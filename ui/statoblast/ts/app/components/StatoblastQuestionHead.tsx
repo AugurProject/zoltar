@@ -27,7 +27,23 @@ export function decodeQuestionHeading(value: unknown): QuestionHeading | undefin
 	})
 }
 
-export function StatoblastQuestionHead({ page, question, reporting, now, hasShares, presentationOnly = false }: { presentationOnly?: boolean; page: StatoblastQuestionPage; question: QuestionHeading; reporting: ReportingDetails | undefined; now: bigint | undefined; hasShares: boolean }) {
+export function StatoblastQuestionHead({
+	page,
+	question,
+	reporting,
+	now,
+	hasShares,
+	checkingDeadline = false,
+	presentationOnly = false,
+}: {
+	presentationOnly?: boolean
+	checkingDeadline?: boolean
+	page: StatoblastQuestionPage
+	question: QuestionHeading
+	reporting: ReportingDetails | undefined
+	now: bigint | undefined
+	hasShares: boolean
+}) {
 	const poolPage = { kind: 'pool', pool: page.pool, tab: 'capital' } as const
 	const questionsPage = { ...poolPage, tab: 'questions' } as const
 	const title = getQuestionTitle(question.marketDetails)
@@ -39,8 +55,11 @@ export function StatoblastQuestionHead({ page, question, reporting, now, hasShar
 	if (ended) step = 1
 	if (started) step = 2
 	if (resolved) step = 3
-	const phase = forkStep ? pageCopy.fork : (pageCopy.stageLabels[step] ?? pageCopy.trading)
+	let phase = pageCopy.stageLabels[step] ?? pageCopy.trading
+	if (forkStep) phase = pageCopy.fork
+	if (checkingDeadline) phase = pageCopy.deadlineChecking
 	const phaseTone = resolved ? 'ok' : 'muted'
+	const hasStakedRep = reporting?.status === 'active' && reporting.sides.some(side => (side.localPrincipalAttoRep ?? 0n) > 0n || side.userDeposits.some(deposit => deposit.amountAttoRep > 0n))
 	const threshold = reporting?.nonDecisionThresholdAttoRep
 	const forkCondition =
 		threshold === undefined ? (
@@ -52,11 +71,12 @@ export function StatoblastQuestionHead({ page, question, reporting, now, hasShar
 			</>
 		)
 	const responseEnd = reporting?.status === 'active' ? reporting.escalationEndTime : undefined
+	const forkDetail = question.universeHasForked ? undefined : pageCopy.waitingForFork
 	const steps = [
 		{ label: pageCopy.trading, detail: step === 0 ? pageCopy.tradingActive : undefined },
 		{ label: pageCopy.reportingOpens, detail: <TimestampValue timestamp={question.marketDetails.endTime} relative={now === undefined ? false : 'after'} {...(now === undefined ? {} : { currentTimestamp: now })} /> },
-		{ label: pageCopy.responseWindow, detail: responseEnd === undefined || responseEnd === 0n ? pageCopy.responseWindowBeforeReport : <TimestampValue timestamp={responseEnd} relative={false} /> },
-		{ label: pageCopy.resolved, detail: pageCopy.resolutionAction },
+		{ label: forkStep ? pageCopy.endedUndecided : pageCopy.responseWindow, detail: responseEnd === undefined || responseEnd === 0n ? pageCopy.responseWindowBeforeReport : <TimestampValue timestamp={responseEnd} relative={false} /> },
+		{ label: forkStep ? pageCopy.fork : pageCopy.resolved, detail: forkStep ? forkDetail : pageCopy.resolutionAction },
 	]
 	return (
 		<>
@@ -87,7 +107,7 @@ export function StatoblastQuestionHead({ page, question, reporting, now, hasShar
 					</span>
 				</div>
 				<div className='statoblast-question-title'>
-					{!presentationOnly && <FavoriteToggle app='statoblast' kind='question' id={`${page.pool}:${question.questionId}`} entityLabel={pageCopy.formatInSecurityPool(title, page.pool)} confirmUnfavorite={() => !hasShares || window.confirm(pageCopy.unstarPositionConfirmation)} />}
+					{!presentationOnly && <FavoriteToggle app='statoblast' kind='question' id={`${page.pool}:${question.questionId}`} entityLabel={pageCopy.formatInSecurityPool(title, page.pool)} confirmUnfavorite={() => (!hasShares && !hasStakedRep) || window.confirm(pageCopy.unstarPositionConfirmation)} />}
 					<h1>{title}</h1>
 				</div>
 				<a className='statoblast-outlined-link' href={statoblastPageHref(poolPage)}>
@@ -147,15 +167,17 @@ export function StatoblastQuestionHead({ page, question, reporting, now, hasShar
 			<div className='statoblast-question-progress' aria-label={pageCopy.questionProgress}>
 				<ol>
 					{steps.map(({ label, detail }, index) => (
-						<li key={label} data-completed={index < step} aria-current={!forkStep && index === step ? 'step' : undefined}>
+						<li key={label} data-completed={index < (forkStep ? 3 : step)} aria-current={!checkingDeadline && index === (forkStep ? 3 : step) ? 'step' : undefined}>
 							<strong>{label}</strong>
 							{detail === undefined ? undefined : <span>{detail}</span>}
 						</li>
 					))}
-					<li className='statoblast-fork-step' aria-current={forkStep ? 'step' : undefined}>
-						<strong>{pageCopy.orFork}</strong>
-						<span>{forkStep ? pageCopy.nonDecision : forkCondition}</span>
-					</li>
+					{!forkStep && (
+						<li className='statoblast-fork-step'>
+							<strong>{pageCopy.orFork}</strong>
+							<span>{forkCondition}</span>
+						</li>
+					)}
 				</ol>
 			</div>
 		</>

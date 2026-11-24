@@ -46,13 +46,13 @@ export function StatoblastUniverseMenu({ activeUniverse, environmentKey, univers
 	useModalFocusIsolation({ dialogRef: panel, getReturnFocusTarget: () => popover.triggerRef.current, initialFocusRef: closeButton, isOpen: popover.open && mobile, onClose: popover.close })
 	useEffect(() => {
 		setBalances(new Map())
-		if (!popover.open || wallet === undefined || universe === undefined || universe.universeId !== activeUniverse) return
+		if ((!popover.open && parentId === undefined && !forked) || wallet === undefined || universe === undefined || universe.universeId !== activeUniverse || document.hidden) return
 		let current = true
 		void (async () => {
 			const client = createConnectedReadClient()
 			const block = await client.getBlock()
 			if (block.number === undefined) return
-			const tokens = [{ id: activeUniverse, token: universe.reputationToken }, ...universe.childUniverses.filter(child => child.exists).map(child => ({ id: child.universeId, token: child.reputationToken }))]
+			const tokens = [{ id: activeUniverse, token: universe.reputationToken }, ...(popover.open ? universe.childUniverses.filter(child => child.exists).map(child => ({ id: child.universeId, token: child.reputationToken })) : [])]
 			if (parentId !== undefined && universe.zoltarAddress !== undefined) {
 				const token = await client.readContract({ abi: Zoltar_Zoltar.abi, address: universe.zoltarAddress, functionName: 'getRepToken', args: [parentId], blockNumber: block.number })
 				tokens.push({ id: parentId, token })
@@ -88,7 +88,12 @@ export function StatoblastUniverseMenu({ activeUniverse, environmentKey, univers
 				{forked || (parentId !== undefined && migrationSource === parentId) ? <span className='statoblast-universe-alert' aria-label={pageCopy.repMigrationAvailable} /> : undefined}
 			</button>
 			{popover.open && (
-				<div className={mobile ? 'modal-backdrop statoblast-universe-scrim' : 'statoblast-universe-popover'}>
+				<div
+					className={mobile ? 'modal-backdrop statoblast-universe-scrim' : 'statoblast-universe-popover'}
+					onClick={event => {
+						if (mobile && event.target === event.currentTarget) popover.close()
+					}}
+				>
 					<section ref={panel} id={popover.panelId} className='statoblast-universe-panel' role='dialog' aria-modal={mobile ? 'true' : undefined} aria-label={pageCopy.universes} tabIndex={-1}>
 						<header>
 							<strong>{pageCopy.universes}</strong>

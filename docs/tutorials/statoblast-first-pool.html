@@ -13,14 +13,14 @@
 			<header>
 				<p class="kicker">Tutorial</p>
 				<h1>Back a shared security pool and mint shares</h1>
-				<p>Use the browser simulator to add 1 REP to a shared <a href="../reference/glossary.html#security-pool">security pool</a>, then purchase complete sets for one of its questions. A complete set contains one share of every outcome. You will see your principal rise from 5,000 to 5,001 REP and receive shares in your simulated wallet.</p>
+				<p>Use the browser simulator to add 1 REP to a shared <a href="../reference/glossary.html#security-pool">security pool</a>, then purchase complete sets for one of its questions. A complete set contains one share of every outcome. You will see your deposited REP rise from 5,000 to 5,001 REP and receive shares in your simulated wallet.</p>
 			</header>
 			<section id="before-you-start">
 				<h2>Open the prepared security pool</h2>
-				<p>This exercise uses fake assets in a browser-local chain. From a prepared checkout, run <code>bun run app:serve:statoblast</code> and open <code>http://localhost:12347/#/watchlist?simulate=1&amp;genesis=yes&amp;simScenario=securitypoolx2</code>. No wallet extension or live funds are needed. Under <strong>Saved security pools</strong>, select <strong>Open</strong>. On <strong>Capital</strong>, wait for <strong>Price current</strong> in the REP price tab.</p>
-				<p>The fixture supplies two registered questions, 5,000 REP of your principal, a 10 WETH commitment and a 120% health target. The security pool shares that commitment across its questions; each question has separate outcome shares. See <a href="../explanation/statoblast.html">How Statoblast works</a> for the economic model.</p>
+				<p>This exercise uses fake assets in a browser-local chain. From a prepared checkout, run <code>bun run app:serve:statoblast</code> and open <code>http://localhost:12347/#/watchlist?simulate=1&amp;genesis=yes&amp;simScenario=securitypoolx2</code>. No wallet extension or live funds are needed. Under <strong>Saved security pools</strong>, select <strong>Open</strong>. Open <strong>REP price</strong> to check the accepted price, then return to <strong>Capital</strong>.</p>
+				<p>The fixture supplies two registered questions, 5,000 REP deposited in your position, a 10 WETH commitment and a 120% health target. The security pool shares that commitment across its questions; each question has separate outcome shares. See <a href="../explanation/statoblast.html">How Statoblast works</a> for the economic model.</p>
 				<figure class="screenshot">
-					<a class="screenshot-link" href="../assets/screenshots/statoblast/security-pool-capital.png"><img width="800" height="352" src="../assets/screenshots/statoblast/security-pool-capital.png" alt="The prepared security pool's Your position section shows principal, commitment and health target." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/statoblast/security-pool-capital.png"><img width="800" height="352" src="../assets/screenshots/statoblast/security-pool-capital.png" alt="The prepared security pool's Your position section shows deposited REP, commitment and health target." loading="lazy" /></a>
 					<figcaption><span class="figure-label">Your starting position.</span> The fixture has already authorized backing.</figcaption>
 				</figure>
 			</section>

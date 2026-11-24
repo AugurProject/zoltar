@@ -2,7 +2,7 @@ import type { ChainBackend, TransactionRequestPreview, WriteClient } from '@zolt
 import { createCompleteSetInQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { createBlockWithTimestamp, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
-import { afterEach, expect, mock, test } from 'bun:test'
+import { afterEach, expect, mock, spyOn, test } from 'bun:test'
 import { createWalletClient, custom, publicActions, encodeFunctionData, decodeFunctionData, maxUint256, type Hash, type TransactionReceipt, type ReplacementReason } from '@zoltar/core-shared/evm/ethereum'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
@@ -901,3 +901,35 @@ test('minting complete sets sends the transaction directly and tracks its receip
 
 for (const _change of ['fresh price', 'pending request', 'queue fee'] as const) {
 }
+
+test('a refreshed review shows verified rows and permits a changing simulation result', async () => {
+	const { client, sendTransaction } = setup()
+	let before = 'saved value'
+	const now = spyOn(performance, 'now').mockReturnValue(0)
+	const call = mock(async (): Promise<{ data: `0x${string}` }> => ({ data: '0x01' }))
+	const reviewed = createReviewedClient({ ...client, sendTransaction, call }, undefined, undefined, undefined, true)
+	try {
+		reviewed.onTransactionPlan?.([
+			{
+				functionName: 'claim',
+				contractAddress: account,
+				validateBeforeSubmit: async () => {
+					before = 'verified value'
+				},
+				readReviewRows: () => [{ label: 'Position', value: before }],
+			},
+		])
+		reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, contractAddress: account, functionName: 'claim', args: [], data: '0x1234', value: undefined })
+		const sending = reviewed.sendTransaction({ to: account, data: '0x1234' })
+		await waitForTransactionStep(0)
+		expect(transactionSteps.value?.steps[0]?.reviewRows).toEqual([{ label: 'Position', value: 'verified value' }])
+		now.mockReturnValue(31_000)
+		call.mockImplementationOnce(async () => ({ data: '0x02' }))
+		transactionSteps.value?.confirmStep(0)
+		await expect(sending).resolves.toBe(hash)
+		expect(call).toHaveBeenCalledTimes(2)
+		expect(sendTransaction).toHaveBeenCalledTimes(1)
+	} finally {
+		now.mockRestore()
+	}
+})

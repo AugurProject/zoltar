@@ -18,6 +18,7 @@ export type TransactionStepDetails = {
 	tokenFunding?: readonly TokenFundingAmount[]
 	optional?: boolean
 	paidFrom?: string
+	reviewRows?: readonly { label: string; value: string }[]
 	title: string
 	/** Explains the step when the title alone does not convey its consequence; omitted for self-describing actions. */
 	description: string | undefined
@@ -172,6 +173,10 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 		setPlan(details: TransactionStepDetails[]) {
 			if (steps.length > 0) throw new Error('The transaction plan has already started.')
 			steps.push(...details.map(step => ({ ...step, phase: 'upcoming' as const })))
+		},
+		setReviewRows(index: number, reviewRows: readonly { label: string; value: string }[]) {
+			const step = steps[index]
+			if (step !== undefined) step.reviewRows = reviewRows
 		},
 		startWithoutReview(index: number) {
 			claimWorkflow()

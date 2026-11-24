@@ -1,5 +1,5 @@
 import * as pageCopy from '../../../copy/securityPoolPage.js'
-import { isAddress, formatUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { isAddress, zeroAddress, formatUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { AddressText, AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -13,7 +13,7 @@ import type { useSecurityPool } from '../hooks/useSecurityPool.js'
 import * as copy from '../../../copy/securityPool.js'
 import * as capitalCopy from '../../../copy/securityPoolCapital.js'
 
-export function StatoblastPoolHead({ page, model, wallet, priceChecking }: { page: StatoblastPoolPage; model: ReturnType<typeof useSecurityPool>; wallet: Address | undefined; priceChecking: boolean }) {
+export function StatoblastPoolHead({ page, model, wallet, priceChecking, fundsRemain = false }: { page: StatoblastPoolPage; model: ReturnType<typeof useSecurityPool>; wallet: Address | undefined; priceChecking: boolean; fundsRemain?: boolean }) {
 	const favorites = useFavorites('statoblast', 'pool')
 	const poolLabel = favorites.entries.find(item => item.id === page.pool.toLowerCase())?.label
 	const snapshot = model.presentationSnapshot
@@ -23,7 +23,8 @@ export function StatoblastPoolHead({ page, model, wallet, priceChecking }: { pag
 	const collateral = (value: bigint | undefined) => <CurrencyValue value={value} suffix={snapshot?.collateral.symbol ?? ''} units={snapshot?.collateral.decimals ?? 18} />
 	const currentPrice = snapshot?.priceValid === true && !priceChecking
 	const priceBadge = forked || snapshot === undefined ? undefined : <Badge tone={currentPrice ? 'ok' : 'warning'}>{currentPrice ? capitalCopy.priceValid : capitalCopy.priceStale}</Badge>
-	const labelForTab = (tab: PoolTab) => (forked && tab === 'price' ? pageCopy.returnFundsOnly : pageCopy.poolTabLabels[tab])
+	const labelForTab = (tab: PoolTab) => (forked && fundsRemain && tab === 'price' ? pageCopy.returnFundsOnly : pageCopy.poolTabLabels[tab])
+	const hasSelectedOwner = isAddress(model.ownerInput) && model.ownerInput.toLowerCase() !== zeroAddress
 	const you = wallet !== undefined && wallet.toLowerCase() === model.ownerInput.toLowerCase()
 	return (
 		<>
@@ -82,9 +83,11 @@ export function StatoblastPoolHead({ page, model, wallet, priceChecking }: { pag
 						) : (
 							pageCopy.positionOf
 						)}{' '}
-						<code>
-							<AddressText address={model.ownerInput} longAbbreviation />
-						</code>
+						{hasSelectedOwner ? (
+							<code>
+								<AddressText address={model.ownerInput} longAbbreviation />
+							</code>
+						) : undefined}
 					</summary>
 					<form
 						onSubmit={event => {
@@ -97,7 +100,7 @@ export function StatoblastPoolHead({ page, model, wallet, priceChecking }: { pag
 					>
 						<label>
 							{pageCopy.positionOwnerLead}
-							<input name='owner' defaultValue={model.ownerInput} key={model.ownerInput} pattern='0x[0-9a-fA-F]{40}' required />
+							<input name='owner' defaultValue={hasSelectedOwner ? model.ownerInput : ''} key={model.ownerInput} pattern='0x[0-9a-fA-F]{40}' required />
 						</label>
 						<button type='submit'>{pageCopy.openPosition}</button>
 						{wallet !== undefined && !you && (
@@ -139,6 +142,9 @@ export function StatoblastPoolHead({ page, model, wallet, priceChecking }: { pag
 					<a key={tab} aria-current={tab === page.tab ? 'page' : undefined} href={statoblastPageHref({ ...page, tab })}>
 						{labelForTab(tab)}
 						{tab === 'price' && priceBadge}
+						{forked && tab === 'capital' && <Badge>{pageCopy.limitedCapital}</Badge>}
+						{forked && tab === 'questions' && <Badge>{pageCopy.mintingClosed}</Badge>}
+						{forked && tab === 'fork' && <Badge tone='warning'>{pageCopy.forkActionRequired}</Badge>}
 					</a>
 				))}
 			</nav>

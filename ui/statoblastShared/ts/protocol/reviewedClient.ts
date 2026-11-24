@@ -134,9 +134,10 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			if (expected === undefined || expected.functionName !== transaction.functionName || (expected.value ?? 0n) !== (transaction.value ?? 0n) || (expected.contractAddress ?? expected.to) !== (transaction.contractAddress ?? transaction.to))
 				throw new Error('The transaction plan changed. No further transactions were sent. Review the action again.')
 			if (transaction.functionName === 'approve' && (expected.args?.[0] !== transaction.args?.[0] || expected.args?.[1] !== transaction.args?.[1])) throw new Error('The approval amount changed. Review the action again.')
-			const check = (candidate: TransactionRequestPreview) => withTimeout(checkTransaction(candidate, expected, gas, raw), 15_000, 'Transaction check timed out. Try again.')
+			const check = (candidate: TransactionRequestPreview) => withTimeout(checkTransaction(candidate, expected, gas, raw), 15_000, transactionCopy.currentStateCheckFailed)
 			const alreadyReviewedFunding = selectedFunding !== undefined
-			const checked = !alwaysReview || alreadyReviewedFunding ? undefined : await check(transaction)
+			if (alwaysReview && !alreadyReviewedFunding) await check(transaction)
+			if (expected.readReviewRows !== undefined) controller.setReviewRows(stepIndex, expected.readReviewRows())
 			const checkedAt = performance.now()
 			let selectedAmount = selectedFunding?.amount
 			if (selectedFunding === undefined) {
@@ -185,10 +186,8 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			controller.assertActive()
 			if (alwaysReview && (approvalArgs !== undefined || alreadyReviewedFunding)) await check(transaction)
-			else if (alwaysReview && performance.now() - checkedAt > 30_000) {
-				const fresh = await check(transaction)
-				if (fresh.data !== checked?.data) throw new Error('Changed since you reviewed. Review the action again.')
-			} else if (expected.validateBeforeSubmit !== undefined) await withTimeout(expected.validateBeforeSubmit(), 15_000, 'Transaction check timed out. Try again.')
+			else if (alwaysReview && performance.now() - checkedAt > 30_000) await check(transaction)
+			else if (expected.validateBeforeSubmit !== undefined) await withTimeout(expected.validateBeforeSubmit(), 15_000, transactionCopy.currentStateCheckFailed)
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			controller.assertActive()
 			client.onTransactionPrepared?.(transaction)

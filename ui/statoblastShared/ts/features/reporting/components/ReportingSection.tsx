@@ -98,6 +98,8 @@ export function ReportingSection({
 	oracleBlocker,
 	currentTimestamp,
 	embedInCard = false,
+	designedOverview = false,
+	manageDeadlineRefresh = true,
 	forkAlreadyTriggered = false,
 	loadingReportingDetails,
 	lockedReason,
@@ -288,7 +290,7 @@ export function ReportingSection({
 			/>
 		)
 	useEffect(() => {
-		if (activeReportingDetails === undefined) return
+		if (!manageDeadlineRefresh || activeReportingDetails === undefined) return
 		if (escalationPhase !== 'Timed Out') return
 		if (loadingReportingDetails) return
 		if (isPoolQuestionFinalized(activeReportingDetails) || activeReportingDetails.hasReachedNonDecision) return
@@ -296,7 +298,7 @@ export function ReportingSection({
 		if (lastTimedOutRefreshBoundaryKey.current === refreshBoundaryKey) return
 		lastTimedOutRefreshBoundaryKey.current = refreshBoundaryKey
 		void onLoadReporting()
-	}, [activeReportingDetails, escalationPhase, loadingReportingDetails, onLoadReporting])
+	}, [activeReportingDetails, escalationPhase, loadingReportingDetails, manageDeadlineRefresh, onLoadReporting])
 
 	const reportingStage = showFullReporting
 		? getReportingStagePresentation({
@@ -376,7 +378,7 @@ export function ReportingSection({
 				</div>
 			) : undefined}
 
-			{showFullReporting && effectiveReportingDetails !== undefined ? (
+			{!designedOverview && showFullReporting && effectiveReportingDetails !== undefined ? (
 				<>
 					{activeReportingDetails === undefined ? undefined : (
 						<ReportingViewerStatus
@@ -397,7 +399,7 @@ export function ReportingSection({
 
 			<ReportingResultCard details={effectiveReportingDetails} />
 			{finalized ? settlementSection : undefined}
-			{showFullReporting && reportingReady !== false ? (
+			{!designedOverview && showFullReporting && reportingReady !== false ? (
 				<SectionBlock className='reporting-metrics-section' title={reportingCopy.escalationMetrics} variant='embedded'>
 					<div className='escalation-metrics'>
 						<MetricField label={<GlossaryTerm id='non-decision-threshold'>{glossaryCopy.nonDecisionThresholdTerm}</GlossaryTerm>}>

@@ -120,7 +120,7 @@ function readCall(request: RpcRead) {
 	return target === undefined || callData === undefined ? undefined : { target, callData, allowFailure: true }
 }
 
-export function statoblastPageCache(profile: NetworkProfile, identity: { pool: Address; universeId: bigint; owner: Address; page: string }) {
+export function statoblastPageCache(profile: NetworkProfile, identity: { pool: Address; universeId: bigint; owner: Address; page: string }, verifyRestoredPool?: (client: ReadClient, block: bigint) => Promise<void>) {
 	const storage = pageStorage(profile)
 	const key = `${identity.pool.toLowerCase()}:${identity.universeId}:${identity.owner.toLowerCase()}:${identity.page}`
 	let livePlan: PageCache | undefined
@@ -159,8 +159,13 @@ export function statoblastPageCache(profile: NetworkProfile, identity: { pool: A
 		record(latest, rawHead)
 		record(pinned, rawHead)
 		record({ method: 'eth_chainId' }, profile.chainIdHex)
-		if (livePlan !== undefined) {
-			const reusable = livePlan.reads.flatMap(entry => {
+		let plan = livePlan
+		if (plan === undefined && verifyRestoredPool !== undefined) {
+			plan = storage.read().find(item => item.key === key)
+			if (plan !== undefined) await withTimeout(verifyRestoredPool(client, block), 15_000, 'Security pool verification timed out.')
+		}
+		if (plan !== undefined) {
+			const reusable = plan.reads.flatMap(entry => {
 				if (entry.request.method === 'eth_getCode') {
 					record(replaceBlock(entry.request, block), entry.response)
 					return []

@@ -53,6 +53,7 @@ export type TransactionPlanStep = Pick<TransactionRequestPreview, 'functionName'
 		/** Require an explicit review even when the plan contains only one transaction. */
 		requireReview?: boolean
 		validateBeforeSubmit?: () => Promise<void>
+		readReviewRows?: (() => readonly { label: string; value: string }[]) | undefined
 		refreshFundingRequirements?: () => Promise<TransactionPlanStep['tokenFunding']>
 		optional?: boolean
 		oracleOutcome?: { settlerRewardAttoEth: bigint; returnToWallet: boolean }

@@ -1,4 +1,6 @@
-import { useId } from 'preact/hooks'
+import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
+import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
+import { useEffect, useId, useState } from 'preact/hooks'
 import * as collateralCopy from '../../../copy/collateral.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
@@ -15,16 +17,33 @@ import { getSecurityPoolPriceWarning } from '../lib/priceWarning.js'
 import * as copy from '../../../copy/securityPoolPrice.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
-export function SecurityPoolPriceReport({ returnFundsOnly = false, ...parameters }: SecurityPoolPriceParameters & { returnFundsOnly?: boolean }) {
+export function SecurityPoolPriceReport({ returnFundsOnly = false, onFundingStatus, hideReportingDeadline = false, ...parameters }: SecurityPoolPriceParameters & { returnFundsOnly?: boolean; onFundingStatus?: ((fundsRemain: boolean) => void) | undefined; hideReportingDeadline?: boolean }) {
 	const model = useSecurityPoolPrice(parameters)
 	const scoped = copy.scopes[parameters.scope]
-	// Only a branch has a preparation window and a feed to prepare; the account's universe already shows its price expiry.
+	// Only a branch has a preparation window and a feed to prepare.
 	// Its report sits under a disclosure that already names it, so it carries no heading of its own.
 	const branch = parameters.scope === 'branch'
 	const priceWarningId = useId()
 	const observation = model.snapshot?.observation
 	const disabled = parameters.actions.busy !== undefined
 	const report = model.report
+	const fundsRemain = report !== undefined && (report.wethCredit > 0n || report.repCredit > 0n || !report.state.settled || report.outcome === 0n)
+	useEffect(() => {
+		if (report !== undefined) onFundingStatus?.(fundsRemain)
+	}, [report?.reportId, fundsRemain, onFundingStatus])
+	const visible = usePageVisible()
+	const chainTime = model.snapshot?.timestamp
+	const [now, setNow] = useState<bigint>()
+	useEffect(() => {
+		if (chainTime === undefined || !visible) return
+		const readAt = Date.now()
+		setNow(chainTime)
+		const timer = setInterval(() => setNow(chainTime + BigInt(Math.floor((Date.now() - readAt) / 1000))), 1000)
+		return () => clearInterval(timer)
+	}, [chainTime, visible])
+	const accepted = observation?.lastSettlementTimestamp === 0n ? undefined : observation?.lastPrice
+	const reference = model.comparisonPrice
+	const deviation = accepted === undefined || reference === undefined || reference === 0n ? undefined : ((accepted - reference) * 10_000n) / reference
 	const priceWarning = getSecurityPoolPriceWarning(model.proposedPrice, model.comparisonPrice, model.collateral)
 	let reportStatus: string | undefined
 	if (report !== undefined) {
@@ -39,7 +58,7 @@ export function SecurityPoolPriceReport({ returnFundsOnly = false, ...parameters
 			<UserMessage detail={scoped.description} />
 			{model.error === undefined ? undefined : <UserMessage tone='error' detail={model.error} />}
 			<MetricGrid>
-				{branch ? (
+				{branch && !hideReportingDeadline ? (
 					<MetricField label={copy.reportingDeadline}>
 						<TimestampValue timestamp={model.reportingDeadline} relative={false} />
 					</MetricField>
@@ -48,13 +67,12 @@ export function SecurityPoolPriceReport({ returnFundsOnly = false, ...parameters
 					<TimestampValue timestamp={model.earliestSettlement} relative={false} />
 				</MetricField>
 				<MetricField label={copy.currentPrice} loading={model.loading}>
-					<CurrencyValue value={observation?.lastSettlementTimestamp === 0n ? undefined : observation?.lastPrice} units={36 - model.collateral.decimals} />
+					<CurrencyValue value={accepted} units={36 - model.collateral.decimals} />
 				</MetricField>
-				{branch ? (
-					<MetricField label={copy.validUntil} loading={model.loading}>
-						<TimestampValue timestamp={observation === undefined || observation.lastSettlementTimestamp === 0n ? undefined : observation.lastSettlementTimestamp + observation.validitySeconds} relative={false} />
-					</MetricField>
-				) : undefined}
+				<MetricField label={copy.validUntil} loading={model.loading}>
+					<TimestampValue timestamp={observation === undefined || observation.lastSettlementTimestamp === 0n ? undefined : observation.lastSettlementTimestamp + observation.validitySeconds} relative={now === undefined ? false : 'after'} {...(now === undefined ? {} : { currentTimestamp: now })} />
+				</MetricField>
+				{deviation !== undefined && <MetricField label={copy.deviation}>{copy.formatDeviation(formatUnits(deviation, 2))}</MetricField>}
 			</MetricGrid>
 			{!returnFundsOnly && (
 				<>
@@ -168,7 +186,7 @@ export function SecurityPoolPriceReport({ returnFundsOnly = false, ...parameters
 			<div className='actions'>
 				<SecurityPoolButton model={parameters.actions} action={model.actionId('settle')} label={copy.settle} pendingLabel={copy.settling} reason={model.settleReason} onClick={model.settle} />
 				<SecurityPoolButton model={parameters.actions} action={model.actionId('recover')} label={copy.recover} pendingLabel={copy.recovering} reason={model.recoverReason} onClick={model.recover} />
-				<SecurityPoolButton model={parameters.actions} action={model.actionId('withdraw')} label={copy.withdraw} pendingLabel={copy.withdrawing} reason={model.withdrawReason} onClick={model.withdraw} />
+				<SecurityPoolButton model={parameters.actions} action={model.actionId('withdraw')} label={copy.returnFunds} pendingLabel={copy.withdrawing} reason={model.withdrawReason} onClick={model.withdraw} />
 				<SecurityPoolButton model={parameters.actions} action={model.actionId('withdrawCollateral')} label={copy.withdrawToken(model.collateral.symbol)} pendingLabel={copy.withdrawingToken(model.collateral.symbol)} reason={model.withdrawCollateralReason} onClick={() => model.withdrawToken('collateral')} />
 				<SecurityPoolButton model={parameters.actions} action={model.actionId('withdrawRep')} label={copy.withdrawToken(common.rep)} pendingLabel={copy.withdrawingToken(common.rep)} reason={model.withdrawRepReason} onClick={() => model.withdrawToken('rep')} />
 				<ActionLauncherButton tone='secondary' idleLabel={copy.refresh} pendingLabel={copy.refreshing} availability={{ disabled: disabled || model.refreshReason !== undefined, reason: (disabled ? copy.busy : undefined) ?? model.refreshReason }} onClick={model.refresh} />

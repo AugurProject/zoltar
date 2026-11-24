@@ -60,7 +60,7 @@ async function readAuthorizationProof(snapshot: SecurityPoolCapitalSnapshot, rep
 }
 
 export function useSecurityPoolAggregate(
-	model: Pick<ReturnType<typeof useSecurityPool>, 'snapshot' | 'loading' | 'error' | 'refresh'> & Partial<Pick<ReturnType<typeof useSecurityPool>, 'presentationSnapshot'>>,
+	model: Pick<ReturnType<typeof useSecurityPool>, 'snapshot' | 'loading' | 'error' | 'refresh'> & Partial<Pick<ReturnType<typeof useSecurityPool>, 'presentationSnapshot' | 'displayedAt'>>,
 	actions: Pick<ReturnType<typeof useSecurityPoolActions>, 'ownerReason' | 'runSecurityPoolAction'>,
 	accountAddress: Address | undefined,
 ) {
@@ -161,7 +161,7 @@ export function useSecurityPoolAggregate(
 		if (pendingRetirement === undefined) return 'No pending retirement.'
 		if (snapshot?.priceValid === false) return 'A new accepted REP price is required.'
 		const preview = pendingRetirement.retirementPreview
-		if (preview !== undefined && preview.status !== 'ready') return 'Retirement is not ready.'
+		if (preview !== undefined && preview.status !== 'ready') return capitalCopy.waitingForFreeCapacity
 		return undefined
 	}
 	const serveReason = ownerReason ?? inactiveReason ?? retirementReadinessReason()
@@ -175,8 +175,19 @@ export function useSecurityPoolAggregate(
 			if (reason !== undefined) throw new Error(reason)
 			const selected = requireSnapshot()
 			const request = build(selected)
+			let freshReviewSnapshot: SecurityPoolCapitalSnapshot | undefined
 			return {
 				...request,
+				readReviewRows: () => {
+					const latest = freshReviewSnapshot
+					if (latest === undefined) return []
+					const comparison = (label: string, before: bigint, after: bigint, units: number, symbol: string) => ({ label, value: `${formatCurrencyBalance(before, units)} → ${formatCurrencyBalance(after, units)} ${symbol}` })
+					if (action === 'depositSecurityPoolRep' && depositAttoRep !== undefined) return [comparison(capitalCopy.principalRep, latest.ownerPrincipalAttoRep, latest.ownerPrincipalAttoRep + depositAttoRep, 18, 'REP')]
+					if (action === 'withdrawSecurityPoolRep' && withdrawAttoRep !== undefined) return [comparison(capitalCopy.principalRep, latest.ownerPrincipalAttoRep, latest.ownerPrincipalAttoRep - withdrawAttoRep, 18, 'REP')]
+					if (action === 'authorizeSecurityPoolCommitment' && commitmentAttoEth !== undefined) return [comparison(capitalCopy.commitment, latest.ownerCommitmentAttoEth, commitmentAttoEth, selected.collateral.decimals, selected.collateral.symbol)]
+					if (action === 'setSecurityPoolHealth' && healthBps !== undefined) return [comparison(capitalCopy.savedHealth, latest.ownerAccount.targetHealthFactorBps || 10_000n, healthBps, 2, '%')]
+					return []
+				},
 				validateBeforeSubmit: async () => {
 					const latest = await loadSecurityPoolCapitalSnapshot({ client: securityPoolReadClient(createConnectedReadClient()), securityPool: selected.securityPool, owner: selected.owner, universeId: selected.universeId })
 					if (latest.chainId !== selected.chainId || latest.capitalLedger !== selected.capitalLedger) throw new Error('Security pool context changed. Review the transaction again.')
@@ -186,6 +197,7 @@ export function useSecurityPoolAggregate(
 					}
 					await validate?.(latest)
 					await request.validateBeforeSubmit?.()
+					freshReviewSnapshot = latest
 				},
 			}
 		})
@@ -195,6 +207,7 @@ export function useSecurityPoolAggregate(
 		showingPreviousSnapshot,
 		loading: model.loading,
 		readError: model.error,
+		displayedAt: model.displayedAt,
 		refresh: model.refresh,
 		depositAmount: depositAmount.value,
 		setDepositAmount: (value: string) => {
@@ -374,7 +387,7 @@ export function useSecurityPoolAggregate(
 		serve: () =>
 			run(
 				'serveSecurityPoolRetirement',
-				'Release available retirement',
+				capitalCopy.releaseReduction,
 				serveReason,
 				selected => {
 					if (pendingRetirement === undefined) throw new Error('No pending retirement.')

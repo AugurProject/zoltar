@@ -86,3 +86,6 @@ export const transactionHash = 'Transaction hash'
 export const formatViewAddressOnExplorer = (address: CopyTemplateValue) => `View address ${address} on explorer (opens in a new tab)`
 
 export const formatViewTransactionOnExplorer = (hash: CopyTemplateValue) => `View transaction ${hash} on explorer (opens in a new tab)`
+
+export const currentStateCheckFailed = 'Couldn’t check the current state. Try again.'
+export const formatOldDataCheck = (age: string) => `Data from ${age} ago. Checked again before sending.`

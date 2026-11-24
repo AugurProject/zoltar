@@ -193,7 +193,7 @@ test('settlement and recovery remain independent after funding closes', async ()
 	await lastRequest(state.requests).validateBeforeSubmit?.()
 	state.values['reportOutcome'] = 2n
 	await act(() => state.hook.state().refresh())
-	await waitFor(() => expect(state.hook.state().recoverReason).toContain('already complete'))
+	await waitFor(() => expect(state.hook.state().recoverReason).toBe('This report is already recovered.'))
 	expect(state.hook.state().withdrawReason).toBeUndefined()
 	await act(() => state.hook.state().withdraw())
 	expect(state.requests).toHaveLength(3)

@@ -54,7 +54,7 @@ test(
 			expect(view.container.textContent).toContain('Mint complete sets')
 			offline = false
 			await act(() => render(h(SecurityPoolQuestionWorkspace, { ...props, entry: { ...props.entry, tab: 'reporting' } }), view.container))
-			await waitFor(() => expect(view.container.textContent).toContain('Reporting workflow'), simulationWaitOptions)
+			await waitFor(() => expect(view.container.textContent).toContain('Add to calendar'), simulationWaitOptions)
 		} finally {
 			await backend.dispose()
 		}

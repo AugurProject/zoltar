@@ -1,5 +1,5 @@
+import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as transactionStepsCopy from '@zoltar/ui-core-shared/copy/transactionSteps.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
@@ -16,7 +16,7 @@ type Props = {
 	questionLedgerAddress: string | undefined
 }
 
-/** The fork pulls any admission shortfall from its caller, so that approval stays in place before the fork, disabled when not needed or done. */
+/** Only a nonzero admission shortfall requires a wallet approval before the fork. */
 export function ForkTriggeredActions({ approval, forkButton, forkPending, onOpenForkWorkflow, questionLedgerAddress }: Props) {
 	if (approval === undefined)
 		return (
@@ -31,37 +31,48 @@ export function ForkTriggeredActions({ approval, forkButton, forkPending, onOpen
 		)
 	const { approvedAmount, requiredAmount } = approval
 	let completedLabel: string | undefined
-	if (requiredAmount === 0n) completedLabel = transactionStepsCopy.skipped
-	else if (requiredAmount !== undefined && approvedAmount !== undefined && approvedAmount >= requiredAmount) completedLabel = commonCopy.approvalSatisfied
+	if (requiredAmount !== undefined && approvedAmount !== undefined && approvedAmount >= requiredAmount) completedLabel = commonCopy.approvalSatisfied
 	return (
-		<SectionBlock className='fork-admission-section' description={requiredAmount !== undefined && requiredAmount > 0n ? securityPoolCopy.forkAdmissionShortfallDetail : undefined} title={securityPoolCopy.forkAdmission} variant='embedded'>
-			<TokenApprovalControl
-				renderActions={({ button, notice, noticeId }) => (
+		<SectionBlock className='fork-admission-section statoblast-fork-danger' title={securityPoolCopy.forkAdmission} variant='embedded'>
+			<UserMessage
+				tone='warning'
+				detail={
 					<>
-						{notice === undefined ? undefined : <UserMessage id={noticeId} placement='field' detail={notice} />}
-						<div className='actions'>
-							{button}
-							{forkButton}
-						</div>
+						{securityPoolCopy.forkCost} <CurrencyValue value={requiredAmount} suffix={commonCopy.rep} />
 					</>
-				)}
-				completedLabel={completedLabel}
-				showRequirementNotice={false}
-				actionLabel={securityPoolCopy.forkAdmissionActionLabel}
-				allowanceError={approval.allowanceError}
-				allowanceLoading={approval.loading}
-				approvedAmount={approvedAmount}
-				disabled={forkPending}
-				guardMessage={undefined}
-				onApprove={approval.onApprove}
-				pending={approval.pending}
-				pendingLabel={commonCopy.approvingRep}
-				requiredAmount={requiredAmount}
-				recommendedAmount={approval.recommendedAmount}
-				resetKey={`${questionLedgerAddress ?? ''}:${requiredAmount?.toString() ?? ''}`}
-				tokenSymbol={commonCopy.rep}
-				tokenUnits={18}
+				}
 			/>
+			{requiredAmount === 0n ? (
+				<div className='actions'>{forkButton}</div>
+			) : (
+				<TokenApprovalControl
+					renderActions={({ button, notice, noticeId }) => (
+						<>
+							{notice === undefined ? undefined : <UserMessage id={noticeId} placement='field' detail={notice} />}
+							<div className='actions'>
+								{button}
+								{forkButton}
+							</div>
+						</>
+					)}
+					completedLabel={completedLabel}
+					showRequirementNotice={false}
+					actionLabel={securityPoolCopy.forkAdmissionActionLabel}
+					allowanceError={approval.allowanceError}
+					allowanceLoading={approval.loading}
+					approvedAmount={approvedAmount}
+					disabled={forkPending}
+					guardMessage={undefined}
+					onApprove={approval.onApprove}
+					pending={approval.pending}
+					pendingLabel={commonCopy.approvingRep}
+					requiredAmount={requiredAmount}
+					recommendedAmount={approval.recommendedAmount}
+					resetKey={`${questionLedgerAddress ?? ''}:${requiredAmount?.toString() ?? ''}`}
+					tokenSymbol={commonCopy.rep}
+					tokenUnits={18}
+				/>
+			)}
 		</SectionBlock>
 	)
 }

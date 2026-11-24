@@ -38,7 +38,7 @@ test('saved pools batch at most 25 verified items together at the same block', a
 		}),
 	})
 	const rows = await loadWatchlistRows(client, entries, 0n, undefined, MAINNET_NETWORK_PROFILE, { onChunk: (_rows, finished) => progress.push(finished) })
-	expect(batches).toEqual([25, 75, 1, 3])
+	expect(batches).toEqual([25, 150, 1, 6])
 	expect(progress).toEqual([25, 26])
 	expect(rows.map(row => row.annualFee)).toEqual(entries.map(() => 15n))
 })

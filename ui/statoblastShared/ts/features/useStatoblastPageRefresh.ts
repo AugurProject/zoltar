@@ -7,3 +7,5 @@ export function useStatoblastPageRefresh(register: RegisterStatoblastPageRefresh
 	latest.current = refresh
 	useEffect(() => register?.(() => latest.current()), [register])
 }
+
+export type ReportStatoblastReadStatus = (readAt: number | undefined, progress: string | undefined) => void

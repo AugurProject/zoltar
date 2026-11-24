@@ -1,7 +1,11 @@
+import { getBrowserStorage } from '@zoltar/ui-core-shared/lib/browserStorage.js'
+import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
+import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
+import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
 import { requiredSecurityPoolCollateral } from '../lib/capital.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import { useSignal } from '@preact/signals'
-import { useEffect, useId, useRef } from 'preact/hooks'
+import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { buildSecurityPoolCapitalCureRequest, buildSecurityPoolCapitalTakeOverWithBoundsRequest, securityPoolTakeoverSource, securityPoolTakeoverFill, securityPoolTakeoverTransfer } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
@@ -39,7 +43,7 @@ type TakeoverSnapshot = Pick<
 	| 'demandAttoEth'
 	| 'ownerAccount'
 	| 'positions'
-> & { collateral: { symbol: string; decimals: number } }
+> & { collateral: { symbol: string; decimals: number }; liquidationDuration?: bigint | undefined }
 
 async function loadTarget(snapshot: TakeoverSnapshot, id: bigint) {
 	const client = createConnectedReadClient()
@@ -53,7 +57,7 @@ async function loadTarget(snapshot: TakeoverSnapshot, id: bigint) {
 	return { position, started, epoch, penaltyPaid, elapsed }
 }
 
-export function SecurityPoolTakeover({ model, actions }: { model: { snapshot: TakeoverSnapshot | undefined }; actions: Pick<SecurityPoolActions, 'ownerReason' | 'scope' | 'busy' | 'runSecurityPoolAction'> }) {
+export function SecurityPoolTakeover({ model, actions, redesigned = false }: { redesigned?: boolean; model: { snapshot: TakeoverSnapshot | undefined }; actions: Pick<SecurityPoolActions, 'ownerReason' | 'scope' | 'busy' | 'runSecurityPoolAction'> }) {
 	const positionInput = useSignal('')
 	const commitmentInput = useSignal('')
 	const ownInput = useSignal('')
@@ -63,6 +67,18 @@ export function SecurityPoolTakeover({ model, actions }: { model: { snapshot: Ta
 	const snapshot = model.snapshot
 	const id = securityPoolUnsignedId(positionInput.value, 96)
 	const key = `${snapshot?.chainId}:${snapshot?.capitalLedger}:${snapshot?.owner}:${snapshot?.blockHash}:${id}`
+	const [knownPositions, setKnownPositions] = useState<string[]>([])
+	const ledgerKey = snapshot === undefined ? undefined : `zoltar-ui:positions:${snapshot.chainId}:${snapshot.capitalLedger}`
+	const [elapsedSinceRead, setElapsedSinceRead] = useState(0n)
+	const visible = usePageVisible()
+	useEffect(() => {
+		if (!redesigned || ledgerKey === undefined) return
+		try {
+			setKnownPositions((getBrowserStorage('localStorage')?.getItem(ledgerKey) ?? '').split(',').filter(value => securityPoolUnsignedId(value, 96) !== undefined))
+		} catch (error) {
+			if (!(error instanceof DOMException)) throw error
+		}
+	}, [ledgerKey, redesigned])
 	const target = useSignal<{ key: string; value?: Awaited<ReturnType<typeof loadTarget>>; error?: string }>()
 	// Bounds are consent for one position of one owner, so another target starts with none. A snapshot refresh or a half-typed ID is not a new target.
 	const boundsTarget = snapshot === undefined || id === undefined ? undefined : `${snapshot.chainId}:${snapshot.capitalLedger}:${snapshot.owner}:${id}`
@@ -90,6 +106,27 @@ export function SecurityPoolTakeover({ model, actions }: { model: { snapshot: Ta
 	}, [key])
 	const loaded = target.value?.key === key ? target.value : undefined
 	const preview = loaded?.value
+	useEffect(() => {
+		if (!redesigned || ledgerKey === undefined || id === undefined || preview === undefined || preview.position.commitment === 0n) return
+		const selected = id.toString()
+		setKnownPositions(previous => {
+			if (previous.includes(selected)) return previous
+			const updated = [selected, ...previous].slice(0, 50)
+			try {
+				getBrowserStorage('localStorage')?.setItem(ledgerKey, updated.join(','))
+			} catch (error) {
+				if (!(error instanceof DOMException)) throw error
+			}
+			return updated
+		})
+	}, [ledgerKey, redesigned, id, preview])
+	useEffect(() => {
+		setElapsedSinceRead(0n)
+		if (!redesigned || !visible || preview === undefined || preview.started === 0n) return
+		const readAt = Date.now()
+		const timer = setInterval(() => setElapsedSinceRead(BigInt(Math.floor((Date.now() - readAt) / 1000))), 1000)
+		return () => clearInterval(timer)
+	}, [redesigned, preview, visible])
 	const source = snapshot !== undefined && preview !== undefined && snapshot.liquidationPrice > 0n ? securityPoolTakeoverSource(snapshot, { ...preview.position, liquidationStarted: preview.started, liquidationPenaltyPaid: preview.penaltyPaid, liquidationElapsed: preview.elapsed }) : undefined
 	const commitment = securityPoolAmountOrUndefined(commitmentInput.value, snapshot?.collateral.decimals ?? 18)
 	const maximumOwnRep = securityPoolAmountOrUndefined(ownInput.value)
@@ -153,11 +190,43 @@ export function SecurityPoolTakeover({ model, actions }: { model: { snapshot: Ta
 			validateBeforeSubmit: validateTarget(preview, snapshot.capitalLedger, snapshot.commitmentIndex, id),
 		}))
 	}
+	const duration = snapshot?.liquidationDuration
+	const liveElapsed = preview === undefined ? undefined : preview.elapsed + elapsedSinceRead
+	const rewardProgress = getVisualRatio({ value: liveElapsed, maxValue: duration })
+	const timeBasedReward = preview === undefined || rewardProgress === undefined || duration === undefined || liveElapsed === undefined ? undefined : ((preview.position.rep + preview.penaltyPaid) * (liveElapsed > duration ? duration : liveElapsed)) / duration - preview.penaltyPaid
+	const laterTakeover = snapshot === undefined || preview === undefined || source === undefined || duration === undefined ? undefined : securityPoolTakeoverSource(snapshot, { ...preview.position, liquidationStarted: preview.started, liquidationPenaltyPaid: preview.penaltyPaid, liquidationElapsed: duration })
+	const receiver = snapshot?.positions.find(position => position.id === snapshot.ownerAccount.positionId)
+	const fill = snapshot === undefined || source === undefined || commitment === undefined ? undefined : securityPoolTakeoverFill(source, commitment, snapshot.economics.minimumCommitmentAttoEth)
+	const pledgedBefore = (receiver?.rep ?? 0n) + (snapshot?.ownerAccount.freeAttoRep ?? 0n)
+	const commitmentBefore = receiver?.commitment ?? 0n
+	const applySuggestedBound = () => {
+		if (snapshot === undefined || source === undefined || duration === undefined) return
+		principalInput.value = formatUnits(pledgedBefore + source.rep, 18)
+	}
+	const displayCollateral = (value: bigint | undefined) => <CurrencyValue value={value} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 	// Both actions often rest disabled for one shared cause, such as a missing position ID; that reason renders once for the pair.
 	const sharedReason = actions.busy === undefined && reason !== undefined && reason === cureReason ? reason : undefined
 	const reasonId = sharedReason === undefined ? undefined : sharedReasonId
 	return (
-		<SectionBlock title={copy.title} description={copy.description}>
+		<SectionBlock title={copy.title} description={redesigned ? undefined : copy.description}>
+			{redesigned && knownPositions.length > 0 && (
+				<label className='field'>
+					<span>{copy.knownPositions}</span>
+					<select
+						value={knownPositions.includes(positionInput.value) ? positionInput.value : ''}
+						onChange={event => {
+							positionInput.value = event.currentTarget.value
+						}}
+					>
+						<option value=''>{copy.chooseKnownPosition}</option>
+						{knownPositions.map(known => (
+							<option key={known} value={known}>
+								{copy.formatPosition(known)}
+							</option>
+						))}
+					</select>
+				</label>
+			)}
 			<SecurityPoolInput
 				label={copy.position}
 				hint={copy.hint}
@@ -167,6 +236,22 @@ export function SecurityPoolTakeover({ model, actions }: { model: { snapshot: Ta
 				}}
 				disabled={actions.busy !== undefined}
 			/>
+			{redesigned && distressed && preview !== undefined && (
+				<div className='statoblast-liquidation-reward'>
+					<strong>{copy.takeoverReward}</strong>
+					<progress aria-label={copy.takeoverReward} max={1} value={rewardProgress} />
+					<MetricGrid>
+						<MetricField label={copy.rewardNow}>
+							<CurrencyValue value={source?.healthy !== true && timeBasedReward !== undefined && timeBasedReward >= 0n ? timeBasedReward : source?.maximumTakeoverReward} suffix={common.rep} />
+						</MetricField>
+						<MetricField label={copy.rewardMax}>
+							<CurrencyValue value={preview.position.rep} suffix={common.rep} />
+						</MetricField>
+						<MetricField label={copy.takeoverNow}>{displayCollateral(source?.maximumTakeoverCommitment)}</MetricField>
+						<MetricField label={copy.takeoverLater}>{displayCollateral(laterTakeover?.maximumTakeoverCommitment)}</MetricField>
+					</MetricGrid>
+				</div>
+			)}
 			<MetricGrid>
 				<MetricField label={copy.targetRep}>
 					<CurrencyValue value={preview?.position.rep} suffix={common.rep} />
@@ -203,6 +288,21 @@ export function SecurityPoolTakeover({ model, actions }: { model: { snapshot: Ta
 					/>
 				))}
 			</div>
+			{redesigned && distressed && (
+				<button type='button' className='secondary' disabled={source === undefined || actions.busy !== undefined} onClick={applySuggestedBound}>
+					{copy.suggestLimit}
+				</button>
+			)}
+			{redesigned && fill !== undefined && (
+				<MetricGrid>
+					<MetricField label={copy.previewPledged}>
+						<CurrencyValue value={pledgedBefore} suffix={common.rep} /> → <CurrencyValue value={pledgedBefore + fill.takeoverReward} suffix={common.rep} />
+					</MetricField>
+					<MetricField label={copy.previewCommitment}>
+						{displayCollateral(commitmentBefore)} → {displayCollateral(commitmentBefore + fill.commitment)}
+					</MetricField>
+				</MetricGrid>
+			)}
 			<div className='actions'>
 				<SecurityPoolButton model={actions} action='takeOverSecurityPoolPosition' label={copy.takeOver} pendingLabel={copy.takingOver} reason={reason} sharedReasonId={reasonId} onClick={takeOver} />
 				<SecurityPoolButton model={actions} action='cureSecurityPoolPosition' label={copy.cure} pendingLabel={copy.curing} reason={cureReason} sharedReasonId={reasonId} onClick={cure} />

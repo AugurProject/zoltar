@@ -37,7 +37,7 @@ function rep(value: bigint) {
 }
 
 function settlementButtonLabel(outcome: string) {
-	return within(document.body).getByRole('button', { name: new RegExp(`^(Claim .* REP from ${outcome}|Clear ${outcome} deposits)`) }).textContent ?? ''
+	return within(document.body).getByRole('button', { name: new RegExp(`^(Claim .* REP from ${outcome}|Remove settled ${outcome} records)`) }).textContent ?? ''
 }
 
 function reportingButtonLabel(outcome: string) {
@@ -437,7 +437,7 @@ describe('ReportingSection', () => {
 		const details = createReportingDetails({ questionOutcome: 'no', parentWithdrawalEnabled: true, settlementState: 'resolved' })
 		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
 		cleanupRenderedComponent = rendered.cleanup
-		expect(settlementButtonLabel('Yes')).toBe('Clear Yes deposits (worth 0 REP)…')
+		expect(settlementButtonLabel('Yes')).toBe('Remove settled Yes records (0 REP payout)…')
 		expect(document.body.textContent).toContain('Losing ordinary deposits return no REP and require no cleanup transaction. Reporter deposits are separate from security pool capital.')
 	})
 
@@ -2722,7 +2722,7 @@ describe('ReportingSection', () => {
 			}
 			expect(status?.classList.contains('notice')).toBe(false)
 			expect(status?.querySelector('strong:not(.notice-title)')?.textContent).toBe(winning ? 'You’re leading on Yes.' : 'You’re behind on Yes.')
-			expect(document.body.textContent).toContain(`Check back before ${formatReportingDeadline(300n, 150n)}. A report that raises the middle of the three balances can extend the response window (up to 7 weeks after activation, following the initial 3-day delay).`)
+			expect(document.body.textContent).toContain(`Check back before ${formatReportingDeadline(300n, 150n)}. A report that raises the middle of the three balances can extend the response window.`)
 			expect(within(document.body).getByRole('button', { name: 'Add reminder (.ics)' })).not.toBeNull()
 			if (!winning) {
 				const input = document.getElementById('reporting-contribution-amount')

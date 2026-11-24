@@ -334,7 +334,7 @@ test('retirement service stays disabled while the owner request lacks capacity',
 		})),
 	}
 	const { hook, requests } = await setup(snapshot)
-	expect(hook.state().serveReason).toBe('Retirement is not ready.')
+	expect(hook.state().serveReason).toBe('Waiting for free capacity')
 	expect(() => act(() => hook.state().serve())).toThrow(hook.state().serveReason)
 	expect(requests).toHaveLength(0)
 })

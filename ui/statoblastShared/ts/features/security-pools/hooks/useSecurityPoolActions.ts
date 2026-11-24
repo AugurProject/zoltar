@@ -36,6 +36,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 	const questionInput = useSignal('')
 	const busy = useSignal<string | undefined>(undefined)
 	const error = useSignal<string | undefined>(undefined)
+	const lastFailedAction = useSignal<string | undefined>(undefined)
 	const feedback = useSignal<string | undefined>(undefined)
 	const snapshot = model.snapshot
 	const backend = getActiveBackend()
@@ -120,6 +121,8 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 				},
 			)
 		} finally {
+			if (error.value !== undefined) lastFailedAction.value = action
+			else if (lastFailedAction.value === action && feedback.value !== undefined) lastFailedAction.value = undefined
 			busy.value = undefined
 		}
 	}
@@ -187,11 +190,12 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		(model.loading ? copy.loading : undefined) ??
 		(snapshot === undefined ? copy.enterSecurityPool : undefined) ??
 		(!admissionAllowed ? copy.unsupportedAdmission : undefined) ??
-		(snapshot !== undefined && (snapshot.forkTime > 0n || snapshot.universeId !== snapshot.originUniverseId) ? 'Register questions in the unforked origin universe.' : undefined) ??
+		(snapshot !== undefined && (snapshot.forkTime > 0n || snapshot.universeId !== snapshot.originUniverseId) ? copy.registrationOriginRequired : undefined) ??
 		(questionId === undefined ? copy.registerDisabled : admissionStatus)
 	return {
 		runSecurityPoolAction: run,
 		busy: busy.value,
+		lastFailedAction: lastFailedAction.value,
 		error: error.value,
 		feedback: feedback.value,
 		scope,

@@ -99,9 +99,9 @@ export const availableBalance = (amount: string) => `Available: ${amount} REP.`
 export const yourPositions = 'Your positions'
 export const resultSummary = (outcome: string) => `Resolved as ${outcome}.`
 export const claimDeposits = (outcome: string, amount: string) => `Claim ${amount}\u00a0REP from ${outcome}`
-export const clearDeposits = (outcome: string) => `Clear ${outcome} deposits (worth 0 REP)`
+export const clearDeposits = (outcome: string) => `Remove settled ${outcome} records (0 REP payout)`
 export const clearLosingDepositsDetail = 'Losing ordinary deposits return no REP and require no cleanup transaction. Reporter deposits are separate from security pool capital.'
-export const clearLosingDepositsReviewDescription = 'Returns no REP. Ordinary losing deposits retire automatically at finality.'
+export const clearLosingDepositsReviewDescription = 'Returns no REP. Losing deposits need no action after resolution.'
 export const results = 'Results'
 
 export const reportedAmount = (outcome: string, amount: string) => `Reported ${amount} REP on ${outcome}`
@@ -126,13 +126,13 @@ export const tieStatusLead = 'No side leads right now.'
 export const tieStatusDetail = (deadline: string) => `If this stays tied at ${deadline}, no side wins (`
 export const tiesResolve = 'see how ties resolve'
 export const tieStatusEnd = ').'
-export const checkBack = (deadline: string) => `Check back before ${deadline}. A report that raises the middle of the three balances can extend the response window (up to 7 weeks after activation, following the initial 3-day delay).`
+export const checkBack = (deadline: string) => `Check back before ${deadline}. A report that raises the middle of the three balances can extend the response window.`
 export const addReminder = 'Add reminder (.ics)'
 export const reminderSummary = (title: string) => `Check escalation: ${title}`
 export const deadlineMoved = (deadline: string) => `The response window now ends ${deadline} because a new report was added. Your status may have changed.`
 export const explainerTitle = 'How the escalation game works'
 export const explainerFirstReport = (bond: string) => `Put REP behind the outcome you believe is correct. The first report must be at least ${bond} REP.`
-export const explainerCompetition = 'Other reporters can overtake your side, even in the last seconds. A report that raises the middle of the three balances extends the response window, up to 7 weeks after activation, following the initial 3-day delay; a change of leader does not start a separate response period.'
+export const explainerCompetition = 'Other reporters can overtake your side, even in the last seconds. A report that raises the middle of the three balances extends the response window.'
 export const explainerResolution = 'When the response window ends, the side with the most REP wins. Winning deposits get their REP back, and eligible early deposits may also earn a reward; losing deposits are lost.'
 export const explainerForkLead = 'If two sides both reach the '
 export const formatExplainerForkThresholdSeparator = (threshold: string) => ` (${threshold} REP), the game stops and a `

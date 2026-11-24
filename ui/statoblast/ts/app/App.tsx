@@ -1,5 +1,6 @@
+import { openHistory } from './lib/watchlistHistory.js'
 import * as pageCopy from '@zoltar/ui-statoblast-shared/copy/statoblastShell.js'
-import type { RegisterStatoblastPageRefresh } from '@zoltar/ui-statoblast-shared/features/useStatoblastPageRefresh.js'
+import type { RegisterStatoblastPageRefresh, ReportStatoblastReadStatus } from '@zoltar/ui-statoblast-shared/features/useStatoblastPageRefresh.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
 import { createActiveEnvironmentGuard, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { localEntityScopeForNetwork, setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
@@ -7,6 +8,7 @@ import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import { getBrowserStorage } from '@zoltar/ui-core-shared/lib/browserStorage.js'
+import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import { hasInvalidUniverseQueryParam, readUniverseQueryParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
@@ -58,19 +60,19 @@ function readPage(search: string, routeHash: string) {
 	let page = parsed
 	if (malformedUniverse) page = { kind: 'not-found' }
 	else if (parsed.kind === 'choose-universe') page = { kind: 'watchlist' }
-	return { page, activeUniverseId: readUniverseQueryParam(search) ?? readUniverseQueryParam(pageSearch) ?? 0n }
+	return { page, openDepositSearch: new URLSearchParams(search).get('locate') === '1', activeUniverseId: readUniverseQueryParam(search) ?? readUniverseQueryParam(pageSearch) ?? 0n }
 }
 
 export function App() {
 	const {
-		state: { page, activeUniverseId },
+		state: { page, activeUniverseId, openDepositSearch },
 		navigate,
 	} = useUrlSearchState(readPage)
 	const [autoRefresh, setAutoRefresh] = useState(() => readPreference(autoRefreshKey) === 'on')
 	const [universeMenuOpen, setUniverseMenuOpen] = useState(false)
 	const [committedBranch, setCommittedBranch] = useState<string>()
 	const [refreshingPage, setRefreshingPage] = useState(false)
-	const [lastRefreshedAt, setLastRefreshedAt] = useState<number>()
+	const [readStatus, setReadStatus] = useState<{ scope: string; readAt: number | undefined; progress: string | undefined }>()
 	const pageRefreshInFlight = useRef(false)
 	const currentPageRefresh = useRef(new Set<() => Promise<unknown>>())
 	const registerPageRefresh = useCallback<RegisterStatoblastPageRefresh>(refresh => {
@@ -79,7 +81,6 @@ export function App() {
 			currentPageRefresh.current.delete(refresh)
 		}
 	}, [])
-	const repPrices = useRepPrices()
 	const {
 		accountState,
 		activeEnvironmentNonce,
@@ -98,7 +99,6 @@ export function App() {
 		refreshActiveEnvironment,
 		refreshSimulationView,
 		refreshCurrentBlock,
-		routeContentBlocked,
 		simulationController,
 		transactionTray,
 		walletBootstrapComplete,
@@ -114,8 +114,8 @@ export function App() {
 		isDeploymentRoute: false,
 		autoRefreshChainClock: autoRefresh,
 		onchainStateDependencies,
-		onRefresh: repPrices.refreshRepPrices,
 	})
+	const repPrices = useRepPrices({ enabled: canReadOnchainData, headerOnly: true })
 	const includeRelatedUniverses = universeMenuOpen || page.kind === 'migrate-rep' || (page.kind === 'pool' && page.tab === 'fork')
 	const operations = useMarketCreation({
 		...walletScopedHookConfig,
@@ -143,6 +143,7 @@ export function App() {
 	}
 	const { zoltarUniverse, zoltarUniverseError } = operations
 	const enabled = canReadOnchainData && walletBootstrapComplete
+	useBlockRefresh(() => void repPrices.refreshRepPrices(), enabled)
 	const selectedUniverse = zoltarUniverse?.universeId === activeUniverseId ? zoltarUniverse : undefined
 	const watchlistHref = statoblastPageHref({ kind: 'watchlist' })
 	const forked = selectedUniverse?.hasForked === true
@@ -151,12 +152,13 @@ export function App() {
 		pageRefreshInFlight.current = true
 		setRefreshingPage(true)
 		try {
+			const refreshPrice = repPrices.refreshRepPrices()
 			if (currentPageRefresh.current.size > 0) await Promise.all([...currentPageRefresh.current].map(refresh => refresh()))
 			else {
 				await refreshCurrentBlock()
 				if (page.kind === 'migrate-rep') await operations.loadZoltarUniverse({ clearCurrentState: false })
 			}
-			setLastRefreshedAt(Date.now())
+			await refreshPrice
 		} finally {
 			pageRefreshInFlight.current = false
 			setRefreshingPage(false)
@@ -171,9 +173,6 @@ export function App() {
 		document.addEventListener('visibilitychange', refreshWhenVisible)
 		return () => document.removeEventListener('visibilitychange', refreshWhenVisible)
 	}, [])
-	useEffect(() => {
-		if (currentBlockNumber !== undefined) setLastRefreshedAt(Date.now())
-	}, [currentBlockNumber])
 	const setUniverse = (universeId: bigint) => navigate(getCurrentRouteHash(), writeUniverseQueryParam(getRouteHashSearch(), universeId))
 	useEffect(() => {
 		const hash = getCurrentRouteHash()
@@ -194,13 +193,21 @@ export function App() {
 		</label>
 	)
 	const overview = getStatoblastUniversePresentation({ canReadOnchainData, ...operations })
-	const branchScope = page.kind === 'pool' ? `${page.pool}:${activeUniverseId}` : undefined
-	const branchAlreadyCommitted = branchScope !== undefined && branchScope === committedBranch
+	const branchScope = page.kind === 'pool' && walletScopedAccountAddress !== undefined ? `statoblast:branch:${profile.id}:${profile.chainIdHex}:${profile.genesisRepTokenAddress}:${page.pool}:${activeUniverseId}:${walletScopedAccountAddress}` : undefined
+	const branchAlreadyCommitted = branchScope !== undefined && (branchScope === committedBranch || readPreference(branchScope) === 'committed')
 	const forkAction = page.kind === 'pool' ? statoblastPageHref({ ...page, tab: 'fork' }) : statoblastPageHref({ kind: 'migrate-rep' })
 	const forkActionLabel = page.kind === 'pool' ? pageCopy.chooseBranchAction : pageCopy.migrateRepAction
 	const repToEth = repPrices.repPerEthPrice
 	const repPrice = repToEth === undefined || repToEth === 0n ? undefined : formatUnits(10n ** 36n / repToEth, 18)
 	const routeKey = parseRouteHash(window.location.hash).routeHash
+	const readScope = `${activeEnvironmentNonce}:${activeUniverseId}:${walletScopedAccountAddress ?? ''}:${routeKey}`
+	const reportReadStatus = useCallback<ReportStatoblastReadStatus>((readAt, progress) => setReadStatus({ scope: readScope, readAt, progress }), [readScope])
+	const currentReadStatus = readStatus?.scope === readScope ? readStatus : undefined
+	useEffect(() => {
+		const history = openHistory(profile)
+		if (page.kind === 'pool') history.add({ ...page, tab: 'capital' }, page.pool, activeUniverseId)
+		if (page.kind === 'question') history.add({ ...page, tab: 'shares', sharesAction: undefined }, formatQuestionIdHex(page.questionId), activeUniverseId)
+	}, [profile, activeUniverseId, page.kind === 'pool' || page.kind === 'question' ? page.pool : undefined, page.kind === 'question' ? page.questionId : undefined])
 	const oracleApp = new URL('../openoracle/#/open-oracle', window.location.href)
 	if (window.location.port === '12347') {
 		oracleApp.port = '4143'
@@ -242,7 +249,7 @@ export function App() {
 										<button className='secondary statoblast-refresh' type='button' aria-label={pageCopy.refresh} disabled={!enabled || refreshingPage} onClick={() => void refreshPage()}>
 											↻
 											<span className='statoblast-refresh-status'>
-												{refreshingPage ? pageCopy.refreshing : <UpdatedAgo updatedAt={lastRefreshedAt} />}
+												{currentReadStatus?.progress ?? (refreshingPage ? pageCopy.refreshing : <UpdatedAgo updatedAt={currentReadStatus?.readAt} />)}
 												<span className='statoblast-auto-state'>
 													{pageCopy.autoLead}
 													{autoRefresh ? pageCopy.on : pageCopy.off}
@@ -277,12 +284,13 @@ export function App() {
 						{forked && (
 							<div className='statoblast-fork-banner'>
 								<strong>{pageCopy.universeForked}</strong>
+								<a href='../docs/explanation/statoblast.html#forks-migration'>{pageCopy.forkHelp}</a>
 								{page.kind !== 'migrate-rep' && !branchAlreadyCommitted && !(page.kind === 'pool' && page.tab === 'fork') && <a href={forkAction}>{forkActionLabel}</a>}
 							</div>
 						)}
 					</>
 				}
-				routeContentDisabled={routeContentBlocked && !applicationDeploymentMissing && page.kind !== 'choose-universe' && page.kind !== 'not-found'}
+				routeContentDisabled={false}
 				transactionRouteKey={routeKey}
 				transactionState={transactionTray.transactionState.value}
 				walletActions={overviewWalletProps}
@@ -294,18 +302,21 @@ export function App() {
 					deploy={deployRouteContentProps}
 					securityPools={{
 						cacheReads: true,
+						onReadStatus: reportReadStatus,
 						parameters: saveTouchedItem,
 						walletConnected: accountState.address !== undefined,
 						enabled,
 						environmentKey: activeEnvironmentNonce,
 						activeUniverseId,
-						binaryFork: zoltarUniverse?.forkQuestionDetails?.marketType === 'binary',
+						forkQuestion: selectedUniverse?.forkQuestionDetails,
 						onSelectUniverse: setUniverse,
-						onBranchCommitted: committed => setCommittedBranch(committed ? branchScope : undefined),
+						onBranchCommitted: committed => {
+							if (branchScope !== undefined) savePreference(branchScope, committed ? 'committed' : '')
+							setCommittedBranch(committed ? branchScope : undefined)
+						},
 						openOracleHref: oracleApp.href,
 					}}
-					readBackendMessage={readBackendMessage}
-					questions={{ accountState, parameters: saveTouchedItem, deploymentStatuses, enabled, environmentKey: activeEnvironmentNonce, universeId: activeUniverseId, currentTimestamp }}
+					questions={{ onReadStatus: reportReadStatus, autoRefresh, openDepositSearch, accountState, parameters: saveTouchedItem, deploymentStatuses, enabled, environmentKey: activeEnvironmentNonce, universeId: activeUniverseId, currentTimestamp }}
 					migration={{
 						accountState,
 						activeUniverseId,

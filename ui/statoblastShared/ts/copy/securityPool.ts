@@ -54,16 +54,16 @@ export const fixedQuestionIdsHint = 'Separate decimal or hexadecimal IDs with co
 export const purchaseFeePercent = 'Base purchase fee (%)'
 export const minimumPurchaseFee = 'Minimum base purchase fee'
 export const immutableEconomics = 'Admission and economic settings are fixed at security pool creation. Each owner chooses their own health target and commitment.'
-export const deployAdmission = 'Deploy admission policy'
-export const deployingAdmission = 'Deploying admission policy…'
-export const deployAdmissionFirst = 'Deploy the selected admission policy first'
-export const admissionDeployed = 'Admission policy deployed'
-export const admissionAddressMissing = 'Admission policy deployment address unavailable.'
+export const deployAdmission = 'Prepare question rules'
+export const deployingAdmission = 'Preparing question rules…'
+export const deployAdmissionFirst = 'Deploy the selected question rules first'
+export const admissionDeployed = 'Question rules deployed'
+export const admissionAddressMissing = 'Question rules deployment address unavailable.'
 export const creationInvalid = 'Check the security pool configuration.'
-export const unsupportedAdmission = 'This admission policy is not supported by this interface. Withdrawals and fork recovery remain available.'
+export const unsupportedAdmission = 'These question rules are unsupported. Withdrawals and fork recovery remain available.'
 export const admissionCustom = 'Custom policy — underwriting unavailable'
 export const admissionChecking = 'Checking question admission…'
-export const admissionCheckFailed = 'Could not verify the question admission policy.'
+export const admissionCheckFailed = 'Could not verify the question rules.'
 export const approvedQuestionCount = (count: bigint) => `${count} permanently approved question${count === 1n ? '' : 's'}. Only the current page is listed below.`
 
 export const readUnavailable = 'Account refresh pending.'
@@ -72,13 +72,13 @@ export const triggerUniverseFork = 'Trigger universe fork'
 
 export const triggerUniverseForkDescription = 'This unresolved question forks its universe. Security pool owners choose a recovery branch. Reporter balances are copied into every child branch.'
 
-export const forkAdmission = 'Fork admission'
+export const forkCost = 'Cost from your wallet'
+export const registrationOriginRequired = 'Register questions in the unforked origin universe.'
+export const forkAdmission = 'Fork the universe'
 
 export const approveForkAdmission = 'Approve fork admission REP'
 
 export const approveForkAdmissionDescription = 'REP supply grew after this Escalation Game started, so its escrow is below the fork threshold. Your wallet pays the difference; it joins the question escrow without a separate claim.'
-
-export const forkAdmissionShortfallDetail = 'REP supply grew after this game started; your wallet pays the escrow shortfall. The default approval adds 1 REP for further growth.'
 
 export const forkAdmissionActionLabel = 'triggering the fork'
 
@@ -96,7 +96,7 @@ export const questionUnavailable = 'Question unavailable'
 
 export const securityMultiplier = 'Security multiplier (%)'
 
-export const securityMultiplierHint = 'Minimum backing policy for this security pool. Vault owners can choose a higher health setting.'
+export const securityMultiplierHint = 'Minimum backing policy for this security pool. Position owners can choose a higher health target.'
 
 export const oraclePriorityFee = 'Oracle priority fee (nanoETH/gas)'
 

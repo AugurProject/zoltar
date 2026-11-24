@@ -1,7 +1,7 @@
 import { formatEther, formatUnits } from '@zoltar/core-shared/evm/ethereum'
 export const title = 'Branch collateral repair auction'
 export const description = 'Bid collateral to repair branch claims and create your own funded vault. All winning lots receive REP at the same clearing price.'
-export const ownership = 'Purchased REP backs your winning vault’s collateral commitment. Your health target is checked at opening; later prices can reduce its health. Vault losses, surplus withdrawals and retirement follow the ordinary vault rules.'
+export const ownership = 'Purchased REP backs your position’s commitment. Your position must meet your health target when it opens.'
 export const fairness = 'Equal-price bids fill in submission order. Each winning lot buys REP at the clearing price; unsold REP remains with inherited claims. Weak demand can leave the branch in runoff.'
 export const connect = 'Connect a wallet to view and fund your auction bids.'
 export const selectBranch = 'Select a fork branch first.'
@@ -42,7 +42,7 @@ export const bidLabel = (id: bigint) => `Bid ${id}`
 export const vault = 'Isolated vault account'
 export const requestedLots = 'Lots requested'
 export const filledLots = 'Lots won'
-export const principal = 'Current vault REP principal'
+export const principal = 'Current pledged REP'
 export const commitment = 'Current collateral commitment'
 export const earnedEth = 'Unclaimed collateral fees'
 export const earnedRep = 'Unclaimed REP fees'
@@ -87,3 +87,7 @@ export const bidReview = (lots: bigint, bidAttoEth: bigint, minimumAttoRepPerLot
 
 export const maximumAdmissible = 'Highest currently admissible limit'
 export const noAdmissibleLimit = 'No admissible new limit'
+
+export const inContention = 'In contention'
+export const outbid = 'Outbid'
+export const winning = 'Winning'

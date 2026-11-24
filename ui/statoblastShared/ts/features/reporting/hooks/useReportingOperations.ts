@@ -29,11 +29,12 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 type UseReportingOperationsParameters = WriteOperationsParameters
 type ResolvedReportingOperationsParameters = UseReportingOperationsParameters & {
 	selectedQuestionLedgerAddress?: string
+	includeSchedule?: boolean
 }
 
 export type UseReportingOperationsDependencies = {
 	approveReportingRep: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], questionLedgerAddress: Address, outcome: Parameters<typeof approveReportingRep>[2], amount: bigint) => ReturnType<typeof approveReportingRep>
-	loadReportingDetails: (questionLedgerAddress: Address, accountAddress: Address | undefined) => ReturnType<typeof loadReportingDetails>
+	loadReportingDetails: (questionLedgerAddress: Address, accountAddress: Address | undefined, includeSchedule?: boolean) => ReturnType<typeof loadReportingDetails>
 	reportOutcomeInQuestionLedger: (
 		accountAddress: Address,
 		callbacks: Parameters<typeof createWalletWriteClient>[1],
@@ -56,7 +57,7 @@ export type UseReportingOperationsDependencies = {
 
 const defaultUseReportingOperationsDependencies: UseReportingOperationsDependencies = {
 	approveReportingRep: async (accountAddress, callbacks, questionLedgerAddress, outcome, amount) => await approveReportingRep(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, outcome, amount),
-	loadReportingDetails: async (questionLedgerAddress, accountAddress) => await loadReportingDetails(createConnectedReadClient(), questionLedgerAddress, accountAddress),
+	loadReportingDetails: async (questionLedgerAddress, accountAddress, includeSchedule) => await loadReportingDetails(createConnectedReadClient(), questionLedgerAddress, accountAddress, includeSchedule),
 	reportOutcomeInQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress, outcome, amount, reviewAmount, triggersFork, requireLead) => await reportOutcomeInQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, outcome, amount, reviewAmount, triggersFork, requireLead),
 	withdrawEscalationFromQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress, outcome, depositIndexes, claimAmount) => await withdrawEscalationFromQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, outcome, depositIndexes, claimAmount),
 }
@@ -90,7 +91,7 @@ function pruneSelectedWithdrawDepositIndexesByOutcome(currentSelections: Reporti
 }
 
 export function useReportingOperations(
-	{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState, selectedQuestionLedgerAddress }: ResolvedReportingOperationsParameters,
+	{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState, selectedQuestionLedgerAddress, includeSchedule = false }: ResolvedReportingOperationsParameters,
 	dependencies: UseReportingOperationsDependencies = defaultUseReportingOperationsDependencies,
 ) {
 	const reportingLoad = useLoadController()
@@ -134,26 +135,28 @@ export function useReportingOperations(
 
 	const resolveReportingQuestionLedgerAddress = () => parseAddressInput(effectiveReportingPoolAddressInput, 'Question ledger address')
 
-	const loadReporting = async () => {
+	const readReporting = async () => {
 		const selectionKey = currentReportingSelectionKey
 		const isCurrentLoad = nextReportingLoad()
-		await reportingLoad.run({
+		return await reportingLoad.run({
 			isCurrent: () => isCurrentLoad() && isReportingSelectionCurrent(selectionKey),
 			onStart: () => {
 				reportingError.value = undefined
 			},
 			load: async () => {
 				const questionLedgerAddress = resolveReportingQuestionLedgerAddress()
-				return await dependencies.loadReportingDetails(questionLedgerAddress, accountAddress)
+				return await dependencies.loadReportingDetails(questionLedgerAddress, accountAddress, includeSchedule)
 			},
 			onSuccess: details => {
 				reportingDetails.value = details
 			},
 			onError: error => {
-				reportingDetails.value = undefined
 				reportingError.value = getErrorMessage(error, 'Failed to load reporting details')
 			},
 		})
+	}
+	const loadReporting = async () => {
+		await readReporting()
 	}
 
 	useEffect(() => {
@@ -375,6 +378,7 @@ export function useReportingOperations(
 		onApproveReportingRep: approveRepForReporting,
 		loadingReportingDetails: reportingLoad.isLoading.value,
 		loadReporting,
+		readReporting,
 		onReportOutcome: reportOutcome,
 		reportingActiveAction: questionChanged ? undefined : reportingActiveAction.value,
 		reportingDetails: questionChanged ? undefined : reportingDetails.value,

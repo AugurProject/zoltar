@@ -58,3 +58,9 @@ export const committedTail = ' committed'
 export const healthTail = '% health'
 export const earnedLead = 'Earned '
 export const poolAddressOrLink = 'Address or link'
+
+export const missingPoolContract = 'No contract exists at this address.'
+
+export const reportingOpen = 'Reporting open'
+export const poolPolicy = { open: ' · Open questions', fixed: ' · Fixed question list', custom: ' · Custom question rules' }
+export const formatPurchaseFee = (percent: string) => ` · ${percent}% purchase fee`

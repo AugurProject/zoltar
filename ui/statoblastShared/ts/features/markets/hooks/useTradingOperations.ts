@@ -71,6 +71,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 	const tradingDetailsLoad = useLoadController()
 	const nextTradingDetailsLoad = useRequestGuard()
 	const tradingDetails = useSignal<TradingDetails | undefined>(undefined)
+	const loadedDetailsScope = useSignal<string>()
 
 	const tradingForkUniverse = useSignal<ZoltarUniverseSummary | undefined>(undefined)
 	const tradingError = useSignal<string | undefined>(undefined)
@@ -83,6 +84,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 	const tradingSystemDeployed = isTradingSystemDeployed(deploymentStatuses)
 	const effectiveTradingPoolAddressInput = selectedQuestionLedgerAddress?.trim() === '' || selectedQuestionLedgerAddress === undefined ? tradingForm.value.questionLedgerAddress : selectedQuestionLedgerAddress
 	const currentTradingSelectionKey = normalizeAddress(effectiveTradingPoolAddressInput) ?? ''
+	const detailsScope = `${currentTradingSelectionKey}:${accountAddress ?? ''}`
 	const currentTradingSelectionKeyRef = useRef(currentTradingSelectionKey)
 	currentTradingSelectionKeyRef.current = currentTradingSelectionKey
 	const getPendingTitle = (actionName: TradingActionResult['action']) => {
@@ -188,17 +190,16 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 			},
 			load: async () => await loadTradingState(questionLedgerAddress, walletAddress),
 			onSuccess: ({ details, forkUniverse }: { details: TradingDetails; forkUniverse: ZoltarUniverseSummary | undefined }) => {
+				loadedDetailsScope.value = detailsScope
 				tradingDetails.value = details
 				tradingForkUniverse.value = forkUniverse
 			},
 			onError: (error: unknown) => {
-				tradingDetails.value = undefined
-				tradingForkUniverse.value = undefined
 				tradingError.value = getErrorMessage(error, 'Failed to load trading details.')
 			},
 		}
 
-		await tradingDetailsLoad.run(isCurrent === undefined ? loadOptions : { ...loadOptions, isCurrent })
+		return await tradingDetailsLoad.run(isCurrent === undefined ? loadOptions : { ...loadOptions, isCurrent })
 	}
 
 	// A confirmed write consumes its amount; a value the user typed since submitting stays.
@@ -248,6 +249,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 					const isOnActiveAppChain = isActiveAppChain(activeWallet.chainId)
 					const { details: latestTradingDetails, forkUniverse: latestForkUniverse } = await loadTradingState(questionLedgerAddress, walletAddress)
 					if (isActionSelectionCurrent()) {
+						loadedDetailsScope.value = detailsScope
 						tradingDetails.value = latestTradingDetails
 						tradingForkUniverse.value = latestForkUniverse
 					}
@@ -397,12 +399,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 
 	useEffect(() => {
 		nextTradingDetailsLoad()
-		if (!enabled) {
-			tradingDetails.value = undefined
-			tradingForkUniverse.value = undefined
-			tradingError.value = undefined
-			return
-		}
+		if (!enabled) return
 		targetOutcomeDefaults.current = undefined
 		if (tradingForm.value.targetOutcomeIndexes !== '')
 			tradingForm.value = {
@@ -476,10 +473,11 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 		migrateShares,
 		redeemCompleteSet,
 		redeemShares,
+		refreshShares: () => refreshTradingDetails(resolveEffectiveTradingPoolAddressInput(), accountAddress, nextTradingDetailsLoad()),
 		setTradingForm: (updater: (current: TradingFormState) => TradingFormState) => {
 			tradingForm.value = updater(tradingForm.value)
 		},
-		tradingDetails: tradingDetails.value,
+		tradingDetails: loadedDetailsScope.value === detailsScope ? tradingDetails.value : undefined,
 		tradingActiveAction: tradingActiveAction.value,
 		tradingError: tradingError.value,
 		tradingFeedback: tradingFeedback.value,

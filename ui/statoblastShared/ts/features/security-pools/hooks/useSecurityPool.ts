@@ -8,7 +8,7 @@ import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
-import { loadSecurityPoolAccount, loadSecurityPoolSetup, type SecurityPoolSetupSnapshot, type SecurityPoolAccountSnapshot } from '../../../protocol/securityPool.js'
+import { loadSecurityPoolAccount, loadSecurityPoolSetup, requireCanonicalSecurityPool, type SecurityPoolSetupSnapshot, type SecurityPoolAccountSnapshot } from '../../../protocol/securityPool.js'
 import { securityPoolUnsignedId } from '../lib/draft.js'
 
 function securityPoolStorageKey(chainId: number) {
@@ -108,24 +108,11 @@ export function useSecurityPool({
 				if (pageCache.current?.key !== cacheKey) {
 					pageCache.current = {
 						key: cacheKey,
-						storage: statoblastPageCache(renderedBackend.profile, { pool: securityPool, owner, universeId, page: `capital:${questionPage}:${admissionPage}` }),
+						storage: statoblastPageCache(renderedBackend.profile, { pool: securityPool, owner, universeId, page: `capital:${questionPage}:${admissionPage}` }, (readClient, block) => requireCanonicalSecurityPool(readClient, securityPool, block)),
 					}
 				}
 				const cache = pageCache.current.storage
-				if (presentationSnapshot.value === undefined) {
-					void cache
-						.loadCached(client, async cachedClient => {
-							const preparation = await loadSecurityPoolSetup(cachedClient, securityPool, owner)
-							return preparation.stage === 4 ? await loadSecurityPoolAccount(cachedClient, securityPool, owner, universeId, questionPage, admissionPage, securityPoolAddress === undefined) : undefined
-						})
-						.then(cached => {
-							if (cached === undefined || !current() || snapshot.value !== undefined || presentationSnapshot.value !== undefined) return
-							presentationSnapshot.value = cached.value
-							displayedAt.value = cached.savedAt
-							presentationContext.current = { environmentKey, backend: renderedBackend, guard: environment }
-						})
-						.catch(() => undefined)
-				}
+
 				return await cache.refresh(client, getMulticall3Address(), readPage, () => inFlight.current === id && current())
 			}
 			const result = read()
@@ -205,6 +192,34 @@ export function useSecurityPool({
 			generation.current++
 		}
 	}, [enabled, environmentKey, activeUniverseId, renderedBackend, backendReady, presentationEnvironmentCurrent])
+	useEffect(() => {
+		if (!cacheReads || !backendReady || presentationSnapshot.value !== undefined) return
+		const managerDraft = managerInput.value.trim()
+		const ownerDraft = ownerInput.value.trim()
+		const universeId = securityPoolUnsignedId(universeInput.value, 248)
+		if (!isAddress(managerDraft) || !isAddress(ownerDraft) || universeId === undefined) return
+		const manager = getAddress(managerDraft)
+		const owner = getAddress(ownerDraft)
+		const questionPage = questionStart.value
+		const admissionPage = admissionStart.value
+		const environment = createActiveEnvironmentGuard()
+		let current = true
+		const cache = statoblastPageCache(renderedBackend.profile, { pool: manager, owner, universeId, page: `capital:${questionPage}:${admissionPage}` })
+		void cache
+			.loadCached(renderedBackend.createReadClient(), async client => {
+				const preparation = await loadSecurityPoolSetup(client, manager, owner)
+				return preparation.stage === 4 ? await loadSecurityPoolAccount(client, manager, owner, universeId, questionPage, admissionPage, securityPoolAddress === undefined) : undefined
+			})
+			.then(cached => {
+				if (cached === undefined || !current || !environment.isCurrent() || !securityPoolBackendReady(renderedBackend) || presentationSnapshot.value !== undefined) return
+				presentationSnapshot.value = cached.value
+				displayedAt.value = cached.savedAt
+				presentationContext.current = { environmentKey, backend: renderedBackend, guard: environment }
+			})
+		return () => {
+			current = false
+		}
+	}, [cacheReads, backendReady, environmentKey, renderedBackend, managerInput.value, ownerInput.value, universeInput.value, questionStart.value, admissionStart.value])
 	useEffect(() => {
 		const walletOwner = accountAddress ?? (securityPoolAddress === undefined ? '' : zeroAddress)
 		if (!followsWallet.current || ownerInput.value === walletOwner) return

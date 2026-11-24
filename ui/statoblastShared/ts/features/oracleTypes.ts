@@ -46,6 +46,8 @@ export type ForkAdmissionApproval = {
 }
 
 export type ReportingSectionProps = ReportingRouteContentProps & {
+	designedOverview?: boolean
+	manageDeadlineRefresh?: boolean
 	showLifecycle?: boolean
 	allowInProgressClaims?: boolean
 	oracleBlocker?: import('preact').ComponentChildren

@@ -1,3 +1,7 @@
+import * as securityPoolPriceCopy from '@zoltar/ui-statoblast-shared/copy/securityPoolPrice.js'
+import * as securityPoolSharedForkCopy from '@zoltar/ui-statoblast-shared/copy/securityPoolSharedFork.js'
+import * as securityPoolCapitalCopy from '@zoltar/ui-statoblast-shared/copy/securityPoolCapital.js'
+import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import { expect, test } from 'bun:test'
@@ -20,4 +24,10 @@ test('a trailing position without a known minimum omits the amount instead of sh
 
 test('step progress counts the escalation phases', () => {
 	expect(reportingCopy.phaseProgress(2, 'Response window')).toBe(`Step 2 of ${reportingCopy.phaseLabels.length} · Response window`)
+})
+
+test('Statoblast workflow copy uses the redesign glossary and live values', () => {
+	const copy = [reportingCopy, securityPoolCopy, securityPoolCapitalCopy, securityPoolSharedForkCopy, securityPoolPriceCopy]
+	const labels = [...copy.flatMap(module => Object.values(module).filter(value => typeof value === 'string')), reportingCopy.clearDeposits('No')]
+	for (const label of labels) expect(label).not.toMatch(/7 weeks|3-day|eight weeks|5% headroom|adds 1 REP|settlement demand|unused healthy capacity|retiring|conservative health|liquidation boundary|scanner or liquidator|funding recipient|vault owners|clear no deposits|\bprincipal\b/i)
 })

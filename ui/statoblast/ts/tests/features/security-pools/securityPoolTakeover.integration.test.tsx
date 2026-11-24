@@ -73,7 +73,7 @@ describe('manual takeover against native security pool contracts', () => {
 			const button = view.container.querySelector('button')
 			if (button === null) throw new Error('Missing takeover action')
 			if (scenario === 'rejected-bounds') {
-				await waitFor(() => expect(view.container.textContent).toContain('Your resulting principal exceeds the maximum total principal.'))
+				await waitFor(() => expect(view.container.textContent).toContain('The resulting pledged REP exceeds your limit.'))
 				expect(button.disabled).toBe(true)
 			} else await waitFor(() => expect(button.disabled).toBe(false))
 			expect(snapshot.ownerCommitmentAttoEth).toBe(0n)

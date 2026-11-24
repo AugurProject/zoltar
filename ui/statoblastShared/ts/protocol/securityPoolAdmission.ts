@@ -16,16 +16,22 @@ export function requireFixedAdmissionQuestionLimit(count: number) {
 	if (count > maxFixedAdmissionQuestions) throw new Error(`A fixed admission policy supports up to ${maxFixedAdmissionQuestions} approved questions per deployment.`)
 }
 
-/** Curation is based on deployed bytecode, never an untrusted policy's self-description. */
-export async function loadSecurityPoolAdmission(client: Pick<ReadClient, 'getCode' | 'readContract'>, address: Address, universeId: bigint, blockNumber?: bigint, questionStart = 0n): Promise<SecurityPoolAdmission> {
-	const code = await client.getCode({ address, blockNumber })
-	if (code === `0x${openArtifact.evm.deployedBytecode.object}`) return { address, mode: 'open' }
+/** Classify known open and fixed-list policies from runtime code. */
+export function identifySecurityPoolAdmission(code: Awaited<ReturnType<ReadClient['getCode']>>) {
+	if (code === `0x${openArtifact.evm.deployedBytecode.object}`) return 'open'
 	try {
 		verifyRuntimeCode(code, `0x${fixedArtifact.evm.deployedBytecode.object}`, fixedArtifact.evm.deployedBytecode.immutableReferences, 'fixed question policy')
+		return 'fixed'
 	} catch (failure) {
 		if (!(failure instanceof Error) || (failure.message !== 'Unrecognized fixed question policy runtime code.' && failure.message !== 'Inconsistent fixed question policy immutable values.')) throw failure
-		return { address, mode: 'custom' }
+		return 'custom'
 	}
+}
+
+/** Curation is based on deployed bytecode, never an untrusted policy's self-description. */
+export async function loadSecurityPoolAdmission(client: Pick<ReadClient, 'getCode' | 'readContract'>, address: Address, universeId: bigint, blockNumber?: bigint, questionStart = 0n): Promise<SecurityPoolAdmission> {
+	const mode = identifySecurityPoolAdmission(await client.getCode({ address, blockNumber }))
+	if (mode !== 'fixed') return { address, mode }
 	const policyUniverse = await client.readContract({ address, abi: admissionAbi, functionName: 'universeId', blockNumber })
 	if (policyUniverse !== universeId) return { address, mode: 'custom' }
 	const questionCount = await client.readContract({ address, abi: admissionAbi, functionName: 'questionCount', blockNumber })

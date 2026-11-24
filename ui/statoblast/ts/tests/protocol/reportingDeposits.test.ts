@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { encodeAbiParameters, encodeEventTopics, keccak256, parseAbi, parseAbiParameters, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { searchReportingDepositsPage } from '@zoltar/ui-statoblast-shared/protocol/reportingDepositSearch.js'
+import { reportingDepositCursorStore, searchReportingDepositsPage } from '@zoltar/ui-statoblast-shared/protocol/reportingDepositSearch.js'
 import { createBlockWithTimestamp, createMulticallStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
 import { captureReportingDeposits, reportingDepositStore } from '@zoltar/ui-statoblast-shared/protocol/reportingDeposits.js'
@@ -64,4 +64,34 @@ test('search restarts at zero when the stored block was reorganized and does not
 	expect(result.confirmed).toEqual({ block: 7n, hash: currentHash, nextIndex: 0n })
 	expect(result.position.nextIndex).toBe(1n)
 	expect(result.end).toBe(true)
+})
+
+test('a fresh device finds a wallet deposit on the second page and Search again starts from zero', async () => {
+	const blockHash = keccak256('0x03')
+	const starts: bigint[] = []
+	const makeDeposit = (depositor: Address) => ({ depositor, amountAttoRep: 5n, cumulativeAmountAttoRep: 5n })
+	const client = testDouble<Parameters<typeof searchReportingDepositsPage>[0]>({
+		getBlock: async ({ blockNumber = 10n }: { blockNumber?: bigint } = {}) => ({ ...createBlockWithTimestamp(20n), hash: blockHash, number: blockNumber }),
+		multicall: createMulticallStub(request => {
+			if (request.allowFailure) return [{ status: 'success', result: 31n }]
+			return request.contracts.map(call => {
+				const start = call.args?.[1]
+				if (typeof start !== 'bigint') throw new Error('Missing page offset.')
+				starts.push(start)
+				if (start === 0n) return Array.from({ length: 30 }, () => makeDeposit(other))
+				return start === 30n ? [makeDeposit(wallet)] : []
+			})
+		}),
+	})
+	const side = { pool: other, questionId: 5n, universeId: 0n, outcome: 'yes' as const, depositor: wallet }
+	const cursor = reportingDepositCursorStore(MAINNET_NETWORK_PROFILE, side)
+	expect(cursor.read()).toBeUndefined()
+	const first = await searchReportingDepositsPage(client, game, side, cursor.read())
+	expect(first.totalDeposits).toBe(31n)
+	expect(first.matches.map(match => match.deposit.index)).toEqual([30n])
+	cursor.write(first.confirmed)
+	expect(cursor.read()?.nextIndex).toBe(31n)
+	cursor.write(undefined)
+	await searchReportingDepositsPage(client, game, side, cursor.read())
+	expect(starts).toEqual([0n, 30n, 0n, 30n])
 })

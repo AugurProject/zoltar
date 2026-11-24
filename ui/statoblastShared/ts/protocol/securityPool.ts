@@ -1,3 +1,4 @@
+import { currentStateCheckFailed } from '@zoltar/ui-core-shared/copy/transaction.js'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { collateralPresentation } from './collateral.js'
 import { encodeFunctionData, getAddress, parseAbi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
@@ -40,7 +41,7 @@ import { readRequiredMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js
 import { loadSecurityPoolAdmission } from './securityPoolAdmission.js'
 import { authenticateSecurityPoolAuctionVault, isCanonicalAuctionVaultImplementation } from './securityPoolRepairAuction.js'
 
-export type SecurityPoolTransaction = { account: Address; to?: Address; data: Hex; value?: bigint; gas?: bigint; reviewDescription?: string; validateBeforeSubmit?: () => Promise<void> }
+export type SecurityPoolTransaction = { account: Address; to?: Address; data: Hex; value?: bigint; gas?: bigint; reviewDescription?: string; readReviewRows?: (() => readonly { label: string; value: string }[]) | undefined; validateBeforeSubmit?: () => Promise<void> }
 const linksAbi = parseAbi([
 	'function securityPool() view returns (address)',
 	'function implementation() view returns (address)',
@@ -113,7 +114,7 @@ export async function verifyCapitalLedgerClone(client: ReadClient, securityPool:
  * The canonical factory deploys every security pool from its pinned creation code and module deployers and records it.
  * Runtime code alone proves nothing about the constructor arguments, so this record is what authenticates the modules.
  */
-async function requireCanonicalSecurityPool(client: Pick<ReadClient, 'readContract'>, securityPool: Address, blockNumber?: bigint) {
+export async function requireCanonicalSecurityPool(client: Pick<ReadClient, 'readContract'>, securityPool: Address, blockNumber?: bigint) {
 	const recorded = await client.readContract({ address: getInfraContractAddresses().securityPoolFactory, abi: linksAbi, functionName: 'isSecurityPool', args: [securityPool], ...(blockNumber === undefined ? {} : { blockNumber }) })
 	if (recorded !== true) throw new Error('Security pool was not deployed by the canonical factory.')
 }
@@ -297,7 +298,7 @@ export async function sendSecurityPoolTransaction(client: WriteClient, request: 
 			await simulate()
 		})(),
 		15_000,
-		'Transaction check timed out. Try again.',
+		currentStateCheckFailed,
 	)
 	const checkedAt = performance.now()
 	const review = { functionName: title, contractAddress: captured.to, data: captured.data, value: captured.value, reviewTitle: title, reviewDescription: captured.reviewDescription, ...gas }
@@ -305,6 +306,7 @@ export async function sendSecurityPoolTransaction(client: WriteClient, request: 
 		{
 			...review,
 			requireReview: true,
+			readReviewRows: captured.readReviewRows,
 			validateBeforeSubmit: async () => {
 				await validateCaptured()
 				if (performance.now() - checkedAt > 30_000) await simulate()

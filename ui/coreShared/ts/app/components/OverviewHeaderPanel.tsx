@@ -40,7 +40,7 @@ export function OverviewHeaderPanel({ applicationTitle, brandHref, badges, contr
 					brandHref === undefined ? (
 						<ApplicationBrand applicationTitle={applicationTitle} />
 					) : (
-						<a href={brandHref} className='statoblast-brand-link'>
+						<a href={brandHref} className='application-brand-link'>
 							<ApplicationBrand applicationTitle={applicationTitle} />
 						</a>
 					)

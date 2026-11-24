@@ -24,7 +24,8 @@ export async function loadStatoblastQuestion(client: ReadClient, pool: Address, 
 	if (checked?.status === 'failed') throw checked.error
 	if (checked?.status === 'unregistered-question') throw new Error('Question not registered')
 	if (checked?.status === 'unprepared-question') throw new Error('Question pool unavailable')
-	if (checked?.status !== 'question') throw new Error('This is not a Statoblast security pool.')
+	if (checked?.status === 'non-statoblast-contract') throw new Error('This contract is not a Statoblast security pool.')
+	if (checked?.status !== 'question') throw new Error('No contract exists at this security pool address.')
 	const [question, sharesFacts] = await Promise.all([loadCheckedQuestionLedger(client, checked.ledger, universeId, anchor.blockNumber), includeSharesFacts ? readSharesFacts(client, checked.pool, universeId, anchor.blockNumber).catch(() => undefined) : undefined])
 	await requireDeploymentRegistryAnchor(client, anchor, 'Question changed during refresh.')
 	return { question, sharesFacts, block: { number: anchor.blockNumber, timestamp: anchor.timestamp } }

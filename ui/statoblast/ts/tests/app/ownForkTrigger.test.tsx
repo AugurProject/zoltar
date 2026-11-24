@@ -8,7 +8,6 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as transactionStepsCopy from '@zoltar/ui-core-shared/copy/transactionSteps.js'
 import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 import { ReportingSection } from '@zoltar/ui-statoblast-shared/features/reporting/components/ReportingSection.js'
 import type { OwnForkAdmission } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
@@ -147,12 +146,13 @@ describe('own-question fork admission', () => {
 		await waitFor(() => expect(sent).toEqual([`approve:${(shortfall + ATTO_REP).toString()}`, 'fork']))
 	})
 
-	test('without a shortfall the approval stays in place as not needed and one fork click sends exactly the fork', async () => {
+	test('without a shortfall the cost is shown and one fork click sends exactly the fork', async () => {
 		const { dependencies, sent } = createDependencies({ allowanceAttoRep: 0n, recommendedApprovalAttoRep: 0n, shortfallAttoRep: 0n })
 		const rendered = await renderIntoDocument(<Harness dependencies={dependencies} />)
 		trackCleanup(rendered.cleanup)
 		await waitFor(() => expectTransactionButtonEnabled(document.body, securityPoolCopy.triggerUniverseFork))
-		expectTransactionButtonDisabled(forkSection(), transactionStepsCopy.skipped)
+		expect(within(forkSection()).queryByRole('button', { name: /approve/i })).toBeNull()
+		expect(forkSection().textContent).toContain(securityPoolCopy.forkCost)
 		// A finished step shows the read allowance, not a loading placeholder.
 		expect(forkSection().textContent).not.toContain('—')
 		await act(async () => {

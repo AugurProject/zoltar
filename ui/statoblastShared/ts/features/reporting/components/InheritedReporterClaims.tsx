@@ -1,3 +1,5 @@
+import { serializeStoredValue } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
+import type { ReadClient, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import * as pageCopy from '../../../copy/reportingDeposits.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
@@ -16,7 +18,7 @@ import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/t
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { buildForkCarriedEscalationProofs, loadForkCarriedEscalationDepositsFromParentSnapshot, withdrawForkedEscalationDeposits } from '../../../protocol/reportingCarryState.js'
+import { buildForkCarriedEscalationProofs, loadForkCarriedEscalationDepositsFromParentSnapshot, withdrawForkedEscalationDeposits, type ParentClaimPreparation } from '../../../protocol/reportingCarryState.js'
 import { loadReportingDetails } from '../../../protocol/reporting.js'
 import type { ActiveReportingDetails, AuthenticatedForkClaim, ReportingDetails } from '../../../types/contracts.js'
 import type { AccountState, WriteOperationsParameters } from '../../../types/app.js'
@@ -28,7 +30,7 @@ type Props = {
 	onRefresh: () => Promise<unknown>
 }
 
-async function loadClaims(active: ActiveReportingDetails, wallet: Address, signal?: AbortSignal) {
+async function loadClaims(active: ActiveReportingDetails, wallet: Address, signal?: AbortSignal, preparation?: ParentClaimPreparation) {
 	const parent = active.parentQuestionLedgerAddress
 	if (parent === undefined || parent === zeroAddress || active.forkContinuation !== true) return []
 	const client = createConnectedReadClient()
@@ -50,18 +52,43 @@ async function loadClaims(active: ActiveReportingDetails, wallet: Address, signa
 	}
 	const claims = await Promise.all(
 		active.sides.map(async side => {
-			const deposits = await loadForkCarriedEscalationDepositsFromParentSnapshot({ ...client, readContract }, active.escalationGameAddress, parent, side.key, wallet)
+			const deposits = await loadForkCarriedEscalationDepositsFromParentSnapshot({ ...client, readContract }, active.escalationGameAddress, parent, side.key, wallet, preparation)
 			return deposits.map(deposit => ({ side, deposit }))
 		}),
 	)
 	return claims.flat()
 }
 
+function createClaimCheckpoint() {
+	const checkpoints = new Map<string, Promise<unknown>>()
+	return (client: Pick<ReadClient, 'readContract'>, report: (node: string) => void): Pick<ReadClient, 'readContract'> => {
+		const useCheckpoint = <T,>(id: string, read: () => Promise<T>): Promise<T> => {
+			const previous = checkpoints.get(id)
+			if (previous !== undefined) return previous as Promise<T>
+			const pending = read().catch(error => {
+				checkpoints.delete(id)
+				throw error
+			})
+			checkpoints.set(id, pending)
+			return pending
+		}
+		return {
+			readContract: async parameters => {
+				// The frozen parent's root is checked independently before its contents are displayed.
+				const key = serializeStoredValue([parameters.address, parameters.functionName, parameters.args])
+				const value = await useCheckpoint(key, () => client.readContract(parameters))
+				if (parameters.functionName === 'nodes') report(key)
+				return value
+			},
+		}
+	}
+}
+
 /** Inherited reporter claims are question claims, independent of underwriting ownership. */
 export function InheritedReporterClaims({ parameters, accountState, details, onRefresh }: Props) {
 	const error = useSignal<string | undefined>(undefined)
 	const pending = useSignal<string | undefined>(undefined)
-	const selection = `${details?.questionLedgerAddress ?? ''}:${accountState.address ?? ''}:${accountState.chainId ?? ''}`
+	const selection = `${details?.questionLedgerAddress ?? ''}:${accountState.address ?? ''}:${accountState.chainId ?? ''}:${details?.universeId ?? ''}`
 	const current = useRef(selection)
 	current.current = selection
 	useEffect(
@@ -74,6 +101,8 @@ export function InheritedReporterClaims({ parameters, accountState, details, onR
 	const [open, setOpen] = useState(false)
 	const [loading, setLoading] = useState(false)
 	const [retry, setRetry] = useState(0)
+	const [progress, setProgress] = useState<ReadonlyMap<ReportingOutcomeKey, { done: bigint; total: bigint }>>(new Map())
+	const checkpoint = useRef<{ selection: string; read: ReturnType<typeof createClaimCheckpoint> }>()
 	const [loaded, setLoaded] = useState<{ selection: string; claims: Awaited<ReturnType<typeof loadClaims>> }>()
 	const visible = usePageVisible()
 	const wallet = accountState.address
@@ -81,24 +110,49 @@ export function InheritedReporterClaims({ parameters, accountState, details, onR
 	useEffect(() => {
 		if (!open || !visible || active === undefined || wallet === undefined || !canLoad) return
 		const abort = new AbortController()
-		setLoading(true)
-		error.value = undefined
-		void withTimeout(loadClaims(active, wallet, abort.signal), 15_000, 'Preparing claims took too long.')
-			.then(
+		let pendingRetry: ReturnType<typeof setTimeout> | undefined
+		if (checkpoint.current?.selection !== selection) {
+			checkpoint.current = { selection, read: createClaimCheckpoint() }
+			setProgress(new Map())
+		}
+		const read = checkpoint.current.read
+		const prepare = (attempt: number) => {
+			const job = new AbortController()
+			abort.signal.addEventListener('abort', () => job.abort(), { once: true })
+			setLoading(true)
+			error.value = undefined
+			void withTimeout(
+				loadClaims(active, wallet, job.signal, {
+					read,
+					onProgress: (outcome, done, total) => {
+						if (!job.signal.aborted) setProgress(previous => new Map([...previous, [outcome, { done, total }]]))
+					},
+				}),
+				15_000,
+				pageCopy.inheritedClaimTimeout,
+			).then(
 				claims => {
-					if (!abort.signal.aborted) setLoaded({ selection, claims })
+					if (abort.signal.aborted) return
+					setLoaded({ selection, claims })
+					setLoading(false)
 				},
 				failure => {
-					if (!abort.signal.aborted) error.value = failure instanceof Error ? failure.message : 'Unable to prepare inherited claims.'
+					job.abort()
+					if (abort.signal.aborted) return
+					const delay = [500, 2000, 5000][attempt]
+					if (delay !== undefined) pendingRetry = setTimeout(() => prepare(attempt + 1), delay)
+					else {
+						error.value = failure instanceof Error ? failure.message : pageCopy.inheritedClaimFailure
+						setLoading(false)
+					}
 				},
 			)
-			.finally(() => {
-				if (!abort.signal.aborted) {
-					setLoading(false)
-					abort.abort()
-				}
-			})
-		return () => abort.abort()
+		}
+		prepare(0)
+		return () => {
+			abort.abort()
+			clearTimeout(pendingRetry)
+		}
 	}, [open, visible, canLoad, active?.escalationGameAddress, wallet, selection, active?.currentTime, retry])
 	const claims = loaded?.selection === selection ? loaded.claims : (active?.sides.flatMap(side => side.importedUserDeposits.map(deposit => ({ side, deposit }))) ?? [])
 	if (claims.length === 0 && !canLoad) return undefined
@@ -166,7 +220,16 @@ export function InheritedReporterClaims({ parameters, accountState, details, onR
 					{pageCopy.prepareInheritedClaims}
 				</button>
 			)}
-			{loading && <p role='status'>{pageCopy.preparingInheritedClaims}</p>}
+			{loading && (
+				<p role='status'>
+					{pageCopy.preparingInheritedClaims}{' '}
+					{progress.size > 0 &&
+						pageCopy.formatInheritedClaimProgress(
+							[...progress.values()].reduce((sum, item) => sum + item.done, 0n),
+							[...progress.values()].reduce((sum, item) => sum + item.total, 0n),
+						)}
+				</p>
+			)}
 			{open && !loading && loaded?.selection === selection && claims.length === 0 && <p>{pageCopy.emptyInheritedClaimsDetail}</p>}
 			{open && !loading && error.value !== undefined && (
 				<button type='button' onClick={() => setRetry(value => value + 1)}>

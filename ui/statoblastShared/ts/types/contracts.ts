@@ -270,6 +270,7 @@ export type ActiveReportingDetails = ReportingDetailsBase & {
 	/** Zoltar refuses this universe's fork before this time while its parent fork response period is active. */
 	earliestForkTime: bigint
 	escalationEndTime: bigint
+	latestEscalationEndTime?: bigint | undefined
 	escalationGameAddress: Address
 	hasReachedNonDecision: boolean
 	sides: EscalationSide[]

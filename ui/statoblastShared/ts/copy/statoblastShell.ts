@@ -41,3 +41,5 @@ export const forkedParent = 'Forked parent'
 export const created = 'Created'
 export const notCreatedYet = 'Not created yet'
 export const noMigrationDeadline = 'There is no REP migration deadline.'
+
+export const forkHelp = 'How to move shares and capital'

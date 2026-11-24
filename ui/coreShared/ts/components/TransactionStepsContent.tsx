@@ -269,6 +269,7 @@ export function TransactionStepsContent({ actionsFirst = false, cancelable = tru
 										{ label: commonCopy.amount, value: current.amount },
 										{ label: transactionCopy.paidFrom, value: current.paidFrom },
 									]),
+							...(current.reviewRows ?? []),
 							...(presentation?.rows ?? []),
 						]}
 					/>

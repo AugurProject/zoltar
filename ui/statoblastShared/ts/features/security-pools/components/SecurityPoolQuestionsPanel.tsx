@@ -1,3 +1,4 @@
+import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import * as pageCopy from '../../../copy/securityPoolPage.js'
 import * as watchlistCopy from '../../../copy/watchlist.js'
 import type { SecurityPoolAccountSnapshot } from '../../../protocol/securityPool.js'
@@ -40,6 +41,7 @@ export function SecurityPoolQuestionsPanel({
 	actions,
 	admission,
 	owner,
+	forked = false,
 	enabled,
 	environmentKey,
 	registerPageRefresh,
@@ -49,6 +51,7 @@ export function SecurityPoolQuestionsPanel({
 	actions: SecurityPoolActions
 	admission: SecurityPoolAccountSnapshot['admission'] | undefined
 	owner: Address | undefined
+	forked?: boolean
 	enabled: boolean
 	environmentKey: number
 	registerPageRefresh: RegisterStatoblastPageRefresh | undefined
@@ -111,7 +114,7 @@ export function SecurityPoolQuestionsPanel({
 	useBlockRefresh(() => void refreshRows(), enabled && saved.length > 0)
 	useStatoblastPageRefresh(registerPageRefresh, refreshRows)
 	const details = savedDetails?.scope === readScope ? savedDetails : undefined
-	const [result, setResult] = useState<{ status: string; id: bigint }>()
+	const [result, setResult] = useState<{ status: string; id: bigint; mint: boolean }>()
 	const [error, setError] = useState<string>()
 	const [checking, setChecking] = useState(false)
 	const id = designQuestionId(actions.questionInput.trim())
@@ -122,20 +125,23 @@ export function SecurityPoolQuestionsPanel({
 		setChecking(true)
 		try {
 			const client = createConnectedReadClient()
-			const [entry] = await withTimeout(
+			const { entry, mint } = await withTimeout(
 				(async () => {
 					const block = await client.getBlock()
-					if (block.number === undefined) throw new Error('Could not confirm the latest block.')
-					return await checkStatoblastEntries(client, [{ pool, questionId: id, universeId }], block.number, true)
+					if (block.number === undefined) throw new Error(pageCopy.questionLookupBlockUnavailable)
+					const [entry] = await checkStatoblastEntries(client, [{ pool, questionId: id, universeId }], block.number, true)
+					if (entry?.status !== 'question' && entry?.status !== 'unregistered-question') return { entry, mint: false }
+					const market = await loadMarketDetails(client, id)
+					return { entry: market.exists ? entry : { status: 'not-a-question' }, mint: market.exists && market.endTime > block.timestamp && !forked }
 				})(),
 				15_000,
-				'Question lookup timed out.',
+				pageCopy.questionLookupTimeout,
 			)
-			if (entry?.status === 'failed') throw entry.error
-			if (entry === undefined) throw new Error('Could not verify this question.')
-			setResult({ status: entry.status, id })
+			if (entry?.status === 'failed' && 'error' in entry) throw entry.error
+			if (entry === undefined) throw new Error(pageCopy.couldNotVerifyQuestion)
+			setResult({ status: entry.status, id, mint })
 		} catch (failure) {
-			setError(failure instanceof Error ? failure.message : 'Could not find the question.')
+			setError(failure instanceof Error ? failure.message : pageCopy.couldNotFindQuestion)
 		} finally {
 			setChecking(false)
 		}
@@ -242,7 +248,7 @@ export function SecurityPoolQuestionsPanel({
 							actions.setQuestionInput(event.currentTarget.value)
 							setError(undefined)
 						}}
-						error={error ?? (actions.questionInput.trim() !== '' && id === undefined ? 'Enter a hexadecimal or decimal question ID.' : undefined)}
+						error={error ?? (actions.questionInput.trim() !== '' && id === undefined ? pageCopy.questionIdFormat : undefined)}
 						action={
 							<button type='submit' disabled={id === undefined || checking}>
 								{checking ? pageCopy.checking : pageCopy.findQuestion}
@@ -250,10 +256,17 @@ export function SecurityPoolQuestionsPanel({
 						}
 					/>
 				</form>
+				{selected?.status === 'not-a-question' && <p>{pageCopy.notAQuestion}</p>}
 				{selected?.status === 'question' && (
 					<p>
 						{pageCopy.registeredHereLead}
 						<a href={statoblastPageHref({ kind: 'question', pool, questionId: selected.id, tab: 'shares' })}>{pageCopy.openShares}</a>
+						{selected.mint && (
+							<>
+								{' '}
+								· <a href={statoblastPageHref({ kind: 'question', pool, questionId: selected.id, tab: 'shares', sharesAction: 'mint' })}>{pageCopy.mintShares}</a>
+							</>
+						)}
 					</p>
 				)}
 				{selected?.status === 'unprepared-question' && (
@@ -265,7 +278,17 @@ export function SecurityPoolQuestionsPanel({
 				{selected?.status === 'unregistered-question' && (
 					<>
 						<p>{pageCopy.questionNotRegistered}</p>
-						<SecurityPoolButton model={actions} action='registerSecurityPoolQuestion' label={pageCopy.registerQuestion} pendingLabel={pageCopy.registeringQuestion} reason={actions.registerReason} onClick={actions.register} />
+						<SecurityPoolButton
+							model={actions}
+							action='registerSecurityPoolQuestion'
+							label={pageCopy.registerQuestion}
+							pendingLabel={pageCopy.registeringQuestion}
+							reason={forked ? pageCopy.universeForked : actions.registerReason}
+							onClick={async () => {
+								await actions.register()
+								await find()
+							}}
+						/>
 					</>
 				)}
 				{selected?.status === 'invalid-pool' && <p>{pageCopy.invalidPool}</p>}

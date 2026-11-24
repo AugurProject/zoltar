@@ -39,7 +39,10 @@ export function openHistory(profile: NetworkProfile) {
 			if (page.kind !== 'pool' && page.kind !== 'question') return
 			const hash = statoblastPageHash(page)
 			const universe = universeId.toString()
-			save([{ hash, title, universe, opened: Date.now() }, ...read().filter(entry => !(entry.hash === hash && entry.universe === universe))].slice(0, limit))
+			const previous = read()
+			const existing = previous.find(entry => entry.hash === hash && entry.universe === universe)
+			const fallback = title.startsWith('0x')
+			save([{ hash, title: fallback ? (existing?.title ?? title) : title, universe, opened: Date.now() }, ...previous.filter(entry => entry !== existing)].slice(0, limit))
 		},
 		clear: () => save([]),
 	}

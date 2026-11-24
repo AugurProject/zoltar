@@ -1,3 +1,4 @@
+import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
@@ -100,6 +101,9 @@ export function SecurityPoolRepairAuction(parameters: SecurityPoolAuctionParamet
 			<h4>{copy.yourBids}</h4>
 			{auction?.bids.length === 0 && !model.loading ? <EmptyState title={copy.noBids} /> : undefined}
 			{auction?.bids.map(bid => {
+				let standing = copy.inContention
+				if (bid.earlyRefundAttoEth > 0n || (!auction.finalized && bid.refundSettled) || bid.fill?.filledLots === 0n) standing = copy.outbid
+				if (bid.fill !== undefined && bid.fill.filledLots > 0n) standing = copy.winning
 				let bidStatus = copy.awaitingClose
 				if (bid.earlyRefundAttoEth > 0n) bidStatus = copy.earlyRefundAvailable
 				if (!auction.finalized && bid.refundSettled) bidStatus = auction.refundAttoEth === 0n ? copy.earlyRefundWithdrawn : copy.earlyRefundCredited
@@ -111,7 +115,9 @@ export function SecurityPoolRepairAuction(parameters: SecurityPoolAuctionParamet
 					(disabled ? copy.busy : undefined) ?? (model.loading ? copy.loading : undefined) ?? (bid.fill === undefined || bid.fill.filledLots === 0n ? copy.managePending : undefined) ?? (!bid.materialized ? copy.activateFirst : undefined) ?? (parameters.openVault === undefined ? copy.manageUnavailable : undefined)
 				return (
 					<article key={bid.id.toString()}>
-						<h5>{copy.bidLabel(bid.id)}</h5>
+						<h5>
+							{copy.bidLabel(bid.id)} <Badge tone={standing === copy.winning ? 'ok' : 'muted'}>{standing}</Badge>
+						</h5>
 						<UserMessage detail={bidStatus} />
 						<MetricGrid>
 							<MetricField label={copy.vault}>

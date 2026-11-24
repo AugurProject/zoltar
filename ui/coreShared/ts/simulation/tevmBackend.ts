@@ -1,5 +1,5 @@
 import { withTimeout } from '../lib/promise.js'
-import { clearSessionLocalEntities, localEntityScopeForNetwork, setEntityFavorite } from '../lib/localEntityStore.js'
+import { clearSessionLocalEntities, localEntityScopeForNetwork, seedEntityFavorite } from '../lib/localEntityStore.js'
 import { formatQuestionIdHex } from '../lib/questionId.js'
 import { createPublicClient, createWalletClient, custom, publicActions, type Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ChainBackend, WriteClient } from '../wallet/chainBackend.js'
@@ -240,9 +240,9 @@ export async function createSimulationBackend(
 	const seedWatchlist = () => {
 		const pool = currentState?.seededSecurityPool
 		if (appId !== 'statoblast' || pool === undefined) return
-		setEntityFavorite(localEntityScopeForNetwork(profile, 'statoblast', 'pool'), pool.address, true)
+		seedEntityFavorite(localEntityScopeForNetwork(profile, 'statoblast', 'pool'), pool.address)
 		const questions = localEntityScopeForNetwork(profile, 'statoblast', 'question')
-		for (const id of pool.questionIds) setEntityFavorite(questions, `${pool.address}:${formatQuestionIdHex(id)}`, true)
+		for (const id of pool.questionIds) seedEntityFavorite(questions, `${pool.address}:${formatQuestionIdHex(id)}`)
 	}
 
 	const applyState = (nextState: SimulationWorkerState) => {

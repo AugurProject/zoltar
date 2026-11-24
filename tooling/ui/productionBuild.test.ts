@@ -284,6 +284,7 @@ type ProductionBrowserDriver = {
 	evaluate: (expression: string) => Promise<unknown>
 	evaluateAsync: (expression: string) => Promise<unknown>
 	navigate: (url: string) => Promise<void>
+	pressEscape: () => Promise<void>
 	pressTab: () => Promise<void>
 	resize: (viewport: { height: number; width: number }) => Promise<void>
 	setInputByLabel: (label: string, value: string) => Promise<void>
@@ -364,6 +365,10 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			evaluateAsync: expression => page.evaluate(expression),
 			navigate: async url => {
 				await navigation.navigate(new URL(url, pageUrl).href)
+			},
+			pressEscape: async () => {
+				await send('Input.dispatchKeyEvent', { code: 'Escape', key: 'Escape', type: 'keyDown' })
+				await send('Input.dispatchKeyEvent', { code: 'Escape', key: 'Escape', type: 'keyUp' })
 			},
 			pressTab: async () => {
 				await send('Input.dispatchKeyEvent', { code: 'Tab', key: 'Tab', type: 'keyDown' })
@@ -558,7 +563,7 @@ test(
 				await Bun.sleep(1500)
 				const methods = await driver.evaluate('window.__statoblastRpcMethods.slice()')
 				expect(Array.isArray(methods) && methods.length > 0 && methods.length <= 4).toBe(true)
-				await Bun.sleep(13_000)
+				await Bun.sleep(35_000)
 				expect(await driver.evaluate('window.__statoblastRpcMethods.slice()')).toEqual(methods)
 			},
 			SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS - PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS,
@@ -566,6 +571,72 @@ test(
 	},
 	SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS,
 )
+
+test(
+	'Statoblast keeps Capital visible during a 10-second RPC read and offers recovery after a timeout',
+	async () => {
+		if (server === undefined) throw new Error('Production test server did not start')
+		const baseUrl = server.url.toString().replace(/\/$/, '')
+		await loadProductionDocumentInChromium(
+			`${baseUrl}/statoblast/#/watchlist?simulate=1&genesis=yes&simScenario=securitypoolx2`,
+			{ height: 844, width: 390 },
+			async driver => {
+				await openSavedStatoblastItem(driver, 'pool')
+				await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
+				expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5000REP')
+				const intercept = (delay: number | undefined) =>
+					driver.evaluate(`(() => {
+				const worker = window.__zoltarProductionWorkers?.at(-1)
+				if (!(worker instanceof Worker)) return false
+				const original = worker.postMessage.bind(worker)
+				Object.defineProperty(worker, 'postMessage', { configurable: true, value: (message, ...args) => {
+					if (message?.type !== 'rpc' || message.method !== 'eth_getBlockByNumber') return original(message, ...args)
+					Object.defineProperty(worker, 'postMessage', { configurable: true, value: original })
+					const delay = ${delay}
+					if (delay !== undefined) setTimeout(() => original(message, ...args), delay)
+				} })
+				return true
+			})()`)
+				expect(await intercept(10_000)).toBe(true)
+				await driver.clickButton('Refresh')
+				await driver.waitForBodyText('Refreshing…')
+				expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5000REP')
+				expect(await driver.evaluate('document.querySelector("main")?.inert')).toBe(false)
+				await driver.waitForButtonEnabled('Refresh')
+				expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5000REP')
+				expect(await intercept(undefined)).toBe(true)
+				await driver.clickButton('Refresh')
+				await driver.waitForBodyText('Showing saved data')
+				expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5000REP')
+				await driver.clickButton('Try again')
+				await driver.waitForBodyWithoutText('Showing saved data')
+			},
+			SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS - PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS,
+		)
+	},
+	SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS,
+)
+
+productionBrowserTest('Statoblast mobile universe sheet traps focus, restores it on Escape, and closes on its scrim', async () => {
+	if (server === undefined) throw new Error('Production test server did not start')
+	const baseUrl = server.url.toString().replace(/\/$/, '')
+	await loadProductionDocumentInChromium(`${baseUrl}/statoblast/#/watchlist?simulate=1&genesis=yes&simScenario=deployed`, { height: 844, width: 390 }, async driver => {
+		const trigger = '.statoblast-universe-menu > button'
+		await driver.evaluate(`document.querySelector(${JSON.stringify(trigger)}).click()`)
+		await driver.waitForBodyText('Universes')
+		await driver.pressTab()
+		expect(await driver.evaluate("document.activeElement?.closest('.statoblast-universe-panel') !== null")).toBe(true)
+		await driver.pressEscape()
+		await driver.waitForBodyWithoutText('Universes')
+		expect(await driver.evaluateAsync(`new Promise(resolve => requestAnimationFrame(() => resolve(document.activeElement?.matches(${JSON.stringify(trigger)}))))`)).toBe(true)
+		expect(await driver.evaluate("document.querySelector('.statoblast-universe-panel') === null")).toBe(true)
+		await driver.evaluate(`document.querySelector(${JSON.stringify(trigger)}).click()`)
+		await driver.waitForBodyText('Universes')
+		await driver.evaluate("document.querySelector('.statoblast-universe-scrim').click()")
+		await driver.waitForBodyWithoutText('Universes')
+		expect(await driver.evaluate("document.querySelector('.statoblast-universe-panel') === null")).toBe(true)
+	})
+})
 
 for (const appId of ['zoltar', 'statoblast', 'trading'] as const) {
 	productionBrowserTest(`production bundle requires a genesis choice before starting ${appId}`, async () => {

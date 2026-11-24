@@ -31,8 +31,8 @@ type AddressValueProps = {
 
 /** Shortened forms, longest first: a slot too narrow for one falls back to the next instead of clipping it. */
 function getAbbreviations(address: string, compactAbbreviation: boolean, longAbbreviation: boolean) {
-	if (longAbbreviation) return [abbreviateAddress(address, 12, 10)]
 	const forms = compactAbbreviation ? [abbreviateAddress(address, 6, 4), abbreviateAddress(address, 4, 4)] : [abbreviateAddress(address), abbreviateAddress(address, 6, 4), abbreviateAddress(address, 4, 4)]
+	if (longAbbreviation) forms.unshift(abbreviateAddress(address, 12, 10))
 	return forms.filter((form, index) => forms.indexOf(form) === index)
 }
 

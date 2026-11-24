@@ -15,3 +15,10 @@ export const checkDeposit = 'Check deposit'
 export const searchFailedError = 'Deposit search could not finish.'
 export const missingDepositsDetail = 'Some deposits are still missing from this device.'
 export const searchAgain = 'Search again'
+
+export const keepTabOpen = 'Keep this tab open.'
+export const formatDepositSearchProgress = (done: bigint, total: bigint, remaining: string) => `${done} of ${total} checked · about ${remaining} left`
+
+export const inheritedClaimTimeout = 'Preparing claims took too long.'
+export const inheritedClaimFailure = 'Unable to prepare inherited claims.'
+export const formatInheritedClaimProgress = (done: bigint, total: bigint) => `${done} of ${total}`

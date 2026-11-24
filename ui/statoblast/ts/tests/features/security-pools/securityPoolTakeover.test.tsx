@@ -248,7 +248,7 @@ test.each([
 	['cohort', 'Your position and the target have different commitment reduction queues.'],
 	['consent', 'Your idle REP exceeds the maximum own REP you consented to pledge.'],
 	['collateral', 'Deposit more REP before taking over this commitment.'],
-	['principal', 'Your resulting principal exceeds the maximum total principal.'],
+	['principal', 'The resulting pledged REP exceeds your limit.'],
 	['commitment', 'Your resulting commitment exceeds the maximum total commitment.'],
 ] as const)('blocks an ineligible takeover receiver: %s', async (condition, reason) => {
 	const base = capitalSnapshot({ totalCommitmentAttoEth: 20n * unit, demandAttoEth: 20n * unit })

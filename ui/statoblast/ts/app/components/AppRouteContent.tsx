@@ -14,14 +14,13 @@ type Props = {
 	page: StatoblastPage
 	registerPageRefresh: RegisterStatoblastPageRefresh
 	contractsMissing: boolean
-	readBackendMessage: string | undefined
 	deploy: ComponentProps<typeof DeploymentRouteContent>
 	securityPools: ComponentProps<typeof SecurityPoolsSection>
 	questions: Omit<ComponentProps<typeof SecurityPoolQuestionWorkspace>, 'entry'>
 	migration: ComponentProps<typeof ZoltarMigrationWorkflow>
 }
 
-export function AppRouteContent({ page, registerPageRefresh, contractsMissing, readBackendMessage, deploy, securityPools, questions, migration }: Props) {
+export function AppRouteContent({ page, registerPageRefresh, contractsMissing, deploy, securityPools, questions, migration }: Props) {
 	if (contractsMissing)
 		return (
 			<div className='route-view-flow'>
@@ -29,10 +28,9 @@ export function AppRouteContent({ page, registerPageRefresh, contractsMissing, r
 				<DeploymentRouteContent {...deploy} />
 			</div>
 		)
-	if (readBackendMessage !== undefined && page.kind !== 'not-found') return undefined
 	switch (page.kind) {
 		case 'watchlist':
-			return <StatoblastWatchlist registerPageRefresh={registerPageRefresh} enabled={questions.enabled} universe={questions.universeId} owner={questions.parameters.accountAddress} environmentKey={questions.environmentKey} />
+			return <StatoblastWatchlist registerPageRefresh={registerPageRefresh} onReadStatus={questions.onReadStatus} enabled={questions.enabled} universe={questions.universeId} owner={questions.parameters.accountAddress} environmentKey={questions.environmentKey} />
 		case 'question':
 			return <SecurityPoolQuestionWorkspace {...questions} registerPageRefresh={registerPageRefresh} entry={page} />
 		case 'pool':

@@ -1,3 +1,5 @@
+import { formatOldDataCheck } from '@zoltar/ui-core-shared/copy/transaction.js'
+import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import * as pageCopy from '../../../copy/securityPoolPage.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import type { ComponentChildren } from 'preact'
@@ -51,10 +53,20 @@ export function SecurityPoolAggregatePanel({
 	redesigned?: boolean
 	priceDeadlineChecking?: boolean
 	model: Model
-	actions: Pick<SecurityPoolActions, 'scope' | 'busy'>
+	actions: Pick<SecurityPoolActions, 'scope' | 'busy'> & Partial<Pick<SecurityPoolActions, 'lastFailedAction'>>
 	priceReport?: ((unfolded: boolean) => ComponentChildren) | undefined
 }) {
 	const snapshot = model.snapshot
+	const [clock, setClock] = useState(Date.now)
+	const visible = usePageVisible()
+	useEffect(() => {
+		if (!redesigned || model.displayedAt === undefined || !visible) return
+		setClock(Date.now())
+		const timer = setInterval(() => setClock(Date.now()), 1000)
+		return () => clearInterval(timer)
+	}, [redesigned, model.displayedAt, visible])
+	const readAge = model.displayedAt === undefined ? 0 : clock - model.displayedAt
+	const staleNotice = redesigned && readAge > 60_000 ? <p className='detail'>{formatOldDataCheck(formatDuration(BigInt(Math.floor(readAge / 1000))))}</p> : undefined
 	const fieldsLoading = model.loading && snapshot === undefined
 	const capitalId = useId()
 	const currentPosition = snapshot?.positions[0]
@@ -209,6 +221,7 @@ export function SecurityPoolAggregatePanel({
 				<SecurityPoolButton model={actions} action='depositSecurityPoolRep' label={copy.deposit} pendingLabel={copy.depositing} reason={model.depositReason} onClick={model.deposit} />
 			</SectionBlock>
 			<SectionBlock headingId={`${capitalId}-commitment`} title={redesigned ? pageCopy.commitmentSection : copy.authorize} description={copy.authorizationHint}>
+				{staleNotice}
 				{redesigned && <UserMessage tone='warning' detail={copy.liquidationHint(snapshot?.liquidationDuration === undefined ? undefined : formatDuration(snapshot.liquidationDuration))} />}
 				<SecurityPoolInput label={copy.health} hint={copy.healthHint} value={model.healthPercent} onChange={model.setHealthPercent} disabled={disabled} numeric />
 				<MetricGrid>
@@ -335,13 +348,13 @@ export function SecurityPoolAggregatePanel({
 										<SecurityPoolButton model={actions} action={`retireSecurityPool-${position.id}`} label={copy.retire} pendingLabel={copy.retiring} reason={reasons.retire} onClick={() => model.retire(position.id)} />
 									</div>
 								</>
-							) : (
-								<SecurityPoolButton model={actions} action={`retireSecurityPool-${position.id}`} label={copy.resubmitRetirement} pendingLabel={copy.resubmittingRetirement} reason={reasons.retire} onClick={() => model.retire(position.id, position.remainingCommitment)} />
-							)}
+							) : undefined}
+							{position.batch !== 0n && redesigned && <SecurityPoolButton model={actions} action='serveSecurityPoolRetirement' label={actions.lastFailedAction === 'serveSecurityPoolRetirement' ? copy.retryRelease : copy.releaseReduction} pendingLabel={copy.serving} reason={model.serveReason} onClick={model.serve} />}
+							{position.batch !== 0n && !redesigned && <SecurityPoolButton model={actions} action={`retireSecurityPool-${position.id}`} label={copy.resubmitRetirement} pendingLabel={copy.resubmittingRetirement} reason={reasons.retire} onClick={() => model.retire(position.id, position.remainingCommitment)} />}
 						</WorkflowSubsection>
 					)
 				})}
-				<SecurityPoolButton model={actions} action='serveSecurityPoolRetirement' label={copy.serve} pendingLabel={copy.serving} reason={model.serveReason} onClick={model.serve} />
+				{!redesigned && <SecurityPoolButton model={actions} action='serveSecurityPoolRetirement' label={copy.serve} pendingLabel={copy.serving} reason={model.serveReason} onClick={model.serve} />}
 			</SectionBlock>
 			<SectionBlock headingId={`${capitalId}-withdraw`} title={copy.withdraw} description={copy.withdrawHint}>
 				<SecurityPoolInput label={copy.repAmount} value={model.withdrawalAmount} onChange={model.setWithdrawalAmount} disabled={disabled} numeric />

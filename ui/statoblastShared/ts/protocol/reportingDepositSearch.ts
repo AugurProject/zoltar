@@ -44,8 +44,10 @@ export async function searchReportingDepositsPage(client: Pick<ReadClient, 'getB
 	const [safeBlock, previousBlock] = await Promise.all([client.getBlock({ blockNumber: safeBlockNumber }), position === undefined || position.block > blockNumber ? undefined : client.getBlock({ blockNumber: position.block })])
 	const isContinuation = position !== undefined && previousBlock?.hash === position.hash
 	const start = isContinuation ? position.nextIndex : 0n
+	const lengthRead = { abi: gameArtifact.abi, address: game, functionName: 'getDepositsByOutcomeLength', args: [getReportingOutcomeValue(side.outcome)] } as const
 	const [first, second] = await readRequiredMulticall(client, [reportingDepositRead(game, side.outcome, start, pageSize), reportingDepositRead(game, side.outcome, start + pageSize, pageSize)], blockNumber)
-	const [safeCount] = await readOptionalMulticall(client, [{ abi: gameArtifact.abi, address: game, functionName: 'getDepositsByOutcomeLength', args: [getReportingOutcomeValue(side.outcome)] }] as const, safeBlockNumber)
+	const [totalDeposits] = await readOptionalMulticall(client, [lengthRead], blockNumber)
+	const [safeCount] = await readOptionalMulticall(client, [lengthRead], safeBlockNumber)
 	const [checkedHead, checkedSafeBlock] = await Promise.all([client.getBlock({ blockNumber }), client.getBlock({ blockNumber: safeBlockNumber })])
 	if (checkedHead.hash !== head.hash || checkedSafeBlock.hash !== safeBlock.hash) throw new Error('The chain changed during the deposit search. Retry this page.')
 	const nextIndex = start + BigInt(first.length + second.length)
@@ -53,6 +55,7 @@ export async function searchReportingDepositsPage(client: Pick<ReadClient, 'getB
 	const safeIndex = safeCount.status === 'success' && safeCount.result < nextIndex ? safeCount.result : nextIndex
 	return {
 		matches,
+		totalDeposits: totalDeposits.status === 'success' ? totalDeposits.result : undefined,
 		end: second.length < Number(pageSize),
 		position: { block: blockNumber, hash: head.hash, nextIndex },
 		confirmed: safeCount.status === 'success' && safeBlock.hash !== undefined ? { block: safeBlockNumber, hash: safeBlock.hash, nextIndex: safeIndex } : undefined,

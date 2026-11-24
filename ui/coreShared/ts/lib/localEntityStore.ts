@@ -266,9 +266,35 @@ function saveFavoriteEntries(scope: LocalEntityScope, entries: FavoriteEntry[]) 
 	notifyListeners()
 }
 
+function seedPreferenceKey(scope: LocalEntityScope, id: string) {
+	return `${getFavoritesStorageKey(scope)}:seed:${normalizeEntityId(id)}`
+}
+
+/** Defaults seed the scenario once without restoring entries the viewer has dismissed in this browser tab. */
+export function seedEntityFavorite(scope: LocalEntityScope, id: string) {
+	try {
+		const storage = getBrowserStorage('sessionStorage')
+		const key = seedPreferenceKey(scope, id)
+		if (storage?.getItem(key) === 'off') return
+		storage?.setItem(key, 'on')
+	} catch (error) {
+		if (!(error instanceof DOMException)) throw error
+	}
+	setEntityFavorite(scope, id, true)
+}
+
 export function setEntityFavorite(scope: LocalEntityScope, id: string, favorite: boolean, now = Date.now()) {
 	const current = readFavoriteEntries(scope)
 	if (hasFavoriteEntry(current, id) === favorite) return
+	if (scope.persistence === 'session') {
+		try {
+			const storage = getBrowserStorage('sessionStorage')
+			const key = seedPreferenceKey(scope, id)
+			if (storage?.getItem(key) != null) storage.setItem(key, favorite ? 'on' : 'off')
+		} catch (error) {
+			if (!(error instanceof DOMException)) throw error
+		}
+	}
 	saveFavoriteEntries(scope, favorite ? addFavoriteEntry(current, id, now) : removeFavoriteEntry(current, id))
 }
 

@@ -133,7 +133,7 @@ test('a forked origin is announced on its field and stated once beside the deplo
 	const reason = reasons?.item(0)
 	expect(reason?.textContent).toBe('The origin universe has forked.')
 	const reasonId = reason?.firstElementChild?.id
-	const buttons = ['Deploy admission policy', 'Deploy security pool'].map(name => Array.from(form?.querySelectorAll('button') ?? []).find(candidate => candidate.textContent === name))
+	const buttons = ['Prepare question rules', 'Deploy security pool'].map(name => Array.from(form?.querySelectorAll('button') ?? []).find(candidate => candidate.textContent === name))
 	for (const button of buttons) {
 		expect(button?.disabled).toBe(true)
 		expect(button?.getAttribute('aria-describedby')).toBe(reasonId ?? null)

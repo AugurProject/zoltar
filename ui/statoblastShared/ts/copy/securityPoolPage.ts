@@ -70,3 +70,21 @@ export const poolLabel = 'Pool label'
 export const saveLabel = 'Save label'
 export const stepDone = '✓ Complete'
 export const sharedSetupStep = 'Anyone can send this; needed once'
+
+export const notAQuestion = 'Not a question'
+export const universeForked = 'This universe has forked.'
+export const questionLookupBlockUnavailable = 'Could not confirm the latest block.'
+export const questionLookupTimeout = 'Question lookup timed out.'
+export const couldNotVerifyQuestion = 'Could not verify this question.'
+export const couldNotFindQuestion = 'Could not find the question.'
+export const questionIdFormat = 'Enter a hexadecimal or decimal question ID.'
+
+export const deployCollateralSection = 'Collateral and universe'
+export const deployPriceSection = 'REP price reports'
+export const deployQuestionsSection = 'Questions'
+export const deployEconomicsSection = 'Economics'
+export const deploySummary = 'Pool summary'
+export const formatMultiplier = (value: string) => `${value}%`
+
+export const limitedCapital = 'Limited'
+export const forkActionRequired = 'Action'

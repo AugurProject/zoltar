@@ -83,7 +83,7 @@ test('funded unclaimed winners show live fees and separate activation from manag
 	const view = await renderIntoDocument(<SecurityPoolRepairAuction fork={fixture.fork} bidder={owner} actions={actions} openVault={vault => opened.push(vault)} />)
 	lifecycle.trackRendered(view)
 	await waitFor(() => expect(view.container.textContent).toContain('Funded vault'))
-	expect(metric(view.container, 'Current vault REP principal')).toContain('100.00')
+	expect(metric(view.container, 'Current pledged REP')).toContain('100.00')
 	expect(metric(view.container, 'Clearing REP per winning lot')).toContain('100.00')
 	expect(metric(view.container, 'REP pledged at closing')).toContain('100.00')
 	expect(metric(view.container, 'Unclaimed collateral fees')).toContain('7.00')

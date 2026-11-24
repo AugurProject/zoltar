@@ -41,7 +41,9 @@ test('replays saved display data without RPC and batches verified warm reads at 
 	}
 	const session = statoblastPageCache(MAINNET_NETWORK_PROFILE, cacheIdentity)
 	await expect(session.refresh(client, multicall, read)).resolves.toEqual({ value: 20n, code: '0x6000' })
-	const mounted = statoblastPageCache(MAINNET_NETWORK_PROFILE, cacheIdentity)
+	const mounted = statoblastPageCache(MAINNET_NETWORK_PROFILE, cacheIdentity, async (reader, blockNumber) => {
+		await reader.readContract({ abi, address: pool, functionName: 'value', blockNumber })
+	})
 	const initialMethods = methods.length
 	await expect(mounted.loadCached(client, read)).resolves.toMatchObject({ value: { value: 20n, code: '0x6000' } })
 	expect(methods).toHaveLength(initialMethods)
@@ -49,4 +51,8 @@ test('replays saved display data without RPC and batches verified warm reads at 
 	currentValue = 21n
 	await expect(session.refresh(client, multicall, read)).resolves.toEqual({ value: 21n, code: '0x6000' })
 	expect(methods).toEqual(['eth_getBlockByNumber', 'eth_call', 'eth_getBlockByNumber'])
+	methods.length = 0
+	currentValue = 22n
+	await expect(mounted.refresh(client, multicall, read)).resolves.toEqual({ value: 22n, code: '0x6000' })
+	expect(methods).toEqual(['eth_getBlockByNumber', 'eth_call', 'eth_call', 'eth_getBlockByNumber'])
 })

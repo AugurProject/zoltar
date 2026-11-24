@@ -63,7 +63,7 @@ async function loadViewerReportingWalletState(client: ReadClient, fundingAddress
 	return { viewerWalletRepAllowanceAttoRep, viewerWalletRepBalanceAttoRep, viewerWalletRepTokenAddress }
 }
 
-export async function loadReportingDetails(client: ReadClient, questionLedgerAddress: Address, accountAddress: Address | undefined): Promise<ReportingDetails> {
+export async function loadReportingDetails(client: ReadClient, questionLedgerAddress: Address, accountAddress: Address | undefined, includeSchedule = false): Promise<ReportingDetails> {
 	const reportingPoolReads: readonly ContractFunctionParameters[] = [
 		{
 			abi: statoblast_QuestionLedger_QuestionLedger.abi,
@@ -277,6 +277,12 @@ export async function loadReportingDetails(client: ReadClient, questionLedgerAdd
 	let reportingBlockedReason: string | undefined
 	if (continuationTiming?.[2] !== undefined && getReportingOutcomeKey(continuationTiming[2]) !== 'none') reportingBlockedReason = reportingCopy.inheritedOutcomeReportingClosed
 	else if (forkContinuationSnapshot && continuationTiming?.[0] === 0n) reportingBlockedReason = reportingCopy.continuationNotResumed
+	let latestEscalationEndTime: bigint | undefined
+	if (includeSchedule && settlementState === 'locked' && !hasReachedNonDecision && reportingBlockedReason === undefined) {
+		const duration = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'computeTimeSinceStartFromAttritionCostAttoRep', args: [nonDecisionThresholdAttoRep], blockNumber: block.number })
+		if (continuationTiming === undefined) latestEscalationEndTime = activationTime + duration
+		else latestEscalationEndTime = continuationTiming[0] + (duration > continuationTiming[1] ? duration - continuationTiming[1] : 0n)
+	}
 
 	return {
 		...(reportingBlockedReason === undefined ? {} : { reportingBlockedReason }),
@@ -287,6 +293,7 @@ export async function loadReportingDetails(client: ReadClient, questionLedgerAdd
 		currentTime: block.timestamp,
 		earliestForkTime,
 		escalationEndTime,
+		latestEscalationEndTime,
 		escalationGameAddress,
 		reportingDepositPool,
 		reportingQuestionId: questionId,

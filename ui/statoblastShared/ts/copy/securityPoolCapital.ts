@@ -1,15 +1,15 @@
 export const title = 'Your position'
-export const description = 'Deposit REP, choose your health target, and authorize shared backing. Your principal and liquidation losses stay with your account.'
+export const description = 'Deposit REP, choose your health target, and authorize shared backing. Your position bears its own liquidation losses.'
 export const poolTitle = 'Shared backing'
 export const poolDescription = 'Eligible questions use the same healthy commitments. Complete-set returns reduce demand and make commitment reductions possible.'
 export const withdrawableRep = 'Withdrawable REP'
 export const principalRep = 'Your REP deposited'
 export const commitment = 'Your commitment'
 export const savedHealth = 'Health target'
-export const demand = 'Settlement demand'
+export const demand = 'Capacity in use'
 export const healthyCommitment = 'Healthy commitments'
 export const totalPledged = 'Security pool pledged REP'
-export const availableCapacity = 'Unused healthy capacity'
+export const availableCapacity = 'Free capacity'
 export const priceValid = 'Price current'
 export const priceStale = 'New REP price required'
 export const priceExpiry = 'Price valid until'
@@ -31,7 +31,7 @@ export const approving = 'Approving REP…'
 export const repAmount = 'REP amount'
 export const withdraw = 'Withdraw REP'
 export const withdrawing = 'Withdrawing REP…'
-export const withdrawHint = 'Withdraw surplus while preserving your saved health target. Live commitments require a current price; idle principal can leave without one.'
+export const withdrawHint = 'Withdraw surplus while preserving your saved health target. Live commitments require a current price; idle REP can be withdrawn without one.'
 export const authorize = 'Authorize commitment'
 export const authorizing = 'Authorizing commitment…'
 export const authorizationHint = 'Your REP and chosen target size the commitment below. You can choose less capacity. Complete the pending commitment reduction before increasing it.'
@@ -56,22 +56,22 @@ export const requiredCollateral = 'Required REP at saved target'
 export const minimumCommitment = 'Minimum commitment (collateral)'
 export const minimumCommitmentHint = 'The minimum collateral commitment; fork auction lots may be larger.'
 export const positions = 'Your commitment position'
-export const positionsHint = 'Retirement uses spare healthy capacity and reserves capacity for earlier requests. A partial request reserves only its reduction; the commitment you keep can still back purchases.'
+export const positionsHint = 'Reductions release in queue order when enough capacity is free.'
 export const noPositions = 'No pledged commitments'
 export const noPositionsHint = 'Deposit REP, then authorize your first commitment.'
-export const phase = { active: 'Active', current: 'Retiring', next: 'Retiring' }
+export const phase = { active: 'Active', current: 'Reduction queued', next: 'Reduction queued' }
 export const position = (id: bigint) => `Position ${id}`
 export const positionPledged = 'Pledged REP'
 export const positionCommitment = 'Commitment (collateral)'
-export const currentHealth = 'Current conservative health'
+export const currentHealth = 'Current health'
 export const unhealthy = 'Below the conservative backing requirement. Add REP or request a smaller commitment.'
-export const belowTarget = 'Below your saved health target. Add REP or request a smaller commitment; the liquidation boundary is separate.'
-export const liquidationHealth = 'Liquidation boundary'
+export const belowTarget = 'Below your health target. Add REP or reduce your commitment.'
+export const liquidationHealth = 'Liquidation threshold'
 export const liquidationHealthy = 'Above boundary'
 export const liquidationUnhealthy = 'Below boundary'
 export const liquidationHint = (duration?: string) => `The liquidation penalty grows${duration === undefined ? '' : ` for ${duration}`} after liquidation starts. The new backer can receive up to all of your pledged REP. Add REP or reduce commitment to stay above the liquidation threshold.`
 export const formatRewardVesting = (duration: string) => `More earnings vest over ${duration}.`
-export const liquidationSince = 'Below liquidation boundary since'
+export const liquidationSince = 'Below liquidation since'
 export const noLiquidationInterval = 'No observed adverse interval'
 export const liquidationTimingHint = 'This marks the accepted adverse price observation, not a guaranteed grace period.'
 export const healthUnknown = 'Price unavailable'
@@ -94,7 +94,7 @@ export const retirementPreviewStatus = {
 	'imports-open': 'Child preparation in progress',
 	'demand-exceeds-healthy': 'Demand exceeds healthy capacity',
 	'earlier-requests': 'Capacity reserved for earlier requests',
-	'insufficient-spare': 'Waiting for enough spare capacity',
+	'insufficient-spare': 'Waiting for free capacity',
 	ready: 'Enough capacity at this snapshot',
 }
 export const retirementSpare = 'Spare healthy commitment'
@@ -135,3 +135,7 @@ export const previewBefore = 'Current'
 export const previewAfter = 'After changes'
 export const estimatedWithdrawal = 'Estimated withdrawable REP'
 export const queueCapacity = 'Free-capacity marker'
+
+export const releaseReduction = 'Release reduction'
+export const waitingForFreeCapacity = 'Waiting for free capacity'
+export const retryRelease = 'Retry release'

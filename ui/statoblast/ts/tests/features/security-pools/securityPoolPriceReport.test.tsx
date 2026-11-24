@@ -22,7 +22,7 @@ test('branch report keeps preparation, wrap, editable approvals and recovery con
 	const labels = () => Array.from(view.container.querySelectorAll('button')).map(button => button.textContent ?? '')
 	const initial = labels()
 	const originalButtons = Array.from(view.container.querySelectorAll('button'))
-	for (const name of ['Prepare price feed', 'Approve Collateral', 'Approve REP', 'Request branch price', 'Settle price report', 'Recover settled report', 'Return released funding', 'Return released Collateral', 'Return released REP']) expect(initial.some(label => label.includes(name))).toBe(true)
+	for (const name of ['Prepare price feed', 'Approve Collateral', 'Approve REP', 'Request branch price', 'Settle price report', 'Recover settled report', 'Return funds', 'Return released Collateral', 'Return released REP']) expect(initial.some(label => label.includes(name))).toBe(true)
 	expect(Array.from(view.container.querySelectorAll('button')).filter(button => !button.disabled)).toHaveLength(0)
 	await act(() => render(<SecurityPoolPriceReport scope='branch' target={branchPriceTarget(fork)} actions={actions} />, view.container))
 	await waitFor(() => expect(view.container.textContent).toContain('already prepared'))
@@ -189,7 +189,7 @@ test('the universe report has no feed preparation, branch deadline or branch wor
 	const metrics = Array.from(view.container.querySelectorAll('.metric-label')).map(label => label.textContent)
 	expect(metrics).toContain(copy.currentPrice)
 	expect(metrics).not.toContain(copy.reportingDeadline)
-	expect(metrics).not.toContain(copy.validUntil)
+	expect(metrics).toContain(copy.validUntil)
 	expect(view.container.textContent).not.toMatch(/branch/i)
 })
 

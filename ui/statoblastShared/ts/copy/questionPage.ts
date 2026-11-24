@@ -46,3 +46,33 @@ export const refreshTimeoutError = 'Question refresh timed out.'
 export const capacityFree = 'Capacity free'
 export const currentPrice = 'Current'
 export const priceNeeded = 'Price due'
+
+export const refreshStep = (step: number, total: number) => `Refreshing… ${step} of ${total}`
+
+export const reportingOpen = 'Reporting open'
+export const noRepStaked = 'You have no REP staked'
+export const deadlineChecking = 'Ended · checking…'
+export const followWithAutoRefresh = 'Turn on Auto-refresh to follow this.'
+export const asOfMinutes = (minutes: number) => `as of ${minutes} min ago`
+export const othersStake = 'Others'
+export const yourStake = 'You'
+export const responseWindowEnds = 'Window ends'
+export const responseWindowToday = 'Today'
+export const responseWindowIfLeading = 'If you take the lead'
+export const responseWindowLatest = 'Latest end'
+export const responseWindowRule = 'Only a report that raises the second-highest outcome extends the window.'
+export const stakedPerOutcome = 'REP staked per outcome'
+export const leadingOutcome = 'Leading'
+export const moreToLead = 'more to lead'
+export const endedUndecided = 'Ended undecided'
+export const waitingForFork = 'Waiting for a trigger'
+export const reportOpensAt = 'Reporting opens at'
+export const reportReminder = (title: string) => `Reporting deadline: ${title}`
+export const takeLead = (side: string) => `Take the lead on ${side}`
+export const moreBeforeDeadline = 'Add this amount before the window ends to take the lead.'
+export const claimAction = 'Claim'
+export const savedHoldings = 'Your saved holdings'
+export const yes = 'Yes'
+export const no = 'No'
+export const invalid = 'Invalid'
+export const tryAgain = 'Try again'

@@ -6,7 +6,7 @@ import { statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_factor
 import { getInfraContractAddresses } from './deploymentHelpers.js'
 
 export type StatoblastEntry = { pool: string; questionId?: bigint; universeId: bigint }
-export type StatoblastEntryResult = { status: 'invalid-pool' | 'unregistered-question' | 'unprepared-question' } | { status: 'pool'; pool: Address } | { status: 'question'; pool: Address; ledger: Address } | { status: 'failed'; error: Error }
+export type StatoblastEntryResult = { status: 'invalid-pool' | 'non-statoblast-contract' | 'unregistered-question' | 'unprepared-question' } | { status: 'pool'; pool: Address } | { status: 'question'; pool: Address; ledger: Address } | { status: 'failed'; error: Error }
 
 function questionFailure(error: Error): StatoblastEntryResult {
 	switch (error.message) {
@@ -20,7 +20,7 @@ function questionFailure(error: Error): StatoblastEntryResult {
 }
 
 /** Authenticate pools with the factory before calling them to resolve questions. Invalid entries fail independently. */
-async function readStatoblastEntries(client: Pick<ReadClient, 'multicall'>, entries: readonly StatoblastEntry[], blockNumber: bigint): Promise<StatoblastEntryResult[]> {
+async function readStatoblastEntries(client: Pick<ReadClient, 'multicall'> & Partial<Pick<ReadClient, 'getCode'>>, entries: readonly StatoblastEntry[], blockNumber: bigint): Promise<StatoblastEntryResult[]> {
 	const factory = getInfraContractAddresses().securityPoolFactory
 	const candidates = [...new Set(entries.flatMap(({ pool }) => (isAddress(pool) && pool.toLowerCase() !== zeroAddress ? [getAddress(pool)] : [])))]
 	const poolResults =
@@ -48,20 +48,29 @@ async function readStatoblastEntries(client: Pick<ReadClient, 'multicall'>, entr
 					blockNumber,
 				)
 	const questionChecks = new Map(questions.map(({ index }, offset) => [index, questionResults[offset]]))
-	return entries.map(({ pool, questionId }, index) => {
-		if (!isAddress(pool) || !poolChecks.has(getAddress(pool))) return { status: 'invalid-pool' }
-		const address = getAddress(pool)
-		const poolResult = poolChecks.get(address)
-		if (poolResult?.status === 'failure') return { status: 'failed', error: poolResult.error }
-		if (poolResult?.result === false) return { status: 'invalid-pool' }
-		if (poolResult?.result !== true) return { status: 'failed', error: new Error('Invalid security pool verification result.') }
-		if (questionId === undefined) return { status: 'pool', pool: address }
-		const question = questionChecks.get(index)
-		if (question?.status === 'failure') return questionFailure(question.error)
-		const ledger = question?.result
-		if (typeof ledger !== 'string' || !isAddress(ledger) || ledger.toLowerCase() === zeroAddress) return { status: 'failed', error: new Error('Invalid question verification result.') }
-		return { status: 'question', pool: address, ledger: getAddress(ledger) }
-	})
+	return await Promise.all(
+		entries.map(async ({ pool, questionId }, index): Promise<StatoblastEntryResult> => {
+			if (!isAddress(pool) || !poolChecks.has(getAddress(pool))) return { status: 'invalid-pool' }
+			const address = getAddress(pool)
+			const poolResult = poolChecks.get(address)
+			if (poolResult?.status === 'failure') return { status: 'failed', error: poolResult.error }
+			if (poolResult?.result === false) {
+				try {
+					const code = await client.getCode?.({ address, blockNumber })
+					return { status: code === undefined || code === '0x' ? 'invalid-pool' : 'non-statoblast-contract' }
+				} catch (error) {
+					return { status: 'failed', error: error instanceof Error ? error : new Error('Could not check the pool address.') }
+				}
+			}
+			if (poolResult?.result !== true) return { status: 'failed', error: new Error('Invalid security pool verification result.') }
+			if (questionId === undefined) return { status: 'pool', pool: address }
+			const question = questionChecks.get(index)
+			if (question?.status === 'failure') return questionFailure(question.error)
+			const ledger = question?.result
+			if (typeof ledger !== 'string' || !isAddress(ledger) || ledger.toLowerCase() === zeroAddress) return { status: 'failed', error: new Error('Invalid question verification result.') }
+			return { status: 'question', pool: address, ledger: getAddress(ledger) }
+		}),
+	)
 }
 
 const entryCache = new WeakMap<ReturnType<typeof getActiveBackend>, Map<string, StatoblastEntryResult>>()
@@ -70,7 +79,7 @@ export function invalidateStatoblastEntries() {
 	entryCache.delete(getActiveBackend())
 }
 
-export async function checkStatoblastEntries(client: Pick<ReadClient, 'multicall'>, entries: readonly StatoblastEntry[], blockNumber: bigint, useSessionCache = false): Promise<StatoblastEntryResult[]> {
+export async function checkStatoblastEntries(client: Pick<ReadClient, 'multicall'> & Partial<Pick<ReadClient, 'getCode'>>, entries: readonly StatoblastEntry[], blockNumber: bigint, useSessionCache = false): Promise<StatoblastEntryResult[]> {
 	if (!useSessionCache) return await readStatoblastEntries(client, entries, blockNumber)
 	const backend = getActiveBackend()
 	const cache = entryCache.get(backend) ?? new Map<string, StatoblastEntryResult>()

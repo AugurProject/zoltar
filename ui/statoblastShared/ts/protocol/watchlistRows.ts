@@ -1,3 +1,4 @@
+import { identifySecurityPoolAdmission } from './securityPoolAdmission.js'
 import { getAddress, isAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { getReportingOutcomeKey } from '@zoltar/ui-core-shared/lib/contractEnums.js'
@@ -38,6 +39,11 @@ export type WatchlistRow = {
 	earnedRep?: bigint
 	collateral?: string
 	annualFee?: bigint
+	purchaseFee?: bigint
+	minimumFee?: bigint
+	admission?: 'open' | 'fixed' | 'custom'
+	observedAt?: bigint
+	nonDecision?: boolean
 	priceValid?: boolean
 	capacity?: bigint
 	commitment?: bigint
@@ -60,19 +66,21 @@ function decodeWatchlistRow(value: unknown): WatchlistRow | undefined {
 		const reference = read.record('entity')
 		const entity = parseWatchlistEntity(reference.string('id'), reference.oneOf('kind', ['pool', 'question']))
 		if (entity === undefined) return undefined
-		const status = read.oneOf('status', ['pool', 'question', 'failed', 'invalid-pool', 'unregistered-question', 'unprepared-question'])
+		const status = read.oneOf('status', ['pool', 'question', 'failed', 'invalid-pool', 'non-statoblast-contract', 'unregistered-question', 'unprepared-question'])
 		const row: WatchlistRow = { entity, status }
-		for (const key of ['missingDeposits', 'reportingPrincipal', 'escalationEnd', 'earnedCollateral', 'earnedRep', 'annualFee', 'capacity', 'commitment', 'demand', 'pledged', 'healthBps'] as const) {
+		for (const key of ['missingDeposits', 'reportingPrincipal', 'escalationEnd', 'earnedCollateral', 'earnedRep', 'annualFee', 'purchaseFee', 'minimumFee', 'observedAt', 'capacity', 'commitment', 'demand', 'pledged', 'healthBps'] as const) {
 			const amount = read.optional(key, read.bigint)
 			if (amount !== undefined && amount >= 0n) row[key] = amount
 		}
-		const optional = <K extends 'collateralDecimals' | 'priceValid' | 'collateral' | 'shares' | 'question'>(key: K, reader: (key: string) => NonNullable<WatchlistRow[K]>) => {
+		const optional = <K extends 'collateralDecimals' | 'priceValid' | 'collateral' | 'shares' | 'question' | 'admission' | 'nonDecision'>(key: K, reader: (key: string) => NonNullable<WatchlistRow[K]>) => {
 			const value = read.optional(key, reader)
 			if (value !== undefined) row[key] = value
 		}
 		optional('collateralDecimals', key => Math.min(36, Math.max(0, Math.trunc(read.number(key)))))
 		optional('collateral', read.string)
 		optional('priceValid', read.boolean)
+		optional('nonDecision', read.boolean)
+		optional('admission', key => read.oneOf(key, ['open', 'fixed', 'custom'] as const))
 		optional('shares', key => {
 			const shares = read.record(key)
 			return { yesAttoShares: shares.bigint('yesAttoShares'), noAttoShares: shares.bigint('noAttoShares'), invalidAttoShares: shares.bigint('invalidAttoShares') }
@@ -141,12 +149,15 @@ function rowCollateral(profile: NetworkProfile, address: Address) {
 	return (['WETH', 'USDC'] as const).map(symbol => securityPoolCollateral(profile, symbol)).find(token => token.address.toLowerCase() === address.toLowerCase())
 }
 
-async function readPoolRow(read: ReadWatchlistBatch, entity: WatchlistEntity, owner: Address | undefined, universeId: bigint, profile: NetworkProfile): Promise<WatchlistRow> {
+async function readPoolRow(read: ReadWatchlistBatch, client: ReadClient, block: bigint, entity: WatchlistEntity, owner: Address | undefined, universeId: bigint, profile: NetworkProfile): Promise<WatchlistRow> {
 	const address = entity.pool
-	const [capital, collateral, fee] = await read([
+	const [capital, collateral, fee, purchase, minimum, policy] = await read([
 		{ abi: poolAbi, address, functionName: 'capitalLedger', args: [universeId] },
 		{ abi: poolAbi, address, functionName: 'collateralToken' },
 		{ abi: poolAbi, address, functionName: 'annualFeeBps' },
+		{ abi: poolAbi, address, functionName: 'purchaseFeeBps' },
+		{ abi: poolAbi, address, functionName: 'minimumPurchaseFeeAttoEth' },
+		{ abi: poolAbi, address, functionName: 'questionAdmissionPolicy' },
 	])
 	const row: WatchlistRow = { entity, status: 'pool' }
 	if (collateral.status === 'success') {
@@ -155,6 +166,15 @@ async function readPoolRow(read: ReadWatchlistBatch, entity: WatchlistEntity, ow
 		row.collateralDecimals = token?.decimals ?? 0
 	}
 	if (fee.status === 'success') row.annualFee = fee.result
+	if (purchase.status === 'success') row.purchaseFee = purchase.result
+	if (minimum.status === 'success') row.minimumFee = minimum.result
+	if (policy.status === 'success' && policy.result !== zeroAddress) {
+		const code = await client.getCode({ address: policy.result, blockNumber: block }).catch(error => {
+			if (error instanceof Error) return undefined
+			throw error
+		})
+		if (code !== undefined) row.admission = identifySecurityPoolAdmission(code)
+	}
 	if (capital.status !== 'success' || capital.result === zeroAddress) return row
 	const ledger = capital.result
 	const [price, demand, totals, position, account, index, conservativePrice, multiplier] = await read([
@@ -218,11 +238,13 @@ async function readQuestionRow(read: ReadWatchlistBatch, entity: Extract<Watchli
 			: read([
 					{ abi: gameAbi, address: gameAddress, functionName: 'getEscalationGameEndDate' },
 					{ abi: gameAbi, address: gameAddress, functionName: 'forkContinuation' },
+					{ abi: gameAbi, address: gameAddress, functionName: 'hasReachedNonDecision' },
 				])
 	const sharesRead = owner !== undefined && token.status === 'success' && token.result !== zeroAddress ? read([{ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: token.result, functionName: 'balanceOfShares', args: [universeId, owner] }]) : undefined
 	const totalsRead = gameAddress === undefined || owner === undefined || !includeDeposits ? undefined : read(reportingSides.map(outcome => reportingPrincipalRead(gameAddress, { outcome, depositor: owner })))
 	const [gameResult, sharesResult, totals] = await Promise.all([gameReads, sharesRead, totalsRead])
-	const [deadline, continuation] = gameResult ?? []
+	const [deadline, continuation, nonDecision] = gameResult ?? []
+	if (nonDecision?.status === 'success') row.nonDecision = nonDecision.result
 	if (deadline?.status === 'success') row.escalationEnd = deadline.result
 	if (market.status === 'success' && outcome.status === 'success' && fork.status === 'success' && game.status === 'success') {
 		row.question = {
@@ -277,8 +299,8 @@ export async function loadWatchlistRows(client: ReadClient, entries: readonly Wa
 			chunk.map(async (entry, index): Promise<WatchlistRow> => {
 				const result = checks[index]
 				if (result?.status === 'failed') throw result.error
-				if (result?.status === 'pool') return await readPoolRow(read, entry, owner, universeId, profile)
-				if (result?.status === 'question' && entry.kind === 'question') return await readQuestionRow(read, entry, result.ledger, owner, universeId, profile, includeDeposits)
+				if (result?.status === 'pool') return await readPoolRow(read, client, block, entry, owner, universeId, profile)
+				if (result?.status === 'question' && entry.kind === 'question') return { ...(await readQuestionRow(read, entry, result.ledger, owner, universeId, profile, includeDeposits)), observedAt: head.timestamp }
 				return { entity: entry, status: result?.status ?? 'failed' }
 			}),
 		)

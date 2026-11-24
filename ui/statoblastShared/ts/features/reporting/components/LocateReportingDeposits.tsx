@@ -7,7 +7,8 @@ import { createActiveEnvironmentGuard, getActiveNetworkProfile } from '@zoltar/u
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
-import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
+import { formatCurrencyBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import type { ActiveReportingDetails } from '../../../types/contracts.js'
 import { locatedDepositKey, reportingDepositStore } from '../../../protocol/reportingDeposits.js'
@@ -15,11 +16,12 @@ import { reportingDepositCursorStore, reportingDepositRead, searchReportingDepos
 
 const retryDelays = [250, 1000, 4000]
 
-export function LocateReportingDeposits({ details, wallet, refresh }: { details: ActiveReportingDetails; wallet: Address; refresh: () => Promise<void> }) {
-	const [open, setOpen] = useState(false)
+export function LocateReportingDeposits({ details, wallet, refresh, openOnEntry = false }: { openOnEntry?: boolean; details: ActiveReportingDetails; wallet: Address; refresh: () => Promise<void> }) {
+	const [open, setOpen] = useState(openOnEntry)
 	const [attempt, setAttempt] = useState(0)
 	const [status, setStatus] = useState<'idle' | 'searching' | 'exhausted' | 'failed'>('idle')
 	const [inspected, setInspected] = useState(0n)
+	const [progress, setProgress] = useState<{ count: bigint; seconds: bigint }>()
 	const [manualIndex, setManualIndex] = useState('')
 	const [checkingIndex, setCheckingIndex] = useState(false)
 	const [indexError, setIndexError] = useState<string>()
@@ -43,6 +45,9 @@ export function LocateReportingDeposits({ details, wallet, refresh }: { details:
 		let current = true
 		let timeout: ReturnType<typeof setTimeout> | undefined
 		let cursor = cursors.read()
+		const startIndex = cursor?.nextIndex ?? 0n
+		const startedAt = Date.now()
+		setInspected(startIndex)
 		let found = locatedPrincipal
 		let failures = 0
 		const active = () => current && !document.hidden && guard.isCurrent()
@@ -56,6 +61,12 @@ export function LocateReportingDeposits({ details, wallet, refresh }: { details:
 				cursors.write(result.confirmed)
 				cursor = result.position
 				setInspected(cursor.nextIndex)
+				const count = result.totalDeposits
+				const scanned = cursor.nextIndex - (cursor.nextIndex >= startIndex ? startIndex : 0n)
+				if (count !== undefined && scanned > 0n && count >= cursor.nextIndex) {
+					const elapsed = BigInt(Math.max(1, Date.now() - startedAt))
+					setProgress({ count, seconds: ((count - cursor.nextIndex) * elapsed + scanned * 1000n - 1n) / (scanned * 1000n) })
+				}
 				for (const { deposit, principal } of result.matches) {
 					const key = locatedDepositKey(deposit)
 					if (known.has(key)) continue
@@ -117,17 +128,18 @@ export function LocateReportingDeposits({ details, wallet, refresh }: { details:
 		setAttempt(value => value + 1)
 	}
 	return (
-		<details onToggle={event => setOpen(event.currentTarget.open)}>
+		<details open={open} onToggle={event => setOpen(event.currentTarget.open)}>
 			<summary>{pageCopy.locateDeposits}</summary>
 			<p>
 				{formatCurrencyBalance(total - locatedPrincipal)}
 				{pageCopy.repToLocateTail}
 			</p>
 			{status === 'searching' && (
-				<p role='status'>
-					{inspected.toString()}
-					{pageCopy.depositsCheckedTail}
-				</p>
+				<div role='status'>
+					<progress max={1} aria-label={pageCopy.locateDeposits} value={getVisualRatio({ value: inspected, maxValue: progress?.count })} />
+					<p>{progress === undefined ? `${inspected}${pageCopy.depositsCheckedTail}` : pageCopy.formatDepositSearchProgress(inspected, progress.count, formatDuration(progress.seconds))}</p>
+					<p>{pageCopy.keepTabOpen}</p>
+				</div>
 			)}
 			<details>
 				<summary>{pageCopy.manualDepositLookup}</summary>
