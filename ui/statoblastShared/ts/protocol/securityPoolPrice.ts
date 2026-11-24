@@ -12,6 +12,7 @@ import { getOpenOracleSettleGasLimit } from './openOracle.js'
 import { loadOpenOracleStoredState } from './openOracleState.js'
 import { securityPoolReadClient, type SecurityPoolTransaction } from './securityPool.js'
 import { statoblastDisplayCache } from './statoblastPageCache.js'
+import * as priceCopy from '../copy/securityPoolPrice.js'
 
 const abi = parseAbi([
 	'function reportCandidates(uint256 id) view returns (address escrow,address sponsor,address coordinator,uint256 maxSettlementBaseFee)',
@@ -41,7 +42,7 @@ export async function loadSecurityPoolPriceReport(client: ReadClient, snapshot: 
 	const [candidate, outcome] = await Promise.all([client.readContract({ abi, address: snapshot.feed, functionName: 'reportCandidates', args: [reportId], blockNumber }), client.readContract({ abi, address: snapshot.feed, functionName: 'reportOutcome', args: [reportId], blockNumber })])
 	const tuple = requireTupleValue(candidate, 4, 'report candidate')
 	const escrow = requireAddressValue(tuple[0], 'report escrow')
-	const sponsor = requireAddressValue(tuple[1], 'report sponsor')
+	const sponsor = requireAddressValue(tuple[1], 'report funder')
 	const maxSettlementBaseFee = requireBigintValue(tuple[3], 'report settlement base-fee ceiling')
 	if (escrow === zeroAddress) throw new Error('This report does not belong to this price feed.')
 	const pinned: Pick<ReadClient, 'readContract'> = { readContract: parameters => client.readContract({ ...parameters, blockNumber }) }
@@ -58,7 +59,7 @@ export async function loadSecurityPoolPriceReport(client: ReadClient, snapshot: 
 	if (
 		requireAddressValue(escrowFeed, 'escrow feed') !== snapshot.feed ||
 		requireBigintValue(escrowId, 'escrow report ID') !== reportId ||
-		requireAddressValue(escrowSponsor, 'escrow sponsor') !== getAddress(sponsor) ||
+		requireAddressValue(escrowSponsor, 'escrow funder') !== getAddress(sponsor) ||
 		requireAddressValue(escrowOracle, 'escrow oracle') !== observation.openOracle ||
 		getAddress(game.callbackContract) !== getAddress(escrow) ||
 		getAddress(game.token1) !== observation.weth ||
@@ -126,7 +127,8 @@ export function buildSecurityPoolPriceFundingWithdrawal(snapshot: SecurityPoolPr
 export function buildSecurityPoolPriceTokenWithdrawal(snapshot: SecurityPoolPriceSnapshot, report: SecurityPoolPriceReport, token: 'collateral' | 'rep', recipient: Address): SecurityPoolTransaction {
 	const tokenAddress = token === 'rep' ? snapshot.repToken : snapshot.observation?.weth
 	if (tokenAddress === undefined) throw new Error('Branch price feed is unavailable.')
-	if (recipient === zeroAddress || recipient === report.escrow || (recipient !== getAddress(report.sponsor) && getAddress(snapshot.owner) !== getAddress(report.sponsor))) throw new Error('Invalid report funding recipient.')
+	if (recipient === zeroAddress || recipient === report.escrow) throw new Error(priceCopy.invalidWithdrawalRecipient)
+	if (recipient !== getAddress(report.sponsor) && getAddress(snapshot.owner) !== getAddress(report.sponsor)) throw new Error(priceCopy.withdrawalRecipientRequiresFunder)
 	return { account: snapshot.owner, to: report.escrow, value: 0n, data: encodeFunctionData({ abi, functionName: 'withdrawTokenFunding', args: [tokenAddress, recipient] }) }
 }
 export function submittedSecurityPoolPriceReport(receipt: Pick<TransactionReceipt, 'logs'>, feed: Address) {

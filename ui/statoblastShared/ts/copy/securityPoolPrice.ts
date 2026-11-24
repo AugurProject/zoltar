@@ -44,8 +44,8 @@ export const scopes: Record<SecurityPoolPriceScope, ScopeCopy> = {
 		requiredRep: 'Branch REP funding',
 		walletRep: 'Wallet branch REP',
 		insufficientRep: 'Insufficient branch REP to fund the report.',
-		request: 'Request branch price',
-		requesting: 'Requesting branch price…',
+		request: 'Report branch price',
+		requesting: 'Reporting branch price…',
 		requestWarning: 'Your collateral and branch REP fund a two-sided oracle quote. Disputes can trade against that quote; the returned token amounts can change. Disputes may delay settlement beyond the reporting window. Security pool collateral does not fund this report.',
 		reportLoading: 'Loading this branch report…',
 		releasedRep: 'Released branch REP',
@@ -58,7 +58,7 @@ export const scopes: Record<SecurityPoolPriceScope, ScopeCopy> = {
 		description: 'Any wallet can fund a report; an accepted one renews this universe’s shared REP price.',
 		// The universe report renders only once an account has been shown, so a missing target means it is reloading.
 		missingTarget: readUnavailable,
-		waitForStart: 'Until this branch activates, fund its price report under Fork choices and recovery.',
+		waitForStart: 'Before this branch activates, report its price in Fork & recovery.',
 		loading: 'Checking price requirements…',
 		prepared: 'This universe’s price feed is already prepared.',
 		prepareFirst: 'This universe has no shared price feed.',
@@ -66,8 +66,8 @@ export const scopes: Record<SecurityPoolPriceScope, ScopeCopy> = {
 		requiredRep: 'REP funding',
 		walletRep: 'Wallet REP',
 		insufficientRep: 'Insufficient REP to fund the report.',
-		request: 'Request REP price',
-		requesting: 'Requesting REP price…',
+		request: 'Report a price',
+		requesting: 'Reporting a price…',
 		requestWarning: 'Your collateral and REP fund a two-sided oracle quote. Disputes can trade against that quote; the returned token amounts can change. Security pool collateral does not fund this report.',
 		reportLoading: 'Loading this report…',
 		releasedRep: 'Released REP',
@@ -82,8 +82,8 @@ export const noPreparationSource = 'No registered origin question is available t
 export const tooLate = 'Too little time remains to challenge and accept a new report before the preparation reporting window closes.'
 export const reportingDeadline = 'Preparation reporting closes'
 export const earliestSettlement = 'New report can settle from'
-export const price = 'Proposed price (REP per collateral token)'
-export const priceInvalid = 'Enter a positive REP per collateral token price.'
+export const price = (collateral: string) => `Proposed price (REP per ${collateral})`
+export const priceInvalid = 'Enter a positive REP price.'
 export const wethHint = 'Leave blank to use the suggested stake shown below.'
 export const wethInvalid = 'Enter a nonnegative collateral amount in the token’s precision.'
 export const bounty = 'Settlement bounty'
@@ -93,10 +93,10 @@ export const wrapping = 'Wrapping ETH…'
 export const noWrap = 'Your WETH balance already covers this report.'
 export const insufficientEth = 'Insufficient ETH for wrapping and the report bounty.'
 export const insufficientWeth = 'Insufficient collateral to fund the report.'
-export const approvalRequired = 'Approve both report tokens before requesting the report.'
+export const approvalRequired = 'Approve both tokens before reporting a price.'
 export const approveWeth = 'Approve collateral for report'
 export const approveRep = 'Approve REP for report'
-export const currentPrice = 'Last accepted price (REP per collateral token)'
+export const currentPrice = (collateral: string) => `Last accepted price (REP per ${collateral})`
 export const validUntil = 'Price valid until'
 export const pricePage = 'REP price'
 export const priceCurrent = 'Current'
@@ -117,7 +117,7 @@ export const reportId = 'Report ID'
 export const reportHint = 'Leave blank to follow the latest report, or enter an older report ID to recover its funding.'
 export const reportInvalid = 'Enter a positive report ID.'
 export const noReport = 'No report selected.'
-export const reportState = 'Report state'
+export const reportState = 'Status'
 export const states = { pending: 'Dispute window open', settle: 'Ready to settle', accepted: 'Accepted', rejected: 'Settled without an accepted price', recovery: 'Settled · recovery available' }
 export const settleAt = 'Settlement available from'
 export const sponsor = 'Return funds to'
@@ -137,6 +137,8 @@ export const withdrawingToken = (symbol: string) => `Returning released ${symbol
 export const withdrawalRecipient = 'Single-token recipient'
 export const withdrawalRecipientHint = 'Leave blank to return funds to the original funder.'
 export const invalidWithdrawalRecipient = 'Enter a valid recipient address other than the report escrow.'
+export const withdrawalRecipientRequiresFunder = 'Only the original funder can send funds to a different address.'
+export const reportFunderChanged = 'The report funder changed. Refresh and review it again.'
 export const fundingReturnHint = 'Return both tokens to the original funder, or return either token independently.'
 export const tokenWithdrawalReview = (symbol: string, recipient: string) => `Send released ${symbol} to ${recipient}.`
 export const refresh = 'Refresh report status'
@@ -151,6 +153,6 @@ export const reportCoverage = 'Report coverage'
 export const growthHeadroom = 'Growth headroom'
 export const coverageWarning = 'Growth beyond this coverage before settlement rejects this price. Attached operations may still use a separately accepted fresh price, within their signed bounds.'
 
-export const deviation = 'Price uncertainty'
+export const deviation = 'Deviation'
 export const formatDeviation = (percent: string) => `${percent}%`
 export const returnFunds = 'Return funds'

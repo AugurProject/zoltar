@@ -156,7 +156,7 @@ test('an unforked security pool with an expired price can fund a new report from
 	// The summary is the report's only label.
 	expect(report.querySelector('h4') === null).toBe(true)
 	await waitFor(() => expect(report.textContent).toContain('Wallet WETH'))
-	const input = [...report.querySelectorAll('input')].find(candidate => candidate.closest('.field')?.querySelector('label')?.textContent?.includes(priceCopy.price))
+	const input = [...report.querySelectorAll('input')].find(candidate => candidate.closest('.field')?.querySelector('label')?.textContent?.includes(priceCopy.price('WETH')))
 	if (input === undefined) throw new Error('Missing proposed price input')
 	await act(() => {
 		input.value = '2'
@@ -211,7 +211,7 @@ test('the price report keeps its drafts when folded and through a failed account
 	const view = await renderSecurityPools()
 	const backing = () => sectionTitled(view.container, copy.poolTitle)
 	const report = () => universePriceReport(backing())
-	const priceInput = () => [...(report()?.querySelectorAll('input') ?? [])].find(candidate => candidate.closest('.field')?.querySelector('label')?.textContent?.includes(priceCopy.price))
+	const priceInput = () => [...(report()?.querySelectorAll('input') ?? [])].find(candidate => candidate.closest('.field')?.querySelector('label')?.textContent?.includes(priceCopy.price('WETH')))
 	await waitFor(() => expect(report()?.textContent).toContain('Wallet WETH'))
 	await act(() => {
 		const input = priceInput()

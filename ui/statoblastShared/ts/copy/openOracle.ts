@@ -38,7 +38,7 @@ export const createAnother = 'Create another'
 export const formatTokenDecimalsInvalid = (tokenAddress: CopyTemplateValue) => `Token metadata for ${tokenAddress} returned invalid decimals`
 export const formatWethMetadataInvalid = (tokenAddress: CopyTemplateValue) => `WETH metadata is invalid for ${tokenAddress}`
 export const formatReportTokenMetadataUnavailable = (reportId: CopyTemplateValue, reason: CopyTemplateValue) => `OpenOracle report #${reportId} is unavailable. ${reason}.`
-export const settlementGasExceedsTransactionCap = 'This report’s settlement callback needs more gas than one transaction allows, so it cannot be settled from this app.'
+export const settlementGasExceedsTransactionCap = 'Settling this report needs more gas than one transaction allows.'
 export const reportCreated = 'Report created'
 export const createStandaloneReport = 'Create standalone OpenOracle report'
 export const creating = 'Creating…'

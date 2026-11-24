@@ -273,7 +273,7 @@ export function useReportingOperations(
 		const timingGuard = getReportingSubmissionTimingGuard(latestDetails.status === 'active' ? latestDetails : undefined)
 		if (timingGuard !== undefined) throw new Error(timingGuard)
 		const contributionPreview = previewReportingContribution(latestDetails, selectedOutcome, reportAmount)
-		if (contributionPreview.actualDepositAmount === undefined) throw new Error(contributionPreview.reason ?? 'Unable to preview the REP that would become dispute-staked for this report.')
+		if (contributionPreview.actualDepositAmount === undefined) throw new Error(contributionPreview.reason ?? reportingCopy.reportPreviewUnavailable)
 		const remainingSelectedOutcomeCapacity = getRemainingSelectedOutcomeContributionCapacity(latestDetails, selectedOutcome)
 		if (contributionPreview.actualDepositAmount > remainingSelectedOutcomeCapacity) {
 			if (remainingSelectedOutcomeCapacity === 0n) throw new Error(reportingCopy.selectedSideCapacityEmpty)
@@ -345,7 +345,7 @@ export function useReportingOperations(
 				const latestDetails = await dependencies.loadReportingDetails(questionLedgerAddress, walletAddress)
 				if (!isCurrentSelection()) return undefined
 				if (latestDetails.status !== 'active') {
-					throw new Error('Deposits cannot be settled until the first report starts the escalation game.')
+					throw new Error(reportingCopy.claimUnavailableBeforeReporting)
 				}
 				if (latestDetails.systemState !== 'operational') throw new Error('Reporting actions are unavailable until this question is operational.')
 				const selectedSide = latestDetails.sides.find(side => side.key === outcome)
@@ -354,13 +354,13 @@ export function useReportingOperations(
 				}
 				const availableDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []
 
-				if (latestDetails.settlementState === 'migration-required') throw new Error('Settle winning parent deposits in the child question after it finalizes; parent deposits do not need migration.')
+				if (latestDetails.settlementState === 'migration-required') throw new Error(reportingCopy.claimParentAfterResolution)
 				if (!latestDetails.parentWithdrawalEnabled) throw new Error(reportingCopy.questionFinalizationRequired)
 
 				const requestedDepositIndexes = depositIndexesOverride ?? currentForm.selectedWithdrawDepositIndexesByOutcome[outcome]
 				const missingSelectedDepositIndex = requestedDepositIndexes.find(index => !availableDepositIndexes.includes(index))
 				if (missingSelectedDepositIndex !== undefined) {
-					throw new Error(`Selected deposit #${missingSelectedDepositIndex.toString()} is no longer available to settle on ${selectedSide.label}.`)
+					throw new Error(reportingCopy.claimDepositUnavailable(missingSelectedDepositIndex, selectedSide.label))
 				}
 
 				const depositIndexes = requestedDepositIndexes
@@ -372,7 +372,7 @@ export function useReportingOperations(
 				const claimAmount = selectedSide.userDeposits.filter(deposit => depositIndexes.includes(deposit.depositIndex)).reduce((sum, deposit) => sum + (getEscalationDepositClaimAmount(latestDetails, outcome, deposit) ?? 0n), 0n)
 				return { ...(await dependencies.withdrawEscalationFromQuestionLedger(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, questionLedgerAddress, outcome, depositIndexes, claimAmount)), amountAttoRep: claimAmount }
 			},
-			'Failed to settle escalation deposits',
+			reportingCopy.claimFailed,
 			outcome,
 		)
 

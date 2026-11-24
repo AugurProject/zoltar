@@ -4,6 +4,7 @@ import * as securityPoolCapitalCopy from '@zoltar/ui-statoblast-shared/copy/secu
 import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 import * as glossaryCopy from '@zoltar/ui-statoblast-shared/copy/glossary.js'
 import * as auctionCopy from '@zoltar/ui-statoblast-shared/copy/securityPoolRepairAuction.js'
+import * as appCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import { expect, test } from 'bun:test'
@@ -29,17 +30,26 @@ test('step progress counts the escalation phases', () => {
 })
 
 test('Statoblast workflow copy uses the redesign glossary and live values', () => {
-	const copy = [reportingCopy, securityPoolCopy, securityPoolCapitalCopy, securityPoolSharedForkCopy, securityPoolPriceCopy, glossaryCopy, auctionCopy]
+	const copy = [reportingCopy, securityPoolCopy, securityPoolCapitalCopy, securityPoolSharedForkCopy, securityPoolPriceCopy, glossaryCopy, auctionCopy, appCopy]
 	const labels = [
 		...copy.flatMap(module => Object.values(module).filter(value => typeof value === 'string')),
 		...securityPoolCapitalCopy.prepareStages,
+		...Object.values(securityPoolCapitalCopy.retirementPreviewStatus),
+		openOracleCopy.settlementGasExceedsTransactionCap,
 		reportingCopy.clearDeposits('No'),
 		securityPoolCopy.fixedQuestionRulesReview(1n, [1n]),
 		securityPoolCopy.fixedQuestionLimit(1),
+		securityPoolCapitalCopy.reductionWithCure('1 WETH', true),
+		securityPoolCapitalCopy.reductionWithCure('1 WETH', false),
+		securityPoolCapitalCopy.releaseReductionReview('1 WETH'),
+		reportingCopy.forkTriggerWarning('No', '1'),
+		reportingCopy.reportForkReviewDescription('No'),
 		securityPoolCopy.mintReview({ amount: '1 WETH', purchaseFee: '0.01 WETH', feeCap: '0.02 WETH', minimum: '1', recovery: undefined }),
 		auctionCopy.bidReview(1n, 1n, 1n),
 	]
 	for (const label of labels) {
-		expect(label).not.toMatch(/7 weeks|3-day|eight weeks|5% headroom|adds 1 REP|settlement demand|unused healthy capacity|retiring|conservative health|liquidation boundary|scanner or liquidator|funding recipient|vault owners|clear no deposits|admission policy|\b(?:principal|ledger|callback|retirement)\b/i)
+		expect(label).not.toMatch(
+			/7 weeks|3-day|eight weeks|5% headroom|adds 1 REP|settlement demand|healthy capacity|spare healthy commitment|(?:above|below|liquidation) boundary|conservative health|funding recipient|vault owners|clear no deposits|admission policy|\b(?:principal|ledger|callback|retirement|retiring|sponsor|scanner|liquidator|escalation|cohort)\b/i,
+		)
 	}
 })

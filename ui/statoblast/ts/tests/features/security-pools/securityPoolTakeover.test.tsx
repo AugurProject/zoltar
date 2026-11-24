@@ -116,7 +116,7 @@ test('a position that unused pool commitment restores is offered as an unpaid cu
 	}
 	await waitFor(() => expect(cureButton.disabled).toBe(false))
 	expect(takeOverButton.disabled).toBe(true)
-	expect(view.container.textContent).toContain('Cure it instead; no takeover reward is paid.')
+	expect(view.container.textContent).toContain('Free capacity can restore this position. Curing it pays no takeover reward.')
 	await act(() => {
 		cureButton.click()
 	})
@@ -168,7 +168,7 @@ test('a position the unused commitment cannot restore keeps the takeover and dis
 		field.value = '2'
 		field.dispatchEvent(new Event('input', { bubbles: true }))
 	})
-	await waitFor(() => expect(view.container.textContent).toContain('Unused security pool commitment cannot restore this position. Take it over.'))
+	await waitFor(() => expect(view.container.textContent).toContain('There is too little free capacity to cure this position.'))
 	expect(view.container.querySelectorAll('button')[1]?.disabled).toBe(true)
 })
 

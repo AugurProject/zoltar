@@ -18,7 +18,7 @@ export const ESCALATION_GAME_ACTIVATION_DELAY = ESCALATION_ACTIVATION_DELAY
 const LOAD_REPORTING_PRESETS_REASON = reportingCopy.loadingReportingDetails
 const MAX_PROFIT_NOT_STARTED_REASON = reportingCopy.maxProfitPrestartReason
 const SELECTED_SIDE_ALREADY_LEADS_REASON = reportingCopy.selectedSideLeadsReason
-const ESCALATION_RESOLVED_REASON = 'Escalation is already resolved.'
+const ESCALATION_RESOLVED_REASON = reportingCopy.reportingAlreadyResolved
 type EscalationPhase = 'Resolved' | 'Fork Triggered' | 'Pending Start' | 'Timed Out' | 'Active'
 function getSelectedAndOtherSides(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey) {
 	const selectedSide = details.sides.find(side => side.key === selectedOutcome)
@@ -281,7 +281,7 @@ function previewEscalationContribution(details: ActiveReportingDetails, outcome:
 	if (projectedDeposit === undefined)
 		return {
 			actualDepositAmount: undefined,
-			reason: 'The escalation game would not accept this report amount.',
+			reason: reportingCopy.invalidReportAmount,
 		}
 	return {
 		actualDepositAmount: projectedDeposit.acceptedAmountAttoRep,
@@ -294,7 +294,7 @@ export function previewReportingContribution(details: ReportingDetails, outcome:
 		if (amount < details.startBondAttoRep)
 			return {
 				actualDepositAmount: undefined,
-				reason: `Enter at least ${formatCurrencyBalanceWithUnit(details.startBondAttoRep, 'REP')} to start the escalation game.`,
+				reason: reportingCopy.minimumReportRequired(formatCurrencyBalanceWithUnit(details.startBondAttoRep, 'REP')),
 			}
 		return {
 			actualDepositAmount: amount,

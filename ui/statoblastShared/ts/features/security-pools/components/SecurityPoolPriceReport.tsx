@@ -93,7 +93,7 @@ export function SecurityPoolPriceReport({
 			<MetricField label={copy.earliestSettlement}>
 				<TimestampValue timestamp={model.earliestSettlement} relative={false} />
 			</MetricField>
-			<MetricField label={copy.currentPrice} loading={model.loading}>
+			<MetricField label={copy.currentPrice(model.collateral.symbol)} loading={model.loading}>
 				<CurrencyValue value={accepted} units={priceUnits} />
 			</MetricField>
 			<MetricField label={copy.validUntil} loading={model.loading}>
@@ -107,7 +107,7 @@ export function SecurityPoolPriceReport({
 			{branch ? <SecurityPoolButton model={parameters.actions} action={model.actionId('prepare')} label={copy.prepare} pendingLabel={copy.preparing} reason={model.prepareReason} onClick={model.prepare} /> : undefined}
 			<MetricGrid>
 				<div className='initial-price-input'>
-					<SecurityPoolInput label={copy.price} value={model.priceInput} onChange={model.setPrice} disabled={disabled} numeric describedBy={priceWarning === undefined ? undefined : priceWarningId} />
+					<SecurityPoolInput label={copy.price(model.collateral.symbol)} value={model.priceInput} onChange={model.setPrice} disabled={disabled} numeric describedBy={priceWarning === undefined ? undefined : priceWarningId} />
 					<div aria-live='polite' className='field-error-live-region'>
 						{priceWarning === undefined ? undefined : <UserMessage id={priceWarningId} placement='field' tone='warning' detail={priceWarning} />}
 					</div>

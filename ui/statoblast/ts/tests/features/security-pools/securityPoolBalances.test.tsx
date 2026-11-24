@@ -81,7 +81,7 @@ test('retirement readiness exposes the reserved capacity and observed times with
 			?.parentElement?.querySelector('.currency-value')
 			?.getAttribute('title')
 			?.replaceAll(/\s/g, '')
-	expect(amount(copy.retirementSpare)).toBe('1WETH')
+	expect(amount(copy.reductionFreeCapacity)).toBe('1WETH')
 	expect(amount(copy.retirementAhead)).toBe('2WETH')
 	expect(amount(copy.retirementReduction)).toBe('5WETH')
 })

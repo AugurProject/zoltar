@@ -42,7 +42,7 @@ export function getReportingReportGuardMessage({
 	if (selectedOutcome === undefined) return reportingCopy.reportOutcomeSelectionRequired
 	if (reportAmount.trim() === '' || selectedAmount === undefined || selectedAmount <= 0n) return reportingCopy.reportAmountRequired
 	if (contributionPreviewReason !== undefined) return contributionPreviewReason
-	if (actualDepositAmount === undefined) return 'Unable to preview the REP that would become dispute-staked for this report.'
+	if (actualDepositAmount === undefined) return reportingCopy.reportPreviewUnavailable
 	if (remainingSelectedOutcomeCapacity !== undefined && actualDepositAmount > remainingSelectedOutcomeCapacity) {
 		if (remainingSelectedOutcomeCapacity === 0n) return reportingCopy.selectedSideCapacityEmpty
 		return `Only ${formatCurrencyBalanceWithUnit(remainingSelectedOutcomeCapacity, 'REP')} remains before the selected side reaches the non-decision threshold.`
@@ -56,7 +56,7 @@ export function getReportingReportGuardMessage({
 }
 
 export function getReportingWithdrawGuardMessage({ accountAddress, isOnActiveAppChain, reportingStatus }: { accountAddress: Address | undefined; isOnActiveAppChain: boolean; reportingStatus: ReportingStatus }) {
-	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('settling escalation deposits') })
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore(reportingCopy.claimWalletAction) })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (reportingStatus === 'missing') return reportingCopy.loadingReportingDetails
 	return undefined

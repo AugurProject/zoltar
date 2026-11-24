@@ -33,7 +33,7 @@ export function SecurityPoolRetirementPreview({ snapshot, position, redesigned =
 				</div>
 			)}
 			<MetricGrid>
-				<MetricField label={copy.retirementSpare}>
+				<MetricField label={copy.reductionFreeCapacity}>
 					<CurrencyValue value={current ? preview?.spareCommitment : undefined} suffix={snapshot.collateral.symbol} units={snapshot.collateral.decimals} />
 				</MetricField>
 				<MetricField label={copy.retirementAhead}>

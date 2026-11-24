@@ -187,15 +187,14 @@ function underwaterSnapshot() {
 test('the retirement review omits the immediate cure for a covered position', async () => {
 	const { hook, requests } = await setup()
 	await act(() => hook.state().retire(1n))
-	expect(requests[0]?.reviewDescription).not.toContain('removed at once')
+	expect(requests[0]?.reviewDescription).not.toContain('at once')
 	expect(requests[0]?.reviewDescription).toContain('The reduction waits for free capacity')
 })
 test('the retirement review states the immediate cure for a position underwater at a fresh price', async () => {
 	const { hook, requests } = await setup(underwaterSnapshot())
 	await act(() => hook.state().retire(1n))
 	// 30 REP at a 10,500 bps multiplier and a liquidation price of 4 backs 7.142857… WETH, shown rounded down.
-	expect(requests[0]?.reviewDescription).toContain('Your REP covers only 7.1428 WETH at the current price, so the uncovered part is removed at once where spare capacity allows. The rest waits for free capacity behind earlier reductions.')
-	expect(requests[0]?.reviewDescription).toContain('The rest waits for free capacity')
+	expect(requests[0]?.reviewDescription).toContain('Your REP covers only 7.1428 WETH at the current price. The uncovered part can be removed at once if there is enough free capacity. The rest waits in queue.')
 })
 test.each(['0', '5'])('the retirement review queues target %s when the uncovered deficit is below the minimum cure', async remaining => {
 	const snapshot = underwaterSnapshot()
@@ -204,7 +203,7 @@ test.each(['0', '5'])('the retirement review queues target %s when the uncovered
 		hook.state().setRemainingCommitmentAmount(remaining)
 	})
 	await act(() => hook.state().retire(1n))
-	expect(requests[0]?.reviewDescription).not.toContain('removed at once')
+	expect(requests[0]?.reviewDescription).not.toContain('at once')
 	expect(requests[0]?.reviewDescription).toContain('The reduction waits for free capacity')
 })
 test('the retirement review states six-decimal collateral amounts in collateral units', async () => {
@@ -222,7 +221,7 @@ test('the retirement review states six-decimal collateral amounts in collateral 
 	await act(() => hook.state().setRemainingCommitmentAmount('2.5'))
 	await act(() => hook.state().retire(1n))
 	expect(requests[0]?.reviewDescription).toContain('Reduce position 1 to 2.5 USDC commitment.')
-	expect(requests[0]?.reviewDescription).toContain('Your REP covers only 7.1428 USDC at the current price,')
+	expect(requests[0]?.reviewDescription).toContain('Your REP covers only 7.1428 USDC at the current price.')
 })
 test('the retirement review claims no queued rest when the kept commitment is at least the covered amount', async () => {
 	const { hook, requests } = await setup(underwaterSnapshot())
@@ -230,13 +229,13 @@ test('the retirement review claims no queued rest when the kept commitment is at
 	if (position === undefined) throw new Error('Missing underwater position')
 	await act(() => hook.state().setRemainingCommitmentAmount(formatEther(position.commitment - unit)))
 	await act(() => hook.state().retire(1n))
-	expect(requests[0]?.reviewDescription).toContain('this reduction is removed at once')
-	expect(requests[0]?.reviewDescription).not.toContain('The rest waits')
+	expect(requests[0]?.reviewDescription).toContain('The reduction can happen at once if there is enough free capacity. Any remainder goes in queue.')
+	expect(requests[0]?.reviewDescription).not.toContain('The rest waits in queue.')
 })
 test('the retirement review omits the immediate cure at a stale price', async () => {
 	const { hook, requests } = await setup({ ...underwaterSnapshot(), priceValid: false })
 	await act(() => hook.state().retire(1n))
-	expect(requests[0]?.reviewDescription).not.toContain('removed at once')
+	expect(requests[0]?.reviewDescription).not.toContain('at once')
 })
 test('target sizing rounds a small reduction up to a meaningful retirement unit', async () => {
 	const { hook } = await setup()

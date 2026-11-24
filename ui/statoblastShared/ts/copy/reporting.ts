@@ -4,76 +4,85 @@
  */
 export type CopyParts<Amount> = readonly (string | Amount)[]
 
-export const timeoutResolutionDetail = 'Escalation ended by timeout. The winner is computed from the current dispute-staked REP totals.'
-export const escalationMetrics = 'Escalation metrics'
-export const loadingEscalationDeposits = 'Loading escalation deposits…'
+export const timeoutResolutionDetail = 'The response window ended. The result uses the final REP staked on each outcome.'
+export const escalationMetrics = 'Reporting details'
+export const loadingEscalationDeposits = 'Loading reporting deposits…'
 export const reportingWorkflow = 'Reporting workflow'
 export const reportOutcome = 'Report outcome'
 export const reportOutcomeSelectionRequired = 'Select an outcome side before reporting on a question.'
 export const reportingActivationHint = 'Select an outcome side above to enable reporting.'
-export const settlementSelectionRequired = 'Select at least one deposit or use the claim or clear action for this side.'
+export const settlementSelectionRequired = 'Select at least one deposit to claim.'
 export const triggerZoltarFork = 'Trigger universe fork'
 export const selectedSideBelowMinimumReason = 'Remaining selected-side capacity is below the minimum report.'
-export const continueForkMigrationDetail = 'Your escalation deposits already carry over to each child question. Once a child question finalizes, claim winning deposits there; the parent deposits do not need to be migrated.'
+export const continueForkMigrationDetail = 'Your deposits carry over to each child question. Claim winning deposits there after it resolves.'
 export const reportAmountFieldLabel = 'Report amount'
-export const escalationStarted = 'Escalation started'
-export const chooseDepositsToSettle = 'Choose deposits to settle'
-export const forkAlreadyTriggeredReportReason = 'Escalation ended without a decision and the universe fork has already been triggered for this question. Continue in Fork choices and recovery.'
-export const forkAlreadyTriggeredSettlementReason = 'Dispute-staked REP remains in escalation, which ended without a decision. The universe fork has already been triggered for this question, so continue in Fork choices and recovery.'
-export const forkTriggerInstruction = 'Escalation ended without a decision, so this question can only resolve through a universe fork. Trigger it unless someone else already has; until then, all escalation deposits stay locked. Triggering is permanent.'
-export const forkRequiredSettlementReason = 'Escalation ended without a decision, so deposits stay locked until someone triggers the universe fork. Settle them in Fork choices and recovery afterwards.'
+export const escalationStarted = 'Reporting started'
+export const chooseDepositsToSettle = 'Choose deposits to claim'
+export const forkAlreadyTriggeredReportReason = 'Reporting ended without a decision and the universe has forked. Continue in Fork & recovery.'
+export const forkAlreadyTriggeredSettlementReason = 'Your deposits carry over to the child questions. Continue in Fork & recovery.'
+export const forkTriggerInstruction = 'Reporting ended without a decision. Deposits stay locked until someone triggers the irreversible universe fork.'
+export const forkRequiredSettlementReason = 'Reporting ended without a decision. Deposits stay locked until the universe forks. Then use Fork & recovery.'
 export const leadHoldingCapital = 'Amount needed to hold the lead'
 export const loadingPoolHeldVaultRepBacking = 'Loading the position’s pledged REP…'
 export const loadingWalletRepBalance = 'Loading wallet REP balance…'
 export const loadingReportingDetails = 'Loading reporting details…'
-export const maxProfitPrestartReason = 'Full bonus share becomes available after the escalation game starts.'
+export const maxProfitPrestartReason = 'Full bonus share becomes available after the first report.'
 export const maxProfitForkReason = 'Full bonus share is unavailable because matching the other side would trigger the universe fork.'
 export const maxProfitWindowFilledReason = 'Full bonus share is unavailable because the reward window is already filled on the selected side.'
 export const selectedSideLeadsReason = 'Selected side already leads.'
-export const loadingEscalation = 'Loading escalation…'
+export const loadingEscalation = 'Loading reporting…'
 export const refreshReporting = 'Refresh reporting'
 export const retryReporting = 'Retry reporting'
 export const selectedSideCapacityEmpty = 'The selected side has no remaining capacity.'
 export const poolHeldVaultRepBackingEmpty = 'This position has no pledged REP available for reporting.'
 export const walletRepBalanceEmpty = 'No wallet REP is available for reporting.'
 export const reportOnSelectedSide = 'Report on selected side'
-export const currentEscalationDisputeStakeLead = 'Based on the current escalation state, this action would move '
-const acceptedWalletAmountTail = ' from wallet REP into dispute-staked REP instead of the full entered amount.'
+export const currentEscalationDisputeStakeLead = 'This report would stake '
+const acceptedWalletAmountTail = ' from your wallet instead of the full amount.'
 const acceptedTieAmountTail = ', 1 attoREP less than entered, because a report cannot tie the leading outcome.'
 export function formatAcceptedAmountTail(trimmedByTie: boolean) {
 	if (trimmedByTie) return acceptedTieAmountTail
 	return acceptedWalletAmountTail
 }
-export const openForkAndMigration = 'Open fork choices and recovery'
+export const openForkAndMigration = 'Open Fork & recovery'
 export const managePoolPrice = 'Manage security pool price'
 export const currentOraclePriceRequired = 'A current security pool oracle price is required before reporting.'
-export const forkMigrationRequiredDetail = 'Set up the child questions in Fork choices and recovery. Escalation deposits carry over on their own; claim winning deposits in the child universe once its question finalizes.'
+export const forkMigrationRequiredDetail = 'Set up the child questions in Fork & recovery. Your deposits carry over. Claim winning deposits after the child question resolves.'
 export const submittingReportTitle = 'Submitting report'
 export const approvingRepTitle = 'Approving REP'
-export const settlingEscalationDepositsTitle = 'Settling escalation deposits'
+export const settlingEscalationDepositsTitle = 'Claiming reporting deposits'
 export const reportingNotEnabled = 'Reporting not enabled'
 export const reportingOpen = 'Reporting open'
 export const resolved = 'Resolved'
 export const timedOut = 'Timed out'
 export const pendingFinalization = 'Pending finalization'
 export const winningPayout = 'Winning payout'
-export const losingDepositSettlement = 'Losing deposit settlement'
+export const losingDepositSettlement = 'Losing deposits'
 export const currentClaimType = 'Current claim type:'
-export const refreshFinalizedOutcomeReason = 'Escalation has ended. Refresh reporting to view the finalized outcome before settling deposits.'
+export const refreshFinalizedOutcomeReason = 'Reporting has ended. Refresh to check the result before claiming deposits.'
 export const poolFinalizedReason = 'This question is already finalized.'
-export const questionFinalizationRequired = 'Escalation deposits cannot be settled until the question is finalized.'
+export const questionFinalizationRequired = 'Claim deposits after the question resolves.'
+export const reportingAlreadyResolved = 'Reporting has already resolved.'
+export const invalidReportAmount = 'The reporting game would not accept this amount.'
+export const minimumReportRequired = (amount: string) => `Enter at least ${amount} to start the reporting game.`
+export const reportPreviewUnavailable = 'Unable to check how much REP this report would stake.'
+export const claimWalletAction = 'claiming reporting deposits'
+export const claimUnavailableBeforeReporting = 'The first report must start the game before you can claim deposits.'
+export const claimParentAfterResolution = 'Claim winning deposits in the child question after it resolves.'
+export const claimDepositUnavailable = (index: bigint, side: string) => `Deposit #${index} is no longer available to claim on ${side}.`
+export const claimFailed = 'Failed to claim reporting deposits'
 export const worthAfterFinalizationPendingFinalization = 'Worth after finalization: Pending finalization'
 export const presetOutcomeSelectionRequired = 'Select an outcome side before using presets.'
 export const selectedSideIsUnavailable = 'Selected side is unavailable.'
 export const selectedSide = 'Selected side'
 export const formatSettleSelectedDepositsLabel = (sideLabel: string) => `Claim selected ${sideLabel} deposits`
-export const formatSettlingDepositsPendingLabel = (sideLabel: string) => `Settling ${sideLabel} deposits…`
+export const formatSettlingDepositsPendingLabel = (sideLabel: string) => `Claiming ${sideLabel} deposits…`
 export const minimumFirstReport = 'Minimum report'
 export const totalSideDisputeStakedRep = 'All reporters'
 export const yourSideDisputeStakedRep = 'You'
 export const triggeringZoltarFork = 'Triggering universe fork…'
-export const walletUnsettledDepositsEmpty = 'Connected wallet has no unsettled escalation deposits.'
-export const forkCarriedSettlementRedirectDetail = 'This question also has deposits carried from the parent universe. Settle those in Fork choices and recovery.'
+export const walletUnsettledDepositsEmpty = 'This wallet has no remaining reporting deposits.'
+export const forkCarriedSettlementRedirectDetail = 'Claim deposits carried from the parent universe in Fork & recovery.'
 
 export const reportingParameters = 'Reporting parameters'
 
@@ -82,8 +91,8 @@ export const forkPhase = 'Fork'
 export const phaseProgress = (step: number, label: string) => `Step ${step} of ${phaseLabels.length} · ${label}`
 export const firstReportNext = (bond: string) => `The first report starts the game. Minimum report: ${bond} REP.`
 export const formatLeaderWinsNext = (end: string, leader: string) => `If no other side overtakes ${leader} by ${end}, ${leader} wins.`
-export const resolvedNext = 'Settle your deposits below.'
-export const resolvedNoDepositsNext = 'You have no deposits to settle.'
+export const resolvedNext = 'Claim winning deposits below.'
+export const resolvedNoDepositsNext = 'You have no deposits to claim.'
 export const startsWithFirstReport = 'After the first report'
 export const progressToFork = (secondLargest: string, threshold: string, percent: string) => `Progress to fork: second side at ${secondLargest} / ${threshold} REP (${percent}%)`
 export const forkProgressHelp = 'A fork needs two sides at this threshold, so progress follows the second-largest side.'
@@ -128,20 +137,20 @@ export const tiesResolve = 'see how ties resolve'
 export const tieStatusEnd = ').'
 export const checkBack = (deadline: string) => `Check back before ${deadline}. A report that raises the middle of the three balances can extend the response window.`
 export const addReminder = 'Add reminder (.ics)'
-export const reminderSummary = (title: string) => `Check escalation: ${title}`
+export const reminderSummary = (title: string) => `Check reporting: ${title}`
 export const deadlineMoved = (deadline: string) => `The response window now ends ${deadline} because a new report was added. Your status may have changed.`
-export const explainerTitle = 'How the escalation game works'
+export const explainerTitle = 'How reporting works'
 export const explainerFirstReport = (bond: string) => `Put REP behind the outcome you believe is correct. The first report must be at least ${bond} REP.`
 export const explainerCompetition = 'Other reporters can overtake your side, even in the last seconds. A report that raises the middle of the three balances extends the response window.'
 export const explainerResolution = 'When the response window ends, the side with the most REP wins. Winning deposits get their REP back, and eligible early deposits may also earn a reward; losing deposits are lost.'
 export const explainerForkLead = 'If two sides both reach the '
 export const formatExplainerForkThresholdSeparator = (threshold: string) => ` (${threshold} REP), the game stops and a `
-export const explainerForkTail = ' can be triggered. Your REP then follows the outcome you backed through Fork choices and recovery.'
+export const explainerForkTail = ' can be triggered. Your REP then follows the outcome you backed through Fork & recovery.'
 export const fullExplanation = 'Read the full explanation'
 export const winningPosition = <Amount>(worth: Amount): CopyParts<Amount> => ['Leading · worth ', worth, ' if it ended now']
 export const losingPosition = <Amount>(zero: Amount): CopyParts<Amount> => ['Behind · worth ', zero, ' if it ended now']
 export const tiedPosition = 'Tied'
-export const forkPosition = 'Continue in Fork choices and recovery'
+export const forkPosition = 'Continue in Fork & recovery'
 export const responseWindowEnds = 'Response window ends'
 export const attritionStarts = 'Attrition starts'
 export const dismissDeadlineNotice = 'Dismiss response window notice'
@@ -156,8 +165,8 @@ export const noVaultRepSelectWallet = 'Select Wallet REP to report. This positio
 
 export const depositTriggersFork = 'This report reaches the non-decision threshold: the game ends and a universe fork can be triggered.'
 export const forkTriggerWarningTitle = 'This report triggers a universe fork'
-export const forkTriggerWarning = (outcome: string, threshold: string) => `Another side already holds ${threshold} REP. Filling ${outcome} to the same threshold ends escalation without a decision: deposits lock, and the question can only resolve by forking the universe into Yes, No, and Invalid. This can’t be undone.`
-export const forkTriggerConfirmation = 'I understand this report ends escalation and leads to a universe fork.'
+export const forkTriggerWarning = (outcome: string, threshold: string) => `Another side already holds ${threshold} REP. Filling ${outcome} to the same threshold ends reporting without a decision: deposits lock, and the question can only resolve by forking the universe into Yes, No, and Invalid. This can’t be undone.`
+export const forkTriggerConfirmation = 'I understand this report ends reporting and allows the universe to fork.'
 export const forkTriggerConfirmationRequired = 'Confirm that this report triggers the universe fork.'
 export const reportingRepApprovalRequired = 'Approve REP for this question before reporting.'
 export const reportingApprovalAction = 'reporting'
@@ -168,7 +177,7 @@ export const maxBelowForkReason = 'Max stops below the non-decision threshold, w
 export const reportAndTriggerForkLabel = (outcome: string, amount: string) => `Report ${outcome} & trigger fork · ${amount} REP`
 export const reportingAndTriggeringFork = (outcome: string, amount: string) => `Reporting ${outcome} & triggering fork · ${amount} REP…`
 export const reportForkReviewTitle = (outcome: string, amount: string) => `Report ${outcome} & trigger fork · ${amount}\u00a0REP`
-export const reportForkReviewDescription = (outcome: string) => `Fills ${outcome} to the non-decision threshold while another side is already there. Escalation ends without a decision, deposits lock, and the question can only resolve through a universe fork. This can’t be undone.`
+export const reportForkReviewDescription = (outcome: string) => `Fills ${outcome} to the non-decision threshold while another side is already there. Reporting ends without a decision, deposits lock, and the question can only resolve through a universe fork. This can’t be undone.`
 export const reportReviewDescription = (outcome: string) => `Deposits REP on ${outcome}. If ${outcome} loses, this REP is lost; if it wins, it returns with any earned reward.`
 export const forkTriggerChangedSinceReview = 'This report would now trigger the universe fork. Review the fork warning and confirm before reporting.'
 export const depositDeadlinePreview = (deadline: string, extension: string, unchanged: boolean) => `After this report, check back before ${deadline}. ${unchanged ? 'This report does not extend the response window.' : `Response window extended by ${extension}.`} Other reports can change when it ends.`
@@ -179,13 +188,13 @@ export const responseWindowEndsTooSoon = 'The response window ends too soon to r
 
 export const recoverySource = 'Reporter recovery'
 
-export const settleInheritedClaim = 'Settle inherited reporter claim'
+export const settleInheritedClaim = 'Claim inherited reporting deposit'
 
-export const claimSettled = 'Reporter claim settled'
+export const claimSettled = 'Inherited deposit claimed'
 
 export const inheritedClaims = 'Inherited reporter claims'
 
-export const inheritedClaimsDescription = 'Recover winning deposits carried from the parent question after this branch resolves.'
+export const inheritedClaimsDescription = 'Claim winning deposits from the parent question after this branch resolves.'
 
 export const claimPending = 'Another claim transaction is pending.'
 
@@ -193,13 +202,13 @@ export const claimAuthenticationRequired = 'Refresh to authenticate this claim.'
 
 export const claimResolutionRequired = 'Wait for branch resolution.'
 
-export const claimWinningOutcomeRequired = 'Only the winning outcome can recover REP.'
+export const claimWinningOutcomeRequired = 'Only deposits on the winning outcome can be claimed.'
 
 export const repUnit = 'REP'
 
-export const settleClaim = 'Settle claim'
+export const settleClaim = 'Claim REP'
 
-export const settlingClaim = 'Settling claim'
+export const settlingClaim = 'Claiming REP'
 
 export const inheritedClaimIdentity = (outcome: string, index: string) => `${outcome} · Deposit #${index} ·`
 

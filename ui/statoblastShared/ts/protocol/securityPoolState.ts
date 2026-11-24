@@ -81,7 +81,7 @@ export async function loadCentralSecurityPoolQuestion(client: Pick<ReadClient, '
 	const cash = requireBigintValue(Reflect.get(snapshot, 'questionCashAttoEth'), 'question cash')
 	return {
 		securityPoolAddress: securityPool,
-		feePrincipalAttoEth: requireBigintValue(Reflect.get(stream, 'feePrincipalAttoEth'), 'question fee principal'),
+		feePrincipalAttoEth: requireBigintValue(Reflect.get(stream, 'feePrincipalAttoEth'), 'holding fee base amount'),
 		centralSettlement: true as const,
 		centralCheckpointTimestamp: requireBigintValue(checkpointValue, 'snapshot block timestamp'),
 		settlementCollateralAttoEth: cash,

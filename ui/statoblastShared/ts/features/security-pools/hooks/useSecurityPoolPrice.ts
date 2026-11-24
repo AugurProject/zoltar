@@ -268,7 +268,7 @@ export function useSecurityPoolPrice({ scope, target, displayTarget = target, bi
 			}),
 			async latest => {
 				const fresh = await freshReport(latest)
-				if (fresh.sponsor !== report?.sponsor) throw new Error('Report sponsor changed. Refresh and review it again.')
+				if (fresh.sponsor !== report?.sponsor) throw new Error(copy.reportFunderChanged)
 				if (credit(fresh, token) === 0n) throw new Error(copy.noFunding)
 			},
 		)

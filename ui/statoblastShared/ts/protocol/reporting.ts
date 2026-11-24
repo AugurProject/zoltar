@@ -41,11 +41,11 @@ function requireReportingBootstrapReadResult(value: unknown): ReportingBootstrap
 	const [questionId, escalationGameAddress, settlementCollateralAttoEth, universeId, zoltarAddress, initialEscalationGameDepositAttoRep, systemStateValue, questionOutcomeValue, parentQuestionLedgerAddress] = requireTupleValue(value, 9, 'reporting bootstrap')
 	return {
 		questionId: requireBigintValue(questionId, 'reporting question id'),
-		escalationGameAddress: requireAddressValue(escalationGameAddress, 'reporting escalation game address'),
+		escalationGameAddress: requireAddressValue(escalationGameAddress, 'reporting game address'),
 		settlementCollateralAttoEth: requireBigintValue(settlementCollateralAttoEth, 'reporting complete set collateral amount'),
 		universeId: requireBigintValue(universeId, 'reporting universe id'),
 		zoltarAddress: requireAddressValue(zoltarAddress, 'reporting zoltar address'),
-		initialEscalationGameDepositAttoRep: requireBigintValue(initialEscalationGameDepositAttoRep, 'reporting initial escalation game deposit'),
+		initialEscalationGameDepositAttoRep: requireBigintValue(initialEscalationGameDepositAttoRep, 'minimum first report'),
 		systemStateValue: requireIntegerLikeValue(systemStateValue, 'reporting system state'),
 		questionOutcomeValue: requireIntegerLikeValue(questionOutcomeValue, 'reporting question outcome'),
 		parentQuestionLedgerAddress: requireAddressValue(parentQuestionLedgerAddress, 'reporting parent question ledger address'),

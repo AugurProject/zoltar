@@ -44,11 +44,9 @@ const proofAbi = [
 
 /** Describe an eligible immediate cure and the portion that can still queue. */
 function retirementQueueDescription(covered: bigint | undefined, remainingCommitment: bigint, collateral: Readonly<{ decimals: number; symbol: string }>) {
-	if (covered === undefined) return ' The reduction waits for free capacity behind earlier reductions.'
+	if (covered === undefined) return capitalCopy.reductionWaits
 	// Rounding down keeps "covers only" conservative.
-	const coverage = ` Your REP covers only ${formatRoundedCurrencyBalance(covered, collateral.decimals, 4, 'down')} ${collateral.symbol} at the current price, so`
-	if (remainingCommitment >= covered) return `${coverage} this reduction is removed at once where spare capacity allows; any shortfall waits behind earlier retirement requests.`
-	return `${coverage} the uncovered part is removed at once where spare capacity allows. The rest waits for free capacity behind earlier reductions.`
+	return capitalCopy.reductionWithCure(`${formatRoundedCurrencyBalance(covered, collateral.decimals, 4, 'down')} ${collateral.symbol}`, remainingCommitment >= covered)
 }
 
 async function readAuthorizationProof(snapshot: SecurityPoolCapitalSnapshot, reportId: bigint, commitment: bigint) {
@@ -393,7 +391,7 @@ export function useSecurityPoolAggregate(
 					if (pendingRetirement === undefined) throw new Error('No reduction in queue.')
 					return {
 						...buildSecurityPoolCapitalServeRetirementRequest({ ...base(selected), positionId: pendingRetirement.id }),
-						reviewDescription: `Finish your request at ${formatCurrencyBalance(pendingRetirement.remainingCommitment, selected.collateral.decimals)} ${selected.collateral.symbol} commitment. Earlier requested reductions remain reserved even if their owners have not claimed. ${capitalCopy.retirementPreviewHint}`,
+						reviewDescription: capitalCopy.releaseReductionReview(`${formatCurrencyBalance(pendingRetirement.remainingCommitment, selected.collateral.decimals)} ${selected.collateral.symbol}`),
 					}
 				},
 				latest => {
@@ -417,13 +415,10 @@ export function useSecurityPoolAggregate(
 					const covered = position === undefined ? undefined : coveredUnderwaterCommitment(selected, position)
 					const queuesWithoutCure = position !== undefined && covered !== undefined && position.commitment - covered < selected.economics.minimumCommitmentAttoEth
 					const queue = retirementQueueDescription(queuesWithoutCure ? undefined : covered, requestedCommitment, selected.collateral)
-					const description =
-						position !== undefined && position.batch !== 0n
-							? `Re-submit position ${id}'s saved reduction target of ${formatCurrencyBalance(requestedCommitment, selected.collateral.decimals)} ${selected.collateral.symbol}. Its target stays fixed.`
-							: `Reduce position ${id} to ${formatCurrencyBalance(requestedCommitment, selected.collateral.decimals)} ${selected.collateral.symbol} commitment.`
+					const amount = `${formatCurrencyBalance(requestedCommitment, selected.collateral.decimals)} ${selected.collateral.symbol}`
 					return {
 						...buildSecurityPoolCapitalSetCommitmentRequest({ ...base(selected), commitment: requestedCommitment }),
-						reviewDescription: `${description} ${requestedCommitment === 0n ? 'Reducing to zero releases its pledged REP.' : 'The reduction stops at this amount and keeps its REP backing the remaining commitment.'}${queue} Once submitted, the request cannot be changed or cancelled. The saved health target stays unchanged.`,
+						reviewDescription: capitalCopy.requestReductionReview(id, amount, position !== undefined && position.batch !== 0n, requestedCommitment === 0n, queue),
 					}
 				},
 				latest => {

@@ -544,7 +544,7 @@ describe('useReportingOperations', () => {
 		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
 		expect(withdrawEscalationFromQuestionLedger).toHaveBeenCalledTimes(0)
 		expect(state().reportingResult).toBeUndefined()
-		expect(state().reportingFeedback?.status.detail).toBe('Selected deposit #0 is no longer available to settle on No.')
+		expect(state().reportingFeedback?.status.detail).toBe('Deposit #0 is no longer available to claim on No.')
 	})
 
 	test('withdrawEscalation prunes selections per side after a successful refresh', async () => {

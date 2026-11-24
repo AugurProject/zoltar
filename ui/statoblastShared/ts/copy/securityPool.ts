@@ -86,7 +86,7 @@ export const forkAdmission = 'Fork the universe'
 
 export const approveForkAdmission = 'Approve fork admission REP'
 
-export const approveForkAdmissionDescription = 'REP supply grew after this Escalation Game started, so its escrow is below the fork threshold. Your wallet pays the difference; it joins the question escrow without a separate claim.'
+export const approveForkAdmissionDescription = 'REP supply grew after reporting started. Your wallet pays the difference needed to reach the fork threshold. This REP cannot be reclaimed.'
 
 export const forkAdmissionActionLabel = 'triggering the fork'
 

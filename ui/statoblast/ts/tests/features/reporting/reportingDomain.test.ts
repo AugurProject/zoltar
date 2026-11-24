@@ -305,7 +305,7 @@ describe('reportingDomain', () => {
 	test('getReportingMaxProfitContribution is unavailable before the escalation game exists', () => {
 		expect(getReportingMaxProfitContribution(createNotStartedReportingDetails(), 'yes')).toEqual({
 			amountAttoRep: undefined,
-			reason: 'Full bonus share becomes available after the escalation game starts.',
+			reason: 'Full bonus share becomes available after the first report.',
 		})
 	})
 
@@ -316,18 +316,18 @@ describe('reportingDomain', () => {
 
 		expect(getReportingMinimumOutcomeChangeContribution(details, 'yes')).toEqual({
 			amountAttoRep: undefined,
-			reason: 'Escalation is already resolved.',
+			reason: 'Reporting has already resolved.',
 		})
 		expect(getReportingMaxProfitContribution(details, 'yes')).toEqual({
 			amountAttoRep: undefined,
-			reason: 'Escalation is already resolved.',
+			reason: 'Reporting has already resolved.',
 		})
 	})
 
 	test('previewReportingContribution rejects a pre-start amount below the first-report minimum', () => {
 		expect(previewReportingContribution(createNotStartedReportingDetails(), 'yes', rep(2n))).toEqual({
 			actualDepositAmount: undefined,
-			reason: 'Enter at least 3\u00a0REP to start the escalation game.',
+			reason: 'Enter at least 3\u00a0REP to start the reporting game.',
 		})
 	})
 
@@ -359,7 +359,7 @@ describe('reportingDomain', () => {
 			),
 		).toEqual({
 			actualDepositAmount: undefined,
-			reason: 'Escalation is already resolved.',
+			reason: 'Reporting has already resolved.',
 		})
 		expect(
 			previewReportingContribution(

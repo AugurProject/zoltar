@@ -1,7 +1,7 @@
 export const title = 'Your position'
 export const description = 'Deposit REP, choose your health target, and authorize shared backing. Your position bears its own liquidation losses.'
 export const poolTitle = 'Shared backing'
-export const poolDescription = 'Eligible questions use the same healthy commitments. Complete-set returns reduce demand and make commitment reductions possible.'
+export const poolDescription = 'Eligible questions share the same backing. Redeeming complete sets frees capacity for commitment reductions.'
 export const withdrawableRep = 'Withdrawable REP'
 export const principalRep = 'Your REP deposited'
 export const commitment = 'Your commitment'
@@ -64,11 +64,11 @@ export const position = (id: bigint) => `Position ${id}`
 export const positionPledged = 'Pledged REP'
 export const positionCommitment = 'Commitment (collateral)'
 export const currentHealth = 'Current health'
-export const unhealthy = 'Below the conservative backing requirement. Add REP or request a smaller commitment.'
+export const unhealthy = 'Below the backing requirement. Add REP or reduce your commitment.'
 export const belowTarget = 'Below your health target. Add REP or reduce your commitment.'
 export const liquidationHealth = 'Liquidation threshold'
-export const liquidationHealthy = 'Above boundary'
-export const liquidationUnhealthy = 'Below boundary'
+export const liquidationHealthy = 'Meets liquidation threshold'
+export const liquidationUnhealthy = 'Below liquidation'
 export const liquidationHint = (duration?: string) => `The liquidation penalty grows${duration === undefined ? '' : ` for ${duration}`} after liquidation starts. The new backer can receive up to all of your pledged REP. Add REP or reduce commitment to stay above the liquidation threshold.`
 export const formatRewardVesting = (duration: string) => `More earnings vest over ${duration}.`
 export const liquidationSince = 'Below liquidation since'
@@ -88,18 +88,30 @@ export const retirementPreviewTitle = 'Commitment reduction preview'
 export const retirementPreviewUnavailable = 'Preview unavailable'
 export const retirementPreviewStale = 'A new accepted REP price is required to assess readiness'
 export const retirementPreviewClosed = 'Universe closed to commitment reductions'
-export const retirementPreviewHint = 'Snapshot estimate before fee checkpoints. Capacity can change before inclusion; an attempt may spend gas without reducing commitment.'
+export const retirementPreviewHint = 'Free capacity can change before confirmation. An attempt may spend gas without reducing commitment.'
 export const retirementPreviewStatus = {
 	'not-retiring': 'No pending reduction',
 	'imports-open': 'Child preparation in progress',
-	'demand-exceeds-healthy': 'Demand exceeds healthy capacity',
+	'demand-exceeds-healthy': 'Capacity in use exceeds available backing',
 	'earlier-requests': 'Capacity reserved for earlier requests',
 	'insufficient-spare': 'Waiting for free capacity',
-	ready: 'Enough capacity at this snapshot',
+	ready: 'Enough free capacity now',
 }
-export const retirementSpare = 'Spare healthy commitment'
+export const reductionFreeCapacity = 'Free capacity for reductions'
 export const retirementAhead = 'Reserved for earlier requests'
 export const retirementReduction = 'Your requested reduction'
+export const reductionWaits = 'The reduction waits for free capacity in queue order.'
+export const reductionWithCure = (covered: string, keepsCoveredCommitment: boolean) => {
+	const coverage = `Your REP covers only ${covered} at the current price.`
+	if (keepsCoveredCommitment) return `${coverage} The reduction can happen at once if there is enough free capacity. Any remainder goes in queue.`
+	return `${coverage} The uncovered part can be removed at once if there is enough free capacity. The rest waits in queue.`
+}
+export const requestReductionReview = (positionId: bigint, amount: string, queued: boolean, releasesPledgedRep: boolean, queue: string) => {
+	const action = queued ? `Resubmit the reduction for position ${positionId} to its saved commitment of ${amount}.` : `Reduce position ${positionId} to ${amount} commitment.`
+	const consequence = releasesPledgedRep ? 'Reducing to zero releases its pledged REP.' : 'REP stays pledged to the remaining commitment.'
+	return `${action} ${consequence} ${queue} The request cannot be changed or cancelled. Your saved health target stays unchanged.`
+}
+export const releaseReductionReview = (amount: string) => `Keep ${amount} committed. Earlier requests keep their place in queue. ${retirementPreviewHint}`
 export const rewardVesting = 'Reward vesting (hours)'
 export const outcomeRate = 'Minimum collateral reserved per share'
 export const outcomeRateHint = 'Holding fees stop before reducing backing below this rate. Fixed at creation; fork recovery can pay less.'

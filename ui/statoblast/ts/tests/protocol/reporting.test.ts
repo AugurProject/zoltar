@@ -443,7 +443,7 @@ describe('reporting protocol client', () => {
 		writeClient.onTransactionPrepared = preview => previews.push(preview)
 		await reportOutcomeInQuestionLedger(writeClient, questionLedgerAddress, 'no', 6n, 6n, true)
 		expect(previews[0]?.reviewTitle).toBe('Report No & trigger fork · 0.000000000000000006\u00a0REP')
-		expect(previews[0]?.reviewDescription).toBe('Fills No to the non-decision threshold while another side is already there. Escalation ends without a decision, deposits lock, and the question can only resolve through a universe fork. This can’t be undone.')
+		expect(previews[0]?.reviewDescription).toBe('Fills No to the non-decision threshold while another side is already there. Reporting ends without a decision, deposits lock, and the question can only resolve through a universe fork. This can’t be undone.')
 	})
 
 	test('withdrawEscalationFromQuestionLedger explains that clearing losing deposits returns no REP', async () => {

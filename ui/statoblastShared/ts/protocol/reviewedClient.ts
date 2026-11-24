@@ -11,7 +11,7 @@ import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { humanizeTransactionAction } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import { createTransactionStepController, type TransactionStepDetails } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { createTransactionFailure, createTransactionFailureError } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
-import { changedSinceReview } from '../copy/app.js'
+import { changedSinceReview, missingTokenSpender } from '../copy/app.js'
 
 async function describeTransaction(client: WriteClient, preview: TransactionRequestPreview & Pick<TransactionPlanStep, 'optional' | 'tokenFunding' | 'oracleOutcome' | 'approvalPurpose'>, requiredApprovalAmount?: bigint): Promise<TransactionStepDetails> {
 	const action = transactionCopy.reviewedActions[preview.functionName]
@@ -177,7 +177,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			const currentFunding = await expected.refreshFundingRequirements?.()
 			for (const funding of currentFunding ?? expected.tokenFunding ?? []) {
 				const spender = expected.fundingSpender ?? expected.contractAddress
-				if (spender === undefined) throw new Error('Missing funding recipient.')
+				if (spender === undefined) throw new Error(missingTokenSpender)
 				const [balance, allowance] = await Promise.all([
 					client.readContract({ address: funding.tokenAddress, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [client.account.address] }),
 					client.readContract({ address: funding.tokenAddress, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, spender] }),
