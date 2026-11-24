@@ -99,6 +99,15 @@ describe('durable OpenOracle position journal', () => {
 		expect((await readFile(path, 'utf8')).toString()).not.toContain('privateKey')
 	})
 
+	test('preserves two independently recorded disputes of the same report', async () => {
+		const path = await journalPath()
+		const first = openPositionFixture({ reportId: '1', status: 'open' })
+		const secondHash = `0x${'cd'.repeat(32)}` as const
+		const second = openPositionFixture({ reportId: '1', entryTransactionHash: secondHash, entryTransactionHashes: [secondHash], status: 'open' })
+		await savePositionJournal(path, [first, second], 1)
+		expect(await loadPositionJournal(path, 1)).toEqual([first, second])
+	})
+
 	test('#1274: round-trips a non-WETH collateral position and rejects an incomplete collateral record', async () => {
 		const path = await journalPath()
 		const collateral = { decimals: 6, symbol: 'USDC', token: getAddress('0x00000000000000000000000000000000000000c0'), valuationAttoWeth: '1000000000000', valuationUnits: '3000' }

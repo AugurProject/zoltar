@@ -14,6 +14,8 @@ export class SecurityPoolOpportunityExpired extends Error {
 	override name = 'SecurityPoolOpportunityExpired'
 }
 
+export class SecurityPoolGasBudgetExceeded extends SecurityPoolOpportunityExpired {}
+
 type Wallet = WalletClient<Transport, Chain, Account>
 type RpcPool = ReturnType<typeof createRpcEndpointPool>
 
@@ -26,8 +28,9 @@ export async function refreshSecurityPoolExecution(
 	target: SecurityPoolObservation,
 	positionId: SecurityPoolTarget | undefined,
 	readers?: Parameters<typeof readSecurityPoolExecutionSnapshot>[6],
+	unlockedTarget?: SecurityPoolTarget,
 ): Promise<{ observation: SecurityPoolObservation; totalPrincipal: bigint; allowance: bigint }> {
-	const targets = positionId === undefined ? [] : [positionId]
+	const targets = [positionId, unlockedTarget].filter(candidate => candidate !== undefined)
 	const result = await readSecurityPoolExecutionSnapshot(
 		wallet,
 		settings,
@@ -50,11 +53,12 @@ export async function executeSecurityPoolTakeover(
 	positionId: SecurityPoolTarget,
 	priceAllowed: (observation: SecurityPoolObservation) => Promise<boolean>,
 	execution = { refresh: refreshSecurityPoolExecution, submit: submitCall },
+	unlockedTarget?: SecurityPoolTarget,
 ) {
 	if (!settings.securityPoolPolicy.allowFundedTakeovers || !settings.runtime.execute) throw new Error('Funded security pool automation is disabled')
 	if (state.pendingTransactions.length !== 0) throw new Error('Pending recovery blocks security pool exposure changes')
 	const refresh = async (requestedCommitment?: bigint) => {
-		const current = await execution.refresh(wallet, settings, state.securityPoolScopes, pool, target, positionId)
+		const current = await execution.refresh(wallet, settings, state.securityPoolScopes, pool, target, positionId, undefined, unlockedTarget)
 		const position = current.observation.positions.find(position => sameSecurityPoolTarget(securityPoolTarget(position), positionId))
 		if (position === undefined) throw new SecurityPoolOpportunityExpired('Security pool target position is missing')
 		const marketAllowed = await priceAllowed(current.observation)

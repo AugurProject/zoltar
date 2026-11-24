@@ -180,6 +180,15 @@ describe('OverviewPanels', () => {
 		expect(documentQueries.getByRole('button', { name: 'Refresh REP prices' })).not.toBeNull()
 	})
 
+	test('explains that the configured direct REP/USDC pool is unavailable', async () => {
+		const documentQueries = await renderOverviewPanels({
+			accountState: connectedAccount,
+			repPrices: { repUsdcFailure: 'no-liquidity' },
+		})
+		openAccountMenu()
+		expect(documentQueries.getByText('Direct REP/USDC pool unavailable')).not.toBeNull()
+	})
+
 	test('explains a missing REP per ETH price with the application-provided reason', async () => {
 		const documentQueries = await renderOverviewPanels({
 			accountState: connectedAccount,

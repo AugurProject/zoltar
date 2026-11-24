@@ -1,4 +1,4 @@
-import { unscannablePollResult } from '../../src/runtime/scan-cycle.ts'
+import { checkScanHead, unscannablePollResult } from '../../src/runtime/scan-cycle.ts'
 import { recordSystemDeploymentCheck } from '../../src/core/deployment-observation.ts'
 import { initialRuntimeState, operatorSnapshot } from '../../src/state/operator-state.ts'
 import { blockStatusText, scanStatusText } from '../../src/dashboard/block-status.ts'
@@ -16,6 +16,19 @@ const block = { number: 42n, timestamp: 123n }
 const zoltar = '0x0000000000000000000000000000000000000001' as const
 const securityPoolFactory = '0x0000000000000000000000000000000000000002' as const
 const weth = '0x0000000000000000000000000000000000000003' as const
+
+test('a lagging scan head preserves evidence until a hash proves replacement', async () => {
+	const previous = { number: 10n, hash: 'previous' }
+	const evidence = { marketConsensus: 'cached' }
+	const noLookup = async () => {
+		throw new Error('A same-height or lagging scan requires no historical RPC lookup')
+	}
+	expect(await checkScanHead(previous, { number: 9n, hash: 'older' }, evidence, noLookup)).toBe('lagging')
+	expect(evidence.marketConsensus).toBe('cached')
+	expect(await checkScanHead(previous, previous, evidence, noLookup)).toBe('current')
+	expect(await checkScanHead(previous, { number: 10n, hash: 'different' }, evidence, noLookup)).toBe('replaced')
+	expect(evidence.marketConsensus).toBeUndefined()
+})
 
 test('stops deployment checks at the first contract without runtime bytecode', async () => {
 	const queried: string[] = []

@@ -12,22 +12,19 @@ type DevServerRoots = {
 
 const isErrorWithCode = (error: unknown, codes: readonly string[]) => error instanceof Error && 'code' in error && typeof error.code === 'string' && codes.includes(error.code)
 
-// Resolves a request path to candidate files inside the app root, then the repository root; `shared/` paths only resolve from the repository root.
+const loopbackHost = /^(?:localhost|127\.0\.0\.1|\[::1\])(?::[0-9]{1,5})?$/i
+const appAssetPath = /^(?:index\.html$|favicon\.svg$|(?:css|js|vendor)\/)/
+const sharedAssetPath = /^(?:ui\/(?:coreShared|zoltarShared|statoblastShared)\/(?:css|js|vendor)\/|shared\/(?:core|zoltar|statoblast|openOracle|trading)\/js\/)/
+
 export const getServedFilePaths = (requestPath: string, { repositoryRootDirectory, uiRootDirectory }: DevServerRoots) => {
 	const urlPath = requestPath.endsWith('/') ? `${requestPath}index.html` : requestPath
-	const relativeFilePath = decodeURI(urlPath).replace(/^\/+/, '')
-	const candidateRoots = relativeFilePath.startsWith('shared/') ? [repositoryRootDirectory] : [uiRootDirectory, repositoryRootDirectory]
-
-	const candidateFilePaths: string[] = []
-	for (const candidateRoot of candidateRoots) {
-		const candidateFilePath = path.resolve(candidateRoot, relativeFilePath)
-		if (candidateFilePath !== candidateRoot && !candidateFilePath.startsWith(`${candidateRoot}${path.sep}`)) {
-			continue
-		}
-		candidateFilePaths.push(candidateFilePath)
-	}
-
-	return candidateFilePaths
+	const relativeFilePath = decodeURIComponent(urlPath).replace(/^\/+/, '')
+	if (relativeFilePath.includes('\\') || relativeFilePath.split('/').some(segment => segment === '' || segment.startsWith('.'))) return []
+	if (appAssetPath.test(relativeFilePath)) return [path.join(uiRootDirectory, relativeFilePath)]
+	const appPrefix = `${path.relative(repositoryRootDirectory, uiRootDirectory).split(path.sep).join('/')}/`
+	if (relativeFilePath.startsWith(appPrefix) && appAssetPath.test(relativeFilePath.slice(appPrefix.length))) return [path.join(repositoryRootDirectory, relativeFilePath)]
+	if (sharedAssetPath.test(relativeFilePath)) return [path.join(repositoryRootDirectory, relativeFilePath)]
+	return []
 }
 
 const createLiveReloadChannel = () => {
@@ -69,23 +66,15 @@ const createLiveReloadChannel = () => {
 	return { handle }
 }
 
-const readFirstExistingFile = async (candidateFilePaths: readonly string[]) => {
-	let lastError: unknown
-	for (const candidateFilePath of candidateFilePaths) {
-		try {
-			return { fileContents: await filesystem.readFile(candidateFilePath), filePath: candidateFilePath }
-		} catch (error) {
-			if (!isErrorWithCode(error, ['ENOENT'])) throw error
-			lastError = error
-		}
-	}
-	throw lastError
-}
-
 export const createDevServerRequestHandler = (roots: DevServerRoots) => {
 	const liveReload = createLiveReloadChannel()
 	return async (request: http.IncomingMessage, response: http.ServerResponse) => {
 		try {
+			if (!loopbackHost.test(request.headers.host ?? '')) {
+				response.writeHead(403)
+				response.end()
+				return
+			}
 			const requestUrl = new URL(request.url === undefined ? '/' : request.url, 'http://localhost')
 			const requestPath = requestUrl.pathname
 			if (requestPath === '/__live-reload') {
@@ -98,14 +87,20 @@ export const createDevServerRequestHandler = (roots: DevServerRoots) => {
 				response.end(JSON.stringify(deployments))
 				return
 			}
-			const candidateFilePaths = getServedFilePaths(requestPath, roots)
-			if (candidateFilePaths.length === 0) {
+			const [filePath] = getServedFilePaths(requestPath, roots)
+			if (filePath === undefined) {
 				response.writeHead(403)
 				response.end()
 				return
 			}
 
-			const { fileContents, filePath } = await readFirstExistingFile(candidateFilePaths)
+			const [realRepositoryRoot, realFilePath] = await Promise.all([filesystem.realpath(roots.repositoryRootDirectory), filesystem.realpath(filePath)])
+			if (realFilePath !== path.join(realRepositoryRoot, path.relative(roots.repositoryRootDirectory, filePath))) {
+				response.writeHead(403)
+				response.end()
+				return
+			}
+			const fileContents = await filesystem.readFile(realFilePath)
 			const mimeType = getDevServerMimeType(filePath)
 			if (mimeType !== undefined) {
 				response.writeHead(200, { 'Content-Type': mimeType })

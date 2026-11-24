@@ -142,7 +142,7 @@
 							<td><code>sweepResidualRepToQuestionLedger()</code></td>
 							<td>Anyone</td>
 							<td>Final outcome and positive releasable surplus (<code>No sweepable REP</code> for an ordinary no-op). Ordinary settlement preserves all unclaimed winning liabilities. Continuations require no effective unresolved principal and, after retiring inherited aggregate escrow, no remaining local stake or vault escrow.</td>
-							<td>Applies ordinary winner-reserve settlement and burns its terminal excess. Also burns fork-continuation residual so pre-child capital cannot accrue to late or nonexistent child owners.</td>
+							<td>Applies ordinary winner-reserve settlement when applicable. Sends terminal surplus through the question ledger to burn it, with no credit to capital owners.</td>
 							<td><code>OrdinarySettlementInitialized</code> if first ordinary settlement, then <code>OrdinaryResidualRepBurned</code>; <code>ForkContinuationResidualRepBurned</code> for a fork continuation</td>
 						</tr>
 					</tbody>

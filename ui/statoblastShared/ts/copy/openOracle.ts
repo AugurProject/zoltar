@@ -210,3 +210,4 @@ export const reportAlreadySettled = 'This report is already settled.'
 export const reportMissingInitialReport = 'This report is invalid because its initial report is missing.'
 
 export const formatAbsoluteBlock = (value: bigint) => `Block ${value}`
+export const approvalGasRequired = 'Add ETH to pay the token approval network fee.'

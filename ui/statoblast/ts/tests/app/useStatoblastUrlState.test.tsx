@@ -77,11 +77,6 @@ describe('useStatoblastUrlState', () => {
 		const state = await renderHarness()
 		expect(state().questionLedgersView).toBe('browse')
 		expect(state().questionLedgerAddress).toBe('')
-		await act(() => state().setQuestionLedgersView('create'))
-		expect(window.location.hash).toBe('#/pools/create')
-		expect(state().questionLedgersView).toBe('create')
-		await act(() => state().setQuestionLedgersView('browse'))
-		expect(window.location.hash).toBe('#/pools')
 	})
 
 	test('loads the initial pool page from the route hash', async () => {
@@ -97,7 +92,7 @@ describe('useStatoblastUrlState', () => {
 		await act(() => state().setActiveUniverseId(7n))
 		expect(window.location.hash).toBe(`#/pools/${POOL_A}?universe=7`)
 
-		await act(() => state().setQuestionLedgerAddress(POOL_C))
+		await act(() => state().openQuestionLedgerInUniverse(state().activeUniverseId, POOL_C))
 		expect(window.location.hash).toBe(`#/pools/${POOL_C}?universe=7`)
 		expect(state().questionLedgerAddress).toBe(POOL_C)
 
@@ -112,53 +107,8 @@ describe('useStatoblastUrlState', () => {
 		expect(state().questionLedgersView).toBe('migrate')
 		expect(state().questionLedgerAddress).toBe('')
 
-		await act(() => state().setQuestionLedgerQuestionId('0x99'))
-		expect(window.location.hash).toBe('#/pools/create?universe=7&questionId=0x99')
-		expect(state().questionLedgerQuestionId).toBe('0x99')
-
 		await act(() => state().setQuestionLedgersView('browse'))
 		expect(window.location.hash).toBe('#/pools?universe=7')
-
-		await act(() => state().setQuestionLedgerAddress(''))
-		expect(window.location.hash).toBe('#/pools?universe=7')
-	})
-
-	test('replaces history while a question ID is typed and pushes when leaving another view', async () => {
-		window.history.replaceState({}, '', '/#/pools?universe=1')
-		const originalPushState = window.history.pushState.bind(window.history)
-		const originalReplaceState = window.history.replaceState.bind(window.history)
-		let pushes = 0
-		let replaces = 0
-		window.history.pushState = (...parameters: Parameters<History['pushState']>) => {
-			pushes += 1
-			return originalPushState(...parameters)
-		}
-		window.history.replaceState = (...parameters: Parameters<History['replaceState']>) => {
-			replaces += 1
-			return originalReplaceState(...parameters)
-		}
-		try {
-			const state = await renderHarness()
-			pushes = 0
-			replaces = 0
-			await act(() => state().setQuestionLedgerQuestionId('0x1'))
-			expect(pushes).toBe(1)
-			for (const questionId of ['0x12', '0x123', '0x1234']) await act(() => state().setQuestionLedgerQuestionId(questionId))
-			expect(pushes).toBe(1)
-			expect(replaces).toBe(3)
-			expect(window.location.hash).toBe('#/pools/create?universe=1&questionId=0x1234')
-			await act(() => state().setQuestionLedgerQuestionId(''))
-			expect(pushes).toBe(1)
-			expect(window.location.hash).toBe('#/pools/create?universe=1')
-			await act(() => {
-				window.history.back()
-				window.dispatchEvent(new Event('popstate'))
-			})
-			expect(state().questionLedgersView).toBe('browse')
-		} finally {
-			window.history.pushState = originalPushState
-			window.history.replaceState = originalReplaceState
-		}
 	})
 
 	test('opens a pool in another universe with one history entry', async () => {
@@ -213,7 +163,7 @@ describe('useStatoblastUrlState', () => {
 		expect(state().vaultAddress).toBe(POOL_B)
 		expect(state().vaultView).toBe('vault-by-address')
 		const savedHash = window.location.hash
-		await act(() => state().setQuestionLedgerAddress(POOL_C))
+		await act(() => state().openQuestionLedgerInUniverse(state().activeUniverseId, POOL_C))
 		expect(state().vaultAddress).toBeUndefined()
 		expect(state().vaultView).toBeUndefined()
 		expect(state().poolBrowseState.searchText).toBe('pool one')

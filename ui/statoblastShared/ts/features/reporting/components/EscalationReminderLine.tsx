@@ -6,15 +6,19 @@ import { buildEscalationReminder } from '../lib/escalationReminder.js'
 import { formatReportingDeadline, getViewerStatusSentence } from '../lib/reportingViewerStatus.js'
 import { isPoolQuestionFinalized } from '../lib/reportingDomain.js'
 
+// iCalendar timestamps use a four-digit year.
+const LAST_CALENDAR_DEADLINE = 253_402_300_799n
+
 export function EscalationReminderLine({ details }: { details: ActiveReportingDetails }) {
 	const [previousDeadline, setPreviousDeadline] = useState(details.escalationEndTime)
 	const [movedDeadline, setMovedDeadline] = useState<bigint | undefined>(undefined)
-	const open = !isPoolQuestionFinalized(details) && !details.hasReachedNonDecision && details.systemState === 'operational' && details.currentTime <= details.escalationEndTime
+	const open = !isPoolQuestionFinalized(details) && !details.hasReachedNonDecision && details.systemState === 'operational' && details.currentTime <= details.escalationEndTime && details.escalationEndTime <= LAST_CALENDAR_DEADLINE
 	useEffect(() => {
 		setPreviousDeadline(details.escalationEndTime)
 		if (!open) setMovedDeadline(undefined)
-		else if (details.escalationEndTime !== previousDeadline) setMovedDeadline(details.escalationEndTime)
+		else if (previousDeadline <= LAST_CALENDAR_DEADLINE && details.escalationEndTime !== previousDeadline) setMovedDeadline(details.escalationEndTime)
 	}, [details.escalationEndTime, previousDeadline, open])
+	if (!open) return undefined
 	const deadline = formatReportingDeadline(details.escalationEndTime, details.currentTime)
 	const download = () => {
 		const calendar = buildEscalationReminder({ questionLedgerAddress: details.questionLedgerAddress, escalationEndTime: details.escalationEndTime, generatedAt: BigInt(Math.floor(Date.now() / 1000)), questionTitle: details.marketDetails.title, status: getViewerStatusSentence(details), pageUrl: location.href })
@@ -27,7 +31,7 @@ export function EscalationReminderLine({ details }: { details: ActiveReportingDe
 	}
 	return (
 		<>
-			{!open || movedDeadline === undefined ? undefined : (
+			{movedDeadline === undefined ? undefined : (
 				<UserMessage
 					announcement='polite'
 					detail={copy.deadlineMoved(formatReportingDeadline(movedDeadline, details.currentTime))}
@@ -43,7 +47,7 @@ export function EscalationReminderLine({ details }: { details: ActiveReportingDe
 					}
 				/>
 			)}
-			{open && movedDeadline === undefined ? (
+			{movedDeadline === undefined ? (
 				<UserMessage
 					detail={copy.checkBack(deadline)}
 					actions={

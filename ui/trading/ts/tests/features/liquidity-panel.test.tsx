@@ -128,6 +128,23 @@ describe('liquidity panel', () => {
 		}
 	})
 
+	test.each([0n, 10n ** 17n])('blocks additions that would mint more than the available capacity (%s)', async capacity => {
+		const market = { ...openMarket, availableMintingCapacityAttoEth: capacity }
+		const rendered = await renderPanel(market, true, undefined, services, offlineWalletClient())
+		try {
+			await typeAmount('0.2')
+			const action = Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Add liquidity')
+			expect(action?.disabled).toBe(true)
+			expect(document.body.textContent?.includes('mint')).toBe(true)
+			if (capacity !== 0n) {
+				await typeAmount('0.1')
+				expect(action?.disabled).toBe(false)
+			}
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
 	test('previews additions instantly without wallet requests', async () => {
 		let requests = 0
 		const walletClient = createWalletClient({

@@ -2,11 +2,8 @@
 # App Setup: Install dependencies and build app
 # ---------------------------------------------
 
-ARG BUN_VERSION=1.4.4
-# Multi-arch index digest of oven/bun:${BUN_VERSION}-alpine; update it together with BUN_VERSION.
-ARG BUN_IMAGE_DIGEST=sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a
 
-FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST} AS common-builder
+FROM oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a AS common-builder
 
 WORKDIR /source
 
@@ -80,7 +77,7 @@ COPY ./ui/zoltar/ts/ /source/ui/zoltar/ts/
 RUN cd /source/ui/zoltar && bun x tsc --project tsconfig.json && bun ../../tooling/ui/production.mts zoltar
 
 # Local runtime images contain only the selected application artifact.
-FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST} AS local-runtime-zoltar
+FROM oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a AS local-runtime-zoltar
 
 WORKDIR /app
 COPY --from=zoltar-builder --chown=bun:bun /source/ui/zoltar/dist/ /app/ui/zoltar/
@@ -115,7 +112,7 @@ COPY ./ui/statoblast/favicon.svg /source/ui/statoblast/favicon.svg
 COPY ./ui/statoblast/ts/ /source/ui/statoblast/ts/
 RUN cd /source/ui/statoblast && bun x tsc --project tsconfig.json && bun ../../tooling/ui/production.mts statoblast
 
-FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST} AS local-runtime-statoblast
+FROM oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a AS local-runtime-statoblast
 
 WORKDIR /app
 COPY --from=statoblast-builder --chown=bun:bun /source/ui/statoblast/dist/ /app/ui/statoblast/
@@ -137,7 +134,7 @@ COPY ./ui/openoracle/favicon.svg /source/ui/openoracle/favicon.svg
 COPY ./ui/openoracle/ts/ /source/ui/openoracle/ts/
 RUN cd /source/ui/openoracle && bun x tsc --project tsconfig.json && bun ../../tooling/ui/production.mts openoracle
 
-FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST} AS local-runtime-openoracle
+FROM oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a AS local-runtime-openoracle
 
 WORKDIR /app
 COPY --from=openoracle-builder --chown=bun:bun /source/ui/openoracle/dist/ /app/ui/openoracle/
@@ -165,7 +162,7 @@ COPY ./ui/trading/build/ /source/ui/trading/build/
 RUN bun ./tooling/ui/vendor.mts trading
 RUN cd /source/ui/trading && bun x tsc --project tsconfig.json && bun ../../tooling/ui/production.mts trading
 
-FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST} AS local-runtime-trading
+FROM oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a AS local-runtime-trading
 
 WORKDIR /app
 COPY --from=trading-builder --chown=bun:bun /source/ui/trading/dist/ /app/ui/trading/

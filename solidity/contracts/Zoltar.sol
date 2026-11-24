@@ -252,6 +252,7 @@ contract Zoltar {
 	function _addRepToMigrationBalance(address owner, uint248 universeId, uint256 amountAttoRep) private {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime != 0, 'Universe has not forked, so migration balance cannot be added');
+		require(getUniverseTheoreticalSupplyAttoRep(universeId) >= amountAttoRep, 'Migration exceeds theoretical supply');
 		_burnRep(universe.reputationToken, owner, amountAttoRep);
 		if (universeId == 0) frozenGenesisTheoreticalSupply -= amountAttoRep;
 		migrationRepBalances[owner][universeId].migrationRepBalanceAttoRep += amountAttoRep;

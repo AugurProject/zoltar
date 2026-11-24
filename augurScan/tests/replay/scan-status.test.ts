@@ -46,6 +46,7 @@ for (const mode of ['committed', 'empty', 'failed', 'reorg', 'wide', 'partial-fa
 			spyOn(database, 'contracts').mockResolvedValue(contracts),
 			spyOn(database, 'tokenMetadata').mockResolvedValue(new Map()),
 			spyOn(database, 'logScanCursors').mockResolvedValue(new Map()),
+			spyOn(database, 'retainedEntitySampleBlocks').mockResolvedValue([]),
 			spyOn(indexer.providers.client, 'getBlockNumber')
 				.mockResolvedValueOnce(largeRange ? 200_000n : 10n)
 				.mockResolvedValue(largeRange ? 200_000n : 12n),

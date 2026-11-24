@@ -5,6 +5,7 @@ import type { PendingTransactionIntent } from '#state/operator-state'
 
 const attemptedTopic = keccak256(toHex('ReportOperationAttempted(uint256,address,uint256,bool)'))
 const deferredTopic = keccak256(toHex('PriceReportDeferred(uint256,uint256,uint256)'))
+const rejectedTopic = keccak256(toHex('PriceReportRejected(uint256,string,uint256,uint256,uint256,uint256)'))
 
 /** Resolve from the receipt so live submission and restart recovery agree. */
 export function reportOperationOutcomes(intent: Pick<PendingTransactionIntent, 'reportOperations' | 'sender' | 'label'>, receipt: TransactionReceipt) {
@@ -12,15 +13,19 @@ export function reportOperationOutcomes(intent: Pick<PendingTransactionIntent, '
 	if (report === undefined) return undefined
 	const operations = new Map<bigint, boolean>()
 	let deferred = false
+	let rejection: string | undefined
 	for (const log of receipt.logs) {
-		if (!sameAddress(log.address, report.feed) || (log.topics[0] !== attemptedTopic && log.topics[0] !== deferredTopic)) continue
+		const topic = log.topics[0]
+		if (!sameAddress(log.address, report.feed) || (topic !== attemptedTopic && topic !== deferredTopic && topic !== rejectedTopic)) continue
 		const event = decodeEventLog({ abi: sharedPoolPriceFeedAbi, data: log.data, topics: log.topics })
 		if (event.eventName === 'PriceReportDeferred' && event.args.reportId === report.reportId) deferred = true
+		if (event.eventName === 'PriceReportRejected' && event.args.reportId === report.reportId) rejection = event.args.reason
 		if (event.eventName === 'ReportOperationAttempted' && event.args.reportId === report.reportId && sameAddress(event.args.sponsor, intent.sender)) operations.set(event.args.operationIndex, event.args.success)
 	}
 	// A settlement above the report's base-fee ceiling keeps it pending; the
 	// pending-report pass recovers it once the base fee is back under the ceiling.
 	if (deferred && operations.size === 0) return { succeeded: 0, message: `${intent.label}: settled above the report base-fee ceiling; the report stays pending until recovery at or below the ceiling`, status: 'info' as const }
+	if (rejection !== undefined && operations.size === 0) return { succeeded: 0, message: `${intent.label}: report rejected (${rejection})`, status: 'confirmed' as const }
 	if (operations.size === 0) return { succeeded: 0, message: `${intent.label}: no operation outcomes reported; inspect report status before recovery`, status: 'failed' as const }
 	const ordered = [...operations].sort(([left], [right]) => {
 		if (left === right) return 0

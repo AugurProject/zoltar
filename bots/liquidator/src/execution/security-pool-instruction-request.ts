@@ -21,6 +21,7 @@ import { SecurityPoolOpportunityExpired } from './security-pool-executor.ts'
 type Request = { account: Address; to: Address; value: bigint; data: Hex }
 type Context = SecurityPoolExecutionContext & { settings: OperatorSettings }
 type PreparedInstruction = { request: Request; completes: boolean }
+type InstructionDisposition = { disposition: 'skip' | 'retry'; reason: string }
 type VaultInstruction = Extract<SecurityPoolInstruction, { vault: Address }>
 type AuctionInstruction = Exclude<SecurityPoolInstruction, VaultInstruction | { action: 'fork-choice' }>
 
@@ -71,17 +72,20 @@ async function vaultInstructionRequest(context: Context, instruction: VaultInstr
 	return { completes: true, request: buildSecurityPoolAuctionVaultExecuteRequest({ bidder: owner, vault: vault.owner, request: operation, sweep: { repToken: snapshot.repToken, recipient: owner } }) }
 }
 
-async function auctionInstructionRequest({ client, settings, observation, totalPrincipal, blockNumber }: Context, instruction: AuctionInstruction): Promise<PreparedInstruction> {
+async function auctionInstructionRequest({ client, settings, observation, totalPrincipal, blockNumber }: Context, instruction: AuctionInstruction): Promise<PreparedInstruction | InstructionDisposition> {
 	const snapshot = observation.snapshot
 	const pinnedClient = { ...client, getBlock: () => client.getBlock({ blockNumber }) }
 	let auctionSnapshot = await loadSecurityPoolAuctionSnapshot({ client: pinnedClient, securityPool: instruction.securityPool, universeId: instruction.universeId, bidder: snapshot.owner, bidCount: 64 })
 	if (instruction.action === 'auction-bid') {
-		const quote = quoteSecurityPoolAuctionBid(auctionSnapshot, instruction)
 		const auction = auctionSnapshot.auction
-		if (auction === undefined) throw new Error('Missing instruction auction')
+		if (auctionSnapshot.forkTime !== 0n || (auction !== undefined && (auction.finalized || auctionSnapshot.timestamp >= auction.closesAt))) return { disposition: 'skip', reason: 'The auction can no longer accept bids' }
+		if (auction === undefined || !auction.opened) return { disposition: 'retry', reason: 'The auction is not open yet' }
+		if (auction.maximumAdmissibleBidAttoRepPerLot < auction.minimumCollateralAttoRepPerLot || instruction.minimumAttoRepPerLot > auction.maximumAdmissibleBidAttoRepPerLot) return { disposition: 'retry', reason: 'Better funded bids currently exclude these terms' }
+		const quote = quoteSecurityPoolAuctionBid(auctionSnapshot, instruction)
 		// Reserve the full possible award even with weak demand, in addition to existing pending bids.
-		if (totalPrincipal + auction.inventoryAttoRep > settings.securityPoolPolicy.maximumTotalPrincipalAttoRep || auction.inventoryAttoRep > settings.securityPoolPolicy.maximumPrincipalAttoRep) throw new SecurityPoolOpportunityExpired('Auction award could exceed managed REP exposure limits')
-		if (quote.bidAttoEth > instruction.maximumValueAttoEth || (observation.managedCommitmentAttoEth ?? snapshot.ownerCommitmentAttoEth) + quote.bidAttoEth > settings.securityPoolPolicy.maximumCommitmentAttoEth) throw new SecurityPoolOpportunityExpired('Auction bid exceeds collateral or commitment limits')
+		if (totalPrincipal + auction.inventoryAttoRep > settings.securityPoolPolicy.maximumTotalPrincipalAttoRep || auction.inventoryAttoRep > settings.securityPoolPolicy.maximumPrincipalAttoRep) return { disposition: 'retry', reason: 'Auction award could exceed managed REP exposure limits' }
+		if (quote.bidAttoEth > instruction.maximumValueAttoEth || (observation.managedCommitmentAttoEth ?? snapshot.ownerCommitmentAttoEth) + quote.bidAttoEth > settings.securityPoolPolicy.maximumCommitmentAttoEth) return { disposition: 'retry', reason: 'Auction bid exceeds collateral or commitment limits' }
+		if (auctionSnapshot.walletCollateral < quote.bidAttoEth) return { disposition: 'retry', reason: 'Insufficient wallet collateral for the bid' }
 		if (auctionSnapshot.collateralAllowance < quote.bidAttoEth)
 			return { completes: false, request: { account: snapshot.owner, to: auctionSnapshot.collateralToken, value: 0n, data: encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [auction.address, auctionSnapshot.collateralAllowance === 0n ? quote.bidAttoEth : 0n] }) } }
 		return { request: buildSecurityPoolAuctionBidRequest(auctionSnapshot, instruction), completes: true }
@@ -95,7 +99,7 @@ async function auctionInstructionRequest({ client, settings, observation, totalP
 	return { request, completes: true }
 }
 
-export async function buildSecurityPoolInstructionRequest(context: Context, instruction: SecurityPoolInstruction): Promise<PreparedInstruction> {
+export async function buildSecurityPoolInstructionRequest(context: Context, instruction: SecurityPoolInstruction): Promise<PreparedInstruction | InstructionDisposition> {
 	if (instruction.action === 'fork-choice') return { request: await forkChoiceRequest(context, context.observation.snapshot.owner, instruction.outcome), completes: true }
 	if ('vault' in instruction) return vaultInstructionRequest(context, instruction)
 	return auctionInstructionRequest(context, instruction)

@@ -143,9 +143,9 @@ describe('OpenOracle application navigation', () => {
 	})
 
 	test('returns from deployment to the oracle browser', async () => {
-		await renderApp('#/deploy')
+		await renderApp('#/deploy?universe=7&simulate=1&genesis=yes')
 		expect(document.title).toContain('Deploy contracts')
-		expect(within(document.body).getByRole('link', { name: 'Browse reports' }).getAttribute('href')).toBe('#/open-oracle')
+		expect(within(document.body).getByRole('link', { name: 'Browse reports' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1&genesis=yes')
 		expect(loadReport).not.toHaveBeenCalled()
 	})
 

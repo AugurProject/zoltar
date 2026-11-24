@@ -98,9 +98,9 @@ function renderRepPriceUnavailable(label: ComponentChildren) {
 	)
 }
 
-function renderRepPriceFailure(failure: RepPriceFailure | undefined) {
+function renderRepPriceFailure(failure: RepPriceFailure | undefined, unavailableLabel = appCopy.repPriceNoLiquidity) {
 	if (failure === undefined) return undefined
-	return renderRepPriceUnavailable(failure === 'rpc-error' ? appCopy.repPriceRequestFailed : appCopy.repPriceNoLiquidity)
+	return renderRepPriceUnavailable(failure === 'rpc-error' ? appCopy.repPriceRequestFailed : unavailableLabel)
 }
 
 function RepPriceGroup({ isLoading, isRefreshing, onRefresh, repPerEthFailure, repPerEthPrice, repPerEthSource, repPerEthSourceLabel, repPerEthSourceUrl, repPerEthUnavailableLabel, repUsdcFailure, repUsdcPrice, repUsdcSource, repUsdcSourceUrl }: OverviewRepPricesProps) {
@@ -138,7 +138,9 @@ function RepPriceGroup({ isLoading, isRefreshing, onRefresh, repPerEthFailure, r
 					</>
 				}
 			>
-				{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repUsdcPrice === undefined && !isLoading ? repUsdcFailure : undefined) ?? <CurrencyValue value={repUsdcPrice} loading={isLoading && repUsdcPrice === undefined} suffix={appCopy.usdc} units={6} notation='compact' />)}
+				{isRepPricingUnavailable
+					? repPricingUnavailableLabel
+					: (renderRepPriceFailure(repUsdcPrice === undefined && !isLoading ? repUsdcFailure : undefined, appCopy.directRepUsdcPoolUnavailable) ?? <CurrencyValue value={repUsdcPrice} loading={isLoading && repUsdcPrice === undefined} suffix={appCopy.usdc} units={6} notation='compact' />)}
 			</MetricField>
 		</HeaderMetricGroup>
 	)

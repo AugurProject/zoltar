@@ -1,10 +1,29 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress, privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
+import { getAddress, parseTransaction, privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
 import { parseTransactionReconciliation, validateReconciliationIntentChain, verifyFinalizedReplacement, type FinalizedReplacementEvidence } from '../../src/core/transaction-reconciliation.ts'
+import { applyMatchingReplacementEffects } from '../../src/runtime/transaction-reconciliation-handler.ts'
+import { initialRuntimeState } from '../../src/state/operator-state.ts'
+import { securityPoolReceiptIntent } from './security-pool-receipt-fixture.ts'
+import { receiptEvidence } from '@zoltar/bot-shared/execution/receipt-quorum'
 
 const intentHash = `0x${'11'.repeat(32)}` as Hex
 const replacementHash = `0x${'22'.repeat(32)}` as Hex
 const sender = getAddress('0x0000000000000000000000000000000000000010')
+
+test.each(['matching', 'different', 'reverted'] as const)('records instruction and funding effects only for a successful matching replacement (%s)', async kind => {
+	const { intent, receipt } = await securityPoolReceiptIntent()
+	intent.securityPoolInstruction = { id: 'queued-deposit', fingerprint: 'deposit-v1' }
+	const key = `${receipt.to?.toLowerCase()}:${intent.sender.toLowerCase()}`
+	intent.securityPoolFunding = { key, operation: 'fund', amount: 5n, target: 1n }
+	const signed = parseTransaction(intent.serializedTransaction)
+	const state = initialRuntimeState(true, intent.sender, 1)
+	applyMatchingReplacementEffects(state, intent, {
+		transaction: { to: signed.to ?? undefined, input: kind === 'different' ? '0x' : (signed.data ?? '0x'), value: signed.value ?? 0n },
+		receipt: receiptEvidence({ ...receipt, status: kind === 'reverted' ? 'reverted' : 'success', transactionHash: replacementHash }),
+	})
+	expect(state.completedSecurityPoolInstructions?.['queued-deposit']).toBe(kind === 'matching' ? 'deposit-v1' : undefined)
+	expect(state.securityPoolFunding?.[key]?.amount).toBe(kind === 'matching' ? 5n : undefined)
+})
 
 // Verifies a replacement whose receipt is already final and canonical, isolating the intent/replacement validation.
 function verifyFinalReplacement(requestedHash: Hex, replacement: FinalizedReplacementEvidence) {

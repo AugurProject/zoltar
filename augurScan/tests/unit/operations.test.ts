@@ -44,17 +44,21 @@ test('keeps settlement and unavailable evidence explicit', () => {
 
 test('describes report round changes against the next older evidence row', () => {
 	const rows = reportRoundChanges([
+		{ event_name: 'ReportSettled', block_number: '13', report_data: { price: '5' } },
 		{
+			event_name: 'ReportDisputed',
 			round_number: '2',
 			block_number: '12',
 			report_data: { currentAmount1: '11', currentAmount2: '20', nested: { reporter: '0x2' }, removedLater: true },
 		},
 		{
+			event_name: 'ReportSubmitted',
 			round_number: '1',
 			block_number: '10',
 			report_data: { currentAmount1: '10', currentAmount2: '20', nested: { reporter: '0x1' }, oldField: 'old' },
 		},
 	])
+	expect(rows).toHaveLength(2)
 	expect(rows[0]?.['comparison']).toEqual({
 		state: 'compared',
 		previousRoundNumber: '1',

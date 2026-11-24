@@ -13,7 +13,6 @@ contract QuestionLedgerEventEmitter is QuestionLedgerAccountingDelegate {
 		require(msg.sender == address(pool.securityPoolFactory()), 'Only factory');
 		// Bootstrap placeholder until security pool binding checkpoints the central security pool clock.
 		lastSettlementSecurityPoolTime = block.timestamp;
-		feeEpochEndTime = pool.questionData().getQuestionEndDate(pool.questionId());
 		_emitCheckpoint(AccountingReason.PoolInitialization);
 	}
 

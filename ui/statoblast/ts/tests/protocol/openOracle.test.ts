@@ -7,7 +7,6 @@ import { describe, expect, test } from 'bun:test'
 import { createWalletClient, custom, publicActions, encodeAbiParameters, encodeEventTopics, parseAbiParameters, decodeFunctionData, parseAbi, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getOpenOracleGameTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { createOpenOracleReportInstance, disputeOracleReport, getOpenOracleSettleGasLimit, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
-import { getOracleManagerPriceValidUntilTimestamp } from '@zoltar/ui-statoblast-shared/protocol/oracleTiming.js'
 import { getInfraContractAddresses, getOpenOracleAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { loadCoordinatorPriceValidUntilTimestamp } from '@zoltar/ui-statoblast-shared/protocol/openOracleSettlement.js'
 import { statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed, statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
@@ -335,11 +334,17 @@ describe('openOracle protocol client', () => {
 									{ status: 'success', result: alternateQuestionLedgerAddress },
 								]
 					if (first === 'openOraclePriceCoordinator') return [{ status: 'success', result: association === 'different coordinator' ? token1Address : vaultAddress }]
+					if (first === 'lastSettlementTimestamp')
+						return [
+							{ status: 'success', result: 11n },
+							{ status: 'success', result: 612n },
+							{ status: 'success', result: token1Address },
+						]
 					throw new Error(`Unexpected multicall ${first}`)
 				},
 			})
 			const report = await loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)
-			if (association === 'verified') expect(report.coordinatorPriceValidUntilTimestamp).toBe(getOracleManagerPriceValidUntilTimestamp(11n))
+			if (association === 'verified') expect(report.coordinatorPriceValidUntilTimestamp).toBe(612n)
 			else expect(report.coordinatorPriceValidUntilTimestamp).toBeUndefined()
 		})
 	}
@@ -591,14 +596,21 @@ for (const change of ['settlement preimage', 'settled report', 'withdraw balance
 				account: wallet.account,
 				chain: wallet.chain,
 				call: async () => ({ data: toHex(0n) }),
-				multicall: createMulticallStub(async request =>
-					getContractFunctionName(request.contracts[0]) === 'openOracle'
-						? [
-								{ status: 'success', result: getOpenOracleAddress() },
-								{ status: 'success', result: alternateQuestionLedgerAddress },
-							]
-						: [{ status: 'success', result: vaultAddress }],
-				),
+				multicall: createMulticallStub(async request => {
+					const first = getContractFunctionName(request.contracts[0])
+					if (first === 'openOracle')
+						return [
+							{ status: 'success', result: getOpenOracleAddress() },
+							{ status: 'success', result: alternateQuestionLedgerAddress },
+						]
+					if (first === 'lastSettlementTimestamp')
+						return [
+							{ status: 'success', result: 11n },
+							{ status: 'success', result: 3611n },
+							{ status: 'success', result: zeroAddress },
+						]
+					return [{ status: 'success', result: vaultAddress }]
+				}),
 				getBlock: async () => createBlockWithTimestamp(change === 'settlement stale unchanged' || (changed && change === 'settlement price expiry') ? 3611n : 1000n),
 				getBalance: async () => (changed && change === 'create ETH' ? 0n : 1000n),
 			},

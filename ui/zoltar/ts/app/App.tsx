@@ -36,7 +36,7 @@ export function App() {
 	const { activeUniverseId, forkQuestionId, setActiveUniverseId, setForkQuestionId, setZoltarView, zoltarView } = useZoltarUrlState()
 	const { navigate, route } = useHashRoute()
 	const resolvedRoute = resolveEnumValue<ZoltarRoute>(route, 'not-found', ZOLTAR_ROUTES)
-	const invalidRoute = isInvalidZoltarRoute({ resolvedRoute, search: parseRouteHash(window.location.hash).search, zoltarView })
+	const invalidRoute = isInvalidZoltarRoute({ resolvedRoute, search: parseRouteHash(window.location.hash).search, pageSearch: window.location.search, zoltarView })
 	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'overview', ZOLTAR_VIEWS)
 	const activeRoute = invalidRoute ? 'not-found' : resolvedRoute
 	const {

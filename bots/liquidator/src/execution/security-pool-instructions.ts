@@ -1,7 +1,7 @@
 import type { OperatorSettings } from '#config/settings'
 import { serializeSecurityPoolInstructions, type SecurityPoolInstruction } from '#config/security-pool-instructions'
 import type { SecurityPoolObservation } from '#monitoring/security-pool-monitor'
-import type { RuntimeState } from '#state/operator-state'
+import { recordActivity, saveDurableState, type RuntimeState } from '#state/operator-state'
 import type { Account, Chain, Transport, WalletClient, createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { readSecurityPoolExecutionSnapshot } from './security-pool-execution-snapshot.ts'
 import { buildSecurityPoolInstructionRequest } from './security-pool-instruction-request.ts'
@@ -50,17 +50,29 @@ export async function executeSecurityPoolInstruction(wallet: Wallet, settings: O
 				const { observation } = context
 				if (!observation.selected || !observation.approvedUniverse) throw new Error('Instruction security pool and universe must be selected and approved')
 				const prepared = await buildSecurityPoolInstructionRequest({ ...context, settings }, instruction)
-				if (observation.snapshot.owner !== wallet.account.address || observation.walletAttoEth < prepared.request.value + settings.securityPoolPolicy.walletReserveAttoEth + settings.strategy.maximumGasCostAttoEth) throw new SecurityPoolOpportunityExpired('Instruction would consume the wallet gas reserve')
+				if ('request' in prepared && (observation.snapshot.owner !== wallet.account.address || observation.walletAttoEth < prepared.request.value + settings.securityPoolPolicy.walletReserveAttoEth + settings.strategy.maximumGasCostAttoEth))
+					return { disposition: 'retry' as const, reason: 'Instruction would consume the wallet gas reserve' }
 				return prepared
 			},
 		)
-		if (instruction.action === 'auction-bid' && !(await priceAllowed(result.observation))) throw new SecurityPoolOpportunityExpired('Independent REP pricing does not allow the auction bid')
+		if ('request' in result.details && instruction.action === 'auction-bid' && !(await priceAllowed(result.observation))) throw new SecurityPoolOpportunityExpired('Independent REP pricing does not allow the auction bid')
 		return result.details
 	}
 
-	const { request, completes } = await refresh()
+	const prepared = await refresh()
+	if ('disposition' in prepared) {
+		if (prepared.disposition === 'retry') throw new SecurityPoolOpportunityExpired(prepared.reason)
+		const next = { ...state, completedSecurityPoolInstructions: { ...state.completedSecurityPoolInstructions, [instruction.id]: fingerprint }, activities: [...state.activities] }
+		recordActivity(next, { kind: 'configuration', status: 'info', message: `Security pool instruction ${instruction.id} skipped. ${prepared.reason}.` })
+		await saveDurableState(settings.runtime.stateFile, next)
+		state.completedSecurityPoolInstructions = next.completedSecurityPoolInstructions
+		state.activities = next.activities
+		return false
+	}
+	const { request, completes } = prepared
 	const validate = async () => {
 		const fresh = await refresh()
+		if ('disposition' in fresh) throw new SecurityPoolOpportunityExpired(fresh.reason)
 		if (fresh.request.to !== request.to || fresh.request.data !== request.data || fresh.request.value !== request.value || fresh.completes !== completes) throw new SecurityPoolOpportunityExpired('Instruction terms changed before submission')
 	}
 	const kind = securityPoolInstructionKind(instruction.action)

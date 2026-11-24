@@ -111,6 +111,10 @@ export function useReportingOperations(
 	const currentAccountRef = useRef(accountAddress)
 	currentAccountRef.current = accountAddress
 	const previousAccountRef = useRef(accountAddress)
+	const explicitQuestion = selectedQuestionLedgerAddress ?? ''
+	const previousExplicitQuestion = useRef(explicitQuestion)
+	const questionChanged = previousExplicitQuestion.current !== explicitQuestion
+	const questionEpoch = useRef(0)
 
 	const getPendingTitle = (actionName: ReportingActionResult['action']) => {
 		if (actionName === 'approveReportingRep') return reportingCopy.approvingRepTitle
@@ -156,6 +160,19 @@ export function useReportingOperations(
 	}
 
 	useEffect(() => {
+		if (previousExplicitQuestion.current === explicitQuestion) return
+		previousExplicitQuestion.current = explicitQuestion
+		questionEpoch.current++
+		reportingLoad.invalidate()
+		reportingDetails.value = undefined
+		reportingError.value = undefined
+		reportingFeedback.value = undefined
+		reportingResult.value = undefined
+		reportingActiveAction.value = undefined
+		setReportingForm(() => ({ ...getDefaultReportingFormState(), questionLedgerAddress: explicitQuestion }))
+	}, [explicitQuestion, reportingActiveAction, reportingDetails, reportingError, reportingFeedback, reportingLoad, reportingResult, setReportingForm])
+
+	useEffect(() => {
 		if (previousAccountRef.current === accountAddress) return
 		previousAccountRef.current = accountAddress
 		const hadReportingContext = reportingDetails.value !== undefined || reportingLoad.isLoading.value
@@ -171,14 +188,16 @@ export function useReportingOperations(
 		errorFallback: string,
 		outcomeOverride?: ReportingOutcomeKey,
 	) => {
+		if (questionChanged) return
 		const currentForm = reportingForm.value
 		const actionSelectionKey = currentReportingSelectionKey
+		const actionQuestionEpoch = questionEpoch.current
 		const transactionContext = {
 			outcome: outcomeOverride ?? currentForm.selectedOutcome,
 			questionLedgerAddress: actionSelectionKey === '' ? undefined : actionSelectionKey,
 			universeId: reportingDetails.value?.universeId,
 		}
-		const isCurrentSelection = () => isReportingSelectionCurrent(actionSelectionKey)
+		const isCurrentSelection = () => actionQuestionEpoch === questionEpoch.current && isReportingSelectionCurrent(actionSelectionKey)
 		try {
 			reportingActiveAction.value = actionName
 			reportingFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
@@ -190,16 +209,20 @@ export function useReportingOperations(
 						commonCopy.formatConnectWalletBefore('reporting on a question'),
 						createReportingTransactionIntent(actionName, transactionContext),
 					),
+					setErrorMessage: message => {
+						if (isCurrentSelection()) reportingError.value = message
+					},
 					onRefreshError: (message, hash) => {
+						if (!isCurrentSelection()) return
 						reportingFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName), message, hash)
 						const result = reportingResult.value
 						if (result !== undefined) onTransactionPresented(createReportingWarningPresentation(result, message))
 					},
 					onWriteCanceled: () => {
-						reportingFeedback.value = undefined
+						if (actionQuestionEpoch === questionEpoch.current) reportingFeedback.value = undefined
 					},
 					onWriteError: message => {
-						reportingFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
+						if (isCurrentSelection()) reportingFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
 					},
 					refreshErrorFallback: 'Reporting transaction succeeded, but refreshing reporting details failed',
 					refreshState: async () => {
@@ -213,14 +236,14 @@ export function useReportingOperations(
 				},
 				errorFallback,
 				async result => {
+					onTransactionPresented(createReportingSuccessPresentation(result))
+					if (!isCurrentSelection()) return
 					reportingResult.value = result
 					reportingFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
-					onTransactionPresented(createReportingSuccessPresentation(result))
 					// A submitted report must not leave its amount behind for an accidental second report.
 					if (actionName === 'reportOutcome') setReportingForm(current => (current.reportAmount === '' ? current : { ...current, reportAmount: '' }))
-					if (!isReportingSelectionCurrent(actionSelectionKey)) return
 					const details = await dependencies.loadReportingDetails(result.questionLedgerAddress, accountAddress)
-					if (!isReportingSelectionCurrent(actionSelectionKey)) return
+					if (!isCurrentSelection()) return
 					reportingDetails.value = details
 					setReportingForm(current => {
 						const selectedWithdrawDepositIndexesByOutcome = pruneSelectedWithdrawDepositIndexesByOutcome(current.selectedWithdrawDepositIndexesByOutcome, details)
@@ -233,7 +256,7 @@ export function useReportingOperations(
 				},
 			)
 		} finally {
-			reportingActiveAction.value = undefined
+			if (actionQuestionEpoch === questionEpoch.current) reportingActiveAction.value = undefined
 		}
 	}
 
@@ -371,12 +394,12 @@ export function useReportingOperations(
 		loadingReportingDetails: reportingLoad.isLoading.value,
 		loadReporting,
 		onReportOutcome: reportOutcome,
-		reportingActiveAction: reportingActiveAction.value,
-		reportingDetails: reportingDetails.value,
-		reportingError: reportingError.value,
-		reportingFeedback: reportingFeedback.value,
-		reportingForm: reportingForm.value,
-		reportingResult: reportingResult.value,
+		reportingActiveAction: questionChanged ? undefined : reportingActiveAction.value,
+		reportingDetails: questionChanged ? undefined : reportingDetails.value,
+		reportingError: questionChanged ? undefined : reportingError.value,
+		reportingFeedback: questionChanged ? undefined : reportingFeedback.value,
+		reportingForm: questionChanged ? { ...getDefaultReportingFormState(), questionLedgerAddress: explicitQuestion } : reportingForm.value,
+		reportingResult: questionChanged ? undefined : reportingResult.value,
 		setReportingForm,
 		withdrawEscalation,
 	}

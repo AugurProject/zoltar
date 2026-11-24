@@ -3,7 +3,7 @@ import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import type { OpenOracleCreateFormState } from '../../../types/app.js'
 import { parseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
-import { parseOpenOracleCreateFormSubmission } from './openOracle.js'
+import { getOpenOracleCreateWrapGuardMessage, parseOpenOracleCreateFormSubmission } from './openOracle.js'
 import { type OpenOracleReadClient, readCreateTokenDecimals } from './openOracleTokenAccess.js'
 
 export async function createReportWrapShortfall(client: OpenOracleReadClient, owner: Address, form: OpenOracleCreateFormState) {
@@ -15,7 +15,10 @@ export async function createReportWrapShortfall(client: OpenOracleReadClient, ow
 	let required = 0n
 	if (first === getWethAddress()) required = parameters.exactToken1Report
 	else if (second === getWethAddress()) required = parameters.initialToken2Amount
-	const balance = await client.readContract({ address: getWethAddress(), abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [owner] })
+	const [balance, walletBalance] = await Promise.all([client.readContract({ address: getWethAddress(), abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [owner] }), client.getBalance({ address: owner })])
 	if (typeof balance !== 'bigint' || required <= balance) throw new Error('No ETH wrapping is required.')
-	return required - balance
+	const shortfall = required - balance
+	const reason = getOpenOracleCreateWrapGuardMessage(shortfall, parameters.settlerRewardAttoEth, walletBalance)
+	if (reason !== undefined) throw new Error(reason)
+	return shortfall
 }
