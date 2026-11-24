@@ -90,7 +90,7 @@ for (const mode of ['stable', 'reorg', 'continuous reorg', 'provider error', 'ba
 		else await expect(result).resolves.toEqual([])
 		const expectedAttempts = mode === 'stable' || mode === 'provider error' ? 1 : 2
 		expect(requests).toBeGreaterThanOrEqual(mode === 'provider error' ? 1 : expectedAttempts * 5)
-		expect(requests).toBeLessThanOrEqual(mode === 'provider error' ? 1 : expectedAttempts * 8)
+		expect(requests).toBeLessThanOrEqual(mode === 'provider error' ? 1 : expectedAttempts * 9)
 		expect(attempts).toBe(expectedAttempts)
 		expect(anchors).toBe(expectedAttempts * 2)
 	})

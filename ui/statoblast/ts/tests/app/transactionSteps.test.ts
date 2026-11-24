@@ -8,7 +8,7 @@ import { afterEach, expect, mock, spyOn, test } from 'bun:test'
 import { createWalletClient, custom, publicActions, encodeFunctionData, decodeFunctionData, maxUint256, type Hash, type TransactionReceipt, type ReplacementReason } from '@zoltar/core-shared/evm/ethereum'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
-import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getActiveNetworkProfile, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
 import { withTransactionReviews } from '@zoltar/ui-statoblast-shared/protocol/reviewedBackend.js'
@@ -864,9 +864,10 @@ test('broadcasts a prepared raw deployment transaction without app confirmation'
 	expect(transactionSteps.value?.showReviewDialog).toBe(false)
 })
 
-test('minting complete sets sends the transaction directly and tracks its receipt', async () => {
+function setupMintReview(alwaysReview: boolean) {
 	const { client, receipt, sendTransaction } = setup()
-	const reviewed = createReviewedClient({
+	let balanceReads = 0
+	const mintClient = {
 		...client,
 		sendTransaction,
 		estimateGas: async () => 100000n,
@@ -877,9 +878,10 @@ test('minting complete sets sends the transaction directly and tracks its receip
 			if (request.functionName === 'securityPoolFactory') return account
 			if (request.functionName === 'securityPoolOf' || request.functionName === 'getQuestionLedger') return account
 			if (request.functionName === 'isSecurityPool') return true
-			if (request.functionName === 'collateralToken') return MAINNET_NETWORK_PROFILE.wethAddress
+			if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
 			if (request.functionName === 'services') return account
-			if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 10n ** 20n
+			if (request.functionName === 'balanceOf') return (balanceReads++ === 0 ? 100n : 90n) * 10n ** 18n
+			if (request.functionName === 'allowance') return 10n ** 20n
 			if (request.functionName === 'purchaseQuote') return [0n, 0n]
 			if (request.functionName === 'quoteMintRecoveryRep') return 0n
 			if (request.functionName === 'availableMintCapacity' || request.functionName === 'attoEthToAttoShares') return 10n ** 18n
@@ -893,7 +895,12 @@ test('minting complete sets sends the transaction directly and tracks its receip
 			throw new Error(`Unexpected read: ${request.functionName}`)
 		}),
 		waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }),
-	})
+	}
+	return { reviewed: createReviewedClient(mintClient, undefined, undefined, undefined, alwaysReview), sendTransaction }
+}
+
+test('minting complete sets sends the transaction directly and tracks its receipt', async () => {
+	const { reviewed, sendTransaction } = setupMintReview(false)
 	expect(await createCompleteSetInQuestionLedger(reviewed, account, 10n ** 18n)).toEqual({ action: 'createCompleteSet', hash, questionLedgerAddress: account, universeId: 0n })
 	expect(sendTransaction).toHaveBeenCalledTimes(1)
 	expect(sendTransaction).toHaveBeenCalledWith(expect.objectContaining({ value: 0n }))
@@ -901,8 +908,17 @@ test('minting complete sets sends the transaction directly and tracks its receip
 	expect(transactionSteps.value?.steps[0]?.phase).toBe('confirmed')
 })
 
-for (const _change of ['fresh price', 'pending request', 'queue fee'] as const) {
-}
+test('mint review shows the refreshed wallet collateral and free capacity', async () => {
+	const { reviewed, sendTransaction } = setupMintReview(true)
+	const sending = createCompleteSetInQuestionLedger(reviewed, account, 10n ** 18n)
+	await waitForTransactionStep(0)
+	const rows = transactionSteps.value?.steps[0]?.reviewRows
+	transactionSteps.value?.confirmStep(0)
+	await expect(sending).resolves.toMatchObject({ hash })
+	expect(rows?.find(row => row.label === 'Wallet collateral')?.value).toMatch(/90.*WETH → 89.*WETH/)
+	expect(rows?.find(row => row.label === 'Free capacity')?.value).toMatch(/1.*WETH → 0.*WETH/)
+	expect(sendTransaction).toHaveBeenCalledTimes(1)
+})
 
 test('a refreshed review shows verified rows and permits a changing simulation result', async () => {
 	const { client, sendTransaction } = setup()

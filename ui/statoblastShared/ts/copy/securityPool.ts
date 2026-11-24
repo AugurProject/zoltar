@@ -33,8 +33,8 @@ export const minting = 'Minting complete sets…'
 export const mintHint = 'Choose a question and amount. Shared capacity backs all outcomes, delivered to your connected wallet.'
 export const mintAmount = 'Collateral'
 export const minimumShares = 'Minimum complete sets'
-export const mintReview = ({ amount, purchaseFee, feeCap, minimum, recovery }: { amount: string; purchaseFee: string; feeCap: string; minimum: string; recovery: { amount: string; cap: string } | undefined }) =>
-	`Mint with ${amount}. The purchase fee is ${purchaseFee}, capped at ${feeCap}. Receive at least ${minimum} of each outcome.${recovery === undefined ? '' : ` The recovery contribution is ${recovery.amount} REP, capped at ${recovery.cap} REP.`} Queued commitment reductions use their reserved capacity.`
+export const mintReview = ({ amount, purchaseFee, feeCap, minimum, recovery }: { amount: string; purchaseFee: string | undefined; feeCap: string; minimum: string; recovery: { amount: string; cap: string } | undefined }) =>
+	`Mint with ${amount}. The purchase fee is ${purchaseFee === undefined ? '' : `estimated at ${purchaseFee}, `}capped at ${feeCap}. Receive at least ${minimum} of each outcome.${recovery === undefined ? '' : ` The recovery contribution is estimated at ${recovery.amount} REP, capped at ${recovery.cap} REP.`} Queued commitment reductions use their reserved capacity.`
 export const openQuestionShares = 'Open question shares'
 
 export const maximumPurchaseFee = 'Maximum purchase fee'

@@ -15,9 +15,11 @@ import type { ShareMigrationTarget, TradingActionResult, TradingDetails, Trading
 import { getMinBigintValue, isBigintTriple } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { readQuestionLedgerUniverseId } from './questionLedgerActions.js'
-import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatAmountDisplay, formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as tradingCopy from '../copy/trading.js'
 import * as collateralCopy from '../copy/collateral.js'
+import { estimatedPurchaseFee, mintReview } from '../copy/securityPool.js'
+import { availableCapacity } from '../copy/securityPoolCapital.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 
@@ -288,9 +290,9 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 		])
 		if (!Array.isArray(quoted) || typeof quoted[0] !== 'bigint' || quoted.length !== 2 || typeof quoted[1] !== 'bigint') throw new Error('Invalid shared REP purchase quote.')
 		const fee = quoted[0]
-		if (typeof capacity !== 'bigint' || capacity < amount) throw new Error('Insufficient shared REP backing after queued retirement.')
+		if (typeof capacity !== 'bigint' || capacity < amount) throw new Error('Insufficient shared REP backing after queued commitment reductions.')
 		if (typeof fee !== 'bigint' || fee < 0n) throw new Error('Invalid shared REP purchase quote.')
-		return { fee, recoveryAttoRep: requireBigintValue(recoveryValue, 'Recovery REP contribution') }
+		return { fee, capacity, recoveryAttoRep: requireBigintValue(recoveryValue, 'Recovery REP contribution') }
 	}
 	const collateral = await loadTradingCollateral(client, questionLedgerAddress, client.account.address)
 	const quoted = await quote()
@@ -300,18 +302,28 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 	const minimumShares = await client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'attoEthToAttoShares', args: [amount] })
 	const args = [universeId, questionId, amount, client.account.address, minimumShares, maximumFee] as const
 	const mintCall = maximumRecoveryAttoRep === 0n ? { functionName: 'createCompleteSet' as const, args } : { functionName: 'createCompleteSetWithRecoveryRep' as const, args: [...args, maximumRecoveryAttoRep] as const }
+	const collateralValue = (value: bigint) => formatCurrencyBalanceWithUnit(value, collateral.symbol, collateral.decimals)
+	const collateralPreview = (value: bigint) => formatValueWithUnit(formatAmountDisplay(value, { units: collateral.decimals }), collateral.symbol)
 	const callParams = {
 		address: securityPool,
 		abi: purchaseAbi,
 		...mintCall,
 		value: 0n,
-		reviewTitle: 'Buy complete sets',
-		reviewDescription: `Estimated purchase fee: ${formatCurrencyBalanceWithUnit(purchaseFee, collateral.symbol, collateral.decimals)}. Includes 1% fee budget headroom; only the actual fee is transferred. Recovery contribution: ${formatCurrencyBalanceWithUnit(quoted.recoveryAttoRep, commonCopy.rep)}. Maximum recovery REP contribution: ${formatCurrencyBalanceWithUnit(maximumRecoveryAttoRep, commonCopy.rep)}, including 1% headroom and rounding; only the actual contribution is transferred.`,
+		reviewTitle: tradingCopy.mintCompleteSets,
+		reviewDescription: mintReview({
+			amount: collateralValue(amount),
+			purchaseFee: undefined,
+			feeCap: collateralValue(maximumFee),
+			minimum: formatCurrencyBalance(minimumShares, collateral.decimals),
+			recovery: quoted.recoveryAttoRep === 0n ? undefined : { amount: formatCurrencyBalance(quoted.recoveryAttoRep), cap: formatCurrencyBalance(maximumRecoveryAttoRep) },
+		}),
 	} as const
+	let reviewRows: { label: string; value: string }[] = []
 	client.onTransactionPlan?.([
 		{
 			...callParams,
 			contractAddress: callParams.address,
+			readReviewRows: () => reviewRows,
 			validateBeforeSubmit: async () => {
 				const latest = await loadTradingCollateral(client, questionLedgerAddress, client.account.address)
 				const fresh = await quote()
@@ -324,6 +336,11 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 				if (recovery.allowance < maximumRecoveryAttoRep) throw new Error(collateralCopy.recoveryApprovalRequired)
 				await client.estimateGas({ account: client.account, to: callParams.address, data: encodeFunctionData(callParams), value: callParams.value })
 				await validateBeforeSubmit()
+				reviewRows = [
+					{ label: estimatedPurchaseFee, value: collateralValue(fresh.fee) },
+					{ label: collateralCopy.wallet, value: `${collateralPreview(latest.balance)} → ${collateralPreview(latest.balance - amount - fresh.fee)}` },
+					{ label: availableCapacity, value: `${collateralPreview(fresh.capacity)} → ${collateralPreview(fresh.capacity - amount)}` },
+				]
 			},
 		},
 	])

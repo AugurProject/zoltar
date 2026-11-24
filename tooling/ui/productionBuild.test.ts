@@ -517,7 +517,10 @@ for (const scenario of productionBrowserScenarios) {
 		if (chromiumPath === undefined) throw new Error('Chromium is required for the production browser smoke test')
 		const baseUrl = server.url.toString().replace(/\/$/, '')
 		const timeout = scenario.workflow ? PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS : PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS
-		const state = JSON.parse(await loadProductionDocumentInChromium(`${baseUrl}/${scenario.appId}/${scenario.hash}`, scenario.viewport, async driver => await driver.waitForBodyText(scenario.expected), timeout))
+		const waitForScenario = async (driver: ProductionBrowserDriver) => {
+			await driver.waitForBodyText(scenario.expected)
+		}
+		const state = JSON.parse(await loadProductionDocumentInChromium(`${baseUrl}/${scenario.appId}/${scenario.hash}`, scenario.viewport, waitForScenario, timeout))
 		if (typeof state !== 'object' || state === null || !('body' in state) || !('html' in state) || typeof state.body !== 'string' || typeof state.html !== 'string' || !('height' in state) || !('width' in state)) {
 			throw new Error(`${scenario.name} returned an invalid document state`)
 		}
