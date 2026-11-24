@@ -1,7 +1,6 @@
 ;(() => {
-	// Questions and security pool pages both live under the Watchlist: every question belongs to one security pool.
 	const rawTab = document.body.dataset.tab ?? ''
-	const tab = rawTab === 'questions' || rawTab === 'portfolios' ? 'watchlist' : rawTab
+	const tab = rawTab
 	const forked = document.body.dataset.forked === '1'
 	const menuOpen = document.body.dataset.umenu === 'open'
 	// Universe menu: a button opens a non-modal popover of ordinary links and buttons (not role="menu").
@@ -36,10 +35,10 @@
 	else if (parentRep) universeMenu = parentRepMenu
 	// The banner's action depends on where you are: security pool pages need a branch choice, the universes page needs none
 	const onPoolPage = document.body.dataset.ptab !== undefined
-	const onUniverses = rawTab === 'universes'
+	const onUniverses = rawTab === 'migrate'
 	// After the branch choice is committed (data-branch-chosen), security pool pages need no banner action
 	const branchChosen = document.body.dataset.branchChosen === '1'
-	let bannerAction = '<span class="row"><a class="btn sm" href="15-universes.html">Migrate REP…</a><a class="small" href="15-universes.html">How to move shares and capital</a></span>'
+	let bannerAction = '<span class="row"><a class="btn sm" href="15-universes.html">Migrate REP…</a></span>'
 	if (onUniverses || (onPoolPage && branchChosen)) bannerAction = ''
 	else if (onPoolPage) bannerAction = '<span class="row"><a class="btn sm" href="#/fork">Choose a branch…</a></span>'
 	const header = `
@@ -47,7 +46,7 @@
 		<a class="brand" href="02-watchlist.html" aria-label="Augur Statoblast, Watchlist"><img src="favicon.svg" alt="" />Augur Statoblast</a>
 		<div class="header-right">
 			<span class="chip hide-m num" title="REP price">1 REP = 0.0045 ETH</span>
-			<span class="refresh-ctl"><button type="button" class="chip" aria-label="Refresh. Updated 2 min ago">↻ <span class="num">2 min ago</span></button><label class="chip hide-m auto-refresh"><input type="checkbox" /> Auto-refresh</label></span>
+			<span class="refresh-ctl"><button type="button" class="chip" aria-label="Refresh. Updated 2 min ago">↻ <span class="num">2 min ago</span><span class="show-m"> · auto off</span></button><label class="chip hide-m auto-refresh"><input type="checkbox" /> Auto-refresh</label></span>
 			<span class="umenu-wrap"><button type="button" class="chip universe-chip${menuOpen ? ' open' : ''}" aria-expanded="${menuOpen}"${menuOpen ? ' aria-controls="umenu"' : ''}><span class="hide-m" style="font-weight: 400; opacity: .75">Universe </span>Augur v2 › Yes${alert ? ` <span class="count" aria-hidden="true">!</span><span class="sr">, ${alertLabel}</span>` : ''} ▾</button>${menuOpen ? universeMenu : ''}</span>
 			<span class="chip num"><span class="dot"></span>0x7a3f…91c2</span>
 			<span class="chip" aria-label="Activity">◴<span class="icon-label"> Activity</span></span>

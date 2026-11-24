@@ -175,6 +175,18 @@
 				</div>
 
 				<div>
+					<div class="frame-cap"><span>1b · Check failed</span><span class="mock-note">slow RPC, before the wallet</span></div>
+					<div class="dialog stack-sm">
+						<div class="dlg-head"><h2>Report Yes · 500.00 REP</h2></div>
+						<div class="notice warn">
+							<span><b>Couldn't check the current state.</b> The network didn't answer in 15 s, so this can't be sent yet.</span>
+						</div>
+						<div class="row" style="justify-content: flex-end"><span class="btn">Try again</span></div>
+						<p class="mock-note">Design note: Review re-reads and simulates the action's inputs when it opens (its before → after rows show a fixed-size loading slot until then) and again on “Continue in wallet” if that read is older than 30 s. Sending unchecked is not offered.</p>
+					</div>
+				</div>
+
+				<div>
 					<div class="frame-cap"><span>3b · Sped up in wallet</span><span class="mock-note">still pending, new hash</span></div>
 					<div class="card stack-sm">
 						<div class="steps compact">

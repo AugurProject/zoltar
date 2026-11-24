@@ -31,23 +31,28 @@
 					<tbody>
 						<tr>
 							<td><b>The page you're on</b></td>
-							<td>When opened, on ↻ Refresh, and after your own transaction confirms. With Auto-refresh on: every new block (at most one refresh in flight)</td>
+							<td>When opened (including returning to a hidden tab), on ↻ Refresh, after your own transaction confirms (the page plus your wallet balances and allowances), and once when a deadline shown on it passes. With Auto-refresh on: every new block (at most one refresh in flight)</td>
 							<td>≈ 60 sub-calls in one multicall</td>
 						</tr>
 						<tr>
 							<td><b>★ Saved items</b></td>
-							<td>When the Watchlist opens and on ↻ Refresh; with Auto-refresh on, up to 25 every block and the rest 10 per block</td>
+							<td>Only on the Watchlist: when it opens and on ↻ Refresh, in chunks of 25 per multicall. With Auto-refresh on, the first 25 every block and the rest 10 per block</td>
 							<td>3–5 sub-calls each, same multicall</td>
 						</tr>
 						<tr>
 							<td><b>Before sending a transaction</b></td>
-							<td>Always: the action's inputs are re-read and simulated; if anything changed, “Changed since you reviewed” (17)</td>
+							<td>When Review opens, and again on “Continue in wallet” if that read is older than 30 s; if anything changed, “Changed since you reviewed” (17); if the read times out, the action can't be sent until it succeeds</td>
 							<td>1 multicall + 1 simulation</td>
 						</tr>
 						<tr>
 							<td><b>Countdowns and deadlines</b></td>
-							<td>Never re-read: computed on the device from timestamps already read</td>
+							<td>Counted on the device from the last block's timestamp plus elapsed time (not the raw device clock). When a deadline passes, its derived state turns neutral (“Ended · checking…”) and the page is re-read once</td>
 							<td>0</td>
+						</tr>
+						<tr>
+							<td><b>Deposit search, inherited-claim preparation</b></td>
+							<td>Foreground jobs: run on their own loop while their screen is open, independent of Auto-refresh; one request in flight; pausable; cursor saved; back off on timeout</td>
+							<td>2 pages of 30 per request</td>
 						</tr>
 						<tr>
 							<td><b>Recently opened</b> (last 20)</td>
@@ -73,7 +78,7 @@
 				<div class="card-head" style="margin-bottom: var(--s3)">
 					<div>
 						<h2>Decided trade-off · no browsing</h2>
-						<p>No screen lists questions or security pools that anyone can create, including a security pool's registered questions. There is no Questions tab: a question exists only inside a security pool, with its own shares and reporting there, so every question is reached as (security pool, question ID) through a link, the Trading app, the Watchlist (including a question-ID search across saved security pools), or lookup by ID inside one security pool. Whatever people save stays live. Spam can't reach the screen, at the cost of not browsing what a security pool backs.</p>
+						<p>No screen lists questions or security pools that anyone can create, including a security pool's registered questions. There is no Questions tab: a question exists only inside a security pool, with its own shares and reporting there, so every question is reached as (security pool, question ID) through a link, the Trading app, the Watchlist, or lookup by ID inside one security pool. Whatever people save is read when they open the Watchlist or press Refresh. Spam can't reach the screen, at the cost of not browsing what a security pool backs.</p>
 					</div>
 					<span class="badge acc">Product decision</span>
 				</div>
@@ -90,9 +95,9 @@
 					<dt>Security pool</dt>
 					<dd style="white-space: normal; text-align: left"><code>isSecurityPool(address)</code> on the factory (SecurityPoolFactory.sol:62)</dd>
 					<dt>Question link</dt>
-					<dd style="white-space: normal; text-align: left">Names a security pool and a question ID: the security pool passes the check above, then <code>getQuestionLedger(questionId, universeId)</code> on it (SecurityPool.sol:231) finds the question. Question ledger addresses are never typed; they appear only in a question's Details</dd>
+					<dd style="white-space: normal; text-align: left">Names a security pool and a question ID: the security pool passes the check above, then <code>getQuestionLedger(questionId, universeId)</code> on it (SecurityPool.sol:231) finds the question. Question ledger addresses are never typed; they appear only in a question's “Resolution rules and details” disclosure</dd>
 					<dt>Question ID</dt>
-					<dd style="white-space: normal; text-align: left">Never searched app-wide: the same question can sit in any number of security pools. Inside one security pool (Find by question ID): one <code>getQuestionLedger(questionId, universeId)</code> read, “Not registered here” otherwise. On the Watchlist: the same read in each saved security pool only (≤ 25, allowFailure), plus one Zoltar read for the title; anything else needs a link or security pool address</dd>
+					<dd style="white-space: normal; text-align: left">Never searched app-wide: the same question can sit in any number of security pools. Inside one security pool (Find by question ID): one <code>getQuestionLedger(questionId, universeId)</code> read, “Not registered here” otherwise. Anything else needs a link or a security pool address; the Watchlist has no question-ID search</dd>
 					<dt>Fails</dt>
 					<dd style="white-space: normal; text-align: left">Not a security pool, or “Question not registered”: “Not a Statoblast question / security pool”, never read, offered for removal. “Question pool unavailable”: registered but not prepared in this universe; kept, linked to Fork &amp; recovery, never offered for removal. Cache cleared after Register and Prepare.</dd>
 					<dt>Order</dt>
@@ -121,10 +126,10 @@
 						<tr>
 							<td>
 								<b>Security pool page</b> reloads everything each block, including 19 bytecode checks
-								<div class="q-meta">Measured: 126 first load, 130 per block</div>
+								<div class="q-meta">Measured: 126 first load, 130 per block, every block</div>
 							</td>
 							<td>
-								Cache verified modules per session; read live state in one block-pinned multicall
+								Cache verified modules per session; read on open and on Refresh in one block-pinned multicall
 								<div class="q-meta">Measured replay: 115 live reads in 1 request, 1.86 M gas</div>
 							</td>
 							<td class="r num">
@@ -140,12 +145,12 @@
 						<tr>
 							<td><b>Your deposits</b>: pages every deposit in the game (reporting.ts:74–100)</td>
 							<td>Saved at deposit time; search (below) only when the game's total for you is larger than what's located</td>
-							<td class="r num">0 usually · ≤ 2 pages</td>
+							<td class="r num">0 usually · search job (below)</td>
 						</tr>
 						<tr>
 							<td><b>Inherited claims</b>: pages every carry leaf of the parent and every consumed index of the child (reportingCarryState.ts:60–77, 150–178)</td>
-							<td>Parent leaves: incremental by saved cursor; the parent is frozen, so it finishes once. Consumed state: no list paging; each of your found claims is checked individually every refresh</td>
-							<td class="r num">≤ 2 pages + 1 per claim</td>
+							<td>Parent leaves: incremental by saved cursor; the parent is frozen, so it finishes once. Consumed state: no list paging; each of your found claims is checked individually on each refresh</td>
+							<td class="r num">one-time job + 1 per claim</td>
 						</tr>
 					</tbody>
 				</table>
@@ -164,7 +169,7 @@
 					<li><b>Your total per side, no search:</b> <code>getLocalUnresolvedPrincipalByVaultAndOutcome(you, outcome)</code> ×3. All zero → nothing to locate. Shown on Reporting while the game runs. Retired (losing) sides read 0 after settlement, so losing deposits are shown only when saved and are never searched; they return no REP and need no action.</li>
 					<li><b>Saved when you deposit:</b> after the transaction confirms, read <code>getDepositsByOutcomeLength</code> at the receipt's block and at its parent block. The entries between them are exactly that block's deposits (<code>getDepositsByOutcome</code>); every one whose depositor is you is yours. Saved per chain, question, outcome and depositor (about 3 reads, once). The first report deploys the game in the same transaction: no code at the parent block counts as length 0. If the parent-block read fails, fall back to the search below.</li>
 					<li><b>Carried by Watchlist export/import</b> to another device.</li>
-					<li><b>Search only when totals differ</b> (new device, another app, cleared storage): page <code>getDepositsByOutcome(outcome, start, 30)</code>, 2 pages per refresh, cursor saved, stop the moment located deposits add up to your total. Only for the open question; may start while the game runs. A deposit number can be entered and checked with one read; reaching the end unmatched shows “Search again”. Screen 04d.</li>
+					<li><b>Search only when totals differ</b> (new device, another app, cleared storage): page <code>getDepositsByOutcome(outcome, start, 30)</code>, as a <b>foreground job</b>: it runs on its own loop while the screen is open, whether or not Auto-refresh is on, one request in flight, 2 pages per request, pausable, cursor saved, backing off on timeout; it stops the moment located deposits add up to your total. Only for the open question; may start while the game runs. A deposit number can be entered and checked with one read; reaching the end unmatched shows “Search again”. Screen 04d.</li>
 					<li><b>Inherited claims:</b> read your REP in the frozen parent game first; zero → nothing more. Otherwise proofs need every parent entry, so the parent list is read in full once and kept (04c).</li>
 					<li>Located deposits are re-read each refresh; amounts drop to 0 once claimed. Cursors advance only to a block a few behind head, so a reorg can't skip a deposit.</li>
 				</ol>
@@ -216,26 +221,26 @@
 					<table class="stackable">
 						<thead>
 							<tr>
-								<th>Open security pool page + 25 saved items</th>
+								<th>Open security pool page</th>
 								<th class="r">Today</th>
 								<th class="r">Planned (estimate)</th>
 							</tr>
 						</thead>
 						<tbody>
 							<tr>
-								<td>Per new block</td>
+								<td>Per Refresh (or per block with Auto-refresh)</td>
 								<td class="r num">≥ 130 (page only)</td>
 								<td class="r num"><b>≈ 3–5</b></td>
 							</tr>
 							<tr>
-								<td>Live sub-calls</td>
+								<td>Sub-calls per Refresh</td>
 								<td class="r">—</td>
-								<td class="r num">≈ 60 + 25 × (2 + outcomes); ≤ 185 for binary (≈ 3 M gas)</td>
+								<td class="r num">≈ 60 on a page; on the Watchlist 25 × (2 + outcomes) per chunk of 25 saved items (≈ 3 M gas)</td>
 							</tr>
 							<tr>
-								<td>Ceiling per refresh</td>
+								<td>Ceiling per Refresh</td>
 								<td class="r">none</td>
-								<td class="r num">1 block + 2 multicalls + ≤ 2 deposit pages + ≤ 1 verification (20)</td>
+								<td class="r num">1 block + 2 multicalls + ≤ 1 verification = ≤ 4 requests; deposit search and claim preparation run as separate foreground jobs</td>
 							</tr>
 						</tbody>
 					</table>
@@ -265,11 +270,11 @@
 							</tr>
 							<tr>
 								<td>Flood a starred game with deposits</td>
-								<td>Each deposit is at least the start bond and a side caps at the threshold; only matters for a search on a new device: more refreshes, never more per refresh; saved positions need no search</td>
+								<td>Each deposit is at least the start bond and a side caps at the threshold; only matters for a search on a new device: a longer search job, never more per request; saved positions need no search</td>
 							</tr>
 							<tr>
 								<td>You star many items</td>
-								<td>Your own choice: 25 live, the rest rotate and show how far behind they are</td>
+								<td>Your own choice: Refresh on the Watchlist reads them in chunks of 25 (“Refreshing… 2 of 4”)</td>
 							</tr>
 						</tbody>
 					</table>

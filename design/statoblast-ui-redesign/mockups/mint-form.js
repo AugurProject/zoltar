@@ -1,10 +1,8 @@
-// One shared mint form, used on the question page (03) and in the security pool Questions tab (09).
+// The mint form on the question Shares tab (03), the only mint form in the app.
 ;(() => {
 	for (const target of document.querySelectorAll('.mint-form')) {
-		const withQuestion = target.dataset.question === '1'
 		target.outerHTML = `
 		<div class="stack">
-			${withQuestion ? `<div class="field"><label>Question</label><div class="input select" style="font-family: var(--sans)">Will this resolve? (security pool question 1)</div><span class="hint"><a>Find by ID</a></span></div>` : ''}
 			<div class="glyph" aria-label="2.50 WETH mints 2.50 Yes, 2.50 No and 2.50 Invalid shares"><span class="tok">2.50 WETH</span><span class="op">→</span><span class="tok y">2.50 Yes</span><span class="op">+</span><span class="tok n">2.50 No</span><span class="op">+</span><span class="tok i">2.50 Invalid</span></div>
 			<div class="grid-2">
 				<div class="field"><label>Collateral</label><div class="input focus">2.50<span class="unit">WETH, max 6.14</span></div></div>

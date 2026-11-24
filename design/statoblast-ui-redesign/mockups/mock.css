@@ -2734,3 +2734,24 @@ aside .gauge-legend.sr {
 	overflow: visible;
 	white-space: normal;
 }
+
+.show-m {
+	display: none;
+}
+@media (max-width: 640px) {
+	.show-m {
+		display: inline;
+	}
+	.anchor-nav a small {
+		display: inline;
+	}
+}
+/* Capital on narrow screens: position summary first, then the section row, then sections */
+@media (max-width: 900px) {
+	.capital-grid > aside {
+		order: -1;
+	}
+	.capital-grid > .anchor-nav {
+		order: -2;
+	}
+}
