@@ -46,7 +46,7 @@
 						</tr>
 						<tr>
 							<td><b>Countdowns and deadlines</b></td>
-							<td>Counted on the device from the last block's timestamp plus elapsed time (not the raw device clock). When a deadline passes, its derived state turns neutral (“Ended · checking…”) and the page is re-read once</td>
+							<td>Counted on the device from the last block's timestamp plus elapsed time (not the raw device clock). When a deadline passes, its derived state turns neutral (“Ended · checking…”) and the page is re-read once; if that read fails or is still before the deadline, it retries with backoff, then shows “Try again”</td>
 							<td>0</td>
 						</tr>
 						<tr>
