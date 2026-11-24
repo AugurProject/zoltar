@@ -44,6 +44,7 @@ export const depositingHealth = 'Depositing and saving target…'
 export const healthDepositDetails = 'Add REP while saving the target'
 export const healthDepositAmount = 'REP to add'
 export const healthDepositHint = 'One transaction adds REP and saves the target. Your commitment does not increase.'
+export const healthDepositReview = 'Your commitment stays the same. Raising the target for an active position requires enough REP, or both changes revert.'
 export const targetCapacity = 'Capacity at chosen target'
 export const targetShortfall = 'Additional REP for current commitment'
 export const useTargetCapacity = 'Use target capacity'
@@ -106,12 +107,11 @@ export const reductionWithCure = (covered: string, keepsCoveredCommitment: boole
 	if (keepsCoveredCommitment) return `${coverage} The reduction can happen at once if there is enough free capacity. Any remainder goes in queue.`
 	return `${coverage} The uncovered part can be removed at once if there is enough free capacity. The rest waits in queue.`
 }
-export const requestReductionReview = (positionId: bigint, amount: string, queued: boolean, releasesPledgedRep: boolean, queue: string) => {
-	const action = queued ? `Resubmit the reduction for position ${positionId} to its saved commitment of ${amount}.` : `Reduce position ${positionId} to ${amount} commitment.`
+export const requestReductionReview = (positionId: bigint, releasesPledgedRep: boolean, queue: string) => {
 	const consequence = releasesPledgedRep ? 'Reducing to zero releases its pledged REP.' : 'REP stays pledged to the remaining commitment.'
-	return `${action} ${consequence} ${queue} The request cannot be changed or cancelled. Your saved health target stays unchanged.`
+	return `Position ${positionId}. ${consequence} ${queue} The request cannot be changed or cancelled. Your saved health target stays unchanged.`
 }
-export const releaseReductionReview = (amount: string) => `Keep ${amount} committed. Earlier requests keep their place in queue. ${retirementPreviewHint}`
+export const releaseReductionReview = `Earlier requests keep their place in queue. ${retirementPreviewHint}`
 export const rewardVesting = 'Reward vesting (hours)'
 export const outcomeRate = 'Minimum collateral reserved per share'
 export const outcomeRateHint = 'Holding fees stop before reducing backing below this rate. Fixed at creation; fork recovery can pay less.'
@@ -149,5 +149,6 @@ export const estimatedWithdrawal = 'Estimated withdrawable REP'
 export const queueCapacity = 'Free-capacity marker'
 
 export const releaseReduction = 'Release reduction'
+export const completedReductionCommitment = 'Commitment when reduction completes'
 export const waitingForFreeCapacity = 'Waiting for free capacity'
 export const retryRelease = 'Retry release'

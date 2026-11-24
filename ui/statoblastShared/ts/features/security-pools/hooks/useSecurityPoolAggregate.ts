@@ -1,5 +1,4 @@
-import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance, formatRoundedCurrencyBalance, formatUnitSuffix } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import { encodeFunctionData, formatEther, formatUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
@@ -55,6 +54,16 @@ async function readAuthorizationProof(snapshot: SecurityPoolCapitalSnapshot, rep
 	const exposure = totalCommitment > snapshot.demandAttoEth ? totalCommitment : snapshot.demandAttoEth
 	const [price] = await client.readContract({ address: snapshot.priceFeed, abi: proofAbi, functionName: 'reportAuthorization', args: [reportId, exposure], blockNumber: snapshot.blockNumber })
 	return price
+}
+
+function capitalComparison(label: string, before: bigint, after: bigint, units: number, symbol: string) {
+	const first = formatCurrencyBalance(before, units)
+	const last = formatCurrencyBalance(after, units)
+	return { label, value: `${first}${symbol === '%' ? '%' : ''} → ${last}${formatUnitSuffix(symbol)}` }
+}
+
+function commitmentComparison(collateral: { decimals: number; symbol: string }, label: string, before: bigint, after: bigint) {
+	return capitalComparison(label, before, after, collateral.decimals, collateral.symbol)
 }
 
 export function useSecurityPoolAggregate(
@@ -168,7 +177,14 @@ export function useSecurityPoolAggregate(
 		if (current === undefined || accountAddress === undefined || accountAddress.toLowerCase() !== (current.auctionVault?.bidder ?? current.owner).toLowerCase()) throw new Error('Connect the selected owner account.')
 		return current
 	}
-	const run = (action: string, title: string, reason: string | undefined, build: (selected: NonNullable<typeof snapshot>) => SecurityPoolTransaction, validate?: (latest: SecurityPoolCapitalSnapshot) => void | Promise<void>) =>
+	const run = (
+		action: string,
+		title: string,
+		reason: string | undefined,
+		build: (selected: NonNullable<typeof snapshot>) => SecurityPoolTransaction,
+		validate?: (latest: SecurityPoolCapitalSnapshot) => void | Promise<void>,
+		compare?: (latest: SecurityPoolCapitalSnapshot, collateral: NonNullable<typeof snapshot>['collateral']) => readonly { label: string; value: string }[],
+	) =>
 		actions.runSecurityPoolAction(action, title, () => {
 			if (reason !== undefined) throw new Error(reason)
 			const selected = requireSnapshot()
@@ -179,11 +195,14 @@ export function useSecurityPoolAggregate(
 				readReviewRows: () => {
 					const latest = freshReviewSnapshot
 					if (latest === undefined) return []
-					const comparison = (label: string, before: bigint, after: bigint, units: number, symbol: string) => ({ label, value: `${formatCurrencyBalance(before, units)} → ${formatCurrencyBalance(after, units)} ${symbol}` })
-					if (action === 'depositSecurityPoolRep' && depositAttoRep !== undefined) return [comparison(capitalCopy.principalRep, latest.ownerPrincipalAttoRep, latest.ownerPrincipalAttoRep + depositAttoRep, 18, 'REP')]
-					if (action === 'withdrawSecurityPoolRep' && withdrawAttoRep !== undefined) return [comparison(capitalCopy.principalRep, latest.ownerPrincipalAttoRep, latest.ownerPrincipalAttoRep - withdrawAttoRep, 18, 'REP')]
-					if (action === 'authorizeSecurityPoolCommitment' && commitmentAttoEth !== undefined) return [comparison(capitalCopy.commitment, latest.ownerCommitmentAttoEth, commitmentAttoEth, selected.collateral.decimals, selected.collateral.symbol)]
-					if (action === 'setSecurityPoolHealth' && healthBps !== undefined) return [comparison(capitalCopy.savedHealth, latest.ownerAccount.targetHealthFactorBps || 10_000n, healthBps, 2, '%')]
+					if (compare !== undefined) return compare(latest, selected.collateral)
+					if (action === 'depositSecurityPoolRep' && depositAttoRep !== undefined) return [capitalComparison(capitalCopy.principalRep, latest.ownerPrincipalAttoRep, latest.ownerPrincipalAttoRep + depositAttoRep, 18, 'REP')]
+					if (action === 'withdrawSecurityPoolRep' && withdrawAttoRep !== undefined) return [capitalComparison(capitalCopy.principalRep, latest.ownerPrincipalAttoRep, latest.ownerPrincipalAttoRep - withdrawAttoRep, 18, 'REP')]
+					if (action === 'authorizeSecurityPoolCommitment' && commitmentAttoEth !== undefined) return [commitmentComparison(selected.collateral, capitalCopy.commitment, latest.ownerCommitmentAttoEth, commitmentAttoEth)]
+					if (action === 'setSecurityPoolHealth' && healthBps !== undefined) return [capitalComparison(capitalCopy.savedHealth, latest.ownerAccount.targetHealthFactorBps || 10_000n, healthBps, 2, '%')]
+					if (action === 'depositSecurityPoolHealthRep' && healthDepositAttoRep !== undefined && healthBps !== undefined) {
+						return [capitalComparison(capitalCopy.principalRep, latest.ownerPrincipalAttoRep, latest.ownerPrincipalAttoRep + healthDepositAttoRep, 18, 'REP'), capitalComparison(capitalCopy.savedHealth, latest.ownerAccount.targetHealthFactorBps || 10_000n, healthBps, 2, '%')]
+					}
 					return []
 				},
 				validateBeforeSubmit: async () => {
@@ -340,7 +359,7 @@ export function useSecurityPoolAggregate(
 						...(selected.auctionVault === undefined
 							? buildSecurityPoolCapitalDepositAndSetHealthRequest({ ...base(selected), amountAttoRep: healthDepositAttoRep, targetHealthFactorBps: healthBps })
 							: buildSecurityPoolAuctionVaultDepositRequest({ bidder: selected.auctionVault.bidder, vault: selected.owner, capitalLedger: selected.capitalLedger, amountAttoRep: healthDepositAttoRep, targetHealthFactorBps: healthBps })),
-						reviewDescription: `Deposit ${formatCurrencyBalance(healthDepositAttoRep)} REP and save a ${formatCurrencyBalance(healthBps, 2)}% target together. Your commitment does not increase. Raising a live target requires sufficient backing; if that check fails, both changes revert.`,
+						reviewDescription: capitalCopy.healthDepositReview,
 					}
 				},
 				async latest => {
@@ -391,7 +410,7 @@ export function useSecurityPoolAggregate(
 					if (pendingRetirement === undefined) throw new Error('No reduction in queue.')
 					return {
 						...buildSecurityPoolCapitalServeRetirementRequest({ ...base(selected), positionId: pendingRetirement.id }),
-						reviewDescription: capitalCopy.releaseReductionReview(`${formatCurrencyBalance(pendingRetirement.remainingCommitment, selected.collateral.decimals)} ${selected.collateral.symbol}`),
+						reviewDescription: capitalCopy.releaseReductionReview,
 					}
 				},
 				latest => {
@@ -401,6 +420,10 @@ export function useSecurityPoolAggregate(
 					const current = latest.positions.find(position => position.id === pendingRetirement.id && position.commitment > 0n && position.batch !== 0n)
 					if (current === undefined || current.remainingCommitment !== pendingRetirement.remainingCommitment) throw new Error('Commitment reduction changed. Review the transaction again.')
 					if (pendingRetirement.retirementPreview?.status === 'ready' && current.retirementPreview?.status !== 'ready') throw new Error('Free capacity changed. Refresh the preview and review the transaction again.')
+				},
+				(latest, collateral) => {
+					const current = latest.positions.find(position => position.id === pendingRetirement?.id)
+					return current === undefined ? [] : [commitmentComparison(collateral, capitalCopy.commitment, current.commitment, current.remainingCommitment)]
 				},
 			),
 		retire: (id: bigint, requestedCommitment = remainingCommitment) =>
@@ -415,15 +438,18 @@ export function useSecurityPoolAggregate(
 					const covered = position === undefined ? undefined : coveredUnderwaterCommitment(selected, position)
 					const queuesWithoutCure = position !== undefined && covered !== undefined && position.commitment - covered < selected.economics.minimumCommitmentAttoEth
 					const queue = retirementQueueDescription(queuesWithoutCure ? undefined : covered, requestedCommitment, selected.collateral)
-					const amount = `${formatCurrencyBalance(requestedCommitment, selected.collateral.decimals)} ${selected.collateral.symbol}`
 					return {
 						...buildSecurityPoolCapitalSetCommitmentRequest({ ...base(selected), commitment: requestedCommitment }),
-						reviewDescription: capitalCopy.requestReductionReview(id, amount, position !== undefined && position.batch !== 0n, requestedCommitment === 0n, queue),
+						reviewDescription: capitalCopy.requestReductionReview(id, requestedCommitment === 0n, queue),
 					}
 				},
 				latest => {
 					const reason = capitalRetirementReason(latest, id, requestedCommitment)
 					if (reason !== undefined) throw new Error(reason)
+				},
+				(latest, collateral) => {
+					const current = latest.positions.find(position => position.id === id)
+					return current === undefined || requestedCommitment === undefined ? [] : [commitmentComparison(collateral, capitalCopy.completedReductionCommitment, current.commitment, requestedCommitment)]
 				},
 			),
 	}

@@ -160,7 +160,12 @@ test('an atomic target raise previews the collateral shortfall and keeps approva
 	const request = requests[1]
 	if (request === undefined) throw new Error('Missing atomic target request')
 	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'depositAndSetHealthTarget', args: [(3n * unit) / 2n, 15_000n] })
+	transport.setSnapshot({ ...funded, ownerPrincipalAttoRep: 32n * unit, positions: funded.positions.map(position => ({ ...position, rep: 32n * unit })), ownerAccount: { ...funded.ownerAccount, targetHealthFactorBps: 13_000n } })
 	await request.validateBeforeSubmit?.()
+	expect(request.readReviewRows?.()).toEqual([
+		{ label: 'Your REP deposited', value: '32 → 33.5 REP' },
+		{ label: 'Health target', value: '130% → 150%' },
+	])
 	transport.setSnapshot({ ...funded, allowanceAttoRep: unit })
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Approve REP')
 	transport.setSnapshot({ ...funded, priceValid: false })
@@ -179,6 +184,8 @@ test('target-sized retirement sends a fixed residual without silently saving an 
 	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'setCommitment', args: [7_142_857_142_857_142_857n] })
 	expect(request.reviewDescription).toContain('saved health target stays unchanged')
 	expect(request.reviewDescription).toContain('cannot be changed or cancelled')
+	await request.validateBeforeSubmit?.()
+	expect(request.readReviewRows?.()).toEqual([{ label: 'Commitment when reduction completes', value: '10 → 7.142857142857142857 WETH' }])
 })
 function underwaterSnapshot() {
 	const snapshot = capitalSnapshot()
@@ -220,8 +227,11 @@ test('the retirement review states six-decimal collateral amounts in collateral 
 	const { hook, requests } = await setup(underwaterUsdc)
 	await act(() => hook.state().setRemainingCommitmentAmount('2.5'))
 	await act(() => hook.state().retire(1n))
-	expect(requests[0]?.reviewDescription).toContain('Reduce position 1 to 2.5 USDC commitment.')
-	expect(requests[0]?.reviewDescription).toContain('Your REP covers only 7.1428 USDC at the current price.')
+	const request = requests[0]
+	if (request === undefined) throw new Error('Missing reduction request')
+	await request.validateBeforeSubmit?.()
+	expect(request.readReviewRows?.()).toEqual([{ label: 'Commitment when reduction completes', value: '10 → 2.5 USDC' }])
+	expect(request.reviewDescription).toContain('Your REP covers only 7.1428 USDC at the current price.')
 })
 test('the retirement review claims no queued rest when the kept commitment is at least the covered amount', async () => {
 	const { hook, requests } = await setup(underwaterSnapshot())
@@ -354,6 +364,10 @@ test('a retirement reviewed as ready is stopped if its capacity disappears befor
 	const request = requests[0]
 	if (request === undefined) throw new Error('Missing retirement request')
 	await request.validateBeforeSubmit?.()
+	expect(request.readReviewRows?.()).toEqual([{ label: 'Your commitment', value: '10 → 5 WETH' }])
+	transport.setSnapshot({ ...snapshot, positions: snapshot.positions.map(position => ({ ...position, commitment: 8n * unit, retirementPreview: { ...preview, commitmentReduction: 3n * unit } })) })
+	await request.validateBeforeSubmit?.()
+	expect(request.readReviewRows?.()).toEqual([{ label: 'Your commitment', value: '8 → 5 WETH' }])
 	transport.setSnapshot({ ...snapshot, demandAttoEth: 20n * unit, positions: snapshot.positions.map(position => ({ ...position, retirementPreview: { ...preview, status: 'insufficient-spare', spareCommitment: 0n } })) })
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Free capacity changed')
 })
