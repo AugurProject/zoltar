@@ -24,6 +24,7 @@ import { captureReportingDeposits, reportingDepositStore } from './reportingDepo
 import { readLocatedReportingDeposits } from './reportingDepositSearch.js'
 import { getRuntimeNetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
+import { readWinningClaimReview } from './reportingClaimReview.js'
 
 type ReportingBootstrapReadResult = {
 	questionId: bigint
@@ -520,14 +521,34 @@ export async function withdrawEscalationFromQuestionLedger(client: WriteClient, 
 	const universeId = await readQuestionLedgerUniverseId(client, questionLedgerAddress)
 	let reviewTitle = transactionCopy.settleEscalationDeposits
 	if (claimAmountAttoRep !== undefined) reviewTitle = claimAmountAttoRep === 0n ? reportingCopy.clearDeposits(getEscalationSideLabel(outcome)) : reportingCopy.claimDeposits(getEscalationSideLabel(outcome), formatCurrencyBalance(claimAmountAttoRep))
-	const hash = await writeContractAndWait(client, () => ({
+	const callParams = {
 		address: questionLedgerAddress,
 		abi: statoblast_QuestionLedger_QuestionLedger.abi,
 		functionName: 'withdrawFromEscalationGame',
 		reviewTitle,
 		...(claimAmountAttoRep === 0n ? { reviewDescription: reportingCopy.clearLosingDepositsReviewDescription } : {}),
 		args: [getReportingOutcomeValue(outcome), depositIndexes],
-	}))
+	} as const
+	if (claimAmountAttoRep !== undefined && claimAmountAttoRep > 0n) {
+		let rows: readonly { label: string; value: string }[] = []
+		client.onTransactionPlan?.([
+			{
+				...callParams,
+				contractAddress: questionLedgerAddress,
+				readReviewRows: () => rows,
+				validateBeforeSubmit: async () => {
+					const { wallet, payout } = await readWinningClaimReview(client, questionLedgerAddress, outcome, depositIndexes)
+					if (payout !== claimAmountAttoRep) throw new Error(reportingCopy.claimPayoutChangedSinceReview)
+					const rep = (amount: bigint) => formatCurrencyBalanceWithUnit(amount, commonCopy.rep)
+					rows = [
+						{ label: reportingCopy.claimPayoutReviewLabel, value: rep(payout) },
+						{ label: reportingCopy.walletRepReviewLabel, value: `${rep(wallet)} → ${rep(wallet + payout)}` },
+					]
+				},
+			},
+		])
+	}
+	const hash = await writeContractAndWait(client, () => callParams)
 	return {
 		action: 'withdrawEscalation',
 		hash,

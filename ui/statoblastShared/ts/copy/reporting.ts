@@ -232,5 +232,7 @@ export const attritionBeginsAfter = (duration: string) => `${duration} until att
 
 export const readyToFork = 'Ready to fork'
 export const walletRepReviewLabel = 'Wallet REP'
+export const claimPayoutReviewLabel = 'Claim payout'
+export const claimPayoutChangedSinceReview = 'The claim payout changed. Refresh and review the claim again.'
 export const stakedRepReviewLabel = (outcome: string) => `Your REP staked on ${outcome}`
 export const reportReviewInsufficientRep = 'Wallet REP changed. Add enough REP for this report and try again.'

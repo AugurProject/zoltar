@@ -6,7 +6,7 @@ import { concatHex, decodeFunctionData, encodeAbiParameters, getAddress, keccak2
 import { approveOwnForkAdmission, approveReportingRep, forkWithOwnEscalationGame, loadOwnForkAdmission, loadReportingDetails, reportOutcomeInQuestionLedger, withdrawEscalationFromQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
 import { buildForkCarriedEscalationProofs, withdrawForkedEscalationDeposits } from '@zoltar/ui-statoblast-shared/protocol/reportingCarryState.js'
 import { statoblast_QuestionLedger_QuestionLedger, statoblast_factories_EscalationGameFactory_EscalationGameFactory } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
-import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
+import type { TransactionPlanStep, TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import type { EscalationSide } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { asWriteClient, createBlockWithTimestamp, createMockWriteClient, createMulticallStub, createReadContractStub, getContractFunctionName, mockTransactionHash } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
@@ -462,6 +462,61 @@ describe('reporting protocol client', () => {
 		expect(previews[0]?.reviewDescription).toBe('Returns no REP. Losing deposits need no action after resolution.')
 		await withdrawEscalationFromQuestionLedger(writeClient, questionLedgerAddress, 'yes', [0n], 4n)
 		expect(previews[1]?.reviewDescription).toBeUndefined()
+	})
+
+	test('a winning claim reviews the selected deposits and wallet REP at the same block', async () => {
+		const rep = 10n ** 18n
+		const owner = getAddress('0x00000000000000000000000000000000000000a3')
+		const client = asWriteClient(createMockWriteClient(() => undefined))
+		client.readContract = createReadContractStub(request => {
+			if (request.functionName === 'universeId') return 9n
+			throw new Error(`Unexpected read ${request.functionName}`)
+		})
+		client.account = testDouble<typeof client.account>({ address: owner })
+		client.getBlockNumber = async () => 11n
+		client.getBlock = async () => ({ ...createBlockWithTimestamp(1n), number: 11n, hash: keccak256('0x0b') })
+		let depositors = [owner, owner]
+		let depositAmount = 2n * rep
+		let wallet = 12n * rep
+		client.multicall = createMulticallStub(async request => {
+			expect(request.blockNumber).toBe(11n)
+			return request.contracts.map(contract => {
+				const name = getContractFunctionName(contract)
+				if (name === 'escalationGame') return escalationGameAddress
+				if (name === 'systemState') return 0n
+				if (name === 'repToken') return repTokenAddress
+				if (name === 'getQuestionOutcome') return 1n
+				if (name === 'balanceOf') return wallet
+				if (name === 'getOutcomeState') return { balanceAttoRep: 5n * rep }
+				if (name === 'getBindingCapitalAttoRep') return 0n
+				if (name === 'nonDecisionThresholdAttoRep' || name === 'settlementForkThresholdAttoRep') return 10n * rep
+				if (name === 'forkContinuation' || name === 'hasReachedNonDecision') return false
+				if (name === 'getDepositsByOutcome') {
+					const index = contract.args?.[1]
+					expect(contract.args?.[2]).toBe(1n)
+					expect(index === 2n || index === 4n).toBe(true)
+					return [{ depositor: depositors[index === 2n ? 0 : 1], amountAttoRep: depositAmount, cumulativeAmountAttoRep: (index === 2n ? 1n : 2n) * depositAmount }]
+				}
+				throw new Error(`Unexpected claim review read: ${name}`)
+			})
+		})
+		const plans: (readonly TransactionPlanStep[])[] = []
+		client.onTransactionPlan = plan => plans.push(plan)
+		await withdrawEscalationFromQuestionLedger(client, questionLedgerAddress, 'yes', [2n, 4n], 4n * rep)
+		const step = plans[0]?.[0]
+		if (step?.validateBeforeSubmit === undefined) throw new Error('Missing claim review check')
+		await step.validateBeforeSubmit()
+		expect(step.readReviewRows?.()).toEqual([
+			{ label: 'Claim payout', value: '4\u00a0REP' },
+			{ label: 'Wallet REP', value: '12\u00a0REP → 16\u00a0REP' },
+		])
+		wallet = 20n * rep
+		await step.validateBeforeSubmit()
+		expect(step.readReviewRows?.()[1]?.value).toBe('20\u00a0REP → 24\u00a0REP')
+		depositAmount = rep
+		await expect(step.validateBeforeSubmit()).rejects.toThrow('The claim payout changed.')
+		depositors = [owner, vaultAddress]
+		await expect(step.validateBeforeSubmit()).rejects.toThrow('Deposit #4 is no longer available to claim on Yes.')
 	})
 
 	test('reportOutcomeInQuestionLedger uses wallet-funded deposits for fork continuations', async () => {
