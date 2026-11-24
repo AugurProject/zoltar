@@ -105,7 +105,7 @@ test('one irreversible choice has an explicit review and rechecks the strict nat
 	if (request === undefined) throw new Error('Choice request missing')
 	expect(request.to).toBe(modules.fork)
 	expect(decodeFunctionData({ abi: parseAbi(['function choose(uint248 source,uint256 outcome)']), data: request.data })).toEqual({ functionName: 'choose', args: [0n, 1n] })
-	expect(request.reviewDescription).toContain('Irreversibly')
+	expect(request.reviewDescription).toContain('This choice is irreversible.')
 	source.setSnapshot({ ...snapshot, timestamp: 2_000n })
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('no longer available')
 })
