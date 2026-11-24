@@ -6,6 +6,7 @@ import * as transactionCopy from '../copy/transaction.js'
 import { AddressValue } from './AddressValue.js'
 import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 import { TransactionObjectContext } from './TransactionObjectContext.js'
+import { TransactionDetailText } from './TransactionPresentationNotice.js'
 import type { ActionAvailability, GlobalTransactionRow } from '../types/components.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
@@ -17,21 +18,20 @@ import { isTransactionStepInFlight, transactionSteps } from '../transactions/tra
 function TransactionStepReview({ contractAddress, contractLabel, description, rows = [] }: { contractAddress: Address | undefined; contractLabel: string | undefined; description: string | undefined; rows?: GlobalTransactionRow[] | undefined }) {
 	return (
 		<>
-			{description === undefined ? undefined : <p className='detail'>{description}</p>}
-			<TransactionObjectContext items={rows} />
+			{description === undefined ? undefined : (
+				<p className='detail'>
+					<TransactionDetailText value={description} longAbbreviation />
+				</p>
+			)}
+			<TransactionObjectContext items={rows.map(row => (typeof row.value === 'string' ? { ...row, value: <TransactionDetailText value={row.value} longAbbreviation /> } : row))} />
 			{contractAddress === undefined ? undefined : (
 				<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>
 					<dl className='global-transaction-notice-rows'>
-						<div className='global-transaction-notice-row'>
+						<div className='global-transaction-notice-row transaction-review-contract-row'>
 							<dt>{transactionCopy.contract}</dt>
 							<dd>
-								{contractLabel === undefined ? (
-									<AddressValue address={contractAddress} />
-								) : (
-									<>
-										{contractLabel} <AddressValue address={contractAddress} />
-									</>
-								)}
+								{contractLabel === undefined ? undefined : <span>{contractLabel} </span>}
+								<AddressValue address={contractAddress} longAbbreviation />
 							</dd>
 						</div>
 					</dl>

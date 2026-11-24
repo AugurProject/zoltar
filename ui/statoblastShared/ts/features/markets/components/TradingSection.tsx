@@ -265,8 +265,8 @@ export function TradingSection({
 			? []
 			: [
 					{ label: commonCopy.question, value: selectedPool.marketDetails.title },
-					{ identityKey: 'security-pool', label: commonCopy.questionLedgerAddress, value: <AddressValue longAbbreviation address={selectedPool.questionLedgerAddress} /> },
 					{ identityKey: 'outcome', label: commonCopy.outcome, value: outcome },
+					{ identityKey: 'security-pool', label: commonCopy.questionLedgerAddress, value: <AddressValue longAbbreviation address={selectedPool.questionLedgerAddress} /> },
 				]
 	const toggleTargetOutcomeIndex = (outcomeIndex: bigint) => {
 		if (selectedTargetOutcomeIndexSet.has(outcomeIndex.toString())) {

@@ -229,7 +229,8 @@ test('explains a step without token funding using its description, the operation
 	const dom = installDomEnvironment()
 	const controller = createTransactionStepController()
 	const contractAddress = '0x00000000000000000000000000000000000000aa'
-	const description = 'Create the binary question and deploy its question ledger in one transaction.'
+	const recipient = '0x1234567890abcdef1234567890abcdef12345678'
+	const description = `Create the binary question and deploy its question ledger for ${recipient} in one transaction.`
 	controller.setPlan([{ title: 'Create question and question ledger', description, contractAddress, contractLabel: 'Multicall3', spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
 	const review = controller.review()
 	const rendered = await renderIntoDocument(
@@ -249,7 +250,11 @@ test('explains a step without token funding using its description, the operation
 	try {
 		const queries = within(rendered.container)
 		expect(rendered.container.querySelector('.modal-header h3')?.textContent).toBe('Create question and question ledger')
-		expect(queries.getByText(description)).not.toBeNull()
+		const explanation = rendered.container.querySelector('.transaction-step-content > .detail')
+		expect(explanation?.textContent).toContain('Create the binary question and deploy its question ledger for ')
+		expect(explanation?.querySelector('.address-value-full')?.textContent).toBe(recipient)
+		expect(explanation?.querySelector('.address-value-abbreviated')?.textContent).toBe('0x1234567890…ef12345678')
+		expect(queries.getByRole('button', { name: `Copy address ${recipient}` })).not.toBeNull()
 		expect(queries.getByText('Question ID')).not.toBeNull()
 		expect(queries.getByText('123')).not.toBeNull()
 		expect(queries.getByText('Statoblast security multiplier')).not.toBeNull()
@@ -259,6 +264,7 @@ test('explains a step without token funding using its description, the operation
 		expect(rendered.container.querySelector('details .address-value')?.getAttribute('title')).toBe(contractAddress)
 		expect(rendered.container.querySelector('details dd')?.textContent).toContain(`Multicall3 ${contractAddress}`)
 		expect(rendered.container.querySelector('details dd .address-value-full')?.textContent).toBe(contractAddress)
+		expect([...rendered.container.querySelectorAll('details .address-value-abbreviated')].map(form => form.textContent)).toEqual([`${contractAddress.slice(0, 12)}…${contractAddress.slice(-10)}`])
 		expect(queries.getByRole('button', { name: `Copy address ${contractAddress}` })).not.toBeNull()
 		expect(rendered.container.querySelector(`details a[href="https://sepolia.etherscan.io/address/${contractAddress}"]`)).not.toBeNull()
 		await act(() => {

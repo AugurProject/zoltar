@@ -4494,6 +4494,16 @@ span.rep-price-status.stale,
 	display: block;
 }
 
+.statoblast-watchlist-table .address-value {
+	font-size: clamp(var(--font-label), 4vw, var(--font-caption));
+}
+
+@media (min-width: 64rem) {
+	.statoblast-watchlist-table td:has(> .address-copy-control) {
+		min-inline-size: 16rem;
+	}
+}
+
 .statoblast-watchlist-question-title {
 	overflow-wrap: anywhere;
 }
@@ -4579,6 +4589,22 @@ span.rep-price-status.stale,
 		content: attr(data-label);
 		display: block;
 		font-size: var(--font-caption);
+	}
+}
+
+@media (width < 40rem) {
+	.statoblast-watchlist-table tr:has(td:nth-child(2) > .address-copy-control) td:first-child {
+		grid-row: 5;
+		align-self: center;
+	}
+
+	.statoblast-watchlist-table td:nth-child(2):has(> .address-copy-control) {
+		grid-column: 1 / -1;
+	}
+
+	.statoblast-watchlist-table tr:has(td:nth-child(2) > .address-copy-control) td:last-child {
+		grid-column: 1;
+		grid-row: 5;
 	}
 }
 
@@ -4774,6 +4800,16 @@ span.rep-price-status.stale,
 	grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
 }
 
+@media (width < 40rem) {
+	:root[data-product="statoblast"] .transaction-object-context:has(.address-value-long-abbreviation) {
+		padding-inline: var(--space-2);
+	}
+
+	:root[data-product="statoblast"] .transaction-object-context .address-value:has(.address-value-long-abbreviation) {
+		font-size: clamp(var(--font-label), 4vw, var(--font-caption));
+	}
+}
+
 :root[data-product="statoblast"] .app-frame {
 	width: min(84rem, 100%);
 }
@@ -4830,6 +4866,12 @@ span.rep-price-status.stale,
 	margin: 0;
 	min-width: 0;
 	font-size: clamp(1.15rem, 2vw, 1.65rem);
+}
+
+@media (width < 64rem) {
+	.statoblast-pool-identity h1 {
+		font-size: clamp(var(--font-caption), 4.4vw, 1.15rem);
+	}
 }
 
 .statoblast-position-picker {
@@ -5444,7 +5486,17 @@ span.rep-price-status.stale,
 }
 
 .statoblast-liquidation-table thead th:nth-child(2) {
-	width: 25%;
+	width: 27%;
+}
+
+.statoblast-liquidation-table .address-value {
+	font-size: var(--font-caption);
+}
+
+@container (width < 16rem) {
+	.statoblast-liquidation-table .address-value {
+		font-size: var(--font-label);
+	}
 }
 
 .statoblast-liquidation-table thead th:nth-child(5),
