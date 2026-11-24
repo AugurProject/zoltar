@@ -7,17 +7,28 @@ type RiskPositions = {
 	readonly lifecycle?: EventPosition
 }
 
+export const riskHistoryObservationHighWater = async (sql: SQL, chainId: number, poolAddress: string, asOfBlock: string): Promise<string> => {
+	const rows = await sql`
+		SELECT COALESCE(max(id), 0)::text AS max_id
+		FROM entity_state_observations
+		WHERE chain_id = ${chainId} AND entity_type = 'pool' AND entity_identity = ${poolAddress}
+			AND canonical AND block_number <= ${asOfBlock}
+	`
+	return String(rows[0]?.['max_id'] ?? '0')
+}
+
 export const riskHistoryRows = async (
 	sql: SQL,
 	query: {
 		readonly chainId: number
 		readonly poolAddress: string
 		readonly asOfBlock: string
+		readonly observationHighWater: string
 		readonly positions: RiskPositions
 		readonly limit: number
 	},
 ) => {
-	const { chainId, poolAddress, asOfBlock, positions, limit } = query
+	const { chainId, poolAddress, asOfBlock, observationHighWater, positions, limit } = query
 	const [stateSnapshots, accountingSnapshots, lifecycleEvents] = await Promise.all([
 		sql`
 			SELECT observation.*, observation.id::text AS id, observation.indexer_run_id::text AS indexer_run_id,
@@ -38,7 +49,7 @@ export const riskHistoryRows = async (
 			) invalidation ON true
 			WHERE observation.chain_id = ${chainId} AND observation.entity_type = 'pool'
 				AND observation.entity_identity = ${poolAddress} AND observation.canonical
-				AND observation.block_number <= ${asOfBlock}
+				AND observation.block_number <= ${asOfBlock} AND observation.id <= ${observationHighWater}::bigint
 				AND (${positions.state === undefined} OR (observation.block_number, observation.observed_at, observation.id) <
 					(${positions.state?.[0] ?? '0'}::bigint, ${positions.state?.[1] ?? '1970-01-01T00:00:00.000Z'}::timestamptz,
 						${positions.state?.[2] ?? '0'}::bigint))

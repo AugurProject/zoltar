@@ -38,6 +38,33 @@ test('collects older market activity independently from lifecycle evidence', asy
 	expect(requests.some(url => url.searchParams.has('activityCursor'))).toBe(true)
 })
 
+test.each(['report', 'trading'] as const)('loads both %s collections from one initial snapshot', async kind => {
+	const primary = kind === 'report' ? 'rounds' : 'events'
+	const secondary = kind === 'report' ? 'coordinatorDecisions' : 'activity'
+	let requests = 0
+	const data = createOperationsData(
+		async () => {
+			requests++
+			return {
+				chainId: 1,
+				asOf: { ...asOf, blockNumber: String(99 + requests) },
+				data: {
+					[primary]: { items: [{ tx_hash: 'primary' }], hasMore: false },
+					[secondary]: { items: [{ tx_hash: 'secondary' }], hasMore: false },
+				},
+			}
+		},
+		() => '1',
+		() => new URL('http://localhost/operations'),
+	)
+	const response = await data.loadOperationsDetail({ kind, identity: [] }, 0)
+	expect(response.data).toMatchObject({
+		[primary]: { items: [{ tx_hash: 'primary' }] },
+		[secondary]: { items: [{ tx_hash: 'secondary' }] },
+	})
+	expect(requests).toBe(1)
+})
+
 test('rejects a cyclic continuation before requesting the same cursor again', async () => {
 	const { collectCanonicalPages } = await import('../../browser/canonical-pagination.ts')
 	const requested: Array<string | undefined> = []

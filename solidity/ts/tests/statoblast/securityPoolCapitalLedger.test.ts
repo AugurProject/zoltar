@@ -571,7 +571,7 @@ describe('Statoblast: individual shared-custody capital', () => {
 	})
 
 	for (const mode of ['stale', 'unhealthy', 'empty'] as const) {
-		test(`terminal ${mode} fee income preserves eligible frozen earnings and quarantines the rest`, async () => {
+		test(`terminal ${mode} fee income preserves eligible frozen earnings and quarantines the rest (#1574)`, async () => {
 			await deposit(alice, 105n * E)
 			const id = mode === 'empty' ? 0n : await authorize(alice, 100n * E)
 			await price(mode === 'unhealthy' ? 2n * E : E, mode === 'stale' ? 100 : 100_000)
@@ -584,6 +584,19 @@ describe('Statoblast: individual shared-custody capital', () => {
 			await getAnvilWindowEthereum().advanceTime(200n)
 			const forkTime = (await alice.getBlock()).timestamp
 			await writeContractAndWait(alice, () => alice.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'setFork', args: [forkTime] }))
+			if (mode === 'stale') {
+				await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
+				const atFork = await position(id)
+				expect(atFork.repFees).toBeGreaterThan(0n)
+				expect(atFork.repFees).toBeLessThan(86_400n * E)
+				await getAnvilWindowEthereum().advanceTime(600n)
+				await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
+				const stillVesting = await position(id)
+				expect(stillVesting.repFees).toBeGreaterThan(atFork.repFees)
+				expect(stillVesting.repFees).toBeLessThan(86_400n * E)
+				expect(stillVesting.ethFees).toBeGreaterThan(atFork.ethFees)
+				expect(stillVesting.ethFees).toBeLessThan(86_400n * E)
+			}
 			await getAnvilWindowEthereum().advanceTime(86_401n)
 			await writeContractAndWait(keeper, () => keeper.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint' }))
 			const earned = await position(id)

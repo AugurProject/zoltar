@@ -156,7 +156,10 @@ describe('AppStatusNotices', () => {
 		expect(documentQueries.getByText('Active read RPC is the custom RPC URL saved in Settings: https://storage.example/path.')).not.toBeNull()
 	})
 
-	test('warns when a stored read RPC override is ignored', async () => {
+	test.each([
+		['http://storage.example', 'RPC URL must use https:// unless it points to local loopback.'],
+		[undefined, 'RPC URL must be an absolute https:// URL, or http:// for local loopback.'],
+	] as const)('warns when a stored read RPC override is ignored (%s)', async (url, reason) => {
 		const renderedComponent = await renderIntoDocument(
 			h(AppStatusNotices, {
 				errorMessage: undefined,
@@ -165,9 +168,9 @@ describe('AppStatusNotices', () => {
 					blockNumber: undefined,
 					blockTimestamp: undefined,
 					rejectedRpcOverride: {
-						reason: 'RPC URL must use https:// unless it points to local loopback.',
+						reason,
 						source: 'localStorage',
-						url: 'http://storage.example',
+						url,
 					},
 					rpcSource: 'default',
 					rpcUrl: 'https://ethereum.dark.florist',
@@ -182,7 +185,7 @@ describe('AppStatusNotices', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Custom RPC URL ignored')).not.toBeNull()
 		expect(documentQueries.getByText('A custom RPC URL was ignored. The configured fallback is active.')).not.toBeNull()
-		expect(documentQueries.getByText('Ignored the custom RPC URL from Settings (http://storage.example): RPC URL must use https:// unless it points to local loopback. Configured fallback read RPC is https://ethereum.dark.florist.')).not.toBeNull()
+		expect(documentQueries.getByText(`Ignored the custom RPC URL from Settings${url === undefined ? '' : ' (http://storage.example)'}: ${reason} Configured fallback read RPC is https://ethereum.dark.florist.`)).not.toBeNull()
 	})
 
 	test('shows deployment setup and top-level errors without a wrong-network notice', async () => {

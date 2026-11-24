@@ -146,19 +146,20 @@ const expectRecentTakeovers = async ({ database, operationsChainId, oracle }: Op
 
 // Pool risk history paginates per observation and carries the pool's accounting checkpoints.
 const expectRiskHistoryAndSeverity = async ({ database, operationsChainId, oracle }: OperationsContext): Promise<void> => {
-	await database.sql`
+	const addObservation = (source: string, timestamp: string) => database.sql`
 				INSERT INTO entity_state_observations (
 					chain_id, entity_type, entity_identity, block_number, block_hash, block_timestamp,
-					source_method, read_status, read_result, canonical,
+					source_method, observed_at, read_status, read_result, canonical,
 					indexer_run_id, abi_source_hash, application_source_hash, projection_source_hash
 				)
 				SELECT chain_id, entity_type, entity_identity, block_number, block_hash, block_timestamp,
-					'augurscan.pool-risk.cursor-test', read_status, read_result, canonical,
+					${source}, ${timestamp}::timestamptz, read_status, read_result, canonical,
 					indexer_run_id, abi_source_hash, application_source_hash, projection_source_hash
 				FROM entity_state_observations
 				WHERE chain_id = ${operationsChainId} AND entity_type = 'pool' AND entity_identity = ${oracle.toLowerCase()}
 				LIMIT 1
 			`
+	await addObservation('augurscan.pool-risk.cursor-test', '2030-01-01T00:00:00Z')
 	const poolRiskPath = `http://localhost/api/v1/state/risk/pools/${operationsChainId}/${oracle.toLowerCase()}`
 	const firstRiskHistoryResponse = await handleApi(new Request(`${poolRiskPath}?limit=1`), database.sql)
 	if (firstRiskHistoryResponse === undefined) throw new Error('pool risk history did not return a response')
@@ -170,6 +171,7 @@ const expectRiskHistoryAndSeverity = async ({ database, operationsChainId, oracl
 	expect(firstRiskHistory.data.history).not.toHaveProperty('liquidations')
 	expect(firstRiskHistory.data).not.toHaveProperty('approvalEvents')
 	expect(firstRiskHistory.data.history.nextCursor).toBeString()
+	await addObservation('augurscan.pool-risk.late', '2029-01-01T00:00:00Z')
 	const secondRiskHistoryResponse = await handleApi(new Request(`${poolRiskPath}?limit=1&cursor=${encodeURIComponent(firstRiskHistory.data.history.nextCursor)}`), database.sql)
 	expect(secondRiskHistoryResponse?.status).toBe(200)
 	const secondRiskHistory = (await secondRiskHistoryResponse?.json()) as {
@@ -177,6 +179,7 @@ const expectRiskHistoryAndSeverity = async ({ database, operationsChainId, oracl
 	}
 	expect(secondRiskHistory.data.history.stateSnapshots).toHaveLength(1)
 	expect(secondRiskHistory.data.history.stateSnapshots[0]?.id).not.toBe(firstRiskHistory.data.history.stateSnapshots[0]?.id)
+	expect(secondRiskHistory.data.history.stateSnapshots[0]).not.toMatchObject({ source_method: 'augurscan.pool-risk.late' })
 	// The single accounting checkpoint was on the first page and must not repeat.
 	expect(secondRiskHistory.data.history.accountingSnapshots).toEqual([])
 	const riskHistoryGeneration = await database.sql`
@@ -195,6 +198,7 @@ const expectRiskHistoryAndSeverity = async ({ database, operationsChainId, oracl
 	const poolRisk = (await poolRiskResponse.json()) as { data: Record<string, unknown> }
 	// A question pool reports settlement state; capital risk belongs to the security pool.
 	expect(poolRisk.data).toMatchObject({ protocol_state: '1', scanner_severity: 'unavailable' })
+	expect(poolRisk.data).toHaveProperty('history.stateSnapshots', expect.arrayContaining([expect.objectContaining({ source_method: 'augurscan.pool-risk.late' })]))
 	expect(poolRisk.data['scanner_reason']).toContain('shared security pool capital positions')
 }
 

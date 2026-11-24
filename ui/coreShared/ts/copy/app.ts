@@ -37,7 +37,7 @@ export const globalRuntime = 'global runtime'
 export const readRpcOverrideIgnored = 'Custom RPC URL ignored'
 export const localStorage = 'Settings'
 export const pageUrl = 'page URL'
-export const formatReadRpcOverrideIgnoredDetail = (sourceLabel: string, url: string, reason: string, configuredRpcLabel: string, activeRpcUrl: string) => `Ignored the custom RPC URL from ${sourceLabel} (${url}): ${reason} ${configuredRpcLabel} is ${activeRpcUrl}.`
+export const formatReadRpcOverrideIgnoredDetail = (sourceLabel: string, url: string | undefined, reason: string, configuredRpcLabel: string, activeRpcUrl: string) => `Ignored the custom RPC URL from ${sourceLabel}${url === undefined ? '' : ` (${url})`}: ${reason} ${configuredRpcLabel} is ${activeRpcUrl}.`
 export const formatReadRpcOverrideFromUrlDetail = (configuredRpcLabel: string, rpcUrl: string) => `${configuredRpcLabel} came from the page URL: ${rpcUrl}.`
 export const formatReadRpcOverrideActiveDetail = (configuredRpcLabel: string, sourceLabel: string, rpcUrl: string) => `${configuredRpcLabel} came from ${sourceLabel}: ${rpcUrl}.`
 export const formatReadRpcSavedInSettingsDetail = (configuredRpcLabel: string, rpcUrl: string) => `${configuredRpcLabel} is the custom RPC URL saved in Settings: ${rpcUrl}.`

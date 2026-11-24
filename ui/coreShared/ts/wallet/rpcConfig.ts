@@ -19,7 +19,7 @@ type ConfiguredRpcOverrideSource = Exclude<ConfiguredRpcSource, 'default'>
 export type RejectedRpcOverride = {
 	reason: string
 	source: ConfiguredRpcOverrideSource
-	url: string
+	url?: string | undefined
 }
 
 export type ConfiguredRpcConfig = {
@@ -123,7 +123,7 @@ export function saveNetworkRpcUrl(networkId: RpcNetworkId, rpcUrl: string | unde
 	else {
 		const normalizedUrl = rpcUrl.trim()
 		const validationError = getRpcUrlValidationError(normalizedUrl)
-		if (validationError !== undefined) throw new Error(validationError)
+		if (validationError !== undefined) throw new Error(validationError.reason)
 		urls[networkId] = normalizedUrl
 	}
 	storage.setItem(RPC_URLS_STORAGE_KEY, JSON.stringify(urls))
@@ -166,16 +166,17 @@ function getRpcUrlValidationError(url: string) {
 	try {
 		parsedUrl = new URL(url)
 	} catch (error) {
-		if (error instanceof TypeError) return 'RPC URL must be an absolute https:// URL, or http:// for local loopback.'
+		if (error instanceof TypeError) return { reason: 'RPC URL must be an absolute https:// URL, or http:// for local loopback.' }
 		throw error
 	}
 
-	if (parsedUrl.username !== '' || parsedUrl.password !== '') return 'RPC URL must not contain embedded credentials.'
+	const endpoint = parsedUrl.host === '' ? undefined : `${parsedUrl.protocol}//${parsedUrl.host}`
+	if (parsedUrl.username !== '' || parsedUrl.password !== '') return { reason: 'RPC URL must not contain embedded credentials.', url: endpoint }
 
 	if (parsedUrl.protocol === 'https:') return undefined
 	if (parsedUrl.protocol === 'http:' && isLocalHttpRpcHostname(parsedUrl.hostname)) return undefined
-	if (parsedUrl.protocol === 'http:') return 'RPC URL must use https:// unless it points to local loopback.'
-	return 'RPC URL must use https://, or http:// for local loopback.'
+	if (parsedUrl.protocol === 'http:') return { reason: 'RPC URL must use https:// unless it points to local loopback.', url: endpoint }
+	return { reason: 'RPC URL must use https://, or http:// for local loopback.', url: endpoint }
 }
 
 function resolveConfiguredRpcOverride(source: ConfiguredRpcOverrideSource, value: unknown, fallbackRpcUrl: string): ConfiguredRpcConfig | undefined {
@@ -187,9 +188,8 @@ function resolveConfiguredRpcOverride(source: ConfiguredRpcOverrideSource, value
 
 	return {
 		rejectedOverride: {
-			reason: validationError,
+			...validationError,
 			source,
-			url,
 		},
 		source: 'default',
 		url: fallbackRpcUrl,

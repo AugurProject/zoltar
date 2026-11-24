@@ -50,7 +50,7 @@ postgresTest('advances the canonical coverage floor when RPC log history is prun
 				discoveryBlock: 1n,
 				discoveryTxHash: transactionHash,
 			} satisfies ContractMetadata
-			await database.storeBlock(boundaryChainId, indexedBlock('block-one', blockHash('genesis'), [dynamicContract, orphanedContract]), lease)
+			await database.storeBlock(boundaryChainId, indexedBlock('block-one', blockHash('genesis'), [dynamicContract, orphanedContract], 'first orphan log'), lease)
 			await database.rewind(boundaryChainId, -1n, undefined, lease)
 			await database.storeBlock(boundaryChainId, indexedBlock('block-one-replacement', blockHash('genesis'), [dynamicContract]), lease)
 			await database.storeBlock(boundaryChainId, indexedBlock('block-two', blockHash('block-one-replacement'), [replayableContract]), lease)
@@ -108,9 +108,22 @@ postgresTest('advances the canonical coverage floor when RPC log history is prun
 			const forwardBlock = retrievableBlock('retrievable-boundary', new Date('2026-02-11T00:00:00Z'))
 			await database.storeBlock(boundaryChainId, forwardBlock, lease)
 			await database.rewind(boundaryChainId, -1n, undefined, lease)
+			const orphanLogUrl = `http://localhost/api/v1/logs?chainId=${boundaryChainId}&canonical=orphaned&limit=1`
+			const orphanFirst = await handleApi(new Request(orphanLogUrl), database.sql)
+			expect(orphanFirst?.status).toBe(200)
+			const orphanPage = (await orphanFirst?.json()) as { items: Array<{ block_hash: string }>; nextCursor: string }
+			expect(orphanPage.items).toHaveLength(1)
+			expect(orphanPage.nextCursor).toBeString()
+			const orphanNext = await handleApi(new Request(`${orphanLogUrl}&cursor=${encodeURIComponent(orphanPage.nextCursor)}`), database.sql)
+			expect(orphanNext?.status).toBe(200)
+			const nextOrphanPage = (await orphanNext?.json()) as { items: Array<{ block_hash: string }> }
+			expect(nextOrphanPage.items).toHaveLength(1)
+			expect(nextOrphanPage.items[0]?.block_hash).not.toBe(orphanPage.items[0]?.block_hash)
 			expect((await database.contracts(boundaryChainId, lease)).get(discoveredAddress.toLowerCase())).toMatchObject(dynamicContract)
 			expect((await database.contracts(boundaryChainId, lease)).has(orphanOnlyAddress.toLowerCase())).toBe(false)
 			await database.storeBlock(boundaryChainId, retrievableBlock('retrievable-replacement', new Date('2026-02-12T00:00:00Z')), lease)
+			const obsoleteOrphanCursor = await handleApi(new Request(`${orphanLogUrl}&cursor=${encodeURIComponent(orphanPage.nextCursor)}`), database.sql)
+			expect(obsoleteOrphanCursor?.status).toBe(409)
 			expect(
 				await database.seedNetwork(
 					{

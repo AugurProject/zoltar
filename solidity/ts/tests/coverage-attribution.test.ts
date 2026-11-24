@@ -1,7 +1,10 @@
-import { encodeDeployData, encodeFunctionData } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, encodeFunctionData, parseAbi } from '@zoltar/core-shared/evm/ethereum'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 import { test } from 'bun:test'
+import solc from 'solc'
+import { getContractOutput, getRecord, getString } from './contractArtifactHelpers'
 import { getSolidityBytecodeCoverageConfig, isSolidityBytecodeCoverageEnabled } from '../testSupport/coverage/coverageConfig'
-import { flushSolidityBytecodeCoverageForTest, getSoliditySourceLineRangeForTest } from '../testSupport/coverage/traceToSource'
+import { buildCoveragePcToSourceMapForTest, flushSolidityBytecodeCoverageForTest, getSolidityCoverableLineNumbersForTest, getSoliditySourceLineRangeForTest } from '../testSupport/coverage/traceToSource'
 import { deployContract } from '../testSupport/deployContract'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import assert from '../testSupport/simulator/utils/assert'
@@ -19,6 +22,60 @@ test('resolves compiler byte offsets across Unicode comments and CRLF', () => {
 
 if (isSolidityBytecodeCoverageEnabled()) {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
+
+	test('UTF-8 compiler spans identify the same executed lines as ASCII spans (#1526)', async () => {
+		const ethereum = getAnvilWindowEthereum()
+		await setupTestAccounts(ethereum)
+		const client = createWriteClient(ethereum, TEST_ADDRESSES[0])
+		const abi = parseAbi(['function select(bool first) pure returns (uint256)'])
+		const sourcePath = 'OffsetFixture.sol'
+		const body = ['contract OffsetFixture {', '    function select(bool first) external pure returns (uint256) {', '        if (first) {', '            return 777;', '        }', '        return 42;', '    }', '}'].join('\r\n')
+		const executedLines = async (comment: string) => {
+			const source = `// ${comment}\r\n${body}`
+			const output = getRecord(
+				JSON.parse(
+					solc.compile(
+						JSON.stringify({
+							language: 'Solidity',
+							sources: { [sourcePath]: { content: source } },
+							settings: { outputSelection: { '*': { '*': ['evm.bytecode.object', 'evm.deployedBytecode'] } } },
+						}),
+					),
+				),
+				'Expected compiler output',
+			)
+			const contract = getContractOutput(output, sourcePath, 'OffsetFixture')
+			const evm = getRecord(contract['evm'], 'Missing fixture bytecode')
+			const runtime = getRecord(evm['deployedBytecode'], 'Missing fixture runtime bytecode')
+			const creation = getRecord(evm['bytecode'], 'Missing fixture creation bytecode')
+			const sources = getRecord(output['sources'], 'Missing compiler source IDs')
+			const sourceId = getRecord(sources[sourcePath], 'Missing fixture source ID')['id']
+			if (typeof sourceId !== 'number') throw new Error('Invalid fixture source ID')
+			const pcMap = buildCoveragePcToSourceMapForTest(getString(runtime['object'], 'Missing runtime bytecode'), getString(runtime['sourceMap'], 'Missing runtime source map'), [])
+			const address = await deployContract(client, encodeDeployData({ abi, bytecode: `0x${getString(creation['object'], 'Missing creation bytecode')}` }))
+			assert.strictEqual(await client.readContract({ address, abi, functionName: 'select', args: [true] }), 777n)
+			const hash = await writeContractAndWait(client, () => client.sendTransaction({ to: address, data: encodeFunctionData({ abi, functionName: 'select', args: [true] }) }))
+			const trace = await ethereum.request({ method: 'debug_traceTransaction', params: [hash, { disableMemory: true, disableStack: true, disableStorage: true }] })
+			if (!isPlainRecord(trace) || !Array.isArray(trace['structLogs'])) throw new Error('Missing coverage fixture trace')
+			const inventory = getSolidityCoverableLineNumbersForTest(sourcePath, source)
+			const hits = new Map<number, number>()
+			for (const step of trace['structLogs']) {
+				if (!isPlainRecord(step) || typeof step['pc'] !== 'number') throw new Error('Invalid coverage fixture step')
+				const segment = pcMap.get(step['pc'])
+				if (segment?.sourceIndex !== sourceId) continue
+				const range = getSoliditySourceLineRangeForTest(source, segment.sourceOffset, segment.sourceLength)
+				if (range === undefined || range.startLine !== range.endLine || !inventory.includes(range.startLine)) continue
+				hits.set(range.startLine, (hits.get(range.startLine) ?? 0) + 1)
+			}
+			return { inventory, hits }
+		}
+		const ascii = await executedLines('x'.repeat(700))
+		const unicode = await executedLines('é🌱'.repeat(350))
+		assert.deepStrictEqual(unicode, ascii)
+		assert.ok(ascii.hits.has(4), 'the executed branch condition must receive hits')
+		assert.ok(ascii.inventory.includes(7) && !ascii.hits.has(7), 'the skipped return must remain uncovered')
+	})
+
 	test('deployment scaffolding does not cover unexecuted Multicall3 functions', async () => {
 		const config = getSolidityBytecodeCoverageConfig()
 		const source = 'solidity/contracts/statoblast/Multicall3.sol'

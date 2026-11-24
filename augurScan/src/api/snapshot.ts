@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import type { JsonValue } from '../ethereum.ts'
-import { operationsAsOf } from '../repositories/operations.ts'
+import { operationsAsOf, unavailableOperationsBlockHash } from '../repositories/operations.ts'
 import { ApiConflictError, ApiRequestError, postgresBigint } from './shared.ts'
 
 export const snapshotBoundaryMatches = (parts: readonly JsonValue[], offset: number, asOf: Record<string, unknown>): boolean =>
@@ -20,9 +20,12 @@ export const operationsAsOfForContinuations = async (sql: SQL, chainId: number, 
 	const cursorBlock = first === undefined ? undefined : first.parts[first.offset]
 	if (cursorBlock !== undefined && typeof cursorBlock !== 'string') throw new ApiRequestError('cursor snapshot block is invalid')
 	if (requestedAtBlock !== undefined && cursorBlock !== undefined && requestedAtBlock !== cursorBlock) throw new ApiRequestError('cursor does not match the requested snapshot block')
+	// An empty canonical checkpoint can still anchor retained orphan evidence.
+	const emptyCheckpoint = first !== undefined && cursorBlock === '0' && first.parts[first.offset + 1] === unavailableOperationsBlockHash
+	const snapshotBlock = requestedAtBlock ?? (emptyCheckpoint ? undefined : cursorBlock)
 	let asOf: Record<string, unknown>
 	try {
-		asOf = await operationsAsOf(sql, chainId, requestedAtBlock ?? cursorBlock)
+		asOf = await operationsAsOf(sql, chainId, snapshotBlock)
 	} catch (error) {
 		if (cursorBlock !== undefined && error instanceof ApiRequestError && error.message === 'atBlock is outside retained canonical coverage') throw new ApiConflictError('Indexed state changed; restart pagination')
 		throw error
