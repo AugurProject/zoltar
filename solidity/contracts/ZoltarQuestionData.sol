@@ -106,6 +106,9 @@ contract ZoltarQuestionData {
 		return questions[questionId].endTime;
 	}
 
+	/// @dev Bit 255 is set for a non-invalid scalar answer; bits 240..254 are
+	/// reserved. Bits 120..239 and 0..119 hold the two uint120 payout numerators.
+	/// This decoder only splits fields; answer validation checks reserved bits and sums.
 	function splitUint256IntoTwoWithInvalid(uint256 value) public pure returns (bool invalid, uint120 firstPart, uint120 secondPart) {
 		// Highest bit (bit 255)
 		invalid = (value >> 255) == 0;

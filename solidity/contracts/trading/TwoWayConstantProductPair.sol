@@ -181,7 +181,7 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 		shareToken.safeTransferFrom(msg.sender, address(this), tokenIn, amountIn, '');
 		shareToken.safeTransferFrom(address(this), recipient, tokenOut, amountOut, '');
 		_checkReserves(yesForNo ? yesReserve + amountIn : yesReserve - amountOut, yesForNo ? noReserve - amountOut : noReserve + amountIn);
-		emit Swap(msg.sender, recipient, yesForNo, false, amountIn, amountOut, feeAmount, _yesBalance(), _noBalance());
+		emit Swap({sender: msg.sender, recipient: recipient, yesForNo: yesForNo, exactOutput: false, amountIn: amountIn, amountOut: amountOut, feeAmount: feeAmount, resultingYesReserve: _yesBalance(), resultingNoReserve: _noBalance()});
 	}
 
 	function swapExactOutput(bool yesForNo, uint256 amountOut, uint256 maxAmountIn, address recipient, uint256 deadline) external nonReentrant beforeDeadline(deadline) returns (uint256 amountIn, uint256 feeAmount) {
@@ -196,7 +196,7 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 		shareToken.safeTransferFrom(msg.sender, address(this), tokenIn, amountIn, '');
 		shareToken.safeTransferFrom(address(this), recipient, tokenOut, amountOut, '');
 		_checkReserves(yesForNo ? yesReserve + amountIn : yesReserve - amountOut, yesForNo ? noReserve - amountOut : noReserve + amountIn);
-		emit Swap(msg.sender, recipient, yesForNo, true, amountIn, amountOut, feeAmount, _yesBalance(), _noBalance());
+		emit Swap({sender: msg.sender, recipient: recipient, yesForNo: yesForNo, exactOutput: true, amountIn: amountIn, amountOut: amountOut, feeAmount: feeAmount, resultingYesReserve: _yesBalance(), resultingNoReserve: _noBalance()});
 	}
 
 	function sync() external nonReentrant {

@@ -19,7 +19,7 @@ limitations under the License.
 
 pragma solidity 0.8.35;
 
-import './IERC165.sol';
+import { IERC165 } from './IERC165.sol';
 
 /// @title ERC-1155 Multi Token Standard
 /// @dev See https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1155.md

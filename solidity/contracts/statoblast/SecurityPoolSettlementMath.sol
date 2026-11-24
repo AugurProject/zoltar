@@ -37,9 +37,13 @@ library SecurityPoolSettlementMath {
 		uint256 earned = scaledValue(fees, net, units) + remainder;
 		return (earned / SCALE, earned % SCALE);
 	}
+	/// @dev Newly minted principal-unit weight, not total principal or raw cash.
+	/// Existing questions round the proportional increment up; the first mint uses addedUnits.
 	function principal(uint256 previous, uint256 supply, uint256 shares, uint256 addedUnits) internal pure returns (uint256) {
 		return supply == 0 ? addedUnits : Math.mulDiv(previous, shares, supply, Math.Rounding.Ceil);
 	}
+	/// @dev Round the target allocation up before converting scaled cash to raw units.
+	/// Keep both ceiling steps and include the carried fee remainder.
 	function requiredCash(uint256 units, uint256 numerator, uint256 denominator, uint256 remainder) internal pure returns (uint256) {
 		return Math.ceilDiv(Math.mulDiv(units, numerator, denominator, Math.Rounding.Ceil) + remainder, SCALE);
 	}

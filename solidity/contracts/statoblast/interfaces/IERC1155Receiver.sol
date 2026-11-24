@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity 0.8.35;
 
-import './IERC165.sol';
+import { IERC165 } from './IERC165.sol';
 
 interface IERC1155Receiver is IERC165 {
 	function onERC1155Received(address operator, address from, uint256 id, uint256 value, bytes calldata data) external returns (bytes4);

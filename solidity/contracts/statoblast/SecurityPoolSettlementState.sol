@@ -68,7 +68,7 @@ abstract contract SecurityPoolSettlementState {
 	}
 
 	/// @dev Modular corrections keep a question's REP entitlement independent of
-	/// rounded ETH units. Units and REP custody are each below 2^128, so the true
+	/// rounded collateral claim units. Units and REP custody are each below 2^128, so the true
 	/// scaled entitlement fits uint256 even when the cumulative index wraps.
 	/// Fork roots key each index increment by its native fork fee time: the
 	/// increment itself and that increment times the funded seconds at the fork.
@@ -134,7 +134,7 @@ contract SecurityPoolSettlementWriter is SecurityPoolSettlementState {
 			}
 		}
 		uint64 stateId = ++lastQuestionStateId;
-		questionStates[stateId] = StoredQuestionState(state, correction, recoveryStates[bookId].index, frozenBookId == 0 ? stored.frozenBookId : frozenBookId);
+		questionStates[stateId] = StoredQuestionState({question: state, recoveryCorrection: correction, recoveryIndex: recoveryStates[bookId].index, frozenBookId: frozenBookId == 0 ? stored.frozenBookId : frozenBookId});
 		book.questionRoot = questionMap.set(book.questionRoot, questionId, stateId);
 	}
 }

@@ -15,7 +15,17 @@ import { SharedPoolReportEscrow } from './SharedPoolReportEscrow.sol';
 import { ReputationToken } from '../ReputationToken.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
-import './OpenOraclePriceCoordinatorTypes.sol';
+import {
+	PRICE_VALID_FOR_SECONDS,
+	SEPOLIA_CHAIN_ID,
+	SEPOLIA_PRICE_VALID_FOR_SECONDS,
+	OPEN_ORACLE_PERCENTAGE_PRECISION,
+	REQUEST_BOUNTY_OFFSET_ATTO_ETH,
+	OPEN_ORACLE_FLAG_TIME_TYPE,
+	OPEN_ORACLE_FLAG_TRACK_DISPUTES,
+	OPEN_ORACLE_FLAG_STORE_ALL,
+	IStoredOpenOracleGame
+} from './OpenOraclePriceCoordinatorTypes.sol';
 
 interface ISharedPoolPriceCoordinator {
 	function questionLedger() external view returns (IQuestionLedger);
@@ -46,6 +56,14 @@ interface ISharedPoolSecurityPoolPriceCheckpoint {
 /// @dev Report sizing reads live aggregate capital, including direct authorizations
 /// that do not touch any question. No question or owner enumeration is required.
 contract SharedPoolPriceFeed {
+	string private constant UNECONOMIC_REPORT_REASON = 'Report uneconomic';
+	string private constant OLD_REPORT_REASON = 'Report timestamp not newer';
+	// Keep these allowances aligned with the SDK bounty calculations in
+	// shared/statoblast/ts/initialReport/oracleInitialReport.ts and statoblast/securityPoolPrice.ts.
+	uint256 private constant BASE_SETTLEMENT_GAS_ALLOWANCE = 310_000;
+	uint256 private constant SETTLEMENT_GAS_BUFFER_BPS = 12_000;
+	uint256 private constant REWARD_COLLECTION_GAS_ALLOWANCE = 20_000;
+
 	bool public constant timeType = true;
 	bool public constant trackDisputes = true;
 	uint256 public constant OPEN_INTEREST_DIVIDER = 100;
@@ -87,7 +105,7 @@ contract SharedPoolPriceFeed {
 	uint8 private constant REPORT_ACCEPTED = 1;
 	uint8 private constant REPORT_REJECTED = 2;
 	struct ReportFundingQuote {
-		uint256 wethAttoEth;
+		uint256 collateralAmount;
 		uint256 repAttoRep;
 		uint256 haltAttoEth;
 		uint256 exposureLimitAttoEth;
@@ -247,11 +265,12 @@ contract SharedPoolPriceFeed {
 	}
 
 	function _minimumSettlementBounty(uint256 callbackGas) private view returns (uint256) {
-		uint256 gasBudget = callbackGas + callbackGas / 63 + 310_000;
+		uint256 gasBudget = callbackGas + callbackGas / 63 + BASE_SETTLEMENT_GAS_ALLOWANCE;
 		uint256 feeAllowance = Math.mulDiv(block.basefee + initialReportPriorityFeeAttoEthPerGas, maxSettlementBaseFeeMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
 		return
-			Math.mulDiv(gasBudget, 12_000, SecurityPoolUtils.BPS_DENOMINATOR, Math.Rounding.Ceil) * feeAllowance +
-			20_000 * feeAllowance +
+			Math.mulDiv(gasBudget, SETTLEMENT_GAS_BUFFER_BPS, SecurityPoolUtils.BPS_DENOMINATOR, Math.Rounding.Ceil) *
+				feeAllowance +
+			REWARD_COLLECTION_GAS_ALLOWANCE * feeAllowance +
 			REQUEST_BOUNTY_OFFSET_ATTO_ETH;
 	}
 
@@ -308,9 +327,9 @@ contract SharedPoolPriceFeed {
 		pendingReportSponsor = sponsor;
 		pendingCoordinator = coordinator;
 		SharedPoolReportEscrow escrow;
-		(reportId, escrow) = this.createReportEscrow(msg.sender, sponsor, quote.wethAttoEth, quote.repAttoRep, quote.haltAttoEth, bountyAttoEth, callbackGasLimit);
+		(reportId, escrow) = this.createReportEscrow(msg.sender, sponsor, quote.collateralAmount, quote.repAttoRep, quote.haltAttoEth, bountyAttoEth, callbackGasLimit);
 		pendingReportId = reportId;
-		reports[reportId] = ReportCandidate(escrow, sponsor, coordinator, REPORT_PENDING, pendingReportMaxSettlementBaseFeeAttoEthPerGas);
+		reports[reportId] = ReportCandidate({escrow: escrow, sponsor: sponsor, coordinator: coordinator, outcome: REPORT_PENDING, maxSettlementBaseFee: pendingReportMaxSettlementBaseFeeAttoEthPerGas});
 		emit PriceRequested(pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas);
 		emit ReportFundingAssigned(pendingReportId, coordinator, sponsor);
 	}
@@ -318,16 +337,16 @@ contract SharedPoolPriceFeed {
 	/// @dev Quote first; custody changes and the self-only escrow call stay in the request path.
 	function _quoteReportFunding(uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) private view returns (ReportFundingQuote memory quote) {
 		require(requestedInitialAttoWeth >= minimumToken1ReportAttoEthForPrice(proposedRepPerEthPrice), 'Report funding below minimum');
-		quote.wethAttoEth = requestedInitialAttoWeth;
-		quote.repAttoRep = Math.mulDiv(quote.wethAttoEth, proposedRepPerEthPrice, SecurityPoolUtils.PRICE_PRECISION, Math.Rounding.Ceil);
-		quote.haltAttoEth = Math.mulDiv(quote.wethAttoEth, escalationHaltMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
+		quote.collateralAmount = requestedInitialAttoWeth;
+		quote.repAttoRep = Math.mulDiv(quote.collateralAmount, proposedRepPerEthPrice, SecurityPoolUtils.PRICE_PRECISION, Math.Rounding.Ceil);
+		quote.haltAttoEth = Math.mulDiv(quote.collateralAmount, escalationHaltMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
 		uint256 exposureEscalationHaltAttoEth = Math.ceilDiv(aggregateExposureAttoEth(), OPEN_INTEREST_DIVIDER);
 		if (exposureEscalationHaltAttoEth > quote.haltAttoEth) quote.haltAttoEth = exposureEscalationHaltAttoEth;
-		require(quote.wethAttoEth <= type(uint128).max, 'WETH report exceeds uint128');
+		require(quote.collateralAmount <= type(uint128).max, 'WETH report exceeds uint128');
 		require(quote.repAttoRep <= type(uint128).max, 'REP report exceeds uint128');
 		require(quote.haltAttoEth <= type(uint128).max, 'Oracle escalation halt amount exceeds uint128 maximum');
 		require(bountyAttoEth <= type(uint96).max, 'Oracle settler reward exceeds uint96 maximum');
-		quote.exposureLimitAttoEth = (quote.wethAttoEth - minimumReportCollateral) * OPEN_INTEREST_DIVIDER;
+		quote.exposureLimitAttoEth = (quote.collateralAmount - minimumReportCollateral) * OPEN_INTEREST_DIVIDER;
 		quote.maxSettlementBaseFeeAttoEthPerGas = Math.mulDiv(block.basefee + initialReportPriorityFeeAttoEthPerGas, maxSettlementBaseFeeMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
 	}
 
@@ -381,8 +400,8 @@ contract SharedPoolPriceFeed {
 				operationBatches[reportId].operations.length != 0 &&
 				lastPrice != 0 &&
 				_isFreshPriceTimestamp(lastSettlementTimestamp) &&
-				(keccak256(bytes(reason)) == keccak256('Report uneconomic') ||
-					keccak256(bytes(reason)) == keccak256('Report timestamp not newer'));
+				(keccak256(bytes(reason)) == keccak256(bytes(UNECONOMIC_REPORT_REASON)) ||
+					keccak256(bytes(reason)) == keccak256(bytes(OLD_REPORT_REASON)));
 		if ((accepted || canonicalOperations) && block.basefee > candidate.maxSettlementBaseFee) {
 			emit PriceReportDeferred(reportId, block.basefee, candidate.maxSettlementBaseFee);
 			return false;
@@ -495,10 +514,10 @@ contract SharedPoolPriceFeed {
 			return ('Security pool reporting window closed', 0);
 		(, , , uint48 finalReportTimestamp, , , , , , , , , uint24 numReports, , , , , , , ) = openOracle.storedGame(reportId);
 		if (numReports == type(uint24).max) return ('Counter saturated', 0);
-		if (numReports == 0 || !_isFinalReportProfitable(amount1)) return ('Report uneconomic', 0);
+		if (numReports == 0 || !_isFinalReportProfitable(amount1)) return (UNECONOMIC_REPORT_REASON, 0);
 		if (amount2 < minimumToken2ReportAttoRep()) return ('Report REP inventory budget insufficient', 0);
 		priceTimestamp = uint256(finalReportTimestamp) + settlementTime;
-		if (priceTimestamp < lastSettlementTimestamp) return ('Report timestamp not newer', 0);
+		if (priceTimestamp < lastSettlementTimestamp) return (OLD_REPORT_REASON, 0);
 		// Equal-time observations are independently challenged evidence. Ordering
 		// their settlements must not suppress a sponsor's authorized operation.
 		if (!_isFreshPriceTimestamp(priceTimestamp)) return ('Report stale', 0);

@@ -5,8 +5,9 @@ import { CheckedCast } from '../CheckedCast.sol';
 
 import { SecurityPoolBoundClones } from './SecurityPoolBoundClones.sol';
 
-/// @notice Exact vesting of independently funded ETH and REP fee budgets.
-/// @dev The authority holds the tokens. Nothing here transfers assets or visits
+/// @notice Exact vesting of independently funded collateral and REP fee budgets.
+/// @dev Collateral amounts use raw token units; REP amounts use attoREP.
+/// The authority holds the tokens. Nothing here transfers assets or visits
 /// an old stream. All streams share the immutable reward duration, so rates and
 /// integrals keep exact numerators over that denominator until income is released. Later funding never accelerates an existing stream.
 contract SecurityPoolCapitalFeeStreams {
@@ -75,7 +76,7 @@ contract SecurityPoolCapitalFeeStreams {
 		uint48 end = releasedThrough + rewardDuration;
 		Expiry memory previous = expiries[lastExpiryId];
 		if (previous.end != end) ++lastExpiryId;
-		expiries[lastExpiryId] = Expiry(end, previous.ethRateNumerator + ethRateNumerator, previous.repRateNumerator + repRateNumerator, previous.ethIntegralNumerator + ethRateNumerator * end, previous.repIntegralNumerator + repRateNumerator * end);
+		expiries[lastExpiryId] = Expiry({end: end, ethRateNumerator: previous.ethRateNumerator + ethRateNumerator, repRateNumerator: previous.repRateNumerator + repRateNumerator, ethIntegralNumerator: previous.ethIntegralNumerator + ethRateNumerator * end, repIntegralNumerator: previous.repIntegralNumerator + repRateNumerator * end});
 		lastEthIntegralNumerator += ethRateNumerator * releasedThrough;
 		lastRepIntegralNumerator += repRateNumerator * releasedThrough;
 	}

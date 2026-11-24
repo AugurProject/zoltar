@@ -258,6 +258,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		parentDepositIndex = depositIndex;
 		if (forkContinuation) {
 			require(depositIndex < (uint256(1) << 88), 'Deposit index high');
+			// Stable ID: 160-bit game address | 8-bit outcome | 88-bit local index.
 			parentDepositIndex = (uint256(uint160(address(this))) << 96) | (uint256(outcomeIndex) << 88) | depositIndex;
 		}
 		uint256 nodeId = nextNodeId;

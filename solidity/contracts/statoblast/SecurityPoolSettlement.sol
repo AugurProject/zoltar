@@ -121,7 +121,7 @@ contract SecurityPoolSettlement {
 		require(pool != address(0) && !questions[pool].registered, 'Settlement question registered');
 		require(ledgersByQuestion[universeId][questionId] == address(0), 'Settlement question already canonical');
 		_bookId(universeId);
-		questions[pool] = QuestionSource(universeId, questionId, true);
+		questions[pool] = QuestionSource({universeId: universeId, questionId: questionId, registered: true});
 		ledgersByQuestion[universeId][questionId] = pool;
 	}
 
@@ -157,7 +157,7 @@ contract SecurityPoolSettlement {
 		(cashAttoEth, , recoveryAttoRep) = ledger.redeem(bookId, source.questionId, shares, minimumCashAttoEth, timestamp);
 		snapshot = _snapshot(source, _collectFees(bookId));
 		_payRecoveryRep(source, recipient, recoveryAttoRep);
-		_sendEth(recipient, cashAttoEth);
+		_sendCollateral(recipient, cashAttoEth);
 	}
 
 	/// @notice Reserve a mature ledger claim even if its native child pool has not been deployed.
@@ -260,7 +260,7 @@ contract SecurityPoolSettlement {
 	function withdrawForkRecoveryCash(uint248 universeId, uint256 cashAttoEth) external onlyForkAuthority nonReentrant {
 		require(cashAttoEth <= universes[universeId].availableForkCashAttoEth, 'Fork settlement cash insufficient');
 		universes[universeId].availableForkCashAttoEth -= cashAttoEth;
-		_sendEth(msg.sender, cashAttoEth);
+		_sendCollateral(msg.sender, cashAttoEth);
 	}
 
 	/// @notice Migrate only live claim REP once; finalized source REP stays payable.
@@ -365,7 +365,7 @@ contract SecurityPoolSettlement {
 		if (cashAttoEth == 0) return 0;
 		ledger.collectFees(bookId, cashAttoEth);
 		if (msg.sender == services) pendingServiceFees += cashAttoEth;
-		else _sendEth(securityPool, cashAttoEth);
+		else _sendCollateral(securityPool, cashAttoEth);
 	}
 
 	/// @notice Move already accounted service income only when a payout needs it.
@@ -373,7 +373,7 @@ contract SecurityPoolSettlement {
 		require(msg.sender == services, 'Only settlement services');
 		uint256 amount = pendingServiceFees;
 		pendingServiceFees = 0;
-		_sendEth(services, amount);
+		_sendCollateral(services, amount);
 	}
 
 	function _question(address pool) private view returns (QuestionSource memory source) {
@@ -386,7 +386,7 @@ contract SecurityPoolSettlement {
 		require(bookId != 0, 'Unknown settlement universe');
 	}
 
-	function _sendEth(address recipient, uint256 cashAttoEth) private {
+	function _sendCollateral(address recipient, uint256 cashAttoEth) private {
 		if (cashAttoEth == 0) return;
 		Collateral.send(collateralToken, recipient, cashAttoEth);
 	}

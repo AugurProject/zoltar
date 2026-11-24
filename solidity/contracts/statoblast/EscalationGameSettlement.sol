@@ -108,7 +108,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 				_isRetiredOrdinaryOutcome(outcomeIndex) || state.consumedParentDepositIndexes[node.parentDepositIndex]
 					? 0
 					: node.amountAttoRep;
-			returnDeposits[index - startIndex] = Deposit(node.depositor, amountAttoRep, node.cumulativeAmountAttoRep);
+			returnDeposits[index - startIndex] = Deposit({depositor: node.depositor, amountAttoRep: amountAttoRep, cumulativeAmountAttoRep: node.cumulativeAmountAttoRep});
 		}
 	}
 

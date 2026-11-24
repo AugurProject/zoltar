@@ -68,7 +68,7 @@ contract GenesisUniswapV3Seeder {
 		uint256 balance1 = IGenesisSeederErc20(token1).balanceOf(address(this));
 		if (maximumAmount0 > 0) _safeTransferFrom(token0, msg.sender, address(this), maximumAmount0);
 		if (maximumAmount1 > 0) _safeTransferFrom(token1, msg.sender, address(this), maximumAmount1);
-		bytes memory callbackData = abi.encode(CallbackData(pool, token0, token1, maximumAmount0, maximumAmount1));
+		bytes memory callbackData = abi.encode(CallbackData({pool: pool, token0: token0, token1: token1, maximumAmount0: maximumAmount0, maximumAmount1: maximumAmount1}));
 		mintCallbackHash = keccak256(callbackData);
 		(amount0, amount1) = IGenesisSeederUniswapV3Pool(pool).mint(recipient, tickLower, tickUpper, liquidity, callbackData);
 		require(mintCallbackHash == bytes32(0), 'Missing mint callback');

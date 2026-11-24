@@ -213,7 +213,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		uint256 requiredReceiverPrincipalAttoRep = _requiredRep(host, existing.commitment + commitment, _target(receiver));
 		require(existing.rep + receiverFreePrincipalAttoRep + takeoverReward >= requiredReceiverPrincipalAttoRep, 'Receiver collateral insufficient');
 		require(existing.commitment + commitment >= minimumCommitmentAttoEth, 'Receiver commitment below minimum');
-		TakeoverPlan memory plan = TakeoverPlan(source.commitment - commitment, source.rep - debit, receiverFreePrincipalAttoRep + takeoverReward);
+		TakeoverPlan memory plan = TakeoverPlan({remainingCommitmentAttoEth: source.commitment - commitment, remainingPrincipalAttoRep: source.rep - debit, receivedPrincipalAttoRep: receiverFreePrincipalAttoRep + takeoverReward});
 		if (enforceBounds) {
 			require(existing.rep + plan.receivedPrincipalAttoRep <= bounds.maximumOwnerPrincipal, 'Takeover owner principal exceeds limit');
 			require(existing.commitment + commitment <= bounds.maximumOwnerCommitment, 'Takeover owner commitment exceeds limit');
@@ -261,7 +261,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(id);
 			uint96 batch;
 			if (position.batch != 0) batch = position.batch == commitmentIndex.currentBatch() ? 1 : 2;
-			choice = ChoicePosition(position.rep, position.commitment, batch, position.remainingCommitment, commitmentIndex.retirementOrder(id));
+			choice = ChoicePosition({rep: position.rep, commitment: position.commitment, batch: batch, remainingCommitment: position.remainingCommitment, retirementOrder: commitmentIndex.retirementOrder(id)});
 		}
 		owners[owner].exported = true;
 		target = _target(account);

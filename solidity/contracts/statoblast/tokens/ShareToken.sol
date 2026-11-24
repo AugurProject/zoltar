@@ -3,15 +3,15 @@ pragma solidity 0.8.35;
 
 import { UniverseIds } from '../../UniverseIds.sol';
 
-import '../../Constants.sol';
-import './TokenId.sol';
-import '../../Zoltar.sol';
-import '../interfaces/IQuestionLedger.sol';
-import '../interfaces/IQuestionForker.sol';
-import '../interfaces/IShareToken.sol';
-import '../BinaryOutcomes.sol';
-import './ERC1155.sol';
-import '../SecurityPoolSettlement.sol';
+import { Constants } from '../../Constants.sol';
+import { TokenId } from './TokenId.sol';
+import { Zoltar } from '../../Zoltar.sol';
+import { IQuestionLedger, SystemState } from '../interfaces/IQuestionLedger.sol';
+import { IQuestionForker } from '../interfaces/IQuestionForker.sol';
+import { IShareToken } from '../interfaces/IShareToken.sol';
+import { BinaryOutcomes } from '../BinaryOutcomes.sol';
+import { ERC1155 } from './ERC1155.sol';
+import { SecurityPoolSettlement } from '../SecurityPoolSettlement.sol';
 
 interface IShareTokenSecurityPoolForkAuthority {
 	function forkController() external view returns (address);
@@ -37,7 +37,8 @@ contract ShareToken is ERC1155, IShareToken {
 	// account materializes any branch, its source balance is locked so a transfer
 	// cannot let both sender and receiver reproduce the same claim.
 	// Source token ID -> target universe ID -> account -> shares already materialized, in attoShares.
-	mapping(uint256 => mapping(uint248 => mapping(address => uint256))) private migratedShareAmountAttoShares;
+	mapping(uint256 sourceTokenId => mapping(uint248 targetUniverseId => mapping(address holder => uint256 shares)))
+		private migratedShareAmountAttoShares;
 	// Recovery credits are independently transferable. Spending a source-backed
 	// right locks its source token; incoming credits alone never lock a recipient.
 	struct SourceAccount {
@@ -46,7 +47,7 @@ contract ShareToken is ERC1155, IShareToken {
 		bool balanceLocked;
 	}
 	// Source token ID -> account -> branch-independent recovery and transfer state.
-	mapping(uint256 => mapping(address => SourceAccount)) private sourceAccounts;
+	mapping(uint256 sourceTokenId => mapping(address holder => SourceAccount)) private sourceAccounts;
 	mapping(uint248 => mapping(address => uint256)) public recoveredCompleteSetShares;
 	event SecurityPoolRecoveryRightsTransferred(uint248 indexed universeId, address indexed from, address indexed to, uint256[3] amountsAttoShares);
 	event SecurityPoolRecoveryRightsConsumed(uint248 indexed universeId, address indexed holder, uint256 amountAttoShares, uint256 cumulativeAttoShares);

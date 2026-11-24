@@ -36,7 +36,7 @@ contract SecurityPoolPurchase {
 	}
 	/// @notice Every purchase prepays its resolution tail.
 	/// @dev Quotes use the current central checkpoint. The transaction checkpoints
-	/// again before enforcing the caller's total ETH budget.
+	/// again before enforcing the caller's total raw-collateral budget.
 	function purchaseQuote(uint248 universeId, uint256 questionId, uint256 cash) external view returns (uint256 fee, uint256 premium) {
 		ISecurityPoolPurchaseRoot root = ISecurityPoolPurchaseRoot(securityPool);
 		SecurityPoolSettlement engine = root.settlement();

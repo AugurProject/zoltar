@@ -60,7 +60,7 @@ contract SecurityPoolCapitalRepairAuctionDelegate is SecurityPoolCapitalState {
 		require(host.repToken().balanceOf(address(this)) >= existing + principal + totalFreeAttoRep + retirementCashAttoRep, 'Auction principal unfunded');
 		uint256 threshold = host.maximumHealthyPrice(repPerLot, commitmentPerLot);
 		uint96 id = commitmentIndex.importPosition(adapter, principal, commitment, threshold, 0, 0, 0);
-		repairAuctionCohort = RepairAuctionCohort(ISecurityPoolRepairAuctionCapital(adapter), id, lots, repPerLot, commitmentPerLot);
+		repairAuctionCohort = RepairAuctionCohort({adapter: ISecurityPoolRepairAuctionCapital(adapter), positionId: id, remainingLots: lots, repPerLot: repPerLot, commitmentPerLot: commitmentPerLot});
 		emit RepairAuctionCohortInstalled(adapter, id, lots, repPerLot, commitmentPerLot);
 	}
 
@@ -102,11 +102,11 @@ contract SecurityPoolCapitalRepairAuctionDelegate is SecurityPoolCapitalState {
 		Owner memory owner = host.storedOwnerAccount(holder);
 		SecurityPoolCommitmentIndex index = host.commitmentIndex();
 		SecurityPoolCommitmentIndex.Account memory position = index.accountOf(owner.positionId);
-		(uint256 virtualRep, uint256 virtualK, uint256 target) = _virtualCapital(host, holder);
+		(uint256 virtualRep, uint256 virtualCommitment, uint256 target) = _virtualCapital(host, holder);
 		withdrawable = owner.freeAttoRep + position.releasedRep;
 		uint256 pledged = position.rep + virtualRep;
 		principal = withdrawable + pledged;
-		commitment = position.commitment + virtualK;
+		commitment = position.commitment + virtualCommitment;
 		if (commitment == 0) return (principal, 0, principal);
 		if (
 			host.importing() ||

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { DelegateCall } from './DelegateCall.sol';
+
 import { IERC165 } from './interfaces/IERC165.sol';
 import { IERC1155Receiver } from './interfaces/IERC1155Receiver.sol';
 
@@ -165,11 +167,7 @@ contract SecurityPoolRepairAuctionVault {
 		require(target != address(0), 'Auction vault target missing');
 		bool success;
 		(success, result) = target.call{value: value}(data);
-		if (!success) {
-			assembly ('memory-safe') {
-				revert(add(result, 32), mload(result))
-			}
-		}
+		if (!success) DelegateCall.bubbleRevert(result);
 	}
 	function onERC1155Received(address, address, uint256, uint256, bytes calldata) external view returns (bytes4) {
 		_requireClone();

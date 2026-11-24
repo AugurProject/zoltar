@@ -2,15 +2,13 @@
 pragma solidity 0.8.35;
 
 import { Pagination } from './Pagination.sol';
-
 import { UniverseIds } from './UniverseIds.sol';
-
-import './Constants.sol';
-import './IERC20.sol';
-import './IExternalGenesisReputationToken.sol';
-import './ReputationToken.sol';
-import './SafeERC20Ops.sol';
-import './ZoltarQuestionData.sol';
+import { Constants } from './Constants.sol';
+import { IERC20 } from './IERC20.sol';
+import { IExternalGenesisReputationToken } from './IExternalGenesisReputationToken.sol';
+import { ReputationToken } from './ReputationToken.sol';
+import { SafeERC20Ops } from './SafeERC20Ops.sol';
+import { ZoltarQuestionData } from './ZoltarQuestionData.sol';
 
 contract Zoltar {
 	using SafeERC20Ops for IERC20;
@@ -58,7 +56,7 @@ contract Zoltar {
 		genesisReputationToken = _genesisReputationToken;
 		forkThresholdDivisor = _forkThresholdDivisor;
 		forkBurnDivisor = _forkBurnDivisor;
-		universes[0] = Universe(0, 0, 0, ReputationToken(address(_genesisReputationToken)), 0);
+		universes[0] = Universe({forkTime: 0, forkQuestionId: 0, forkingOutcomeIndex: 0, reputationToken: ReputationToken(address(_genesisReputationToken)), parentUniverseId: 0});
 		// Mainnet REPv2 exposes this theoretical-supply extension in addition to ERC-20.
 		uint256 genesisSupply = _genesisReputationToken.getTotalTheoreticalSupply();
 		require(genesisSupply != 0, 'Genesis REP missing supply: theoretical supply must be non-zero');
@@ -211,7 +209,7 @@ contract Zoltar {
 		uint256 repNumber = childReputationTokenCount + 1;
 		childReputationToken.initialize(childUniverseId, childUniverseTheoreticalSupplyAttoRep, repNumber);
 		childReputationTokenCount = repNumber;
-		universes[childUniverseId] = Universe(0, universe.forkQuestionId, outcomeIndex, childReputationToken, universeId);
+		universes[childUniverseId] = Universe({forkTime: 0, forkQuestionId: universe.forkQuestionId, forkingOutcomeIndex: outcomeIndex, reputationToken: childReputationToken, parentUniverseId: universeId});
 		deployedChildOutcomeIndexes[universeId].push(outcomeIndex);
 		emit DeployChild(msg.sender, universeId, outcomeIndex, childUniverseId, childReputationToken, childUniverseTheoreticalSupplyAttoRep);
 		emit ChildReputationTokenInitialized(childUniverseId, childReputationToken, repNumber);
