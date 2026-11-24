@@ -6,6 +6,8 @@ const kindAliases: Readonly<Record<string, string>> = {
 	EscalationGameProofVerifier: 'escalationProofVerifier',
 	OpenOraclePriceCoordinator: 'priceCoordinator',
 	OpenOraclePriceCoordinatorFactory: 'priceCoordinatorFactory',
+	// Deployment status masks and scanner records use this existing step ID.
+	QuestionLedgerAccountingModule: 'questionLedgerEventEmitter',
 	TwoWayConstantProductFactory: 'ammFactory',
 	TwoWayConstantProductPair: 'ammPair',
 	TwoWayConstantProductRouter: 'ammRouter',

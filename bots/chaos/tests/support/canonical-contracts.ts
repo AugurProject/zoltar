@@ -23,7 +23,7 @@ export const CANONICAL_MUTATING_CONTRACT_MANIFEST: readonly CanonicalMutatingCon
 	{ artifactSource: 'contracts/statoblast/factories/QuestionLedgerDeployer.sol', contract: 'QuestionLedgerDeploymentWorker', exposure: 'deployment-helper' },
 	{ artifactSource: 'contracts/statoblast/QuestionLedger.sol', contract: 'QuestionLedger', exposure: 'dynamic-endpoint' },
 	{ artifactSource: 'contracts/statoblast/QuestionLedgerOperationsDelegate.sol', contract: 'QuestionLedgerOperationsDelegate', exposure: 'delegate-module' },
-	{ artifactSource: 'contracts/statoblast/QuestionLedgerEventEmitter.sol', contract: 'QuestionLedgerEventEmitter', exposure: 'delegate-module' },
+	{ artifactSource: 'contracts/statoblast/QuestionLedgerAccountingModule.sol', contract: 'QuestionLedgerAccountingModule', exposure: 'delegate-module' },
 	{ artifactSource: 'contracts/statoblast/OpenOraclePriceCoordinator.sol', contract: 'OpenOraclePriceCoordinator', exposure: 'dynamic-endpoint' },
 	{ artifactSource: 'contracts/statoblast/SharedPoolPriceFeed.sol', contract: 'SharedPoolPriceFeed', exposure: 'dynamic-endpoint' },
 	{ artifactSource: 'contracts/statoblast/SharedPoolReportEscrow.sol', contract: 'SharedPoolReportEscrow', exposure: 'dynamic-endpoint' },

@@ -23,7 +23,7 @@ import {
 	statoblast_openOracle_OpenOracle_OpenOracle,
 	statoblast_QuestionLedger_QuestionLedger,
 	statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate,
-	statoblast_QuestionLedgerEventEmitter_QuestionLedgerEventEmitter,
+	statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule,
 	statoblast_SecurityPool_SecurityPool,
 	statoblast_QuestionForker_QuestionForker,
 	statoblast_QuestionForkerDelegate_QuestionForkerDelegate,
@@ -61,7 +61,7 @@ const statoblastInitCodes = createStatoblastInitCodes(
 		questionForker: statoblast_QuestionForker_QuestionForker,
 		questionForkerDelegate: statoblast_QuestionForkerDelegate_QuestionForkerDelegate,
 		questionLedgerOperationsDelegate: statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate,
-		questionLedgerEventEmitter: statoblast_QuestionLedgerEventEmitter_QuestionLedgerEventEmitter,
+		questionLedgerEventEmitter: statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule,
 		securityPoolCapitalLedgerDeployer: statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalLedgerDeployer,
 		securityPoolCommitmentIndexDeployer: statoblast_SecurityPoolModuleDeployers_SecurityPoolCommitmentIndexDeployer,
 		securityPoolCapitalFeeStreamsDeployer: statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalFeeStreamsDeployer,
@@ -85,7 +85,7 @@ const {
 	getQuestionForkerByteCode,
 	getQuestionForkerDelegateByteCode,
 	getQuestionLedgerOperationsDelegateByteCode,
-	getQuestionLedgerEventEmitterByteCode,
+	getQuestionLedgerAccountingModuleByteCode,
 	getSecurityPoolCapitalLedgerDeployerByteCode,
 	getSecurityPoolCommitmentIndexDeployerByteCode,
 	getSecurityPoolCapitalFeeStreamsDeployerByteCode,
@@ -271,7 +271,7 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 
 	if (!existence['multicall3']) await deployBytecode('multicall3', MULTICALL3_BYTECODE)
 	if (!existence['questionLedgerOperationsDelegate']) await deployBytecode('questionLedgerOperationsDelegate', getQuestionLedgerOperationsDelegateByteCode())
-	if (!existence['questionLedgerEventEmitter']) await deployBytecode('questionLedgerEventEmitter', getQuestionLedgerEventEmitterByteCode())
+	if (!existence['questionLedgerEventEmitter']) await deployBytecode('questionLedgerEventEmitter', getQuestionLedgerAccountingModuleByteCode())
 	if (!existence['openOracle']) await deployBytecode('openOracle', `0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
 	if (!existence['zoltarQuestionData']) await deployBytecode('zoltarQuestionData', getZoltarQuestionDataByteCode())
 	if (!existence['zoltar']) {

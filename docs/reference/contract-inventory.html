@@ -165,7 +165,9 @@
 								<td>Accept resulting state and logs only when the recognized game, question ledger, or forker executes the matching wrapper through <code>delegatecall</code>. State changes and events then occur in that recognized contract's context. Canonical liquidation enters through the security pool capital ledger; continuation activation enters through <code>QuestionLedger.resumeForkedEscalationGame</code>.</td>
 							</tr>
 							<tr>
-								<td><code>QuestionLedgerEventEmitter</code></td>
+								<td>
+									<code>QuestionLedger<wbr />AccountingModule</code>
+								</td>
 								<td>A fixed delegate shares the question ledger storage layout and handles central fee checkpoints, surplus transfers and settlement mirrors.</td>
 								<td>Only events from canonical question addresses describe protocol state. Calling a helper directly does not mutate a registered question.</td>
 							</tr>
@@ -265,12 +267,16 @@
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCommitmentIndex.sol"><code>SecurityPoolCommitmentIndex.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCommitmentTree.sol"><code>SecurityPoolCommitmentTree.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCreationCode.sol"><code>SecurityPoolCreationCode.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/QuestionLedgerEventEmitter.sol"><code>QuestionLedgerEventEmitter.sol</code></a
+									>,
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/QuestionLedgerAccountingModule.sol"
+										><code>QuestionLedger<wbr />AccountingModule.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolFixedAdmissionPolicy.sol"><code>SecurityPoolFixedAdmissionPolicy.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/QuestionForker.sol"><code>QuestionForker.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/QuestionForkerDelegate.sol"><code>QuestionForkerDelegate.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolFrozenHistory.sol"><code>SecurityPoolFrozenHistory.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/QuestionLedgerLinearFees.sol"><code>QuestionLedgerLinearFees.sol</code></a
+									>,
+									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/QuestionLedgerSettlementSync.sol"
+										><code>QuestionLedger<wbr />SettlementSync.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolMaturityMap.sol"><code>SecurityPoolMaturityMap.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolOpenAdmissionPolicy.sol"><code>SecurityPoolOpenAdmissionPolicy.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/QuestionLedgerOperationsDelegate.sol"><code>QuestionLedgerOperationsDelegate.sol</code></a

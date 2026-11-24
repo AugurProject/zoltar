@@ -27,8 +27,8 @@ import {
 	securityPoolModuleDeployments,
 	getQuestionLedgerOperationsDelegateByteCode,
 	getQuestionLedgerOperationsDelegateRuntimeCode,
-	getQuestionLedgerEventEmitterByteCode,
-	getQuestionLedgerEventEmitterRuntimeCode,
+	getQuestionLedgerAccountingModuleByteCode,
+	getQuestionLedgerAccountingModuleRuntimeCode,
 	getShareTokenFactoryByteCode,
 } from './deploymentHelpers.js'
 import { DeploymentStatusOracle_DeploymentStatusOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
@@ -44,17 +44,17 @@ export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonl
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
 	openOraclePriceCoordinatorFactory: '0x7c1f5f7d1acf26baa86673c19bc4a661f3fe8f2e2828a2ac02cdbbbc92f68fb8',
 	priceCoordinatorDeploymentWorker: '0xb5424f26ea14d1c67967a435d09a8c86cc12ae1bccc921c2b5a6b1522be3bb24',
-	questionLedgerEventEmitter: '0x31da561a9213ba7aed899f3d0e6873d1d7ce1111f421c79c0658db13704b1039',
-	securityPoolFactory: '0x54c475e67ad982688be712e98765d4b786d96c2c375ee613a70e805455892e91',
+	questionLedgerEventEmitter: '0xb9fb593528df6a1b260bf7f8d270b10a129e28182fed3b1be71c80dcd3c99b07',
+	securityPoolFactory: '0x1de0f9d4ae54a544f9378f4b74872fff84634e2ca66ae185751cde9b34567ae9',
 	questionForker: '0xeea43b5a22e97b7103cd2d8dd8bd85e1ec9298aa711e3f0b302b3a7b8b346213',
-	questionLedgerOperationsDelegate: '0x8fff325ee801aa4b7f7e4f7bcad7a8cd2a365386c0c873c2bb05ec62ee4f419e',
+	questionLedgerOperationsDelegate: '0xb5a58d8a061abb29ee3d33c7e36b443b490b53ac7f16252f7c3b5f78e1c4f08d',
 	shareTokenFactory: '0xdc3c829696741d1c28ba6303d276d818bd38de385555a6d6cf036cc8b93f955e',
 	sharedPoolPriceFeedDeploymentWorker: '0x8074bccd7cd4b0fb1472a672c6c215f027da5dcccec05b8857eff1615c2e2a02',
 }
 
 const EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0x73621b6637a46c1c351827977aa41a1ce25cc4af87c4a013b591872956015ef8',
+	securityPoolFactory: '0xfc70d604bec1ea74a51b7b726fda1a35a826e4417da32089d7f2b3535932c63d',
 	questionForker: '0x0936b5beca00c3ad0f91e57fde6b85156d59c16f6393404ee5d8940307d69653',
 	shareTokenFactory: '0xd878e68de39dc839beea8abda13aa8e3b193b7d092e8c58ffb734ddf08c82559',
 }
@@ -100,7 +100,7 @@ const STATIC_STATOBLAST_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID = {
 	escalationGameDepositDelegate: `0x${statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.evm.deployedBytecode.object}`,
 	openOracle: `0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.deployedBytecode.object}`,
 	questionLedgerOperationsDelegate: getQuestionLedgerOperationsDelegateRuntimeCode(),
-	questionLedgerEventEmitter: getQuestionLedgerEventEmitterRuntimeCode(),
+	questionLedgerEventEmitter: getQuestionLedgerAccountingModuleRuntimeCode(),
 } satisfies Readonly<Partial<Record<DeploymentStepId, Hex>>>
 
 export function assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes(
@@ -118,17 +118,17 @@ const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentSt
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
 	openOraclePriceCoordinatorFactory: '0x7fbe87d0928383b0c2477ee905ad2d2b1e4028f091f7f596fb24293ed41e3206',
 	priceCoordinatorDeploymentWorker: '0xb5424f26ea14d1c67967a435d09a8c86cc12ae1bccc921c2b5a6b1522be3bb24',
-	questionLedgerEventEmitter: '0x31da561a9213ba7aed899f3d0e6873d1d7ce1111f421c79c0658db13704b1039',
-	securityPoolFactory: '0x10076b310e00ee2685578ecc5f930e5bc28db1170303c79e1f4099bd112bf017',
+	questionLedgerEventEmitter: '0xb9fb593528df6a1b260bf7f8d270b10a129e28182fed3b1be71c80dcd3c99b07',
+	securityPoolFactory: '0xccfdd1f60925b5c599234bb49f38d77b4094a8962cd16efae9f64a15aa3a2a91',
 	questionForker: '0x8916fd856a386c48bf8e90e21a568ae898c7d543ceeffd43d98ed66f06e995c6',
-	questionLedgerOperationsDelegate: '0x8fff325ee801aa4b7f7e4f7bcad7a8cd2a365386c0c873c2bb05ec62ee4f419e',
+	questionLedgerOperationsDelegate: '0xb5a58d8a061abb29ee3d33c7e36b443b490b53ac7f16252f7c3b5f78e1c4f08d',
 	shareTokenFactory: '0x49bd454447ab5bf1f718798def3bf27e0f604973a451b9034ec4a7c6c3e52633',
 	sharedPoolPriceFeedDeploymentWorker: '0x8074bccd7cd4b0fb1472a672c6c215f027da5dcccec05b8857eff1615c2e2a02',
 }
 
 const EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_MAINNET_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0xc62e6015fec79ee673b8c832b83eff2f2f9cc0fb3e3b73132dc8062c816a5237',
+	securityPoolFactory: '0x0fd6b502d67ca6650ba34d50ea9d70a307de1f77ca135da5df081a8b578e3908',
 	questionForker: '0x08f5242607b06ab7277d0b70d676c6a607898411fa7a7abaf44eeed0b2924e1d',
 	shareTokenFactory: '0xc6fcb892969422ddf4d583d4ce9a3a0eee603fba18557bba0ec3b68996768f3a',
 }
@@ -163,10 +163,10 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 		},
 		{
 			id: 'questionLedgerEventEmitter',
-			label: 'QuestionLedgerEventEmitter',
+			label: 'QuestionLedgerAccountingModule',
 			address: addresses.questionLedgerEventEmitter,
 			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, getQuestionLedgerEventEmitterByteCode()),
+			deploy: async client => await deployViaProxy(client, getQuestionLedgerAccountingModuleByteCode()),
 		},
 		{
 			id: 'openOracle',

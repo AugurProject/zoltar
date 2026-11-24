@@ -48,7 +48,7 @@ export const contractSafetyPolicy = {
 		},
 		{
 			host: { sourcePath: 'contracts/statoblast/QuestionLedger.sol', contractName: 'QuestionLedger' },
-			delegate: { sourcePath: 'contracts/statoblast/QuestionLedgerEventEmitter.sol', contractName: 'QuestionLedgerEventEmitter' },
+			delegate: { sourcePath: 'contracts/statoblast/QuestionLedgerAccountingModule.sol', contractName: 'QuestionLedgerAccountingModule' },
 			reason: 'Native fee accounting and security pool credits mutate QuestionLedger storage through this fixed delegate.',
 		},
 		{
@@ -70,7 +70,7 @@ export const contractSafetyPolicy = {
 	anchoredLayouts: [
 		{
 			host: { sourcePath: 'contracts/statoblast/QuestionLedger.sol', contractName: 'QuestionLedger' },
-			consumer: { sourcePath: 'contracts/statoblast/QuestionLedgerEventEmitter.sol', contractName: 'QuestionLedgerEventEmitter' },
+			consumer: { sourcePath: 'contracts/statoblast/QuestionLedgerAccountingModule.sol', contractName: 'QuestionLedgerAccountingModule' },
 			reason: 'Pool accounting events and fee accrual read these exact QuestionLedger slots through the shared storage base.',
 			anchors: [
 				{ label: 'settlementCollateralAttoEth', slot: '1', offset: 0, typeLabel: 'uint256' },

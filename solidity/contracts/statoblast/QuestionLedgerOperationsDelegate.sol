@@ -2,7 +2,6 @@
 pragma solidity 0.8.35;
 
 import { IQuestionLedger, SystemState } from './interfaces/IQuestionLedger.sol';
-import { DelegateErrorReason } from './DelegateErrorReason.sol';
 import { QuestionLedgerSettlementDelegate } from './QuestionLedgerSettlementDelegate.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
@@ -28,11 +27,6 @@ contract QuestionLedgerOperationsDelegate is QuestionLedgerSettlementDelegate {
 	using SafeERC20Ops for IERC20;
 
 	event AwaitingForkContinuationSet(bool awaitingForkContinuation);
-
-	/// @notice Decodes an `Error(string)` revert payload into its reason, or returns a generic failure message.
-	function decodeError(bytes calldata result) external pure returns (string memory reason) {
-		return DelegateErrorReason.decode(result);
-	}
 
 	event EscalationGameSet(EscalationGame escalationGame);
 

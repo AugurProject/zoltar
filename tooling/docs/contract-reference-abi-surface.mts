@@ -142,7 +142,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 export const readDeclarationExclusionsBySource: Record<string, string[]> = {
 	'solidity/contracts/statoblast/tokens/ShareToken.sol': ['forkController', 'forkSecurityPoolTime', 'isReady', 'settlement'],
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': ['storedGame', 'disputeHistory'],
-	'solidity/contracts/statoblast/QuestionLedger.sol': ['eventEmitter', 'factory', 'operationsDelegate'],
+	'solidity/contracts/statoblast/QuestionLedger.sol': ['accountingModule', 'factory', 'operationsDelegate'],
 }
 export function assertCoordinatorDataFunctionInventory(coordinatorData: string, compiledContractArtifacts: unknown): void {
 	const coordinatorIndex: unknown = JSON.parse(coordinatorData)

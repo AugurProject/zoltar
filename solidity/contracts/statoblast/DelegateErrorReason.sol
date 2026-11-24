@@ -1,20 +1,31 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-/// @dev Shared `decodeError` body of the delegates that `DelegateCallForwarder` asks for a reason.
+/// @dev Decodes delegate failures locally without calling the failed target again.
 library DelegateErrorReason {
 	string private constant GENERIC_REASON = 'Delegate call failed';
 
-	/// @notice Returns the reason of an `Error(string)` revert payload, or a generic reason for anything else.
-	/// @dev Never reverts: revert data bubbled up from another contract need not be well formed, and a
-	/// reverting decoder would replace the readable reason with an empty revert.
-	function decode(bytes calldata result) internal pure returns (string memory) {
-		if (result.length < 68 || bytes4(result[:4]) != bytes4(keccak256('Error(string)'))) return GENERIC_REASON;
-		bytes calldata payload = result[4:];
-		uint256 offset = uint256(bytes32(payload[:32]));
-		if (offset > payload.length - 32) return GENERIC_REASON;
-		uint256 length = uint256(bytes32(payload[offset:offset + 32]));
-		if (length > payload.length - offset - 32) return GENERIC_REASON;
-		return string(payload[offset + 32:offset + 32 + length]);
+	/// @notice Returns an Error(string) reason, or a generic reason for every other payload.
+	/// @dev Validate offsets before reading: callees can return malformed revert data.
+	function decode(bytes memory result) internal pure returns (string memory) {
+		if (result.length < 68) return GENERIC_REASON;
+		bytes4 selector;
+		uint256 offset;
+		assembly ('memory-safe') {
+			selector := mload(add(result, 32))
+			offset := mload(add(result, 36))
+		}
+		uint256 payloadLength = result.length - 4;
+		if (selector != bytes4(keccak256('Error(string)')) || offset > payloadLength - 32) return GENERIC_REASON;
+		uint256 length;
+		assembly ('memory-safe') {
+			length := mload(add(add(result, 36), offset))
+		}
+		if (length > payloadLength - offset - 32) return GENERIC_REASON;
+		bytes memory reason = new bytes(length);
+		assembly ('memory-safe') {
+			mcopy(add(reason, 32), add(add(result, 68), offset), length)
+		}
+		return string(reason);
 	}
 }

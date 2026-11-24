@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { QuestionLedgerLinearFees } from './QuestionLedgerLinearFees.sol';
-import { DelegateErrorReason } from './DelegateErrorReason.sol';
+import { QuestionLedgerSettlementSync } from './QuestionLedgerSettlementSync.sol';
 import { IQuestionLedger, AccountingReason } from './interfaces/IQuestionLedger.sol';
 import { ISecurityPoolAccounting } from './interfaces/ISecurityPoolAccounting.sol';
 import { IERC20 } from '../IERC20.sol';
@@ -11,7 +10,7 @@ import { Zoltar } from '../Zoltar.sol';
 import { ISecurityPoolSettlement } from './interfaces/ISecurityPoolSettlement.sol';
 
 /// @dev Delegate targets keep the native pool deployable while sharing its exact storage layout.
-abstract contract QuestionLedgerAccountingDelegate is QuestionLedgerLinearFees {
+abstract contract QuestionLedgerAccountingDelegate is QuestionLedgerSettlementSync {
 	using SafeERC20Ops for IERC20;
 
 	function _emitAccountingCheckpoint(AccountingReason reason) internal virtual;
@@ -19,12 +18,8 @@ abstract contract QuestionLedgerAccountingDelegate is QuestionLedgerLinearFees {
 	/// @notice Pool delegate target; payable because delegatecall retains the outer call value.
 	function accrueSettlementCollateral() external payable {
 		uint256 previousTimestamp = lastSettlementSecurityPoolTime;
-		updateLinearFees();
+		synchronizeSettlement();
 		if (lastSettlementSecurityPoolTime != previousTimestamp) _emitAccountingCheckpoint(AccountingReason.Accrual);
-	}
-
-	function decodeError(bytes calldata result) external pure returns (string memory reason) {
-		return DelegateErrorReason.decode(result);
 	}
 
 	function setSecurityPoolCustody(address custody) external {

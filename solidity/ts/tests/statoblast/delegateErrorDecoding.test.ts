@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { encodeAbiParameters, encodeDeployData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate as operationsArtifact, statoblast_QuestionLedgerEventEmitter_QuestionLedgerEventEmitter as accountingArtifact } from '../../types/contractArtifact'
+import { test_statoblast_DelegateCallForwarderHarness_DelegateCallForwarderHarness as artifact } from '../../types/contractArtifact'
 import { deployContract } from '../../testSupport/deployContract'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient } from '../../testSupport/simulator/utils/clients'
@@ -10,28 +10,28 @@ import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
 const errorSelector = '0x08c379a0'
 const word = (value: bigint) => value.toString(16).padStart(64, '0')
 
-// A pool reverts with `decodeError(revertData)` whenever a delegate call fails. Revert data that a
-// delegate bubbles up from another contract need not be well formed, and decoding must not itself revert:
-// that would replace the readable reason with an empty revert.
+// The forwarding helper preserves string reasons and normalizes every other revert payload.
 describe('Statoblast: delegate revert reasons', () => {
 	const node = useIsolatedAnvilNode()
 	let client: WriteClient
-	const delegates: { name: string; address: Address }[] = []
+	let harness: Address
 
 	beforeAll(async () => {
 		await setupTestAccounts(node.getAnvilWindowEthereum())
 		client = createWriteClient(node.getAnvilWindowEthereum(), TEST_ADDRESSES[0])
-		delegates.push({ name: 'operations', address: await deployContract(client, encodeDeployData({ abi: operationsArtifact.abi, bytecode: `0x${operationsArtifact.evm.bytecode.object}` })) })
-		delegates.push({ name: 'accounting', address: await deployContract(client, encodeDeployData({ abi: accountingArtifact.abi, bytecode: `0x${accountingArtifact.evm.bytecode.object}` })) })
+		harness = await deployContract(client, encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}` }))
 		await node.setBaselineSnapshot()
 	})
 
-	const decode = (address: Address, result: Hex) => client.readContract({ abi: operationsArtifact.abi, address, functionName: 'decodeError', args: [result] })
+	const decode = (address: Address, result: Hex) => client.readContract({ abi: artifact.abi, address, functionName: 'decodeError', args: [result] })
 
 	test('well-formed reasons decode and malformed Error payloads fall back to the generic reason', async () => {
 		const reason = 'Question active'
 		const wellFormed: Hex = `${errorSelector}${encodeAbiParameters([{ type: 'string' }], [reason]).slice(2)}`
 		const malformed: readonly Hex[] = [
+			'0x',
+			'0xdeadbeef',
+			`0x4e487b71${word(0x11n)}`,
 			// An Error selector alone has no ABI string header.
 			errorSelector,
 			// The string offset points far outside the payload.
@@ -41,11 +41,26 @@ describe('Statoblast: delegate revert reasons', () => {
 			// The offset leaves no room for a length word.
 			`${errorSelector}${word(33n)}${word(0n)}`,
 		]
-		for (const delegate of delegates) {
-			expect(await decode(delegate.address, wellFormed)).toBe(reason)
-			expect(await decode(delegate.address, '0x')).toBe('Delegate call failed')
-			expect(await decode(delegate.address, `0x4e487b71${word(0x11n)}`)).toBe('Delegate call failed')
-			for (const result of malformed) expect(await decode(delegate.address, result)).toBe('Delegate call failed')
+		const address = harness
+		expect(await decode(address, wellFormed)).toBe(reason)
+		expect(await decode(address, '0x')).toBe('Delegate call failed')
+		expect(await decode(address, `0x4e487b71${word(0x11n)}`)).toBe('Delegate call failed')
+		for (const result of malformed) {
+			expect(await decode(address, result)).toBe('Delegate call failed')
+			await expect(client.simulateContract({ abi: artifact.abi, address, functionName: 'forwardFailure', args: [result] })).rejects.toThrow('Delegate call failed')
 		}
+		await expect(client.simulateContract({ abi: artifact.abi, address, functionName: 'forwardFailure', args: [wellFormed] })).rejects.toThrow(reason)
+	})
+
+	test('preserves empty and long string reasons and successful return data', async () => {
+		for (const reason of ['', 'x'.repeat(257)]) {
+			const result: Hex = `${errorSelector}${encodeAbiParameters([{ type: 'string' }], [reason]).slice(2)}`
+			expect(await decode(harness, result)).toBe(reason)
+		}
+		// Preserve the old decoder's acceptance of in-range, noncanonical offsets.
+		expect(await decode(harness, `${errorSelector}${word(33n)}00${word(3n)}616263`)).toBe('abc')
+		expect(await decode(harness, `${errorSelector}${word(0n)}${word(0n)}`)).toBe('')
+		const { result } = await client.simulateContract({ abi: artifact.abi, address: harness, functionName: 'forwardSuccess', args: [123n] })
+		expect(result).toBe(123n)
 	})
 })

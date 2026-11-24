@@ -23,13 +23,13 @@ import { CarriedDepositProof } from './EscalationGameTypes.sol';
 import { ZoltarQuestionData } from '../ZoltarQuestionData.sol';
 import { IQuestionForker } from './interfaces/IQuestionForker.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
-import { QuestionLedgerEventEmitter } from './QuestionLedgerEventEmitter.sol';
+import { QuestionLedgerAccountingModule } from './QuestionLedgerAccountingModule.sol';
 import { QuestionLedgerStorage } from './QuestionLedgerStorage.sol';
 import { QuestionLedgerOperationsDelegate } from './QuestionLedgerOperationsDelegate.sol';
 import { QuestionLedgerSettlementDelegate } from './QuestionLedgerSettlementDelegate.sol';
 import { DelegateCallForwarder } from './DelegateCallForwarder.sol';
 import { IQuestionLedgerDeploymentWorkerConfiguration } from './interfaces/IQuestionLedgerDeploymentWorkerConfiguration.sol';
-import { QuestionLedgerLinearFees } from './QuestionLedgerLinearFees.sol';
+import { QuestionLedgerSettlementSync } from './QuestionLedgerSettlementSync.sol';
 import { QuestionLedgerAccountingDelegate } from './QuestionLedgerAccountingDelegate.sol';
 import { ISecurityPoolSettlement } from './interfaces/ISecurityPoolSettlement.sol';
 
@@ -53,7 +53,7 @@ contract QuestionLedger is QuestionLedgerStorage {
 	address public immutable questionForker;
 	ISecurityPoolFactory public immutable securityPoolFactory;
 	bool private immutable hasInheritedForkOutcome;
-	QuestionLedgerEventEmitter public immutable eventEmitter;
+	QuestionLedgerAccountingModule public immutable accountingModule;
 	address private immutable operationsDelegate;
 
 	event EscalationGameSet(EscalationGame escalationGame);
@@ -82,7 +82,7 @@ contract QuestionLedger is QuestionLedgerStorage {
 		universeId = _universeId;
 		IQuestionLedgerDeploymentWorkerConfiguration worker = IQuestionLedgerDeploymentWorkerConfiguration(msg.sender);
 		securityPoolFactory = worker.factory();
-		eventEmitter = worker.eventEmitter();
+		accountingModule = worker.accountingModule();
 		operationsDelegate = worker.operationsDelegate();
 		questionId = _questionId;
 		statoblastSecurityMultiplierBps = _statoblastSecurityMultiplierBps;
@@ -131,15 +131,15 @@ contract QuestionLedger is QuestionLedgerStorage {
 		_delegateAccounting(abi.encodeCall(QuestionLedgerAccountingDelegate.creditEscalationSurplus, (amountAttoRep)));
 	}
 
-	/// @dev The fixed eventEmitter target also owns security pool accounting and fee mutations.
+	/// @dev The fixed accountingModule target also owns security pool accounting and fee mutations.
 	/// Delegatecall preserves the original caller; authorization lives in each named target method.
 	function _delegateAccounting(bytes memory callData) private {
-		DelegateCallForwarder.invokeWithDecodedRevert(address(eventEmitter), callData);
+		DelegateCallForwarder.invokeWithDecodedRevert(address(accountingModule), callData);
 	}
 
 	/// @notice Factory-only: initializes the question fee clock.
 	function setStartingParams() external {
-		_delegateAccounting(abi.encodeCall(QuestionLedgerEventEmitter.setStartingParams, ()));
+		_delegateAccounting(abi.encodeCall(QuestionLedgerAccountingModule.setStartingParams, ()));
 	}
 
 	/// @notice Checkpoints the security pool settlement book; callable by anyone.
@@ -158,15 +158,11 @@ contract QuestionLedger is QuestionLedgerStorage {
 
 	/// @notice Refreshes the security pool's linear fee stream.
 	function refreshSecurityPoolFees() public {
-		_delegateAccounting(abi.encodeCall(QuestionLedgerLinearFees.refreshLinearFeeStream, ()));
+		_delegateAccounting(abi.encodeCall(QuestionLedgerSettlementSync.refreshSettlement, ()));
 	}
 
 	function _emitQuestionLedgerAccountingCheckpoint(AccountingReason reason) private {
-		_emitEvent(abi.encodeCall(QuestionLedgerEventEmitter.emitQuestionLedgerAccountingCheckpoint, (reason)));
-	}
-
-	function _emitEvent(bytes memory eventCall) private {
-		_delegateAccounting(eventCall);
+		_delegateAccounting(abi.encodeCall(QuestionLedgerAccountingModule.emitQuestionLedgerAccountingCheckpoint, (reason)));
 	}
 
 	/// @notice Returns zero once the question ends or a game exists; otherwise question cash plus available shared security pool capacity.
