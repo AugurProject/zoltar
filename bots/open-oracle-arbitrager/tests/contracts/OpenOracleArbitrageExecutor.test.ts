@@ -383,7 +383,7 @@ describe('OpenOracle arbitrage executor', () => {
 		expect(await tokenBalance(token2, client.account.address)).toBe(1000n)
 	})
 
-	test('withdraws one exact replacement credit without consuming unrelated holder balances', async () => {
+	test('withdraws exact replacement and dispute credits without consuming unrelated holder balances', async () => {
 		const replacementAmount = 2n ** 128n + 1n
 		const creditedAmount = replacementAmount
 		const token = await deploy(tokenArtifact, ['Replacement Token', 'RPL'])
@@ -391,6 +391,11 @@ describe('OpenOracle arbitrage executor', () => {
 		await approveToken(token, target, creditedAmount)
 		await writeContractAndWait(client, () => client.writeContract({ abi: targetArtifact.abi, address: target, functionName: 'credit', args: [token, creditedAmount, client.account.address] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: targetArtifact.abi, address: target, functionName: 'approveInternal', args: [executor, token, replacementAmount] }))
+		const residualToken = await deploy(tokenArtifact, ['Disputed Token', 'DIS'])
+		await mintToken(residualToken, client.account.address, 130n)
+		await approveToken(residualToken, target, 130n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: targetArtifact.abi, address: target, functionName: 'credit', args: [residualToken, 130n, client.account.address] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: targetArtifact.abi, address: target, functionName: 'approveInternal', args: [executor, residualToken, 30n] }))
 		const parent = await parentBlock()
 		await writeContractAndWait(client, () =>
 			client.writeContract({
@@ -404,6 +409,8 @@ describe('OpenOracle arbitrage executor', () => {
 						openOracle: target,
 						parentBlockNumber: parent.number,
 						token,
+						residualToken,
+						residualAmount: 30n,
 					},
 					7n,
 				],
@@ -411,5 +418,7 @@ describe('OpenOracle arbitrage executor', () => {
 		)
 		expect(await client.readContract({ abi: targetArtifact.abi, address: target, functionName: 'tokenHolder', args: [client.account.address, token] })).toBe(1n)
 		expect(await tokenBalance(token, client.account.address)).toBe(replacementAmount)
+		expect(await tokenBalance(residualToken, client.account.address)).toBe(30n)
+		expect(await client.readContract({ abi: targetArtifact.abi, address: target, functionName: 'tokenHolder', args: [client.account.address, residualToken] })).toBe(101n)
 	})
 })

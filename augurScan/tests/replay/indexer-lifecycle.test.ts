@@ -2010,6 +2010,7 @@ describe('network indexer lifecycle', () => {
 		spyOn(database, 'storedBlockTip').mockResolvedValue(undefined)
 		spyOn(database, 'contracts').mockResolvedValue(contracts)
 		spyOn(database, 'logScanCursors').mockResolvedValue(new Map())
+		spyOn(database, 'retainedEntitySampleBlocks').mockResolvedValue([])
 		spyOn(database, 'seedNetwork').mockResolvedValue(false)
 		spyOn(database, 'tokenMetadata').mockResolvedValue(new Map([[wethAddress.toLowerCase(), { address: wethAddress, decimals: 18, name: 'Wrapped Ether', readBlock: 10n, symbol: 'WETH' }]]))
 		spyOn(database, 'storeBlocks').mockImplementation(async (_chainId, blocks, _lease, _provenance, validateBeforeCommit) => {
@@ -2019,7 +2020,6 @@ describe('network indexer lifecycle', () => {
 		spyOn(database, 'contractDeploymentCandidates').mockResolvedValue([{ address: repAddress, kind: 'reputationToken', label: 'Reputation', provenance: 'Zoltar.DeployChild' }])
 		const recordContractDeployment = spyOn(database, 'recordContractDeployment').mockResolvedValue()
 		spyOn(database, 'recordFailure').mockResolvedValue()
-		// Reaching the head samples state there; this lifecycle has nothing to sample.
 		spyOn(database, 'richListBalanceTargets').mockResolvedValue({ addresses: [], assets: [] })
 		spyOn(database, 'stateSnapshotTargets').mockResolvedValue([])
 		const info = spyOn(console, 'info').mockImplementation(() => {})

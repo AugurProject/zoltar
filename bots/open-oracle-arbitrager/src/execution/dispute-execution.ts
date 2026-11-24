@@ -168,7 +168,7 @@ export async function executeDispute(
 	const lockedToken = expectedWithdrawalToken2(refreshedQuote.direction, game.currentAmount2, newAmount2)
 	const replacementFeePercentage = chargesFees({ ...game, currentAmount1: newAmount1 }) ? game.feePercentage : 0n
 	const replacementCredit1 = 2n * newAmount1 + calculateFee(newAmount1, replacementFeePercentage)
-	const replacementCredit2 = 2n * newAmount2 + calculateFee(newAmount2, replacementFeePercentage)
+	const replacementCredit2 = 2n * newAmount2 + calculateFee(newAmount2, replacementFeePercentage) + (lockedToken - newAmount2)
 	const internalAllowanceError = lifecycleAllowanceMismatch({ token1: executionSnapshot.internalAllowance1, token2: executionSnapshot.internalAllowance2 }, { token1: replacementCredit1 > newAmount1 ? replacementCredit1 : newAmount1, token2: replacementCredit2 > lockedToken ? replacementCredit2 : lockedToken })
 	if (internalAllowanceError !== undefined) throw new Error(internalAllowanceError)
 	const timeType = (game.flags & OPEN_ORACLE_FLAG_TIME_TYPE) !== 0n
@@ -241,6 +241,7 @@ export async function executeDispute(
 		entrySubmissionMode: config.submission.mode,
 		entryTransactionIntent: durableTransactionIntent(executionSigned.transaction),
 		entryTransactionNonce: executionSigned.transaction.nonce.toString(),
+		positionId: executionSigned.hash,
 		entryTransactionHash: executionSigned.hash,
 		entryTransactionHashes: signedTransactions.map(transaction => transaction.signed.hash),
 		executionIntent: executionPayload.executionIntent,

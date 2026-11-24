@@ -51,6 +51,18 @@ test('disabling the security pool clears discovery status and ignores a late dis
 		logs.resolve([])
 	}
 })
+test('a wallet switch updates an automatic owner and preserves an explicit selection', async () => {
+	window.history.replaceState({}, '', '#/security-pools')
+	capitalClient().install()
+	const hook = await mount()
+	expect(hook.state().ownerInput).toBe(owner)
+	await hook.setProps({ accountAddress: securityPool })
+	await waitFor(() => expect(hook.state().ownerInput).toBe(securityPool))
+	await act(() => hook.state().setOwnerInput(owner))
+	await hook.setProps({ accountAddress: undefined })
+	expect(hook.state().ownerInput).toBe(owner)
+})
+
 test('permissionless question growth is paged independently of the owner’s single position', async () => {
 	const source = capitalClient(capitalSnapshot({ questionCount: 1_000_000n }))
 	source.install()

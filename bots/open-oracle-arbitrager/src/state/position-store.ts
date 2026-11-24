@@ -81,12 +81,14 @@ export type PositionRecord = {
 	lockedWeth: string
 	manualReconciliation: ManualReconciliation | undefined
 	openedAt: string
+	positionId?: Hex | undefined
 	reportAmount1?: string | undefined
 	reportAmount2?: string | undefined
 	reportDisputeIndex?: string | undefined
 	reportFeePercentage?: string | undefined
 	realizedNetProfitEth: string | undefined
 	replacementCreditAmount?: string | undefined
+	replacementResidualTokenAmount?: string | undefined
 	replacementCreditToken?: Address | undefined
 	reportId: string
 	status: 'closed' | 'closed-pending-finality' | 'expired-not-included' | 'open' | 'open-pending-finality' | 'pending-entry' | 'recovery-required' | 'replaced' | 'settled' | 'withdrawing'
@@ -332,6 +334,7 @@ function parsePosition(value: unknown): PositionRecord {
 	const reportAccountingFieldCount = [reportAmount1, reportAmount2, reportFeePercentage].filter(value => value !== undefined).length
 	if (reportAccountingFieldCount !== 0 && reportAccountingFieldCount !== 3) throw new Error('Position journal report accounting fields are incomplete')
 	const replacementCreditAmount = optionalIntegerField(record, 'replacementCreditAmount')
+	const replacementResidualTokenAmount = optionalIntegerField(record, 'replacementResidualTokenAmount')
 	let replacementCreditToken: Address | undefined
 	if (record['replacementCreditToken'] !== undefined) {
 		if (typeof record['replacementCreditToken'] !== 'string') throw new Error('Position journal replacement credit token is invalid')
@@ -382,6 +385,7 @@ function parsePosition(value: unknown): PositionRecord {
 		entryTransactionNonce,
 		entryTransactionHash: hash32(record['entryTransactionHash'], 'Position journal transaction hash'),
 		entryTransactionHashes: entryTransactionHashes.map(hash => hash32(hash, 'Position journal transaction hash')),
+		...(record['positionId'] === undefined ? {} : { positionId: hash32(record['positionId'], 'Position journal position id') }),
 		executionIntent,
 		...(expiredTransactionAttempts === undefined ? {} : { expiredTransactionAttempts }),
 		gasExpenditures: parsedGasExpenditures,
@@ -416,6 +420,7 @@ function parsePosition(value: unknown): PositionRecord {
 		realizedNetProfitEth: record['realizedNetProfitEth'],
 		replacementCreditAmount,
 		replacementCreditToken,
+		replacementResidualTokenAmount,
 		reportId: record['reportId'],
 		status: record['status'] as PositionRecord['status'],
 		token,
@@ -550,8 +555,9 @@ export async function loadPositionJournalState(path: string, expectedChainId: nu
 	const positions = root['positions'].map(parsePosition)
 	const ids = new Set<string>()
 	for (const position of positions) {
-		if (ids.has(position.reportId)) throw new Error(`Duplicate position journal report id ${position.reportId}`)
-		ids.add(position.reportId)
+		const key = positionJournalKey(position)
+		if (ids.has(key)) throw new Error(`Duplicate position journal position ${key}`)
+		ids.add(key)
 	}
 	const archived = root['version'] === 2 ? emptyPositionJournalArchive() : parsePositionJournalArchive(root['archived'])
 	return compactPositionJournal({ archived, positions })
@@ -569,14 +575,24 @@ export function acquireExecutionSignerLock(chainId: number, account: Address) {
 	return acquireSharedExecutionSignerLock(chainId, account, 'open-oracle-arbitrager')
 }
 
+function positionJournalKey(position: PositionRecord) {
+	return `${position.reportId}:${(position.positionId ?? position.entryTransactionHash).toLowerCase()}`
+}
+
+export function upsertPositionJournalRecord(positions: readonly PositionRecord[], position: PositionRecord) {
+	const key = positionJournalKey(position)
+	return [position, ...positions.filter(existing => positionJournalKey(existing) !== key)]
+}
+
 export async function savePositionJournalState(path: string, state: PositionJournalState, chainId: number, filesystem?: PositionJournalFilesystem) {
 	if (!Number.isSafeInteger(chainId) || chainId < 1) throw new Error('Position journal chain ID must be a positive integer')
 	const compacted = compactPositionJournal({ archived: state.archived, positions: [...state.positions] })
 	const ids = new Set<string>()
 	for (const position of compacted.positions) {
 		parsePosition(position)
-		if (ids.has(position.reportId)) throw new Error(`Duplicate position journal report id ${position.reportId}`)
-		ids.add(position.reportId)
+		const key = positionJournalKey(position)
+		if (ids.has(key)) throw new Error(`Duplicate position journal position ${key}`)
+		ids.add(key)
 	}
 	await writeFileAtomically(path, `${JSON.stringify({ archived: compacted.archived, chainId, positions: compacted.positions, version: 4 }, undefined, 2)}\n`, { filesystem })
 	return compacted

@@ -9,6 +9,7 @@ import { buildIntent, createPreparedWalletPresentation } from '@zoltar/ui-core-s
 import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
+import { createUserFacingError, transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
 
 type MulticallRequest = Parameters<ReadClient['multicall']>[0]
 type WriteContractClient = Pick<WriteClient, 'sendTransaction' | 'waitForTransactionReceipt'> &
@@ -193,6 +194,46 @@ describe('contract core helpers', () => {
 					}) as never,
 			),
 		).rejects.toThrow('provider failed')
+	})
+
+	test.each([new Error(transactionErrorMessages.reviewCanceled), Object.assign(new Error('User rejected the request'), { code: 4001 }), createUserFacingError('Wallet account changed')])('preserves pre-broadcast errors without falling back to a simulation (%s)', async error => {
+		const call = mock(async () => {
+			throw new Error('execution reverted: simulation result')
+		})
+		const client: WriteContractClient = {
+			call,
+			sendTransaction: async () => {
+				throw error
+			},
+			waitForTransactionReceipt: async () => hashReceipt('success'),
+		}
+		await expect(
+			writeContractAndWaitForReceipt(client, () => ({
+				abi: [{ type: 'function', stateMutability: 'payable', name: 'submit', inputs: [], outputs: [] }] as const,
+				address: getAddress('0x3333333333333333333333333333333333333333'),
+				functionName: 'submit',
+			})),
+		).rejects.toBe(error)
+		expect(call).not.toHaveBeenCalled()
+	})
+
+	test('uses the simulation reason for a pre-broadcast contract revert', async () => {
+		const client: WriteContractClient = {
+			call: async () => {
+				throw new Error('execution reverted: specific contract reason')
+			},
+			sendTransaction: async () => {
+				throw new Error('execution reverted')
+			},
+			waitForTransactionReceipt: async () => hashReceipt('success'),
+		}
+		await expect(
+			writeContractAndWaitForReceipt(client, () => ({
+				abi: [{ type: 'function', stateMutability: 'payable', name: 'submit', inputs: [], outputs: [] }] as const,
+				address: getAddress('0x3333333333333333333333333333333333333333'),
+				functionName: 'submit',
+			})),
+		).rejects.toThrow('specific contract reason')
 	})
 
 	test('writeContractAndWaitForReceipt throws a generic revert message when no reason can be resolved', async () => {

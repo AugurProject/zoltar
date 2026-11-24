@@ -58,8 +58,8 @@ export function marketPriceState(market: Parameters<typeof marketAcceptsNewRisk>
  * gives 2·Y·N / (Y + N) outcome-share pairs, which convert to collateral at the pool's current share rate. The result is in
  * base units of the market's own collateral, so compare markets only after accounting for each collateral's decimals.
  */
-export function marketLiquidityCollateralUnits(market: Pick<LiveMarket, 'loadError' | 'pair' | 'yesReserve' | 'noReserve' | 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares'>) {
-	if (market.loadError !== undefined || market.pair === undefined) return undefined
+export function marketLiquidityCollateralUnits(market: Pick<LiveMarket, 'loadError' | 'cachedCollateralMissing' | 'pair' | 'yesReserve' | 'noReserve' | 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares'>) {
+	if (market.loadError !== undefined || market.cachedCollateralMissing || market.pair === undefined) return undefined
 	const total = market.yesReserve + market.noReserve
 	if (total === 0n) return 0n
 	return attoSharesToCollateralAttoEth((2n * market.yesReserve * market.noReserve) / total, market)

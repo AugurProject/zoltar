@@ -1,8 +1,19 @@
 import { describe, expect, test } from 'bun:test'
-import { expectedWithdrawalToken2, hedgedProfitBeforeGasToken1, realizedNetProfitWeth, recoveredHedgedProfitBeforeGasWeth, replacementCredit } from '#core/position-accounting'
+import { classifyPositionReport, expectedWithdrawalToken2, hedgedProfitBeforeGasToken1, realizedNetProfitWeth, recoveredHedgedProfitBeforeGasWeth, replacementCredit } from '#core/position-accounting'
 import { WETH_VALUATION } from '#core/collateral-valuation'
 
 describe('position accounting', () => {
+	test('classifies two disputes by one signer using the authenticated round', () => {
+		const account = '0x0000000000000000000000000000000000000001'
+		const earlier = { account, reportDisputeIndex: '1', reportAmount1: '1400', reportAmount2: '1300' } as const
+		const current = { account, reportDisputeIndex: '3', reportAmount1: '2744', reportAmount2: '2550' } as const
+		const game = { currentReporter: account, currentAmount1: 2744n, currentAmount2: 2550n, numReports: 4n } as const
+		expect(classifyPositionReport(earlier, game)).toBe('replaced')
+		expect(classifyPositionReport(current, game)).toBe('current')
+		expect(classifyPositionReport({ ...earlier, reportDisputeIndex: undefined }, game)).toBe('unknown')
+		expect(classifyPositionReport({ ...current, reportDisputeIndex: undefined }, game)).toBe('unknown')
+	})
+
 	test('uses actual swap execution rather than the pre-submission quote', () => {
 		expect(hedgedProfitBeforeGasToken1('sell-rep', 1_200n, 1_000n, 10n, 20n)).toBe(170n)
 		expect(hedgedProfitBeforeGasToken1('buy-rep', 900n, 1_000n, 10n, 20n)).toBe(100n)

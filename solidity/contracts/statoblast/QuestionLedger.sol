@@ -147,15 +147,6 @@ contract QuestionLedger is QuestionLedgerStorage {
 		_delegateAccounting(abi.encodeCall(QuestionLedgerAccountingDelegate.accrueSettlementCollateral, ()));
 	}
 
-	/// @notice Returns the native fee-epoch cutoff; bound security pool fee accrual follows the central stream.
-	function getFeeEpochEndTime() public view returns (uint256) {
-		uint256 forkTime = zoltar.getForkTime(universeId);
-		uint256 end = feeEpochEndTime;
-		if (end == type(uint256).max && address(escalationGame) != address(0))
-			end = escalationGame.getEscalationGameEndDate();
-		return forkTime != 0 && forkTime < end ? forkTime : end;
-	}
-
 	/// @notice Refreshes the security pool's linear fee stream.
 	function refreshSecurityPoolFees() public {
 		_delegateAccounting(abi.encodeCall(QuestionLedgerSettlementSync.refreshSettlement, ()));

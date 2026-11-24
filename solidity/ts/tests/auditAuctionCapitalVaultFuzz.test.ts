@@ -250,7 +250,9 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 				const keeperPrincipal = await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'ownerCollateral', args: [keeper.account.address] })
 				expect(keeperPrincipal[0]).toBe(keeperDeposit + bids.reduce((sum, bid) => sum + bid.award, 0n))
 				if (earned > credited) throw new Error(`${label}: winners are owed ${earned} of ${credited} credited: ${context()}`)
-				const wethBalanceAttoEth = await caller.readContract({ abi: wethArtifact.abi, address: weth, functionName: 'balanceOf', args: [capital] })
+				const [ledgerCash, deferredCash] = await Promise.all([capital, harness].map(address => caller.readContract({ abi: wethArtifact.abi, address: weth, functionName: 'balanceOf', args: [address] })))
+				if (ledgerCash === undefined || deferredCash === undefined) throw new Error('Missing capital fee custody balances')
+				const wethBalanceAttoEth = ledgerCash + deferredCash
 				// Healthy cohorts keep every credited attoETH; fees of unhealthy intervals are burned by design.
 				if (exactFees ? wethBalanceAttoEth !== credited : wethBalanceAttoEth > credited || wethBalanceAttoEth < earned) throw new Error(`${label}: ledger holds ${wethBalanceAttoEth} collateral for ${credited} credited and ${earned} owed fees: ${context()}`)
 				const totals = await caller.readContract({ abi: indexArtifact.abi, address: index, functionName: 'totals' })

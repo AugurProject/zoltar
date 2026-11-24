@@ -343,9 +343,7 @@ export async function quoteBestV3ExactInputWithSource(client: ReadClient, tokenI
 	}
 }
 
-// ─── Known V4 REP pools ───────────────────────────────────────────────────────
-// REP/USDC V4 pool (fee=10001, tickSpacing=200, no hooks)
-// Pool ID: 0x75d479eb83b7c9008ab854e74625a01841e5b3e06af40a89c10998ad2664f356
+// Try this direct pool configuration for the active genesis REP and USDC.
 const REP_USDC_V4_POOL: PoolConfig = { fee: 10001, tickSpacing: 200 }
 
 export async function quoteRepForUsdcV4WithSource(client: ReadClient, amountAttoRep: bigint) {

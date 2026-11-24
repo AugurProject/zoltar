@@ -296,7 +296,8 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 		headerPromises.set(blockNumber, pending)
 		return await pending
 	}
-	let pendingBlocks = [...new Set([...logsByBlock.keys(), end])].sort(compareBigint)
+	const sampleBlocks = await state.database.retainedEntitySampleBlocks(state.network.chainId, batchStart, end, requireLease(state))
+	let pendingBlocks = [...new Set([...logsByBlock.keys(), ...sampleBlocks, end])].sort(compareBigint)
 	let pendingBlockIndex = 0
 	let processedBlockCount = 0
 	let committedLogs = 0

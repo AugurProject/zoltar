@@ -1,12 +1,23 @@
 import { PRIVATE_INTENT_FINALITY_BLOCKS } from '#core/cycle-control'
 import { parseTransactionReconciliation, validateReconciliationIntentChain, verifyFinalizedReplacement } from '#core/transaction-reconciliation'
 import { canonicalBlockHash } from '#monitoring/operator-chain'
-import { commitReconciledIntent } from '#state/operator-state'
-import { createPublicClient } from '@zoltar/bot-shared/ethereum'
+import { commitReconciledIntent, type PendingTransactionIntent, type RuntimeState } from '#state/operator-state'
+import { createPublicClient, parseTransaction, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { sameAddress } from '@zoltar/core-shared/evm/address'
+import { applySuccessfulSecurityPoolFunding, completeSecurityPoolInstruction } from '#execution/receipt-transition'
 import { isReceiptNotFound, receiptEvidence } from '@zoltar/bot-shared/execution/receipt-quorum'
 import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import { readEndpoints, type LiquidatorDeps, type LiquidatorRuntime } from './liquidator-runtime.ts'
+
+/** @internal Tests verify durable effects for a matching successful replacement. */
+export function applyMatchingReplacementEffects(state: RuntimeState, intent: PendingTransactionIntent, evidence: { transaction: { to: Address | undefined; input: Hex; value: bigint }; receipt: ReturnType<typeof receiptEvidence> }) {
+	const original = parseTransaction(intent.serializedTransaction)
+	const { transaction, receipt } = evidence
+	if (receipt.status !== 'success' || original.to === undefined || original.to === null || transaction.to === undefined || !sameAddress(original.to, transaction.to) || (original.data ?? '0x').toLowerCase() !== transaction.input.toLowerCase() || (original.value ?? 0n) !== transaction.value) return
+	applySuccessfulSecurityPoolFunding(state, intent, receipt)
+	completeSecurityPoolInstruction(state, intent)
+}
 
 /** Resolves a paused pending intent to its finalized replacement transaction, verified under the RPC quorum. */
 export function reconcileTransaction(runtime: Pick<LiquidatorRuntime, 'settings' | 'chain' | 'readPool'>, deps: Pick<LiquidatorDeps, 'state' | 'configurationMutationGate'>, value: unknown) {
@@ -57,6 +68,7 @@ export function reconcileTransaction(runtime: Pick<LiquidatorRuntime, 'settings'
 			replacement: async () => replacementEvidence,
 		})
 		const reconciledState = { ...state }
+		if (replacementEvidence !== undefined) applyMatchingReplacementEffects(reconciledState, intent, replacementEvidence)
 		await commitReconciledIntent(runtime.settings.runtime.stateFile, reconciledState, intent.hash, {
 			details: `original=${intent.hash} replacement=${replacement.hash} nonce=${intent.nonce.toString()} replacementStatus=${replacement.status}`,
 			hash: replacement.hash,
@@ -66,6 +78,8 @@ export function reconcileTransaction(runtime: Pick<LiquidatorRuntime, 'settings'
 		})
 		state.activities = reconciledState.activities
 		state.pendingTransactions = reconciledState.pendingTransactions
+		state.securityPoolFunding = reconciledState.securityPoolFunding
+		state.completedSecurityPoolInstructions = reconciledState.completedSecurityPoolInstructions
 		return { intentHash: intent.hash, replacementHash: replacement.hash, replacementStatus: replacement.status }
 	})
 }

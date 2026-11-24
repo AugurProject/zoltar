@@ -45,6 +45,8 @@ contract OpenOracleArbitrageExecutor is OpenOracleV4Hedge {
 		uint256 parentBlockNumber;
 		bytes32 expectedParentBlockHash;
 		uint256 amount;
+		address residualToken;
+		uint256 residualAmount;
 	}
 
 	struct ExecutionBalances {
@@ -311,25 +313,39 @@ contract OpenOracleArbitrageExecutor is OpenOracleV4Hedge {
 		require(request.amount <= uint256(type(uint128).max) * 4, 'Replacement credit amount exceeds report bounds');
 		entered = true;
 
-		uint256 walletBalance = IERC20(request.token).balanceOf(msg.sender);
 		IOpenOracleLifecycle openOracle = IOpenOracleLifecycle(request.openOracle);
-		uint256 remaining = request.amount;
+		_withdrawReplacementToken(openOracle, reportId, request.token, request.amount);
+		if (request.residualAmount != 0) {
+			require(request.residualToken != request.token, 'Combine credits for the same token');
+			require(request.residualToken.code.length > 0, 'Residual token must contain contract code');
+			require(request.residualAmount <= type(uint128).max, 'Residual credit exceeds report bounds');
+			_withdrawReplacementToken(openOracle, reportId, request.residualToken, request.residualAmount);
+		}
+		entered = false;
+	}
+
+	function _withdrawReplacementToken(
+		IOpenOracleLifecycle openOracle,
+		uint256 reportId,
+		address token,
+		uint256 amount
+	) private {
+		uint256 walletBalance = IERC20(token).balanceOf(msg.sender);
+		uint256 remaining = amount;
 		while (remaining != 0) {
 			uint128 chunk = remaining > type(uint128).max ? type(uint128).max : uint128(remaining);
-			openOracle.internalTransferFrom(msg.sender, address(this), request.token, chunk);
+			openOracle.internalTransferFrom(msg.sender, address(this), token, chunk);
 			remaining -= chunk;
 		}
 		require(
-			openOracle.withdrawTo(request.token, request.amount, msg.sender) == request.amount,
+			openOracle.withdrawTo(token, amount, msg.sender) == amount,
 			'OpenOracle replacement credit withdrawal was not exact'
 		);
 		require(
-			IERC20(request.token).balanceOf(msg.sender) == walletBalance + request.amount,
+			IERC20(token).balanceOf(msg.sender) == walletBalance + amount,
 			'OpenOracle replacement credit receipt was not exact'
 		);
-
-		emit ReplacementCreditWithdrawn(msg.sender, reportId, request.token, request.amount);
-		entered = false;
+		emit ReplacementCreditWithdrawn(msg.sender, reportId, token, amount);
 	}
 
 	/// @notice Reverts unless execution occurs in the direct child of the signed canonical parent.

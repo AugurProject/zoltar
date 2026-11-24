@@ -17,6 +17,63 @@ type DirectObservationContext = {
 	readonly replayRun: IndexerRunSourceHashes
 }
 
+postgresTest('source replay restores quiet entity sample anchors only when their block hash agrees', async () => {
+	const database = new ScannerDatabase(requirePostgresUrl())
+	await initializeSchema(database.sql)
+	const replayChain = chainId + 500
+	const network: NetworkConfig = {
+		id: 'quiet-sample-replay',
+		name: 'Quiet sample replay',
+		chainId: replayChain,
+		rpcUrls: ['https://example.invalid'],
+		startBlock: 1n,
+		explorerBaseUrl: '',
+		nativeSymbol: 'ETH',
+		confirmationDepth: 0n,
+		contracts: [],
+	}
+	await database.seedNetwork(network)
+	const lease = await database.tryAcquireIndexerLock(replayChain)
+	if (lease === undefined) throw new Error('Quiet sample writer did not acquire its lock')
+	const header = (number: bigint, hash: BlockHash, parentHash: BlockHash): IndexedBlock => ({
+		number,
+		hash,
+		parentHash,
+		timestamp: new Date('2026-04-01T00:00:00Z'),
+		observedHead: 4n,
+		finalizedThrough: 4n,
+		contracts: [],
+		tokenMetadata: [],
+		transactions: [],
+		logs: [],
+		addressActivity: [],
+		contractDeploymentObservations: [],
+		logScanCursors: [],
+	})
+	const first = header(1n, blockHash('quiet-sample-1'), blockHash('quiet-sample-parent'))
+	const second = header(2n, blockHash('quiet-sample-2'), first.hash)
+	const replacement = header(2n, blockHash('quiet-sample-replaced'), first.hash)
+	try {
+		for (const block of [first, second]) {
+			await database.storeBlock(replayChain, block, lease)
+			await database.storeEntityStateSnapshots(replayChain, block.number, block.hash, block.timestamp, [{ entityType: 'pool', entityIdentity: address.toLowerCase(), sourceMethod: 'sample', readStatus: 'success', readResult: { value: block.number.toString() } }], lease)
+		}
+		await database.seedNetwork(network, { lease, sourceReplayPlan: { reason: 'projection-rebuild', causes: ['projection-rebuild'] } })
+		expect(await database.retainedEntitySampleBlocks(replayChain, 1n, 4n, lease)).toEqual([1n, 2n])
+		await database.storeBlocks(replayChain, [first, replacement], lease)
+		const visible = await database.sql`
+			SELECT sample.block_number::text AS number FROM entity_state_snapshots sample
+			JOIN blocks block ON block.chain_id = sample.chain_id AND block.hash = sample.block_hash AND block.canonical
+			WHERE sample.chain_id = ${replayChain} AND sample.canonical ORDER BY sample.block_number
+		`
+		expect([...visible]).toEqual([{ number: '1' }])
+	} finally {
+		await lease.release()
+		await database.sql.unsafe('TRUNCATE TABLE networks CASCADE')
+		await database.close()
+	}
+})
+
 // Records successful and failed balance reads from two indexer runs against one canonical block.
 const storeInitialObservationAttempts = async ({ database, observationChainId, evidenceHash, evidence, initialRun, replayRun }: DirectObservationContext): Promise<void> => {
 	const initialLease = await database.tryAcquireIndexerLock(observationChainId)

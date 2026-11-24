@@ -56,8 +56,8 @@ contract CapitalAuctionHarness is CapitalLedgerHarness {
 	}
 	function creditFees() external payable {
 		collateralToken.deposit{value: msg.value}();
-		collateralToken.approve(address(ledger), msg.value);
-		ledger.creditTimedFees(msg.value);
+		assignedCapitalCash += msg.value;
+		ledger.creditDeferredTimedFees(msg.value);
 	}
 }
 

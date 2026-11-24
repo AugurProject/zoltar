@@ -2806,8 +2806,8 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent).toContain('The response window now ends')
 		expect(within(document.body).getByRole('button', { name: 'Update your reminder (.ics)' })).not.toBeNull()
 	})
-	for (const closed of [{ currentTime: 601n }, { questionOutcome: 'yes', settlementState: 'resolved', parentWithdrawalEnabled: true }, { hasReachedNonDecision: true }] satisfies Partial<ActiveReportingDetails>[]) {
-		test(`clears deadline movement when closed: ${Object.keys(closed).join(', ')}`, async () => {
+	for (const closed of [{ currentTime: 601n }, { questionOutcome: 'yes', settlementState: 'resolved', parentWithdrawalEnabled: true }, { hasReachedNonDecision: true }, { escalationEndTime: (1n << 256n) - 1n }] satisfies Partial<ActiveReportingDetails>[]) {
+		test(`clears deadline movement when reminders are unavailable: ${Object.keys(closed).join(', ')}`, async () => {
 			const details = createReportingDetails()
 			const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
 			cleanupRenderedComponent = rendered.cleanup

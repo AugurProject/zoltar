@@ -56,6 +56,8 @@ export function priceFixture(account = capitalSnapshot({ forkTime: 100n })) {
 	let wethAllowanceAttoEth = 0n
 	let repAllowanceAttoRep = 0n
 	let baseFeePerGas = 0n
+	let head: bigint | undefined
+	let ethBalanceAttoEth: bigint | undefined
 	let recoveryCallFailure: Error | undefined
 	const recoveryCalls: Parameters<ReadClient['simulateContract']>[0][] = []
 	const game: OpenOracleStatePreimage['game'] = {
@@ -108,7 +110,11 @@ export function priceFixture(account = capitalSnapshot({ forkTime: 100n })) {
 			if (recoveryCallFailure !== undefined) throw recoveryCallFailure
 			return { result: undefined }
 		}),
-		getBlock: async () => ({ ...(await client.getBlock()), baseFeePerGas }),
+		getBalance: async (args: Parameters<ReadClient['getBalance']>[0]) => ethBalanceAttoEth ?? (await client.getBalance(args)),
+		getBlock: async () => {
+			const block = await client.getBlock()
+			return { ...block, number: head ?? block.number, baseFeePerGas }
+		},
 	}))
 	const backend = { ...source.backend, createReadClient: () => pricedClient }
 	installActiveEnvironmentForTesting(backend)
@@ -130,6 +136,13 @@ export function priceFixture(account = capitalSnapshot({ forkTime: 100n })) {
 		recoveryCalls,
 		setRecoveryCallFailure: (failure: Error | undefined) => {
 			recoveryCallFailure = failure
+		},
+		setEth: (balance: bigint) => {
+			ethBalanceAttoEth = balance
+		},
+		setHead: (blockNumber: bigint, fee: bigint) => {
+			head = blockNumber
+			baseFeePerGas = fee
 		},
 		setBaseFee: (fee: bigint) => {
 			baseFeePerGas = fee

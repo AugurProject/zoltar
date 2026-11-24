@@ -20,6 +20,11 @@ test('fee valuation stops at the epoch end', () => {
 	expect(estimateMintCheckpoint({ ...accounting, currentTimestamp: 1n })?.estimatedRetentionFeeAttoEth).toBe(0n)
 })
 
+test('USDC pools display LP in their share precision', () => {
+	const collateral = { token: '0x1111111111111111111111111111111111111111', symbol: 'USDC', decimals: 6, native: false } as const
+	expect(formatLpQuantity(1_250_000n, 2, 'nearest', { collateral })).toBe('1.25 LP')
+})
+
 test('does not label a nonzero token balance as zero at display precision', () => {
 	expect(formatOutcomeQuantity(1n, 'YES')).toBe('0.000000000000000001 Yes')
 	expect(formatOutcomeQuantity(0n, 'YES')).toBe('0.00 Yes')

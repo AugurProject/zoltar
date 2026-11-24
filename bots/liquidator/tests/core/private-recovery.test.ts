@@ -18,7 +18,7 @@ async function fixture() {
 	const settings = parseSettings(JSON.parse(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).text()))
 	settings.network.chainId = 1
 	settings.runtime.stateFile = join(directory, 'state.json')
-	const control: { head: bigint; nonce: bigint; receipt: boolean; cancellationHash?: Hex; cancellationMined: boolean; rejectCancellation?: boolean } = { head: 140n, nonce: 0n, receipt: false, cancellationMined: false }
+	const control: { head: bigint; nonce: bigint; receipt: boolean; receiptOnNonceRead?: boolean; cancellationHash?: Hex; cancellationMined: boolean; rejectCancellation?: boolean } = { head: 140n, nonce: 0n, receipt: false, cancellationMined: false }
 	const requests: string[] = []
 	const server = Bun.serve({
 		hostname: '127.0.0.1',
@@ -46,8 +46,10 @@ async function fixture() {
 				if (control.cancellationMined && Reflect.get(payload, 'params')?.[0] === control.cancellationHash) result = { ...envelope, to: intent.sender, transactionHash: control.cancellationHash }
 				else if (control.receipt) result = { ...envelope, to: receipt.to, transactionHash: intent.hash }
 				else result = null
-			} else if (method === 'eth_getTransactionCount') result = `0x${control.nonce.toString(16)}`
-			else if (method === 'eth_blockNumber') result = `0x${control.head.toString(16)}`
+			} else if (method === 'eth_getTransactionCount') {
+				if (control.receiptOnNonceRead) control.receipt = true
+				result = `0x${control.nonce.toString(16)}`
+			} else if (method === 'eth_blockNumber') result = `0x${control.head.toString(16)}`
 			else if (method === 'eth_getBlockByNumber') result = { number: Reflect.get(payload, 'params')?.[0] === 'latest' ? `0x${control.head.toString(16)}` : Reflect.get(payload, 'params')?.[0], hash: receipt.blockHash, baseFeePerGas: '0x1', timestamp: '0x1', transactions: [] }
 			else return Response.json({ id, jsonrpc: '2.0', error: { code: -32000, message: `Unexpected recovery RPC ${method}` } })
 			return Response.json({ id, jsonrpc: '2.0', result })
@@ -123,7 +125,19 @@ test('a consumed nonce without a receipt remains tracked and never falls back to
 		f.control.nonce = 1n
 		await expect(recoverPendingTransactions(f.settings, f.wallet, f.state)).rejects.toThrow('nonce was consumed')
 		expect((await loadDurableState(f.settings.runtime.stateFile, 1)).pendingTransactions[0]?.hash).toBe(f.intent.hash)
-		expect(f.requests).toEqual(['eth_blockNumber', 'eth_getTransactionReceipt', 'eth_getTransactionCount'])
+		expect(f.requests).toEqual(['eth_blockNumber', 'eth_getTransactionReceipt', 'eth_getTransactionCount', 'eth_blockNumber', 'eth_getTransactionReceipt'])
+	} finally {
+		await f.close()
+	}
+})
+
+test('recovers a receipt that first appears when the signer nonce advances', async () => {
+	const f = await fixture()
+	try {
+		f.control.nonce = 1n
+		f.control.receiptOnNonceRead = true
+		expect(await recoverPendingTransactions(f.settings, f.wallet, f.state)).toBe(false)
+		expect((await loadDurableState(f.settings.runtime.stateFile, 1)).pendingTransactions).toHaveLength(0)
 	} finally {
 		await f.close()
 	}

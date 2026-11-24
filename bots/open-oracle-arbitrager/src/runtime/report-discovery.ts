@@ -1,7 +1,7 @@
 import { retainReportsAndLogs } from '#config/runtime-deployment'
 import { canonicalBlockHashWithQuorum, REORG_OVERLAP_BLOCKS } from '#execution/execution-orchestration'
 import { pendingCoordinatorReports, pendingCoordinatorReportsWithQuorum } from '#execution/recovery-support'
-import { scheduleReportWork } from '#monitoring/report-work'
+import { scheduleReportWork, watchedPositionReportIds } from '#monitoring/report-work'
 import { discoverStoredReports } from '#monitoring/report-index'
 import { discoverCoordinatorPolicies } from '#monitoring/coordinator-discovery'
 import { applyCoordinatorReports, applyLogs, compareLogs, logBlockNumber } from '#monitoring/oracle-log-state'
@@ -55,14 +55,7 @@ export async function discoverReports(runtime: OperatorRuntime, context: Operato
 	const scanCursor = cursorForHeadScan(cursor, blockNumber, blockHash, REORG_OVERLAP_BLOCKS)
 	if (scanCursor === undefined) return { kind: 'head-unchanged' }
 	const clients = config.execute ? runtime.readClients : [runtime.client]
-	const indexed = await discoverStoredReports(
-		clients,
-		config,
-		blockNumber,
-		blockHash,
-		replacedMarketHead ? undefined : runtime.reportIndexCursor,
-		runtime.positions.map(position => BigInt(position.reportId)),
-	)
+	const indexed = await discoverStoredReports(clients, config, blockNumber, blockHash, replacedMarketHead ? undefined : runtime.reportIndexCursor, watchedPositionReportIds(runtime.positions))
 	runtime.reportBacklog ??= new Map()
 	for (const report of indexed.reports) {
 		if (!runtime.reportBacklog.has(report.reportId)) runtime.reportBacklog.set(report.reportId, { creator: report.creator })

@@ -44,7 +44,7 @@ postgresTest('a settled timestamp report keeps its timestamp clock in the detail
 		await report(1, 'ReportSubmitted', { flags: '15', reportTimestamp: '1767225660', disputeDelay: '0', settlementTime: '60' })
 		await report(3, 'ReportSettled', { price: '5' })
 		const detail = await request(connection, `/api/v1/state/reports/${chainId}/${oracle}/7`)
-		expect(await detail.json()).toMatchObject({ data: { current: { event_name: 'ReportSettled', lifecycle: { state: 'Settled', clock: 'timestamp' } } } })
+		expect(await detail.json()).toMatchObject({ data: { current: { event_name: 'ReportSettled', lifecycle: { state: 'Settled', clock: 'timestamp' } }, rounds: { items: [{ event_name: 'ReportSubmitted' }] } } })
 		const operations = await request(connection, `/api/v1/state/reports?chainId=${chainId}`)
 		expect(operations.status).toBe(200)
 		// Before settlement the historical detail shows the open report on the same clock.

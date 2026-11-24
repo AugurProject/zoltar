@@ -882,7 +882,6 @@ export const questionLedgerAbi = [
 	{ type: 'function', name: 'escalationGame', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract EscalationGame' }] },
 	{ type: 'function', name: 'escalationGameFactory', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract EscalationGameFactory' }] },
 	{ type: 'function', name: 'getCurrentMintingCapacityAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
-	{ type: 'function', name: 'getFeeEpochEndTime', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'initialEscalationGameDepositAttoRep', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{
 		type: 'function',
@@ -2756,7 +2755,6 @@ export const securityPoolCapitalLedgerAbi = [
 	{ type: 'function', name: 'commitmentIndex', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract SecurityPoolCommitmentIndex' }] },
 	{ type: 'function', name: 'conservativePrice', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'creditDeferredTimedFees', stateMutability: 'nonpayable', inputs: [{ name: 'cash', type: 'uint256', internalType: 'uint256' }], outputs: [] },
-	{ type: 'function', name: 'creditTimedFees', stateMutability: 'nonpayable', inputs: [{ name: 'cash', type: 'uint256', internalType: 'uint256' }], outputs: [] },
 	{ type: 'function', name: 'demandAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{
 		type: 'function',
@@ -5907,7 +5905,7 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0x9c960988000004470d6978a3a6914472b73421bd7992fbd42e43f04c28945c35',
 		runtimeCodeLength: 21706,
 		immutableReferences: {
-			'25580': [
+			'25523': [
 				{ length: 32, start: 4605 },
 				{ length: 32, start: 4792 },
 				{ length: 32, start: 8061 },
@@ -5918,64 +5916,64 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 19468 },
 				{ length: 32, start: 20681 },
 			],
-			'25583': [
+			'25526': [
 				{ length: 32, start: 4874 },
 				{ length: 32, start: 10131 },
 				{ length: 32, start: 11549 },
 				{ length: 32, start: 16089 },
 				{ length: 32, start: 18486 },
 			],
-			'25585': [
+			'25528': [
 				{ length: 32, start: 3788 },
 				{ length: 32, start: 9362 },
 				{ length: 32, start: 16035 },
 				{ length: 32, start: 18307 },
 			],
-			'25588': [
+			'25531': [
 				{ length: 32, start: 9627 },
 				{ length: 32, start: 12982 },
 				{ length: 32, start: 18362 },
 			],
-			'25590': [
+			'25533': [
 				{ length: 32, start: 12357 },
 				{ length: 32, start: 17673 },
 				{ length: 32, start: 18587 },
 			],
-			'25593': [{ length: 32, start: 5637 }],
-			'25595': [{ length: 32, start: 11679 }],
-			'25597': [
+			'25536': [{ length: 32, start: 5637 }],
+			'25538': [{ length: 32, start: 11679 }],
+			'25540': [
 				{ length: 32, start: 12670 },
 				{ length: 32, start: 17916 },
 				{ length: 32, start: 18627 },
 			],
-			'25599': [
+			'25542': [
 				{ length: 32, start: 11620 },
 				{ length: 32, start: 19134 },
 			],
-			'25601': [{ length: 32, start: 10030 }],
-			'25603': [{ length: 32, start: 6969 }],
-			'25605': [{ length: 32, start: 5406 }],
-			'25607': [
+			'25544': [{ length: 32, start: 10030 }],
+			'25546': [{ length: 32, start: 6969 }],
+			'25548': [{ length: 32, start: 5406 }],
+			'25550': [
 				{ length: 32, start: 13566 },
 				{ length: 32, start: 17711 },
 			],
-			'25609': [
+			'25552': [
 				{ length: 32, start: 5298 },
 				{ length: 32, start: 16294 },
 			],
-			'25614': [
+			'25557': [
 				{ length: 32, start: 6691 },
 				{ length: 32, start: 20083 },
 			],
-			'25617': [{ length: 32, start: 1137 }],
-			'25620': [
+			'25560': [{ length: 32, start: 1137 }],
+			'25563': [
 				{ length: 32, start: 1445 },
 				{ length: 32, start: 4169 },
 				{ length: 32, start: 5815 },
 				{ length: 32, start: 11967 },
 				{ length: 32, start: 12085 },
 			],
-			'25623': [
+			'25566': [
 				{ length: 32, start: 1261 },
 				{ length: 32, start: 1724 },
 				{ length: 32, start: 4345 },
@@ -5994,73 +5992,72 @@ export const securityPoolRuntimeIdentities = {
 		},
 	},
 	SecurityPoolCapitalLedger: {
-		runtimeCodeHash: '0xd139854734c84260dce07b0d8ad1bf0d45e0cd7292c8e1046da8d1eabbc68c4b',
-		runtimeCodeLength: 19972,
+		runtimeCodeHash: '0x9883a00c930e3f9f322b22d5f87a668b269398924de1545dcf19792b37451f2b',
+		runtimeCodeLength: 19781,
 		immutableReferences: {
-			'32008': [
-				{ length: 32, start: 1270 },
-				{ length: 32, start: 1913 },
-				{ length: 32, start: 3913 },
-				{ length: 32, start: 4359 },
-				{ length: 32, start: 4739 },
-				{ length: 32, start: 4985 },
-				{ length: 32, start: 5817 },
-				{ length: 32, start: 6973 },
-				{ length: 32, start: 7211 },
-				{ length: 32, start: 7457 },
-				{ length: 32, start: 8349 },
-				{ length: 32, start: 9017 },
-				{ length: 32, start: 9278 },
-				{ length: 32, start: 9680 },
-				{ length: 32, start: 10670 },
-				{ length: 32, start: 17789 },
+			'31951': [
+				{ length: 32, start: 1259 },
+				{ length: 32, start: 1902 },
+				{ length: 32, start: 3902 },
+				{ length: 32, start: 4348 },
+				{ length: 32, start: 4746 },
+				{ length: 32, start: 5578 },
+				{ length: 32, start: 6734 },
+				{ length: 32, start: 6972 },
+				{ length: 32, start: 7218 },
+				{ length: 32, start: 8217 },
+				{ length: 32, start: 8885 },
+				{ length: 32, start: 9146 },
+				{ length: 32, start: 9548 },
+				{ length: 32, start: 10538 },
+				{ length: 32, start: 17318 },
 			],
-			'32011': [
-				{ length: 32, start: 1492 },
-				{ length: 32, start: 2035 },
-				{ length: 32, start: 7951 },
-				{ length: 32, start: 11648 },
-				{ length: 32, start: 12198 },
-				{ length: 32, start: 12944 },
-				{ length: 32, start: 16855 },
-				{ length: 32, start: 19697 },
+			'31954': [
+				{ length: 32, start: 1481 },
+				{ length: 32, start: 2024 },
+				{ length: 32, start: 7819 },
+				{ length: 32, start: 11446 },
+				{ length: 32, start: 11996 },
+				{ length: 32, start: 12742 },
+				{ length: 32, start: 16653 },
+				{ length: 32, start: 19594 },
 			],
-			'32014': [
-				{ length: 32, start: 1823 },
-				{ length: 32, start: 2248 },
+			'31957': [
+				{ length: 32, start: 1812 },
+				{ length: 32, start: 2237 },
 			],
-			'32017': [
-				{ length: 32, start: 5054 },
-				{ length: 32, start: 6584 },
-				{ length: 32, start: 8558 },
-				{ length: 32, start: 10062 },
-				{ length: 32, start: 10299 },
+			'31960': [
+				{ length: 32, start: 4815 },
+				{ length: 32, start: 6345 },
+				{ length: 32, start: 8426 },
+				{ length: 32, start: 9930 },
+				{ length: 32, start: 10167 },
 			],
-			'32019': [
-				{ length: 32, start: 6394 },
-				{ length: 32, start: 8847 },
-				{ length: 32, start: 12041 },
-				{ length: 32, start: 14207 },
+			'31962': [
+				{ length: 32, start: 6155 },
+				{ length: 32, start: 8715 },
+				{ length: 32, start: 11839 },
+				{ length: 32, start: 14005 },
 			],
-			'32021': [
-				{ length: 32, start: 2804 },
-				{ length: 32, start: 8505 },
-				{ length: 32, start: 13557 },
-				{ length: 32, start: 14034 },
-				{ length: 32, start: 14169 },
-				{ length: 32, start: 14364 },
-				{ length: 32, start: 14454 },
-				{ length: 32, start: 15275 },
+			'31964': [
+				{ length: 32, start: 2793 },
+				{ length: 32, start: 8373 },
+				{ length: 32, start: 13355 },
+				{ length: 32, start: 13832 },
+				{ length: 32, start: 13967 },
+				{ length: 32, start: 14162 },
+				{ length: 32, start: 14252 },
+				{ length: 32, start: 15073 },
 			],
 		},
 	},
-	SecurityPoolCommitmentIndex: { runtimeCodeHash: '0xf8d2e01bf55b43a35f26dab47b79a5cceb43a37468cb075c37adebc40682f636', runtimeCodeLength: 21092, immutableReferences: { '36789': [{ length: 32, start: 4416 }] } },
-	SecurityPoolCapitalFeeStreams: { runtimeCodeHash: '0xcb9a0c294463757f330e56afd77799ee9b40dd28676ec5f57ec0ff659b0d91ad', runtimeCodeLength: 3855, immutableReferences: { '31334': [{ length: 32, start: 1067 }] } },
+	SecurityPoolCommitmentIndex: { runtimeCodeHash: '0xf8d2e01bf55b43a35f26dab47b79a5cceb43a37468cb075c37adebc40682f636', runtimeCodeLength: 21092, immutableReferences: { '36701': [{ length: 32, start: 4416 }] } },
+	SecurityPoolCapitalFeeStreams: { runtimeCodeHash: '0xcb9a0c294463757f330e56afd77799ee9b40dd28676ec5f57ec0ff659b0d91ad', runtimeCodeLength: 3855, immutableReferences: { '31277': [{ length: 32, start: 1067 }] } },
 	SecurityPoolSettlement: {
 		runtimeCodeHash: '0x3690c9b05d1a25301963ca3ebdd958ab2d8b14bcebccd81be82cb706d24bf862',
 		runtimeCodeLength: 19095,
 		immutableReferences: {
-			'53319': [
+			'53231': [
 				{ length: 32, start: 623 },
 				{ length: 32, start: 1462 },
 				{ length: 32, start: 1763 },
@@ -6084,7 +6081,7 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 11831 },
 				{ length: 32, start: 15465 },
 			],
-			'53322': [
+			'53234': [
 				{ length: 32, start: 3899 },
 				{ length: 32, start: 6799 },
 				{ length: 32, start: 7139 },
@@ -6098,12 +6095,12 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0xb579ff1819d6cf5a609711983421feb318e10df13ad0a75429871f8b9ee93058',
 		runtimeCodeLength: 23164,
 		immutableReferences: {
-			'55445': [
+			'55357': [
 				{ length: 32, start: 3736 },
 				{ length: 32, start: 11982 },
 			],
-			'55448': [{ length: 32, start: 14721 }],
-			'55451': [
+			'55360': [{ length: 32, start: 14721 }],
+			'55363': [
 				{ length: 32, start: 1693 },
 				{ length: 32, start: 3647 },
 				{ length: 32, start: 17688 },
@@ -6111,7 +6108,7 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 18063 },
 				{ length: 32, start: 19244 },
 			],
-			'59344': [
+			'59256': [
 				{ length: 32, start: 8710 },
 				{ length: 32, start: 10167 },
 				{ length: 32, start: 17440 },
@@ -6122,7 +6119,7 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0x207afc4874da3e74916deb3cb0217611fda5b3ea6c8365b9afad87cb61c695f5',
 		runtimeCodeLength: 18411,
 		immutableReferences: {
-			'47916': [
+			'47828': [
 				{ length: 32, start: 1521 },
 				{ length: 32, start: 2395 },
 				{ length: 32, start: 2557 },
@@ -6134,7 +6131,7 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 11551 },
 				{ length: 32, start: 12448 },
 			],
-			'47919': [
+			'47831': [
 				{ length: 32, start: 340 },
 				{ length: 32, start: 787 },
 				{ length: 32, start: 1211 },
@@ -6156,7 +6153,7 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0x5d5f273e067a7edd0695979e807bfc371ebb255c2f85a82a0d6ada886670d667',
 		runtimeCodeLength: 6422,
 		immutableReferences: {
-			'47193': [
+			'47105': [
 				{ length: 32, start: 134 },
 				{ length: 32, start: 212 },
 				{ length: 32, start: 461 },
@@ -6170,7 +6167,7 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0x1f81292f92a65ac7cf6807e67917e99c882e90a07875921f4e2cd63b304faa77',
 		runtimeCodeLength: 21058,
 		immutableReferences: {
-			'42453': [
+			'42365': [
 				{ length: 32, start: 873 },
 				{ length: 32, start: 1355 },
 				{ length: 32, start: 3726 },
@@ -6184,7 +6181,7 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 14249 },
 				{ length: 32, start: 15106 },
 			],
-			'42456': [
+			'42368': [
 				{ length: 32, start: 1215 },
 				{ length: 32, start: 3539 },
 				{ length: 32, start: 4120 },
@@ -6203,7 +6200,7 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0xa2747c355305dfebcdce9c28e214aef3c83d987deeb2cc8fe1397abe06d28181',
 		runtimeCodeLength: 19509,
 		immutableReferences: {
-			'51494': [
+			'51406': [
 				{ length: 32, start: 337 },
 				{ length: 32, start: 1450 },
 				{ length: 32, start: 2197 },
@@ -6225,7 +6222,7 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 18291 },
 				{ length: 32, start: 18442 },
 			],
-			'51497': [
+			'51409': [
 				{ length: 32, start: 1959 },
 				{ length: 32, start: 4531 },
 				{ length: 32, start: 5015 },
@@ -6245,7 +6242,7 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0x301a2ae9ae184c9c1fe4a069cfe0f0c2be038a5437c79617f1d1777dac521f02',
 		runtimeCodeLength: 18746,
 		immutableReferences: {
-			'34479': [
+			'34391': [
 				{ length: 32, start: 625 },
 				{ length: 32, start: 1359 },
 				{ length: 32, start: 1908 },
@@ -6267,7 +6264,7 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0x22aec6ced9bece5e4fa31e80d9223bd055896d0c5d9aad901085c31783f79b07',
 		runtimeCodeLength: 9627,
 		immutableReferences: {
-			'30289': [
+			'30232': [
 				{ length: 32, start: 449 },
 				{ length: 32, start: 2803 },
 				{ length: 32, start: 4175 },
@@ -6278,17 +6275,17 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0xec338fcbaaadccf5c2646c5d46ad3aeee04f4e811bc5916c663f76ddd30ebbab',
 		runtimeCodeLength: 14456,
 		immutableReferences: {
-			'28070': [
+			'28013': [
 				{ length: 32, start: 4359 },
 				{ length: 32, start: 5742 },
 			],
-			'28073': [
+			'28016': [
 				{ length: 32, start: 480 },
 				{ length: 32, start: 4290 },
 				{ length: 32, start: 5909 },
 				{ length: 32, start: 8973 },
 			],
-			'28076': [
+			'28019': [
 				{ length: 32, start: 797 },
 				{ length: 32, start: 3682 },
 				{ length: 32, start: 3861 },
@@ -6297,7 +6294,7 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 7030 },
 				{ length: 32, start: 9282 },
 			],
-			'28079': [
+			'28022': [
 				{ length: 32, start: 1613 },
 				{ length: 32, start: 3930 },
 				{ length: 32, start: 4030 },
@@ -6311,18 +6308,18 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 11745 },
 				{ length: 32, start: 11917 },
 			],
-			'28082': [
+			'28025': [
 				{ length: 32, start: 6621 },
 				{ length: 32, start: 6712 },
 				{ length: 32, start: 10765 },
 			],
-			'28084': [
+			'28027': [
 				{ length: 32, start: 559 },
 				{ length: 32, start: 5859 },
 				{ length: 32, start: 8843 },
 				{ length: 32, start: 9060 },
 			],
-			'28086': [
+			'28029': [
 				{ length: 32, start: 415 },
 				{ length: 32, start: 3584 },
 				{ length: 32, start: 7548 },
@@ -6331,7 +6328,7 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 8634 },
 				{ length: 32, start: 10709 },
 			],
-			'28088': [
+			'28031': [
 				{ length: 32, start: 1568 },
 				{ length: 32, start: 2602 },
 				{ length: 32, start: 3268 },
@@ -6339,18 +6336,18 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 7760 },
 				{ length: 32, start: 8787 },
 			],
-			'28090': [
+			'28033': [
 				{ length: 32, start: 980 },
 				{ length: 32, start: 5002 },
 				{ length: 32, start: 6331 },
 			],
-			'28096': [
+			'28039': [
 				{ length: 32, start: 1516 },
 				{ length: 32, start: 2084 },
 				{ length: 32, start: 7258 },
 				{ length: 32, start: 10862 },
 			],
-			'28099': [
+			'28042': [
 				{ length: 32, start: 3725 },
 				{ length: 32, start: 4183 },
 				{ length: 32, start: 9547 },
@@ -6361,7 +6358,7 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0x4f9ef5545e9c37ba7a75fb3e009a8005aabde98969d0794d74ba48835551e947',
 		runtimeCodeLength: 15377,
 		immutableReferences: {
-			'60739': [
+			'60651': [
 				{ length: 32, start: 478 },
 				{ length: 32, start: 556 },
 				{ length: 32, start: 1272 },
@@ -6372,7 +6369,7 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 2999 },
 				{ length: 32, start: 5458 },
 			],
-			'60866': [
+			'60778': [
 				{ length: 32, start: 2483 },
 				{ length: 32, start: 3244 },
 				{ length: 32, start: 9845 },
@@ -6385,7 +6382,7 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0xf0540b2814481c23ad0f79b491ff351a466da05354d55b2b23725a7de29f0840',
 		runtimeCodeLength: 11294,
 		immutableReferences: {
-			'49817': [
+			'49729': [
 				{ length: 32, start: 267 },
 				{ length: 32, start: 514 },
 				{ length: 32, start: 613 },

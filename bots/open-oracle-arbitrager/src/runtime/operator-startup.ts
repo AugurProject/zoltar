@@ -49,8 +49,9 @@ export async function startOperator(config: Configuration, lockManager: Executio
 	const environment = readBotEnvironment()
 	if (config.execute) await ensureExecutionHistoryWritable(config.historyFile)
 	let positionJournal = await loadPositionJournalState(config.positionFile, config.network.chain.id)
-	const positions = positionJournal.positions
+	positionJournal = { ...positionJournal, positions: positionJournal.positions.map(position => ({ ...position, positionId: position.positionId ?? position.entryTransactionHash })) }
 	if (config.execute) positionJournal = await savePositionJournalState(config.positionFile, positionJournal, config.network.chain.id)
+	const positions = positionJournal.positions
 	const readPool = createReadPool(config)
 	const runtime: OperatorRuntime = {
 		activeSignerLock: initialSignerLock,

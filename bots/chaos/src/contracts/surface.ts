@@ -231,7 +231,6 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('SecurityPoolCapitalLedger', 'claimEarnings', 'selectable', 'statoblast.capital.claim'),
 	entry('SecurityPoolCapitalLedger', 'creditDeferredTimedFees', 'role-restricted', undefined, 'Only bound services may credit earned collateral awaiting delivery.'),
 	entry('SecurityPoolCapitalLedger', 'flushBurn', 'excluded-dangerous', undefined, 'Permissionless retry of already accounted burns; no randomized funding action is needed.'),
-	entry('SecurityPoolCapitalLedger', 'creditTimedFees', 'role-restricted', undefined, 'Only the bound protocol accounting, security pool, fork, or auction authority may invoke this component callback.'),
 	entry('SecurityPoolCapitalLedger', 'depositAndSetHealthTarget', 'excluded-dangerous', undefined, 'The operator separates exact approved deposits from health changes, preserving the existing position target until the deposit confirms.'),
 	entry('SecurityPoolCapitalLedger', 'depositFor', 'selectable', 'statoblast.capital.deposit'),
 	entry('SecurityPoolCapitalLedger', 'exportChoice', 'role-restricted', undefined, 'Only the bound protocol accounting, security pool, fork, or auction authority may invoke this component callback.'),
