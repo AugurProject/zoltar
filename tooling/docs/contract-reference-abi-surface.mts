@@ -43,7 +43,7 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		creditEscalationSurplus: ['external(uint256)'],
 		refreshSecurityPoolFees: ['public()'],
 		burnEscalationWinnerHaircut: ['external(uint256)'],
-		createCompleteSet: ['external(uint256)'],
+		createCompleteSet: ['external(uint256,address,uint256,uint256,uint256)'],
 		redeemCompleteSet: ['external(uint256)'],
 		redeemShares: ['external()'],
 		depositWalletRepToEscalationGame: ['external(BinaryOutcomes.BinaryOutcome,uint256)'],
@@ -117,7 +117,10 @@ export const fallbackRoutedEntrypointSignatures: Record<string, Record<string, R
 		},
 	},
 }
-export const interfaceEntrypointExclusionsBySource: Record<string, string[]> = {}
+export const interfaceEntrypointExclusionsBySource: Record<string, string[]> = {
+	// Purchase funding is a callback implemented by Services, not a QuestionLedger entrypoint.
+	'solidity/contracts/statoblast/QuestionLedger.sol': ['completePurchaseFunding'],
+}
 export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/OpenOraclePriceSource.sol': '395129796c5f6e2acb4e9290860a651010691f8f19e1f5dd75d07afcbb4e7298',
 	'solidity/contracts/Context.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
@@ -132,7 +135,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/EscalationGameState.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-	'solidity/contracts/statoblast/QuestionLedger.sol': '7a36de96e277aee6bcf6d3a3480d783d184a08746677c1736f766191d8fa12ce',
+	'solidity/contracts/statoblast/QuestionLedger.sol': 'd5ee68293a6702fd7c319a15eb2eae627d384ae7bf178eb3fb9bf472021b4dd4',
 	'solidity/contracts/statoblast/QuestionForker.sol': '706506c8a6f3b9cab5022f10c037b1ed96e240b4b5f3b0a3100448ad3b586567',
 	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': '4d6009a01c640efcf0545d8f1a8342bbe4f677467d4383759e6a095af241a02b',
 	'solidity/contracts/statoblast/tokens/ERC1155.sol': '7bb87695bc3df8fa177c545209ed58d2e4571c19c869b5598bb0a829e764b218',

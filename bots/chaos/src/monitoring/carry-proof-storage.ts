@@ -25,15 +25,16 @@ export async function loadCarryStorageCandidates(client: CarryStorageClient, rou
 	async function readGame(game: Address) {
 		budget()
 		const pool = await client.readContract({ abi: escalationGameAbi, address: game, blockNumber, functionName: 'questionLedger' })
-		const [parent, actualGame, forker, continuation] = await drainConcurrent([
+		const [parent, actualGame, forker, continuation, appendOnly] = await drainConcurrent([
 			client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'parent' }),
 			client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'escalationGame' }),
 			client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'questionForker' }),
 			client.readContract({ abi: escalationGameAbi, address: game, blockNumber, functionName: 'forkContinuation' }),
+			client.readContract({ abi: escalationGameAbi, address: game, blockNumber, functionName: 'appendOnlyCarry' }),
 		])
 		if (actualGame.toLowerCase() !== game.toLowerCase()) throw new Error('Carry storage game/pool route mismatch')
 		const parentGame = parent === zeroAddress ? zeroAddress : await client.readContract({ abi: questionLedgerAbi, address: parent, blockNumber, functionName: 'escalationGame' })
-		return { pool, parent, parentGame, forker, continuation }
+		return { pool, parent, parentGame, forker, continuation, appendOnly }
 	}
 	function gameInfo(game: Address) {
 		const key = game.toLowerCase()
@@ -120,7 +121,7 @@ export async function loadCarryStorageCandidates(client: CarryStorageClient, rou
 			if (Number(nodeOutcome) !== outcome || amount === 0n) throw new Error('Invalid historical carry node')
 			const leaf = { depositor, outcome, amountAttoRep: amount.toString(), parentDepositIndex: parentIndex.toString(), cumulativeAmountAttoRep: cumulative.toString(), sourceNodeId: nodeId.toString() }
 			const present = active.has(nodeId.toString())
-			locals.push({ index, slot: { leaf, hash: present ? hashCarryLeaf(leaf) : zeroHash, originGame: game, consumedLocally: !present } })
+			locals.push({ index, slot: { leaf, hash: info.appendOnly || present ? hashCarryLeaf(leaf) : zeroHash, originGame: game, consumedLocally: !present } })
 			nodeId = parentNode
 		}
 		locals.sort((left, right) => compareIntegers(left.index, right.index))
@@ -147,9 +148,9 @@ export async function loadCarryStorageCandidates(client: CarryStorageClient, rou
 			budget(slots.length)
 			const commitment = carryCommitment(slots)
 			if (commitment.leafCount !== state.snapshotLeafCount.toString() || commitment.root.toLowerCase() !== state.snapshotCarryRoot.toLowerCase()) throw new Error('Stored parent carry snapshot root is not reconstructible')
-			const consumed = new Set([...(await inheritedConsumed(info.parentGame, outcome)), ...(await localConsumed(route.escalationGame, outcome))])
+			const consumed = new Set([...(info.appendOnly ? [] : await inheritedConsumed(info.parentGame, outcome)), ...(await localConsumed(route.escalationGame, outcome))])
 			const nullifier = {
-				consumed: [...consumed]
+				consumed: (info.appendOnly ? [] : [...consumed])
 					.sort((left, right) => compareIntegers(BigInt(left), BigInt(right)))
 					.map(parentDepositIndex => {
 						const index = slots.findIndex(slot => slot.leaf.parentDepositIndex === parentDepositIndex)
@@ -166,7 +167,7 @@ export async function loadCarryStorageCandidates(client: CarryStorageClient, rou
 				if (encodedSource !== zeroAddress && encodedSource.toLowerCase() !== claimSourceGame.toLowerCase()) throw new Error('Carry claim source differs from authenticated history')
 				const claimInfo = await gameInfo(claimSourceGame)
 				if (claimInfo.forker.toLowerCase() !== info.forker.toLowerCase()) throw new Error('Carry claim source uses a different forker')
-				candidates.push({ pool: route.pool, game: route.escalationGame, sourcePool: info.parent, sourceGame: info.parentGame, claimSourceGame, forker: info.forker, state, ...leaf, slots, index, nullifier })
+				candidates.push({ pool: route.pool, game: route.escalationGame, sourcePool: info.parent, sourceGame: info.parentGame, claimSourceGame, forker: info.forker, state, appendOnly: info.appendOnly, ...leaf, slots, index, nullifier })
 			}
 		}
 	}
@@ -188,7 +189,7 @@ export async function loadCarryStorageCandidates(client: CarryStorageClient, rou
 				parentDepositIndex: candidate.parentDepositIndex,
 				sourceNodeId: candidate.sourceNodeId,
 				...mmr,
-				nullifierSiblings: createSparseNullifierProof(nullifier, mmr.leafIndex),
+				nullifierSiblings: candidate.appendOnly ? [] : createSparseNullifierProof(nullifier, mmr.leafIndex),
 			},
 		}
 	})

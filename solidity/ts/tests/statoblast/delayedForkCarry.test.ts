@@ -187,9 +187,8 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 			const walletBefore = await getERC20Balance(client, nextRep, noDepositor.account.address)
 			await writeContractAndWait(noDepositor, () => noDepositor.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: nextPool.questionLedger, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.No, [proof]] }))
 			assert.ok((await getERC20Balance(client, nextRep, noDepositor.account.address)) - walletBefore > 80n * ATTO_REP_PER_REP, 'the original carried NO claim must pay principal plus its winning reward')
-			const consumedNullifiers = new SparseNullifierTree()
-			consumedNullifiers.consume(proof.leafIndex)
-			assert.equal((await getEscalationGameOutcomeState(client, nextGame, QuestionOutcome.No)).currentNullifierRoot, consumedNullifiers.root)
+			const emptyNullifiers = new SparseNullifierTree()
+			assert.equal((await getEscalationGameOutcomeState(client, nextGame, QuestionOutcome.No)).currentNullifierRoot, emptyNullifiers.root)
 			await assert.rejects(noDepositor.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: nextPool.questionLedger, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.No, [proof]] }), /Deposit settled|Bad nullifier proof/)
 			assert.equal((await getEscalationGameOutcomeState(client, nextGame, QuestionOutcome.No)).currentCarryTotalAttoRep, 30n * ATTO_REP_PER_REP, 'settling inherited principal must leave the new deposit intact')
 			// Keep these checks after settlement so the pre-fix implementation reproduces Carried REP low.

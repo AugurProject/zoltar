@@ -15,24 +15,18 @@ import { Constants } from '../Constants.sol';
 import { IQuestionLedger } from './interfaces/IQuestionLedger.sol';
 import { ISecurityPoolServiceRoot } from './interfaces/ISecurityPoolServiceRoot.sol';
 
-import { IShareToken } from './interfaces/IShareToken.sol';
-import { IERC1155 } from './interfaces/IERC1155.sol';
-import { IERC1155Receiver } from './interfaces/IERC1155Receiver.sol';
-import { IERC165 } from './interfaces/IERC165.sol';
-import { BinaryOutcomes } from './BinaryOutcomes.sol';
-
 /// @notice Question-specific prepaid resolution risk compensation.
 /// @dev Premium roots copy across forks; no call walks questions or ancestors.
 /// No shared pot pays keepers or price sponsors. Collateral whose payer is not
 /// recorded, or that would otherwise accrue to no one, is burned.
-contract SecurityPoolServices is IERC1155Receiver {
+contract SecurityPoolServices {
 	using SafeERC20Ops for IERC20;
 	address public immutable securityPool;
 	SecurityPoolResolutionPremiumBook public immutable premiumLedger;
 	bool private entered;
 	address private purchasePayer;
 	uint256 private purchaseMaximumRecoveryAttoRep;
-	address private expectedMintToken;
+	address private purchasePool;
 	mapping(uint248 => bool) public premiumChildCreated;
 	mapping(uint248 => bool) private syncingFees;
 	mapping(uint248 => bool) public feesEnabled;
@@ -74,17 +68,29 @@ contract SecurityPoolServices is IERC1155Receiver {
 		require(cash <= root.quoteHelper().availableMintCapacity(universeId), 'Purchase exceeds healthy capacity');
 		purchasePayer = trader;
 		purchaseMaximumRecoveryAttoRep = maximumRecoveryAttoRep;
-		minted = _mintCompleteSets(pool, recipient, minimumShares, cash);
+		require(recipient != address(0) && recipient != address(this), 'Invalid share recipient');
+		purchasePool = address(pool);
+		minted = pool.createCompleteSet(cash, recipient, minimumShares, fee, premium);
 		purchasePayer = address(0);
 		purchaseMaximumRecoveryAttoRep = 0;
-		if (premium != 0) _fundPremium(universeId, questionId, premium);
+	}
+	/// @dev The canonical ledger calls back after its accounting and fee stream are complete,
+	/// but before minting shares to an untrusted recipient.
+	function completePurchaseFunding(uint256 fee, uint256 premium) external {
+		require(msg.sender == purchasePool && purchasePayer != address(0), 'No prepared purchase');
+		purchasePool = address(0);
+		IQuestionLedger pool = IQuestionLedger(payable(msg.sender));
+		uint248 universeId = pool.universeId();
+		if (premium != 0) _fundPremium(universeId, pool.questionId(), premium);
 		uint256 earnings = fee - premium;
 		if (earnings != 0) {
+			ISecurityPoolServiceRoot root = ISecurityPoolServiceRoot(securityPool);
+			IERC20 collateral = ICollateralConfig(securityPool).collateralToken();
 			collateral.safeApprove(address(root.capitalLedger(universeId)), earnings);
 			root.capitalLedger(universeId).fundVestedFees(earnings, 0);
 		}
-		_deliverCompleteSets(pool, recipient, minted);
 	}
+
 	function mintQuestionSettlement(IQuestionLedger pool, uint256 cash) external onlySecurityPool returns (uint256, uint256, uint256) {
 		require(purchasePayer != address(0), 'No authorized purchase payer');
 		ISecurityPoolServiceRoot root = ISecurityPoolServiceRoot(securityPool);
@@ -252,38 +258,5 @@ contract SecurityPoolServices is IERC1155Receiver {
 	function _send(address recipient, uint256 amount) private {
 		if (amount == 0) return;
 		Collateral.send(ICollateralConfig(securityPool).collateralToken(), recipient, amount);
-	}
-	function _mintCompleteSets(IQuestionLedger pool, address recipient, uint256 minimumShares, uint256 cash) private returns (uint256 minted) {
-		require(recipient != address(0) && recipient != address(this), 'Invalid share recipient');
-		IShareToken token = pool.shareToken();
-		uint248 universeId = pool.universeId();
-		uint256 beforeShares = token.balanceOfOutcome(universeId, BinaryOutcomes.BinaryOutcome.Invalid, address(this));
-		expectedMintToken = address(token);
-		pool.createCompleteSet(cash);
-		expectedMintToken = address(0);
-		minted = token.balanceOfOutcome(universeId, BinaryOutcomes.BinaryOutcome.Invalid, address(this)) - beforeShares;
-		require(minted > 0 && minted >= minimumShares, 'Minimum shares not met');
-	}
-	/// @dev Recipient callbacks run only after the funded premium is recorded.
-	function _deliverCompleteSets(IQuestionLedger pool, address recipient, uint256 minted) private {
-		IShareToken token = pool.shareToken();
-		uint248 universeId = pool.universeId();
-		uint256[] memory ids = new uint256[](3);
-		uint256[] memory amounts = new uint256[](3);
-		for (uint256 i; i < 3; i++) {
-			ids[i] = token.getTokenId(universeId, BinaryOutcomes.BinaryOutcome(i));
-			amounts[i] = minted;
-		}
-		IERC1155(address(token)).safeBatchTransferFrom(address(this), recipient, ids, amounts, '');
-	}
-	function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) {
-		revert('Unexpected single share transfer');
-	}
-	function onERC1155BatchReceived(address, address from, uint256[] calldata, uint256[] calldata, bytes calldata) external view returns (bytes4) {
-		require(from == address(0) && msg.sender == expectedMintToken, 'Unexpected share batch');
-		return IERC1155Receiver.onERC1155BatchReceived.selector;
-	}
-	function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
-		return interfaceId == type(IERC1155Receiver).interfaceId || interfaceId == type(IERC165).interfaceId;
 	}
 }

@@ -117,7 +117,6 @@ contract SecurityPool is ISecurityPoolSettlement {
 	Deployers private deployers;
 	SecurityPoolCapitalLedger public capitalImplementation;
 	mapping(uint248 => SecurityPoolCapitalLedger) public capitalLedger;
-	mapping(address => bool) private capitalAddresses;
 	mapping(uint256 => bytes32) public questionOriginIds;
 	mapping(address => bool) public registeredLedgers;
 	uint256[] private questions;
@@ -435,7 +434,6 @@ contract SecurityPool is ISecurityPoolSettlement {
 		capital = deployers.capital.create(capitalImplementation, universeId);
 		capital.initialize(deployers.commitments.create(address(capital)), ICapitalFeeStreams(address(deployers.fees.create(address(capital), CheckedCast.toUint48(block.timestamp), rewardVestingSeconds))), forkController, address(services));
 		capitalLedger[universeId] = capital;
-		capitalAddresses[address(capital)] = true;
 		emit UniversePrepared(universeId, address(capital));
 	}
 }

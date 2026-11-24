@@ -84,6 +84,7 @@ function createActiveReportingClient(getDepositsByOutcome: (outcomeIndex: number
 			throw new Error(`Unexpected multicall contract: ${functionName}`)
 		}),
 		readContract: createReadContractStub(async request => {
+			if (request.functionName === 'appendOnlyCarry') return false
 			if (request.functionName === 'startBondAttoRep') return 7n
 			if (request.functionName === 'nonDecisionThresholdAttoRep') return 50n
 			if (request.functionName === 'activationTime') return 12n
@@ -150,6 +151,7 @@ describe('reporting protocol client', () => {
 				return [questionTuple, 10n]
 			}),
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'isEscalationResolved') return true
@@ -172,6 +174,7 @@ describe('reporting protocol client', () => {
 			const client = {
 				...base,
 				readContract: createReadContractStub(async request => {
+					if (request.functionName === 'appendOnlyCarry') return false
 					if (request.functionName === 'getForkTime') return forkTime
 					if (request.functionName === 'hasReachedNonDecision') return false
 					return base.readContract(request)
@@ -187,6 +190,7 @@ describe('reporting protocol client', () => {
 		const client = {
 			...base,
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'settlementForkThresholdAttoRep') return 61n
 				return base.readContract(request)
 			}),
@@ -199,6 +203,7 @@ describe('reporting protocol client', () => {
 		const client = {
 			...base,
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'getForkTime') return 200n
 				return base.readContract(request)
 			}),
@@ -529,6 +534,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'startBondAttoRep') return 7n
 				if (request.functionName === 'nonDecisionThresholdAttoRep') return 50n
 				if (request.functionName === 'activationTime') return 12n
@@ -597,6 +603,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'startBondAttoRep') return 7n
 				if (request.functionName === 'nonDecisionThresholdAttoRep') return 50n
 				if (request.functionName === 'activationTime') return 12n
@@ -670,6 +677,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'startBondAttoRep') return 7n
 				if (request.functionName === 'nonDecisionThresholdAttoRep') return 50n
 				if (request.functionName === 'activationTime') return 12n
@@ -716,6 +724,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'startBondAttoRep') return 7n
 				if (request.functionName === 'nonDecisionThresholdAttoRep') return 50n
 				if (request.functionName === 'activationTime') return 12n
@@ -777,6 +786,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'getForkThresholdAttoRep') return 9n
 				if (request.functionName === 'escalationGame') return zeroAddress
 				if (request.functionName === 'getEscalationMigrationEntitlementStatus') return [false, 0n, [false, false, false]]
@@ -820,6 +830,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'forkContinuation') {
@@ -849,6 +860,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'forkContinuation') throw new Error(missingForkContinuationGetterMessage)
@@ -872,6 +884,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'getForkThresholdAttoRep') return 100n
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
@@ -936,6 +949,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'escalationGame') return parentEscalationGameAddress
 				if (request.functionName === 'getOutcomeState')
 					return {
@@ -970,6 +984,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.functionName === 'escalationGame') return parentEscalationGameAddress
 				if (request.functionName === 'getOutcomeState')
 					return {
@@ -987,7 +1002,7 @@ describe('reporting protocol client', () => {
 		await expect(buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [])).rejects.toThrow(missingForkContinuationGetterMessage)
 	})
 
-	test('buildForkCarriedEscalationProofs retains historical leaves when hashing the frozen child snapshot', async () => {
+	test.each([false, true])('#1539 historical membership remains authenticated (append-only=%s)', async appendOnly => {
 		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
 		const firstDepositor = getAddress('0x00000000000000000000000000000000000000f2')
 		const secondDepositor = getAddress('0x00000000000000000000000000000000000000f3')
@@ -1023,6 +1038,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'appendOnlyCarry') return appendOnly
 				if (request.address === alternateQuestionLedgerAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
 				if (request.address === parentEscalationGameAddress && request.functionName === 'getOutcomeState') {
 					return {
@@ -1059,6 +1075,8 @@ describe('reporting protocol client', () => {
 			}),
 		})
 
+		const proofs = await buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [secondLeaf.parentDepositIndex])
+		expect(proofs[0]?.nullifierSiblings).toHaveLength(appendOnly ? 0 : 64)
 		await expect(buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [secondLeaf.parentDepositIndex])).resolves.toMatchObject([
 			{
 				depositor: secondDepositor,
@@ -1105,6 +1123,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.address === alternateQuestionLedgerAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
 				if (request.address === grandparentQuestionLedgerAddress && request.functionName === 'escalationGame') return grandparentEscalationGameAddress
 				if (request.address === parentEscalationGameAddress && request.functionName === 'getOutcomeState') {
@@ -1199,6 +1218,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.address === alternateQuestionLedgerAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
 				if (request.address === grandparentQuestionLedgerAddress && request.functionName === 'escalationGame') return grandparentEscalationGameAddress
 				if (request.address === parentEscalationGameAddress && request.functionName === 'getOutcomeState') {
@@ -1264,6 +1284,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'appendOnlyCarry') return false
 				if (request.address === alternateQuestionLedgerAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
 				if (request.address === grandparentQuestionLedgerAddress && request.functionName === 'escalationGame') return grandparentEscalationGameAddress
 				if (request.address === escalationGameAddress && request.functionName === 'getOutcomeState') {
@@ -1331,6 +1352,7 @@ describe('reporting protocol client', () => {
 					throw new Error(`Unexpected multicall contract: ${functionName}`)
 				}),
 				readContract: createReadContractStub(async request => {
+					if (request.functionName === 'appendOnlyCarry') return false
 					if (request.address === alternateQuestionLedgerAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
 					if (request.address === escalationGameAddress && request.functionName === 'getOutcomeState') {
 						return { currentNullifierRoot: computeEmptyNullifierRootForTest(), snapshotLeafCount: BigInt(leafCount), snapshotCarryRoot: getCarrySnapshotRoot(BigInt(leafCount), snapshotPeaks) }

@@ -178,6 +178,7 @@ contract QuestionForkerDelegate {
 	}
 
 	function _continueReporterGame(ISecurityPoolNative securityPool, IQuestionLedger source, IQuestionLedger child, EscalationGame game) private returns (bool complete) {
+		require(game.getFinalQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'Final reporter game cannot export live carry');
 		if (address(child.escalationGame()) == address(0)) _initializeReporterGame(securityPool, source, child, game);
 		(
 			bytes32[64][3] memory peaks,

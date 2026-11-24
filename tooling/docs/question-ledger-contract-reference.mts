@@ -1,6 +1,6 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const questionLedgerContractReference: ContractReference = {
-	compiledAbiFingerprint: '0507b2077c633d17a7b996be45407acc680a3ce2147549aa91c2cc0efa536f15',
+	compiledAbiFingerprint: '6dd230ec2cb0e2b84124e14d1fd7366f13831e330e59de692928c0a61475e131',
 	name: 'QuestionLedger',
 	interactionNotes:
 		'All deployed question ledgers belong to a security pool. Providers use its capital ledger for deposits, commitments, health targets, retirement and liquidation. Reporters fund separate reporter custody with wallet REP. Purchases use the registered security pool route; traders redeem through the question ledger. There is no standalone vault, tick auction or operation queue.',
@@ -154,9 +154,9 @@ export const questionLedgerContractReference: ContractReference = {
 			signals: 'Relevant share, reporting or central accounting events; no standalone vault accounting.',
 		},
 		{
-			call: '`createCompleteSet(cash)`',
+			call: '`createCompleteSet(cash, recipient, minimumShares, fee, premium)`',
 			caller: 'The registered security pool purchase route',
-			effect: 'Mints question complete sets using central settlement cash and shared backing. The security pool transfers the resulting shares to the buyer.',
+			effect: 'Completes central settlement and purchase-fee funding, then mints question complete sets directly to the recipient.',
 			declarations: [
 				{
 					name: 'createCompleteSet',
@@ -289,7 +289,7 @@ export const questionLedgerContractReference: ContractReference = {
 					name: 'initializeForkCarryOutcome',
 				},
 			],
-			effect: 'Installs the next outcome of the continuation game’s canonical snapshot. Three calls install immutable inherited roots and leaf counts, plus mutable current peaks, carry totals, resolution balances, and normalized nullifier roots.',
+			effect: 'Installs the next outcome of the continuation game’s canonical snapshot. Three calls install immutable inherited roots and leaf counts, plus append-only current peaks, carry totals and resolution balances. Canonical live sources require empty nullifier roots and cannot export finalized claims.',
 			preconditions: 'A game is configured; it is a fork continuation with fewer than three initialized outcomes; leaf counts fit the MMR; every call supplies the same source and nonzero snapshot ID, with the next outcome’s data; the third call verifies the full commitment.',
 			signals: '`ForkCarryCheckpoint` on completion of the third outcome',
 		},

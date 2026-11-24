@@ -734,7 +734,7 @@
 						<summary><code>ESCALATION</code><span class="invariant-title">Reporter liabilities and historical proofs</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Ordinary settlement fixes winning payout liabilities and required burns before paying individual claims. Inherited claims authenticate frozen Merkle-mountain-range membership and per-branch nullifiers. Replaying a consumed proof cannot pay again.</div>
+							<div class="invariant-property">Ordinary settlement fixes winning payout liabilities and required burns before paying individual claims. Inherited claims authenticate frozen Merkle-mountain-range membership and reject consumed deposit identities. Standalone games also require nullifier proofs; see the <a href="./merkle-mountain-range.html#proofs">carry proof reference</a>. Replaying a consumed proof cannot pay again.</div>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -854,7 +854,7 @@
 						<summary><code>LIFECYCLE</code><span class="invariant-title">Bounded work and explicit recovery</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Capital and settlement operations use fixed-width indexes and aggregate accounting rather than scanning every owner or question. User-supplied claim batches are divisible. Inherited claims preserve the authenticated leaf’s principal and reward coordinates at every fork depth; settlement requires membership and nullifier proofs.</div>
+							<div class="invariant-property">Capital and settlement operations use fixed-width indexes and aggregate accounting rather than scanning every owner or question. User-supplied claim batches are divisible. Inherited claims preserve the authenticated leaf’s principal and reward coordinates at every fork depth; settlement requires membership proofs and consumed-identity checks, with additional nullifier proofs for standalone games.</div>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>

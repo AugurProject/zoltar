@@ -49,7 +49,7 @@ export const createCompleteSet = async (client: WriteClient, questionLedgerAddre
 			abi: statoblast_QuestionLedger_QuestionLedger.abi,
 			functionName: 'createCompleteSet',
 			address: questionLedgerAddress,
-			args: [settlementCollateralAttoEth],
+			args: [settlementCollateralAttoEth, client.account.address, 0n, 0n, 0n],
 			value: 0n,
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),

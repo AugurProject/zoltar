@@ -109,6 +109,13 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		return outcome;
 	}
 
+	/// @notice Canonical central custody permits consumption only after finality.
+	/// Live fork exports therefore contain no spent deposits; standalone games
+	/// retain their independently supported mutable carry lifecycle.
+	function appendOnlyCarry() public view returns (bool) {
+		return EscalationGameRepCustody.securityPool(address(questionLedger)) != address(0);
+	}
+
 	function getFinalQuestionResolution() public view returns (BinaryOutcomes.BinaryOutcome) {
 		uint256 endDate = getEscalationGameEndDate();
 		if (block.timestamp <= endDate) return BinaryOutcomes.BinaryOutcome.None;

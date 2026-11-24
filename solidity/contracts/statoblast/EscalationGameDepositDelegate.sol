@@ -80,7 +80,10 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 			require(forkCarrySnapshotId == snapshotId && forkCarrySourceGame == sourceGame, 'Snapshot changed');
 		}
 		OutcomeState storage state = outcomeState[outcomeIndex];
-		state.currentNullifierRoot = nullifierRoot == bytes32(0) ? emptyNullifierRoot : nullifierRoot;
+		bool mutableCarry = EscalationGameRepCustody.securityPool(msg.sender) == address(0);
+		if (!mutableCarry) {
+			require(nullifierRoot == bytes32(0) || nullifierRoot == emptyNullifierRoot, 'Live carry source has spent deposits');
+		} else state.currentNullifierRoot = nullifierRoot == bytes32(0) ? emptyNullifierRoot : nullifierRoot;
 		state.snapshotLeafCount = leafCount;
 		state.snapshotCarryRoot = proofVerifier.bagCarryPeaks(peaks, leafCount);
 		state.currentLeafCount = leafCount;
@@ -91,7 +94,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 			}
 			state.currentPeaks[height] = peaks[height];
 			if (((leafCount >> height) & 1) == 0) continue;
-			state.currentCarryNodeHashes[height][peakStartIndex] = peaks[height];
+			if (mutableCarry) state.currentCarryNodeHashes[height][peakStartIndex] = peaks[height];
 			peakStartIndex += uint256(1) << height;
 		}
 		state.balanceAttoRep = resolutionBalanceAttoRep;
@@ -100,10 +103,10 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 			forkCarrySnapshotOutcomesInitialized = outcomeIndex + 1;
 			return;
 		}
-		_finalizeForkCarrySnapshot(sourceGame, snapshotId, proofVerifier);
+		_finalizeForkCarrySnapshot(sourceGame, snapshotId, proofVerifier, emptyNullifierRoot);
 	}
 
-	function _finalizeForkCarrySnapshot(address sourceGame, bytes32 snapshotId, EscalationGameProofVerifier proofVerifier) private {
+	function _finalizeForkCarrySnapshot(address sourceGame, bytes32 snapshotId, EscalationGameProofVerifier proofVerifier, bytes32 emptyNullifierRoot) private {
 		bytes32[3] memory carryRoots;
 		bytes32[3] memory nullifierRoots;
 		uint256[3] memory leafCounts;
@@ -114,7 +117,8 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 			OutcomeState storage state = outcomeState[index];
 			leafCounts[index] = state.snapshotLeafCount;
 			carryRoots[index] = state.snapshotCarryRoot;
-			nullifierRoots[index] = state.currentNullifierRoot;
+			nullifierRoots[index] =
+				state.currentNullifierRoot == bytes32(0) ? emptyNullifierRoot : state.currentNullifierRoot;
 			carryTotals[index] = state.inheritedUnresolvedTotalAttoRep;
 			balances[index] = state.balanceAttoRep;
 			totalCarryAttoRep += carryTotals[index];
@@ -217,12 +221,19 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		uint8 outcomeIndex = uint8(outcome);
 		_validateAcceptedDeposit(outcome, outcomeIndex, outcomeState[outcomeIndex].balanceAttoRep, amountAttoRep, expectedCumulativeRepAmountAttoRep);
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
-		EscalationGameRepCustody.receiveDeposit(game.questionLedger(), game.repToken(), amountAttoRep);
 		parentDepositIndex = _appendDeposit(depositor, outcome, amountAttoRep, expectedCumulativeRepAmountAttoRep);
 		// Every accepted deposit records the threshold settlement scales by.
 		address poolAddress = game.questionLedger();
 		_recordSettlementForkThreshold(poolAddress);
-		_scheduleReporterFinality();
+		address authority = EscalationGameRepCustody.securityPool(poolAddress);
+		uint48 finalAfter;
+		if (authority != address(0)) {
+			finalAfter = EscalationGameRepCustody.normalizeFinalAfter(_reporterFinalAfter());
+			EscalationGameRepCustody.receiveDeposit(poolAddress, game.repToken(), amountAttoRep, finalAfter);
+		}
+		// No token transfer or surplus callback runs until the new principal is credited.
+		_accrueOrdinarySurplus();
+		if (authority != address(0)) ISecurityPoolReporterHost(authority).onQuestionFinalityChanged(finalAfter);
 		IEscalationGameQuestionLedgerContext(poolAddress).refreshSecurityPoolFees();
 	}
 
@@ -271,7 +282,6 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 			nonDecisionTimestamp = block.timestamp;
 			emit NonDecisionReached(nonDecisionTimestamp);
 		}
-		_accrueOrdinarySurplus();
 	}
 
 	function _accrueOrdinarySurplus() private {
@@ -327,14 +337,17 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		uint256 leafCount = state.currentLeafCount;
 		uint256 peakHeight;
 		uint256 carryStartIndex = leafCount;
-		state.currentCarryNodeHashes[0][carryStartIndex] = carryHash;
+		bool mutableCarry =
+			EscalationGameRepCustody.securityPool(IEscalationGameDepositContext(address(this)).questionLedger()) ==
+				address(0);
+		if (mutableCarry) state.currentCarryNodeHashes[0][carryStartIndex] = carryHash;
 		while (((leafCount >> peakHeight) & 1) == 1) {
 			uint256 siblingStartIndex = carryStartIndex - (uint256(1) << peakHeight);
 			carryHash = MerkleMountainRange.hashParent(state.currentPeaks[peakHeight], carryHash);
 			delete state.currentPeaks[peakHeight];
 			peakHeight += 1;
 			carryStartIndex = siblingStartIndex;
-			state.currentCarryNodeHashes[peakHeight][carryStartIndex] = carryHash;
+			if (mutableCarry) state.currentCarryNodeHashes[peakHeight][carryStartIndex] = carryHash;
 		}
 		require(peakHeight < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS, 'MMR too tall');
 		state.currentPeaks[peakHeight] = carryHash;
@@ -416,6 +429,11 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	function _scheduleReporterFinality() private {
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		if (address(EscalationGameRepCustody.ledger(game.questionLedger())) == address(0)) return;
+		EscalationGameRepCustody.scheduleFinality(game.questionLedger(), _reporterFinalAfter());
+	}
+
+	function _reporterFinalAfter() private view returns (uint48) {
+		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		uint256 highest;
 		uint256 leaders;
 		for (uint256 index = 0; index < 3; index++) {
@@ -431,6 +449,6 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 			(nonDecisionState == NonDecisionState.None && leaders == 1)
 		) finalAfter = game.getEscalationGameEndDate();
 		require(finalAfter <= type(uint48).max, 'Reporter finality timestamp too high');
-		EscalationGameRepCustody.scheduleFinality(game.questionLedger(), uint48(finalAfter));
+		return uint48(finalAfter);
 	}
 }

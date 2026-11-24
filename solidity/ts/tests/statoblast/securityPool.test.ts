@@ -187,8 +187,8 @@ describe('Statoblast: central security pool and native question integration', ()
 		expect(before[0]).toBeGreaterThan(0n)
 		const target = { abi: shareArtifact.abi, address: shareToken }
 		const id = base.genesisUniverse << 8n
-		await expect(trader.writeContract({ ...target, functionName: 'safeTransferFrom', args: [trader.account.address, services, id, 1n] })).rejects.toThrow('single-transfer acceptance check')
-		await expect(trader.writeContract({ ...target, functionName: 'safeBatchTransferFrom', args: [trader.account.address, services, [id, id | 1n], [1n, 1n]] })).rejects.toThrow('batch-transfer acceptance check')
+		await expect(trader.writeContract({ ...target, functionName: 'safeTransferFrom', args: [trader.account.address, services, id, 1n] })).rejects.toThrow('does not implement ERC1155Receiver for single transfers')
+		await expect(trader.writeContract({ ...target, functionName: 'safeBatchTransferFrom', args: [trader.account.address, services, [id, id | 1n], [1n, 1n]] })).rejects.toThrow('does not implement ERC1155Receiver for batch transfers')
 		expect(await balance()).toEqual(before)
 	})
 

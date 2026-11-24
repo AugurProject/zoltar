@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 import { getDefaultAnvilRpcUrl, getMockedEthSimulateWindowEthereum, JsonRpcError, normalizeAnvilTransactionParams, parseJsonRpcResponse, validateLocalAnvilRpcUrl, validateRpcResult } from '../testSupport/simulator/AnvilWindowEthereum'
 
 type JsonRpcRequest = {
@@ -266,6 +266,34 @@ test.each([
 			else expect(observedMethods).not.toContain('evm_mine')
 		},
 	)
+})
+
+test('#1515 polls immediately, backs off from 5ms, and caps retries without extra mining', async () => {
+	const transactionHash = `0x${'13'.repeat(32)}`
+	const methods: string[] = []
+	let receipts = 0
+	mockJsonRpc(request => {
+		if (request.method === 'evm_setNextBlockTimestamp') return createJsonRpcResponse(request, { result: '0x1' })
+		if (request.method === 'anvil_getAutomine') return createJsonRpcResponse(request, { result: true })
+		if (request.method === 'eth_sendTransaction') return createJsonRpcResponse(request, { result: transactionHash })
+		if (request.method === 'eth_getTransactionReceipt') return createJsonRpcResponse(request, { result: ++receipts < 9 ? null : successfulReceipt(transactionHash) })
+		return undefined
+	}, methods)
+	const timer = spyOn(globalThis, 'setTimeout')
+	try {
+		await withMockedClock(
+			() => 10_000,
+			async () => {
+				await expect(sendTestTransaction()).resolves.toBe(transactionHash)
+			},
+		)
+		const delays = timer.mock.calls.map(([, delay]) => delay).filter(delay => delay !== undefined && delay <= 100)
+		expect(delays).toEqual([5, 10, 20, 40, 80, 100, 100, 100])
+		expect(receipts).toBe(9)
+		expect(methods).not.toContain('evm_mine')
+	} finally {
+		timer.mockRestore()
+	}
 })
 
 const mockMissingReceipt = (transactionHash: string, diagnostics: (request: JsonRpcRequest, init: RequestInit | BunFetchRequestInit | undefined) => Promise<Response | undefined> | Response | undefined) =>
