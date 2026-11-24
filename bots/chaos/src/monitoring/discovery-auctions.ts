@@ -7,43 +7,43 @@ import { contractSimulationReverted } from './discovery-client.ts'
 
 export async function discoverAuctions(context: EcosystemDiscoveryContext, pools: readonly PoolSnapshot[], blockNumber: bigint): Promise<AuctionSnapshot[]> {
 	const { client, wallet } = context
-	const scopes = new Map(pools.map(pool => [`${pool.portfolio.toLowerCase()}:${pool.universeId}`, pool]))
+	const scopes = new Map(pools.map(pool => [`${pool.securityPool.toLowerCase()}:${pool.universeId}`, pool]))
 	const auctions: AuctionSnapshot[] = []
 	for (const pool of scopes.values()) {
-		const controller = getAddress(await client.readContract({ abi: abis.securityPoolPortfolioAbi, address: pool.portfolio, functionName: 'forkController', blockNumber }))
-		const address = getAddress(await client.readContract({ abi: abis.securityPoolPortfolioForkCoordinatorAbi, address: controller, functionName: 'auctions', args: [BigInt(pool.universeId)], blockNumber }))
+		const controller = getAddress(await client.readContract({ abi: abis.securityPoolAbi, address: pool.securityPool, functionName: 'forkController', blockNumber }))
+		const address = getAddress(await client.readContract({ abi: abis.securityPoolForkCoordinatorAbi, address: controller, functionName: 'auctions', args: [BigInt(pool.universeId)], blockNumber }))
 		if (address === zeroAddress) continue
-		const [portfolio, authority, universeId, engineAddress, opened, finalized, closesAt, lotAttoEth, repGrid, minimumCollateral] = await Promise.all([
-			client.readContract({ abi: abis.securityPoolPortfolioAuctionAbi, address, functionName: 'portfolio', blockNumber }),
-			client.readContract({ abi: abis.securityPoolPortfolioAuctionAbi, address, functionName: 'forkAuthority', blockNumber }),
-			client.readContract({ abi: abis.securityPoolPortfolioAuctionAbi, address, functionName: 'universeId', blockNumber }),
-			client.readContract({ abi: abis.securityPoolPortfolioAuctionAbi, address, functionName: 'engine', blockNumber }),
-			client.readContract({ abi: abis.securityPoolPortfolioAuctionAbi, address, functionName: 'opened', blockNumber }),
-			client.readContract({ abi: abis.securityPoolPortfolioAuctionAbi, address, functionName: 'finalized', blockNumber }),
-			client.readContract({ abi: abis.securityPoolPortfolioAuctionAbi, address, functionName: 'closesAt', blockNumber }),
-			client.readContract({ abi: abis.securityPoolPortfolioAuctionAbi, address, functionName: 'lotAttoEth', blockNumber }),
-			client.readContract({ abi: abis.securityPoolPortfolioAuctionAbi, address, functionName: 'repGrid', blockNumber }),
-			client.readContract({ abi: abis.securityPoolPortfolioAuctionAbi, address, functionName: 'minimumCollateralAttoRepPerLot', blockNumber }),
+		const [securityPool, authority, universeId, engineAddress, opened, finalized, closesAt, lotAttoEth, repGrid, minimumCollateral] = await Promise.all([
+			client.readContract({ abi: abis.securityPoolAuctionAbi, address, functionName: 'securityPool', blockNumber }),
+			client.readContract({ abi: abis.securityPoolAuctionAbi, address, functionName: 'forkAuthority', blockNumber }),
+			client.readContract({ abi: abis.securityPoolAuctionAbi, address, functionName: 'universeId', blockNumber }),
+			client.readContract({ abi: abis.securityPoolAuctionAbi, address, functionName: 'engine', blockNumber }),
+			client.readContract({ abi: abis.securityPoolAuctionAbi, address, functionName: 'opened', blockNumber }),
+			client.readContract({ abi: abis.securityPoolAuctionAbi, address, functionName: 'finalized', blockNumber }),
+			client.readContract({ abi: abis.securityPoolAuctionAbi, address, functionName: 'closesAt', blockNumber }),
+			client.readContract({ abi: abis.securityPoolAuctionAbi, address, functionName: 'lotAttoEth', blockNumber }),
+			client.readContract({ abi: abis.securityPoolAuctionAbi, address, functionName: 'repGrid', blockNumber }),
+			client.readContract({ abi: abis.securityPoolAuctionAbi, address, functionName: 'minimumCollateralAttoRepPerLot', blockNumber }),
 		])
-		requireGraphEdge(getAddress(portfolio), pool.portfolio, 'Auction portfolio binding')
+		requireGraphEdge(getAddress(securityPool), pool.securityPool, 'Auction security pool binding')
 		requireGraphEdge(getAddress(authority), controller, 'Auction fork authority binding')
 		if (universeId.toString() !== pool.universeId) throw new Error('Auction universe binding mismatch')
 		let openingExpectedSuccess = false
 		if (!opened && !finalized) {
 			try {
-				await client.simulateContract({ abi: abis.securityPoolPortfolioAuctionAbi, address, ...(wallet === undefined ? {} : { account: wallet }), functionName: 'open', blockNumber })
+				await client.simulateContract({ abi: abis.securityPoolAuctionAbi, address, ...(wallet === undefined ? {} : { account: wallet }), functionName: 'open', blockNumber })
 				openingExpectedSuccess = true
 			} catch (error) {
 				if (!contractSimulationReverted(error)) throw error
 			}
 		}
-		const collateralToken = getAddress(await client.readContract({ abi: abis.securityPoolPortfolioAbi, address: pool.portfolio, functionName: 'collateralToken', blockNumber }))
+		const collateralToken = getAddress(await client.readContract({ abi: abis.securityPoolAbi, address: pool.securityPool, functionName: 'collateralToken', blockNumber }))
 		const [walletCollateral, collateralAllowance] =
 			wallet === undefined
 				? [0n, 0n]
 				: await Promise.all([client.readContract({ abi: abis.erc20Abi, address: collateralToken, functionName: 'balanceOf', args: [wallet], blockNumber }), client.readContract({ abi: abis.erc20Abi, address: collateralToken, functionName: 'allowance', args: [wallet, address], blockNumber })])
-		const capital = getAddress(await client.readContract({ abi: abis.securityPoolPortfolioAuctionAbi, address, functionName: 'capital', blockNumber }))
-		const openingPrice = await client.readContract({ abi: abis.securityPoolPortfolioAuctionAbi, address, functionName: 'openingConservativePrice', blockNumber })
+		const capital = getAddress(await client.readContract({ abi: abis.securityPoolAuctionAbi, address, functionName: 'capital', blockNumber }))
+		const openingPrice = await client.readContract({ abi: abis.securityPoolAuctionAbi, address, functionName: 'openingConservativePrice', blockNumber })
 		const multiplier = await client.readContract({ abi: abis.securityPoolCapitalLedgerAbi, address: capital, functionName: 'securityMultiplierBps', blockNumber })
 		const base = (lotAttoEth * openingPrice + 10n ** 18n - 1n) / 10n ** 18n
 		const unroundedCollateral = (base * multiplier + 9_999n) / 10_000n
@@ -65,7 +65,7 @@ export async function discoverAuctions(context: EcosystemDiscoveryContext, pools
 			bid.settled = stored[5]
 			if (bid.settled) continue
 			try {
-				await client.simulateContract({ abi: abis.securityPoolPortfolioAuctionAbi, address, account: wallet, functionName: 'settleRefund', args: [BigInt(bid.bidId)], blockNumber })
+				await client.simulateContract({ abi: abis.securityPoolAuctionAbi, address, account: wallet, functionName: 'settleRefund', args: [BigInt(bid.bidId)], blockNumber })
 				refundableBidIds.push(bid.bidId)
 			} catch (error) {
 				if (!contractSimulationReverted(error)) throw error
@@ -77,7 +77,7 @@ export async function discoverAuctions(context: EcosystemDiscoveryContext, pools
 			openingExpectedSuccess,
 			address,
 			engine,
-			portfolio: pool.portfolio,
+			securityPool: pool.securityPool,
 			universeId: pool.universeId,
 			forkController: controller,
 			startTime: opensAt.toString(),

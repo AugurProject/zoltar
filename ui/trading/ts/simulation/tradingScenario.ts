@@ -7,9 +7,9 @@ import { discoverLiveUniverseMarketPage } from '../protocol/live.js'
 import type { BootstrapScenarioApplyParameters } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import { reportBootstrapProgress, requireQaAccount } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import { applyStatoblastScenario } from '@zoltar/ui-statoblast-shared/simulation/statoblastScenarios.js'
-import { forkSeededPortfolio } from '@zoltar/ui-statoblast-shared/simulation/portfolioScenarioFork.js'
-import { prepareSeededPortfolioMint } from '@zoltar/ui-statoblast-shared/simulation/portfolioScenarioMint.js'
-import { portfolioReadClient, sendPortfolioTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolio.js'
+import { forkSeededSecurityPool } from '@zoltar/ui-statoblast-shared/simulation/securityPoolScenarioFork.js'
+import { prepareSeededSecurityPoolMint } from '@zoltar/ui-statoblast-shared/simulation/securityPoolScenarioMint.js'
+import { securityPoolReadClient, sendSecurityPoolTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
 import { loadBudgetMint } from '../protocol/minting.js'
 import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { deployTradingStep, deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../protocol/deployment.js'
@@ -21,7 +21,7 @@ export async function applyTradingScenario(parameters: BootstrapScenarioApplyPar
 	if (!TRADING_SIMULATION_SCENARIOS.includes(parameters.scenario)) return false
 	const usdcFunded = parameters.scenario === USDC_TRADING_SIMULATION_SCENARIO
 	const seeded = await applyStatoblastScenario({ ...parameters, scenario: usdcFunded ? 'securitypoolx2' : 'security-pool' }, usdcFunded ? 'USDC' : 'WETH')
-	if (!seeded) throw new Error('Trading simulation could not seed its Statoblast security pool')
+	if (!seeded) throw new Error('Trading simulation could not seed its Statoblast question ledger')
 
 	const account = requireQaAccount(parameters.accounts[0], 'Expected a Trading simulation QA account')
 	const addresses = getInfraContractAddresses(parameters.profile)
@@ -49,7 +49,7 @@ export async function applyTradingScenario(parameters: BootstrapScenarioApplyPar
 		const configuration = deploymentConfigurationForPlan(plan, 'http://127.0.0.1/')
 		const { markets } = await discoverLiveUniverseMarketPage(readClient, configuration, 0n)
 		const market = markets[0]
-		if (market === undefined || market.loadError !== undefined) throw new Error('Trading simulation could not discover its seeded SecurityPool')
+		if (market === undefined || market.loadError !== undefined) throw new Error('Trading simulation could not discover its seeded QuestionLedger')
 		const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
 		const block = await readClient.getBlock()
 		if (block.number === undefined) throw new Error('Trading seed requires a mined block')
@@ -65,9 +65,9 @@ export async function applyTradingScenario(parameters: BootstrapScenarioApplyPar
 			? await writeClient.writeContract({ abi: router.abi, address: plan.router.address, functionName: 'createPairAndInitializeWithCollateral', args: [market.pool, mintAttoEth, 5_000n, maxUint256, maxUint256, 0n, 0n, 0n, account, block.timestamp + 1_200n, budget] })
 			: await writeClient.writeContract({ abi: router.abi, address: plan.router.address, functionName: 'createPairAndInitializeWithEth', args: [market.pool, mintAttoEth, 5_000n, maxUint256, maxUint256, 0n, 0n, 0n, account, block.timestamp + 1_200n], value: 10n ** 16n })
 		await readClient.waitForTransactionReceipt({ hash: liquidityHash })
-		const portfolio = await readClient.readContract({ abi: factoryArtifact.abi, address: addresses.securityPoolFactory, functionName: 'getSecurityPoolPortfolio', args: [market.pool] })
-		await sendPortfolioTransaction(writeClient, await prepareSeededPortfolioMint(portfolioReadClient(readClient), account, portfolio, market.questionId, !nativeFunding ? 5n * 10n ** BigInt(asset.decimals) : 5n * 10n ** 15n, 100n), 'Fund trading wallet shares')
-		if (parameters.scenario === FORKED_TRADING_SIMULATION_SCENARIO) await forkSeededPortfolio(parameters, portfolio, market.pool, market.questionId)
+		const securityPool = await readClient.readContract({ abi: factoryArtifact.abi, address: addresses.securityPoolFactory, functionName: 'securityPoolOf', args: [market.pool] })
+		await sendSecurityPoolTransaction(writeClient, await prepareSeededSecurityPoolMint(securityPoolReadClient(readClient), account, securityPool, market.questionId, !nativeFunding ? 5n * 10n ** BigInt(asset.decimals) : 5n * 10n ** 15n, 100n), 'Fund trading wallet shares')
+		if (parameters.scenario === FORKED_TRADING_SIMULATION_SCENARIO) await forkSeededSecurityPool(parameters, securityPool, market.pool, market.questionId)
 	}
 	await reportBootstrapProgress(parameters.onProgress, 'Trading simulation is ready', 0.995)
 	return true

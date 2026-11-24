@@ -114,7 +114,7 @@ describe('canonical test discovery', () => {
 		for (const slice of ['Entry', 'MultiPool', 'Recovery', 'Vault', 'Claims']) {
 			expect(files).toContain(`solidity/ts/tests/statoblast/forkMigration${slice}.test.ts`)
 		}
-		for (const suite of ['Delivery', 'Redemption', 'ReportingFork']) expect(files).toContain(`solidity/ts/tests/statoblast/securityPoolPortfolio${suite}.test.ts`)
+		for (const suite of ['Delivery', 'Redemption', 'ReportingFork']) expect(files).toContain(`solidity/ts/tests/statoblast/securityPool${suite}.test.ts`)
 		expect(files).not.toContain('solidity/ts/tests/statoblast/forkMigrationShares.test.ts')
 		expect(files).not.toContain('solidity/ts/tests/statoblast/forkMigration.test.ts')
 	})

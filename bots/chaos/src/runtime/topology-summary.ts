@@ -9,7 +9,7 @@ export function runtimeTopologySummary(scan: Pick<CanonicalScanResult, 'anchor' 
 			bidCount: auction.bids.length,
 			endTime: auction.endTime,
 			finalized: auction.finalized,
-			portfolio: auction.portfolio,
+			securityPool: auction.securityPool,
 			universeId: auction.universeId,
 			startTime: auction.startTime,
 		})),
@@ -23,7 +23,7 @@ export function runtimeTopologySummary(scan: Pick<CanonicalScanResult, 'anchor' 
 			questionId: pool.questionId,
 			systemState: pool.systemState,
 			universeId: pool.universeId,
-			portfolio: pool.portfolio,
+			securityPool: pool.securityPool,
 		})),
 		reports: scan.snapshot.reports.map(report => ({
 			currentReporter: report.currentReporter,

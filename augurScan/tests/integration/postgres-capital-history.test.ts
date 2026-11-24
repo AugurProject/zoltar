@@ -15,7 +15,7 @@ const blockHash = (number: number): Hex => `0x${number.toString(16).padStart(64,
 const address = (digit: string) => getAddress(`0x${digit.repeat(40)}`)
 const lower = (value: string) => value.toLowerCase()
 const ledger = address('1')
-const portfolio = address('4')
+const securityPool = address('4')
 const alice = address('a')
 const bob = address('b')
 const carol = address('c')
@@ -48,7 +48,7 @@ postgresTest('capital views respect the historical boundary, surface failed ledg
 			await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, block_timestamp, source_method, read_status, read_result, read_failure_reason, canonical)
 				VALUES (${chainId}, ${entityType}, ${identity}, ${blockNumber}, ${blockHash(blockNumber)}, ${new Date(Date.UTC(2026, 0, blockNumber))}, ${`augurscan.${entityType}-state.v1`},
 					${readResult === undefined ? 'failed' : 'success'}, ${readResult === undefined ? null : JSON.stringify(readResult)}::text::jsonb, ${readResult === undefined ? 'execution reverted' : null}, true)`
-		await snapshot('capital-ledger', lower(ledger), 4, { portfolio: lower(portfolio), universeId: '0', commitmentAttoEth: '100', fees: { annualFeeBps: '200' } })
+		await snapshot('capital-ledger', lower(ledger), 4, { securityPool: lower(securityPool), universeId: '0', commitmentAttoEth: '100', fees: { annualFeeBps: '200' } })
 		await snapshot('capital-ledger', lower(ledger), 5, undefined)
 		// Bob's position is revealed only by a read at block 6.
 		await snapshot('capital-position', `${lower(ledger)}:2`, 6, { ledger: lower(ledger), positionId: '2', owner: lower(bob) })

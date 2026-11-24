@@ -1,8 +1,8 @@
 export type { DurableState } from './durable-state-document.ts'
 import { durableStateDocument, type DurableState } from './durable-state-document.ts'
-import { parseCompletedInstructions, parsePortfolioFunding, type PortfolioFundingEffect, type InstructionIdentity } from './portfolio-instructions.ts'
+import { parseCompletedInstructions, parseSecurityPoolFunding, type SecurityPoolFundingEffect, type InstructionIdentity } from './security-pool-instructions.ts'
 import { marketConfigurationList, poolCentralizedPriceAllowed, poolCentralizedPriceDeviationBps } from './market-snapshot.ts'
-import { parsePortfolioScopes } from './portfolio-scopes.ts'
+import { parseSecurityPoolScopes } from './security-pool-scopes.ts'
 import { parsePendingTransactionIntent } from './pending-transaction-intent.ts'
 import type { RuntimeState } from './runtime-state.ts'
 export type { RuntimeState } from './runtime-state.ts'
@@ -48,7 +48,7 @@ export type PoolObservation = {
 	repToken: Address
 	requestPriceCostAttoEth: bigint
 	selected: boolean
-	securityPoolForker: Address
+	questionForker: Address
 	stagedOperations: StagedOperationObservation[]
 	systemState: bigint
 	totalUnderwritingLimitAttoEth: bigint
@@ -99,8 +99,8 @@ export type Activity = {
 export type PendingTransactionIntent = {
 	cancellation?: { hash: Hex; serializedTransaction: Hex } | undefined
 	reportOperations?: { feed: Address; reportId: bigint } | undefined
-	portfolioFunding?: PortfolioFundingEffect | undefined
-	portfolioInstruction?: InstructionIdentity | undefined
+	securityPoolFunding?: SecurityPoolFundingEffect | undefined
+	securityPoolInstruction?: InstructionIdentity | undefined
 	hash: Hex
 	/** What the transaction does to the operator's funds; `configuration` changes vault settings without moving tokens. */
 	kind: 'configuration' | 'deployment' | 'deposit' | 'fees' | 'liquidation' | 'migration' | 'withdrawal'
@@ -140,8 +140,8 @@ export function initialRuntimeState(paused: boolean, wallet: Address | undefined
 		paused,
 		rpcEndpointHealth: [],
 		pendingTransactions: [],
-		portfolios: [],
-		portfolioScopes: [],
+		securityPools: [],
+		securityPoolScopes: [],
 		pools: [],
 		scanning: false,
 		startedAt: new Date().toISOString(),
@@ -369,7 +369,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 				repToken: pool.repToken,
 				requestPriceCostEth: formatDecimalAmount(pool.requestPriceCostAttoEth),
 				selected: pool.selected,
-				securityPoolForker: pool.securityPoolForker,
+				questionForker: pool.questionForker,
 				systemState: pool.systemState.toString(),
 				totalCapacityOwnershipEth: formatDecimalAmount(pool.totalUnderwritingLimitAttoEth),
 				totalPoolHeldRep: formatDecimalAmount(pool.totalAttoRep),
@@ -445,7 +445,7 @@ function assertNoLegacyStagedOperations(value: unknown, path: string) {
 export async function loadDurableState(path: string, expectedChainId: number): Promise<DurableState> {
 	if (!Number.isSafeInteger(expectedChainId) || expectedChainId < 1) throw new Error('Expected state chain ID must be a positive integer')
 	const contents = await readOwnerFileIfPresent(path, 'Liquidator state', MAXIMUM_STATE_BYTES)
-	if (contents === undefined) return { portfolioFunding: {}, completedPortfolioInstructions: {}, portfolioScopes: [], activities: [], chainId: expectedChainId, lastScannedBlock: undefined, pendingTransactions: [], version: 2 }
+	if (contents === undefined) return { securityPoolFunding: {}, completedSecurityPoolInstructions: {}, securityPoolScopes: [], activities: [], chainId: expectedChainId, lastScannedBlock: undefined, pendingTransactions: [], version: 2 }
 	const value: unknown = JSON.parse(contents)
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Liquidator state must be an object')
 	const version = Reflect.get(value, 'version')
@@ -487,9 +487,9 @@ export async function loadDurableState(path: string, expectedChainId: number): P
 		lastScannedBlock: typeof lastScannedBlock === 'string' ? lastScannedBlock : undefined,
 		lastExpiredTakeoverBlock: lastExpiredTakeoverBlock === undefined ? undefined : BigInt(lastExpiredTakeoverBlock),
 		pendingTransactions: await Promise.all(pendingTransactions.map((intent: unknown) => parsePendingTransactionIntent(intent, expectedChainId))),
-		portfolioFunding: parsePortfolioFunding(Reflect.get(value, 'portfolioFunding')),
-		completedPortfolioInstructions: parseCompletedInstructions(Reflect.get(value, 'completedPortfolioInstructions')),
-		portfolioScopes: parsePortfolioScopes(Reflect.get(value, 'portfolioScopes')),
+		securityPoolFunding: parseSecurityPoolFunding(Reflect.get(value, 'securityPoolFunding')),
+		completedSecurityPoolInstructions: parseCompletedInstructions(Reflect.get(value, 'completedSecurityPoolInstructions')),
+		securityPoolScopes: parseSecurityPoolScopes(Reflect.get(value, 'securityPoolScopes')),
 		version: 2,
 	}
 }

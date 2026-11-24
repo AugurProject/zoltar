@@ -1,6 +1,6 @@
 import { useDownloadedEntities, useFavorites } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { marketDownloadStore, selectPortfolioMarkets } from '../../lib/favoriteMarkets.js'
-import { isSecurityPoolNotFoundError } from '../../protocol/marketDiscovery.js'
+import { isQuestionLedgerNotFoundError } from '../../protocol/marketDiscovery.js'
 import { readOperationClient, runReadOperation } from '@zoltar/ui-core-shared/lib/readOperation.js'
 import type { MarketDiscoveryProgress } from '../../protocol/live.js'
 import { useEffect, useRef } from 'preact/hooks'
@@ -202,7 +202,7 @@ export function useMarketDiscoveryController({
 			}
 			const detail = publicErrorMessage(error, liveCopy.discoveryFailureLead(route))
 			market.setDiscoveryError(detail)
-			if (routePool !== undefined && isSecurityPoolNotFoundError(error)) {
+			if (routePool !== undefined && isQuestionLedgerNotFoundError(error)) {
 				market.setMarkets([])
 				market.setDiscoveryRows(undefined)
 				market.setDiscoveryState('not-found')

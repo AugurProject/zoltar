@@ -158,7 +158,7 @@ describe('QuestionsView', () => {
 		expect(documentQueries.getByText(question.title)).not.toBeNull()
 		expect(document.body.textContent).not.toContain('Statoblast')
 		expect(document.body.textContent).not.toContain('OpenOracle')
-		expect(document.body.textContent).not.toContain('Security Pool')
+		expect(document.body.textContent).not.toContain('Question Ledger')
 
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: `Use for fork: ${question.title} (${question.questionId})` }))

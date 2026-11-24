@@ -3,10 +3,10 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { formatStorageSlot, getAddressMappingStorageSlot } from '../../testSupport/storage'
 import {
 	statoblast_EscalationGame_EscalationGame,
-	statoblast_SecurityPool_SecurityPool,
-	statoblast_SecurityPoolForker_SecurityPoolForker,
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
+	statoblast_QuestionLedger_QuestionLedger,
+	statoblast_QuestionForker_QuestionForker,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as coordinatorArtifact,
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
 	Zoltar_Zoltar,
 } from '../../types/contractArtifact'
@@ -15,7 +15,7 @@ import { createWriteClient, writeContractAndWait, type WriteClient } from '../..
 import { DAY, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getEscalationGameOutcomeState } from '../../testSupport/simulator/utils/contracts/escalationGame'
-import { getAwaitingForkContinuation, getRepToken, getSecurityPoolsEscalationGame, getSystemState } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { getAwaitingForkContinuation, getRepToken, getQuestionLedgersEscalationGame, getSystemState } from '../../testSupport/simulator/utils/contracts/questionLedger'
 import { addRepToMigrationBalance, splitMigrationRep, forkUniverse, getZoltarAddress, getZoltarForkThreshold } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
@@ -23,30 +23,30 @@ import { approveToken, getChildUniverseId, getERC20Balance } from '../../testSup
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
 import { createCarryProof, SparseNullifierTree } from '../carryProofHelpers'
-import { useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { useSecurityPoolFixture } from './securityPoolFixture'
 
 const ATTO_REP_PER_REP = 10n ** 18n
 
 describe('Statoblast: delayed repeated-fork carry', () => {
-	const portfolio = useSecurityPoolPortfolioFixture()
-	const fixture = portfolio.base
-	const native = () => portfolio.poolFor(fixture.questionId)
+	const securityPool = useSecurityPoolFixture()
+	const fixture = securityPool.base
+	const native = () => securityPool.poolFor(fixture.questionId)
 	const depositToEscalationGame = async (sender: WriteClient, pool: Address, outcome: QuestionOutcome, amount: bigint) => {
 		await approveToken(sender, await getRepToken(sender, pool), pool)
-		return writeContractAndWait(sender, () => sender.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] }))
+		return writeContractAndWait(sender, () => sender.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] }))
 	}
 	const activateChild = async (source: Address, universe: bigint) => {
 		const { client, mockWindow } = fixture
-		const controller = await client.readContract({ abi: portfolioArtifact.abi, address: portfolio.portfolio, functionName: 'forkController' })
+		const controller = await client.readContract({ abi: securityPoolArtifact.abi, address: securityPool.securityPool, functionName: 'forkController' })
 		const forkTime = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getForkTime', args: [universe] })
 		await mockWindow.setTime(forkTime + 63n * DAY)
 		await writeContractAndWait(client, () => client.writeContract({ abi: coordinatorArtifact.abi, address: controller, functionName: 'startBranch', args: [universe, 1n] }))
 		const child = getChildUniverseId(universe, QuestionOutcome.Yes)
 		await writeContractAndWait(client, () => client.writeContract({ abi: coordinatorArtifact.abi, address: controller, functionName: 'finalizeBranch', args: [child] }))
-		const target = { abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi, address: getInfraContractAddresses().securityPoolForker }
-		await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'preparePortfolioQuestion', args: [source, child] }))
-		for (let outcome = 0; outcome < 3; outcome++) await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'materializePortfolioQuestion', args: [source, child] }))
-		return portfolio.poolFor(fixture.questionId, child, source)
+		const target = { abi: statoblast_QuestionForker_QuestionForker.abi, address: getInfraContractAddresses().questionForker }
+		await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'prepareSecurityPoolQuestion', args: [source, child] }))
+		for (let outcome = 0; outcome < 3; outcome++) await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'materializeSecurityPoolQuestion', args: [source, child] }))
+		return securityPool.poolFor(fixture.questionId, child, source)
 	}
 
 	async function resumePool(pool: Address) {
@@ -57,12 +57,12 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 
 	async function setupInheritedDispute() {
 		const { client, mockWindow, questionData, outcomes, genesisUniverse } = fixture
-		const securityPoolAddresses = native()
+		const questionLedgerAddresses = native()
 		const noDepositor = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await mockWindow.setTime(questionData.endTime + 10000n)
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 100n * ATTO_REP_PER_REP)
-		await depositToEscalationGame(noDepositor, securityPoolAddresses.securityPool, QuestionOutcome.No, 80n * ATTO_REP_PER_REP)
-		const parentGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
+		await depositToEscalationGame(client, questionLedgerAddresses.questionLedger, QuestionOutcome.Yes, 100n * ATTO_REP_PER_REP)
+		await depositToEscalationGame(noDepositor, questionLedgerAddresses.questionLedger, QuestionOutcome.No, 80n * ATTO_REP_PER_REP)
+		const parentGame = await getQuestionLedgersEscalationGame(client, questionLedgerAddresses.questionLedger)
 		const proof = await createCarryProof(client, parentGame, {
 			expectedOutcome: QuestionOutcome.No,
 			parentDepositIndex: 0n,
@@ -74,18 +74,18 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 		})
 		const firstQuestion = { ...questionData, title: 'delayed carry first unrelated fork' }
 		await createQuestion(noDepositor, firstQuestion, outcomes)
-		await approveToken(noDepositor, await getRepToken(client, securityPoolAddresses.securityPool), getZoltarAddress())
+		await approveToken(noDepositor, await getRepToken(client, questionLedgerAddresses.questionLedger), getZoltarAddress())
 		await forkUniverse(noDepositor, genesisUniverse, getQuestionId(firstQuestion, outcomes))
 		const universe = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const pool = await activateChild(securityPoolAddresses.securityPool, genesisUniverse)
-		await resumePool(pool.securityPool)
-		const game = await getSecurityPoolsEscalationGame(client, pool.securityPool)
+		const pool = await activateChild(questionLedgerAddresses.questionLedger, genesisUniverse)
+		await resumePool(pool.questionLedger)
+		const game = await getQuestionLedgersEscalationGame(client, pool.questionLedger)
 		assert.equal((await getEscalationGameOutcomeState(client, game, QuestionOutcome.Yes)).inheritedUnresolvedTotalAttoRep, 100n * ATTO_REP_PER_REP)
 		assert.equal((await getEscalationGameOutcomeState(client, game, QuestionOutcome.No)).inheritedUnresolvedTotalAttoRep, 80n * ATTO_REP_PER_REP)
 		const deadline = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getEscalationGameEndDate' })
 		const secondQuestion = { ...questionData, title: 'delayed carry second unrelated fork' }
 		await createQuestion(noDepositor, secondQuestion, outcomes)
-		const repToken = await getRepToken(client, pool.securityPool)
+		const repToken = await getRepToken(client, pool.questionLedger)
 		const forkThreshold = await getZoltarForkThreshold(client, universe)
 		// Only fund the unrelated fork initiator; carry principal and backing come from real migrations.
 		const balanceSlot = formatStorageSlot(getAddressMappingStorageSlot(noDepositor.account.address, 0n))
@@ -115,7 +115,7 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 			await mockWindow.setTime(forkAt + DAY)
 			const delayedSnapshot = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getForkCarrySnapshot' })
 			const delayedFinality = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getFinalQuestionResolution' })
-			const poolOutcome = await client.readContract({ abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'getQuestionOutcome', args: [pool.securityPool] })
+			const poolOutcome = await client.readContract({ abi: statoblast_QuestionForker_QuestionForker.abi, address: getInfraContractAddresses().questionForker, functionName: 'getQuestionOutcome', args: [pool.questionLedger] })
 			assert.deepStrictEqual(delayedSnapshot[0], beforeFork[0], 'delay must preserve proof commitments')
 			assert.deepStrictEqual(delayedSnapshot[1], beforeFork[1], 'delay must preserve leaf counts')
 			assert.deepStrictEqual(delayedSnapshot[3], beforeFork[3], 'delay must not consume claims')
@@ -125,8 +125,8 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 				assert.equal(poolOutcome, BigInt(QuestionOutcome.Yes))
 				assert.equal(delayedSnapshot[2][QuestionOutcome.No], 0n, 'genuinely losing inherited principal must retire')
 				assert.equal(delayedSnapshot[2][QuestionOutcome.Yes], 100n * ATTO_REP_PER_REP)
-				await assert.rejects(noDepositor.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool.securityPool, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.No, [proof]] }), /Not winning outcome/)
-				const winningProof = await createCarryProof(client, await getSecurityPoolsEscalationGame(client, native().securityPool), {
+				await assert.rejects(noDepositor.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool.questionLedger, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.No, [proof]] }), /Not winning outcome/)
+				const winningProof = await createCarryProof(client, await getQuestionLedgersEscalationGame(client, native().questionLedger), {
 					expectedOutcome: QuestionOutcome.Yes,
 					parentDepositIndex: 0n,
 					leafIndex: 0n,
@@ -134,25 +134,25 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 					merkleMountainRangeSiblings: [],
 					nullifierSiblings: new SparseNullifierTree().getProof(0n),
 				})
-				const token = await getRepToken(client, pool.securityPool)
+				const token = await getRepToken(client, pool.questionLedger)
 				const balanceBefore = await getERC20Balance(client, token, client.account.address)
-				await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool.securityPool, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.Yes, [winningProof]] }))
+				await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool.questionLedger, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.Yes, [winningProof]] }))
 				assert.ok((await getERC20Balance(client, token, client.account.address)) > balanceBefore, 'genuinely finalized winning claims remain payable after the fork')
 				assert.equal((await getEscalationGameOutcomeState(client, game, QuestionOutcome.Yes)).currentCarryTotalAttoRep, 0n)
 				return
 			}
 
 			const nextUniverse = getChildUniverseId(universe, QuestionOutcome.Yes)
-			const nextPool = await activateChild(pool.securityPool, universe)
-			const nextGame = await getSecurityPoolsEscalationGame(client, nextPool.securityPool)
-			const nextRep = await getRepToken(client, nextPool.securityPool)
-			const reporter = await client.readContract({ abi: portfolioArtifact.abi, address: portfolio.portfolio, functionName: 'reporterLedger', args: [nextUniverse] })
+			const nextPool = await activateChild(pool.questionLedger, universe)
+			const nextGame = await getQuestionLedgersEscalationGame(client, nextPool.questionLedger)
+			const nextRep = await getRepToken(client, nextPool.questionLedger)
+			const reporter = await client.readContract({ abi: securityPoolArtifact.abi, address: securityPool.securityPool, functionName: 'reporterLedger', args: [nextUniverse] })
 			const migratedBacking = await client.readContract({ abi: reporterArtifact.abi, address: reporter, functionName: 'balanceOfGame', args: [nextGame] })
 			const inheritedNo = await getEscalationGameOutcomeState(client, nextGame, QuestionOutcome.No)
 			assert.deepStrictEqual(inheritedNo.snapshotCarryRoot, beforeForkRoots[QuestionOutcome.No], 'the original proof commitment must reach the next continuation')
 			assert.equal(inheritedNo.currentNullifierRoot, beforeFork[3][QuestionOutcome.No])
 			assert.equal(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: nextGame, functionName: 'isForkCarryFundingComplete' }), true)
-			await resumePool(nextPool.securityPool)
+			await resumePool(nextPool.questionLedger)
 			const resumedAt = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: nextGame, functionName: 'forkResumedAt' })
 			const responseEnd = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: nextGame, functionName: 'getEscalationGameEndDate' })
 			assert.equal(responseEnd, resumedAt + deadline - forkAt, 'the continuation preserves only its remaining curve time')
@@ -169,7 +169,7 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 			}
 			if (offset >= -1n) {
 				assert.equal(alreadyFinal, true)
-				await assert.rejects(noDepositor.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: nextPool.securityPool, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.No, [proof]] }), /Not winning outcome/)
+				await assert.rejects(noDepositor.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: nextPool.questionLedger, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.No, [proof]] }), /Not winning outcome/)
 				assertPreservedCarry()
 				return
 			}
@@ -177,20 +177,20 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 			// Fund a new 30 REP deposit without touching game backing or the inherited 80 REP claim.
 			await addRepToMigrationBalance(noDepositor, universe, 60n * ATTO_REP_PER_REP)
 			await splitMigrationRep(noDepositor, universe, 60n * ATTO_REP_PER_REP, [QuestionOutcome.Yes])
-			await approveToken(noDepositor, nextRep, nextPool.securityPool)
-			await depositToEscalationGame(noDepositor, nextPool.securityPool, QuestionOutcome.No, 30n * ATTO_REP_PER_REP)
+			await approveToken(noDepositor, nextRep, nextPool.questionLedger)
+			await depositToEscalationGame(noDepositor, nextPool.questionLedger, QuestionOutcome.No, 30n * ATTO_REP_PER_REP)
 			assert.equal((await getEscalationGameOutcomeState(client, nextGame, QuestionOutcome.No)).balanceAttoRep, 110n * ATTO_REP_PER_REP)
 			const finalDeadline = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: nextGame, functionName: 'getEscalationGameEndDate' })
 			await mockWindow.setTime(finalDeadline + 1n)
 			assert.equal(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: nextGame, functionName: 'getFinalQuestionResolution' }), BigInt(QuestionOutcome.No))
 			assert.equal((await getEscalationGameOutcomeState(client, nextGame, QuestionOutcome.Yes)).currentCarryTotalAttoRep, 0n, 'the new genuine finality must retire the losing YES principal')
 			const walletBefore = await getERC20Balance(client, nextRep, noDepositor.account.address)
-			await writeContractAndWait(noDepositor, () => noDepositor.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: nextPool.securityPool, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.No, [proof]] }))
+			await writeContractAndWait(noDepositor, () => noDepositor.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: nextPool.questionLedger, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.No, [proof]] }))
 			assert.ok((await getERC20Balance(client, nextRep, noDepositor.account.address)) - walletBefore > 80n * ATTO_REP_PER_REP, 'the original carried NO claim must pay principal plus its winning reward')
 			const consumedNullifiers = new SparseNullifierTree()
 			consumedNullifiers.consume(proof.leafIndex)
 			assert.equal((await getEscalationGameOutcomeState(client, nextGame, QuestionOutcome.No)).currentNullifierRoot, consumedNullifiers.root)
-			await assert.rejects(noDepositor.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: nextPool.securityPool, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.No, [proof]] }), /Deposit settled|Bad nullifier proof/)
+			await assert.rejects(noDepositor.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: nextPool.questionLedger, functionName: 'withdrawForkedEscalationDeposits', args: [QuestionOutcome.No, [proof]] }), /Deposit settled|Bad nullifier proof/)
 			assert.equal((await getEscalationGameOutcomeState(client, nextGame, QuestionOutcome.No)).currentCarryTotalAttoRep, 30n * ATTO_REP_PER_REP, 'settling inherited principal must leave the new deposit intact')
 			// Keep these checks after settlement so the pre-fix implementation reproduces Carried REP low.
 			assertPreservedCarry()

@@ -165,7 +165,7 @@ describe('documentation screenshots', () => {
 		const html = `<code data-simulation-security-pool="address">${previousPool}</code><img src="./assets/screenshots/trading/buy-ticket.png" width="1" height="1" alt="Ticket" />`
 		await withEmbeddingPage(html, async (docsRoot, pagePath) => {
 			for (const invalid of ['', '0x1234', `0x${'z'.repeat(40)}`, `${currentPool}0`, ` ${currentPool}`]) {
-				await expect(updateEmbeddingPages(docsRoot, { usedBy: ['existing.html'] }, outputPath, { width: 480, height: 1213 }, () => undefined, invalid)).rejects.toThrow('simulation SecurityPool address')
+				await expect(updateEmbeddingPages(docsRoot, { usedBy: ['existing.html'] }, outputPath, { width: 480, height: 1213 }, () => undefined, invalid)).rejects.toThrow('simulation QuestionLedger address')
 				expect(await readFile(pagePath, 'utf8')).toBe(html)
 			}
 		})

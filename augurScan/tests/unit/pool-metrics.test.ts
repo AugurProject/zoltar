@@ -36,7 +36,7 @@ test('samples the current question ledger ABI and live settlement quotes without
 	const pool = getAddress('0x1111111111111111111111111111111111111111')
 	const values: Readonly<Record<string, unknown>> = {
 		securityPoolFactory: pool,
-		getSecurityPoolPortfolio: pool,
+		securityPoolOf: pool,
 		collateralToken: pool,
 		symbol: 'WETH',
 		decimals: 18n,
@@ -73,7 +73,7 @@ for (const supply of [0n, 1n]) {
 	test(`question quote stays within the remaining supply of ${supply}`, async () => {
 		const pool = getAddress('0x1111111111111111111111111111111111111111')
 		const snapshot = await sampleEntityStateWithRead({ entityType: 'pool', entityIdentity: pool, address: pool }, async (_address, _abi, name, args) => {
-			if (['securityPoolFactory', 'getSecurityPoolPortfolio', 'collateralToken'].includes(name)) return pool
+			if (['securityPoolFactory', 'securityPoolOf', 'collateralToken'].includes(name)) return pool
 			if (name === 'symbol') return 'WETH'
 			if (name === 'decimals') return 18n
 			if (name === 'shareTokenSupplyAttoShares') return supply

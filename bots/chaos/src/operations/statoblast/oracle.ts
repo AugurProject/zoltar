@@ -234,7 +234,7 @@ export const requestOraclePrice: OperationDefinition = {
 	},
 	classification: 'selectable',
 	contract: 'OpenOraclePriceCoordinator',
-	description: 'Sponsors a bounded REP/ETH report for a stale pool or renews a shared portfolio price before expiry when no report is pending.',
+	description: 'Sponsors a bounded REP/ETH report for a stale pool or renews a shared security pool price before expiry when no report is pending.',
 	discoveryInputs: ['oracle freshness/pending report', 'request cost', 'WETH and REP balances/allowances'],
 	ecosystem: 'statoblast',
 	evaluate(snapshot, options) {

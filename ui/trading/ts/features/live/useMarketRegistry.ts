@@ -4,7 +4,7 @@ import { readOperationClient, runReadOperation } from '@zoltar/ui-core-shared/li
 import { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { marketsCopy } from '../../copy/markets.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
-import { createSecurityPoolDeploymentIndex, publicErrorMessage, type LiveMarket } from '../../protocol/live.js'
+import { createQuestionLedgerDeploymentIndex, publicErrorMessage, type LiveMarket } from '../../protocol/live.js'
 import type { TradingPairIndex } from '../../protocol/marketDiscovery.js'
 import type { LiveTradingControllerServices } from './liveTradingTypes.js'
 import { parsedUniverseId } from './useLiveTradingState.js'
@@ -40,7 +40,7 @@ export function useMarketRegistry({ active, configuration, selectedUniverseId, s
 	const scope = active && configuration !== undefined && selectedUniverseId !== undefined ? `${configuration.chainId.toString()}:${configuration.factory}:${configuration.rpcUrl}:${selectedUniverseId}` : undefined
 	const [state, setState] = useState<RegistryState>(() => emptyRegistry(scope))
 	const requests = useRef(createLatestRequestGuard()).current
-	const pairIndex = useRef<TradingPairIndex>(createSecurityPoolDeploymentIndex()).current
+	const pairIndex = useRef<TradingPairIndex>(createQuestionLedgerDeploymentIndex()).current
 	const current = state.scope === scope ? state : emptyRegistry(scope)
 
 	async function load(start: bigint, background = false) {

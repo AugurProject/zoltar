@@ -59,7 +59,7 @@ describe('execution risk controls', () => {
 		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 0n, positions: noPositions, projectedGasCostAttoWeth: privateReserve + 1n }, dailyLimit)).toContain('UTC-day gas spend')
 	})
 
-	test('rechecks refreshed capital and relay-simulated gas against every portfolio cap', () => {
+	test('rechecks refreshed capital and relay-simulated gas against every security pool cap', () => {
 		const positions = [
 			{
 				actualEntryGasCostEth: '0.01',

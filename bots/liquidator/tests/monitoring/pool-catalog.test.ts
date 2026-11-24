@@ -8,7 +8,7 @@ const address = getAddress('0x1111111111111111111111111111111111111111')
 
 function fixture(
 	total: bigint,
-	options: { missingPortfolio?: boolean; missingCapital?: boolean; stallDeploymentBlock?: boolean; stallDeployment?: boolean; unknownPool?: boolean; wrongCanonical?: boolean; failSearch?: boolean; failMetrics?: boolean; failDates?: boolean; failDeployment?: boolean; missingQuestion?: boolean; reorg?: boolean } = {},
+	options: { missingSecurityPool?: boolean; missingCapital?: boolean; stallDeploymentBlock?: boolean; stallDeployment?: boolean; unknownPool?: boolean; wrongCanonical?: boolean; failSearch?: boolean; failMetrics?: boolean; failDates?: boolean; failDeployment?: boolean; missingQuestion?: boolean; reorg?: boolean } = {},
 ) {
 	const reads: { functionName: string; args: readonly unknown[]; blockNumber: bigint }[] = []
 	let blockReads = 0
@@ -38,10 +38,10 @@ function fixture(
 					return async (parameters: { functionName: string; args: readonly unknown[]; blockNumber: bigint }) => {
 						reads.push(parameters)
 						switch (parameters.functionName) {
-							case 'getSecurityPoolOriginId':
+							case 'getQuestionLedgerOriginId':
 								if (options.failSearch) throw new Error('RPC unavailable')
 								return options.unknownPool ? `0x${'0'.repeat(64)}` : `0x${'1'.repeat(64)}`
-							case 'getSecurityPool':
+							case 'getQuestionLedger':
 								return options.wrongCanonical ? zeroAddress : address
 							case 'universeId':
 								return 7n
@@ -51,15 +51,15 @@ function fixture(
 								return zeroAddress
 							case 'statoblastSecurityMultiplierBps':
 								return 12500n
-							case 'securityPoolDeploymentCount':
+							case 'questionLedgerDeploymentCount':
 								return total
-							case 'securityPoolDeploymentsRange':
-								return [{ securityPool: address, parent: zeroAddress, universeId: 7n, questionId: 42n, statoblastSecurityMultiplierBps: 12500n }]
+							case 'questionLedgerDeploymentsRange':
+								return [{ questionLedger: address, parent: zeroAddress, universeId: 7n, questionId: 42n, statoblastSecurityMultiplierBps: 12500n }]
 							case 'systemState':
 								if (options.failMetrics) throw new Error('Pool unavailable')
 								return 0n
-							case 'getSecurityPoolPortfolio':
-								return options.missingPortfolio ? zeroAddress : address
+							case 'securityPoolOf':
+								return options.missingSecurityPool ? zeroAddress : address
 							case 'capitalLedger':
 								return options.missingCapital ? zeroAddress : address
 							case 'totals':
@@ -89,9 +89,9 @@ test('browses unselected factory deployments with bounded ranges at a canonical 
 		total: '25',
 		pageCount: '3',
 		page: 2,
-		pools: [{ address, universeId: '7', questionId: '42', deploymentDate: '1789560000', questionDates: { startTime: '1789473600', endTime: '1792065600' }, metrics: { systemState: '0', portfolio: address, sharedCommittedRep: '2', sharedCommitmentEth: '3' } }],
+		pools: [{ address, universeId: '7', questionId: '42', deploymentDate: '1789560000', questionDates: { startTime: '1789473600', endTime: '1792065600' }, metrics: { systemState: '0', securityPool: address, sharedCommittedRep: '2', sharedCommitmentEth: '3' } }],
 	})
-	expect(reads.find(read => read.functionName === 'securityPoolDeploymentsRange')?.args).toEqual([24n, 1n])
+	expect(reads.find(read => read.functionName === 'questionLedgerDeploymentsRange')?.args).toEqual([24n, 1n])
 	expect(reads.every(read => read.blockNumber === 42n)).toBe(true)
 	expect(result).not.toHaveProperty('block')
 	expect(reads.filter(read => read.functionName === 'questions').map(read => read.args)).toEqual([[42n]])
@@ -104,7 +104,7 @@ test('handles empty and out-of-range pages without reading pool details', async 
 	] as const) {
 		const { client, reads } = fixture(total)
 		expect((await loadPoolCatalog(client, address, 1, page)).pools).toEqual([])
-		expect(reads.map(read => read.functionName)).toEqual(['securityPoolDeploymentCount'])
+		expect(reads.map(read => read.functionName)).toEqual(['questionLedgerDeploymentCount'])
 	}
 })
 
@@ -139,8 +139,8 @@ test('finds an exact registered address without scanning catalog pages', async (
 	const { client, reads } = fixture(1000000n)
 	const result = await loadPoolCatalog(client, address, 1, 0, address)
 	expect(result).toMatchObject({ page: 0, total: '1', pageCount: '1', pools: [{ address, universeId: '7', questionId: '42', multiplierBps: '12500' }] })
-	expect(reads.some(read => read.functionName.startsWith('securityPoolDeployment'))).toBe(false)
-	expect(reads.find(read => read.functionName === 'getSecurityPool')?.args).toEqual([`0x${'1'.repeat(64)}`, 7n])
+	expect(reads.some(read => read.functionName.startsWith('questionLedgerDeployment'))).toBe(false)
+	expect(reads.find(read => read.functionName === 'getQuestionLedger')?.args).toEqual([`0x${'1'.repeat(64)}`, 7n])
 	expect(reads.every(read => read.blockNumber === 42n)).toBe(true)
 })
 
@@ -162,8 +162,8 @@ test('paginates monitored addresses globally and excludes unmonitored search res
 	const monitored = [...Array.from({ length: 12 }, (_, index) => getAddress(`0x${(index + 1).toString(16).padStart(40, '0')}`)), address]
 	const result = await loadPoolCatalog(client, address, 1, 1, undefined, monitored)
 	expect(result).toMatchObject({ total: '13', pageCount: '2', page: 1, pools: [{ address }] })
-	expect(reads.filter(read => read.functionName === 'getSecurityPoolOriginId').map(read => read.args)).toEqual([[address]])
-	expect(reads.some(read => read.functionName.startsWith('securityPoolDeployment'))).toBe(false)
+	expect(reads.filter(read => read.functionName === 'getQuestionLedgerOriginId').map(read => read.args)).toEqual([[address]])
+	expect(reads.some(read => read.functionName.startsWith('questionLedgerDeployment'))).toBe(false)
 	const empty = fixture(1000000n)
 	expect(await loadPoolCatalog(empty.client, address, 1, 0, address, [])).toMatchObject({ total: '0', pools: [] })
 	expect(empty.reads).toEqual([])
@@ -196,8 +196,8 @@ test('returns usable pools when deployment timestamp metadata stalls after log d
 	expect(result.pools[0]?.deploymentDate).toBeUndefined()
 })
 
-test('does not invent capital metrics when the portfolio or universe ledger is unavailable', async () => {
-	for (const options of [{ missingPortfolio: true }, { missingCapital: true }]) {
+test('does not invent capital metrics when the security pool or universe ledger is unavailable', async () => {
+	for (const options of [{ missingSecurityPool: true }, { missingCapital: true }]) {
 		const { client, reads } = fixture(1n, options)
 		const result = await loadPoolCatalog(client, address, 1, 0)
 		expect(result.pools[0]?.metrics).toBeUndefined()

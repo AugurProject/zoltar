@@ -270,7 +270,7 @@ describe.serial('OpenOracleSection integration', () => {
 	test('creates, funds, and opens an atomic initial report through the UI', async () => {
 		const renderedComponent = await renderIntoDocument(<OpenOracleSectionHarness accountAddress={walletAddress} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
-		expect(within(document.body).getByText('Standalone only. Start portfolio-managed requests from the portfolio price panel.')).not.toBeNull()
+		expect(within(document.body).getByText('Standalone only. Start security-pool-managed requests from the security pool price panel.')).not.toBeNull()
 		expect(within(document.body).getByLabelText('Base token address')).not.toBeNull()
 		expect(within(document.body).queryByText('Transaction review')).toBeNull()
 

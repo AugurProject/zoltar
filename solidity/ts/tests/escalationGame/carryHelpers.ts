@@ -85,8 +85,8 @@ export function createEscalationGameCarryHelpers(getClient: () => WriteClient) {
 		}
 	}
 
-	const initializeSnapshotViaTestSecurityPool = async (
-		testSecurityPoolAddress: Address,
+	const initializeSnapshotViaTestQuestionLedger = async (
+		testQuestionLedgerAddress: Address,
 		inheritedCarryPeaks: readonly [PeakArray, PeakArray, PeakArray],
 		inheritedCarryLeafCounts: readonly [bigint, bigint, bigint],
 		inheritedCarryTotals: readonly [bigint, bigint, bigint],
@@ -96,14 +96,14 @@ export function createEscalationGameCarryHelpers(getClient: () => WriteClient) {
 			async () =>
 				await getClient().writeContract({
 					abi: initializeForkCarrySnapshotAbi,
-					address: testSecurityPoolAddress,
+					address: testQuestionLedgerAddress,
 					functionName: 'initializeForkCarrySnapshot',
 					args: [inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots],
 				}),
 		)
 
-	const initializeSnapshotWithResolutionBalancesViaTestSecurityPool = async (
-		testSecurityPoolAddress: Address,
+	const initializeSnapshotWithResolutionBalancesViaTestQuestionLedger = async (
+		testQuestionLedgerAddress: Address,
 		inheritedCarryPeaks: readonly [PeakArray, PeakArray, PeakArray],
 		inheritedCarryLeafCounts: readonly [bigint, bigint, bigint],
 		inheritedCarryTotals: readonly [bigint, bigint, bigint],
@@ -114,14 +114,14 @@ export function createEscalationGameCarryHelpers(getClient: () => WriteClient) {
 			async () =>
 				await getClient().writeContract({
 					abi: initializeForkCarrySnapshotWithResolutionBalancesAbi,
-					address: testSecurityPoolAddress,
+					address: testQuestionLedgerAddress,
 					functionName: 'initializeForkCarrySnapshotWithResolutionBalances',
 					args: [inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedResolutionBalances, inheritedNullifierRoots],
 				}),
 		)
 
-	const initializeSnapshotFromSourceViaTestSecurityPool = async (
-		testSecurityPoolAddress: Address,
+	const initializeSnapshotFromSourceViaTestQuestionLedger = async (
+		testQuestionLedgerAddress: Address,
 		sourceGame: Address,
 		snapshotId: Hex,
 		inheritedCarryPeaks: readonly [PeakArray, PeakArray, PeakArray],
@@ -133,7 +133,7 @@ export function createEscalationGameCarryHelpers(getClient: () => WriteClient) {
 			async () =>
 				await getClient().writeContract({
 					abi: initializeForkCarrySnapshotFromSourceAbi,
-					address: testSecurityPoolAddress,
+					address: testQuestionLedgerAddress,
 					functionName: 'initializeForkCarrySnapshotFromSource',
 					args: [sourceGame, snapshotId, inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots],
 				}),
@@ -213,5 +213,5 @@ export function createEscalationGameCarryHelpers(getClient: () => WriteClient) {
 		}
 	}
 
-	return { assertOutcomeCarryTotalsMatchComponents, initializeSnapshotViaTestSecurityPool, initializeSnapshotWithResolutionBalancesViaTestSecurityPool, initializeSnapshotFromSourceViaTestSecurityPool, getEscalationReplayLogs, assertCarryCommitmentStructure }
+	return { assertOutcomeCarryTotalsMatchComponents, initializeSnapshotViaTestQuestionLedger, initializeSnapshotWithResolutionBalancesViaTestQuestionLedger, initializeSnapshotFromSourceViaTestQuestionLedger, getEscalationReplayLogs, assertCarryCommitmentStructure }
 }

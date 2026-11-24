@@ -10,11 +10,11 @@ const stateReceiptTimes = new WeakMap<Snapshot, number>()
 
 export function renderOverviewHealth(snapshot: Snapshot, _configuration: Configuration | undefined, stale = false) {
 	if (!stateReceiptTimes.has(snapshot)) stateReceiptTimes.set(snapshot, Date.now())
-	const portfolio = snapshot.portfolios?.[0]
+	const securityPool = snapshot.securityPools?.[0]
 	renderOperatorHealth(element('operator-health', HTMLDivElement), {
 		mode: snapshot.execute ? 'Live armed' : 'Dry run',
 		lastScanAt: snapshot.lastScanAt,
-		capitalAtRisk: portfolio === undefined ? 'Awaiting portfolio exposure scan' : `${formatAmount(portfolio.managedPrincipalRep, 'REP')} / ${formatAmount(portfolio.maximumTotalPrincipalRep, 'REP')} portfolios`,
+		capitalAtRisk: securityPool === undefined ? 'Awaiting security pool exposure scan' : `${formatAmount(securityPool.managedPrincipalRep, 'REP')} / ${formatAmount(securityPool.maximumTotalPrincipalRep, 'REP')} security pools`,
 		recoveryItems: snapshot.pendingTransactions.length,
 		lastAction: snapshot.activities[0]?.message ?? 'No action yet',
 		paused: snapshot.paused,
@@ -25,16 +25,16 @@ export function renderOverviewHealth(snapshot: Snapshot, _configuration: Configu
 
 export function renderOverviewMetrics(snapshot: Snapshot, configuration: Configuration | undefined, stale = false) {
 	element('metrics', HTMLDivElement).replaceChildren(
-		createMetric('Managed portfolios', String(snapshot.portfolios?.length ?? 0)),
-		createMetric('Selected portfolios', String(configuration?.selectedPortfolios.length ?? 0)),
+		createMetric('Managed security pools', String(snapshot.securityPools?.length ?? 0)),
+		createMetric('Selected security pools', String(configuration?.selectedSecurityPools.length ?? 0)),
 		createMetric('Approved universes', snapshot.metrics.approvedUniverseCount.toString()),
-		createMetric('Automated scopes', String(snapshot.portfolios?.filter(portfolio => portfolio.automation).length ?? 0)),
-		createMetric('Distressed positions in page', String(snapshot.portfolios?.flatMap(portfolio => portfolio.positions).filter(position => position.distressed).length ?? 0)),
+		createMetric('Automated scopes', String(snapshot.securityPools?.filter(securityPool => securityPool.automation).length ?? 0)),
+		createMetric('Distressed positions in page', String(snapshot.securityPools?.flatMap(securityPool => securityPool.positions).filter(position => position.distressed).length ?? 0)),
 	)
 	element('wallet-metrics', HTMLDivElement).replaceChildren(
 		createMetric('Wallet ETH', formatAmount(snapshot.metrics.walletEth, 'ETH')),
 		...Object.entries(snapshot.walletRep ?? {}).map(([token, amount]) => createMetric(`Wallet REP · ${shorten(token)}`, formatAmount(amount, 'REP'))),
-		createMetric('Managed principal', formatAmount(snapshot.portfolios?.[0]?.managedPrincipalRep, 'REP')),
+		createMetric('Managed principal', formatAmount(snapshot.securityPools?.[0]?.managedPrincipalRep, 'REP')),
 	)
 	renderOverviewHealth(snapshot, configuration, stale)
 }

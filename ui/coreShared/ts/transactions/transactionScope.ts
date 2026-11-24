@@ -30,8 +30,8 @@ export function transactionScopesOverlap(left: TransactionScope | undefined, rig
 	return left.some(key => right.includes(key))
 }
 
-export function securityPoolTransactionScope(securityPoolAddress: string | undefined) {
-	return createTransactionScope('security-pool', securityPoolAddress)
+export function questionLedgerTransactionScope(questionLedgerAddress: string | undefined) {
+	return createTransactionScope('security-pool', questionLedgerAddress)
 }
 
 /** Universe ids are local to a genesis deployment, so equal ids in Yes and No never share a lock. */

@@ -12,7 +12,7 @@ export type CoordinatorGamePolicy = {
 	callbackGasLimit: bigint
 	/**
 	 * Operator-allowlisted report collateral the coordinator may use as `token1` instead of its WETH: shared price feeds
-	 * start each portfolio's report with that portfolio's collateral token.
+	 * start each security pool's report with that security pool's collateral token.
 	 */
 	collateralTokens?: readonly Address[] | undefined
 	coordinator: Address

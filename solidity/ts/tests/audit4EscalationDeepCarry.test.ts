@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_SecurityPool_SecurityPool as poolArtifact } from '../types/contractArtifact'
+import { statoblast_QuestionLedger_QuestionLedger as poolArtifact } from '../types/contractArtifact'
 import { writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { SparseNullifierTree } from './carryProofHelpers'
 import { BRANCH_GAS, createE2E, expectedWinningClaim, INVALID, median, NO, NONE, OUTCOMES, YES, type CarryLeaf } from './auditE2EHarness'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 const K = 1_000n * unit
 
@@ -12,7 +12,7 @@ const K = 1_000n * unit
 // leaves (multi-peak mountain ranges), forged proof variants, replays, and exact REP conservation
 // in both great-grandchildren.
 describe('audit4: carry proofs three generations deep with multi-peak mountain ranges', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const e2e = createE2E(fixture)
 	type Plan = readonly (readonly [WriteClient, number, bigint])[]
 
@@ -20,7 +20,7 @@ describe('audit4: carry proofs three generations deep with multi-peak mountain r
 		const { base } = fixture
 		const owner = fixture.owner()
 		const U0 = base.genesisUniverse
-		const source = fixture.poolFor(base.questionId).securityPool
+		const source = fixture.poolFor(base.questionId).questionLedger
 		const [r2, r3, r4, r5, r6] = [e2e.account(2), e2e.account(3), e2e.account(4), e2e.account(5), e2e.account(6)]
 		const reporters = [r2, r3, r4, r5]
 		await fixture.prepare()

@@ -1,6 +1,6 @@
 import { addressTransactionHistory } from '../../src/repositories/address-history.ts'
 import { reportDetailData } from '../../src/repositories/entity-details.ts'
-import { richListRows } from '../../src/repositories/portfolio.ts'
+import { richListRows } from '../../src/repositories/security-pool.ts'
 import { expect, test } from 'bun:test'
 import { SQL } from 'bun'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'

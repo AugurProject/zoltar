@@ -18,7 +18,7 @@ for (const mismatch of [undefined, 'feed', 'factory', 'collateralToken', 'rep', 
 				if (request.functionName === 'reportCandidates') return { status: 'success', result: [mismatch === 'escrow' ? feed : coordinator, coordinator, otherCoordinator, 0n] }
 				if (request.functionName === 'openOracle') return { status: 'success', result: otherCoordinator }
 				if (request.functionName === 'securityPoolFactory') return { status: 'success', result: mismatch === 'factory' ? coordinator : getInfraContractAddresses().securityPoolFactory }
-				if (request.functionName === 'portfolio') return { status: 'success', result: coordinator }
+				if (request.functionName === 'securityPool') return { status: 'success', result: coordinator }
 				if (request.functionName === 'universeId') return { status: 'success', result: 5n }
 				if (request.functionName === 'collateralToken') return { status: 'success', result: mismatch === 'collateralToken' ? feed : coordinator }
 				if (request.functionName === 'reputationToken') return { status: 'success', result: mismatch === 'rep' ? feed : otherCoordinator }
@@ -28,7 +28,7 @@ for (const mismatch of [undefined, 'feed', 'factory', 'collateralToken', 'rep', 
 					expect(request.args).toEqual([coordinator, 5n])
 					return { status: 'success', result: mismatch === 'feed' ? coordinator : feed }
 				}
-				if (request.functionName === 'securityPool') return { status: 'failure', error: new Error('Not a question coordinator') }
+				if (request.functionName === 'questionLedger') return { status: 'failure', error: new Error('Not a question coordinator') }
 				throw new Error(`Unexpected read ${request.functionName}`)
 			}),
 		)

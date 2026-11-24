@@ -12,9 +12,9 @@ void describe('simulation scenarios', () => {
 	})
 
 	void test('registered app scenarios participate in listing, labels and descriptions', () => {
-		registerSimulationScenario('securitypoolx2', { description: 'x2 description', label: 'Security pool x2' })
+		registerSimulationScenario('securitypoolx2', { description: 'x2 description', label: 'Question ledger x2' })
 		expect(getRegisteredSimulationScenarios()).toContain('securitypoolx2')
-		expect(getSimulationScenarioLabel('securitypoolx2')).toBe('Security pool x2')
+		expect(getSimulationScenarioLabel('securitypoolx2')).toBe('Question ledger x2')
 		expect(getSimulationScenarioDescription('securitypoolx2')).toBe('x2 description')
 	})
 

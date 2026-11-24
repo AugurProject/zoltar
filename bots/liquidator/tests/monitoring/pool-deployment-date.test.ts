@@ -8,7 +8,7 @@ const factory = getAddress('0x1111111111111111111111111111111111111111')
 const pool = getAddress('0x2222222222222222222222222222222222222222')
 
 function fixture(options: { limitLogs?: boolean; historyUnavailable?: boolean; reorg?: boolean; noEvent?: boolean } = {}) {
-	const ranges: { event: unknown; address: string; args: { securityPool: string }; fromBlock: bigint; toBlock: bigint }[] = []
+	const ranges: { event: unknown; address: string; args: { questionLedger: string }; fromBlock: bigint; toBlock: bigint }[] = []
 	const codeReads: bigint[] = []
 	const birthBlock = 7123n
 	const client = new Proxy(
@@ -50,7 +50,7 @@ function fixture(options: { limitLogs?: boolean; historyUnavailable?: boolean; r
 test('uses the matching factory deployment event block timestamp', async () => {
 	const { client, ranges, codeReads } = fixture()
 	expect(await loadPoolDeploymentDate(client, factory, pool, 10000n, 1)).toBe('1789560000')
-	expect(ranges).toEqual([{ address: factory, event: expect.anything(), args: { securityPool: pool }, fromBlock: 0n, toBlock: 10000n }])
+	expect(ranges).toEqual([{ address: factory, event: expect.anything(), args: { questionLedger: pool }, fromBlock: 0n, toBlock: 10000n }])
 	expect(codeReads).toEqual([])
 })
 

@@ -14,7 +14,7 @@ const escrowFeedAbi = [{ type: 'function', name: 'feed', stateMutability: 'view'
 
 type DiscoveryConfiguration = Pick<Configuration, 'collateralTokens' | 'network' | 'openOracle' | 'operatorSettings' | 'execute' | 'connectivity' | 'quorumRpcUrls' | 'rpcQuorum'>
 
-/** Authenticate indexed reports through the canonical portfolio/universe feed binding, independent of question count. */
+/** Authenticate indexed reports through the canonical security pool/universe feed binding, independent of question count. */
 export async function discoverCoordinatorPolicies(clients: readonly ReadClient[], config: DiscoveryConfiguration, blockNumber: bigint, blockHash: Hex, _retainedReportIds: readonly bigint[] = [], observedReports: readonly ObservedReport[] = []) {
 	const approved = config.operatorSettings.approvedUniverses
 	if (approved.length === 0) return []
@@ -65,16 +65,16 @@ export async function discoverCoordinatorPolicies(clients: readonly ReadClient[]
 							client,
 							config.network.multicall3,
 							[
-								{ address: feed, abi: sharedPoolPriceFeedAbi, functionName: 'portfolio' },
+								{ address: feed, abi: sharedPoolPriceFeedAbi, functionName: 'securityPool' },
 								{ address: feed, abi: sharedPoolPriceFeedAbi, functionName: 'universeId' },
 							],
 							blockNumber,
 							{ gas: 100_000n },
 						)
-						const portfolio = bindings[0]
+						const securityPool = bindings[0]
 						const universe = bindings[1]
-						if (portfolio?.status !== 'success' || typeof portfolio.result !== 'string' || !isAddress(portfolio.result) || universe?.status !== 'success' || typeof universe.result !== 'bigint' || !approved.includes(universe.result)) continue
-						const registered = await client.readContract({ address: factory, abi: securityPoolFactoryAbi, functionName: 'sharedPriceFeeds', args: [getAddress(portfolio.result), universe.result], blockNumber })
+						if (securityPool?.status !== 'success' || typeof securityPool.result !== 'string' || !isAddress(securityPool.result) || universe?.status !== 'success' || typeof universe.result !== 'bigint' || !approved.includes(universe.result)) continue
+						const registered = await client.readContract({ address: factory, abi: securityPoolFactoryAbi, functionName: 'sharedPriceFeeds', args: [getAddress(securityPool.result), universe.result], blockNumber })
 						if (registered.toLowerCase() !== key) continue
 						observedIds.set(key, new Set())
 						priceFeeds.add(feed)

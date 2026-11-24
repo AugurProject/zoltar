@@ -42,9 +42,9 @@ const caller =
 	}
 
 // ERC20 metadata is optional. A failed read must not erase an otherwise valid capital snapshot.
-const collateralOf = async (portfolio: Address, read: StateRead): Promise<Readonly<Record<string, unknown>>> => {
+const collateralOf = async (securityPool: Address, read: StateRead): Promise<Readonly<Record<string, unknown>>> => {
 	try {
-		const token = address(await caller(read)(portfolio, 'securityPoolPortfolio', 'collateralToken'), 'collateralToken')
+		const token = address(await caller(read)(securityPool, 'securityPool', 'collateralToken'), 'collateralToken')
 		return { collateral: await readCollateralMetadata(token, read) }
 	} catch (error) {
 		return { collateralMetadataError: errorMessage(error) }
@@ -59,7 +59,7 @@ const collateralOf = async (portfolio: Address, read: StateRead): Promise<Readon
 const capitalHealthFactorBps = (pledgedAttoRep: bigint, requiredAttoRep: bigint | undefined): string | undefined => (requiredAttoRep === undefined || requiredAttoRep === 0n ? undefined : ((pledgedAttoRep * BPS) / requiredAttoRep).toString())
 
 type LedgerState = {
-	readonly portfolio: Address
+	readonly securityPool: Address
 	readonly universeId: bigint
 	readonly index: Address
 	readonly multiplier: bigint
@@ -78,7 +78,7 @@ const ledgerState = async (ledger: Address, read: StateRead): Promise<LedgerStat
 	const call = caller(read)
 	const kind = 'securityPoolCapitalLedger'
 	const values = await Promise.all([
-		call(ledger, kind, 'portfolio'),
+		call(ledger, kind, 'securityPool'),
 		call(ledger, kind, 'universeId'),
 		call(ledger, kind, 'commitmentIndex'),
 		call(ledger, kind, 'securityMultiplierBps'),
@@ -96,7 +96,7 @@ const ledgerState = async (ledger: Address, read: StateRead): Promise<LedgerStat
 	const universeId = quantity(values[1], 'universeId')
 	const forkTime = quantity(await call(address(values[11], 'zoltar'), 'zoltar', 'getForkTime', [universeId]), 'getForkTime')
 	return {
-		portfolio: address(values[0], 'portfolio'),
+		securityPool: address(values[0], 'securityPool'),
 		universeId,
 		index,
 		multiplier: quantity(values[3], 'securityMultiplierBps'),
@@ -112,7 +112,7 @@ const ledgerState = async (ledger: Address, read: StateRead): Promise<LedgerStat
 }
 
 const ledgerFields = (state: LedgerState): Record<string, unknown> => ({
-	portfolio: state.portfolio.toLowerCase(),
+	securityPool: state.securityPool.toLowerCase(),
 	universeId: state.universeId.toString(),
 	securityMultiplierBps: state.multiplier.toString(),
 	acceptedPrice: state.acceptedPrice.toString(),
@@ -126,19 +126,19 @@ const ledgerFields = (state: LedgerState): Record<string, unknown> => ({
 })
 
 /**
- * The fee state of one universe: the portfolio's fee configuration, the ledger's vesting fee streams, and the
- * universe's book in the portfolio settlement book. Fee reads are optional: a failure is recorded beside an
+ * The fee state of one universe: the security pool's fee configuration, the ledger's vesting fee streams, and the
+ * universe's book in the security pool settlement book. Fee reads are optional: a failure is recorded beside an
  * otherwise valid ledger snapshot instead of failing it.
  */
 const universeFees = async (ledger: Address, state: LedgerState, read: StateRead): Promise<Readonly<Record<string, unknown>>> => {
 	const call = caller(read)
 	try {
 		const [annualFeeBps, purchaseFeeBps, rawStreams, rawSettlement, rawServices] = await Promise.all([
-			call(state.portfolio, 'securityPoolPortfolio', 'annualFeeBps'),
-			call(state.portfolio, 'securityPoolPortfolio', 'purchaseFeeBps'),
+			call(state.securityPool, 'securityPool', 'annualFeeBps'),
+			call(state.securityPool, 'securityPool', 'purchaseFeeBps'),
 			call(ledger, 'securityPoolCapitalLedger', 'feeStreams'),
-			call(state.portfolio, 'securityPoolPortfolio', 'settlement'),
-			call(state.portfolio, 'securityPoolPortfolio', 'services'),
+			call(state.securityPool, 'securityPool', 'settlement'),
+			call(state.securityPool, 'securityPool', 'services'),
 		])
 		const streams = address(rawStreams, 'feeStreams')
 		const settlement = address(rawSettlement, 'settlement')
@@ -150,8 +150,8 @@ const universeFees = async (ledger: Address, state: LedgerState, read: StateRead
 			call(streams, streamKind, 'deferredRep'),
 			call(streams, streamKind, 'releasedThrough'),
 			call(streams, streamKind, 'rewardDuration'),
-			call(settlement, 'securityPoolPortfolioSettlement', 'ledger'),
-			call(settlement, 'securityPoolPortfolioSettlement', 'bookIds', [state.universeId]),
+			call(settlement, 'securityPoolSettlement', 'ledger'),
+			call(settlement, 'securityPoolSettlement', 'bookIds', [state.universeId]),
 		])
 		const book = address(rawBook, 'settlement.ledger')
 		const bookId = quantity(rawBookId, 'bookIds')
@@ -199,7 +199,7 @@ export const capitalLedgerSnapshot = async (ledger: Address, read: StateRead): P
 		call(ledger, kind, 'frozenBackingAttoRep'),
 		call(ledger, kind, 'frozenCommitmentAttoEth'),
 		call(state.index, 'securityPoolCommitmentIndex', 'lastPositionId'),
-		call(state.portfolio, 'securityPoolPortfolio', 'priceFeed', [state.universeId]),
+		call(state.securityPool, 'securityPool', 'priceFeed', [state.universeId]),
 	])
 	const totals = tuple(rawTotals, 3, 'totals')
 	return {
@@ -218,7 +218,7 @@ export const capitalLedgerSnapshot = async (ledger: Address, read: StateRead): P
 		frozenCommitmentAttoEth: quantity(frozenCommitment, 'frozenCommitmentAttoEth').toString(),
 		lastPositionId: quantity(lastPositionId, 'lastPositionId').toString(),
 		...(await universeFees(ledger, state, read)),
-		...(await collateralOf(state.portfolio, read)),
+		...(await collateralOf(state.securityPool, read)),
 	}
 }
 
@@ -302,6 +302,6 @@ export const capitalOwnerSnapshot = async (ledger: Address, owner: Address, read
 		requiredAttoRep: required?.toString(),
 		healthFactorBps: capitalHealthFactorBps(pledged, required),
 		...position,
-		...(await collateralOf(state.portfolio, read)),
+		...(await collateralOf(state.securityPool, read)),
 	}
 }

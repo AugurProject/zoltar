@@ -1,18 +1,18 @@
 import { describe, expect, test } from 'bun:test'
 import {
 	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact,
-	statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuction as auctionArtifact,
+	statoblast_SecurityPoolAuction_SecurityPoolAuction as auctionArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
 } from '../../types/contractArtifact'
 import { DAY } from '../../testSupport/simulator/utils/constants'
-import { preparePortfolioCollateralRepairAuction } from './securityPoolPortfolioCollateralRepairAuctionFixture'
-import { useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { prepareSecurityPoolCollateralRepairAuction } from './securityPoolCollateralRepairAuctionFixture'
+import { useSecurityPoolFixture } from './securityPoolFixture'
 
 describe('collateral repair auction safety bounds', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	test('#1363 an opening-week quote cannot authorize closing', async () => {
-		const context = await preparePortfolioCollateralRepairAuction(fixture)
+		const context = await prepareSecurityPoolCollateralRepairAuction(fixture)
 		await context.report()
 		await context.open()
 		await context.bid(context.owner, 1n)
@@ -23,7 +23,7 @@ describe('collateral repair auction safety bounds', () => {
 	})
 
 	test('#1331 opening cannot compress a week of bidding into its last seconds', async () => {
-		const context = await preparePortfolioCollateralRepairAuction(fixture)
+		const context = await prepareSecurityPoolCollateralRepairAuction(fixture)
 		await context.mock.setTime(context.deadline - DAY + 1n)
 		await context.report()
 		await expect(context.open()).rejects.toThrow('Collateral repair auction requires one day of bidding')
@@ -31,9 +31,9 @@ describe('collateral repair auction safety bounds', () => {
 })
 
 describe('collateral repair auction REP precision', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n, minimumCommitmentAttoEth: 1n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n, minimumCommitmentAttoEth: 1n })
 	test('#1339 permits precise small lots while bounding rounding and covering the deficit', async () => {
-		const context = await preparePortfolioCollateralRepairAuction(fixture)
+		const context = await prepareSecurityPoolCollateralRepairAuction(fixture)
 		await context.report()
 		const auction = { abi: auctionArtifact.abi, address: context.auction }
 		await context.open()

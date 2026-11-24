@@ -1,7 +1,7 @@
 import { createPublicClient, decodeFunctionData, defineChain, encodeAbiParameters, getAddress, hexToBytes, isHex, toHex, zeroAddress, zeroHash, type AbiValue, type Address } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { carryStorageAbi } from '../../src/contracts/carry-storage-abi.ts'
-import { escalationGameAbi, multicall3Abi, securityPoolAbi, securityPoolForkerAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
+import { escalationGameAbi, multicall3Abi, questionLedgerAbi, questionForkerAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
 import { carryCommitment, hashCarryLeaf, sparseNullifierRoot, type CarryLeafSlot } from '../../src/monitoring/carry-proof-index.ts'
 import { consumeSparseNullifier, emptySparseNullifierState } from '../support/carry-proof-verification.ts'
 
@@ -13,7 +13,7 @@ export const grandchild = address(300)
 export const forker = address(900)
 export const anchor = 11000000n
 export const blockHash = toHex(anchor, { size: 32 })
-const abi = [...carryStorageAbi, ...multicall3Abi, ...escalationGameAbi, ...securityPoolAbi, ...securityPoolForkerAbi, ...zoltarAbi]
+const abi = [...carryStorageAbi, ...multicall3Abi, ...escalationGameAbi, ...questionLedgerAbi, ...questionForkerAbi, ...zoltarAbi]
 
 export function slot(game: Address, index: number, depositor = wallet): CarryLeafSlot {
 	const leaf = { depositor, outcome: 0 as const, amountAttoRep: 10n.toString(), parentDepositIndex: ((BigInt(game) << 96n) + BigInt(index)).toString(), cumulativeAmountAttoRep: ((index + 1) * 10).toString(), sourceNodeId: (index + 1).toString() }
@@ -71,7 +71,7 @@ export function storageFixture() {
 		const game = resolve(target)
 		const outcome = args[0]
 		switch (name) {
-			case 'securityPool':
+			case 'questionLedger':
 				if (game === undefined) break
 				return [pool(game.game)]
 			case 'parent':
@@ -80,7 +80,7 @@ export function storageFixture() {
 			case 'escalationGame':
 				if (game === undefined) break
 				return [game.game]
-			case 'securityPoolForker':
+			case 'questionForker':
 				return [forker]
 			case 'forkContinuation':
 				return [game?.parent !== zeroAddress]

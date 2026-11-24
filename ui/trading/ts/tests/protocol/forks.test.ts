@@ -47,10 +47,10 @@ const selectors = {
 	questionCreatedTimestamp: selector('questionCreatedTimestamp(uint256)'),
 	outcomeLabels: selector('getOutcomeLabels(uint256,uint256,uint256)'),
 	answerOptionName: selector('getAnswerOptionName(uint256,uint256)'),
-	canonicalPool: selector('canonicalPoolByUniverse(uint248)'),
+	canonicalPool: selector('canonicalQuestionLedgerByUniverse(uint248)'),
 	migratedShares: selector('getMigratedShareAmountAttoShares(uint256,uint248,address)'),
 	securityPoolFactory: selector('securityPoolFactory()'),
-	portfolio: selector('getSecurityPoolPortfolio(address)'),
+	portfolio: selector('securityPoolOf(address)'),
 	forkController: selector('forkController()'),
 	isReady: selector('isReady(uint248)'),
 }
@@ -218,7 +218,7 @@ describe('fork protocol helpers', () => {
 		expect(childPage).toBe(2)
 	})
 
-	test('reads what an account already migrated into each child universe that has a security pool', async () => {
+	test('reads what an account already migrated into each child universe that has a question ledger', async () => {
 		const account = getAddress(`0x${'66'.repeat(20)}`)
 		const yesUniverse = getChildUniverseId(market.universeId, 1n)
 		const migratedReads: { fromId: bigint; universeId: bigint; account: Address }[] = []

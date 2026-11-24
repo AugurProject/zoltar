@@ -1,12 +1,12 @@
 import type { ComponentProps } from 'preact'
 import { DeploymentRouteContent } from '@zoltar/ui-zoltar-shared/features/deployment/components/DeploymentRouteContent.js'
 import { NotFoundSection } from '@zoltar/ui-core-shared/app/components/NotFoundSection.js'
-import { PortfoliosSection } from '@zoltar/ui-statoblast-shared/features/portfolios/components/PortfoliosSection.js'
+import { SecurityPoolsSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsSection.js'
 import { PriceRequestStatusSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/PriceRequestStatusSection.js'
-import { PortfolioQuestionWorkspace } from './PortfolioQuestionWorkspace.js'
-import { UniversePoolDirectorySection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/UniversePoolDirectorySection.js'
+import { SecurityPoolQuestionWorkspace } from './SecurityPoolQuestionWorkspace.js'
+import { UniversePoolDirectorySection } from '@zoltar/ui-statoblast-shared/features/question-ledgers/components/UniversePoolDirectorySection.js'
 import { ZoltarMigrationWorkflow } from '@zoltar/ui-zoltar-shared/features/universes/components/ZoltarMigrationWorkflow.js'
-import type { SecurityPoolsView } from '@zoltar/ui-statoblast-shared/features/types.js'
+import type { QuestionLedgersView } from '@zoltar/ui-statoblast-shared/features/types.js'
 import type { StatoblastRoute } from '@zoltar/ui-statoblast-shared/types/app.js'
 import { shouldRenderAppRouteContent } from '@zoltar/ui-core-shared/app/lib/appRouteGate.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -19,7 +19,7 @@ import { buildPoolsRouteHash } from '@zoltar/ui-statoblast-shared/lib/statoblast
 
 const STATOBLAST_NOT_FOUND_LINKS = [
 	{ href: statoblastRouting.getHash('pools'), label: statoblastAppCopy.questions },
-	{ href: statoblastRouting.getHash('portfolios'), label: statoblastAppCopy.portfolios },
+	{ href: statoblastRouting.getHash('security-pools'), label: statoblastAppCopy.securityPools },
 	{ href: buildPoolsRouteHash({ view: 'universes' }), label: zoltarCopy.universesTitle },
 	{ href: statoblastRouting.getHash('open-oracle'), label: openOracleCopy.priceReports },
 	{ href: statoblastRouting.getHash('deploy'), label: commonCopy.deploy },
@@ -28,11 +28,11 @@ const STATOBLAST_NOT_FOUND_LINKS = [
 type Props = {
 	deploy: ComponentProps<typeof DeploymentRouteContent>
 	openOracle: ComponentProps<typeof PriceRequestStatusSection>
-	portfolios: ComponentProps<typeof PortfoliosSection>
+	securityPools: ComponentProps<typeof SecurityPoolsSection>
 	readBackendMessage: string | undefined
 	route: StatoblastRoute
-	questions: ComponentProps<typeof PortfolioQuestionWorkspace>
-	questionView: SecurityPoolsView
+	questions: ComponentProps<typeof SecurityPoolQuestionWorkspace>
+	questionView: QuestionLedgersView
 	universeDirectory: ComponentProps<typeof UniversePoolDirectorySection>
 	migration: ComponentProps<typeof ZoltarMigrationWorkflow>
 }
@@ -41,7 +41,7 @@ function shouldRenderRouteContent({ readBackendMessage, route }: Pick<Props, 're
 	return shouldRenderAppRouteContent(route, readBackendMessage)
 }
 
-export function AppRouteContent({ deploy, openOracle, portfolios, readBackendMessage, route, questions, questionView, universeDirectory, migration }: Props) {
+export function AppRouteContent({ deploy, openOracle, securityPools, readBackendMessage, route, questions, questionView, universeDirectory, migration }: Props) {
 	if (!shouldRenderRouteContent({ readBackendMessage, route })) return undefined
 
 	switch (route) {
@@ -50,9 +50,9 @@ export function AppRouteContent({ deploy, openOracle, portfolios, readBackendMes
 		case 'pools':
 			if (questionView === 'universes') return <UniversePoolDirectorySection {...universeDirectory} />
 			if (questionView === 'migrate') return <ZoltarMigrationWorkflow {...migration} />
-			return <PortfolioQuestionWorkspace {...questions} />
-		case 'portfolios':
-			return <PortfoliosSection {...portfolios} />
+			return <SecurityPoolQuestionWorkspace {...questions} />
+		case 'security-pools':
+			return <SecurityPoolsSection {...securityPools} />
 		case 'open-oracle':
 			return <PriceRequestStatusSection {...openOracle} />
 		case 'not-found':

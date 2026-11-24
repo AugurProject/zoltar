@@ -1,17 +1,17 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { isObjectRecord, requireArrayOf } from '@zoltar/core-shared/validation/guards'
 
-export type SecurityPoolDeploymentTuple = {
+export type QuestionLedgerDeploymentTuple = {
 	initialReportPriorityFeeAttoEthPerGas: bigint
 	parent: Address
 	openOraclePriceCoordinator: Address
 	questionId: bigint
 	statoblastSecurityMultiplierBps: bigint
-	securityPool: Address
+	questionLedger: Address
 	universeId: bigint
 }
 
-function isSecurityPoolDeploymentTuple(value: unknown): value is SecurityPoolDeploymentTuple {
+function isQuestionLedgerDeploymentTuple(value: unknown): value is QuestionLedgerDeploymentTuple {
 	return (
 		isObjectRecord(value) &&
 		typeof value['initialReportPriorityFeeAttoEthPerGas'] === 'bigint' &&
@@ -19,9 +19,9 @@ function isSecurityPoolDeploymentTuple(value: unknown): value is SecurityPoolDep
 		typeof value['openOraclePriceCoordinator'] === 'string' &&
 		typeof value['questionId'] === 'bigint' &&
 		typeof value['statoblastSecurityMultiplierBps'] === 'bigint' &&
-		typeof value['securityPool'] === 'string' &&
+		typeof value['questionLedger'] === 'string' &&
 		typeof value['universeId'] === 'bigint'
 	)
 }
 
-export const requireSecurityPoolDeploymentTupleArray = requireArrayOf(isSecurityPoolDeploymentTuple)
+export const requireQuestionLedgerDeploymentTupleArray = requireArrayOf(isQuestionLedgerDeploymentTuple)

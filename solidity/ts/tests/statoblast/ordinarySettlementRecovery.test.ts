@@ -4,12 +4,12 @@ import { DAY } from '../../testSupport/simulator/utils/constants'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { approveToken, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact } from '../../types/contractArtifact'
-import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_SecurityPool_SecurityPool as securityPoolArtifact, statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact } from '../../types/contractArtifact'
+import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 
-describe('Statoblast: ordinary settlement with portfolio reporter custody', () => {
-	const fixture = useSecurityPoolPortfolioFixture()
-	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).securityPool })
+describe('Statoblast: ordinary settlement with security pool reporter custody', () => {
+	const fixture = useSecurityPoolFixture()
+	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).questionLedger })
 	const token = () => getRepTokenAddress(fixture.base.genesisUniverse)
 	const report = (outcome: QuestionOutcome, amount: bigint) => writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ ...pool(), functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] }))
 	const withdraw = (outcome: QuestionOutcome, index: bigint) => writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...pool(), functionName: 'withdrawFromEscalationGame', args: [outcome, [index]] }))
@@ -25,7 +25,7 @@ describe('Statoblast: ordinary settlement with portfolio reporter custody', () =
 		const game = { abi: gameArtifact.abi, address: await fixture.owner().readContract({ ...pool(), functionName: 'escalationGame' }) }
 		const end = await fixture.owner().readContract({ ...game, functionName: 'activationTime' })
 		await fixture.base.mockWindow.setTime(end + 49n * DAY + 1n)
-		const ledger = await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'reporterLedger', args: [fixture.base.genesisUniverse] })
+		const ledger = await fixture.owner().readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'reporterLedger', args: [fixture.base.genesisUniverse] })
 		const balance = () => fixture.owner().readContract({ abi: reporterArtifact.abi, address: ledger, functionName: 'balanceOfGame', args: [game.address] })
 		const settle = () => writeContractAndWait(fixture.owner(), () => fixture.owner().writeContract({ ...game, functionName: 'settleOrdinaryGame' }))
 		return { game, balance, settle }

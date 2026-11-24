@@ -1,13 +1,13 @@
 import type { Activity, PendingTransactionIntent } from './operator-state.ts'
-import type { PortfolioFunding } from './portfolio-instructions.ts'
-import type { PortfolioScope } from '#monitoring/portfolio-monitor'
+import type { SecurityPoolFunding } from './security-pool-instructions.ts'
+import type { SecurityPoolScope } from '#monitoring/security-pool-monitor'
 import type { RuntimeState } from './runtime-state.ts'
 
 export type DurableState = {
-	portfolioFunding?: Record<string, PortfolioFunding>
-	completedPortfolioInstructions?: Record<string, string>
+	securityPoolFunding?: Record<string, SecurityPoolFunding>
+	completedSecurityPoolInstructions?: Record<string, string>
 	lastExpiredTakeoverBlock?: bigint | undefined
-	portfolioScopes: PortfolioScope[]
+	securityPoolScopes: SecurityPoolScope[]
 	activities: Activity[]
 	chainId: number
 	lastScannedBlock: string | undefined
@@ -23,9 +23,9 @@ export function durableStateDocument(state: RuntimeState) {
 		lastScannedBlock: state.lastScannedBlock,
 		lastExpiredTakeoverBlock: state.lastExpiredTakeoverBlock,
 		pendingTransactions: state.pendingTransactions,
-		portfolioFunding: state.portfolioFunding ?? {},
-		completedPortfolioInstructions: state.completedPortfolioInstructions ?? {},
-		portfolioScopes: state.portfolioScopes,
+		securityPoolFunding: state.securityPoolFunding ?? {},
+		completedSecurityPoolInstructions: state.completedSecurityPoolInstructions ?? {},
+		securityPoolScopes: state.securityPoolScopes,
 		version: 2,
 	}
 }

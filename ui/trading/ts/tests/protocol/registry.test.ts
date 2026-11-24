@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { createMockLoaderClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
-import { loadSecurityPoolRegistry } from '../../protocol/live.js'
+import { loadQuestionLedgerRegistry } from '../../protocol/live.js'
 import { deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../../protocol/deployment.js'
 import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
@@ -22,13 +22,13 @@ test('pages the current pool registry and filters the requested universe without
 		multicall: async () => [],
 		readContract: async request => {
 			expect(request.blockNumber).toBe(100_000n)
-			if (request.functionName === 'securityPoolDeploymentCount') return 205n
-			if (request.functionName !== 'securityPoolDeploymentsRange') throw new Error(`Unexpected read ${request.functionName}`)
+			if (request.functionName === 'questionLedgerDeploymentCount') return 205n
+			if (request.functionName !== 'questionLedgerDeploymentsRange') throw new Error(`Unexpected read ${request.functionName}`)
 			const [start, count] = request.args ?? []
 			if (typeof start !== 'bigint' || typeof count !== 'bigint') throw new Error('Missing registry range')
 			ranges.push([start, count])
 			return Array.from({ length: Number(count) }, (_, offset) => ({
-				securityPool: getAddress(`0x${(start + BigInt(offset) + 1n).toString(16).padStart(40, '0')}`),
+				questionLedger: getAddress(`0x${(start + BigInt(offset) + 1n).toString(16).padStart(40, '0')}`),
 				shareToken: zeroAddress,
 				universeId: (start + BigInt(offset)) % 2n,
 				questionId: 1n,
@@ -37,7 +37,7 @@ test('pages the current pool registry and filters the requested universe without
 			}))
 		},
 	})
-	const deployments = await loadSecurityPoolRegistry(client, configuration, 1n, 100_000n)
+	const deployments = await loadQuestionLedgerRegistry(client, configuration, 1n, 100_000n)
 	expect(ranges).toEqual([
 		[0n, 100n],
 		[100n, 100n],
@@ -45,5 +45,5 @@ test('pages the current pool registry and filters the requested universe without
 	])
 	expect(deployments).toHaveLength(102)
 	expect(deployments.every(deployment => deployment.universeId === 1n)).toBe(true)
-	await expect(loadSecurityPoolRegistry(client, configuration, 1n, 100_000n, () => false)).rejects.toThrow('cancelled')
+	await expect(loadQuestionLedgerRegistry(client, configuration, 1n, 100_000n, () => false)).rejects.toThrow('cancelled')
 })

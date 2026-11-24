@@ -4,14 +4,14 @@ import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { readOptionalMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
-import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../contractArtifact.js'
+import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_QuestionLedger_QuestionLedger, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../contractArtifact.js'
 import type { OpenOraclePriceSettlement } from '../types/contracts.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './oracleTiming.js'
 
 const sharedFeedLinkAbi = [
 	{ type: 'function', name: 'securityPoolFactory', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-	{ type: 'function', name: 'portfolio', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+	{ type: 'function', name: 'securityPool', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 	{ type: 'function', name: 'universeId', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint248' }] },
 	{ type: 'function', name: 'priceValidityWindowSeconds', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
 ] as const
@@ -49,11 +49,11 @@ export async function loadCoordinatorPriceValidUntilTimestamp(client: Pick<ReadC
 	const abi = statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
 	const [oracle, pool] = await readOptionalMulticall(client, [
 		{ address: game.callbackContract, abi, functionName: 'openOracle' },
-		{ address: game.callbackContract, abi, functionName: 'securityPool' },
+		{ address: game.callbackContract, abi, functionName: 'questionLedger' },
 	])
 	if (oracle.status !== 'success' || !sameAddress(oracle.result, openOracleAddress)) return undefined
-	const securityPool = pool.status === 'success' ? pool.result : zeroAddress
-	if (securityPool === zeroAddress) {
+	const questionLedger = pool.status === 'success' ? pool.result : zeroAddress
+	if (questionLedger === zeroAddress) {
 		if (reportId === undefined) return undefined
 		const [feed, escrowReport] = await readOptionalMulticall(client, [
 			{ address: game.callbackContract, abi: reportEscrowAbi, functionName: 'feed' },
@@ -62,9 +62,9 @@ export async function loadCoordinatorPriceValidUntilTimestamp(client: Pick<ReadC
 		if (feed.status !== 'success' || feed.result === zeroAddress || escrowReport.status !== 'success' || escrowReport.result !== reportId) return undefined
 		const [candidate] = await readOptionalMulticall(client, [{ address: feed.result, abi: reportEscrowAbi, functionName: 'reportCandidates', args: [reportId] }])
 		if (candidate.status !== 'success' || !sameAddress(candidate.result[0], game.callbackContract)) return undefined
-		const [factory, portfolio, universe, weth, rep] = await readOptionalMulticall(client, [
+		const [factory, securityPool, universe, weth, rep] = await readOptionalMulticall(client, [
 			{ address: feed.result, abi: sharedFeedLinkAbi, functionName: 'securityPoolFactory' },
-			{ address: feed.result, abi: sharedFeedLinkAbi, functionName: 'portfolio' },
+			{ address: feed.result, abi: sharedFeedLinkAbi, functionName: 'securityPool' },
 			{ address: feed.result, abi: sharedFeedLinkAbi, functionName: 'universeId' },
 			{ address: feed.result, abi, functionName: 'collateralToken' },
 			{ address: feed.result, abi, functionName: 'reputationToken' },
@@ -72,8 +72,8 @@ export async function loadCoordinatorPriceValidUntilTimestamp(client: Pick<ReadC
 		if (
 			factory.status !== 'success' ||
 			!sameAddress(factory.result, getInfraContractAddresses().securityPoolFactory) ||
-			portfolio.status !== 'success' ||
-			portfolio.result === zeroAddress ||
+			securityPool.status !== 'success' ||
+			securityPool.result === zeroAddress ||
 			universe.status !== 'success' ||
 			weth.status !== 'success' ||
 			!sameAddress(weth.result, game.token1) ||
@@ -82,13 +82,13 @@ export async function loadCoordinatorPriceValidUntilTimestamp(client: Pick<ReadC
 		)
 			return undefined
 		const [registeredFeed, validity] = await readOptionalMulticall(client, [
-			{ address: factory.result, abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, functionName: 'sharedPriceFeeds', args: [portfolio.result, universe.result] },
+			{ address: factory.result, abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, functionName: 'sharedPriceFeeds', args: [securityPool.result, universe.result] },
 			{ address: feed.result, abi: sharedFeedLinkAbi, functionName: 'priceValidityWindowSeconds' },
 		])
 		if (registeredFeed.status !== 'success' || !sameAddress(registeredFeed.result, feed.result) || validity.status !== 'success') return undefined
 		return game.reportTimestamp + game.settlementTime + validity.result
 	}
-	const [coordinator] = await readOptionalMulticall(client, [{ address: securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'openOraclePriceCoordinator' }])
+	const [coordinator] = await readOptionalMulticall(client, [{ address: questionLedger, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'openOraclePriceCoordinator' }])
 	if (coordinator.status !== 'success' || !sameAddress(coordinator.result, game.callbackContract)) return undefined
 	return getOracleManagerPriceValidUntilTimestamp(game.reportTimestamp + game.settlementTime, chainId)
 }
@@ -104,10 +104,10 @@ export async function isFeedAuthenticatedReportEscrow(client: Pick<ReadClient, '
 	const feed = (await readOptionalMulticall(client, [{ address: callbackContract, abi: reportEscrowAbi, functionName: 'feed' }])).at(0)
 	if (feed?.status !== 'success' || feed.result === zeroAddress) return false
 	const feedAbi = statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi
-	const [candidate, factory, portfolio, universe, feedOracle] = await readOptionalMulticall(client, [
+	const [candidate, factory, securityPool, universe, feedOracle] = await readOptionalMulticall(client, [
 		{ address: feed.result, abi: feedAbi, functionName: 'reportCandidates', args: [reportId] },
 		{ address: feed.result, abi: feedAbi, functionName: 'securityPoolFactory' },
-		{ address: feed.result, abi: feedAbi, functionName: 'portfolio' },
+		{ address: feed.result, abi: feedAbi, functionName: 'securityPool' },
 		{ address: feed.result, abi: feedAbi, functionName: 'universeId' },
 		{ address: feed.result, abi: feedAbi, functionName: 'openOracle' },
 	])
@@ -116,14 +116,14 @@ export async function isFeedAuthenticatedReportEscrow(client: Pick<ReadClient, '
 		!sameAddress(candidate.result[0], callbackContract) ||
 		factory?.status !== 'success' ||
 		!sameAddress(factory.result, getInfraContractAddresses().securityPoolFactory) ||
-		portfolio?.status !== 'success' ||
-		portfolio.result === zeroAddress ||
+		securityPool?.status !== 'success' ||
+		securityPool.result === zeroAddress ||
 		universe?.status !== 'success' ||
 		feedOracle?.status !== 'success' ||
 		!sameAddress(feedOracle.result, openOracleAddress)
 	)
 		return false
-	const registeredFeed = (await readOptionalMulticall(client, [{ address: factory.result, abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, functionName: 'sharedPriceFeeds', args: [portfolio.result, universe.result] }])).at(0)
+	const registeredFeed = (await readOptionalMulticall(client, [{ address: factory.result, abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, functionName: 'sharedPriceFeeds', args: [securityPool.result, universe.result] }])).at(0)
 	return registeredFeed?.status === 'success' && sameAddress(registeredFeed.result, feed.result)
 }
 

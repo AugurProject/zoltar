@@ -71,8 +71,8 @@ describe('chaos operation selection', () => {
 	})
 
 	test('retries the earliest missing genesis prerequisite before later initialization work', () => {
-		const evaluations = [evaluation(plan('trading.pair.create', 'random')), evaluation(plan('statoblast.capital.deposit', 'random')), evaluation(plan('statoblast.portfolio.add-question', 'random'))]
-		expect(genesisInitializationPlan(evaluations, completeGenesisInitializationState({ hasInitializedPair: false, hasPair: false, hasPool: false, hasPortfolioCapital: false }))?.definitionId).toBe('statoblast.portfolio.add-question')
+		const evaluations = [evaluation(plan('trading.pair.create', 'random')), evaluation(plan('statoblast.capital.deposit', 'random')), evaluation(plan('statoblast.security-pool.add-question', 'random'))]
+		expect(genesisInitializationPlan(evaluations, completeGenesisInitializationState({ hasInitializedPair: false, hasPair: false, hasPool: false, hasSecurityPoolCapital: false }))?.definitionId).toBe('statoblast.security-pool.add-question')
 		expect(genesisInitializationPlan([evaluation(plan('trading.pair.create', 'random'))], completeGenesisInitializationState({ hasInitializedPair: false, hasPair: false }))?.definitionId).toBe('trading.pair.create')
 		expect(genesisInitializationPlan(evaluations, completeGenesisInitializationState({ genesisUniversePresent: false }))).toBeUndefined()
 	})
@@ -89,7 +89,7 @@ describe('chaos operation selection', () => {
 })
 
 test('rejects a reverting candidate before selecting an executable operation', async () => {
-	const reverting = plan('statoblast.portfolio.add-question', 'random')
+	const reverting = plan('statoblast.security-pool.add-question', 'random')
 	const executable = plan('open-oracle.weth.wrap', 'random')
 	const checked: string[] = []
 	const rejected: string[] = []
@@ -97,7 +97,7 @@ test('rejects a reverting candidate before selecting an executable operation', a
 		[reverting, executable],
 		async candidate => {
 			checked.push(candidate.id)
-			if (candidate === reverting) throw new OperationRediscoveryRequired('Security pool deployment failed')
+			if (candidate === reverting) throw new OperationRediscoveryRequired('Question ledger deployment failed')
 		},
 		candidate => {
 			rejected.push(candidate.id)
@@ -110,7 +110,7 @@ test('rejects a reverting candidate before selecting an executable operation', a
 })
 
 test('returns no selection when every candidate reverts and does not mutate candidates', async () => {
-	const candidates = [plan('statoblast.portfolio.add-question', 'random')]
+	const candidates = [plan('statoblast.security-pool.add-question', 'random')]
 	expect(
 		await selectExecutableOperationPlan(
 			candidates,

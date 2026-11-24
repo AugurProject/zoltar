@@ -72,14 +72,14 @@ describe('OpenOracle compiler profile', () => {
 	test('generated factory artifacts retain immutable metadata without deployed-library links', async () => {
 		const artifact: unknown = JSON.parse(await fs.readFile('solidity/artifacts/Contracts.json', 'utf8'))
 		if (!isObjectRecord(artifact) || !isObjectRecord(artifact['contracts'])) throw new Error('Generated contract artifact is missing contracts')
-		const securityPoolSource = artifact['contracts']['contracts/statoblast/factories/SecurityPoolFactory.sol']
-		if (!isObjectRecord(securityPoolSource) || !isObjectRecord(securityPoolSource['SecurityPoolFactory'])) throw new Error('Generated contract artifact is missing SecurityPoolFactory')
-		const evm = securityPoolSource['SecurityPoolFactory']['evm']
-		if (!isObjectRecord(evm) || !isObjectRecord(evm['deployedBytecode'])) throw new Error('Generated SecurityPool artifact is missing deployed bytecode')
+		const questionLedgerSource = artifact['contracts']['contracts/statoblast/factories/SecurityPoolFactory.sol']
+		if (!isObjectRecord(questionLedgerSource) || !isObjectRecord(questionLedgerSource['SecurityPoolFactory'])) throw new Error('Generated contract artifact is missing SecurityPoolFactory')
+		const evm = questionLedgerSource['SecurityPoolFactory']['evm']
+		if (!isObjectRecord(evm) || !isObjectRecord(evm['deployedBytecode'])) throw new Error('Generated QuestionLedger artifact is missing deployed bytecode')
 		const immutableReferences = evm['deployedBytecode']['immutableReferences']
 		const linkReferences = evm['deployedBytecode']['linkReferences']
-		if (!isObjectRecord(immutableReferences)) throw new Error('Generated SecurityPool artifact is missing immutable references')
-		if (!isObjectRecord(linkReferences)) throw new Error('Generated SecurityPool artifact is missing link references')
+		if (!isObjectRecord(immutableReferences)) throw new Error('Generated QuestionLedger artifact is missing immutable references')
+		if (!isObjectRecord(linkReferences)) throw new Error('Generated QuestionLedger artifact is missing link references')
 		expect(Object.values(immutableReferences).some(ranges => Array.isArray(ranges) && ranges.length > 0)).toBe(true)
 		expect(linkReferences).toEqual({})
 	})

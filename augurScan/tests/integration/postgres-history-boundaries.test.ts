@@ -29,8 +29,8 @@ postgresTest('advances the canonical coverage floor when RPC log history is prun
 			const dynamicContract = {
 				address: discoveredAddress,
 				label: 'Previously discovered pool',
-				kind: 'securityPool',
-				provenance: 'Factory.DeploySecurityPool',
+				kind: 'questionLedger',
+				provenance: 'Factory.DeployQuestionLedger',
 				discoveryBlock: 1n,
 				discoveryTxHash: transactionHash,
 			} satisfies ContractMetadata
@@ -45,8 +45,8 @@ postgresTest('advances the canonical coverage floor when RPC log history is prun
 			const orphanedContract = {
 				address: orphanOnlyAddress,
 				label: 'Orphaned pre-floor discovery',
-				kind: 'securityPool',
-				provenance: 'Factory.DeploySecurityPool',
+				kind: 'questionLedger',
+				provenance: 'Factory.DeployQuestionLedger',
 				discoveryBlock: 1n,
 				discoveryTxHash: transactionHash,
 			} satisfies ContractMetadata
@@ -129,7 +129,7 @@ postgresTest('advances the canonical coverage floor when RPC log history is prun
 			const promotedNetwork = {
 				...network,
 				startBlock: 2n,
-				contracts: [...network.contracts, [discoveredAddress, 'Promoted retained pool', 'securityPool'], [orphanOnlyAddress, 'Promoted orphan', 'securityPool']],
+				contracts: [...network.contracts, [discoveredAddress, 'Promoted retained pool', 'questionLedger'], [orphanOnlyAddress, 'Promoted orphan', 'questionLedger']],
 			} satisfies NetworkConfig
 			expect(await database.seedNetwork(promotedNetwork, { lease, resetCanonicalHistoryOnManifestChange: true, preserveStoredStart: true })).toBe(true)
 			expect((await database.contracts(boundaryChainId, lease)).get(discoveredAddress.toLowerCase())).toMatchObject({

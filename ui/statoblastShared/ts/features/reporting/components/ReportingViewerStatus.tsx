@@ -79,7 +79,7 @@ export function ReportingViewerStatus({ details, onTakeLead, disabled }: { detai
 		<SectionBlock className='reporting-viewer-status' title={copy.yourPositions} variant='plain'>
 			{detail}
 			{!forked && tied ? positions.map(position => <p key={position.side.key}>{copy.forkViewerStake(position.side.label, <RepAmount value={position.stake} />)}</p>) : undefined}
-			<EscalationReminderLine key={details.securityPoolAddress} details={details} />
+			<EscalationReminderLine key={details.questionLedgerAddress} details={details} />
 		</SectionBlock>
 	)
 }

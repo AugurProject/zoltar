@@ -1,7 +1,7 @@
 import type { EcosystemSnapshot, OperationDefinition } from '../types.ts'
 import { choose, eligible, encodeStep, eventEvidence, mixSeed, planBase } from '../planning.ts'
 import { BINARY_OUTCOME_NONE, compareDecimalStrings, escalationWithdrawalSafe, lifecycleBatches } from './planning.ts'
-import { securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
+import { questionLedgerAbi } from '@zoltar/bot-shared/contracts/abi'
 
 function escalationWithdrawalCandidates(snapshot: EcosystemSnapshot) {
 	return snapshot.pools.flatMap(pool => {
@@ -35,7 +35,7 @@ function buildEscalationWithdrawalPlan(snapshot: EcosystemSnapshot, candidate: R
 		priority: 'urgent',
 		risk: 'low',
 		snapshot,
-		steps: [encodeStep({ abi: securityPoolAbi, args: [candidate.outcome, indexes], evidence: [eventEvidence(candidate.pool.escalationGame, signature)], functionName: 'withdrawFromEscalationGame', id: 'withdraw-escalation', label: 'Withdraw resolved escalation deposits', to: candidate.pool.address })],
+		steps: [encodeStep({ abi: questionLedgerAbi, args: [candidate.outcome, indexes], evidence: [eventEvidence(candidate.pool.escalationGame, signature)], functionName: 'withdrawFromEscalationGame', id: 'withdraw-escalation', label: 'Withdraw resolved escalation deposits', to: candidate.pool.address })],
 	})
 }
 
@@ -54,7 +54,7 @@ export const withdrawEscalation: OperationDefinition = {
 		return escalationWithdrawalCandidates(snapshot).map(escalationWithdrawalMetadata)
 	},
 	classification: 'lifecycle-obligation',
-	contract: 'SecurityPool',
+	contract: 'QuestionLedger',
 	description: 'Withdraws indexed wallet escalation deposits after the pool question resolves.',
 	discoveryInputs: ['canonical escalation deposit index', 'pool question outcome and lifecycle'],
 	ecosystem: 'statoblast',

@@ -2,21 +2,21 @@ import { describe, expect, test } from 'bun:test'
 import { encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
 import {
 	test_statoblast_CollateralTestToken_CollateralTestToken as tokenArtifact,
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact,
 } from '../../types/contractArtifact'
 import { deployContract } from '../../testSupport/deployContract'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { forkUniverse, getZoltarAddress, getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { openOracleSettle } from '../../testSupport/simulator/utils/contracts/statoblast'
-import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 
 describe('collateral-independent outcome disputes', () => {
-	const fixture = useSecurityPoolPortfolioFixture()
+	const fixture = useSecurityPoolFixture()
 	const prepare = async () => {
 		const owner = fixture.owner()
 		const other = fixture.other()
@@ -29,11 +29,11 @@ describe('collateral-independent outcome disputes', () => {
 			}),
 		)
 		const token = { abi: tokenArtifact.abi, address: collateral }
-		const portfolio = await fixture.deployPortfolio(undefined, undefined, {
+		const securityPool = await fixture.deploySecurityPool(undefined, undefined, {
 			collateralToken: collateral,
 		})
-		const target = { abi: portfolioArtifact.abi, address: portfolio }
-		await fixture.register(fixture.base.questionId, portfolio)
+		const target = { abi: securityPoolArtifact.abi, address: securityPool }
+		await fixture.register(fixture.base.questionId, securityPool)
 		for (const recipient of [owner.account.address, other.account.address]) {
 			await writeContractAndWait(owner, () =>
 				owner.writeContract({
@@ -43,7 +43,7 @@ describe('collateral-independent outcome disputes', () => {
 				}),
 			)
 		}
-		await fixture.deposit(1_000n * unit, owner, portfolio)
+		await fixture.deposit(1_000n * unit, owner, securityPool)
 		const feed = {
 			abi: feedArtifact.abi,
 			address: await owner.readContract({
@@ -61,7 +61,7 @@ describe('collateral-independent outcome disputes', () => {
 		await writeContractAndWait(owner, () =>
 			owner.writeContract({
 				...feed,
-				functionName: 'requestPortfolioPrice',
+				functionName: 'requestSecurityPoolPrice',
 				args: [unit, 500n * unit, bounty],
 				value: bounty,
 			}),
@@ -72,19 +72,19 @@ describe('collateral-independent outcome disputes', () => {
 		})
 		await fixture.base.mockWindow.advanceTime(481n)
 		await openOracleSettle(owner, report)
-		await fixture.authorize(200n * unit, owner, portfolio)
+		await fixture.authorize(200n * unit, owner, securityPool)
 		await fixture.mint(100n * unit, fixture.base.questionId, {
-			namespace: portfolio,
+			namespace: securityPool,
 		})
 		const pool = {
 			abi: poolArtifact.abi,
-			address: fixture.poolFor(fixture.base.questionId, undefined, undefined, portfolio).securityPool,
+			address: fixture.poolFor(fixture.base.questionId, undefined, undefined, securityPool).questionLedger,
 		}
-		return { owner, other, token, portfolio, target, pool, feed }
+		return { owner, other, token, securityPool, target, pool, feed }
 	}
 	for (const mode of ['paused', 'blocked burn address'] as const) {
 		test(`#1336 permits a REP dispute with ${mode}`, async () => {
-			const { owner, other, token, portfolio, target, pool } = await prepare()
+			const { owner, other, token, securityPool, target, pool } = await prepare()
 			await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
 			for (const reporter of [owner, other]) await approveToken(reporter, getRepTokenAddress(fixture.base.genesisUniverse), pool.address)
 			await writeContractAndWait(owner, () =>
@@ -132,7 +132,7 @@ describe('collateral-independent outcome disputes', () => {
 				}),
 			}
 			// The same checkpoint must keep REP-only provider funding available (#1337).
-			await fixture.deposit(unit, owner, portfolio)
+			await fixture.deposit(unit, owner, securityPool)
 			if (mode === 'paused')
 				await writeContractAndWait(owner, () =>
 					owner.writeContract({
@@ -165,19 +165,19 @@ describe('collateral-independent outcome disputes', () => {
 		})
 	}
 	test('#1337 quarantines collateral burns without blocking REP checkpoints', async () => {
-		const { owner, other, token, target, portfolio, feed } = await prepare()
+		const { owner, other, token, target, securityPool, feed } = await prepare()
 		const capital = { abi: capitalArtifact.abi, address: await owner.readContract({ ...target, functionName: 'capitalLedger', args: [fixture.base.genesisUniverse] }) }
 		const bounty = await owner.readContract({ ...feed, functionName: 'getRequestPriceCostAttoEth' })
-		await writeContractAndWait(owner, () => owner.writeContract({ ...feed, functionName: 'requestPortfolioPrice', args: [4n * unit, 500n * unit, bounty], value: bounty }))
+		await writeContractAndWait(owner, () => owner.writeContract({ ...feed, functionName: 'requestSecurityPoolPrice', args: [4n * unit, 500n * unit, bounty], value: bounty }))
 		const report = await owner.readContract({ ...feed, functionName: 'pendingReportId' })
 		await fixture.base.mockWindow.advanceTime(481n)
 		await openOracleSettle(owner, report)
 		const burn = '0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF'
 		await writeContractAndWait(owner, () => owner.writeContract({ ...token, functionName: 'setBlocked', args: [burn, true] }))
 		await fixture.base.mockWindow.advanceTime(86_401n)
-		await expect(fixture.deposit(unit, owner, portfolio)).rejects.toThrow('Position is liquidating')
+		await expect(fixture.deposit(unit, owner, securityPool)).rejects.toThrow('Position is liquidating')
 		// An idle provider can checkpoint the deferred burn without curing the liquidating owner.
-		await fixture.deposit(unit, other, portfolio)
+		await fixture.deposit(unit, other, securityPool)
 		const pending = await owner.readContract({ ...capital, functionName: 'pendingBurnCash' })
 		expect(pending).toBeGreaterThan(0n)
 		await expect(owner.simulateContract({ ...capital, functionName: 'flushBurn' })).rejects.toThrow('SafeERC20Ops token call reverted')

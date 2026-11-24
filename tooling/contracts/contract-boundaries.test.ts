@@ -7,15 +7,15 @@ test('rejects production dependencies on test contracts', () => {
 })
 
 test('keeps Statoblast core independent from optional Trading', () => {
-	const findings = findContractBoundaryViolations('solidity/contracts/statoblast/SecurityPool.sol', "import '../trading/TwoWayConstantProductPair.sol';")
+	const findings = findContractBoundaryViolations('solidity/contracts/statoblast/QuestionLedger.sol', "import '../trading/TwoWayConstantProductPair.sol';")
 	expect(findings.map(finding => finding.reason)).toEqual(['Statoblast core must not depend on optional Trading contracts'])
 })
 
 test('allows Trading to consume the explicit Statoblast interface surface', () => {
 	const sourcePath = 'solidity/contracts/trading/Router.sol'
-	expect(findContractBoundaryViolations(sourcePath, "import '../statoblast/interfaces/ISecurityPool.sol';")).toEqual([])
+	expect(findContractBoundaryViolations(sourcePath, "import '../statoblast/interfaces/IQuestionLedger.sol';")).toEqual([])
 	expect(findContractBoundaryViolations(sourcePath, "import '../statoblast/BinaryOutcomes.sol';")).toEqual([])
-	expect(findContractBoundaryViolations(sourcePath, "import '../statoblast/SecurityPool.sol';")).toHaveLength(1)
+	expect(findContractBoundaryViolations(sourcePath, "import '../statoblast/QuestionLedger.sol';")).toHaveLength(1)
 })
 
 test('keeps the vendored OpenOracle tree self-contained', () => {

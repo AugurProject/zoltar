@@ -7,7 +7,7 @@ import { capitalPositionCard, capitalPositionPath } from './capital-presentation
 import { exactUnit, tokenDecimals } from './format.ts'
 import { forkParticipationUniverse } from './operations-presentation.ts'
 import { short, shortIdentifier } from './identifier-format.ts'
-import { PORTFOLIO_KIND_LABELS, portfolioItems, portfolioPage } from './portfolio-helpers.ts'
+import { SECURITY_POOL_KIND_LABELS, securityPoolItems, securityPoolPage } from './security-pool-helpers.ts'
 import type { createOperationsComponents } from './operations-components.ts'
 import { sharePositionSummary, tradingPnlPanel } from './trading-panels.ts'
 import { captureViewState, restoreViewState } from './view-state.ts'
@@ -47,7 +47,7 @@ export const addressTokenBalances = (item: Pick<RichListRecord, 'weth_balances' 
 		amount: exactUnit(token.balance, tokenDecimals(token.decimals), token.symbol ?? fallbackSymbol),
 	}))
 
-export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichListRecord, transactions: AccountTransaction[], interactions: AccountTransaction[], { live = false, portfolioFocusKind }: { live?: boolean; portfolioFocusKind?: 'forks' | 'lp' | 'reports' | undefined } = {}) => {
+export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichListRecord, transactions: AccountTransaction[], interactions: AccountTransaction[], { live = false, securityPoolFocusKind }: { live?: boolean; securityPoolFocusKind?: 'forks' | 'lp' | 'reports' | undefined } = {}) => {
 	const { lookup: $, liveSnapshot, nativeSymbol, element, isDemo, setLiveRecord, number, protocolAddressLink, operationsPanel, operationRow, operationCounted, operationsHref, openAccountTransactions, internalEvidenceLink, time, decodedArgumentsTable, applyLiveChanges, loadAddressProfile } = deps
 	const content = $('#address-profile-content')
 	const previousSections = liveSnapshot(content, '[data-live-key]')
@@ -109,11 +109,11 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		rep: item.rep_balances,
 	})
 	const involvement = element('section', 'address-profile-panel')
-	involvement.append(element('p', 'eyebrow', 'Augur involvement'), element('h3', '', 'Security pools and capital positions'))
+	involvement.append(element('p', 'eyebrow', 'Augur involvement'), element('h3', '', 'Question ledgers and capital positions'))
 	const involvementGrid = element('div', 'rich-position-grid')
 	for (const pool of item.pool_associations ?? []) {
 		const card = element('div', 'rich-position')
-		card.append(element('strong', '', pool.questionTitle ?? pool.label ?? 'Security pool'), protocolAddressLink(pool.address, { knownLabel: pool.label, chainId, className: 'rich-token-address address-link' }))
+		card.append(element('strong', '', pool.questionTitle ?? pool.label ?? 'Question ledger'), protocolAddressLink(pool.address, { knownLabel: pool.label, chainId, className: 'rich-token-address address-link' }))
 		involvementGrid.append(card)
 	}
 	// One capital position per universe ledger: the owner's principal, commitment and health at the latest tagged read.
@@ -222,16 +222,16 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		),
 		'No OpenOracle rounds identify this address as the current reporter.',
 	)
-	const appendPortfolioPagination = (kind: 'forks' | 'lp' | 'reports', panel: HTMLElement) => {
-		const page = portfolioPage(item, kind)
-		const items = portfolioItems(item, kind)
-		const singular = PORTFOLIO_KIND_LABELS[kind].singular
+	const appendSecurityPoolPagination = (kind: 'forks' | 'lp' | 'reports', panel: HTMLElement) => {
+		const page = securityPoolPage(item, kind)
+		const items = securityPoolItems(item, kind)
+		const singular = SECURITY_POOL_KIND_LABELS[kind].singular
 		const total = typeof page['total'] === 'number' ? page['total'] : undefined
 		panel.querySelector('h3')?.after(element('p', 'operations-panel-scope', `${operationCounted(items.length, singular)} shown · ${operationCounted(total, singular)} total`))
 		if (page['hasMore'] === true && typeof page['nextCursor'] === 'string') {
-			const button = element('button', 'secondary compact portfolio-history-more', `Show more ${PORTFOLIO_KIND_LABELS[kind].plural}`)
+			const button = element('button', 'secondary compact security-pool-history-more', `Show more ${SECURITY_POOL_KIND_LABELS[kind].plural}`)
 			button.type = 'button'
-			button.dataset['portfolioKind'] = kind
+			button.dataset['securityPoolKind'] = kind
 			const status = element('p', 'activity-summary')
 			status.setAttribute('role', 'status')
 			status.setAttribute('aria-live', 'polite')
@@ -239,36 +239,36 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 				const scrollY = window.scrollY
 				button.disabled = true
 				button.setAttribute('aria-busy', 'true')
-				button.textContent = `Showing more ${PORTFOLIO_KIND_LABELS[kind].plural}…`
+				button.textContent = `Showing more ${SECURITY_POOL_KIND_LABELS[kind].plural}…`
 				status.textContent = 'Loading older account evidence…'
 				status.classList.add('sr-only')
-				const loaded = await loadAddressProfile({ live: true, portfolioTarget: { kind, count: items.length + 100 } })
+				const loaded = await loadAddressProfile({ live: true, securityPoolTarget: { kind, count: items.length + 100 } })
 				if (loaded) {
-					const next = $('#address-profile-content').querySelector<HTMLElement>(`[data-portfolio-kind="${kind}"]`)
+					const next = $('#address-profile-content').querySelector<HTMLElement>(`[data-security-pool-kind="${kind}"]`)
 					next?.focus({ preventScroll: true })
 					window.scrollTo({ top: scrollY, behavior: 'auto' })
 				} else if (button.isConnected) {
 					button.disabled = false
 					button.removeAttribute('aria-busy')
-					button.textContent = `Retry more ${PORTFOLIO_KIND_LABELS[kind].plural}`
+					button.textContent = `Retry more ${SECURITY_POOL_KIND_LABELS[kind].plural}`
 					status.textContent = 'Additional account evidence could not be loaded.'
 					status.classList.remove('sr-only')
 					button.focus({ preventScroll: true })
 				}
 			})
 			panel.append(button, status)
-		} else if (portfolioFocusKind === kind) {
+		} else if (securityPoolFocusKind === kind) {
 			const complete = element('p', 'activity-summary operations-pagination-complete', `All available ${singular}${singular.endsWith('s') ? '' : 's'} are shown.`)
-			complete.dataset['portfolioKind'] = kind
+			complete.dataset['securityPoolKind'] = kind
 			complete.tabIndex = -1
 			complete.setAttribute('role', 'status')
 			complete.setAttribute('aria-live', 'polite')
 			panel.append(complete)
 		}
 	}
-	appendPortfolioPagination('lp', lpPositions)
-	appendPortfolioPagination('forks', forkParticipation)
-	appendPortfolioPagination('reports', reportParticipation)
+	appendSecurityPoolPagination('lp', lpPositions)
+	appendSecurityPoolPagination('forks', forkParticipation)
+	appendSecurityPoolPagination('reports', reportParticipation)
 	const activity = element('section', 'address-profile-panel')
 	const activityHeader = element('div', 'address-section-heading')
 	const activityCopy = element('div')
@@ -334,7 +334,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	setLiveRecord(interactionPanel, 'references', interactions)
 	setLiveRecord(activity, 'transactions', transactions)
 	content.replaceChildren(header, metrics, balances, involvement, payoutPanel, escalationPositions, sharePanel, refundPanel, tradingPnl, lpPositions, forkParticipation, reportParticipation, escalationClaims, auctionClaims, interactionPanel, activity)
-	if (viewState !== undefined && portfolioFocusKind === undefined) restoreViewState(content, viewState)
+	if (viewState !== undefined && securityPoolFocusKind === undefined) restoreViewState(content, viewState)
 	applyLiveChanges(content, previousSections, { live })
 	content.setAttribute('aria-busy', 'false')
 }

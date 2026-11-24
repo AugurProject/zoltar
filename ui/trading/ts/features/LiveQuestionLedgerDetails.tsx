@@ -1,0 +1,218 @@
+import { collateralAsset } from '../protocol/collateral.js'
+import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
+import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
+import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
+import { BackingDetails } from './BackingDetails.js'
+import { formatMultiplier, formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatEthAmountPair } from '../lib/format.js'
+import { formatInitialReportPriorityFee } from '@zoltar/ui-statoblast-shared/features/question-ledgers/lib/priorityFee.js'
+import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
+import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
+import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
+import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
+import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
+import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
+import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
+import { marketNewRiskBlocker, type LiveMarket } from '../protocol/live.js'
+import * as appCopy from '../copy/app.js'
+import { getTradingRouteHref } from '../lib/routing.js'
+import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
+import { QuestionLedgerIdentityFields } from './LiveMarketIdentity.js'
+import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { liveCopy } from '../copy/live.js'
+import { marketsCopy } from '../copy/markets.js'
+import { questionOutcomeLabel, systemStateLabel } from '../lib/marketLabels.js'
+
+export function PairInitializationAction({ market, nowSeconds }: { market: LiveMarket; nowSeconds: bigint }) {
+	const blocker = marketNewRiskBlocker(market, nowSeconds)
+	// The blocked action keeps the label it has when available: creating the market, or adding the first liquidity to one.
+	const initializationLabel = market.pair === undefined ? appCopy.createMarket : liveCopy.addFirstLiquidity
+	if (blocker !== undefined)
+		return (
+			<div className='pair-initialization'>
+				<UserMessage className='detail' detail={liveCopy.neverInitializedDetail} />
+				<div className='actions'>
+					<ActionLauncherButton idleLabel={initializationLabel} pendingLabel={initializationLabel} availability={{ disabled: true, reason: liveCopy.formatInitializationUnavailable(blocker) }} onClick={() => undefined} />
+				</div>
+			</div>
+		)
+	return (
+		<div className='pair-initialization'>
+			<UserMessage className='detail' detail={market.pair === undefined ? liveCopy.formatMarketNotCreatedDetail(formatTrimmedUnits(market.feeBps, 2, 2)) : liveCopy.formatNoLiquidityDetail(formatTrimmedUnits(market.feeBps, 2, 2))} />
+			<div className='actions'>
+				<a className='button-link primary' href={getTradingRouteHref(`#/${market.pair === undefined ? 'create-market' : 'liquidity'}/${market.pool}`)}>
+					{market.pair === undefined ? appCopy.createMarket : liveCopy.addFirstLiquidity}
+				</a>
+			</div>
+		</div>
+	)
+}
+
+export function LiveQuestionLedgerDetails({
+	market,
+	refreshError,
+	refreshing = false,
+	retry,
+	workflowLocked,
+	nowSeconds,
+	connectionMessage,
+}: {
+	market: LiveMarket
+	refreshError?: string | undefined
+	refreshing?: boolean
+	retry(): void
+	workflowLocked: boolean
+	nowSeconds: bigint
+	connectionMessage?: string | undefined
+}) {
+	const hasLoadedDetails = market.loadError === undefined
+	let refreshMessage: string | undefined
+	if (refreshing) refreshMessage = hasLoadedDetails ? liveCopy.refreshingQuestionLedger : liveCopy.retryingQuestionLedgerDetails
+	let errorMessage: string | undefined
+	if (market.loadError !== undefined) errorMessage = liveCopy.questionLedgerDetailsUnavailable(market.loadError, refreshError)
+	else if (refreshError !== undefined) errorMessage = liveCopy.questionLedgerRefreshFailed(refreshError)
+	// Return to the landing whose list includes this pool: markets once a pair exists, otherwise market creation.
+	const browseBack = market.pair === undefined ? { href: '#/create-market', label: liveCopy.backToCreateMarket } : { href: '#/market', label: marketsCopy.allMarkets }
+	return (
+		<div className='route-view-flow'>
+			<RouteHeader
+				eyebrow={appCopy.questionLedger}
+				title={market.title}
+				badge={market.loadError === undefined ? <FavoriteToggle app='trading' entityLabel={market.title} id={market.pool} kind='pool' /> : <Badge tone='warning'>{appCopy.questionLedgerDataUnavailable}</Badge>}
+				actions={
+					<a className='button-link' href={getTradingRouteHref(browseBack.href)}>
+						{browseBack.label}
+					</a>
+				}
+			/>
+			<ErrorNotice message={connectionMessage} />
+			<SectionBlock title={liveCopy.questionLedgerFacts}>
+				<div className='security-pool-details' aria-busy={refreshing}>
+					{refreshMessage === undefined ? undefined : <UserMessage className='detail' announcement='polite' detail={refreshMessage} />}
+					<RetryableNotice disabled={workflowLocked} message={errorMessage} onRetry={refreshing ? undefined : retry} retryLabel={hasLoadedDetails ? liveCopy.retryRefresh : liveCopy.retryQuestionLedger} />
+
+					{market.loadError !== undefined ? (
+						<ReadOnlyDetailAccordion title={liveCopy.details}>
+							<DataGrid dense>
+								<QuestionLedgerIdentityFields market={market} />
+							</DataGrid>
+						</ReadOnlyDetailAccordion>
+					) : (
+						<>
+							<div>
+								<DataGrid dense>
+									<MetricField label={liveCopy.questionEnd}>
+										<TimestampValue timestamp={market.endTime} relative={false} />
+									</MetricField>
+									<MetricField label={liveCopy.questionLedgerState}>{systemStateLabel(market.systemState)}</MetricField>
+									<MetricField label={liveCopy.universeFork}>
+										{market.universeForkTime === 0n ? (
+											liveCopy.notForked
+										) : (
+											<>
+												{liveCopy.forked} <TimestampValue timestamp={market.universeForkTime} relative={false} />
+											</>
+										)}
+									</MetricField>
+									{market.questionOutcome === 3 ? undefined : <MetricField label={liveCopy.outcome}>{questionOutcomeLabel(market.questionOutcome)}</MetricField>}
+									<MetricField label={liveCopy.mintingCapacity}>{formatEthAmountPair(market.settlementCollateralAttoEth, market.mintingCapacityCeilingAttoEth, collateralAsset(market))}</MetricField>
+								</DataGrid>
+							</div>
+							{market.pair === undefined ? (
+								<PairInitializationAction market={market} nowSeconds={nowSeconds} />
+							) : (
+								<div className='actions'>
+									<a className='button-link primary' href={getTradingRouteHref(`#/market/${market.pool}`)}>
+										{liveCopy.openMarket}
+									</a>
+								</div>
+							)}
+							<ReadOnlyDetailAccordion title={liveCopy.details}>
+								<DataGrid dense>
+									<QuestionLedgerIdentityFields market={market} />
+								</DataGrid>
+							</ReadOnlyDetailAccordion>
+							<ReadOnlyDetailAccordion title={liveCopy.parameters}>
+								<DataGrid dense>
+									<MetricField label={liveCopy.securityMultiplier}>{formatMultiplier(market.statoblastSecurityMultiplierBps, 4)}</MetricField>
+									<MetricField label={liveCopy.initialReportPriorityFee}>{formatInitialReportPriorityFee(market.initialReportPriorityFeeAttoEthPerGas)}</MetricField>
+									<MetricField label={liveCopy.commitmentLimits}>{formatEthAmountPair(market.totalUnderwritingLimitAttoEth, market.feeEligibleUnderwritingLimitAttoEth, collateralAsset(market))}</MetricField>
+								</DataGrid>
+							</ReadOnlyDetailAccordion>
+							<BackingDetails market={market} />
+						</>
+					)}
+				</div>
+			</SectionBlock>
+		</div>
+	)
+}
+
+/** The list a missing pool's route returns to, so a mistyped address is fixed where it was entered. */
+function lookupReturn(lookupRoute: 'market' | 'create-market') {
+	return lookupRoute === 'market' ? { href: '#/market', label: marketsCopy.allMarkets } : { href: '#/create-market', label: liveCopy.backToCreateMarket }
+}
+
+export function QuestionLedgerRouteEmptyState({
+	discoveryState,
+	discoveryError,
+	workflowLocked,
+	retry,
+	lookupRoute = 'create-market',
+	address,
+}: {
+	discoveryState: 'loading' | 'ready' | 'error' | 'not-found'
+	discoveryError: string | undefined
+	workflowLocked: boolean
+	retry(): void
+	/** The landing whose search opened this address. */
+	lookupRoute?: 'market' | 'create-market'
+	/** The address that was opened, shown so a typo is visible. */
+	address?: string | undefined
+}) {
+	if (discoveryState === 'not-found') {
+		const back = lookupReturn(lookupRoute)
+		return (
+			<EmptyState
+				live
+				title={liveCopy.questionLedgerDoesNotExist}
+				detail={
+					<>
+						{address === undefined ? undefined : (
+							<>
+								<AddressValue address={address} />{' '}
+							</>
+						)}
+						{discoveryError}
+					</>
+				}
+				actions={
+					<a className='button-link primary' href={getTradingRouteHref(back.href)}>
+						{back.label}
+					</a>
+				}
+			/>
+		)
+	}
+	if (discoveryState === 'loading') return <EmptyState live title={liveCopy.loadingQuestionLedgerDetails} />
+	if (discoveryState === 'error') return <RetryableNotice disabled={workflowLocked} message={liveCopy.questionLedgerDiscoveryFailed(discoveryError ?? liveCopy.unknownDiscovery)} onRetry={retry} retryLabel={liveCopy.retryDiscovery} />
+	// Discovery finished without the addressed pool: it belongs to another universe (or none), so offer both ways out.
+	return (
+		<EmptyState
+			title={marketsCopy.poolNotInUniverse}
+			detail={marketsCopy.poolNotInUniverseDetail}
+			actions={
+				<>
+					<a className='button-link primary' href={getTradingRouteHref('#/universe')}>
+						{marketsCopy.switchUniverse}
+					</a>
+					<a className='button-link secondary-link' href={getTradingRouteHref('#/market')}>
+						{appCopy.markets}
+					</a>
+				</>
+			}
+		/>
+	)
+}

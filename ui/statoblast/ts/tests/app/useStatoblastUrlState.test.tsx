@@ -75,31 +75,20 @@ describe('useStatoblastUrlState', () => {
 	test('lands on Browse pools before the default route hash is installed', async () => {
 		window.history.replaceState({}, '', '/')
 		const state = await renderHarness()
-		expect(state().securityPoolsView).toBe('browse')
-		expect(state().securityPoolAddress).toBe('')
-		await act(() => state().setSecurityPoolsView('create'))
+		expect(state().questionLedgersView).toBe('browse')
+		expect(state().questionLedgerAddress).toBe('')
+		await act(() => state().setQuestionLedgersView('create'))
 		expect(window.location.hash).toBe('#/pools/create')
-		expect(state().securityPoolsView).toBe('create')
-		await act(() => state().setSecurityPoolsView('browse'))
+		expect(state().questionLedgersView).toBe('create')
+		await act(() => state().setQuestionLedgersView('browse'))
 		expect(window.location.hash).toBe('#/pools')
 	})
 
 	test('loads the initial pool page from the route hash', async () => {
 		const state = await renderHarness()
 		expect(state().activeUniverseId).toBe(1n)
-		expect(state().securityPoolsView).toBe('operate')
-		expect(state().securityPoolAddress).toBe(POOL_A)
-	})
-
-	test('rewrites legacy security pool links onto the pool path', async () => {
-		const state = await renderHarness()
-		await act(() => {
-			window.location.hash = `#/security-pools?securityPool=${POOL_B}&securityPoolsView=operate&selectedPoolView=reporting&universe=2`
-			window.dispatchEvent(new Event('hashchange'))
-		})
-		expect(window.location.hash).toBe(`#/pools/${POOL_B}?universe=2`)
-		expect(state().securityPoolAddress).toBe(POOL_B)
-		expect(state().activeUniverseId).toBe(2n)
+		expect(state().questionLedgersView).toBe('operate')
+		expect(state().questionLedgerAddress).toBe(POOL_A)
 	})
 
 	test('updates the pool path and query through setter callbacks', async () => {
@@ -108,29 +97,29 @@ describe('useStatoblastUrlState', () => {
 		await act(() => state().setActiveUniverseId(7n))
 		expect(window.location.hash).toBe(`#/pools/${POOL_A}?universe=7`)
 
-		await act(() => state().setSecurityPoolAddress(POOL_C))
+		await act(() => state().setQuestionLedgerAddress(POOL_C))
 		expect(window.location.hash).toBe(`#/pools/${POOL_C}?universe=7`)
-		expect(state().securityPoolAddress).toBe(POOL_C)
+		expect(state().questionLedgerAddress).toBe(POOL_C)
 
-		await act(() => state().setSecurityPoolsView('operate'))
-		expect(state().securityPoolAddress).toBe(POOL_C)
+		await act(() => state().setQuestionLedgersView('operate'))
+		expect(state().questionLedgerAddress).toBe(POOL_C)
 
-		await act(() => state().setSecurityPoolsView('universes'))
+		await act(() => state().setQuestionLedgersView('universes'))
 		expect(window.location.hash).toBe('#/pools/universes?universe=7')
 
-		await act(() => state().setSecurityPoolsView('migrate'))
+		await act(() => state().setQuestionLedgersView('migrate'))
 		expect(window.location.hash).toBe('#/pools/migrate?universe=7')
-		expect(state().securityPoolsView).toBe('migrate')
-		expect(state().securityPoolAddress).toBe('')
+		expect(state().questionLedgersView).toBe('migrate')
+		expect(state().questionLedgerAddress).toBe('')
 
-		await act(() => state().setSecurityPoolQuestionId('0x99'))
+		await act(() => state().setQuestionLedgerQuestionId('0x99'))
 		expect(window.location.hash).toBe('#/pools/create?universe=7&questionId=0x99')
-		expect(state().securityPoolQuestionId).toBe('0x99')
+		expect(state().questionLedgerQuestionId).toBe('0x99')
 
-		await act(() => state().setSecurityPoolsView('browse'))
+		await act(() => state().setQuestionLedgersView('browse'))
 		expect(window.location.hash).toBe('#/pools?universe=7')
 
-		await act(() => state().setSecurityPoolAddress(''))
+		await act(() => state().setQuestionLedgerAddress(''))
 		expect(window.location.hash).toBe('#/pools?universe=7')
 	})
 
@@ -152,20 +141,20 @@ describe('useStatoblastUrlState', () => {
 			const state = await renderHarness()
 			pushes = 0
 			replaces = 0
-			await act(() => state().setSecurityPoolQuestionId('0x1'))
+			await act(() => state().setQuestionLedgerQuestionId('0x1'))
 			expect(pushes).toBe(1)
-			for (const questionId of ['0x12', '0x123', '0x1234']) await act(() => state().setSecurityPoolQuestionId(questionId))
+			for (const questionId of ['0x12', '0x123', '0x1234']) await act(() => state().setQuestionLedgerQuestionId(questionId))
 			expect(pushes).toBe(1)
 			expect(replaces).toBe(3)
 			expect(window.location.hash).toBe('#/pools/create?universe=1&questionId=0x1234')
-			await act(() => state().setSecurityPoolQuestionId(''))
+			await act(() => state().setQuestionLedgerQuestionId(''))
 			expect(pushes).toBe(1)
 			expect(window.location.hash).toBe('#/pools/create?universe=1')
 			await act(() => {
 				window.history.back()
 				window.dispatchEvent(new Event('popstate'))
 			})
-			expect(state().securityPoolsView).toBe('browse')
+			expect(state().questionLedgersView).toBe('browse')
 		} finally {
 			window.history.pushState = originalPushState
 			window.history.replaceState = originalReplaceState
@@ -183,19 +172,19 @@ describe('useStatoblastUrlState', () => {
 			return originalPushState(...parameters)
 		}
 		try {
-			await act(() => state().openSecurityPoolInUniverse(3n, POOL_B))
+			await act(() => state().openQuestionLedgerInUniverse(3n, POOL_B))
 			expect(pushes).toBe(1)
 			expect(window.location.hash).toBe(`#/pools/${POOL_B}?universe=3`)
 			expect(state().vaultAddress).toBeUndefined()
 			expect(state().vaultView).toBeUndefined()
 			expect(state().activeUniverseId).toBe(3n)
-			expect(state().securityPoolAddress).toBe(POOL_B)
+			expect(state().questionLedgerAddress).toBe(POOL_B)
 			await act(() => {
 				window.history.back()
 				window.dispatchEvent(new Event('popstate'))
 			})
 			expect(state().activeUniverseId).toBe(1n)
-			expect(state().securityPoolAddress).toBe(POOL_A)
+			expect(state().questionLedgerAddress).toBe(POOL_A)
 		} finally {
 			window.history.pushState = originalPushState
 		}
@@ -224,7 +213,7 @@ describe('useStatoblastUrlState', () => {
 		expect(state().vaultAddress).toBe(POOL_B)
 		expect(state().vaultView).toBe('vault-by-address')
 		const savedHash = window.location.hash
-		await act(() => state().setSecurityPoolAddress(POOL_C))
+		await act(() => state().setQuestionLedgerAddress(POOL_C))
 		expect(state().vaultAddress).toBeUndefined()
 		expect(state().vaultView).toBeUndefined()
 		expect(state().poolBrowseState.searchText).toBe('pool one')

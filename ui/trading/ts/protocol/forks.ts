@@ -1,25 +1,19 @@
 import { encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { formatScalarOutcomeIndexLabel, type ScalarQuestionDetails } from '@zoltar/zoltar-shared/questions/scalarOutcome'
-import {
-	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator,
-	statoblast_SecurityPool_SecurityPool,
-	statoblast_tokens_ShareToken_ShareToken,
-} from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator, statoblast_QuestionLedger_QuestionLedger, statoblast_tokens_ShareToken_ShareToken } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { ForkQuestionDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { getMarketType } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import type { LiveMarket } from './live.js'
 
-const poolForkAbi = statoblast_SecurityPool_SecurityPool.abi
+const poolForkAbi = statoblast_QuestionLedger_QuestionLedger.abi
 const zoltarForkAbi = Zoltar_Zoltar.abi
 const forkQuestionAbi = ZoltarQuestionData_ZoltarQuestionData.abi
 const shareForkAbi = statoblast_tokens_ShareToken_ShareToken.abi
 const factoryForkAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
-const portfolioForkAbi = statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio.abi
-const coordinatorForkAbi = statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator.abi
+const securityPoolForkAbi = statoblast_SecurityPool_SecurityPool.abi
+const coordinatorForkAbi = statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator.abi
 
 /** Shares of each source outcome the account has already migrated into one child universe. */
 type MigratedShareAmounts = Readonly<{ invalid: bigint; yes: bigint; no: bigint }>
@@ -83,9 +77,9 @@ function branchReadiness(client: PublicClient, pool: Address): BranchReadiness {
 	let coordinator: Promise<Address> | undefined
 	const loadCoordinator = async () => {
 		const factory = await client.readContract({ abi: poolForkAbi, address: pool, functionName: 'securityPoolFactory' })
-		const portfolio = await client.readContract({ abi: factoryForkAbi, address: getAddress(factory), functionName: 'getSecurityPoolPortfolio', args: [pool] })
-		if (portfolio === zeroAddress) throw new Error('Security pool has no portfolio')
-		return getAddress(await client.readContract({ abi: portfolioForkAbi, address: getAddress(portfolio), functionName: 'forkController' }))
+		const portfolio = await client.readContract({ abi: factoryForkAbi, address: getAddress(factory), functionName: 'securityPoolOf', args: [pool] })
+		if (portfolio === zeroAddress) throw new Error('Question ledger has no portfolio')
+		return getAddress(await client.readContract({ abi: securityPoolForkAbi, address: getAddress(portfolio), functionName: 'forkController' }))
 	}
 	return async universeId => {
 		coordinator ??= loadCoordinator()
@@ -95,7 +89,7 @@ function branchReadiness(client: PublicClient, pool: Address): BranchReadiness {
 
 async function targetWithCanonicalPool(client: PublicClient, market: Pick<LiveMarket, 'shareToken' | 'universeId'>, isBranchActive: BranchReadiness, outcomeIndex: bigint, label: string, account: Address | undefined, knownUniverseId?: bigint): Promise<ForkTarget> {
 	const universeId = knownUniverseId ?? getChildUniverseId(market.universeId, outcomeIndex)
-	const canonicalPoolAddress = await client.readContract({ abi: shareForkAbi, address: market.shareToken, functionName: 'canonicalPoolByUniverse', args: [universeId] })
+	const canonicalPoolAddress = await client.readContract({ abi: shareForkAbi, address: market.shareToken, functionName: 'canonicalQuestionLedgerByUniverse', args: [universeId] })
 	const canonicalPool = canonicalPoolAddress === zeroAddress ? undefined : getAddress(canonicalPoolAddress)
 	const branchActive = canonicalPool !== undefined || (await isBranchActive(universeId))
 	return { outcomeIndex, universeId, label, canonicalPool, branchActive, migrated: await loadMigratedShares(client, market, universeId, account, canonicalPool) }

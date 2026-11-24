@@ -4,23 +4,23 @@ import { getAddress } from '../../src/ethereum.ts'
 import type { StateRead } from '../../src/snapshots.ts'
 
 const pool = getAddress('0x1111111111111111111111111111111111111111')
-const portfolio = getAddress('0x2222222222222222222222222222222222222222')
+const securityPool = getAddress('0x2222222222222222222222222222222222222222')
 const factory = getAddress('0x3333333333333333333333333333333333333333')
 const token = getAddress('0x4444444444444444444444444444444444444444')
 
-for (const kind of ['securityPool', 'securityPoolPortfolio', 'sharedPoolPriceFeed', 'priceCoordinator', 'ammPair', 'securityPoolPortfolioServices'])
+for (const kind of ['questionLedger', 'securityPool', 'sharedPoolPriceFeed', 'priceCoordinator', 'ammPair', 'securityPoolServices'])
 	test(`${kind} resolves pool collateral through its authenticated dependencies`, async () => {
 		const calls: string[] = []
 		const read: StateRead = async (_address, _abi, name) => {
 			calls.push(name)
 			switch (name) {
-				case 'securityPool':
+				case 'questionLedger':
 					return pool
 				case 'securityPoolFactory':
 					return factory
-				case 'portfolio':
-				case 'getSecurityPoolPortfolio':
-					return portfolio
+				case 'securityPool':
+				case 'securityPoolOf':
+					return securityPool
 				case 'collateralToken':
 					return token
 				case 'symbol':
@@ -40,7 +40,7 @@ for (const kind of ['securityPool', 'securityPoolPortfolio', 'sharedPoolPriceFee
 	})
 
 test('collateral units apply to the contract kinds the generated configuration produces', () => {
-	for (const kind of ['securityPool', 'securityPoolCapitalLedger', 'sharedPoolPriceFeed', 'priceCoordinator', 'ammFactory', 'ammPair', 'ammRouter']) expect(usesCollateralUnits(kind)).toBe(true)
+	for (const kind of ['questionLedger', 'securityPoolCapitalLedger', 'sharedPoolPriceFeed', 'priceCoordinator', 'ammFactory', 'ammPair', 'ammRouter']) expect(usesCollateralUnits(kind)).toBe(true)
 	for (const kind of [undefined, 'weth', 'reputationToken', 'openOracle', 'zoltar', 'uniswapV2Pair']) expect(usesCollateralUnits(kind)).toBe(false)
 })
 
@@ -50,9 +50,9 @@ test('unavailable or malformed metadata leaves amounts in raw units', async () =
 		if (name === 'symbol') return 'USDC'
 		return 256n
 	}
-	expect(await readContractCollateral(portfolio, 'securityPoolPortfolio', read)).toHaveProperty('readError')
+	expect(await readContractCollateral(securityPool, 'securityPool', read)).toHaveProperty('readError')
 	expect(
-		await readContractCollateral(portfolio, 'securityPoolPortfolio', async () => {
+		await readContractCollateral(securityPool, 'securityPool', async () => {
 			throw new Error('Historical state unavailable')
 		}),
 	).toHaveProperty('readError')

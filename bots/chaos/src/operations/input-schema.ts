@@ -9,7 +9,7 @@ const integer = (key: string, label: string, path: Array<string | number>, minim
 const amountField = (path: Array<string | number>, label = 'Token amount', key = 'amount', minimum = '1'): InputField => ({ key, label, path, kind: 'amount', minimum })
 const selectionKeys = { tokens: 'token', pools: 'pool', pairs: 'pair', universes: 'universeId', questions: 'questionId', auctions: 'auction' }
 const selection = (key: NonNullable<InputField['choices']>, label: string, path: Array<string | number>): InputField => ({ key: selectionKeys[key], label, kind: 'choice', choices: key, path })
-const pool = selection('pools', 'Security pool', ['metadata', 'pool'])
+const pool = selection('pools', 'Question ledger', ['metadata', 'pool'])
 const pair = selection('pairs', 'Trading pair', ['metadata', 'pair'])
 const token = selection('tokens', 'Token', ['metadata', 'token'])
 const universe = selection('universes', 'Universe', ['metadata', 'universeId'])
@@ -77,7 +77,7 @@ for (const id of ['trading.pair.create-and-initialize', 'trading.pair.initialize
 	if (entering) minimumIndex = 3
 	if (initializing) minimumIndex = 7
 	schemas[id] = [
-		{ key: 'target', label: id === 'trading.pair.create-and-initialize' ? 'Security pool' : 'Trading pair', kind: 'choice', choices: id === 'trading.pair.create-and-initialize' ? 'pools' : 'pairs', path: ['args', 0] },
+		{ key: 'target', label: id === 'trading.pair.create-and-initialize' ? 'Question ledger' : 'Trading pair', kind: 'choice', choices: id === 'trading.pair.create-and-initialize' ? 'pools' : 'pairs', path: ['args', 0] },
 		amountField(['args', 1], 'Mint cash (ETH, excluding fees)'),
 		amountField(['args', minimumIndex], entering ? 'Minimum long shares' : 'Minimum LP tokens', entering ? 'minimumOutput' : 'minimumLiquidity'),
 		integer('deadline', 'Deadline (Unix seconds)', ['args', minimumIndex + 2]),

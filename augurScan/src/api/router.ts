@@ -10,7 +10,7 @@ import { historicalExport } from './exports.ts'
 import { integrityCatalogResponse } from './integrity.ts'
 import { listLogs, logDetail, provenanceHistory, reorganizationHistory } from './logs.ts'
 import { domainCatalogResponse, operationsResponse } from './operations.ts'
-import { addressPortfolioResponse, richList } from './portfolio.ts'
+import { addressSecurityPoolResponse, richList } from './security-pool.ts'
 import { riskDetailResponse } from './risk.ts'
 import { blockResponse, searchResponse, transactionResponse } from './search.ts'
 import { ApiConflictError, ApiRequestError, actionCursorFor, actionJsonColumns, decodedJsonColumns, integer, json, parseActionCursor, routeInteger } from './shared.ts'
@@ -64,7 +64,7 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 		if (url.pathname.startsWith('/api/v1/state/risk/')) return await riskDetailResponse(sql, url.pathname.slice('/api/v1/state/risk/'.length).split('/'), url)
 		if (url.pathname.startsWith('/api/v1/state/capital/')) return await capitalDetailResponse(sql, url.pathname.slice('/api/v1/state/capital/'.length).split('/'), url)
 		if (url.pathname.startsWith('/api/v1/state/trading/')) return await tradingDetailResponse(sql, url.pathname.slice('/api/v1/state/trading/'.length).split('/'), url)
-		if (url.pathname === '/api/v1/state/address-portfolio') return await addressPortfolioResponse(sql, url)
+		if (url.pathname === '/api/v1/state/address-security-pool') return await addressSecurityPoolResponse(sql, url)
 		if (url.pathname === '/api/v1/state/timeline') return await timelineCatalogResponse(sql, url)
 		if (url.pathname.startsWith('/api/v1/state/timeline/')) return await timelineResponse(sql, url.pathname.slice('/api/v1/state/timeline/'.length).split('/'), url)
 		if (url.pathname === '/api/v1/state/catalog') return await stateCatalog(sql, url)

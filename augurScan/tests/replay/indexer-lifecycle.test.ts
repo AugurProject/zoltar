@@ -1007,7 +1007,7 @@ describe('network indexer lifecycle', () => {
 		expect(attempts).toEqual([[0n, 100n]])
 	})
 
-	test('attributes senders and referenced vaults to every security pool touched by a transaction', () => {
+	test('attributes senders and referenced vaults to every question ledger touched by a transaction', () => {
 		const sender = '0x2000000000000000000000000000000000000002'
 		const pool = '0x3000000000000000000000000000000000000003'
 		const vault = '0x4000000000000000000000000000000000000004'
@@ -1043,7 +1043,7 @@ describe('network indexer lifecycle', () => {
 			data: '0x',
 			decoded: { status: 'decoded', name: 'VaultEscrowUpdated', arguments: { vault }, referencedAddresses: [vault], summary: 'checkpoint' },
 		}
-		const contracts = new Map<string, ContractMetadata>([[pool.toLowerCase(), { address: pool, label: 'Pool', kind: 'securityPool', provenance: 'test' }]])
+		const contracts = new Map<string, ContractMetadata>([[pool.toLowerCase(), { address: pool, label: 'Pool', kind: 'questionLedger', provenance: 'test' }]])
 		expect(addressActivityFrom([transaction], [log], contracts)).toEqual([
 			{ transactionHash: hash, address: sender, poolAddress: pool, role: 'sender' },
 			{ transactionHash: hash, address: vault, poolAddress: pool, role: 'referenced' },
@@ -1334,8 +1334,8 @@ describe('network indexer lifecycle', () => {
 			discoveryBlock: 25n,
 			discoveryTxHash: `0x${'12'.repeat(32)}`,
 			label: 'Retained pool',
-			kind: 'securityPool',
-			provenance: 'Factory.DeploySecurityPool',
+			kind: 'questionLedger',
+			provenance: 'Factory.DeployQuestionLedger',
 		} satisfies ContractMetadata
 		const plan = await planDeploymentAwareLogScan(
 			[contract],
@@ -1722,8 +1722,8 @@ describe('network indexer lifecycle', () => {
 				{
 					address,
 					label: 'Discovered pool',
-					kind: 'securityPool',
-					provenance: 'Factory.DeploySecurityPool',
+					kind: 'questionLedger',
+					provenance: 'Factory.DeployQuestionLedger',
 					deploymentBlock: 75n,
 					deploymentBlockExact: false,
 					deploymentCheckedBlock: 100n,
@@ -1732,7 +1732,7 @@ describe('network indexer lifecycle', () => {
 		])
 		const promotionSearches: bigint[] = []
 		expect(
-			await manifestChangeRequiresFullReplay([[address, 'Promoted pool', 'securityPool']], promotedDiscovery, new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 75n, lastRetrievedBlock: 100n }]]), 100n, 0n, 75n, async (_candidate, start) => {
+			await manifestChangeRequiresFullReplay([[address, 'Promoted pool', 'questionLedger']], promotedDiscovery, new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 75n, lastRetrievedBlock: 100n }]]), 100n, 0n, 75n, async (_candidate, start) => {
 				promotionSearches.push(start)
 				return { block: 50n, exact: true }
 			}),

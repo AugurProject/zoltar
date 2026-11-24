@@ -9,10 +9,10 @@ import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import {
 	ReputationToken_ReputationToken,
-	statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker,
+	statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker,
 	test_statoblast_FalseReturningERC20_FalseReturningERC20,
 	test_statoblast_SafeERC20OpsHarness_SafeERC20OpsHarness,
-	test_statoblast_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar,
+	test_statoblast_QuestionLedgerConstructorFailureZoltar_QuestionLedgerConstructorFailureZoltar,
 } from '../types/contractArtifact'
 
 describe('Safe ERC20 Operations', () => {
@@ -109,19 +109,19 @@ describe('Safe ERC20 Operations', () => {
 		)
 	})
 
-	test('security pool deployment worker reports constructor failures without revert data', async () => {
+	test('question ledger deployment worker reports constructor failures without revert data', async () => {
 		const fakeZoltar = await deployContract(
 			client,
 			encodeDeployData({
-				abi: test_statoblast_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar.abi,
-				bytecode: `0x${test_statoblast_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar.evm.bytecode.object}`,
+				abi: test_statoblast_QuestionLedgerConstructorFailureZoltar_QuestionLedgerConstructorFailureZoltar.abi,
+				bytecode: `0x${test_statoblast_QuestionLedgerConstructorFailureZoltar_QuestionLedgerConstructorFailureZoltar.evm.bytecode.object}`,
 			}),
 		)
 		const deploymentWorker = await deployContract(
 			client,
 			encodeDeployData({
-				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
-				bytecode: `0x${statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.evm.bytecode.object}`,
+				abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker.abi,
+				bytecode: `0x${statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker.evm.bytecode.object}`,
 				args: [zeroAddress, zeroAddress, zeroAddress],
 			}),
 		)
@@ -129,13 +129,13 @@ describe('Safe ERC20 Operations', () => {
 		await assert.rejects(
 			writeContractAndWait(client, () =>
 				client.writeContract({
-					abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
+					abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker.abi,
 					address: deploymentWorker,
 					functionName: 'deploy',
 					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n],
 				}),
 			),
-			/Security pool deployment failed/,
+			/Question ledger deployment failed/,
 		)
 	})
 })

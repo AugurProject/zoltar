@@ -119,16 +119,16 @@ export const storeAndRewindOrphan = async ({ database, network }: LifecycleConte
 	const discovery: ContractMetadata = {
 		address: discoveredAddress,
 		label: 'Discovered pool',
-		kind: 'securityPool',
-		provenance: 'Factory.DeploySecurityPool',
+		kind: 'questionLedger',
+		provenance: 'Factory.DeployQuestionLedger',
 		discoveryBlock: 2n,
 		discoveryTxHash: transactionHash,
 	}
 	const promotedDiscovery: ContractMetadata = {
 		address: promotedAddress,
 		label: 'Dynamically discovered helper',
-		kind: 'securityPool',
-		provenance: 'Factory.DeploySecurityPool',
+		kind: 'questionLedger',
+		provenance: 'Factory.DeployQuestionLedger',
 		discoveryBlock: 2n,
 		discoveryTxHash: transactionHash,
 	}
@@ -169,7 +169,7 @@ export const storeAndRewindOrphan = async ({ database, network }: LifecycleConte
 				...network,
 				contracts: [
 					[address, 'Corrected manifest contract', 'openOracle'],
-					[promotedAddress, 'Promoted manifest helper', 'securityPool'],
+					[promotedAddress, 'Promoted manifest helper', 'questionLedger'],
 				],
 			},
 			{ lease: writeLease },
@@ -180,7 +180,7 @@ export const storeAndRewindOrphan = async ({ database, network }: LifecycleConte
 	expect(seededContracts.get(promotedAddress.toLowerCase())).toMatchObject({
 		address: promotedAddress,
 		label: 'Promoted manifest helper',
-		kind: 'securityPool',
+		kind: 'questionLedger',
 		provenance: 'manifest',
 		discoveryBlock: 2n,
 		discoveryTxHash: transactionHash,
@@ -394,15 +394,15 @@ export const reconcileManifestAfterReorg = async ({ database, network }: Lifecyc
 		],
 		writeLease,
 	)
-	await database.seedNetwork({ ...network, contracts: [[discoveredAddress, 'Temporarily promoted pool', 'securityPool']] }, { lease: writeLease })
+	await database.seedNetwork({ ...network, contracts: [[discoveredAddress, 'Temporarily promoted pool', 'questionLedger']] }, { lease: writeLease })
 	await database.seedNetwork({ ...network, contracts: [] }, { lease: writeLease })
 	const reconciledContracts = await database.contracts(chainId)
 	expect(reconciledContracts.has(address.toLowerCase())).toBe(false)
 	expect(reconciledContracts.has(promotedAddress.toLowerCase())).toBe(false)
 	expect(reconciledContracts.get(discoveredAddress.toLowerCase())).toMatchObject({
 		label: 'Discovered pool',
-		kind: 'securityPool',
-		provenance: 'Factory.DeploySecurityPool',
+		kind: 'questionLedger',
+		provenance: 'Factory.DeployQuestionLedger',
 		discoveryBlock: 2n,
 		discoveryTxHash: transactionHash,
 	})

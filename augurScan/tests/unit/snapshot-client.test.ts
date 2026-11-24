@@ -11,7 +11,7 @@ const fixture = () => {
 	const client = {
 		readContract: async ({ functionName, blockNumber }: { functionName: string; blockNumber?: bigint | undefined }) => {
 			calls.push(`${functionName}:${blockNumber}`)
-			if (['securityPoolFactory', 'getSecurityPoolPortfolio', 'collateralToken'].includes(functionName)) {
+			if (['securityPoolFactory', 'securityPoolOf', 'collateralToken'].includes(functionName)) {
 				if (failIdentity) throw new Error('Identity unavailable')
 				return pool
 			}
@@ -35,7 +35,7 @@ test('caches immutable collateral identity across blocks while sampling live amo
 	const cache = new Map<string, typeof pool>()
 	await sampleEntityState(client, target, 10n, undefined, cache)
 	const second = await sampleEntityState(client, target, 11n, undefined, cache)
-	for (const name of ['securityPoolFactory', 'getSecurityPoolPortfolio', 'collateralToken']) expect(calls.filter(call => call.startsWith(`${name}:`))).toHaveLength(1)
+	for (const name of ['securityPoolFactory', 'securityPoolOf', 'collateralToken']) expect(calls.filter(call => call.startsWith(`${name}:`))).toHaveLength(1)
 	for (const name of ['symbol', 'decimals', 'settlementCollateralAttoEth']) expect(calls).toContain(`${name}:11`)
 	expect(second.readResult).toMatchObject({ settlementCollateralAttoEth: String(11n), collateral: { symbol: 'USDC', decimals: 6 } })
 	// Independent networks and invalidated history must discover identity again.

@@ -40,14 +40,14 @@ export function snapshotFixture(): EcosystemSnapshot {
 		anchor: { baseFeePerGas: '1', blockHash: hash(100), blockNumber: '100', timestamp: '2000000000' },
 		auctions: [],
 		chainId: 31337,
-		deployments: { multicall3: address(90), openOracle, questionData, securityPoolFactory: factory, securityPoolForker: forker, tradingFactory, tradingRouter: router, weth, zoltar },
+		deployments: { multicall3: address(90), openOracle, questionData, securityPoolFactory: factory, questionForker: forker, tradingFactory, tradingRouter: router, weth, zoltar },
 		escalationDeposits: [],
 		pairs: [{ address: pair, effectiveNoReserve: '1000000000000000000', effectiveYesReserve: '1000000000000000000', feeBps: 30, noReserve: '1000000000000000000', pool, shareToken, status: 0, totalSupply: '1000000000000000000', universeId: '0', walletLiquidity: '1000000000000000', yesReserve: '1000000000000000000' }],
-		portfolioCapital: [],
+		securityPoolCapital: [],
 		pools: [
 			{
 				address: pool,
-				portfolio: address(501),
+				securityPool: address(501),
 				awaitingForkContinuation: false,
 				coordinator,
 				childPoolPreparations: {},
@@ -81,7 +81,7 @@ export function snapshotFixture(): EcosystemSnapshot {
 				lastRepPerEthPrice: '1000000000000000000',
 				lastOracleSettlementTimestamp: '1999999900',
 				oraclePriceValidUntilTimestamp: '2000000200',
-				lastSettlementPortfolioTime: '1999999999',
+				lastSettlementSecurityPoolTime: '1999999999',
 				minimumToken1ReportAttoEth: 10_000_000_000_000_005n.toString(),
 				oraclePriceValid: true,
 				oracleRequestFunding: {
@@ -148,14 +148,14 @@ export function snapshotFixture(): EcosystemSnapshot {
 	}
 }
 
-/** The standard snapshot after the wallet holds nothing but ETH: no tokens, shares, LP, Open Oracle credit, portfolio capital, or warnings. */
+/** The standard snapshot after the wallet holds nothing but ETH: no tokens, shares, LP, Open Oracle credit, security pool capital, or warnings. */
 export function drainedWalletSnapshotFixture() {
 	const snapshot = snapshotFixture()
 	snapshot.wallet.tokens = []
 	snapshot.wallet.shares = []
 	snapshot.wallet.lpTokens = []
 	snapshot.wallet.openOracleEthCredit = '0'
-	snapshot.portfolioCapital = []
+	snapshot.securityPoolCapital = []
 	for (const pair of snapshot.pairs) pair.walletLiquidity = '0'
 	snapshot.warnings = []
 	return snapshot
@@ -174,7 +174,7 @@ export function completeGenesisInitializationState(overrides: Partial<GenesisIni
 		hasUniswapPool: true,
 		hasUniswapSeeder: true,
 		hasWeth: true,
-		hasPortfolioCapital: true,
+		hasSecurityPoolCapital: true,
 		tradingFactoryDeployed: true,
 		tradingRouterDeployed: true,
 		...overrides,

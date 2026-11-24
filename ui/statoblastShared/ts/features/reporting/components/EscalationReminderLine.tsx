@@ -17,7 +17,7 @@ export function EscalationReminderLine({ details }: { details: ActiveReportingDe
 	}, [details.escalationEndTime, previousDeadline, open])
 	const deadline = formatReportingDeadline(details.escalationEndTime, details.currentTime)
 	const download = () => {
-		const calendar = buildEscalationReminder({ securityPoolAddress: details.securityPoolAddress, escalationEndTime: details.escalationEndTime, generatedAt: BigInt(Math.floor(Date.now() / 1000)), questionTitle: details.marketDetails.title, status: getViewerStatusSentence(details), pageUrl: location.href })
+		const calendar = buildEscalationReminder({ questionLedgerAddress: details.questionLedgerAddress, escalationEndTime: details.escalationEndTime, generatedAt: BigInt(Math.floor(Date.now() / 1000)), questionTitle: details.marketDetails.title, status: getViewerStatusSentence(details), pageUrl: location.href })
 		const url = URL.createObjectURL(new Blob([calendar], { type: 'text/calendar;charset=utf-8' }))
 		const link = document.createElement('a')
 		link.href = url

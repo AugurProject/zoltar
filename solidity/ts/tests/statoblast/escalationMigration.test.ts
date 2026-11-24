@@ -2,10 +2,10 @@ import { describe, expect, test } from 'bun:test'
 import { type Address, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
@@ -18,13 +18,13 @@ import { getInfraContractAddresses } from '../../testSupport/simulator/utils/con
 import { addRepToMigrationBalance, splitMigrationRep, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { computeForkContinuationParentDepositIndex, createCarryProof, hashParent, readCarryLeafHash, SparseNullifierTree } from '../carryProofHelpers'
-import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 
-describe('Statoblast: portfolio reporting carry and atomic claims', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
-	const sourcePool = () => fixture.poolFor(fixture.base.questionId).securityPool
-	const portfolio = () => ({ abi: portfolioArtifact.abi, address: fixture.portfolio })
-	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker })
+describe('Statoblast: security pool reporting carry and atomic claims', () => {
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
+	const sourcePool = () => fixture.poolFor(fixture.base.questionId).questionLedger
+	const securityPool = () => ({ abi: securityPoolArtifact.abi, address: fixture.securityPool })
+	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker })
 	const gameFor = (pool: Address) => fixture.owner().readContract({ abi: poolArtifact.abi, address: pool, functionName: 'escalationGame' })
 	const deposit = async (sender: WriteClient, pool: Address, outcome: number, amount: bigint, universe = fixture.base.genesisUniverse) => {
 		await approveToken(sender, getRepTokenAddress(universe), pool)
@@ -49,20 +49,20 @@ describe('Statoblast: portfolio reporting carry and atomic claims', () => {
 			await addRepToMigrationBalance(owner, universe, 1_000_000n * unit)
 			await splitMigrationRep(owner, universe, 1_000_000n * unit, [BigInt(outcome)])
 		}
-		const controller = await owner.readContract({ ...portfolio(), functionName: 'forkController' })
+		const controller = await owner.readContract({ ...securityPool(), functionName: 'forkController' })
 		const branch = { abi: forkArtifact.abi, address: controller }
 		const child = getChildUniverseId(universe, outcome)
 		await fixture.base.mockWindow.setTime((await getUniverseData(owner, universe)).forkTime + 63n * DAY)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'startBranch', args: [universe, BigInt(outcome)] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'finalizeBranch', args: [child] }))
-		for (let step = 0; step < 3; step++) await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'materializePortfolioQuestion', args: [source, child] }))
-		const pool = await owner.readContract({ ...portfolio(), functionName: 'getPool', args: [fixture.base.questionId, child] })
+		for (let step = 0; step < 3; step++) await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'materializeSecurityPoolQuestion', args: [source, child] }))
+		const pool = await owner.readContract({ ...securityPool(), functionName: 'getQuestionLedger', args: [fixture.base.questionId, child] })
 		return { pool, game: await gameFor(pool), universe: child }
 	}
 	const state = async (pool: Address, universe = fixture.base.genesisUniverse) => {
 		const owner = fixture.owner()
 		const game = await gameFor(pool)
-		const ledger = await owner.readContract({ ...portfolio(), functionName: 'reporterLedger', args: [universe] })
+		const ledger = await owner.readContract({ ...securityPool(), functionName: 'reporterLedger', args: [universe] })
 		return {
 			game,
 			wallets: await Promise.all([owner, fixture.other()].map(sender => getERC20Balance(owner, getRepTokenAddress(universe), sender.account.address))),

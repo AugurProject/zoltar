@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { SQL } from 'bun'
 import { refreshHistoryAggregates } from '../../src/database/history-aggregates.ts'
 import { operationsOverviewSupplement, reportCatalogData } from '../../src/repositories/operations.ts'
-import { richListRows } from '../../src/repositories/portfolio.ts'
+import { richListRows } from '../../src/repositories/security-pool.ts'
 
 const url = process.env['POSTGRES_TEST_URL']
 test.skipIf(url === undefined)('#1474: maintained totals and address ranking preserve snapshots and reorgs', async () => {

@@ -2,10 +2,10 @@ import type { UiScreenshotSpec } from '../ui-screenshot-specs.mts'
 
 export const STATOBLAST_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 	{
-		id: 'portfolio-capital',
+		id: 'security-pool-capital',
 		app: 'statoblast',
 		scenario: 'securitypoolx2',
-		route: '#/portfolios',
+		route: '#/security-pools',
 		viewport: { width: 800, height: 900 },
 		steps: [{ waitForText: 'PRICE CURRENT' }],
 		expectText: ['Your total principal', 'Your commitment', 'Saved health target'],
@@ -13,10 +13,10 @@ export const STATOBLAST_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		usedBy: ['tutorials/statoblast-first-pool.html'],
 	},
 	{
-		id: 'portfolio-purchase',
+		id: 'security-pool-purchase',
 		app: 'statoblast',
 		scenario: 'securitypoolx2',
-		route: '#/portfolios',
+		route: '#/security-pools',
 		viewport: { width: 800, height: 1000 },
 		steps: [{ waitForText: 'PRICE CURRENT' }],
 		expectText: ['Find by question ID', 'Collateral (WETH)', 'Maximum purchase charge (WETH)', 'Minimum complete sets'],

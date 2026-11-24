@@ -6,7 +6,7 @@ import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectiv
 import { quorumPendingNonce, settledQuorumValue, sharedQuorumReadTargets } from '@zoltar/bot-shared/monitoring/read-quorum'
 import type { OperatorSettings } from '#config/settings'
 import { recordActivity, saveDurableState, type PendingTransactionIntent, type RuntimeState } from '#state/operator-state'
-import { finalizedReceiptWithQuorum, resolvePortfolioReceipt } from '#execution/recovery'
+import { finalizedReceiptWithQuorum, resolveSecurityPoolReceipt } from '#execution/recovery'
 import { assertExecutionActive, assertGasCostLimitForBaseFee, assertOperatorNotStopping, requireFinalizedTransactionReceipt, TransactionAwaitingCanonicalFinality } from '#execution/execution-safety'
 
 type WriteClient = WalletClient<Transport, Chain, Account>
@@ -14,8 +14,8 @@ type RpcPool = ReturnType<typeof createRpcEndpointPool>
 
 type Call = {
 	reportOperations?: PendingTransactionIntent['reportOperations']
-	portfolioFunding?: PendingTransactionIntent['portfolioFunding']
-	portfolioInstruction?: PendingTransactionIntent['portfolioInstruction']
+	securityPoolFunding?: PendingTransactionIntent['securityPoolFunding']
+	securityPoolInstruction?: PendingTransactionIntent['securityPoolInstruction']
 	data: Hex
 	capFeeToGasBudget?: boolean | undefined
 	gas: bigint | 'estimate'
@@ -58,7 +58,7 @@ export async function submitCall(wallet: WriteClient, settings: OperatorSettings
 			pinned.readers.map(async ({ client, endpoint }) => ({ endpoint, value: (await client.getBlock({ blockNumber: pinned.blockNumber })).hash })),
 			settings.connectivity.rpcQuorum,
 		)
-		if (canonicalHash !== block.hash) throw new Error('Simulation block changed before portfolio revalidation')
+		if (canonicalHash !== block.hash) throw new Error('Simulation block changed before security pool revalidation')
 	}
 	const revalidateRevert =
 		call.revalidateSimulationRevert === undefined
@@ -135,8 +135,8 @@ export async function submitCall(wallet: WriteClient, settings: OperatorSettings
 	await call.preSubmit?.()
 	state.pendingTransactions.push({
 		reportOperations: call.reportOperations,
-		portfolioFunding: call.portfolioFunding,
-		portfolioInstruction: call.portfolioInstruction,
+		securityPoolFunding: call.securityPoolFunding,
+		securityPoolInstruction: call.securityPoolInstruction,
 		hash: signed.hash,
 		kind,
 		label: call.label,
@@ -210,7 +210,7 @@ export async function submitCall(wallet: WriteClient, settings: OperatorSettings
 	const receipt = requireFinalizedTransactionReceipt(call.label, hash, receiptResult)
 	const intent = state.pendingTransactions.find(pending => pending.hash.toLowerCase() === hash.toLowerCase())
 	if (intent === undefined) throw new Error('Submitted transaction is missing its pending intent')
-	await resolvePortfolioReceipt(settings, wallet, state, pool, intent, receipt)
+	await resolveSecurityPoolReceipt(settings, wallet, state, pool, intent, receipt)
 	return receipt.transactionHash
 }
 

@@ -254,7 +254,7 @@ export async function probeChaosDoctor(settings: OperatorSettings, wallet: `0x${
 		{ address: settings.deployment.openOracle, name: 'openOracle' },
 		{ address: settings.deployment.questionData, name: 'questionData' },
 		{ address: settings.deployment.securityPoolFactory, name: 'securityPoolFactory' },
-		{ address: settings.deployment.securityPoolForker, name: 'securityPoolForker' },
+		{ address: settings.deployment.questionForker, name: 'questionForker' },
 		{ address: settings.deployment.weth, name: 'weth' },
 		{ address: settings.deployment.zoltar, name: 'zoltar' },
 	]
@@ -431,7 +431,7 @@ export function assertDoctorDurableStateScope(settings: OperatorSettings, state:
 		const index = state.protocolIndex
 		if (
 			index.openOracle.toLowerCase() !== settings.deployment.openOracle.toLowerCase() ||
-			index.securityPoolForker.toLowerCase() !== settings.deployment.securityPoolForker.toLowerCase() ||
+			index.questionForker.toLowerCase() !== settings.deployment.questionForker.toLowerCase() ||
 			index.zoltar.toLowerCase() !== settings.deployment.zoltar.toLowerCase() ||
 			index.startBlock !== settings.runtime.protocolStartBlock.toString()
 		) {

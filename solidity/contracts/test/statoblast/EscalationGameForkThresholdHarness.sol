@@ -6,7 +6,7 @@ import { ReputationToken } from '../../ReputationToken.sol';
 import { EscalationGameCalculations } from '../../statoblast/EscalationGameCalculations.sol';
 import { EscalationGameProofVerifier } from '../../statoblast/EscalationGameProofVerifier.sol';
 import { EscalationGameState } from '../../statoblast/EscalationGameState.sol';
-import { ISecurityPool } from '../../statoblast/interfaces/ISecurityPool.sol';
+import { IQuestionLedger } from '../../statoblast/interfaces/IQuestionLedger.sol';
 
 contract EscalationGameForkBoundaryZoltar {
 	uint256 private forkThresholdAttoRep;
@@ -29,7 +29,7 @@ contract EscalationGameForkBoundaryZoltar {
 	}
 }
 
-contract EscalationGameForkBoundarySecurityPool {
+contract EscalationGameForkBoundaryQuestionLedger {
 	Zoltar public immutable zoltar;
 	uint248 public constant universeId = 0;
 
@@ -43,7 +43,7 @@ contract EscalationGameForkThresholdHarness is EscalationGameCalculations {
 		return address(0x0);
 	}
 
-	constructor(ISecurityPool _securityPool, EscalationGameProofVerifier _proofVerifier) EscalationGameState(_securityPool, ReputationToken(address(0)), _proofVerifier) {}
+	constructor(IQuestionLedger _questionLedger, EscalationGameProofVerifier _proofVerifier) EscalationGameState(_questionLedger, ReputationToken(address(0)), _proofVerifier) {}
 
 	function configureBoundary(uint256 gameEndDate, uint256 _nonDecisionThresholdAttoRep, uint256 winningBalanceAttoRep) external {
 		activationTime = gameEndDate;
@@ -53,7 +53,7 @@ contract EscalationGameForkThresholdHarness is EscalationGameCalculations {
 	}
 
 	function recordSettlementForkThreshold() external {
-		settlementForkThresholdAttoRep = securityPool.zoltar().getForkThresholdAttoRep(securityPool.universeId());
+		settlementForkThresholdAttoRep = questionLedger.zoltar().getForkThresholdAttoRep(questionLedger.universeId());
 	}
 
 	function computeWinningWithdrawal(uint256 depositAmountAttoRep, uint256 cumulativeAmountAttoRep) external view returns (uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep) {

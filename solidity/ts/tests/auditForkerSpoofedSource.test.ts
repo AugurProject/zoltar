@@ -1,24 +1,24 @@
 import { describe, expect, test } from 'bun:test'
 import { encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
-import { statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact, test_statoblast_ForkerSourceSpoof_ForkerSourceSpoof as spoofArtifact } from '../types/contractArtifact'
+import { statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_QuestionForker_QuestionForker as forkerArtifact, test_statoblast_ForkerSourceSpoof_ForkerSourceSpoof as spoofArtifact } from '../types/contractArtifact'
 import { deployContract } from '../testSupport/deployContract'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { DAY } from '../testSupport/simulator/utils/constants'
 import { getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
-import { redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
+import { redeemShares } from '../testSupport/simulator/utils/contracts/questionLedger'
 import { forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress, splitMigrationRep, addRepToMigrationBalance } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { approveToken, getChildUniverseId } from '../testSupport/simulator/utils/utilities'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 // Audit regression: the forker is the privileged caller of every pool. It must not
 // resolve the pool it acts on through a factory that the caller's source pool names.
 describe('audit: the forker rejects a child pool resolved through a spoofed source', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
-	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).securityPool })
-	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
+	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).questionLedger })
+	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker })
 	const systemState = () => fixture.owner().readContract({ ...pool(), functionName: 'systemState' })
 
 	const forkOn = async (universe: bigint, title: string) => {
@@ -52,13 +52,13 @@ describe('audit: the forker rejects a child pool resolved through a spoofed sour
 		await forkOn(child, 'Audit unrelated child fork')
 
 		// A finalized question cannot enter fork mode, so its winners can always redeem.
-		await expect(owner.writeContract({ ...forker(), functionName: 'initiateSecurityPoolFork', args: [pool().address] })).rejects.toThrow('Question finalized before fork')
+		await expect(owner.writeContract({ ...forker(), functionName: 'initiateQuestionLedgerFork', args: [pool().address] })).rejects.toThrow('Question finalized before fork')
 		expect(await systemState()).toBe(0n)
 
 		const spoof = await deployContract(owner, encodeDeployData({ abi: spoofArtifact.abi, bytecode: `0x${spoofArtifact.evm.bytecode.object}`, args: [child, pool().address] }))
 		// Genesis is an ancestor of the spoof's claimed universe, never a descendant, so the forker refuses before deploying.
-		await expect(owner.writeContract({ ...forker(), functionName: 'preparePortfolioQuestion', args: [spoof, genesis] })).rejects.toThrow('Target universe does not descend from source')
-		await expect(owner.writeContract({ ...forker(), functionName: 'materializePortfolioQuestion', args: [spoof, genesis] })).rejects.toThrow('Target universe does not descend from source')
+		await expect(owner.writeContract({ ...forker(), functionName: 'prepareSecurityPoolQuestion', args: [spoof, genesis] })).rejects.toThrow('Target universe does not descend from source')
+		await expect(owner.writeContract({ ...forker(), functionName: 'materializeSecurityPoolQuestion', args: [spoof, genesis] })).rejects.toThrow('Target universe does not descend from source')
 		expect(await systemState()).toBe(0n)
 		await redeemShares(trader, pool().address)
 	})

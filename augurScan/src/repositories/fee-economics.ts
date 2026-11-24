@@ -1,9 +1,9 @@
 import type { SQL } from 'bun'
 import { latestLedgerAttempt, latestLedgers } from './capital.ts'
 
-// Fees are accounted per portfolio universe. Configuration and balances come from the tagged `capital-ledger`
-// read (`fees`); totals are sums of the events the settlement book, the portfolio, its services and the capital
-// ledger emit. The book, portfolio, services and ledger lookups seek the timeline's entity index with an exact
+// Fees are accounted per security pool universe. Configuration and balances come from the tagged `capital-ledger`
+// read (`fees`); totals are sums of the events the settlement book, the security pool, its services and the capital
+// ledger emit. The book, security pool, services and ledger lookups seek the timeline's entity index with an exact
 // identity; earnings claims, which are keyed by ledger and owner, are grouped by ledger in one pass.
 
 /**
@@ -40,7 +40,7 @@ export const feeEconomicsRows = async (sql: SQL, chainId: number, snapshotBlock:
 					AND entry.summary_data->>'ethAmount' ~ '^[0-9]+$' AND entry.summary_data->>'repAmount' ~ '^[0-9]+$'
 				GROUP BY 1
 			)
-		SELECT ledger.ledger_address, ledger.read_result->>'portfolio' AS portfolio, ledger.read_result->>'universeId' AS universe_id,
+		SELECT ledger.ledger_address, ledger.read_result->>'securityPool' AS "securityPool", ledger.read_result->>'universeId' AS universe_id,
 			-- A failed ledger read after the latest successful one is a failed fee read: its balances are not reported as current.
 			CASE WHEN attempt.read_status = 'success' THEN ledger.read_result->'fees' END AS fees,
 			CASE WHEN attempt.read_status = 'success' THEN ledger.read_result->>'feeReadError' ELSE COALESCE(attempt.read_failure_reason, 'Capital ledger read failed') END AS fee_read_error,
@@ -68,15 +68,15 @@ export const feeEconomicsRows = async (sql: SQL, chainId: number, snapshotBlock:
 			SELECT COALESCE(sum((entry.summary_data->>'purchaseFeeAttoEth')::numeric), 0)::text AS fees,
 				COALESCE(sum((entry.summary_data->>'cashAttoEth')::numeric), 0)::text AS cash, count(*)::integer AS events
 			FROM protocol_timeline_entries entry
-			WHERE entry.chain_id = ${chainId} AND entry.canonical AND entry.block_number <= ${snapshotBlock} AND entry.entity_type = 'portfolio'
-				AND entry.entity_identity = ledger.read_result->>'portfolio' AND entry.semantic_event_kind = 'CompleteSetsFunded'
+			WHERE entry.chain_id = ${chainId} AND entry.canonical AND entry.block_number <= ${snapshotBlock} AND entry.entity_type = 'security-pool'
+				AND entry.entity_identity = ledger.read_result->>'securityPool' AND entry.semantic_event_kind = 'CompleteSetsFunded'
 				AND entry.summary_data->>'universeId' = ledger.read_result->>'universeId'
 				AND entry.summary_data->>'purchaseFeeAttoEth' ~ '^[0-9]+$' AND entry.summary_data->>'cashAttoEth' ~ '^[0-9]+$'
 		) purchases
 		CROSS JOIN LATERAL (
 			SELECT COALESCE(sum((entry.summary_data->>'amountAttoEth')::numeric), 0)::text AS total
 			FROM protocol_timeline_entries entry
-			WHERE entry.chain_id = ${chainId} AND entry.canonical AND entry.block_number <= ${snapshotBlock} AND entry.entity_type = 'portfolio-services'
+			WHERE entry.chain_id = ${chainId} AND entry.canonical AND entry.block_number <= ${snapshotBlock} AND entry.entity_type = 'security-pool-services'
 				AND entry.entity_identity = identity.services || ':' || (ledger.read_result->>'universeId')
 				AND entry.semantic_event_kind = 'PremiumFunded' AND entry.summary_data->>'amountAttoEth' ~ '^[0-9]+$'
 		) premiums
@@ -85,7 +85,7 @@ export const feeEconomicsRows = async (sql: SQL, chainId: number, snapshotBlock:
 			SELECT COALESCE(sum((entry.summary_data->>'ethAmount')::numeric), 0)::text AS eth,
 				COALESCE(sum((entry.summary_data->>'repAmount')::numeric), 0)::text AS rep, count(*)::integer AS events
 			FROM protocol_timeline_entries entry
-			WHERE entry.chain_id = ${chainId} AND entry.canonical AND entry.block_number <= ${snapshotBlock} AND entry.entity_type = 'portfolio'
+			WHERE entry.chain_id = ${chainId} AND entry.canonical AND entry.block_number <= ${snapshotBlock} AND entry.entity_type = 'security-pool'
 				AND entry.entity_identity = ledger.ledger_address AND entry.semantic_event_kind = 'UnassignedFeesBurned'
 				AND entry.summary_data->>'ethAmount' ~ '^[0-9]+$' AND entry.summary_data->>'repAmount' ~ '^[0-9]+$'
 		) burned

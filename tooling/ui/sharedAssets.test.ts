@@ -492,7 +492,7 @@ test('project artifact generation writes Trading output only when explicitly req
 			JSON.stringify({
 				contracts: {
 					'contracts/Zoltar.sol': { Zoltar: { abi: [] } },
-					'contracts/statoblast/SecurityPool.sol': { SecurityPool: { abi: [] } },
+					'contracts/statoblast/QuestionLedger.sol': { QuestionLedger: { abi: [] } },
 					'contracts/statoblast/openOracle/OpenOracle.sol': { OpenOracle: { abi: [] } },
 					'contracts/test/Mock.sol': { Mock: { abi: [] } },
 					'contracts/trading/Router.sol': {
@@ -509,10 +509,10 @@ test('project artifact generation writes Trading output only when explicitly req
 		await copyProjectArtifacts({ project: 'zoltar' }, artifactPaths)
 		expect(fs.existsSync(artifactPaths.statoblastContractArtifactOutputPath)).toBe(false)
 		const zoltarOutput = fs.readFileSync(artifactPaths.contractArtifactOutputPath, 'utf8')
-		for (const excluded of ['SecurityPool', 'OpenOracle', 'Mock', 'Router']) expect(zoltarOutput).not.toContain(excluded)
+		for (const excluded of ['QuestionLedger', 'OpenOracle', 'Mock', 'Router']) expect(zoltarOutput).not.toContain(excluded)
 		await copyProjectArtifacts({}, artifactPaths)
 		const statoblastOutput = fs.readFileSync(artifactPaths.statoblastContractArtifactOutputPath, 'utf8')
-		expect(statoblastOutput).toContain('SecurityPool')
+		expect(statoblastOutput).toContain('QuestionLedger')
 		expect(statoblastOutput).toContain('OpenOracle')
 		for (const excluded of ['Zoltar_Zoltar', 'Mock', 'Router']) expect(statoblastOutput).not.toContain(excluded)
 		expect(fs.readFileSync(artifactPaths.contractArtifactOutputPath, 'utf8')).toContain('Zoltar_Zoltar')
@@ -531,13 +531,13 @@ test('project artifact generation writes Trading output only when explicitly req
 		fs.rmSync(artifactPaths.statoblastContractArtifactOutputPath)
 		await generateCanonicalProjectArtifacts(artifactPaths)
 		expect(fs.readFileSync(artifactPaths.tradingContractArtifactOutputPath, 'utf8')).toContain('contracts/trading/Router.sol')
-		expect(fs.readFileSync(artifactPaths.statoblastContractArtifactOutputPath, 'utf8')).toContain('SecurityPool')
+		expect(fs.readFileSync(artifactPaths.statoblastContractArtifactOutputPath, 'utf8')).toContain('QuestionLedger')
 	} finally {
 		fs.rmSync(temporaryRoot, { force: true, recursive: true })
 	}
 
 	expect(isCoreProjectContractPath('contracts/Zoltar.sol')).toBe(true)
-	expect(isCoreProjectContractPath('contracts/statoblast/SecurityPool.sol')).toBe(true)
+	expect(isCoreProjectContractPath('contracts/statoblast/QuestionLedger.sol')).toBe(true)
 	expect(isCoreProjectContractPath('contracts/trading/TwoWayConstantProductRouter.sol')).toBe(false)
 })
 

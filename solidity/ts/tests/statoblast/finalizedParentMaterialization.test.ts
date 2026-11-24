@@ -2,10 +2,10 @@ import { describe, expect, test } from 'bun:test'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
 	Zoltar_Zoltar as zoltarArtifact,
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as coordinatorArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_tokens_ShareToken_ShareToken as shareArtifact,
 } from '../../types/contractArtifact'
@@ -15,13 +15,13 @@ import { approveToken, getChildUniverseId, getERC20Balance } from '../../testSup
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { addRepToMigrationBalance, splitMigrationRep, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 
 describe('Statoblast: reject materializing a question that finalized before an unrelated fork', () => {
-	const fixture = useSecurityPoolPortfolioFixture({})
-	const p = () => ({ abi: portfolioArtifact.abi, address: fixture.portfolio })
-	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker })
-	const sourcePool = () => fixture.poolFor(fixture.base.questionId).securityPool
+	const fixture = useSecurityPoolFixture({})
+	const p = () => ({ abi: securityPoolArtifact.abi, address: fixture.securityPool })
+	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker })
+	const sourcePool = () => fixture.poolFor(fixture.base.questionId).questionLedger
 	const shares = () => ({ abi: shareArtifact.abi, address: fixture.poolFor(fixture.base.questionId).shareToken })
 	const coordinator = async () => ({ abi: coordinatorArtifact.abi, address: await fixture.owner().readContract({ ...p(), functionName: 'forkController' }) })
 
@@ -82,9 +82,9 @@ describe('Statoblast: reject materializing a question that finalized before an u
 		await writeContractAndWait(owner, () => owner.writeContract({ ...c, functionName: 'startBranch', args: [base.genesisUniverse, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...c, functionName: 'finalizeBranch', args: [child] }))
 
-		for (const functionName of ['preparePortfolioQuestion', 'materializePortfolioQuestion'] as const) {
+		for (const functionName of ['prepareSecurityPoolQuestion', 'materializeSecurityPoolQuestion'] as const) {
 			await expect(writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName, args: [sourcePool(), child] }))).rejects.toThrow('Question finalized in source universe')
-			await expect(owner.readContract({ ...p(), functionName: 'getPool', args: [base.questionId, child] })).rejects.toThrow('Question pool unavailable')
+			await expect(owner.readContract({ ...p(), functionName: 'getQuestionLedger', args: [base.questionId, child] })).rejects.toThrow('Question pool unavailable')
 		}
 
 		await expect(trader.simulateContract({ ...shares(), functionName: 'migrate', args: [base.genesisUniverse * 256n + 1n, [1n]] })).rejects.toThrow('ShareToken question finalized before fork')

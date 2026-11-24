@@ -498,10 +498,10 @@ describe('trading header', () => {
 			},
 			createTradingWalletClient: () => testDouble<WriteClient>({}),
 			discoverAddressedMarket: async () => {
-				throw Object.assign(new Error('Security pool does not exist.'), { name: 'SecurityPoolNotFoundError' })
+				throw Object.assign(new Error('Question ledger does not exist.'), { name: 'QuestionLedgerNotFoundError' })
 			},
 		})
-		await waitFor(() => expect(rendered.container.textContent).toContain('Security pool does not exist'))
+		await waitFor(() => expect(rendered.container.textContent).toContain('Question does not exist'))
 		await clickConnectWallet(rendered.container)
 		await waitFor(() => expect(rendered.container.querySelector('.account-menu-trigger')).not.toBeNull())
 		await waitFor(() => expect(rendered.container.textContent).not.toContain('Loading wallet ETH balance'))
@@ -517,21 +517,21 @@ describe('trading header', () => {
 	})
 
 	test('does not treat a missing addressed pool as a retryable wallet failure', () => {
-		expect(walletSummaryAvailability(true, undefined, 'not-found', 'Security pool does not exist', false, 'Security pool discovery failed')).toBeUndefined()
+		expect(walletSummaryAvailability(true, undefined, 'not-found', 'Question does not exist', false, 'Question discovery failed')).toBeUndefined()
 		expect(walletSummaryDiscoveryRetryStart('not-found', false, undefined, 0n)).toBeUndefined()
 	})
 
 	test('ends wallet balance loading when selected-universe discovery fails', async () => {
-		expect(walletSummaryAvailability(true, undefined, 'loading', undefined, true, 'Security pool discovery failed')?.status).toBe('loading')
+		expect(walletSummaryAvailability(true, undefined, 'loading', undefined, true, 'Question discovery failed')?.status).toBe('loading')
 		// The universe route names its own discovery and a redacted detail is not prefixed twice.
 		expect(walletSummaryAvailability(true, undefined, 'error', 'RPC request failed', true, 'Universe discovery failed')).toEqual({ status: 'error', error: 'Universe discovery failed: RPC request failed.', errorLabel: 'Universe discovery failed' })
 		expect(walletSummaryAvailability(true, undefined, 'error', 'Universe discovery failed', true, 'Universe discovery failed')?.error).toBe('Universe discovery failed.')
-		const availability = walletSummaryAvailability(true, undefined, 'error', 'RPC request failed', true, 'Security pool discovery failed')
+		const availability = walletSummaryAvailability(true, undefined, 'error', 'RPC request failed', true, 'Question discovery failed')
 		if (availability === undefined) throw new Error('A discovery failure must make wallet balances unavailable')
 		const rendered = await renderIntoDocument(<TradingOverviewPanel walletSummary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: undefined, repAttoRep: undefined, status: availability.status, error: availability.error, errorLabel: availability.errorLabel, universeId: '1' }} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('[role="status"]')).toBeNull()
-		expect(rendered.container.querySelector('[role="alert"]')?.getAttribute('aria-label')).toContain('Security pool discovery failed: RPC request failed')
+		expect(rendered.container.querySelector('[role="alert"]')?.getAttribute('aria-label')).toContain('Question discovery failed: RPC request failed')
 	})
 
 	test('preserves all 18 decimals in the authoritative wallet ETH balance', async () => {

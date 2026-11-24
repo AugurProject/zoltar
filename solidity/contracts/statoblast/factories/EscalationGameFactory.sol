@@ -3,8 +3,8 @@ pragma solidity 0.8.35;
 
 import { EscalationGameRepCustody } from '../EscalationGameRepCustody.sol';
 import { SecurityPoolReporterLedger } from '../SecurityPoolReporterLedger.sol';
-import { ISecurityPoolPortfolioNative } from '../interfaces/ISecurityPoolPortfolioNative.sol';
-import { ISecurityPool } from '../interfaces/ISecurityPool.sol';
+import { ISecurityPoolNative } from '../interfaces/ISecurityPoolNative.sol';
+import { IQuestionLedger } from '../interfaces/IQuestionLedger.sol';
 import { EscalationGame } from '../EscalationGame.sol';
 import { EscalationGameProofVerifier } from '../EscalationGameProofVerifier.sol';
 import { BinaryOutcomes } from '../BinaryOutcomes.sol';
@@ -48,22 +48,22 @@ contract EscalationGameFactory {
 	}
 
 	function deployEscalationGame(uint256 startBondAttoRep, uint256 _nonDecisionThresholdAttoRep) external returns (EscalationGame) {
-		require(EscalationGameRepCustody.portfolio(msg.sender) != address(0), 'Reporter portfolio required');
+		require(EscalationGameRepCustody.securityPool(msg.sender) != address(0), 'Reporter security pool required');
 		require(_nonDecisionThresholdAttoRep > 1, 'Escalation threshold too low');
 		if (startBondAttoRep >= _nonDecisionThresholdAttoRep) startBondAttoRep = _nonDecisionThresholdAttoRep - 1;
-		EscalationGame gameImplementation = _deployOrReuseEscalationGame(ISecurityPool(payable(msg.sender)));
+		EscalationGame gameImplementation = _deployOrReuseEscalationGame(IQuestionLedger(payable(msg.sender)));
 		gameImplementation.start(startBondAttoRep, _nonDecisionThresholdAttoRep);
 		return gameImplementation;
 	}
 
 	function deployEscalationGameFromFork(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, int256 elapsedAtFork, BinaryOutcomes.BinaryOutcome fixedQuestionOutcome) external returns (EscalationGame) {
-		ISecurityPool child = ISecurityPool(payable(msg.sender));
+		IQuestionLedger child = IQuestionLedger(payable(msg.sender));
 		bool winnerHaircutPaidByFork;
 		uint256 forkCarryInitialBackingAttoRep;
-		address portfolio = EscalationGameRepCustody.portfolio(address(child));
-		require(portfolio != address(0), 'Reporter portfolio required');
+		address securityPool = EscalationGameRepCustody.securityPool(address(child));
+		require(securityPool != address(0), 'Reporter security pool required');
 		{
-			(SecurityPoolReporterLedger.Question memory state, ) = SecurityPoolReporterLedger(ISecurityPoolPortfolioNative(portfolio).reporterLedger(child.universeId())).question(child.universeId(), child.questionId());
+			(SecurityPoolReporterLedger.Question memory state, ) = SecurityPoolReporterLedger(ISecurityPoolNative(securityPool).reporterLedger(child.universeId())).question(child.universeId(), child.questionId());
 			winnerHaircutPaidByFork = state.winnerHaircutPaidByFork;
 			forkCarryInitialBackingAttoRep = state.balanceAttoRep;
 		}
@@ -72,20 +72,20 @@ contract EscalationGameFactory {
 		return gameImplementation;
 	}
 
-	/// @notice Deploys `securityPool`'s Escalation Game without starting it, so the first report does not pay
-	/// the deployment gas (#1453). Permissionless: the creation arguments bind the game to `securityPool`, only
+	/// @notice Deploys `questionLedger`'s Escalation Game without starting it, so the first report does not pay
+	/// the deployment gas (#1453). Permissionless: the creation arguments bind the game to `questionLedger`, only
 	/// this factory can start it, and its clock starts with the first report, not with this call.
-	function prepareEscalationGame(ISecurityPool securityPool) external returns (EscalationGame) {
-		return _deployOrReuseEscalationGame(securityPool);
+	function prepareEscalationGame(IQuestionLedger questionLedger) external returns (EscalationGame) {
+		return _deployOrReuseEscalationGame(questionLedger);
 	}
 
-	/// @notice The address at which `securityPool`'s Escalation Game is or will be deployed.
-	function escalationGameAddress(ISecurityPool securityPool) external view returns (EscalationGame) {
-		return EscalationGame(_create2Address(_escalationGameInitCode(securityPool)));
+	/// @notice The address at which `questionLedger`'s Escalation Game is or will be deployed.
+	function escalationGameAddress(IQuestionLedger questionLedger) external view returns (EscalationGame) {
+		return EscalationGame(_create2Address(_escalationGameInitCode(questionLedger)));
 	}
 
-	function _deployOrReuseEscalationGame(ISecurityPool securityPool) private returns (EscalationGame) {
-		bytes memory initCode = _escalationGameInitCode(securityPool);
+	function _deployOrReuseEscalationGame(IQuestionLedger questionLedger) private returns (EscalationGame) {
+		bytes memory initCode = _escalationGameInitCode(questionLedger);
 		address prepared = _create2Address(initCode);
 		// A reused game may be unstarted (prepared) or already started; start and startFromFork accept only this
 		// factory, and the game refuses any second start, so reuse can never restart or re-parameterize a game.
@@ -100,7 +100,7 @@ contract EscalationGameFactory {
 			address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), address(this), bytes32(0), keccak256(initCode))))));
 	}
 
-	function _escalationGameInitCode(ISecurityPool securityPool) private view returns (bytes memory) {
+	function _escalationGameInitCode(IQuestionLedger questionLedger) private view returns (bytes memory) {
 		address partOne = escalationGameCreationCodePartOne;
 		address partTwo = escalationGameCreationCodePartTwo;
 		uint256 partOneLength;
@@ -117,6 +117,6 @@ contract EscalationGameFactory {
 		// Code storage is cheaper to deploy and read than one storage slot per 32-byte
 		// word, while two fixed parts keep each carrier below EIP-170.
 		return
-			abi.encodePacked(creationCode, abi.encode(securityPool, securityPool.repToken(), proofVerifier, depositDelegate));
+			abi.encodePacked(creationCode, abi.encode(questionLedger, questionLedger.repToken(), proofVerifier, depositDelegate));
 	}
 }

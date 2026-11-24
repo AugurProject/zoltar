@@ -242,7 +242,7 @@ describe('trade ticket inputs', () => {
 		expect(ticketModelFor(market, 'entry', formatCurrencyInputBalance(maximum + eth / 10n, 18)).impactTier).toBe('blocked')
 	})
 
-	test('caps the buy shortcuts at what the security pool can still mint and states that limit above it', () => {
+	test('caps the buy shortcuts at what the question ledger can still mint and states that limit above it', () => {
 		const limited = { ...market, availableMintingCapacityAttoEth: 2n * eth }
 		const shortcuts = tradeTicketModel({ ...ready, market: limited, amount: '' }).shortcuts
 		expect(shortcuts).toEqual([
@@ -379,7 +379,7 @@ test('recovery REP blocks cash-only buys without blocking share sales', () => {
 	const recovered = { ...market, settlementRecoveryAttoRep: shares }
 	const buy = tradeTicketModel({ ...ready, market: recovered })
 	expect(buy.estimate).toBeUndefined()
-	expect(buy.availability.reason).toBe('New complete sets require recovery REP. Purchase complete sets from this market’s portfolio in Statoblast.')
+	expect(buy.availability.reason).toBe('New complete sets require recovery REP. Purchase complete sets from this market’s security pool in Statoblast.')
 	const sell = tradeTicketModel({ ...ready, market: recovered, mode: 'exit', amount: '0.01' })
 	expect(sell.availability.disabled).toBe(false)
 	expect(sell.estimate?.kind).toBe('exit')

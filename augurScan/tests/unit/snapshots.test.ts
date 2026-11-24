@@ -8,7 +8,7 @@ const vault = getAddress('0x2222222222222222222222222222222222222222')
 const coordinator = getAddress('0x3333333333333333333333333333333333333333')
 
 for (const [entityType, contractKind] of [
-	['pool', 'securityPool'],
+	['pool', 'questionLedger'],
 	['auction', 'securityPoolUniformPriceAuction'],
 	['escalation', 'escalationGame'],
 ] as const) {
@@ -36,7 +36,7 @@ for (const [entityType, contractKind] of [
 			const input = encodeFunctionData({ abi: compiled, functionName, args })
 			const method = compiled.find(item => item.type === 'function' && toFunctionSelector(item) === input.slice(0, 10))
 			if (method?.type !== 'function' || method.outputs === undefined) throw new Error(`Missing compiled function outputs ${kind}.${functionName}`)
-			if (functionName === 'securityPool') throw new Error('Claim fixture unavailable')
+			if (functionName === 'questionLedger') throw new Error('Claim fixture unavailable')
 			const values = outputValues[functionName] ?? [1n]
 			return decodeFunctionResult({ abi, functionName, data: encodeAbiParameters(method.outputs, values) })
 		}
@@ -159,7 +159,7 @@ test('prioritizes delayed pruning over an earlier ordinary snapshot failure', as
 
 test('unavailable claim reconstruction preserves the tagged basic escalation state', async () => {
 	const read: StateRead = async (_address, _abi, name) => {
-		if (name === 'securityPool') throw new Error('Claim ancestry unavailable')
+		if (name === 'questionLedger') throw new Error('Claim ancestry unavailable')
 		if (name === 'getOutcomeBalancesAttoRep') return [1n, 2n, 3n]
 		return 1n
 	}

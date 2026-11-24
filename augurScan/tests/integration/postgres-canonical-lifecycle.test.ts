@@ -153,16 +153,16 @@ const resetManifestAndRediscover = async ({ database }: LifecycleContext, extraR
 	if (retiredManifestAddress === undefined) throw new Error('retired manifest fixture is unavailable')
 	await database.upsertContract(chainId, {
 		address: retiredManifestAddress,
-		label: 'Rediscovered security pool',
-		kind: 'securityPool',
-		provenance: 'Factory.DeploySecurityPool',
+		label: 'Rediscovered question ledger',
+		kind: 'questionLedger',
+		provenance: 'Factory.DeployQuestionLedger',
 		discoveryBlock: 4n,
 		discoveryTxHash: transactionHash,
 	})
 	expect((await database.contracts(chainId)).get(retiredManifestAddress.toLowerCase())).toMatchObject({
-		label: 'Rediscovered security pool',
-		kind: 'securityPool',
-		provenance: 'Factory.DeploySecurityPool',
+		label: 'Rediscovered question ledger',
+		kind: 'questionLedger',
+		provenance: 'Factory.DeployQuestionLedger',
 	})
 	expect(await database.seedNetwork({ ...network, contracts: [[address, 'Final manifest', 'zoltar']] })).toBe(false)
 	expect(() => assertStartBlockCompatible(100n, 1n, undefined, true)).toThrow('while an effective index start is retained')

@@ -192,7 +192,7 @@ export const renderUniverseDetailPage = async (deps: StateEntityDeps, universe: 
 	metrics.append(
 		metricCard('Theoretical REP supply', exactUnit(universe.theoretical_supply_atto_rep, 18, 'REP')),
 		metricCard('Child universes', number(universe.child_count)),
-		metricCard('Security pools', number(universe.pool_count)),
+		metricCard('Question ledgers', number(universe.pool_count)),
 		metricCard('Fork time', universe.active_fork_time ? utcDateTime(universe.active_fork_time) : 'Not forked'),
 	)
 	fragment.append(metrics)

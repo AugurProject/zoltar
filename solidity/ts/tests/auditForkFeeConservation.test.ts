@@ -2,32 +2,32 @@ import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as coordinatorArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCapitalFeeStreams_SecurityPoolCapitalFeeStreams as streamsArtifact,
-	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
+	statoblast_SecurityPoolSettlement_SecurityPoolSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
 	statoblast_SecurityPoolResolutionPremiumBook_SecurityPoolResolutionPremiumBook as premiumArtifact,
-	statoblast_SecurityPoolPortfolioServices_SecurityPoolPortfolioServices as servicesArtifact,
+	statoblast_SecurityPoolServices_SecurityPoolServices as servicesArtifact,
 } from '../types/contractArtifact'
 import { DAY } from '../testSupport/simulator/utils/constants'
 import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { approveToken, getERC20Balance } from '../testSupport/simulator/utils/utilities'
 import { forkUniverse, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 // At the fork instant every collateral token is in exactly one accounted bucket, whether
 // the capital price was fresh or stale when the universe forked.
 describe('audit: fee conservation at the fork instant', () => {
-	const fixture = useSecurityPoolPortfolioFixture()
+	const fixture = useSecurityPoolFixture()
 
 	test.each([{ stale: false }, { stale: true }])('no fee is stranded when the price is stale=$stale at the fork', async ({ stale }) => {
 		const { base } = fixture
 		const owner = fixture.owner()
 		const trader = fixture.other()
-		const p = { abi: portfolioArtifact.abi, address: fixture.portfolio }
+		const p = { abi: securityPoolArtifact.abi, address: fixture.securityPool }
 		await fixture.prepare()
 		await fixture.mint(10n * unit, base.questionId)
 		await fixture.mint(10n * unit, fixture.secondQuestionId)
@@ -53,11 +53,11 @@ describe('audit: fee conservation at the fork instant', () => {
 		const bookId = await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'bookIds', args: [base.genesisUniverse] })
 		const totals = await owner.readContract({ ...book, functionName: 'totals', args: [bookId] })
 		const fork = await owner.readContract({ ...coordinator, functionName: 'forks', args: [base.genesisUniverse] })
-		const after = { engine: await cash(engine), services: await cash(services), portfolio: await cash(fixture.portfolio), coordinator: await cash(coordinator.address) }
+		const after = { engine: await cash(engine), services: await cash(services), securityPool: await cash(fixture.securityPool), coordinator: await cash(coordinator.address) }
 		const premiumTotal = await owner.readContract({ ...premiumBook, functionName: 'totalCash' })
 		const streams = { abi: streamsArtifact.abi, address: await owner.readContract({ ...capital, functionName: 'feeStreams' }) }
-		// Sealing strands nothing in the portfolio or the coordinator.
-		expect(after.portfolio).toBe(0n)
+		// Sealing strands nothing in the security pool or the coordinator.
+		expect(after.securityPool).toBe(0n)
 		expect(after.coordinator).toBe(0n)
 		// The sealed book holds no uncollected fee escrow.
 		expect(totals[2]).toBe(0n)
@@ -74,7 +74,7 @@ describe('audit: fee conservation at the fork instant', () => {
 		await base.mockWindow.advanceTime(30n * DAY)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...capital, functionName: 'claimEarnings', args: [owner.account.address] }))
 		expect(await cash(engine)).toBe(totals[0])
-		expect(await cash(fixture.portfolio)).toBe(0n)
+		expect(await cash(fixture.securityPool)).toBe(0n)
 		const outstandingLater = await owner.readContract({ ...streams, functionName: 'fundedOutstanding' })
 		// Vesting purchase fees are fully released (credited or burned) once their duration has passed.
 		expect(outstandingLater[0]).toBe(0n)

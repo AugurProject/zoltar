@@ -2,7 +2,7 @@ import type { EcosystemSnapshot, OperationDefinition, OperationEvidence, PoolSna
 
 import { amount, choose, eligible, encodePreflightCall, encodeStep, eventEvidence, eventTopic, mixSeed, planBase } from '../planning.ts'
 
-import { escalationGameAbi, securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
+import { escalationGameAbi, questionLedgerAbi } from '@zoltar/bot-shared/contracts/abi'
 
 import { CARRY_DEPOSIT_CONSUMED_ABI, CARRY_DEPOSIT_CONSUMED_SIGNATURE, CLAIM_DEPOSIT_ABI, CLAIM_DEPOSIT_SIGNATURE } from './planning.ts'
 
@@ -17,7 +17,7 @@ function buildResidualSweepPlan(snapshot: EcosystemSnapshot, pool: PoolSnapshot)
 		priority: 'random',
 		risk: 'low',
 		snapshot,
-		steps: [encodeStep({ abi: escalationGameAbi, evidence: [eventEvidence(pool.escalationGame, signature)], functionName: 'sweepResidualRepToSecurityPool', id: 'sweep-residual', label: 'Sweep terminal escalation REP', to: pool.escalationGame })],
+		steps: [encodeStep({ abi: escalationGameAbi, evidence: [eventEvidence(pool.escalationGame, signature)], functionName: 'sweepResidualRepToQuestionLedger', id: 'sweep-residual', label: 'Sweep terminal escalation REP', to: pool.escalationGame })],
 	})
 }
 
@@ -37,7 +37,7 @@ export const sweepResidualEscalation: OperationDefinition = {
 	evaluate: snapshot => eligible(snapshot.pools.some(pool => pool.escalationResidualSweepExpectedSuccess) ? undefined : 'No escalation game has a simulated terminal residual sweep'),
 	id: 'statoblast.escalation.sweep-residual',
 	label: 'Sweep residual escalation REP',
-	method: 'sweepResidualRepToSecurityPool',
+	method: 'sweepResidualRepToQuestionLedger',
 	risk: 'low',
 }
 
@@ -125,7 +125,7 @@ function buildForkedCarryWithdrawalPlan(snapshot: EcosystemSnapshot, candidate: 
 		snapshot,
 		steps: [
 			encodeStep({
-				abi: securityPoolAbi,
+				abi: questionLedgerAbi,
 				args: [candidate.outcome, [proof]],
 				evidence: carriedDepositEvidence(candidate),
 				functionName: 'withdrawForkedEscalationDeposits',
@@ -133,7 +133,7 @@ function buildForkedCarryWithdrawalPlan(snapshot: EcosystemSnapshot, candidate: 
 				label: 'Withdraw one inherited escalation deposit',
 				preflightCalls: [
 					encodePreflightCall({
-						abi: securityPoolAbi,
+						abi: questionLedgerAbi,
 						args: [candidate.outcome, [proof]],
 						caller: snapshot.wallet.address,
 						expectedResult: candidate.preflightExpectedResult,
@@ -179,7 +179,7 @@ export const withdrawForkedCarry: OperationDefinition = {
 		return (snapshot.forkedCarryWithdrawalPresence ?? snapshot.forkedCarryWithdrawals ?? []).map(forkedCarryMetadata)
 	},
 	classification: 'lifecycle-obligation',
-	contract: 'SecurityPool',
+	contract: 'QuestionLedger',
 	description: 'Withdraws one canonically replayed, anchor-verified inherited escalation deposit per private next-block transaction.',
 	discoveryInputs: ['anchored contract storage', 'snapshot MMR proof', 'sparse nullifier proof', 'anchored source/child graph and direct-claim state'],
 	ecosystem: 'statoblast',

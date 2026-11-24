@@ -24,10 +24,10 @@
 			"bun": "./ts/statoblast/linearFees.ts",
 			"default": "./js/statoblast/linearFees.js"
 		},
-		"./statoblast/securityPoolPortfolio": {
-			"types": "./ts/statoblast/securityPoolPortfolio.ts",
-			"bun": "./ts/statoblast/securityPoolPortfolio.ts",
-			"default": "./js/statoblast/securityPoolPortfolio.js"
+		"./statoblast/securityPool": {
+			"types": "./ts/statoblast/securityPool.ts",
+			"bun": "./ts/statoblast/securityPool.ts",
+			"default": "./js/statoblast/securityPool.js"
 		},
 		"./deployment/initCodes": {
 			"types": "./ts/deployment/initCodes.ts",

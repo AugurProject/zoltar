@@ -48,7 +48,7 @@ const SCHEMA_MIGRATIONS: readonly SchemaMigration[] = [
 	{ version: CURRENT_CONTRACT_EVENTS_SCHEMA_VERSION, file: '007-current-contract-events.sql', description: 'Storage for events the current contracts emit' },
 	{ version: STALE_CONTRACT_VALUES_SCHEMA_VERSION, file: '008-stale-contract-values.sql', description: 'Removal of values no current contract supplies' },
 	{ version: BOUNDED_READ_SCHEMA_VERSION, file: '009-bounded-read-indexes.sql', description: 'Selective address and report reads' },
-	{ version: CURRENT_SCHEMA_VERSION, file: '010-accounting-clock-and-reasons.sql', description: 'Exact portfolio accounting clock and current reason enum' },
+	{ version: CURRENT_SCHEMA_VERSION, file: '010-accounting-clock-and-reasons.sql', description: 'Exact security pool accounting clock and current reason enum' },
 ]
 
 /** Migrations that upgrade a database at `startingVersion` to the current schema, in application order. */

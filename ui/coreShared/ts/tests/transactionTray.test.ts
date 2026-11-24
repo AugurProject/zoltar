@@ -17,7 +17,7 @@ import {
 	markTransactionSubmitted,
 	markTransactionTrackingStopped,
 } from '../transactions/transactionTray.js'
-import { securityPoolTransactionScope } from '../transactions/transactionScope.js'
+import { questionLedgerTransactionScope } from '../transactions/transactionScope.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
 const transactionHash = '0x1234000000000000000000000000000000000000000000000000000000000000'
@@ -28,7 +28,7 @@ describe('transactionTray', () => {
 	})
 
 	test('drops a transaction the user stopped tracking, so its status no longer reads pending and its scope unlocks', () => {
-		const scope = securityPoolTransactionScope('0x0000000000000000000000000000000000000001')
+		const scope = questionLedgerTransactionScope('0x0000000000000000000000000000000000000001')
 		const requested = markTransactionRequested(createInitialTransactionTrayState(), { action: 'deposit', scope, source: 'statoblast', submittedTitle: 'Depositing REP' })
 		const submitted = markTransactionSubmitted(markTransactionPrepared(requested, { account: undefined, args: [], chainName: 'Sepolia', functionName: 'deposit', value: undefined }), transactionHash)
 		expect(submitted.active?.tone).toBe('pending')
@@ -84,8 +84,8 @@ describe('transactionTray', () => {
 	})
 
 	test('locks every action while the prompt is open and only overlapping scopes once the transaction is pending', () => {
-		const poolA = securityPoolTransactionScope('0x00000000000000000000000000000000000000AA')
-		const poolB = securityPoolTransactionScope('0x00000000000000000000000000000000000000bb')
+		const poolA = questionLedgerTransactionScope('0x00000000000000000000000000000000000000AA')
+		const poolB = questionLedgerTransactionScope('0x00000000000000000000000000000000000000bb')
 		const intent = { action: 'depositRepToVault', scope: poolA, source: 'security-vault', submittedTitle: 'Depositing REP' }
 		const requested = markTransactionRequested(createInitialTransactionTrayState(), intent)
 		const submitted = markTransactionSubmitted(requested, transactionHash)
@@ -107,8 +107,8 @@ describe('transactionTray', () => {
 
 	test('routes outcomes to their own request while another transaction is pending', () => {
 		const otherHash = '0x9999000000000000000000000000000000000000000000000000000000000000'
-		const first = markTransactionSubmitted(markTransactionRequested(createInitialTransactionTrayState(), { action: 'depositRepToVault', scope: securityPoolTransactionScope('0x01'), source: 'security-vault', submittedTitle: 'Depositing REP' }), transactionHash)
-		const second = markTransactionRequested(first, { action: 'createSecurityPool', source: 'security-pools', submittedTitle: 'Creating Security Pool', failedTitle: 'Security pool creation' })
+		const first = markTransactionSubmitted(markTransactionRequested(createInitialTransactionTrayState(), { action: 'depositRepToVault', scope: questionLedgerTransactionScope('0x01'), source: 'security-vault', submittedTitle: 'Depositing REP' }), transactionHash)
+		const second = markTransactionRequested(first, { action: 'createQuestionLedger', source: 'security-pools', submittedTitle: 'Creating Question Ledger', failedTitle: 'Question ledger creation' })
 		const secondKey = second.entries[1]?.key
 		expect(secondKey).toBe('transaction-request-2')
 		const secondSubmitted = markTransactionSubmitted(second, otherHash)
@@ -122,7 +122,7 @@ describe('transactionTray', () => {
 		])
 		expect(recovered.entries[1]?.lifecycle).toEqual({ phase: 'pending', hash: otherHash })
 		expect(secondFailed.entries[1]?.lifecycle).toEqual({ phase: 'failed', failure: { kind: 'reverted', message: 'Transaction reverted' }, hash: otherHash })
-		expect(secondFailed.active?.title).toBe('Security pool creation')
+		expect(secondFailed.active?.title).toBe('Question ledger creation')
 		expect(secondFinished.entries.map(entry => entry.key)).toEqual(['transaction-request-1'])
 	})
 

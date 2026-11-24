@@ -1,4 +1,4 @@
-import { discoverPortfolioCapital } from '../../src/monitoring/discovery-portfolios.ts'
+import { discoverSecurityPoolCapital } from '../../src/monitoring/discovery-security-pools.ts'
 import { discoverPurchaseQuote } from '../../src/monitoring/discovery-purchase.ts'
 import type { ImmutableTopologyIdentity } from '../../src/monitoring/topology-identity.ts'
 import type { DiscoveryIssue } from '../../src/operations/types.ts'
@@ -42,12 +42,12 @@ test('keyless discovery scans protocol topology without querying account invento
 	expect(snapshot.wallet.tokens).toEqual([])
 })
 
-test('discovers a fully prepared portfolio with no admitted questions', async () => {
+test('discovers a fully prepared security pool with no admitted questions', async () => {
 	const fake = refundBackfillClient(0n)
 	const identity = topologyIdentity()
 	const { chainId: _chainId, ...deployments } = identity
-	const capital = await discoverPortfolioCapital({ client: fake.client, deployments, wallet: address(1), anchorBlockNumber: 10n }, [], 10n)
-	expect(capital.map(item => item.portfolio)).toEqual([address(90)])
+	const capital = await discoverSecurityPoolCapital({ client: fake.client, deployments, wallet: address(1), anchorBlockNumber: 10n }, [], 10n)
+	expect(capital.map(item => item.securityPool)).toEqual([address(90)])
 })
 
 test('derives the universe initial escalation deposit from the Zoltar universe supply that genesis burns reduce', async () => {
@@ -94,7 +94,7 @@ for (const shared of [false, true])
 			const fake = fakeClient(10n, hash(10), { childPreparation: { shared, ready } })
 			const preparation = await discoverChildPoolPreparations(fake.client, address(4), address(2), address(50), 0n, ['1'], 10n)
 			expect(preparation['1']).toEqual({
-				portfolio: shared ? address(90) : zeroAddress,
+				securityPool: shared ? address(90) : zeroAddress,
 				branchReady: !shared || ready,
 				sourcePool: address(50),
 				sourceGame: zeroAddress,
@@ -181,7 +181,7 @@ test('discovers and authenticates fixed-fee REP/WETH pools for every canonical u
 	const snapshot = await discoverEcosystemSnapshot({
 		anchorBlockNumber: 10n,
 		client: fake.client,
-		deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), uniswapV3Factory: uniswapFactory, weth: address(7), zoltar: address(2) },
+		deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), uniswapV3Factory: uniswapFactory, weth: address(7), zoltar: address(2) },
 		limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10 },
 		wallet: address(1),
 	})
@@ -204,7 +204,7 @@ test('discovers unpoked fees at exact ranges and gates mismatched router binding
 		const snapshot = await discoverEcosystemSnapshot({
 			anchorBlockNumber: 10n,
 			client: fake.client,
-			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), uniswapV3Factory: factory, weth: address(7), zoltar: address(2) },
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), uniswapV3Factory: factory, weth: address(7), zoltar: address(2) },
 			limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10 },
 			wallet: address(1),
 		})
@@ -222,7 +222,7 @@ test('discovers Sepolia pools using the network default when no factory override
 	const snapshot = await discoverEcosystemSnapshot({
 		anchorBlockNumber: 10n,
 		client: fake.client,
-		deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+		deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 		discoverGenesisDeployment: true,
 		limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10 },
 		wallet: address(1),
@@ -238,7 +238,7 @@ test('bounds concurrent per-universe Uniswap pool-state fan-out below the RPC qu
 	const snapshot = await discoverEcosystemSnapshot({
 		anchorBlockNumber: 10n,
 		client: fake.client,
-		deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), uniswapV3Factory: uniswapFactory, weth: address(7), zoltar: address(2) },
+		deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), uniswapV3Factory: uniswapFactory, weth: address(7), zoltar: address(2) },
 		limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 11 },
 		wallet: address(1),
 	})
@@ -257,7 +257,7 @@ function topologyIdentity(): ImmutableTopologyIdentity {
 		openOracle: address(6),
 		questionData: address(3),
 		securityPoolFactory: address(4),
-		securityPoolForker: address(5),
+		questionForker: address(5),
 		tradingFactory: address(8),
 		tradingRouter: address(9),
 		weth: address(7),
@@ -282,7 +282,7 @@ interface GraphOverrides {
 		parent: Address
 		openOraclePriceCoordinator: Address
 		questionId: bigint
-		securityPool: Address
+		questionLedger: Address
 		shareToken: Address
 		universeId: bigint
 	}[]
@@ -392,11 +392,11 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					return 5n
 				case 'getChildUniverseId':
 					return 88n
-				case 'getSecurityPoolPortfolio':
+				case 'securityPoolOf':
 					return graph.childPreparation?.shared ? address(90) : zeroAddress
-				case 'getSecurityPoolOriginId':
+				case 'getQuestionLedgerOriginId':
 					return hash(90)
-				case 'getChildPoolCoordinator':
+				case 'getChildQuestionLedgerCoordinator':
 					return graph.childPreparation?.ready ? address(91) : zeroAddress
 				case 'clocks':
 					return [0n, 0n, true, graph.childPreparation?.ready ?? false]
@@ -408,7 +408,7 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					return 101n
 				case 'systemState':
 					return 0n
-				case 'getSecurityPool':
+				case 'getQuestionLedger':
 					return graph.childPreparation?.ready ? address(93) : zeroAddress
 				case 'sharedPriceFeeds':
 					return graph.childPreparation?.ready ? address(94) : zeroAddress
@@ -443,18 +443,18 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					if (graph.outcomeLabelPage !== undefined) return graph.outcomeLabelPage(questionId, start, count)
 					return [...(graph.outcomeLabelsByQuestion?.[questionId.toString()] ?? ['Yes', 'No'])].slice(Number(start), Number(start + count))
 				}
-				case 'portfolioCount':
+				case 'securityPoolCount':
 					return 0n
-				case 'securityPoolDeploymentCount':
+				case 'questionLedgerDeploymentCount':
 					return BigInt(graph.poolDeployments?.length ?? 0)
-				case 'securityPoolDeploymentsRange': {
+				case 'questionLedgerDeploymentsRange': {
 					const start = parameters.args?.[0]
 					const count = parameters.args?.[1]
 					if (typeof start !== 'bigint' || typeof count !== 'bigint') throw new Error('Pool-deployment page arguments required')
 					return [...(graph.poolDeployments ?? [])].slice(Number(start), Number(start + count))
 				}
 				case 'escalationGame':
-				case 'portfolioCustody':
+				case 'securityPoolCustody':
 					return zeroAddress
 				case 'balanceOf':
 				case 'allowance':
@@ -502,7 +502,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				parent: address(0),
 				openOraclePriceCoordinator: coordinator,
 				questionId: 101n,
-				securityPool: pool,
+				questionLedger: pool,
 				shareToken,
 				universeId: 0n,
 			},
@@ -525,17 +525,17 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 			// Geth evaluates BASEFEE as zero for eth_call without a nonzero fee.
 			const callBaseFee = (parameters.gasPrice ?? 0n) === 0n ? 0n : baseFeePerGas
 			switch (parameters.functionName) {
-				case 'portfolioCount':
+				case 'securityPoolCount':
 					return 1n
-				case 'portfoliosRange':
+				case 'securityPoolsRange':
 					return [address(90)]
 				case 'setupStage':
 					return 4n
 				case 'getRepToken':
 					return address(10)
-				case 'getSecurityPoolPortfolio':
+				case 'securityPoolOf':
 					return address(90)
-				case 'getPool':
+				case 'getQuestionLedger':
 					return pool
 				case 'factory':
 					return parameters.address === address(90) ? address(4) : address(8)
@@ -550,7 +550,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 					return address(94)
 				case 'forkController':
 					return address(95)
-				case 'portfolio':
+				case 'securityPool':
 					return parameters.address === address(92) ? address(91) : address(90)
 				case 'forkAuthority':
 					return address(95)
@@ -615,7 +615,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'nextBatch':
 				case 'minimumOutcomeExchangeRate':
 				case 'settlementCollateralAttoEth':
-				case 'lastSettlementPortfolioTime':
+				case 'lastSettlementSecurityPoolTime':
 					return 0n
 				case 'repToken':
 				case 'reputationToken':
@@ -627,7 +627,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'questionId':
 					return 101n
 				case 'escalationGame':
-				case 'portfolioCustody':
+				case 'securityPoolCustody':
 					return address(0)
 				case 'systemState':
 					return 0n
@@ -643,7 +643,6 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'lastSettlementTimestamp':
 				case 'priceValidUntil':
 				case 'pendingReportId':
-				case 'getTotalPoolHeldAttoRep':
 				case 'getQuestionOutcome':
 				case 'getCurrentMintingCapacityAttoEth':
 				case 'getVaultOpenInterestAttoEth':
@@ -702,13 +701,13 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 					return [false, 0n, [false, false, false]] as const
 				case 'securityPoolFactory':
 					return address(4)
-				case 'securityPoolForker':
+				case 'questionForker':
 					return address(5)
 				case 'questionData':
 					return address(3)
 				case 'openOraclePriceCoordinator':
 					return coordinator
-				case 'securityPool':
+				case 'questionLedger':
 					return pool
 				case 'openOracle':
 					return address(6)
@@ -786,7 +785,7 @@ describe('anchored ecosystem discovery', () => {
 	})
 
 	test('allows positive auction refunds while the authenticated episode index is absent or lagging', async () => {
-		const deployments = { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) }
+		const deployments = { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) }
 		const missing = refundBackfillClient(8n)
 		const withoutIndex = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: missing.client, deployments, wallet: address(1) })
 		expect(withoutIndex.auctions).toContainEqual(expect.objectContaining({ address: missing.collateralRepairAuction, pendingEthRefund: '8' }))
@@ -852,7 +851,7 @@ describe('anchored ecosystem discovery', () => {
 		const snapshot = await discoverEcosystemSnapshot({
 			anchorBlockNumber: 10n,
 			client: fake.client,
-			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 			indexedReports: [report],
 			wallet: address(1),
 		})
@@ -965,7 +964,7 @@ describe('anchored ecosystem discovery', () => {
 			discoverEcosystemSnapshot({
 				anchorBlockNumber: 10n,
 				client: fake.client,
-				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 				limits: { maxPools: 101, maxQuestions: 1, maxUniverses: 100 },
 				wallet: address(1),
 			}),
@@ -1040,7 +1039,7 @@ describe('anchored ecosystem discovery', () => {
 		const snapshot = await discoverEcosystemSnapshot({
 			anchorBlockNumber: 10n,
 			client: fake.client,
-			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 			limits: { maxPools: 2, maxQuestions: 2, maxUniverses: 2 },
 			wallet: address(1),
 		})
@@ -1058,7 +1057,7 @@ describe('anchored ecosystem discovery', () => {
 		const snapshot = await discoverEcosystemSnapshot({
 			anchorBlockNumber: 10n,
 			client: fake.client,
-			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 			limits: { maxPools: 3, maxQuestions: 3, maxUniverses: 3 },
 			wallet: address(1),
 		})
@@ -1074,7 +1073,7 @@ describe('anchored ecosystem discovery', () => {
 			parent: address(0),
 			openOraclePriceCoordinator: address(1_000 + index),
 			questionId: questionIds[index] ?? 0n,
-			securityPool: address(2_000 + index),
+			questionLedger: address(2_000 + index),
 			shareToken: address(3_000 + index),
 			universeId: 0n,
 		}))
@@ -1089,7 +1088,7 @@ describe('anchored ecosystem discovery', () => {
 			const snapshot = await discoverEcosystemSnapshot({
 				anchorBlockNumber: anchor,
 				client: fake.client,
-				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 				limits,
 				recordTopologyCache: value => {
 					checkpoint = value
@@ -1106,7 +1105,7 @@ describe('anchored ecosystem discovery', () => {
 			expect(snapshot.questions).toEqual([])
 			expect(snapshot.pools).toEqual([])
 			expect(fake.contractReads.filter(read => read.functionName === 'getQuestions')).toHaveLength(1)
-			expect(fake.contractReads.filter(read => read.functionName === 'securityPoolDeploymentsRange')).toHaveLength(1)
+			expect(fake.contractReads.filter(read => read.functionName === 'questionLedgerDeploymentsRange')).toHaveLength(1)
 			expect(fake.contractReads.filter(read => read.functionName === 'questions')).toHaveLength(0)
 			expect(fake.contractReads.filter(read => read.functionName === 'questionCreatedTimestamp')).toHaveLength(0)
 			expect(fake.contractReads.filter(read => read.functionName === 'getOutcomeLabels')).toHaveLength(0)
@@ -1129,7 +1128,7 @@ describe('anchored ecosystem discovery', () => {
 		const snapshot = await discoverEcosystemSnapshot({
 			anchorBlockNumber: 10n,
 			client: fake.client,
-			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 			wallet: address(1),
 		})
 		expect(snapshot.questions[0]?.outcomeLabels).toEqual(labels)
@@ -1149,7 +1148,7 @@ describe('anchored ecosystem discovery', () => {
 			discoverEcosystemSnapshot({
 				anchorBlockNumber: 10n,
 				client: fake.client,
-				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 				limits: { maxOutcomeLabelsPerQuestion: 512 },
 				wallet: address(1),
 			}),
@@ -1170,7 +1169,7 @@ describe('anchored ecosystem discovery', () => {
 			discoverEcosystemSnapshot({
 				anchorBlockNumber: 10n,
 				client: fake.client,
-				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 				limits: { maxOutcomeLabelUtf8BytesPerQuestion: 1 },
 				wallet: address(1),
 			}),
@@ -1188,7 +1187,7 @@ describe('anchored ecosystem discovery', () => {
 		const snapshot = await discoverEcosystemSnapshot({
 			anchorBlockNumber: 10n,
 			client: fake.client,
-			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 			recordTopologyCache: value => {
 				checkpoint = value
 			},
@@ -1203,7 +1202,7 @@ describe('anchored ecosystem discovery', () => {
 			discoverEcosystemSnapshot({
 				anchorBlockNumber: 10n,
 				client: fake.client,
-				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 				limits: { maxOutcomeLabelUtf8BytesPerQuestion: IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES + 1 },
 				wallet: address(1),
 			}),
@@ -1220,7 +1219,7 @@ describe('anchored ecosystem discovery', () => {
 		await discoverEcosystemSnapshot({
 			anchorBlockNumber: 10n,
 			client: first.client,
-			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 			limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10 },
 			recordTopologyCache: (value, changed) => {
 				checkpoint = value
@@ -1241,7 +1240,7 @@ describe('anchored ecosystem discovery', () => {
 		const snapshot = await discoverEcosystemSnapshot({
 			anchorBlockNumber: 11n,
 			client: next.client,
-			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 			limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10 },
 			recordTopologyCache: (value, changed) => {
 				nextCheckpoint = value
@@ -1272,7 +1271,7 @@ describe('anchored ecosystem discovery', () => {
 		await discoverEcosystemSnapshot({
 			anchorBlockNumber: 12n,
 			client: unchanged.client,
-			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 			limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10 },
 			recordTopologyCache: (value, changed) => {
 				unchangedCheckpoint = value
@@ -1294,7 +1293,7 @@ describe('anchored ecosystem discovery', () => {
 		await discoverEcosystemSnapshot({
 			anchorBlockNumber: 11n,
 			client: reorged.client,
-			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 			limits: { maxPools: 10, maxQuestions: 10, maxUniverses: 10 },
 			recordTopologyCache: (_value, changed) => {
 				reorgChanged = changed
@@ -1332,7 +1331,7 @@ describe('anchored ecosystem discovery', () => {
 			await discoverEcosystemSnapshot({
 				anchorBlockNumber: candidate.anchorBlockNumber,
 				client: fake.client,
-				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 				recordTopologyCache: (_value, valueChanged) => {
 					changed = valueChanged
 				},
@@ -1347,7 +1346,7 @@ describe('anchored ecosystem discovery', () => {
 			discoverEcosystemSnapshot({
 				anchorBlockNumber: 11n,
 				client: unavailable.client,
-				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 				topologyCache: base,
 				wallet: address(1),
 			}),
@@ -1515,7 +1514,7 @@ describe('anchored ecosystem discovery', () => {
 				openOracle: address(6),
 				questionData: address(3),
 				securityPoolFactory: address(4),
-				securityPoolForker: address(5),
+				questionForker: address(5),
 				tradingFactory: address(8),
 				tradingRouter: address(9),
 				weth: address(7),
@@ -1540,7 +1539,7 @@ describe('anchored ecosystem discovery', () => {
 			discoverEcosystemSnapshot({
 				anchorBlockNumber: 10n,
 				client: fake.client,
-				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+				deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 				expectedAnchorHash: hash(2),
 				wallet: address(1),
 			}),
@@ -1548,7 +1547,7 @@ describe('anchored ecosystem discovery', () => {
 	})
 
 	test('requires the provider block to match the quorum EIP-1559 base fee', async () => {
-		const deployments = { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) }
+		const deployments = { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) }
 		await expect(discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fakeClient(10n, hash(1), { baseFeePerGas: null }).client, deployments, wallet: address(1) })).rejects.toThrow('no EIP-1559 base fee')
 		await expect(
 			discoverEcosystemSnapshot({
@@ -1563,7 +1562,7 @@ describe('anchored ecosystem discovery', () => {
 
 	test('rejects mismatched configured deployment-graph roots before inventory discovery', async () => {
 		const cases: Array<{ graph: GraphOverrides; expected: string }> = [
-			{ expected: 'SecurityPoolForker Zoltar edge', graph: { forkerZoltar: address(99) } },
+			{ expected: 'QuestionForker Zoltar edge', graph: { forkerZoltar: address(99) } },
 			{ expected: 'Trading factory security-pool-factory edge', graph: { tradingSecurityPoolFactory: address(99) } },
 			{ expected: 'Trading router factory edge', graph: { routerFactory: address(99) } },
 		]
@@ -1573,7 +1572,7 @@ describe('anchored ecosystem discovery', () => {
 				discoverEcosystemSnapshot({
 					anchorBlockNumber: 10n,
 					client: fake.client,
-					deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+					deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 					wallet: address(1),
 				}),
 			).rejects.toThrow(candidate.expected)
@@ -1695,10 +1694,10 @@ test('reports missing configured contract code before calling protocol getters',
 		discoverEcosystemSnapshot({
 			anchorBlockNumber: 10n,
 			client: fake.client,
-			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), securityPoolForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
+			deployments: { openOracle: address(6), questionData: address(3), securityPoolFactory: address(4), questionForker: address(5), tradingFactory: address(8), tradingRouter: address(9), weth: address(7), zoltar: address(2) },
 			wallet: address(1),
 		}),
-	).rejects.toThrow('securityPoolForker')
+	).rejects.toThrow('questionForker')
 	expect(fake.contractReads).toHaveLength(0)
 })
 

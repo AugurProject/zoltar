@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact } from '../types/contractArtifact'
+import { statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_QuestionForker_QuestionForker as forkerArtifact } from '../types/contractArtifact'
 import { writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { DAY } from '../testSupport/simulator/utils/constants'
 import { SparseNullifierTree } from './carryProofHelpers'
 import { BRANCH_GAS, createE2E, INVALID, median, NO, NONE, WEEK, YES } from './auditE2EHarness'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 const K = 1_000n * unit
 
@@ -12,7 +12,7 @@ const K = 1_000n * unit
 // materialized in a child after that child universe forked again, and a second escalated
 // question that rides through another question's own fork.
 describe('auditE2E: lazy materialization and a second escalated question keep reporter claims payable', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const e2e = createE2E(fixture)
 	const thresholdPlan = (N: bigint, [r2, r3, r4, r5]: readonly [WriteClient, WriteClient, WriteClient, WriteClient]): readonly (readonly [WriteClient, number, bigint])[] => [
 		[r5, INVALID, N / 10n],
@@ -29,7 +29,7 @@ describe('auditE2E: lazy materialization and a second escalated question keep re
 		const owner = fixture.owner()
 		const U0 = base.genesisUniverse
 		const q = base.questionId
-		const source = fixture.poolFor(q).securityPool
+		const source = fixture.poolFor(q).questionLedger
 		const reporters = [e2e.account(2), e2e.account(3), e2e.account(4), e2e.account(5)] as const
 		const r6 = e2e.account(6)
 		await fixture.prepare()
@@ -88,7 +88,7 @@ describe('auditE2E: lazy materialization and a second escalated question keep re
 		const owner = fixture.owner()
 		const U0 = base.genesisUniverse
 		const q = base.questionId
-		const source = fixture.poolFor(q).securityPool
+		const source = fixture.poolFor(q).questionLedger
 		const [r2, r3, r4, r5, r6] = [e2e.account(2), e2e.account(3), e2e.account(4), e2e.account(5), e2e.account(6)]
 		await fixture.prepare()
 		await fixture.mint(10n * unit)
@@ -150,8 +150,8 @@ describe('auditE2E: lazy materialization and a second escalated question keep re
 		const U0 = base.genesisUniverse
 		const q1 = base.questionId
 		const q2 = fixture.secondQuestionId
-		const source1 = fixture.poolFor(q1).securityPool
-		const source2 = fixture.poolFor(q2).securityPool
+		const source1 = fixture.poolFor(q1).questionLedger
+		const source2 = fixture.poolFor(q2).questionLedger
 		const reporters = [e2e.account(2), e2e.account(3), e2e.account(4), e2e.account(5)] as const
 		const [r2, r3, , r5] = reporters
 		const r6 = e2e.account(6)

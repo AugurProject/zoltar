@@ -389,7 +389,7 @@ describe('chaos launch doctor', () => {
 			openOracle: privateKeyToAccount(`0x${'77'.repeat(32)}`).address,
 			reports: [],
 			schemaVersion: 5,
-			securityPoolForker: settings.deployment.securityPoolForker,
+			questionForker: settings.deployment.questionForker,
 			startBlock: settings.runtime.protocolStartBlock.toString(),
 			wallet,
 			zoltar: settings.deployment.zoltar,

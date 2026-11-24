@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier as verifierArtifact, statoblast_factories_EscalationGameFactory_EscalationGameFactory as factoryArtifact, statoblast_SecurityPool_SecurityPool as poolArtifact } from '../types/contractArtifact'
+import { statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier as verifierArtifact, statoblast_factories_EscalationGameFactory_EscalationGameFactory as factoryArtifact, statoblast_QuestionLedger_QuestionLedger as poolArtifact } from '../types/contractArtifact'
 import { writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { SparseNullifierTree } from './carryProofHelpers'
 import { BRANCH_GAS, createE2E, expectedWinningClaim, INVALID, median, NO, YES } from './auditE2EHarness'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 const K = 1_000n * unit
 
@@ -18,12 +18,12 @@ const scaledClaim = (amount: bigint, cumulative: bigint, binding: bigint, winnin
 // Invalid wins in a continuation, and when the fork threshold has fallen below the game's
 // non-decision threshold.
 describe('audit4: escalation payouts conserve escrow under every threshold relation', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const e2e = createE2E(fixture)
 
 	test('the verifier never allocates more than winning principal plus binding capital', async () => {
 		const owner = fixture.owner()
-		const pool = fixture.poolFor(fixture.base.questionId).securityPool
+		const pool = fixture.poolFor(fixture.base.questionId).questionLedger
 		const factory = await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'escalationGameFactory' })
 		const verifier = { abi: verifierArtifact.abi, address: await owner.readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'proofVerifier' }) }
 		let seed = 0x9e3779b9n
@@ -79,7 +79,7 @@ describe('audit4: escalation payouts conserve escrow under every threshold relat
 		const { base } = fixture
 		const owner = fixture.owner()
 		const U0 = base.genesisUniverse
-		const source = fixture.poolFor(base.questionId).securityPool
+		const source = fixture.poolFor(base.questionId).questionLedger
 		const [r2, r3, r4, r5, r6] = [e2e.account(2), e2e.account(3), e2e.account(4), e2e.account(5), e2e.account(6)]
 		await fixture.prepare()
 		await fixture.mint(10n * unit)
@@ -170,7 +170,7 @@ describe('audit4: escalation payouts conserve escrow under every threshold relat
 
 		// 4. What the winners are not owed is neither stuck nor paid twice: it burns in the terminal sweep.
 		expect(await e2e.gameBalance(child.game)).toBe(backing - paid - burned)
-		await expect(owner.simulateContract({ ...g, functionName: 'sweepResidualRepToSecurityPool' })).rejects.toThrow('Principal remains')
+		await expect(owner.simulateContract({ ...g, functionName: 'sweepResidualRepToQuestionLedger' })).rejects.toThrow('Principal remains')
 		expect(await e2e.claimLocal(r6, child.pool, NO, [0n], r3.account.address)).toBe(0n)
 		const residual = await e2e.gameBalance(child.game)
 		expect(residual).toBeGreaterThanOrEqual(25n * K)

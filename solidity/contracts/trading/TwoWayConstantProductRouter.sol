@@ -2,7 +2,7 @@
 pragma solidity 0.8.35;
 
 import { BinaryOutcomes } from '../statoblast/BinaryOutcomes.sol';
-import { ISecurityPool, ISecurityPoolFactory } from '../statoblast/interfaces/ISecurityPool.sol';
+import { IQuestionLedger, ISecurityPoolFactory } from '../statoblast/interfaces/IQuestionLedger.sol';
 import { IERC165 } from '../statoblast/interfaces/IERC165.sol';
 import { IERC1155Receiver } from '../statoblast/interfaces/IERC1155Receiver.sol';
 import { ITwoWayConstantProductFactory } from './interfaces/ITwoWayConstantProductFactory.sol';
@@ -15,7 +15,7 @@ import { IWeth9 } from '../statoblast/interfaces/IWeth9.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 
-interface ITradingPortfolioSettlement {
+interface ITradingSecurityPoolSettlement {
 	function settlement() external view returns (address);
 	function services() external view returns (address);
 	function purchaseQuote(uint248 universeId, uint256 questionId, uint256 cash) external view returns (uint256 fee, uint256 premium);
@@ -56,7 +56,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		uint8 version;
 		ReceiveOperation operation;
 		address shareToken;
-		ISecurityPool securityPool;
+		IQuestionLedger questionLedger;
 		ITwoWayConstantProductPair pair;
 		uint248 universeId;
 		uint256 questionId;
@@ -81,7 +81,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	bool private receiveInternalShareCallback;
 	bool private ethCallbackActive;
 	uint256 private collateralBudget;
-	ISecurityPool private callbackPool;
+	IQuestionLedger private callbackPool;
 	ITradingShareToken private callbackShareToken;
 	address private callbackSettlement;
 
@@ -106,7 +106,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	function enterPositionWithCollateral(ITwoWayConstantProductPair pair, uint256 cash, BinaryOutcomes.BinaryOutcome outcome, uint256 minimum, address recipient, uint256 deadline, uint256 budget) external tokenBudget(budget) returns (EnterResult memory) {
 		return enterPosition(pair, cash, outcome, minimum, recipient, deadline);
 	}
-	function createPairAndInitializeWithCollateral(ISecurityPool pool, uint256 cash, uint256 probability, uint256 maxYes, uint256 maxNo, uint256 minYes, uint256 minNo, uint256 minimum, address recipient, uint256 deadline, uint256 budget) external tokenBudget(budget) returns (LiquidityResult memory) {
+	function createPairAndInitializeWithCollateral(IQuestionLedger pool, uint256 cash, uint256 probability, uint256 maxYes, uint256 maxNo, uint256 minYes, uint256 minNo, uint256 minimum, address recipient, uint256 deadline, uint256 budget) external tokenBudget(budget) returns (LiquidityResult memory) {
 		return
 			createPairAndInitializeWithEth(pool, cash, probability, maxYes, maxNo, minYes, minNo, minimum, recipient, deadline);
 	}
@@ -121,7 +121,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		_validatePair(pair);
 		bool longYes = _isDirectionalOutcome(longOutcome);
 		require(recipient != address(0) && recipient != address(this), 'Invalid recipient');
-		ISecurityPool pool = pair.securityPool();
+		IQuestionLedger pool = pair.questionLedger();
 		(uint256 startInvalid, uint256 startYes, uint256 startNo) = _beginShareOperation(pool);
 		(uint256 yesBefore, uint256 noBefore) = pair.getEffectiveReserves();
 		uint256 spent = _mintCompleteSets(pool, mintAttoEth);
@@ -140,7 +140,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 
 	/// @notice Seeds the pair at `conditionalYesBpsValue`. If anyone already initialized it, the same call adds
 	/// liquidity at the pair's price instead, subject to the caller's signed minimum and maximum deposit bounds.
-	function createPairAndInitializeWithEth(ISecurityPool pool, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 maxYesUsed, uint256 maxNoUsed, uint256 minYesUsed, uint256 minNoUsed, uint256 minLiquidity, address recipient, uint256 deadline) public payable nonReentrant returns (LiquidityResult memory result) {
+	function createPairAndInitializeWithEth(IQuestionLedger pool, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 maxYesUsed, uint256 maxNoUsed, uint256 minYesUsed, uint256 minNoUsed, uint256 minLiquidity, address recipient, uint256 deadline) public payable nonReentrant returns (LiquidityResult memory result) {
 		result = _provideLiquidity(factory.createPair(pool), mintAttoEth, conditionalYesBpsValue, maxYesUsed, maxNoUsed, minYesUsed, minNoUsed, minLiquidity, recipient, deadline);
 	}
 
@@ -188,7 +188,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		_validateReceiveRequest(request);
 		require(msg.sender == request.shareToken, 'Wrong share token');
 		require(block.timestamp <= request.deadline, 'Deadline expired');
-		callbackPool = request.securityPool;
+		callbackPool = request.questionLedger;
 		callbackShareToken = ITradingShareToken(request.shareToken);
 		uint256[3] memory priorBalances = _priorReceiveBalances(request, ids, values);
 		if (request.operation == ReceiveOperation.ExitPosition) _exitReceivedPosition(request, from, ids, values);
@@ -196,7 +196,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 			_redeemReceivedCompleteSet(request, ids, values);
 		else revert('Unsupported operation');
 		_requireReceiveBalances(priorBalances);
-		callbackPool = ISecurityPool(payable(address(0)));
+		callbackPool = IQuestionLedger(payable(address(0)));
 		callbackShareToken = ITradingShareToken(address(0));
 		entered = false;
 		return IERC1155Receiver.onERC1155BatchReceived.selector;
@@ -238,19 +238,19 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		require(values[0] == request.completeSetShares && values[1] == request.completeSetShares && values[2] == request.completeSetShares, 'Complete set amounts');
 		require(request.maxLongSharesIn == 0 && request.longOutcome == BinaryOutcomes.BinaryOutcome.None, 'Unexpected redeem fields');
 		_redeemReceivedShares(request);
-		emit CompleteSetRedeemedByTransfer(address(request.securityPool), request.completeSetShares, request.payoutRecipient);
+		emit CompleteSetRedeemedByTransfer(address(request.questionLedger), request.completeSetShares, request.payoutRecipient);
 	}
 
 	function _redeemReceivedShares(ReceiveRequest memory request) private {
-		address portfolio = request.securityPool.securityPoolFactory().getSecurityPoolPortfolio(request.securityPool);
-		IERC20 collateral = ICollateralConfig(portfolio).collateralToken();
+		address securityPool = request.questionLedger.securityPoolFactory().securityPoolOf(request.questionLedger);
+		IERC20 collateral = ICollateralConfig(securityPool).collateralToken();
 		uint256 ethBefore = collateral.balanceOf(address(this));
-		IERC20 rep = IERC20(address(request.securityPool.repToken()));
+		IERC20 rep = IERC20(address(request.questionLedger.repToken()));
 		uint256 repBefore = rep.balanceOf(address(this));
-		if (request.securityPool.portfolioCustody() != address(0))
-			callbackSettlement = ITradingPortfolioSettlement(portfolio).settlement();
+		if (request.questionLedger.securityPoolCustody() != address(0))
+			callbackSettlement = ITradingSecurityPoolSettlement(securityPool).settlement();
 		ethCallbackActive = true;
-		request.securityPool.redeemCompleteSet(request.completeSetShares);
+		request.questionLedger.redeemCompleteSet(request.completeSetShares);
 		ethCallbackActive = false;
 		callbackSettlement = address(0);
 		uint256 ethOut = collateral.balanceOf(address(this)) - ethBefore;
@@ -259,7 +259,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		require(repOut >= request.minRepOut, 'Minimum REP output');
 		if (repOut != 0) rep.safeTransfer(request.payoutRecipient, repOut);
 		if (ethOut != 0) {
-			if (address(collateral) == address(request.securityPool.openOraclePriceCoordinator().weth())) {
+			if (address(collateral) == address(request.questionLedger.openOraclePriceCoordinator().weth())) {
 				callbackSettlement = address(collateral);
 				ethCallbackActive = true;
 				IWeth9(address(collateral)).withdraw(ethOut);
@@ -278,17 +278,17 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		require(request.refundRecipient != address(0) && request.refundRecipient != address(this), 'Invalid refund recipient');
 		if (address(request.pair) != address(0) || request.operation != ReceiveOperation.RedeemCompleteSet) {
 			_validatePair(request.pair);
-			require(address(request.securityPool) == address(request.pair.securityPool()), 'Wrong security pool');
+			require(address(request.questionLedger) == address(request.pair.questionLedger()), 'Wrong question ledger');
 		}
 		ISecurityPoolFactory poolFactory = factory.securityPoolFactory();
-		require(address(request.securityPool.securityPoolFactory()) == address(poolFactory), 'Wrong security pool factory');
-		require(address(poolFactory.getSecurityPool(poolFactory.getSecurityPoolOriginId(request.securityPool), request.universeId)) == address(request.securityPool), 'Noncanonical security pool');
-		require(request.shareToken == address(request.securityPool.shareToken()), 'Wrong request share token');
-		require(request.universeId == request.securityPool.universeId(), 'Wrong universe');
-		require(request.questionId == request.securityPool.questionId(), 'Wrong question');
+		require(address(request.questionLedger.securityPoolFactory()) == address(poolFactory), 'Wrong security pool factory');
+		require(address(poolFactory.getQuestionLedger(poolFactory.getQuestionLedgerOriginId(request.questionLedger), request.universeId)) == address(request.questionLedger), 'Noncanonical question ledger');
+		require(request.shareToken == address(request.questionLedger.shareToken()), 'Wrong request share token');
+		require(request.universeId == request.questionLedger.universeId(), 'Wrong universe');
+		require(request.questionId == request.questionLedger.questionId(), 'Wrong question');
 		ITradingShareToken shares = ITradingShareToken(request.shareToken);
 		require(request.invalidTokenId == shares.getTokenId(request.universeId, BinaryOutcomes.BinaryOutcome.Invalid) && request.yesTokenId == shares.getTokenId(request.universeId, BinaryOutcomes.BinaryOutcome.Yes) && request.noTokenId == shares.getTokenId(request.universeId, BinaryOutcomes.BinaryOutcome.No), 'Wrong outcome IDs');
-		require(address(request.securityPool.shareToken().canonicalPoolByUniverse(request.universeId)) == address(request.securityPool), 'Noncanonical share pool');
+		require(address(request.questionLedger.shareToken().canonicalQuestionLedgerByUniverse(request.universeId)) == address(request.questionLedger), 'Noncanonical share pool');
 	}
 
 	function _validateReceiveInternalCallback(address operator, uint256[] calldata ids, uint256[] calldata values) private view {
@@ -322,7 +322,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	/// An initialized pair adds complete sets proportionally at the pair's own price.
 	function _provideLiquidity(ITwoWayConstantProductPair pair, uint256 mintAttoEth, uint256 conditionalYesBpsValue, uint256 maxYesUsed, uint256 maxNoUsed, uint256 minYesUsed, uint256 minNoUsed, uint256 minLiquidity, address recipient, uint256 deadline) private returns (LiquidityResult memory result) {
 		require(recipient != address(0) && recipient != address(this), 'Invalid recipient');
-		ISecurityPool pool = pair.securityPool();
+		IQuestionLedger pool = pair.questionLedger();
 		(uint256 startInvalid, uint256 startYes, uint256 startNo) = _beginShareOperation(pool);
 		uint256 spent = _mintCompleteSets(pool, mintAttoEth);
 		(uint256 mintedInvalid, uint256 mintedYes, uint256 mintedNo) = _balanceDeltas(pool, startInvalid, startYes, startNo);
@@ -346,14 +346,14 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		result = LiquidityResult(pair, mintedInvalid, yesUsed, noUsed, yesReturned, noReturned, mintedInvalid, liquidity);
 	}
 
-	function _mintCompleteSets(ISecurityPool pool, uint256 cash) private returns (uint256 spent) {
+	function _mintCompleteSets(IQuestionLedger pool, uint256 cash) private returns (uint256 spent) {
 		require(cash > 0, 'Mint amount is zero');
-		address root = pool.securityPoolFactory().getSecurityPoolPortfolio(pool);
-		require(root != address(0), 'Question has no portfolio');
+		address root = pool.securityPoolFactory().securityPoolOf(pool);
+		require(root != address(0), 'Question has no security pool');
 		// Quote after the same-block capital/fee checkpoint used by purchase.
-		pool.refreshPortfolioFees();
-		ITradingPortfolioSettlement portfolio = ITradingPortfolioSettlement(root);
-		(uint256 fee, ) = portfolio.purchaseQuote(pool.universeId(), pool.questionId(), cash);
+		pool.refreshSecurityPoolFees();
+		ITradingSecurityPoolSettlement securityPool = ITradingSecurityPoolSettlement(root);
+		(uint256 fee, ) = securityPool.purchaseQuote(pool.universeId(), pool.questionId(), cash);
 		spent = cash + fee;
 		IERC20 collateral = ICollateralConfig(root).collateralToken();
 		if (collateralBudget != 0) {
@@ -364,8 +364,8 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 			require(address(collateral) == address(pool.openOraclePriceCoordinator().weth()), 'Use collateral token entry');
 			IWeth9(address(collateral)).deposit{value: spent}();
 		}
-		collateral.safeApprove(portfolio.services(), spent);
-		portfolio.createCompleteSet(pool.universeId(), pool.questionId(), cash, address(this), 0, spent - cash);
+		collateral.safeApprove(securityPool.services(), spent);
+		securityPool.createCompleteSet(pool.universeId(), pool.questionId(), cash, address(this), 0, spent - cash);
 	}
 
 	function _refundBudget(uint256 spent) private {
@@ -378,7 +378,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 
 	function _validatePair(ITwoWayConstantProductPair pair) private view {
 		require(factory.isPair(address(pair)), 'Unrecognized pair');
-		require(address(factory.getPair(pair.securityPool())) == address(pair), 'Noncanonical pair');
+		require(address(factory.getPair(pair.questionLedger())) == address(pair), 'Noncanonical pair');
 	}
 
 	function _isDirectionalOutcome(BinaryOutcomes.BinaryOutcome outcome) private pure returns (bool longYes) {
@@ -386,7 +386,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		return outcome == BinaryOutcomes.BinaryOutcome.Yes;
 	}
 
-	function _beginShareOperation(ISecurityPool pool) private returns (uint256 invalidBalance, uint256 yesBalance, uint256 noBalance) {
+	function _beginShareOperation(IQuestionLedger pool) private returns (uint256 invalidBalance, uint256 yesBalance, uint256 noBalance) {
 		callbackActive = true;
 		callbackPool = pool;
 		callbackShareToken = ITradingShareToken(address(pool.shareToken()));
@@ -397,11 +397,11 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		(uint256 finalInvalid, uint256 finalYes, uint256 finalNo) = _balances();
 		require(finalInvalid == invalidBalance && finalYes == yesBalance && finalNo == noBalance, 'Router share residue');
 		callbackActive = false;
-		callbackPool = ISecurityPool(payable(address(0)));
+		callbackPool = IQuestionLedger(payable(address(0)));
 		callbackShareToken = ITradingShareToken(address(0));
 	}
 
-	function _balanceDeltas(ISecurityPool, uint256 invalidBefore, uint256 yesBefore, uint256 noBefore) private view returns (uint256, uint256, uint256) {
+	function _balanceDeltas(IQuestionLedger, uint256 invalidBefore, uint256 yesBefore, uint256 noBefore) private view returns (uint256, uint256, uint256) {
 		(uint256 invalidAfter, uint256 yesAfter, uint256 noAfter) = _balances();
 		return (invalidAfter - invalidBefore, yesAfter - yesBefore, noAfter - noBefore);
 	}
@@ -418,7 +418,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 			callbackShareToken.setApprovalForAll(address(pair), true);
 	}
 
-	function _transferPosition(ISecurityPool pool, address recipient, bool longYes, uint256 invalidAmount, uint256 longAmount) private {
+	function _transferPosition(IQuestionLedger pool, address recipient, bool longYes, uint256 invalidAmount, uint256 longAmount) private {
 		ITradingShareToken token = ITradingShareToken(address(pool.shareToken()));
 		uint248 universe = pool.universeId();
 		uint256[] memory ids = new uint256[](2);
@@ -430,7 +430,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		token.safeBatchTransferFrom(address(this), recipient, ids, values, '');
 	}
 
-	function _transferShares(ISecurityPool pool, address recipient, uint256 invalidAmount, uint256 yesAmount, uint256 noAmount) private {
+	function _transferShares(IQuestionLedger pool, address recipient, uint256 invalidAmount, uint256 yesAmount, uint256 noAmount) private {
 		ITradingShareToken token = ITradingShareToken(address(pool.shareToken()));
 		uint248 universe = pool.universeId();
 		uint256[] memory ids = new uint256[](3);
@@ -454,5 +454,5 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	}
 
 	event PositionExitedByTransfer(address indexed owner, address indexed pair, uint256 completeSetShares, uint256 longSharesUsed, uint256 longSharesRefunded, address payoutRecipient);
-	event CompleteSetRedeemedByTransfer(address indexed securityPool, uint256 completeSetShares, address payoutRecipient);
+	event CompleteSetRedeemedByTransfer(address indexed questionLedger, uint256 completeSetShares, address payoutRecipient);
 }

@@ -6,21 +6,21 @@ contract ShareTokenRecoveryTestPool {
 	address public immutable shareToken;
 	uint248 public immutable universeId;
 	address public immutable parent;
-	address public immutable portfolioCustody;
+	address public immutable securityPoolCustody;
 	constructor(address token, uint248 universe, address source, address authority) {
 		shareToken = token;
 		universeId = universe;
 		parent = source;
-		portfolioCustody = authority;
+		securityPoolCustody = authority;
 	}
 	function securityPoolFactory() external view returns (address) {
 		return address(this);
 	}
-	function getSecurityPoolPortfolio(address) external view returns (address) {
-		return portfolioCustody.code.length == 0 ? address(this) : portfolioCustody;
+	function securityPoolOf(address) external view returns (address) {
+		return securityPoolCustody.code.length == 0 ? address(this) : securityPoolCustody;
 	}
 	function forkController() external view returns (address) {
-		return portfolioCustody;
+		return securityPoolCustody;
 	}
 	function settlement() external view returns (address) {
 		return address(this);
@@ -34,13 +34,13 @@ contract ShareTokenRecoveryTestPool {
 	function bookIds(uint248) external pure returns (uint64) {
 		return 1;
 	}
-	function forkPortfolioTime(uint248) external pure returns (uint48) {
+	function forkSecurityPoolTime(uint248) external pure returns (uint48) {
 		return 0;
 	}
 	function hasLiveForkRecoveryRight(uint64, uint256, uint48) external pure returns (bool) {
 		return true;
 	}
-	function securityPoolForker() external view returns (address) {
+	function questionForker() external view returns (address) {
 		return address(this);
 	}
 	function systemState() external pure returns (uint8) {

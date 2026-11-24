@@ -120,7 +120,7 @@ test('responsive docs compact equations and label unavoidable equation and table
 			<pre class="code-scroll" tabindex="0" data-short-command><code>unset PRIVATE_KEY</code></pre>
 			<table class="wide-table invalid-table" aria-label="Deployment mapping">
 				<thead><tr><th>Contract</th><th>Purpose</th></tr></thead>
-				<tbody><tr><td>SecurityPool</td><td>Bare wide content</td></tr></tbody>
+				<tbody><tr><td>QuestionLedger</td><td>Bare wide content</td></tr></tbody>
 			</table>
 			<table data-complex-table>
 				<thead><tr><th colspan="2">Complex heading</th></tr></thead>
@@ -223,7 +223,7 @@ test('responsive docs compact equations and label unavoidable equation and table
 })
 
 test('wide desktop tables reflow into cards, and only a table that still scrolls becomes a named region', async () => {
-	const environment = installDomEnvironment('http://localhost/docs/reference/contracts/securitypool.html')
+	const environment = installDomEnvironment('http://localhost/docs/reference/contracts/questionledger.html')
 	try {
 		document.write(`
 			<h2>State-changing interactions</h2>

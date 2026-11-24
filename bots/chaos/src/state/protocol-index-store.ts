@@ -237,7 +237,7 @@ export async function persistProtocolIndexGeneration(statePath: string, index: C
 		cursor: parsed.cursor,
 		openOracle: parsed.openOracle,
 		schemaVersion: 5,
-		securityPoolForker: parsed.securityPoolForker,
+		questionForker: parsed.questionForker,
 		startBlock: parsed.startBlock,
 		...(parsed.availableStartBlock === undefined ? {} : { availableStartBlock: parsed.availableStartBlock }),
 		wallet: parsed.wallet,

@@ -2,11 +2,11 @@ import { expect, test } from 'bun:test'
 import { SQL } from 'bun'
 import { forkDetailData } from '../../src/repositories/entity-details.ts'
 import { forkCatalogData } from '../../src/repositories/operations.ts'
-import { addressPortfolioRows } from '../../src/repositories/portfolio.ts'
+import { addressSecurityPoolRows } from '../../src/repositories/security-pool.ts'
 import { initializeSchema } from '../../src/schema.ts'
 
 const url = process.env['POSTGRES_TEST_URL']
-test.skipIf(url === undefined)('fork summaries attribute portfolio fork events to the universe that forked', async () => {
+test.skipIf(url === undefined)('fork summaries attribute security pool fork events to the universe that forked', async () => {
 	if (url === undefined) throw new Error('POSTGRES_TEST_URL is required')
 	const sql = new SQL(url)
 	await initializeSchema(sql)
@@ -58,7 +58,7 @@ test.skipIf(url === undefined)('fork summaries attribute portfolio fork events t
 		// The detail event list still shows every event that names the universe, including its own branch start.
 		expect(childFork.rows.map((row: Record<string, unknown>) => row['event_name']).sort()).toEqual(['BranchActivated', 'BranchChosen', 'BranchStarted', 'BranchStarted', 'ForkFrozen', 'UniverseForked'])
 
-		const participation = await addressPortfolioRows(connection, { chainId, snapshotBlock: '1', address: ownerA, limit: 100, lpOffset: 0, forkOffset: 0, reportOffset: 0 })
+		const participation = await addressSecurityPoolRows(connection, { chainId, snapshotBlock: '1', address: ownerA, limit: 100, lpOffset: 0, forkOffset: 0, reportOffset: 0 })
 		expect(participation.forkRows.map((row: Record<string, unknown>) => [row['universe_identity'], row['event_name']]).sort()).toEqual([
 			[branch('1'), 'BranchChosen'],
 			[branch('2'), 'BranchChosen'],

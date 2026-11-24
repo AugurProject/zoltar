@@ -11,11 +11,11 @@ import { CHAOS_OPERATION_CATALOG } from '../../src/operations/catalog.ts'
 /** The shared ABI exports the chaos bot executes against; every one must map to a compiled artifact below. */
 const chaosContractAbis = {
 	securityPoolUniformPriceAuctionAbi: contractAbis.securityPoolUniformPriceAuctionAbi,
-	securityPoolPortfolioAuctionAbi: contractAbis.securityPoolPortfolioAuctionAbi,
-	securityPoolPortfolioForkCoordinatorAbi: contractAbis.securityPoolPortfolioForkCoordinatorAbi,
+	securityPoolAuctionAbi: contractAbis.securityPoolAuctionAbi,
+	securityPoolForkCoordinatorAbi: contractAbis.securityPoolForkCoordinatorAbi,
 	securityPoolCommitmentIndexAbi: contractAbis.securityPoolCommitmentIndexAbi,
 	securityPoolCapitalLedgerAbi: contractAbis.securityPoolCapitalLedgerAbi,
-	securityPoolPortfolioAbi: contractAbis.securityPoolPortfolioAbi,
+	securityPoolAbi: contractAbis.securityPoolAbi,
 	openOraclePriceCoordinatorAbi: contractAbis.openOraclePriceCoordinatorAbi,
 	sharedPoolPriceFeedAbi: contractAbis.sharedPoolPriceFeedAbi,
 	erc1155Abi: contractAbis.erc1155Abi,
@@ -24,9 +24,9 @@ const chaosContractAbis = {
 	genesisUniswapV3SeederAbi: contractAbis.genesisUniswapV3SeederAbi,
 	openOracleAbi: contractAbis.openOracleAbi,
 	zoltarQuestionDataAbi: contractAbis.zoltarQuestionDataAbi,
-	securityPoolAbi: contractAbis.securityPoolAbi,
+	questionLedgerAbi: contractAbis.questionLedgerAbi,
 	securityPoolFactoryAbi: contractAbis.securityPoolFactoryAbi,
-	securityPoolForkerAbi: contractAbis.securityPoolForkerAbi,
+	questionForkerAbi: contractAbis.questionForkerAbi,
 	shareTokenAbi: contractAbis.shareTokenAbi,
 	twoWayConstantProductFactoryAbi: contractAbis.twoWayConstantProductFactoryAbi,
 	twoWayConstantProductPairAbi: contractAbis.twoWayConstantProductPairAbi,
@@ -45,9 +45,9 @@ const {
 	genesisUniswapV3SeederAbi,
 	openOracleAbi,
 	zoltarQuestionDataAbi,
-	securityPoolAbi,
+	questionLedgerAbi,
 	securityPoolFactoryAbi,
-	securityPoolForkerAbi,
+	questionForkerAbi,
 	shareTokenAbi,
 	twoWayConstantProductFactoryAbi,
 	twoWayConstantProductPairAbi,
@@ -60,20 +60,20 @@ const {
 
 const curatedAbiBindings = [
 	{ abi: contractAbis.securityPoolUniformPriceAuctionAbi, artifactSource: 'contracts/statoblast/SecurityPoolUniformPriceAuction.sol', contract: 'SecurityPoolUniformPriceAuction' },
-	{ abi: contractAbis.securityPoolPortfolioAuctionAbi, artifactSource: 'contracts/statoblast/SecurityPoolPortfolioAuction.sol', contract: 'SecurityPoolPortfolioAuction' },
-	{ abi: contractAbis.securityPoolPortfolioForkCoordinatorAbi, artifactSource: 'contracts/statoblast/SecurityPoolPortfolioForkCoordinator.sol', contract: 'SecurityPoolPortfolioForkCoordinator' },
+	{ abi: contractAbis.securityPoolAuctionAbi, artifactSource: 'contracts/statoblast/SecurityPoolAuction.sol', contract: 'SecurityPoolAuction' },
+	{ abi: contractAbis.securityPoolForkCoordinatorAbi, artifactSource: 'contracts/statoblast/SecurityPoolForkCoordinator.sol', contract: 'SecurityPoolForkCoordinator' },
 	{ abi: contractAbis.securityPoolCommitmentIndexAbi, artifactSource: 'contracts/statoblast/SecurityPoolCommitmentIndex.sol', contract: 'SecurityPoolCommitmentIndex' },
 	{ abi: contractAbis.securityPoolCapitalLedgerAbi, artifactSource: 'contracts/statoblast/SecurityPoolCapitalLedger.sol', contract: 'SecurityPoolCapitalLedger' },
-	{ abi: contractAbis.securityPoolPortfolioAbi, artifactSource: 'contracts/statoblast/SecurityPoolPortfolio.sol', contract: 'SecurityPoolPortfolio' },
+	{ abi: contractAbis.securityPoolAbi, artifactSource: 'contracts/statoblast/SecurityPool.sol', contract: 'SecurityPool' },
 	{ abi: carryStorageAbi, artifactSource: 'contracts/statoblast/EscalationGame.sol', contract: 'EscalationGame', catalogSurface: false },
 	{ abi: zoltarQuestionDataAbi, artifactSource: 'contracts/ZoltarQuestionData.sol', contract: 'ZoltarQuestionData' },
 	{ abi: zoltarAbi, artifactSource: 'contracts/Zoltar.sol', contract: 'Zoltar' },
 	{ abi: genesisReputationTokenAbi, artifactSource: 'contracts/GenesisReputationToken.sol', contract: 'GenesisReputationToken' },
 	{ abi: securityPoolFactoryAbi, artifactSource: 'contracts/statoblast/factories/SecurityPoolFactory.sol', contract: 'SecurityPoolFactory' },
-	{ abi: securityPoolAbi, artifactSource: 'contracts/statoblast/SecurityPool.sol', contract: 'SecurityPool' },
+	{ abi: questionLedgerAbi, artifactSource: 'contracts/statoblast/QuestionLedger.sol', contract: 'QuestionLedger' },
 	{ abi: openOraclePriceCoordinatorAbi, artifactSource: 'contracts/statoblast/OpenOraclePriceCoordinator.sol', contract: 'OpenOraclePriceCoordinator' },
 	{ abi: sharedPoolPriceFeedAbi, artifactSource: 'contracts/statoblast/SharedPoolPriceFeed.sol', contract: 'SharedPoolPriceFeed' },
-	{ abi: securityPoolForkerAbi, artifactSource: 'contracts/statoblast/SecurityPoolForker.sol', contract: 'SecurityPoolForker' },
+	{ abi: questionForkerAbi, artifactSource: 'contracts/statoblast/QuestionForker.sol', contract: 'QuestionForker' },
 	{
 		abi: escalationGameAbi,
 		artifactSource: 'contracts/statoblast/EscalationGame.sol',
@@ -97,11 +97,11 @@ const expectedCanonicalManifest = [
 	'GenesisReputationToken:contracts/GenesisReputationToken.sol:static-endpoint',
 	'ReputationToken:contracts/ReputationToken.sol:dynamic-endpoint',
 	'SecurityPoolFactory:contracts/statoblast/factories/SecurityPoolFactory.sol:static-endpoint',
-	'SecurityPoolDeployer:contracts/statoblast/factories/SecurityPoolDeployer.sol:deployment-helper',
-	'SecurityPoolDeploymentWorker:contracts/statoblast/factories/SecurityPoolDeployer.sol:deployment-helper',
-	'SecurityPool:contracts/statoblast/SecurityPool.sol:dynamic-endpoint',
-	'SecurityPoolOperationsDelegate:contracts/statoblast/SecurityPoolOperationsDelegate.sol:delegate-module',
-	'SecurityPoolEventEmitter:contracts/statoblast/SecurityPoolEventEmitter.sol:delegate-module',
+	'QuestionLedgerDeployer:contracts/statoblast/factories/QuestionLedgerDeployer.sol:deployment-helper',
+	'QuestionLedgerDeploymentWorker:contracts/statoblast/factories/QuestionLedgerDeployer.sol:deployment-helper',
+	'QuestionLedger:contracts/statoblast/QuestionLedger.sol:dynamic-endpoint',
+	'QuestionLedgerOperationsDelegate:contracts/statoblast/QuestionLedgerOperationsDelegate.sol:delegate-module',
+	'QuestionLedgerEventEmitter:contracts/statoblast/QuestionLedgerEventEmitter.sol:delegate-module',
 	'OpenOraclePriceCoordinator:contracts/statoblast/OpenOraclePriceCoordinator.sol:dynamic-endpoint',
 	'SharedPoolPriceFeed:contracts/statoblast/SharedPoolPriceFeed.sol:dynamic-endpoint',
 	'SharedPoolReportEscrow:contracts/statoblast/SharedPoolReportEscrow.sol:dynamic-endpoint',
@@ -109,7 +109,7 @@ const expectedCanonicalManifest = [
 	'SharedPoolPriceFeedDeploymentWorker:contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol:static-endpoint',
 	'OpenOraclePriceCoordinatorFactory:contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol:static-endpoint',
 	'PriceCoordinatorDeploymentWorker:contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol:static-endpoint',
-	'SecurityPoolForker:contracts/statoblast/SecurityPoolForker.sol:static-endpoint',
+	'QuestionForker:contracts/statoblast/QuestionForker.sol:static-endpoint',
 	'EscalationGameFactory:contracts/statoblast/factories/EscalationGameFactory.sol:static-endpoint',
 	'EscalationGame:contracts/statoblast/EscalationGame.sol:dynamic-endpoint',
 	'EscalationGameDepositDelegate:contracts/statoblast/EscalationGameDepositDelegate.sol:delegate-module',
@@ -125,21 +125,21 @@ const expectedCanonicalManifest = [
 	'SecurityPoolCapitalLedger:contracts/statoblast/SecurityPoolCapitalLedger.sol:dynamic-endpoint',
 	'SecurityPoolCapitalLifecycleDelegate:contracts/statoblast/SecurityPoolCapitalLifecycleDelegate.sol:delegate-module',
 	'SecurityPoolCommitmentIndex:contracts/statoblast/SecurityPoolCommitmentIndex.sol:dynamic-endpoint',
-	'SecurityPoolForkerPortfolioDelegate:contracts/statoblast/SecurityPoolForkerPortfolioDelegate.sol:delegate-module',
-	'SecurityPoolPortfolio:contracts/statoblast/SecurityPoolPortfolio.sol:dynamic-endpoint',
-	'SecurityPoolPortfolioAuction:contracts/statoblast/SecurityPoolPortfolioAuction.sol:dynamic-endpoint',
-	'SecurityPoolPortfolioAuctionDeployer:contracts/statoblast/SecurityPoolPortfolioAuction.sol:deployment-helper',
-	'SecurityPoolPortfolioForkCoordinator:contracts/statoblast/SecurityPoolPortfolioForkCoordinator.sol:dynamic-endpoint',
-	'SecurityPoolPortfolioForkCoordinatorDeployer:contracts/statoblast/SecurityPoolPortfolioForkCoordinator.sol:deployment-helper',
-	'SecurityPoolCapitalFeeStreamsDeployer:contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol:deployment-helper',
-	'SecurityPoolCapitalLedgerDeployer:contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol:deployment-helper',
-	'SecurityPoolCommitmentIndexDeployer:contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol:deployment-helper',
-	'SecurityPoolPortfolioServicesDeployer:contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol:deployment-helper',
-	'SecurityPoolPortfolioSettlementDeployer:contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol:deployment-helper',
-	'SecurityPoolReporterLedgerDeployer:contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol:deployment-helper',
-	'SecurityPoolSettlementBookDeployer:contracts/statoblast/SecurityPoolPortfolioModuleDeployers.sol:deployment-helper',
-	'SecurityPoolPortfolioServices:contracts/statoblast/SecurityPoolPortfolioServices.sol:dynamic-endpoint',
-	'SecurityPoolPortfolioSettlement:contracts/statoblast/SecurityPoolPortfolioSettlement.sol:dynamic-endpoint',
+	'QuestionForkerDelegate:contracts/statoblast/QuestionForkerDelegate.sol:delegate-module',
+	'SecurityPool:contracts/statoblast/SecurityPool.sol:dynamic-endpoint',
+	'SecurityPoolAuction:contracts/statoblast/SecurityPoolAuction.sol:dynamic-endpoint',
+	'SecurityPoolAuctionDeployer:contracts/statoblast/SecurityPoolAuction.sol:deployment-helper',
+	'SecurityPoolForkCoordinator:contracts/statoblast/SecurityPoolForkCoordinator.sol:dynamic-endpoint',
+	'SecurityPoolForkCoordinatorDeployer:contracts/statoblast/SecurityPoolForkCoordinator.sol:deployment-helper',
+	'SecurityPoolCapitalFeeStreamsDeployer:contracts/statoblast/SecurityPoolModuleDeployers.sol:deployment-helper',
+	'SecurityPoolCapitalLedgerDeployer:contracts/statoblast/SecurityPoolModuleDeployers.sol:deployment-helper',
+	'SecurityPoolCommitmentIndexDeployer:contracts/statoblast/SecurityPoolModuleDeployers.sol:deployment-helper',
+	'SecurityPoolServicesDeployer:contracts/statoblast/SecurityPoolModuleDeployers.sol:deployment-helper',
+	'SecurityPoolSettlementDeployer:contracts/statoblast/SecurityPoolModuleDeployers.sol:deployment-helper',
+	'SecurityPoolReporterLedgerDeployer:contracts/statoblast/SecurityPoolModuleDeployers.sol:deployment-helper',
+	'SecurityPoolSettlementBookDeployer:contracts/statoblast/SecurityPoolModuleDeployers.sol:deployment-helper',
+	'SecurityPoolServices:contracts/statoblast/SecurityPoolServices.sol:dynamic-endpoint',
+	'SecurityPoolSettlement:contracts/statoblast/SecurityPoolSettlement.sol:dynamic-endpoint',
 	'SecurityPoolReporterLedger:contracts/statoblast/SecurityPoolReporterLedger.sol:dynamic-endpoint',
 	'SecurityPoolSettlementBook:contracts/statoblast/SecurityPoolSettlementBook.sol:dynamic-endpoint',
 	'SecurityPoolUniformPriceAuction:contracts/statoblast/SecurityPoolUniformPriceAuction.sol:dynamic-endpoint',
@@ -358,17 +358,17 @@ describe('contract operation classification', () => {
 			}
 			if (directDelegateContracts.has(entry.contract)) expect(entry.classification, `${entry.contract}.${entry.method}`).toBe('excluded-dangerous')
 			if (orphanFactoryContracts.has(entry.contract)) {
-				const authenticatedFeedWiring = entry.contract === 'OpenOraclePriceCoordinatorFactory' && ['deploySharedPoolPriceFeed', 'configureSharedPriceFeed', 'configureSecurityPool'].includes(entry.method)
+				const authenticatedFeedWiring = entry.contract === 'OpenOraclePriceCoordinatorFactory' && ['deploySharedPoolPriceFeed', 'configureSharedPriceFeed', 'configureQuestionLedger'].includes(entry.method)
 				expect(entry.classification, `${entry.contract}.${entry.method}`).toBe(authenticatedFeedWiring ? 'role-restricted' : 'excluded-dangerous')
 			}
 		}
 	})
 
 	test('classifies canonical receive and fallback entry points by ABI kind', () => {
-		expect(classifiedMethod('SecurityPoolPortfolioForkCoordinator', 'receive', 'receive')).toBeUndefined()
+		expect(classifiedMethod('SecurityPoolForkCoordinator', 'receive', 'receive')).toBeUndefined()
 		const wethDeposit = classifiedMethod('WETH9', 'deposit')
 		expect(classifiedMethod('WETH9', 'receive', 'receive')).toMatchObject({ abiEntryKind: 'receive', classification: wethDeposit?.classification, operationId: wethDeposit?.operationId })
-		expect(classifiedMethod('SecurityPool', 'receive', 'receive')).toBeUndefined()
+		expect(classifiedMethod('QuestionLedger', 'receive', 'receive')).toBeUndefined()
 		expect(classifiedMethod('TwoWayConstantProductRouter', 'receive', 'receive')).toMatchObject({ abiEntryKind: 'receive', classification: 'role-restricted' })
 		expect(classifiedMethod('EscalationGame', 'fallback', 'fallback')).toMatchObject({ abiEntryKind: 'fallback', classification: 'role-restricted' })
 	})
@@ -527,5 +527,5 @@ describe('contract operation classification', () => {
 })
 
 test('#1356 canonical runtime catalog excludes the unused migration proxy', () => {
-	expect(CANONICAL_MUTATING_CONTRACT_MANIFEST.some(entry => entry.contract === 'SecurityPoolMigrationProxy')).toBe(false)
+	expect(CANONICAL_MUTATING_CONTRACT_MANIFEST.some(entry => entry.contract === 'QuestionLedgerMigrationProxy')).toBe(false)
 })

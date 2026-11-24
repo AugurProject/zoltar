@@ -168,7 +168,7 @@ export const expectReportCatalogGenerations = async ({ database, operationsChain
 	await database.sql`DELETE FROM chain_reorganizations WHERE id = ${generationId}`
 }
 
-export const expectTradingAndPortfolioPagination = async ({ database, operationsChainId, oracle }: OperationsContext): Promise<void> => {
+export const expectTradingAndSecurityPoolPagination = async ({ database, operationsChainId, oracle }: OperationsContext): Promise<void> => {
 	const tradingResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading/${operationsChainId}/${oracle.toLowerCase()}`), database.sql)
 	if (tradingResponse === undefined) throw new Error('trading endpoint did not return a response')
 	const trading = (await tradingResponse.json()) as {
@@ -199,43 +199,43 @@ export const expectTradingAndPortfolioPagination = async ({ database, operations
 		balance: '2',
 	})
 
-	const portfolioResponse = await handleApi(new Request(`http://localhost/api/v1/state/address-portfolio?chainId=${operationsChainId}&address=${address.toLowerCase()}`), database.sql)
-	if (portfolioResponse === undefined) throw new Error('portfolio endpoint did not return a response')
-	const portfolio = (await portfolioResponse.json()) as {
+	const securityPoolResponse = await handleApi(new Request(`http://localhost/api/v1/state/address-security-pool?chainId=${operationsChainId}&address=${address.toLowerCase()}`), database.sql)
+	if (securityPoolResponse === undefined) throw new Error('security pool endpoint did not return a response')
+	const securityPool = (await securityPoolResponse.json()) as {
 		data: {
 			lp_positions: Array<{ market_address: string; balance: string }>
 			fork_participation: Array<{ universe_identity: string }>
 			report_participation: Array<{ report_id: string }>
-			portfolioPagination: Record<'lp' | 'forks' | 'reports', { total: number; hasMore: boolean; nextCursor: string }>
+			securityPoolPagination: Record<'lp' | 'forks' | 'reports', { total: number; hasMore: boolean; nextCursor: string }>
 		}
 	}
-	expect(portfolio.data.lp_positions).toHaveLength(100)
-	expect(portfolio.data.fork_participation).toHaveLength(100)
-	expect(portfolio.data.report_participation).toHaveLength(100)
-	for (const kind of ['lp', 'forks', 'reports'] as const) expect(portfolio.data.portfolioPagination[kind]).toMatchObject({ total: 102, hasMore: true })
+	expect(securityPool.data.lp_positions).toHaveLength(100)
+	expect(securityPool.data.fork_participation).toHaveLength(100)
+	expect(securityPool.data.report_participation).toHaveLength(100)
+	for (const kind of ['lp', 'forks', 'reports'] as const) expect(securityPool.data.securityPoolPagination[kind]).toMatchObject({ total: 102, hasMore: true })
 
-	const portfolioContinuationUrl = new URL('http://localhost/api/v1/state/address-portfolio')
-	portfolioContinuationUrl.search = new URLSearchParams({
+	const securityPoolContinuationUrl = new URL('http://localhost/api/v1/state/address-security-pool')
+	securityPoolContinuationUrl.search = new URLSearchParams({
 		chainId: String(operationsChainId),
 		address: address.toLowerCase(),
-		lpCursor: portfolio.data.portfolioPagination.lp.nextCursor,
-		forkCursor: portfolio.data.portfolioPagination.forks.nextCursor,
-		reportCursor: portfolio.data.portfolioPagination.reports.nextCursor,
+		lpCursor: securityPool.data.securityPoolPagination.lp.nextCursor,
+		forkCursor: securityPool.data.securityPoolPagination.forks.nextCursor,
+		reportCursor: securityPool.data.securityPoolPagination.reports.nextCursor,
 	}).toString()
-	const portfolioContinuationResponse = await handleApi(new Request(portfolioContinuationUrl), database.sql)
-	if (portfolioContinuationResponse === undefined) throw new Error('portfolio continuation did not return a response')
-	const portfolioContinuation = (await portfolioContinuationResponse.json()) as typeof portfolio
-	expect(portfolioContinuation.data.lp_positions).toHaveLength(2)
-	expect(portfolioContinuation.data.fork_participation).toHaveLength(2)
-	expect(portfolioContinuation.data.report_participation).toHaveLength(2)
-	for (const kind of ['lp', 'forks', 'reports'] as const) expect(portfolioContinuation.data.portfolioPagination[kind]).toMatchObject({ total: 102, hasMore: false })
-	expect(new Set([...portfolio.data.lp_positions, ...portfolioContinuation.data.lp_positions].map(item => item.market_address)).size).toBe(102)
-	expect(portfolioContinuation.data.lp_positions.find(item => item.market_address === selfTransferMarket)).toMatchObject({ balance: '2' })
+	const securityPoolContinuationResponse = await handleApi(new Request(securityPoolContinuationUrl), database.sql)
+	if (securityPoolContinuationResponse === undefined) throw new Error('security pool continuation did not return a response')
+	const securityPoolContinuation = (await securityPoolContinuationResponse.json()) as typeof securityPool
+	expect(securityPoolContinuation.data.lp_positions).toHaveLength(2)
+	expect(securityPoolContinuation.data.fork_participation).toHaveLength(2)
+	expect(securityPoolContinuation.data.report_participation).toHaveLength(2)
+	for (const kind of ['lp', 'forks', 'reports'] as const) expect(securityPoolContinuation.data.securityPoolPagination[kind]).toMatchObject({ total: 102, hasMore: false })
+	expect(new Set([...securityPool.data.lp_positions, ...securityPoolContinuation.data.lp_positions].map(item => item.market_address)).size).toBe(102)
+	expect(securityPoolContinuation.data.lp_positions.find(item => item.market_address === selfTransferMarket)).toMatchObject({ balance: '2' })
 
-	const changedPortfolioCursor = decodeOpaqueCursor(portfolio.data.portfolioPagination.lp.nextCursor) as unknown[]
-	changedPortfolioCursor[9] = 103
-	const changedPortfolioResponse = await handleApi(new Request(`http://localhost/api/v1/state/address-portfolio?chainId=${operationsChainId}&address=${address.toLowerCase()}&lpCursor=${encodeURIComponent(btoa(JSON.stringify(changedPortfolioCursor)))}`), database.sql)
-	expect(changedPortfolioResponse?.status).toBe(409)
+	const changedSecurityPoolCursor = decodeOpaqueCursor(securityPool.data.securityPoolPagination.lp.nextCursor) as unknown[]
+	changedSecurityPoolCursor[9] = 103
+	const changedSecurityPoolResponse = await handleApi(new Request(`http://localhost/api/v1/state/address-security-pool?chainId=${operationsChainId}&address=${address.toLowerCase()}&lpCursor=${encodeURIComponent(btoa(JSON.stringify(changedSecurityPoolCursor)))}`), database.sql)
+	expect(changedSecurityPoolResponse?.status).toBe(409)
 }
 
 export const expectRiskAndForkCatalogs = async ({ database, operationsChainId }: OperationsContext): Promise<void> => {

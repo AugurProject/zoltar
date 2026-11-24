@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { readOpenOracleReportIdQueryParam, readOpenOracleViewQueryParam, writeOpenOracleReportIdQueryParam, writeOpenOracleViewQueryParam } from '../navigation/openOracleUrlParams.js'
-import { hasInvalidUniverseQueryParam, readGenesisQueryParam, readSecurityPoolQuestionIdQueryParam, readUniverseQueryParam, readZoltarViewQueryParam, updateSearchParams, writeGenesisQueryParam, writeUniverseQueryParam, writeZoltarViewQueryParam } from '../navigation/urlParams.js'
+import { hasInvalidUniverseQueryParam, readGenesisQueryParam, readQuestionLedgerQuestionIdQueryParam, readUniverseQueryParam, readZoltarViewQueryParam, updateSearchParams, writeGenesisQueryParam, writeUniverseQueryParam, writeZoltarViewQueryParam } from '../navigation/urlParams.js'
 
 void describe('url params', () => {
 	void test('accepts only Yes and No canonical genesis choices independently of fork universe IDs', () => {
@@ -45,9 +45,9 @@ void describe('url params', () => {
 		expect(writeUniverseQueryParam('?foo=bar&universe=12', undefined)).toBe('?foo=bar')
 	})
 
-	void test('reads a security pool question id query param', () => {
-		expect(readSecurityPoolQuestionIdQueryParam('?questionId=0x42')).toBe('0x42')
-		expect(readSecurityPoolQuestionIdQueryParam('?questionId=')).toBe(undefined)
+	void test('reads a question ledger question id query param', () => {
+		expect(readQuestionLedgerQuestionIdQueryParam('?questionId=0x42')).toBe('0x42')
+		expect(readQuestionLedgerQuestionIdQueryParam('?questionId=')).toBe(undefined)
 	})
 
 	void test('reads and writes an open oracle report id query param', () => {

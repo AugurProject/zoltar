@@ -78,7 +78,7 @@ export const accountingCheckpoint = (hash: BlockHash): StoredLog => ({
 			reason: 0,
 			settlementCollateralAttoEth: 85_000_000_000_000_000_000n.toString(),
 			shareTokenSupplyAttoShares: 85_000_000_000_000_000_000n.toString(),
-			lastSettlementPortfolioTime: '1767225600',
+			lastSettlementSecurityPoolTime: '1767225600',
 		},
 	},
 })
@@ -98,8 +98,8 @@ export const repPriceLog = (hash: BlockHash, price: string): StoredLog =>
 	})
 
 export const priceHistoryLogs = (hash: BlockHash): readonly StoredLog[] => [
-	decodedLog(hash, 2, address, 'DeploySecurityPool', {
-		securityPool: discoveredAddress,
+	decodedLog(hash, 2, address, 'DeployQuestionLedger', {
+		questionLedger: discoveredAddress,
 		parent: '0x0000000000000000000000000000000000000000',
 		universeId: '0',
 		questionId: '42',
@@ -109,7 +109,7 @@ export const priceHistoryLogs = (hash: BlockHash): readonly StoredLog[] => [
 		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n.toString(),
 	}),
 	decodedLog(hash, 3, address, 'PairCreated', {
-		securityPool: discoveredAddress,
+		questionLedger: discoveredAddress,
 		shareToken: wethAddress,
 		universeId: '0',
 		pair: pairAddress,

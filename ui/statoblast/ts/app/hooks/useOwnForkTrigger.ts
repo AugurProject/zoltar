@@ -1,4 +1,4 @@
-import * as copy from '@zoltar/ui-statoblast-shared/copy/portfolio.js'
+import * as copy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
@@ -14,15 +14,15 @@ import type { WriteOperationsParameters } from '@zoltar/ui-statoblast-shared/typ
 type WalletCallbacks = Parameters<typeof createWalletWriteClient>[1]
 
 export type UseOwnForkTriggerDependencies = {
-	approveOwnForkAdmission: (accountAddress: Address, callbacks: WalletCallbacks, securityPoolAddress: Address, amountAttoRep: bigint) => Promise<Hash>
-	forkWithOwnEscalationGame: (accountAddress: Address, callbacks: WalletCallbacks, securityPoolAddress: Address) => Promise<Hash>
-	loadOwnForkAdmission: (securityPoolAddress: Address, accountAddress: Address | undefined) => Promise<OwnForkAdmission>
+	approveOwnForkAdmission: (accountAddress: Address, callbacks: WalletCallbacks, questionLedgerAddress: Address, amountAttoRep: bigint) => Promise<Hash>
+	forkWithOwnEscalationGame: (accountAddress: Address, callbacks: WalletCallbacks, questionLedgerAddress: Address) => Promise<Hash>
+	loadOwnForkAdmission: (questionLedgerAddress: Address, accountAddress: Address | undefined) => Promise<OwnForkAdmission>
 }
 
 const defaultDependencies: UseOwnForkTriggerDependencies = {
-	approveOwnForkAdmission: async (accountAddress, callbacks, securityPoolAddress, amountAttoRep) => await approveOwnForkAdmission(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, amountAttoRep),
-	forkWithOwnEscalationGame: async (accountAddress, callbacks, securityPoolAddress) => await forkWithOwnEscalationGame(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress),
-	loadOwnForkAdmission: async (securityPoolAddress, accountAddress) => await loadOwnForkAdmission(createConnectedReadClient(), securityPoolAddress, accountAddress),
+	approveOwnForkAdmission: async (accountAddress, callbacks, questionLedgerAddress, amountAttoRep) => await approveOwnForkAdmission(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, amountAttoRep),
+	forkWithOwnEscalationGame: async (accountAddress, callbacks, questionLedgerAddress) => await forkWithOwnEscalationGame(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress),
+	loadOwnForkAdmission: async (questionLedgerAddress, accountAddress) => await loadOwnForkAdmission(createConnectedReadClient(), questionLedgerAddress, accountAddress),
 }
 
 type UseOwnForkTriggerParameters = {
@@ -30,7 +30,7 @@ type UseOwnForkTriggerParameters = {
 	active: boolean
 	onForked: (hash: Hash) => Promise<void>
 	parameters: WriteOperationsParameters
-	question: { securityPoolAddress: string; universeId: bigint } | undefined
+	question: { questionLedgerAddress: string; universeId: bigint } | undefined
 	refreshKey: number
 }
 
@@ -46,7 +46,7 @@ export function useOwnForkTrigger({ active, onForked, parameters, question, refr
 	const approvePending = useSignal(false)
 	const forkPending = useSignal(false)
 	const reloadCount = useSignal(0)
-	const poolAddress = question !== undefined && isAddress(question.securityPoolAddress) ? getAddress(question.securityPoolAddress) : undefined
+	const poolAddress = question !== undefined && isAddress(question.questionLedgerAddress) ? getAddress(question.questionLedgerAddress) : undefined
 	const admissionKey = `${poolAddress ?? ''}:${parameters.accountAddress ?? ''}`
 	const admissionKeyRef = useRef(admissionKey)
 	admissionKeyRef.current = admissionKey

@@ -15,7 +15,7 @@ import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 /// @dev This contract records liabilities; its authority holds and transfers the actual ETH.
 /// Every reported funding delta must be atomically backed by that custody. The authority also
 /// authenticates complete-set or winning-outcome burns and supplies irreversible finality.
-/// Finality uses a portfolio clock paused during forks; fee deadlines retain native calendar time.
+/// Finality uses a security pool clock paused during forks; fee deadlines retain native calendar time.
 /// A fork copies immutable roots, including ALL inherited outcome liabilities, in constant work.
 contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	using SecurityPoolPersistentMap for SecurityPoolPersistentMap.Store;
@@ -25,7 +25,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 
 	/// @notice Exclusive bound of every fee-stream end (about year 2242). Streams stop charging after it.
 	uint48 public constant FEE_END_LIMIT = uint48(1) << 33;
-	address public immutable portfolio;
+	address public immutable securityPool;
 	SecurityPoolSettlementWriter private immutable writer;
 	/// @notice Fee-stream ends round down to a multiple of this bucket duration in seconds.
 	/// @dev The largest bucket number is (FEE_END_LIMIT - 1) / feeEndGranularity.
@@ -37,28 +37,32 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	event SettlementMinted(uint64 indexed bookId, uint256 indexed questionId, uint256 cashAttoEth, uint256 outcomeShares);
 	event SettlementRedeemed(uint64 indexed bookId, uint256 indexed questionId, uint256 outcomeShares, uint256 units, uint256 cashAttoEth);
 	event FinalityScheduled(uint64 indexed bookId, uint256 indexed questionId, uint48 finalAfter);
-	event FinalClaimsFrozen(uint64 indexed bookId, uint64 indexed frozenBookId, uint48 portfolioTimestamp, uint256 units, uint256 cashAttoEth);
+	event FinalClaimsFrozen(uint64 indexed bookId, uint64 indexed frozenBookId, uint48 securityPoolTimestamp, uint256 units, uint256 cashAttoEth);
 	event FeeStreamReplaced(uint64 indexed bookId, uint256 indexed questionId, uint96 rateAttoEthPerSecond, uint48 end);
-	event AggregateFeesAccrued(uint64 indexed bookId, uint48 portfolioTimestamp, uint256 cashAttoEth);
+	event AggregateFeesAccrued(uint64 indexed bookId, uint48 securityPoolTimestamp, uint256 cashAttoEth);
 
 	constructor(address authority, uint256 minimumExchangeRate, uint48 endGranularity) SecurityPoolSettlementPricing(minimumExchangeRate) {
 		require(authority != address(0), 'Invalid settlement authority');
 		require(endGranularity != 0 && endGranularity <= FEE_END_LIMIT >> 1, 'Invalid fee end granularity');
-		portfolio = authority;
+		securityPool = authority;
 		writer = new SecurityPoolSettlementWriter();
 		feeEndGranularity = endGranularity;
 	}
 
-	modifier onlyPortfolio() {
-		require(msg.sender == portfolio, 'Only portfolio');
+	modifier onlySecurityPool() {
+		_requireSecurityPool();
 		_;
 	}
 
-	function createBook(uint48 portfolioTimestamp) external onlyPortfolio returns (uint64 bookId) {
-		require(portfolioTimestamp <= block.timestamp, 'Future settlement clock');
+	function _requireSecurityPool() private view {
+		require(msg.sender == securityPool, 'Only security pool');
+	}
+
+	function createBook(uint48 securityPoolTimestamp) external onlySecurityPool returns (uint64 bookId) {
+		require(securityPoolTimestamp <= block.timestamp, 'Future settlement clock');
 		bookId = ++lastBookId;
 		fundingTargets[bookId] = FundingTarget(1, 1);
-		books[bookId].portfolioTimestamp = portfolioTimestamp;
+		books[bookId].securityPoolTimestamp = securityPoolTimestamp;
 		books[bookId].feesEnabled = true;
 		_setFeeMode(books[bookId], true);
 		emit BookCreated(bookId, 0, 0, 0);
@@ -66,15 +70,15 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 
 	/// @notice Seal a source at fork time after protecting claims already final strictly before it.
 	/// @dev Sealed sources allow frozen claims and fee collection, but no active-unit redemptions.
-	function sealForFork(uint64 bookId, uint48 portfolioTimestamp) external onlyPortfolio {
+	function sealForFork(uint64 bookId, uint48 securityPoolTimestamp) external onlySecurityPool {
 		Book storage book = _activeBook(bookId);
-		_freezeMatured(bookId, book, portfolioTimestamp);
+		_freezeMatured(bookId, book, securityPoolTimestamp);
 		book.isSealed = true;
 	}
 
 	/// @notice Create a child with independently supplied ETH and every source outcome liability.
 	/// @dev Source fee escrow and finalized claims remain source obligations and are not duplicated.
-	function createChildBook(uint64 sourceBookId, uint256 fundedCashAttoEth, uint256 recoveryAttoRep) external onlyPortfolio returns (uint64 bookId) {
+	function createChildBook(uint64 sourceBookId, uint256 fundedCashAttoEth, uint256 recoveryAttoRep) external onlySecurityPool returns (uint64 bookId) {
 		Book storage source = _book(sourceBookId);
 		require(source.isSealed, 'Settlement source not sealed');
 		require(fundedCashAttoEth <= requiredForkCash(sourceBookId), 'Child cash exceeds liabilities');
@@ -89,12 +93,12 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		child.questionRoot = source.questionRoot;
 		child.finalityRoot = source.finalityRoot;
 		child.frozenRoot = source.frozenRoot;
-		child.portfolioTimestamp = source.portfolioTimestamp;
+		child.securityPoolTimestamp = source.securityPoolTimestamp;
 		child.feeRateRoot = source.feeRateRoot;
 		child.feeEndRoot = source.feeEndRoot;
 		child.feeModeRoot = source.feeModeRoot;
 		child.feesEnabled = source.feesEnabled;
-		child.minimumFinalAfter = source.portfolioTimestamp;
+		child.minimumFinalAfter = source.securityPoolTimestamp;
 		child.feeTimeOffset = source.feeTimeOffset;
 		child.finalizedUnitsPrefix = source.finalizedUnitsPrefix;
 		recoveryStates[bookId] = recoveryStates[sourceBookId];
@@ -136,7 +140,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		(Question memory state, uint64 frozenBookId) = scaledQuestion(bookId, questionId);
 		// A zero-unit final question has no funded FrozenBook. Its immutable
 		// source cutoff still closes recovery rights to separate premium cash.
-		uint48 cutoff = book.isSealed ? book.portfolioTimestamp : forkTimestamp;
+		uint48 cutoff = book.isSealed ? book.securityPoolTimestamp : forkTimestamp;
 		return
 			frozenBookId == 0 &&
 			state.outcomeSupplyAttoShares != 0 &&
@@ -149,26 +153,38 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 
 	/// @notice Skip an inactive fork window without extending any question's calendar deadline.
 	/// @dev The child is prepared before its activation date, so this clock may be in the future
-	/// while fees are disabled. Its portfolio finality clock and inherited claims do not advance.
-	function setFeeClock(uint64 bookId, uint48 nativeTimestamp) external onlyPortfolio {
+	/// while fees are disabled. Its security pool finality clock and inherited claims do not advance.
+	function setFeeClock(uint64 bookId, uint48 nativeTimestamp) external onlySecurityPool {
 		Book storage book = _activeBook(bookId);
 		require(!book.feesEnabled, 'Pause fees before clock change');
 		require(nativeTimestamp >= _feeTimestamp(book), 'Fee clock cannot go backwards');
-		book.feeTimeOffset = nativeTimestamp - book.portfolioTimestamp;
+		book.feeTimeOffset = nativeTimestamp - book.securityPoolTimestamp;
 		_setFeeMode(book, false);
 	}
 
 	function totals(uint64 bookId)
 		external
 		view
-		returns (uint256 cashAttoEth, uint256 units, uint256 feeCashAttoEth, uint48 portfolioTimestamp, bool isSealed)
+		returns (
+			uint256 cashAttoEth,
+			uint256 units,
+			uint256 feeCashAttoEth,
+			uint48 securityPoolTimestamp,
+			bool isSealed
+		)
 	{
 		Book storage book = _book(bookId);
-		return (book.cashAttoEth, _descaled(book.units), book.feeCashAttoEth, book.portfolioTimestamp, book.isSealed);
+		return (
+			book.cashAttoEth,
+			_descaled(book.units),
+			book.feeCashAttoEth,
+			book.securityPoolTimestamp,
+			book.isSealed
+		);
 	}
 
 	/// @notice Donate the active cash deficit while preserving all recovery REP.
-	function topUp(uint64 bookId, uint256 cashAttoEth) external onlyPortfolio {
+	function topUp(uint64 bookId, uint256 cashAttoEth) external onlySecurityPool {
 		Book storage book = _activeBook(bookId);
 		require(cashAttoEth != 0 && cashAttoEth == _missingCash(bookId, book), 'Settlement deficit must be exact');
 		book.cashAttoEth += cashAttoEth;
@@ -176,17 +192,17 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		emit SettlementBookRepaired(bookId, cashAttoEth);
 	}
 
-	function mint(uint64 bookId, uint256 questionId, uint256 cashAttoEth, uint256 minimumShares, uint48 portfolioTimestamp) external onlyPortfolio returns (uint256) {
-		return _mint(bookId, questionId, cashAttoEth, minimumShares, 0, portfolioTimestamp);
+	function mint(uint64 bookId, uint256 questionId, uint256 cashAttoEth, uint256 minimumShares, uint48 securityPoolTimestamp) external onlySecurityPool returns (uint256) {
+		return _mint(bookId, questionId, cashAttoEth, minimumShares, 0, securityPoolTimestamp);
 	}
 
-	function mintWithRecoveryRep(uint64 bookId, uint256 questionId, uint256 cashAttoEth, uint256 minimumShares, uint256 recoveryAttoRep, uint48 portfolioTimestamp) external onlyPortfolio returns (uint256) {
-		return _mint(bookId, questionId, cashAttoEth, minimumShares, recoveryAttoRep, portfolioTimestamp);
+	function mintWithRecoveryRep(uint64 bookId, uint256 questionId, uint256 cashAttoEth, uint256 minimumShares, uint256 recoveryAttoRep, uint48 securityPoolTimestamp) external onlySecurityPool returns (uint256) {
+		return _mint(bookId, questionId, cashAttoEth, minimumShares, recoveryAttoRep, securityPoolTimestamp);
 	}
 
-	function _mint(uint64 bookId, uint256 questionId, uint256 cashAttoEth, uint256 minimumShares, uint256 recoveryAttoRep, uint48 portfolioTimestamp) private returns (uint256 outcomeShares) {
+	function _mint(uint64 bookId, uint256 questionId, uint256 cashAttoEth, uint256 minimumShares, uint256 recoveryAttoRep, uint48 securityPoolTimestamp) private returns (uint256 outcomeShares) {
 		Book storage book = _activeBook(bookId);
-		_accrueFees(bookId, book, portfolioTimestamp);
+		_accrueFees(bookId, book, securityPoolTimestamp);
 		require(cashAttoEth > 0, 'Zero settlement funding');
 		outcomeShares = quoteMint(bookId, questionId, cashAttoEth);
 		(Question memory state, ) = scaledQuestion(bookId, questionId);
@@ -213,9 +229,9 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	}
 
 	/// @notice Burn authenticated complete sets or winning outcomes and return their funded cash.
-	function redeem(uint64 bookId, uint256 questionId, uint256 outcomeShares, uint256 minimumCashAttoEth, uint48 portfolioTimestamp) public onlyPortfolio returns (uint256 cashAttoEth, uint256 unitsBurned, uint256 recoveryAttoRep) {
+	function redeem(uint64 bookId, uint256 questionId, uint256 outcomeShares, uint256 minimumCashAttoEth, uint48 securityPoolTimestamp) public onlySecurityPool returns (uint256 cashAttoEth, uint256 unitsBurned, uint256 recoveryAttoRep) {
 		Book storage book = _book(bookId);
-		if (!book.isSealed) _accrueFees(bookId, book, portfolioTimestamp);
+		if (!book.isSealed) _accrueFees(bookId, book, securityPoolTimestamp);
 		(Question memory state, uint64 frozenBookId) = scaledQuestion(bookId, questionId);
 		if (!book.isSealed && frozenBookId == 0) frozenBookId = _finalizeQuestion(bookId, book, questionId, state);
 		require(outcomeShares > 0 && outcomeShares <= state.outcomeSupplyAttoShares, 'Invalid outcome burn');
@@ -266,9 +282,9 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	/// @dev Clamp the end to the fee budget above the backing floor and FEE_END_LIMIT, then round it
 	/// down to feeEndGranularity. Runoff pauses accrual globally; pausing never extends the absolute
 	/// end, so skipped intervals cannot be charged after recap.
-	function replaceFeeStream(uint64 bookId, uint256 questionId, uint96 rateAttoEthPerSecond, uint48 end, uint48 portfolioTimestamp) external onlyPortfolio {
+	function replaceFeeStream(uint64 bookId, uint256 questionId, uint96 rateAttoEthPerSecond, uint48 end, uint48 securityPoolTimestamp) external onlySecurityPool {
 		Book storage book = _activeBook(bookId);
-		_accrueFees(bookId, book, portfolioTimestamp);
+		_accrueFees(bookId, book, securityPoolTimestamp);
 		(Question memory state, uint64 frozenBookId) = scaledQuestion(bookId, questionId);
 		require(frozenBookId == 0, 'Final claim fees closed');
 		uint48 feeClockTimestamp = _feeTimestamp(book);
@@ -295,16 +311,16 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		emit FeeStreamReplaced(bookId, questionId, rateAttoEthPerSecond, state.feeEnd);
 	}
 
-	function collectFees(uint64 bookId, uint256 cashAttoEth) external onlyPortfolio {
+	function collectFees(uint64 bookId, uint256 cashAttoEth) external onlySecurityPool {
 		Book storage book = _book(bookId);
 		require(cashAttoEth <= book.feeCashAttoEth, 'Fee escrow insufficient');
 		book.feeCashAttoEth -= cashAttoEth;
 	}
 
-	/// @notice Stop at the last valid price portfolio timestamp before advancing through a stale-price period.
-	function setFeeAccrualEnabled(uint64 bookId, bool enabled, uint48 portfolioTimestamp) external onlyPortfolio {
+	/// @notice Stop at the last valid price security pool timestamp before advancing through a stale-price period.
+	function setFeeAccrualEnabled(uint64 bookId, bool enabled, uint48 securityPoolTimestamp) external onlySecurityPool {
 		Book storage book = _activeBook(bookId);
-		_accrueFees(bookId, book, portfolioTimestamp);
+		_accrueFees(bookId, book, securityPoolTimestamp);
 		require(!enabled || _feeTimestamp(book) <= block.timestamp, 'Fee activation is in the future');
 		book.feesEnabled = enabled;
 		_syncFeeMode(bookId, book);
@@ -312,12 +328,12 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 
 	/// @notice Schedule a bound outcome's irreversible deadline; ordinary question end is insufficient.
 	/// @dev The authority must replace/cancel this schedule atomically whenever reporting changes it.
-	function scheduleFinality(uint64 bookId, uint256 questionId, uint48 finalAfter, uint48 portfolioTimestamp) external onlyPortfolio {
+	function scheduleFinality(uint64 bookId, uint256 questionId, uint48 finalAfter, uint48 securityPoolTimestamp) external onlySecurityPool {
 		Book storage book = _activeBook(bookId);
-		_accrueFees(bookId, book, portfolioTimestamp);
+		_accrueFees(bookId, book, securityPoolTimestamp);
 		(Question memory state, uint64 frozenBookId) = scaledQuestion(bookId, questionId);
-		require(frozenBookId == 0 && !_isMature(book, state.finalAfter, book.portfolioTimestamp), 'Final claim immutable');
-		require(finalAfter == 0 || finalAfter >= portfolioTimestamp, 'Finality already elapsed');
+		require(frozenBookId == 0 && !_isMature(book, state.finalAfter, book.securityPoolTimestamp), 'Final claim immutable');
+		require(finalAfter == 0 || finalAfter >= securityPoolTimestamp, 'Finality already elapsed');
 		require(finalAfter == 0 || state.feeRateAttoEthPerSecond == 0 || state.feeEnd <= _feeTimestamp(book), 'Stop fees before finality');
 		state.finalAfter = finalAfter;
 		_writeQuestion(bookId, book, questionId, state);
@@ -325,33 +341,33 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	}
 
 	/// @notice Checkpoint time fees only. Unrelated maturities stay pending.
-	function checkpointFees(uint64 bookId, uint48 portfolioTimestamp) external onlyPortfolio {
-		_accrueFees(bookId, _activeBook(bookId), portfolioTimestamp);
+	function checkpointFees(uint64 bookId, uint48 securityPoolTimestamp) external onlySecurityPool {
+		_accrueFees(bookId, _activeBook(bookId), securityPoolTimestamp);
 	}
 
 	/// @notice Reserve one question's finalized claim without waiting for a redemption.
-	function finalizeQuestion(uint64 bookId, uint256 questionId, uint48 portfolioTimestamp) external onlyPortfolio {
+	function finalizeQuestion(uint64 bookId, uint256 questionId, uint48 securityPoolTimestamp) external onlySecurityPool {
 		Book storage book = _activeBook(bookId);
-		_accrueFees(bookId, book, portfolioTimestamp);
+		_accrueFees(bookId, book, securityPoolTimestamp);
 		(Question memory state, uint64 frozenBookId) = scaledQuestion(bookId, questionId);
 		if (frozenBookId == 0) _finalizeQuestion(bookId, book, questionId, state);
 	}
 
-	function freezeMatured(uint64 bookId, uint48 portfolioTimestamp) external onlyPortfolio returns (uint64 frozenBookId) {
+	function freezeMatured(uint64 bookId, uint48 securityPoolTimestamp) external onlySecurityPool returns (uint64 frozenBookId) {
 		Book storage book = _activeBook(bookId);
-		return _freezeMatured(bookId, book, portfolioTimestamp);
+		return _freezeMatured(bookId, book, securityPoolTimestamp);
 	}
 
 	function quoteRedemption(uint64 bookId, uint256 questionId, uint256 outcomeShares) public view returns (uint256 cashAttoEth, uint256 unitsBurned) {
-		return _quoteRedemption(bookId, questionId, outcomeShares, _book(bookId).portfolioTimestamp);
+		return _quoteRedemption(bookId, questionId, outcomeShares, _book(bookId).securityPoolTimestamp);
 	}
 
 	/// @notice Quotes checkpointed balances using the supplied clock to determine whether a named reservation comes first.
-	function quoteRedemptionAt(uint64 bookId, uint256 questionId, uint256 outcomeShares, uint48 portfolioTimestamp) external view returns (uint256, uint256) {
-		return _quoteRedemption(bookId, questionId, outcomeShares, portfolioTimestamp);
+	function quoteRedemptionAt(uint64 bookId, uint256 questionId, uint256 outcomeShares, uint48 securityPoolTimestamp) external view returns (uint256, uint256) {
+		return _quoteRedemption(bookId, questionId, outcomeShares, securityPoolTimestamp);
 	}
 
-	function _quoteRedemption(uint64 bookId, uint256 questionId, uint256 outcomeShares, uint48 portfolioTimestamp) private view returns (uint256 cashAttoEth, uint256 unitsBurned) {
+	function _quoteRedemption(uint64 bookId, uint256 questionId, uint256 outcomeShares, uint48 securityPoolTimestamp) private view returns (uint256 cashAttoEth, uint256 unitsBurned) {
 		Book storage book = _book(bookId);
 		(Question memory state, uint64 frozenBookId) = scaledQuestion(bookId, questionId);
 		// Losing outcome tokens may remain after every payable claim is burned.
@@ -360,7 +376,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		if (outcomeShares == 0) return (0, 0);
 		unitsBurned = SettlementMath.unitsForRedeemedShares(state.units, state.outcomeSupplyAttoShares, outcomeShares);
 		if (frozenBookId == 0) {
-			if (!book.isSealed && _isMature(book, state.finalAfter, portfolioTimestamp)) {
+			if (!book.isSealed && _isMature(book, state.finalAfter, securityPoolTimestamp)) {
 				uint256 reserved = SettlementMath.cashForUnits(book.cashAttoEth, book.units, feeRemainders[bookId], state.units);
 				cashAttoEth = SettlementMath.cashForUnits(reserved, state.units, 0, unitsBurned);
 			} else
@@ -455,10 +471,10 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		return _book(bookId).recoveryAttoRep;
 	}
 
-	function _accrueFees(uint64 bookId, Book storage book, uint48 portfolioTimestamp) private {
-		require(portfolioTimestamp >= book.portfolioTimestamp && portfolioTimestamp <= block.timestamp, 'Invalid settlement clock');
+	function _accrueFees(uint64 bookId, Book storage book, uint48 securityPoolTimestamp) private {
+		require(securityPoolTimestamp >= book.securityPoolTimestamp && securityPoolTimestamp <= block.timestamp, 'Invalid settlement clock');
 		uint48 previousFeeTime = _feeTimestamp(book);
-		uint48 nextFeeTime = portfolioTimestamp + book.feeTimeOffset;
+		uint48 nextFeeTime = securityPoolTimestamp + book.feeTimeOffset;
 		if (feeModes[uint64(tree.floor(book.feeModeRoot, previousFeeTime))].funded && nextFeeTime > previousFeeTime) {
 			uint256 fees = _feeIntegral(book, nextFeeTime) - _feeIntegral(book, previousFeeTime);
 			(uint256 cashFees, uint256 remainder) = SettlementMath.feeCash(fees, _netCash(bookId, book), book.units, feeRemainders[bookId]);
@@ -466,17 +482,17 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 			feeRemainders[bookId] = remainder;
 			book.cashAttoEth -= cashFees;
 			book.feeCashAttoEth += cashFees;
-			if (cashFees != 0) emit AggregateFeesAccrued(bookId, portfolioTimestamp, cashFees);
+			if (cashFees != 0) emit AggregateFeesAccrued(bookId, securityPoolTimestamp, cashFees);
 		}
-		book.portfolioTimestamp = portfolioTimestamp;
+		book.securityPoolTimestamp = securityPoolTimestamp;
 	}
 
-	function _isMature(Book storage book, uint48 deadline, uint48 portfolioTimestamp) private view returns (bool) {
-		return deadline != 0 && deadline < portfolioTimestamp && book.minimumFinalAfter < portfolioTimestamp;
+	function _isMature(Book storage book, uint48 deadline, uint48 securityPoolTimestamp) private view returns (bool) {
+		return deadline != 0 && deadline < securityPoolTimestamp && book.minimumFinalAfter < securityPoolTimestamp;
 	}
 
 	function _finalizeQuestion(uint64 bookId, Book storage book, uint256 questionId, Question memory state) private returns (uint64 frozenBookId) {
-		if (!_isMature(book, state.finalAfter, book.portfolioTimestamp) || state.units == 0) return 0;
+		if (!_isMature(book, state.finalAfter, book.securityPoolTimestamp) || state.units == 0) return 0;
 		uint256 entitlement = _scaledRecovery(bookId, book, questionId, state);
 		frozenBookId = _reserveClaim(bookId, book, state.units, entitlement);
 		uint256 correction;
@@ -486,10 +502,10 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		_writeQuestionWithRecovery(bookId, questionId, state, correction, frozenBookId);
 	}
 
-	function _freezeMatured(uint64 bookId, Book storage book, uint48 portfolioTimestamp) private returns (uint64 frozenBookId) {
-		_accrueFees(bookId, book, portfolioTimestamp);
-		if (portfolioTimestamp <= book.minimumFinalAfter) return 0;
-		(uint256 prefix, uint256 correctionPrefix) = maturities.prefix(book.finalityRoot, portfolioTimestamp - 1);
+	function _freezeMatured(uint64 bookId, Book storage book, uint48 securityPoolTimestamp) private returns (uint64 frozenBookId) {
+		_accrueFees(bookId, book, securityPoolTimestamp);
+		if (securityPoolTimestamp <= book.minimumFinalAfter) return 0;
+		(uint256 prefix, uint256 correctionPrefix) = maturities.prefix(book.finalityRoot, securityPoolTimestamp - 1);
 		uint256 units;
 		// Only pending deadlines can change. All newly matured scheduled units
 		// fit the live book, so a modular prefix difference is their exact amount.
@@ -505,7 +521,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		}
 		recovery.finalizedPrefix = correctionPrefix;
 		frozenBookId = _reserveClaim(bookId, book, units, scaledRecovery);
-		book.frozenRoot = frozenHistory.append(book.frozenRoot, portfolioTimestamp - 1, frozenBookId);
+		book.frozenRoot = frozenHistory.append(book.frozenRoot, securityPoolTimestamp - 1, frozenBookId);
 	}
 
 	function _reserveClaim(uint64 bookId, Book storage book, uint256 units, uint256 scaledRecovery) private returns (uint64 frozenBookId) {
@@ -518,7 +534,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		frozenBookId = ++lastFrozenBookId;
 		frozenBooks[frozenBookId] = FrozenBook(cashAttoEth, units, bookId, recoveryAttoRep);
 		_syncFeeMode(bookId, book);
-		emit FinalClaimsFrozen(bookId, frozenBookId, book.portfolioTimestamp, _descaled(units), cashAttoEth);
+		emit FinalClaimsFrozen(bookId, frozenBookId, book.securityPoolTimestamp, _descaled(units), cashAttoEth);
 	}
 
 	/// @notice Remaining collateral that may fund fees, excluding the rounded-up backing floor.
@@ -588,7 +604,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 	}
 
 	function _feeTimestamp(Book storage book) private view returns (uint48) {
-		return book.portfolioTimestamp + book.feeTimeOffset;
+		return book.securityPoolTimestamp + book.feeTimeOffset;
 	}
 
 	function _writeQuestion(uint64 bookId, Book storage book, uint256 questionId, Question memory state) private {

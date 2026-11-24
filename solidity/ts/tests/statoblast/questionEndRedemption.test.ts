@@ -4,14 +4,14 @@ import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { approveToken, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
-import { redeemShares } from '../../testSupport/simulator/utils/contracts/securityPool'
-import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact, statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact } from '../../types/contractArtifact'
-import { statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact } from '../../types/contractArtifact'
-import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { redeemShares } from '../../testSupport/simulator/utils/contracts/questionLedger'
+import { statoblast_SecurityPool_SecurityPool as securityPoolArtifact, statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact } from '../../types/contractArtifact'
+import { statoblast_SecurityPoolSettlement_SecurityPoolSettlement as settlementArtifact } from '../../types/contractArtifact'
+import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 
-describe('Statoblast: question end and portfolio principal redemption', () => {
-	const fixture = useSecurityPoolPortfolioFixture()
-	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).securityPool })
+describe('Statoblast: question end and security pool principal redemption', () => {
+	const fixture = useSecurityPoolFixture()
+	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).questionLedger })
 	const capital = () => ({ abi: capitalArtifact.abi, address: fixture.capitalLedger })
 	const supply = () => fixture.owner().readContract({ ...pool(), functionName: 'shareTokenSupplyAttoShares' })
 	const demand = () => fixture.owner().readContract({ ...capital(), functionName: 'demandAttoEth' })
@@ -30,8 +30,8 @@ describe('Statoblast: question end and portfolio principal redemption', () => {
 		await fixture.prepare()
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime - 600n)
 		await fixture.refreshPrice()
-		const collateral = await fixture.other().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'collateralToken' })
-		const services = await fixture.other().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'services' })
+		const collateral = await fixture.other().readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'collateralToken' })
+		const services = await fixture.other().readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'services' })
 		await approveToken(fixture.other(), collateral, services)
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime - 2n)
 		await fixture.mint(unit)
@@ -66,7 +66,7 @@ describe('Statoblast: question end and portfolio principal redemption', () => {
 		const game = await finalize()
 		await fixture.refreshPrice()
 		await expect(withdraw(1_000n * unit)).rejects.toThrow()
-		const settlement = await fixture.owner().readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'settlement' })
+		const settlement = await fixture.owner().readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'settlement' })
 		await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'finalizeQuestion', args: [fixture.base.genesisUniverse, fixture.base.questionId] }))
 		await fixture.authorize(0n)
 		const beforeSupply = await supply()

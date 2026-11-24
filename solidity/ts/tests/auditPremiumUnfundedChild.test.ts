@@ -14,12 +14,12 @@ describe('audit: an unfunded or dust-funded child premium book stays usable', ()
 	let client: WriteClient
 	let address: Address
 	const target = () => ({ abi: artifact.abi, address })
-	const register = (universe: bigint, portfolioTimestamp: number) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'register', args: [universe, portfolioTimestamp] }))
+	const register = (universe: bigint, securityPoolTimestamp: number) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'register', args: [universe, securityPoolTimestamp] }))
 	const fund = (universe: bigint, id: bigint, cash: bigint) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'fund', args: [universe, id, cash] }))
 	const freeze = (universe: bigint) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'freeze', args: [universe] }))
 	const choose = (source: bigint, child: bigint, chosen: bigint, total: bigint) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'choose', args: [source, child, chosen, total] }))
 	const createChild = (source: bigint, child: bigint) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChild', args: [source, child] }))
-	const schedule = (universe: bigint, id: bigint, finalAfterPortfolioTime: number) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'schedule', args: [universe, id, finalAfterPortfolioTime] }))
+	const schedule = (universe: bigint, id: bigint, finalAfterSecurityPoolTime: number) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'schedule', args: [universe, id, finalAfterSecurityPoolTime] }))
 	const totals = async (universe: bigint) => {
 		const [cash, units] = await client.readContract({ ...target(), functionName: 'totals', args: [universe] })
 		return { cash, units }

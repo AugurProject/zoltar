@@ -4,7 +4,7 @@ export function getDefaultTradingFormState(): TradingFormState {
 	return {
 		completeSetAmount: '',
 		redeemAmount: '',
-		securityPoolAddress: '',
+		questionLedgerAddress: '',
 		selectedShareOutcome: 'yes',
 		targetOutcomeIndexes: '',
 	}

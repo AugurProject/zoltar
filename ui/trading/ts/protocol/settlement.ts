@@ -1,7 +1,7 @@
 import { attoSharesToRecoveryAttoRep } from '../lib/shareValue.js'
 import { outcomeValue, simulateSettlement } from './settlementSimulation.js'
 import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_QuestionLedger_QuestionLedger } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { getReportingOutcomeKey } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import type { DeploymentConfiguration } from './config.js'
 import type { LiveBalances, LiveMarket, MarketLifecycle } from './liveMarket.js'
@@ -9,7 +9,7 @@ import { latestBlockIdentity, minimumAfterSlippage, retainApprovedMinimum, type 
 import { encodeReceiveBasedRedeemRequest, shareOperationRouter, shareTokenAbi } from './authorization.js'
 import { loadTransactionFeeMarket, sellHoldingFeeBlocker } from './holdingFees.js'
 
-const securityPoolAbi = statoblast_SecurityPool_SecurityPool.abi
+const questionLedgerAbi = statoblast_QuestionLedger_QuestionLedger.abi
 
 export type SettlementOperation = 'redeem-complete-set' | 'redeem-winning-shares' | 'migrate-shares'
 export type ShareOutcome = 'INVALID' | 'YES' | 'NO'
@@ -97,7 +97,7 @@ export async function submitFreshSettlement(client: WalletClient, configuration:
 			return await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, shareOperationRouter(configuration), [invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n], [quote.amount, quote.amount, quote.amount], data] })
 		})
 	}
-	if (quote.operation === 'redeem-winning-shares') return await guardedWrite(async () => await client.writeContract({ abi: securityPoolAbi, address: quote.market.pool, functionName: 'redeemShares', account, args: [] }))
+	if (quote.operation === 'redeem-winning-shares') return await guardedWrite(async () => await client.writeContract({ abi: questionLedgerAbi, address: quote.market.pool, functionName: 'redeemShares', account, args: [] }))
 	if (refreshed.operation !== 'migrate-shares') throw new Error('Settlement operation changed during revalidation')
 	const sourceTokenId = (quote.market.universeId << 8n) | outcomeValue(refreshed.sourceOutcome)
 	return await guardedWrite(async () => await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'migrate', account, args: [sourceTokenId, refreshed.targetOutcomeIndexes] }))

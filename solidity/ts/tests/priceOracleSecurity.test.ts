@@ -40,7 +40,7 @@ import {
 	statoblast_openOracle_OpenOracle_OpenOracle,
 } from '../types/contractArtifact'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
-import { useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 type TransactionReceiptLogs = Awaited<ReturnType<WriteClient['waitForTransactionReceipt']>>['logs']
 const OPEN_ORACLE_GAME_MAPPING_SLOT = 1n
@@ -65,8 +65,8 @@ const findPriceReportedLog = (logs: TransactionReceiptLogs) => findFeedLog(logs,
 const findPriceReportRejectedLog = (logs: TransactionReceiptLogs) => findFeedLog(logs, 'PriceReportRejected')
 const findPriceReportDeferredLog = (logs: TransactionReceiptLogs) => findFeedLog(logs, 'PriceReportDeferred')
 
-describe('Shared portfolio oracle security regressions', () => {
-	const fixture = useSecurityPoolPortfolioFixture()
+describe('Shared security pool oracle security regressions', () => {
+	const fixture = useSecurityPoolFixture()
 	let client: WriteClient
 	let mockWindow: AnvilWindowEthereum
 	let priceOracle: `0x${string}`
@@ -831,11 +831,11 @@ describe('Shared portfolio oracle security regressions', () => {
 
 	test('adapter setup rejects repeated and unauthorized binding without changing the canonical feed', async () => {
 		const target = { abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: priceOracle }
-		const pool = fixture.poolFor(fixture.base.questionId).securityPool
-		await assert.rejects(client.writeContract({ ...target, functionName: 'setSecurityPool', args: [pool] }), /Security pool already set/)
+		const pool = fixture.poolFor(fixture.base.questionId).questionLedger
+		await assert.rejects(client.writeContract({ ...target, functionName: 'setQuestionLedger', args: [pool] }), /Question ledger already set/)
 		await assert.rejects(client.writeContract({ ...target, functionName: 'setSharedPriceFeed', args: [priceFeed] }), /Shared feed setup invalid/)
 		await assert.rejects(client.writeContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'registerCoordinator', args: [priceOracle] }), /Only security pool factory/)
-		assert.strictEqual(await client.readContract({ ...target, functionName: 'securityPool' }), pool)
+		assert.strictEqual(await client.readContract({ ...target, functionName: 'questionLedger' }), pool)
 		assert.strictEqual(await client.readContract({ ...target, functionName: 'priceFeed' }), priceFeed)
 	})
 
@@ -848,11 +848,11 @@ describe('Shared portfolio oracle security regressions', () => {
 		const beforeId = await nextId()
 		await assert.rejects(client.writeContract({ ...target, functionName: 'requestPrice', args: [1n, 0n, cost - 1n], value: cost - 1n }), /Oracle bounty too small/)
 		await assert.rejects(client.writeContract({ ...target, functionName: 'requestPrice', args: [1n, 0n, cost], value: cost - 1n }), /Not enough ETH for oracle bounty/)
-		await assert.rejects(client.writeContract({ ...direct, functionName: 'requestPortfolioPrice', args: [0n, 0n, cost], value: cost }), /Initial oracle price zero/)
+		await assert.rejects(client.writeContract({ ...direct, functionName: 'requestSecurityPoolPrice', args: [0n, 0n, cost], value: cost }), /Initial oracle price zero/)
 		await assert.rejects(recoverSettledPendingReport(client, priceOracle), /No report to recover/)
-		await assert.rejects(client.writeContract({ ...direct, functionName: 'requestPortfolioPrice', args: [1n, 1n << 128n, cost], value: cost }), /WETH report exceeds uint128/)
-		await assert.rejects(client.writeContract({ ...direct, functionName: 'requestPortfolioPrice', args: [(1n << 128n) * 10n ** 18n, minimum, cost], value: cost }), /REP report exceeds uint128/)
-		await assert.rejects(client.writeContract({ ...direct, functionName: 'requestPortfolioPrice', args: [1n, (1n << 128n) / 10n + 1n, cost], value: cost }), /Oracle escalation halt amount exceeds uint128 maximum/)
+		await assert.rejects(client.writeContract({ ...direct, functionName: 'requestSecurityPoolPrice', args: [1n, 1n << 128n, cost], value: cost }), /WETH report exceeds uint128/)
+		await assert.rejects(client.writeContract({ ...direct, functionName: 'requestSecurityPoolPrice', args: [(1n << 128n) * 10n ** 18n, minimum, cost], value: cost }), /REP report exceeds uint128/)
+		await assert.rejects(client.writeContract({ ...direct, functionName: 'requestSecurityPoolPrice', args: [1n, (1n << 128n) / 10n + 1n, cost], value: cost }), /Oracle escalation halt amount exceeds uint128 maximum/)
 		assert.strictEqual(await nextId(), beforeId)
 		assert.strictEqual(await getPendingReportId(client, priceOracle), 0n)
 		await requestPrice(client, priceOracle)
@@ -873,7 +873,7 @@ describe('Shared portfolio oracle security regressions', () => {
 		await mockWindow.setBalance(client.account.address, bounty * 2n)
 		const nextId = await client.readContract({ abi: statoblast_openOracle_OpenOracle_OpenOracle.abi, address: getInfraContractAddresses().openOracle, functionName: 'nextReportId' })
 		const minimum = await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'minimumToken1ReportAttoEth' })
-		await assert.rejects(client.writeContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'requestPortfolioPrice', args: [10n ** 18n, minimum, bounty], value: bounty }), /Oracle settler reward exceeds uint96 maximum/)
+		await assert.rejects(client.writeContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'requestSecurityPoolPrice', args: [10n ** 18n, minimum, bounty], value: bounty }), /Oracle settler reward exceeds uint96 maximum/)
 		assert.strictEqual(await getPendingReportId(client, priceOracle), 0n)
 		assert.strictEqual(await client.readContract({ abi: statoblast_openOracle_OpenOracle_OpenOracle.abi, address: getInfraContractAddresses().openOracle, functionName: 'nextReportId' }), nextId)
 	})

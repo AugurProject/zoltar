@@ -1,21 +1,12 @@
 import type { ForkedCarryWithdrawalSnapshot } from '../operations/carry-types.ts'
 import { keccak256, toHex, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
-import { escalationGameAbi, securityPoolAbi, securityPoolForkerAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
+import { escalationGameAbi, questionLedgerAbi, questionForkerAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
 import { computeNullifierRootFromProof } from './carry-proof-index.ts'
 import { loadCarryStorageCandidates, type CarryStorageRoute } from './carry-proof-storage.ts'
 import { computeWinningEconomics } from './carry-withdrawal-economics.ts'
 import { DISCOVERY_RPC_CONCURRENCY, drainConcurrent, mapWithConcurrency, type ChaosReadClient } from './discovery-client.ts'
 
-export async function scanCarryStorage(context: {
-	client: Pick<ChaosReadClient, 'readContract' | 'simulateContract' | 'getBlock'>
-	escalationGames: readonly CarryStorageRoute[]
-	wallet: Address
-	securityPoolForker: Address
-	anchorBlockNumber: bigint
-	expectedAnchorHash: Hash
-	maximumItems: number
-	multicall3?: Address
-}) {
+export async function scanCarryStorage(context: { client: Pick<ChaosReadClient, 'readContract' | 'simulateContract' | 'getBlock'>; escalationGames: readonly CarryStorageRoute[]; wallet: Address; questionForker: Address; anchorBlockNumber: bigint; expectedAnchorHash: Hash; maximumItems: number; multicall3?: Address }) {
 	const { client, anchorBlockNumber: blockNumber } = context
 	async function authenticateAnchor() {
 		const block = await client.getBlock({ blockNumber })
@@ -32,21 +23,21 @@ export async function scanCarryStorage(context: {
 			client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber, functionName: 'getBindingCapitalAttoRep' }),
 			client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber, functionName: 'nonDecisionThresholdAttoRep' }),
 			client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber, functionName: 'getEscalationGameEndDate' }),
-			client.readContract({ abi: securityPoolAbi, address: candidate.pool, blockNumber, functionName: 'universeId' }),
-			client.readContract({ abi: securityPoolAbi, address: candidate.pool, blockNumber, functionName: 'zoltar' }),
+			client.readContract({ abi: questionLedgerAbi, address: candidate.pool, blockNumber, functionName: 'universeId' }),
+			client.readContract({ abi: questionLedgerAbi, address: candidate.pool, blockNumber, functionName: 'zoltar' }),
 			client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber, functionName: 'settlementForkThresholdAttoRep' }),
 		])
 		const [forkThreshold, forkTime] = await drainConcurrent([client.readContract({ abi: zoltarAbi, address: zoltar, args: [universeId], blockNumber, functionName: 'getForkThresholdAttoRep' }), client.readContract({ abi: zoltarAbi, address: zoltar, args: [universeId], blockNumber, functionName: 'getForkTime' })])
 		return { bindingCapital, nonDecisionThreshold, gameEnd, forkThreshold, forkTime, frozenForkThreshold }
 	}
 	const verified = await mapWithConcurrency(selected, Math.min(2, DISCOVERY_RPC_CONCURRENCY), async (candidate): Promise<ForkedCarryWithdrawalSnapshot | undefined> => {
-		if (candidate.forker.toLowerCase() !== context.securityPoolForker.toLowerCase()) throw new Error('Carry storage pool uses an unexpected forker')
+		if (candidate.forker.toLowerCase() !== context.questionForker.toLowerCase()) throw new Error('Carry storage pool uses an unexpected forker')
 		const [poolState, resolved, initialized, resolution, poolOutcome] = await drainConcurrent([
-			client.readContract({ abi: securityPoolAbi, address: candidate.pool, blockNumber, functionName: 'systemState' }),
-			client.readContract({ abi: securityPoolAbi, address: candidate.pool, blockNumber, functionName: 'isEscalationResolved' }),
+			client.readContract({ abi: questionLedgerAbi, address: candidate.pool, blockNumber, functionName: 'systemState' }),
+			client.readContract({ abi: questionLedgerAbi, address: candidate.pool, blockNumber, functionName: 'isEscalationResolved' }),
 			client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber, functionName: 'forkCarrySnapshotInitialized' }),
 			client.readContract({ abi: escalationGameAbi, address: candidate.game, blockNumber, functionName: 'getFinalQuestionResolution' }),
-			client.readContract({ abi: securityPoolForkerAbi, address: context.securityPoolForker, args: [candidate.pool], blockNumber, functionName: 'getQuestionOutcome' }),
+			client.readContract({ abi: questionForkerAbi, address: context.questionForker, args: [candidate.pool], blockNumber, functionName: 'getQuestionOutcome' }),
 		])
 		if (Number(poolState) !== 0 || !resolved || !initialized || Number(resolution) !== candidate.outcome || Number(poolOutcome) !== candidate.outcome) return undefined
 		const proof = candidate.proof
@@ -71,7 +62,7 @@ export async function scanCarryStorage(context: {
 		const [{ bindingCapital, nonDecisionThreshold, gameEnd, forkThreshold, forkTime, frozenForkThreshold }, gameWithdrawal, simulation] = await drainConcurrent([
 			gameEconomics,
 			client.simulateContract({ abi: escalationGameAbi, address: candidate.game, account: candidate.pool, args: [argument, candidate.outcome], blockNumber, functionName: 'withdrawDeposit' }),
-			client.simulateContract({ abi: securityPoolAbi, address: candidate.pool, account: context.wallet, args: [candidate.outcome, [argument]], blockNumber, functionName: 'withdrawForkedEscalationDeposits' }),
+			client.simulateContract({ abi: questionLedgerAbi, address: candidate.pool, account: context.wallet, args: [candidate.outcome, [argument]], blockNumber, functionName: 'withdrawForkedEscalationDeposits' }),
 		])
 		const liveForkThreshold = forkTime > gameEnd ? nonDecisionThreshold : forkThreshold
 		const economics = computeWinningEconomics({

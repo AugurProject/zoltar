@@ -12,7 +12,7 @@ import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue
 import { formatScaledPercentage } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { MarketResolution } from '../components/MarketResolution.js'
 import { ProbabilityBar } from '../components/ProbabilityBar.js'
-import { TradingSecurityPoolLink } from '../components/TradingSecurityPoolLink.js'
+import { TradingQuestionLedgerLink } from '../components/TradingQuestionLedgerLink.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { liveCopy } from '../copy/live.js'
 import { getTradingRouteHref } from '../lib/routing.js'
@@ -38,7 +38,7 @@ export function MarketFacts({ market, nowSeconds, headingRef }: { market: LiveMa
 				</>
 			}
 			items={[
-				{ label: liveCopy.securityPool, value: <TradingSecurityPoolLink value={market.pool} /> },
+				{ label: liveCopy.questionLedger, value: <TradingQuestionLedgerLink value={market.pool} /> },
 				...(market.loadError === undefined
 					? [{ label: liveCopy.questionEnd, value: <TimestampValue timestamp={market.endTime} relative={false} /> }, ...(liquidity === undefined ? [] : [{ label: marketsCopy.liquidity, value: liquidity }]), { label: liveCopy.tradingFee, value: formatScaledPercentage(market.feeBps, 2) }]
 					: []),
@@ -52,8 +52,8 @@ export function MarketContracts({ market }: { market: LiveMarket }) {
 	return (
 		<ReadOnlyDetailAccordion title={marketsCopy.contracts}>
 			<DataGrid dense className='market-contracts-grid'>
-				<MetricField label={liveCopy.securityPool}>
-					<TradingSecurityPoolLink value={market.pool} />
+				<MetricField label={liveCopy.questionLedger}>
+					<TradingQuestionLedgerLink value={market.pool} />
 				</MetricField>
 				<MetricField label={liveCopy.tradingPool}>{market.pair === undefined ? commonCopy.notDeployed : <AddressValue address={market.pair} />}</MetricField>
 				<MetricField label={marketsCopy.shareToken}>

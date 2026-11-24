@@ -55,7 +55,7 @@ contract CoverageAttributionDecoy {
 	}
 }
 
-contract EscalationGameFactoryCoverageSecurityPool {
+contract EscalationGameFactoryCoverageQuestionLedger {
 	ReputationToken public immutable repToken;
 
 	constructor(ReputationToken configuredRepToken) {

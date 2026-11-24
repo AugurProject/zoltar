@@ -5,8 +5,8 @@ import { useUrlSearchState, type UrlHistoryMode } from '@zoltar/ui-core-shared/a
 import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
 import { getCurrentRouteHash, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { readOpenOracleReportIdQueryParam, writeOpenOracleReportIdQueryParam } from '@zoltar/ui-core-shared/navigation/openOracleUrlParams.js'
-import { readSecurityPoolQuestionIdQueryParam, readUniverseQueryParam, updateSearchParams, setOrDeleteSearchParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
-import { buildPoolsRouteHash, mapLegacyStatoblastHash, parsePoolsRouteHash, writePoolsLocationSearch, type PoolsLocation } from '@zoltar/ui-statoblast-shared/lib/statoblastLocation.js'
+import { readQuestionLedgerQuestionIdQueryParam, readUniverseQueryParam, updateSearchParams, setOrDeleteSearchParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
+import { buildPoolsRouteHash, parsePoolsRouteHash, writePoolsLocationSearch, type PoolsLocation } from '@zoltar/ui-statoblast-shared/lib/statoblastLocation.js'
 
 type StatoblastUrlState = {
 	poolBrowseState: PoolBrowseState
@@ -14,9 +14,9 @@ type StatoblastUrlState = {
 	vaultView: SelectedVaultView | undefined
 	activeUniverseId: bigint
 	openOracleReportId: string
-	securityPoolsView: string
-	securityPoolAddress: string
-	securityPoolQuestionId: string
+	questionLedgersView: string
+	questionLedgerAddress: string
+	questionLedgerQuestionId: string
 }
 
 const QUESTION_ID_QUERY_PARAM = 'questionId'
@@ -29,15 +29,14 @@ function readStatoblastUrlState(search: string, routeHash: string): StatoblastUr
 		...readVaultSelection(search),
 		activeUniverseId: readUniverseQueryParam(search) ?? readUniverseQueryParam(window.location.search) ?? 0n,
 		openOracleReportId: readOpenOracleReportIdQueryParam(search) ?? '',
-		securityPoolsView: poolsLocation?.view ?? 'browse',
-		securityPoolAddress: poolsLocation?.view === 'operate' ? poolsLocation.securityPoolAddress : '',
-		securityPoolQuestionId: readSecurityPoolQuestionIdQueryParam(search) ?? '',
+		questionLedgersView: poolsLocation?.view ?? 'browse',
+		questionLedgerAddress: poolsLocation?.view === 'operate' ? poolsLocation.questionLedgerAddress : '',
+		questionLedgerQuestionId: readQuestionLedgerQuestionIdQueryParam(search) ?? '',
 	}
 }
 
 export function useStatoblastUrlState() {
-	// A legacy `#/security-pools` link is rewritten in place so every reader sees the path-based pool location.
-	const { navigate: navigateUrl, state } = useUrlSearchState(readStatoblastUrlState, { mapLegacyHash: mapLegacyStatoblastHash })
+	const { navigate: navigateUrl, state } = useUrlSearchState(readStatoblastUrlState)
 	const updateSearch = useCallback((update: (search: string) => string, historyMode: UrlHistoryMode = 'push') => navigateUrl(getCurrentRouteHash(), update(getRouteHashSearch()), historyMode), [navigateUrl])
 	const navigatePools = useCallback(
 		(location: PoolsLocation, historyMode: UrlHistoryMode = 'push') => {
@@ -63,32 +62,32 @@ export function useStatoblastUrlState() {
 
 	const setActiveUniverseId = useCallback((universeId: bigint | undefined) => updateSearch(search => writeUniverseQueryParam(search, universeId)), [updateSearch])
 	// Editing keeps one history entry per editing session: moving away from a complete address pushes, and replacing a partial address replaces that entry, so Back returns to the previous pool.
-	const setSecurityPoolAddress = useCallback(
-		(securityPoolAddress: string) => {
+	const setQuestionLedgerAddress = useCallback(
+		(questionLedgerAddress: string) => {
 			const current = parsePoolsRouteHash(getCurrentRouteHash())
-			const currentAddress = current?.view === 'operate' ? current.securityPoolAddress : ''
+			const currentAddress = current?.view === 'operate' ? current.questionLedgerAddress : ''
 			const currentIsPartial = currentAddress !== '' && !isHexAddressInput(currentAddress)
-			const nextAddress = securityPoolAddress.trim()
-			navigatePools(nextAddress === '' ? { view: 'browse' } : { securityPoolAddress: nextAddress, view: 'operate' }, currentIsPartial ? 'replace' : 'push')
+			const nextAddress = questionLedgerAddress.trim()
+			navigatePools(nextAddress === '' ? { view: 'browse' } : { questionLedgerAddress: nextAddress, view: 'operate' }, currentIsPartial ? 'replace' : 'push')
 		},
 		[navigatePools],
 	)
 	// Opening a pool in another universe moves both in one history entry, so Back returns to the previous pool and universe together.
-	const openSecurityPoolInUniverse = useCallback(
-		(universeId: bigint, securityPoolAddress: string) => {
-			const nextAddress = securityPoolAddress.trim()
-			const location: PoolsLocation = nextAddress === '' ? { view: 'browse' } : { securityPoolAddress: nextAddress, view: 'operate' }
+	const openQuestionLedgerInUniverse = useCallback(
+		(universeId: bigint, questionLedgerAddress: string) => {
+			const nextAddress = questionLedgerAddress.trim()
+			const location: PoolsLocation = nextAddress === '' ? { view: 'browse' } : { questionLedgerAddress: nextAddress, view: 'operate' }
 			navigateUrl(buildPoolsRouteHash(location), writeUniverseQueryParam(writePoolsLocationSearch(getRouteHashSearch(), parsePoolsRouteHash(getCurrentRouteHash()), location), universeId))
 		},
 		[navigateUrl],
 	)
 	// Like the pool address, typing a question ID keeps one history entry: the first keystroke pushes the create view, and later edits of that entry replace it.
-	const setSecurityPoolQuestionId = useCallback(
+	const setQuestionLedgerQuestionId = useCallback(
 		(questionId: string | undefined) => {
 			const currentSearch = getRouteHashSearch()
 			const nextSearch = updateSearchParams(currentSearch, params => setOrDeleteSearchParam(params, QUESTION_ID_QUERY_PARAM, questionId))
 			const currentHash = getCurrentRouteHash()
-			const editingQuestionId = parsePoolsRouteHash(currentHash)?.view === 'create' && (readSecurityPoolQuestionIdQueryParam(currentSearch) ?? '') !== ''
+			const editingQuestionId = parsePoolsRouteHash(currentHash)?.view === 'create' && (readQuestionLedgerQuestionIdQueryParam(currentSearch) ?? '') !== ''
 			const historyMode: UrlHistoryMode = editingQuestionId ? 'replace' : 'push'
 			if ((questionId?.trim() ?? '') === '') {
 				navigateUrl(currentHash, nextSearch, historyMode)
@@ -99,7 +98,7 @@ export function useStatoblastUrlState() {
 		[navigateUrl],
 	)
 	const setOpenOracleReport = useCallback((reportId: string | undefined, historyMode: UrlHistoryMode = 'push') => updateSearch(search => writeOpenOracleReportIdQueryParam(search, reportId), historyMode), [updateSearch])
-	const setSecurityPoolsView = useCallback(
+	const setQuestionLedgersView = useCallback(
 		(view: string | undefined) => {
 			if (view === 'create' || view === 'universes' || view === 'migrate' || view === 'browse') {
 				navigatePools({ view })
@@ -114,14 +113,14 @@ export function useStatoblastUrlState() {
 
 	return {
 		...state,
-		openSecurityPoolInUniverse,
+		openQuestionLedgerInUniverse,
 		setActiveUniverseId,
 		setPoolBrowseState,
 		setVaultAddress,
 		setVaultView,
 		setOpenOracleReport,
-		setSecurityPoolsView,
-		setSecurityPoolAddress,
-		setSecurityPoolQuestionId,
+		setQuestionLedgersView,
+		setQuestionLedgerAddress,
+		setQuestionLedgerQuestionId,
 	}
 }

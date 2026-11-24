@@ -266,7 +266,7 @@ export const riskCatalogData = async (sql: SQL, chainId: number, options: { pool
 			price_provenance: jsonRecord(state['price']),
 			protocol_state: String(state['systemState'] ?? 'unavailable'),
 			scanner_severity: 'unavailable',
-			scanner_reason: 'Question settlement is shown here. Underwriting risk belongs to the shared portfolio capital positions.',
+			scanner_reason: 'Question settlement is shown here. Underwriting risk belongs to the shared security pool capital positions.',
 		}
 	})
 	const lastPool = poolData.at(-1)
@@ -290,7 +290,7 @@ export const forkCatalogTotal = async (sql: SQL, chainId: number, snapshotBlock:
 	return Number(rows[0]?.['total'] ?? 0)
 }
 
-// Portfolio fork events name the forked universe (ForkFrozen, BranchChosen, NeutralCashRecovered, ReporterForkFrozen,
+// Security pool fork events name the forked universe (ForkFrozen, BranchChosen, NeutralCashRecovered, ReporterForkFrozen,
 // and ReporterChildCreated as sourceUniverseId) or one of its child universes (BranchStarted, BranchActivated).
 // A child's start and activation belong to its parent's fork, so they join only through the child's universe
 // record and never through their own universeId.

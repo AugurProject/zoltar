@@ -1,19 +1,19 @@
 import { expect, test } from 'bun:test'
-import { executePortfolioAutomation, executeQueuedPortfolioInstructions } from '../../src/runtime/scan-execution.ts'
-import { PortfolioOpportunityExpired } from '../../src/execution/portfolio-executor.ts'
-import { portfolioInstructionKind } from '../../src/execution/portfolio-instructions.ts'
-import type { PortfolioInstruction } from '../../src/config/portfolio-instructions.ts'
+import { executeSecurityPoolAutomation, executeQueuedSecurityPoolInstructions } from '../../src/runtime/scan-execution.ts'
+import { SecurityPoolOpportunityExpired } from '../../src/execution/security-pool-executor.ts'
+import { securityPoolInstructionKind } from '../../src/execution/security-pool-instructions.ts'
+import type { SecurityPoolInstruction } from '../../src/config/security-pool-instructions.ts'
 import { createWalletClient, createRpcEndpointPool, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { chainFor } from '../../src/monitoring/operator-chain.ts'
 import { initialRuntimeState } from '../../src/state/operator-state.ts'
-import { portfolioObservation, portfolioSettings } from '../support/portfolio-observation.ts'
+import { securityPoolObservation, securityPoolSettings } from '../support/security-pool-observation.ts'
 
-const instruction = (id: string): PortfolioInstruction => ({ id, action: 'auction-refund', bidId: 1n, portfolio: portfolioObservation().selection.address, universeId: 0n })
+const instruction = (id: string): SecurityPoolInstruction => ({ id, action: 'auction-refund', bidId: 1n, securityPool: securityPoolObservation().selection.address, universeId: 0n })
 
 test('#1450 an over-budget queued instruction stays queued while later instructions and takeover automation still run', async () => {
-	const observation = portfolioObservation()
-	const settings = portfolioSettings()
+	const observation = securityPoolObservation()
+	const settings = securityPoolSettings()
 	settings.centralizedMarkets.assetAddress = observation.snapshot.repToken
 	const account = privateKeyToAccount(`0x${'01'.repeat(32)}`)
 	const wallet = createWalletClient({
@@ -26,22 +26,22 @@ test('#1450 an over-budget queued instruction stays queued while later instructi
 		}),
 	})
 	const state = initialRuntimeState(false, account.address, 1)
-	state.portfolios = [observation]
+	state.securityPools = [observation]
 	const attempted: string[] = []
-	const instructionExecuted = await executeQueuedPortfolioInstructions(state, [instruction('over-budget'), instruction('blocked')], async current => {
+	const instructionExecuted = await executeQueuedSecurityPoolInstructions(state, [instruction('over-budget'), instruction('blocked')], async current => {
 		attempted.push(current.id)
-		throw new PortfolioOpportunityExpired('Estimated instruction gas exceeds strategy.maximumGasCostEth')
+		throw new SecurityPoolOpportunityExpired('Estimated instruction gas exceeds strategy.maximumGasCostEth')
 	})
 	expect(instructionExecuted).toBe(false)
 	expect(attempted).toEqual(['over-budget', 'blocked'])
-	expect(state.completedPortfolioInstructions ?? {}).toEqual({})
+	expect(state.completedSecurityPoolInstructions ?? {}).toEqual({})
 	expect(state.activities.map(activity => [activity.status, activity.message, activity.details])).toEqual([
-		['info', 'Portfolio instruction blocked deferred; retry next cycle', 'Estimated instruction gas exceeds strategy.maximumGasCostEth'],
-		['info', 'Portfolio instruction over-budget deferred; retry next cycle', 'Estimated instruction gas exceeds strategy.maximumGasCostEth'],
+		['info', 'Security pool instruction blocked deferred; retry next cycle', 'Estimated instruction gas exceeds strategy.maximumGasCostEth'],
+		['info', 'Security pool instruction over-budget deferred; retry next cycle', 'Estimated instruction gas exceeds strategy.maximumGasCostEth'],
 	])
 
 	const takeovers: unknown[] = []
-	const actions: Parameters<typeof executePortfolioAutomation>[3] = {
+	const actions: Parameters<typeof executeSecurityPoolAutomation>[3] = {
 		pendingReport: async () => 'none',
 		earnings: async () => {
 			throw new Error('Unexpected earnings action')
@@ -51,7 +51,7 @@ test('#1450 an over-budget queued instruction stays queued while later instructi
 		},
 		unusedFunding: async () => false,
 	}
-	expect(await executePortfolioAutomation({ wallet, settings, readPool: createRpcEndpointPool(['https://read.example']) }, state, async () => true, actions)).toBe(true)
+	expect(await executeSecurityPoolAutomation({ wallet, settings, readPool: createRpcEndpointPool(['https://read.example']) }, state, async () => true, actions)).toBe(true)
 	expect(takeovers).toEqual([observation])
 })
 
@@ -59,24 +59,24 @@ test('queued instructions stop at the first submission and rethrow unexpected fa
 	const state = initialRuntimeState(false, undefined, 1)
 	const attempted: string[] = []
 	expect(
-		await executeQueuedPortfolioInstructions(state, [instruction('first'), instruction('second')], async current => {
+		await executeQueuedSecurityPoolInstructions(state, [instruction('first'), instruction('second')], async current => {
 			attempted.push(current.id)
 			return true
 		}),
 	).toBe(true)
 	expect(attempted).toEqual(['first'])
 	await expect(
-		executeQueuedPortfolioInstructions(state, [instruction('failing')], async () => {
-			throw new Error('Pending recovery or dry-run mode blocks portfolio instructions')
+		executeQueuedSecurityPoolInstructions(state, [instruction('failing')], async () => {
+			throw new Error('Pending recovery or dry-run mode blocks security pool instructions')
 		}),
 	).rejects.toThrow('Pending recovery')
 })
 
-test('journals each portfolio instruction by its effect on funds', () => {
-	expect(portfolioInstructionKind('vault-health')).toBe('configuration')
-	expect(portfolioInstructionKind('vault-earnings')).toBe('fees')
-	expect(portfolioInstructionKind('vault-withdraw')).toBe('withdrawal')
-	expect(portfolioInstructionKind('vault-deposit')).toBe('deposit')
-	expect(portfolioInstructionKind('auction-bid')).toBe('deposit')
-	expect(portfolioInstructionKind('vault-fork-choice')).toBe('migration')
+test('journals each security pool instruction by its effect on funds', () => {
+	expect(securityPoolInstructionKind('vault-health')).toBe('configuration')
+	expect(securityPoolInstructionKind('vault-earnings')).toBe('fees')
+	expect(securityPoolInstructionKind('vault-withdraw')).toBe('withdrawal')
+	expect(securityPoolInstructionKind('vault-deposit')).toBe('deposit')
+	expect(securityPoolInstructionKind('auction-bid')).toBe('deposit')
+	expect(securityPoolInstructionKind('vault-fork-choice')).toBe('migration')
 })

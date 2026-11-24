@@ -22,7 +22,7 @@ for (const app of UI_APP_IDS) {
 			fs.mkdirSync(path.join(fixtureRoot, 'ui/coreShared/ts'), { recursive: true })
 			const compiledContracts = (bytecode: string) =>
 				JSON.stringify({
-					contracts: Object.fromEntries(['contracts/Zoltar.sol', 'contracts/statoblast/SecurityPool.sol', 'contracts/trading/Router.sol'].map(filename => [filename, { Fixture: { abi: [], evm: { bytecode: { object: bytecode } } } }])),
+					contracts: Object.fromEntries(['contracts/Zoltar.sol', 'contracts/statoblast/QuestionLedger.sol', 'contracts/trading/Router.sol'].map(filename => [filename, { Fixture: { abi: [], evm: { bytecode: { object: bytecode } } } }])),
 				})
 			writeFixture('solidity/artifacts/Contracts.json', compiledContracts('60006001'))
 			// Reduced compiler source sets can produce different deployment bytecode.

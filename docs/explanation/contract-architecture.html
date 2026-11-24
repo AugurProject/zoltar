@@ -13,17 +13,17 @@
 			<header>
 				<p class="kicker">Start here</p>
 				<h1>Contract architecture</h1>
-				<p>Users call <a href="../reference/glossary.html#security-pool">SecurityPools</a>, the Statoblast contracts that expose each market's shares and reporting. Each question belongs to a <a href="../reference/glossary.html#portfolio">portfolio</a>, which holds cash in its central settlement engine. Pools rely on Zoltar for <a href="../reference/glossary.html#universe">universes</a> and <a href="../reference/glossary.html#rep">REP</a>, on a <a href="../reference/glossary.html#price-coordinator">price coordinator</a> for REP prices in the portfolio’s collateral token, and on the <a href="../reference/glossary.html#security-pool-forker">SecurityPoolForker</a> after a fork.</p>
+				<p>Users call <a href="../reference/glossary.html#question-ledger">question ledgers</a>, the Statoblast contracts that expose each market's shares and reporting. Each question belongs to a <a href="../reference/glossary.html#security-pool">security pool</a>, which holds cash in its central settlement engine. Question ledgers rely on Zoltar for <a href="../reference/glossary.html#universe">universes</a> and <a href="../reference/glossary.html#rep">REP</a>, on a <a href="../reference/glossary.html#price-coordinator">price coordinator</a> for REP prices in the security pool’s collateral token, and on the <a href="../reference/glossary.html#question-forker">QuestionForker</a> after a fork.</p>
 				<p class="security-assumption-ref"><strong>Related reading:</strong> <a href="../reference/contracts.html">the generated transaction reference</a> for exact caller and prerequisite rules, <a href="../explanation/statoblast.html">How Statoblast works</a> for lifecycle context, and <a href="../reference/invariants.html">the invariant catalog</a> for cross-contract safety properties.</p>
 			</header>
 			<section id="product-layers">
 				<h2>Product layers</h2>
 				<figure class="diagram" id="fig-product-layers" aria-labelledby="product-layer-caption">
-					<div class="protocol-flow" role="img" aria-label="Zoltar supplies questions, universes, and REP to Statoblast core. Trading is one implementation of trading built on Statoblast shares; other implementations can also build on Statoblast. OpenOracle supplies a contestable REP price in the portfolio’s collateral token to Statoblast. augurScan indexes protocol activity, and bots perform permissionless operations.">
+					<div class="protocol-flow" role="img" aria-label="Zoltar supplies questions, universes, and REP to Statoblast core. Trading is one implementation of trading built on Statoblast shares; other implementations can also build on Statoblast. OpenOracle supplies a contestable REP price in the security pool’s collateral token to Statoblast. augurScan indexes protocol activity, and bots perform permissionless operations.">
 						<p><strong>Zoltar</strong> — questions, universes, REP, forks</p>
-						<p><strong>Statoblast core</strong> — pools, collateral, shares, resolution, migration</p>
+						<p><strong>Statoblast core</strong> — security pools, question ledgers, collateral, shares, resolution, migration</p>
 						<p><strong>Trading</strong> — one implementation of swaps and liquidity around shares</p>
-						<p><strong>OpenOracle</strong> — contestable REP prices in the portfolio’s collateral token</p>
+						<p><strong>OpenOracle</strong> — contestable REP prices in the security pool’s collateral token</p>
 						<p><strong>augurScan and bots</strong> — indexing, evidence, and permissionless operations</p>
 					</div>
 					<figcaption id="product-layer-caption"><span class="figure-label">Product-layer map.</span> These products share protocol data but retain separate responsibilities and deployment boundaries.</figcaption>
@@ -33,23 +33,23 @@
 				<h2>What each contract owns</h2>
 				<ul>
 					<li><code>ZoltarQuestionData</code> stores questions; <code>Zoltar</code> manages universes, forks and universe-specific REP.</li>
-					<li><code>SecurityPoolPortfolio</code> registers admitted questions and coordinates shared operations. A fixed single-question portfolio uses this same architecture.</li>
-					<li><code>SecurityPoolFactory</code> deploys every portfolio from one pinned creation code with its own pinned module deployers. Only such a portfolio can register pools, so a registered pool always belongs to a genuine portfolio.</li>
+					<li><code>SecurityPool</code> registers admitted questions and coordinates shared operations. A fixed single-question security pool uses this same architecture.</li>
+					<li><code>SecurityPoolFactory</code> deploys every security pool from one pinned creation code with its own pinned module deployers. Only such a security pool can register question ledgers, so a registered question ledger always belongs to a genuine security pool.</li>
 					<li>The capital ledger records each owner's REP principal, commitment, health target and earned income. Its commitment index supports bounded health and retirement operations.</li>
 					<li>The settlement engine and book track question demand, collateral, fee streams, minimum backing floors and recovery assets.</li>
-					<li>A <code>SecurityPool</code> is a question adapter. Its <code>ShareToken</code> records outcome balances across that question's universe lineage; its <code>EscalationGame</code> resolves reports. Reporter REP has separate custody.</li>
+					<li>A <code>QuestionLedger</code> is a question adapter. Its <code>ShareToken</code> records outcome balances across that question's universe lineage; its <code>EscalationGame</code> resolves reports. Reporter REP has separate custody.</li>
 					<li>The shared OpenOracle feed accepts independently funded price candidates. Question price coordinators adapt that shared evidence.</li>
-					<li>The portfolio fork coordinator records branch choices and prepares shared branch accounting. The uniform auction sells freshly unchosen provider REP for portfolio collateral when a branch needs repair.</li>
+					<li>The security pool fork coordinator records branch choices and prepares shared branch accounting. The uniform auction sells freshly unchosen provider REP for security pool collateral when a branch needs repair.</li>
 				</ul>
 			</section>
 			<section id="overview">
 				<h2>Purchase and resolution</h2>
-				<p>A trader purchases complete sets through the portfolio. Admission, fresh price, healthy capacity, fees and the question's backing floor are checked atomically. The question adapter mints distinct outcome shares. After final resolution, winning claims redeem against their question's settlement accounting. Returning complete sets earlier reduces demand and can free commitment for retirement.</p>
+				<p>A trader purchases complete sets through the security pool. Admission, fresh price, healthy capacity, fees and the question's backing floor are checked atomically. The question adapter mints distinct outcome shares. After final resolution, winning claims redeem against their question's settlement accounting. Returning complete sets earlier reduces demand and can free commitment for retirement.</p>
 			</section>
 			<section id="edges">
 				<h2>Fork boundaries</h2>
-				<p>Owners choose once per portfolio and universe. Shared roots and branch balances avoid a migration transaction per owner per question. A question adapter and reporter continuation are materialized only when used. Token holders still migrate their own claims through each intervening universe.</p>
-				<p>See <a href="./statoblast.html#portfolio-shared-forks">the fork lifecycle</a>, <a href="./collateral-repair-auctions.html#portfolio-auctions">uniform auctions</a>, and <a href="../reference/contract-inventory.html">the contract inventory</a> for module interfaces and limits.</p>
+				<p>Owners choose once per security pool and universe. Shared roots and branch balances avoid a migration transaction per owner per question. A question adapter and reporter continuation are materialized only when used. Token holders still migrate their own claims through each intervening universe.</p>
+				<p>See <a href="./statoblast.html#security-pool-shared-forks">the fork lifecycle</a>, <a href="./collateral-repair-auctions.html#security-pool-auctions">uniform auctions</a>, and <a href="../reference/contract-inventory.html">the contract inventory</a> for module interfaces and limits.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>

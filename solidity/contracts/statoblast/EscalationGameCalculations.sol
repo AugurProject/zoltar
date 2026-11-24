@@ -4,7 +4,7 @@ pragma solidity 0.8.35;
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameState } from './EscalationGameState.sol';
 import { EscalationGameRepCustody } from './EscalationGameRepCustody.sol';
-import { ISecurityPoolReporterPortfolio } from './interfaces/ISecurityPoolReporterLedger.sol';
+import { ISecurityPoolReporterHost } from './interfaces/ISecurityPoolReporterLedger.sol';
 import { ESCALATION_TIME_LENGTH, NonDecisionState } from './EscalationGameTypes.sol';
 
 abstract contract EscalationGameCalculations is EscalationGameState {
@@ -44,13 +44,13 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	/// @dev A late-activated fixed outcome can be interrupted by another native fork.
 	/// Custody preserves its remaining deadline; materialization must never restart it.
 	function _fixedQuestionEndDate() private view returns (uint256) {
-		address authority = EscalationGameRepCustody.portfolio(address(securityPool));
+		address authority = EscalationGameRepCustody.securityPool(address(questionLedger));
 		if (authority == address(0)) return forkResumedAt + ACTIVATION_DELAY;
-		ISecurityPoolReporterPortfolio portfolio = ISecurityPoolReporterPortfolio(authority);
-		uint248 universe = securityPool.universeId();
-		uint48 finalAfter = EscalationGameRepCustody.fixedQuestionFinalAfter(authority, universe, securityPool.questionId());
+		ISecurityPoolReporterHost securityPool = ISecurityPoolReporterHost(authority);
+		uint248 universe = questionLedger.universeId();
+		uint48 finalAfter = EscalationGameRepCustody.fixedQuestionFinalAfter(authority, universe, questionLedger.questionId());
 		if (finalAfter == 0) return forkResumedAt + ACTIVATION_DELAY;
-		return portfolio.nativeTimeForPortfolioTime(universe, finalAfter);
+		return securityPool.nativeTimeForSecurityPoolTime(universe, finalAfter);
 	}
 
 	/// @dev Finality is strictly after this last second at or below binding capital.
@@ -111,7 +111,7 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	}
 
 	function _getUniverseForkTime() internal view returns (uint256) {
-		return securityPool.zoltar().getForkTime(securityPool.universeId());
+		return questionLedger.zoltar().getForkTime(questionLedger.universeId());
 	}
 
 	function hasReachedNonDecision() public view returns (bool) {

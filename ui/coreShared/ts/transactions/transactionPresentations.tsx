@@ -8,7 +8,7 @@ import type { GlobalTransactionPresentation, GlobalTransactionRow, TransactionIn
 import { AddressValue } from '../components/AddressValue.js'
 
 export type PoolUniverseTransactionContext = {
-	securityPoolAddress?: string | undefined
+	questionLedgerAddress?: string | undefined
 	universeId?: bigint | undefined
 }
 
@@ -26,7 +26,7 @@ export function humanizeTransactionAction(action: string) {
 
 export function getPoolUniverseTransactionRows(context: PoolUniverseTransactionContext | undefined): GlobalTransactionRow[] | undefined {
 	if (context === undefined) return undefined
-	return context.securityPoolAddress === undefined || context.securityPoolAddress.trim() === '' ? [] : [{ identityKey: 'security-pool', label: transactionCopy.pool, value: <AddressValue address={context.securityPoolAddress} /> }]
+	return context.questionLedgerAddress === undefined || context.questionLedgerAddress.trim() === '' ? [] : [{ identityKey: 'security-pool', label: transactionCopy.questionLedger, value: <AddressValue address={context.questionLedgerAddress} /> }]
 }
 
 export function buildPresentation({

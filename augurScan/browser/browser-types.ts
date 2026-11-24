@@ -155,7 +155,7 @@ export interface RichListRecord {
 	// The latest tagged read of each capital position the address owns, one per universe ledger.
 	capital_positions?: Array<{
 		ledgerAddress: string
-		portfolio: string | null
+		securityPool: string | null
 		universeId: string | null
 		readStatus: string
 		principalAttoRep: string | null
@@ -178,7 +178,7 @@ export interface RichListRecord {
 	trading_pnl?: JsonRecord
 	fork_participation?: JsonRecord[]
 	report_participation?: JsonRecord[]
-	portfolioPagination?: JsonRecord
+	securityPoolPagination?: JsonRecord
 }
 
 export type PoolRecord = {
@@ -456,7 +456,7 @@ export interface LoadOptions {
 	replaceDepth?: number | undefined
 	contextVersion?: number
 	retainVisibleDepth?: boolean
-	portfolioTarget?: { readonly kind: 'forks' | 'lp' | 'reports'; readonly count: number }
+	securityPoolTarget?: { readonly kind: 'forks' | 'lp' | 'reports'; readonly count: number }
 }
 
 export interface DetailOptions {
@@ -512,6 +512,6 @@ export interface DetailContextSnapshot extends ActivityDetailFocusSnapshot {
 	scrollTop: number
 }
 
-export type PortfolioData = JsonRecord | Pick<RichListRecord, 'lp_positions' | 'fork_participation' | 'report_participation' | 'portfolioPagination'>
+export type SecurityPoolData = JsonRecord | Pick<RichListRecord, 'lp_positions' | 'fork_participation' | 'report_participation' | 'securityPoolPagination'>
 
 export type OperationsRoutePosition = { readonly scrollY: number; readonly focusedIndex?: number }

@@ -163,7 +163,7 @@ function protocolIndexMatches(index: ChaosProtocolIndex, settings: OperatorSetti
 		index.chainId === settings.network.chainId &&
 		index.openOracle.toLowerCase() === settings.deployment.openOracle.toLowerCase() &&
 		index.zoltar.toLowerCase() === settings.deployment.zoltar.toLowerCase() &&
-		index.securityPoolForker.toLowerCase() === settings.deployment.securityPoolForker.toLowerCase() &&
+		index.questionForker.toLowerCase() === settings.deployment.questionForker.toLowerCase() &&
 		index.startBlock === settings.runtime.protocolStartBlock.toString() &&
 		index.wallet.toLowerCase() === wallet.toLowerCase()
 	)
@@ -255,7 +255,7 @@ async function updateIndexWithQuorum(settings: OperatorSettings, pool: RpcPool, 
 			maxBlockSpan: BigInt(settings.runtime.protocolLogBlockSpan),
 			maximumSettlementStepGasLimit: OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT,
 			openOracle: settings.deployment.openOracle,
-			securityPoolForker: settings.deployment.securityPoolForker,
+			questionForker: settings.deployment.questionForker,
 			...(previous === undefined ? {} : { previous }),
 			startBlock: settings.runtime.protocolStartBlock,
 			trustedRepTokens,
@@ -279,7 +279,7 @@ async function updateCarryWithQuorum(settings: OperatorSettings, pool: RpcPool, 
 					multicall3: settings.deployment.multicall3,
 					wallet,
 					escalationGames: escalationRoutes(topology),
-					securityPoolForker: settings.deployment.securityPoolForker,
+					questionForker: settings.deployment.questionForker,
 					anchorBlockNumber: anchor.blockNumber,
 					expectedAnchorHash: anchor.blockHash,
 					maximumItems: MAXIMUM_DISCOVERY_AGGREGATE_ITEMS,

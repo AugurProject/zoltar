@@ -47,8 +47,8 @@ describe('test impact recommendations', () => {
 		expect(commandsFor(['tooling/ui/production.mts'])).toEqual(['bun run test:browser:smoke', 'bun run test:browser:workflow'])
 		expect(commandsFor(['tooling/ui/productionWorkflowScenarios.ts'])).toEqual(['bun run test:browser:workflow'])
 		// The browser workflows seed these simulation scenarios, so editing them must suggest the workflow tier.
-		expect(commandsFor(['ui/statoblastShared/ts/simulation/portfolioAuctionScenario.ts'])).toContain('bun run test:browser:workflow')
-		expect(commandsFor(['ui/statoblastShared/ts/simulation/portfolioScenario.ts'])).toContain('bun run test:browser:workflow')
+		expect(commandsFor(['ui/statoblastShared/ts/simulation/securityPoolAuctionScenario.ts'])).toContain('bun run test:browser:workflow')
+		expect(commandsFor(['ui/statoblastShared/ts/simulation/securityPoolScenario.ts'])).toContain('bun run test:browser:workflow')
 		expect(commandsFor(['ui/statoblastShared/ts/simulation/statoblastScenarioSeeding.ts'])).toContain('bun run test:browser:workflow')
 		// Only the simulation scenario modules select the long workflow tier, not the rest of the shared Statoblast UI.
 		expect(commandsFor(['ui/statoblastShared/ts/protocol/pagination.ts'])).not.toContain('bun run test:browser:workflow')

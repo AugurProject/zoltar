@@ -1,7 +1,7 @@
 import type { LiveEventPayload } from '../../browser/browser-types.ts'
 import type { DemoContext } from '../../browser/demo-runtime.ts'
 import { fetchApi } from '../../browser/fetch-api.ts'
-import { demoAddressIdentityRoute, demoAddressInteractionsRoute, demoAddressPortfolioRoute, demoAddressTransactionsRoute, demoRichListRoute } from './demo-api/account-routes.ts'
+import { demoAddressIdentityRoute, demoAddressInteractionsRoute, demoAddressSecurityPoolRoute, demoAddressTransactionsRoute, demoRichListRoute } from './demo-api/account-routes.ts'
 import { demoBlockRoute, demoContractsRoute, demoLogDetailRoute, demoLogsRoute, demoNetworksRoute, demoSearchRoute, demoTransactionRoute } from './demo-api/activity-routes.ts'
 import { demoCatalogRoute } from './demo-api/catalog-route.ts'
 import { createDemoEnvironment, type DemoApi } from './demo-api/environment.ts'
@@ -28,7 +28,7 @@ export function createDemoApi(context: DemoContext) {
 		if (/^\/api\/v1\/state\/(reports|escalations|auctions|forks|trading|timeline|integrity)(?:\?|$)/.test(path)) return await demoOperationsCatalogRoute(env, path)
 		if (/^\/api\/v1\/state\/(reports|escalations|auctions|forks|trading|capital|risk\/pools)\//.test(path)) return await demoOperationsDetailRoute(env, path)
 		if (path.startsWith('/api/v1/state/catalog')) return await demoCatalogRoute(env, path)
-		if (path.startsWith('/api/v1/state/address-portfolio')) return await demoAddressPortfolioRoute(env, path)
+		if (path.startsWith('/api/v1/state/address-security-pool')) return await demoAddressSecurityPoolRoute(env, path)
 		if (path.startsWith('/api/v1/state/')) return await demoStateHistoryRoute(env, path)
 		if (path.startsWith('/api/v1/address-transactions')) return await demoAddressTransactionsRoute(env, path)
 		if (path.startsWith('/api/v1/address-interactions')) return await demoAddressInteractionsRoute(path, api)

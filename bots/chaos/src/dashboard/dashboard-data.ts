@@ -31,10 +31,10 @@ export type OperationEvaluation = {
 export type Topology = {
 	anchorBlock?: string | number | undefined
 	anchorTimestamp?: string | number | undefined
-	auctions: Array<{ address?: string | undefined; bidCount?: number | undefined; endTime?: string | number | undefined; finalized?: boolean | undefined; portfolio?: string | undefined; universeId?: string | undefined; startTime?: string | number | undefined }>
+	auctions: Array<{ address?: string | undefined; bidCount?: number | undefined; endTime?: string | number | undefined; finalized?: boolean | undefined; securityPool?: string | undefined; universeId?: string | undefined; startTime?: string | number | undefined }>
 	complete?: boolean | undefined
 	pairs: Array<{ address?: string | undefined; feeBps?: string | number | undefined; pool?: string | undefined; status?: string | number | undefined; universeId?: string | undefined }>
-	pools: Array<{ address?: string | undefined; awaitingForkContinuation?: boolean | undefined; coordinator?: string | undefined; questionId?: string | undefined; systemState?: string | number | undefined; universeId?: string | undefined; portfolio?: string | undefined }>
+	pools: Array<{ address?: string | undefined; awaitingForkContinuation?: boolean | undefined; coordinator?: string | undefined; questionId?: string | undefined; systemState?: string | number | undefined; universeId?: string | undefined; securityPool?: string | undefined }>
 	reports: Array<{ currentReporter?: string | undefined; flags?: string | number | undefined; reportId?: string | undefined; settlementTime?: string | number | undefined; token1?: string | undefined; token2?: string | undefined }>
 	totalCounts: { auctions: number; pairs: number; pools: number; reports: number; universes: number }
 	truncated?: boolean | undefined
@@ -256,7 +256,7 @@ function parseTopology(value: unknown): Topology {
 			bidCount: nonnegativeIntegerValue(entry['bidCount']),
 			endTime: scalarValue(entry['endTime']),
 			finalized: booleanValue(entry['finalized']),
-			portfolio: stringValue(entry['portfolio']),
+			securityPool: stringValue(entry['securityPool']),
 			universeId: stringValue(entry['universeId']),
 			startTime: scalarValue(entry['startTime']),
 		})),
@@ -275,7 +275,7 @@ function parseTopology(value: unknown): Topology {
 			questionId: stringValue(entry['questionId']),
 			systemState: scalarValue(entry['systemState']),
 			universeId: stringValue(entry['universeId']),
-			portfolio: stringValue(entry['portfolio']),
+			securityPool: stringValue(entry['securityPool']),
 		})),
 		reports: list(source['reports'], entry => ({
 			currentReporter: stringValue(entry['currentReporter']),

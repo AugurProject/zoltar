@@ -4,7 +4,7 @@ pragma solidity 0.8.35;
 import { ISecurityPoolQuestionAdmissionPolicy } from './interfaces/ISecurityPoolQuestionAdmissionPolicy.sol';
 
 /// @notice Curated, permanently fixed question membership for one origin universe.
-/// @dev There is no administrator or mutation API. A portfolio can deploy its allowed ledgers lazily.
+/// @dev There is no administrator or mutation API. A security pool can deploy its allowed ledgers lazily.
 contract SecurityPoolFixedAdmissionPolicy is ISecurityPoolQuestionAdmissionPolicy {
 	uint248 public immutable universeId;
 	uint256[] private questions;

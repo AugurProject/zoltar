@@ -22,16 +22,16 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		startEscalation,
 		startEscalationFromFork,
 		advanceForkContinuationPastStart,
-		depositOnOutcomeViaProofTestSecurityPool,
-		withdrawDepositViaProofTestSecurityPool,
-		claimDepositForWinningViaTestSecurityPool,
+		depositOnOutcomeViaProofTestQuestionLedger,
+		withdrawDepositViaProofTestQuestionLedger,
+		claimDepositForWinningViaTestQuestionLedger,
 		createCarryProof,
 		computeLocalParentDepositIndex,
 		assertOutcomeCarryTotalsMatchComponents,
-		initializeSnapshotViaTestSecurityPool,
-		initializeSnapshotFromSourceViaTestSecurityPool,
+		initializeSnapshotViaTestQuestionLedger,
+		initializeSnapshotFromSourceViaTestQuestionLedger,
 		getEscalationReplayLogs,
-		deployEscalationGameTestSecurityPool,
+		deployEscalationGameTestQuestionLedger,
 		deployForkContinuationEscalationGame,
 		readOutcomeCarrySnapshot,
 	} = fixture
@@ -42,16 +42,16 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 	})
 
 	test('fork carry grandchild instances can settle inherited parent carry from a recursive child snapshot', async () => {
-		const parent = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, 2n * reportBond)
-		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
+		const parent = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Invalid, 2n * reportBond)
+		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
 
 		const { peaks: parentInvalidPeaks, leafCount: parentInvalidLeafCount, carryTotal: parentInvalidCarryTotal, nullifierRoot: parentInvalidNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Invalid)
 		const { peaks: parentYesPeaks, leafCount: parentLeafCount, carryTotal: parentCarryTotal, nullifierRoot: parentNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Yes)
 
 		const child = await deployForkContinuationEscalationGame()
-		await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [parentInvalidPeaks, parentYesPeaks, zeroPeakArray()], [parentInvalidLeafCount, parentLeafCount, 0n], [parentInvalidCarryTotal, parentCarryTotal, 0n], [parentInvalidNullifierRoot, parentNullifierRoot, zeroHash()])
-		await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await initializeSnapshotViaTestQuestionLedger(child.testQuestionLedgerAddress, [parentInvalidPeaks, parentYesPeaks, zeroPeakArray()], [parentInvalidLeafCount, parentLeafCount, 0n], [parentInvalidCarryTotal, parentCarryTotal, 0n], [parentInvalidNullifierRoot, parentNullifierRoot, zeroHash()])
+		await depositOnOutcomeViaProofTestQuestionLedger(child.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 
 		const { peaks: childInvalidPeaks, leafCount: childInvalidLeafCount, carryTotal: childInvalidCarryTotal, nullifierRoot: childInvalidNullifierRoot } = await readOutcomeCarrySnapshot(child.escalationGameAddress, QuestionOutcome.Invalid)
@@ -62,7 +62,7 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		const childLocalLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, reportBond, childLocalParentDepositIndex, 4n * reportBond, 1n)
 
 		const grandchild = await deployForkContinuationEscalationGame()
-		await initializeSnapshotViaTestSecurityPool(grandchild.testSecurityPoolAddress, [childInvalidPeaks, childYesPeaks, zeroPeakArray()], [childInvalidLeafCount, childLeafCount, 0n], [childInvalidCarryTotal, childCarryTotal, 0n], [childInvalidNullifierRoot, childNullifierRoot, zeroHash()])
+		await initializeSnapshotViaTestQuestionLedger(grandchild.testQuestionLedgerAddress, [childInvalidPeaks, childYesPeaks, zeroPeakArray()], [childInvalidLeafCount, childLeafCount, 0n], [childInvalidCarryTotal, childCarryTotal, 0n], [childInvalidNullifierRoot, childNullifierRoot, zeroHash()])
 		await advanceForkContinuationPastStart(grandchild.escalationGameAddress, recursiveResolutionTargetCost)
 
 		const nullifierTree = new SparseNullifierTree()
@@ -77,7 +77,7 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 			merkleMountainRangeSiblings: [childLocalLeafHash],
 			nullifierSiblings: nullifierTree.getProof(0n),
 		}
-		const settlementHash = await withdrawDepositViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
+		const settlementHash = await withdrawDepositViaProofTestQuestionLedger(grandchild.testQuestionLedgerAddress, QuestionOutcome.Yes, proof)
 		const settlementReceipt = await client.waitForTransactionReceipt({ hash: settlementHash })
 		assert.ok(settlementReceipt.gasUsed < 2_000_000n, `recursive grandchild carry proof settlement must stay below the 2,000,000 gas bound; used ${settlementReceipt.gasUsed}`)
 
@@ -88,16 +88,16 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 	})
 
 	test('grandchild settlement preserves the complete ancestor reporter principal', async () => {
-		const parent = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, 2n * reportBond)
-		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
+		const parent = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Invalid, 2n * reportBond)
+		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
 
 		const { peaks: parentInvalidPeaks, leafCount: parentInvalidLeafCount, carryTotal: parentInvalidCarryTotal, nullifierRoot: parentInvalidNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Invalid)
 		const { peaks: parentYesPeaks, leafCount: parentYesLeafCount, carryTotal: parentYesCarryTotal, nullifierRoot: parentYesNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Yes)
 
 		const child = await deployForkContinuationEscalationGame()
-		await initializeSnapshotFromSourceViaTestSecurityPool(
-			child.testSecurityPoolAddress,
+		await initializeSnapshotFromSourceViaTestQuestionLedger(
+			child.testQuestionLedgerAddress,
 			parent.escalationGameAddress,
 			zeroHash(),
 			[parentInvalidPeaks, parentYesPeaks, zeroPeakArray()],
@@ -113,8 +113,8 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		assert.strictEqual(childYesCarryTotal, parentYesCarryTotal)
 
 		const grandchild = await deployForkContinuationEscalationGame()
-		await initializeSnapshotFromSourceViaTestSecurityPool(
-			grandchild.testSecurityPoolAddress,
+		await initializeSnapshotFromSourceViaTestQuestionLedger(
+			grandchild.testQuestionLedgerAddress,
 			child.escalationGameAddress,
 			zeroHash(),
 			[childInvalidPeaks, childYesPeaks, zeroPeakArray()],
@@ -125,7 +125,7 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		assert.strictEqual(await readCarryTotal(client, grandchild.escalationGameAddress, QuestionOutcome.Yes), childYesCarryTotal)
 		await advanceForkContinuationPastStart(grandchild.escalationGameAddress, recursiveResolutionTargetCost)
 
-		await withdrawDepositViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, QuestionOutcome.Yes, {
+		await withdrawDepositViaProofTestQuestionLedger(grandchild.testQuestionLedgerAddress, QuestionOutcome.Yes, {
 			depositor: client.account.address,
 			amountAttoRep: 3n * reportBond,
 			parentDepositIndex: 0n,
@@ -143,13 +143,13 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		const firstAmount = 8n * reportBond + 3n
 		const secondAmount = 8n * reportBond + 5n
 		const aggregateAmount = firstAmount + secondAmount
-		const parent = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, firstAmount)
-		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, secondAmount)
+		const parent = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, firstAmount)
+		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, secondAmount)
 
 		const child = await deployForkContinuationEscalationGame()
-		await initializeSnapshotFromSourceViaTestSecurityPool(
-			child.testSecurityPoolAddress,
+		await initializeSnapshotFromSourceViaTestQuestionLedger(
+			child.testQuestionLedgerAddress,
 			parent.escalationGameAddress,
 			zeroHash(),
 			[zeroPeakArray(), await readCarryPeaks(client, parent.escalationGameAddress, QuestionOutcome.Yes), zeroPeakArray()],
@@ -169,7 +169,7 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 
 		const settleInOrder = async (leafOrder: readonly [0 | 1, 0 | 1]) => {
 			const grandchild = await deployForkContinuationEscalationGame()
-			await initializeSnapshotFromSourceViaTestSecurityPool(grandchild.testSecurityPoolAddress, child.escalationGameAddress, zeroHash(), [zeroPeakArray(), childPeaks, zeroPeakArray()], [0n, childLeafCount, 0n], [0n, childCarryTotal, 0n], [zeroHash(), childNullifierRoot, zeroHash()])
+			await initializeSnapshotFromSourceViaTestQuestionLedger(grandchild.testQuestionLedgerAddress, child.escalationGameAddress, zeroHash(), [zeroPeakArray(), childPeaks, zeroPeakArray()], [0n, childLeafCount, 0n], [0n, childCarryTotal, 0n], [zeroHash(), childNullifierRoot, zeroHash()])
 			await advanceForkContinuationPastStart(grandchild.escalationGameAddress, recursiveResolutionTargetCost)
 			const nullifierTree = new SparseNullifierTree()
 			const payouts = [0n, 0n]
@@ -179,10 +179,10 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 				const isFirst = leafIndex === 0
 				const proof = await createCarryProof(parent.escalationGameAddress, BigInt(leafIndex), BigInt(leafIndex), 1n, [isFirst ? secondLeafHash : firstLeafHash], nullifierTree.getProof(BigInt(leafIndex)), BigInt(leafIndex + 1))
 				const before = await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)
-				await withdrawDepositViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
+				await withdrawDepositViaProofTestQuestionLedger(grandchild.testQuestionLedgerAddress, QuestionOutcome.Yes, proof)
 				const payout = (await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)) - before
 				assert.strictEqual(payout, isFirst ? firstAmount : secondAmount, 'each reporter receives its complete original stake')
-				await assert.rejects(withdrawDepositViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, QuestionOutcome.Yes, proof))
+				await assert.rejects(withdrawDepositViaProofTestQuestionLedger(grandchild.testQuestionLedgerAddress, QuestionOutcome.Yes, proof))
 				payouts[leafIndex] = payout
 				totalPaid += payout
 				assert.strictEqual(await readCarryTotal(client, grandchild.escalationGameAddress, QuestionOutcome.Yes), allocatedTotal - totalPaid)
@@ -198,17 +198,17 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 
 	test('direct child settlement pays the full inherited principal exactly once', async () => {
 		const inheritedPrincipal = 100n * reportBond
-		const parent = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, inheritedPrincipal)
+		const parent = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, inheritedPrincipal)
 
 		const { peaks: parentYesPeaks, leafCount: parentYesLeafCount, carryTotal: parentYesCarryTotal, nullifierRoot: parentYesNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Yes)
 		const child = await deployForkContinuationEscalationGame()
-		await initializeSnapshotFromSourceViaTestSecurityPool(child.testSecurityPoolAddress, parent.escalationGameAddress, zeroHash(), [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentYesLeafCount, 0n], [0n, parentYesCarryTotal, 0n], [zeroHash(), parentYesNullifierRoot, zeroHash()])
+		await initializeSnapshotFromSourceViaTestQuestionLedger(child.testQuestionLedgerAddress, parent.escalationGameAddress, zeroHash(), [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentYesLeafCount, 0n], [0n, parentYesCarryTotal, 0n], [zeroHash(), parentYesNullifierRoot, zeroHash()])
 		await advanceForkContinuationPastStart(child.escalationGameAddress)
 
 		const proof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 0n, [], new SparseNullifierTree().getProof(0n))
 		const walletBalanceBefore = await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)
-		await withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
+		await withdrawDepositViaProofTestQuestionLedger(child.testQuestionLedgerAddress, QuestionOutcome.Yes, proof)
 		const walletBalanceAfter = await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)
 
 		assert.strictEqual(walletBalanceAfter - walletBalanceBefore, inheritedPrincipal, 'the direct child payout preserves the original reporter principal')
@@ -218,16 +218,16 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 	test('fork carry grandchild instances reject child-local leaves that were already settled before the recursive fork', async () => {
 		const parent = await deployEscalationGameWithProofPool()
 		const parentStartHash = await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
-		const parentInvalidDepositHash = await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, 2n * reportBond)
-		const parentYesDepositHash = await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
+		const parentInvalidDepositHash = await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Invalid, 2n * reportBond)
+		const parentYesDepositHash = await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
 
 		const { peaks: parentInvalidPeaks, leafCount: parentInvalidLeafCount, carryTotal: parentInvalidCarryTotal, nullifierRoot: parentInvalidNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Invalid)
 		const { peaks: parentYesPeaks, leafCount: parentYesLeafCount, carryTotal: parentYesCarryTotal, nullifierRoot: parentYesNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Yes)
 
 		const child = await deployEscalationGameWithProofPool()
 		const childStartHash = await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
-		const childCheckpointHash = await initializeSnapshotFromSourceViaTestSecurityPool(
-			child.testSecurityPoolAddress,
+		const childCheckpointHash = await initializeSnapshotFromSourceViaTestQuestionLedger(
+			child.testQuestionLedgerAddress,
 			parent.escalationGameAddress,
 			zeroHash(),
 			[parentInvalidPeaks, parentYesPeaks, zeroPeakArray()],
@@ -235,17 +235,17 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 			[parentInvalidCarryTotal, parentYesCarryTotal, 0n],
 			[parentInvalidNullifierRoot, parentYesNullifierRoot, zeroHash()],
 		)
-		const childLocalDepositHash = await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		const childLocalDepositHash = await depositOnOutcomeViaProofTestQuestionLedger(child.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
-		const childClaimHash = await claimDepositForWinningViaTestSecurityPool(child.testSecurityPoolAddress, 0n, QuestionOutcome.Yes)
+		const childClaimHash = await claimDepositForWinningViaTestQuestionLedger(child.testQuestionLedgerAddress, 0n, QuestionOutcome.Yes)
 
 		const { peaks: childInvalidPeaks, leafCount: childInvalidLeafCount, carryTotal: childInvalidCarryTotal, nullifierRoot: childInvalidNullifierRoot } = await readOutcomeCarrySnapshot(child.escalationGameAddress, QuestionOutcome.Invalid)
 		const { peaks: childYesPeaks, leafCount: childYesLeafCount, carryTotal: childYesCarryTotal, nullifierRoot: childYesNullifierRoot } = await readOutcomeCarrySnapshot(child.escalationGameAddress, QuestionOutcome.Yes)
 		const parentLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, 3n * reportBond, 0n, 3n * reportBond, 2n)
 		const grandchild = await deployEscalationGameWithProofPool()
 		const grandchildStartHash = await startEscalationFromFork(grandchild.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
-		const grandchildCheckpointHash = await initializeSnapshotFromSourceViaTestSecurityPool(
-			grandchild.testSecurityPoolAddress,
+		const grandchildCheckpointHash = await initializeSnapshotFromSourceViaTestQuestionLedger(
+			grandchild.testQuestionLedgerAddress,
 			child.escalationGameAddress,
 			zeroHash(),
 			[childInvalidPeaks, childYesPeaks, zeroPeakArray()],
@@ -269,7 +269,7 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		}
 
 		await assert.rejects(
-			withdrawDepositViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, QuestionOutcome.Yes, settledChildLocalLeafProof),
+			withdrawDepositViaProofTestQuestionLedger(grandchild.testQuestionLedgerAddress, QuestionOutcome.Yes, settledChildLocalLeafProof),
 			/Bad nullifier proof|Deposit settled|Carry peak absent|Bad carry proof|Bad MMR proof length/,
 			'grandchild carry settlement must reject a child-local leaf that was already settled before the recursive fork',
 		)
@@ -287,12 +287,12 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 
 	test('grandchild local settlement does not lock an inherited child-local carried deposit with the same deposit index', async () => {
 		const childLocalDepositor = addressString(TEST_ADDRESSES[1])
-		const parent = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
+		const parent = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
 
 		const child = await deployForkContinuationEscalationGame()
-		await initializeSnapshotFromSourceViaTestSecurityPool(
-			child.testSecurityPoolAddress,
+		await initializeSnapshotFromSourceViaTestQuestionLedger(
+			child.testQuestionLedgerAddress,
 			parent.escalationGameAddress,
 			zeroHash(),
 			[zeroPeakArray(), await readCarryPeaks(client, parent.escalationGameAddress, QuestionOutcome.Yes), zeroPeakArray()],
@@ -300,7 +300,7 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 			[0n, await readCarryTotal(client, parent.escalationGameAddress, QuestionOutcome.Yes), 0n],
 			[zeroHash(), await readNullifierRoot(client, parent.escalationGameAddress, QuestionOutcome.Yes), zeroHash()],
 		)
-		await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, childLocalDepositor, QuestionOutcome.Yes, reportBond)
+		await depositOnOutcomeViaProofTestQuestionLedger(child.testQuestionLedgerAddress, childLocalDepositor, QuestionOutcome.Yes, reportBond)
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 		const { peaks: childYesPeaks, leafCount: childYesLeafCount, carryTotal: childYesCarryTotal, nullifierRoot: childYesNullifierRoot } = await readOutcomeCarrySnapshot(child.escalationGameAddress, QuestionOutcome.Yes)
 		const parentLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, 3n * reportBond, 0n, 3n * reportBond, 1n)
@@ -308,40 +308,40 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		const childLocalLeafHash = hashCarryLeaf(childLocalDepositor, QuestionOutcome.Yes, reportBond, childLocalParentDepositIndex, 4n * reportBond, 1n)
 
 		const grandchild = await deployForkContinuationEscalationGame()
-		await initializeSnapshotFromSourceViaTestSecurityPool(grandchild.testSecurityPoolAddress, child.escalationGameAddress, zeroHash(), [zeroPeakArray(), childYesPeaks, zeroPeakArray()], [0n, childYesLeafCount, 0n], [0n, childYesCarryTotal, 0n], [zeroHash(), childYesNullifierRoot, zeroHash()])
-		await depositOnOutcomeViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
+		await initializeSnapshotFromSourceViaTestQuestionLedger(grandchild.testQuestionLedgerAddress, child.escalationGameAddress, zeroHash(), [zeroPeakArray(), childYesPeaks, zeroPeakArray()], [0n, childYesLeafCount, 0n], [0n, childYesCarryTotal, 0n], [zeroHash(), childYesNullifierRoot, zeroHash()])
+		await depositOnOutcomeViaProofTestQuestionLedger(grandchild.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
 		await advanceForkContinuationPastStart(grandchild.escalationGameAddress, recursiveResolutionTargetCost)
 
-		await claimDepositForWinningViaTestSecurityPool(grandchild.testSecurityPoolAddress, 0n, QuestionOutcome.Yes)
+		await claimDepositForWinningViaTestQuestionLedger(grandchild.testQuestionLedgerAddress, 0n, QuestionOutcome.Yes)
 
 		const nullifierTree = new SparseNullifierTree()
 		const inheritedChildLocalProof = await createCarryProof(child.escalationGameAddress, childLocalParentDepositIndex, 1n, 1n, [parentLeafHash], nullifierTree.getProof(1n), 1n)
 		const childLocalBalanceBefore = await getERC20Balance(client, getRepTokenAddress(0n), childLocalDepositor)
-		await withdrawDepositViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, QuestionOutcome.Yes, inheritedChildLocalProof)
+		await withdrawDepositViaProofTestQuestionLedger(grandchild.testQuestionLedgerAddress, QuestionOutcome.Yes, inheritedChildLocalProof)
 		const childLocalBalanceAfter = await getERC20Balance(client, getRepTokenAddress(0n), childLocalDepositor)
 		assert.ok(childLocalBalanceAfter > childLocalBalanceBefore, 'the committed depositor should receive the inherited payout')
 		nullifierTree.consume(1n)
 
 		const inheritedParentProof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 1n, [childLocalLeafHash], nullifierTree.getProof(0n), 1n)
-		await withdrawDepositViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, QuestionOutcome.Yes, inheritedParentProof)
+		await withdrawDepositViaProofTestQuestionLedger(grandchild.testQuestionLedgerAddress, QuestionOutcome.Yes, inheritedParentProof)
 
 		assert.strictEqual(await readCarryTotal(client, grandchild.escalationGameAddress, QuestionOutcome.Yes), 0n, 'grandchild local settlement should not lock inherited carried deposits from the child snapshot')
 		await assertOutcomeCarryTotalsMatchComponents(grandchild.escalationGameAddress)
 	})
 
 	test('settling an inherited child-local carried deposit first still clears the matching grandchild-local unresolved carry', async () => {
-		const parent = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
+		const parent = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
 
 		const child = await deployForkContinuationEscalationGame()
-		await initializeSnapshotViaTestSecurityPool(
-			child.testSecurityPoolAddress,
+		await initializeSnapshotViaTestQuestionLedger(
+			child.testQuestionLedgerAddress,
 			[zeroPeakArray(), await readCarryPeaks(client, parent.escalationGameAddress, QuestionOutcome.Yes), zeroPeakArray()],
 			[0n, await readCarryLeafCount(client, parent.escalationGameAddress, QuestionOutcome.Yes), 0n],
 			[0n, await readCarryTotal(client, parent.escalationGameAddress, QuestionOutcome.Yes), 0n],
 			[zeroHash(), await readNullifierRoot(client, parent.escalationGameAddress, QuestionOutcome.Yes), zeroHash()],
 		)
-		await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await depositOnOutcomeViaProofTestQuestionLedger(child.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 
 		const { peaks: childYesPeaks, leafCount: childYesLeafCount, carryTotal: childYesCarryTotal, nullifierRoot: childYesNullifierRoot } = await readOutcomeCarrySnapshot(child.escalationGameAddress, QuestionOutcome.Yes)
@@ -349,19 +349,19 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		const childLocalParentDepositIndex = computeLocalParentDepositIndex(child.escalationGameAddress, QuestionOutcome.Yes, 0n)
 
 		const grandchild = await deployForkContinuationEscalationGame()
-		await initializeSnapshotViaTestSecurityPool(grandchild.testSecurityPoolAddress, [zeroPeakArray(), childYesPeaks, zeroPeakArray()], [0n, childYesLeafCount, 0n], [0n, childYesCarryTotal, 0n], [zeroHash(), childYesNullifierRoot, zeroHash()])
-		await depositOnOutcomeViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await initializeSnapshotViaTestQuestionLedger(grandchild.testQuestionLedgerAddress, [zeroPeakArray(), childYesPeaks, zeroPeakArray()], [0n, childYesLeafCount, 0n], [0n, childYesCarryTotal, 0n], [zeroHash(), childYesNullifierRoot, zeroHash()])
+		await depositOnOutcomeViaProofTestQuestionLedger(grandchild.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await advanceForkContinuationPastStart(grandchild.escalationGameAddress, recursiveResolutionTargetCost)
 
 		const nullifierTree = new SparseNullifierTree()
 		const inheritedChildLocalProof = await createCarryProof(child.escalationGameAddress, childLocalParentDepositIndex, 1n, 1n, [parentLeafHash], nullifierTree.getProof(1n), 1n)
-		await withdrawDepositViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, QuestionOutcome.Yes, inheritedChildLocalProof)
+		await withdrawDepositViaProofTestQuestionLedger(grandchild.testQuestionLedgerAddress, QuestionOutcome.Yes, inheritedChildLocalProof)
 		nullifierTree.consume(1n)
 
-		await claimDepositForWinningViaTestSecurityPool(grandchild.testSecurityPoolAddress, 0n, QuestionOutcome.Yes)
+		await claimDepositForWinningViaTestQuestionLedger(grandchild.testQuestionLedgerAddress, 0n, QuestionOutcome.Yes)
 
 		const inheritedParentProof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 1n, [hashCarryLeaf(client.account.address, QuestionOutcome.Yes, reportBond, childLocalParentDepositIndex, 4n * reportBond, 1n)], nullifierTree.getProof(0n), 1n)
-		await withdrawDepositViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, QuestionOutcome.Yes, inheritedParentProof)
+		await withdrawDepositViaProofTestQuestionLedger(grandchild.testQuestionLedgerAddress, QuestionOutcome.Yes, inheritedParentProof)
 
 		assert.strictEqual(await readCarryTotal(client, grandchild.escalationGameAddress, QuestionOutcome.Yes), 0n, 'inherited settlement first should still leave the matching grandchild-local deposit claimable and clear all unresolved carry')
 		await assertOutcomeCarryTotalsMatchComponents(grandchild.escalationGameAddress)

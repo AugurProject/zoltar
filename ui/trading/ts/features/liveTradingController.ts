@@ -12,7 +12,7 @@ import { useTransactionWorkflow } from './live/useTransactionWorkflow.js'
 import { useWalletSession, useWalletSessionController, useWalletSummaryEffects, walletNetworkMismatchReason } from './live/useWalletSession.js'
 import { createPositionTransactionController } from './live/positionTransactionController.js'
 import { useMarketDiscoveryController } from './live/useMarketDiscoveryController.js'
-import { filterMarketsByUniverse, livePairInitialized, liveTradingControllerServices, marketDiscoveryScope, securityPoolAddressFromRoute } from './liveTradingControllerHelpers.js'
+import { filterMarketsByUniverse, livePairInitialized, liveTradingControllerServices, marketDiscoveryScope, questionLedgerAddressFromRoute } from './liveTradingControllerHelpers.js'
 import { tradingListKindFor } from '../lib/routing.js'
 import type { TradeSettings } from '../lib/tradeSettings.js'
 
@@ -34,7 +34,7 @@ export function useLiveTradingController({
 	settings: TradeSettings
 	services?: LiveTradingControllerServices
 }) {
-	const routePool = securityPoolAddressFromRoute(route)
+	const routePool = questionLedgerAddressFromRoute(route)
 	const marketDiscovery = useMarketDiscovery(configuration, marketDiscoveryScope(route, selectedUniverseId))
 	const { markets, discoveryState, discoveryError, marketPage } = marketDiscovery
 	const walletSession = useWalletSession()

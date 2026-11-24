@@ -205,14 +205,14 @@ test('explains a step without token funding using its description, the operation
 	const dom = installDomEnvironment()
 	const controller = createTransactionStepController()
 	const contractAddress = '0x00000000000000000000000000000000000000aa'
-	const description = 'Create the binary question and deploy its security pool in one transaction.'
-	controller.setPlan([{ title: 'Create question and security pool', description, contractAddress, contractLabel: 'Multicall3', spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+	const description = 'Create the binary question and deploy its question ledger in one transaction.'
+	controller.setPlan([{ title: 'Create question and question ledger', description, contractAddress, contractLabel: 'Multicall3', spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
 	const review = controller.review()
 	const rendered = await renderIntoDocument(
 		<GlobalTransactionPresentationProvider
 			transaction={{
 				tone: 'awaiting-wallet',
-				title: 'Creating security pool',
+				title: 'Creating question ledger',
 				rows: [
 					{ label: 'Question ID', value: '123' },
 					{ label: 'Statoblast security multiplier', value: '2x' },
@@ -224,7 +224,7 @@ test('explains a step without token funding using its description, the operation
 	)
 	try {
 		const queries = within(rendered.container)
-		expect(rendered.container.querySelector('.modal-header h3')?.textContent).toBe('Create question and security pool')
+		expect(rendered.container.querySelector('.modal-header h3')?.textContent).toBe('Create question and question ledger')
 		expect(queries.getByText(description)).not.toBeNull()
 		expect(queries.getByText('Question ID')).not.toBeNull()
 		expect(queries.getByText('123')).not.toBeNull()
@@ -238,7 +238,7 @@ test('explains a step without token funding using its description, the operation
 		expect(queries.getByRole('button', { name: `Copy address ${contractAddress}` })).not.toBeNull()
 		expect(rendered.container.querySelector(`details a[href="https://sepolia.etherscan.io/address/${contractAddress}"]`)).not.toBeNull()
 		await act(() => {
-			fireEvent.click(queries.getByRole('button', { name: 'Create question and security pool' }))
+			fireEvent.click(queries.getByRole('button', { name: 'Create question and question ledger' }))
 		})
 		await review
 	} finally {
@@ -260,7 +260,7 @@ test('only keeps inline actions visible when asked, leaving modal-embedded steps
 		return 0
 	}
 	const controller = createTransactionStepController()
-	controller.setPlan([{ title: 'Create security pool', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+	controller.setPlan([{ title: 'Create question ledger', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
 	const review = controller.review()
 	try {
 		const embedded = await renderIntoDocument(<TransactionStepsContent contextKey='embedded' />)

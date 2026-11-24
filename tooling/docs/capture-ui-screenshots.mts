@@ -96,7 +96,7 @@ async function runHelper(session: DevToolsSession, call: string, context: string
 async function runStep(session: DevToolsSession, step: UiScreenshotStep, specId: string) {
 	const context = `Screenshot '${specId}'`
 	const waitOptions = { attempts: 600, intervalMilliseconds: 100, retryFailures: true }
-	let simulationSecurityPoolAddress: string | undefined
+	let simulationQuestionLedgerAddress: string | undefined
 	if ('click' in step) {
 		await clickScreenshotControl(session, step.click, step.nth ?? 0, context)
 	} else if ('fill' in step) {
@@ -104,27 +104,27 @@ async function runStep(session: DevToolsSession, step: UiScreenshotStep, specId:
 			typeof step.value === 'string'
 				? step.value
 				: await session.evaluate(`(async () => {
-			const [{ getActiveBackend }, { loadAllSecurityPools }] = await Promise.all([
+			const [{ getActiveBackend }, { loadAllQuestionLedgers }] = await Promise.all([
 				import('@zoltar/ui-core-shared/lib/activeEnvironment.js'),
-				import('@zoltar/ui-statoblast-shared/protocol/securityPools.js'),
+				import('@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'),
 			])
 			const backend = getActiveBackend()
 			if (backend.id !== 'simulation') throw new Error('Screenshot requires simulation')
 			await backend.waitUntilReady?.()
-			const pools = await loadAllSecurityPools(backend.createReadClient())
+			const pools = await loadAllQuestionLedgers(backend.createReadClient())
 			const pool = pools[0]
 			if (pools.length !== 1 || pool === undefined) throw new Error('Expected one seeded security pool, found ' + pools.length)
-			return pool.securityPoolAddress
+			return pool.questionLedgerAddress
 		})()`)
 		if (typeof value !== 'string') throw new Error(`${context}: fill value did not resolve to text`)
-		if (typeof step.value !== 'string') simulationSecurityPoolAddress = value
+		if (typeof step.value !== 'string') simulationQuestionLedgerAddress = value
 		await runHelper(session, `fill(${quote(step.fill)}, ${quote(value)})`, context)
 	} else if ('waitForText' in step) await session.waitFor(`document.body.innerText.includes(${quote(step.waitForText)})`, { ...waitOptions, message: `${context}: timed out waiting for text "${step.waitForText}"` })
 	else if ('waitForNoText' in step) await session.waitFor(`!document.body.innerText.includes(${quote(step.waitForNoText)})`, { ...waitOptions, message: `${context}: text "${step.waitForNoText}" never disappeared` })
 	else if ('waitForEnabled' in step) await session.waitFor(`window.__docsScreenshot.enabled(${quote(step.waitForEnabled)})`, { ...waitOptions, message: `${context}: "${step.waitForEnabled}" never became enabled` })
 	else await session.evaluate('history.back()')
 	await Bun.sleep(300)
-	return simulationSecurityPoolAddress
+	return simulationQuestionLedgerAddress
 }
 
 const isRect = (value: unknown): value is { x: number; y: number; width: number; height: number } => typeof value === 'object' && value !== null && ['x', 'y', 'width', 'height'].every(key => key in value && typeof Reflect.get(value, key) === 'number')
@@ -135,7 +135,7 @@ async function cropRect(session: DevToolsSession, crop: UiScreenshotCrop, specId
 	return { ...rect, scale: 1 }
 }
 
-async function captureScreenshot(chromiumPath: string, baseUrl: string, spec: UiScreenshotSpec): Promise<{ image: Uint8Array; simulationSecurityPoolAddress: string | undefined }> {
+async function captureScreenshot(chromiumPath: string, baseUrl: string, spec: UiScreenshotSpec): Promise<{ image: Uint8Array; simulationQuestionLedgerAddress: string | undefined }> {
 	const app = screenshotApp(spec.app)
 	const viewport = spec.viewport ?? DEFAULT_VIEWPORT
 	const pageUrl = `${baseUrl}/?simulate=1&genesis=yes&simScenario=${encodeURIComponent(spec.scenario)}${spec.route ?? ''}`
@@ -159,9 +159,9 @@ async function captureScreenshot(chromiumPath: string, baseUrl: string, spec: Ui
 			message: `Screenshot '${spec.id}': ${app.title} did not finish loading ${pageUrl}`,
 		})
 		await Bun.sleep(SETTLE_MILLISECONDS)
-		let simulationSecurityPoolAddress: string | undefined
+		let simulationQuestionLedgerAddress: string | undefined
 		try {
-			for (const step of spec.steps ?? []) simulationSecurityPoolAddress = (await runStep(session, step, spec.id)) ?? simulationSecurityPoolAddress
+			for (const step of spec.steps ?? []) simulationQuestionLedgerAddress = (await runStep(session, step, spec.id)) ?? simulationQuestionLedgerAddress
 			for (const text of spec.expectText ?? [])
 				await session.waitFor(`document.body.innerText.includes(${quote(text)})`, { attempts: 300, intervalMilliseconds: 100, message: `Screenshot '${spec.id}': expected text "${text}" is not visible. If the UI label changed, update the screenshot spec and the documentation that quotes it.` })
 		} catch (error) {
@@ -183,7 +183,7 @@ async function captureScreenshot(chromiumPath: string, baseUrl: string, spec: Ui
 		if (typeof data !== 'string') throw new Error(`Screenshot '${spec.id}': Chromium returned no image data`)
 		const pageErrors = session.issues.filter(issue => issue.kind === 'pageerror')
 		if (pageErrors.length > 0) console.warn(`Screenshot '${spec.id}' page errors:\n${pageErrors.map(issue => `  ${issue.detail}`).join('\n')}`)
-		return { image: Buffer.from(data, 'base64'), simulationSecurityPoolAddress }
+		return { image: Buffer.from(data, 'base64'), simulationQuestionLedgerAddress }
 	} finally {
 		await session.close()
 	}
@@ -211,18 +211,18 @@ async function main() {
 	const fingerprints = await readScreenshotFingerprints(repositoryRoot)
 	for (const appId of screenshotAppIds(specs)) {
 		const { server, baseUrl } = await startDevServer(appId)
-		let appSimulationSecurityPoolAddress: string | undefined
+		let appSimulationQuestionLedgerAddress: string | undefined
 		try {
 			for (const spec of specs.filter(candidate => candidate.app === appId)) {
 				const outputPath = screenshotOutputPath(spec)
-				const { image, simulationSecurityPoolAddress } = await captureScreenshot(chromiumPath, baseUrl, spec)
-				if (simulationSecurityPoolAddress !== undefined) {
-					if (appSimulationSecurityPoolAddress !== undefined && appSimulationSecurityPoolAddress !== simulationSecurityPoolAddress) throw new Error(`${appId} screenshots resolved inconsistent seeded security pools`)
-					appSimulationSecurityPoolAddress = simulationSecurityPoolAddress
+				const { image, simulationQuestionLedgerAddress } = await captureScreenshot(chromiumPath, baseUrl, spec)
+				if (simulationQuestionLedgerAddress !== undefined) {
+					if (appSimulationQuestionLedgerAddress !== undefined && appSimulationQuestionLedgerAddress !== simulationQuestionLedgerAddress) throw new Error(`${appId} screenshots resolved inconsistent seeded question ledgers`)
+					appSimulationQuestionLedgerAddress = simulationQuestionLedgerAddress
 				}
 				await fs.mkdir(path.dirname(path.join(repositoryRoot, outputPath)), { recursive: true })
 				await fs.writeFile(path.join(repositoryRoot, outputPath), image)
-				await updateEmbeddingPages(path.join(repositoryRoot, 'docs'), spec, outputPath, readPngSize(image), console.warn, simulationSecurityPoolAddress)
+				await updateEmbeddingPages(path.join(repositoryRoot, 'docs'), spec, outputPath, readPngSize(image), console.warn, simulationQuestionLedgerAddress)
 				console.log(`Captured ${outputPath}`)
 			}
 		} finally {

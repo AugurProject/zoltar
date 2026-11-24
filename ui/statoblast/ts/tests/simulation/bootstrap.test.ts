@@ -315,7 +315,7 @@ describe('simulation bootstrap', () => {
 				profile: createBaselineProfile(),
 				scenario: 'security-pool',
 			}),
-		).rejects.toThrow('Expected simulation portfolio owner')
+		).rejects.toThrow('Expected simulation security pool owner')
 	})
 
 	test('boots deployed simulation scenario when all contracts are already present', async () => {

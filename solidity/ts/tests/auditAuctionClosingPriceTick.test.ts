@@ -1,15 +1,15 @@
 import { describe, expect, test } from 'bun:test'
-import { preparePortfolioCollateralRepairAuction } from './statoblast/securityPoolPortfolioCollateralRepairAuctionFixture'
+import { prepareSecurityPoolCollateralRepairAuction } from './statoblast/securityPoolCollateralRepairAuctionFixture'
 import {
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPoolPortfolioAuction_SecurityPoolPortfolioAuction as auctionArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_SecurityPoolAuction_SecurityPoolAuction as auctionArtifact,
 	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact,
-	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
+	statoblast_SecurityPoolSettlement_SecurityPoolSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 } from '../types/contractArtifact'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 // Audit regression: the whole collateral repair auction used to be cancelled when the last
 // report accepted before the fixed close was even one price unit above the price cached by the
@@ -17,10 +17,10 @@ import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPool
 // and left the branch impaired for good. A higher closing price now only raises the REP every
 // winning lot must receive to what backs it at that price.
 describe('audit: a higher closing price no longer cancels the collateral repair auction', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 
 	test('a closing report one unit above the opening price still fills every funded lot', async () => {
-		const context = await preparePortfolioCollateralRepairAuction(fixture)
+		const context = await prepareSecurityPoolCollateralRepairAuction(fixture)
 		await context.report(unit)
 		await context.open()
 		const opening = await context.owner.readContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'openingConservativePrice' })
@@ -44,7 +44,7 @@ describe('audit: a higher closing price no longer cancels the collateral repair 
 		expect(repPerLot).toBeGreaterThanOrEqual(required)
 		expect(repPerLot % grid).toBe(0n)
 		// The branch is fully repaired.
-		const settlement = await context.owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'settlement' })
+		const settlement = await context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'settlement' })
 		const book = await context.owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'ledger' })
 		const bookId = await context.owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'bookIds', args: [context.child] })
 		const totals = await context.owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'totals', args: [bookId] })
@@ -53,7 +53,7 @@ describe('audit: a higher closing price no longer cancels the collateral repair 
 	})
 
 	test('the same bids with an unchanged closing price repair the branch', async () => {
-		const context = await preparePortfolioCollateralRepairAuction(fixture)
+		const context = await prepareSecurityPoolCollateralRepairAuction(fixture)
 		await context.report(unit)
 		await context.open()
 		const bid = await context.bid(context.other, 5n)

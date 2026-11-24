@@ -1,18 +1,18 @@
 import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact } from '../types/contractArtifact'
+import { statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_QuestionForker_QuestionForker as forkerArtifact } from '../types/contractArtifact'
 import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { DAY } from '../testSupport/simulator/utils/constants'
 import { getChildUniverseId } from '../testSupport/simulator/utils/utilities'
 import { SparseNullifierTree } from './carryProofHelpers'
 import { BRANCH_GAS, createE2E, INVALID, median, NO, NONE, OUTCOMES, WEEK, YES } from './auditE2EHarness'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 // Scenario 2: the parent game sits in local non-decision when an unrelated question forks the
 // universe. Each child inherits the threshold tie, can only resolve it by forking on its own
 // question once the child universe may fork, and the grandchildren pay every carried claim.
 describe('auditE2E: an inherited threshold tie resolves through a second-generation own fork', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const e2e = createE2E(fixture)
 
 	test('tie children cannot report or settle, fork only after week ten, and grandchildren conserve REP and cash', async () => {
@@ -21,7 +21,7 @@ describe('auditE2E: an inherited threshold tie resolves through a second-generat
 		const trader = fixture.other()
 		const U0 = base.genesisUniverse
 		const q = base.questionId
-		const source = fixture.poolFor(q).securityPool
+		const source = fixture.poolFor(q).questionLedger
 		const reporters = [e2e.account(2), e2e.account(3), e2e.account(4), e2e.account(5)] as const
 		const [r2, r3, r4, r5] = reporters
 		const thirdParty = e2e.account(6)
@@ -78,7 +78,7 @@ describe('auditE2E: an inherited threshold tie resolves through a second-generat
 				const first = leaves[outcome]?.[0]
 				if (first !== undefined) await expect(e2e.simulateInheritedClaim(owner, child.pool, outcome, leaves[outcome] ?? [], first, new SparseNullifierTree())).rejects.toThrow('Question not final')
 			}
-			await expect(owner.simulateContract({ ...g, functionName: 'sweepResidualRepToSecurityPool' })).rejects.toThrow('Question not final')
+			await expect(owner.simulateContract({ ...g, functionName: 'sweepResidualRepToQuestionLedger' })).rejects.toThrow('Question not final')
 		}
 		// The child universe may fork only after the parent's choice, recapitalization and response periods.
 		const earliest = await owner.readContract({ ...e2e.zoltar(), functionName: 'getEarliestForkTime', args: [A] })
@@ -109,7 +109,7 @@ describe('auditE2E: an inherited threshold tie resolves through a second-generat
 		expect(await owner.readContract({ ...e2e.game(childB.game), functionName: 'canTriggerOwnFork' })).toBe(true)
 		// Neither the origin nor the forked child pays anything.
 		for (const pool of [source, childA.pool]) await expect(owner.simulateContract({ abi: poolArtifact.abi, address: pool, functionName: 'withdrawFromEscalationGame', args: [YES, [0n]] })).rejects.toThrow()
-		for (const game of [game0, childA.game]) await expect(owner.simulateContract({ ...e2e.game(game), functionName: 'sweepResidualRepToSecurityPool' })).rejects.toThrow()
+		for (const game of [game0, childA.game]) await expect(owner.simulateContract({ ...e2e.game(game), functionName: 'sweepResidualRepToQuestionLedger' })).rejects.toThrow()
 
 		await e2e.choose(owner, A, YES)
 		const grandchildren = []
@@ -164,8 +164,8 @@ describe('auditE2E: an inherited threshold tie resolves through a second-generat
 		let cashOut = 0n
 		const cashTable: Record<string, unknown>[] = []
 		for (const { outcome, universe, pool } of grandchildren) {
-			const quoteCash = await owner.readContract({ ...e2e.portfolio(), functionName: 'quoteQuestionSettlement', args: [pool, 10n * unit] })
-			const quoteRep = await owner.readContract({ ...e2e.portfolio(), functionName: 'quoteQuestionRecoveryRep', args: [pool, 10n * unit] })
+			const quoteCash = await owner.readContract({ ...e2e.securityPool(), functionName: 'quoteQuestionSettlement', args: [pool, 10n * unit] })
+			const quoteRep = await owner.readContract({ ...e2e.securityPool(), functionName: 'quoteQuestionRecoveryRep', args: [pool, 10n * unit] })
 			const got = await e2e.redeemShares(trader, pool)
 			expect(got).toEqual({ cash: quoteCash, rep: quoteRep })
 			expect(await e2e.shareBalance(trader.account.address, universe, outcome)).toBe(0n)

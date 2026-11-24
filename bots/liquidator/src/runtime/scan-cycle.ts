@@ -1,13 +1,13 @@
-import { PortfolioOpportunityExpired } from '#execution/portfolio-executor'
+import { SecurityPoolOpportunityExpired } from '#execution/security-pool-executor'
 import { sharedQuorumReadTargets } from '@zoltar/bot-shared/monitoring/read-quorum'
-import { loadManagedPortfolioObservations, managedPortfolioScopes } from '#monitoring/portfolio-monitor'
+import { loadManagedSecurityPoolObservations, managedSecurityPoolScopes } from '#monitoring/security-pool-monitor'
 import { shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
 import { recheckStartupConnectivity } from './startup-connectivity.ts'
 import { validateApprovedUniverseSelection } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { FinalizedTakeoverExpired, OperatorStopping, TransactionAwaitingCanonicalFinality } from '#execution/execution-safety'
 import { availableExecutionObservations, liquidationExecutionSnapshotObservation } from '#monitoring/execution-quorum'
 import { canonicalBlockHash, chainFor } from '#monitoring/operator-chain'
-import { scanPortfolioContext } from '#monitoring/portfolio-context'
+import { scanSecurityPoolContext } from '#monitoring/security-pool-context'
 import { recordActivity, saveDurableState } from '#state/operator-state'
 import { recordSystemDeploymentCheck } from '../core/deployment-observation.ts'
 import { createLiquidatorScanReport, cycleFailureMessage, runningStatus } from '../monitoring/scan-status.ts'
@@ -25,18 +25,18 @@ import { runDryRunStep, runLiveExecutionStep } from './scan-execution.ts'
  */
 async function scanExecutionSnapshot(runtime: LiquidatorRuntime, deps: LiquidatorDeps, currentChain: LiquidatorRuntime['chain']) {
 	const { shutdown, state } = deps
-	state.portfolioScopes = managedPortfolioScopes(state.portfolioScopes, runtime.settings.selectedPortfolios)
+	state.securityPoolScopes = managedSecurityPoolScopes(state.securityPoolScopes, runtime.settings.selectedSecurityPools)
 	const scanClient = async (client: typeof runtime.client, blockNumber?: bigint) => {
-		const scan = await scanPortfolioContext(client, runtime.settings, state.wallet, shutdown.isRequested, blockNumber)
+		const scan = await scanSecurityPoolContext(client, runtime.settings, state.wallet, shutdown.isRequested, blockNumber)
 		if (shutdown.isRequested()) throw new OperatorStopping()
-		const portfolios = await loadManagedPortfolioObservations(
+		const securityPools = await loadManagedSecurityPoolObservations(
 			client,
 			runtime.settings,
 			state.wallet,
-			state.portfolioScopes.map(scope => ({ scope })),
+			state.securityPoolScopes.map(scope => ({ scope })),
 			scan.block.number,
 		)
-		return { ...scan, portfolios }
+		return { ...scan, securityPools }
 	}
 	if (!runtime.settings.runtime.execute) return await scanClient(runtime.client)
 	const pinned = await sharedQuorumReadTargets(
@@ -85,7 +85,7 @@ async function scanAndAct(runtime: LiquidatorRuntime, deps: LiquidatorDeps, scan
 	state.lastScannedBlockHash = scannedBlock.hash
 	state.lastScannedTimestamp = scannedBlock.timestamp
 	if (replacedMarketHead) {
-		state.portfolioScopes = state.portfolioScopes.map(scope => ({ ...scope, nextPositionId: 1n, sweepEnd: 0n, retirementObservations: [] }))
+		state.securityPoolScopes = state.securityPoolScopes.map(scope => ({ ...scope, nextPositionId: 1n, sweepEnd: 0n, retirementObservations: [] }))
 		recordActivity(state, {
 			details: `block=${scannedBlock.number.toString()}`,
 			kind: 'scan',
@@ -96,8 +96,8 @@ async function scanAndAct(runtime: LiquidatorRuntime, deps: LiquidatorDeps, scan
 		await saveDurableState(runtime.settings.runtime.stateFile, state)
 		return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
 	}
-	state.portfolios = primary.portfolios
-	state.portfolioScopes = primary.portfolios.map(portfolio => portfolio.nextScope)
+	state.securityPools = primary.securityPools
+	state.securityPoolScopes = primary.securityPools.map(securityPool => securityPool.nextScope)
 	state.universes = primary.universes
 	state.walletRepByToken = primary.walletRepByToken
 	const rootUniverse = state.universes.find(universe => universe.parentId === undefined)
@@ -135,9 +135,9 @@ export async function settleInterruptedCycle(runtime: Pick<LiquidatorRuntime, 's
 		await saveDurableState(runtime.settings.runtime.stateFile, state)
 		return true
 	}
-	if (error instanceof PortfolioOpportunityExpired || error instanceof FinalizedTakeoverExpired) {
+	if (error instanceof SecurityPoolOpportunityExpired || error instanceof FinalizedTakeoverExpired) {
 		state.status = runningStatus(state.paused, runtime.settings.runtime.execute)
-		recordActivity(state, { kind: 'liquidation', status: 'info', message: 'Portfolio opportunity expired; rescreen next cycle', details: error.message })
+		recordActivity(state, { kind: 'liquidation', status: 'info', message: 'Security pool opportunity expired; rescreen next cycle', details: error.message })
 		await saveDurableState(runtime.settings.runtime.stateFile, state)
 		return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
 	}

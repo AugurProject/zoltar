@@ -682,7 +682,7 @@ export const applyModel = (m: Model, op: Operation): TakeoverResult | undefined 
 				requireModel(owner.positionId !== 0n, 'Insufficient owner principal')
 				requireOpen(m)
 				requireFresh(m)
-				requireModel(eligible(m, m.cons) >= m.demand, 'Portfolio backing insufficient')
+				requireModel(eligible(m, m.cons) >= m.demand, 'Security pool backing insufficient')
 				const p = positionOf(m, owner.positionId)
 				requireModel(pledged <= p.rep && p.rep - pledged >= requiredRep(p.k, m.cons, targetOf(owner)), 'Owner collateral too low')
 				const price = maxHealthyPrice(p.rep - pledged, p.k)

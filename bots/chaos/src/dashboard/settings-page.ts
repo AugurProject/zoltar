@@ -48,7 +48,7 @@ function PolicySwitches() {
 		h(DescribedSwitch, { danger: true, description: 'Includes forks, REP migration, burns, and global lifecycle transitions.', id: 'allow-irreversible', label: 'Allow irreversible operations', name: 'allowIrreversibleOperations' }),
 		h(DescribedSwitch, {
 			description:
-				'Continuously completes the exact genesis topology: binary question, origin security pool, wallet vault, external REP/WETH Uniswap pool creation, initialization, and seeding, Statoblast trading roots, canonical trading pair, and initial pair liquidity. Only these initializer operations bypass the selectable allowlist.',
+				'Continuously completes the exact genesis topology: binary question, origin question ledger, wallet vault, external REP/WETH Uniswap pool creation, initialization, and seeding, Statoblast trading roots, canonical trading pair, and initial pair liquidity. Only these initializer operations bypass the selectable allowlist.',
 			id: 'initialize-genesis-universe',
 			label: 'Initialize genesis universe',
 			name: 'initializeGenesisUniverse',

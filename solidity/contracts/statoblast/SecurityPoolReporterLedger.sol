@@ -7,24 +7,24 @@ import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { SecurityPoolQuestionMap } from './SecurityPoolQuestionMap.sol';
 import { SecurityPoolMaturityMap } from './SecurityPoolMaturityMap.sol';
 import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
-import { ISecurityPool, ISecurityPoolFactory } from './interfaces/ISecurityPool.sol';
+import { IQuestionLedger, ISecurityPoolFactory } from './interfaces/IQuestionLedger.sol';
 import { ISecurityPoolReporterLedger } from './interfaces/ISecurityPoolReporterLedger.sol';
 import { Constants } from '../Constants.sol';
 
-interface IReporterPortfolioClock {
+interface IReporterSecurityPoolClock {
 	function factory() external view returns (ISecurityPoolFactory);
 	function forkController() external view returns (address);
-	function portfolioTime(uint248 universeId) external view returns (uint48);
-	function forkPortfolioTime(uint248 universeId) external view returns (uint48);
+	function securityPoolTime(uint248 universeId) external view returns (uint48);
+	function forkSecurityPoolTime(uint248 universeId) external view returns (uint48);
 }
 
 interface IReporterGameIdentity {
-	function securityPool() external view returns (ISecurityPool);
+	function questionLedger() external view returns (IQuestionLedger);
 	function repToken() external view returns (address);
 }
 
 /// @notice Disjoint reporter custody with immutable per-question roots shared by fork children.
-/// @dev One ledger stores every portfolio universe, so root copies never traverse ancestors.
+/// @dev One ledger stores every security pool universe, so root copies never traverse ancestors.
 /// Games finalized strictly before a fork retain parent REP; only live escrow migrates.
 contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 	using SafeERC20Ops for IERC20;
@@ -59,7 +59,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		bool registered;
 	}
 
-	address public immutable portfolio;
+	address public immutable securityPool;
 	Zoltar public immutable zoltar;
 	SecurityPoolMaturityMap.Store private tree;
 	SecurityPoolQuestionMap.Store private questionMap;
@@ -78,28 +78,28 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 
 	constructor(address authority, Zoltar protocol) {
 		require(authority != address(0) && address(protocol).code.length != 0, 'Invalid reporter custody authority');
-		portfolio = authority;
+		securityPool = authority;
 		zoltar = protocol;
 	}
 
-	modifier onlyPortfolio() {
-		require(msg.sender == portfolio, 'Only portfolio reporter authority');
+	modifier onlySecurityPool() {
+		require(msg.sender == securityPool, 'Only security pool reporter authority');
 		_;
 	}
 
 	modifier onlyForkAuthority() {
-		require(msg.sender == portfolio || msg.sender == IReporterPortfolioClock(portfolio).forkController(), 'Only portfolio fork authority');
+		require(msg.sender == securityPool || msg.sender == IReporterSecurityPoolClock(securityPool).forkController(), 'Only security pool fork authority');
 		_;
 	}
 
-	function registerUniverse(uint248 universeId) external onlyPortfolio {
+	function registerUniverse(uint248 universeId) external onlySecurityPool {
 		require(!books[universeId].exists, 'Reporter universe already exists');
 		require(address(zoltar.getRepToken(universeId)) != address(0), 'Reporter universe is missing');
 		books[universeId].exists = true;
 	}
 
-	function registerGame(uint256 questionId, address game) external onlyPortfolio {
-		ISecurityPool pool = IReporterGameIdentity(game).securityPool();
+	function registerGame(uint256 questionId, address game) external onlySecurityPool {
+		IQuestionLedger pool = IReporterGameIdentity(game).questionLedger();
 		uint248 universeId = pool.universeId();
 		require(pool.questionId() == questionId && address(pool.escalationGame()) == game, 'Reporter game is not canonical');
 		require(address(pool.zoltar()) == address(zoltar), 'Reporter game uses another protocol');
@@ -108,7 +108,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		address existing = registeredGames[universeId][questionId];
 		require(existing == address(0) || existing == game, 'Reporter game already bound');
 		if (existing == game) return;
-		if (!book.isSealed) _freezeMatured(universeId, book, _portfolioTime(universeId));
+		if (!book.isSealed) _freezeMatured(universeId, book, _securityPoolTime(universeId));
 		(Question memory state, bool finalClaim) = _question(universeId, questionId);
 		require(!finalClaim || state.balanceAttoRep != 0, 'Use source reporter claim');
 		require((!book.isSealed && zoltar.getForkTime(universeId) == 0) || (finalClaim && state.balanceAttoRep != 0), 'Reporter universe sealed');
@@ -127,9 +127,9 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 	function balanceOfGame(address game) external view returns (uint256) {
 		Game memory identity = games[game];
 		if (!identity.registered) {
-			ISecurityPool pool = IReporterGameIdentity(game).securityPool();
+			IQuestionLedger pool = IReporterGameIdentity(game).questionLedger();
 			if (
-				IReporterPortfolioClock(portfolio).factory().getSecurityPoolPortfolio(pool) != portfolio ||
+				IReporterSecurityPoolClock(securityPool).factory().securityPoolOf(pool) != securityPool ||
 				address(pool.escalationGame()) != game
 			) return 0;
 			identity = Game(pool.universeId(), pool.questionId(), false);
@@ -143,7 +143,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		Game memory identity = _authorizedGame(game);
 		Book storage book = _book(identity.universeId);
 		require(!book.isSealed && zoltar.getForkTime(identity.universeId) == 0, 'Reporter universe is forked');
-		_freezeMatured(identity.universeId, book, _portfolioTime(identity.universeId));
+		_freezeMatured(identity.universeId, book, _securityPoolTime(identity.universeId));
 		(Question memory state, bool finalClaim) = _question(identity.universeId, identity.questionId);
 		require(!finalClaim, 'Reporter claim is final');
 		require(IERC20(address(zoltar.getRepToken(identity.universeId))).balanceOf(address(this)) >= book.liveAttoRep + book.finalAttoRep + amountAttoRep, 'Reporter deposit is not funded');
@@ -160,7 +160,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		Book storage book = _book(identity.universeId);
 		if (!book.isSealed) {
 			uint256 forkTime = zoltar.getForkTime(identity.universeId);
-			if (forkTime == 0) _freezeMatured(identity.universeId, book, _portfolioTime(identity.universeId));
+			if (forkTime == 0) _freezeMatured(identity.universeId, book, _securityPoolTime(identity.universeId));
 			else _sealFork(identity.universeId, book, forkTime);
 		}
 		(Question memory state, bool finalClaim) = _question(identity.universeId, identity.questionId);
@@ -179,16 +179,16 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 
 	/// @dev Games update this when reporting changes the unique leader or response deadline.
 	function scheduleFinality(address game, uint48 finalAfter) external {
-		require(msg.sender == portfolio || msg.sender == game, 'Only canonical reporter game');
+		require(msg.sender == securityPool || msg.sender == game, 'Only canonical reporter game');
 		Game memory identity = games[game];
 		require(identity.registered, 'Reporter game is not registered');
 		Book storage book = _book(identity.universeId);
 		require(!book.isSealed && zoltar.getForkTime(identity.universeId) == 0, 'Reporter universe is forked');
-		_freezeMatured(identity.universeId, book, _portfolioTime(identity.universeId));
+		_freezeMatured(identity.universeId, book, _securityPoolTime(identity.universeId));
 		(Question memory state, bool finalClaim) = _question(identity.universeId, identity.questionId);
 		require(!finalClaim, 'Reporter finality is immutable');
-		// Deadlines are expressed in the portfolio clock, which pauses across forks.
-		require(finalAfter == 0 || finalAfter >= _portfolioTime(identity.universeId), 'Reporter finality already elapsed');
+		// Deadlines are expressed in the security pool clock, which pauses across forks.
+		require(finalAfter == 0 || finalAfter >= _securityPoolTime(identity.universeId), 'Reporter finality already elapsed');
 		// Deposits already credit new REP at the stored deadline.
 		if (state.finalAfter != finalAfter) {
 			_changeFinality(book, state.finalAfter, state.balanceAttoRep, false);
@@ -205,7 +205,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 	/// @notice Finalize elapsed reporter deadlines without starting any migration work.
 	function checkpoint(uint248 universeId) external {
 		Book storage book = _book(universeId);
-		if (!book.isSealed) _freezeMatured(universeId, book, _portfolioTime(universeId));
+		if (!book.isSealed) _freezeMatured(universeId, book, _securityPoolTime(universeId));
 	}
 
 	function freezeFork(uint248 universeId) external onlyForkAuthority {
@@ -226,10 +226,10 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 	/// @dev A game's non-decision threshold is fixed when it starts, but the genesis fork threshold
 	/// follows the live external supply. Any shortfall is pulled from `payer` (who approves this ledger)
 	/// and joins the question's escrow as a donation without a separate claim.
-	function triggerFork(uint248 universeId, uint256 questionId, address payer) external onlyPortfolio {
+	function triggerFork(uint248 universeId, uint256 questionId, address payer) external onlySecurityPool {
 		Book storage book = _book(universeId);
 		require(!book.isSealed && zoltar.getForkTime(universeId) == 0, 'Reporter universe is forked');
-		_freezeMatured(universeId, book, _portfolioTime(universeId));
+		_freezeMatured(universeId, book, _securityPoolTime(universeId));
 		(Question memory state, bool finalClaim) = _question(universeId, questionId);
 		require(!finalClaim && state.balanceAttoRep != 0, 'Triggering question lacks fork admission REP');
 		uint256 threshold = zoltar.getForkThresholdAttoRep(universeId);
@@ -280,8 +280,8 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 
 	function _sealFork(uint248 universeId, Book storage book, uint256 forkTime) private {
 		require(forkTime != 0 && forkTime <= type(uint48).max, 'Reporter fork is missing');
-		uint48 forkPortfolioTime = IReporterPortfolioClock(portfolio).forkPortfolioTime(universeId);
-		_freezeMatured(universeId, book, forkPortfolioTime);
+		uint48 forkSecurityPoolTime = IReporterSecurityPoolClock(securityPool).forkSecurityPoolTime(universeId);
+		_freezeMatured(universeId, book, forkSecurityPoolTime);
 		book.isSealed = true;
 		uint256 prepared = zoltar.getMigrationRepBalanceAttoRep(address(this), universeId);
 		require(prepared <= book.liveAttoRep, 'Reporter migration exceeds live inventory');
@@ -301,8 +301,8 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		if (finalClaim && finalizingUniversePlusOne - 1 != universeId) state.balanceAttoRep = 0;
 	}
 
-	function _portfolioTime(uint248 universeId) private view returns (uint48) {
-		return IReporterPortfolioClock(portfolio).portfolioTime(universeId);
+	function _securityPoolTime(uint248 universeId) private view returns (uint48) {
+		return IReporterSecurityPoolClock(securityPool).securityPoolTime(universeId);
 	}
 
 	function _freezeMatured(uint248 universeId, Book storage book, uint48 timestamp) private {

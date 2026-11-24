@@ -1,5 +1,5 @@
 // Evidence seeding for the operations snapshot integration test: one decoded block with report and
-// capital commitment events, ten thousand blocks of AMM trading history, and bulk risk, portfolio,
+// capital commitment events, ten thousand blocks of AMM trading history, and bulk risk, security pool,
 // fork, report, and question rows that exercise every paginated catalog.
 import { expect } from 'bun:test'
 import { handleApi } from '../../src/api.ts'
@@ -39,7 +39,7 @@ export const storeOperationsEvidenceBlock = async ({ database, operationsChainId
 			{ name: 'CommitmentCured', argumentsValue: { positionId: '1', removedCommitment: '10' } },
 			{ name: 'CommitmentTakenOver', argumentsValue: { sourceId: '1', receiverId: '2', commitment: '90', awardAttoRep: 5n.toString() } },
 			// The decoder keeps the uint8 reason as a number.
-			{ name: 'QuestionAccountingCheckpoint', argumentsValue: { reason: 2, settlementCollateralAttoEth: 40n.toString(), shareTokenSupplyAttoShares: 40n.toString(), lastSettlementPortfolioTime: '1767225620' } },
+			{ name: 'QuestionAccountingCheckpoint', argumentsValue: { reason: 2, settlementCollateralAttoEth: 40n.toString(), shareTokenSupplyAttoShares: 40n.toString(), lastSettlementSecurityPoolTime: '1767225620' } },
 		]
 		const capitalEvents = capitalEvidence.map(({ name, argumentsValue }, index) => ({
 			...decodedLog(hash, index + 2, oracle, name, argumentsValue),
@@ -190,7 +190,7 @@ export const seedBulkTradingHistory = async ({ database, operationsChainId, orac
 }
 
 // Adds pool, state, LP, fork, report, coordinator, and question evidence beyond single-page limits.
-export const seedRiskAndPortfolioEvidence = async ({ database, operationsChainId, oracle, hash }: OperationsContext): Promise<void> => {
+export const seedRiskAndSecurityPoolEvidence = async ({ database, operationsChainId, oracle, hash }: OperationsContext): Promise<void> => {
 	await database.sql`
 			INSERT INTO pools (
 				chain_id, block_hash, tx_hash, log_index, block_number, pool_address, parent_address,

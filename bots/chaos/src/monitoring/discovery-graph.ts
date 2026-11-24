@@ -1,4 +1,4 @@
-import { openOraclePriceCoordinatorAbi, securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
+import { openOraclePriceCoordinatorAbi, questionLedgerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { type Address, getAddress } from '@zoltar/bot-shared/ethereum'
 import { sameAddress } from '@zoltar/core-shared/evm/address'
 import type { CachedPoolDeployment } from './topology-schema.ts'
@@ -22,7 +22,7 @@ interface PoolProtocolBindingAuthentication {
 export async function authenticatePoolProtocolBindings(authentication: PoolProtocolBindingAuthentication) {
 	const { blockNumber, canonicalRepToken, client, configuredOpenOracle, configuredWeth, coordinator, pool } = authentication
 	const [poolOpenOracle, coordinatorOpenOracle, coordinatorWeth, coordinatorRepToken] = await drainConcurrent([
-		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'openOracle' }),
+		client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'openOracle' }),
 		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'openOracle' }),
 		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'weth' }),
 		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'reputationToken' }),
@@ -91,12 +91,12 @@ export function assertCanonicalPairGraph(identity: PairGraphIdentity) {
 	if (identity.pairUniverseId !== identity.poolUniverseId || identity.pairQuestionId !== identity.poolQuestionId) throw new Error(`Pair ${identity.pair} immutable question identity does not match pool ${identity.pool}`)
 }
 
-export function cachePoolDeployment(deployment: { parent: Address; openOraclePriceCoordinator: Address; questionId: bigint; securityPool: Address; shareToken: Address; universeId: bigint }): CachedPoolDeployment {
+export function cachePoolDeployment(deployment: { parent: Address; openOraclePriceCoordinator: Address; questionId: bigint; questionLedger: Address; shareToken: Address; universeId: bigint }): CachedPoolDeployment {
 	return {
 		coordinator: getAddress(deployment.openOraclePriceCoordinator),
 		parent: getAddress(deployment.parent),
 		questionId: deployment.questionId.toString(),
-		securityPool: getAddress(deployment.securityPool),
+		questionLedger: getAddress(deployment.questionLedger),
 		shareToken: getAddress(deployment.shareToken),
 		universeId: deployment.universeId.toString(),
 	}

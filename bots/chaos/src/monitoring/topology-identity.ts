@@ -6,7 +6,7 @@ export interface ImmutableTopologyIdentity {
 	openOracle: Address
 	questionData: Address
 	securityPoolFactory: Address
-	securityPoolForker: Address
+	questionForker: Address
 	tradingFactory: Address
 	tradingRouter: Address
 	uniswapV3Factory?: Address | undefined
@@ -25,7 +25,7 @@ export function topologyAddress(value: unknown, label: string) {
 
 export function parseTopologyIdentity(value: unknown, label: string): ImmutableTopologyIdentity {
 	const identity = requiredRecord(value, label)
-	const addressFields = ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'weth', 'zoltar'] as const
+	const addressFields = ['openOracle', 'questionData', 'securityPoolFactory', 'questionForker', 'tradingFactory', 'tradingRouter', 'weth', 'zoltar'] as const
 	assertExactKeys(identity, ['chainId', ...addressFields, ...('uniswapV3Factory' in identity ? ['uniswapV3Factory'] : [])], ['multicall3'], label)
 	// The stateless transaction utility belongs to execution configuration, not persisted protocol topology.
 	if ('multicall3' in identity) topologyAddress(identity['multicall3'], `${label}.multicall3`)
@@ -35,7 +35,7 @@ export function parseTopologyIdentity(value: unknown, label: string): ImmutableT
 		openOracle: topologyAddress(identity['openOracle'], `${label}.openOracle`),
 		questionData: topologyAddress(identity['questionData'], `${label}.questionData`),
 		securityPoolFactory: topologyAddress(identity['securityPoolFactory'], `${label}.securityPoolFactory`),
-		securityPoolForker: topologyAddress(identity['securityPoolForker'], `${label}.securityPoolForker`),
+		questionForker: topologyAddress(identity['questionForker'], `${label}.questionForker`),
 		tradingFactory: topologyAddress(identity['tradingFactory'], `${label}.tradingFactory`),
 		tradingRouter: topologyAddress(identity['tradingRouter'], `${label}.tradingRouter`),
 		...('uniswapV3Factory' in identity ? { uniswapV3Factory: topologyAddress(identity['uniswapV3Factory'], `${label}.uniswapV3Factory`) } : {}),
@@ -45,6 +45,6 @@ export function parseTopologyIdentity(value: unknown, label: string): ImmutableT
 }
 
 export function sameTopologyIdentity(left: ImmutableTopologyIdentity, right: ImmutableTopologyIdentity) {
-	const addressFields = ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'uniswapV3Factory', 'weth', 'zoltar'] as const
+	const addressFields = ['openOracle', 'questionData', 'securityPoolFactory', 'questionForker', 'tradingFactory', 'tradingRouter', 'uniswapV3Factory', 'weth', 'zoltar'] as const
 	return left.chainId === right.chainId && addressFields.every(field => left[field]?.toLowerCase() === right[field]?.toLowerCase())
 }

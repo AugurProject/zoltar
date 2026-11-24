@@ -2,7 +2,7 @@ import { decodeEventLog, parseAbi, toEventSelector, type Hash, type Address, get
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import type { ReadClient } from '../../testSupport/simulator/utils/clients'
 import { BURN_ADDRESS } from '../../testSupport/simulator/utils/constants'
-import { statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SecurityPoolPortfolioServices_SecurityPoolPortfolioServices as servicesArtifact } from '../../types/contractArtifact'
+import { statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SecurityPoolServices_SecurityPoolServices as servicesArtifact } from '../../types/contractArtifact'
 
 const burnAddress = addressString(BURN_ADDRESS)
 

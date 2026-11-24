@@ -125,7 +125,7 @@ export const diagramGraphSpecs = {
 	),
 	'fig-statoblast-share-lifecycle': diagram(
 		{
-			ariaDescription: 'Collateral mints Invalid, Yes, and No shares. Operational pools redeem full sets, and finalized winning shares redeem through outcome settlement.',
+			ariaDescription: 'Collateral mints Invalid, Yes, and No shares. Operational question ledgers redeem full sets, and finalized winning shares redeem through outcome settlement.',
 			ariaLabel: 'Complete set lifecycle',
 			height: 360,
 			width: 860,
@@ -141,7 +141,7 @@ export const diagramGraphSpecs = {
 					node('settlement', 'Collateral settlement', 'slate'),
 				],
 				[
-					edge('shares-eth-full-set', 'eth', 'full-set', 'portfolio purchase'),
+					edge('shares-eth-full-set', 'eth', 'full-set', 'security pool purchase'),
 					edge('shares-full-set-operational', 'full-set', 'operational'),
 					edge('shares-full-set-finalized', 'full-set', 'finalized'),
 					edge('shares-operational-settlement', 'operational', 'settlement', 'recover collateral'),
@@ -152,21 +152,26 @@ export const diagramGraphSpecs = {
 	),
 	'fig-statoblast-system-decision-flow': diagram(
 		{
-			ariaDescription: 'A portfolio shares capital across registered questions. Each question can resolve locally. A universe fork uses one owner choice per portfolio, shared branch accounting and auctions where needed, then prepares individual child questions on demand.',
-			ariaLabel: 'Shared portfolio and question lifecycle',
+			ariaDescription: 'A security pool shares capital across registered questions. Each question can resolve locally. A universe fork uses one owner choice per security pool, shared branch accounting and auctions where needed, then prepares individual child questions on demand.',
+			ariaLabel: 'Shared security pool and question lifecycle',
 			height: 620,
 			width: 940,
 		},
 		[
 			section(
-				'portfolio-questions',
-				[node('capital', 'Portfolio capital', 'blue', ['individual owner commitments']), node('questions', 'Registered questions', 'green', ['separate shares and cash']), node('reports', 'Question reporting', 'gold', ['wallet REP deposits']), node('local', 'Local resolution', 'green', ['winning shares redeem'])],
+				'security-pool-questions',
+				[node('capital', 'Security pool capital', 'blue', ['individual owner commitments']), node('questions', 'Registered questions', 'green', ['separate shares and cash']), node('reports', 'Question reporting', 'gold', ['wallet REP deposits']), node('local', 'Local resolution', 'green', ['winning shares redeem'])],
 				[edge('capital-questions', 'capital', 'questions', 'shared backing'), edge('questions-reports', 'questions', 'reports'), edge('reports-local', 'reports', 'local', 'resolved outcome')],
 				{ title: 'Question settlement' },
 			),
 			section(
-				'portfolio-forks',
-				[node('fork', 'Universe fork', 'red', ['local non-decision or another question']), node('choices', 'Shared owner choices', 'gold', ['one per portfolio and universe']), node('branch', 'Branch accounting', 'blue', ['auction where ETH is short']), node('child', 'Child questions', 'green', ['prepare on demand'])],
+				'security-pool-forks',
+				[
+					node('fork', 'Universe fork', 'red', ['local non-decision or another question']),
+					node('choices', 'Shared owner choices', 'gold', ['one per security pool and universe']),
+					node('branch', 'Branch accounting', 'blue', ['auction where ETH is short']),
+					node('child', 'Child questions', 'green', ['prepare on demand']),
+				],
 				[edge('fork-choices', 'fork', 'choices'), edge('choices-branch', 'choices', 'branch', 'after choice cutoff'), edge('branch-child', 'branch', 'child', 'settle or continue')],
 				{ title: 'Shared fork recovery' },
 			),

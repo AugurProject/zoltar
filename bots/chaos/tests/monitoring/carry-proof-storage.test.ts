@@ -22,7 +22,7 @@ function load(fixture: ReturnType<typeof storageFixture>, game = child, limit = 
 	return loadCarryStorageCandidates(fixture.client, [{ pool: fixture.pool(game), escalationGame: game }], wallet, anchor, limit)
 }
 function scan(fixture: ReturnType<typeof storageFixture>) {
-	return scanCarryStorage({ client: fixture.client, escalationGames: [{ pool: fixture.pool(child), escalationGame: child }], wallet, anchorBlockNumber: anchor, expectedAnchorHash: blockHash, securityPoolForker: forker, maximumItems: 1000 })
+	return scanCarryStorage({ client: fixture.client, escalationGames: [{ pool: fixture.pool(child), escalationGame: child }], wallet, anchorBlockNumber: anchor, expectedAnchorHash: blockHash, questionForker: forker, maximumItems: 1000 })
 }
 
 test('constructs and simulates a carry withdrawal exclusively from anchored storage', async () => {
@@ -193,7 +193,7 @@ test('deep canonical claims settle without ancestry preparation', async () => {
 		fixture.games.push({ game, parent, inherited: [fixture.leaf], local: [], consumed: [] })
 		parent = game
 	}
-	const result = await scanCarryStorage({ client: fixture.client, escalationGames: [{ pool: fixture.pool(parent), escalationGame: parent }], wallet, anchorBlockNumber: anchor, expectedAnchorHash: blockHash, securityPoolForker: forker, maximumItems: 1000 })
+	const result = await scanCarryStorage({ client: fixture.client, escalationGames: [{ pool: fixture.pool(parent), escalationGame: parent }], wallet, anchorBlockNumber: anchor, expectedAnchorHash: blockHash, questionForker: forker, maximumItems: 1000 })
 	expect(result.withdrawals).toHaveLength(1)
 	expect(result.withdrawals[0]?.claimSourceGame).toBe(source)
 	expect(fixture.calls.some(call => call.functionName?.includes('ClaimCheckpoint'))).toBeFalse()

@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { discoverCoordinatorPolicies } from '#monitoring/coordinator-discovery'
 import { canonicalSecurityPoolFactory, networkConfiguration } from '#config/network'
 import { parseOperatorSettings } from '#config/settings-store'
-import { securityPoolAbi, securityPoolFactoryAbi, openOraclePriceCoordinatorAbi, sharedPoolPriceFeedAbi } from '@zoltar/bot-shared/contracts/abi'
+import { questionLedgerAbi, securityPoolFactoryAbi, openOraclePriceCoordinatorAbi, sharedPoolPriceFeedAbi } from '@zoltar/bot-shared/contracts/abi'
 import { createPublicClient, decodeFunctionData, encodeAbiParameters, encodeFunctionData, getAddress, type Hex } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import example from '../../config/operator.example.json'
@@ -17,9 +17,9 @@ const secondPool = getAddress('0x0000000000000000000000000000000000000055')
 const feed = getAddress('0x0000000000000000000000000000000000000044')
 const other = getAddress('0x0000000000000000000000000000000000000033')
 const hash: Hex = `0x${'ab'.repeat(32)}`
-const portfolio = getAddress('0x0000000000000000000000000000000000000066')
+const securityPool = getAddress('0x0000000000000000000000000000000000000066')
 const escrowFeedCall = encodeFunctionData({ abi: [{ type: 'function', name: 'feed', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] }], functionName: 'feed' })
-const entry = { securityPool: pool, openOraclePriceCoordinator: coordinator, shareToken: other, parent: other, universeId: 0n, questionId: 1n, statoblastSecurityMultiplierBps: 20_000n, initialReportPriorityFeeAttoEthPerGas: 1n }
+const entry = { questionLedger: pool, openOraclePriceCoordinator: coordinator, shareToken: other, parent: other, universeId: 0n, questionId: 1n, statoblastSecurityMultiplierBps: 20_000n, initialReportPriorityFeeAttoEthPerGas: 1n }
 
 function reader(options: { sharedFeed?: boolean; missingEscrow?: boolean; wrongCoordinator?: boolean; missingCode?: boolean; wrongBlock?: boolean; unapproved?: boolean; shortPage?: boolean; unsafePolicy?: boolean; registryCount?: bigint; reorg?: boolean; wrongFeedBinding?: boolean } = {}) {
 	let blockReads = 0
@@ -33,9 +33,9 @@ function reader(options: { sharedFeed?: boolean; missingEscrow?: boolean; wrongC
 			if (to.toLowerCase() === factory.toLowerCase()) {
 				const call = decodeFunctionData({ abi: securityPoolFactoryAbi, data })
 				if (call.functionName === 'sharedPriceFeeds') return encodeAbiParameters([{ type: 'address' }], [options.wrongFeedBinding ? other : feed])
-				if (call.functionName === 'securityPoolDeploymentCount') return encodeAbiParameters([{ type: 'uint256' }], [options.registryCount ?? 1n])
-				if (call.functionName !== 'securityPoolDeploymentsRange') throw new Error('Unexpected factory read')
-				const fn = securityPoolFactoryAbi.find(item => item.type === 'function' && item.name === 'securityPoolDeploymentsRange')
+				if (call.functionName === 'questionLedgerDeploymentCount') return encodeAbiParameters([{ type: 'uint256' }], [options.registryCount ?? 1n])
+				if (call.functionName !== 'questionLedgerDeploymentsRange') throw new Error('Unexpected factory read')
+				const fn = securityPoolFactoryAbi.find(item => item.type === 'function' && item.name === 'questionLedgerDeploymentsRange')
 				if (fn === undefined || fn.type !== 'function') throw new Error('Missing registry ABI')
 				const [start, count] = call.args
 				return encodeAbiParameters(fn.outputs, [
@@ -43,19 +43,19 @@ function reader(options: { sharedFeed?: boolean; missingEscrow?: boolean; wrongC
 						? []
 						: Array.from({ length: Number(count) }, (_, index) => ({
 								...entry,
-								...(options.sharedFeed && index === 1 ? { securityPool: secondPool, openOraclePriceCoordinator: other } : {}),
+								...(options.sharedFeed && index === 1 ? { questionLedger: secondPool, openOraclePriceCoordinator: other } : {}),
 								universeId: options.unapproved || (!options.sharedFeed && options.registryCount !== undefined && start + BigInt(index) < options.registryCount - 1n) ? 1n : 0n,
 							})),
 				])
 			}
 			if (to.toLowerCase() === pool.toLowerCase() || to.toLowerCase() === secondPool.toLowerCase()) {
-				const call = decodeFunctionData({ abi: securityPoolAbi, data })
+				const call = decodeFunctionData({ abi: questionLedgerAbi, data })
 				if (call.functionName === 'universeId') return encodeAbiParameters([{ type: 'uint248' }], [0n])
 				return encodeAbiParameters([{ type: 'address' }], [options.wrongCoordinator || to.toLowerCase() === secondPool.toLowerCase() ? other : coordinator])
 			}
 			if (to.toLowerCase() !== coordinator.toLowerCase() && (!options.sharedFeed || (to.toLowerCase() !== feed.toLowerCase() && to.toLowerCase() !== other.toLowerCase()))) throw new Error('Untrusted coordinator queried')
 			const call = decodeFunctionData({ abi: [...openOraclePriceCoordinatorAbi, ...sharedPoolPriceFeedAbi], data })
-			if (call.functionName === 'portfolio') return encodeAbiParameters([{ type: 'address' }], [portfolio])
+			if (call.functionName === 'securityPool') return encodeAbiParameters([{ type: 'address' }], [securityPool])
 			if (call.functionName === 'universeId') return encodeAbiParameters([{ type: 'uint248' }], [options.unapproved ? 1n : 0n])
 			if (call.functionName === 'pendingReportId') return encodeAbiParameters([{ type: 'uint256' }], [7n])
 			if (call.functionName === 'reportCandidates') {
@@ -149,7 +149,7 @@ test('retains older authenticated report identities, ignoring absent candidates'
 	expect(policies[0]?.reportEscrows).toEqual({ '6': secondPool, '7': other })
 })
 
-test('discovers questionless portfolio feeds through canonical bindings', async () => {
+test('discovers questionless security pool feeds through canonical bindings', async () => {
 	const policies = await discoverCoordinatorPolicies([reader({ sharedFeed: true, registryCount: 0n }).client], await configuration(), 10n, hash, [], reports)
 	expect(policies.map(policy => policy.coordinator)).toEqual([feed])
 	expect(policies[0]?.reportEscrows).toEqual({ '6': secondPool, '7': other })

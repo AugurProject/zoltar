@@ -1,4 +1,4 @@
-import { tryGetSecurityPoolSystemState } from '@zoltar/ui-core-shared/lib/contractEnums.js'
+import { tryGetQuestionLedgerSystemState } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import { liveCopy } from '../copy/live.js'
 import * as outcomeCopy from '../copy/outcomes.js'
 import { resolvedShareOutcome } from '../protocol/settlement.js'
@@ -11,6 +11,6 @@ export function questionOutcomeLabel(questionOutcome: number) {
 }
 
 export function systemStateLabel(systemState: number) {
-	const state = tryGetSecurityPoolSystemState(systemState)
+	const state = tryGetQuestionLedgerSystemState(systemState)
 	return state === undefined ? liveCopy.unknownSystemState(systemState) : liveCopy[state]
 }

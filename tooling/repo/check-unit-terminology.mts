@@ -27,8 +27,8 @@ const serializedAtomicStringAllowlist = new Set([
 	'augurScan/tests/unit/snapshots.test.ts',
 	'bots/liquidator/scripts/serve-dashboard-fixture.mts',
 	'bots/liquidator/tests/config/settings.test.ts',
-	// Portfolio instructions serialize exact atomic integers as decimal strings.
-	'bots/liquidator/tests/config/portfolio-instructions.test.ts',
+	// Security pool instructions serialize exact atomic integers as decimal strings.
+	'bots/liquidator/tests/config/security-pool-instructions.test.ts',
 	'bots/liquidator/README.md',
 	'docs/mainnet-deployment-addresses.json',
 	'docs/sepolia-deployment-addresses.json',
@@ -62,7 +62,7 @@ const ambiguousSettlementCollateralTerminology = /\b(?:open-interest|parent) col
 const uiEscrowAccountingAlias = /\b(?:escalationEscrowedAttoRep|connectedWalletEscrowedAttoRep)\b/
 const uiDirectRepCollateralRepairAuctionClaimAlias = /\b(?:child-pool(?:-held)? REP|Estimated REP Claimed|Winning (?:claims|selections|bids)[^\n]{0,40}\b(?:add|receive|claim) REP(?! backing units))\b/i
 const docsDirectRepCollateralRepairAuctionClaimAlias = /\bbought locked REP and security commitments\b/i
-const invalidSecurityPoolInterfaceCapacityUnits = /Capacity ownership[^\n]*denominated in attoETH|REP backing units, commitments and fees use attoETH|assignFinalizedAuctionFees\(address vault, uint256 amountAttoEth/
+const invalidQuestionLedgerInterfaceCapacityUnits = /Capacity ownership[^\n]*denominated in attoETH|REP backing units, commitments and fees use attoETH|assignFinalizedAuctionFees\(address vault, uint256 amountAttoEth/
 const capacityOwnershipIdentifierWithAttoEthUnits = /\b(?:capacityOwnership|CapacityOwnership)[A-Za-z0-9]*AttoEth\b/
 const legacyLiquidatorCoverageModel = /\b(?:coverageCommitment|CoverageCommitment|totalCoverageCommitmentAttoEth|initiatorVault)\b|coverage commitment/i
 const uiLegacyDisputeStakeCopy = /\b(?:Total side stake|Your side stake|Total stake|Your stake|current stakes|escrow attributed to this vault)\b/i
@@ -106,7 +106,7 @@ if (!ambiguousAtomicScaleConstant.test('const ONE_REP = 10n ** 18n')) throw new 
 if (!vaultContainerActingAsCaller.test('the vault invokes migration')) throw new Error('Unit terminology checker negative fixture did not detect a vault container acting as a caller')
 if (!unsuffixedAtomicEthEquationSymbol.test('<math data-source="rawEthBalance = settlementCollateralAttoEth"><mi>rawEthBalance</mi></math>')) throw new Error('Unit terminology checker negative fixture did not detect an unsuffixed attoETH equation symbol')
 if (!docsDirectRepCollateralRepairAuctionClaimAlias.test('participants claim their bought locked REP and security commitments')) throw new Error('Unit terminology checker negative fixture did not detect obsolete collateral-repair-auction settlement terminology')
-if (!invalidSecurityPoolInterfaceCapacityUnits.test('function assignFinalizedAuctionFees(address vault, uint256 amountAttoEth, uint256 feeIndex)')) throw new Error('Unit terminology checker negative fixture did not detect attoETH capacity ownership in ISecurityPool')
+if (!invalidQuestionLedgerInterfaceCapacityUnits.test('function assignFinalizedAuctionFees(address vault, uint256 amountAttoEth, uint256 feeIndex)')) throw new Error('Unit terminology checker negative fixture did not detect attoETH capacity ownership in IQuestionLedger')
 if (!capacityOwnershipIdentifierWithAttoEthUnits.test('const capacityOwnershipTransferAttoEth = 1n')) throw new Error('Unit terminology checker negative fixture did not detect an attoETH capacity-ownership identifier')
 if (!legacyLiquidatorCoverageModel.test('totalCoverageCommitmentAttoEth')) throw new Error('Unit terminology checker negative fixture did not detect the legacy liquidator coverage model')
 
@@ -145,7 +145,7 @@ for (const path of sourceFiles) {
 	if (/^ui\/(?:coreShared|zoltarShared|statoblastShared|zoltar|statoblast|trading|openoracle)\/ts\//.test(path) && uiEscrowAccountingAlias.test(source)) failures.push(`${path}: uses escrow mechanics terminology for the dispute-staked REP accounting state`)
 	if (/^ui\/(?:coreShared|zoltarShared|statoblastShared|zoltar|statoblast|trading|openoracle)\/ts\//.test(path) && uiDirectRepCollateralRepairAuctionClaimAlias.test(source)) failures.push(`${path}: describes collateral-repair-auction REP backing units as direct child-pool REP`)
 	if (path === 'docs/explanation/statoblast.html' && docsDirectRepCollateralRepairAuctionClaimAlias.test(source)) failures.push(`${path}: describes collateral-repair-auction settlement as direct locked REP and undefined security commitments`)
-	if (path === 'solidity/contracts/statoblast/interfaces/ISecurityPool.sol' && invalidSecurityPoolInterfaceCapacityUnits.test(source)) failures.push(`${path}: describes attoREP capacity ownership as attoETH or uses obsolete commitment units`)
+	if (path === 'solidity/contracts/statoblast/interfaces/IQuestionLedger.sol' && invalidQuestionLedgerInterfaceCapacityUnits.test(source)) failures.push(`${path}: describes attoREP capacity ownership as attoETH or uses obsolete commitment units`)
 	if (path !== terminologyCheckPath && capacityOwnershipIdentifierWithAttoEthUnits.test(source)) failures.push(`${path}: uses attoETH units in a capacity-ownership identifier; use attoREP for ownership or an explicit debt/capacity-value name`)
 	if (path.startsWith('bots/liquidator/') && legacyLiquidatorCoverageModel.test(source)) failures.push(`${path}: uses the removed fixed-coverage liquidator model`)
 	if (/^ui\/(?:coreShared|zoltarShared|statoblastShared|zoltar|statoblast|trading|openoracle)\/ts\//.test(path) && uiLegacyDisputeStakeCopy.test(source)) failures.push(`${path}: uses stake or escrow copy instead of dispute-staked REP`)

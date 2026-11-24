@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate as depositDelegateArtifact, statoblast_factories_EscalationGameFactory_EscalationGameFactory as factoryArtifact, statoblast_SecurityPool_SecurityPool as poolArtifact } from '../types/contractArtifact'
+import { statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate as depositDelegateArtifact, statoblast_factories_EscalationGameFactory_EscalationGameFactory as factoryArtifact, statoblast_QuestionLedger_QuestionLedger as poolArtifact } from '../types/contractArtifact'
 import { writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { BRANCH_GAS, createE2E, INVALID, median, NO, YES } from './auditE2EHarness'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 // Removed public selectors must remain unreachable through the signed-deposit fallback.
 const claimDelegateArtifact = {
@@ -35,14 +35,14 @@ const K = 1_000n * unit
 // a frozen parent game or in a live continuation, whether called on the game, through its
 // fallback, or on a shared delegate.
 describe('audit4: privileged and claim-checkpoint entry points are inert', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const e2e = createE2E(fixture)
 
 	test('no outside caller can move REP or change a claim through a legacy path', async () => {
 		const { base } = fixture
 		const owner = fixture.owner()
 		const U0 = base.genesisUniverse
-		const source = fixture.poolFor(base.questionId).securityPool
+		const source = fixture.poolFor(base.questionId).questionLedger
 		const [r2, r3, r4, r5, r6] = [e2e.account(2), e2e.account(3), e2e.account(4), e2e.account(5), e2e.account(6)]
 		await fixture.prepare()
 		await fixture.mint(10n * unit)
@@ -97,7 +97,7 @@ describe('audit4: privileged and claim-checkpoint entry points are inert', () =>
 					['startFromFork', () => caller.simulateContract({ ...g, functionName: 'startFromFork', args: [1n, 2n, 0n, YES, false, 0n] })],
 					['resumeFromFork', () => caller.simulateContract({ ...g, functionName: 'resumeFromFork' })],
 					['initializeForkCarryOutcome', () => caller.simulateContract({ ...g, functionName: 'initializeForkCarryOutcome', args: [game0, zeroHash, peaks, 0n, 0n, 0n, zeroHash] })],
-					['recordDepositFromSecurityPool', () => caller.simulateContract({ ...g, functionName: 'recordDepositFromSecurityPool', args: [caller.account.address, YES, K, 1_000n * K] })],
+					['recordDepositFromQuestionLedger', () => caller.simulateContract({ ...g, functionName: 'recordDepositFromQuestionLedger', args: [caller.account.address, YES, K, 1_000n * K] })],
 					// Selectors that exist only on the deposit delegate never reach it through the game's fallback.
 					['fallback transferReporterRep', () => caller.simulateContract({ ...viaDeposit, functionName: 'transferReporterRep', args: [caller.account.address, K] })],
 					['fallback creditClaimOwners', () => caller.simulateContract({ ...viaDeposit, functionName: 'creditClaimOwners', args: [caller.account.address, K] })],

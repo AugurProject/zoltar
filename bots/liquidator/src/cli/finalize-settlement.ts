@@ -14,8 +14,8 @@ function positiveInteger(name: string) {
 }
 
 if (process.argv.includes('--help')) {
-	console.log(`Settlement finalizer: scan a Statoblast portfolio once for funded final questions.
-Set SETTLEMENT_RPC_URL, SETTLEMENT_CHAIN_ID, SETTLEMENT_PORTFOLIO and
+	console.log(`Settlement finalizer: scan a Statoblast security pool once for funded final questions.
+Set SETTLEMENT_RPC_URL, SETTLEMENT_CHAIN_ID, SETTLEMENT_SECURITY_POOL and
 SETTLEMENT_MINIMUM_CASH (raw collateral units).
 
 For submission, supply a dedicated SETTLEMENT_PRIVATE_KEY plus
@@ -27,7 +27,7 @@ SETTLEMENT_MAX_GAS_PRICE in attoETH per gas. Run one instance per signer on a ti
 const url = required('SETTLEMENT_RPC_URL')
 const chainId = Number(positiveInteger('SETTLEMENT_CHAIN_ID'))
 if (!Number.isSafeInteger(chainId)) throw new Error('Invalid settlement chain ID')
-const portfolio = getAddress(required('SETTLEMENT_PORTFOLIO'))
+const securityPool = getAddress(required('SETTLEMENT_SECURITY_POOL'))
 const minimumCash = positiveInteger('SETTLEMENT_MINIMUM_CASH')
 const chain = defineChain({ id: chainId, name: 'Settlement chain', nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: [url] } } })
 const client = createPublicClient({ chain, transport: http(url) })
@@ -48,13 +48,13 @@ if (key !== undefined) {
 }
 
 let sent = 0n
-for await (const candidate of scanSettlementFinalizations(client, portfolio, minimumCash)) {
+for await (const candidate of scanSettlementFinalizations(client, securityPool, minimumCash)) {
 	console.log('Final settlement candidate', candidate)
 	if (sender === undefined) continue
 	const { account, wallet, maximumTransactions, maximumGas, maximumGasPrice } = sender
 	const latest = await client.getBlock()
 	if (latest.number === undefined) throw new Error('Settlement execution requires a numbered block')
-	const current = await settlementFinalizationCandidate(client, portfolio, candidate, minimumCash, latest.number)
+	const current = await settlementFinalizationCandidate(client, securityPool, candidate, minimumCash, latest.number)
 	if (current === undefined) continue
 	const gasPrice = await client.getGasPrice()
 	if (gasPrice > maximumGasPrice) break

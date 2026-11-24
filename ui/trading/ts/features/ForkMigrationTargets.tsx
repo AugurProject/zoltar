@@ -86,7 +86,7 @@ function formatMigratedShares(target: ForkTarget, market: CollateralMarket) {
 }
 
 /**
- * Where migrated shares went: each child universe that received some, with a link that opens its security pool's market
+ * Where migrated shares went: each child universe that received some, with a link that opens its question ledger's market
  * in that universe. Migration mints the shares there, so this is the way to find, trade, or redeem them.
  */
 export function MigratedShareLinks({ context, market = {} }: { context: ForkMigrationContext; market?: CollateralMarket }) {

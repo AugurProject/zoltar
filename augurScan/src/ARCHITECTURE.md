@@ -3,7 +3,7 @@
 The backend is organized by capability and keeps dependencies directed toward runtime-neutral evidence types:
 
 - `api/` owns HTTP validation, cursor parsing, response serialization, and route-family controllers. It contains no SQL; `api.ts` is its public entry point.
-- `repositories/` owns the read-only SQL for API catalogs, histories, entity details, portfolios, exports, and integrity evidence. Repositories return rows or domain data and cannot depend on HTTP, indexer, database-session, or projection implementations.
+- `repositories/` owns the read-only SQL for API catalogs, histories, entity details, security pools, exports, and integrity evidence. Repositories return rows or domain data and cannot depend on HTTP, indexer, database-session, or projection implementations.
 - `indexer/` owns provider selection, ownership and replay lifecycle, canonical-chain synchronization, bounded log scanning, and block ingestion. `indexer/network-state.ts` creates one plain state record per network (providers, state boundary, progress, and lease); the focused operation modules are functions that receive that record, or only the parts they need, as explicit parameters, while `indexer.ts` is the stable public entry point.
 - `database/` owns lease/session handling, network and contract catalog persistence, direct observations, history and checkpoint transitions, and atomic block persistence. The database composes repository operations over one connection owner so transaction boundaries stay explicit, while `database.ts` is the stable public entry point.
 - `projections/` converts decoded evidence into typed state and domain projections. `projections.ts` is its public entry point.

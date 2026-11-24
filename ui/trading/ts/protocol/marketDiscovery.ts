@@ -1,6 +1,6 @@
 import { readOperationClient, runReadOperation } from '@zoltar/ui-core-shared/lib/readOperation.js'
 import { getAddress, zeroAddress, type Address, type Hash, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_QuestionLedger_QuestionLedger, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { DeploymentConfiguration } from './config.js'
 import { shareTokenAbi } from './authorization.js'
@@ -9,68 +9,68 @@ import {
 	type MarketDiscoveryProgress,
 	type LiveMarket,
 	publicErrorMessage,
-	createSecurityPoolDeploymentIndex,
-	loadSecurityPoolRegistry,
+	createQuestionLedgerDeploymentIndex,
+	loadQuestionLedgerRegistry,
 	mapWithConcurrency,
 	loadLiveMarket,
 	shareBalanceScope,
 	loadSelectedUniverseIds,
 	marketDiscoveryPage,
-	refreshSecurityPoolDeploymentIndex,
+	refreshQuestionLedgerDeploymentIndex,
 	registryBlockAnchorIsCanonical,
 	unavailableMarket,
-	type SecurityPoolDeployment,
-	type SecurityPoolDeploymentIndex,
+	type QuestionLedgerDeployment,
+	type QuestionLedgerDeploymentIndex,
 } from './live.js'
 import { latestBlockIdentity } from './tradeQuote.js'
 
-const poolAbi = statoblast_SecurityPool_SecurityPool.abi
+const poolAbi = statoblast_QuestionLedger_QuestionLedger.abi
 const poolFactoryAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
 const tradingFactoryAbi = tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory.abi
-type PairDeployment = Readonly<{ securityPool: Address; shareToken: Address; universeId: bigint }>
-export type TradingPairIndex = SecurityPoolDeploymentIndex<PairDeployment, { blockNumber: bigint; blockHash: Hash }>
+type PairDeployment = Readonly<{ questionLedger: Address; shareToken: Address; universeId: bigint }>
+export type TradingPairIndex = QuestionLedgerDeploymentIndex<PairDeployment, { blockNumber: bigint; blockHash: Hash }>
 
 function createTradingPairIndex(): TradingPairIndex {
-	return createSecurityPoolDeploymentIndex()
+	return createQuestionLedgerDeploymentIndex()
 }
 
-function securityPoolNotFound(message: string) {
-	return Object.assign(new Error(message), { name: 'SecurityPoolNotFoundError' })
+function questionLedgerNotFound(message: string) {
+	return Object.assign(new Error(message), { name: 'QuestionLedgerNotFoundError' })
 }
 
-export function isSecurityPoolNotFoundError(error: unknown) {
-	return error instanceof Error && error.name === 'SecurityPoolNotFoundError'
+export function isQuestionLedgerNotFoundError(error: unknown) {
+	return error instanceof Error && error.name === 'QuestionLedgerNotFoundError'
 }
 
-async function loadCanonicalPoolDeployment(client: PublicClient, configuration: DeploymentConfiguration, pool: Address): Promise<SecurityPoolDeployment> {
+async function loadCanonicalPoolDeployment(client: PublicClient, configuration: DeploymentConfiguration, pool: Address): Promise<QuestionLedgerDeployment> {
 	const [factory, universeId, shareToken, zoltar] = await Promise.all([
 		client.readContract({ abi: poolAbi, address: pool, functionName: 'securityPoolFactory' }),
 		client.readContract({ abi: poolAbi, address: pool, functionName: 'universeId' }),
 		client.readContract({ abi: poolAbi, address: pool, functionName: 'shareToken' }),
 		client.readContract({ abi: poolAbi, address: pool, functionName: 'zoltar' }),
 	]).catch(error => {
-		if (error instanceof Error && error.name === 'ContractFunctionZeroDataError') throw securityPoolNotFound('Security pool does not exist at this address. Check the address and network.')
+		if (error instanceof Error && error.name === 'ContractFunctionZeroDataError') throw questionLedgerNotFound('Question ledger does not exist at this address. Check the address and network.')
 		throw error
 	})
-	if (getAddress(factory) !== getAddress(configuration.securityPoolFactory) || getAddress(zoltar) !== getAddress(configuration.zoltar)) throw securityPoolNotFound('Security pool does not exist in the configured deployment. Check the address and network.')
-	const originId = await client.readContract({ abi: poolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'getSecurityPoolOriginId', args: [pool] })
+	if (getAddress(factory) !== getAddress(configuration.securityPoolFactory) || getAddress(zoltar) !== getAddress(configuration.zoltar)) throw questionLedgerNotFound('Question ledger does not exist in the configured deployment. Check the address and network.')
+	const originId = await client.readContract({ abi: poolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'getQuestionLedgerOriginId', args: [pool] })
 	const [registeredPool, canonicalPool] = await Promise.all([
-		client.readContract({ abi: poolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'getSecurityPool', args: [originId, universeId] }),
-		client.readContract({ abi: shareTokenAbi, address: getAddress(shareToken), functionName: 'canonicalPoolByUniverse', args: [universeId] }),
+		client.readContract({ abi: poolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'getQuestionLedger', args: [originId, universeId] }),
+		client.readContract({ abi: shareTokenAbi, address: getAddress(shareToken), functionName: 'canonicalQuestionLedgerByUniverse', args: [universeId] }),
 	])
-	if (getAddress(registeredPool) !== pool || getAddress(canonicalPool) !== pool) throw securityPoolNotFound('This address is not a registered security pool.')
+	if (getAddress(registeredPool) !== pool || getAddress(canonicalPool) !== pool) throw questionLedgerNotFound('This address is not a registered question ledger.')
 	const [questionId, statoblastSecurityMultiplierBps, manager] = await Promise.all([
 		client.readContract({ abi: poolAbi, address: pool, functionName: 'questionId' }),
 		client.readContract({ abi: poolAbi, address: pool, functionName: 'statoblastSecurityMultiplierBps' }),
 		client.readContract({ abi: poolAbi, address: pool, functionName: 'openOraclePriceCoordinator' }),
 	])
 	const initialReportPriorityFeeAttoEthPerGas = await client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: getAddress(manager), functionName: 'initialReportPriorityFeeAttoEthPerGas' })
-	return { securityPool: pool, shareToken: getAddress(shareToken), universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas }
+	return { questionLedger: pool, shareToken: getAddress(shareToken), universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas }
 }
 
 export async function discoverAddressedMarket(client: PublicClient, configuration: DeploymentConfiguration, address: Address) {
 	const pool = getAddress(address)
-	if (pool === zeroAddress) throw new Error('Enter a nonzero security pool address')
+	if (pool === zeroAddress) throw new Error('Enter a nonzero question ledger address')
 	const deployment = await loadCanonicalPoolDeployment(client, configuration, pool)
 	const market = await loadLiveMarket(client, configuration, deployment)
 	return { start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [market], universeIds: [market.universeId], selectedUniverseId: market.universeId }
@@ -87,10 +87,10 @@ export type SavedPortfolioPool = Readonly<{ pool: Address; universeId: bigint | 
 /** Find holdings across registered questions, including pools the browser has never opened. */
 async function discoverWalletPools(client: PublicClient, configuration: DeploymentConfiguration, universeId: bigint, account: Address, isCurrent: () => boolean): Promise<SavedPortfolioPool[]> {
 	const anchor = await latestBlockIdentity(client)
-	const deployments = await loadSecurityPoolRegistry(client, configuration, universeId, anchor.blockNumber, isCurrent)
+	const deployments = await loadQuestionLedgerRegistry(client, configuration, universeId, anchor.blockNumber, isCurrent)
 	const owned = await mapWithConcurrency(deployments, 4, async deployment => {
 		if (!isCurrent()) throw new Error('Portfolio refresh cancelled')
-		const pool = { pool: deployment.securityPool, shareToken: deployment.shareToken, universeId: deployment.universeId }
+		const pool = { pool: deployment.questionLedger, shareToken: deployment.shareToken, universeId: deployment.universeId }
 		try {
 			return await runReadOperation(
 				async operation => {
@@ -137,7 +137,7 @@ export async function discoverSavedMarkets(client: PublicClient, configuration: 
 				return market.universeId === selectedUniverseId ? market : undefined
 			} catch (error) {
 				if (!isCurrent()) throw error
-				const market = cached.market ?? unavailableMarket({ securityPool: cached.pool, universeId: selectedUniverseId ?? 0n, shareToken: zeroAddress, questionId: 0n, statoblastSecurityMultiplierBps: 0n, initialReportPriorityFeeAttoEthPerGas: 0n }, error, configuration.feeBps)
+				const market = cached.market ?? unavailableMarket({ questionLedger: cached.pool, universeId: selectedUniverseId ?? 0n, shareToken: zeroAddress, questionId: 0n, statoblastSecurityMultiplierBps: 0n, initialReportPriorityFeeAttoEthPerGas: 0n }, error, configuration.feeBps)
 				return { ...market, loadError: publicErrorMessage(error, 'Favorite market refresh failed.') }
 			}
 		},
@@ -151,17 +151,17 @@ export async function discoverTradingMarketPage(client: PublicClient, configurat
 	if (selectedUniverseId === undefined) return { ...marketDiscoveryPage(0n), total: 0n, markets: [], universeIds, selectedUniverseId }
 	const canonical = async (anchor: { blockNumber: bigint; blockHash: Hash }) =>
 		await registryBlockAnchorIsCanonical(anchor, async () => await latestBlockIdentity(client), getActiveBackend().id === 'simulation' ? undefined : async blockNumber => await latestBlockIdentity({ getBlock: async () => await client.getBlock({ blockNumber }) }))
-	const deployments = await refreshSecurityPoolDeploymentIndex(
+	const deployments = await refreshQuestionLedgerDeploymentIndex(
 		index,
 		`${configuration.chainId}:${configuration.factory}:${configuration.rpcUrl}:${selectedUniverseId}`,
 		async () => await latestBlockIdentity(client),
 		canonical,
 		async anchor => {
 			const { blockNumber } = anchor
-			const pools = await loadSecurityPoolRegistry(client, configuration, selectedUniverseId, blockNumber, isCurrent, { index: index.registry, anchor })
+			const pools = await loadQuestionLedgerRegistry(client, configuration, selectedUniverseId, blockNumber, isCurrent, { index: index.registry, anchor })
 			const pairs = await mapWithConcurrency(pools, 8, async deployment => {
 				if (!isCurrent()) throw new Error('Market discovery cancelled')
-				const pair = await client.readContract({ abi: tradingFactoryAbi, address: configuration.factory, functionName: 'getPair', args: [deployment.securityPool], blockNumber })
+				const pair = await client.readContract({ abi: tradingFactoryAbi, address: configuration.factory, functionName: 'getPair', args: [deployment.questionLedger], blockNumber })
 				return pair === zeroAddress ? [] : [deployment]
 			})
 			return pairs.flat()
@@ -175,12 +175,12 @@ export async function discoverTradingMarketPage(client: PublicClient, configurat
 		6,
 		async deployment => {
 			try {
-				const { markets } = await discoverAddressedMarket(client, configuration, deployment.securityPool)
+				const { markets } = await discoverAddressedMarket(client, configuration, deployment.questionLedger)
 				const market = markets[0]
-				if (market === undefined || market.pair === undefined || market.universeId !== deployment.universeId || market.shareToken !== deployment.shareToken) throw new Error('The trading pool registry no longer matches its security pool')
+				if (market === undefined || market.pair === undefined || market.universeId !== deployment.universeId || market.shareToken !== deployment.shareToken) throw new Error('The trading pool registry no longer matches its question ledger')
 				return market
 			} catch (error) {
-				return { ...unavailableMarket({ ...deployment, questionId: 0n, statoblastSecurityMultiplierBps: 0n, initialReportPriorityFeeAttoEthPerGas: 0n }, error, configuration.feeBps), title: `Security pool ${deployment.securityPool}` }
+				return { ...unavailableMarket({ ...deployment, questionId: 0n, statoblastSecurityMultiplierBps: 0n, initialReportPriorityFeeAttoEthPerGas: 0n }, error, configuration.feeBps), title: `Question ledger ${deployment.questionLedger}` }
 			}
 		},
 		markets => onProgress?.({ ...page, total: BigInt(deployments.length), markets, universeIds, selectedUniverseId }),

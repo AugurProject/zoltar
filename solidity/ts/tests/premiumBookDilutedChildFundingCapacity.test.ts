@@ -27,7 +27,7 @@ describe('premium book: a diluted but surviving fork child keeps its funding cap
 	const freeze = (universe: bigint) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'freeze', args: [universe] }))
 	const choose = (source: bigint, child: bigint, chosen: bigint, total: bigint) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'choose', args: [source, child, chosen, total] }))
 	const createChild = (source: bigint, child: bigint) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'createChild', args: [source, child] }))
-	const schedule = (universe: bigint, id: bigint, finalAfterPortfolioTime: number) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'schedule', args: [universe, id, finalAfterPortfolioTime] }))
+	const schedule = (universe: bigint, id: bigint, finalAfterSecurityPoolTime: number) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'schedule', args: [universe, id, finalAfterSecurityPoolTime] }))
 	const totals = async (universe: bigint) => {
 		const [cash, units] = await client.readContract({ ...target(), functionName: 'totals', args: [universe] })
 		return { cash, units }

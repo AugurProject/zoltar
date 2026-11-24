@@ -55,7 +55,7 @@ describe('chaos semantic receipt validation', () => {
 		).toBe('confirmed')
 	})
 
-	test('decodes the portfolio setup stage instead of trusting the event topic alone', () => {
+	test('decodes the security pool setup stage instead of trusting the event topic alone', () => {
 		const signature = 'SetupAdvanced(uint8)'
 		const setupTopic = keccak256(toHex(signature))
 		const setupReceipt = {

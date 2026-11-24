@@ -1,4 +1,4 @@
-import { auctionFixture, capitalFixture } from '../support/portfolio-fixtures.ts'
+import { auctionFixture, capitalFixture } from '../support/security-pool-fixtures.ts'
 import { expect, test } from 'bun:test'
 import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
 import { CHAOS_OPERATION_CATALOG, evaluateOperationCatalog, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
@@ -41,7 +41,7 @@ function editableSnapshot() {
 	pool.escalationGame = '0x0000000000000000000000000000000000000000'
 	pool.currentMintingCapacityAttoEth = (2n * 10n ** 18n).toString()
 	pool.purchaseQuote = { spender: pool.coordinator, mintAttoEth: 10000n.toString(), feeAttoEth: 300n.toString(), premiumAttoEth: 200n.toString(), minimumShares: '10000' }
-	snapshot.portfolioCapital = [capitalFixture(snapshot)]
+	snapshot.securityPoolCapital = [capitalFixture(snapshot)]
 	pool.shareTokenSupplyAttoShares = '1000000000000000000'
 	for (const token of snapshot.wallet.tokens) token.openOracleCredit = '1000000000000000000'
 	return snapshot

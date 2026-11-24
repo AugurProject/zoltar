@@ -1,11 +1,11 @@
-import { deployTestPortfolio } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployTestPortfolio.ts'
+import { deployTestSecurityPool } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployTestSecurityPool.ts'
 import { eip191Signer } from 'micro-eth-signer'
 import { encodeDeployData, keccak256, privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { createAnvilNodeForConnectionMode, type AnvilNode } from '../../../../solidity/ts/testSupport/simulator/anvilNode.ts'
 import { addressString } from '../../../../solidity/ts/testSupport/simulator/utils/bigint.ts'
 import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients.ts'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../../../../solidity/ts/testSupport/simulator/utils/constants.ts'
-import { ensureInfraDeployed, getInfraContractAddresses, type getSecurityPoolAddresses } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast.ts'
+import { ensureInfraDeployed, getInfraContractAddresses, type getQuestionLedgerAddresses } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast.ts'
 import { createQuestion } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData.ts'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { manipulatePriceOracle } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblastTestUtils.ts'
@@ -55,7 +55,7 @@ export type ChaosAnvilFixture = {
 	dispose: () => Promise<void>
 	infra: ReturnType<typeof getInfraContractAddresses>
 	node: AnvilNode
-	pool: ReturnType<typeof getSecurityPoolAddresses>['securityPool']
+	pool: ReturnType<typeof getQuestionLedgerAddresses>['questionLedger']
 	questionId: bigint
 	restoreBaseline: () => Promise<void>
 	signer: Address
@@ -267,9 +267,9 @@ export async function createChaosAnvilFixture(): Promise<ChaosAnvilFixture> {
 		const outcomes = ['Yes', 'No']
 		const questionId = getQuestionId(question, outcomes)
 		await createQuestion(deployer, question, outcomes)
-		const poolAddresses = await deployTestPortfolio(deployer, ORIGIN_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS)
+		const poolAddresses = await deployTestSecurityPool(deployer, ORIGIN_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS)
 		const infra = getInfraContractAddresses()
-		const pool = poolAddresses.securityPool
+		const pool = poolAddresses.questionLedger
 		await manipulatePriceOracle(deployer, simulator, poolAddresses.openOraclePriceCoordinator, ONE_TOKEN, 100n * ONE_TOKEN)
 
 		const tradingFactory = await deploy(

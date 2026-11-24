@@ -1,6 +1,6 @@
 {
 	"schemaVersion": 5,
-	"scope": "shared-portfolio-price-adapter-public-ABI-and-event-index",
+	"scope": "shared-securityPool-price-adapter-public-ABI-and-event-index",
 	"source": "solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol",
 	"observablePredicates": {
 		"cache": ["fresh-price", "stale-price"],
@@ -10,7 +10,7 @@
 	"outcomes": [
 		{
 			"trigger": "requestPrice",
-			"preconditions": ["sponsor funding and allowance cover the exact reviewed budget", "portfolio reporting window open"],
+			"preconditions": ["sponsor funding and allowance cover the exact reviewed budget", "security pool reporting window open"],
 			"outcomes": ["isolated candidate escrow", "exact public bounty forwarded", "excess ETH refunded"]
 		},
 		{
@@ -46,8 +46,8 @@
 		"reportDelegate": "view",
 		"reputationToken": "view",
 		"requestPrice": "payable",
-		"securityPool": "view",
-		"setSecurityPool": "nonpayable",
+		"questionLedger": "view",
+		"setQuestionLedger": "nonpayable",
 		"setSharedPriceFeed": "nonpayable",
 		"settlementTime": "view",
 		"sharedPriceFeed": "view",
@@ -81,8 +81,8 @@
 		"reportDelegate": "reportDelegate()",
 		"reputationToken": "reputationToken()",
 		"requestPrice": "requestPrice(uint256,uint256,uint256)",
-		"securityPool": "securityPool()",
-		"setSecurityPool": "setSecurityPool(address)",
+		"questionLedger": "questionLedger()",
+		"setQuestionLedger": "setQuestionLedger(address)",
 		"setSharedPriceFeed": "setSharedPriceFeed(address)",
 		"settlementTime": "settlementTime()",
 		"sharedPriceFeed": "sharedPriceFeed()",
@@ -91,9 +91,9 @@
 		"weth": "weth()",
 		"collateralToken": "collateralToken()"
 	},
-	"events": ["SecurityPoolSet", "SharedPriceFeedSet"],
+	"events": ["QuestionLedgerSet", "SharedPriceFeedSet"],
 	"eventDeclarations": {
-		"SecurityPoolSet": "SecurityPoolSet(address indexed securityPool)",
+		"QuestionLedgerSet": "QuestionLedgerSet(address indexed questionLedger)",
 		"SharedPriceFeedSet": "SharedPriceFeedSet(address indexed priceFeed)"
 	},
 	"enumValues": {}

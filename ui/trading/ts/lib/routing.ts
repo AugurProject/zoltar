@@ -6,7 +6,7 @@ export type TradingRoute = 'create-market' | 'market' | 'liquidity' | 'portfolio
 
 export type TradingLookupRoute = Extract<TradingRoute, 'market' | 'liquidity' | 'create-market'>
 
-/** Candidate list a lookup landing pages through: trading markets for trade and liquidity, security pools without a pair for market creation. */
+/** Candidate list a lookup landing pages through: trading markets for trade and liquidity, question ledgers without a pair for market creation. */
 export type TradingListKind = 'markets' | 'security-pools'
 
 const TRADING_ROUTING_CONFIG: RoutingConfig<TradingRoute> = {

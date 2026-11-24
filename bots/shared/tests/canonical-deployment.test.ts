@@ -3,13 +3,13 @@ import { canonicalCoreDeployment, canonicalNetworkDeployment, canonicalUniswapDe
 
 const address = '0x0000000000000000000000000000000000000001'
 const manifest = {
-	deploymentSteps: ['zoltar', 'multicall3', 'openOracle', 'securityPoolFactory', 'securityPoolForker'].map(id => ({ id, address })),
+	deploymentSteps: ['zoltar', 'multicall3', 'openOracle', 'securityPoolFactory', 'questionForker'].map(id => ({ id, address })),
 	derivedContracts: [{ id: 'zoltarQuestionData', address }],
 	network: { wethAddress: address },
 }
 
 test('resolves core addresses from deployment steps and derived contracts', () => {
-	expect(canonicalCoreDeployment(manifest)).toEqual({ zoltar: address, multicall3: address, questionData: address, openOracle: address, securityPoolFactory: address, securityPoolForker: address, weth: address })
+	expect(canonicalCoreDeployment(manifest)).toEqual({ zoltar: address, multicall3: address, questionData: address, openOracle: address, securityPoolFactory: address, questionForker: address, weth: address })
 })
 
 test('rejects an incomplete canonical manifest', () => {

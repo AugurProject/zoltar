@@ -16,7 +16,7 @@ export type ProtocolIndexIdentity = {
 	cursor: { blockHash: Hash; blockNumber: string }
 	openOracle: Address
 	schemaVersion: 5
-	securityPoolForker: Address
+	questionForker: Address
 	startBlock: string
 	availableStartBlock?: string
 	wallet: Address
@@ -48,7 +48,7 @@ function boundedUnsignedString(value: unknown, label: string, bits: number) {
 
 export function parseIdentity(value: unknown, expectedChainId: number, label = 'protocolIndex'): ProtocolIndexIdentity {
 	const index = requiredRecord(value, label)
-	assertExactKeys(index, ['chainId', 'cursor', 'openOracle', 'schemaVersion', 'securityPoolForker', 'startBlock', 'wallet', 'zoltar'], ['availableStartBlock'], label)
+	assertExactKeys(index, ['chainId', 'cursor', 'openOracle', 'schemaVersion', 'questionForker', 'startBlock', 'wallet', 'zoltar'], ['availableStartBlock'], label)
 	if (index['schemaVersion'] !== 5) throw new Error(`${label}.schemaVersion is unsupported`)
 	if (index['chainId'] !== expectedChainId) throw new Error(`Protocol index belongs to chain ${String(index['chainId'])}, expected chain ${expectedChainId.toString()}`)
 	const startBlock = boundedUnsignedString(index['startBlock'], `${label}.startBlock`, 256)
@@ -63,7 +63,7 @@ export function parseIdentity(value: unknown, expectedChainId: number, label = '
 		cursor: { blockHash: hash(cursor['blockHash'], `${label}.cursor.blockHash`), blockNumber: cursorBlockNumber },
 		openOracle: getAddress(nonemptyString(index['openOracle'], `${label}.openOracle`)),
 		schemaVersion: 5,
-		securityPoolForker: getAddress(nonemptyString(index['securityPoolForker'], `${label}.securityPoolForker`)),
+		questionForker: getAddress(nonemptyString(index['questionForker'], `${label}.questionForker`)),
 		startBlock,
 		...(availableStartBlock === undefined ? {} : { availableStartBlock }),
 		wallet: getAddress(nonemptyString(index['wallet'], `${label}.wallet`)),
@@ -304,7 +304,7 @@ function assertProtocolIndexRecordEnvelope(index: Record<string, unknown>) {
 export function parseProtocolIndex(value: unknown, expectedChainId: number): ChaosProtocolIndex | undefined {
 	if (value === null || value === undefined) return undefined
 	const index = requiredRecord(value, 'protocolIndex')
-	assertExactKeys(index, ['auctionBids', 'auctionRefunds', 'chainId', 'cursor', 'escalationDeposits', 'migrationRepSplits', 'openOracle', 'reports', 'schemaVersion', 'securityPoolForker', 'startBlock', 'wallet', 'zoltar'], ['availableStartBlock'], 'protocolIndex')
+	assertExactKeys(index, ['auctionBids', 'auctionRefunds', 'chainId', 'cursor', 'escalationDeposits', 'migrationRepSplits', 'openOracle', 'reports', 'schemaVersion', 'questionForker', 'startBlock', 'wallet', 'zoltar'], ['availableStartBlock'], 'protocolIndex')
 	assertProtocolIndexRecordEnvelope(index)
 	const identity = parseIdentity(
 		{
@@ -312,7 +312,7 @@ export function parseProtocolIndex(value: unknown, expectedChainId: number): Cha
 			cursor: index['cursor'],
 			openOracle: index['openOracle'],
 			schemaVersion: index['schemaVersion'],
-			securityPoolForker: index['securityPoolForker'],
+			questionForker: index['questionForker'],
 			startBlock: index['startBlock'],
 			...(index['availableStartBlock'] === undefined ? {} : { availableStartBlock: index['availableStartBlock'] }),
 			wallet: index['wallet'],

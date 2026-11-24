@@ -2,7 +2,7 @@ import { parseTransaction, type TransactionReceipt } from '@zoltar/bot-shared/et
 import { sameAddress } from '@zoltar/core-shared/evm/address'
 import type { PendingTransactionIntent } from '#state/operator-state'
 
-/** Portfolio actions complete atomically; no deferred coordinator outcome exists. */
+/** Security pool actions complete atomically; no deferred coordinator outcome exists. */
 export function validateReceiptExpectation(receipt: TransactionReceipt, expectation: PendingTransactionIntent['receiptExpectation'], intent?: PendingTransactionIntent) {
 	if (expectation.type !== 'transaction') throw new Error('Unsupported receipt expectation')
 	if (intent !== undefined) {

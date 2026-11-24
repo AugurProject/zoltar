@@ -3,7 +3,7 @@ import { collateralUnit } from '../src/collateral.ts'
 import { exactNumber, exactUnit, percentFromBps, utcDateTime } from './format.ts'
 import { shortIdentifier } from './identifier-format.ts'
 
-// A capital position is one owner's principal and commitment in the capital ledger of one portfolio universe.
+// A capital position is one owner's principal and commitment in the capital ledger of one security pool universe.
 
 const integer = (value: unknown): string | undefined => (typeof value === 'string' && /^\d+$/.test(value) ? value : undefined)
 

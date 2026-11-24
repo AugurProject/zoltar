@@ -39,7 +39,7 @@ type DemoCounters = {
 	routeRefreshErrorConsumed: boolean
 	riskHistoryAppendErrorConsumed: boolean
 	stateHistoryAppendErrorConsumed: boolean
-	portfolioAppendErrorConsumed: boolean
+	securityPoolAppendErrorConsumed: boolean
 	liveSequence: number
 }
 
@@ -79,7 +79,7 @@ const createDemoCounters = (): DemoCounters => ({
 	routeRefreshErrorConsumed: false,
 	riskHistoryAppendErrorConsumed: false,
 	stateHistoryAppendErrorConsumed: false,
-	portfolioAppendErrorConsumed: false,
+	securityPoolAppendErrorConsumed: false,
 	liveSequence: 0,
 })
 

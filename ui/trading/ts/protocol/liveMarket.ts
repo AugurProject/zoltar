@@ -1,5 +1,5 @@
 import type { TradingCollateral } from './collateral.js'
-import type { PortfolioMintFees } from '@zoltar/trading-shared/trading/portfolioMint'
+import type { SecurityPoolMintFees } from '@zoltar/trading-shared/trading/securityPoolMint'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getReportingOutcomeKey } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import type { FeeAccounting } from './holdingFees.js'
@@ -7,7 +7,7 @@ import * as blockerCopy from '../copy/marketBlockers.js'
 
 export type LiveMarket = Readonly<{
 	collateral?: TradingCollateral | undefined
-	mintFees?: Omit<PortfolioMintFees, 'cashAttoEth' | 'outcomeSupplyAttoShares'>
+	mintFees?: Omit<SecurityPoolMintFees, 'cashAttoEth' | 'outcomeSupplyAttoShares'>
 	loadError?: string
 	pool: Address
 	pair: Address | undefined

@@ -4,6 +4,6 @@ import { getDeploymentSections as getZoltarDeploymentSections } from '@zoltar/ui
 const ZOLTAR_STEP_IDS = new Set(['proxyDeployer', 'deploymentStatusOracle', 'multicall3', 'reputationToken', 'zoltarQuestionData', 'zoltar'])
 
 export function getStatoblastDeploymentSections(steps: DeploymentStatus[]) {
-	const securityPoolSteps = steps.filter(step => !ZOLTAR_STEP_IDS.has(step.id))
-	return [...getZoltarDeploymentSections(steps), ...(securityPoolSteps.length === 0 ? [] : [{ title: 'Security pools', steps: securityPoolSteps }])]
+	const statoblastSteps = steps.filter(step => !ZOLTAR_STEP_IDS.has(step.id))
+	return [...getZoltarDeploymentSections(steps), ...(statoblastSteps.length === 0 ? [] : [{ title: 'Security pools', steps: statoblastSteps }])]
 }

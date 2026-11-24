@@ -95,7 +95,7 @@ export const demoOperations = (env: DemoEnvironment, chainId: string, atBlock?: 
 				source_method: 'augurscan.pool-state.v1',
 				protocol_state: poolMetricsUnavailable ? 'unavailable' : '0',
 				scanner_severity: 'unavailable',
-				scanner_reason: poolMetricsUnavailable ? 'Tagged pool read unavailable' : 'Question settlement is shown here. Underwriting risk belongs to the shared portfolio capital positions.',
+				scanner_reason: poolMetricsUnavailable ? 'Tagged pool read unavailable' : 'Question settlement is shown here. Underwriting risk belongs to the shared security pool capital positions.',
 				read_result:
 					poolMetricsMode === 'unavailable'
 						? {}

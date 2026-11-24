@@ -17,7 +17,7 @@ interface ICapitalSettlementRepairRoot {
 }
 
 interface ICapitalLifecycleHost {
-	function portfolio() external view returns (address);
+	function securityPool() external view returns (address);
 	function universeId() external view returns (uint248);
 	function securityMultiplierBps() external view returns (uint256);
 	function ownerConservativePrice(address owner) external view returns (uint256);
@@ -58,7 +58,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 	/// @notice Record a canonical settlement's donation without changing index weights.
 	function recordSettlementRepair(uint256 demand) external onlyDelegateCall {
 		ICapitalLifecycleHost host = ICapitalLifecycleHost(address(this));
-		require(msg.sender == ICapitalSettlementRepairRoot(host.portfolio()).settlement(), 'Only canonical settlement');
+		require(msg.sender == ICapitalSettlementRepairRoot(host.securityPool()).settlement(), 'Only canonical settlement');
 		_requireOpen(host);
 		require(demand >= demandAttoEth, 'Repair cannot remove demand');
 		(, uint256 commitment) = commitmentIndex.totals();
@@ -66,7 +66,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		demandAttoEth = demand;
 	}
 
-	/// @dev The ledger authenticates the portfolio, validates the input, and
+	/// @dev The ledger authenticates the security pool, validates the input, and
 	/// checkpoints all old-price income before forwarding its canonical feed.
 	function acceptPrice(ICapitalPriceExposure feed, uint256 price, uint48 validUntil) external onlyDelegateCall {
 		uint256 uncertainty = feed.targetPriceErrorForDispute();
@@ -96,7 +96,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		if (id != 0) old = commitmentIndex.accountOf(id);
 		require(old.batch == 0, 'Retirement pending');
 		ICapitalLifecycleHost host = ICapitalLifecycleHost(address(this));
-		ICapitalPriceExposure feed = ICapitalPriceExposure(ICapitalLedgerAccounting(host.portfolio()).priceFeed(host.universeId()));
+		ICapitalPriceExposure feed = ICapitalPriceExposure(ICapitalLedgerAccounting(host.securityPool()).priceFeed(host.universeId()));
 		if (useReport) {
 			(, uint256 totalCommitment) = commitmentIndex.totals();
 			(uint256 reportPrice, uint256 epoch) = feed.reportAuthorization(reportId, Math.max(demandAttoEth, totalCommitment - old.commitment + commitment));
@@ -136,7 +136,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			require(owner.positionId != 0 && _capitalOwner() != forkAuthority, 'Insufficient owner principal');
 			_requireOpen(host);
 			require(host.isPriceValid(), 'Capital price stale');
-			require(commitmentIndex.eligibleCommitment(conservativePrice) >= demandAttoEth, 'Portfolio backing insufficient');
+			require(commitmentIndex.eligibleCommitment(conservativePrice) >= demandAttoEth, 'Security pool backing insufficient');
 			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(owner.positionId);
 			require(pledged <= position.rep && position.rep - pledged >= _requiredRep(host, position.commitment, _target(owner)), 'Owner collateral too low');
 			uint256 maxPrice = host.maximumHealthyPrice(position.rep - pledged, position.commitment);
@@ -192,7 +192,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		if (cured.settled) return 0;
 		commitment = repaired;
 		require(award >= minimumAward, 'Takeover award below minimum');
-		ICapitalPriceExposure feed = ICapitalPriceExposure(ICapitalLedgerAccounting(host.portfolio()).priceFeed(host.universeId()));
+		ICapitalPriceExposure feed = ICapitalPriceExposure(ICapitalLedgerAccounting(host.securityPool()).priceFeed(host.universeId()));
 		require(source.rep <= feed.acceptedRepExposureLimitAttoRep(), 'Accepted report REP exposure exceeded');
 		_settleOwner(receiverOwner);
 		Owner storage receiver = owners[receiverOwner].account;

@@ -14,7 +14,7 @@ import {
 	trading_test_TradingProtocolMocks_TradingMockCoreFactory as coreFactoryArtifact,
 	trading_test_TradingProtocolMocks_TradingMockForker as forkerArtifact,
 	trading_test_TradingProtocolMocks_TradingMockQuestionData as questionDataArtifact,
-	trading_test_TradingProtocolMocks_TradingMockSecurityPool as poolArtifact,
+	trading_test_TradingProtocolMocks_TradingMockQuestionLedger as poolArtifact,
 	trading_test_TradingProtocolMocks_TradingMockShareToken as shareArtifact,
 	trading_test_TradingProtocolMocks_TradingMockZoltar as zoltarArtifact,
 } from '../types/contractArtifact'

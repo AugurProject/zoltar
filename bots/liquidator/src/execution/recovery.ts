@@ -24,7 +24,7 @@ function recoveryReaders(settings: OperatorSettings, wallet: WalletClient<Transp
 	}
 }
 
-export function resolvePortfolioReceipt(
+export function resolveSecurityPoolReceipt(
 	settings: OperatorSettings,
 	wallet: WalletClient<Transport, Chain, Account>,
 	state: ReturnType<typeof initialRuntimeState>,
@@ -74,7 +74,7 @@ export async function recoverPendingTransactions(
 		const receiptResult = await finalizedReceiptWithQuorum(settings, wallet, intent.hash, pool)
 		const receipt = receiptResult.receipt
 		if (receipt !== undefined) {
-			await resolvePortfolioReceipt(settings, wallet, state, pool, intent, receipt)
+			await resolveSecurityPoolReceipt(settings, wallet, state, pool, intent, receipt)
 			continue
 		}
 		if (receiptResult.observed) return true

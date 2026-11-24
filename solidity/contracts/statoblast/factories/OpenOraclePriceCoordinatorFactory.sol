@@ -2,7 +2,7 @@
 pragma solidity 0.8.35;
 import { OraclePriceMath } from '../OraclePriceMath.sol';
 import { IWeth9 } from '../interfaces/IWeth9.sol';
-import { ISecurityPool } from '../interfaces/ISecurityPool.sol';
+import { IQuestionLedger } from '../interfaces/IQuestionLedger.sol';
 import { OpenOracle } from '../openOracle/OpenOracle.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
@@ -68,9 +68,9 @@ contract PriceCoordinatorDeploymentWorker {
 		return OpenOraclePriceCoordinator(deployed);
 	}
 
-	function configureSecurityPool(OpenOraclePriceCoordinator coordinator, ISecurityPool pool) external {
+	function configureQuestionLedger(OpenOraclePriceCoordinator coordinator, IQuestionLedger pool) external {
 		require(deployers[address(coordinator)] == msg.sender, 'Only coordinator factory');
-		coordinator.setSecurityPool(pool);
+		coordinator.setQuestionLedger(pool);
 	}
 
 	function configureSharedPriceFeed(OpenOraclePriceCoordinator coordinator, address feed) external {
@@ -87,9 +87,9 @@ contract SharedPoolPriceFeedDeploymentWorker {
 		(creationCodeFirstChunk, creationCodeSecondChunk) = CreationCodeStorage.store(type(SharedPoolPriceFeed).creationCode);
 	}
 
-	function deployImplementation(address coordinator, address securityPoolFactory, address portfolio) external returns (SharedPoolPriceFeed) {
-		bytes memory initCode = abi.encodePacked(CreationCodeStorage.load(creationCodeFirstChunk, creationCodeSecondChunk), abi.encode(ISharedPoolPriceCoordinator(coordinator), securityPoolFactory, portfolio));
-		address deployed = Create2Deployment.deploy(initCode, keccak256(abi.encode(msg.sender, securityPoolFactory, portfolio)));
+	function deployImplementation(address coordinator, address securityPoolFactory, address securityPool) external returns (SharedPoolPriceFeed) {
+		bytes memory initCode = abi.encodePacked(CreationCodeStorage.load(creationCodeFirstChunk, creationCodeSecondChunk), abi.encode(ISharedPoolPriceCoordinator(coordinator), securityPoolFactory, securityPool));
+		address deployed = Create2Deployment.deploy(initCode, keccak256(abi.encode(msg.sender, securityPoolFactory, securityPool)));
 		require(deployed != address(0), 'Shared feed implementation deployment failed');
 		return SharedPoolPriceFeed(deployed);
 	}
@@ -108,7 +108,7 @@ contract OpenOraclePriceCoordinatorFactory {
 	SharedPoolPriceFeedDeploymentWorker private immutable sharedPoolPriceFeedDeploymentWorker;
 	mapping(address => address) private coordinatorDeployers;
 	mapping(address => address) private feedDeployers;
-	/// @dev Coordinator deployers own independent portfolio namespaces.
+	/// @dev Coordinator deployers own independent security pool namespaces.
 	mapping(address => mapping(address => SharedPoolPriceFeed)) public sharedPriceFeedImplementations;
 	IWeth9 public immutable weth;
 	uint256 public immutable targetPriceErrorForDispute;
@@ -151,20 +151,20 @@ contract OpenOraclePriceCoordinatorFactory {
 		return coordinator;
 	}
 
-	function deploySharedPoolPriceFeed(OpenOraclePriceCoordinator coordinator, address portfolio, uint248 universeId, ReputationToken reputationToken, bytes32 salt) external returns (SharedPoolPriceFeed feed) {
+	function deploySharedPoolPriceFeed(OpenOraclePriceCoordinator coordinator, address securityPool, uint248 universeId, ReputationToken reputationToken, bytes32 salt) external returns (SharedPoolPriceFeed feed) {
 		require(coordinatorDeployers[address(coordinator)] == msg.sender, 'Only coordinator deployer');
-		SharedPoolPriceFeed implementation = sharedPriceFeedImplementations[msg.sender][portfolio];
+		SharedPoolPriceFeed implementation = sharedPriceFeedImplementations[msg.sender][securityPool];
 		if (address(implementation) == address(0)) {
-			implementation = sharedPoolPriceFeedDeploymentWorker.deployImplementation(address(coordinator), msg.sender, portfolio);
-			sharedPriceFeedImplementations[msg.sender][portfolio] = implementation;
+			implementation = sharedPoolPriceFeedDeploymentWorker.deployImplementation(address(coordinator), msg.sender, securityPool);
+			sharedPriceFeedImplementations[msg.sender][securityPool] = implementation;
 		}
 		feed = sharedPoolPriceFeedDeploymentWorker.deployClone(implementation, universeId, reputationToken, keccak256(abi.encode(msg.sender, salt)));
 		feedDeployers[address(feed)] = msg.sender;
 	}
 
-	function configureSecurityPool(OpenOraclePriceCoordinator coordinator, ISecurityPool pool) external {
+	function configureQuestionLedger(OpenOraclePriceCoordinator coordinator, IQuestionLedger pool) external {
 		require(coordinatorDeployers[address(coordinator)] == msg.sender, 'Only coordinator deployer');
-		priceCoordinatorDeploymentWorker.configureSecurityPool(coordinator, pool);
+		priceCoordinatorDeploymentWorker.configureQuestionLedger(coordinator, pool);
 	}
 
 	function configureSharedPriceFeed(OpenOraclePriceCoordinator coordinator, SharedPoolPriceFeed feed) external {

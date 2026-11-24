@@ -8,12 +8,12 @@ import { EscalationGameStorage } from './EscalationGameStorage.sol';
 import { EscalationGameProofVerifier } from './EscalationGameProofVerifier.sol';
 import { DelegateCall } from './DelegateCall.sol';
 import { EscalationGameRepCustody } from './EscalationGameRepCustody.sol';
-import { ISecurityPoolReporterPortfolio } from './interfaces/ISecurityPoolReporterLedger.sol';
-import { SystemState } from './interfaces/ISecurityPool.sol';
+import { ISecurityPoolReporterHost } from './interfaces/ISecurityPoolReporterLedger.sol';
+import { SystemState } from './interfaces/IQuestionLedger.sol';
 import { IEscalationGameEvents } from './interfaces/IEscalationGame.sol';
 import {
 	IEscalationGameDepositContext,
-	IEscalationGameSecurityPoolContext
+	IEscalationGameQuestionLedgerContext
 } from './interfaces/IEscalationGameDelegateContexts.sol';
 import { IZoltarForkState } from './interfaces/IZoltarForkState.sol';
 import { Zoltar } from '../Zoltar.sol';
@@ -36,7 +36,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	/// @dev Reachable through the game's internal delegate dispatch, not its public fallback.
 	function transferReporterRep(address recipient, uint256 amountAttoRep) external {
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
-		EscalationGameRepCustody.transfer(game.securityPool(), game.repToken(), recipient, amountAttoRep);
+		EscalationGameRepCustody.transfer(game.questionLedger(), game.repToken(), recipient, amountAttoRep);
 	}
 
 	function settleOrdinaryGame(EscalationGameProofVerifier verifier, bool releaseSurplus) external returns (uint256) {
@@ -48,7 +48,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 			uint256 winningPrincipal = outcomeState[uint8(outcome)].balanceAttoRep;
 			(uint256 payout, uint256 burn) = verifier.computeOrdinaryWinningWithdrawal(winningPrincipal, winningPrincipal, game.getBindingCapitalAttoRep(), winningPrincipal, settlementForkThresholdAttoRep, nonDecisionThresholdAttoRep);
 			ordinaryWinningReserveAttoRep = payout + burn;
-			require(EscalationGameRepCustody.balance(game.securityPool(), game.repToken()) >= ordinaryWinningReserveAttoRep, 'Winner reserve underfunded');
+			require(EscalationGameRepCustody.balance(game.questionLedger(), game.repToken()) >= ordinaryWinningReserveAttoRep, 'Winner reserve underfunded');
 			ordinarySettlementOutcome = outcome;
 			ordinarySettlementInitialized = true;
 			totalDisputeStakedAttoRep = winningPrincipal;
@@ -57,17 +57,17 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		}
 		if (!releaseSurplus) return 0;
 		uint256 amount =
-			EscalationGameRepCustody.balance(game.securityPool(), game.repToken()) - ordinaryWinningReserveAttoRep;
+			EscalationGameRepCustody.balance(game.questionLedger(), game.repToken()) - ordinaryWinningReserveAttoRep;
 		if (amount == 0) return 0;
-		EscalationGameRepCustody.transfer(game.securityPool(), game.repToken(), game.securityPool(), amount);
-		IEscalationGameSecurityPoolContext(game.securityPool()).burnEscalationWinnerHaircut(amount);
+		EscalationGameRepCustody.transfer(game.questionLedger(), game.repToken(), game.questionLedger(), amount);
+		IEscalationGameQuestionLedgerContext(game.questionLedger()).burnEscalationWinnerHaircut(amount);
 		emit OrdinaryResidualRepBurned(amount);
 		return amount;
 	}
 
 	/// @notice Pool-only delegate target: install exactly one outcome from a bound fork snapshot.
 	function initializeForkCarryOutcome(address sourceGame, bytes32 snapshotId, bytes32[64] memory peaks, uint256 leafCount, uint256 carryTotalAttoRep, uint256 resolutionBalanceAttoRep, bytes32 nullifierRoot, EscalationGameProofVerifier proofVerifier, bytes32 emptyNullifierRoot) external {
-		require(msg.sender == IEscalationGameDepositContext(address(this)).securityPool(), 'Only pool');
+		require(msg.sender == IEscalationGameDepositContext(address(this)).questionLedger(), 'Only pool');
 		require(forkContinuation, 'No fork mode');
 		uint8 outcomeIndex = forkCarrySnapshotOutcomesInitialized;
 		require(outcomeIndex < 3, 'Snapshot initialized');
@@ -150,7 +150,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	function depositRepOnOutcomeWithPermit(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) public {
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		_validateGameForDeposit(game);
-		IEscalationGameSecurityPoolContext pool = IEscalationGameSecurityPoolContext(game.securityPool());
+		IEscalationGameQuestionLedgerContext pool = IEscalationGameQuestionLedgerContext(game.questionLedger());
 		require(pool.universeId() != 0, 'Genesis REP does not support permit');
 		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = game.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
 		address token = game.repToken();
@@ -181,9 +181,9 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		_validateGameForDeposit(game);
 		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = _previewDeposit(game, outcome, maximumDepositAttoRep, requireLead);
-		IEscalationGameSecurityPoolContext pool = IEscalationGameSecurityPoolContext(game.securityPool());
+		IEscalationGameQuestionLedgerContext pool = IEscalationGameQuestionLedgerContext(game.questionLedger());
 		require(pool.universeId() != 0, 'Genesis REP does not support authorization');
-		bytes32 operationHash = keccak256(abi.encode((requireLead ? this.depositRepOnOutcomeWithAuthorizationAndLead.selector : this.depositRepOnOutcomeWithAuthorization.selector), owner, game.securityPool(), pool.universeId(), pool.questionId(), outcome, maximumDepositAttoRep, depositedAttoRep));
+		bytes32 operationHash = keccak256(abi.encode((requireLead ? this.depositRepOnOutcomeWithAuthorizationAndLead.selector : this.depositRepOnOutcomeWithAuthorization.selector), owner, game.questionLedger(), pool.universeId(), pool.questionId(), outcome, maximumDepositAttoRep, depositedAttoRep));
 		IERC3009Authorization(game.repToken()).receiveWithAuthorization(owner, address(this), depositedAttoRep, validAfter, validBefore, keccak256(abi.encode(nonce, operationHash, owner)), v, r, s);
 		_recordDeposit(owner, outcome, depositedAttoRep, resultingCumulativeAttoRep);
 	}
@@ -204,9 +204,9 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	}
 
 	function _validateGameForDeposit(IEscalationGameDepositContext game) private view {
-		address poolAddress = game.securityPool();
-		require(!forkContinuation || (EscalationGameRepCustody.portfolio(poolAddress) != address(0) && forkResumedAt != 0 && fixedQuestionOutcome == BinaryOutcomes.BinaryOutcome.None), 'Fork game');
-		IEscalationGameSecurityPoolContext pool = IEscalationGameSecurityPoolContext(poolAddress);
+		address poolAddress = game.questionLedger();
+		require(!forkContinuation || (EscalationGameRepCustody.securityPool(poolAddress) != address(0) && forkResumedAt != 0 && fixedQuestionOutcome == BinaryOutcomes.BinaryOutcome.None), 'Fork game');
+		IEscalationGameQuestionLedgerContext pool = IEscalationGameQuestionLedgerContext(poolAddress);
 		require(pool.escalationGame() == address(this), 'Game inactive');
 		require(pool.systemState() == SystemState.Operational, 'Pool inactive');
 		require(IZoltarForkState(pool.zoltar()).getForkTime(pool.universeId()) == 0, 'Forked');
@@ -216,13 +216,13 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		uint8 outcomeIndex = uint8(outcome);
 		_validateAcceptedDeposit(outcome, outcomeIndex, outcomeState[outcomeIndex].balanceAttoRep, amountAttoRep, expectedCumulativeRepAmountAttoRep);
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
-		EscalationGameRepCustody.receiveDeposit(game.securityPool(), game.repToken(), amountAttoRep);
+		EscalationGameRepCustody.receiveDeposit(game.questionLedger(), game.repToken(), amountAttoRep);
 		parentDepositIndex = _appendDeposit(depositor, outcome, amountAttoRep, expectedCumulativeRepAmountAttoRep);
 		// Every accepted deposit records the threshold settlement scales by.
-		address poolAddress = game.securityPool();
+		address poolAddress = game.questionLedger();
 		_recordSettlementForkThreshold(poolAddress);
 		_scheduleReporterFinality();
-		IEscalationGameSecurityPoolContext(poolAddress).refreshPortfolioFees();
+		IEscalationGameQuestionLedgerContext(poolAddress).refreshSecurityPoolFees();
 	}
 
 	function _appendDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, uint256 expectedCumulativeRepAmountAttoRep) private returns (uint256 parentDepositIndex) {
@@ -274,8 +274,8 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		if (amount == 0) return;
 		creditedSurplusAttoRep = minimumBalance;
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
-		EscalationGameRepCustody.transfer(game.securityPool(), game.repToken(), game.securityPool(), amount);
-		IEscalationGameSecurityPoolContext(game.securityPool()).creditEscalationSurplus(amount);
+		EscalationGameRepCustody.transfer(game.questionLedger(), game.repToken(), game.questionLedger(), amount);
+		IEscalationGameQuestionLedgerContext(game.questionLedger()).creditEscalationSurplus(amount);
 		emit EscalationSurplusAccrued(amount, minimumBalance);
 	}
 
@@ -304,7 +304,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	/// @dev A final continuation can materialize after its universe forked again.
 	/// Migration after finality must not scale down its already-earned claims.
 	function _recordSettlementForkThreshold(address poolAddress) private {
-		IEscalationGameSecurityPoolContext pool = IEscalationGameSecurityPoolContext(poolAddress);
+		IEscalationGameQuestionLedgerContext pool = IEscalationGameQuestionLedgerContext(poolAddress);
 		Zoltar registry = Zoltar(pool.zoltar());
 		settlementForkThresholdAttoRep =
 			registry.getForkTime(pool.universeId()) != 0
@@ -335,7 +335,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	/// @notice Game delegatecall target, pool-only: resumes a paused fork-continuation game once its carry funding is complete.
 	function resumeFromFork() external {
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
-		require(msg.sender == game.securityPool(), 'Only pool');
+		require(msg.sender == game.questionLedger(), 'Only pool');
 		require(forkContinuation, 'No fork mode');
 		require(forkResumedAt == 0, 'Fork resumed');
 		require(forkCarrySnapshotOutcomesInitialized == 3, 'Fork snapshot incomplete');
@@ -346,18 +346,18 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 			}
 			totalDisputeStakedAttoRep += forkCarryDisputeStakedAttoRep;
 		}
-		address authority = EscalationGameRepCustody.portfolio(game.securityPool());
+		address authority = EscalationGameRepCustody.securityPool(game.questionLedger());
 		if (authority == address(0)) forkResumedAt = block.timestamp;
 		else {
-			uint248 universeId = IEscalationGameSecurityPoolContext(game.securityPool()).universeId();
-			ISecurityPoolReporterPortfolio portfolio = ISecurityPoolReporterPortfolio(authority);
-			uint48 portfolioTimeAnchor = portfolio.portfolioTimeForNative(universeId, 0);
-			forkResumedAt = portfolio.nativeTimeForPortfolioTime(universeId, portfolioTimeAnchor);
-			require(block.timestamp >= forkResumedAt, 'Portfolio response period has not started');
+			uint248 universeId = IEscalationGameQuestionLedgerContext(game.questionLedger()).universeId();
+			ISecurityPoolReporterHost securityPool = ISecurityPoolReporterHost(authority);
+			uint48 securityPoolTimeAnchor = securityPool.securityPoolTimeForNative(universeId, 0);
+			forkResumedAt = securityPool.nativeTimeForSecurityPoolTime(universeId, securityPoolTimeAnchor);
+			require(block.timestamp >= forkResumedAt, 'Security pool response period has not started');
 		}
-		_recordSettlementForkThreshold(game.securityPool());
+		_recordSettlementForkThreshold(game.questionLedger());
 		if (game.getEscalationGameEndDate() >= block.timestamp) _scheduleReporterFinality();
-		IEscalationGameSecurityPoolContext(game.securityPool()).refreshPortfolioFees();
+		IEscalationGameQuestionLedgerContext(game.questionLedger()).refreshSecurityPoolFees();
 		emit ForkContinuationResumed(forkResumedAt);
 	}
 
@@ -388,7 +388,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	function creditClaimOwners(address bundleId, uint256 amountAttoRep) external {
 		if (amountAttoRep == 0) return;
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
-		EscalationGameRepCustody.transfer(game.securityPool(), game.repToken(), bundleId, amountAttoRep);
+		EscalationGameRepCustody.transfer(game.questionLedger(), game.repToken(), bundleId, amountAttoRep);
 	}
 
 	/// @notice Game delegatecall target: pays a carried-deposit claim to `bundleId` and releases the consumed fork-carry dispute stake.
@@ -397,18 +397,18 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		// Losing local principal may already be settled while its tokens still fund
 		// this reward. Check actual expenditure against tokens, not logical escrow.
-		require(EscalationGameRepCustody.balance(game.securityPool(), game.repToken()) >= backingConsumed, 'Escrow low');
+		require(EscalationGameRepCustody.balance(game.questionLedger(), game.repToken()) >= backingConsumed, 'Escrow low');
 		uint256 inheritedBackingConsumed =
 			backingConsumed < forkCarryDisputeStakedAttoRep ? backingConsumed : forkCarryDisputeStakedAttoRep;
 		forkCarryDisputeStakedAttoRep -= inheritedBackingConsumed;
 		totalDisputeStakedAttoRep -= inheritedBackingConsumed;
 		if (amountAttoRep == 0) return;
-		EscalationGameRepCustody.transfer(game.securityPool(), game.repToken(), bundleId, amountAttoRep);
+		EscalationGameRepCustody.transfer(game.questionLedger(), game.repToken(), bundleId, amountAttoRep);
 	}
 
 	function _scheduleReporterFinality() private {
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
-		if (address(EscalationGameRepCustody.ledger(game.securityPool())) == address(0)) return;
+		if (address(EscalationGameRepCustody.ledger(game.questionLedger())) == address(0)) return;
 		uint256 highest;
 		uint256 leaders;
 		for (uint256 index = 0; index < 3; index++) {
@@ -424,6 +424,6 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 			(nonDecisionState == NonDecisionState.None && leaders == 1)
 		) finalAfter = game.getEscalationGameEndDate();
 		require(finalAfter <= type(uint48).max, 'Reporter finality timestamp too high');
-		EscalationGameRepCustody.scheduleFinality(game.securityPool(), uint48(finalAfter));
+		EscalationGameRepCustody.scheduleFinality(game.questionLedger(), uint48(finalAfter));
 	}
 }

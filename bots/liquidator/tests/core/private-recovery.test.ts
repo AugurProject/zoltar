@@ -9,11 +9,11 @@ import { loadSettings, saveSettings } from '#config/settings-store'
 import { createGoLiveControls } from '#core/go-live-controls'
 import { recoverPendingTransactions } from '#execution/recovery'
 import { initialRuntimeState, loadDurableState, saveDurableState } from '#state/operator-state'
-import { portfolioReceiptIntent } from './portfolio-receipt-fixture.ts'
+import { securityPoolReceiptIntent } from './security-pool-receipt-fixture.ts'
 
 async function fixture() {
-	const directory = await mkdtemp(join(tmpdir(), 'portfolio-private-recovery-'))
-	const { intent, receipt } = await portfolioReceiptIntent()
+	const directory = await mkdtemp(join(tmpdir(), 'security-pool-private-recovery-'))
+	const { intent, receipt } = await securityPoolReceiptIntent()
 	intent.mode = 'private'
 	const settings = parseSettings(JSON.parse(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).text()))
 	settings.network.chainId = 1
@@ -99,7 +99,7 @@ test('#1471: dropped expired intents persist and broadcast a same-nonce cancella
 
 for (const mode of ['public', 'private'] as const)
 	for (const head of [110n, 140n]) {
-		test(`waits or cancels signed ${mode} intent at block ${head} without replaying portfolio decisions`, async () => {
+		test(`waits or cancels signed ${mode} intent at block ${head} without replaying security pool decisions`, async () => {
 			const f = await fixture()
 			try {
 				f.intent.mode = mode

@@ -28,7 +28,7 @@ for (const app of UI_APP_IDS) {
 }
 
 test('Zoltar excludes Statoblast and OpenOracle while retaining neutral infrastructure', () => {
-	for (const source of ['contracts/statoblast/SecurityPool.sol', 'contracts/statoblast/openOracle/OpenOracle.sol', 'contracts/trading/Pair.sol', 'contracts/test/Mock.sol']) expect(isContractProjectSource(source, 'zoltar')).toBe(false)
+	for (const source of ['contracts/statoblast/QuestionLedger.sol', 'contracts/statoblast/openOracle/OpenOracle.sol', 'contracts/trading/Pair.sol', 'contracts/test/Mock.sol']) expect(isContractProjectSource(source, 'zoltar')).toBe(false)
 	for (const source of ['contracts/Zoltar.sol', 'contracts/ScalarOutcomes.sol', 'contracts/statoblast/WETH9.sol', 'contracts/statoblast/Multicall3.sol']) expect(isContractProjectSource(source, 'zoltar')).toBe(true)
 	expect(isContractProjectSource('contracts/trading/Pair.sol', 'statoblast')).toBe(false)
 })
@@ -44,7 +44,7 @@ test('shared boundaries reject reverse edges, relative bypasses and type-only de
 })
 
 test('every canonical Solidity source invalidates application contract builds', () => {
-	for (const source of ['solidity/contracts/Zoltar.sol', 'solidity/contracts/statoblast/SecurityPool.sol', 'solidity/contracts/statoblast/openOracle/OpenOracle.sol', 'solidity/contracts/trading/TradingPair.sol', 'solidity/contracts/test/Mock.sol', 'solidity/contracts/chaos/ChaosHarness.sol']) {
+	for (const source of ['solidity/contracts/Zoltar.sol', 'solidity/contracts/statoblast/QuestionLedger.sol', 'solidity/contracts/statoblast/openOracle/OpenOracle.sol', 'solidity/contracts/trading/TradingPair.sol', 'solidity/contracts/test/Mock.sol', 'solidity/contracts/chaos/ChaosHarness.sol']) {
 		const affected = affectedProjects([source]).map(entry => entry.id)
 		expect(affected).toContain('contracts')
 		for (const app of UI_APP_IDS) expect(affected).toContain(`ui-${app}`)

@@ -90,7 +90,7 @@ function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {})
 		marketDetails: createMarketDetails(),
 		nonDecisionThresholdAttoRep: rep(20n),
 		questionOutcome: 'none',
-		securityPoolAddress: zeroAddress,
+		questionLedgerAddress: zeroAddress,
 		sides: [
 			{ balance: rep(1n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 			{ balance: rep(5n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
@@ -138,7 +138,7 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 		marketDetails: createMarketDetails(),
 		nonDecisionThresholdAttoRep,
 		questionOutcome: 'none',
-		securityPoolAddress: zeroAddress,
+		questionLedgerAddress: zeroAddress,
 		sides,
 		startBondAttoRep,
 		activationTime,
@@ -174,7 +174,7 @@ function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDe
 		marketDetails: createMarketDetails(),
 		nonDecisionThresholdAttoRep: rep(50n),
 		questionOutcome: 'none',
-		securityPoolAddress: zeroAddress,
+		questionLedgerAddress: zeroAddress,
 		startBondAttoRep: rep(3n),
 		status: 'not-started',
 		systemState: 'operational',
@@ -199,7 +199,7 @@ function createSelectedWithdrawDepositIndexesByOutcome(overrides: Partial<Report
 function createReportingForm(overrides: Partial<ReportingFormState> = {}): ReportingFormState {
 	return {
 		reportAmount: '1',
-		securityPoolAddress: zeroAddress,
+		questionLedgerAddress: zeroAddress,
 		selectedOutcome: undefined,
 		selectedWithdrawDepositIndexesByOutcome: createSelectedWithdrawDepositIndexesByOutcome(),
 		...overrides,
@@ -224,7 +224,7 @@ function createProps(overrides: Partial<ReportingSectionProps> = {}): ReportingS
 		reportingForm: createReportingForm(),
 		reportingResult: undefined,
 		showHeader: false,
-		showSecurityPoolAddressInput: false,
+		showQuestionLedgerAddressInput: false,
 		...overrides,
 	}
 }
@@ -300,7 +300,7 @@ describe('ReportingSection', () => {
 	test('describes reporting timing with question terminology', () => {
 		const message = getReportingLockedUntilMessage(100n, 50n)
 
-		expect(message).toContain('this pool’s underlying question ends')
+		expect(message).toContain('when this question ends')
 		expect(message).not.toContain("this pool's market ends")
 	})
 
@@ -438,7 +438,7 @@ describe('ReportingSection', () => {
 		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
 		cleanupRenderedComponent = rendered.cleanup
 		expect(settlementButtonLabel('Yes')).toBe('Clear Yes deposits (worth 0 REP)…')
-		expect(document.body.textContent).toContain('Losing ordinary deposits return no REP and require no cleanup transaction. Reporter deposits are separate from portfolio capital.')
+		expect(document.body.textContent).toContain('Losing ordinary deposits return no REP and require no cleanup transaction. Reporter deposits are separate from security pool capital.')
 	})
 
 	describe('fork-triggering reports', () => {
@@ -532,11 +532,11 @@ describe('ReportingSection', () => {
 			// The shared approval control abbreviates large approvals and keeps the exact amount in the button title.
 			expectTransactionButtonEnabled(document.body, 'Approve 225k REP')
 			const label = 'Report No & trigger fork · 225 000 REP…'
-			expectTransactionButtonDisabled(document.body, label, 'Confirm that this report triggers the universe fork and approve REP for this security pool before reporting.')
+			expectTransactionButtonDisabled(document.body, label, 'Confirm that this report triggers the universe fork and approve REP for this question before reporting.')
 			await act(() => {
 				fireEvent.click(queries.getByRole('checkbox', { name: 'I understand this report ends escalation and leads to a universe fork.' }))
 			})
-			expectTransactionButtonDisabled(document.body, label, 'Approve REP for this security pool before reporting.')
+			expectTransactionButtonDisabled(document.body, label, 'Approve REP for this question before reporting.')
 		})
 	})
 
@@ -863,10 +863,10 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, reportingButtonLabel('No'), 'A current pool oracle price is required before reporting.')
+		expectTransactionButtonDisabled(document.body, reportingButtonLabel('No'), 'A current security pool oracle price is required before reporting.')
 		expect(within(getReportOutcomeSection()).getByRole('status').textContent).toContain(reason)
 		expect(document.body.textContent?.match(new RegExp(reason.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? []).toHaveLength(1)
-		fireEvent.click(within(document.body).getByRole('button', { name: 'Manage pool price' }))
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Manage security pool price' }))
 		expect(openOracleCalls).toBe(1)
 	})
 
@@ -935,7 +935,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent).toContain('Paid from: wallet REP')
 		expect(document.body.textContent).not.toContain('Paid from: pool vault REP')
 		expectTransactionButtonEnabled(document.body, 'Approve 5 REP')
-		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Approve REP for this security pool before reporting.')
+		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Approve REP for this question before reporting.')
 		const reportButton = within(document.body).getByRole('button', { name: /^Report Yes ·/ })
 		const approvalButton = within(document.body).getByRole('button', { name: /^Approve [\d.]+ REP$/ })
 		const reportAction = reportButton.closest('.tx-action')
@@ -1490,7 +1490,7 @@ describe('ReportingSection', () => {
 		const lifecycleBanner = document.body.querySelector('.escalation-phase')
 		if (!(lifecycleBanner instanceof HTMLElement)) throw new Error('Expected phase stepper')
 		const lifecycleBannerQueries = within(lifecycleBanner)
-		expect(document.body.textContent?.includes('Escalation ended without a decision and the universe fork has already been triggered for this pool. Continue in Fork choices and recovery.')).toBe(true)
+		expect(document.body.textContent?.includes('Escalation ended without a decision and the universe fork has already been triggered for this question. Continue in Fork choices and recovery.')).toBe(true)
 		expect(lifecycleBannerQueries.queryByText('Continue in Fork choices and recovery')).toBeNull()
 		expect(lifecycleBannerQueries.queryByText('Trigger universe fork')).toBeNull()
 	})
@@ -1508,7 +1508,7 @@ describe('ReportingSection', () => {
 					reportingDetails: createReportingDetails({
 						currentTime: 150n,
 						escalationEndTime: 300n,
-						securityPoolAddress: '0x00000000000000000000000000000000000000c1',
+						questionLedgerAddress: '0x00000000000000000000000000000000000000c1',
 					}),
 				}),
 			),
@@ -1529,7 +1529,7 @@ describe('ReportingSection', () => {
 						reportingDetails: createReportingDetails({
 							currentTime: 150n,
 							escalationEndTime: 300n,
-							securityPoolAddress: '0x00000000000000000000000000000000000000c1',
+							questionLedgerAddress: '0x00000000000000000000000000000000000000c1',
 						}),
 					}),
 				),
@@ -1554,7 +1554,7 @@ describe('ReportingSection', () => {
 						currentTime: 150n,
 						escalationEndTime: 300n,
 						hasReachedNonDecision: true,
-						securityPoolAddress: '0x00000000000000000000000000000000000000c2',
+						questionLedgerAddress: '0x00000000000000000000000000000000000000c2',
 					}),
 				}),
 			),
@@ -2123,7 +2123,7 @@ describe('ReportingSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Trigger universe fork' })).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Open fork choices and recovery' })).not.toBeNull()
-		expect(document.body.textContent?.includes('Dispute-staked REP remains in escalation, which ended without a decision. The universe fork has already been triggered for this pool, so continue in Fork choices and recovery.')).toBe(true)
+		expect(document.body.textContent?.includes('Dispute-staked REP remains in escalation, which ended without a decision. The universe fork has already been triggered for this question, so continue in Fork choices and recovery.')).toBe(true)
 	})
 
 	test('shows a Trigger universe fork action when non-decision blocks reporting', async () => {
@@ -2672,7 +2672,7 @@ describe('ReportingSection', () => {
 						action: 'reportOutcome',
 						hash: '0x1234000000000000000000000000000000000000000000000000000000000000',
 						outcome: 'yes',
-						securityPoolAddress: zeroAddress,
+						questionLedgerAddress: zeroAddress,
 						universeId: 1n,
 					},
 				}),
@@ -2695,7 +2695,7 @@ describe('ReportingSection', () => {
 						action: 'withdrawEscalation',
 						hash: '0x5678000000000000000000000000000000000000000000000000000000000000',
 						outcome: 'yes',
-						securityPoolAddress: zeroAddress,
+						questionLedgerAddress: zeroAddress,
 						universeId: 1n,
 					},
 				}),

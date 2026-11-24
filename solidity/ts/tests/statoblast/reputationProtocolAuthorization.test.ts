@@ -2,24 +2,24 @@ import assert from '../../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
 import {
 	statoblast_interfaces_IEscalationGame_IEscalationGameAuthorization,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
 } from '../../types/contractArtifact'
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { addRepToMigrationBalance, splitMigrationRep, getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 import { encodeAbiParameters, encodeFunctionData, getAddress, keccak256, parseAbiParameters, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { DAY } from '../../testSupport/simulator/utils/constants'
 import { PERMIT_TYPES, RECEIVE_WITH_AUTHORIZATION_TYPES, signTypedDataV4, tokenDomain } from '../../testSupport/simulator/utils/typedDataSignatures'
 
 describe('Statoblast REP authorization entry points', () => {
-	const fixture = useSecurityPoolPortfolioFixture()
+	const fixture = useSecurityPoolFixture()
 	const reportBond = 100n * unit
 	test('#1328 protected child permit and authorization deposits retain lead and signature bounds', async () => {
 		const client = fixture.owner()
@@ -28,10 +28,10 @@ describe('Statoblast REP authorization entry points', () => {
 		const { forks, forkTime, child } = await fixture.forkAndStartYesBranch()
 		await mock.setTime(forkTime + 63n * DAY)
 		await writeContractAndWait(client, () => client.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'finalizeBranch', args: [child] }))
-		await writeContractAndWait(client, () => client.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'materializePortfolioQuestion', args: [fixture.poolFor(fixture.secondQuestionId).securityPool, child] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker, functionName: 'materializeSecurityPoolQuestion', args: [fixture.poolFor(fixture.secondQuestionId).questionLedger, child] }))
 		await addRepToMigrationBalance(client, fixture.base.genesisUniverse, 1_000n * unit)
 		await splitMigrationRep(client, fixture.base.genesisUniverse, 1_000n * unit, [1])
-		const pool = await client.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'getPool', args: [fixture.secondQuestionId, child] })
+		const pool = await client.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'getQuestionLedger', args: [fixture.secondQuestionId, child] })
 		const token = { abi: tokenArtifact.abi, address: getRepTokenAddress(child) }
 		const accounts = await mock.request({ method: 'eth_accounts' })
 		if (!Array.isArray(accounts) || typeof accounts[0] !== 'string') throw new Error('Anvil signer missing')
@@ -69,7 +69,7 @@ describe('Statoblast REP authorization entry points', () => {
 	})
 	const initializeEscalationGame = async () => {
 		const client = fixture.owner()
-		const pool = fixture.poolFor(fixture.base.questionId).securityPool
+		const pool = fixture.poolFor(fixture.base.questionId).questionLedger
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
 		await approveToken(client, getRepTokenAddress(fixture.base.genesisUniverse), pool)
 		await writeContractAndWait(client, () => client.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [1, reportBond] }))

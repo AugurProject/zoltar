@@ -452,7 +452,7 @@ const KNOWN_REVERTS = [
 	'Takeover commitment below minimum',
 	'Position requires additional backing',
 	'Receiver commitment below minimum',
-	'Portfolio backing insufficient',
+	'Security pool backing insufficient',
 	'Capital universe inactive',
 	'Capital price stale',
 	'Invalid capital deposit',
@@ -613,7 +613,7 @@ const createDriver = (getEthereum: ReturnType<typeof useIsolatedAnvilNode>['getA
 			case 'demand':
 				return [asAdmin(encodeFunctionData({ abi: harnessAbi, functionName: 'setDemand', args: [op.value] }))]
 			case 'syncDemand':
-				// The harness has no wrapper; the impersonated portfolio calls the ledger directly.
+				// The harness has no wrapper; the impersonated security pool calls the ledger directly.
 				return [{ from: harness, to: ledger, data: encodeFunctionData({ abi: capitalAbi, functionName: 'synchronizeDemand', args: [op.value] }) }]
 			case 'deposit':
 				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'depositFor', args: [ownerAddress(op.o), op.amount] }))]

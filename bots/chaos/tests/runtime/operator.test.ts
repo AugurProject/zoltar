@@ -333,7 +333,7 @@ describe('chaos operator runtime', () => {
 			questionId: firstPool.questionId,
 			systemState: firstPool.systemState,
 			universeId: firstPool.universeId,
-			portfolio: firstPool.portfolio,
+			securityPool: firstPool.securityPool,
 		})
 		expect(summary.reports).toHaveLength(snapshot.reports.length)
 		expect(summary.auctions).toHaveLength(snapshot.auctions.length)
@@ -694,7 +694,7 @@ describe('chaos operator runtime', () => {
 			openOracle: settings.deployment.openOracle,
 			reports: [],
 			schemaVersion: 5,
-			securityPoolForker: settings.deployment.securityPoolForker,
+			questionForker: settings.deployment.questionForker,
 			startBlock: settings.runtime.protocolStartBlock.toString(),
 			wallet: zeroAddress,
 			zoltar: settings.deployment.zoltar,

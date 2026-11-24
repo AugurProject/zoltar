@@ -31,7 +31,7 @@ describe('trading UI deployment configuration', () => {
 		expect(() => parseDeploymentSetupInput({ chainId: '11155111', feeBps: '30', rpcUrl: 'http://example.test' })).toThrow('RPC URL must use HTTPS or loopback HTTP')
 	})
 
-	test('loads ETH and REP from the selected SecurityPool universe', async () => {
+	test('loads ETH and REP from the selected QuestionLedger universe', async () => {
 		const account = getAddress(`0x${'45'.repeat(20)}`)
 		const pool = getAddress(`0x${'56'.repeat(20)}`)
 		const repToken = getAddress(`0x${'67'.repeat(20)}`)

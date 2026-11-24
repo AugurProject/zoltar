@@ -62,7 +62,14 @@ export const semanticFields = (data: Readonly<Record<string, unknown>>, nativeSy
 }
 
 export const semanticSummary = (record: Readonly<Record<string, unknown>>, nativeSymbol: string, collateral?: CollateralUnit): string => {
-	const accounting = record['settlement_collateral_atto_eth'] === undefined ? undefined : { settlement_collateral_atto_eth: record['settlement_collateral_atto_eth'], share_token_supply_atto_shares: record['share_token_supply_atto_shares'], last_settlement_portfolio_time: record['last_settlement_portfolio_time'] }
+	const accounting =
+		record['settlement_collateral_atto_eth'] === undefined
+			? undefined
+			: {
+					settlement_collateral_atto_eth: record['settlement_collateral_atto_eth'],
+					share_token_supply_atto_shares: record['share_token_supply_atto_shares'], // The stored column keeps its original name; display it under the security pool clock name.
+					last_settlement_security_pool_time: record['last_settlement_portfolio_time'],
+				}
 	const data = record['event_data'] ?? record['summary_data'] ?? record['arguments'] ?? record['read_result'] ?? accounting
 	const displayData = record['entity_type'] === 'price-coordinator' && isPlainRecord(data) ? Object.fromEntries(Object.entries(data).map(([key, value]) => [key === 'price' ? 'repPerEth1e18' : key, value])) : data
 	return isPlainRecord(displayData)
@@ -72,8 +79,8 @@ export const semanticSummary = (record: Readonly<Record<string, unknown>>, nativ
 		: 'Payload unavailable'
 }
 
-/** Timeline entities whose attoETH-named amounts are in an auction's or portfolio's collateral token, never the chain's native currency. */
-const collateralDenominatedEntityTypes: ReadonlySet<string> = new Set(['price-coordinator', 'pool', 'portfolio-settlement', 'portfolio-auction', 'auction', 'vault', 'capital-position', 'portfolio', 'portfolio-services', 'settlement-book'])
+/** Timeline entities whose attoETH-named amounts are in an auction's or security pool's collateral token, never the chain's native currency. */
+const collateralDenominatedEntityTypes: ReadonlySet<string> = new Set(['price-coordinator', 'pool', 'security-pool-settlement', 'security-pool-auction', 'auction', 'vault', 'capital-position', 'security-pool', 'security-pool-services', 'settlement-book'])
 
 /** A timeline entry's payload; collateral amounts use the entry's sampled `collateral` token, or raw collateral units without one. */
 export const timelineTransitionSummary = (record: Readonly<Record<string, unknown>>, nativeSymbol: string): string => semanticSummary(record, nativeSymbol, collateralDenominatedEntityTypes.has(String(record['entity_type'])) ? collateralUnit(record) : undefined)

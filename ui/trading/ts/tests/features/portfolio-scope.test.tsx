@@ -8,7 +8,7 @@ import { liveMarketFixture, ticketEstimateFor } from '../support/liveMarketFixtu
 import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from '../../features/LiveSecurityPoolDetails.js'
+import { LiveQuestionLedgerDetails, PairInitializationAction, QuestionLedgerRouteEmptyState } from '../../features/LiveQuestionLedgerDetails.js'
 import { LivePortfolio } from '../../features/LivePortfolio.js'
 import { shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -88,7 +88,7 @@ describe('live portfolio scope', () => {
 		// The genesis universe is named without its raw identifier.
 		expect(empty?.querySelector('.empty-state-title')?.textContent).toBe('No positions in Augur v2 › Yes')
 		// Holdings discovery covers registered pools in the selected universe.
-		expect(empty?.textContent).toContain('No Yes, No, Invalid, or LP balance was found in registered security pools in this universe.')
+		expect(empty?.textContent).toContain('No Yes, No, Invalid, or LP balance was found in registered questions in this universe.')
 		expect(empty?.textContent).not.toContain('only covers markets opened in this browser')
 		const links = Array.from(empty?.querySelectorAll('a') ?? [])
 		expect(links.map(link => [link.textContent, link.getAttribute('href'), link.classList.contains('primary')])).toEqual([
@@ -97,7 +97,7 @@ describe('live portfolio scope', () => {
 		])
 	})
 
-	test('renders separate balance groups for each exact SecurityPool', async () => {
+	test('renders separate balance groups for each exact QuestionLedger', async () => {
 		const secondMarket = { ...market, pool: secondPool, shareToken: secondShareToken, universeId: 8n, questionId: 10n, title: 'Second scoped portfolio' }
 		const firstBalances = { scope: { pool, shareToken, invalidTokenId: 1_792n, yesTokenId: 1_793n, noTokenId: 1_794n }, invalid: 3n * 10n ** 18n, yes: 1n * 10n ** 18n, no: 2n * 10n ** 18n, lp: 0n }
 		const secondBalances = { scope: { pool: secondPool, shareToken: secondShareToken, invalidTokenId: 2_048n, yesTokenId: 2_049n, noTokenId: 2_050n }, invalid: 6n * 10n ** 18n, yes: 4n * 10n ** 18n, no: 5n * 10n ** 18n, lp: 0n }
@@ -132,7 +132,7 @@ describe('live portfolio scope', () => {
 		expect(rendered.container.querySelectorAll('[data-portfolio-pool]')).toHaveLength(2)
 		expect(rendered.container.textContent).not.toContain('These balances and LP claims belong only')
 		expect(rendered.container.textContent).not.toContain('live RPC')
-		expect(rendered.container.textContent).not.toContain('Balances are grouped by SecurityPool')
+		expect(rendered.container.textContent).not.toContain('Balances are grouped by QuestionLedger')
 	})
 
 	test('separates stable outcome quantities, conditional payouts, and finalized redemption', async () => {
@@ -246,13 +246,13 @@ describe('live portfolio scope', () => {
 		})
 	}
 
-	test('keeps live pool identifiers and operational details in the security pool view', async () => {
-		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={{ ...market, feeBps: 47n, initialReportPriorityFeeAttoEthPerGas: 2_000_000_000n }} retry={() => undefined} workflowLocked={false} nowSeconds={market.endTime - 1n} />)
+	test('keeps live pool identifiers and operational details in the question ledger view', async () => {
+		const rendered = await renderIntoDocument(<LiveQuestionLedgerDetails market={{ ...market, feeBps: 47n, initialReportPriorityFeeAttoEthPerGas: 2_000_000_000n }} retry={() => undefined} workflowLocked={false} nowSeconds={market.endTime - 1n} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.textContent).toContain(pool)
 		expect(rendered.container.textContent).toContain(shareToken)
 		expect(rendered.container.textContent).toContain('Outcome token IDs')
-		expect(rendered.container.textContent).toContain('Security pool stateOperational')
+		expect(rendered.container.textContent).toContain('Question stateOperational')
 		expect(rendered.container.textContent).toContain('Security multiplier2×')
 		expect(rendered.container.querySelector('details')?.open).toBe(false)
 		const capacity = Array.from(rendered.container.querySelectorAll('.metric-label')).find(field => field.textContent?.includes('Minting capacity'))
@@ -269,7 +269,7 @@ describe('live portfolio scope', () => {
 	})
 
 	test('returns from a pool with a trading pair to the market lookup landing', async () => {
-		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={{ ...market, pair: `0x${'90'.repeat(20)}` }} retry={() => undefined} workflowLocked={false} nowSeconds={market.endTime - 1n} />)
+		const rendered = await renderIntoDocument(<LiveQuestionLedgerDetails market={{ ...market, pair: `0x${'90'.repeat(20)}` }} retry={() => undefined} workflowLocked={false} nowSeconds={market.endTime - 1n} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('.route-header a[href="#/market"]')).not.toBeNull()
 		expect(rendered.container.querySelector(`a[href="#/market/${pool}"]`)?.textContent).toContain('Open market')
@@ -286,43 +286,43 @@ describe('live portfolio scope', () => {
 	test('does not present placeholder operational facts when live pool reads fail', async () => {
 		let retries = 0
 		const failedMarket: LiveMarket = { ...market, loadError: 'pool RPC failed' }
-		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={failedMarket} retry={() => retries++} workflowLocked={false} nowSeconds={0n} />)
+		const rendered = await renderIntoDocument(<LiveQuestionLedgerDetails market={failedMarket} retry={() => retries++} workflowLocked={false} nowSeconds={0n} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('Security pool details could not be loaded: pool RPC failed')
+		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('Question details could not be loaded: pool RPC failed')
 		expect(rendered.container.textContent).toContain(pool)
 		expect(rendered.container.textContent).toContain(shareToken)
 		expect(rendered.container.textContent).toContain('Outcome token IDs')
-		expect(rendered.container.textContent).not.toContain('Security pool state')
+		expect(rendered.container.textContent).not.toContain('Question state')
 		expect(rendered.container.textContent).not.toContain('Registered vaults')
 		expect(rendered.container.textContent).not.toContain('Minting capacity')
 		expect(rendered.container.textContent).not.toContain('Checkpointed collateral')
 		const retry = rendered.container.querySelector('button:not([aria-label^="Copy"]):not(.favorite-toggle)')
-		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry security pool button is unavailable')
+		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry question button is unavailable')
 		retry.click()
 		expect(retries).toBe(1)
 	})
 
 	test('uses one truthful recovery state across failed pool retry combinations', async () => {
 		const failedMarket: LiveMarket = { ...market, loadError: 'pool RPC failed' }
-		const refreshing = await renderIntoDocument(<LiveSecurityPoolDetails market={failedMarket} refreshing retry={() => undefined} workflowLocked={false} nowSeconds={0n} />)
-		expect(refreshing.container.querySelector('[role="status"]')?.textContent).toContain('Retrying security pool details')
+		const refreshing = await renderIntoDocument(<LiveQuestionLedgerDetails market={failedMarket} refreshing retry={() => undefined} workflowLocked={false} nowSeconds={0n} />)
+		expect(refreshing.container.querySelector('[role="status"]')?.textContent).toContain('Retrying question details')
 		expect(refreshing.container.textContent).not.toContain('last successful result')
 		expect(refreshing.container.querySelectorAll('button:not([aria-label^="Copy"]):not(.favorite-toggle)')).toHaveLength(0)
 		await refreshing.cleanup()
 
-		const failedRetry = await renderIntoDocument(<LiveSecurityPoolDetails market={failedMarket} refreshError='factory RPC failed' retry={() => undefined} workflowLocked={false} nowSeconds={0n} />)
+		const failedRetry = await renderIntoDocument(<LiveQuestionLedgerDetails market={failedMarket} refreshError='factory RPC failed' retry={() => undefined} workflowLocked={false} nowSeconds={0n} />)
 		cleanupRendered = failedRetry.cleanup
-		expect(failedRetry.container.querySelector('[role="alert"]')?.textContent).toContain('Security pool details could not be loaded: pool RPC failed. Latest retry failed: factory RPC failed')
+		expect(failedRetry.container.querySelector('[role="alert"]')?.textContent).toContain('Question details could not be loaded: pool RPC failed. Latest retry failed: factory RPC failed')
 		expect(failedRetry.container.textContent).not.toContain('last successful result')
 		expect(failedRetry.container.querySelectorAll('button:not([aria-label^="Copy"]):not(.favorite-toggle)')).toHaveLength(1)
 	})
 
 	test('identifies stale pool details and offers recovery after refresh fails', async () => {
 		let retries = 0
-		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={market} refreshError='factory RPC failed' retry={() => retries++} workflowLocked={false} nowSeconds={0n} />)
+		const rendered = await renderIntoDocument(<LiveQuestionLedgerDetails market={market} refreshError='factory RPC failed' retry={() => retries++} workflowLocked={false} nowSeconds={0n} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('Security pool refresh failed; showing the last successful result: factory RPC failed')
-		expect(rendered.container.textContent).toContain('Security pool stateOperational')
+		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('Question refresh failed; showing the last successful result: factory RPC failed')
+		expect(rendered.container.textContent).toContain('Question stateOperational')
 		const retry = rendered.container.querySelector('button:not([aria-label^="Copy"]):not(.favorite-toggle)')
 		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry refresh button is unavailable')
 		retry.click()
@@ -330,19 +330,19 @@ describe('live portfolio scope', () => {
 	})
 
 	test('keeps stale pool details identified while a refresh is pending', async () => {
-		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={market} refreshing retry={() => undefined} workflowLocked={false} nowSeconds={0n} />)
+		const rendered = await renderIntoDocument(<LiveQuestionLedgerDetails market={market} refreshing retry={() => undefined} workflowLocked={false} nowSeconds={0n} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('[role="status"]')?.textContent).toContain('Refreshing security pool; showing the last successful result.')
+		expect(rendered.container.querySelector('[role="status"]')?.textContent).toContain('Refreshing question; showing the last successful result.')
 		expect(rendered.container.querySelector('[aria-busy="true"]')).not.toBeNull()
-		expect(rendered.container.textContent).toContain('Security pool stateOperational')
+		expect(rendered.container.textContent).toContain('Question stateOperational')
 		expect(rendered.container.querySelector('button:not([aria-label^="Copy"]):not(.favorite-toggle)') === null).toBe(true)
 	})
 
-	test('shows a recoverable error when security pool discovery fails', async () => {
+	test('shows a recoverable error when question ledger discovery fails', async () => {
 		let retries = 0
-		const rendered = await renderIntoDocument(<SecurityPoolRouteEmptyState discoveryState='error' discoveryError='RPC unavailable' workflowLocked={false} retry={() => retries++} />)
+		const rendered = await renderIntoDocument(<QuestionLedgerRouteEmptyState discoveryState='error' discoveryError='RPC unavailable' workflowLocked={false} retry={() => retries++} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('Security pool discovery failed: RPC unavailable')
+		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('Question discovery failed: RPC unavailable')
 		const retry = rendered.container.querySelector('button:not([aria-label^="Copy"]):not(.favorite-toggle)')
 		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry discovery button is unavailable')
 		retry.click()
@@ -350,12 +350,12 @@ describe('live portfolio scope', () => {
 	})
 
 	test('announces when a routed live pool is unavailable in the selected universe', async () => {
-		const rendered = await renderIntoDocument(<SecurityPoolRouteEmptyState discoveryState='ready' discoveryError={undefined} workflowLocked={false} retry={() => undefined} />)
+		const rendered = await renderIntoDocument(<QuestionLedgerRouteEmptyState discoveryState='ready' discoveryError={undefined} workflowLocked={false} retry={() => undefined} />)
 		cleanupRendered = rendered.cleanup
 		const empty = rendered.container.querySelector('.empty-state')
 		// The pool route names what is wrong once, and offers both ways out.
-		expect(empty?.querySelector('.empty-state-title')?.textContent).toBe('Security pool not in this universe')
-		expect(empty?.textContent).not.toContain('No security pool selected')
+		expect(empty?.querySelector('.empty-state-title')?.textContent).toBe('Question not in this universe')
+		expect(empty?.textContent).not.toContain('No question ledger selected')
 		expect(Array.from(empty?.querySelectorAll('a') ?? []).map(link => [link.textContent, link.getAttribute('href')])).toEqual([
 			['Switch universe', '#/universe'],
 			['Markets', '#/market'],

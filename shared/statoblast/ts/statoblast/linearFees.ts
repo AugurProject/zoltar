@@ -1,4 +1,4 @@
-/** A dedicated portfolio question accrues a funded, constant attoETH-per-second stream. */
+/** A dedicated security pool question accrues a funded, constant attoETH-per-second stream. */
 export type LinearFeeState = Readonly<{ rateAttoEthPerSecond: bigint; rateScale?: bigint; endTime: bigint }>
 
 /** Mirrors the native checkpoint, including the question/fork cutoff and funded stream end. */

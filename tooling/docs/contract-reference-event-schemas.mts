@@ -1,11 +1,11 @@
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
 	{
-		name: 'PortfolioRecoveryRightsConsumed',
+		name: 'SecurityPoolRecoveryRightsConsumed',
 		parameters: 'uint248 indexed universeId,address indexed holder,uint256 amountAttoShares,uint256 cumulativeAttoShares',
 		sourcePath: 'solidity/contracts/statoblast/tokens/ShareToken.sol',
 	},
 	{
-		name: 'PortfolioRecoveryRightsTransferred',
+		name: 'SecurityPoolRecoveryRightsTransferred',
 		parameters: 'uint248 indexed universeId,address indexed from,address indexed to,uint256[3] amountsAttoShares',
 		sourcePath: 'solidity/contracts/statoblast/tokens/ShareToken.sol',
 	},
@@ -55,18 +55,18 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 		sourcePath: 'solidity/contracts/Zoltar.sol',
 	},
 	{
-		name: 'SecurityPoolRegistered',
-		parameters: 'bytes32 indexed originId,bytes32 indexed poolId,uint248 indexed universeId,ISecurityPool securityPool',
+		name: 'QuestionLedgerRegistered',
+		parameters: 'bytes32 indexed originId,bytes32 indexed poolId,uint248 indexed universeId,IQuestionLedger questionLedger',
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
 	},
 	{
 		name: 'SharedPriceFeedRegistered',
-		parameters: 'address indexed portfolio,uint248 indexed universeId,address indexed priceFeed',
+		parameters: 'address indexed securityPool,uint248 indexed universeId,address indexed priceFeed',
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
 	},
 	{
-		name: 'DeploySecurityPool',
-		parameters: 'ISecurityPool indexed securityPool,OpenOraclePriceCoordinator openOraclePriceCoordinator,IShareToken shareToken,ISecurityPool indexed parent,uint248 indexed universeId,uint256 questionId,uint256 statoblastSecurityMultiplierBps,uint256 initialReportPriorityFeeAttoEthPerGas',
+		name: 'DeployQuestionLedger',
+		parameters: 'IQuestionLedger indexed questionLedger,OpenOraclePriceCoordinator openOraclePriceCoordinator,IShareToken shareToken,IQuestionLedger indexed parent,uint248 indexed universeId,uint256 questionId,uint256 statoblastSecurityMultiplierBps,uint256 initialReportPriorityFeeAttoEthPerGas',
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
 	},
 	{
@@ -102,12 +102,12 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 	{
 		name: 'AwaitingForkContinuationSet',
 		parameters: 'bool awaitingForkContinuation',
-		sourcePath: 'solidity/contracts/statoblast/SecurityPool.sol',
+		sourcePath: 'solidity/contracts/statoblast/QuestionLedger.sol',
 	},
 	{
 		name: 'SystemStateSet',
 		parameters: 'SystemState systemState',
-		sourcePath: 'solidity/contracts/statoblast/SecurityPool.sol',
+		sourcePath: 'solidity/contracts/statoblast/QuestionLedger.sol',
 	},
 	{
 		name: 'VaultEscrowUpdated',
@@ -131,4 +131,4 @@ export const assemblyEventEmissions: Array<{ dataArguments: string; indexedArgum
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameCarry.sol',
 	},
 ]
-export const referencedEventAbiFingerprint = 'bbedbb4e1c8e5b4a331770d93e75a5334669a59c030014d30a08a13c62fb77bd'
+export const referencedEventAbiFingerprint = 'ce02b828077a0eb9833157bcf72ec672d95da7dcc61ebcd2b0250fddf64a8f83'

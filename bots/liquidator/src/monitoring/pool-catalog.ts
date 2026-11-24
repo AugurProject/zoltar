@@ -1,6 +1,6 @@
 import { loadPoolDeploymentDate } from './pool-deployment-date.ts'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
-import { securityPoolAbi, securityPoolFactoryAbi, securityPoolCapitalLedgerAbi, zoltarQuestionDataAbi } from '@zoltar/bot-shared/contracts/abi'
+import { questionLedgerAbi, securityPoolFactoryAbi, securityPoolCapitalLedgerAbi, zoltarQuestionDataAbi } from '@zoltar/bot-shared/contracts/abi'
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { getAddress, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import type { ReadClient } from './read-client.ts'
@@ -13,7 +13,7 @@ type CatalogPool = {
 	multiplierBps: string
 	deploymentDate?: string
 	questionDates?: { startTime: string; endTime: string }
-	metrics?: { systemState: string; portfolio: string; sharedCommittedRep: string; sharedCommitmentEth: string }
+	metrics?: { systemState: string; securityPool: string; sharedCommittedRep: string; sharedCommitmentEth: string }
 }
 
 export type PoolCatalogPage = {
@@ -26,20 +26,20 @@ export type PoolCatalogPage = {
 }
 
 const PAGE_SIZE = 12n
-const portfolioAbi = [{ type: 'function', name: 'capitalLedger', stateMutability: 'view', inputs: [{ name: 'universeId', type: 'uint248' }], outputs: [{ type: 'address' }] }] as const
+const securityPoolAbi = [{ type: 'function', name: 'capitalLedger', stateMutability: 'view', inputs: [{ name: 'universeId', type: 'uint248' }], outputs: [{ type: 'address' }] }] as const
 
 async function findPoolDeployment(client: ReadClient, factory: Address, address: Address, blockNumber: bigint) {
-	const originId = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'getSecurityPoolOriginId', args: [address], blockNumber })
+	const originId = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'getQuestionLedgerOriginId', args: [address], blockNumber })
 	if (BigInt(originId) === 0n) return []
-	const universeId = await client.readContract({ abi: securityPoolAbi, address, functionName: 'universeId', args: [], blockNumber })
-	const registered = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'getSecurityPool', args: [originId, universeId], blockNumber })
+	const universeId = await client.readContract({ abi: questionLedgerAbi, address, functionName: 'universeId', args: [], blockNumber })
+	const registered = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'getQuestionLedger', args: [originId, universeId], blockNumber })
 	if (registered.toLowerCase() !== address.toLowerCase()) return []
 	const [parent, questionId, statoblastSecurityMultiplierBps] = await Promise.all([
-		client.readContract({ abi: securityPoolAbi, address, functionName: 'parent', args: [], blockNumber }),
-		client.readContract({ abi: securityPoolAbi, address, functionName: 'questionId', args: [], blockNumber }),
-		client.readContract({ abi: securityPoolAbi, address, functionName: 'statoblastSecurityMultiplierBps', args: [], blockNumber }),
+		client.readContract({ abi: questionLedgerAbi, address, functionName: 'parent', args: [], blockNumber }),
+		client.readContract({ abi: questionLedgerAbi, address, functionName: 'questionId', args: [], blockNumber }),
+		client.readContract({ abi: questionLedgerAbi, address, functionName: 'statoblastSecurityMultiplierBps', args: [], blockNumber }),
 	])
-	return [{ securityPool: address, parent, universeId, questionId, statoblastSecurityMultiplierBps }]
+	return [{ questionLedger: address, parent, universeId, questionId, statoblastSecurityMultiplierBps }]
 }
 
 export async function loadPoolCatalog(client: ReadClient, factory: Address, chainId: number, page: number, searchAddress?: Address, monitoredAddresses?: readonly Address[], dateCache?: Parameters<typeof loadPoolDeploymentDate>[5]): Promise<PoolCatalogPage> {
@@ -56,40 +56,40 @@ export async function loadPoolCatalog(client: ReadClient, factory: Address, chai
 	let total: bigint
 	if (match !== undefined) total = BigInt(match.length)
 	else if (monitored !== undefined) total = BigInt(monitored.length)
-	else total = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'securityPoolDeploymentCount', args: [], blockNumber })
+	else total = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'questionLedgerDeploymentCount', args: [], blockNumber })
 	const start = BigInt(page) * PAGE_SIZE
 	const remaining = start >= total ? 0n : total - start
 	const count = remaining < PAGE_SIZE ? remaining : PAGE_SIZE
 	let deployments: Readonly<Awaited<ReturnType<typeof findPoolDeployment>>> = match ?? []
 	if (match === undefined && count > 0n) {
-		if (monitored === undefined) deployments = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'securityPoolDeploymentsRange', args: [start, count], blockNumber })
+		if (monitored === undefined) deployments = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'questionLedgerDeploymentsRange', args: [start, count], blockNumber })
 		else deployments = (await Promise.all(monitored.slice(Number(start), Number(start + count)).map(address => findPoolDeployment(client, factory, address, blockNumber)))).flat()
 	}
 	const pools = await Promise.all(
 		deployments.map(async deployment => {
 			const pool: CatalogPool = {
-				address: deployment.securityPool,
+				address: deployment.questionLedger,
 				parent: deployment.parent,
 				questionId: deployment.questionId.toString(),
 				universeId: deployment.universeId.toString(),
 				multiplierBps: deployment.statoblastSecurityMultiplierBps.toString(),
 			}
 			try {
-				const portfolio = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'getSecurityPoolPortfolio', args: [deployment.securityPool], blockNumber })
-				if (portfolio === zeroAddress) throw new Error('Question has no backing portfolio')
-				const capital = await client.readContract({ abi: portfolioAbi, address: portfolio, functionName: 'capitalLedger', args: [deployment.universeId], blockNumber })
-				if (capital === zeroAddress) throw new Error('Portfolio universe has no capital ledger')
+				const securityPool = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'securityPoolOf', args: [deployment.questionLedger], blockNumber })
+				if (securityPool === zeroAddress) throw new Error('Question has no backing security pool')
+				const capital = await client.readContract({ abi: securityPoolAbi, address: securityPool, functionName: 'capitalLedger', args: [deployment.universeId], blockNumber })
+				if (capital === zeroAddress) throw new Error('Security pool universe has no capital ledger')
 				const [systemState, [rep, commitment]] = await Promise.all([
-					client.readContract({ abi: securityPoolAbi, address: deployment.securityPool, functionName: 'systemState', args: [], blockNumber }),
+					client.readContract({ abi: questionLedgerAbi, address: deployment.questionLedger, functionName: 'systemState', args: [], blockNumber }),
 					client.readContract({ abi: securityPoolCapitalLedgerAbi, address: capital, functionName: 'totals', args: [], blockNumber }),
 				])
-				pool.metrics = { systemState: systemState.toString(), portfolio, sharedCommittedRep: formatDecimalAmount(rep), sharedCommitmentEth: formatDecimalAmount(commitment) }
+				pool.metrics = { systemState: systemState.toString(), securityPool, sharedCommittedRep: formatDecimalAmount(rep), sharedCommitmentEth: formatDecimalAmount(commitment) }
 			} catch (error) {
 				// Keep discovery available and retain the failure in protected operator logs.
 				console.warn(`Pool catalog metrics unavailable for ${pool.address}: ${errorMessage(error)}`)
 			}
 			try {
-				const questionData = await client.readContract({ abi: securityPoolAbi, address: deployment.securityPool, functionName: 'questionData', args: [], blockNumber })
+				const questionData = await client.readContract({ abi: questionLedgerAbi, address: deployment.questionLedger, functionName: 'questionData', args: [], blockNumber })
 				const [createdAt, question] = await Promise.all([
 					client.readContract({ abi: zoltarQuestionDataAbi, address: questionData, functionName: 'questionCreatedTimestamp', args: [deployment.questionId], blockNumber }),
 					client.readContract({ abi: zoltarQuestionDataAbi, address: questionData, functionName: 'questions', args: [deployment.questionId], blockNumber }),
@@ -100,7 +100,7 @@ export async function loadPoolCatalog(client: ReadClient, factory: Address, chai
 			}
 
 			try {
-				const deploymentDate = await loadPoolDeploymentDate(client, factory, deployment.securityPool, blockNumber, chainId, dateCache)
+				const deploymentDate = await loadPoolDeploymentDate(client, factory, deployment.questionLedger, blockNumber, chainId, dateCache)
 				if (deploymentDate !== undefined) pool.deploymentDate = deploymentDate
 			} catch (error) {
 				console.warn(`Pool catalog deployment date unavailable for ${pool.address}: ${errorMessage(error)}`)

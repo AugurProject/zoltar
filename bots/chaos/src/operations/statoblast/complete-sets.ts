@@ -8,7 +8,7 @@ import { BINARY_OUTCOME_NONE, operationalPools, shareTokenId, sharesToEth, walle
 
 import { allowance, tokenInventory, erc20AllowanceEvidence, amount, choose, eligible, encodeStep, erc20WalletDebit, erc1155WalletDebit, eventEvidence, mixSeed, optionAmount, planBase } from '../planning.ts'
 
-import { erc20Abi, securityPoolAbi, securityPoolPortfolioAbi } from '@zoltar/bot-shared/contracts/abi'
+import { erc20Abi, questionLedgerAbi, securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
 import { timestampDeadlineHasRequiredSafety } from '../timing.ts'
 
 function mintDeadline(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: PlanningOptions) {
@@ -94,7 +94,7 @@ export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Op
 				definitionId: id,
 				ecosystem: 'statoblast',
 				label: actionLabel,
-				metadata: { amount: spend.toString(), pool: pool.address, ...(quotedPurchase === undefined ? {} : { collateralToken: snapshot.deployments.weth, portfolio: pool.portfolio, collateralSpender: quotedPurchase.quote.spender, collateralBudget: quotedPurchase.value.toString() }) },
+				metadata: { amount: spend.toString(), pool: pool.address, ...(quotedPurchase === undefined ? {} : { collateralToken: snapshot.deployments.weth, securityPool: pool.securityPool, collateralSpender: quotedPurchase.quote.spender, collateralBudget: quotedPurchase.value.toString() }) },
 				deadlineTimestamp: kind === 'create' ? mintDeadline(snapshot, pool, options) : undefined,
 				postconditions: [kind === 'create' ? 'All three outcome share balances increase equally' : 'Pool collateral and wallet share balances decrease consistently'],
 				risk: kind === 'create' ? 'medium' : 'low',
@@ -108,25 +108,25 @@ export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Op
 									args: [quotedPurchase.quote.spender, quotedPurchase.value],
 									evidence: [erc20AllowanceEvidence(snapshot.deployments.weth, snapshot.wallet.address, quotedPurchase.quote.spender, quotedPurchase.value)],
 									functionName: 'approve',
-									id: 'approve-portfolio-collateral',
-									label: 'Approve portfolio collateral',
+									id: 'approve-security-pool-collateral',
+									label: 'Approve security pool collateral',
 									to: snapshot.deployments.weth,
 								}),
 							]
 						: []),
-					encodeStep({ abi: kind === 'create' ? securityPoolPortfolioAbi : securityPoolAbi, args, evidence: [eventEvidence(pool.address, signature)], functionName: method, id: method, label: method, to: kind === 'create' ? pool.portfolio : pool.address, value: 0n, walletAssetDebits }),
+					encodeStep({ abi: kind === 'create' ? securityPoolAbi : questionLedgerAbi, args, evidence: [eventEvidence(pool.address, signature)], functionName: method, id: method, label: method, to: kind === 'create' ? pool.securityPool : pool.address, value: 0n, walletAssetDebits }),
 				],
 			})
 		},
 
 		classification: 'selectable',
-		contract: kind === 'create' ? 'SecurityPoolPortfolio' : 'SecurityPool',
+		contract: kind === 'create' ? 'SecurityPool' : 'QuestionLedger',
 		description: `Exercises the ${kind} complete-set/share workflow with wallet-owned inventory.`,
 		discoveryInputs: ['share balances', 'pool lifecycle', 'wallet ETH'],
 		ecosystem: 'statoblast',
 		evaluate(snapshot, options) {
 			if (kind === 'create') {
-				return eligible(snapshot.pools.some(pool => purchase(snapshot, pool, options) !== undefined) ? undefined : 'No anchored portfolio purchase fits the WETH budget and ETH gas reserve')
+				return eligible(snapshot.pools.some(pool => purchase(snapshot, pool, options) !== undefined) ? undefined : 'No anchored security pool purchase fits the WETH budget and ETH gas reserve')
 			}
 			const possible = snapshot.pools.some(pool => {
 				const shares = snapshot.wallet.shares.find(candidate => candidate.shareToken.toLowerCase() === pool.shareToken.toLowerCase() && candidate.universeId === pool.universeId)
@@ -145,6 +145,6 @@ export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Op
 		method,
 		risk: kind === 'create' ? 'medium' : 'low',
 	}
-	if (kind === 'create') definition.buildContinuationPlan = (snapshot, options, context) => collateralSpendContinuation({ snapshot, options, context, buildPlan: definition.buildPlan, approvalId: 'approve-portfolio-collateral', actionId: method, label: 'Revoke portfolio collateral approval', risk: 'medium' })
+	if (kind === 'create') definition.buildContinuationPlan = (snapshot, options, context) => collateralSpendContinuation({ snapshot, options, context, buildPlan: definition.buildPlan, approvalId: 'approve-security-pool-collateral', actionId: method, label: 'Revoke security pool collateral approval', risk: 'medium' })
 	return definition
 }

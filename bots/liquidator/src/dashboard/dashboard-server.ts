@@ -29,8 +29,8 @@ export type DashboardController = {
 	setPaused: (value: unknown) => unknown | Promise<unknown>
 	reconcileTransaction?: (value: unknown) => unknown | Promise<unknown>
 	testMarketSources?: (value: unknown) => unknown | Promise<unknown>
-	setSupportedPortfolio?: (value: unknown) => unknown | Promise<unknown>
-	setSelectedPortfolios: (value: unknown) => unknown | Promise<unknown>
+	setSupportedSecurityPool?: (value: unknown) => unknown | Promise<unknown>
+	setSelectedSecurityPools: (value: unknown) => unknown | Promise<unknown>
 	setExecution?: (value: unknown) => unknown | Promise<unknown>
 	setSigner: (value: unknown) => unknown | Promise<unknown>
 	setStrategy: (value: unknown) => unknown | Promise<unknown>
@@ -195,8 +195,8 @@ function publicOperatorSnapshot(value: unknown) {
 	const snapshot = publicFields(value, ['configurationRevision', 'deploymentMissingName', 'deploymentCheckedBlock', 'deploymentCheckedTimestamp', 'execute', 'lastScanAt', 'lastScannedBlock', 'lastScannedTimestamp', 'network', 'operatorCapable', 'paused', 'scanning', 'status', 'wallet'])
 	const error = source['error']
 	if (typeof error === 'string') snapshot['error'] = publicOperatorFailure(error)
-	if (Array.isArray(source['portfolios']))
-		snapshot['portfolios'] = publicList(source['portfolios'], value => {
+	if (Array.isArray(source['securityPools']))
+		snapshot['securityPools'] = publicList(source['securityPools'], value => {
 			const view = publicFields(value, ['address', 'universeId', 'selected', 'approvedUniverse', 'blockNumber', 'priceValid', 'principalRep', 'commitmentEth', 'managedPrincipalRep', 'maximumTotalPrincipalRep', 'automation', 'knownPositionCount', 'nextPositionId', 'knownAuctionBidCount', 'auctionAfterBidId'])
 			view['positions'] = publicList(record(value)?.['positions'], position => publicFields(position, ['id', 'label', 'commitmentEth', 'distressed', 'retirementStatus', 'stalledRetirement', 'takeoverStatus']))
 			return view
@@ -284,11 +284,11 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			const handlers = new Map<string, (value: unknown) => unknown | Promise<unknown>>([
 				['/api/approved-universes', controller.setApprovedUniverses],
 				['/api/paused', controller.setPaused],
-				['/api/selected-portfolios', controller.setSelectedPortfolios],
+				['/api/selected-security-pools', controller.setSelectedSecurityPools],
 				['/api/signer', controller.setSigner],
 				['/api/strategy', controller.setStrategy],
 			])
-			if (controller.setSupportedPortfolio !== undefined) handlers.set('/api/supported-portfolio', controller.setSupportedPortfolio)
+			if (controller.setSupportedSecurityPool !== undefined) handlers.set('/api/supported-security-pool', controller.setSupportedSecurityPool)
 			if (controller.setExecution !== undefined) handlers.set('/api/execution', controller.setExecution)
 			if (controller.setSubmission !== undefined) handlers.set('/api/submission', controller.setSubmission)
 			if (controller.setMarketConfiguration !== undefined) handlers.set('/api/market-configuration', controller.setMarketConfiguration)
