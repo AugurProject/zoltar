@@ -493,7 +493,14 @@ export function TradingSection({
 				</div>
 			</OperationModal>
 
-			<OperationModal closeOnSuccessKey={tradingResult?.action === 'redeemCompleteSet' ? tradingResult.hash : undefined} context={getTransactionContext('Complete set · Yes + No + Invalid')} isOpen={activeModal === 'redeem-complete-sets'} onClose={closeActiveModal} title={tradingCopy.redeemCompleteSets}>
+			<OperationModal
+				closeOnSuccessKey={tradingResult?.action === 'redeemCompleteSet' ? tradingResult.hash : undefined}
+				context={getTransactionContext('Complete set · Yes + No + Invalid')}
+				finalActionLabel={tradingCopy.continueInWallet}
+				isOpen={activeModal === 'redeem-complete-sets'}
+				onClose={closeActiveModal}
+				title={tradingCopy.redeemCompleteSets}
+			>
 				{renderPayoutMetrics({
 					attoShares: maxRedeemableCompleteSetsAttoShares,
 					collateralLabel: tradingCopy.availableToRedeem,
@@ -535,7 +542,14 @@ export function TradingSection({
 				</div>
 			</OperationModal>
 
-			<OperationModal closeOnSuccessKey={tradingResult?.action === 'redeemShares' ? tradingResult.hash : undefined} context={getTransactionContext(winningOutcomeLabel ?? '')} isOpen={activeModal === 'redeem-shares'} onClose={closeActiveModal} title={tradingCopy.redeemResolvedShares}>
+			<OperationModal
+				closeOnSuccessKey={tradingResult?.action === 'redeemShares' ? tradingResult.hash : undefined}
+				context={getTransactionContext(winningOutcomeLabel ?? '')}
+				finalActionLabel={tradingCopy.continueInWallet}
+				isOpen={activeModal === 'redeem-shares'}
+				onClose={closeActiveModal}
+				title={tradingCopy.redeemResolvedShares}
+			>
 				{renderPayoutMetrics({
 					attoShares: winningAttoShares,
 					collateralLabel: tradingCopy.expectedCollateralPayout,

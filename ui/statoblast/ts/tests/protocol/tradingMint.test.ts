@@ -2,7 +2,7 @@ import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnviro
 import { describe, expect, mock, test } from 'bun:test'
 import { decodeFunctionData, getAddress, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { createBlockWithTimestamp, createReadContractStub, createMockReadClient, createMockWriteClient, asWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
-import { createCompleteSetInQuestionLedger, redeemSharesInQuestionLedger, migrateSharesFromUniverse, requireCanonicalSecurityPoolOf } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
+import { createCompleteSetInQuestionLedger, redeemCompleteSetInQuestionLedger, redeemSharesInQuestionLedger, migrateSharesFromUniverse, requireCanonicalSecurityPoolOf } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
 import type { TransactionPlanStep, TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 
@@ -68,6 +68,8 @@ const securityPoolMintAbi = parseAbi(['function createCompleteSet(uint248 univer
 test('winning-share redemption reviews ETH and REP recovery for the winning balance at one block', async () => {
 	const unit = 10n ** 18n
 	let review: TransactionRequestPreview | undefined
+	let plan: readonly TransactionPlanStep[] = []
+	let balances = [unit, 2n * unit, 3n * unit]
 	const send = mock((request: MockSentTransaction) => {
 		expect(request.to).toBe(pool)
 		if (request.data === undefined) throw new Error('Missing redemption calldata')
@@ -87,7 +89,7 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 				if (request.functionName === 'isSecurityPool') return true
 				if (request.functionName === 'shareToken' || request.functionName === 'questionForker') return securityPool
 				pinned.push(request.blockNumber)
-				if (request.functionName === 'balanceOfShares') return [unit, 2n * unit, 3n * unit]
+				if (request.functionName === 'balanceOfShares') return balances
 				if (request.functionName === 'getQuestionOutcome') return 2n
 				expect(request.args).toEqual([3n * unit])
 				if (request.functionName === 'attoSharesToAttoEth') return unit
@@ -100,12 +102,54 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 		onTransactionPrepared: (value: TransactionRequestPreview) => {
 			review = value
 		},
+		onTransactionPlan: (steps: readonly TransactionPlanStep[]) => {
+			plan = steps
+		},
 	}
 	await redeemSharesInQuestionLedger(client, pool)
 	expect(pinned).toEqual([99n, 99n, 99n, 99n])
 	expect(review?.reviewDescription).toMatch(/1\sWETH/)
 	expect(review?.reviewDescription).toMatch(/2\sREP/)
 	expect(send).toHaveBeenCalledTimes(1)
+	const step = plan[0]
+	if (step?.validateBeforeSubmit === undefined || step.readReviewRows === undefined) throw new Error('Missing redemption review')
+	await step.validateBeforeSubmit()
+	expect(step.readReviewRows()).toContainEqual({ label: 'No shares', value: '3 → 0' })
+	balances = [unit, 2n * unit, 4n * unit]
+	await expect(step.validateBeforeSubmit()).rejects.toThrow('Changed since you reviewed')
+})
+
+test('complete-set redemption refreshes all three share balances and its payout estimate', async () => {
+	const unit = 10n ** 18n
+	const base = mintClient(() => undefined, 1n, 100n)
+	let plan: readonly TransactionPlanStep[] = []
+	let holdings = [unit, 2n * unit, 3n * unit]
+	let cash = 2n * unit
+	const client = {
+		...base,
+		readContract: createReadContractStub(async request => {
+			if (request.functionName === 'balanceOfShares') return holdings
+			if (request.functionName === 'attoSharesToAttoEth') return cash
+			if (request.functionName === 'attoSharesToAttoRep') return 0n
+			return base.readContract(request)
+		}),
+		onTransactionPlan: (next: readonly TransactionPlanStep[]) => {
+			plan = next
+		},
+	}
+	await redeemCompleteSetInQuestionLedger(client, pool, unit)
+	const step = plan[0]
+	if (step?.validateBeforeSubmit === undefined || step.readReviewRows === undefined) throw new Error('Missing redemption review')
+	cash = unit
+	await step.validateBeforeSubmit()
+	expect(step.readReviewRows().map(row => [row.label, row.value])).toEqual([
+		['Yes shares', '2 → 1'],
+		['No shares', '3 → 2'],
+		['Invalid shares', '1 → 0'],
+		['Estimated collateral received', '1\u00a0WETH'],
+	])
+	holdings = [unit, 0n, 3n * unit]
+	await expect(step.validateBeforeSubmit()).rejects.toThrow('Your balance is too low')
 })
 
 test('token approval authorizes only the requested spender and amount', async () => {

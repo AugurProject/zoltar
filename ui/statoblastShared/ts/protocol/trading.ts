@@ -22,6 +22,8 @@ import { estimatedPurchaseFee, mintReview } from '../copy/securityPool.js'
 import { availableCapacity } from '../copy/securityPoolCapital.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { getReportingOutcomeKey, getReportingOutcomeValue } from '@zoltar/ui-core-shared/lib/contractEnums.js'
+import { changedSinceReview } from '../copy/app.js'
 
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
 type QuestionLedgerMintCapacity = {
@@ -179,16 +181,38 @@ export async function redeemSharesInQuestionLedger(client: WriteClient, question
 	])
 	const balances = await client.readContract({ address: shareToken, abi: statoblast_tokens_ShareToken_ShareToken.abi, functionName: 'balanceOfShares', args: [universeId, client.account.address], blockNumber: block.number })
 	const outcome = await client.readContract({ address: forker, abi: QUESTION_LEDGER_QUESTION_OUTCOME_ABI, functionName: 'getQuestionOutcome', args: [questionLedgerAddress], blockNumber: block.number })
-	const amount = balances[Number(outcome)]
-	if (amount === undefined) throw new Error('Winning outcome is unavailable.')
-	const reviewDescription = await redemptionReview(client, questionLedgerAddress, amount, block.number)
-	const hash = await writeContractAndWait(client, () => ({
+	const winner = getReportingOutcomeKey(outcome)
+	if (winner === 'none') throw new Error(tradingCopy.poolResolutionRequired)
+	const amount = balances[getReportingOutcomeValue(winner)]
+	const quote = await readRedemptionQuote(client, questionLedgerAddress, amount, block.number)
+	const callParams = {
 		address: questionLedgerAddress,
 		abi: statoblast_QuestionLedger_QuestionLedger.abi,
 		functionName: 'redeemShares',
-		reviewDescription,
 		args: [],
-	}))
+	} as const
+	let reviewRows: ReturnType<typeof redemptionRows> = []
+	client.onTransactionPlan?.([
+		{
+			...callParams,
+			contractAddress: questionLedgerAddress,
+			reviewTitle: tradingCopy.redeemResolvedShares,
+			reviewDescription: tradingCopy.redeemSharesReview,
+			readReviewRows: () => reviewRows,
+			validateBeforeSubmit: async () => {
+				const { number: blockNumber } = await client.getBlock()
+				if (blockNumber === undefined) throw new Error(tradingCopy.redemptionNeedsBlock)
+				const [freshOutcome, freshShares] = await Promise.all([
+					client.readContract({ address: forker, abi: QUESTION_LEDGER_QUESTION_OUTCOME_ABI, functionName: 'getQuestionOutcome', args: [questionLedgerAddress], blockNumber }),
+					client.readContract({ address: shareToken, abi: statoblast_tokens_ShareToken_ShareToken.abi, functionName: 'balanceOfShares', args: [universeId, client.account.address], blockNumber }),
+				])
+				if (getReportingOutcomeKey(freshOutcome) !== winner || freshShares[getReportingOutcomeValue(winner)] !== amount) throw new Error(changedSinceReview)
+				if (amount === 0n) throw new Error(tradingCopy.redemptionInsufficientShares)
+				reviewRows = redemptionRows(await readRedemptionQuote(client, questionLedgerAddress, amount, blockNumber), amount, freshShares, [winner])
+			},
+		},
+	])
+	const hash = await writeContractAndWait(client, () => ({ ...callParams, reviewDescription: quote.description }))
 	return {
 		action: 'redeemShares',
 		hash,
@@ -367,14 +391,32 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 export async function redeemCompleteSetInQuestionLedger(client: WriteClient, questionLedgerAddress: Address, amount: bigint) {
 	const universeId = await readQuestionLedgerUniverseId(client, questionLedgerAddress)
 	const block = await client.getBlock()
-	const reviewDescription = await redemptionReview(client, questionLedgerAddress, amount, block.number)
-	const hash = await writeContractAndWait(client, () => ({
+	const quote = await readRedemptionQuote(client, questionLedgerAddress, amount, block.number)
+	const callParams = {
 		address: questionLedgerAddress,
 		abi: statoblast_QuestionLedger_QuestionLedger.abi,
 		functionName: 'redeemCompleteSet',
-		reviewDescription,
 		args: [amount],
-	}))
+	} as const
+	let reviewRows: ReturnType<typeof redemptionRows> = []
+	client.onTransactionPlan?.([
+		{
+			...callParams,
+			contractAddress: questionLedgerAddress,
+			reviewTitle: tradingCopy.redeemCompleteSets,
+			reviewDescription: tradingCopy.redeemSetsReview,
+			readReviewRows: () => reviewRows,
+			validateBeforeSubmit: async () => {
+				const { number: blockNumber } = await client.getBlock()
+				if (blockNumber === undefined) throw new Error(tradingCopy.redemptionNeedsBlock)
+				const shareToken = await client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'shareToken', blockNumber })
+				const balances = await client.readContract({ address: shareToken, abi: statoblast_tokens_ShareToken_ShareToken.abi, functionName: 'balanceOfShares', args: [universeId, client.account.address], blockNumber })
+				if (balances.some(balance => amount > balance)) throw new Error(tradingCopy.redemptionInsufficientShares)
+				reviewRows = redemptionRows(await readRedemptionQuote(client, questionLedgerAddress, amount, blockNumber), amount, balances, ['yes', 'no', 'invalid'])
+			},
+		},
+	])
+	const hash = await writeContractAndWait(client, () => ({ ...callParams, reviewDescription: quote.description }))
 	return {
 		action: 'redeemCompleteSet',
 		hash,
@@ -383,12 +425,26 @@ export async function redeemCompleteSetInQuestionLedger(client: WriteClient, que
 	} satisfies TradingActionResult
 }
 
-async function redemptionReview(client: Pick<ReadClient, 'readContract'>, pool: Address, shares: bigint, blockNumber: bigint | undefined) {
+async function readRedemptionQuote(client: Pick<ReadClient, 'readContract'>, pool: Address, shares: bigint, blockNumber: bigint | undefined) {
 	const collateral = await loadTradingCollateralIdentity(client, pool, blockNumber)
 	const recoveryAbi = parseAbi(['function attoSharesToAttoRep(uint256 amountAttoShares) view returns (uint256)'])
 	const [cash, rep] = await Promise.all([
 		client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool, functionName: 'attoSharesToAttoEth', args: [shares], blockNumber }),
 		client.readContract({ abi: recoveryAbi, address: pool, functionName: 'attoSharesToAttoRep', args: [shares], blockNumber }),
 	])
-	return `Redeem ${formatCurrencyBalanceWithUnit(shares, 'shares', collateral.decimals)} for approximately ${formatCurrencyBalanceWithUnit(cash, collateral.symbol, collateral.decimals)} and ${formatCurrencyBalanceWithUnit(requireBigintValue(rep, 'recovery REP quote'), 'REP')} in this universe.`
+	const collateralAmount = formatCurrencyBalanceWithUnit(cash, collateral.symbol, collateral.decimals)
+	const recovery = requireBigintValue(rep, 'recovery REP quote')
+	const repAmount = formatCurrencyBalanceWithUnit(recovery, commonCopy.rep)
+	return { collateralAmount, repAmount, recovery, decimals: collateral.decimals, description: tradingCopy.redemptionEstimate(formatCurrencyBalanceWithUnit(shares, 'shares', collateral.decimals), collateralAmount, repAmount) }
+}
+
+function redemptionRows(quote: Awaited<ReturnType<typeof readRedemptionQuote>>, amount: bigint, balances: readonly [bigint, bigint, bigint], outcomes: readonly ReportingOutcomeKey[]) {
+	return [
+		...outcomes.map(outcome => {
+			const balance = balances[getReportingOutcomeValue(outcome)]
+			return { label: tradingCopy.formatOutcomeShares(getShareOutcomeLabel(outcome)), value: `${formatCurrencyBalance(balance, quote.decimals)} → ${formatCurrencyBalance(balance - amount, quote.decimals)}` }
+		}),
+		{ label: tradingCopy.estimatedRedemptionCollateral, value: quote.collateralAmount },
+		...(quote.recovery === 0n ? [] : [{ label: tradingCopy.estimatedRedemptionRep, value: quote.repAmount }]),
+	]
 }
