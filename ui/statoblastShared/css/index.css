@@ -4491,6 +4491,10 @@ span.rep-price-status.stale,
 	display: block;
 }
 
+.statoblast-watchlist-question-title {
+	overflow-wrap: anywhere;
+}
+
 .statoblast-watchlist-table meter {
 	width: 5rem;
 	accent-color: var(--accent);
@@ -5240,10 +5244,92 @@ span.rep-price-status.stale,
 .statoblast-deploy-summary {
 	min-inline-size: 0;
 }
+.statoblast-deploy-progress,
+.statoblast-price-progress {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: var(--space-2);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.statoblast-deploy-progress button,
+.statoblast-price-progress li {
+	width: 100%;
+	min-inline-size: 0;
+	text-align: start;
+}
+.statoblast-deploy-progress button[aria-current="step"] {
+	border-color: var(--accent);
+}
+.statoblast-price-progress li {
+	padding: var(--space-2) 0;
+	border-block-start: 2px solid var(--divider-strong);
+	font-size: var(--font-caption);
+}
+.statoblast-deploy-progress li[data-done="true"] button,
+.statoblast-price-progress li[data-done="true"] {
+	border-block-start-color: var(--accent);
+}
+.statoblast-price-layout,
+.statoblast-price-summary {
+	display: grid;
+	align-items: start;
+	gap: var(--space-4);
+}
+.statoblast-price-layout > * {
+	min-inline-size: 0;
+}
+.statoblast-price-band {
+	display: grid;
+	align-self: center;
+	gap: var(--space-3);
+}
+.statoblast-price-band dl {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: var(--space-2);
+	margin: 0;
+	font-size: var(--font-caption);
+}
+.statoblast-price-band dd {
+	margin: 0;
+	font-weight: 650;
+}
+.statoblast-price-band-track {
+	position: relative;
+	min-block-size: var(--space-2);
+	border-radius: var(--radius-control);
+	background: var(--divider-strong);
+}
+.statoblast-price-band-track > span,
+.statoblast-price-band-track > i {
+	position: absolute;
+	block-size: 100%;
+	background: var(--accent);
+}
+.statoblast-price-band-track > span {
+	opacity: 0.35;
+}
+.statoblast-price-band-track > i {
+	inline-size: 3px;
+}
+@media (max-width: 40rem) {
+	.statoblast-deploy-progress,
+	.statoblast-price-progress {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
 @media (min-width: 64rem) {
 	.statoblast-deploy-layout:has(.statoblast-deploy-summary) {
 		grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
 		align-items: start;
+	}
+	.statoblast-price-layout[data-funding="true"] {
+		grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+	}
+	.statoblast-price-summary:has(.statoblast-price-band) {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 }
 

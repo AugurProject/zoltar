@@ -31,7 +31,6 @@ export const addToCalendar = 'Add to calendar'
 export const reportingOpensReminder = (title: string) => `Reporting opens: ${title}`
 export const resolved = 'Resolved'
 export const fork = 'Fork'
-export const nonDecision = 'Non-decision'
 export const nonDecisionCondition = 'If two outcomes reach the threshold'
 export const questionIdLead = ' · question ID '
 export const responseWindow = 'Response window'

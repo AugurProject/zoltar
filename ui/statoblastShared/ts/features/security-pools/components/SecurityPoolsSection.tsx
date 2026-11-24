@@ -66,6 +66,8 @@ export function SecurityPoolsSection({
 	activeUniverseId: bigint
 }) {
 	const [fundsRemain, setFundsRemain] = useState(false)
+	const [deployStep, setDeployStep] = useState(0)
+	const deploySteps = [pageCopy.deployCollateralAndPrice, pageCopy.deployQuestionsSection, pageCopy.deployEconomicsSection, pageCopy.deployAndSetup]
 	const model = useSecurityPool({ accountAddress: parameters.accountAddress, enabled, environmentKey, activeUniverseId, cacheReads: cacheReads && !deploying, resumeSetup: deploying, securityPoolAddress: page?.pool })
 	useStatoblastPageRefresh(registerPageRefresh, model.refresh)
 	useEffect(() => onReadStatus?.(model.displayedAt, undefined), [model.displayedAt, onReadStatus])
@@ -88,93 +90,131 @@ export function SecurityPoolsSection({
 	const shownAccount = useRef<string>()
 	if (model.presentationSnapshot !== undefined) shownAccount.current = accountIdentity
 	const creationForm = (
-		<div className='statoblast-deploy-layout'>
-			<div className='form-grid security-pool-creation-form'>
-				<fieldset className='statoblast-deploy-section'>
-					<legend>{pageCopy.deployCollateralSection}</legend>
-
-					<ViewTabs
-						ariaLabel={collateralCopy.selector}
-						variant='segmented'
-						value={actions.collateralSymbol}
-						onChange={actions.setCollateralSymbol}
-						options={[
-							{ value: collateralCopy.weth, label: collateralCopy.weth, disabled },
-							{ value: collateralCopy.usdc, label: collateralCopy.usdc, disabled },
-						]}
-					/>
-					<SecurityPoolInput label={copy.originPool} hint={copy.originPoolHint} value={actions.originInput} onChange={actions.setOriginInput} disabled={disabled} error={actions.originForked ? copy.originForked : undefined} liveError />
-				</fieldset>
-				<fieldset className='statoblast-deploy-section'>
-					<legend>{pageCopy.deployPriceSection}</legend>
-
-					<SecurityPoolInput label={collateralCopy.oracleStake(actions.collateral.symbol)} hint={collateralCopy.floorHint} value={actions.reportFloor} onChange={actions.setReportFloor} disabled={disabled} numeric />
-					<SecurityPoolInput label={copy.oraclePriorityFee} value={actions.priorityFeeInput} onChange={actions.setPriorityFeeInput} disabled={disabled} />
-				</fieldset>
-				<fieldset className='statoblast-deploy-section'>
-					<legend>{pageCopy.deployQuestionsSection}</legend>
-
-					<ViewTabs
-						ariaLabel={copy.admissionMode}
-						variant='segmented'
-						value={actions.admissionMode}
-						onChange={actions.setAdmissionMode}
-						options={[
-							{ value: 'open', label: copy.admissionOpen },
-							{ value: 'fixed', label: copy.admissionFixed },
-						]}
-					/>
-					<UserMessage detail={actions.admissionMode === 'open' ? copy.admissionOpenHint : copy.admissionFixedHint} />
-					{actions.admissionMode === 'fixed' ? <SecurityPoolInput label={copy.fixedQuestionIds} hint={copy.fixedQuestionIdsHint} value={actions.fixedQuestions} onChange={actions.setFixedQuestions} disabled={disabled} /> : undefined}
-					<SecurityPoolInput label={copy.horizon} hint={copy.horizonHint} value={actions.horizonDays} onChange={actions.setHorizonDays} disabled={disabled} numeric />
-				</fieldset>
-				<fieldset className='statoblast-deploy-section'>
-					<legend>{pageCopy.deployEconomicsSection}</legend>
-
-					<SecurityPoolInput label={copy.securityMultiplier} hint={copy.securityMultiplierHint} value={actions.multiplierInput} onChange={actions.setMultiplierInput} disabled={disabled} />
-					<MetricGrid>
-						<SecurityPoolInput label={copy.purchaseFeePercent} value={actions.economicsDraft.purchaseFeePercent} onChange={value => actions.setEconomicsField('purchaseFeePercent', value)} disabled={disabled} numeric />
-						<SecurityPoolInput label={collateralCopy.purchaseFee(actions.collateral.symbol)} value={actions.economicsDraft.minimumPurchaseFee} onChange={value => actions.setEconomicsField('minimumPurchaseFee', value)} disabled={disabled} numeric />
-						<SecurityPoolInput label={collateralCopy.commitment(actions.collateral.symbol)} hint={capitalCopy.minimumCommitmentHint} value={actions.economicsDraft.minimumCommitment} onChange={value => actions.setEconomicsField('minimumCommitment', value)} disabled={disabled} numeric />
-						<SecurityPoolInput label={capitalCopy.rewardVesting} value={actions.economicsDraft.rewardVestingHours} onChange={value => actions.setEconomicsField('rewardVestingHours', value)} disabled={disabled} numeric />
-						<SecurityPoolInput label={capitalCopy.annualFee} hint={capitalCopy.annualFeeHint} value={actions.economicsDraft.annualFeePercent} onChange={value => actions.setEconomicsField('annualFeePercent', value)} disabled={disabled} numeric />
-						<SecurityPoolInput label={capitalCopy.outcomeRate} hint={capitalCopy.outcomeRateHint} value={actions.economicsDraft.minimumOutcomeRate} onChange={value => actions.setEconomicsField('minimumOutcomeRate', value)} disabled={disabled} numeric />
-					</MetricGrid>
-				</fieldset>
-
-				<UserMessage detail={copy.immutableEconomics} />
-				{actions.creationError === undefined ? undefined : <UserMessage tone='error' detail={actions.creationError} />}
-				<SecurityPoolButton
-					model={actions}
-					action='deploySecurityPoolAdmission'
-					label={copy.deployAdmission}
-					pendingLabel={copy.deployingAdmission}
-					reason={actions.admissionDeployReason}
-					sharedReasonId={actions.admissionDeployReason === copy.originForked ? deployReasonId : undefined}
-					onClick={actions.deployAdmission}
-				/>
-				{actions.admissionAddress === undefined ? undefined : <AddressValue address={actions.admissionAddress} longAbbreviation />}
-				<SecurityPoolButton model={actions} action='deploySecurityPool' label={copy.deploy} pendingLabel={copy.deploying} reason={actions.deployReason} sharedReasonId={actions.deployReason === copy.originForked ? deployReasonId : undefined} onClick={actions.deploy} />
-				{actions.originForked ? (
-					<div className='tx-action-feedback shared-action-reason'>
-						<InlineHint id={deployReasonId} message={copy.originForkedAction} />
-					</div>
-				) : undefined}
-			</div>
+		<>
 			{deploying && (
-				<aside className='statoblast-deploy-summary' aria-label={pageCopy.deploySummary}>
-					<h3>{pageCopy.deploySummary}</h3>
-					<MetricGrid>
-						<MetricField label={pageCopy.deployCollateralSection}>{actions.collateral.symbol}</MetricField>
-						<MetricField label={copy.originPool}>{actions.originInput || undefined}</MetricField>
-						<MetricField label={pageCopy.deployQuestionsSection}>{actions.admissionMode === 'open' ? copy.admissionOpen : copy.admissionFixed}</MetricField>
-						<MetricField label={copy.securityMultiplier}>{actions.multiplierInput ? pageCopy.formatMultiplier(actions.multiplierInput) : undefined}</MetricField>
-						<MetricField label={capitalCopy.annualFee}>{actions.economicsDraft.annualFeePercent ? pageCopy.formatMultiplier(actions.economicsDraft.annualFeePercent) : undefined}</MetricField>
-						<MetricField label={copy.purchaseFeePercent}>{actions.economicsDraft.purchaseFeePercent ? pageCopy.formatMultiplier(actions.economicsDraft.purchaseFeePercent) : undefined}</MetricField>
-					</MetricGrid>
-				</aside>
+				<ol className='statoblast-deploy-progress' aria-label={pageCopy.deployProgress}>
+					{deploySteps.map((label, step) => (
+						<li key={label} data-done={step < deployStep}>
+							<button type='button' className='secondary' aria-current={step === deployStep ? 'step' : undefined} onClick={() => setDeployStep(step)}>
+								{label}
+							</button>
+						</li>
+					))}
+				</ol>
 			)}
-		</div>
+			<div className='statoblast-deploy-layout'>
+				<div className='form-grid security-pool-creation-form'>
+					{(!deploying || deployStep === 0) && (
+						<>
+							<fieldset className='statoblast-deploy-section'>
+								<legend>{pageCopy.deployCollateralSection}</legend>
+
+								<ViewTabs
+									ariaLabel={collateralCopy.selector}
+									variant='segmented'
+									value={actions.collateralSymbol}
+									onChange={actions.setCollateralSymbol}
+									options={[
+										{ value: collateralCopy.weth, label: collateralCopy.weth, disabled },
+										{ value: collateralCopy.usdc, label: collateralCopy.usdc, disabled },
+									]}
+								/>
+								<SecurityPoolInput label={copy.originPool} hint={copy.originPoolHint} value={actions.originInput} onChange={actions.setOriginInput} disabled={disabled} error={actions.originForked ? copy.originForked : undefined} liveError />
+							</fieldset>
+							<fieldset className='statoblast-deploy-section'>
+								<legend>{pageCopy.deployPriceSection}</legend>
+
+								<SecurityPoolInput label={collateralCopy.oracleStake(actions.collateral.symbol)} hint={collateralCopy.floorHint} value={actions.reportFloor} onChange={actions.setReportFloor} disabled={disabled} numeric />
+								<SecurityPoolInput label={copy.oraclePriorityFee} value={actions.priorityFeeInput} onChange={actions.setPriorityFeeInput} disabled={disabled} />
+							</fieldset>
+						</>
+					)}
+					{(!deploying || deployStep === 1) && (
+						<fieldset className='statoblast-deploy-section'>
+							<legend>{pageCopy.deployQuestionsSection}</legend>
+
+							<ViewTabs
+								ariaLabel={copy.admissionMode}
+								variant='segmented'
+								value={actions.admissionMode}
+								onChange={actions.setAdmissionMode}
+								options={[
+									{ value: 'open', label: copy.admissionOpen },
+									{ value: 'fixed', label: copy.admissionFixed },
+								]}
+							/>
+							<UserMessage detail={actions.admissionMode === 'open' ? copy.admissionOpenHint : copy.admissionFixedHint} />
+							{actions.admissionMode === 'fixed' ? <SecurityPoolInput label={copy.fixedQuestionIds} hint={copy.fixedQuestionIdsHint} value={actions.fixedQuestions} onChange={actions.setFixedQuestions} disabled={disabled} /> : undefined}
+							<SecurityPoolInput label={copy.horizon} hint={copy.horizonHint} value={actions.horizonDays} onChange={actions.setHorizonDays} disabled={disabled} numeric />
+						</fieldset>
+					)}
+					{(!deploying || deployStep === 2) && (
+						<fieldset className='statoblast-deploy-section'>
+							<legend>{pageCopy.deployEconomicsSection}</legend>
+
+							<SecurityPoolInput label={copy.securityMultiplier} hint={copy.securityMultiplierHint} value={actions.multiplierInput} onChange={actions.setMultiplierInput} disabled={disabled} />
+							<MetricGrid>
+								<SecurityPoolInput label={copy.purchaseFeePercent} value={actions.economicsDraft.purchaseFeePercent} onChange={value => actions.setEconomicsField('purchaseFeePercent', value)} disabled={disabled} numeric />
+								<SecurityPoolInput label={collateralCopy.purchaseFee(actions.collateral.symbol)} value={actions.economicsDraft.minimumPurchaseFee} onChange={value => actions.setEconomicsField('minimumPurchaseFee', value)} disabled={disabled} numeric />
+								<SecurityPoolInput label={collateralCopy.commitment(actions.collateral.symbol)} hint={capitalCopy.minimumCommitmentHint} value={actions.economicsDraft.minimumCommitment} onChange={value => actions.setEconomicsField('minimumCommitment', value)} disabled={disabled} numeric />
+								<SecurityPoolInput label={capitalCopy.rewardVesting} value={actions.economicsDraft.rewardVestingHours} onChange={value => actions.setEconomicsField('rewardVestingHours', value)} disabled={disabled} numeric />
+								<SecurityPoolInput label={capitalCopy.annualFee} hint={capitalCopy.annualFeeHint} value={actions.economicsDraft.annualFeePercent} onChange={value => actions.setEconomicsField('annualFeePercent', value)} disabled={disabled} numeric />
+								<SecurityPoolInput label={capitalCopy.outcomeRate} hint={capitalCopy.outcomeRateHint} value={actions.economicsDraft.minimumOutcomeRate} onChange={value => actions.setEconomicsField('minimumOutcomeRate', value)} disabled={disabled} numeric />
+							</MetricGrid>
+						</fieldset>
+					)}
+					{(!deploying || deployStep === 3) && (
+						<>
+							<UserMessage detail={copy.immutableEconomics} />
+							{actions.creationError === undefined ? undefined : <UserMessage tone='error' detail={actions.creationError} />}
+							<SecurityPoolButton
+								model={actions}
+								action='deploySecurityPoolAdmission'
+								label={copy.deployAdmission}
+								pendingLabel={copy.deployingAdmission}
+								reason={actions.admissionDeployReason}
+								sharedReasonId={actions.admissionDeployReason === copy.originForked ? deployReasonId : undefined}
+								onClick={actions.deployAdmission}
+							/>
+							{actions.admissionAddress === undefined ? undefined : <AddressValue address={actions.admissionAddress} longAbbreviation />}
+							<SecurityPoolButton model={actions} action='deploySecurityPool' label={copy.deploy} pendingLabel={copy.deploying} reason={actions.deployReason} sharedReasonId={actions.deployReason === copy.originForked ? deployReasonId : undefined} onClick={actions.deploy} />
+							{actions.originForked ? (
+								<div className='tx-action-feedback shared-action-reason'>
+									<InlineHint id={deployReasonId} message={copy.originForkedAction} />
+								</div>
+							) : undefined}
+						</>
+					)}
+					{deploying && (
+						<div className='actions statoblast-deploy-navigation'>
+							{deployStep > 0 && (
+								<button className='secondary' type='button' onClick={() => setDeployStep(deployStep - 1)}>
+									{pageCopy.deployBack}
+								</button>
+							)}
+							{deployStep < deploySteps.length - 1 && (
+								<button type='button' onClick={() => setDeployStep(deployStep + 1)}>
+									{pageCopy.deployContinue(deploySteps[deployStep + 1] ?? '')}
+								</button>
+							)}
+						</div>
+					)}
+				</div>
+				{deploying && (
+					<aside className='statoblast-deploy-summary' aria-label={pageCopy.deploySummary}>
+						<h3>{pageCopy.deploySummary}</h3>
+						<MetricGrid>
+							<MetricField label={pageCopy.deployCollateralSection}>{actions.collateral.symbol}</MetricField>
+							<MetricField label={copy.originPool}>{actions.originInput || undefined}</MetricField>
+							<MetricField label={pageCopy.deployQuestionsSection}>{actions.admissionMode === 'open' ? copy.admissionOpen : copy.admissionFixed}</MetricField>
+							<MetricField label={copy.securityMultiplier}>{actions.multiplierInput ? pageCopy.formatMultiplier(actions.multiplierInput) : undefined}</MetricField>
+							<MetricField label={capitalCopy.annualFee}>{actions.economicsDraft.annualFeePercent ? pageCopy.formatMultiplier(actions.economicsDraft.annualFeePercent) : undefined}</MetricField>
+							<MetricField label={copy.purchaseFeePercent}>{actions.economicsDraft.purchaseFeePercent ? pageCopy.formatMultiplier(actions.economicsDraft.purchaseFeePercent) : undefined}</MetricField>
+						</MetricGrid>
+					</aside>
+				)}
+			</div>
+		</>
 	)
 
 	return (
@@ -203,7 +243,7 @@ export function SecurityPoolsSection({
 					)}
 				</SectionBlock>
 			)}
-			{((deploying && model.setup !== undefined) || (!deploying && (page === undefined || (model.setup?.stage !== undefined && model.setup.stage < 4)))) && (
+			{((deploying && (deployStep === 3 || model.setup !== undefined)) || (!deploying && (page === undefined || (model.setup?.stage !== undefined && model.setup.stage < 4)))) && (
 				<SectionBlock title={capitalCopy.prepareTitle} description={actions.setupStage === 4 ? undefined : capitalCopy.prepareHint}>
 					<UserMessage tone={actions.setupStage === 4 ? 'success' : 'neutral'} detail={actions.setupStage === undefined ? capitalCopy.prepareProgressUnknown : capitalCopy.prepareProgress(actions.setupStage)} />
 					<ol className='statoblast-fork-steps'>
@@ -264,14 +304,17 @@ export function SecurityPoolsSection({
 						<SecurityPoolQuestionsPanel pool={page.pool} universeId={activeUniverseId} actions={actions} admission={shown?.admission} forked={(shown?.forkTime ?? 0n) > 0n} owner={parameters.accountAddress} enabled={enabled} environmentKey={environmentKey} registerPageRefresh={registerPageRefresh} />
 					)}
 					{page?.tab === 'price' && (
-						<>
-							{openOracleHref !== undefined && (
-								<a href={openOracleHref} target='_blank' rel='noreferrer'>
-									{pageCopy.openOracleLink}
-								</a>
-							)}
-							<SecurityPoolPriceReport scope='universe' target={accountPriceTarget(model.snapshot)} actions={actions} bidder={parameters.accountAddress} returnFundsOnly={(shown?.forkTime ?? 0n) > 0n} onFundingStatus={setFundsRemain} />
-						</>
+						<SecurityPoolPriceReport
+							redesigned
+							scope='universe'
+							target={accountPriceTarget(model.snapshot)}
+							actions={actions}
+							bidder={parameters.accountAddress}
+							returnFundsOnly={(shown?.forkTime ?? 0n) > 0n}
+							onFundingStatus={setFundsRemain}
+							priceBand={shown === undefined || shown.acceptedPrice === 0n ? undefined : { accepted: shown.acceptedPrice, health: shown.conservativePrice, liquidation: shown.liquidationPrice, validUntil: shown.priceValidUntil, timestamp: shown.timestamp, decimals: shown.collateral.decimals }}
+							openOracleHref={openOracleHref}
+						/>
 					)}
 					{page?.tab === 'fork' && shown?.forkTime === 0n && <UserMessage detail={pageCopy.universeUnforked} />}
 					{(page === undefined || (page.tab === 'fork' && (shown?.forkTime ?? 0n) > 0n)) && (

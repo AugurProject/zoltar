@@ -291,6 +291,7 @@ type ProductionBrowserDriver = {
 	waitForButtonEnabled: (label: string, occurrence?: number) => Promise<void>
 	waitForBodyText: (text: string) => Promise<string>
 	waitForBodyWithoutText: (text: string) => Promise<string>
+	waitForExpression: (expression: string) => Promise<void>
 	waitForReady: () => Promise<void>
 	waitForTransactionStatus: (status: string, title: string) => Promise<string>
 }
@@ -391,6 +392,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			},
 			waitForBodyText: async text => await waitForBody(body => body.includes(text), JSON.stringify(text)),
 			waitForBodyWithoutText: async text => await waitForBody(body => !body.includes(text), `body to omit ${JSON.stringify(text)}`),
+			waitForExpression: expression => page.waitFor(expression),
 			waitForReady: navigation.waitForReady,
 			waitForTransactionStatus: async (status, title) => {
 				for (let attempt = 0; attempt < 2400; attempt += 1) {
@@ -627,8 +629,7 @@ productionBrowserTest('Statoblast mobile universe sheet traps focus, restores it
 		await driver.pressTab()
 		expect(await driver.evaluate("document.activeElement?.closest('.statoblast-universe-panel') !== null")).toBe(true)
 		await driver.pressEscape()
-		await driver.waitForBodyWithoutText('Universes')
-		expect(await driver.evaluateAsync(`new Promise(resolve => requestAnimationFrame(() => resolve(document.activeElement?.matches(${JSON.stringify(trigger)}))))`)).toBe(true)
+		await driver.waitForExpression(`document.activeElement?.matches(${JSON.stringify(trigger)}) && document.querySelector('.statoblast-universe-panel') === null`)
 		expect(await driver.evaluate("document.querySelector('.statoblast-universe-panel') === null")).toBe(true)
 		await driver.evaluate(`document.querySelector(${JSON.stringify(trigger)}).click()`)
 		await driver.waitForBodyText('Universes')

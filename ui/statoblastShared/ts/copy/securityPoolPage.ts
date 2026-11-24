@@ -37,7 +37,6 @@ export const priceWindowEndedChecking = 'Price window ended · checking…'
 export const tryAgain = 'Try again'
 export const staleDataLead = 'Couldn’t refresh. Showing saved data. '
 export const openSecurityPool = 'Open security pool'
-export const openOracleLink = 'Open it in OpenOracle ↗'
 export const universeUnforked = 'This universe has not forked.'
 export const returnFundsOnly = 'Return funds only'
 export const breadcrumbs = 'Breadcrumbs'
@@ -81,8 +80,13 @@ export const questionIdFormat = 'Enter a hexadecimal or decimal question ID.'
 
 export const deployCollateralSection = 'Collateral and universe'
 export const deployPriceSection = 'REP price reports'
+export const deployCollateralAndPrice = 'Collateral and REP price'
 export const deployQuestionsSection = 'Questions'
-export const deployEconomicsSection = 'Economics'
+export const deployEconomicsSection = 'Fees and limits'
+export const deployAndSetup = 'Deploy and set up'
+export const deployProgress = 'Deployment steps'
+export const deployBack = 'Back'
+export const deployContinue = (step: string) => `Continue to ${step.toLowerCase()}`
 export const deploySummary = 'Pool summary'
 export const formatMultiplier = (value: string) => `${value}%`
 

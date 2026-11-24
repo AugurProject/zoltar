@@ -8,6 +8,8 @@ import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.j
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
+import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
+import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
@@ -299,7 +301,9 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 						<tbody role='rowgroup'>
 							{questionRows.map(entity => {
 								const row = visibleRows.get(entity.id)
-								const title = labels.get(entity.id) ?? row?.question?.marketDetails.title ?? pageCopy.formatQuestion(entity.questionId)
+								const questionTitle = labels.get(entity.id) ?? row?.question?.marketDetails.title
+								const questionId = formatQuestionIdHex(entity.questionId)
+								const title = questionTitle ?? pageCopy.formatQuestion(questionId)
 								const reason = row === undefined ? undefined : entryReason(row.status)
 								const stage = questionStage(row)
 								const stageTone = stage === pageCopy.resolved ? 'ok' : 'muted'
@@ -309,8 +313,8 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 								return (
 									<tr role='row' key={entity.id}>
 										<td role='cell'>{row?.status === 'unprepared-question' ? pageCopy.saved : star(entity, title, row)}</td>
-										<td role='cell'>
-											<strong>{title}</strong>
+										<td role='cell' className='statoblast-watchlist-question-title'>
+											{questionTitle === undefined ? <IdentifierValue value={questionId} abbreviated /> : <strong>{questionTitle}</strong>}
 											{row?.missingDeposits !== undefined && (
 												<p>
 													<CurrencyValue value={row.missingDeposits} suffix={pageCopy.rep} />

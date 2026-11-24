@@ -7,7 +7,7 @@ export const STATOBLAST_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		scenario: 'securitypoolx2',
 		route: '#/watchlist',
 		viewport: { width: 800, height: 900 },
-		steps: [{ waitForText: 'Saved security pools' }, { click: 'Open', nth: -1 }, { waitForText: 'PRICE CURRENT' }],
+		steps: [{ waitForText: 'Saved security pools' }, { click: 'Open', nth: -1 }, { waitForText: 'PRICE CURRENT' }, { click: 'PRICE CURRENT' }, { waitForText: 'Last accepted price' }, { click: 'Capital' }, { waitForText: 'Your REP deposited' }],
 		expectText: ['Your position', 'Your REP deposited', 'Your commitment', 'Health target'],
 		crop: { selector: 'section', containing: 'Your REP deposited', scrollIntoView: true },
 		usedBy: ['tutorials/statoblast-first-pool.html'],
