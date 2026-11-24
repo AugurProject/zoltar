@@ -49,6 +49,8 @@ test('Statoblast workflow copy uses the redesign glossary and live values', () =
 		securityPoolCapitalCopy.reductionWithCure('1 WETH', false),
 		reportingCopy.forkTriggerWarning('No', '1'),
 		reportingCopy.reportForkReviewDescription('No'),
+		reportingCopy.inheritedDepositAlreadyClaimed(9n),
+		reportingCopy.inheritedDepositUnavailable(9n),
 		securityPoolCopy.mintReview({ amount: '1 WETH', purchaseFee: '0.01 WETH', feeCap: '0.02 WETH', minimum: '1', recovery: undefined }),
 		auctionCopy.bidReview(1n, 1n, 1n),
 	]

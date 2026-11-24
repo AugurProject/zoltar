@@ -547,6 +547,22 @@ describe('useReportingOperations', () => {
 		expect(state().reportingFeedback?.status.detail).toBe('Deposit #0 is no longer available to claim on No.')
 	})
 
+	test.each([
+		['poolForked', 'Claim winning deposits in the child question after it resolves.'],
+		['forkMigration', 'Set up the child questions in Fork & recovery. Your deposits carry over. Claim winning deposits after the child question resolves.'],
+	] as const)('withdrawEscalation explains what to do after a fork (%s)', async (systemState, reason) => {
+		const questionLedgerAddress = getAddress('0x00000000000000000000000000000000000000d1')
+		const loadReportingDetails = mock(async () => createReportingDetails(questionLedgerAddress, { systemState }))
+		const withdrawEscalationFromQuestionLedger = mock(async () => {
+			throw new Error('Must not send while the question is moving to a child universe')
+		})
+		const { state, setForm } = await renderOperations(createReportingOperationsDependencies({ loadReportingDetails, withdrawEscalationFromQuestionLedger }))
+		await setForm({ questionLedgerAddress })
+		await act(async () => await state().withdrawEscalation('yes', [0n]))
+		expect(state().reportingFeedback?.status.detail).toBe(reason)
+		expect(withdrawEscalationFromQuestionLedger).not.toHaveBeenCalled()
+	})
+
 	test('withdrawEscalation prunes selections per side after a successful refresh', async () => {
 		const questionLedgerAddress = getAddress('0x00000000000000000000000000000000000000d2')
 		const latestDetails = createReportingDetails(questionLedgerAddress, {

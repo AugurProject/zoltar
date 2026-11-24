@@ -347,10 +347,11 @@ export function useReportingOperations(
 				if (latestDetails.status !== 'active') {
 					throw new Error(reportingCopy.claimUnavailableBeforeReporting)
 				}
-				if (latestDetails.systemState !== 'operational') throw new Error('Reporting actions are unavailable until this question is operational.')
+				if (latestDetails.systemState === 'poolForked') throw new Error(reportingCopy.claimParentAfterResolution)
+				if (latestDetails.systemState === 'forkMigration') throw new Error(reportingCopy.forkMigrationRequiredDetail)
 				const selectedSide = latestDetails.sides.find(side => side.key === outcome)
 				if (selectedSide === undefined) {
-					throw new Error('Unable to load deposits for the requested outcome side.')
+					throw new Error(reportingCopy.claimOutcomeUnavailable)
 				}
 				const availableDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []
 

@@ -165,11 +165,11 @@ export function InheritedReporterClaims({ parameters, accountState, details, onR
 		pending.value = key
 		error.value = undefined
 		const assertSelection = () => {
-			if (current.current !== selection) throw new Error('Question or wallet changed. Reopen the claim and retry.')
+			if (current.current !== selection) throw new Error(copy.inheritedClaimContextChanged)
 		}
 		try {
 			await runWriteAction(
-				buildWriteActionConfig({ ...parameters, onTransactionCanceled: parameters.onTransactionCanceled, onTransactionFailed: parameters.onTransactionFailed, onTransactionPrepared: parameters.onTransactionPrepared }, error, commonCopy.formatConnectWalletBefore('recovering reporter REP'), {
+				buildWriteActionConfig({ ...parameters, onTransactionCanceled: parameters.onTransactionCanceled, onTransactionFailed: parameters.onTransactionFailed, onTransactionPrepared: parameters.onTransactionPrepared }, error, commonCopy.formatConnectWalletBefore(copy.claimWalletAction), {
 					action: 'settleForkedEscalation',
 					source: copy.recoverySource,
 					submittedTitle: copy.settleInheritedClaim,
@@ -181,11 +181,12 @@ export function InheritedReporterClaims({ parameters, accountState, details, onR
 					const latest = await loadReportingDetails(read, pool, account)
 					context.assertActive()
 					assertSelection()
-					const latestClaims = latest.status === 'active' ? await withTimeout(loadClaims(latest, account, context.reviewSignal), 15_000, 'Checking inherited claims timed out.') : []
-					if (latest.settlementState !== 'resolved' || latest.questionOutcome !== identity.outcome) throw new Error('The winning claim must be finalized before settlement.')
+					const latestClaims = latest.status === 'active' ? await withTimeout(loadClaims(latest, account, context.reviewSignal), 15_000, pageCopy.inheritedClaimTimeout) : []
+					if (latest.settlementState !== 'resolved') throw new Error(copy.questionFinalizationRequired)
+					if (latest.questionOutcome !== identity.outcome) throw new Error(copy.claimWinningOutcomeRequired)
 					const indexes = identities.map(item => {
 						const deposit = latestClaims.find(candidate => candidate.side.key === item.outcome && candidate.deposit.parentDepositIndex === item.parentDepositIndex)?.deposit
-						if (deposit?.claimIdentity === undefined || item.outcome !== identity.outcome || deposit.claimIdentity.snapshotRoot !== item.snapshotRoot || deposit.depositor.toLowerCase() !== account.toLowerCase()) throw new Error('Inherited claim changed. Refresh and retry.')
+						if (deposit?.claimIdentity === undefined || item.outcome !== identity.outcome || deposit.claimIdentity.snapshotRoot !== item.snapshotRoot || deposit.depositor.toLowerCase() !== account.toLowerCase()) throw new Error(copy.inheritedClaimDepositChanged)
 						return item.parentDepositIndex
 					})
 					const client = createWalletWriteClient(account, { reviewSignal: context.reviewSignal, onTransactionPrepared: parameters.onTransactionPrepared, onTransactionSubmitted: parameters.onTransactionSubmitted })
@@ -194,7 +195,7 @@ export function InheritedReporterClaims({ parameters, accountState, details, onR
 					assertSelection()
 					return await withdrawForkedEscalationDeposits(client, pool, identity.outcome, proofs)
 				},
-				'Unable to recover the inherited reporter claim.',
+				copy.inheritedClaimSubmissionFailed,
 				async result => {
 					parameters.onTransactionPresented({ hash: result.hash, title: copy.claimSettled, tone: 'success', showStatusDialog: false, universeId: active.universeId })
 					if (current.current === selection) {

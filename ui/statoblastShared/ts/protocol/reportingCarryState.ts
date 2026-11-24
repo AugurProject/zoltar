@@ -16,6 +16,7 @@ import { claimStateChanged } from './claimActionState.js'
 import { withClaimReadContext } from './claimReadContext.js'
 import { CONTRACT_PAGE_SIZE } from './pagination.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import * as copy from '../copy/reporting.js'
 
 const EMPTY_CARRY_LEAF_HASH = ('0x' + '00'.repeat(32)) as Hex
 
@@ -363,7 +364,7 @@ async function loadParentSnapshot(
 			.filter(leaf => sameAddress(leaf.depositor, depositor) && !consumedParentDepositIndexSet.has(leaf.parentDepositIndex.toString()))
 			.map(async leaf => {
 				const leafIndex = orderedEntries.findIndex(entry => entry.leaf.parentDepositIndex === leaf.parentDepositIndex && entry.leafHash === hashCarryLeaf(leaf, outcome))
-				if (leafIndex < 0) throw new Error('Inherited claim history is incomplete.')
+				if (leafIndex < 0) throw new Error(copy.inheritedClaimParentDepositsUnavailable)
 				const claimIdentity: AuthenticatedForkClaim = {
 					escalationGame: childEscalationGameAddress,
 					outcome,
@@ -415,15 +416,15 @@ export async function buildForkCarriedEscalationProofs(client: ReadClient, quest
 }
 
 async function buildCarriedProofs(client: Pick<ReadClient, 'readContract'>, parentQuestionLedgerAddress: Address, childEscalationGameAddress: Address, outcome: ReportingOutcomeKey, parentDepositIndexes: readonly bigint[]): Promise<CarriedDepositProof[]> {
-	if (parentQuestionLedgerAddress === zeroAddress) throw new Error('Parent deposits can only be settled in a child question.')
-	if (childEscalationGameAddress === zeroAddress) throw new Error('The child escalation game is unavailable for settling parent deposits.')
+	if (parentQuestionLedgerAddress === zeroAddress) throw new Error(copy.inheritedClaimRequiresChildQuestion)
+	if (childEscalationGameAddress === zeroAddress) throw new Error(copy.inheritedClaimChildReportingUnavailable)
 	const parentEscalationGameAddress = await client.readContract({
 		address: parentQuestionLedgerAddress,
 		abi: statoblast_QuestionLedger_QuestionLedger.abi,
 		functionName: 'escalationGame',
 		args: [],
 	})
-	if (parentEscalationGameAddress === zeroAddress) throw new Error('The parent escalation game is unavailable for settling parent deposits.')
+	if (parentEscalationGameAddress === zeroAddress) throw new Error(copy.inheritedClaimParentDepositsUnavailable)
 	const [parentHistoricalLeaves, inheritedConsumedParentDepositIndexes, localConsumedParentDepositIndexes, childOutcomeState] = await Promise.all([
 		loadRecursiveHistoricalCarryLeaves(client, parentEscalationGameAddress, outcome),
 		loadRecursiveProofConsumedCarriedDepositIndexes(client, parentEscalationGameAddress, outcome),
@@ -448,11 +449,11 @@ async function buildCarriedProofs(client: Pick<ReadClient, 'readContract'>, pare
 	const proofs: CarriedDepositProof[] = []
 	for (const parentDepositIndex of parentDepositIndexes) {
 		const parentDepositIndexKey = parentDepositIndex.toString()
-		if (consumedParentDepositIndexSet.has(parentDepositIndexKey)) throw claimStateChanged(`Parent deposit #${parentDepositIndexKey} is already settled.`)
+		if (consumedParentDepositIndexSet.has(parentDepositIndexKey)) throw claimStateChanged(copy.inheritedDepositAlreadyClaimed(parentDepositIndex))
 		const leafIndex = orderedLeaves.findIndex(leaf => leaf.parentDepositIndex === parentDepositIndex)
-		if (leafIndex === -1) throw new Error(`Parent deposit #${parentDepositIndex.toString()} is unavailable.`)
+		if (leafIndex === -1) throw new Error(copy.inheritedDepositUnavailable(parentDepositIndex))
 		const targetLeaf = orderedLeaves[leafIndex]
-		if (targetLeaf === undefined) throw new Error(`Parent deposit #${parentDepositIndex.toString()} is unavailable.`)
+		if (targetLeaf === undefined) throw new Error(copy.inheritedDepositUnavailable(parentDepositIndex))
 		const { leafIndex: globalLeafIndex, merkleMountainRangePeakIndex, merkleMountainRangeSiblings } = buildCarryMerkleMountainRangeProof(leafHashes, leafIndex)
 		const nullifierSiblings = nullifierTree?.getProof(globalLeafIndex) ?? []
 		proofs.push({

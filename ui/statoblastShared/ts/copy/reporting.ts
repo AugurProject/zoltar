@@ -67,7 +67,8 @@ export const invalidReportAmount = 'The reporting game would not accept this amo
 export const minimumReportRequired = (amount: string) => `Enter at least ${amount} to start the reporting game.`
 export const reportPreviewUnavailable = 'Unable to check how much REP this report would stake.'
 export const claimWalletAction = 'claiming reporting deposits'
-export const claimUnavailableBeforeReporting = 'The first report must start the game before you can claim deposits.'
+export const claimUnavailableBeforeReporting = 'Reporting has not started yet.'
+export const claimOutcomeUnavailable = 'Could not load deposits for this outcome.'
 export const claimParentAfterResolution = 'Claim winning deposits in the child question after it resolves.'
 export const claimDepositUnavailable = (index: bigint, side: string) => `Deposit #${index} is no longer available to claim on ${side}.`
 export const claimFailed = 'Failed to claim reporting deposits'
@@ -186,7 +187,7 @@ export const dismissReminderUpdate = 'Dismiss'
 
 export const responseWindowEndsTooSoon = 'The response window ends too soon to report. Wait for the result.'
 
-export const recoverySource = 'Reporter recovery'
+export const recoverySource = 'Inherited reporting deposits'
 
 export const settleInheritedClaim = 'Claim inherited reporting deposit'
 
@@ -198,11 +199,20 @@ export const inheritedClaimsDescription = 'Claim winning deposits from the paren
 
 export const claimPending = 'Another claim transaction is pending.'
 
-export const claimAuthenticationRequired = 'Refresh to authenticate this claim.'
+export const claimAuthenticationRequired = 'Refresh to check this deposit.'
 
 export const claimResolutionRequired = 'Wait for branch resolution.'
 
 export const claimWinningOutcomeRequired = 'Only deposits on the winning outcome can be claimed.'
+
+export const inheritedClaimContextChanged = 'The question or wallet changed. Reopen the claim.'
+export const inheritedClaimDepositChanged = 'This deposit changed. Refresh and try again.'
+export const inheritedClaimSubmissionFailed = 'Could not claim inherited deposits.'
+export const inheritedClaimRequiresChildQuestion = 'Open the question in the child universe to claim inherited deposits.'
+export const inheritedClaimChildReportingUnavailable = 'Reporting is unavailable for this question in the child universe.'
+export const inheritedClaimParentDepositsUnavailable = 'Could not check deposits from the parent universe.'
+export const inheritedDepositAlreadyClaimed = (index: bigint) => `Deposit #${index} from the parent universe has already been claimed.`
+export const inheritedDepositUnavailable = (index: bigint) => `Deposit #${index} from the parent universe is unavailable.`
 
 export const repUnit = 'REP'
 

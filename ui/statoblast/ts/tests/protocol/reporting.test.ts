@@ -1285,7 +1285,7 @@ describe('reporting protocol client', () => {
 		})
 
 		await expect(buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [secondLeaf.parentDepositIndex])).resolves.toMatchObject([{ leafIndex: 1n, parentDepositIndex: secondLeaf.parentDepositIndex }])
-		await expect(buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [firstLeaf.parentDepositIndex])).rejects.toThrow('Parent deposit #9 is already settled.')
+		await expect(buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [firstLeaf.parentDepositIndex])).rejects.toThrow('Deposit #9 from the parent universe has already been claimed.')
 	})
 
 	test('buildForkCarriedEscalationProofs encodes global leaf indexes with the containing peak height for three- and six-leaf tail peaks', async () => {
