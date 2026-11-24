@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { Pagination } from '../Pagination.sol';
+
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameEscrow } from './EscalationGameEscrow.sol';
 import { IQuestionForker } from './interfaces/IQuestionForker.sol';
@@ -97,7 +99,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		if (outcome == BinaryOutcomes.BinaryOutcome.None) return new Deposit[](0);
 		uint8 outcomeIndex = uint8(outcome);
 		OutcomeState storage state = outcomeState[outcomeIndex];
-		uint256 iterateUntil = _sliceEnd(startIndex, numberOfEntries, state.localNodeIds.length);
+		uint256 iterateUntil = Pagination.sliceEnd(startIndex, numberOfEntries, state.localNodeIds.length);
 		if (iterateUntil <= startIndex) return new Deposit[](0);
 		returnDeposits = new Deposit[](iterateUntil - startIndex);
 		for (uint256 index = startIndex; index < iterateUntil; index++) {

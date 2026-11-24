@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { Create2Address } from '../Create2Address.sol';
+
 import { IQuestionLedger, ISecurityPoolFactory } from '../statoblast/interfaces/IQuestionLedger.sol';
 import { IShareToken } from '../statoblast/interfaces/IShareToken.sol';
 import { TwoWayConstantProductPair } from './TwoWayConstantProductPair.sol';
@@ -39,7 +41,7 @@ contract TwoWayConstantProductFactory {
 	function predictPair(IQuestionLedger pool) external view returns (address predicted) {
 		bytes32 salt = keccak256(abi.encode(pool));
 		bytes32 initCodeHash = keccak256(abi.encodePacked(type(TwoWayConstantProductPair).creationCode, abi.encode(address(this), pool, feeBps, predeploymentShareSink)));
-		predicted = address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), address(this), salt, initCodeHash)))));
+		predicted = Create2Address.predict(address(this), salt, initCodeHash);
 	}
 
 	function _validateCanonicalPool(IQuestionLedger pool) private view {

@@ -27,9 +27,7 @@ interface ISecurityPoolForkRoot {
 	function settlement() external view returns (SecurityPoolSettlement);
 	function reporters() external view returns (SecurityPoolReporterLedger);
 	function services() external view returns (address);
-	function securityPoolTime(uint248 universeId) external view returns (uint48);
 	function forkSecurityPoolTime(uint248 universeId) external view returns (uint48);
-	function clocks(uint248 universeId) external view returns (uint48, uint48, bool, bool);
 	function prepareForkChild(uint248 parent, uint256 outcome) external returns (SecurityPoolCapitalLedger);
 	function activateForkChild(uint248 child) external;
 	function getQuestionLedger(uint256 questionId, uint248 universeId) external view returns (IQuestionLedger);
