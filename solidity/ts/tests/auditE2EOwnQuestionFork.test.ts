@@ -217,7 +217,7 @@ describe('auditE2E: fork on the escalated question conserves reporter REP and se
 	}
 	const auctionRep = async (child: bigint) => {
 		const target = await e2e.coordinator()
-		const auction = await fixture.owner().readContract({ ...target, functionName: 'auctions', args: [child] })
+		const auction = await fixture.owner().readContract({ ...target, functionName: 'repairAuctions', args: [child] })
 		return { auction, rep: await e2e.rep(child, auction) }
 	}
 

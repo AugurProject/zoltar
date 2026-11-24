@@ -76,12 +76,12 @@ export async function discoverSecurityPoolEventDependencies(emitter: ContractMet
 	if (emitter.kind === 'securityPoolForkCoordinator' && decoded.name === 'BranchStarted') {
 		const universe = decoded.arguments?.['universeId']
 		if ((typeof universe !== 'string' && typeof universe !== 'bigint') || !/^\d+$/.test(String(universe))) throw new Error('Branch start is missing its universe')
-		const auction = address(await call(emitterAddress, 'securityPoolForkCoordinator', 'auctions', [BigInt(universe)]))
+		const auction = address(await call(emitterAddress, 'securityPoolForkCoordinator', 'repairAuctions', [BigInt(universe)]))
 		if (auction === zeroAddress) return []
-		if (address(await call(auction, 'securityPoolAuction', 'forkAuthority')) !== emitterAddress) throw new Error('Branch auction authority mismatch')
-		const engine = address(await call(auction, 'securityPoolAuction', 'engine'))
-		if (engine === zeroAddress || address(await call(engine, 'securityPoolUniformPriceAuction', 'controller')) !== auction) throw new Error('Branch auction engine binding mismatch')
-		return [component('securityPoolAuction', auction), component('uniformPriceAuction', engine)]
+		if (address(await call(auction, 'securityPoolRepairAuction', 'forkAuthority')) !== emitterAddress) throw new Error('Branch auction authority mismatch')
+		const engine = address(await call(auction, 'securityPoolRepairAuction', 'engine'))
+		if (engine === zeroAddress || address(await call(engine, 'securityPoolUniformPriceRepairAuction', 'controller')) !== auction) throw new Error('Branch auction engine binding mismatch')
+		return [component('securityPoolRepairAuction', auction), component('uniformPriceAuction', engine)]
 	}
 	return []
 }

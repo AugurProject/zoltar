@@ -6,8 +6,8 @@ import {
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
 	statoblast_SecurityPoolCapitalFeeStreams_SecurityPoolCapitalFeeStreams as streamsArtifact,
 	statoblast_Multicall3_Multicall3 as multicallArtifact,
-	test_statoblast_CapitalAuctionHarness_CapitalAuctionHarness as harnessArtifact,
-	test_statoblast_CapitalAuctionHarness_CapitalAuctionAdapterMock as adapterArtifact,
+	test_statoblast_CapitalRepairAuctionHarness_CapitalRepairAuctionHarness as harnessArtifact,
+	test_statoblast_CapitalRepairAuctionHarness_CapitalRepairAuctionAdapterMock as adapterArtifact,
 	test_statoblast_CapitalLedgerHarness_CapitalLedgerZoltarMock as zoltarArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
 } from '../types/contractArtifact'
@@ -413,7 +413,7 @@ const createScenario = (random: Random, steps: number, now: bigint): Scenario =>
 		let taken = 0n
 		let bid = 1n
 		const withAuction = random.chance(0.8)
-		if (withAuction) setup.push({ c: 'installAuction', lots, repPerLot })
+		if (withAuction) setup.push({ c: 'installRepairAuction', lots, repPerLot })
 		for (let o = 0; o < owners; o++) {
 			const kind = random.int(4)
 			if (kind === 0 && withAuction && taken < lots) {
@@ -466,7 +466,7 @@ const KNOWN_REVERTS = [
 	'Retirement below economic minimum',
 	'Position is not retiring',
 	'Position is not live',
-	'Materialize an individual auction vault',
+	'Materialize an individual repair auction vault',
 	'Healthy commitment insufficient',
 	'Sync cannot add demand',
 	'Invalid capital price',
@@ -633,7 +633,7 @@ const createDriver = (getEthereum: ReturnType<typeof useIsolatedAnvilNode>['getA
 				if (op.bounds === undefined) return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'takeOver', args: [op.id, op.k, op.minimumTakeoverReward, op.maxOwn] }))]
 				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'takeOverWithBounds', args: [op.id, op.k, op.minimumTakeoverReward, op.maxOwn, op.bounds] }))]
 			case 'takeoverBid':
-				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'takeOverAuctionBid', args: [op.bid, op.k, op.minimumTakeoverReward, op.maxOwn, op.bounds] }))]
+				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'takeOverRepairAuctionBid', args: [op.bid, op.k, op.minimumTakeoverReward, op.maxOwn, op.bounds] }))]
 			case 'fundEth':
 				return [asAdmin(encodeFunctionData({ abi: harnessAbi, functionName: 'fundFees' }), op.amount)]
 			case 'fundRep':
@@ -643,11 +643,11 @@ const createDriver = (getEthereum: ReturnType<typeof useIsolatedAnvilNode>['getA
 			case 'checkpoint':
 				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'checkpoint' }))]
 			case 'materialize':
-				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'materializeAuctionBid', args: [op.bid] }))]
+				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'materializeRepairAuctionBid', args: [op.bid] }))]
 			case 'beginImport':
 				return [asAdmin(encodeFunctionData({ abi: harnessAbi, functionName: 'beginImport' }))]
-			case 'installAuction':
-				return [asAdmin(encodeFunctionData({ abi: harnessAbi, functionName: 'mint', args: [ledger, op.lots * op.repPerLot] })), asAdmin(encodeFunctionData({ abi: harnessAbi, functionName: 'installAuction', args: [adapter, op.lots, op.repPerLot, MINC] }))]
+			case 'installRepairAuction':
+				return [asAdmin(encodeFunctionData({ abi: harnessAbi, functionName: 'mint', args: [ledger, op.lots * op.repPerLot] })), asAdmin(encodeFunctionData({ abi: harnessAbi, functionName: 'installRepairAuction', args: [adapter, op.lots, op.repPerLot, MINC] }))]
 			case 'setBid':
 				return [{ from: adminAddress, to: adapter, data: encodeFunctionData({ abi: adapterArtifact.abi, functionName: 'setBid', args: [op.bid, ownerAddress(op.o), op.health, op.lots] }) }]
 			case 'importChoice':
@@ -676,7 +676,7 @@ const createDriver = (getEthereum: ReturnType<typeof useIsolatedAnvilNode>['getA
 		for (const call of await calls(op)) await transact(call)
 	}
 	/** Number of blocks an operation mines when it succeeds; each advances the clock by one second. */
-	const blocksOf = (op: Operation) => (op.c === 'installAuction' || op.c === 'importChoice' ? 2n : 1n)
+	const blocksOf = (op: Operation) => (op.c === 'installRepairAuction' || op.c === 'importChoice' ? 2n : 1n)
 
 	// Pure-JS selector hashing and generic decoding dominate a per-step read, so call data is
 	// cached and static return words are sliced directly; `verifyDecoding` checks the layouts
@@ -1022,7 +1022,7 @@ const principalOf = (a: Snapshot, o: number) => a.collaterals[o]?.[0] ?? 0n
 /** Independent transition properties over the chain state before and after one successful step. */
 const properties = (before: Snapshot, after: Snapshot, op: Operation, owners: number, result: TakeoverResult | undefined, unmaterialized: (o: number) => boolean, queueOrder: ReadonlyMap<bigint, bigint>) => {
 	const issues: string[] = []
-	if (op.c === 'beginImport' || op.c === 'installAuction' || op.c === 'setBid' || op.c === 'importChoice' || op.c === 'finishImport') return issues
+	if (op.c === 'beginImport' || op.c === 'installRepairAuction' || op.c === 'setBid' || op.c === 'importChoice' || op.c === 'finishImport') return issues
 	// (b) a non-price operation never deepens an existing shortfall of healthy commitment.
 	if (op.c !== 'price' && op.c !== 'price2' && before.conservative === after.conservative) {
 		const shortfallBefore = before.demand > before.eligibleCommitment ? before.demand - before.eligibleCommitment : 0n

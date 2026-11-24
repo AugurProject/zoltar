@@ -2,11 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import { encodeFunctionData, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
-	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as vaultArtifact,
+	statoblast_SecurityPoolRepairAuctionVault_SecurityPoolRepairAuctionVault as vaultArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
-	statoblast_SecurityPoolAuction_SecurityPoolAuction as auctionArtifact,
+	statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction as auctionArtifact,
 	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as coordinatorArtifact,
-	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact,
+	statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as engineArtifact,
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
 } from '../types/contractArtifact'
 import { writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
@@ -113,8 +113,8 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		expect((await e2e.bookTotals(C))[0]).toBe(20n * unit)
 
 		// ---- lazy materialization: a keeper materializes b3; b4 and b5 stay in the shared cohort ----
-		await writeContractAndWait(forker, () => forker.writeContract({ ...capitalC, functionName: 'materializeAuctionBid', args: [best.id] }))
-		const position = (bidId: bigint) => owner.readContract({ ...capitalC, functionName: 'auctionPosition', args: [bidId] })
+		await writeContractAndWait(forker, () => forker.writeContract({ ...capitalC, functionName: 'materializeRepairAuctionBid', args: [best.id] }))
+		const position = (bidId: bigint) => owner.readContract({ ...capitalC, functionName: 'repairAuctionPosition', args: [bidId] })
 		expect((await position(best.id)).materialized).toBe(true)
 		expect((await position(tieA.id)).materialized).toBe(false)
 		expect((await position(tieB.id)).materialized).toBe(false)
@@ -174,8 +174,8 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		await e2e.finalizeBranch(C, NO)
 		const capitalG1 = await e2e.capital(G1)
 		const capitalG2 = await e2e.capital(G2)
-		const auctionG1 = await owner.readContract({ ...coordinator, functionName: 'auctions', args: [G1] })
-		const auctionG2 = await owner.readContract({ ...coordinator, functionName: 'auctions', args: [G2] })
+		const auctionG1 = await owner.readContract({ ...coordinator, functionName: 'repairAuctions', args: [G1] })
+		const auctionG2 = await owner.readContract({ ...coordinator, functionName: 'repairAuctions', args: [G2] })
 		const g1 = await branch(G1)
 		const g2 = await branch(G2)
 		// Every vault's principal arrived in the branch it chose, under the vault's own address.
@@ -256,7 +256,7 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 
 		// ---- the winner who never acted: its lots stayed in the snapshot and now back the branches' claims ----
 		expect((await position(tieB.id)).materialized).toBe(false)
-		await writeContractAndWait(forker, () => forker.writeContract({ ...capitalC, functionName: 'materializeAuctionBid', args: [tieB.id] }))
+		await writeContractAndWait(forker, () => forker.writeContract({ ...capitalC, functionName: 'materializeRepairAuctionBid', args: [tieB.id] }))
 		expect((await position(tieB.id)).materialized).toBe(true)
 		const idle = await collateralOf(context.capital, tieB.vault)
 		expect(idle.slice(0, 2)).toEqual([3n * repPerLot, 3n * unit])
@@ -293,7 +293,7 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		expect(await e2e.rep(C, context.capital)).toBe(1_000n * unit + sold)
 		expect(await e2e.rep(C, settlement)).toBe(1_000n * unit - sold)
 		// b3 materializes before the fork, b4 only afterwards.
-		await writeContractAndWait(forker, () => forker.writeContract({ ...capitalC, functionName: 'materializeAuctionBid', args: [first.id] }))
+		await writeContractAndWait(forker, () => forker.writeContract({ ...capitalC, functionName: 'materializeRepairAuctionBid', args: [first.id] }))
 		await e2e.migrateWalletRep(forker, U0, 700_000n * unit, [YES])
 		await base.mockWindow.setTime(fork0 + 10n * WEEK)
 		await e2e.forkOn(forker, C, await e2e.unrelatedQuestion('auditE2E auction child: undersubscribed second fork'))

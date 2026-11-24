@@ -31,7 +31,7 @@ const artifacts = {
 	securityPoolServicesDeployer: artifact(23),
 	securityPoolReporterLedgerDeployer: artifact(22),
 	securityPoolForkCoordinatorDeployer: artifact(24),
-	securityPoolAuctionDeployer: artifact(25),
+	securityPoolRepairAuctionDeployer: artifact(25),
 }
 const builders = createStatoblastInitCodes(artifacts, { proxyDeployerAddress: proxy, zeroSalt })
 const constructorArgs = (code: Hex) => `0x${code.slice(10)}` as const
@@ -57,12 +57,12 @@ describe('shared capital infrastructure init codes', () => {
 			addresses.securityPoolServicesDeployer,
 			addresses.securityPoolReporterLedgerDeployer,
 			addresses.securityPoolForkCoordinatorDeployer,
-			addresses.securityPoolAuctionDeployer,
+			addresses.securityPoolRepairAuctionDeployer,
 		]
 		expect(constructorArgs(builders.getSecurityPoolForkCoordinatorDeployerByteCode())).toBe('0x')
-		expect(constructorArgs(builders.getSecurityPoolAuctionDeployerByteCode())).toBe('0x')
+		expect(constructorArgs(builders.getSecurityPoolRepairAuctionDeployerByteCode())).toBe('0x')
 		expect(new Set(modules).size).toBe(9)
-		expect(addresses.securityPoolAuctionDeployer).toBe(getCreate2Address({ bytecode: builders.getSecurityPoolAuctionDeployerByteCode(), from: proxy, salt: zeroSalt }))
+		expect(addresses.securityPoolRepairAuctionDeployer).toBe(getCreate2Address({ bytecode: builders.getSecurityPoolRepairAuctionDeployerByteCode(), from: proxy, salt: zeroSalt }))
 	})
 
 	test('the factory pins the security pool creation code hash and the module deployers in security pool constructor order', () => {
@@ -77,7 +77,7 @@ describe('shared capital infrastructure init codes', () => {
 			addresses.securityPoolReporterLedgerDeployer,
 			addresses.securityPoolForkCoordinatorDeployer,
 			addresses.securityPoolServicesDeployer,
-			addresses.securityPoolAuctionDeployer,
+			addresses.securityPoolRepairAuctionDeployer,
 		] as const
 		expect(constructorArgs(factoryCode)).toBe(
 			encodeAbiParameters(parseAbiParameters('address,address,address,address,address,address,address,address,address,bytes32,address[9]'), [

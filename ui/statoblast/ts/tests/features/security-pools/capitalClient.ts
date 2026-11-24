@@ -7,7 +7,7 @@ import { getInfraContractAddresses, getSecurityPoolRuntimeCode } from '@zoltar/u
 import {
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCapitalLifecycleDelegate_SecurityPoolCapitalLifecycleDelegate as lifecycleArtifact,
-	statoblast_SecurityPoolCapitalAuctionDelegate_SecurityPoolCapitalAuctionDelegate as auctionDelegateArtifact,
+	statoblast_SecurityPoolCapitalRepairAuctionDelegate_SecurityPoolCapitalRepairAuctionDelegate as auctionDelegateArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
 	statoblast_SecurityPoolCapitalFeeStreams_SecurityPoolCapitalFeeStreams as feesArtifact,
 	statoblast_SecurityPoolSettlement_SecurityPoolSettlement as engineArtifact,
@@ -33,7 +33,7 @@ export const modules = {
 	lifecycle: getAddress('0x0000000000000000000000000000000000000067'),
 	services: getAddress('0x0000000000000000000000000000000000000068'),
 	premium: getAddress('0x0000000000000000000000000000000000000070'),
-	auctionDelegate: getAddress('0x0000000000000000000000000000000000000071'),
+	repairAuctionDelegate: getAddress('0x0000000000000000000000000000000000000071'),
 }
 export function capitalClient(initial = capitalSnapshot()) {
 	let snapshot = initial
@@ -48,7 +48,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 		[securityPool, getSecurityPoolRuntimeCode()],
 		[modules.capitalImplementation, `0x${capitalArtifact.evm.deployedBytecode.object}`],
 		[modules.lifecycle, `0x${lifecycleArtifact.evm.deployedBytecode.object}`],
-		[modules.auctionDelegate, `0x${auctionDelegateArtifact.evm.deployedBytecode.object}`],
+		[modules.repairAuctionDelegate, `0x${auctionDelegateArtifact.evm.deployedBytecode.object}`],
 		[index, boundCloneRuntimeCode(modules.indexImplementation, capital)],
 		[modules.indexImplementation, `0x${indexArtifact.evm.deployedBytecode.object}`],
 		[modules.fees, boundCloneRuntimeCode(modules.feesImplementation, capital)],
@@ -82,7 +82,7 @@ export function capitalClient(initial = capitalSnapshot()) {
 			const scopedKey = `${request.address}:${request.functionName}`
 			if (scopedOverrides.has(scopedKey)) return scopedOverrides.get(scopedKey)
 			// Deriving deployment addresses hashes large init codes; unrelated reads need no derivation.
-			const infrastructure = ['zoltar', 'factory', 'auctionDeployer'].includes(request.functionName) ? getInfraContractAddresses() : undefined
+			const infrastructure = ['zoltar', 'factory', 'repairAuctionDeployer'].includes(request.functionName) ? getInfraContractAddresses() : undefined
 			const values: Record<string, unknown> = {
 				setupStage,
 				quoteMintRecoveryRep: 0n,
@@ -101,8 +101,8 @@ export function capitalClient(initial = capitalSnapshot()) {
 				ledger: modules.book,
 				implementation: request.address,
 				lifecycleDelegate: modules.lifecycle,
-				auctionDelegate: modules.auctionDelegate,
-				auctionDeployer: infrastructure?.securityPoolAuctionDeployer,
+				repairAuctionDelegate: modules.repairAuctionDelegate,
+				repairAuctionDeployer: infrastructure?.securityPoolRepairAuctionDeployer,
 				services: modules.services,
 				forkAuthority: modules.fork,
 				premiumLedger: modules.premium,

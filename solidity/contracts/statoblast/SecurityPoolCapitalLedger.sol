@@ -11,7 +11,10 @@ import { Collateral } from '../Collateral.sol';
 import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
 import { SecurityPoolCapitalState } from './SecurityPoolCapitalState.sol';
 import { SecurityPoolCapitalLifecycleDelegate } from './SecurityPoolCapitalLifecycleDelegate.sol';
-import { SecurityPoolCapitalAuctionDelegate, ICapitalAuctionHost } from './SecurityPoolCapitalAuctionDelegate.sol';
+import {
+	SecurityPoolCapitalRepairAuctionDelegate,
+	ICapitalRepairAuctionHost
+} from './SecurityPoolCapitalRepairAuctionDelegate.sol';
 import { SecurityPoolBoundClones } from './SecurityPoolBoundClones.sol';
 import { DelegateCall } from './DelegateCall.sol';
 import { IERC20 } from '../IERC20.sol';
@@ -30,7 +33,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	address public immutable securityPool;
 	Zoltar public immutable zoltar;
 	SecurityPoolCapitalLifecycleDelegate public immutable lifecycleDelegate;
-	SecurityPoolCapitalAuctionDelegate public immutable auctionDelegate;
+	SecurityPoolCapitalRepairAuctionDelegate public immutable repairAuctionDelegate;
 	uint256 public immutable securityMultiplierBps;
 	uint256 private immutable minimumCommitmentAttoEth;
 
@@ -48,7 +51,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	event EarningsClaimed(address indexed owner, uint256 ethAmount, uint256 repAmount);
 	event UnassignedFeesBurned(uint256 ethAmount, uint256 repAmount);
 
-	constructor(address authority, Zoltar protocol, uint256 multiplier, uint256 minimumCommitment, SecurityPoolCapitalLifecycleDelegate lifecycle, SecurityPoolCapitalAuctionDelegate auction) {
+	constructor(address authority, Zoltar protocol, uint256 multiplier, uint256 minimumCommitment, SecurityPoolCapitalLifecycleDelegate lifecycle, SecurityPoolCapitalRepairAuctionDelegate repairAuction) {
 		require(authority != address(0), 'Capital authority missing');
 		require(minimumCommitment > 0, 'Capital economic minimum missing');
 		securityPool = authority;
@@ -56,7 +59,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		securityMultiplierBps = multiplier;
 		minimumCommitmentAttoEth = minimumCommitment;
 		lifecycleDelegate = lifecycle;
-		auctionDelegate = auction;
+		repairAuctionDelegate = repairAuction;
 	}
 
 	function universeId() public view returns (uint248 universe) {
@@ -109,26 +112,26 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		return owners[owner].account;
 	}
 	function ownerAccount(address owner) external view returns (Owner memory) {
-		return auctionDelegate.previewOwner(ICapitalAuctionHost(address(this)), owner);
+		return repairAuctionDelegate.previewOwner(ICapitalRepairAuctionHost(address(this)), owner);
 	}
 	/// @notice Deposited principal includes virtual winning bids and excludes
 	/// earnings, even before either the position or its earnings are claimed.
 	function ownerCollateral(address owner) external view returns (uint256 principal, uint256 commitment, uint256 withdrawable) {
-		return auctionDelegate.previewCollateral(ICapitalAuctionHost(address(this)), owner);
+		return repairAuctionDelegate.previewCollateral(ICapitalRepairAuctionHost(address(this)), owner);
 	}
-	function auctionPosition(uint256 bidId) external view returns (AuctionPosition memory) {
-		return auctionDelegate.previewAuctionPosition(ICapitalAuctionHost(address(this)), bidId);
+	function repairAuctionPosition(uint256 bidId) external view returns (RepairAuctionPosition memory) {
+		return repairAuctionDelegate.previewRepairAuctionPosition(ICapitalRepairAuctionHost(address(this)), bidId);
 	}
-	function installAuctionCohort(address adapter, uint256 lots, uint256 repPerLot, uint256 commitmentPerLot) external onlyForkAuthority nonReentrant {
-		DelegateCall.invoke(address(auctionDelegate), abi.encodeCall(auctionDelegate.install, (adapter, lots, repPerLot, commitmentPerLot, minimumCommitmentAttoEth)));
+	function installRepairAuctionCohort(address adapter, uint256 lots, uint256 repPerLot, uint256 commitmentPerLot) external onlyForkAuthority nonReentrant {
+		DelegateCall.invoke(address(repairAuctionDelegate), abi.encodeCall(repairAuctionDelegate.install, (adapter, lots, repPerLot, commitmentPerLot, minimumCommitmentAttoEth)));
 	}
-	function materializeAuctionBid(uint256 bidId) external nonReentrant returns (address vault, uint96 id) {
+	function materializeRepairAuctionBid(uint256 bidId) external nonReentrant returns (address vault, uint96 id) {
 		_checkpoint();
-		return _materializeAuctionBid(bidId);
+		return _materializeRepairAuctionBid(bidId);
 	}
-	function _materializeAuctionBid(uint256 bidId) private returns (address vault, uint96 id) {
+	function _materializeRepairAuctionBid(uint256 bidId) private returns (address vault, uint96 id) {
 		return
-			abi.decode(DelegateCall.invoke(address(auctionDelegate), abi.encodeCall(auctionDelegate.materialize, (bidId))), (address, uint96));
+			abi.decode(DelegateCall.invoke(address(repairAuctionDelegate), abi.encodeCall(repairAuctionDelegate.materialize, (bidId))), (address, uint96));
 	}
 	function isPriceValid() public view returns (bool) {
 		return acceptedPrice > 0 && block.timestamp < priceValidUntil;
@@ -254,14 +257,14 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	function serveRetirement(uint96 id) external nonReentrant {
 		_requireOpen();
 		_checkpoint();
-		require(id == 0 || id != auctionCohort.positionId, 'Materialize an individual auction vault');
+		require(id == 0 || id != repairAuctionCohort.positionId, 'Materialize an individual repair auction vault');
 		_serveRetirement(id);
 	}
 	function _serveRetirement(uint96 id) private {
 		if (id == 0) return;
 		SecurityPoolCommitmentIndex.Account memory pending = commitmentIndex.accountOf(id);
 		if (pending.batch == 0 || pending.commitment == 0) return;
-		require(id == 0 || id != auctionCohort.positionId, 'Materialize an individual auction vault');
+		require(id == 0 || id != repairAuctionCohort.positionId, 'Materialize an individual repair auction vault');
 		if (!isPriceValid() || frozen || zoltar.getForkTime(universeId()) != 0) return;
 		SecurityPoolCommitmentIndex.Retirement memory result = commitmentIndex.retire(conservativePrice, demandAttoEth, id);
 		retirementCashAttoRep += result.rep;
@@ -399,10 +402,10 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	function takeOverWithBounds(uint96 id, uint256 commitment, uint256 minimumTakeoverReward, uint256 maximumOwnRep, TakeoverBounds calldata bounds) external nonReentrant returns (uint96 receiverId) {
 		return _takeOver(id, commitment, minimumTakeoverReward, maximumOwnRep, bounds, ENFORCE_TAKEOVER_BOUNDS);
 	}
-	function takeOverAuctionBid(uint256 bidId, uint256 commitment, uint256 minimumTakeoverReward, uint256 maximumOwnRep, TakeoverBounds calldata bounds) external nonReentrant returns (uint96 receiverId) {
+	function takeOverRepairAuctionBid(uint256 bidId, uint256 commitment, uint256 minimumTakeoverReward, uint256 maximumOwnRep, TakeoverBounds calldata bounds) external nonReentrant returns (uint96 receiverId) {
 		_requireOpen();
 		_checkpoint();
-		(, uint96 id) = _materializeAuctionBid(bidId);
+		(, uint96 id) = _materializeRepairAuctionBid(bidId);
 		return _takeOver(id, commitment, minimumTakeoverReward, maximumOwnRep, bounds, ENFORCE_TAKEOVER_BOUNDS);
 	}
 	/// @notice Execute one existing owner operation as its funding sponsor.

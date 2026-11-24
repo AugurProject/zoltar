@@ -5,7 +5,7 @@ import { Collateral } from '../Collateral.sol';
 import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
 import { ICapitalFeeStreams } from './interfaces/ICapitalAccounting.sol';
 import { SecurityPoolCommitmentIndex } from './SecurityPoolCommitmentIndex.sol';
-import { ISecurityPoolAuctionCapital } from './interfaces/ISecurityPoolAuctionCapital.sol';
+import { ISecurityPoolRepairAuctionCapital } from './interfaces/ISecurityPoolRepairAuctionCapital.sol';
 
 /// @dev Exact shared storage for the custody ledger and its lifecycle delegate.
 /// The delegate uses host getters for immutable configuration; only the ledger
@@ -84,14 +84,14 @@ abstract contract SecurityPoolCapitalState {
 		return owners[owner].exported;
 	}
 
-	struct AuctionCohort {
-		ISecurityPoolAuctionCapital adapter;
+	struct RepairAuctionCohort {
+		ISecurityPoolRepairAuctionCapital adapter;
 		uint96 positionId;
 		uint256 remainingLots;
 		uint256 repPerLot;
 		uint256 commitmentPerLot;
 	}
-	struct AuctionPosition {
+	struct RepairAuctionPosition {
 		address vault;
 		uint96 positionId;
 		uint256 principal;
@@ -102,11 +102,11 @@ abstract contract SecurityPoolCapitalState {
 		uint256 earnedAttoEth;
 		uint256 earnedAttoRep;
 	}
-	AuctionCohort public auctionCohort;
-	mapping(uint256 => uint96) public auctionBidPositionIds;
+	RepairAuctionCohort public repairAuctionCohort;
+	mapping(uint256 => uint96) public repairAuctionBidPositionIds;
 
 	function _settleOwner(address owner) internal {
-		require(owner != address(auctionCohort.adapter), 'Materialize an individual auction vault');
+		require(owner != address(repairAuctionCohort.adapter), 'Materialize an individual repair auction vault');
 		Owner storage account = owners[owner].account;
 		uint96 id = account.positionId;
 		if (id == 0) return;

@@ -15,10 +15,10 @@ import { useSecurityPoolAuction, type SecurityPoolAuctionParameters } from '../h
 import { useId } from 'preact/hooks'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import type { SecurityPoolAuctionBid } from '@zoltar/statoblast-shared/statoblast/securityPool'
-import * as copy from '../../../copy/securityPoolAuction.js'
+import * as copy from '../../../copy/securityPoolRepairAuction.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
-export function SecurityPoolAuction(parameters: SecurityPoolAuctionParameters) {
+export function SecurityPoolRepairAuction(parameters: SecurityPoolAuctionParameters) {
 	const model = useSecurityPoolAuction(parameters)
 	const snapshot = model.snapshot
 	const auction = snapshot?.auction

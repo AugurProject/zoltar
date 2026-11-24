@@ -5,7 +5,7 @@ import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilN
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'
-import { statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact, test_statoblast_CollateralTestToken_CollateralTestToken as tokenArtifact } from '../types/contractArtifact'
+import { statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as engineArtifact, test_statoblast_CollateralTestToken_CollateralTestToken as tokenArtifact } from '../types/contractArtifact'
 
 const LOT = 10n ** 15n
 const TARGET = 100n
@@ -36,7 +36,7 @@ describe('audit: collateral repair auction equal-limit bids fill in submission o
 	const startEngine = async () => {
 		const engine = await deployContract(client, encodeDeployData({ abi: engineArtifact.abi, bytecode: `0x${engineArtifact.evm.bytecode.object}`, args: [controller, token] }))
 		const now = (await client.getBlock()).timestamp
-		await writeContractAndWait(client, () => client.writeContract({ abi: engineArtifact.abi, address: engine, functionName: 'startAuction', args: [now, now + 1_000n, LOT, TARGET, TARGET * FLOOR * 10n, GRID, controller] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: engineArtifact.abi, address: engine, functionName: 'startRepairAuction', args: [now, now + 1_000n, LOT, TARGET, TARGET * FLOOR * 10n, GRID, controller] }))
 		const bid = async (bidder: Address, lots: bigint) => {
 			await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'mint', args: [engine, lots * LOT] }))
 			await writeContractAndWait(client, () => client.writeContract({ abi: engineArtifact.abi, address: engine, functionName: 'submitBid', args: [bidder, bidder, 12_000n, lots, FLOOR] }))

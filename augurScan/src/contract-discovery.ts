@@ -31,8 +31,8 @@ export const securityPoolComponentKinds = {
 	capitalLedger: { kind: 'securityPoolCapitalLedger', label: 'Security Pool Capital Ledger' },
 	commitmentIndex: { kind: 'securityPoolCommitmentIndex', label: 'Capital Commitment Index' },
 	feeStreams: { kind: 'securityPoolCapitalFeeStreams', label: 'Capital Fee Streams' },
-	securityPoolAuction: { kind: 'securityPoolAuction', label: 'Security Pool Collateral Repair Auction' },
-	uniformPriceAuction: { kind: 'securityPoolUniformPriceAuction', label: 'Uniform Price Auction' },
+	securityPoolRepairAuction: { kind: 'securityPoolRepairAuction', label: 'Security Pool Collateral Repair Auction' },
+	uniformPriceAuction: { kind: 'securityPoolUniformPriceRepairAuction', label: 'Uniform Price Auction' },
 	reportEscrow: { kind: 'sharedPoolReportEscrow', label: 'Shared Report Escrow' },
 } as const satisfies Readonly<Record<string, { readonly kind: SystemContractKind; readonly label: string }>>
 

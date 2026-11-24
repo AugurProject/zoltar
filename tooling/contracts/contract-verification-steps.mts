@@ -98,10 +98,10 @@ export const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 		compilerProfile: 'main',
 		contractName: 'SecurityPoolForkCoordinatorDeployer',
 	},
-	securityPoolAuctionDeployer: {
-		artifactPath: 'contracts/statoblast/SecurityPoolAuction.sol',
+	securityPoolRepairAuctionDeployer: {
+		artifactPath: 'contracts/statoblast/SecurityPoolRepairAuction.sol',
 		compilerProfile: 'main',
-		contractName: 'SecurityPoolAuctionDeployer',
+		contractName: 'SecurityPoolRepairAuctionDeployer',
 	},
 	questionLedgerEventEmitter: {
 		artifactPath: 'contracts/statoblast/QuestionLedgerEventEmitter.sol',

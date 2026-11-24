@@ -17,7 +17,7 @@ export function getTestSecurityPoolDeployers() {
 		settlement: infrastructure.securityPoolSettlementDeployer,
 		reporters: infrastructure.securityPoolReporterLedgerDeployer,
 		forks: infrastructure.securityPoolForkCoordinatorDeployer,
-		auctions: infrastructure.securityPoolAuctionDeployer,
+		repairAuctions: infrastructure.securityPoolRepairAuctionDeployer,
 		services: infrastructure.securityPoolServicesDeployer,
 	}
 }

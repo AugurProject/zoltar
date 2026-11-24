@@ -53,7 +53,7 @@ const ledgerOutputs: Outputs = {
 	ownerAccount: [{ freeAttoRep: 20n, feesAttoEth: 4n, feesAttoRep: 6n, targetHealthFactorBps: 12_000n, positionId: 7n }],
 	ownerCollateral: [520n, 10n, 30n],
 	ownerConservativePrice: [215n * 10n ** 18n],
-	auctionCohort: [zeroAddress, 0n, 0n, 0n, 0n],
+	repairAuctionCohort: [zeroAddress, 0n, 0n, 0n, 0n],
 	annualFeeBps: [200n],
 	purchaseFeeBps: [30n],
 	feeStreams: [streams],
@@ -173,28 +173,28 @@ test('a capital position snapshot reads the permanent owner of one id', async ()
 test('the auction adapter owns the cohort position that the ledger keeps outside its owner account', async () => {
 	// The ledger reports zero principal and commitment for the adapter; the cohort's REP and commitment are in the index.
 	const cohort = reader({
-		auctionCohort: [owner, 9n, 4n, 125n, 5n],
+		repairAuctionCohort: [owner, 9n, 4n, 125n, 5n],
 		ownerAccount: [{ freeAttoRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, targetHealthFactorBps: 0n, positionId: 0n }],
 		ownerCollateral: [0n, 0n, 0n],
 		accountOf: args => [{ owner, batch: 0n, rep: args[0] === 9n ? 500n : 0n, commitment: 20n, maxHealthyPrice: 195n * 10n ** 18n, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n }],
 	})
 	const snapshot = await sampleEntityStateWithRead({ entityType: 'capital-owner', entityIdentity: 'position', address: ledger, ownerAddress: owner }, cohort)
-	expect(snapshot.readResult).toMatchObject({ auctionCohort: true, auctionCohortRemainingLots: '4', positionId: '9', principalAttoRep: '500', pledgedAttoRep: '500', commitmentAttoEth: '20', healthFactorBps: '12500', belowLiquidationPrice: false })
-	// A cohort is taken over per bid through `takeOverAuctionBid`, never as a whole, even below the liquidation price.
+	expect(snapshot.readResult).toMatchObject({ repairAuctionCohort: true, auctionCohortRemainingLots: '4', positionId: '9', principalAttoRep: '500', pledgedAttoRep: '500', commitmentAttoEth: '20', healthFactorBps: '12500', belowLiquidationPrice: false })
+	// A cohort is taken over per bid through `takeOverRepairAuctionBid`, never as a whole, even below the liquidation price.
 	const underwater = await sampleEntityStateWithRead(
 		{ entityType: 'capital-owner', entityIdentity: 'position', address: ledger, ownerAddress: owner },
-		reader({ auctionCohort: [owner, 9n, 4n, 125n, 5n], ownerAccount: [{ freeAttoRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, targetHealthFactorBps: 0n, positionId: 0n }], ownerCollateral: [0n, 0n, 0n] }),
+		reader({ repairAuctionCohort: [owner, 9n, 4n, 125n, 5n], ownerAccount: [{ freeAttoRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, targetHealthFactorBps: 0n, positionId: 0n }], ownerCollateral: [0n, 0n, 0n] }),
 	)
-	expect(underwater.readResult).toMatchObject({ auctionCohort: true, belowLiquidationPrice: true, takeoverPreconditionsMet: false })
+	expect(underwater.readResult).toMatchObject({ repairAuctionCohort: true, belowLiquidationPrice: true, takeoverPreconditionsMet: false })
 	const cohortRisk = capitalPositionRisk(underwater.readResult ?? {})
 	expect(cohortRisk).toMatchObject({ protocolState: 'under-collateralized', scannerSeverity: 'critical' })
 	expect(cohortRisk.scannerReason).toContain('taken over per bid')
 	expect(cohortRisk.scannerReason).not.toContain('adverse observation')
 	expect(capitalPositionRisk(snapshot.readResult ?? {})).toMatchObject({ protocolState: 'healthy' })
 	// Any other owner is unaffected by an installed cohort.
-	const bystander = await sampleEntityStateWithRead({ entityType: 'capital-owner', entityIdentity: 'position', address: ledger, ownerAddress: owner }, reader({ auctionCohort: [other, 9n, 4n, 125n, 5n] }))
+	const bystander = await sampleEntityStateWithRead({ entityType: 'capital-owner', entityIdentity: 'position', address: ledger, ownerAddress: owner }, reader({ repairAuctionCohort: [other, 9n, 4n, 125n, 5n] }))
 	expect(bystander.readResult).toMatchObject({ positionId: '7', principalAttoRep: '520' })
-	expect(bystander.readResult?.['auctionCohort']).toBeUndefined()
+	expect(bystander.readResult?.['repairAuctionCohort']).toBeUndefined()
 })
 
 test('a capital owner snapshot reads principal, commitment and the health of the live position', async () => {

@@ -1,8 +1,8 @@
 import { test } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
 import { getContractOutput, getRecord, getString, loadContractsJson } from './contractArtifactHelpers'
-const auctionSource = 'contracts/statoblast/SecurityPoolUniformPriceAuction.sol'
-const auctionName = 'SecurityPoolUniformPriceAuction'
+const auctionSource = 'contracts/statoblast/SecurityPoolUniformPriceRepairAuction.sol'
+const auctionName = 'SecurityPoolUniformPriceRepairAuction'
 const eip170RuntimeCodeLimitBytes = 24_576
 
 test('auction runtime stays within the EIP-170 limit', () => {

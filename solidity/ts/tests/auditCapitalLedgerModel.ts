@@ -349,7 +349,7 @@ const retireOne = (m: Model, id: bigint): Retirement => {
 	return result
 }
 export const serve = (m: Model, id: bigint) => {
-	requireModel(id === 0n || id !== m.cohortId, 'Materialize an individual auction vault')
+	requireModel(id === 0n || id !== m.cohortId, 'Materialize an individual repair auction vault')
 	const pending = findPosition(m, id)
 	if (id === 0n || pending === undefined || !inTree(pending) || pending.batch === 0n || !priceValid(m) || m.frozen || m.forkTime !== 0n) return
 	const result = retireOne(m, id)
@@ -361,7 +361,7 @@ export const serve = (m: Model, id: bigint) => {
 }
 // Owners cure at the liquidation price; a takeover cures to the conservative price it repairs to (#1571).
 export const cure = (m: Model, id: bigint, target: bigint, ownerExit: boolean, price = m.liq) => {
-	requireModel(id !== 0n && id !== m.cohortId, 'Materialize an individual auction vault')
+	requireModel(id !== 0n && id !== m.cohortId, 'Materialize an individual repair auction vault')
 	const p = findPosition(m, id)
 	if (p === undefined || !inTree(p) || !(p.k > target)) return fail('Position is not live')
 	const supported = (((p.rep * BPS) / MULTIPLIER) * WAD) / price
@@ -453,7 +453,7 @@ export type Operation =
 	| { c: 'checkpoint'; o: number }
 	| { c: 'materialize'; o: number; bid: bigint }
 	| { c: 'beginImport' }
-	| { c: 'installAuction'; lots: bigint; repPerLot: bigint }
+	| { c: 'installRepairAuction'; lots: bigint; repPerLot: bigint }
 	| { c: 'setBid'; bid: bigint; o: number; health: bigint; lots: bigint }
 	| { c: 'importChoice'; o: number; rep: bigint; k: bigint; batch: bigint; remaining: bigint; target: bigint }
 	| { c: 'finishImport'; demand: bigint }
@@ -786,7 +786,7 @@ export const applyModel = (m: Model, op: Operation): TakeoverResult | undefined 
 			m.nextBatch = 2n
 			m.lastBatch = 2n
 			return undefined
-		case 'installAuction': {
+		case 'installRepairAuction': {
 			requireModel(m.importing && m.cohortId === 0n, 'Auction cohort installation unavailable')
 			requireModel(op.lots !== 0n && op.repPerLot !== 0n, 'Invalid auction cohort')
 			requireModel((op.repPerLot * BPS) % MULTIPLIER === 0n, 'Auction collateral ratio rounds per vault')

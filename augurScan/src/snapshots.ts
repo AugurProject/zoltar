@@ -39,7 +39,7 @@ const snapshotAbi = (kind: SystemContractKind): Abi => {
 const poolAbi = snapshotAbi('questionLedger')
 const coordinatorAbi = snapshotAbi('priceCoordinator')
 const escalationAbi = snapshotAbi('escalationGame')
-const auctionAbi = snapshotAbi('securityPoolUniformPriceAuction')
+const auctionAbi = snapshotAbi('securityPoolUniformPriceRepairAuction')
 
 export type StateRead = (address: Address, abi: Abi, functionName: string, args?: readonly AbiValue[]) => Promise<unknown>
 

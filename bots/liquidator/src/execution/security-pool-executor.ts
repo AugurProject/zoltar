@@ -95,7 +95,7 @@ export async function executeSecurityPoolTakeover(
 						maximumOwnRep: plan.maximumOwnRep,
 						bounds,
 					})
-				: { to: base.capitalLedger, value: 0n, data: encodeFunctionData({ abi: securityPoolCapitalLedgerAbi, functionName: 'takeOverAuctionBid', args: [positionId.bidId, plan.requestedCommitment ?? plan.commitment, plan.minimumTakeoverReward, plan.maximumOwnRep, bounds] }) }
+				: { to: base.capitalLedger, value: 0n, data: encodeFunctionData({ abi: securityPoolCapitalLedgerAbi, functionName: 'takeOverRepairAuctionBid', args: [positionId.bidId, plan.requestedCommitment ?? plan.commitment, plan.minimumTakeoverReward, plan.maximumOwnRep, bounds] }) }
 		label = typeof positionId === 'bigint' ? `Take over security pool position ${positionId}` : `Take over auction bid ${positionId.bidId} vault ${positionId.vault}`
 		if (plan.unpaidCure) label = typeof positionId === 'bigint' ? `Cure security pool position ${positionId} without a takeover reward` : `Cure auction bid ${positionId.bidId} vault ${positionId.vault} without a takeover reward`
 	}

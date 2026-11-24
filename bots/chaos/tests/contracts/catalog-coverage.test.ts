@@ -10,8 +10,8 @@ import { CHAOS_OPERATION_CATALOG } from '../../src/operations/catalog.ts'
 
 /** The shared ABI exports the chaos bot executes against; every one must map to a compiled artifact below. */
 const chaosContractAbis = {
-	securityPoolUniformPriceAuctionAbi: contractAbis.securityPoolUniformPriceAuctionAbi,
-	securityPoolAuctionAbi: contractAbis.securityPoolAuctionAbi,
+	securityPoolUniformPriceRepairAuctionAbi: contractAbis.securityPoolUniformPriceRepairAuctionAbi,
+	securityPoolRepairAuctionAbi: contractAbis.securityPoolRepairAuctionAbi,
 	securityPoolForkCoordinatorAbi: contractAbis.securityPoolForkCoordinatorAbi,
 	securityPoolCommitmentIndexAbi: contractAbis.securityPoolCommitmentIndexAbi,
 	securityPoolCapitalLedgerAbi: contractAbis.securityPoolCapitalLedgerAbi,
@@ -59,8 +59,8 @@ const {
 } = chaosContractAbis
 
 const curatedAbiBindings = [
-	{ abi: contractAbis.securityPoolUniformPriceAuctionAbi, artifactSource: 'contracts/statoblast/SecurityPoolUniformPriceAuction.sol', contract: 'SecurityPoolUniformPriceAuction' },
-	{ abi: contractAbis.securityPoolAuctionAbi, artifactSource: 'contracts/statoblast/SecurityPoolAuction.sol', contract: 'SecurityPoolAuction' },
+	{ abi: contractAbis.securityPoolUniformPriceRepairAuctionAbi, artifactSource: 'contracts/statoblast/SecurityPoolUniformPriceRepairAuction.sol', contract: 'SecurityPoolUniformPriceRepairAuction' },
+	{ abi: contractAbis.securityPoolRepairAuctionAbi, artifactSource: 'contracts/statoblast/SecurityPoolRepairAuction.sol', contract: 'SecurityPoolRepairAuction' },
 	{ abi: contractAbis.securityPoolForkCoordinatorAbi, artifactSource: 'contracts/statoblast/SecurityPoolForkCoordinator.sol', contract: 'SecurityPoolForkCoordinator' },
 	{ abi: contractAbis.securityPoolCommitmentIndexAbi, artifactSource: 'contracts/statoblast/SecurityPoolCommitmentIndex.sol', contract: 'SecurityPoolCommitmentIndex' },
 	{ abi: contractAbis.securityPoolCapitalLedgerAbi, artifactSource: 'contracts/statoblast/SecurityPoolCapitalLedger.sol', contract: 'SecurityPoolCapitalLedger' },
@@ -120,15 +120,15 @@ const expectedCanonicalManifest = [
 	'TwoWayConstantProductFactory:contracts/trading/TwoWayConstantProductFactory.sol:static-endpoint',
 	'TwoWayConstantProductPair:contracts/trading/TwoWayConstantProductPair.sol:dynamic-endpoint',
 	'TwoWayConstantProductRouter:contracts/trading/TwoWayConstantProductRouter.sol:static-endpoint',
-	'SecurityPoolCapitalAuctionDelegate:contracts/statoblast/SecurityPoolCapitalAuctionDelegate.sol:delegate-module',
+	'SecurityPoolCapitalRepairAuctionDelegate:contracts/statoblast/SecurityPoolCapitalRepairAuctionDelegate.sol:delegate-module',
 	'SecurityPoolCapitalFeeStreams:contracts/statoblast/SecurityPoolCapitalFeeStreams.sol:dynamic-endpoint',
 	'SecurityPoolCapitalLedger:contracts/statoblast/SecurityPoolCapitalLedger.sol:dynamic-endpoint',
 	'SecurityPoolCapitalLifecycleDelegate:contracts/statoblast/SecurityPoolCapitalLifecycleDelegate.sol:delegate-module',
 	'SecurityPoolCommitmentIndex:contracts/statoblast/SecurityPoolCommitmentIndex.sol:dynamic-endpoint',
 	'QuestionForkerDelegate:contracts/statoblast/QuestionForkerDelegate.sol:delegate-module',
 	'SecurityPool:contracts/statoblast/SecurityPool.sol:dynamic-endpoint',
-	'SecurityPoolAuction:contracts/statoblast/SecurityPoolAuction.sol:dynamic-endpoint',
-	'SecurityPoolAuctionDeployer:contracts/statoblast/SecurityPoolAuction.sol:deployment-helper',
+	'SecurityPoolRepairAuction:contracts/statoblast/SecurityPoolRepairAuction.sol:dynamic-endpoint',
+	'SecurityPoolRepairAuctionDeployer:contracts/statoblast/SecurityPoolRepairAuction.sol:deployment-helper',
 	'SecurityPoolForkCoordinator:contracts/statoblast/SecurityPoolForkCoordinator.sol:dynamic-endpoint',
 	'SecurityPoolForkCoordinatorDeployer:contracts/statoblast/SecurityPoolForkCoordinator.sol:deployment-helper',
 	'SecurityPoolCapitalFeeStreamsDeployer:contracts/statoblast/SecurityPoolModuleDeployers.sol:deployment-helper',
@@ -142,8 +142,8 @@ const expectedCanonicalManifest = [
 	'SecurityPoolSettlement:contracts/statoblast/SecurityPoolSettlement.sol:dynamic-endpoint',
 	'SecurityPoolReporterLedger:contracts/statoblast/SecurityPoolReporterLedger.sol:dynamic-endpoint',
 	'SecurityPoolSettlementBook:contracts/statoblast/SecurityPoolSettlementBook.sol:dynamic-endpoint',
-	'SecurityPoolUniformPriceAuction:contracts/statoblast/SecurityPoolUniformPriceAuction.sol:dynamic-endpoint',
-	'SecurityPoolAuctionVault:contracts/statoblast/SecurityPoolAuctionVault.sol:dynamic-endpoint',
+	'SecurityPoolUniformPriceRepairAuction:contracts/statoblast/SecurityPoolUniformPriceRepairAuction.sol:dynamic-endpoint',
+	'SecurityPoolRepairAuctionVault:contracts/statoblast/SecurityPoolRepairAuctionVault.sol:dynamic-endpoint',
 	'SecurityPoolResolutionPremiumBook:contracts/statoblast/SecurityPoolResolutionPremiumBook.sol:dynamic-endpoint',
 ] as const
 

@@ -170,7 +170,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// @notice Materialize an exact share of an active auction cohort without
 	/// granting a new liquidation clock. Custody and past cohort fees are handled
 	/// by the controller; this operation moves only principal and commitment.
-	function splitAuctionPosition(uint96 id, address receiver, uint256 rep, uint256 commitment) external onlyCapitalLedger operational returns (uint96 receiverId) {
+	function splitRepairAuctionPosition(uint96 id, address receiver, uint256 rep, uint256 commitment) external onlyCapitalLedger operational returns (uint96 receiverId) {
 		_touch(id);
 		Position storage source = positions[id];
 		Node storage leaf = nodes[source.node];
@@ -383,7 +383,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	}
 
 	/// @notice Cure at the conservative price, then quote a repair funded by the takeover reward.
-	/// The pre-cure observation retains auction age even if a spare-limited cure
+	/// The pre-cure observation retains liquidation auction age even if a spare-limited cure
 	/// temporarily brings the source between the liquidation and repair prices.
 	function takeover(uint96 id, uint96 cohort, address receiver, uint256 requested, uint256 minimumCommitment, uint256 demand, uint256 price, uint256 repairPrice, uint256 multiplier)
 		external
@@ -399,7 +399,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		source = accountOf(id);
 		require(source.owner != receiver && source.maxHealthyPrice < price, 'Position does not need takeover');
 		require(requested > 0 && requested <= source.commitment, 'Invalid takeover commitment');
-		require(id != cohort, 'Materialize an individual auction vault');
+		require(id != cohort, 'Materialize an individual repair auction vault');
 		cured = cure(id, repairPrice, multiplier, minimumCommitment, demand, 0, false);
 		source = accountOf(id);
 		// Minimum-size commitments can be replaced: REP not paid as a takeover reward returns to

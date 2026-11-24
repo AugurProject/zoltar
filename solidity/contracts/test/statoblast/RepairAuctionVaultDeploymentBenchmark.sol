@@ -2,30 +2,30 @@
 pragma solidity 0.8.35;
 
 import {
-	SecurityPoolAuctionVault,
-	SecurityPoolAuctionVaultClones,
-	IAuctionVaultCapital
-} from '../../statoblast/SecurityPoolAuctionVault.sol';
-import { ISecurityPoolAuctionCapital } from '../../statoblast/interfaces/ISecurityPoolAuctionCapital.sol';
+	SecurityPoolRepairAuctionVault,
+	SecurityPoolRepairAuctionVaultClones,
+	IRepairAuctionVaultCapital
+} from '../../statoblast/SecurityPoolRepairAuctionVault.sol';
+import { ISecurityPoolRepairAuctionCapital } from '../../statoblast/interfaces/ISecurityPoolRepairAuctionCapital.sol';
 import { IERC20 } from '../../IERC20.sol';
 import { SafeERC20Ops } from '../../SafeERC20Ops.sol';
 
 /// @dev Benchmark reference: the former constructor-bound vault with the same
 /// materialization flag, kept only to measure the clone tradeoff over time.
-contract AuctionVaultReference {
+contract RepairAuctionVaultReference {
 	using SafeERC20Ops for IERC20;
 	address public immutable owner;
-	IAuctionVaultCapital public immutable initialCapital;
-	ISecurityPoolAuctionCapital public immutable auction;
+	IRepairAuctionVaultCapital public immutable initialCapital;
+	ISecurityPoolRepairAuctionCapital public immutable repairAuction;
 	uint256 public immutable bidId;
 	bool private entered;
 	bool public initialPositionMaterialized;
 
-	constructor(address owner_, address capital_, address auction_, uint256 bidId_) {
+	constructor(address owner_, address capital_, address repairAuction_, uint256 bidId_) {
 		require(owner_ != address(0) && capital_ != address(0), 'Auction vault dependencies missing');
 		owner = owner_;
-		initialCapital = IAuctionVaultCapital(capital_);
-		auction = ISecurityPoolAuctionCapital(auction_);
+		initialCapital = IRepairAuctionVaultCapital(capital_);
+		repairAuction = ISecurityPoolRepairAuctionCapital(repairAuction_);
 		bidId = bidId_;
 	}
 
@@ -40,12 +40,12 @@ contract AuctionVaultReference {
 		entered = false;
 	}
 	function _materializeInitialPosition() private {
-		if (auction.bidPosition(bidId).filledLots == 0) return;
-		(address vault, uint96 positionId) = initialCapital.materializeAuctionBid(bidId);
+		if (repairAuction.bidPosition(bidId).filledLots == 0) return;
+		(address vault, uint96 positionId) = initialCapital.materializeRepairAuctionBid(bidId);
 		require(vault == address(this) && positionId != 0, 'Auction vault materialization failed');
 		initialPositionMaterialized = true;
 	}
-	function depositPrincipal(IAuctionVaultCapital capital, uint256 amount, uint256 targetHealthFactorBps) external onlyOwner {
+	function depositPrincipal(IRepairAuctionVaultCapital capital, uint256 amount, uint256 targetHealthFactorBps) external onlyOwner {
 		IERC20 token = capital.repToken();
 		token.safeTransferFrom(msg.sender, address(this), amount);
 		token.safeApprove(address(capital), amount);
@@ -85,31 +85,32 @@ contract AuctionVaultReference {
 
 /// @dev Deploys production clones and reference vaults from one factory so
 /// their creation and operation gas are directly comparable.
-contract AuctionVaultDeploymentBenchmark {
+contract RepairAuctionVaultDeploymentBenchmark {
 	address public immutable implementation;
 	constructor() {
-		implementation = address(new SecurityPoolAuctionVault());
+		implementation = address(new SecurityPoolRepairAuctionVault());
 	}
-	function createClone(address owner, address capital, address auction, uint256 bidId) external returns (address) {
-		return SecurityPoolAuctionVaultClones.create(implementation, owner, capital, auction, bidId);
+	function createClone(address owner, address capital, address repairAuction, uint256 bidId) external returns (address) {
+		return SecurityPoolRepairAuctionVaultClones.create(implementation, owner, capital, repairAuction, bidId);
 	}
-	function createReference(address owner, address capital, address auction, uint256 bidId) external returns (address) {
-		return address(new AuctionVaultReference{salt: bytes32(bidId)}(owner, capital, auction, bidId));
+	function createReference(address owner, address capital, address repairAuction, uint256 bidId) external returns (address) {
+		return address(new RepairAuctionVaultReference{salt: bytes32(bidId)}(owner, capital, repairAuction, bidId));
 	}
-	function predictClone(address owner, address capital, address auction, uint256 bidId) external view returns (address) {
-		return SecurityPoolAuctionVaultClones.predict(address(this), implementation, owner, capital, auction, bidId);
+	function predictClone(address owner, address capital, address repairAuction, uint256 bidId) external view returns (address) {
+		return
+			SecurityPoolRepairAuctionVaultClones.predict(address(this), implementation, owner, capital, repairAuction, bidId);
 	}
-	function expectedRuntime(address owner, address capital, address auction, uint256 bidId) external view returns (bytes memory) {
-		return SecurityPoolAuctionVaultClones.runtimeCode(implementation, owner, capital, auction, bidId);
+	function expectedRuntime(address owner, address capital, address repairAuction, uint256 bidId) external view returns (bytes memory) {
+		return SecurityPoolRepairAuctionVaultClones.runtimeCode(implementation, owner, capital, repairAuction, bidId);
 	}
-	function expectedCreationCode(address owner, address capital, address auction, uint256 bidId) external view returns (bytes memory) {
-		return SecurityPoolAuctionVaultClones.creationCode(implementation, owner, capital, auction, bidId);
+	function expectedCreationCode(address owner, address capital, address repairAuction, uint256 bidId) external view returns (bytes memory) {
+		return SecurityPoolRepairAuctionVaultClones.creationCode(implementation, owner, capital, repairAuction, bidId);
 	}
 }
 
 /// @dev Controls the fill each vault sees and serves as a cheap execution
 /// target. Counters start nonzero so the first measured call pays no fresh slot.
-contract AuctionVaultBenchmarkAuctionMock is ISecurityPoolAuctionCapital {
+contract RepairAuctionVaultBenchmarkAuctionMock is ISecurityPoolRepairAuctionCapital {
 	mapping(uint256 => BidPosition) private positions;
 	uint256 public pings = 1;
 	function setFill(uint256 id, address vault, uint256 filledLots) external {
@@ -132,10 +133,10 @@ contract AuctionVaultBenchmarkAuctionMock is ISecurityPoolAuctionCapital {
 	}
 }
 
-contract AuctionVaultBenchmarkCapitalMock {
+contract RepairAuctionVaultBenchmarkCapitalMock {
 	mapping(address => uint96) public positionIds;
 	uint96 private next = 1;
-	function materializeAuctionBid(uint256) external returns (address vault, uint96 positionId) {
+	function materializeRepairAuctionBid(uint256) external returns (address vault, uint96 positionId) {
 		vault = msg.sender;
 		positionId = positionIds[vault];
 		if (positionId == 0) {

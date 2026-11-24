@@ -57,7 +57,7 @@ test("presents an owner's ledger events in REP and the ledger collateral", () =>
 	expect(at('PrincipalWithdrawn', { owner: alice, recipient: bob, amountAttoRep: (5n * 10n ** 18n).toString() })).toEqual({ title: 'Principal withdrawal', summary: '5 REP to 0xbbbbbb…bbbbbb' })
 	expect(at('CommitmentAuthorized', { owner: alice, positionId: '7', rep: (5n * 10n ** 18n).toString(), commitment: '100000000', targetHealthFactorBps: '12000' })?.summary).toBe('position 7 · 5 REP backing 100 USDC · target health 120%')
 	expect(at('EarningsClaimed', { owner: alice, ethAmount: '1500000', repAmount: '0' })?.summary).toBe('1.5 USDC · 0 REP')
-	expect(at('AuctionBidMaterialized', { bidId: '4', vault: alice, positionId: '3', principal: (70n * 10n ** 18n).toString(), commitment: '10000000' })?.summary).toBe('bid 4 became position 3 · 70 REP principal · 10 USDC commitment')
+	expect(at('RepairAuctionBidMaterialized', { bidId: '4', vault: alice, positionId: '3', principal: (70n * 10n ** 18n).toString(), commitment: '10000000' })?.summary).toBe('bid 4 became position 3 · 70 REP principal · 10 USDC commitment')
 	expect(at('CommitmentTakenOver', {})).toBeUndefined()
 })
 

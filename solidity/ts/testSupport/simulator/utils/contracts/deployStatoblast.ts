@@ -35,7 +35,7 @@ import {
 	statoblast_SecurityPoolModuleDeployers_SecurityPoolServicesDeployer,
 	statoblast_SecurityPoolModuleDeployers_SecurityPoolReporterLedgerDeployer,
 	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinatorDeployer,
-	statoblast_SecurityPoolAuction_SecurityPoolAuctionDeployer,
+	statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuctionDeployer,
 	statoblast_tokens_ShareToken_ShareToken,
 	Zoltar_Zoltar,
 	ZoltarQuestionData_ZoltarQuestionData,
@@ -70,7 +70,7 @@ const statoblastInitCodes = createStatoblastInitCodes(
 		securityPoolServicesDeployer: statoblast_SecurityPoolModuleDeployers_SecurityPoolServicesDeployer,
 		securityPoolReporterLedgerDeployer: statoblast_SecurityPoolModuleDeployers_SecurityPoolReporterLedgerDeployer,
 		securityPoolForkCoordinatorDeployer: statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinatorDeployer,
-		securityPoolAuctionDeployer: statoblast_SecurityPoolAuction_SecurityPoolAuctionDeployer,
+		securityPoolRepairAuctionDeployer: statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuctionDeployer,
 		shareTokenFactory: statoblast_factories_ShareTokenFactory_ShareTokenFactory,
 	},
 	{ proxyDeployerAddress: addressString(PROXY_DEPLOYER_ADDRESS), zeroSalt: ZERO_SALT },
@@ -94,7 +94,7 @@ const {
 	getSecurityPoolServicesDeployerByteCode,
 	getSecurityPoolReporterLedgerDeployerByteCode,
 	getSecurityPoolForkCoordinatorDeployerByteCode,
-	getSecurityPoolAuctionDeployerByteCode,
+	getSecurityPoolRepairAuctionDeployerByteCode,
 	getShareTokenFactoryByteCode,
 } = statoblastInitCodes
 
@@ -215,7 +215,7 @@ function getDeploymentStatusOracleSteps() {
 		{ id: 'securityPoolServicesDeployer', address: infraContracts.securityPoolServicesDeployer },
 		{ id: 'securityPoolReporterLedgerDeployer', address: infraContracts.securityPoolReporterLedgerDeployer },
 		{ id: 'securityPoolForkCoordinatorDeployer', address: infraContracts.securityPoolForkCoordinatorDeployer },
-		{ id: 'securityPoolAuctionDeployer', address: infraContracts.securityPoolAuctionDeployer },
+		{ id: 'securityPoolRepairAuctionDeployer', address: infraContracts.securityPoolRepairAuctionDeployer },
 	] as const
 }
 
@@ -254,7 +254,7 @@ async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key 
 		securityPoolServicesDeployer: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolServicesDeployer'),
 		securityPoolReporterLedgerDeployer: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolReporterLedgerDeployer'),
 		securityPoolForkCoordinatorDeployer: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolForkCoordinatorDeployer'),
-		securityPoolAuctionDeployer: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolAuctionDeployer'),
+		securityPoolRepairAuctionDeployer: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolRepairAuctionDeployer'),
 	}
 }
 export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
@@ -299,7 +299,7 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	if (!existence['securityPoolServicesDeployer']) await deployBytecode('securityPoolServicesDeployer', getSecurityPoolServicesDeployerByteCode())
 	if (!existence['securityPoolReporterLedgerDeployer']) await deployBytecode('securityPoolReporterLedgerDeployer', getSecurityPoolReporterLedgerDeployerByteCode())
 	if (!existence['securityPoolForkCoordinatorDeployer']) await deployBytecode('securityPoolForkCoordinatorDeployer', getSecurityPoolForkCoordinatorDeployerByteCode())
-	if (!existence['securityPoolAuctionDeployer']) await deployBytecode('securityPoolAuctionDeployer', getSecurityPoolAuctionDeployerByteCode())
+	if (!existence['securityPoolRepairAuctionDeployer']) await deployBytecode('securityPoolRepairAuctionDeployer', getSecurityPoolRepairAuctionDeployerByteCode())
 
 	for (const [name, contractAddress] of objectEntries(contractAddresses)) {
 		if (!(await contractExists(client, contractAddress))) throw new Error(`${name} does not exist even though we deployed it`)

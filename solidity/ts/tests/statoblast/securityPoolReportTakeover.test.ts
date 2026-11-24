@@ -31,7 +31,7 @@ function operationBatch(intent: {
 	const data =
 		intent.bidId === 0n
 			? encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'takeOverWithBounds', args: [intent.positionId, intent.commitment, intent.minimumTakeoverReward, intent.maximumOwnRep, bounds] })
-			: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'takeOverAuctionBid', args: [intent.bidId, intent.commitment, intent.minimumTakeoverReward, intent.maximumOwnRep, bounds] })
+			: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'takeOverRepairAuctionBid', args: [intent.bidId, intent.commitment, intent.minimumTakeoverReward, intent.maximumOwnRep, bounds] })
 	return { gasLimit: 3_100_000n, minimumPrice: intent.minimumPrice, maximumPrice: intent.maximumPrice, deadline: intent.deadline, operations: [{ gasLimit: 3_000_000n, data }] }
 }
 
@@ -160,7 +160,7 @@ describe('Statoblast: report sponsor takeover priority', () => {
 		const id = await context.owner.readContract({ abi: feedArtifact.abi, address: context.feed, functionName: 'pendingReportId' })
 		await context.mock.advanceTime(481n)
 		await openOracleSettle(context.other, id)
-		expect((await context.owner.readContract({ ...ledger, functionName: 'auctionPosition', args: [winner.id] })).materialized).toBe(!failure)
+		expect((await context.owner.readContract({ ...ledger, functionName: 'repairAuctionPosition', args: [winner.id] })).materialized).toBe(!failure)
 		expect((await context.owner.readContract({ ...ledger, functionName: 'ownerCollateral', args: [sponsor.account.address] }))[1]).toBe(failure ? 0n : 3n * unit)
 	})
 	test('a starved takeover callback remains recoverable with sponsor priority', async () => {

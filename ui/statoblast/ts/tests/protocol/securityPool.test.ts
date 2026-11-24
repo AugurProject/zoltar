@@ -28,17 +28,17 @@ test('a lifecycle delegate whose implementation getter points elsewhere fails au
 })
 test('an unrecognized capital auction delegate fails closed before approvals', async () => {
 	const fixture = capitalClient()
-	fixture.setRead('auctionDelegate', modules.engine)
+	fixture.setRead('repairAuctionDelegate', modules.engine)
 	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('capital auction delegate runtime')
 })
 test('an auction delegate whose implementation getter points elsewhere fails authentication', async () => {
 	const fixture = capitalClient()
-	fixture.setRead('implementation', modules.engine, modules.auctionDelegate)
+	fixture.setRead('implementation', modules.engine, modules.repairAuctionDelegate)
 	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('capital auction delegate belongs to another authority')
 })
 test('setup and account authentication reject an unrecognized future auction deployer', async () => {
 	const fixture = capitalClient()
-	fixture.setRead('auctionDeployer', modules.engine)
+	fixture.setRead('repairAuctionDeployer', modules.engine)
 	await expect(loadSecurityPoolSetup(fixture.client, securityPool, owner)).rejects.toThrow('unrecognized auction deployer')
 	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('unrecognized auction deployer')
 })

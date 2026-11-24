@@ -119,7 +119,7 @@ describe('Statoblast: bounded fork initialization', () => {
 		const ledger = { abi: capitalArtifact.abi, address: childLedger } as const
 		expect(await owner().readContract({ abi: tokenArtifact.abi, address: getRepTokenAddress(childUniverse), functionName: 'allowance', args: [childLedger, getZoltarAddress()] })).toBe(0n)
 		await expect(other().simulateContract({ ...ledger, functionName: 'initialize', args: emptyModules })).rejects.toThrow('Only security pool')
-		for (const functionName of ['lifecycleDelegate', 'auctionDelegate'] as const) {
+		for (const functionName of ['lifecycleDelegate', 'repairAuctionDelegate'] as const) {
 			const origin = await owner().readContract({ ...ledger, address: fixture.capitalLedger, functionName })
 			expect(await owner().readContract({ ...ledger, functionName })).toBe(origin)
 		}

@@ -4,7 +4,7 @@ import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilN
 import { createWriteClient, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'
-import { statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact, statoblast_Multicall3_Multicall3 as multicallArtifact, test_statoblast_CollateralTestToken_CollateralTestToken as tokenArtifact } from '../types/contractArtifact'
+import { statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as engineArtifact, statoblast_Multicall3_Multicall3 as multicallArtifact, test_statoblast_CollateralTestToken_CollateralTestToken as tokenArtifact } from '../types/contractArtifact'
 
 // Randomized and exhaustive-small differential test of the uniform-price auction engine
 // against an independent brute-force model (sections A and B of the audit brief).
@@ -246,7 +246,7 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 
 	const createEngine = async (config: Config): Promise<Engine> => {
 		const address = await deploy(encodeDeployData({ abi: engineArtifact.abi, bytecode: `0x${engineArtifact.evm.bytecode.object}`, args: [controller, token] }))
-		await send(address, encodeFunctionData({ abi: engineArtifact.abi, functionName: 'startAuction', args: [0n, CLOSE, config.lot, config.target, config.inventory, config.grid, controller] }))
+		await send(address, encodeFunctionData({ abi: engineArtifact.abi, functionName: 'startRepairAuction', args: [0n, CLOSE, config.lot, config.target, config.inventory, config.grid, controller] }))
 		const floors: bigint[] = []
 		const steps = config.inventory / config.grid + 2n
 		if (steps <= 44n) for (let step = 0n; step <= steps; step++) floors.push(step * config.grid)
@@ -610,7 +610,7 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'settleBid', args: [1n] }))).toContain('Auction bid does not exist')
 		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'withdrawRaised', args: [controller] }))).toContain('not withdrawable')
 		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'allocateAndRemoveFees', args: [1n, 0n, 0n] }), stranger)).toContain('Only the auction fee allocator')
-		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'startAuction', args: [0n, CLOSE, 1n, 1n, 1n, 1n, controller] }))).toContain('already started')
+		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'startRepairAuction', args: [0n, CLOSE, 1n, 1n, 1n, 1n, controller] }))).toContain('already started')
 		await send(engine.address, bid(1n, 14n))
 		engine.bids.push({ id: 1n, lots: 1n, min: 14n, bidder: bidderPool[0] ?? controller })
 		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'settleBid', args: [1n] }))).toContain('Bid may still win')

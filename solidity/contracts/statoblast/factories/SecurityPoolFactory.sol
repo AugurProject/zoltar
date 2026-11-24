@@ -55,7 +55,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	address private immutable reporterLedgerDeployer;
 	address private immutable forkCoordinatorDeployer;
 	address private immutable securityPoolServicesDeployer;
-	address private immutable securityPoolAuctionDeployer;
+	address private immutable securityPoolRepairAuctionDeployer;
 	uint256 private constant SECURITY_POOL_CONFIGURATION_BYTES = 13 * 32;
 	/// @notice Security pools this factory deployed from the canonical creation code.
 	/// Only they can open a pool namespace, so every registered pool belongs to one.
@@ -81,7 +81,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		reporterLedgerDeployer = securityPoolModuleDeployers[5];
 		forkCoordinatorDeployer = securityPoolModuleDeployers[6];
 		securityPoolServicesDeployer = securityPoolModuleDeployers[7];
-		securityPoolAuctionDeployer = securityPoolModuleDeployers[8];
+		securityPoolRepairAuctionDeployer = securityPoolModuleDeployers[8];
 		questionForker = _questionForker;
 		shareTokenFactory = _shareTokenFactory;
 		openOraclePriceCoordinatorFactory = _openOraclePriceCoordinatorFactory;
@@ -178,7 +178,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	function deploySecurityPool(bytes calldata creationCode, bytes calldata configuration) external returns (address securityPool) {
 		require(keccak256(creationCode) == securityPoolCreationCodeHash, 'Security pool creation code is not canonical');
 		require(configuration.length == SECURITY_POOL_CONFIGURATION_BYTES, 'Security pool configuration length invalid');
-		bytes memory initCode = abi.encodePacked(creationCode, abi.encode(address(this), capitalLedgerDeployer, commitmentIndexDeployer, capitalFeeStreamsDeployer, settlementBookDeployer, securityPoolSettlementDeployer, reporterLedgerDeployer, forkCoordinatorDeployer, securityPoolServicesDeployer, securityPoolAuctionDeployer), configuration);
+		bytes memory initCode = abi.encodePacked(creationCode, abi.encode(address(this), capitalLedgerDeployer, commitmentIndexDeployer, capitalFeeStreamsDeployer, settlementBookDeployer, securityPoolSettlementDeployer, reporterLedgerDeployer, forkCoordinatorDeployer, securityPoolServicesDeployer, securityPoolRepairAuctionDeployer), configuration);
 		// The address depends on the creator, so no other deployment can take it.
 		bytes32 salt = keccak256(abi.encode(msg.sender, securityPoolCreationCount[msg.sender]++));
 		assembly ('memory-safe') {

@@ -52,17 +52,17 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	// The reporter ledger names the game it registers or schedules, so both join that game's history.
 	...definitions('escalation', 'escalation', ['GameRegistered', 'ReporterFinalityScheduled'], ['game']),
 	...definitions('risk', 'reporter-ledger', ['ReporterBalanceChanged'], ['universeId']),
-	...definitions('auction', 'auction', ['AuctionStarted', 'BidSubmitted', 'AuctionFinalized', 'BidSettled', 'FeesRemoved', 'RefundWithdrawn', 'RaisedWithdrawn']),
+	...definitions('auction', 'auction', ['RepairAuctionStarted', 'BidSubmitted', 'RepairAuctionFinalized', 'BidSettled', 'FeesRemoved', 'RefundWithdrawn', 'RaisedWithdrawn']),
 	...definitions('risk', 'pool', ['DeployQuestionLedger', 'QuestionLedgerRegistered', 'AwaitingForkContinuationSet', 'CompleteSetCreated', 'CompleteSetRedeemed', 'EscalationGameSet', 'QuestionAccountingCheckpoint', 'ShareTokenSupplySet', 'SharesRedeemed', 'SystemStateSet'], ['questionLedger']),
 	...definitions('risk', 'vault', ['PrincipalDeposited', 'PrincipalWithdrawn', 'CommitmentAuthorized', 'HealthTargetSet', 'EarningsClaimed'], ['owner']),
 	// A materialized auction bid becomes the position of the vault that won it, so the vault is the owner.
-	...definitions('risk', 'vault', ['AuctionBidMaterialized'], ['vault']),
-	...definitions('risk', 'capital-position', ['CommitmentCured', 'CommitmentTakenOver', 'AuctionCohortInstalled'], ['positionId', 'sourceId']),
+	...definitions('risk', 'vault', ['RepairAuctionBidMaterialized'], ['vault']),
+	...definitions('risk', 'capital-position', ['CommitmentCured', 'CommitmentTakenOver', 'RepairAuctionCohortInstalled'], ['positionId', 'sourceId']),
 	...definitions('risk', 'security-pool', ['QuestionRegistered', 'CompleteSetsFunded', 'UniversePrepared', 'SetupAdvanced', 'RetirementServed', 'CapitalPriceAccepted', 'UnassignedFeesBurned']),
 	...definitions('risk', 'security-pool', ['SecurityPoolDeployed', 'SecurityPoolRegistered'], ['securityPool']),
 	...definitions('oracle', 'price-feed', ['SharedPriceFeedRegistered'], ['priceFeed']),
 	// The security pool auction controls a uniform-price auction engine at another address; only the engine's events build the auction views.
-	...definitions('risk', 'security-pool-auction', ['AuctionOpened', 'BidVaultCreated', 'AuctionClosed']),
+	...definitions('risk', 'security-pool-auction', ['RepairAuctionOpened', 'BidVaultCreated', 'RepairAuctionClosed']),
 	...definitions('fork', 'security-pool-branch', ['ForkFrozen', 'BranchChosen', 'BranchStarted', 'BranchActivated', 'NeutralCashRecovered', 'ReporterForkFrozen'], ['universeId']),
 	// The reporter ledger creates a child's reporter escrow under the forked source universe.
 	...definitions('fork', 'security-pool-branch', ['ReporterChildCreated'], ['sourceUniverseId']),
@@ -97,7 +97,7 @@ const listedTaxonomyContractKinds: readonly SystemContractKind[] = [
 	'priceCoordinator',
 	'reputationToken',
 	'questionLedger',
-	'securityPoolCapitalAuctionDelegate',
+	'securityPoolCapitalRepairAuctionDelegate',
 	'securityPoolCapitalLifecycleDelegate',
 	'questionLedgerEventEmitter',
 	'securityPoolFactory',

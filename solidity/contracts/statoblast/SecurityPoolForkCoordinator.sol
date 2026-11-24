@@ -16,8 +16,8 @@ import { SecurityPoolSettlement } from './SecurityPoolSettlement.sol';
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
 import { SecurityPoolReporterLedger } from './SecurityPoolReporterLedger.sol';
 import { SecurityPoolQuestionMap } from './SecurityPoolQuestionMap.sol';
-import { SecurityPoolAuction } from './SecurityPoolAuction.sol';
-import { SecurityPoolUniformPriceAuction } from './SecurityPoolUniformPriceAuction.sol';
+import { SecurityPoolRepairAuction } from './SecurityPoolRepairAuction.sol';
+import { SecurityPoolUniformPriceRepairAuction } from './SecurityPoolUniformPriceRepairAuction.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { Constants } from '../Constants.sol';
 
@@ -34,7 +34,7 @@ interface ISecurityPoolForkRoot {
 	function activateForkChild(uint248 child) external;
 	function getQuestionLedger(uint256 questionId, uint248 universeId) external view returns (IQuestionLedger);
 	function minimumCommitmentAttoEth() external view returns (uint256);
-	function auctionDeployer() external view returns (ISecurityPoolCollateralRepairAuctionDeployer);
+	function repairAuctionDeployer() external view returns (ISecurityPoolCollateralRepairAuctionDeployer);
 }
 
 interface ISecurityPoolCollateralRepairAuctionDeployer {
@@ -88,7 +88,7 @@ contract SecurityPoolForkCoordinator {
 		bool migrationPrepared;
 	}
 	struct Branch {
-		SecurityPoolAuction auction;
+		SecurityPoolRepairAuction repairAuction;
 		uint64 fixedRoot;
 		uint248 parent;
 		uint256 outcome;
@@ -103,8 +103,8 @@ contract SecurityPoolForkCoordinator {
 		bool started;
 		bool ready;
 	}
-	function auctions(uint248 universeId) external view returns (SecurityPoolAuction) {
-		return branchStates[universeId].auction;
+	function repairAuctions(uint248 universeId) external view returns (SecurityPoolRepairAuction) {
+		return branchStates[universeId].repairAuction;
 	}
 	function branches(uint248 universeId)
 		external
@@ -189,12 +189,15 @@ contract SecurityPoolForkCoordinator {
 	}
 	/// @notice Reports reserve the maximum winning liability before bids begin.
 	/// These budgets remain fixed until activation, including a delayed closing.
-	function auctionExposure(uint248 universeId) external view returns (uint256 commitment, uint256 rep) {
+	function repairAuctionExposure(uint248 universeId) external view returns (uint256 commitment, uint256 rep) {
 		Branch storage branch = branchStates[universeId];
 		if (!branch.started || branch.ready) return (0, 0);
-		SecurityPoolAuction auction = branch.auction;
-		if (address(auction) == address(0)) return (branch.chosenCommitment, 0);
-		return (branch.chosenCommitment + auction.targetLots() * auction.lotAttoEth(), auction.inventoryAttoRep());
+		SecurityPoolRepairAuction repairAuction = branch.repairAuction;
+		if (address(repairAuction) == address(0)) return (branch.chosenCommitment, 0);
+		return (
+			branch.chosenCommitment + repairAuction.targetLots() * repairAuction.lotAttoEth(),
+			repairAuction.inventoryAttoRep()
+		);
 	}
 	/// @notice The security pool clock used for settlement and finality, adjusted for fork pauses.
 	function securityPoolTime(uint248 universeId) public view returns (uint48) {
@@ -339,7 +342,7 @@ contract SecurityPoolForkCoordinator {
 			zoltar.burnRep(child, branch.recoveryAttoRep);
 			branch.recoveryAttoRep = 0;
 		}
-		_createBranchAuctionIfNeeded(child, branch, fork, token);
+		_createBranchRepairAuctionIfNeeded(child, branch, fork, token);
 		ISecurityPoolForkServices(securityPool.services()).createPremiumChild(branch.parent, child);
 		emit BranchStarted(child, branch.parentCash, branch.recoveryAttoRep);
 	}
@@ -358,7 +361,7 @@ contract SecurityPoolForkCoordinator {
 			}
 		}
 	}
-	function _createBranchAuctionIfNeeded(uint248 child, Branch storage branch, Fork storage fork, IERC20 token) private {
+	function _createBranchRepairAuctionIfNeeded(uint248 child, Branch storage branch, Fork storage fork, IERC20 token) private {
 		uint256 freshInventoryAttoRep = fork.backing - branch.chosenBacking;
 		SecurityPoolSettlement settlement = securityPool.settlement();
 		uint256 targetCash = settlement.ledger().requiredForkCash(settlement.bookIds(branch.parent));
@@ -368,9 +371,9 @@ contract SecurityPoolForkCoordinator {
 			freshInventoryAttoRep != 0 &&
 			settlementShortfallAttoEth >= securityPool.minimumCommitmentAttoEth()
 		) {
-			SecurityPoolAuction auction = SecurityPoolAuction(securityPool.auctionDeployer().create(address(this), address(securityPool), child, zoltar.getForkRecapitalizationDeadline(branch.parent), freshInventoryAttoRep, settlementShortfallAttoEth));
-			branch.auction = auction;
-			token.safeTransfer(address(auction), freshInventoryAttoRep);
+			SecurityPoolRepairAuction repairAuction = SecurityPoolRepairAuction(securityPool.repairAuctionDeployer().create(address(this), address(securityPool), child, zoltar.getForkRecapitalizationDeadline(branch.parent), freshInventoryAttoRep, settlementShortfallAttoEth));
+			branch.repairAuction = repairAuction;
+			token.safeTransfer(address(repairAuction), freshInventoryAttoRep);
 		}
 	}
 
@@ -384,7 +387,7 @@ contract SecurityPoolForkCoordinator {
 		_start(child);
 		// The earliest activation date remains fixed even when bids or quotes are missing.
 		require(block.timestamp >= zoltar.getForkRecapitalizationDeadline(branch.parent), 'Fork activation window still open');
-		uint256 raisedAttoEth = _settleBranchAuction(child, branch);
+		uint256 raisedAttoEth = _settleBranchRepairAuction(child, branch);
 		// No inherited reporting time elapses while the branch is in preparation.
 		clocks[child].wallAnchor = CheckedCast.toUint48(block.timestamp);
 		_initializeChildSettlement(child, branch, raisedAttoEth);
@@ -396,14 +399,14 @@ contract SecurityPoolForkCoordinator {
 		emit BranchActivated(child, branch.parentCash + raisedAttoEth, branch.recoveryAttoRep);
 	}
 
-	function _settleBranchAuction(uint248 child, Branch storage branch) private returns (uint256 raisedAttoEth) {
-		SecurityPoolAuction auction = branch.auction;
-		if (address(auction) != address(0)) {
-			SecurityPoolUniformPriceAuction.Clearing memory result = auction.finalize();
+	function _settleBranchRepairAuction(uint248 child, Branch storage branch) private returns (uint256 raisedAttoEth) {
+		SecurityPoolRepairAuction repairAuction = branch.repairAuction;
+		if (address(repairAuction) != address(0)) {
+			SecurityPoolUniformPriceRepairAuction.Clearing memory result = repairAuction.finalize();
 			raisedAttoEth = result.raisedAttoEth;
 			branch.recoveryAttoRep -= result.soldAttoRep;
 			if (result.filledLots != 0)
-				securityPool.capitalLedger(child).installAuctionCohort(address(auction), result.filledLots, result.attoRepPerLot, auction.lotAttoEth());
+				securityPool.capitalLedger(child).installRepairAuctionCohort(address(repairAuction), result.filledLots, result.attoRepPerLot, repairAuction.lotAttoEth());
 		}
 	}
 	function _initializeChildSettlement(uint248 child, Branch storage branch, uint256 raisedAttoEth) private {

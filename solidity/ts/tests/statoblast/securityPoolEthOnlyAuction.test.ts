@@ -7,11 +7,11 @@ import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { DAY } from '../../testSupport/simulator/utils/constants'
 import { addRepToMigrationBalance, forkUniverse, getZoltarForkThreshold, splitMigrationRep } from '../../testSupport/simulator/utils/contracts/zoltar'
 import {
-	statoblast_SecurityPoolAuction_SecurityPoolAuction as auctionArtifact,
+	statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction as auctionArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
-	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact,
-	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as vaultArtifact,
+	statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as engineArtifact,
+	statoblast_SecurityPoolRepairAuctionVault_SecurityPoolRepairAuctionVault as vaultArtifact,
 	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
 } from '../../types/contractArtifact'
@@ -53,7 +53,7 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		expect(await collateralBalance(context.other, fixture.securityPool, context.engine)).toBe(2n * unit)
 		await context.closingQuote()
 		await context.finalize()
-		const position = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [bid.id] })
+		const position = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'repairAuctionPosition', args: [bid.id] })
 		expect(position.commitment).toBe(2n * unit)
 		expect(position.principal + position.earnedAttoRep).toBe(2n * minimum)
 	})
@@ -141,7 +141,7 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		const afterClose = await collateralBalance(context.owner, fixture.securityPool, recipient)
 		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [tied.id, recipient] }))
 		expect((await collateralBalance(context.owner, fixture.securityPool, recipient)) - afterClose).toBe(fill.refundAttoEth)
-		expect((await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [tied.id] })).materialized).toBe(false)
+		expect((await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'repairAuctionPosition', args: [tied.id] })).materialized).toBe(false)
 	})
 
 	test('purchased collateral meets the chosen health target without selling unsold inventory', async () => {
@@ -161,14 +161,14 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		const result = await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewFinalization', args: [5n, 0n] })
 		expect(result.soldAttoRep).toBe(3n * minimum)
 		expect(result.roundingAttoRep).toBe(0n)
-		const virtual = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [bid.id] })
+		const virtual = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'repairAuctionPosition', args: [bid.id] })
 		expect(virtual.principal).toBe(3n * result.attoRepPerLot)
 		expect(virtual.principal).toBeGreaterThanOrEqual(3n * required)
 		expect(virtual.earnedAttoRep).toBe(result.roundingAttoRep)
 		const incumbent = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerAccount', args: [context.owner.account.address] })
 		expect(incumbent.feesAttoRep).toBe(0n)
-		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'materializeAuctionBid', args: [bid.id] }))
-		const materialized = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [bid.id] })
+		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'materializeRepairAuctionBid', args: [bid.id] }))
+		const materialized = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'repairAuctionPosition', args: [bid.id] })
 		expect(materialized.principal + materialized.earnedAttoRep).toBe(3n * minimum)
 		expect(materialized.earnedAttoRep).toBe(result.roundingAttoRep)
 		expect(await context.balance(context.capital)).toBe(1_000n * unit + result.soldAttoRep)
@@ -188,7 +188,7 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 			context.other.writeContract({ abi: vaultArtifact.abi, address: bid.vault, functionName: 'executeAndSweep', args: [context.capital, 0n, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings', args: [bid.vault] }), context.token, context.other.account.address] }),
 		)
 		expect(await context.balance(context.other.account.address)).toBe(before + result.roundingAttoRep)
-		expect((await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [bid.id] })).earnedAttoRep).toBe(0n)
+		expect((await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'repairAuctionPosition', args: [bid.id] })).earnedAttoRep).toBe(0n)
 	})
 
 	test.each([1n, 2n * unit])('#1242 an adequately backed clearing survives an upward closing price %s', async price => {

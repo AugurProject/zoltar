@@ -163,7 +163,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 	}
 
 	function cure(uint96 id, uint256 target, bool ownerExit, uint256 minimumCommitmentAttoEth, uint256 securityMultiplierBps) public onlyDelegateCall returns (uint256 removed) {
-		require(id != 0 && id != auctionCohort.positionId, 'Materialize an individual auction vault');
+		require(id != 0 && id != repairAuctionCohort.positionId, 'Materialize an individual repair auction vault');
 		SecurityPoolCommitmentIndex.Cure memory result = commitmentIndex.cure(id, liquidationPrice, securityMultiplierBps, minimumCommitmentAttoEth, demandAttoEth, target, ownerExit);
 		removed = result.removed;
 		if (removed != 0) {
@@ -183,7 +183,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			uint256 repaired,
 			uint256 takeoverReward,
 			uint256 debit
-		) = commitmentIndex.takeover(id, auctionCohort.positionId, receiverOwner, commitment, minimumCommitmentAttoEth, demandAttoEth, liquidationPrice, conservativePrice, securityMultiplierBps);
+		) = commitmentIndex.takeover(id, repairAuctionCohort.positionId, receiverOwner, commitment, minimumCommitmentAttoEth, demandAttoEth, liquidationPrice, conservativePrice, securityMultiplierBps);
 		if (cured.removed != 0) {
 			owners[cured.owner].account.freeAttoRep += cured.freedRep;
 			totalFreeAttoRep += cured.freedRep;

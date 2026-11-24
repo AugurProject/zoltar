@@ -5,7 +5,7 @@ import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/act
 import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { quoteSecurityPoolAuctionRefundClaim } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { discoverSimulationSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
-import { loadSecurityPoolBranchAuction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolAuction.js'
+import { loadSecurityPoolBranchAuction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolRepairAuction.js'
 import { loadSecurityPoolForkSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { securityPoolReadClient } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
 

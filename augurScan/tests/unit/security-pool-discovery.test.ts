@@ -126,7 +126,7 @@ test('non-auction branches stop after the bounded auction address lookup', async
 	const result = await discoverSecurityPoolEventDependencies({ ...emitter, address: controller, kind: 'securityPoolForkCoordinator' }, { ...event, name: 'BranchStarted', arguments: { universeId: '2' } }, async (address, abi, name, args = []) => {
 		encodeFunctionData({ abi, functionName: name, args })
 		expect(address).toBe(controller)
-		expect(name).toBe('auctions')
+		expect(name).toBe('repairAuctions')
 		expect(args).toEqual([2n])
 		reads++
 		return zeroAddress
@@ -151,10 +151,10 @@ for (const [name, value, error] of [
 	test(`rejects an unauthenticated auction ${name} edge`, async () => {
 		const auction = getAddress('0x5555555555555555555555555555555555555555')
 		const engine = getAddress('0x6666666666666666666666666666666666666666')
-		const values: Readonly<Record<string, unknown>> = { auctions: auction, forkAuthority: controller, engine, controller: auction, [name]: value }
+		const values: Readonly<Record<string, unknown>> = { repairAuctions: auction, forkAuthority: controller, engine, controller: auction, [name]: value }
 		const read: StateRead = async (address, abi, functionName, args = []) => {
 			encodeFunctionData({ abi, functionName, args })
-			const targets: Readonly<Record<string, Address>> = { auctions: controller, forkAuthority: auction, engine: auction, controller: engine }
+			const targets: Readonly<Record<string, Address>> = { repairAuctions: controller, forkAuthority: auction, engine: auction, controller: engine }
 			const target = targets[functionName]
 			if (target === undefined) throw new Error(`Unexpected discovery target ${functionName}`)
 			expect(address).toBe(target)

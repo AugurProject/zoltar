@@ -72,7 +72,7 @@ type StatoblastInfrastructureArtifacts = {
 	securityPoolServicesDeployer: BytecodeArtifact
 	securityPoolReporterLedgerDeployer: BytecodeArtifact
 	securityPoolForkCoordinatorDeployer: BytecodeArtifact
-	securityPoolAuctionDeployer: BytecodeArtifact
+	securityPoolRepairAuctionDeployer: BytecodeArtifact
 	shareTokenFactory: ContractArtifact
 }
 
@@ -91,7 +91,7 @@ type SecurityPoolFactoryInputs = {
 	securityPoolReporterLedgerDeployer: Address
 	securityPoolForkCoordinatorDeployer: Address
 	securityPoolServicesDeployer: Address
-	securityPoolAuctionDeployer: Address
+	securityPoolRepairAuctionDeployer: Address
 	shareTokenFactory: Address
 	zoltar: Address
 	zoltarQuestionData: Address
@@ -125,7 +125,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 	const getSecurityPoolServicesDeployerByteCode = (): Hex => `0x${artifacts.securityPoolServicesDeployer.evm.bytecode.object}`
 	const getSecurityPoolReporterLedgerDeployerByteCode = (): Hex => `0x${artifacts.securityPoolReporterLedgerDeployer.evm.bytecode.object}`
 	const getSecurityPoolForkCoordinatorDeployerByteCode = (): Hex => `0x${artifacts.securityPoolForkCoordinatorDeployer.evm.bytecode.object}`
-	const getSecurityPoolAuctionDeployerByteCode = (): Hex => `0x${artifacts.securityPoolAuctionDeployer.evm.bytecode.object}`
+	const getSecurityPoolRepairAuctionDeployerByteCode = (): Hex => `0x${artifacts.securityPoolRepairAuctionDeployer.evm.bytecode.object}`
 	/** The only security pool creation code the factory deploys; its hash is a factory constructor argument. */
 	const getSecurityPoolCreationCode = (): Hex => `0x${artifacts.securityPool.evm.bytecode.object}`
 	const getSecurityPoolFactoryByteCode = (inputs: SecurityPoolFactoryInputs) =>
@@ -153,7 +153,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 					inputs.securityPoolReporterLedgerDeployer,
 					inputs.securityPoolForkCoordinatorDeployer,
 					inputs.securityPoolServicesDeployer,
-					inputs.securityPoolAuctionDeployer,
+					inputs.securityPoolRepairAuctionDeployer,
 				],
 			],
 		})
@@ -185,7 +185,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 			securityPoolServicesDeployerBytecode: getSecurityPoolServicesDeployerByteCode(),
 			securityPoolReporterLedgerDeployerBytecode: getSecurityPoolReporterLedgerDeployerByteCode(),
 			securityPoolForkCoordinatorDeployerBytecode: getSecurityPoolForkCoordinatorDeployerByteCode(),
-			securityPoolAuctionDeployerBytecode: getSecurityPoolAuctionDeployerByteCode(),
+			securityPoolRepairAuctionDeployerBytecode: getSecurityPoolRepairAuctionDeployerByteCode(),
 			zeroSalt,
 		}).getInfraContractAddresses
 
@@ -209,7 +209,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 		getSecurityPoolServicesDeployerByteCode,
 		getSecurityPoolReporterLedgerDeployerByteCode,
 		getSecurityPoolForkCoordinatorDeployerByteCode,
-		getSecurityPoolAuctionDeployerByteCode,
+		getSecurityPoolRepairAuctionDeployerByteCode,
 		getShareTokenFactoryByteCode,
 	}
 }

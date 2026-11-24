@@ -20,7 +20,7 @@ function takeoverAcquiredTarget(intent: PendingTransactionIntent, receipt: Recei
 	const ledger = transaction.to
 	if (ledger === undefined || ledger === null || transaction.data === undefined) return false
 	const call = decodeFunctionData({ abi: securityPoolCapitalLedgerAbi, data: transaction.data })
-	if (call.functionName !== 'takeOverWithBounds' && call.functionName !== 'takeOverAuctionBid') return false
+	if (call.functionName !== 'takeOverWithBounds' && call.functionName !== 'takeOverRepairAuctionBid') return false
 	const sourceId = call.functionName === 'takeOverWithBounds' ? call.args[0] : undefined
 	return receipt.logs.some(log => {
 		if (!sameAddress(log.address, ledger) || log.topics[0] !== takenOverTopic) return false

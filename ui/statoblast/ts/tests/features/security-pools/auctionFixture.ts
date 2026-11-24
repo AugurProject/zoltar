@@ -1,5 +1,9 @@
 import { auctionVaultRuntimeCode, boundCloneRuntimeCode, universeCloneBindings } from '@zoltar/statoblast-shared/statoblast/securityPool'
-import { statoblast_SecurityPoolAuction_SecurityPoolAuction as auctionArtifact, statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact, statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as vaultArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import {
+	statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction as auctionArtifact,
+	statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as engineArtifact,
+	statoblast_SecurityPoolRepairAuctionVault_SecurityPoolRepairAuctionVault as vaultArtifact,
+} from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { auctionAddress, auctionEngine, auctionVault, auctionVaultBindings, auctionVaultImplementation, capital, owner, token, unit } from './capitalFixture.js'
 import { modules } from './capitalClient.js'
 import { priceFixture } from './priceFixture.js'
@@ -10,7 +14,7 @@ export async function auctionFixture() {
 	fixture.setAllowances(100n * unit, 100n * unit)
 	const fork = await fixture.fork()
 	Object.assign(fixture.values, {
-		auctions: auctionAddress,
+		repairAuctions: auctionAddress,
 		oracleExposure: 20n * unit,
 		getForkTime: 0n,
 		forkAuthority: modules.fork,
@@ -44,13 +48,13 @@ export async function auctionFixture() {
 		bidderBidId: 1n,
 		owner,
 		initialCapital: capital,
-		auction: auctionAddress,
+		repairAuction: auctionAddress,
 		bidId: 1n,
 		bidIdForVault: 1n,
 		bids: [owner, auctionVault, 12_000n, 2n, 60n * unit, false, false],
 		previewBid: [owner, auctionVault, 12_000n, 1n, unit, 100n * unit, unit],
 		clearing: [100n * unit, 1n, unit, 100n * unit, 0n, 0n, 0n, 0n, 1n, false],
-		auctionPosition: [auctionVault, 0n, 100n * unit, unit, 12_000n, 0n, false, 7n * unit, 9n * unit],
+		repairAuctionPosition: [auctionVault, 0n, 100n * unit, unit, 12_000n, 0n, false, 7n * unit, 9n * unit],
 	})
 	fixture.set(capital, 'universeId', 42n)
 	fixture.set(auctionAddress, 'universeId', 42n)

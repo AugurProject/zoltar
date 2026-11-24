@@ -8,10 +8,10 @@ import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
 import { auctionVaultCreationCode, auctionVaultRuntimeCode, decodeAuctionVaultBindings } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import {
-	test_statoblast_AuctionVaultDeploymentBenchmark_AuctionVaultDeploymentBenchmark as benchmarkArtifact,
-	test_statoblast_AuctionVaultDeploymentBenchmark_AuctionVaultBenchmarkAuctionMock as auctionArtifact,
-	test_statoblast_AuctionVaultDeploymentBenchmark_AuctionVaultBenchmarkCapitalMock as capitalArtifact,
-	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as vaultArtifact,
+	test_statoblast_RepairAuctionVaultDeploymentBenchmark_RepairAuctionVaultDeploymentBenchmark as benchmarkArtifact,
+	test_statoblast_RepairAuctionVaultDeploymentBenchmark_RepairAuctionVaultBenchmarkAuctionMock as auctionArtifact,
+	test_statoblast_RepairAuctionVaultDeploymentBenchmark_RepairAuctionVaultBenchmarkCapitalMock as capitalArtifact,
+	statoblast_SecurityPoolRepairAuctionVault_SecurityPoolRepairAuctionVault as vaultArtifact,
 	statoblast_tokens_ShareToken_ShareToken as tokenArtifact,
 } from '../../types/contractArtifact'
 
@@ -85,7 +85,7 @@ describe('Statoblast: auction vault clones', () => {
 		await expect(owner.readContract({ abi: vaultArtifact.abi, address: implementation, functionName: 'owner' })).rejects.toThrow('Auction vault is not a clone')
 		expect(await owner.readContract({ abi: vaultArtifact.abi, address: vault, functionName: 'owner' })).toBe(owner.account.address)
 		expect(await owner.readContract({ abi: vaultArtifact.abi, address: vault, functionName: 'initialCapital' })).toBe(capital)
-		expect(await owner.readContract({ abi: vaultArtifact.abi, address: vault, functionName: 'auction' })).toBe(auction)
+		expect(await owner.readContract({ abi: vaultArtifact.abi, address: vault, functionName: 'repairAuction' })).toBe(auction)
 		expect(await owner.readContract({ abi: vaultArtifact.abi, address: vault, functionName: 'bidId' })).toBe(7n)
 		await expect(stranger.writeContract({ abi: vaultArtifact.abi, address: vault, functionName: 'execute', args: [auction, 0n, ping] })).rejects.toThrow('Only the auction vault owner')
 		await expect(owner.writeContract({ abi: benchmarkArtifact.abi, address: benchmark, functionName: 'createClone', args: [owner.account.address, capital, auction, 7n] })).rejects.toThrow('Auction vault deployment failed')

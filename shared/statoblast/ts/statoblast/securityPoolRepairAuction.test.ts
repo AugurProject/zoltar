@@ -45,7 +45,7 @@ const abi = parseAbi([
 	'function open()',
 	'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot,uint256 targetHealthFactorBps) payable returns (uint256 bidId,address vault)',
 	'function settleRefund(uint256 bidId)',
-	'function materializeAuctionBid(uint256 bidId) returns (address vault,uint96 positionId)',
+	'function materializeRepairAuctionBid(uint256 bidId) returns (address vault,uint96 positionId)',
 	'function withdrawRefunds(address recipient)',
 	'function settleAndWithdrawRefund(uint256 bidId,address recipient) returns (uint256)',
 	'function execute(address target,uint256 value,bytes data) payable returns (bytes)',
@@ -62,7 +62,7 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 		forkController: controller,
 		securityPool,
 		zoltar,
-		auctions: auction,
+		repairAuctions: auction,
 		capitalLedger: capital,
 		priceFeed: feed,
 		oracleExposure: 20n * unit,
@@ -100,7 +100,7 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 		bidderBidCount: 3n,
 		owner: bidder,
 		initialCapital: capital,
-		auction,
+		repairAuction: auction,
 		balanceOf: options.walletAttoEth ?? 100n * unit,
 		allowance: 100n * unit,
 		clearing: [6n * unit, 3n, 3n * unit, 18n * unit, 0n, 0n, 0n, 0n, 3n, false],
@@ -119,7 +119,7 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 			if (parameters.functionName === 'bidderBidId') return BigInt(String(parameters.args?.[1])) + 1n
 			if (parameters.functionName === 'bids' && typeof id === 'bigint') return [bidder, vaultFor(id), 12_000n, 2n, 5n * unit, false, false]
 			if (parameters.functionName === 'previewBid' && typeof id === 'bigint') return [bidder, vaultFor(id), 12_000n, 1n, unit, 6n * unit, unit]
-			if (parameters.functionName === 'auctionPosition' && typeof id === 'bigint') return [vaultFor(id), 0n, 6n * unit, unit, 12_000n, 30n, false, 7n, 9n]
+			if (parameters.functionName === 'repairAuctionPosition' && typeof id === 'bigint') return [vaultFor(id), 0n, 6n * unit, unit, 12_000n, 30n, false, 7n, 9n]
 			if (parameters.functionName === 'bidId') return vaultId(parameters.address)
 			if (parameters.functionName === 'bidIdForVault') return vaultId(id)
 			if (!(parameters.functionName in values)) throw new Error(`Unexpected auction read ${parameters.functionName}`)
@@ -181,7 +181,7 @@ describe('security pool collateral repair auction SDK', () => {
 		await expect(load(source, 0n, 65)).rejects.toThrow('64 bids')
 	})
 	test('missing auctions stay readable without touching zero-address capital and preserve an explicit empty state', async () => {
-		const source = fixture({ auctions: zeroAddress, capitalLedger: zeroAddress, getRepToken: zeroAddress, priceFeed: zeroAddress })
+		const source = fixture({ repairAuctions: zeroAddress, capitalLedger: zeroAddress, getRepToken: zeroAddress, priceFeed: zeroAddress })
 		const snapshot = await load(source)
 		expect(snapshot.auction).toBeUndefined()
 		expect(source.calls.some(call => call.address === zeroAddress || call.functionName === 'oracleExposure')).toBe(false)
@@ -196,7 +196,7 @@ describe('security pool collateral repair auction SDK', () => {
 			[engine, 'controller', bidder],
 			[vaultFor(1n), 'owner', securityPool],
 			[vaultFor(1n), 'initialCapital', bidder],
-			[vaultFor(1n), 'auction', engine],
+			[vaultFor(1n), 'repairAuction', engine],
 			[vaultFor(1n), 'bidId', 9n],
 		] as const) {
 			await expect(load(fixture({ [`${address}:${name}`]: value }))).rejects.toThrow()
@@ -303,7 +303,7 @@ describe('security pool collateral repair auction SDK', () => {
 		expect(snapshot.auction?.bids[0]?.position).toMatchObject({ positionId: 0n, materialized: false, principalAttoRep: 6n * unit, commitmentAttoEth: unit, liquidationStarted: 30n, earnedAttoEth: 7n, earnedAttoRep: 9n })
 		expect(decodeFunctionData({ abi, data: buildSecurityPoolAuctionRefundCreditRequest(snapshot, 1n).data })).toEqual({ functionName: 'settleRefund', args: [1n] })
 		expect(buildSecurityPoolAuctionMaterializeRequest(snapshot, 1n)).toMatchObject({ account: bidder, to: capital, value: 0n })
-		expect(decodeFunctionData({ abi, data: buildSecurityPoolAuctionMaterializeRequest(snapshot, 1n).data })).toEqual({ functionName: 'materializeAuctionBid', args: [1n] })
+		expect(decodeFunctionData({ abi, data: buildSecurityPoolAuctionMaterializeRequest(snapshot, 1n).data })).toEqual({ functionName: 'materializeRepairAuctionBid', args: [1n] })
 		expect(decodeFunctionData({ abi, data: buildSecurityPoolAuctionRefundWithdrawRequest(snapshot, bidder).data })).toEqual({ functionName: 'withdrawRefunds', args: [bidder] })
 		expect(() => buildSecurityPoolAuctionRefundCreditRequest(snapshot, 100n)).toThrow('page')
 		expect(() => buildSecurityPoolAuctionRefundWithdrawRequest(snapshot, zeroAddress)).toThrow('recipient')

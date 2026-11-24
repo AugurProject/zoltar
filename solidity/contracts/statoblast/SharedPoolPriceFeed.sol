@@ -420,7 +420,7 @@ contract SharedPoolPriceFeed {
 		return
 			selector == SecurityPoolCapitalLedger.takeOver.selector ||
 			selector == SecurityPoolCapitalLedger.takeOverWithBounds.selector ||
-			selector == SecurityPoolCapitalLedger.takeOverAuctionBid.selector ||
+			selector == SecurityPoolCapitalLedger.takeOverRepairAuctionBid.selector ||
 			selector == SecurityPoolCapitalLedger.depositFor.selector ||
 			selector == SecurityPoolCapitalLedger.depositAndSetHealthTarget.selector ||
 			selector == SecurityPoolCapitalLedger.withdrawPrincipal.selector ||
@@ -429,7 +429,7 @@ contract SharedPoolPriceFeed {
 			selector == SecurityPoolCapitalLedger.setCommitmentWithReport.selector ||
 			selector == SecurityPoolCapitalLedger.claimEarnings.selector ||
 			selector == SecurityPoolCapitalLedger.serveRetirement.selector ||
-			selector == SecurityPoolCapitalLedger.materializeAuctionBid.selector;
+			selector == SecurityPoolCapitalLedger.materializeRepairAuctionBid.selector;
 	}
 
 	function _executeReportOperations(uint256 reportId, address sponsor) private {

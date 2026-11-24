@@ -158,7 +158,7 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 								},
 							},
 				collateral: auctionCollateral,
-				finalization: evidence('AuctionFinalized', { attoRepPerLot: (4n * 10n ** 18n).toString(), filledLots: '3', raisedAttoEth: (3n * 10n ** 6n).toString(), soldAttoRep: (12n * 10n ** 18n).toString() }),
+				finalization: evidence('RepairAuctionFinalized', { attoRepPerLot: (4n * 10n ** 18n).toString(), filledLots: '3', raisedAttoEth: (3n * 10n ** 6n).toString(), soldAttoRep: (12n * 10n ** 18n).toString() }),
 				demandCurveTruncated: context.pageUrl.searchParams.get('demandTruncated') === '1',
 				demandCurve: [{ minimumAttoRepPerLot: (4n * 10n ** 18n).toString(), lots: '3', cumulativeLots: '3', amountAttoEth: (3n * 10n ** 6n).toString(), cumulativeDemandAttoEth: (3n * 10n ** 6n).toString() }],
 				events: evidencePage(bid),

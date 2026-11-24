@@ -554,7 +554,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 					return parameters.address === address(92) ? address(91) : address(90)
 				case 'forkAuthority':
 					return address(95)
-				case 'auctions':
+				case 'repairAuctions':
 					return collateralRepairAuction
 				case 'engine':
 					return address(24)

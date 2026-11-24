@@ -34,9 +34,9 @@ describe('security pool operator funded auction capital integration', () => {
 		const initial = await loadSecurityPoolObservation(reader, settings, account.address, scope, await reader.getBlockNumber())
 		const virtual = initial.positions.filter(position => position.auctionTarget !== undefined)
 		expect(virtual.map(position => position.auctionTarget?.bidId)).toEqual([first.id, second.id])
-		const cohort = await context.owner.readContract({ address: context.capital, abi: capitalAbi, functionName: 'auctionCohort' })
+		const cohort = await context.owner.readContract({ address: context.capital, abi: capitalAbi, functionName: 'repairAuctionCohort' })
 		expect(initial.positions.filter(position => position.auctionTarget === undefined).some(position => position.id === cohort[1])).toBe(false)
-		expect(virtual[0]).toMatchObject({ rep: (await context.owner.readContract({ address: context.capital, abi: capitalAbi, functionName: 'auctionPosition', args: [first.id] })).principal })
+		expect(virtual[0]).toMatchObject({ rep: (await context.owner.readContract({ address: context.capital, abi: capitalAbi, functionName: 'repairAuctionPosition', args: [first.id] })).principal })
 		await context.report(3n * unit)
 		const observation = await loadSecurityPoolObservation(reader, settings, account.address, scope, await reader.getBlockNumber())
 		const target = observation.positions.find(position => position.auctionTarget?.bidId === first.id)
@@ -49,14 +49,14 @@ describe('security pool operator funded auction capital integration', () => {
 		})
 		try {
 			// Cures are unpaid, so the keeper never cures standalone and both winners stay virtual until a funded acquisition.
-			expect((await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'auctionPosition', args: [first.id] })).materialized).toBe(false)
+			expect((await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'repairAuctionPosition', args: [first.id] })).materialized).toBe(false)
 			await context.mock.setBalance(account.address, 100n * unit)
 			const { next, winner } = await distressedSecondWinner(context, keeperOperator, second.id)
 			for (let step = 0; step < 3; step++) {
 				const before = state.activities.filter(activity => activity.status === 'confirmed').length
 				await executeSecurityPoolTakeover(wallet, settings, state, pool, next, securityPoolTarget(winner), async () => true)
 				expect(state.activities.filter(activity => activity.status === 'confirmed')).toHaveLength(before + 1)
-				const after = await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'auctionPosition', args: [second.id] })
+				const after = await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'repairAuctionPosition', args: [second.id] })
 				expect(after.materialized).toBe(step === 2)
 			}
 			const taken = await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'ownerCollateral', args: [account.address] })

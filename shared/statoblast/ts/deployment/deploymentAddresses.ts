@@ -16,7 +16,7 @@ type SecurityPoolFactoryAddressInputs = {
 	securityPoolReporterLedgerDeployer: Address
 	securityPoolForkCoordinatorDeployer: Address
 	securityPoolServicesDeployer: Address
-	securityPoolAuctionDeployer: Address
+	securityPoolRepairAuctionDeployer: Address
 	shareTokenFactory: Address
 	zoltar: Address
 	zoltarQuestionData: Address
@@ -45,7 +45,7 @@ type InfraContractAddressConfig = {
 	securityPoolServicesDeployerBytecode: Hex
 	securityPoolReporterLedgerDeployerBytecode: Hex
 	securityPoolForkCoordinatorDeployerBytecode: Hex
-	securityPoolAuctionDeployerBytecode: Hex
+	securityPoolRepairAuctionDeployerBytecode: Hex
 	zeroSalt: Hex
 	getZoltarAddress: () => Address
 	getZoltarQuestionDataAddress: () => Address
@@ -73,7 +73,7 @@ type InfraContractAddresses = {
 	securityPoolServicesDeployer: Address
 	securityPoolReporterLedgerDeployer: Address
 	securityPoolForkCoordinatorDeployer: Address
-	securityPoolAuctionDeployer: Address
+	securityPoolRepairAuctionDeployer: Address
 	shareTokenFactory: Address
 	zoltar: Address
 	zoltarQuestionData: Address
@@ -91,7 +91,7 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 			securityPoolServicesDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolServicesDeployerBytecode),
 			securityPoolReporterLedgerDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolReporterLedgerDeployerBytecode),
 			securityPoolForkCoordinatorDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolForkCoordinatorDeployerBytecode),
-			securityPoolAuctionDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolAuctionDeployerBytecode),
+			securityPoolRepairAuctionDeployer: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.securityPoolRepairAuctionDeployerBytecode),
 			openOracle: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.openOracleBytecode),
 			zoltarQuestionData: config.getZoltarQuestionDataAddress(),
 			zoltar: config.getZoltarAddress(),
@@ -135,7 +135,7 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 					securityPoolReporterLedgerDeployer: addresses.securityPoolReporterLedgerDeployer,
 					securityPoolForkCoordinatorDeployer: addresses.securityPoolForkCoordinatorDeployer,
 					securityPoolServicesDeployer: addresses.securityPoolServicesDeployer,
-					securityPoolAuctionDeployer: addresses.securityPoolAuctionDeployer,
+					securityPoolRepairAuctionDeployer: addresses.securityPoolRepairAuctionDeployer,
 					shareTokenFactory: addresses.shareTokenFactory,
 					zoltar: addresses.zoltar,
 					zoltarQuestionData: addresses.zoltarQuestionData,

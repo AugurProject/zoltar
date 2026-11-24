@@ -277,7 +277,7 @@ test('virtual winner takeover uses the bid API and rejects materialization or id
 	const call = f.calls[0]
 	if (call === undefined) throw new Error('Missing auction takeover')
 	expect(decodeFunctionData({ abi: securityPoolCapitalLedgerAbi, data: call.data })).toMatchObject({
-		functionName: 'takeOverAuctionBid',
+		functionName: 'takeOverRepairAuctionBid',
 		args: [44n, 100n * unit, 99n * unit, 100n * unit, { maximumOwnerPrincipal: 1000n * unit, maximumOwnerCommitment: 1000n * unit, expectedTargetHealthFactorBps: 15_000n, expectedAcceptedPriceEpoch: 3n, expectedSourceBatch: 0n }],
 	})
 	expect(call.label).toContain('auction bid 44')

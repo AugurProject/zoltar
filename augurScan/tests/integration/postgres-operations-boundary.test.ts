@@ -80,7 +80,7 @@ postgresTest(
 						(${historicalChainId}, ${firstTransactionHash}, ${firstHash}, 1, 0, 1, ${escalationAddress}, '[]'::jsonb, '0x',
 							'DepositOnOutcome', '{}'::jsonb, '[]'::jsonb, 'decoded', 'historical deposit', true, true),
 						(${historicalChainId}, ${firstTransactionHash}, ${firstHash}, 1, 0, 2, ${auctionAddress}, '[]'::jsonb, '0x',
-							'AuctionStarted', '{}'::jsonb, '[]'::jsonb, 'decoded', 'historical auction', true, true),
+							'RepairAuctionStarted', '{}'::jsonb, '[]'::jsonb, 'decoded', 'historical auction', true, true),
 						(${historicalChainId}, ${firstTransactionHash}, ${firstHash}, 1, 0, 3, ${auctionAddress}, '[]'::jsonb, '0x',
 							'BidSubmitted', '{}'::jsonb, '[]'::jsonb, 'decoded', 'historical bid', true, true),
 						(${historicalChainId}, ${secondTransactionHash}, ${secondHash}, 2, 0, 0, ${reportAddress}, '[]'::jsonb, '0x',
@@ -90,7 +90,7 @@ postgresTest(
 						(${historicalChainId}, ${secondTransactionHash}, ${secondHash}, 2, 0, 2, ${auctionAddress}, '[]'::jsonb, '0x',
 							'BidSubmitted', '{}'::jsonb, '[]'::jsonb, 'decoded', 'current bid', true, true),
 						(${historicalChainId}, ${secondTransactionHash}, ${secondHash}, 2, 0, 3, ${auctionAddress}, '[]'::jsonb, '0x',
-							'AuctionFinalized', '{}'::jsonb, '[]'::jsonb, 'decoded', 'current finalization', true, true)
+							'RepairAuctionFinalized', '{}'::jsonb, '[]'::jsonb, 'decoded', 'current finalization', true, true)
 				`
 			await database.sql`
 					INSERT INTO open_oracle_report_events (
@@ -115,13 +115,13 @@ postgresTest(
 					INSERT INTO collateral_repair_auction_events (
 						chain_id, block_hash, tx_hash, log_index, block_number, auction_address, event_name, event_data, canonical
 					) VALUES
-						(${historicalChainId}, ${firstHash}, ${firstTransactionHash}, 2, 1, ${auctionAddress}, 'AuctionStarted',
+						(${historicalChainId}, ${firstHash}, ${firstTransactionHash}, 2, 1, ${auctionAddress}, 'RepairAuctionStarted',
 							'{"opensAt":"1767225600","closesAt":"1767229200","lotAttoEth":"1000","targetLots":"10","inventoryAttoRep":"900","maximumAttoRepPerLot":"90"}'::jsonb, true),
 						(${historicalChainId}, ${firstHash}, ${firstTransactionHash}, 3, 1, ${auctionAddress}, 'BidSubmitted',
 							'{"bidId":"1","bidder":"0x1000000000000000000000000000000000000001","vault":"0x1000000000000000000000000000000000000001","lots":"4","minimumAttoRepPerLot":"60","targetHealthBps":"12000"}'::jsonb, true),
 						(${historicalChainId}, ${secondHash}, ${secondTransactionHash}, 2, 2, ${auctionAddress}, 'BidSubmitted',
 							'{"bidId":"2","bidder":"0x2000000000000000000000000000000000000002","vault":"0x2000000000000000000000000000000000000002","lots":"3","minimumAttoRepPerLot":"30","targetHealthBps":"12000"}'::jsonb, true),
-						(${historicalChainId}, ${secondHash}, ${secondTransactionHash}, 3, 2, ${auctionAddress}, 'AuctionFinalized',
+						(${historicalChainId}, ${secondHash}, ${secondTransactionHash}, 3, 2, ${auctionAddress}, 'RepairAuctionFinalized',
 							'{"attoRepPerLot":"60","filledLots":"7","raisedAttoEth":"7000","soldAttoRep":"420"}'::jsonb, true)
 				`
 			const response = await handleApi(new Request(`http://localhost/api/v1/state/risk?chainId=${historicalChainId}&atBlock=1&limit=1`), database.sql)
@@ -170,12 +170,12 @@ postgresTest(
 				report_data: { marker: 'historical' },
 			})
 			expect(operations.data.escalations).toEqual([expect.objectContaining({ block_number: '1', event_name: 'DepositOnOutcome', invalid_stake_atto_rep: null, balance_read_status: null })])
-			// Block 1 is stamped 21 seconds after AuctionStarted.opensAt and well before closesAt.
+			// Block 1 is stamped 21 seconds after RepairAuctionStarted.opensAt and well before closesAt.
 			expect(operations.data.auctions).toEqual([expect.objectContaining({ block_number: '1', event_name: 'BidSubmitted', bid_count: 1, bidder_count: 1, settlement_count: 0, status: 'Open' })])
 			const auctionDetailResponse = await handleApi(new Request(`http://localhost/api/v1/state/auctions/${historicalChainId}/${auctionAddress}`), database.sql)
 			expect(auctionDetailResponse?.status).toBe(200)
 			const auctionDetail = (await auctionDetailResponse?.json()) as { data: { demandCurve: unknown; demandCurveTruncated: boolean; finalization: { event_data: unknown } } }
-			// The lower REP-per-lot limit fills first; each lot is AuctionStarted.lotAttoEth of collateral.
+			// The lower REP-per-lot limit fills first; each lot is RepairAuctionStarted.lotAttoEth of collateral.
 			expect(auctionDetail.data.demandCurve).toEqual([
 				{ minimumAttoRepPerLot: '30', lots: '3', cumulativeLots: '3', amountAttoEth: '3000', cumulativeDemandAttoEth: '3000' },
 				{ minimumAttoRepPerLot: '60', lots: '4', cumulativeLots: '7', amountAttoEth: '4000', cumulativeDemandAttoEth: '7000' },
