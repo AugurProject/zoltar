@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { createPublicClient, custom, encodeAbiParameters, encodeFunctionData, parseAbi, parseAbiParameters, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { checkStatoblastEntries } from '@zoltar/ui-statoblast-shared/protocol/statoblastEntries.js'
+import { checkStatoblastEntries, invalidateStatoblastEntries } from '@zoltar/ui-statoblast-shared/protocol/statoblastEntries.js'
 import { getInfraContractAddresses } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 
 const pool: Address = '0x0000000000000000000000000000000000000011'
@@ -58,4 +58,27 @@ test('entry checks authenticate pools before resolving questions and isolate the
 	expect(batches).toHaveLength(2)
 	expect(batches[0]).toContain(factory)
 	expect(batches[1]).not.toContain(foreign.slice(2))
+})
+
+test('a refresh rechecks a negative entry after another wallet prepares it', async () => {
+	invalidateStatoblastEntries()
+	let checks = 0
+	const client = createPublicClient({
+		transport: custom({
+			request: async ({ method, params }) => {
+				expect(method).toBe('eth_call')
+				if (!Array.isArray(params)) throw new Error('Missing multicall parameters.')
+				const [, tag] = params
+				checks++
+				const result = checks % 2 === 1 ? encodeAbiParameters(parseAbiParameters('bool'), [true]) : encodeAbiParameters(parseAbiParameters('address'), [ledger])
+				const noLedger = checks % 2 === 0 && tag === '0x2a'
+				return encodeAbiParameters(multicallResult, [[{ success: !noLedger, returnData: noLedger ? revert('Question pool unavailable') : result }]])
+			},
+		}),
+	})
+	const target = [{ pool, questionId: 7n, universeId: 1n }]
+	expect(await checkStatoblastEntries(client, target, 42n, true)).toEqual([{ status: 'unprepared-question' }])
+	expect(await checkStatoblastEntries(client, target, 43n, true)).toEqual([{ status: 'question', pool, ledger }])
+	expect(await checkStatoblastEntries(client, target, 44n, true)).toEqual([{ status: 'question', pool, ledger }])
+	expect(checks).toBe(4)
 })

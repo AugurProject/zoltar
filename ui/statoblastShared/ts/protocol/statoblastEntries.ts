@@ -80,7 +80,8 @@ export async function checkStatoblastEntries(client: Pick<ReadClient, 'multicall
 	const loaded = missing.length === 0 ? [] : await readStatoblastEntries(client, missing, blockNumber)
 	const checked = new Map(missing.map((entry, index) => [key(entry), loaded[index]]))
 	for (const [entry, result] of checked) {
-		if (result !== undefined && result.status !== 'failed') cache.set(entry, result)
+		// A registration, deployment, or child preparation from another wallet can change a negative result.
+		if (result?.status === 'pool' || result?.status === 'question') cache.set(entry, result)
 	}
 	return entries.map(entry => cache.get(key(entry)) ?? checked.get(key(entry)) ?? { status: 'failed', error: new Error('Missing entry verification result.') })
 }
