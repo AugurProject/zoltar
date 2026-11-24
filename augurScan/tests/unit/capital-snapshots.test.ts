@@ -179,7 +179,7 @@ test('the auction adapter owns the cohort position that the ledger keeps outside
 		accountOf: args => [{ owner, batch: 0n, rep: args[0] === 9n ? 500n : 0n, commitment: 20n, maxHealthyPrice: 195n * 10n ** 18n, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n }],
 	})
 	const snapshot = await sampleEntityStateWithRead({ entityType: 'capital-owner', entityIdentity: 'position', address: ledger, ownerAddress: owner }, cohort)
-	expect(snapshot.readResult).toMatchObject({ repairAuctionCohort: true, auctionCohortRemainingLots: '4', positionId: '9', principalAttoRep: '500', pledgedAttoRep: '500', commitmentAttoEth: '20', healthFactorBps: '12500', belowLiquidationPrice: false })
+	expect(snapshot.readResult).toMatchObject({ repairAuctionCohort: true, repairAuctionCohortRemainingLots: '4', positionId: '9', principalAttoRep: '500', pledgedAttoRep: '500', commitmentAttoEth: '20', healthFactorBps: '12500', belowLiquidationPrice: false })
 	// A cohort is taken over per bid through `takeOverRepairAuctionBid`, never as a whole, even below the liquidation price.
 	const underwater = await sampleEntityStateWithRead(
 		{ entityType: 'capital-owner', entityIdentity: 'position', address: ledger, ownerAddress: owner },

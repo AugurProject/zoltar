@@ -289,7 +289,7 @@ export const capitalOwnerSnapshot = async (ledger: Address, owner: Address, read
 		ledger: ledger.toLowerCase(),
 		owner: owner.toLowerCase(),
 		positionId: positionId.toString(),
-		...(cohortId === 0n ? {} : { repairAuctionCohort: true, auctionCohortRemainingLots: quantity(cohort[2], 'repairAuctionCohort.remainingLots').toString() }),
+		...(cohortId === 0n ? {} : { repairAuctionCohort: true, repairAuctionCohortRemainingLots: quantity(cohort[2], 'repairAuctionCohort.remainingLots').toString() }),
 		principalAttoRep: principal.toString(),
 		commitmentAttoEth: commitment.toString(),
 		withdrawableAttoRep: quantity(collateral[2], 'ownerCollateral.withdrawable').toString(),

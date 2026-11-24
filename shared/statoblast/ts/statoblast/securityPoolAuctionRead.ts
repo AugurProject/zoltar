@@ -1,6 +1,6 @@
 import { parseAbi, zeroAddress, type AbiValue, type Address } from '@zoltar/core-shared/evm/ethereum'
 import type { SecurityPoolReadClient } from './securityPoolRead.js'
-import { predictAuctionVaultAddress } from './securityPoolAuctionVaultClones.js'
+import { predictAuctionVaultAddress } from './securityPoolRepairAuctionVaultClones.js'
 import { decodeAddress, decodeBool, decodeFields, decodeUint } from './securityPoolDecoding.js'
 
 const abi = parseAbi([
