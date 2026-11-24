@@ -259,7 +259,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	function observeHealthy(uint256 price) external onlyCapitalLedger operational {
 		require(block.timestamp <= type(uint48).max, 'Commitment clock exhausted');
 		uint64 epoch = ++healthObservationEpoch;
-		observationTimes[epoch] = CheckedCast.toUint48(block.timestamp);
+		observationTimes[epoch] = uint48(block.timestamp);
 		observedPrice = price;
 		_observeHealthy(roots[0], price, epoch);
 		if (currentBatch != 0) _observeHealthy(roots[currentBatch], price, epoch);
