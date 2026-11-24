@@ -76,7 +76,9 @@ describe('Statoblast: child security pool price preparation', () => {
 		expect(open.reportingOpen).toBe(true)
 		expect(open.observation?.weth).toBe(context.weth)
 		const funding = quoteSecurityPoolPriceFunding(open, unit, 10n * unit)
-		expect(funding).toMatchObject({ weth: 10n * unit, rep: 10n * unit, wrap: 0n, bounty: context.bounty })
+		expect(funding).toMatchObject({ weth: 10n * unit, rep: 10n * unit, wrap: 0n })
+		expect(open.observation).toMatchObject({ bounty: context.bounty, nextBlockBounty: funding.bounty })
+		expect(funding.bounty).toBeGreaterThan(context.bounty)
 		await writeContractAndWait(context.owner, () => context.owner.sendTransaction(buildSecurityPoolPriceRequest(open, unit, 10n * unit)))
 		const pending = await load()
 		const reportId = pending.observation?.pendingReportId
