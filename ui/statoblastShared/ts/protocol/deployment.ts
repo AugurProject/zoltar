@@ -45,18 +45,18 @@ export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonl
 	openOraclePriceCoordinatorFactory: '0x7c1f5f7d1acf26baa86673c19bc4a661f3fe8f2e2828a2ac02cdbbbc92f68fb8',
 	priceCoordinatorDeploymentWorker: '0xb5424f26ea14d1c67967a435d09a8c86cc12ae1bccc921c2b5a6b1522be3bb24',
 	questionLedgerEventEmitter: '0xbee32449ae381df422b74497c395f78983985c2ad2775417b1b9eaf915701bde',
-	securityPoolFactory: '0x510036ef549fd3b2bf298cb7e828a2703fb5a48b2aed6112a54167896736f83e',
-	questionForker: '0xeea43b5a22e97b7103cd2d8dd8bd85e1ec9298aa711e3f0b302b3a7b8b346213',
+	securityPoolFactory: '0xedef1bcf7b298f5ef4ef9484d14ff92a0ace0092f8f7ac2d6194150bfdee8806',
+	questionForker: '0x8ab908d2d23e4db2b7f9d4180151a12777535cdcd2df0783f7d2cb87a2380747',
 	questionLedgerOperationsDelegate: '0x70efd3ecf075e48d3f86f51d9b7480e6512d8d034f016a0f50b72223ad820d1c',
-	shareTokenFactory: '0xdc3c829696741d1c28ba6303d276d818bd38de385555a6d6cf036cc8b93f955e',
+	shareTokenFactory: '0xc36149fd76975080650e26afd10c1c2ecf3d553317839156969f93a896044248',
 	sharedPoolPriceFeedDeploymentWorker: '0x8074bccd7cd4b0fb1472a672c6c215f027da5dcccec05b8857eff1615c2e2a02',
 }
 
 const EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0x4269d0188c2bf59bb1f114f6d848f74a6eb832535ce5489f76ed9a0410a71ae2',
-	questionForker: '0x0936b5beca00c3ad0f91e57fde6b85156d59c16f6393404ee5d8940307d69653',
-	shareTokenFactory: '0xd878e68de39dc839beea8abda13aa8e3b193b7d092e8c58ffb734ddf08c82559',
+	securityPoolFactory: '0xdcff59199f53b0c7270185f89acccf64e903b1813612e22a1c393d63fc4e655d',
+	questionForker: '0xe12e39811a45633823c5ecbc54d475d802227bf9616494915f6ca295919dd4ef',
+	shareTokenFactory: '0x54e55a32fc9c7865e02de7e25209e1339de2ec0e63606ae235a8ad5686f8a838',
 }
 
 function runtimeWithAddresses(artifact: { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } }, addresses: readonly Address[]) {
@@ -119,18 +119,18 @@ const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentSt
 	openOraclePriceCoordinatorFactory: '0x7fbe87d0928383b0c2477ee905ad2d2b1e4028f091f7f596fb24293ed41e3206',
 	priceCoordinatorDeploymentWorker: '0xb5424f26ea14d1c67967a435d09a8c86cc12ae1bccc921c2b5a6b1522be3bb24',
 	questionLedgerEventEmitter: '0xbee32449ae381df422b74497c395f78983985c2ad2775417b1b9eaf915701bde',
-	securityPoolFactory: '0x5c85c22eb42d72b0e629b67ef9f8975dd52287ea499d5196e30dc2e167d923bc',
-	questionForker: '0x8916fd856a386c48bf8e90e21a568ae898c7d543ceeffd43d98ed66f06e995c6',
+	securityPoolFactory: '0xed26137ea06bd5996b815bc9076d5a273a4784bc74b30538ec320461b2d91cdc',
+	questionForker: '0x9a68aa08f8cf3ddefaae4a3c4297af94506df30d9323b2f86274bc0ccfa2cadf',
 	questionLedgerOperationsDelegate: '0x70efd3ecf075e48d3f86f51d9b7480e6512d8d034f016a0f50b72223ad820d1c',
-	shareTokenFactory: '0x49bd454447ab5bf1f718798def3bf27e0f604973a451b9034ec4a7c6c3e52633',
+	shareTokenFactory: '0x9e7041790ed386602f7d86d5cbc7c46eb87a74afae480443bab328f6511bb397',
 	sharedPoolPriceFeedDeploymentWorker: '0x8074bccd7cd4b0fb1472a672c6c215f027da5dcccec05b8857eff1615c2e2a02',
 }
 
 const EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_MAINNET_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0x68e5ce23283f574eab9b25c658420f62bebae32157ea1646e43f3300acc7096b',
-	questionForker: '0x08f5242607b06ab7277d0b70d676c6a607898411fa7a7abaf44eeed0b2924e1d',
-	shareTokenFactory: '0xc6fcb892969422ddf4d583d4ce9a3a0eee603fba18557bba0ec3b68996768f3a',
+	securityPoolFactory: '0xca059e1768070d3257342238bd6cda2700163b523972bf93da69e4b31b7be1d2',
+	questionForker: '0xb5e80abce0bb55e8dce3105a1db0b98a540e27665cbe5ba1c0ce69e56f38c7b0',
+	shareTokenFactory: '0xe900cde79d6ff1c433385905d2e634d2a49cadd05c3b6522688207bf6b29bbd2',
 }
 const EXPECTED_PUBLIC_RUNTIME_CODE_HASHES = {
 	mainnet: { yes: EXPECTED_MAINNET_RUNTIME_CODE_HASHES, no: EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES },
