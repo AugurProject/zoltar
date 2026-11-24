@@ -32,6 +32,7 @@ export function useSecurityPool({ accountAddress, enabled, environmentKey, activ
 	const initial = new URLSearchParams(window.location.hash.split('?')[1])
 	const managerInput = useSignal(initial.get('securityPool') ?? '')
 	const ownerInput = useSignal(initial.get('owner') ?? accountAddress ?? '')
+	const followsWallet = useRef(!initial.has('owner'))
 	const universeInput = useSignal(String(activeUniverseId))
 	const previousActiveUniverse = useRef(activeUniverseId)
 	const questionStart = useSignal(0n)
@@ -138,7 +139,6 @@ export function useSecurityPool({ accountAddress, enabled, environmentKey, activ
 		const storageKey = securityPoolStorageKey(backend.profile.chain.id)
 		if (selectedNetwork.current !== undefined && selectedNetwork.current !== storageKey) managerInput.value = ''
 		selectedNetwork.current = storageKey
-		if (ownerInput.value === '' && accountAddress !== undefined) ownerInput.value = accountAddress
 		let current = true
 		void (async () => {
 			if (managerInput.value === '') {
@@ -165,7 +165,10 @@ export function useSecurityPool({ accountAddress, enabled, environmentKey, activ
 		}
 	}, [enabled, environmentKey, activeUniverseId, renderedBackend, backendReady, presentationEnvironmentCurrent])
 	useEffect(() => {
-		if (ownerInput.value === '' && accountAddress !== undefined) ownerInput.value = accountAddress
+		const walletOwner = accountAddress ?? ''
+		if (!followsWallet.current || ownerInput.value === walletOwner) return
+		invalidate()
+		ownerInput.value = walletOwner
 	}, [accountAddress])
 	useEffect(() => {
 		if (!enabled) return
@@ -179,6 +182,7 @@ export function useSecurityPool({ accountAddress, enabled, environmentKey, activ
 			const query = new URLSearchParams(window.location.hash.split('?')[1])
 			const securityPool = query.get('securityPool')
 			const owner = query.get('owner')
+			if (owner !== null) followsWallet.current = false
 			if (securityPool !== null && securityPool !== managerInput.value) {
 				invalidate()
 				managerInput.value = securityPool
@@ -219,6 +223,7 @@ export function useSecurityPool({ accountAddress, enabled, environmentKey, activ
 			managerInput.value = value
 		},
 		setOwnerInput: (value: string) => {
+			followsWallet.current = false
 			if (value === ownerInput.value) return
 			invalidate()
 			ownerInput.value = value

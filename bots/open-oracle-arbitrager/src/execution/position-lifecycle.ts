@@ -1,7 +1,7 @@
 import type { Configuration } from '#config/configuration'
 import { openOracleArbitrageExecutorAbi } from '#contracts/abi'
 import type { ReadClient, WriteClient } from '#core/operator-types'
-import { replacementCredit } from '#core/position-accounting'
+import { classifyPositionReport, replacementCredit } from '#core/position-accounting'
 import {
 	attemptHasFinality,
 	canonicalBlockHashWithQuorum,
@@ -127,7 +127,12 @@ export async function processPositionLifecycle(
 		await persistPosition({ ...activePosition, status: 'recovery-required' })
 		throw new Error(`Open position ${activePosition.reportId} cannot be reconciled with stored OpenOracle state`)
 	}
-	const currentReporter = game.currentReporter.toLowerCase() === account.address.toLowerCase()
+	const reportStatus = classifyPositionReport(activePosition, game)
+	if (reportStatus === 'unknown') {
+		await persistPosition({ ...activePosition, status: 'recovery-required' })
+		throw new Error(`Position ${activePosition.reportId} cannot prove ownership of its stored OpenOracle dispute round`)
+	}
+	const currentReporter = reportStatus === 'current'
 	const currentTime = (game.flags & OPEN_ORACLE_FLAG_TIME_TYPE) === 0n ? blockNumber : storedSnapshot.blockTimestamp
 	const settlementEligible = currentReporter && game.settlementTimestamp === 0n && currentTime >= game.reportTimestamp + game.settlementTime
 	if (currentReporter && game.settlementTimestamp === 0n && !settlementEligible) {
@@ -144,6 +149,7 @@ export async function processPositionLifecycle(
 	let lifecycleKind: NonNullable<PositionRecord['lifecycleKind']>
 	let replacementAmount: bigint | undefined
 	let replacementToken: Address | undefined
+	let residualTokenAmount = 0n
 	let lifecycleCall: { data: Hex; gas: bigint; kind: 'settle' | 'withdraw-replacement'; to: Address }
 	if (!currentReporter) {
 		if (activePosition.reportAmount1 === undefined || activePosition.reportAmount2 === undefined || activePosition.reportFeePercentage === undefined) {
@@ -167,7 +173,12 @@ export async function processPositionLifecycle(
 			oldAmount1: BigInt(activePosition.reportAmount1),
 			oldAmount2: BigInt(activePosition.reportAmount2),
 		})
-		replacementAmount = credit.amount
+		// Settlement already withdraws this part of locked token2. A successor
+		// only replaces the report escrow, so include the leftover dispute credit here.
+		const residual = expectedToken - BigInt(activePosition.reportAmount2)
+		if (residual < 0n) throw new Error('Position token escrow exceeds recorded locked tokens')
+		replacementAmount = credit.amount + (credit.token === 'token2' ? residual : 0n)
+		residualTokenAmount = credit.token === 'token1' ? residual : 0n
 		replacementToken = credit.token === 'token1' ? collateralToken : activePosition.token
 		const holderBalance = credit.token === 'token1' ? balancesBefore.holderToken1 : balancesBefore.holderToken
 		const allowance = credit.token === 'token1' ? balancesBefore.internalAllowanceToken1 : balancesBefore.internalAllowanceToken
@@ -175,6 +186,7 @@ export async function processPositionLifecycle(
 		if (allowance < replacementAmount) {
 			throw new Error(`Position ${activePosition.reportId} replacement credit exceeds its executor internal allowance`)
 		}
+		if (residualTokenAmount > 0n && (balancesBefore.holderToken <= residualTokenAmount || balancesBefore.internalAllowanceToken < residualTokenAmount)) throw new Error(`Position ${activePosition.reportId} residual credit is not yet withdrawable`)
 		lifecycleKind = 'replacement-credit'
 		lifecycleCall = {
 			data: encodeFunctionData({
@@ -187,11 +199,13 @@ export async function processPositionLifecycle(
 						openOracle: config.openOracle,
 						parentBlockNumber: blockNumber,
 						token: replacementToken,
+						residualToken: activePosition.token,
+						residualAmount: residualTokenAmount,
 					},
 					id,
 				],
 			}),
-			gas: 450_000n,
+			gas: residualTokenAmount === 0n ? 450_000n : 650_000n,
 			kind: 'withdraw-replacement',
 			to: executor,
 		}
@@ -260,6 +274,7 @@ export async function processPositionLifecycle(
 		lifecycleWalletWethBefore: undefined,
 		replacementCreditAmount: replacementAmount?.toString(),
 		replacementCreditToken: replacementToken,
+		replacementResidualTokenAmount: residualTokenAmount === 0n ? undefined : residualTokenAmount.toString(),
 		status: 'withdrawing' as const,
 	} satisfies PositionRecord
 	if (config.submission.mode === 'public') {

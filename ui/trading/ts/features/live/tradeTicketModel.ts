@@ -1,3 +1,4 @@
+import { bigintToSafeNumber } from '@zoltar/core-shared/evm/ethereum'
 import { collateralAsset, tokenFunded, formatCollateralAmount } from '../../protocol/collateral.js'
 import * as collateralCopy from '../../copy/collateral.js'
 import { estimateBudgetMint, recoveryMintBlocker } from '../../protocol/minting.js'
@@ -240,12 +241,28 @@ function largestTradableBuy(market: LiveMarket, side: Side, ceiling: bigint, sli
  */
 function buyShortcuts(market: LiveMarket, side: Side, walletEthAttoEth: bigint | undefined, slippageBps: bigint) {
 	if (walletEthAttoEth === undefined || recoveryMintBlocker(market) !== undefined) return []
-	const buyable = largestTradableBuy(market, side, minimum(tokenFunded(market) ? walletEthAttoEth : getSpendableEthBalance(walletEthAttoEth), market.availableMintingCapacityAttoEth), slippageBps)
+	const budget = tokenFunded(market) ? walletEthAttoEth : getSpendableEthBalance(walletEthAttoEth)
+	const buyable = largestTradableBuy(market, side, largestBudgetWithinMintingCapacity(market, budget), slippageBps)
 	return [
 		{ label: ticketCopy.quarter, value: roundDownShortcut(buyable / 4n, collateralAsset(market).decimals) },
 		{ label: ticketCopy.half, value: roundDownShortcut(buyable / 2n, collateralAsset(market).decimals) },
 		{ label: ticketCopy.max, value: roundDownShortcut(buyable, collateralAsset(market).decimals) },
 	].filter(shortcut => shortcut.value > 0n)
+}
+
+function largestBudgetWithinMintingCapacity(market: LiveMarket, budget: bigint) {
+	const capacity = market.availableMintingCapacityAttoEth
+	if (capacity === 0n) return 0n
+	const withinCapacity = (amount: bigint) => (estimateBudgetMint(market, amount) ?? amount) <= capacity
+	if (withinCapacity(budget)) return budget
+	let low = 0n
+	let high = budget
+	while (high - low > 1n) {
+		const middle = (low + high) / 2n
+		if (withinCapacity(middle)) low = middle
+		else high = middle
+	}
+	return low
 }
 
 /** A buy above the wallet balance cannot be paid; one that only eats into the gas reserve would leave nothing to send it with. */
@@ -261,11 +278,12 @@ function insufficientEthReason(payAttoEth: bigint, walletEthAttoEth: bigint) {
  */
 function mintingCapacityReason(payAttoEth: bigint, market: LiveMarket, side: Side, slippageBps: bigint) {
 	const capacity = market.availableMintingCapacityAttoEth
-	if (payAttoEth <= capacity) return undefined
+	if ((estimateBudgetMint(market, payAttoEth) ?? payAttoEth) <= capacity) return undefined
 	if (capacity === 0n) return ticketCopy.mintingCapacityExhaustedReason
-	const largest = largestTradableBuy(market, side, capacity, slippageBps)
-	if (largest < capacity) return ticketCopy.formatPriceImpactBlockedReason(formatCollateralAmount(largest, market, LIMIT_DIGITS, 'down'))
-	return ticketCopy.formatMintingCapacityReason(formatTrimmedUnits(capacity, collateralAsset(market).decimals, LIMIT_DIGITS), collateralAsset(market).symbol)
+	const capacityBudget = largestBudgetWithinMintingCapacity(market, payAttoEth)
+	const largest = largestTradableBuy(market, side, capacityBudget, slippageBps)
+	if (largest < capacityBudget) return ticketCopy.formatPriceImpactBlockedReason(formatCollateralAmount(largest, market, LIMIT_DIGITS, 'down'))
+	return ticketCopy.formatMintingCapacityReason(formatTrimmedUnits(capacityBudget, collateralAsset(market).decimals, LIMIT_DIGITS), collateralAsset(market).symbol)
 }
 
 /** A refused price impact names the largest amount of the same trade the pool takes within the limit. */
@@ -338,7 +356,7 @@ export function ticketInputsAfterSelection(previous: TicketInputs, selection: Pa
 }
 
 export function probabilityPercent(yesBps: bigint) {
-	return Number(yesBps) / 100
+	return bigintToSafeNumber(yesBps, 'Conditional YES basis points') / 100
 }
 
 export type TradeTicketInputs = Readonly<{

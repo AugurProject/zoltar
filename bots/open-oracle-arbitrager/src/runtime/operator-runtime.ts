@@ -9,7 +9,7 @@ import type { TrackTransaction } from '#execution/transaction-tracker'
 import { createTokenCatalogTracker, createTokenMetadataCache, discoverAugurRepTokens } from '#monitoring/market-monitor'
 import type { ActiveReport } from '#monitoring/oracle-log-state'
 import { appendExecutionHistoryIfMissing, type OperatorState, type QueuedSigner } from '#state/operator-state'
-import { savePositionJournalState, type ExclusiveProcessLock, type PositionJournalState, type PositionRecord } from '#state/position-store'
+import { savePositionJournalState, upsertPositionJournalRecord, type ExclusiveProcessLock, type PositionJournalState, type PositionRecord } from '#state/position-store'
 import { createContextualPublicClient, createRpcEndpointPool, createWalletClient, privateKeyToAccount, type Address, type Chain, type Hex, type PublicClient, type TransactionLog, type Transport } from '@zoltar/bot-shared/ethereum'
 import type { BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import type { SignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
@@ -167,7 +167,7 @@ export function clearReportCaches(runtime: OperatorRuntime, context: Pick<Operat
 
 export async function persistPosition(runtime: OperatorRuntime, context: Pick<OperatorContext, 'config' | 'state'>, position: PositionRecord) {
 	const { config, state } = context
-	const nextPositions = [position, ...runtime.positions.filter(existing => existing.reportId !== position.reportId)]
+	const nextPositions = upsertPositionJournalRecord(runtime.positions, position)
 	runtime.positionJournal = await savePositionJournalState(config.positionFile, { archived: runtime.positionJournal.archived, positions: nextPositions }, config.network.chain.id)
 	runtime.positions = runtime.positionJournal.positions
 	state.positions = runtime.positions

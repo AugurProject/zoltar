@@ -356,6 +356,24 @@ describe('Contract Test Suite', () => {
 		await assert.rejects(splitMigrationRep(client, GENESIS_UNIVERSE, 1n, [1n]), /Universe has not forked, so migration REP cannot be split/)
 	})
 
+	test('late genesis migration cannot exceed the frozen theoretical supply', async () => {
+		const genesisRep = addressString(GENESIS_REPUTATION_TOKEN)
+		await overrideGenesisTheoreticalSupply(mockWindow, client, genesisRep, 1_000n)
+		const question = makeQuestion('late genesis migration guard')
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, question, outcomes)
+		await approveToken(client, genesisRep, getZoltarAddress())
+		await forkUniverse(client, GENESIS_UNIVERSE, getQuestionId(question, outcomes))
+		const supply = await getUniverseTheoreticalSupplyAttoRep(client, GENESIS_UNIVERSE)
+		const credit = await getMigrationRepBalanceAttoRep(client, GENESIS_UNIVERSE, client.account.address)
+		const walletBalance = await getERC20Balance(client, genesisRep, client.account.address)
+
+		await assert.rejects(addRepToMigrationBalance(client, GENESIS_UNIVERSE, supply + 1n), /Migration exceeds theoretical supply/)
+		assert.strictEqual(await getUniverseTheoreticalSupplyAttoRep(client, GENESIS_UNIVERSE), supply)
+		assert.strictEqual(await getMigrationRepBalanceAttoRep(client, GENESIS_UNIVERSE, client.account.address), credit)
+		assert.strictEqual(await getERC20Balance(client, genesisRep, client.account.address), walletBalance)
+	})
+
 	test('fork and child deployment reject repeated lifecycle actions', async () => {
 		const questionData = makeQuestion('repeat lifecycle guard coverage')
 		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])

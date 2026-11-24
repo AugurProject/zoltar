@@ -67,7 +67,6 @@ interface IQuestionLedger {
 
 	function setStartingParams() external;
 
-	function getFeeEpochEndTime() external view returns (uint256);
 	function updateSettlementCollateral() external;
 
 	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] calldata proofs) external;

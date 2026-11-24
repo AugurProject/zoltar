@@ -83,14 +83,23 @@ test('Docker defaults match the canonical Bun package manager version', async ()
 	const digests = new Set<string>()
 	for (const file of ['ui/Dockerfile', 'bots/chaos/Dockerfile', 'bots/liquidator/Dockerfile', 'bots/open-oracle-arbitrager/Dockerfile', 'augurScan/Dockerfile']) {
 		const source = await readFile(join(repositoryRoot, file), 'utf8')
-		expect(source).toContain(`ARG BUN_VERSION=${version}`)
-		// #1465: the Bun base image is pinned by digest like every other image, so a re-pushed tag cannot change the build.
-		const digest = source.match(/^ARG BUN_IMAGE_DIGEST=(sha256:[0-9a-f]{64})$/m)?.[1]
-		if (digest === undefined) throw new Error(`${file} does not pin the Bun image digest`)
-		digests.add(digest)
+		expect(source).not.toContain('ARG BUN_VERSION')
 		const stages = source.match(/FROM oven\/bun:[^\s]+/g) ?? []
 		expect(stages.length).toBeGreaterThan(0)
-		expect(stages.every(line => line === 'FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST}')).toBe(true)
+		for (const stage of stages) {
+			expect(stage).toStartWith(`FROM oven/bun:${version}-alpine@`)
+			const digest = stage.match(/@((?:sha256:)[0-9a-f]{64})$/)?.[1]
+			if (digest === undefined) throw new Error(`${file} does not pin the Bun image digest`)
+			digests.add(digest)
+		}
 	}
 	expect(digests.size).toBe(1)
+})
+
+test('local chain containers use pinned image digests', async () => {
+	const testnet = await readFile(join(repositoryRoot, 'testnetwork', 'Dockerfile'), 'utf8')
+	const reth = await readFile(join(repositoryRoot, 'reth', 'compose.yaml'), 'utf8')
+	const images = [...testnet.matchAll(/^FROM\s+(\S+)/gm), ...reth.matchAll(/^\s+image:\s+(\S+)/gm)].map(match => match[1])
+	expect(images).toHaveLength(4)
+	for (const image of images) expect(image).toMatch(/@sha256:[0-9a-f]{64}$/)
 })

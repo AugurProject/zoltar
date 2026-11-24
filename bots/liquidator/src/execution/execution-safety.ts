@@ -1,7 +1,6 @@
 import type { finalizedReceiptWithQuorum } from '#execution/recovery'
 import type { RuntimeState } from '#state/operator-state'
 import type { Hex } from '@zoltar/bot-shared/ethereum'
-import { maximumFeePerGas, paddedTransactionGas } from '@zoltar/bot-shared/execution/transaction-submission'
 
 const shutdownChecks = new WeakMap<object, () => boolean>()
 
@@ -30,16 +29,6 @@ export function requireFinalizedTransactionReceipt(label: string, hash: Hex, res
 	if (result.receipt !== undefined) return result.receipt
 	if (!result.observed) throw new Error(`${label} receipt disappeared before canonical finality`)
 	throw new TransactionAwaitingCanonicalFinality(label, hash)
-}
-
-function assertGasCostLimit(gasEstimate: bigint, maxFeePerGas: bigint, maximumGasCost: bigint, label = 'Transaction') {
-	if (maxFeePerGas * paddedTransactionGas(gasEstimate) > maximumGasCost) {
-		throw new Error(`${label} estimated gas ceiling exceeds strategy.maximumGasCostEth`)
-	}
-}
-
-export function assertGasCostLimitForBaseFee(gasEstimate: bigint, baseFeePerGas: bigint, maximumGasCost: bigint, label = 'Transaction') {
-	assertGasCostLimit(gasEstimate, maximumFeePerGas(baseFeePerGas), maximumGasCost, label)
 }
 
 export function assertExecutionActive(state: Pick<RuntimeState, 'paused'>) {

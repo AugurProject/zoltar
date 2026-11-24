@@ -5,6 +5,23 @@ import { securityPoolTakeoverPlan } from '#core/security-pool-strategy'
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import type { RuntimeState } from './runtime-state.ts'
 
+export function securityPoolScanMetrics(state: RuntimeState, settings: OperatorSettings) {
+	const totalPrincipal = totalManagedPrincipalAttoRep(state.securityPools)
+	let candidateCount = 0
+	let eligiblePoolCount = 0
+	let selectedPoolCount = 0
+	for (const pool of state.securityPools) {
+		if (pool.selected) selectedPoolCount++
+		const { snapshot } = pool
+		if (!pool.selected || !pool.approvedUniverse || snapshot.forkTime !== 0n || snapshot.frozen || snapshot.importing || snapshot.exported) continue
+		eligiblePoolCount++
+		if (state.wallet === undefined) continue
+		const marketAllowed = marketPriceAllowsExecution({ repToken: snapshot.repToken, lastPrice: snapshot.acceptedPrice }, settings, state, !snapshot.priceValid || snapshot.timestamp >= snapshot.priceValidUntil)
+		candidateCount += pool.positions.filter(position => securityPoolTakeoverPlan(pool, position, settings, totalPrincipal, marketAllowed).plan !== undefined).length
+	}
+	return { poolCount: state.securityPools.length, selectedPoolCount, eligiblePoolCount, candidateCount }
+}
+
 export function securityPoolViews(state: RuntimeState, settings: OperatorSettings) {
 	const totalPrincipal = totalManagedPrincipalAttoRep(state.securityPools)
 	return state.securityPools.map(securityPool => {

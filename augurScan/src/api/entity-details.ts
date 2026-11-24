@@ -167,7 +167,7 @@ export const reportDetailResponse = async (sql: SQL, parts: readonly string[], u
 		rounds: { block: cursorBlock, log: cursorLog, tx: cursorTx, limit: page.queryLimit },
 		decisions: { block: decisionCursorBlock, log: decisionCursorLog, tx: decisionCursorTx, limit: decisionPage.queryLimit },
 	})
-	if (rows.length === 0 && page.cursor === undefined) return json({ error: 'Report not found' }, 404)
+	if (current === undefined && page.cursor === undefined) return json({ error: 'Report not found' }, 404)
 	const currentData = jsonRecord(current?.['report_data'])
 	const roundData = jsonRecord(round?.['report_data'])
 	const lifecycle =

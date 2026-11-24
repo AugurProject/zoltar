@@ -33,6 +33,20 @@ describe('useZoltarUrlState', () => {
 		cleanupDom = undefined
 	})
 
+	test('opens a universe from the page query and can switch from it to Genesis', async () => {
+		window.history.replaceState({}, '', '/?universe=7#/zoltar')
+		let hookState: ZoltarUrlState | undefined
+		function Harness() {
+			hookState = useZoltarUrlState()
+			return <div />
+		}
+		cleanupRenderedComponent = (await renderIntoDocument(<Harness />)).cleanup
+		expect(requireState(hookState).activeUniverseId).toBe(7n)
+		await act(() => requireState(hookState).setActiveUniverseId(0n))
+		expect(requireState(hookState).activeUniverseId).toBe(0n)
+		expect(window.location.hash).toContain('universe=0')
+	})
+
 	test('recovers from oversized universe URLs and renders the maximum uint248 identity', async () => {
 		const overflow = 1n << 248n
 		const maximum = overflow - 1n

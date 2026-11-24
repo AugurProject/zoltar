@@ -8,7 +8,7 @@ import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from 
 import { getLocalEntityScope } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { readFavoriteEntries, resetLocalEntityStoreForTesting, setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { fireEvent, within, waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleReportSummaryPage } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { renderSelectedReportActionSection } from '../../../features/open-oracle/components/OpenOracleReportContent.js'
@@ -443,6 +443,28 @@ function createApprovedTokenAccessState(approvedAmount: bigint, overrides: Parti
 }
 
 void describe('OpenOracleSection', () => {
+	test('allows token approval when the wallet can pay gas but is short of the settler reward', async () => {
+		const approve = mock(() => undefined)
+		const environment = installDomEnvironment()
+		const props = createOpenOracleSectionProps({
+			activeView: 'create',
+			accountState: createAccountState({ ethBalanceAttoEth: 10n ** 15n }),
+			openOracleCreateForm: { ...getDefaultOpenOracleCreateFormState(), token1Address: '0x2000000000000000000000000000000000000000', token2Address: '0x3000000000000000000000000000000000000000', exactToken1Report: '1', initialToken2Amount: '1', settlerRewardEthAmount: '0.1' },
+		})
+		const rendered = await renderIntoDocument(<OpenOracleSection {...props} loadCreateTokenMetadata={async (_address, kind) => ({ status: 'success', decimals: 18, symbol: kind === 'Base' ? 'REP' : 'WETH' })} loadCreateFunding={async () => ({ balance: 10n ** 20n, allowance: 0n })} onApproveCreateToken={approve} />)
+		try {
+			await waitFor(() => {
+				const approvalButtons = within(document.body).getAllByRole('button', { name: /^Approve / })
+				expect(approvalButtons).toHaveLength(2)
+				expect(approvalButtons.every(button => button.getAttribute('aria-disabled') !== 'true' && !button.hasAttribute('disabled'))).toBe(true)
+			})
+			expectTransactionButtonDisabled(document.body, 'Create standalone OpenOracle report')
+		} finally {
+			await rendered.cleanup()
+			environment.cleanup()
+		}
+	})
+
 	test.each([
 		{ pendingReportId: '7', locked: true },
 		{ pendingReportId: '8', locked: false },

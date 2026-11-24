@@ -7,6 +7,7 @@ import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBa
 import { getGenesisNetworkProfile, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { formatMarketLiquidity } from '../../features/MarketCard.js'
 import { LiveMarketBrowser } from '../../features/LiveMarketBrowser.js'
 import { getRememberableMarket, marketDownloadStore, selectFavoriteMarkets, selectMarketCacheUpdates, selectPortfolioMarkets } from '../../lib/favoriteMarkets.js'
 import type { LiveMarket } from '../../protocol/liveMarket.js'
@@ -16,6 +17,7 @@ import { readyMarketRegistry } from '../support/liveTradingServices.js'
 function createMarket(index: number, overrides: Partial<LiveMarket> = {}): LiveMarket {
 	return smallReserveMarketFixture({
 		description: 'Favorite market fixture',
+		collateral: { token: getAddress('0x0000000000000000000000000000000000000001'), symbol: 'ETH', decimals: 18, native: true },
 		endTime: 2n ** 70n,
 		pair: getAddress(`0x${(index + 0x100).toString(16).padStart(40, '0')}`),
 		pool: getAddress(`0x${index.toString(16).padStart(40, '0')}`),
@@ -72,18 +74,24 @@ describe('favorite markets', () => {
 				feeEndTime: 3n,
 				projectedCollateralAttoEth: 4n,
 				timestamp: 5n,
-				feeAccounting: { linearFee: { rateAttoEthPerSecond: 3n, endTime: 9n }, settlementCollateralAttoEth: 10n, totalUnderwritingLimitAttoEth: 8n, feeEligibleUnderwritingLimitAttoEth: 7n, lastFeeCheckpointNativeTime: 2n },
+				feeAccounting: { linearFee: { rateAttoEthPerSecond: 3n, rateScale: 1_000_000n, endTime: 9n }, settlementCollateralAttoEth: 10n, totalUnderwritingLimitAttoEth: 8n, feeEligibleUnderwritingLimitAttoEth: 7n, lastFeeCheckpointNativeTime: 2n },
 			}
-			const market = createMarket(1, { originUniverseId: 7n, tradingStatus: undefined, valuation })
+			const market = createMarket(1, { collateral: { token: '0x1111111111111111111111111111111111111111', symbol: 'USDC', decimals: 6, native: false }, originUniverseId: 7n, tradingStatus: undefined, valuation })
+			const { collateral: _collateral, ...legacyMarket } = createMarket(3)
 			const withoutCheckpoint = createMarket(2, { valuation: { feeEndTime: 3n, projectedCollateralAttoEth: 4n, timestamp: 5n } })
 			const items = [
 				{ data: market, fetchedAt: 1, id: market.pool },
 				{ data: withoutCheckpoint, fetchedAt: 1, id: withoutCheckpoint.pool },
+				{ data: legacyMarket, fetchedAt: 1, id: legacyMarket.pool },
 				{ data: { ...market, pool: 'not an address' }, fetchedAt: 1, id: 'broken' },
 				{ data: { ...market, valuation: { ...valuation, feeAccounting: { ...valuation.feeAccounting, lastFeeCheckpointNativeTime: 'invalid' } } }, fetchedAt: 1, id: 'broken-accounting' },
 			]
 			window.localStorage.setItem(getDownloadedStorageKey(scope), serializeStoredValue({ items, version: 1 }))
-			expect(marketDownloadStore.read(scope).map(entry => entry.data)).toEqual([market, withoutCheckpoint])
+			const recovered = marketDownloadStore.read(scope).map(entry => entry.data)
+			expect(recovered).toEqual([market, withoutCheckpoint, { ...legacyMarket, cachedCollateralMissing: true }])
+			const cachedLegacyMarket = recovered[2]
+			if (cachedLegacyMarket === undefined) throw new Error('Missing cached legacy market')
+			expect(formatMarketLiquidity(cachedLegacyMarket)).toBeUndefined()
 		} finally {
 			resetLocalEntityStoreForTesting()
 			dom.cleanup()
@@ -131,10 +139,13 @@ describe('favorite markets', () => {
 	test('renders saved market rows with their favorite controls', async () => {
 		const dom = installDomEnvironment()
 		resetLocalEntityStoreForTesting()
-		const favorite = createMarket(1)
+		const favorite = createMarket(1, { collateral: undefined, cachedCollateralMissing: true, tradingStatus: 0 })
 		setEntityFavorite(getLocalEntityScope('trading', 'market'), favorite.pool, true)
 		const rendered = await renderIntoDocument(<LiveMarketBrowser lookupRoute='market' markets={[createMarket(2), favorite]} registry={readyMarketRegistry()} discoveryState='ready' discoveryError={undefined} workflowLocked={false} nowSeconds={0n} retry={() => undefined} />)
 		try {
+			const legacy = [...rendered.container.querySelectorAll('.market-card')].find(card => card.textContent?.includes('Market 1'))
+			expect(legacy?.textContent).toContain('Unavailable')
+			expect(legacy?.querySelectorAll('a[aria-label^="Buy Yes"]')).toHaveLength(1)
 			// Favorites lead under their own heading; with nothing else on the registry page no second heading follows.
 			const headings = [...rendered.container.querySelectorAll('.market-list-heading')].map(heading => heading.textContent)
 			expect(headings).toEqual(['Favorites (2)'])

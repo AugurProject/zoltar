@@ -39,7 +39,6 @@ export function feeAccountingRpcResult(data: Hex, market: LiveMarket, timestamp:
 		['getCurrentBlockTimestamp()', timestamp],
 		['getQuestionEndDate(uint256)', market.endTime],
 		['shareTokenSupplyAttoShares()', supply],
-		['getFeeEpochEndTime()', end],
 		['universeId()', market.universeId],
 		['questionId()', market.questionId],
 		['bookIds(uint248)', 1n],

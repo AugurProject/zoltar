@@ -414,6 +414,23 @@ void describe('quoteRepForEth', () => {
 	})
 })
 void describe('quoteRepForUsdcV4WithSource', () => {
+	void test('checks only the configured direct pool when the pool is missing', async () => {
+		const client = createStubReadClient()
+		const reads: string[] = []
+		client.readContract = createReadContractStub(args => {
+			reads.push(args.functionName)
+			if (args.functionName === 'poolManager') return zeroAddress
+			if (args.functionName === 'extsload') return `0x${'0'.repeat(64)}`
+			throw new Error(`Unexpected contract read: ${args.functionName}`)
+		})
+		client.simulateContract = async () => {
+			throw new Error('Missing direct pool must not be quoted')
+		}
+
+		await expect(quoteRepForUsdcV4WithSource(client, 1n)).rejects.toThrow('Uniswap V4 pool is not initialized')
+		expect(reads).toEqual(['poolManager', 'extsload'])
+	})
+
 	void test('uses Sepolia REP and USDC for Sepolia quotes', async () => {
 		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
 		try {

@@ -90,6 +90,7 @@ export async function loadSecurityPoolPriceSnapshot(parameters: { client: PriceR
 				currentExposureAttoEth: bigint
 				minimumReportCollateral: bigint
 				bounty: bigint
+				nextBlockBounty: bigint
 				lastPrice: bigint
 				lastSettlementTimestamp: bigint
 				validitySeconds: bigint
@@ -127,16 +128,15 @@ export async function loadSecurityPoolPriceSnapshot(parameters: { client: PriceR
 		])
 		// Fee-priced eth_call can fail for an unfunded caller. Derive the exact
 		// contract quote from immutable settings and the pinned block instead.
-		const bounty = decodeUint(
-			calculateOracleSettlementBountyAttoEth({
-				maxSettlementBaseFeeMultiplierBps: decodeUint(multiplier, 'Settlement fee multiplier'),
-				settlementCallbackGasLimit: decodeUint(callbackGas, 'Settlement callback gas', 32),
-				baseFeePerGas: decodeUint(block.baseFeePerGas ?? 0n, 'Block base fee'),
-				initialReportPriorityFeeAttoEthPerGas: decodeUint(priority, 'Report priority fee'),
-			}),
-			'Settlement bounty',
-			96,
-		)
+		const settlementSettings = {
+			maxSettlementBaseFeeMultiplierBps: decodeUint(multiplier, 'Settlement fee multiplier'),
+			settlementCallbackGasLimit: decodeUint(callbackGas, 'Settlement callback gas', 32),
+			initialReportPriorityFeeAttoEthPerGas: decodeUint(priority, 'Report priority fee'),
+		}
+		const baseFeePerGas = decodeUint(block.baseFeePerGas ?? 0n, 'Block base fee')
+		const increase = baseFeePerGas / 8n
+		const nextBlockBaseFee = block.baseFeePerGas === undefined ? baseFeePerGas : baseFeePerGas + (increase > 0n ? increase : 1n)
+		const bountyAt = (baseFeePerGas: bigint) => decodeUint(calculateOracleSettlementBountyAttoEth({ ...settlementSettings, baseFeePerGas }), 'Settlement bounty', 96)
 		observation = {
 			wrappedNative,
 			currentExposureAttoEth: decodeUint(exposure, 'Current exposure'),
@@ -145,7 +145,8 @@ export async function loadSecurityPoolPriceSnapshot(parameters: { client: PriceR
 			openOracle,
 			minimumWethAttoEth: minimum === undefined ? undefined : decodeUint(minimum, 'Minimum WETH', 128),
 			minimumRepAttoRep: minimumRep === undefined ? undefined : decodeUint(minimumRep, 'Minimum REP', 128),
-			bounty: decodeUint(bounty, 'Report bounty', 96),
+			bounty: bountyAt(baseFeePerGas),
+			nextBlockBounty: bountyAt(nextBlockBaseFee),
 			lastPrice: decodeUint(price, 'Last price'),
 			lastSettlementTimestamp: decodeUint(settled, 'Last settlement'),
 			validitySeconds: decodeUint(validity, 'Price validity'),
@@ -186,7 +187,7 @@ export function quoteSecurityPoolPriceFunding(snapshot: SecurityPoolPriceSnapsho
 	if (callbackGas > MAXIMUM_SECURITY_POOL_REPORT_CALLBACK_GAS) throw new Error('Callback gas exceeds limit.')
 	const paddedGas = (callback: bigint) => ((callback + callback / 63n + 310_000n) * 12_000n + 9_999n) / 10_000n + 20_000n
 	const baseGas = paddedGas(SECURITY_POOL_REPORT_SETTLEMENT_CALLBACK_GAS)
-	const bounty = operationsGas === 0n ? observation.bounty : ((observation.bounty - 101n) * paddedGas(callbackGas) + baseGas - 1n) / baseGas + 101n
+	const bounty = operationsGas === 0n ? observation.nextBlockBounty : ((observation.nextBlockBounty - 101n) * paddedGas(callbackGas) + baseGas - 1n) / baseGas + 101n
 	return { price, weth, minimumWeth: required, rep, wrap, bounty, requiredEth: wrap + bounty, coveredExposureAttoEth, growthHeadroomAttoEth }
 }
 export function buildSecurityPoolPricePreparationRequest(snapshot: SecurityPoolPriceSnapshot) {

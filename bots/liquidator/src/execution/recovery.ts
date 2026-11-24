@@ -71,22 +71,28 @@ export async function recoverPendingTransactions(
 			throw new Error(`Pending transaction ${intent.hash} was signed for a different chain`)
 		}
 		const { clients } = recoveryReaders(settings, wallet, pool)
-		const receiptResult = await finalizedReceiptWithQuorum(settings, wallet, intent.hash, pool)
-		const receipt = receiptResult.receipt
-		if (receipt !== undefined) {
-			await resolveSecurityPoolReceipt(settings, wallet, state, pool, intent, receipt)
-			continue
-		}
-		if (receiptResult.observed) return true
-		if (intent.cancellation !== undefined) {
-			const cancelled = await finalizedReceiptWithQuorum(settings, wallet, intent.cancellation.hash, pool)
-			if (cancelled.receipt !== undefined) {
-				if (cancelled.receipt.from.toLowerCase() !== intent.sender.toLowerCase() || cancelled.receipt.to?.toLowerCase() !== intent.sender.toLowerCase()) throw new Error('Cancellation receipt identity mismatch')
-				await commitReconciledIntent(settings.runtime.stateFile, state, intent.hash, { kind: intent.kind, hash: intent.cancellation.hash, status: 'confirmed', message: `Cancelled dropped transaction: ${intent.label}` })
-				continue
+		const checkReceipts = async () => {
+			const receiptResult = await finalizedReceiptWithQuorum(settings, wallet, intent.hash, pool)
+			const receipt = receiptResult.receipt
+			if (receipt !== undefined) {
+				await resolveSecurityPoolReceipt(settings, wallet, state, pool, intent, receipt)
+				return 'resolved'
 			}
-			if (cancelled.observed) return true
+			if (receiptResult.observed) return 'pending'
+			if (intent.cancellation !== undefined) {
+				const cancelled = await finalizedReceiptWithQuorum(settings, wallet, intent.cancellation.hash, pool)
+				if (cancelled.receipt !== undefined) {
+					if (cancelled.receipt.from.toLowerCase() !== intent.sender.toLowerCase() || cancelled.receipt.to?.toLowerCase() !== intent.sender.toLowerCase()) throw new Error('Cancellation receipt identity mismatch')
+					await commitReconciledIntent(settings.runtime.stateFile, state, intent.hash, { kind: intent.kind, hash: intent.cancellation.hash, status: 'confirmed', message: `Cancelled dropped transaction: ${intent.label}` })
+					return 'resolved'
+				}
+				if (cancelled.observed) return 'pending'
+			}
+			return 'missing'
 		}
+		const initialReceipt = await checkReceipts()
+		if (initialReceipt === 'resolved') continue
+		if (initialReceipt === 'pending') return true
 		const requireReconciliation = async (reason: string): Promise<never> => {
 			intent.reconciliationReason = `${reason}; inspect the transaction and reconcile its receipt or replace signer nonce ${intent.nonce.toString()} before resuming`
 			await saveDurableState(settings.runtime.stateFile, state)
@@ -104,6 +110,9 @@ export async function recoverPendingTransactions(
 			settings.connectivity.rpcQuorum,
 		)
 		if (nonce > intent.nonce) {
+			const freshReceipt = await checkReceipts()
+			if (freshReceipt === 'resolved') continue
+			if (freshReceipt === 'pending') return true
 			await requireReconciliation('The signer nonce was consumed without a receipt for this transaction; manual reconciliation is required')
 		}
 		const pinned = await sharedQuorumReadTargets(clients, settings.connectivity.rpcQuorum)

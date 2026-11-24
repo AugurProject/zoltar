@@ -1,3 +1,4 @@
+import { forkBurns } from './fork-burns.ts'
 import type { SQL } from 'bun'
 
 type PageBoundary = { readonly block: string; readonly log: number; readonly tx: string; readonly limit: number }
@@ -30,6 +31,7 @@ export const reportDetailData = async (
 		JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash AND block.canonical
 		WHERE event.chain_id = ${chainId} AND event.open_oracle_address = ${openOracleAddress}
 			AND event.report_id = ${reportId} AND event.canonical AND event.block_number <= ${snapshotBlock}
+			AND event.event_name IN ('ReportSubmitted', 'ReportDisputed')
 			AND (event.block_number, event.log_index, event.tx_hash) < (${rounds.block}::bigint, ${rounds.log}::integer, ${rounds.tx})
 		ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT ${rounds.limit}
 	`
@@ -131,8 +133,12 @@ export const forkDetailData = async (sql: SQL, query: { readonly snapshotBlock: 
 		SELECT
 			COALESCE(sum((event.event_data->>'amountAttoRep')::numeric) FILTER
 				(WHERE event.event_name = 'MigrationRepSplit' AND event.event_data ? 'amountAttoRep'), 0)::text AS migrated_atto_rep,
-			COALESCE(sum((event.event_data->>'amountAttoRep')::numeric) FILTER
-				(WHERE event.event_name = 'RepBurned' AND event.event_data ? 'amountAttoRep'), 0)::text AS burned_atto_rep,
+			COALESCE((
+				SELECT ${forkBurns(sql, snapshotBlock)} FROM fork_migration_events root
+				WHERE root.chain_id = ${chainId} AND root.canonical AND root.event_name = 'UniverseForked'
+					AND root.universe_identity = ${identity} AND root.block_number <= ${snapshotBlock}
+				ORDER BY root.block_number DESC, root.log_index DESC LIMIT 1
+			), '0') AS burned_atto_rep,
 			count(DISTINCT event.event_data->>'migrator') FILTER (WHERE event.event_data ? 'migrator')::integer AS migrator_count,
 			count(DISTINCT event.event_data->>'childUniverseId') FILTER (WHERE event.event_data ? 'childUniverseId')::integer AS child_count,
 			count(*) FILTER (WHERE event.event_name IN ('ForkFrozen', 'BranchChosen', 'BranchStarted', 'BranchActivated', 'NeutralCashRecovered', 'ReporterForkFrozen', 'ReporterChildCreated'))::integer AS portfolio_fork_events,

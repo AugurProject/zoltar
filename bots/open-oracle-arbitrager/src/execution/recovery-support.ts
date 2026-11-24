@@ -86,12 +86,12 @@ export function lifecycleExecutionFromLogs(logs: readonly { address: Address; da
 	throw new Error('Confirmed executor transaction did not emit LifecycleExecuted')
 }
 
-export function replacementCreditExecutionFromLogs(logs: readonly { address: Address; data: Hex; topics: readonly Hex[] }[], executor: Address) {
+export function replacementCreditExecutionFromLogs(logs: readonly { address: Address; data: Hex; topics: readonly Hex[] }[], executor: Address, token?: Address) {
 	for (const log of logs) {
 		if (log.address.toLowerCase() !== executor.toLowerCase()) continue
 		try {
 			const decoded = decodeEventLog({ abi: openOracleArbitrageExecutorAbi, data: log.data, topics: log.topics })
-			if (decoded.eventName !== 'ReplacementCreditWithdrawn') continue
+			if (decoded.eventName !== 'ReplacementCreditWithdrawn' || (token !== undefined && decoded.args.token.toLowerCase() !== token.toLowerCase())) continue
 			return {
 				account: decoded.args.account,
 				amount: decoded.args.amount,

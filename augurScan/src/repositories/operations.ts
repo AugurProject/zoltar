@@ -1,3 +1,4 @@
+import { forkBurns } from './fork-burns.ts'
 import type { SQL } from 'bun'
 import { auctionLifecycle, auctionStartedWindow, reportLifecycle, reportLifecycleEventName } from '../operations.ts'
 import { ApiRequestError } from '../query-errors.ts'
@@ -310,8 +311,7 @@ export const forkCatalogData = async (sql: SQL, chainId: number, cursorBlock: st
 			count(DISTINCT related.event_data->>'migrator') FILTER (WHERE related.event_data ? 'migrator')::integer AS migrator_count,
 			COALESCE(sum((related.event_data->>'amountAttoRep')::numeric) FILTER
 				(WHERE related.event_name = 'MigrationRepSplit' AND related.event_data ? 'amountAttoRep'), 0)::text AS migrated_atto_rep,
-			COALESCE(sum((related.event_data->>'amountAttoRep')::numeric) FILTER
-				(WHERE related.event_name = 'RepBurned' AND related.event_data ? 'amountAttoRep'), 0)::text AS burned_atto_rep,
+			${forkBurns(sql, snapshotBlock)} AS burned_atto_rep,
 			count(*) FILTER (WHERE related.event_name IN ('ForkFrozen', 'BranchChosen', 'BranchStarted', 'BranchActivated', 'NeutralCashRecovered', 'ReporterForkFrozen', 'ReporterChildCreated'))::integer AS portfolio_fork_events
 		FROM roots root
 		LEFT JOIN fork_migration_events related ON related.chain_id = root.chain_id AND related.canonical

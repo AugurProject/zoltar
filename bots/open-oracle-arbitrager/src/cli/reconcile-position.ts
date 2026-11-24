@@ -12,6 +12,7 @@ PRIVATE_KEY=0x... bun run reconcile -- \\
   (--realized-net-profit-eth=ETH --acknowledge-pnl-is-all-in=true |
    --pnl-unavailable=true)
 
+For a report with multiple positions, also pass --position-id=ENTRY_HASH.
 The PRIVATE_KEY must belong to the position signer. Preserve a journal backup and
 independent receipt/balance evidence before running this command.`
 
@@ -33,7 +34,7 @@ if (process.argv.includes('--help') || process.argv.includes('-h')) {
 	process.exit(0)
 }
 
-const accepted = new Set(['position-file', 'chain-id', 'report-id', 'confirm-report-id', 'evidence', 'note', 'external-cost-eth', 'final-wallet-weth', 'final-wallet-token', 'realized-net-profit-eth', 'pnl-unavailable', 'acknowledge-pnl-is-all-in'])
+const accepted = new Set(['position-file', 'chain-id', 'report-id', 'confirm-report-id', 'position-id', 'evidence', 'note', 'external-cost-eth', 'final-wallet-weth', 'final-wallet-token', 'realized-net-profit-eth', 'pnl-unavailable', 'acknowledge-pnl-is-all-in'])
 const values = options(process.argv.slice(2))
 for (const name of values.keys()) if (!accepted.has(name)) throw new Error(`Unknown option --${name}`)
 const required = ['position-file', 'chain-id', 'report-id', 'confirm-report-id', 'evidence', 'note', 'external-cost-eth', 'final-wallet-weth', 'final-wallet-token'] as const
@@ -49,6 +50,8 @@ if (privateKeyValue === undefined || !/^0x[0-9a-fA-F]{64}$/.test(privateKeyValue
 const account = privateKeyToAccount(privateKeyValue as Hex)
 const positionFile = values.get('position-file')
 const reportId = values.get('report-id')
+const positionId = values.get('position-id')?.toLowerCase()
+if (positionId !== undefined && !/^0x[0-9a-f]{64}$/.test(positionId)) throw new Error('--position-id must be the position entry hash')
 if (positionFile === undefined || reportId === undefined) throw new Error('Position file and report id are required')
 const chainId = Number(values.get('chain-id'))
 if (!Number.isSafeInteger(chainId) || chainId < 1) throw new Error('--chain-id must be a positive integer')
@@ -56,10 +59,11 @@ const journalLock = await acquirePositionJournalLock(positionFile)
 try {
 	const journal = await loadPositionJournalState(positionFile, chainId)
 	const positions = journal.positions
-	const index = positions.findIndex(position => position.reportId === reportId)
-	if (index === -1) throw new Error(`Position ${reportId} was not found`)
-	const position = positions[index]
+	const candidates = positions.filter(position => position.reportId === reportId && (positionId === undefined || (position.positionId ?? position.entryTransactionHash).toLowerCase() === positionId))
+	if (candidates.length > 1) throw new Error(`Report ${reportId} has multiple positions. Select --position-id from ${candidates.map(position => position.positionId ?? position.entryTransactionHash).join(', ')}`)
+	const [position] = candidates
 	if (position === undefined) throw new Error(`Position ${reportId} was not found`)
+	const index = positions.indexOf(position)
 	const reconciled = manuallyReconcilePosition(position, {
 		confirmedReportId: values.get('confirm-report-id') ?? '',
 		evidence: values.get('evidence') ?? '',

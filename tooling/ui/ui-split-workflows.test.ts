@@ -7,7 +7,7 @@ import { taskProjects } from '../repo/projects.ts'
 import { projectQuery } from '../repo/query-projects.mts'
 import { PRODUCTION_WORKFLOW_SCENARIOS, selectProductionWorkflowScenarios } from './productionWorkflowScenarios.ts'
 import { repositoryRoot } from '../repo/root.mts'
-import { dockerGlobalArguments, dockerInstructions, parseDockerfile } from '../testing/packaging-parsers.ts'
+import { dockerInstructions, parseDockerfile } from '../testing/packaging-parsers.ts'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 // Validate pending workflow definitions until they are moved into GitHub's active directory.
@@ -336,6 +336,8 @@ ${command}`,
 		expect(requireRecord(manualInputs['application'], 'manual application input')).toMatchObject({ type: 'boolean', default: true })
 		const testDomainConcurrency = requireRecord(testDomainsWorkflow['concurrency'], 'test-domain concurrency')
 		expect(testDomainConcurrency['group']).toContain("${{ inputs.invocation || 'direct' }}")
+		// Push CI and manual IPFS validation both call CI on main and pass the same domain invocation.
+		expect(testDomainConcurrency['group']).toContain('${{ github.workflow }}')
 		const concurrencyInvocation = (invocation: string | undefined) => invocation ?? 'direct'
 		expect(concurrencyInvocation(undefined)).not.toBe(concurrencyInvocation(String(invocationInput['default'])))
 		const ciWorkflow = await readWorkflow(ciWorkflowPath)
@@ -677,7 +679,6 @@ ${command}`,
 
 		const dockerfile = await readFile(dockerfilePath, 'utf8')
 		const dockerStages = parseDockerfile(dockerfile)
-		expect(dockerGlobalArguments(dockerfile)).toContain('BUN_VERSION=1.4.4')
 		const copies = dockerStages.flatMap(stage => dockerInstructions(stage, 'COPY'))
 		const runs = dockerStages.flatMap(stage => dockerInstructions(stage, 'RUN'))
 		expect(copies.some(copy => copy.includes('bun.lock'))).toBe(true)

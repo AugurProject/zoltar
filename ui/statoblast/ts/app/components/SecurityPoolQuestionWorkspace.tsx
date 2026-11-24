@@ -1,3 +1,5 @@
+import { buildRouteHref, getTopLevelRouteSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
+import { setOrDeleteSearchParam, updateSearchParams } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 import * as copy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 import { getReportingOutcomeLabel } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reporting.js'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
@@ -11,6 +13,7 @@ import { AddressText } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { ReportingSection } from '@zoltar/ui-statoblast-shared/features/reporting/components/ReportingSection.js'
@@ -34,11 +37,21 @@ type Props = {
 	onSelect: (universe: bigint, address: string) => void
 }
 
+function securityPoolsHref(universeId: bigint, securityPoolAddress?: string) {
+	const search = updateSearchParams(getTopLevelRouteSearch('security-pools'), params => {
+		setOrDeleteSearchParam(params, 'securityPool', securityPoolAddress)
+		params.set('universe', universeId.toString())
+		params.delete('owner')
+	})
+	return buildRouteHref('#/security-pools', search)
+}
+
 /** Question-specific shares and reporting; backing, liquidation and auctions live in the security pool workspace. */
 export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploymentStatuses, enabled, environmentKey, universeId, currentTimestamp, selectedAddress, onSelect }: Props) {
-	const [snapshot, setSnapshot] = useState<{ environmentKey: number; questions: ListedQuestionLedger[]; unavailable: UnavailableQuestionLedger[] }>({ environmentKey, questions: [], unavailable: [] })
-	const questions = snapshot.environmentKey === environmentKey ? snapshot.questions : []
-	const unavailable = snapshot.environmentKey === environmentKey ? snapshot.unavailable.filter(question => question.universeId === universeId) : []
+	const [snapshot, setSnapshot] = useState<{ environmentKey: number; address: string; questions: ListedQuestionLedger[]; unavailable: UnavailableQuestionLedger[] }>()
+	const currentSnapshot = snapshot?.environmentKey === environmentKey && snapshot.address === selectedAddress ? snapshot : undefined
+	const questions = currentSnapshot?.questions ?? []
+	const unavailable = currentSnapshot?.unavailable.filter(question => question.universeId === universeId) ?? []
 	const [loading, setLoading] = useState(false)
 	const [loadError, setLoadError] = useState<string>()
 	const [refresh, setRefresh] = useState(0)
@@ -52,7 +65,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 		let current = true
 		setLoadError(undefined)
 		if (!enabled) {
-			setSnapshot({ environmentKey, questions: [], unavailable: [] })
+			setSnapshot(undefined)
 			setLoading(false)
 			return
 		}
@@ -64,12 +77,11 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 			return { pools: [await loadSelectedQuestionLedger(client, getAddress(selectedAddress))], unavailable: [] }
 		})()
 			.then(value => {
-				if (current) setSnapshot({ environmentKey, questions: value.pools, unavailable: value.unavailable })
+				if (current) setSnapshot({ environmentKey, address: selectedAddress, questions: value.pools, unavailable: value.unavailable })
 			})
 			.catch(error => {
 				if (current) {
 					setLoadError(getErrorMessage(error, 'Unable to load security pool questions.'))
-					if (selectedAddress !== '') setSnapshot({ environmentKey, questions: [], unavailable: [] })
 				}
 			})
 			.finally(() => {
@@ -96,18 +108,36 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 		question: selected,
 		refreshKey: refresh,
 	})
-	if (selectedAddress !== '' && selected === undefined) return <EmptyState title={loading ? copy.loadingQuestion : copy.questionUnavailable} detail={loadError ?? copy.selectRegisteredQuestion} actions={<a href='#/security-pools'>{copy.openSecurityPools}</a>} />
-	if (selected === undefined)
+	const retryQuestion = () => setRefresh(value => value + 1)
+	if (selectedAddress !== '' && selected === undefined)
+		return (
+			<EmptyState
+				title={loading ? copy.loadingQuestion : copy.questionUnavailable}
+				detail={loadError ?? copy.selectRegisteredQuestion}
+				actions={
+					<>
+						<a href={securityPoolsHref(universeId)}>{copy.openSecurityPools}</a>
+						{loadError === undefined ? undefined : (
+							<button type='button' onClick={retryQuestion}>
+								{copy.retryQuestionDetails}
+							</button>
+						)}
+					</>
+				}
+			/>
+		)
+	if (selected === undefined) {
+		const listedQuestions = questions.filter(question => question.universeId === universeId)
 		return (
 			<div className='route-view-flow'>
-				<RouteHeader title={copy.securityPoolQuestions} description={copy.securityPoolQuestionsDescription} actions={<a href='#/security-pools'>{copy.openSecurityPools}</a>} />
-				<ErrorNotice message={loadError} />
+				<RouteHeader title={copy.securityPoolQuestions} description={copy.securityPoolQuestionsDescription} actions={<a href={securityPoolsHref(universeId)}>{copy.openSecurityPools}</a>} />
+				<RetryableNotice message={loadError} retryLabel={copy.retryQuestionList} onRetry={retryQuestion} disabled={loading} />
 				{unavailable.map(question => (
 					<StateHint key={question.address} title={<AddressText address={question.address} />} presentation={{ key: 'load_failed', badgeLabel: copy.questionUnavailable, badgeTone: 'blocked', detail: question.reason }} />
 				))}
-				{loading && <EmptyState title={copy.loadingQuestions} />}
-				{!loading && questions.filter(question => question.universeId === universeId).length === 0 && <EmptyState title={copy.noRegisteredQuestions} detail={copy.registerQuestionsHint} actions={<a href='#/security-pools'>{copy.openSecurityPools}</a>} />}
-				{!loading && questions.filter(question => question.universeId === universeId).length > 0 && (
+				{loading && currentSnapshot === undefined && <EmptyState title={copy.loadingQuestions} />}
+				{!loading && loadError === undefined && currentSnapshot !== undefined && listedQuestions.length === 0 && unavailable.length === 0 && <EmptyState title={copy.noRegisteredQuestions} detail={copy.registerQuestionsHint} actions={<a href={securityPoolsHref(universeId)}>{copy.openSecurityPools}</a>} />}
+				{listedQuestions.length > 0 && (
 					<div className='security-pool-questions-table' role='region' aria-label={copy.securityPoolQuestions} tabIndex={0}>
 						{/* Explicit roles keep the table semantics when phone widths stack each row (see .security-pool-questions-table). */}
 						<table role='table'>
@@ -119,35 +149,35 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 								</tr>
 							</thead>
 							<tbody role='rowgroup'>
-								{questions
-									.filter(question => question.universeId === universeId)
-									.map(question => (
-										<tr key={question.questionLedgerAddress} role='row'>
-											<td role='cell'>
-												<button type='button' onClick={() => onSelect(question.universeId, question.questionLedgerAddress)}>
-													{getQuestionTitle(question.marketDetails)}
-												</button>
-											</td>
-											<td role='cell' data-label={copy.securityPoolColumn}>
-												{/* The address shortens only when its cell is too narrow for it; the full address stays in the page text, the link's accessible name and its title. */}
-												<a className='security-pool-questions-address' href={`#/security-pools?securityPool=${question.securityPoolAddress}&universe=${question.universeId}`} aria-label={copy.formatOpenSecurityPoolLabel(question.securityPoolAddress)} title={question.securityPoolAddress}>
-													<AddressText address={question.securityPoolAddress} />
-												</a>
-											</td>
-											<td role='cell' data-label={copy.outcomeColumn}>
-												{getReportingOutcomeLabel(question.questionOutcome)}
-											</td>
-										</tr>
-									))}
+								{listedQuestions.map(question => (
+									<tr key={question.questionLedgerAddress} role='row'>
+										<td role='cell'>
+											<button type='button' onClick={() => onSelect(question.universeId, question.questionLedgerAddress)}>
+												{getQuestionTitle(question.marketDetails)}
+											</button>
+										</td>
+										<td role='cell' data-label={copy.securityPoolColumn}>
+											{/* The address shortens only when its cell is too narrow for it; the full address stays in the page text, the link's accessible name and its title. */}
+											<a className='security-pool-questions-address' href={securityPoolsHref(question.universeId, question.securityPoolAddress)} aria-label={copy.formatOpenSecurityPoolLabel(question.securityPoolAddress)} title={question.securityPoolAddress}>
+												<AddressText address={question.securityPoolAddress} />
+											</a>
+										</td>
+										<td role='cell' data-label={copy.outcomeColumn}>
+											{getReportingOutcomeLabel(question.questionOutcome)}
+										</td>
+									</tr>
+								))}
 							</tbody>
 						</table>
 					</div>
 				)}
 			</div>
 		)
+	}
 	return (
 		<div className='route-view-flow'>
-			<RouteHeader title={getQuestionTitle(selected.marketDetails)} actions={<a href={`#/security-pools?securityPool=${selected.securityPoolAddress}&universe=${selected.universeId}`}>{copy.manageBackingAndRecovery}</a>} />
+			<RouteHeader title={getQuestionTitle(selected.marketDetails)} actions={<a href={securityPoolsHref(selected.universeId, selected.securityPoolAddress)}>{copy.manageBackingAndRecovery}</a>} />
+			<RetryableNotice message={loadError === undefined ? undefined : copy.formatStaleQuestionDetails(loadError)} retryLabel={copy.retryQuestionDetails} onRetry={retryQuestion} disabled={loading} />
 			<ErrorNotice message={ownFork.error} />
 			<TradingSection
 				accountState={accountState}
@@ -187,7 +217,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 				reportingResult={reporting.reportingResult}
 				forkAlreadyTriggered={selected.universeHasForked}
 				onOpenForkWorkflow={() => {
-					window.location.hash = `#/security-pools?securityPool=${selected.securityPoolAddress}&universe=${selected.universeId}`
+					window.location.hash = securityPoolsHref(selected.universeId, selected.securityPoolAddress)
 				}}
 				onTriggerZoltarFork={() => void ownFork.triggerFork()}
 				triggerZoltarForkApproval={ownFork.approval}
