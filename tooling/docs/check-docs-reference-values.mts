@@ -119,5 +119,5 @@ async function assertAuctionClearingFormula(): Promise<void> {
 	const engine = await readFile('solidity/contracts/statoblast/SecurityPoolUniformPriceRepairAuction.sol', 'utf8')
 	assert.match(inventory, /data-source="q = max\(m, f\)"/, 'Auction reference must identify its uniform clearing formula')
 	assert.match(engine, /result\.attoRepPerLot = Math\.max\(marginal, floorAttoRepPerLot\);/, 'Reference clearing formula must match the engine')
-	assert.match(engine, /result\.soldAttoRep = principal;/, 'Only grid-priced principal is sold')
+	assert.match(engine, /result\.soldAttoRep = result\.filledLots \* result\.attoRepPerLot;/, 'Only grid-priced principal is sold')
 }

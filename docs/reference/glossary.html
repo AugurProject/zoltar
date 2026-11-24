@@ -96,10 +96,12 @@
 					<dd>The balance that two outcomes must each reach for the Escalation Game to enter non-decision: half of the universe's fork threshold, rounded up, read when the game opens and fixed for that game and any game carried from it.</dd>
 					<dt id="non-decision">Non-decision</dt>
 					<dd>The Escalation Game state in which two outcomes have each reached the non-decision threshold (<code>NonDecisionState.Local</code>). The game picks no winner, and anyone can fork the universe on the question ledger's own question.</dd>
+					<dt id="escalation-reward">Escalation reward</dt>
+					<dd>REP a winning Escalation Game deposit receives on top of its returned principal. It is a share of the runner-up’s forfeited stake, not paid by the protocol: three fifths of binding capital, split across winning deposits up to the reward-eligible cap.</dd>
 					<dt id="reward-eligible-cap">Reward-eligible cap</dt>
-					<dd>One and a half times binding capital. Only the portion of winning Escalation Game deposits up to this cap earns a bonus; deposits beyond it return principal only. See the <a href="./contracts/escalationgame.html#winning-deposit-payout">EscalationGame reference</a>.</dd>
+					<dd>One and a half times binding capital. Only the portion of winning Escalation Game deposits up to this cap earns an <a href="#escalation-reward">escalation reward</a>; deposits beyond it return principal only. See the <a href="./contracts/escalationgame.html#winning-deposit-payout">EscalationGame reference</a>.</dd>
 					<dt id="escalation-haircut">Escalation haircut</dt>
-					<dd>Two fifths of binding capital, burned at Escalation Game settlement instead of being paid to winners as a bonus, unless the question ledger's own fork already paid it through the fork haircut. The contracts call it the winner haircut (<code>burnEscalationWinnerHaircut</code>).</dd>
+					<dd>Two fifths of binding capital, burned at Escalation Game settlement instead of being paid to winners as an escalation reward, unless the question ledger's own fork already paid it through the fork haircut. The contracts call it the winner haircut (<code>burnEscalationWinnerHaircut</code>).</dd>
 				</dl>
 			</section>
 			<section id="forks-and-repair">

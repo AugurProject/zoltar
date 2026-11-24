@@ -10,9 +10,9 @@ export function computeWinningEconomics(parameters: { principalAttoRep: bigint; 
 		const eligibleEndAttoRep = parameters.cumulativeAmountAttoRep < rewardEligibleCapAttoRep ? parameters.cumulativeAmountAttoRep : rewardEligibleCapAttoRep
 		let rewardEligibleDepositAttoRep = eligibleEndAttoRep > depositStartAttoRep ? eligibleEndAttoRep - depositStartAttoRep : 0n
 		if (rewardEligibleDepositAttoRep > parameters.depositAmountAttoRep) rewardEligibleDepositAttoRep = parameters.depositAmountAttoRep
-		const bonusAttoRep = (rewardEligibleDepositAttoRep * ((parameters.bindingCapitalAttoRep * 3n) / 5n)) / rewardEligiblePrincipalAttoRep
+		const rewardAttoRep = (rewardEligibleDepositAttoRep * ((parameters.bindingCapitalAttoRep * 3n) / 5n)) / rewardEligiblePrincipalAttoRep
 		burnAmountAttoRep = (rewardEligibleDepositAttoRep * ((parameters.bindingCapitalAttoRep * 2n) / 5n)) / rewardEligiblePrincipalAttoRep
-		amountToWithdrawAttoRep += bonusAttoRep
+		amountToWithdrawAttoRep += rewardAttoRep
 	}
 	if (parameters.actualForkThresholdAttoRep < parameters.nonDecisionThresholdAttoRep) {
 		amountToWithdrawAttoRep = (amountToWithdrawAttoRep * parameters.actualForkThresholdAttoRep) / parameters.nonDecisionThresholdAttoRep

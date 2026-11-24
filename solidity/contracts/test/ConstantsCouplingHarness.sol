@@ -16,7 +16,7 @@ contract ConstantsCouplingHarness is EscalationGameStorage {
 		uint256 escalationTimeLength;
 		uint256 resolutionPremiumWindow;
 		uint256 minimumForkBurnDivisor;
-		uint256 winnerBonusNumerator;
+		uint256 rewardNumerator;
 		uint256 burnNumerator;
 		uint256 payoutDenominator;
 		uint256 forwarderLength;
@@ -26,6 +26,6 @@ contract ConstantsCouplingHarness is EscalationGameStorage {
 
 	function coupling() external pure returns (Coupling memory) {
 		return
-			Coupling(Constants.FORK_RESPONSE_DELAY, ACTIVATION_DELAY, Constants.FORK_RESPONSE_TIME, ESCALATION_TIME_LENGTH, Constants.RESOLUTION_PREMIUM_WINDOW, Constants.MINIMUM_FORK_BURN_DIVISOR, Constants.ESCALATION_WINNER_BONUS_NUMERATOR, Constants.ESCALATION_BURN_NUMERATOR, Constants.ESCALATION_PAYOUT_DENOMINATOR, SecurityPoolBoundClones.FORWARDER_LENGTH, SecurityPoolRepairAuctionVaultClones.RUNTIME_LENGTH, SecurityPoolRepairAuctionVaultClones.BINDINGS_LENGTH);
+			Coupling(Constants.FORK_RESPONSE_DELAY, ACTIVATION_DELAY, Constants.FORK_RESPONSE_TIME, ESCALATION_TIME_LENGTH, Constants.RESOLUTION_PREMIUM_WINDOW, Constants.MINIMUM_FORK_BURN_DIVISOR, Constants.ESCALATION_REWARD_NUMERATOR, Constants.ESCALATION_BURN_NUMERATOR, Constants.ESCALATION_PAYOUT_DENOMINATOR, SecurityPoolBoundClones.FORWARDER_LENGTH, SecurityPoolRepairAuctionVaultClones.RUNTIME_LENGTH, SecurityPoolRepairAuctionVaultClones.BINDINGS_LENGTH);
 	}
 }

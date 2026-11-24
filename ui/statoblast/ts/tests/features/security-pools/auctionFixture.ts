@@ -53,7 +53,7 @@ export async function auctionFixture() {
 		bidIdForVault: 1n,
 		bids: [owner, auctionVault, 12_000n, 2n, 60n * unit, false, false],
 		previewBid: [owner, auctionVault, 12_000n, 1n, unit, 100n * unit, unit],
-		clearing: [100n * unit, 1n, unit, 100n * unit, 0n, 0n, 0n, 0n, 1n, false],
+		clearing: [100n * unit, 1n, unit, 100n * unit, 0n, 0n, 0n, 1n, false],
 		repairAuctionPosition: [auctionVault, 0n, 100n * unit, unit, 12_000n, 0n, false, 7n * unit, 9n * unit],
 	})
 	fixture.set(capital, 'universeId', 42n)

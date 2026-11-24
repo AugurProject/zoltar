@@ -39,7 +39,7 @@ function editableSnapshot() {
 	if (question === undefined || pool === undefined) throw new Error('Missing fixture')
 	question.endTime = (BigInt(snapshot.anchor.timestamp) + 10000n).toString()
 	pool.escalationGame = '0x0000000000000000000000000000000000000000'
-	pool.currentMintingCapacityAttoEth = (2n * 10n ** 18n).toString()
+	pool.additionalMintCapacityAttoEth = (2n * 10n ** 18n).toString()
 	pool.purchaseQuote = { spender: pool.coordinator, mintAttoEth: 10000n.toString(), feeAttoEth: 300n.toString(), premiumAttoEth: 200n.toString(), minimumShares: '10000' }
 	snapshot.securityPoolCapital = [capitalFixture(snapshot)]
 	pool.shareTokenSupplyAttoShares = '1000000000000000000'

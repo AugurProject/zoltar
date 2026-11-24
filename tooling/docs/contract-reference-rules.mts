@@ -33,7 +33,7 @@ export type EscalationPayout = {
 	rewardEligiblePrincipalAttoRep: bigint
 	rewardPoolAttoRep: bigint
 	haircutPoolAttoRep: bigint
-	bonusAttoRep: bigint
+	rewardAttoRep: bigint
 	burnAttoRep: bigint
 	payoutAttoRep: bigint
 	scaledPayoutAttoRep: bigint
@@ -47,16 +47,16 @@ export function computeOrdinaryWinningWithdrawal(input: EscalationPayoutInput, r
 	const rewardEligiblePrincipalAttoRep = input.winningOutcomeBalanceAttoRep < rewardEligibleCapAttoRep ? input.winningOutcomeBalanceAttoRep : rewardEligibleCapAttoRep
 	const prefix = (principal: bigint) => {
 		const eligible = principal < rewardEligibleCapAttoRep ? principal : rewardEligibleCapAttoRep
-		const bonus = rewardEligiblePrincipalAttoRep === 0n ? 0n : (eligible * rewardPoolAttoRep) / rewardEligiblePrincipalAttoRep
+		const reward = rewardEligiblePrincipalAttoRep === 0n ? 0n : (eligible * rewardPoolAttoRep) / rewardEligiblePrincipalAttoRep
 		const burn = rewardEligiblePrincipalAttoRep === 0n ? 0n : (eligible * haircutPoolAttoRep) / rewardEligiblePrincipalAttoRep
-		const payout = principal + bonus
+		const payout = principal + reward
 		const scaledPayout = input.actualForkThresholdAttoRep < input.nonDecisionThresholdAttoRep ? (payout * input.actualForkThresholdAttoRep) / input.nonDecisionThresholdAttoRep : payout
-		return { bonus, burn, payout, scaledPayout }
+		return { reward, burn, payout, scaledPayout }
 	}
 	const end = prefix(input.cumulativeAmountAttoRep)
 	const start = prefix(input.cumulativeAmountAttoRep - input.depositAmountAttoRep)
 	return {
-		bonusAttoRep: end.bonus - start.bonus,
+		rewardAttoRep: end.reward - start.reward,
 		burnAttoRep: end.burn - start.burn,
 		payoutAttoRep: end.payout - start.payout,
 		scaledPayoutAttoRep: end.scaledPayout - start.scaledPayout,

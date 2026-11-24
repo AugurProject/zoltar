@@ -55,7 +55,7 @@ function fixture() {
 		bids: [owner, vault, 12_000n, 1n, 3n * unit, false, false],
 		previewBid: { bidder: owner, vault, targetHealthBps: 12_000n, filledLots: 1n, usedAttoEth: unit, principalAttoRep: 10n * unit, refundAttoEth: 0n },
 		repairAuctionPosition: { vault, positionId: 0n, principal: 10n * unit, commitment: unit, targetHealthFactorBps: 12_000n, liquidationStarted: 0n, materialized: false, earnedAttoEth: 7n, earnedAttoRep: 9n },
-		clearing: [10n * unit, 1n, unit, 10n * unit, 0n, 0n, 0n, 0n, 1n, false],
+		clearing: [10n * unit, 1n, unit, 10n * unit, 0n, 0n, 0n, 1n, false],
 	}
 	const scoped = new Map<string, unknown>()
 	const reads: { functionName: string; address: Address; blockNumber?: bigint | undefined }[] = []

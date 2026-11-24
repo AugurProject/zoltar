@@ -31,7 +31,6 @@ contract SecurityPoolUniformPriceRepairAuction {
 		uint256 filledLots;
 		uint256 raisedAttoEth;
 		uint256 soldAttoRep;
-		uint256 roundingAttoRep;
 		uint256 marginalMinimumAttoRepPerLot;
 		uint256 marginalFillLots;
 		uint256 marginalDemandLots;
@@ -162,7 +161,6 @@ contract SecurityPoolUniformPriceRepairAuction {
 		result = previewFinalization(maximumFilledLots, floorAttoRepPerLot);
 		clearing = result;
 		remainingFeeLots = result.filledLots;
-		if (result.roundingAttoRep != 0) nodes[root].pendingAttoRep = _amount128(result.roundingAttoRep);
 		finalized = true;
 		emit RepairAuctionFinalized(result.attoRepPerLot, result.filledLots, result.raisedAttoEth, result.soldAttoRep);
 	}
@@ -202,11 +200,9 @@ contract SecurityPoolUniformPriceRepairAuction {
 		result.marginalFillLots = result.filledLots - result.fullBeforeLots;
 		result.raiseLimitReached = result.filledLots == maximumFilledLots;
 		result.attoRepPerLot = Math.max(marginal, floorAttoRepPerLot);
-		result.attoRepPerLot -= result.attoRepPerLot % repGrid;
 		result.raisedAttoEth = result.filledLots * lotAttoEth;
-		uint256 principal = result.filledLots * result.attoRepPerLot;
-		result.soldAttoRep = principal;
-		result.roundingAttoRep = result.soldAttoRep - principal;
+		// Both bid limits and the floor are already REP-grid aligned.
+		result.soldAttoRep = result.filledLots * result.attoRepPerLot;
 	}
 
 	function previewBid(uint256 bidId) public view returns (Fill memory fill) {

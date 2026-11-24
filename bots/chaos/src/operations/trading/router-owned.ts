@@ -66,7 +66,7 @@ function buildRouterRedeemPlan(snapshot: EcosystemSnapshot, options: PlanningOpt
 		steps: [
 			encodeStep({
 				abi: erc1155Abi,
-				args: [snapshot.wallet.address, snapshot.deployments.tradingRouter, tokenIds, tokenIds.map(() => completeAmount), receiveRequestData(snapshot, pool, pair, shares, 1, 3, completeAmount, 0n, minimumEthAttoEth, BigInt(deadline), minimumRepAttoRep)],
+				args: [snapshot.wallet.address, snapshot.deployments.tradingRouter, tokenIds, tokenIds.map(() => completeAmount), receiveRequestData(snapshot, pool, pair, 1, 3, completeAmount, 0n, minimumEthAttoEth, BigInt(deadline), minimumRepAttoRep)],
 				evidence: [eventEvidence(pool.address, COMPLETE_SET_REDEEMED_SIGNATURE)],
 				functionName: 'safeBatchTransferFrom',
 				id: 'redeemCompleteSet',
@@ -100,7 +100,7 @@ function buildRouterExitPlan(snapshot: EcosystemSnapshot, options: PlanningOptio
 		steps: [
 			encodeStep({
 				abi: erc1155Abi,
-				args: [snapshot.wallet.address, snapshot.deployments.tradingRouter, tokenIds, [completeAmount, maximumLong], receiveRequestData(snapshot, pool, pair, shares, 0, longOutcome, completeAmount, maximumLong, minimumEthAttoEth, BigInt(deadline), minimumRepAttoRep)],
+				args: [snapshot.wallet.address, snapshot.deployments.tradingRouter, tokenIds, [completeAmount, maximumLong], receiveRequestData(snapshot, pool, pair, 0, longOutcome, completeAmount, maximumLong, minimumEthAttoEth, BigInt(deadline), minimumRepAttoRep)],
 				evidence: [eventEvidence(pair.address, 'Swap(address,address,bool,bool,uint256,uint256,uint256,uint256,uint256)'), eventEvidence(pool.address, COMPLETE_SET_REDEEMED_SIGNATURE)],
 				functionName: 'safeBatchTransferFrom',
 				id: 'exitPosition',

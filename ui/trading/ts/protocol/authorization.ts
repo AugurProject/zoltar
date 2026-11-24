@@ -14,52 +14,12 @@ export function shareOperationRouter(configuration: DeploymentConfiguration) {
 
 function encodeReceiveBasedExitRequest(market: ReceiveMarket, side: 'YES' | 'NO', completeSetShares: bigint, maximumLongShares: bigint, minimumEthAttoEth: bigint, recipient: Address, deadline: bigint, minimumRepAttoRep: bigint): Hex {
 	if (market.pair === undefined) throw new Error('The trading pool is unavailable')
-	const invalidTokenId = market.universeId << 8n
-	return encodeReceiveRequest([
-		RECEIVE_REQUEST_VERSION,
-		0,
-		market.shareToken,
-		market.pool,
-		market.pair,
-		market.universeId,
-		market.questionId,
-		invalidTokenId,
-		invalidTokenId | 1n,
-		invalidTokenId | 2n,
-		side === 'YES' ? 1 : 2,
-		completeSetShares,
-		maximumLongShares,
-		minimumEthAttoEth,
-		recipient,
-		recipient,
-		deadline,
-		minimumRepAttoRep,
-	])
+	return encodeReceiveRequest([RECEIVE_REQUEST_VERSION, 0, market.pool, market.pair, side === 'YES' ? 1 : 2, completeSetShares, maximumLongShares, minimumEthAttoEth, recipient, recipient, deadline, minimumRepAttoRep])
 }
 
 export function encodeReceiveBasedRedeemRequest(market: ReceiveMarket, completeSetShares: bigint, minimumEthAttoEth: bigint, recipient: Address, deadline: bigint, minimumRepAttoRep = 0n): Hex {
-	const invalidTokenId = market.universeId << 8n
 	const noLongOutcome = 3 // BinaryOutcomes.BinaryOutcome.None: redemption has no directional leg.
-	return encodeReceiveRequest([
-		RECEIVE_REQUEST_VERSION,
-		1,
-		market.shareToken,
-		market.pool,
-		market.pair ?? zeroAddress,
-		market.universeId,
-		market.questionId,
-		invalidTokenId,
-		invalidTokenId | 1n,
-		invalidTokenId | 2n,
-		noLongOutcome,
-		completeSetShares,
-		0n,
-		minimumEthAttoEth,
-		recipient,
-		recipient,
-		deadline,
-		minimumRepAttoRep,
-	])
+	return encodeReceiveRequest([RECEIVE_REQUEST_VERSION, 1, market.pool, market.pair ?? zeroAddress, noLongOutcome, completeSetShares, 0n, minimumEthAttoEth, recipient, recipient, deadline, minimumRepAttoRep])
 }
 
 /** The signed REP floor covers the recovery REP a fork-child pool pays per burned complete set. */

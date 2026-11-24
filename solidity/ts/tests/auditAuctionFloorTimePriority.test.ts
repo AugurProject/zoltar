@@ -75,6 +75,6 @@ describe('audit: collateral repair auction equal-limit bids fill in submission o
 		expect(clearing.filledLots).toBe(1n)
 		expect(clearing.attoRepPerLot).toBe(FLOOR)
 		expect(clearing.soldAttoRep).toBe(FLOOR)
-		expect(clearing.roundingAttoRep).toBe(0n)
+		expect(clearing.soldAttoRep).toBe(clearing.filledLots * clearing.attoRepPerLot)
 	})
 })

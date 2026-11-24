@@ -129,7 +129,9 @@
 							</tr>
 							<tr>
 								<td>Security pool module deployers</td>
-								<td><code>SecurityPoolModuleDeployers</code> deploys the capital implementation during security pool setup. Its commitment-index and fee-stream deployers each create a shared implementation at construction. The capital, settlement-book, service-accounting and fork-coordinator deployers use <code>SecurityPoolCreationCodeDeployer</code> to store creation bytecode in two immutable, STOP-prefixed <code>SecurityPoolCreationCode</code> contracts. The factory pins all nine deployer addresses and supplies them to every security pool it creates.</td>
+								<td>
+									<code>SecurityPoolModuleDeployers</code> deploys the capital implementation during security pool setup. Its commitment-index and fee-stream deployers each create a shared implementation at construction. The capital-ledger deployer shares one stateless lifecycle delegate; the fee-stream deployer shares one stateless auction delegate. Each security pool retains separate capital implementations and storage. The capital, settlement-book, service-accounting and fork-coordinator deployers use <code>SecurityPoolCreationCodeDeployer</code> to store creation bytecode in two immutable, STOP-prefixed <code>CreationCodeChunk</code> contracts through the common <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/CreationCodeStorage.sol"><code>CreationCodeStorage</code></a> primitive. The factory pins all nine deployer addresses and supplies them to every security pool it creates.
+								</td>
 								<td>Deployment permission does not grant authority over another security pool’s modules. Canonical bindings and initialization must be verified before use. These deployment boundaries keep creation code and individual initialization transactions within EVM limits.</td>
 							</tr>
 							<tr>
@@ -235,8 +237,6 @@
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/BinaryOutcomes.sol"><code>BinaryOutcomes.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/CheckedTimestamp.sol"><code>CheckedTimestamp.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/DelegateCall.sol"><code>DelegateCall.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/DelegateCallForwarder.sol"><code>DelegateCallForwarder.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/DelegateErrorReason.sol"><code>DelegateErrorReason.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGame.sol"><code>EscalationGame.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameCalculations.sol"><code>EscalationGameCalculations.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameCarry.sol"><code>EscalationGameCarry.sol</code></a

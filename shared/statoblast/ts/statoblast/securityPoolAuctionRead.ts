@@ -51,7 +51,7 @@ const abi = parseAbi([
 	'function bids(uint256 id) view returns (address bidder,address vault,uint256 targetHealthBps,uint256 lots,uint256 minimumAttoRepPerLot,bool settled,bool feesRemoved)',
 	'function previewBid(uint256 id) view returns ((address bidder,address vault,uint256 targetHealthBps,uint256 filledLots,uint256 usedAttoEth,uint256 principalAttoRep,uint256 refundAttoEth) fill)',
 	'function repairAuctionPosition(uint256 bidId) view returns ((address vault,uint96 positionId,uint256 principal,uint256 commitment,uint256 targetHealthFactorBps,uint48 liquidationStarted,bool materialized,uint256 earnedAttoEth,uint256 earnedAttoRep) result)',
-	'function clearing() view returns (uint256 attoRepPerLot,uint256 filledLots,uint256 raisedAttoEth,uint256 soldAttoRep,uint256 roundingAttoRep,uint256 marginalMinimumAttoRepPerLot,uint256 marginalFillLots,uint256 marginalDemandLots,uint256 fullBeforeLots,bool raiseLimitReached)',
+	'function clearing() view returns (uint256 attoRepPerLot,uint256 filledLots,uint256 raisedAttoEth,uint256 soldAttoRep,uint256 marginalMinimumAttoRepPerLot,uint256 marginalFillLots,uint256 marginalDemandLots,uint256 fullBeforeLots,bool raiseLimitReached)',
 	'function bidIdForVault(address vault) view returns (uint256)',
 	'function owner() view returns (address)',
 	'function initialCapital() view returns (address)',
@@ -225,16 +225,15 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 		const remaining = totalBidCount - start
 		const size = Number(remaining < BigInt(pageSize) ? remaining : BigInt(pageSize))
 		const bids = await Promise.all(Array.from({ length: size }, (_, offset) => readBid(decodeUint(start + BigInt(offset), 'Bid index'))))
-		let clearing: { attoRepPerLot: bigint; filledLots: bigint; raisedAttoEth: bigint; soldAttoRep: bigint; roundingAttoRep: bigint; raiseLimitReached: boolean } | undefined
+		let clearing: { attoRepPerLot: bigint; filledLots: bigint; raisedAttoEth: bigint; soldAttoRep: bigint; raiseLimitReached: boolean } | undefined
 		if (opened && finalized) {
-			const result = decodeFields(await read(engine, 'clearing'), ['attoRepPerLot', 'filledLots', 'raisedAttoEth', 'soldAttoRep', 'roundingAttoRep', 'marginalMinimumAttoRepPerLot', 'marginalFillLots', 'marginalDemandLots', 'fullBeforeLots', 'raiseLimitReached'], 'Invalid auction response.')
+			const result = decodeFields(await read(engine, 'clearing'), ['attoRepPerLot', 'filledLots', 'raisedAttoEth', 'soldAttoRep', 'marginalMinimumAttoRepPerLot', 'marginalFillLots', 'marginalDemandLots', 'fullBeforeLots', 'raiseLimitReached'], 'Invalid auction response.')
 			clearing = {
 				attoRepPerLot: decodeUint(result[0], 'Clearing REP per lot'),
 				filledLots: decodeUint(result[1], 'Filled lots'),
 				raisedAttoEth: decodeUint(result[2], 'Raised ETH'),
 				soldAttoRep: decodeUint(result[3], 'Sold REP'),
-				roundingAttoRep: decodeUint(result[4], 'REP rounding fees'),
-				raiseLimitReached: decodeBool(result[9], 'Invalid auction state.'),
+				raiseLimitReached: decodeBool(result[8], 'Invalid auction state.'),
 			}
 		}
 		return { ...terms, price, clearing, totalBidCount, bidStart: start, bids }

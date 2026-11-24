@@ -128,6 +128,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		if (proofVerifier.hasReachedNonDecision(balances, nonDecisionThresholdAttoRep))
 			nonDecisionState = NonDecisionState.InheritedThresholdTie;
 		forkCarrySnapshotOutcomesInitialized = 3;
+		_refreshCurveCrossing();
 		emit ForkCarryCheckpoint(sourceGame, snapshotId, carryRoots, nullifierRoots, leafCounts, carryTotals, balances);
 		if (nonDecisionState == NonDecisionState.InheritedThresholdTie) emit InheritedThresholdTie(sourceGame);
 	}
@@ -225,12 +226,20 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		IEscalationGameQuestionLedgerContext(poolAddress).refreshSecurityPoolFees();
 	}
 
+	function _refreshCurveCrossing() private {
+		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
+		uint256 binding = game.getBindingCapitalAttoRep();
+		if (binding == cachedBindingCapitalAttoRep) return;
+		cachedBindingCapitalAttoRep = binding;
+		cachedFinalityElapsed = game.computeCurveFinalityElapsed();
+	}
+
 	function _appendDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, uint256 expectedCumulativeRepAmountAttoRep) private returns (uint256 parentDepositIndex) {
 		uint8 outcomeIndex = uint8(outcome);
 		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
 		selectedOutcomeState.balanceAttoRep = expectedCumulativeRepAmountAttoRep;
+		_refreshCurveCrossing();
 		_increaseEscrowedRepForBundle(depositor, amountAttoRep);
-		vaultAccounting[depositor].unresolvedAttoRep += amountAttoRep;
 		totalLocalUnresolvedAttoRep += amountAttoRep;
 		vaultAccounting[depositor].localUnresolvedPrincipalByOutcome[outcomeIndex] += amountAttoRep;
 
@@ -369,8 +378,6 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		uint256 sourceRetainedAmountAttoRep = amountAttoRep;
 		require(effectiveInheritedAttoRep >= sourceRetainedAmountAttoRep, 'Carried REP low');
 		state.consumedParentDepositIndexes[parentDepositIndex] = true;
-		state.inheritedConsumedSourceAttoRep += sourceBasisAttoRep;
-		state.inheritedConsumedRetainedAttoRep += sourceRetainedAmountAttoRep;
 		require(sourceBasisAttoRep <= state.inheritedUnresolvedTotalAttoRep, 'Carried source low');
 		state.inheritedUnresolvedTotalAttoRep -= sourceBasisAttoRep;
 	}

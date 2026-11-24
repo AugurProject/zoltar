@@ -285,11 +285,9 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		const second = await context.bid(b4, 2n, 6n * unit)
 		await context.closingQuote(unit)
 		await context.finalize()
-		const [repPerLot, filledLots, , sold, rounding] = await owner.readContract({ ...engine, functionName: 'clearing' })
+		const [repPerLot, filledLots, , sold] = await owner.readContract({ ...engine, functionName: 'clearing' })
 		expect(filledLots).toBe(3n)
 		expect(sold).toBe(3n * repPerLot)
-		expect(rounding).toBe(sold - 3n * repPerLot)
-		expect(rounding).toBe(0n)
 		expect(await e2e.rep(C, context.capital)).toBe(1_000n * unit + sold)
 		expect(await e2e.rep(C, settlement)).toBe(1_000n * unit - sold)
 		// b3 materializes before the fork, b4 only afterwards.
@@ -309,7 +307,7 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		const capitalG1 = await e2e.capital(G1)
 		// Every purchased lot moved to the chosen branch; unsold REP remains reserved for claims.
 		expect(await e2e.rep(G1, capitalG1)).toBe(backing)
-		expect(await e2e.rep(C, context.capital)).toBe(rounding)
+		expect(await e2e.rep(C, context.capital)).toBe(0n)
 		const claim = (vault: Address) => encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings', args: [vault] })
 		const earned: bigint[] = []
 		for (const [bidder, bid] of [
@@ -321,7 +319,7 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 			earned.push((await e2e.rep(C, bidder.account.address)) - before)
 		}
 		// Retained inventory creates no winner earning, and no winner REP is stranded.
-		expect((earned[0] ?? 0n) + (earned[1] ?? 0n) + (await e2e.rep(C, context.capital))).toBe(rounding)
+		expect((earned[0] ?? 0n) + (earned[1] ?? 0n) + (await e2e.rep(C, context.capital))).toBe(0n)
 		expect(await e2e.rep(C, context.capital)).toBeLessThanOrEqual(1n)
 	})
 })
