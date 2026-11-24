@@ -735,6 +735,7 @@ productionInteractionTest('capital-recovery', '#/watchlist?simulate=1&genesis=ye
 	await driver.clickButton('Close')
 	await driver.waitForButtonEnabled(capitalCopy.deposit)
 	await driver.clickButton(capitalCopy.deposit)
+	await driver.waitForButtonEnabled('Continue in wallet')
 	await createWorkflowActions(driver).completeTransactionReview(undefined, securityPoolCopy.confirmed)
 	await driver.waitForBodyText(securityPoolCopy.confirmed)
 	expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5001REP')

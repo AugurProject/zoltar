@@ -11,7 +11,7 @@ const embeddedTransactionSteps = signal<AbortSignal | undefined>(undefined)
  * Hosts the review of a transaction started outside any dialog. It is the same `OperationModal` review path a
  * dialog uses for its own transactions, so both surfaces share one review, focus trap, and close behavior.
  */
-export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
+export function TransactionStepsModal({ contextKey, finalActionLabel }: { contextKey: string; finalActionLabel?: string | undefined }) {
 	useEffect(() => () => transactionSteps.peek()?.cancel(), [contextKey])
 	const workflow = transactionSteps.value
 	// Standalone approval buttons already specify their spending limit on the page.
@@ -30,5 +30,5 @@ export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 	if (workflow === undefined || embedded || directApproval || !workflow.showReviewDialog || workflow.reviewSignal?.aborted) return undefined
 	const current = workflow.steps[workflow.activeIndex]
 	if (current === undefined) return undefined
-	return <OperationModal hostsExternalReview isOpen title={workflow.steps.at(-1)?.title ?? current.title} onClose={workflow.cancel} />
+	return <OperationModal hostsExternalReview isOpen title={workflow.steps.at(-1)?.title ?? current.title} finalActionLabel={finalActionLabel} onClose={workflow.cancel} />
 }

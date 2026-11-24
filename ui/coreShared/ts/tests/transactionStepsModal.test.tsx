@@ -147,6 +147,30 @@ test('shows every step, token deposit, expected return and ETH cost before the f
 	}
 })
 
+test('labels only the final step with the wallet handoff copy supplied by the host', async () => {
+	const dom = installDomEnvironment()
+	const controller = createTransactionStepController()
+	const common = { description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
+	controller.setPlan([
+		{ ...common, title: 'Prepare escalation game' },
+		{ ...common, title: 'Report outcome' },
+	])
+	const review = controller.review()
+	const rendered = await renderIntoDocument(<TransactionStepsModal contextKey='report' finalActionLabel='Continue in wallet' />)
+	try {
+		const queries = within(rendered.container)
+		expect(queries.getByRole('dialog', { name: 'Report outcome' })).not.toBeNull()
+		expect(queries.getByRole('button', { name: 'Prepare escalation game' }).hasAttribute('disabled')).toBe(false)
+		expect(queries.getByRole('button', { name: 'Continue in wallet' }).hasAttribute('disabled')).toBe(true)
+		expect(queries.queryByRole('button', { name: 'Report outcome' })).toBeNull()
+	} finally {
+		transactionSteps.value?.cancel()
+		await review.catch(() => undefined)
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
 test('keeps confirmed wrap and approval steps visible while the final request awaits review', async () => {
 	const dom = installDomEnvironment()
 	const controller = createTransactionStepController()

@@ -324,7 +324,7 @@ export function App() {
 						universeState: resolveLoadableValueState({ isLoading: operations.loadingZoltarUniverse, isMissing: operations.zoltarUniverseMissing, value: zoltarUniverse }),
 					}}
 				/>
-				<TransactionStepsModal contextKey={`${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}`} />
+				<TransactionStepsModal contextKey={`${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}`} finalActionLabel={pageCopy.continueInWallet} />
 			</ProtocolAppFrame>
 		</UniverseNamesProvider>
 	)

@@ -1,4 +1,5 @@
 export const watchlist = 'Watchlist'
+export const continueInWallet = 'Continue in wallet'
 export const genesisTitle = 'Choose a universe'
 export const migrateRep = 'Migrate REP'
 export const deployPool = 'Deploy a security pool'

@@ -3,6 +3,7 @@ import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApp
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as tradingCopy from '../../../copy/trading.js'
+import { continueInWallet } from '../../../copy/statoblastShell.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { ActionLauncherCard } from '@zoltar/ui-core-shared/components/ActionLauncherCard.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -410,7 +411,7 @@ export function TradingSection({
 			<OperationModal
 				closeOnSuccessKey={tradingResult?.action === 'createCompleteSet' ? tradingResult.hash : undefined}
 				context={getTransactionContext('Complete set · Yes + No + Invalid')}
-				finalActionLabel={tradingCopy.continueInWallet}
+				finalActionLabel={continueInWallet}
 				isOpen={activeModal === 'mint'}
 				onClose={closeActiveModal}
 				title={tradingCopy.mintCompleteSets}
@@ -497,7 +498,7 @@ export function TradingSection({
 			<OperationModal
 				closeOnSuccessKey={tradingResult?.action === 'redeemCompleteSet' ? tradingResult.hash : undefined}
 				context={getTransactionContext('Complete set · Yes + No + Invalid')}
-				finalActionLabel={tradingCopy.continueInWallet}
+				finalActionLabel={continueInWallet}
 				isOpen={activeModal === 'redeem-complete-sets'}
 				onClose={closeActiveModal}
 				title={tradingCopy.redeemCompleteSets}
@@ -523,7 +524,14 @@ export function TradingSection({
 				</div>
 			</OperationModal>
 
-			<OperationModal closeOnSuccessKey={tradingResult?.action === 'migrateShares' ? tradingResult.hash : undefined} context={getTransactionContext(getReportingOutcomeLabel(tradingForm.selectedShareOutcome))} isOpen={activeModal === 'migrate-shares'} onClose={closeActiveModal} title={tradingCopy.migrateForkedShares}>
+			<OperationModal
+				closeOnSuccessKey={tradingResult?.action === 'migrateShares' ? tradingResult.hash : undefined}
+				context={getTransactionContext(getReportingOutcomeLabel(tradingForm.selectedShareOutcome))}
+				finalActionLabel={continueInWallet}
+				isOpen={activeModal === 'migrate-shares'}
+				onClose={closeActiveModal}
+				title={tradingCopy.migrateForkedShares}
+			>
 				<label className='field'>
 					<span>{tradingCopy.shareOutcomeToMigrate}</span>
 					<EnumDropdown options={shareOutcomeOptions} value={tradingForm.selectedShareOutcome} onChange={selectedShareOutcome => onTradingFormChange({ selectedShareOutcome })} disabled={shareMigrationSelectionDisabled} />
@@ -543,14 +551,7 @@ export function TradingSection({
 				</div>
 			</OperationModal>
 
-			<OperationModal
-				closeOnSuccessKey={tradingResult?.action === 'redeemShares' ? tradingResult.hash : undefined}
-				context={getTransactionContext(winningOutcomeLabel ?? '')}
-				finalActionLabel={tradingCopy.continueInWallet}
-				isOpen={activeModal === 'redeem-shares'}
-				onClose={closeActiveModal}
-				title={tradingCopy.redeemResolvedShares}
-			>
+			<OperationModal closeOnSuccessKey={tradingResult?.action === 'redeemShares' ? tradingResult.hash : undefined} context={getTransactionContext(winningOutcomeLabel ?? '')} finalActionLabel={continueInWallet} isOpen={activeModal === 'redeem-shares'} onClose={closeActiveModal} title={tradingCopy.redeemResolvedShares}>
 				{renderPayoutMetrics({
 					attoShares: winningAttoShares,
 					collateralLabel: tradingCopy.expectedCollateralPayout,

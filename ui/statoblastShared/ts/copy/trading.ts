@@ -1,7 +1,6 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 export const migrateShares = 'Migrate shares'
 export const mintCompleteSets = 'Mint complete sets'
-export const continueInWallet = 'Continue in wallet'
 export const redeemCompleteSets = 'Redeem complete sets'
 export const estimatedRedemptionCollateral = 'Estimated collateral received'
 export const estimatedRedemptionRep = 'Estimated REP received'
