@@ -396,20 +396,20 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 			abi.decode(DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.cure, (id, target, ownerExit, minimumCommitmentAttoEth, securityMultiplierBps))), (uint256));
 	}
 
-	/// @notice Auction repair; the source bonus stays pledged in the receiver vault.
-	function takeOver(uint96 id, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep) external nonReentrant returns (uint96 receiverId) {
+	/// @notice Auction repair; the takeover reward from the source stays pledged in the receiver vault.
+	function takeOver(uint96 id, uint256 commitment, uint256 minimumTakeoverReward, uint256 maximumOwnRep) external nonReentrant returns (uint96 receiverId) {
 		TakeoverBounds memory bounds;
-		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, OMIT_TAKEOVER_BOUNDS);
+		return _takeOver(id, commitment, minimumTakeoverReward, maximumOwnRep, bounds, OMIT_TAKEOVER_BOUNDS);
 	}
 	/// @notice Keeper-owned acquisition with signed owner exposure and quote bounds.
-	function takeOverWithBounds(uint96 id, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep, TakeoverBounds calldata bounds) external nonReentrant returns (uint96 receiverId) {
-		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, ENFORCE_TAKEOVER_BOUNDS);
+	function takeOverWithBounds(uint96 id, uint256 commitment, uint256 minimumTakeoverReward, uint256 maximumOwnRep, TakeoverBounds calldata bounds) external nonReentrant returns (uint96 receiverId) {
+		return _takeOver(id, commitment, minimumTakeoverReward, maximumOwnRep, bounds, ENFORCE_TAKEOVER_BOUNDS);
 	}
-	function takeOverAuctionBid(uint256 bidId, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep, TakeoverBounds calldata bounds) external nonReentrant returns (uint96 receiverId) {
+	function takeOverAuctionBid(uint256 bidId, uint256 commitment, uint256 minimumTakeoverReward, uint256 maximumOwnRep, TakeoverBounds calldata bounds) external nonReentrant returns (uint96 receiverId) {
 		_requireOpen();
 		_checkpoint();
 		(, uint96 id) = _materializeAuctionBid(bidId);
-		return _takeOver(id, commitment, minimumAward, maximumOwnRep, bounds, ENFORCE_TAKEOVER_BOUNDS);
+		return _takeOver(id, commitment, minimumTakeoverReward, maximumOwnRep, bounds, ENFORCE_TAKEOVER_BOUNDS);
 	}
 	/// @notice Execute one existing owner operation as its funding sponsor.
 	/// The canonical feed filters selectors and isolates calls. The selected
@@ -423,13 +423,13 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		reportOwner = address(0);
 	}
 
-	function _takeOver(uint96 id, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep, TakeoverBounds memory bounds, bool enforceBounds) private returns (uint96) {
+	function _takeOver(uint96 id, uint256 commitment, uint256 minimumTakeoverReward, uint256 maximumOwnRep, TakeoverBounds memory bounds, bool enforceBounds) private returns (uint96) {
 		_requireOpen();
 		// The index requires an existing adverse observation. Its auction remains
 		// executable at the last accepted valuation after that report expires.
 		_checkpoint();
 		return
-			abi.decode(DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.takeOver, (id, commitment, minimumAward, maximumOwnRep, bounds, enforceBounds, minimumCommitmentAttoEth))), (uint96));
+			abi.decode(DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.takeOver, (id, commitment, minimumTakeoverReward, maximumOwnRep, bounds, enforceBounds, minimumCommitmentAttoEth))), (uint96));
 	}
 
 	function freeze() external onlyForkAuthority {
@@ -463,8 +463,8 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	function liquidationElapsed(uint96 id) external view returns (uint256) {
 		return commitmentIndex.liquidationElapsed(id);
 	}
-	function liquidationAwarded(uint96 id) external view returns (uint256) {
-		return commitmentIndex.liquidationAwarded(id);
+	function liquidationPenaltyPaid(uint96 id) external view returns (uint256) {
+		return commitmentIndex.liquidationPenaltyPaid(id);
 	}
 	function liquidationStarted(uint96 id) public view returns (uint48 started) {
 		return commitmentIndex.liquidationStarted(id);

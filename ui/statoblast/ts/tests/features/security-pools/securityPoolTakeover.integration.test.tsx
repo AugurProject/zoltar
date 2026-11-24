@@ -17,7 +17,7 @@ const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentFor
 describe('manual takeover against native security pool contracts', () => {
 	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	for (const scenario of ['success', 'changed-price', 'rejected-bounds'] as const)
-		test(`manual takeover applies pledged awards atomically through ${scenario}`, async () => {
+		test(`manual takeover applies pledged takeover rewards atomically through ${scenario}`, async () => {
 			await fixture.prepare()
 			await fixture.mint(200n * unit)
 			const owner = fixture.owner()

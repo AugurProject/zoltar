@@ -115,7 +115,7 @@ export const liquidationSummary = (item: Readonly<Record<string, unknown>>, { un
 	let parts: ReadonlyArray<string | undefined>
 	switch (item['event_name']) {
 		case 'CommitmentTakenOver':
-			parts = [[owner(data['sourceId'], item['source_owner']), owner(data['receiverId'], item['receiver_owner'])].filter(part => part !== undefined).join(' → '), `${amount(data['commitment'], collateral.decimals, collateral.symbol)} commitment`, `${amount(data['awardAttoRep'], 18, 'REP')} award`]
+			parts = [[owner(data['sourceId'], item['source_owner']), owner(data['receiverId'], item['receiver_owner'])].filter(part => part !== undefined).join(' → '), `${amount(data['commitment'], collateral.decimals, collateral.symbol)} commitment`, `${amount(data['takeoverRewardAttoRep'], 18, 'REP')} takeover reward`]
 			break
 		case 'CommitmentCured':
 			parts = [owner(data['positionId'], item['source_owner']), `${amount(data['removedCommitment'], collateral.decimals, collateral.symbol)} commitment removed`]

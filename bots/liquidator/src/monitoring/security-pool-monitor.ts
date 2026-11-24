@@ -36,7 +36,7 @@ const securityPoolMonitorAbi = [
 	parseAbiItem('function lastPositionId() view returns (uint96)'),
 	parseAbiItem('function accountOf(uint96 id) view returns ((address owner,uint96 batch,uint256 rep,uint256 commitment,uint256 maxHealthyPrice,uint256 releasedRep,uint256 ethFees,uint256 repFees,uint256 remainingCommitment) account)'),
 	parseAbiItem('function liquidationStarted(uint96 id) view returns (uint48)'),
-	parseAbiItem('function liquidationAwarded(uint96 id) view returns (uint256)'),
+	parseAbiItem('function liquidationPenaltyPaid(uint96 id) view returns (uint256)'),
 	parseAbiItem('function liquidationElapsed(uint96 id) view returns (uint256)'),
 	parseAbiItem('function previewRetirement(uint96 id,uint256 acceptedPrice,uint256 demand) view returns ((uint8 status,uint96 effectiveCurrentBatch,uint256 healthyCommitment,uint256 spareCommitment,uint256 queuedAheadCommitment,uint256 commitmentReduction,uint256 releasedRep) preview)'),
 ] as const
@@ -53,7 +53,7 @@ export type SecurityPoolPosition = {
 	maxHealthyPrice: bigint
 	remainingCommitment: bigint
 	liquidationStarted: bigint
-	liquidationAwarded?: bigint
+	liquidationPenaltyPaid?: bigint
 	liquidationElapsed?: bigint
 	retirementStatus: string
 	stalledRetirement: boolean
@@ -118,10 +118,10 @@ async function isCanonicalAuctionVaultImplementation(client: ReadClient, impleme
 
 async function loadSecurityPoolPosition(client: ReadClient, snapshot: SecurityPoolCapitalSnapshot, id: bigint): Promise<SecurityPoolPosition> {
 	const blockNumber = snapshot.blockNumber
-	const [rawAccount, started, awarded, elapsed] = await Promise.all([
+	const [rawAccount, started, penaltyPaid, elapsed] = await Promise.all([
 		client.readContract({ address: snapshot.commitmentIndex, abi: securityPoolMonitorAbi, functionName: 'accountOf', args: [id], blockNumber }),
 		client.readContract({ address: snapshot.capitalLedger, abi: securityPoolMonitorAbi, functionName: 'liquidationStarted', args: [id], blockNumber }),
-		client.readContract({ address: snapshot.capitalLedger, abi: securityPoolMonitorAbi, functionName: 'liquidationAwarded', args: [id], blockNumber }),
+		client.readContract({ address: snapshot.capitalLedger, abi: securityPoolMonitorAbi, functionName: 'liquidationPenaltyPaid', args: [id], blockNumber }),
 		client.readContract({ address: snapshot.capitalLedger, abi: securityPoolMonitorAbi, functionName: 'liquidationElapsed', args: [id], blockNumber }),
 	])
 	const account = record(rawAccount, 'Security pool position')
@@ -159,7 +159,7 @@ async function loadSecurityPoolPosition(client: ReadClient, snapshot: SecurityPo
 		maxHealthyPrice: uint(account['maxHealthyPrice']),
 		remainingCommitment: uint(account['remainingCommitment']),
 		liquidationStarted: uint(started),
-		liquidationAwarded: uint(awarded),
+		liquidationPenaltyPaid: uint(penaltyPaid),
 		liquidationElapsed: uint(elapsed),
 	}
 }

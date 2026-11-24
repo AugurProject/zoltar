@@ -24,7 +24,7 @@ for (const viewport of qaViewports) {
 				expect(await evaluate(`${panel('Capital ledgers')}.textContent`)).toContain('25,350 REP pledged · 90 USDC committed · 40 USDC healthy · 200 REP/USDC · price fresh · 3 owners')
 				const feed = await evaluate(`${panel('Liquidation feed')}.textContent`)
 				expect(feed).toContain('attributed to universe and owner, not to a question pool')
-				expect(feed).toContain('position 7 (0x000000…579bde) → position 12 (0xcccccc…cccccc) · 40 USDC commitment · 300 REP award · universe 0')
+				expect(feed).toContain('position 7 (0x000000…579bde) → position 12 (0xcccccc…cccccc) · 40 USDC commitment · 300 REP takeover reward · universe 0')
 				expect(feed).toContain('position 7 (0x000000…579bde) · 10 USDC commitment removed')
 				expect(feed).toContain('report 1842 operation 0 · sponsor 0xcccccc…cccccc · succeeded')
 				// A feed row opens the position it concerns.

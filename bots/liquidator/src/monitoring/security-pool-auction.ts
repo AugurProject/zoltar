@@ -98,7 +98,7 @@ export async function loadSecurityPoolAuctionPosition(client: ReadClient, snapsh
 		remainingCommitment: 0n,
 		liquidationStarted: BigInt(position.liquidationStarted),
 		liquidationElapsed: BigInt(elapsed),
-		liquidationAwarded: 0n,
+		liquidationPenaltyPaid: 0n,
 		retirementStatus: 'Not retiring',
 		stalledRetirement: false,
 	}

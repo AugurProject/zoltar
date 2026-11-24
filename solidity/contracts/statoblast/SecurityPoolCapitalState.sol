@@ -26,7 +26,7 @@ abstract contract SecurityPoolCapitalState {
 	}
 
 	event CommitmentCured(uint96 indexed positionId, uint256 removedCommitment);
-	event CommitmentTakenOver(uint96 indexed sourceId, uint96 indexed receiverId, uint256 commitment, uint256 awardAttoRep);
+	event CommitmentTakenOver(uint96 indexed sourceId, uint96 indexed receiverId, uint256 commitment, uint256 takeoverRewardAttoRep);
 	SecurityPoolCommitmentIndex public commitmentIndex;
 	ICapitalFeeStreams public feeStreams;
 	address public services;

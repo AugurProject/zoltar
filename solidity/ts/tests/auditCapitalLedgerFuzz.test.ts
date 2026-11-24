@@ -124,7 +124,7 @@ const probeTakeover = (m: Model, o: number, id: bigint, k: bigint) => {
 	const probe = structuredClone(m)
 	probe.now += 1n
 	try {
-		return applyModel(probe, { c: 'takeover', o, id, k, minAward: 0n, maxOwn: MAX_UINT, bounds: undefined })
+		return applyModel(probe, { c: 'takeover', o, id, k, minimumTakeoverReward: 0n, maxOwn: MAX_UINT, bounds: undefined })
 	} catch (error) {
 		if (error instanceof ModelRevert) return undefined
 		throw error
@@ -145,7 +145,7 @@ const generateTakeover = (m: Model, random: Random, owners: number): Operation =
 		return { c: 'price', price: (m.accepted * BigInt(1050 + random.int(1500))) / 1000n, until: m.now + 1n + random.pick([HOUR, 3n * DAY, 30n * DAY]) }
 	}
 	const candidates = distressed.length !== 0 && random.chance(0.9) ? distressed : m.positions
-	if (candidates.length === 0) return { c: 'takeover', o, id: BigInt(1 + random.int(3)), k: MINC, minAward: 0n, maxOwn: MAX_UINT, bounds: undefined }
+	if (candidates.length === 0) return { c: 'takeover', o, id: BigInt(1 + random.int(3)), k: MINC, minimumTakeoverReward: 0n, maxOwn: MAX_UINT, bounds: undefined }
 	const source = random.pick(candidates)
 	// A healing cure may shrink the source before the quote; size the request on the cured position.
 	const cured = structuredClone(m)
@@ -172,11 +172,11 @@ const generateTakeover = (m: Model, random: Random, owners: number): Operation =
 	const backable = maximumCommitment(m, receiver.free + (held === undefined ? 0n : held.rep), targetOf(receiver)) - (held === undefined ? 0n : held.k)
 	if (random.chance(0.5) && backable >= MINC && backable < k && available - backable >= MINC) k = backable
 	const probe = probeTakeover(m, o, source.id, k)
-	const award = probe === undefined ? 0n : probe.award
-	const minAward = probe?.cured && random.chance(0.8) ? 0n : random.pick([0n, 0n, 0n, award, award, award + 1n, 1n])
+	const takeoverReward = probe === undefined ? 0n : probe.takeoverReward
+	const minimumTakeoverReward = probe?.cured && random.chance(0.8) ? 0n : random.pick([0n, 0n, 0n, takeoverReward, takeoverReward, takeoverReward + 1n, 1n])
 	const free = ownerOf(m, o).free
 	const maxOwn = random.pick([MAX_UINT, MAX_UINT, free, free === 0n ? 0n : free - 1n])
-	if (random.chance(0.6)) return { c: 'takeover', o, id: source.id, k, minAward, maxOwn, bounds: undefined }
+	if (random.chance(0.6)) return { c: 'takeover', o, id: source.id, k, minimumTakeoverReward, maxOwn, bounds: undefined }
 	const bounds: Bounds = {
 		maximumOwnerPrincipal: probe === undefined ? MAX_UINT : probe.receiverPrincipal,
 		maximumOwnerCommitment: probe === undefined ? MAX_UINT : probe.receiverCommitment,
@@ -190,7 +190,7 @@ const generateTakeover = (m: Model, random: Random, owners: number): Operation =
 	if (wrong === 2) bounds.expectedTargetHealthFactorBps += 1n
 	if (wrong === 3) bounds.expectedAcceptedPriceEpoch += 1n
 	if (wrong === 4) bounds.expectedSourceBatch += 1n
-	return { c: 'takeover', o, id: source.id, k, minAward, maxOwn, bounds }
+	return { c: 'takeover', o, id: source.id, k, minimumTakeoverReward, maxOwn, bounds }
 }
 const generatePrice = (m: Model, random: Random): Operation => {
 	const base = m.accepted === 0n ? WAD : m.accepted
@@ -322,7 +322,7 @@ const generate = (m: Model, random: Random, owners: number, plan: Plan): Operati
 			for (let candidate = 0; candidate < owners; candidate++) if (candidate !== bid.owner && ownerOf(m, candidate).free > ownerOf(m, receiver).free) receiver = candidate
 			if (ownerOf(m, receiver).free === 0n) return { c: 'deposit', o: receiver, amount: randomAmount(random, 19, 20) }
 			const k = random.chance(0.6) || bid.lots < 2n ? bid.lots * MINC : MINC * BigInt(1 + random.int(Number(bid.lots) - 1))
-			return { c: 'takeoverBid', o: receiver, bid: BigInt(bidId), k, minAward: 0n, maxOwn: MAX_UINT, bounds: { maximumOwnerPrincipal: MAX_UINT, maximumOwnerCommitment: MAX_UINT, expectedTargetHealthFactorBps: targetOf(ownerOf(m, receiver)), expectedAcceptedPriceEpoch: m.epoch, expectedSourceBatch: 0n } }
+			return { c: 'takeoverBid', o: receiver, bid: BigInt(bidId), k, minimumTakeoverReward: 0n, maxOwn: MAX_UINT, bounds: { maximumOwnerPrincipal: MAX_UINT, maximumOwnerCommitment: MAX_UINT, expectedTargetHealthFactorBps: targetOf(ownerOf(m, receiver)), expectedAcceptedPriceEpoch: m.epoch, expectedSourceBatch: 0n } }
 		}
 	}
 	if (live(m).some(p => started(m, p.id) !== 0n && p.id !== m.cohortId)) {
@@ -386,7 +386,7 @@ const generate = (m: Model, random: Random, owners: number, plan: Plan): Operati
 			o,
 			bid,
 			k,
-			minAward: 0n,
+			minimumTakeoverReward: 0n,
 			maxOwn: MAX_UINT,
 			bounds: { maximumOwnerPrincipal: MAX_UINT, maximumOwnerCommitment: random.chance(0.9) ? MAX_UINT : free, expectedTargetHealthFactorBps: targetOf(ownerOf(m, o)), expectedAcceptedPriceEpoch: random.chance(0.9) ? m.epoch : m.epoch + 1n, expectedSourceBatch: 0n },
 		}
@@ -448,7 +448,7 @@ const stringify = (value: unknown) => JSON.stringify(value, (_key, item: unknown
 
 const KNOWN_REVERTS = [
 	'Position is liquidating',
-	'Takeover award below minimum',
+	'Takeover reward below minimum',
 	'Takeover commitment below minimum',
 	'Position requires additional backing',
 	'Receiver commitment below minimum',
@@ -630,10 +630,10 @@ const createDriver = (getEthereum: ReturnType<typeof useIsolatedAnvilNode>['getA
 			case 'claim':
 				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'claimEarnings', args: [ownerAddress(op.o)] }))]
 			case 'takeover':
-				if (op.bounds === undefined) return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'takeOver', args: [op.id, op.k, op.minAward, op.maxOwn] }))]
-				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'takeOverWithBounds', args: [op.id, op.k, op.minAward, op.maxOwn, op.bounds] }))]
+				if (op.bounds === undefined) return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'takeOver', args: [op.id, op.k, op.minimumTakeoverReward, op.maxOwn] }))]
+				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'takeOverWithBounds', args: [op.id, op.k, op.minimumTakeoverReward, op.maxOwn, op.bounds] }))]
 			case 'takeoverBid':
-				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'takeOverAuctionBid', args: [op.bid, op.k, op.minAward, op.maxOwn, op.bounds] }))]
+				return [asOwner(op.o, encodeFunctionData({ abi: capitalAbi, functionName: 'takeOverAuctionBid', args: [op.bid, op.k, op.minimumTakeoverReward, op.maxOwn, op.bounds] }))]
 			case 'fundEth':
 				return [asAdmin(encodeFunctionData({ abi: harnessAbi, functionName: 'fundFees' }), op.amount)]
 			case 'fundRep':
@@ -1067,8 +1067,8 @@ const properties = (before: Snapshot, after: Snapshot, op: Operation, owners: nu
 		if ((op.c === 'deposit' || op.c === 'depositTarget') && op.o === o) expected = op.amount
 		if (op.c === 'withdraw' && op.o === o) expected = -op.amount
 		if (paid !== undefined && (op.c === 'takeover' || op.c === 'takeoverBid')) {
-			if (op.o === o) expected = paid.award
-			if (paid.sourceOwner === o) expected = -paid.award
+			if (op.o === o) expected = paid.takeoverReward
+			if (paid.sourceOwner === o) expected = -paid.takeoverReward
 		}
 		// (a)(d) repair never transfers principal ownership; deposits and withdrawals
 		// change principal exactly once.
@@ -1093,8 +1093,8 @@ const properties = (before: Snapshot, after: Snapshot, op: Operation, owners: nu
 	if (paid !== undefined && sum !== 0n) issues.push(`TAKEOVER.conservation: principal changed by ${sum}`)
 	if (paid !== undefined && 'id' in op) {
 		const source = before.accounts[Number(op.id) - 1]
-		// (d) the award never exceeds the source position's own principal.
-		if (source !== undefined && op.c === 'takeover' && paid.award > source.rep) issues.push(`TAKEOVER.award: ${paid.award} exceeds the source principal ${source.rep}`)
+		// (d) the takeover reward never exceeds the source position's own principal.
+		if (source !== undefined && op.c === 'takeover' && paid.takeoverReward > source.rep) issues.push(`TAKEOVER.takeoverReward: ${paid.takeoverReward} exceeds the source principal ${source.rep}`)
 	}
 	// (d) an unpaid cure leaves its target eligible at the conservative price, or at only the
 	// economic minimum that needs additional capacity, and pays the caller nothing (#1571).

@@ -70,7 +70,7 @@ describe('audit: the unpaid cure never leaves a commitment below the minimum', (
 	// Three minimums backed for only 0.6 of one, with spare of two and a half: the uncovered 2.4
 	// would leave 0.6. The cut shrinks to two minimums, so exactly the minimum is left, and that
 	// remainder, still under water, is what the keeper takes over.
-	test('a minimum residual can be replaced while unawarded principal remains with its owner', async () => {
+	test('a minimum residual can be replaced while principal not paid as a takeover reward remains with its owner', async () => {
 		const commitment = 3n * MINIMUM
 		const { id, required } = await underwater(commitment, 100n * E + MINIMUM / 2n, 5n * E)
 		await fixture.deposit(keeper, 1_000n * E)

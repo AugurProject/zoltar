@@ -173,7 +173,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		}
 	}
 
-	function takeOver(uint96 id, uint256 commitment, uint256 minimumAward, uint256 maximumOwnRep, TakeoverBounds calldata bounds, bool enforceBounds, uint256 minimumCommitmentAttoEth) external onlyDelegateCall returns (uint96 receiverId) {
+	function takeOver(uint96 id, uint256 commitment, uint256 minimumTakeoverReward, uint256 maximumOwnRep, TakeoverBounds calldata bounds, bool enforceBounds, uint256 minimumCommitmentAttoEth) external onlyDelegateCall returns (uint96 receiverId) {
 		ICapitalLifecycleHost host = ICapitalLifecycleHost(address(this));
 		address receiverOwner = _capitalOwner();
 		uint256 securityMultiplierBps = host.securityMultiplierBps();
@@ -181,7 +181,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			SecurityPoolCommitmentIndex.Cure memory cured,
 			SecurityPoolCommitmentIndex.Account memory source,
 			uint256 repaired,
-			uint256 award,
+			uint256 takeoverReward,
 			uint256 debit
 		) = commitmentIndex.takeover(id, auctionCohort.positionId, receiverOwner, commitment, minimumCommitmentAttoEth, demandAttoEth, liquidationPrice, conservativePrice, securityMultiplierBps);
 		if (cured.removed != 0) {
@@ -191,7 +191,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		}
 		if (cured.settled) return 0;
 		commitment = repaired;
-		require(award >= minimumAward, 'Takeover award below minimum');
+		require(takeoverReward >= minimumTakeoverReward, 'Takeover reward below minimum');
 		ICapitalPriceExposure feed = ICapitalPriceExposure(ICapitalLedgerAccounting(host.securityPool()).priceFeed(host.universeId()));
 		require(source.rep <= feed.acceptedRepExposureLimitAttoRep(), 'Accepted report REP exposure exceeded');
 		_settleOwner(receiverOwner);
@@ -211,9 +211,9 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		uint256 receiverFreePrincipalAttoRep = receiver.freeAttoRep;
 		require(receiverFreePrincipalAttoRep <= maximumOwnRep, 'Receiver consent exceeded');
 		uint256 requiredReceiverPrincipalAttoRep = _requiredRep(host, existing.commitment + commitment, _target(receiver));
-		require(existing.rep + receiverFreePrincipalAttoRep + award >= requiredReceiverPrincipalAttoRep, 'Receiver collateral insufficient');
+		require(existing.rep + receiverFreePrincipalAttoRep + takeoverReward >= requiredReceiverPrincipalAttoRep, 'Receiver collateral insufficient');
 		require(existing.commitment + commitment >= minimumCommitmentAttoEth, 'Receiver commitment below minimum');
-		TakeoverPlan memory plan = TakeoverPlan(source.commitment - commitment, source.rep - debit, receiverFreePrincipalAttoRep + award);
+		TakeoverPlan memory plan = TakeoverPlan(source.commitment - commitment, source.rep - debit, receiverFreePrincipalAttoRep + takeoverReward);
 		if (enforceBounds) {
 			require(existing.rep + plan.receivedPrincipalAttoRep <= bounds.maximumOwnerPrincipal, 'Takeover owner principal exceeds limit');
 			require(existing.commitment + commitment <= bounds.maximumOwnerCommitment, 'Takeover owner commitment exceeds limit');
@@ -226,9 +226,9 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		) commitmentIndex.clearLiquidation(id);
 		receiver.freeAttoRep -= receiverFreePrincipalAttoRep;
 		totalFreeAttoRep -= receiverFreePrincipalAttoRep;
-		owners[source.owner].account.freeAttoRep += debit - award;
-		totalFreeAttoRep += debit - award;
-		emit CommitmentTakenOver(id, receiverId, commitment, award);
+		owners[source.owner].account.freeAttoRep += debit - takeoverReward;
+		totalFreeAttoRep += debit - takeoverReward;
+		emit CommitmentTakenOver(id, receiverId, commitment, takeoverReward);
 	}
 
 	function _transferTakeoverPosition(uint96 id, uint256 commitment, uint256 debit, Owner storage receiver, SecurityPoolCommitmentIndex.Account memory existing, TakeoverPlan memory plan, address receiverOwner, uint256 minimumCommitmentAttoEth) private returns (uint96 receiverId) {

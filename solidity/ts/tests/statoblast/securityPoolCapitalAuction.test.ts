@@ -195,7 +195,7 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 		expect((await owner(caller.account.address)).feesAttoEth).toBe(0n)
 	})
 
-	test.each([false, true])('a funded repair moves only its target bonus and preserves another winner’s fees (expired=%s)', async expired => {
+	test.each([false, true])('a funded repair moves only its target takeover reward and preserves another winner’s fees (expired=%s)', async expired => {
 		await activate()
 		await writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'creditFees', value: 30n }))
 		await setPrice(6n * ATTO_ETH_PER_ETH, expired ? 60n : 100_000n)

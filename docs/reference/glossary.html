@@ -123,7 +123,11 @@
 					<dt id="target-vault">Target vault</dt>
 					<dd>The unhealthy vault whose underwriting commitment a liquidation reduces.</dd>
 					<dt id="receiver-vault">Receiver vault</dt>
-					<dd>The vault that receives a liquidation REP bonus and transferred commitment, supplies the remaining backing and earns future fees. It must remain healthy on its whole resulting commitment; the bonus remains pledged principal.</dd>
+					<dd>The vault that receives transferred commitment and a <a href="#takeover-reward">takeover reward</a> taken from the target vault’s pledged REP, supplies the remaining backing and earns future fees. It must remain healthy on its whole resulting commitment; the takeover reward remains pledged principal.</dd>
+					<dt id="takeover-reward">Takeover reward</dt>
+					<dd>REP a receiver vault gains by taking over distressed commitment. It is taken from the <a href="#target-vault">target vault</a>’s pledged REP, not paid by the protocol, and grows linearly from zero to all of that REP over one hour from the start of liquidation; a partial takeover receives a proportional share.</dd>
+					<dt id="liquidation-penalty">Liquidation penalty</dt>
+					<dd>The same REP seen from the side of the target vault’s owner: up to all of the vault’s pledged REP, rising over one hour from the start of liquidation, which moves to whoever takes over its commitment.</dd>
 					<dt id="operator">Operator</dt>
 					<dd>An account submitting permissionless maintenance transactions, such as a funded takeover of distressed commitment. A takeover receiver must authorize its own capital and satisfy the transaction bounds.</dd>
 				</dl>

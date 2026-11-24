@@ -6,7 +6,7 @@ import { capitalUnit as E, useCapitalTestFixture } from './statoblast/securityPo
 // unhealthy. When the target's own deficit fit in `totalCommitment - demand`, the cure healed
 // it, the quote reverted, and the revert undid the cure. The spare was never consumed, so with
 // several unhealthy owners whose combined deficit exceeded it, no position could be taken over
-// while outstanding demand stayed under-backed. A healing cure now stands without an award.
+// while outstanding demand stayed under-backed. A healing cure now stands without a takeover reward.
 describe('audit: a curable target no longer blocks every takeover', () => {
 	const fixture = useCapitalTestFixture()
 	const alice = 0
@@ -34,7 +34,7 @@ describe('audit: a curable target no longer blocks every takeover', () => {
 
 		await fixture.deposit(keeper, 1_000n * E)
 		await fixture.getAnvilWindowEthereum().advanceTime(7_200n)
-		// Alice's deficit fits the spare. The call cures her and pays no award.
+		// Alice's deficit fits the spare. The call cures her and pays no takeover reward.
 		await takeOver(a, 100n * E)
 		expect(await fixture.position(a)).toMatchObject({ rep: 105n * E, commitment: 50n * E })
 		expect(await started(a)).toBe(0n)

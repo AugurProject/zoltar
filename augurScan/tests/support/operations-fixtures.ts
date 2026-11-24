@@ -37,7 +37,7 @@ export const storeOperationsEvidenceBlock = async ({ database, operationsChainId
 			{ name: 'PrincipalDeposited', argumentsValue: { payer: address, owner: address, amountAttoRep: 120n.toString() } },
 			{ name: 'CommitmentAuthorized', argumentsValue: { owner: address, positionId: '1', rep: '120', commitment: '100', targetHealthFactorBps: '12000' } },
 			{ name: 'CommitmentCured', argumentsValue: { positionId: '1', removedCommitment: '10' } },
-			{ name: 'CommitmentTakenOver', argumentsValue: { sourceId: '1', receiverId: '2', commitment: '90', awardAttoRep: 5n.toString() } },
+			{ name: 'CommitmentTakenOver', argumentsValue: { sourceId: '1', receiverId: '2', commitment: '90', takeoverRewardAttoRep: 5n.toString() } },
 			// The decoder keeps the uint8 reason as a number.
 			{ name: 'QuestionAccountingCheckpoint', argumentsValue: { reason: 2, settlementCollateralAttoEth: 40n.toString(), shareTokenSupplyAttoShares: 40n.toString(), lastSettlementSecurityPoolTime: '1767225620' } },
 		]

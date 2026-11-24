@@ -87,13 +87,13 @@ export async function executeSecurityPoolTakeover(
 						...base,
 						positionId: plan.positionId,
 						commitment: plan.requestedCommitment ?? plan.commitment,
-						minimumAward: plan.minimumAward,
+						minimumTakeoverReward: plan.minimumTakeoverReward,
 						maximumOwnRep: plan.maximumOwnRep,
 						bounds,
 					})
-				: { to: base.capitalLedger, value: 0n, data: encodeFunctionData({ abi: securityPoolCapitalLedgerAbi, functionName: 'takeOverAuctionBid', args: [positionId.bidId, plan.requestedCommitment ?? plan.commitment, plan.minimumAward, plan.maximumOwnRep, bounds] }) }
+				: { to: base.capitalLedger, value: 0n, data: encodeFunctionData({ abi: securityPoolCapitalLedgerAbi, functionName: 'takeOverAuctionBid', args: [positionId.bidId, plan.requestedCommitment ?? plan.commitment, plan.minimumTakeoverReward, plan.maximumOwnRep, bounds] }) }
 		label = typeof positionId === 'bigint' ? `Take over security pool position ${positionId}` : `Take over auction bid ${positionId.bidId} vault ${positionId.vault}`
-		if (plan.unpaidCure) label = typeof positionId === 'bigint' ? `Cure security pool position ${positionId} without an award` : `Cure auction bid ${positionId.bidId} vault ${positionId.vault} without an award`
+		if (plan.unpaidCure) label = typeof positionId === 'bigint' ? `Cure security pool position ${positionId} without a takeover reward` : `Cure auction bid ${positionId.bidId} vault ${positionId.vault} without a takeover reward`
 	}
 	const preSubmit = async () => {
 		const latest = await refresh(action === 'takeover' && plan.requestedCommitment === undefined ? plan.commitment : undefined)
@@ -130,5 +130,5 @@ export function assertSecurityPoolPlanStillAllowed(original: SecurityPoolTakeove
 		throw new SecurityPoolOpportunityExpired('Security pool exposure or cohort changed before submission')
 	if (original.unpaidCure !== current.unpaidCure) throw new SecurityPoolOpportunityExpired('Security pool takeover terms changed before submission')
 	if ((action === 'approval' || action === 'principal') && original.ownFunding !== current.ownFunding) throw new SecurityPoolOpportunityExpired('Security pool funding requirement changed before submission')
-	if (action === 'takeover' && (current.ownFunding !== 0n || current.minimumAward < original.minimumAward || current.maximumOwnRep > original.maximumOwnRep)) throw new SecurityPoolOpportunityExpired('Security pool takeover terms changed before submission')
+	if (action === 'takeover' && (current.ownFunding !== 0n || current.minimumTakeoverReward < original.minimumTakeoverReward || current.maximumOwnRep > original.maximumOwnRep)) throw new SecurityPoolOpportunityExpired('Security pool takeover terms changed before submission')
 }

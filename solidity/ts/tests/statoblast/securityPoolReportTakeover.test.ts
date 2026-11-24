@@ -17,7 +17,7 @@ function operationBatch(intent: {
 	positionId: bigint
 	bidId: bigint
 	commitment: bigint
-	minimumAward: bigint
+	minimumTakeoverReward: bigint
 	maximumOwnRep: bigint
 	maximumOwnerPrincipal: bigint
 	maximumOwnerCommitment: bigint
@@ -30,8 +30,8 @@ function operationBatch(intent: {
 	const bounds = { maximumOwnerPrincipal: intent.maximumOwnerPrincipal, maximumOwnerCommitment: intent.maximumOwnerCommitment, expectedTargetHealthFactorBps: intent.expectedTargetHealthFactorBps, expectedAcceptedPriceEpoch: 0n, expectedSourceBatch: intent.expectedSourceBatch }
 	const data =
 		intent.bidId === 0n
-			? encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'takeOverWithBounds', args: [intent.positionId, intent.commitment, intent.minimumAward, intent.maximumOwnRep, bounds] })
-			: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'takeOverAuctionBid', args: [intent.bidId, intent.commitment, intent.minimumAward, intent.maximumOwnRep, bounds] })
+			? encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'takeOverWithBounds', args: [intent.positionId, intent.commitment, intent.minimumTakeoverReward, intent.maximumOwnRep, bounds] })
+			: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'takeOverAuctionBid', args: [intent.bidId, intent.commitment, intent.minimumTakeoverReward, intent.maximumOwnRep, bounds] })
 	return { gasLimit: 3_100_000n, minimumPrice: intent.minimumPrice, maximumPrice: intent.maximumPrice, deadline: intent.deadline, operations: [{ gasLimit: 3_000_000n, data }] }
 }
 
@@ -61,7 +61,7 @@ describe('Statoblast: report sponsor takeover priority', () => {
 				positionId: owner.positionId,
 				bidId: 0n,
 				commitment: 100n * unit,
-				minimumAward: 0n,
+				minimumTakeoverReward: 0n,
 				maximumOwnRep: 3_000n * unit,
 				maximumOwnerPrincipal: 4_000n * unit,
 				maximumOwnerCommitment: 100n * unit,
@@ -89,12 +89,12 @@ describe('Statoblast: report sponsor takeover priority', () => {
 		expect(receiver[0]).toBe(3400n * unit)
 		expect(source[1] + receiver[1]).toBe(100n * unit)
 	})
-	for (const failure of ['expiry', 'price', 'award', 'funding', 'cohort', 'health target'] as const) {
+	for (const failure of ['expiry', 'price', 'takeover reward', 'funding', 'cohort', 'health target'] as const) {
 		test(`a failed ${failure} bound preserves accepted price and both owners' funds`, async () => {
 			const { sponsor, feed, intent } = await prepare()
 			if (failure === 'expiry') intent.deadline -= 600n
 			if (failure === 'price') intent.maximumPrice--
-			if (failure === 'award') intent.minimumAward = 1_000n * unit
+			if (failure === 'takeover reward') intent.minimumTakeoverReward = 1_000n * unit
 			if (failure === 'funding') intent.maximumOwnRep = 0n
 			if (failure === 'cohort') intent.expectedSourceBatch = 1n
 			if (failure === 'health target') intent.expectedTargetHealthFactorBps = 12_000n
@@ -146,7 +146,7 @@ describe('Statoblast: report sponsor takeover priority', () => {
 			positionId: 0n,
 			bidId: winner.id,
 			commitment: 3n * unit,
-			minimumAward: failure ? 10_000n * unit : 0n,
+			minimumTakeoverReward: failure ? 10_000n * unit : 0n,
 			maximumOwnRep: 10_000n * unit,
 			maximumOwnerPrincipal: 20_000n * unit,
 			maximumOwnerCommitment: 10n * unit,

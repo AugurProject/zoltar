@@ -225,7 +225,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), 2n * unit, 100n * unit)
 		const largeReport = await getPendingReportId(owner, coordinator)
 		await fixture.base.mockWindow.advanceTime(1n)
-		// The candidate must fund all pledged REP, including principal now exposed to liquidation bonuses.
+		// The candidate must fund all pledged REP, including principal now exposed to liquidation penalties.
 		await requestPriceWithValue(owner, otherCoordinator, await getRequestPriceCostAttoEth(owner, otherCoordinator), unit, 10n * unit)
 		const smallReport = await getPendingReportId(owner, otherCoordinator)
 		await fixture.base.mockWindow.advanceTime(481n)

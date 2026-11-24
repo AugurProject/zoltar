@@ -13,7 +13,7 @@ function evaluate(observation = securityPoolObservation(), settings = securityPo
 
 test('funded takeover bounds the entire transferred obligation, owner collateral without upfront ETH funding', () => {
 	const plan = evaluate().plan
-	expect(plan).toMatchObject({ commitment: 100n * unit, minimumAward: 99n * unit, ownFunding: (585n * unit) / 10n, maximumOwnRep: (585n * unit) / 10n, maximumOwnerPrincipal: 1000n * unit, expectedSourceBatch: 0n })
+	expect(plan).toMatchObject({ commitment: 100n * unit, minimumTakeoverReward: 99n * unit, ownFunding: (585n * unit) / 10n, maximumOwnRep: (585n * unit) / 10n, maximumOwnerPrincipal: 1000n * unit, expectedSourceBatch: 0n })
 	expect(plan?.netRewardAttoEth).toBeGreaterThan(0n)
 })
 
@@ -96,14 +96,14 @@ test('managed scopes, projected income, principal and commitment caps, wallet ga
 	expect(evaluate(observation, settings).reason).toContain('Wallet REP')
 })
 
-test('each prerequisite is followed by fresh funding, cohort, exposure and award revalidation', () => {
+test('each prerequisite is followed by fresh funding, cohort, exposure and takeover reward revalidation', () => {
 	const plan = evaluate().plan
 	if (plan === undefined) throw new Error('Fixture plan missing')
 	expect(() => assertSecurityPoolPlanStillAllowed(plan, { ...plan, ownFunding: plan.ownFunding + 1n }, 'principal')).toThrow('funding requirement')
 	expect(() => assertSecurityPoolPlanStillAllowed(plan, { ...plan, expectedSourceBatch: 2n }, 'approval')).toThrow('cohort')
 	expect(() => assertSecurityPoolPlanStillAllowed(plan, { ...plan, maximumOwnerPrincipal: plan.maximumOwnerPrincipal - 1n }, 'principal')).toThrow('exposure')
 	const funded = { ...plan, ownFunding: 0n }
-	expect(() => assertSecurityPoolPlanStillAllowed(funded, { ...funded, minimumAward: funded.minimumAward - 1n }, 'takeover')).toThrow('terms')
+	expect(() => assertSecurityPoolPlanStillAllowed(funded, { ...funded, minimumTakeoverReward: funded.minimumTakeoverReward - 1n }, 'takeover')).toThrow('terms')
 	expect(() => assertSecurityPoolPlanStillAllowed(funded, { ...funded, ownFunding: 1n }, 'takeover')).toThrow('terms')
 	expect(() => assertSecurityPoolPlanStillAllowed(funded, funded, 'takeover')).not.toThrow()
 })
@@ -120,7 +120,7 @@ test('atomic takeover can remove unpaid spare commitment and acquire the still u
 	observation.snapshot.ownerPrincipalAttoRep = 200n * unit
 	observation.snapshot.ownerAccount.freeAttoRep = 200n * unit
 	const result = evaluate(observation)
-	expect(result.plan).toMatchObject({ commitment: 90n * unit, minimumAward: 105n * unit, ownFunding: 0n })
+	expect(result.plan).toMatchObject({ commitment: 90n * unit, minimumTakeoverReward: 105n * unit, ownFunding: 0n })
 	expect(result.plan?.netRewardAttoEth).toBeGreaterThan(0n)
 })
 
@@ -142,12 +142,12 @@ function deadlocked() {
 	return observation
 }
 
-test('a healing cure is submitted without an award only when it opens another position to a profitable takeover', () => {
+test('a healing cure is submitted without a takeover reward only when it opens another position to a profitable takeover', () => {
 	const observation = deadlocked()
 	const result = evaluate(observation)
 	expect(result.reason).toBe('Unpaid cure ready; it opens another position to takeover')
 	// Zero consent: the call can cure and nothing else.
-	expect(result.plan).toMatchObject({ positionId: 1n, unpaidCure: true, minimumAward: 0n, ownFunding: 0n, maximumOwnRep: 0n, maximumOwnerPrincipal: 0n, maximumOwnerCommitment: 0n, commitment: 100n * unit })
+	expect(result.plan).toMatchObject({ positionId: 1n, unpaidCure: true, minimumTakeoverReward: 0n, ownFunding: 0n, maximumOwnRep: 0n, maximumOwnerPrincipal: 0n, maximumOwnerCommitment: 0n, commitment: 100n * unit })
 	expect(result.plan?.netRewardAttoEth).toBeGreaterThan(0n)
 	// Once the cure has spent the spare, the other position is a paid takeover.
 	const second = observation.positions[1]
@@ -156,7 +156,7 @@ test('a healing cure is submitted without an award only when it opens another po
 	observation.snapshot.totalCommitmentAttoEth -= cured.removed
 	const paid = securityPoolTakeoverPlan(observation, second, securityPoolSettings(), observation.snapshot.ownerPrincipalAttoRep, true)
 	expect(paid.plan).toMatchObject({ positionId: 2n, unpaidCure: false })
-	expect(paid.plan?.minimumAward).toBe(100n * unit)
+	expect(paid.plan?.minimumTakeoverReward).toBe(100n * unit)
 	expect(paid.plan?.netRewardAttoEth).toBeGreaterThan(0n)
 })
 
@@ -218,7 +218,7 @@ test('the preliminary cure respects minimum commitments without freeing backed R
 	expect(securityPoolCureOutcome(observation, position)).toMatchObject({ removed: 0n, commitment: 100n * unit, healthy: false })
 	// A deep deficit (10.5 REP back 10 ETH) with a 30 ETH minimum and spare of 95: the uncovered 90 would
 	// leave 10, so the cut shrinks to 70 and exactly the minimum remains. The auction can replace
-	// this underbacked minimum; any unawarded principal remains credited to the source owner.
+	// this underbacked minimum; any principal not paid as a takeover reward remains credited to the source owner.
 	Object.assign(position, { rep: (105n * unit) / 10n })
 	observation.snapshot.economics.minimumCommitmentAttoEth = 30n * unit
 	observation.snapshot.demandAttoEth = 5n * unit
@@ -278,11 +278,11 @@ test('auction vault commitments consume the same managed commitment budget as di
 	expect(evaluate(observation).plan).toMatchObject({ maximumOwnerCommitment: 200n * unit + observation.snapshot.ownerCommitmentAttoEth })
 })
 
-test('a pledged REP bonus can justify repair without projecting future fees', () => {
+test('a pledged takeover reward can justify repair without projecting future fees', () => {
 	const observation = securityPoolObservation()
 	const settings = securityPoolSettings()
 	settings.securityPoolPolicy.takeoverIncomeHorizonSeconds = 0
-	expect(evaluate(observation, settings).plan?.minimumAward).toBe(99n * unit)
+	expect(evaluate(observation, settings).plan?.minimumTakeoverReward).toBe(99n * unit)
 	observation.snapshot.timestamp = 100n
 	expect(evaluate(observation, settings).reason).toContain('income horizon')
 	settings.securityPoolPolicy.takeoverIncomeHorizonSeconds = 31_536_000
@@ -310,7 +310,7 @@ test('a growing auction can fill the previously reviewed commitment without enla
 	observation.snapshot.timestamp = 2000n
 	const next = securityPoolTakeoverPlan(observation, target, securityPoolSettings(), 0n, true, first.commitment).plan
 	expect(next?.commitment).toBe(first.commitment)
-	expect(next?.minimumAward).toBeGreaterThanOrEqual(first.minimumAward)
+	expect(next?.minimumTakeoverReward).toBeGreaterThanOrEqual(first.minimumTakeoverReward)
 })
 
 test('a funded full repair reserves bounded growth while a tight principal cap prevents that reservation', () => {

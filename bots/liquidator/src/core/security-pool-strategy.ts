@@ -13,7 +13,7 @@ export type SecurityPoolTakeover = {
 	positionId: bigint
 	commitment: bigint
 	requestedCommitment?: bigint
-	minimumAward: bigint
+	minimumTakeoverReward: bigint
 	ownFunding: bigint
 	approvalRep: bigint
 	maximumOwnRep: bigint
@@ -23,7 +23,7 @@ export type SecurityPoolTakeover = {
 	expectedDemand: bigint
 	expectedSourceBatch: bigint
 	netRewardAttoEth: bigint
-	/** The ledger's preliminary cure alone restores the target: the call pays no award and must ask for none. */
+	/** The ledger's preliminary cure alone restores the target: the call pays no takeover reward and must ask for none. */
 	unpaidCure: boolean
 }
 
@@ -47,7 +47,7 @@ function unlockingCurePlan(observation: SecurityPoolObservation, position: Secur
 				positionId: position.id,
 				// The ledger ignores every bound below when the cure heals. If it does not, zero consent makes the call revert.
 				commitment: position.commitment,
-				minimumAward: 0n,
+				minimumTakeoverReward: 0n,
 				ownFunding: 0n,
 				approvalRep: 0n,
 				maximumOwnRep: 0n,
@@ -71,7 +71,7 @@ export function securityPoolTakeoverPlan(observation: SecurityPoolObservation, p
 	return unlockingCurePlan(observation, position, result.healingCure, settings, totalPrincipal, marketAllowed)
 }
 
-/** A takeover that asks for an award. A target its own model predicts the cure will heal never gets one. */
+/** A takeover that asks for a takeover reward. A target its own model predicts the cure will heal never gets one. */
 function paidTakeoverPlan(observation: SecurityPoolObservation, position: SecurityPoolPosition, settings: OperatorSettings, totalPrincipal: bigint, marketAllowed: boolean, requestedCommitment?: bigint): { reason: string; plan?: SecurityPoolTakeover; healingCure?: bigint } {
 	const { snapshot } = observation
 	const policy = settings.securityPoolPolicy
@@ -93,37 +93,37 @@ function paidTakeoverPlan(observation: SecurityPoolObservation, position: Securi
 	let fill = quote(requestedCommitment ?? source.maximumTakeoverCommitment)
 	// After funding, accept the part this capital supports instead of chasing
 	// an ever-growing full-repair quote through repeated approval/deposit cycles.
-	if (requestedCommitment === undefined && snapshot.ownerPrincipalAttoRep > 0n && snapshot.ownerPrincipalAttoRep + fill.award < requiredFor(fill.commitment)) {
+	if (requestedCommitment === undefined && snapshot.ownerPrincipalAttoRep > 0n && snapshot.ownerPrincipalAttoRep + fill.takeoverReward < requiredFor(fill.commitment)) {
 		let low = 0n
 		let high = fill.commitment
 		while (low < high) {
 			const middle = (low + high + 1n) / 2n
 			const candidate = quote(middle)
-			if (snapshot.ownerPrincipalAttoRep + candidate.award >= requiredFor(candidate.commitment)) low = middle
+			if (snapshot.ownerPrincipalAttoRep + candidate.takeoverReward >= requiredFor(candidate.commitment)) low = middle
 			else high = middle - 1n
 		}
 		const funded = quote(low)
 		if (funded.commitment > 0n && snapshot.ownerCommitmentAttoEth + funded.commitment >= snapshot.economics.minimumCommitmentAttoEth) fill = funded
 	}
-	const { commitment, award } = fill
+	const { commitment, takeoverReward } = fill
 	if (commitment === 0n) return reject('Minimum position needs additional backing or healthy capacity')
 	if (snapshot.ownerCommitmentAttoEth + commitment < snapshot.economics.minimumCommitmentAttoEth) return reject('Receiver commitment would be below the economic minimum')
 	const maximumOwnerCommitment = policy.maximumCommitmentAttoEth - (observation.managedCommitmentAttoEth ?? snapshot.ownerCommitmentAttoEth) + snapshot.ownerCommitmentAttoEth
 	if (snapshot.ownerCommitmentAttoEth + commitment > maximumOwnerCommitment) return reject('Owner commitment limit would be exceeded')
-	if (policy.takeoverIncomeHorizonSeconds === 0 && award === 0n) return reject('Repair earns future income; configure an income horizon before automation')
+	if (policy.takeoverIncomeHorizonSeconds === 0 && takeoverReward === 0n) return reject('Repair earns future income; configure an income horizon before automation')
 	const required = requiredFor(commitment)
-	const ownFunding = required > snapshot.ownerPrincipalAttoRep + award ? required - snapshot.ownerPrincipalAttoRep - award : 0n
+	const ownFunding = required > snapshot.ownerPrincipalAttoRep + takeoverReward ? required - snapshot.ownerPrincipalAttoRep - takeoverReward : 0n
 	if (ownFunding > 0n && receiver !== undefined && receiver.maxHealthyPrice < snapshot.liquidationPrice) return reject('Receiver position is liquidating; principal top-ups are unavailable')
 	const maximumOwnerPrincipal = policy.maximumPrincipalAttoRep < policy.maximumTotalPrincipalAttoRep - totalPrincipal + snapshot.ownerPrincipalAttoRep ? policy.maximumPrincipalAttoRep : policy.maximumTotalPrincipalAttoRep - totalPrincipal + snapshot.ownerPrincipalAttoRep
-	// Both receiver-funded principal and the pledged award count toward exposure limits.
-	if (maximumOwnerPrincipal < snapshot.ownerPrincipalAttoRep + ownFunding + award) return reject('Managed principal exposure limit would be exceeded')
+	// Both receiver-funded principal and the pledged takeover reward count toward exposure limits.
+	if (maximumOwnerPrincipal < snapshot.ownerPrincipalAttoRep + ownFunding + takeoverReward) return reject('Managed principal exposure limit would be exceeded')
 	if (ownFunding > policy.maximumOwnFundingAttoRep) return reject('Own REP funding limit would be exceeded')
 	if (observation.walletRep < ownFunding + settings.strategy.walletAttoRepReserve) return reject('Wallet REP reserve would be consumed')
 	const possibleCommitment = source.commitment < maximumOwnerCommitment - snapshot.ownerCommitmentAttoEth ? source.commitment : maximumOwnerCommitment - snapshot.ownerCommitmentAttoEth
 	const fullFunding = requiredFor(possibleCommitment) > snapshot.ownerPrincipalAttoRep ? requiredFor(possibleCommitment) - snapshot.ownerPrincipalAttoRep : 0n
 	const approvalRep = [fullFunding, policy.maximumOwnFundingAttoRep, maximumOwnerPrincipal - snapshot.ownerPrincipalAttoRep, observation.walletRep - settings.strategy.walletAttoRepReserve].reduce((a, b) => (a < b ? a : b))
 	// Reserve a full-repair request through the signed validity horizon only
-	// when current vault capital and policy caps cover its growing bonus/debt.
+	// when current vault capital and policy caps cover its growing takeover reward and debt.
 	const horizon = DEFAULT_TRANSACTION_VALIDITY_BLOCKS * SIGNED_TRANSACTION_SLOT_SECONDS
 	const elapsed = position.liquidationElapsed ?? (snapshot.timestamp > position.liquidationStarted ? snapshot.timestamp - position.liquidationStarted : 0n)
 	const future = securityPoolTakeoverSource({ ...snapshot, timestamp: snapshot.timestamp + horizon }, { ...position, liquidationElapsed: elapsed + horizon })
@@ -131,8 +131,8 @@ function paidTakeoverPlan(observation: SecurityPoolObservation, position: Securi
 		ownFunding === 0n &&
 		commitment === source.maximumTakeoverCommitment &&
 		future.maximumTakeoverCommitment > commitment &&
-		requiredFor(future.maximumTakeoverCommitment) <= snapshot.ownerPrincipalAttoRep + future.maximumTakeoverAward &&
-		snapshot.ownerPrincipalAttoRep + future.maximumTakeoverAward <= maximumOwnerPrincipal &&
+		requiredFor(future.maximumTakeoverCommitment) <= snapshot.ownerPrincipalAttoRep + future.maximumTakeoverReward &&
+		snapshot.ownerPrincipalAttoRep + future.maximumTakeoverReward <= maximumOwnerPrincipal &&
 		snapshot.ownerCommitmentAttoEth + future.maximumTakeoverCommitment <= maximumOwnerCommitment
 	// Repair income arrives in the future. Budget approval, deposit and repair
 	// from the wallet without treating that income as spendable gas funding.
@@ -142,8 +142,8 @@ function paidTakeoverPlan(observation: SecurityPoolObservation, position: Securi
 	// Receiver-funded principal is an investment, not an execution expense or reward.
 	const annualFees = (snapshot.demandAttoEth * snapshot.economics.annualFeeBps) / BPS
 	const projectedIncome = (annualFees * commitment * BigInt(policy.takeoverIncomeHorizonSeconds)) / (snapshot.totalCommitmentAttoEth - source.removed) / 31_536_000n
-	const awardValue = (award * UNIT) / snapshot.ownerConservativePrice
-	const netRewardAttoEth = awardValue + projectedIncome - gasBudget
+	const takeoverRewardValue = (takeoverReward * UNIT) / snapshot.ownerConservativePrice
+	const netRewardAttoEth = takeoverRewardValue + projectedIncome - gasBudget
 	if (netRewardAttoEth < policy.minimumNetRewardAttoEth) return reject('Projected future income is below the profitability floor')
 	return {
 		reason: policy.allowFundedTakeovers ? 'Funded takeover ready' : 'Funded takeover ready; automation is disabled',
@@ -151,7 +151,7 @@ function paidTakeoverPlan(observation: SecurityPoolObservation, position: Securi
 			positionId: position.id,
 			commitment,
 			...(futureCovered ? { requestedCommitment: future.maximumTakeoverCommitment } : {}),
-			minimumAward: award,
+			minimumTakeoverReward: takeoverReward,
 			ownFunding,
 			approvalRep,
 			maximumOwnRep: snapshot.ownerAccount.freeAttoRep + ownFunding + (receiver === undefined ? snapshot.positions.reduce((sum, position) => sum + position.releasedRep, 0n) : 0n),

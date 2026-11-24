@@ -13,7 +13,7 @@ describe('Statoblast: one-hour liquidation auction', () => {
 		await f.price(2n * E)
 		return source
 	}
-	const take = (source: bigint, commitment: bigint, minimumAward: bigint) => writeContractAndWait(f.client(2), () => f.client(2).writeContract({ ...f.capital, functionName: 'takeOver', args: [source, commitment, minimumAward, 105n * E + 10n] }))
+	const take = (source: bigint, commitment: bigint, minimumTakeoverReward: bigint) => writeContractAndWait(f.client(2), () => f.client(2).writeContract({ ...f.capital, functionName: 'takeOver', args: [source, commitment, minimumTakeoverReward, 105n * E + 10n] }))
 
 	test('at one hour the entire principal and commitment move to the funded receiver vault, with no wallet payout', async () => {
 		const source = await prepare()
@@ -36,7 +36,7 @@ describe('Statoblast: one-hour liquidation auction', () => {
 		expect(await f.position((await f.owner(2)).positionId)).toMatchObject({ rep: 210n * E, commitment: 100n * E })
 	})
 
-	test('a receiver cannot take an award without enough backing for the resulting commitment', async () => {
+	test('a receiver cannot take a takeover reward without enough backing for the resulting commitment', async () => {
 		const source = await prepare()
 		await f.getAnvilWindowEthereum().advanceTime(3601n)
 		const before = await f.position(source)
@@ -51,7 +51,7 @@ describe('Statoblast: one-hour liquidation auction', () => {
 		for (const amount of [25n * E, 10n * E]) {
 			await take(source, amount, 0n)
 			const current = await f.position(source)
-			const paid = await f.client().readContract({ ...f.capital, functionName: 'liquidationAwarded', args: [source] })
+			const paid = await f.client().readContract({ ...f.capital, functionName: 'liquidationPenaltyPaid', args: [source] })
 			const started = await f.client().readContract({ ...f.capital, functionName: 'liquidationStarted', args: [source] })
 			const elapsed = (await f.client().getBlock()).timestamp - started
 			expect(paid).toBe(105n * E - current.rep)
@@ -94,20 +94,20 @@ describe('Statoblast: one-hour liquidation auction', () => {
 		expect(await f.position(source)).toMatchObject({ rep: 105n * E, commitment: 100n * E })
 	})
 
-	test('stale time advances the auction and permits another fill without a renewal or repeated partial awards', async () => {
+	test('stale time advances the auction and permits another fill without a renewal or repeated partial takeover rewards', async () => {
 		const source = await prepare()
 		await f.deposit(2, 10n)
 		await writeContractAndWait(f.client(), async () => f.client().writeContract({ ...f.harness, functionName: 'setPrice', args: [2n * E, Number((await f.client().getBlock()).timestamp + 1800n)] }))
 		await f.getAnvilWindowEthereum().advanceTime(900n)
 		await take(source, 25n * E, 0n)
-		const paid = await f.client().readContract({ ...f.capital, functionName: 'liquidationAwarded', args: [source] })
+		const paid = await f.client().readContract({ ...f.capital, functionName: 'liquidationPenaltyPaid', args: [source] })
 		await f.getAnvilWindowEthereum().advanceTime(1000n)
 		const beforeGap = await f.client().readContract({ ...f.capital, functionName: 'liquidationElapsed', args: [source] })
 		await f.getAnvilWindowEthereum().advanceTime(7200n)
 		expect(await f.client().readContract({ ...f.capital, functionName: 'liquidationElapsed', args: [source] })).toBeGreaterThanOrEqual(beforeGap + 7200n)
 		const resumed = await f.client().readContract({ ...f.capital, functionName: 'liquidationElapsed', args: [source] })
 		expect(resumed).toBeGreaterThanOrEqual(beforeGap + 7200n)
-		expect(await f.client().readContract({ ...f.capital, functionName: 'liquidationAwarded', args: [source] })).toBe(paid)
+		expect(await f.client().readContract({ ...f.capital, functionName: 'liquidationPenaltyPaid', args: [source] })).toBe(paid)
 		const remaining = await f.position(source)
 		await take(source, remaining.commitment, remaining.rep)
 		expect(await f.position(source)).toMatchObject({ rep: 0n, commitment: 0n })

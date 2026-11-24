@@ -32,10 +32,10 @@ test('summarizes a ledger and says whether its price is fresh', () => {
 })
 
 test('attributes take-overs, cures and report operations to owners and a universe', () => {
-	const takeover = { event_name: 'CommitmentTakenOver', event_data: { sourceId: '1', receiverId: '2', commitment: '40000000', awardAttoRep: (25n * 10n ** 18n).toString() }, source_owner: alice, receiver_owner: bob, universe_id: '0', collateral: usdc }
+	const takeover = { event_name: 'CommitmentTakenOver', event_data: { sourceId: '1', receiverId: '2', commitment: '40000000', takeoverRewardAttoRep: (25n * 10n ** 18n).toString() }, source_owner: alice, receiver_owner: bob, universe_id: '0', collateral: usdc }
 	expect(liquidationTitle(takeover)).toBe('Commitment take-over')
-	expect(liquidationSummary(takeover)).toBe('position 1 (0xaaaaaa…aaaaaa) → position 2 (0xbbbbbb…bbbbbb) · 40 USDC commitment · 25 REP award · universe 0')
-	expect(liquidationSummary(takeover, { universe: false })).toBe('position 1 (0xaaaaaa…aaaaaa) → position 2 (0xbbbbbb…bbbbbb) · 40 USDC commitment · 25 REP award')
+	expect(liquidationSummary(takeover)).toBe('position 1 (0xaaaaaa…aaaaaa) → position 2 (0xbbbbbb…bbbbbb) · 40 USDC commitment · 25 REP takeover reward · universe 0')
+	expect(liquidationSummary(takeover, { universe: false })).toBe('position 1 (0xaaaaaa…aaaaaa) → position 2 (0xbbbbbb…bbbbbb) · 40 USDC commitment · 25 REP takeover reward')
 	expect(capitalPositionListLabel(100, 240)).toBe('The 100 most at risk of 240 positions')
 	expect(capitalPositionListLabel(3, 3)).toBe('3 positions · most at risk first')
 	expect(capitalPositionListLabel(1, 1)).toBe('1 position · most at risk first')

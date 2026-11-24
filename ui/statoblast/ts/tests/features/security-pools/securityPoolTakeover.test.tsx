@@ -21,7 +21,7 @@ function installTakeoverReader(snapshot: SecurityPoolAccountSnapshot) {
 	reader.setRead('accountOf', { owner: getAddress('0x0000000000000000000000000000000000000099'), batch: 0n, rep: 15n * unit, commitment: 10n * unit, maxHealthyPrice: unit, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n }, index)
 	reader.setRead('liquidationStarted', 1n, capital)
 	reader.setRead('acceptedPriceEpoch', 4n, capital)
-	reader.setRead('liquidationAwarded', 0n, capital)
+	reader.setRead('liquidationPenaltyPaid', 0n, capital)
 	reader.setRead('liquidationElapsed', 0n, capital)
 	reader.install()
 	return reader
@@ -87,7 +87,7 @@ test('a position that unused pool commitment restores is offered as an unpaid cu
 	reader.setRead('accountOf', { owner: getAddress('0x0000000000000000000000000000000000000099'), batch: 0n, rep: 15n * unit, commitment: 10n * unit, maxHealthyPrice: unit, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n }, index)
 	reader.setRead('liquidationStarted', 1n, capital)
 	reader.setRead('acceptedPriceEpoch', 4n, capital)
-	reader.setRead('liquidationAwarded', 0n, capital)
+	reader.setRead('liquidationPenaltyPaid', 0n, capital)
 	reader.setRead('liquidationElapsed', 0n, capital)
 	reader.install()
 	const requests: SecurityPoolTransaction[] = []
@@ -116,7 +116,7 @@ test('a position that unused pool commitment restores is offered as an unpaid cu
 	}
 	await waitFor(() => expect(cureButton.disabled).toBe(false))
 	expect(takeOverButton.disabled).toBe(true)
-	expect(view.container.textContent).toContain('Cure it instead; no award is paid.')
+	expect(view.container.textContent).toContain('Cure it instead; no takeover reward is paid.')
 	await act(() => {
 		cureButton.click()
 	})
@@ -124,7 +124,7 @@ test('a position that unused pool commitment restores is offered as an unpaid cu
 	if (request === undefined) throw new Error('Missing cure transaction')
 	const decoded = decodeFunctionData({ abi: capitalArtifact.abi, data: request.data })
 	if (decoded.functionName !== 'takeOverWithBounds') throw new Error('Wrong cure entry point')
-	// No award is requested, and zero consent keeps the call from acquiring anything if the cure stops being enough.
+	// No takeover reward is requested, and zero consent keeps the call from acquiring anything if the cure stops being enough.
 	expect(decoded.args).toEqual([2n, 10n * unit, 0n, 0n, { maximumOwnerPrincipal: 0n, maximumOwnerCommitment: 0n, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: 4n, expectedSourceBatch: 0n }])
 	await request.validateBeforeSubmit?.()
 	reader.setRead('acceptedPriceEpoch', 5n, capital)
@@ -156,7 +156,7 @@ test('a position the unused commitment cannot restore keeps the takeover and dis
 	reader.setRead('accountOf', { owner: getAddress('0x0000000000000000000000000000000000000099'), batch: 0n, rep: 15n * unit, commitment: 10n * unit, maxHealthyPrice: unit, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n }, index)
 	reader.setRead('liquidationStarted', 1n, capital)
 	reader.setRead('acceptedPriceEpoch', 4n, capital)
-	reader.setRead('liquidationAwarded', 0n, capital)
+	reader.setRead('liquidationPenaltyPaid', 0n, capital)
 	reader.setRead('liquidationElapsed', 0n, capital)
 	reader.install()
 	const actions = { ownerReason: undefined, scope: [], busy: undefined, runSecurityPoolAction: async () => undefined }

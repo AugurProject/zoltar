@@ -28,8 +28,8 @@ const abi = parseAbi([
 	'function setCommitmentWithReport(uint256 reportId,uint256 commitment)',
 	'function serveRetirement(uint96 id)',
 	'function depositAndSetHealthTarget(uint256 amount,uint256 targetHealthFactorBps)',
-	'function takeOver(uint96 id,uint256 commitment,uint256 minimumAward,uint256 maximumOwnRep)',
-	'function takeOverWithBounds(uint96 id,uint256 commitment,uint256 minimumAward,uint256 maximumOwnRep,(uint256 maximumOwnerPrincipal,uint256 maximumOwnerCommitment,uint256 expectedTargetHealthFactorBps,uint256 expectedAcceptedPriceEpoch,uint96 expectedSourceBatch) bounds)',
+	'function takeOver(uint96 id,uint256 commitment,uint256 minimumTakeoverReward,uint256 maximumOwnRep)',
+	'function takeOverWithBounds(uint96 id,uint256 commitment,uint256 minimumTakeoverReward,uint256 maximumOwnRep,(uint256 maximumOwnerPrincipal,uint256 maximumOwnerCommitment,uint256 expectedTargetHealthFactorBps,uint256 expectedAcceptedPriceEpoch,uint96 expectedSourceBatch) bounds)',
 ])
 
 function fixture(overrides: Record<string, unknown> = {}) {
@@ -72,7 +72,7 @@ function fixture(overrides: Record<string, unknown> = {}) {
 		ownerCollateral: [260n, 20n, 17n],
 		accountOf: { owner, batch: 0n, rep: 200n, commitment: 20n, maxHealthyPrice: 20n, releasedRep: 60n, ethFees: 11n, repFees: 13n, remainingCommitment: 0n },
 		liquidationStarted: 0n,
-		liquidationAwarded: 0n,
+		liquidationPenaltyPaid: 0n,
 		liquidationElapsed: 0n,
 		previewRetirement: [5n, 9n, 50n, 10n, 0n, 13n, 0n],
 		...overrides,
@@ -103,7 +103,7 @@ describe('personal security pool capital SDK', () => {
 		expect(decodeFunctionData({ abi, data: buildSecurityPoolCapitalSetCommitmentRequest({ ...base, commitment: 100n }).data })).toEqual({ functionName: 'setCommitment', args: [100n] })
 		expect(decodeFunctionData({ abi, data: buildSecurityPoolCapitalSetCommitmentRequest({ ...base, commitment: 0n }).data })).toEqual({ functionName: 'setCommitment', args: [0n] })
 		expect(decodeFunctionData({ abi, data: buildSecurityPoolCapitalSetCommitmentRequest({ ...base, commitment: 100n, reportId: 4n }).data })).toEqual({ functionName: 'setCommitmentWithReport', args: [4n, 100n] })
-		expect(decodeFunctionData({ abi, data: buildSecurityPoolCapitalTakeOverRequest({ ...base, positionId: 9n, commitment: 17n, minimumAward: 0n, maximumOwnRep: 30n }).data })).toEqual({ functionName: 'takeOver', args: [9n, 17n, 0n, 30n] })
+		expect(decodeFunctionData({ abi, data: buildSecurityPoolCapitalTakeOverRequest({ ...base, positionId: 9n, commitment: 17n, minimumTakeoverReward: 0n, maximumOwnRep: 30n }).data })).toEqual({ functionName: 'takeOver', args: [9n, 17n, 0n, 30n] })
 		expect(() => buildSecurityPoolCapitalSetHealthRequest({ ...base, targetHealthFactorBps: 9_999n })).toThrow('100%')
 		expect(() => buildSecurityPoolCapitalSetCommitmentRequest({ ...base, commitment: -1n })).toThrow('uint256')
 		expect(() => buildSecurityPoolCapitalSetCommitmentRequest({ ...base, commitment: 0n, reportId: 4n })).toThrow('positive')
@@ -118,7 +118,7 @@ describe('personal security pool capital SDK', () => {
 	})
 	test('keeper takeover binds final exposure, saved target, report epoch and source cohort', () => {
 		const bounds = { maximumOwnerPrincipal: 100n, maximumOwnerCommitment: 40n, expectedTargetHealthFactorBps: 12_000n, expectedAcceptedPriceEpoch: 7n, expectedSourceBatch: 9n }
-		const parameters = { ...base, positionId: 3n, commitment: 20n, minimumAward: 0n, maximumOwnRep: 30n, bounds }
+		const parameters = { ...base, positionId: 3n, commitment: 20n, minimumTakeoverReward: 0n, maximumOwnRep: 30n, bounds }
 		const request = buildSecurityPoolCapitalTakeOverWithBoundsRequest(parameters)
 		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'takeOverWithBounds', args: [3n, 20n, 0n, 30n, bounds] })
 		expect(request).toMatchObject({ account: owner, to: capitalLedger, value: 0n })
@@ -126,7 +126,7 @@ describe('personal security pool capital SDK', () => {
 		expect(() => buildSecurityPoolCapitalTakeOverWithBoundsRequest({ ...parameters, bounds: { ...bounds, expectedSourceBatch: 1n << 96n } })).toThrow('uint96')
 		expect(() => buildSecurityPoolCapitalTakeOverWithBoundsRequest({ ...parameters, bounds: { ...bounds, maximumOwnerPrincipal: -1n } })).toThrow('uint256')
 	})
-	test('an unpaid cure asks for no award and consents to no exposure', () => {
+	test('an unpaid cure asks for no takeover reward and consents to no exposure', () => {
 		const request = buildSecurityPoolCapitalCureRequest({ ...base, positionId: 3n, commitment: 20n, expectedAcceptedPriceEpoch: 7n, expectedSourceBatch: 9n })
 		expect(request).toMatchObject({ account: owner, to: capitalLedger, value: 0n })
 		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'takeOverWithBounds', args: [3n, 20n, 0n, 0n, { maximumOwnerPrincipal: 0n, maximumOwnerCommitment: 0n, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: 7n, expectedSourceBatch: 9n }] })
@@ -219,6 +219,6 @@ test('live collateral never becomes withdrawable merely because principal exists
 	await expect(loadSecurityPoolCapitalSnapshot({ client: fixture({ accountOf: { owner: securityPool, batch: 0n, rep: 200n, commitment: 20n, maxHealthyPrice: 20n, releasedRep: 60n, ethFees: 11n, repFees: 13n } }).client, securityPool, owner })).rejects.toThrow('another owner')
 })
 
-test('takeover builders encode the receiver minimum REP award', () => {
-	expect(decodeFunctionData({ abi, data: buildSecurityPoolCapitalTakeOverRequest({ owner, capitalLedger, positionId: 1n, commitment: 1n, minimumAward: 1n, maximumOwnRep: 0n }).data }).args).toEqual([1n, 1n, 1n, 0n])
+test('takeover builders encode the receiver minimum takeover reward', () => {
+	expect(decodeFunctionData({ abi, data: buildSecurityPoolCapitalTakeOverRequest({ owner, capitalLedger, positionId: 1n, commitment: 1n, minimumTakeoverReward: 1n, maximumOwnRep: 0n }).data }).args).toEqual([1n, 1n, 1n, 0n])
 })

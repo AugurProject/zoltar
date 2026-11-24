@@ -38,7 +38,7 @@
 	<body>
 		<main>
 			<h1>Backing-preserving commitment repairs</h1>
-			<p><strong>Historical design:</strong> This page records PR #1358. The current <a href="../docs/explanation/liquidations.html">liquidation auction</a> replaces its zero-award rule with a one-hour REP bonus credited to the receiver’s vault.</p>
+			<p><strong>Historical design:</strong> This page records PR #1358. The current <a href="../docs/explanation/liquidations.html">liquidation auction</a> replaces its zero-award rule with a one-hour takeover reward, taken from the provider’s pledged REP and credited to the receiver’s vault.</p>
 			<p>This audit explains the replacement for principal-seizing takeovers and identifies which reported oracle risks remain. It is intended for protocol reviewers who understand portfolio commitments and the shared REP price feed.</p>
 			<h2>Implemented ownership and funding</h2>
 			<p>A repair transfers unsupported commitment, never the original provider’s REP or past earnings. The receiver supplies its own REP and earns future fees on its commitment. The requested transfer is an upper bound: after the unpaid cure, the contract stops at the source’s conservative-price repair limit and retains at least its minimum commitment. Repeated operations cannot keep taking commitment from a recovered source.</p>

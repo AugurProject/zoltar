@@ -297,7 +297,7 @@ describe('Statoblast: collateral-repair-auction lifecycle gas baselines', () => 
 		await renewDistressedPrice()
 		const distressStart = await owner.readContract({ ...capital, functionName: 'liquidationStarted', args: [cohort[1]] })
 		expect(distressStart).toBeGreaterThan(0n)
-		// One hour of uninterrupted distress earns the full award; the price
+		// One hour of uninterrupted distress earns the full takeover reward; the price
 		// observation must be refreshed because the feed window is shorter.
 		for (let renewal = 0; renewal < 6; renewal++) {
 			await mock.advanceTime(120n)

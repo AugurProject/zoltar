@@ -96,7 +96,7 @@ test.skipIf(url === undefined)('capital positions rank by health, attribute liqu
 			event(1, 2, ledger, 'PrincipalDeposited', { payer: bob, owner: bob, amountAttoRep: '900' }),
 			event(1, 3, ledger, 'AuctionBidMaterialized', { bidId: '4', vault: carol, positionId: '3', principal: '70', commitment: '10' }),
 			// Bob takes over part of Alice's position. The split creates position 2, which no event ties to an owner.
-			event(2, 0, ledger, 'CommitmentTakenOver', { sourceId: '1', receiverId: '2', commitment: '40', awardAttoRep: '25' }),
+			event(2, 0, ledger, 'CommitmentTakenOver', { sourceId: '1', receiverId: '2', commitment: '40', takeoverRewardAttoRep: '25' }),
 			event(2, 1, ledger, 'CommitmentCured', { positionId: '1', removedCommitment: '10' }),
 			event(2, 2, feed, 'ReportOperationAttempted', { reportId: '7', sponsor: bob, operationIndex: '0', success: true }),
 			// Position 5 of the other ledger is unresolved and must not be attributed across ledgers.
@@ -182,7 +182,7 @@ test.skipIf(url === undefined)('capital positions rank by health, attribute liqu
 			['CommitmentCured', lower(ledger), '0', lower(alice), null],
 			['CommitmentTakenOver', lower(ledger), '0', lower(alice), lower(bob)],
 		])
-		expect(feedRows[3]).toMatchObject({ securityPool: lower(securityPool), collateral: { symbol: 'USDC', decimals: 6 }, event_data: { commitment: '40', awardAttoRep: '25' } })
+		expect(feedRows[3]).toMatchObject({ securityPool: lower(securityPool), collateral: { symbol: 'USDC', decimals: 6 }, event_data: { commitment: '40', takeoverRewardAttoRep: '25' } })
 		// Bob received the take-over and sponsored the report operation; the cure of Alice's position is not his.
 		expect((await liquidationRows(connection, { chainId, snapshotBlock: '3', owner: lower(bob), page })).map((row: Record<string, unknown>) => row['event_name'])).toEqual(['ReportOperationAttempted', 'CommitmentTakenOver'])
 		expect((await liquidationRows(connection, { chainId, snapshotBlock: '3', ledger: lower(otherLedger), page })).map((row: Record<string, unknown>) => row['event_name'])).toEqual(['CommitmentCured'])
