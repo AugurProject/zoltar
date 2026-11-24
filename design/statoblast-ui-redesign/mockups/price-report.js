@@ -21,7 +21,7 @@
 				<div class="step now"><span class="mk">1</span><div><div class="t">Wrap ETH</div><div class="s">Need 0.1050 WETH, have 0.0400</div></div><div class="act"><span class="btn sm primary">Wrap 0.0650 ETH</span></div></div>
 				<div class="step"><span class="mk">2</span><div><div class="t">Approve WETH</div><div class="s">0.1050 WETH needed · <a>Adjust amount</a></div></div><div class="act"><span class="btn sm">Approve WETH</span></div></div>
 				<div class="step"><span class="mk">3</span><div><div class="t">Approve REP</div><div class="s">25.20 ${branch ? 'branch ' : ''}REP needed, wallet has 2 310.00 · <a>Adjust amount</a></div></div><div class="act"><span class="btn sm">Approve REP</span></div></div>
-				<div class="step locked"><span class="mk"></span><div><div><div class="t">Report ${branch ? 'branch ' : ''}REP price</div><div class="s">Gas now 8.2 gwei, accepted up to 30</div></div></div><div class="act"><span class="btn sm disabled">Report price</span><span class="why">Approve WETH and REP first.</span></div></div>
+				<div class="step locked"><span class="mk"></span><div><div><div class="t">Report ${branch ? 'branch ' : ''}REP price</div><div class="s">Gas now 8.2 nanoETH/gas, accepted up to 30</div></div></div><div class="act"><span class="btn sm disabled">Report price</span><span class="why">Approve WETH and REP first.</span></div></div>
 			</div>
 		</div>`
 	}

@@ -123,7 +123,7 @@
 					<li><a href="#question">Question pages</a></li>
 					<li><a href="#pool">Security pool pages</a></li>
 					<li><a href="#fork">Fork and recovery</a></li>
-					<li><a href="#other">Price reports, universes, deploy</a></li>
+					<li><a href="#other">Price reports and app-wide states</a></li>
 					<li><a href="#components">Shared components and behaviours</a></li>
 					<li><a href="#data">Data loading (no event logs)</a></li>
 					<li><a href="#wording">Wording rules and glossary</a></li>
@@ -254,7 +254,7 @@
 			<p>Breadcrumbs: <code>Watchlist › Security pool {address} › Questions › Question</code>. On phones they collapse to one “‹ back” link to the parent.</p>
 
 			<h2 id="shell">4. App shell</h2>
-			<h3>Header (every screen, built in <code>shell.js</code>)</h3>
+			<h3>Header (every screen)</h3>
 			<ul>
 				<li>Left: logo, tabs <b>Watchlist</b> (★) and <b>Price reports</b>. Question and security pool pages highlight Watchlist. Phones: tabs move to a bottom bar.</li>
 				<li>Right: REP price chip (<code>1 REP = 0.0045 ETH</code>), universe menu button, wallet chip, Activity, Settings. The right group wraps to a second row when it doesn't fit (never runs off-screen).</li>
@@ -280,8 +280,8 @@
 				<li>“View positions of another address” (closed disclosure): read-only mode for any address; the header then shows “Viewing as”.</li>
 				<li><b>Saved questions</b> table: star, question title, security pool address, stage badge with the relevant date, your shares, Open. If the same question is saved in two pools, each row notes “Also saved in another security pool”. A row can link “REP staked in deposits not found on this device. Locate them” (→ 04d).</li>
 				<li><b>Saved security pools</b>: star, address with collateral/policy/fees line, REP price status badge, capacity-in-use bar, your position (pledged REP, commitment, health, earned). Deploy a security pool… button.</li>
-				<li>Saved items that fail the entry check show “isn't a Statoblast security pool” with Remove.</li>
-				<li>Export / Import watchlist: the file also carries the deposits located on this device.</li>
+				<li>Saved items that fail the entry check show “isn't a Statoblast security pool” (or question) with Remove. A question that is registered but not prepared in the current universe is never offered for removal (see <a href="#data">Entry check</a>).</li>
+				<li>Export / Import watchlist: the file also carries the deposits located on this device (<a href="#storage">schema</a>).</li>
 				<li><b>Recently opened</b>: last 20, a snapshot, not refreshed. Clear history.</li>
 				<li>Empty state (02c) explains the three ways in: paste a link or address, search a question ID in saved pools, or open something and star it.</li>
 				<li>Un-starring an item where you hold a position asks first (see 18).</li>
@@ -342,11 +342,12 @@
 			<ul>
 				<li>The only screen where a question offers the fork. Shown after two outcomes reach 225 000 REP: no more reports are accepted and reporting has ended undecided; triggering the fork is a separate transaction anyone can send.</li>
 				<li>Badge “Undecided · fork step”; tab badge “Fork”; outcome bars at the threshold.</li>
-				<li>“Fork the universe” card: danger notice “A fork cannot be undone. This universe freezes; everything moves to child universes Yes, No and Invalid.”; cost “Triggering costs you 12.40 REP, not returned. (REP supply grew since reporting started.)”; approval amount input (cost + 1 REP spare); steps Approve REP → Trigger universe fork (sub-line “Anyone can send this; needed once”).</li>
+				<li>“Fork the universe” card: danger notice “A fork cannot be undone. This universe freezes; everything moves to child universes Yes, No and Invalid.”; cost “Triggering costs you 12.40 REP, not returned. (REP supply grew since reporting started.)”; approval amount input (cost + 1 REP spare; the spender is the <code>reporterLedger</code> returned by <code>getOwnForkAdmissionShortfall</code>); steps Approve REP → Trigger universe fork (sub-line “Anyone can send this; needed once”).</li>
 				<li>With no shortfall the cost line, approval field and Approve step are hidden; Trigger is the only step. While loading, Trigger shows “Checking…”. After the fork, the fork banner and the pool's Fork tab take over.</li>
+				<li>Your own deposits in this state are read-only: “Your REP stays staked and carries to the child universes after the fork.” They are claimed there (04c).</li>
 			</ul>
 
-			<h2 id="pool">7. Security pool pages (06–11)</h2>
+			<h2 id="pool">7. Security pool pages (07–11, 06)</h2>
 			<p>Shared head (<code>portfolio-head.js</code>): status badge, collateral and question policy, star + full address (copy, add a label), “Position of you {address}” selector (switch to any position owner, read-only), Refresh. Tabs: Overview, Capital, Questions (count), REP price (status badge), Liquidations (count), Fork &amp; recovery (status). Tabs wrap; on phones a select replaces them. A forked pool shows a “Forked” badge.</p>
 			<h3>07 Overview</h3>
 			<ul>
@@ -365,8 +366,8 @@
 			</ul>
 			<h3>09 Questions (09b, 09c)</h3>
 			<ul>
-				<li>Your saved questions in this pool (“Showing the 3 you saved, of 14 registered here.”) — never the full registry. Find or register by question ID (hex or decimal).</li>
-				<li>09c states: Registered here (open, mint), Not registered here (Register question; for an open pool), invalid input, not a question.</li>
+				<li>Your saved questions in this pool (“Showing the 3 you saved, of 14 registered here.”) — never the full registry. Find or register by question ID: input starting with <code>0x</code> is hex, anything else is decimal.</li>
+				<li>09c states: Registered here (open, mint); Not registered here (Register question; for an open pool); invalid input; not a question. Register is disabled with its reason when the question can't be registered: only Yes/No questions, trading not yet ended, universe not forked (<code>SecurityPoolFactory.sol</code> registration checks). A question registered here but not yet prepared in the current child universe shows “Registered, not prepared in this universe” and links to Fork &amp; recovery. Invalidate the session entry-check cache after Register and after Prepare.</li>
 				<li>09b fixed question list: “Which questions can be registered: Fixed question list” and the approved IDs; others can't be registered.</li>
 				<li>Mint drawer uses the shared mint form with a question picker and Find by ID.</li>
 			</ul>
@@ -377,7 +378,7 @@
 			</ul>
 			<h3>11 Liquidations</h3>
 			<ul>
-				<li>List of positions below liquidation that this device knows (checked set or ID lookup “Position ID → Open position”), never a global scan.</li>
+				<li>Positions this device knows: your own, ones opened by ID (“Position ID → Open position”, reads <code>accountOf(id)</code> and <code>liquidationStarted(id)</code>), and ones from shared links. No scan over all position IDs: anyone can open positions, so a scan is unbounded.</li>
 				<li>Position #7: health 78%, started time, takeover reward growing over one hour (bar from ≥ 186.50 REP now to all 746.00 REP by 00:58), max takeover now / later. Take over with your limits (start empty; suggested “Most pledged REP you'll end with”) and before → after for your position. Cure: permissionless, no reward, owner keeps REP; disabled when pool capacity is too low.</li>
 				<li>Taker side says “takeover reward”; the owner side says “liquidation penalty”. Never “bonus”.</li>
 			</ul>
@@ -423,24 +424,25 @@
 				<li><b>Fixed-size inputs</b>: one-line inputs keep their height; long typed values are clipped with an ellipsis; units/hints sit inside the input on the right.</li>
 				<li><b>Tables</b> stack into label/value cards whenever their container is narrower than about 1000 px (container query), not just on phones.</li>
 				<li><b>Layout widths</b>: test 1440, 1280, 1024, 900, 768, 390, 360. Below 1100 px side columns move below the main column; below 640 px the bottom bar and select-style tabs apply.</li>
-				<li>Dates: “Jan 9, 14:00 UTC”; relative “in 2d 13h” only next to an absolute date. Durations “7 days”. Gas in gwei.</li>
+				<li>Dates: “Jan 9, 14:00 UTC”; relative “in 2d 13h” only next to an absolute date. Durations “7 days”. Gas prices in <code>nanoETH/gas</code> (the repository unit rule, enforced by <code>bun run check:unit-terminology</code>).</li>
 				<li>Light and dark themes.</li>
 			</ul>
 
 			<h2 id="data">11. Data loading (no event logs)</h2>
 			<p>The full plan with per-row read counts, the request budget and the abuse analysis is <a href="mockups/19-refresh-plan.html">19 Refresh plan</a>. Summary:</p>
 			<ul>
-				<li><b>Refresh rules</b>: the open page every new block in one block-pinned multicall; saved items every block up to 25 (beyond that 10 rotate per block and show “as of …”); recently opened never refreshed; hidden tab paused.</li>
-				<li><b>Entry check</b> before anything joins a read batch: security pool via <code>isSecurityPool(address)</code> on the factory; a question via <code>getQuestionLedger(questionId, universeId)</code> on that security pool. Fails → “Not a Statoblast question / security pool”, offered for removal. The check runs in the first multicall, reads in the second; results cached per session.</li>
-				<li><b>Saved items store</b>: reuse <code>localEntityStore.ts</code> (app “statoblast”, kinds “question” and “pool”, per network, limit 500) and <code>FavoriteToggle.tsx</code> (aria-pressed; label “Saved: {name} in security pool {address}”).</li>
+				<li><b>Refresh rules</b>: the open page every new block in one block-pinned multicall; saved items every block up to 25 (beyond that 10 rotate per block); recently opened never refreshed; hidden tab paused. <b>Staleness</b>: any row whose data is more than 3 minutes behind the chain head shows “Updated {time} ago” and its transaction buttons are paused with “Refresh to continue.” (18); within 3 minutes no age is shown.</li>
+				<li><b>Entry check</b> before anything joins a read batch: security pool via <code>isSecurityPool(address)</code> on the factory; a question via <code>getQuestionLedger(questionId, universeId)</code> on that security pool, read with <code>allowFailure</code>. It has three outcomes: a ledger address (registered and prepared); revert “Question not registered” (not registered here, “Not a Statoblast question”, offered for removal); revert “Question pool unavailable” (registered but not prepared in this universe, e.g. a child universe before “prepare question”: keep the item and link to Fork &amp; recovery). The check runs in the first multicall, reads in the second; results are cached per session and invalidated after Register and Prepare.</li>
+				<li><b>Universe scope</b>: a question is really (security pool, question ID, universe). Routes keep the existing universe / network / simulation query context (as <code>buildQuestionPoolHref</code> in <code>SS/lib/routing.ts</code> does today), so a shared link opens the same universe. Saved items are stored per network as (security pool, question ID) and shown with their state in the currently selected universe; where that universe has no ledger yet, the row shows “Not prepared in this universe”.</li>
+				<li id="storage"><b>Device storage and export</b>: reuse <code>localEntityStore.ts</code> (app “statoblast”, kinds “question” and “pool”, per network, limit 500) and <code>FavoriteToggle.tsx</code> (aria-pressed; label “Saved: {name} in security pool {address}”). Also stored per network: history (last 20), located deposits <code>{game, outcome, depositor, index}</code>, search cursors <code>{game, outcome, depositor, nextIndex, block}</code>, and deploy progress. Export file: <code>{"version": 1, "chainId", "saved": [{kind, pool, questionId?, label?}], "deposits": [{game, outcome, depositor, index}]}</code>. Import treats every entry as untrusted: validate the shape and chainId, run the entry check on saved items, and verify each deposit with one <code>getDepositsByOutcome(outcome, index, 1)</code> read (depositor must match); merge by key, never overwrite. Errors: “Not a Statoblast watchlist file.”, “This file is for another network.”, and a count of skipped entries.</li>
 				<li>
 					<b>Your deposits</b>:
 					<ul>
-						<li>Total per side with no search: <code>getLocalUnresolvedPrincipalByVaultAndOutcome(you, outcome)</code> × 3. All zero → nothing to locate.</li>
-						<li>Saved at deposit time: after the report confirms, read <code>getDepositsByOutcomeLength</code> at the receipt block and its parent block; the entries between are that block's deposits (<code>getDepositsByOutcome</code>); those whose depositor is you are yours. Saved per chain, game, outcome and depositor.</li>
+						<li>Total per side with no search: <code>getLocalUnresolvedPrincipalByVaultAndOutcome(wallet, outcome)</code> × 3, where <code>wallet</code> is the depositing wallet address. All zero → nothing to locate.</li>
+						<li>Saved at deposit time: after the report confirms, read <code>getDepositsByOutcomeLength</code> at the receipt block and its parent block; the entries between are that block's deposits (<code>getDepositsByOutcome</code>); those whose depositor is you are yours. Saved per chain, game, outcome and depositor. The first report of a game deploys the game in the same transaction, so a game with no code at the parent block counts as length 0. Both reads are of very recent state (the receipt's block and its parent), which ordinary nodes serve; if the parent-block read fails, fall back to the search below. See <a href="#open">open question</a> on decoding the receipt instead.</li>
 						<li>Carried to another device by Watchlist export/import.</li>
 						<li>Search only when totals differ: page <code>getDepositsByOutcome(outcome, start, 30)</code>, 2 pages per refresh, cursor saved, stop when located deposits add up to your total; only for the open question; cursors advance only to a block a few behind head (reorg safety). Losing sides read 0 after settlement and are never searched.</li>
-						<li>Claiming uses <code>withdrawFromEscalationGame(outcome, depositIndexes[])</code> with all selected indexes in one transaction.</li>
+						<li>Claiming uses <code>withdrawFromEscalationGame(outcome, depositIndexes[])</code> with all selected indexes in one transaction. It is permissionless but needs one depositor per call, and after a fork it reverts (“Deposits carry to child games”): deposits then carry to the child games (04c).</li>
 					</ul>
 				</li>
 				<li><b>Inherited claims</b>: read your REP in the frozen parent first; zero → stop. Otherwise read the parent list once in full (proofs need every entry) and keep it; check each of your claims individually each refresh.</li>
@@ -563,7 +565,43 @@
 			<p>All mockups use one data set (unforked “now” = Jan 7, 00:13 UTC; fork scenario on Nov 24). For example: security pool <code>0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</code> (WETH), REP price 220.00 REP per WETH (health uses 239.13, liquidation uses 203.70), capacity 1.00 of 10.00 WETH in use; your position 5 000.00 REP pledged, 10.00 WETH commitment, health 209% (= 5 000 / (10 × 239.13)), withdrawable ≈ 2 130.44 REP. Useful as test fixtures for the simulation scenarios.</p>
 
 			<h2 id="facts">13. Verified contract facts</h2>
-			<p>Checked against the contracts; the mockups depend on them.</p>
+			<p>Checked against the contracts; the mockups depend on them. Numbers in the mockups such as 225 000 REP, 85%, 5 minutes and 7 days are <b>example values</b>: read them from the contracts, never hard-code them in copy (see the table below).</p>
+			<div class="wrap">
+				<table>
+					<thead>
+						<tr>
+							<th>Example value</th>
+							<th>Read from</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>225 000 REP per outcome (fork / non-decision threshold)</td>
+							<td>Per game: <code>EscalationGame.nonDecisionThresholdAttoRep</code>, set from <code>Zoltar.getNonDecisionThresholdAttoRep(universeId)</code>; it depends on REP supply.</td>
+						</tr>
+						<tr>
+							<td>1.00 REP minimum first report</td>
+							<td>Per game: <code>EscalationGame.startBondAttoRep</code>.</td>
+						</tr>
+						<tr>
+							<td>5-minute price-report dispute window</td>
+							<td>The price feed's immutable <code>settlementTime</code> (<code>SharedPoolPriceFeed.sol</code>).</td>
+						</tr>
+						<tr>
+							<td>Earnings vest over 7 days</td>
+							<td>A security pool deploy parameter (06 “Reward vesting”); read it from the pool.</td>
+						</tr>
+						<tr>
+							<td>Liquidation below 85% health; 120% target</td>
+							<td>From the pool's security multiplier and price feed (liquidation price) and the position's saved target; never a constant in copy.</td>
+						</tr>
+						<tr>
+							<td>Takeover reward reaches all pledged REP after 1 hour</td>
+							<td><code>LIQUIDATION_AUCTION_DURATION</code> (<code>SecurityPoolCommitmentIndex.sol</code>).</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
 			<ul>
 				<li>Reports are paid from wallet REP only.</li>
 				<li>Losing deposits return nothing and need no action.</li>
@@ -571,12 +609,14 @@
 				<li>Attrition begins 3 days after the reporting game starts; the cost to keep a side alive then rises over up to 7 weeks; once it passes the second-highest side, reporting closes and the leader wins (<code>EscalationGame.sol</code>, <code>EscalationGameCalculations.sol</code>, <code>Constants.sol</code>).</li>
 				<li>Only a report that raises the second-highest outcome extends the window.</li>
 				<li>“Full bonus share” fills your side to min(1.5 × largest other side, threshold): winners split 60% of the second-highest side; 40% is burned.</li>
-				<li>Deposits are capped at the per-outcome threshold (225 000 REP). When two outcomes reach it, the game is in its non-decision state and accepts no deposits; the fork is a separate, permissionless trigger that pulls any REP shortfall from the caller.</li>
+				<li>Deposits are capped at the per-outcome threshold. When two outcomes reach it, the game is in its non-decision state and accepts no deposits; the fork is a separate, permissionless trigger (<code>QuestionForker.forkZoltarWithOwnEscalationGame</code>) that pulls any REP shortfall from the caller; the shortfall and the spender to approve (<code>reporterLedger</code>) come from <code>QuestionForker.getOwnForkAdmissionShortfall</code>. In the non-decision state deposits can't be withdrawn (“Non-decision done”); after the fork they carry to the child games.</li>
+				<li>Resolution: if no outcome has any REP, the question resolves Invalid; a tie doesn't resolve: the question stays unresolved until one outcome strictly leads (<code>EscalationGameProofVerifier.resolveQuestion</code>).</li>
+				<li>Only Yes/No questions can be registered in a security pool, before trading ends and while the universe hasn't forked (<code>SecurityPoolFactory.sol</code>).</li>
 				<li>Missing the branch choice: pledged REP goes to claimants in every branch; the commitment ends.</li>
 				<li>No accepted branch REP price: the repair auction can't fill, bids are refunded, the branch activates under-collateralized.</li>
 				<li>Repair auction: lowest REP-per-lot asks win; all winners get the highest winning ask.</li>
 				<li>Shares and REP can be migrated to more child universes later; no REP migration deadline.</li>
-				<li>Reduce-commitment queue: can't be changed once queued, all-or-nothing, served when free capacity covers it. Earnings vest over 7 days. Cure is permissionless, pays no reward, and the owner keeps their REP.</li>
+				<li>Reduce-commitment queue: can't be changed once queued, all-or-nothing, served when free capacity covers it. Cure is permissionless, pays no reward, and the owner keeps their REP.</li>
 			</ul>
 
 			<h2 id="code-map">14. Where the current code lives</h2>
@@ -598,7 +638,7 @@
 						</tr>
 						<tr>
 							<td>Shell</td>
-							<td><code>CS/app/components/AppHeaderShell.tsx</code>, <code>OverviewPanels.tsx</code> (wallet, REP price, forked notice), <code>CS/components/UniverseSwitcher.tsx</code>, <code>WalletChip.tsx</code>, <code>TransactionActivityMenu.tsx</code>, <code>AppSettingsMenu.tsx</code>; universe data <code>ui/statoblast/ts/app/lib/overviewUniverse.ts</code></td>
+							<td><code>CS/app/components/AppHeaderShell.tsx</code>, <code>OverviewPanels.tsx</code> (wallet, REP price, forked notice), <code>CS/components/UniverseSwitcher.tsx</code>, <code>CS/components/WalletChip.tsx</code>, <code>CS/app/components/TransactionActivityMenu.tsx</code>, <code>CS/app/components/AppSettingsMenu.tsx</code>; universe data <code>ui/statoblast/ts/app/lib/overviewUniverse.ts</code></td>
 							<td>Universe menu popover/sheet, fork banner with contextual action.</td>
 						</tr>
 						<tr>
@@ -674,7 +714,7 @@
 						<tr>
 							<td>Event logs</td>
 							<td>One query: <code>SS/protocol/securityPool.ts</code> <code>discoverSimulationSecurityPool</code> (<code>getLogs</code> on <code>PrincipalDeposited</code>, simulation only). Receipt-log decoding (report IDs, deploy address) is fine: it reads the receipt of the user's own transaction.</td>
-							<td>Remove the query.</td>
+							<td>Remove the query. Simulation scenarios instead seed the Watchlist with their security pool and questions (scenario setup in <code>SS/simulation/statoblastScenarios.ts</code>), so <code>simScenario=security-pool</code> opens with them saved. Update the route-dependent browser tests (<code>tooling/ui/productionBrowserNavigation.test.ts</code>, <code>tooling/ui/productionBuild.test.ts</code>).</td>
 						</tr>
 						<tr>
 							<td>Copy</td>
@@ -694,7 +734,7 @@
 			<h2 id="order">15. Suggested implementation order</h2>
 			<p>Each milestone is shippable on its own and keeps the feature map (00) complete.</p>
 			<ol>
-				<li><b>Data layer first</b>: entry checks, block-pinned multicall refresh, saved-items refresh budget, deposit saving at deposit time, the state-only deposit search; delete log reads and global loaders. Add tests that fail if the app issues <code>eth_getLogs</code>.</li>
+				<li><b>Data layer first</b>: entry checks, block-pinned multicall refresh, saved-items refresh budget, deposit saving at deposit time, the state-only deposit search, device storage and export schema; simulation scenarios seed the Watchlist; delete log reads and global loaders. Add tests that fail if the app issues <code>eth_getLogs</code>.</li>
 				<li><b>Shell and navigation</b>: header tabs (Watchlist, Price reports), universe menu, fork banner, routes; remove the Questions tab and Home.</li>
 				<li><b>Watchlist</b> (02–02f) with export/import.</li>
 				<li><b>Question pages</b> (03–04e): full width, stepper with the fork branch, reporting, claim, locate deposits, inherited claims, fork step.</li>
@@ -708,7 +748,13 @@
 			<ul>
 				<li>Every row of <a href="mockups/00-feature-map.html">00 Feature map</a> is reachable.</li>
 				<li>No request to <code>eth_getLogs</code> in any simulation scenario (count JSON-RPC methods in a browser test).</li>
-				<li>Request budget per new block on a security pool page with 25 saved items ≈ 3–5 requests.</li>
+				<li>Request budget, measured in <code>simScenario=securitypoolx2</code> on the Capital tab with 25 saved items: at most 5 JSON-RPC requests per new block (target 3).</li>
+				<li>Deposits: a report saves its deposit; a fresh device locates it by search; an imported file restores it after one verification read; a reorg during search doesn't skip a deposit; a missing deposit shows Search again.</li>
+				<li>Entry check: a bogus address, a non-Statoblast contract, an unregistered question and a registered-but-unprepared question each show their own state; none breaks the shared multicall.</li>
+				<li>The report that brings a second outcome to the threshold requires the confirmation checkbox.</li>
+				<li>No copy hard-codes thresholds, windows or percentages (values come from contract reads).</li>
+				<li>Old routes (<code>#/pools</code>, <code>#/pools/&lt;ledger&gt;</code>, <code>#/security-pools</code>) are dropped without redirects and show the not-found page.</li>
+				<li><code>bun run check:repository:current</code> passes (includes <code>check:unit-terminology</code>).</li>
 				<li><code>bun run ui:layout-scan -- --app statoblast</code> clean at the five default viewports; additionally no text outside its box and no wrapped addresses at 1440, 1024, 768, 390.</li>
 				<li>Inputs don't change size while typing or checking.</li>
 				<li>The fork action is unreachable on a question until its game is in the non-decision state.</li>
@@ -720,7 +766,7 @@
 			<ul>
 				<li>Whether the security pool setup transaction is best described as “claims &amp; redemption” (06b).</li>
 				<li>The exact wording for a pool's provider earning no fees before its branch is activated (12b).</li>
-				<li>What a reporter sees for their own deposits between “ended undecided” and the fork (04e).</li>
+				<li>Deposit capture at deposit time: the spec uses two state reads (deposit-list length at the receipt block and its parent). Decoding <code>DepositOnOutcome(depositor, outcome, amount, depositIndex, …)</code> from the user's own transaction receipt would be simpler and robust, but it reads receipt logs, and the product decision is that the UI reads no logs. Product owner to decide.</li>
 			</ul>
 		</main>
 	</body>
