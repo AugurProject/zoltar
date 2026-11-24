@@ -61,8 +61,8 @@ export function SecurityPoolPriceReport({
 	}, [chainTime, visible])
 	const accepted = observation !== undefined && observation.lastSettlementTimestamp !== 0n ? observation.lastPrice : priceBand?.accepted
 	const priceUnits = 36 - (priceBand?.decimals ?? model.collateral.decimals)
-	const reference = model.comparisonPrice
-	const deviation = accepted === undefined || reference === undefined || reference === 0n ? undefined : ((accepted - reference) * 10_000n) / reference
+	const healthPrice = priceBand?.health
+	const deviation = accepted === undefined || healthPrice === undefined || healthPrice < accepted || healthPrice === 0n ? undefined : ((healthPrice - accepted) * 10_000n + healthPrice / 2n) / healthPrice
 	const priceWarning = getSecurityPoolPriceWarning(model.proposedPrice, model.comparisonPrice, model.collateral)
 	let reportStatus: string | undefined
 	if (report !== undefined) {

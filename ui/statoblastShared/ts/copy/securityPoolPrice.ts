@@ -149,6 +149,6 @@ export const reportCoverage = 'Report coverage'
 export const growthHeadroom = 'Growth headroom'
 export const coverageWarning = 'Growth beyond this coverage before settlement rejects this price. Attached operations may still use a separately accepted fresh price, within their signed bounds.'
 
-export const deviation = 'Deviation from reference'
+export const deviation = 'Price uncertainty'
 export const formatDeviation = (percent: string) => `${percent}%`
 export const returnFunds = 'Return funds'

@@ -364,20 +364,29 @@ export async function reportOutcomeInQuestionLedger(client: WriteClient, questio
 				return [{ tokenAddress, amount: reviewAmountAttoRep }]
 			},
 			validateBeforeSubmit: async () => {
+				const block = await client.getBlock()
+				if (block.number === undefined) throw new Error(transactionCopy.currentStateCheckFailed)
+				const blockNumber = block.number
 				const [currentGame, systemState] = await Promise.all([
-					client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'escalationGame' }),
-					client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'systemState' }),
+					client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'escalationGame', blockNumber }),
+					client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'systemState', blockNumber }),
 				])
 				if (currentGame !== escalationGameAddress || getQuestionLedgerSystemState(systemState) !== 'operational') throw new Error('Reporting changed. Review the question again.')
 				if (currentGame !== zeroAddress) {
 					const [endTime, acceptedDeposit] = await Promise.all([
-						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate' }),
-						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: requireLead ? 'previewLeadingDepositOnOutcome' : 'previewDepositOnOutcome', args: [getReportingOutcomeValue(outcome), amountAttoRep] }),
+						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate', blockNumber }),
+						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: requireLead ? 'previewLeadingDepositOnOutcome' : 'previewDepositOnOutcome', args: [getReportingOutcomeValue(outcome), amountAttoRep], blockNumber }),
 					])
 					if (acceptedDeposit[0] !== reviewAmountAttoRep || acceptedDeposit[0] <= 0n) throw new Error('The report amount changed. Review the report again.')
-					const block = await client.getBlock()
 					const timingGuard = getReportingSubmissionTimingGuard({ currentTime: block.timestamp, escalationEndTime: endTime })
 					if (timingGuard !== undefined) throw new Error(timingGuard)
+					if (!triggersFork) {
+						const threshold = await client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'nonDecisionThresholdAttoRep', blockNumber })
+						if (acceptedDeposit[1] === threshold) {
+							const balances = await client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getOutcomeBalancesAttoRep', blockNumber })
+							if (balances.some((balance, index) => index !== getReportingOutcomeValue(outcome) && balance >= threshold)) throw new Error(reportingCopy.forkTriggerChangedSinceReview)
+						}
+					}
 				}
 			},
 		},

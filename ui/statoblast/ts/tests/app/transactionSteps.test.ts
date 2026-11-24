@@ -1,5 +1,7 @@
 import type { ChainBackend, TransactionRequestPreview, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { createCompleteSetInQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
+import { reportOutcomeInQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
+import { forkTriggerChangedSinceReview } from '@zoltar/ui-statoblast-shared/copy/reporting.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { createBlockWithTimestamp, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { afterEach, expect, mock, spyOn, test } from 'bun:test'
@@ -932,4 +934,39 @@ test('a refreshed review shows verified rows and permits a changing simulation r
 	} finally {
 		now.mockRestore()
 	}
+})
+
+test('a report that becomes fork-triggering during review requires new confirmation even when the amount is unchanged', async () => {
+	const { client, receipt, sendTransaction } = setup()
+	let noBalance = 10n
+	const threshold = 20n
+	const reviewed = createReviewedClient(
+		{
+			...client,
+			sendTransaction,
+			getBlock: async () => ({ ...createBlockWithTimestamp(10n), number: 1n }),
+			waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }),
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'universeId') return 0n
+				if (request.functionName === 'escalationGame' || request.functionName === 'repToken') return account
+				if (request.functionName === 'systemState') return 0
+				if (request.functionName === 'getEscalationGameEndDate') return 1000n
+				if (request.functionName === 'previewLeadingDepositOnOutcome') return [5n, threshold]
+				if (request.functionName === 'nonDecisionThresholdAttoRep') return threshold
+				if (request.functionName === 'getOutcomeBalancesAttoRep') return [0n, 15n, noBalance]
+				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return maxUint256
+				throw new Error(`Unexpected read: ${request.functionName}`)
+			}),
+		},
+		undefined,
+		undefined,
+		undefined,
+		true,
+	)
+	const sending = reportOutcomeInQuestionLedger(reviewed, account, 'yes', 5n, 5n, false, true)
+	await waitForTransactionStep(0)
+	noBalance = threshold
+	transactionSteps.value?.confirmStep(0)
+	await expect(sending).rejects.toThrow(forkTriggerChangedSinceReview)
+	expect(sendTransaction).not.toHaveBeenCalled()
 })
