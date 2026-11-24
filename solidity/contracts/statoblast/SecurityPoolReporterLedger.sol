@@ -154,6 +154,31 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		emit ReporterBalanceChanged(identity.universeId, identity.questionId, state.balanceAttoRep);
 	}
 
+	/// @notice Credit funded REP and move the complete balance to its resulting deadline in one snapshot.
+	function depositAndScheduleFinality(address game, uint256 amountAttoRep, uint48 finalAfter) external {
+		Game memory identity = _authorizedGame(game);
+		Book storage book = _book(identity.universeId);
+		require(!book.isSealed && zoltar.getForkTime(identity.universeId) == 0, 'Reporter universe is forked');
+		uint48 timestamp = _securityPoolTime(identity.universeId);
+		_freezeMatured(identity.universeId, book, timestamp);
+		(Question memory state, bool finalClaim) = _question(identity.universeId, identity.questionId);
+		require(!finalClaim, 'Reporter claim is final');
+		require(finalAfter == 0 || finalAfter >= timestamp, 'Reporter finality already elapsed');
+		require(IERC20(address(zoltar.getRepToken(identity.universeId))).balanceOf(address(this)) >= book.liveAttoRep + book.finalAttoRep + amountAttoRep, 'Reporter deposit is not funded');
+		if (state.finalAfter == finalAfter) _changeFinality(book, finalAfter, amountAttoRep, true);
+		else {
+			_changeFinality(book, state.finalAfter, state.balanceAttoRep, false);
+			_changeFinality(book, finalAfter, state.balanceAttoRep + amountAttoRep, true);
+		}
+		state.balanceAttoRep += amountAttoRep;
+		state.finalAfter = finalAfter;
+		state.scheduledUniverseId = identity.universeId;
+		book.liveAttoRep += amountAttoRep;
+		_writeQuestion(book, identity.questionId, state);
+		emit ReporterBalanceChanged(identity.universeId, identity.questionId, state.balanceAttoRep);
+		emit ReporterFinalityScheduled(game, finalAfter);
+	}
+
 	function transferFromGame(address game, address recipient, uint256 amountAttoRep) external {
 		Game memory identity = _authorizedGame(game);
 		require(recipient != address(0) && recipient != address(this), 'Invalid reporter recipient');

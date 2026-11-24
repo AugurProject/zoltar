@@ -12,6 +12,7 @@ const replacement = keccak256('0x02')
 
 function emptyCarryResponse(functionName: string) {
 	if (functionName === 'escalationGame') return game
+	if (functionName === 'appendOnlyCarry') return false
 	if (functionName === 'forkContinuation') return false
 	if (functionName === 'getLocalUnresolvedPrincipalByVaultAndOutcome') return 10n
 	if (functionName === 'getOutcomeState') return { currentCarryRoot: zeroHash, currentLeafCount: 0n, currentNullifierRoot: zeroHash, localHeadNodeId: 0n, snapshotLeafCount: 0n, snapshotCarryRoot: zeroHash }

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
 	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_tokens_ShareToken_ShareToken as sharesArtifact,
 	statoblast_SecurityPoolSettlement_SecurityPoolSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
 	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
@@ -17,7 +18,7 @@ import { approveToken, getERC20Balance } from '../../testSupport/simulator/utils
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/questionLedger'
 import { balanceOfShares } from '../../testSupport/simulator/utils/contracts/statoblast'
-import { encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, zeroAddress, encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
 import { deployContract } from '../../testSupport/deployContract'
 import { loadSecurityPoolCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
 
@@ -137,6 +138,22 @@ describe('Statoblast: reporting and unresolved capital compensation', () => {
 		expect(observed).toBeGreaterThan(0n)
 		expect(observed).toBe((await fixture.owner().readContract({ ...services, functionName: 'questionPremium', args: [fixture.base.genesisUniverse, fixture.base.questionId] }))[1])
 	})
+	test('#1536 mints directly to the recipient without temporary Services custody', async () => {
+		await fixture.prepare()
+		const hash = await fixture.mint(10n * unit)
+		const token = await fixture.owner().readContract({ ...pool(), functionName: 'shareToken' })
+		const transfers = []
+		for (const log of (await fixture.owner().getTransactionReceipt({ hash })).logs) {
+			if (log.address.toLowerCase() !== token.toLowerCase()) continue
+			const decoded = decodeEventLog({ abi: sharesArtifact.abi, topics: log.topics, data: log.data })
+			if (decoded.eventName === 'TransferBatch') transfers.push(decoded.args)
+		}
+		expect(transfers).toHaveLength(1)
+		expect(transfers[0]?.from).toBe(zeroAddress)
+		expect(transfers[0]?.to?.toLowerCase()).toBe(fixture.other().account.address.toLowerCase())
+		expect(transfers[0]?.values).toHaveLength(3)
+	})
+
 	test('returning all trader complete sets releases the premium without any question sweep', async () => {
 		await fixture.prepare()
 		await fixture.mint(10n * unit)

@@ -3,6 +3,7 @@ pragma solidity 0.8.35;
 
 interface ISecurityPoolReporterLedger {
 	function balanceOfGame(address game) external view returns (uint256);
+	function depositAndScheduleFinality(address game, uint256 amountAttoRep, uint48 finalAfter) external;
 	function depositForGame(address game, uint256 amountAttoRep) external;
 	function transferFromGame(address game, address recipient, uint256 amountAttoRep) external;
 	function scheduleFinality(address game, uint48 finalAfter) external;

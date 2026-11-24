@@ -35,7 +35,7 @@ const flag = (value: unknown): boolean => {
 }
 
 type Leaf = CarryLeaf & { index: bigint; localIndex: bigint; active: boolean; leafHash: Hex }
-type Game = { pool: Address; parentPool: Address; source: Address; forker: Address; continuation: boolean }
+type Game = { pool: Address; parentPool: Address; source: Address; forker: Address; continuation: boolean; appendOnly: boolean }
 
 // All calls inherit the sampler's one canonical block tag. The budget fails
 // closed instead of returning a valid-looking proof from a truncated tree.
@@ -59,10 +59,11 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 		if (cached !== undefined) return cached
 		const pool = address(await call(game, 'escalationGame', 'questionLedger'))
 		const continuation = flag(await call(game, 'escalationGame', 'forkContinuation'))
+		const appendOnly = flag(await call(game, 'escalationGame', 'appendOnlyCarry'))
 		const parentPool = continuation ? address(await call(pool, 'questionLedger', 'parent')) : zeroAddress
 		const source = parentPool === zeroAddress ? zeroAddress : address(await call(parentPool, 'questionLedger', 'escalationGame'))
 		const forker = address(await call(pool, 'questionLedger', 'questionForker'))
-		const result = { pool, parentPool, source, forker, continuation }
+		const result = { pool, parentPool, source, forker, continuation, appendOnly }
 		contexts.set(game, result)
 		return result
 	}
@@ -88,7 +89,7 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 			if (uint(node[2]) !== BigInt(outcome)) throw new Error('Carry node outcome mismatch')
 			const leaf = { depositor: address(node[1]), amountAttoRep: uint(node[3]), parentDepositIndex: uint(node[4]), cumulativeAmountAttoRep: uint(node[5]), sourceNodeId: nodeId, index: uint(node[6]) }
 			const isActive = active.has(nodeId.toString())
-			leaves.push({ ...leaf, localIndex: 0n, active: isActive, leafHash: isActive ? hashCarryLeaf(leaf, outcome) : ZERO })
+			leaves.push({ ...leaf, localIndex: 0n, active: isActive, leafHash: (await context(game)).appendOnly || isActive ? hashCarryLeaf(leaf, outcome) : ZERO })
 			nodeId = uint(node[0])
 		}
 		leaves.sort((a, b) => compareBigint(a.index, b.index))
@@ -110,7 +111,7 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 			if (BigInt(inherited.length) !== count) throw new Error('Inherited carry snapshot is incomplete')
 			const local = await localLeaves(game, outcome, view)
 			if (local.some((leaf, index) => leaf.index !== count + BigInt(index))) throw new Error('Carry append order is incomplete')
-			const consumed = [...parent.consumed]
+			const consumed = ctx.appendOnly ? [] : [...parent.consumed]
 			for (let offset = 0n; ; offset += 100n) {
 				const page = array(await call(game, 'escalationGame', 'getProofConsumedCarriedDepositIndexesByOutcome', [outcome, offset, 100n])).map(uint)
 				consumed.push(...page)
@@ -141,7 +142,7 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 		const { leaves, consumed } = await history(gameAddress, outcome)
 		const inherited = leaves.slice(0, Number(count))
 		const nullifiers = createSparseNullifier(
-			consumed.map(parentIndex => {
+			(ctx.appendOnly ? [] : consumed).map(parentIndex => {
 				const leaf = leaves.find(entry => entry.parentDepositIndex === parentIndex)
 				if (leaf === undefined) throw new Error('Consumed carry deposit is absent from history')
 				return leaf.index
@@ -175,7 +176,7 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 							leafIndex: membership.leafIndex.toString(),
 							merkleMountainRangePeakIndex: membership.merkleMountainRangePeakIndex.toString(),
 							merkleMountainRangeSiblings: membership.merkleMountainRangeSiblings,
-							nullifierSiblings: nullifiers.getProof(leaf.index),
+							nullifierSiblings: ctx.appendOnly ? [] : nullifiers.getProof(leaf.index),
 						}
 			const sourcePrincipal = leaf.amountAttoRep
 			const principal = leaf.amountAttoRep

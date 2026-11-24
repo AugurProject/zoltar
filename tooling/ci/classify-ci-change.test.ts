@@ -167,3 +167,16 @@ test('publishes the UI-only Solidity route as a shadow decision', () => {
 		expect(classifyCiChange(paths).shadowSolidityRoute).toBe('full')
 	}
 })
+
+test.each(
+	[
+		['ui/openoracle/ts/index.ts', 'shared/openOracle/ts/reports.ts'],
+		['ui/openoracle/ts/index.ts', 'ui/coreShared/ts/index.ts'],
+		['ui/openoracle/ts/index.ts', 'ui/openoracle/ts/generated/abis.ts'],
+		['ui/openoracle/ts/index.ts', 'ui/openoracle/tsconfig.json'],
+		['ui/openoracle/ts/index.ts', 'bun.lock'],
+		['ui/openoracle/ts/index.ts', 'unknown/deleted.ts'],
+	].map(paths => ({ paths })),
+)('#1509 keeps ambiguous UI changes on the full shadow route: $paths', ({ paths }) => {
+	expect(classifyCiChange(paths).shadowSolidityRoute).toBe('full')
+})

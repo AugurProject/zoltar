@@ -21,7 +21,7 @@ export function slot(game: Address, index: number, depositor = wallet): CarryLea
 }
 
 type Game = { game: Address; parent: Address; inherited: CarryLeafSlot[]; local: CarryLeafSlot[]; consumed: string[] }
-export function storageFixture() {
+export function storageFixture(appendOnly = false) {
 	const leaf = slot(source, 0)
 	const games: Game[] = [
 		{ game: source, parent: zeroAddress, inherited: [], local: [leaf], consumed: [] },
@@ -52,7 +52,7 @@ export function storageFixture() {
 		const snapshot = carryCommitment(inherited)
 		const current = carryCommitment([...inherited, ...local])
 		let nullifier = emptySparseNullifierState()
-		if (outcome === 0n) for (const index of new Set(allConsumed(game))) nullifier = consumeSparseNullifier(nullifier, index, [...inherited, ...local].findIndex(slot => slot.leaf.parentDepositIndex === index).toString())
+		if (!appendOnly && outcome === 0n) for (const index of new Set(allConsumed(game))) nullifier = consumeSparseNullifier(nullifier, index, [...inherited, ...local].findIndex(slot => slot.leaf.parentDepositIndex === index).toString())
 		return {
 			balanceAttoRep: 10n,
 			snapshotLeafCount: BigInt(snapshot.leafCount),
@@ -82,6 +82,8 @@ export function storageFixture() {
 				return [game.game]
 			case 'questionForker':
 				return [forker]
+			case 'appendOnlyCarry':
+				return [appendOnly]
 			case 'forkContinuation':
 				return [game?.parent !== zeroAddress]
 			case 'getOutcomeState':

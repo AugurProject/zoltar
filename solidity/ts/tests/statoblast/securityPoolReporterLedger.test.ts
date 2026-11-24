@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { decodeEventLog, encodeDeployData, encodeFunctionData, encodeAbiParameters, keccak256, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, parseAbi, encodeDeployData, encodeFunctionData, encodeAbiParameters, keccak256, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { deployContract } from '../../testSupport/deployContract'
 import type { AnvilWindowEthereum } from '../../testSupport/simulator/AnvilWindowEthereum'
@@ -94,6 +94,22 @@ describe('Statoblast: central reporter custody', () => {
 		await schedule(1_000)
 		expect((await book()).slice(2, 4)).toEqual([questionRoot, finalityRoot])
 		await schedule(1_100)
+		await ethereum.setTime(1_000n)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint', args: [0n] }))
+		expect((await book()).slice(0, 2)).toEqual([13n * unit, 0n])
+		await ethereum.setTime(1_100n)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint', args: [0n] }))
+		expect((await book()).slice(0, 2)).toEqual([0n, 13n * unit])
+	})
+
+	test('#1543 credits a funded deposit and moves all principal to its resulting deadline atomically', async () => {
+		const game = await createGame(questionId)
+		await deposit(game, 10n * unit)
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: harness.abi, address: game, functionName: 'schedule', args: [1_000] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: parseAbi(['function depositAndSchedule(uint256 amountAttoRep, uint48 finalAfter)']), address: game, functionName: 'depositAndSchedule', args: [3n * unit, 1_100] }))
+		expect(await balance(game)).toBe(13n * unit)
+		const [state] = await owner.readContract({ abi: artifact.abi, address: ledger, functionName: 'question', args: [0n, questionId] })
+		expect(state.finalAfter).toBe(1_100n)
 		await ethereum.setTime(1_000n)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: artifact.abi, address: ledger, functionName: 'checkpoint', args: [0n] }))
 		expect((await book()).slice(0, 2)).toEqual([13n * unit, 0n])

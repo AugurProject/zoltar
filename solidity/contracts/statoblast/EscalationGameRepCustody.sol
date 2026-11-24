@@ -64,13 +64,13 @@ library EscalationGameRepCustody {
 				: custody.balanceOfGame(address(this));
 	}
 
-	function receiveDeposit(address poolAddress, address tokenAddress, uint256 amountAttoRep) internal {
+	function receiveDeposit(address poolAddress, address tokenAddress, uint256 amountAttoRep, uint48 finalAfter) internal {
 		address authority = securityPool(poolAddress);
 		if (authority == address(0)) return;
 		ISecurityPoolReporterHost(authority).registerReporterGame(address(this));
 		ISecurityPoolReporterLedger custody = ledger(poolAddress);
 		IERC20(tokenAddress).safeTransfer(address(custody), amountAttoRep);
-		custody.depositForGame(address(this), amountAttoRep);
+		custody.depositAndScheduleFinality(address(this), amountAttoRep, _finalityInSecurityPoolTime(authority, poolAddress, finalAfter));
 	}
 
 	function transfer(address poolAddress, address tokenAddress, address recipient, uint256 amountAttoRep) internal {
@@ -84,12 +84,18 @@ library EscalationGameRepCustody {
 		address authority = securityPool(poolAddress);
 		if (authority == address(0)) return;
 		ISecurityPoolReporterHost(authority).registerReporterGame(address(this));
-		if (finalAfter != 0 && finalAfter < block.timestamp) finalAfter = CheckedCast.toUint48(block.timestamp);
-		uint48 finalAfterSecurityPoolTime =
+		ledger(poolAddress).scheduleFinality(address(this), _finalityInSecurityPoolTime(authority, poolAddress, finalAfter));
+		ISecurityPoolReporterHost(authority).onQuestionFinalityChanged(normalizeFinalAfter(finalAfter));
+	}
+
+	function _finalityInSecurityPoolTime(address authority, address poolAddress, uint48 finalAfter) private view returns (uint48) {
+		finalAfter = normalizeFinalAfter(finalAfter);
+		return
 			finalAfter == 0
 				? 0
 				: ISecurityPoolReporterHost(authority).securityPoolTimeForNative(IQuestionLedger(payable(poolAddress)).universeId(), finalAfter);
-		ledger(poolAddress).scheduleFinality(address(this), finalAfterSecurityPoolTime);
-		ISecurityPoolReporterHost(authority).onQuestionFinalityChanged(finalAfter);
+	}
+	function normalizeFinalAfter(uint48 finalAfter) internal view returns (uint48) {
+		return finalAfter != 0 && finalAfter < block.timestamp ? CheckedCast.toUint48(block.timestamp) : finalAfter;
 	}
 }

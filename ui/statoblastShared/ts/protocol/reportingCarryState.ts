@@ -120,7 +120,12 @@ async function loadHistoricalLocalCarryLeaves(client: Pick<ReadClient, 'readCont
 	return carryLeaves.sort((left, right) => compareBigint(left.carryLeafIndex, right.carryLeafIndex))
 }
 
+async function readAppendOnlyCarry(client: Pick<ReadClient, 'readContract'>, game: Address) {
+	return await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'appendOnlyCarry' })
+}
+
 async function buildHistoricalLocalCarrySnapshotEntries(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey, localLeaves: readonly HistoricalCarryLeafViewStruct[]): Promise<HistoricalCarrySnapshotEntry[]> {
+	if (await readAppendOnlyCarry(client, escalationGameAddress)) return localLeaves.map(leaf => ({ leaf, leafHash: hashCarryLeaf(leaf, outcome) }))
 	const activeLeaves = await loadCarryLeafPage(client, escalationGameAddress, outcome)
 	const activeSourceNodeIds = new Set(activeLeaves.map(leaf => leaf.sourceNodeId.toString()))
 	return localLeaves.map(leaf => {
@@ -173,7 +178,7 @@ async function loadProofConsumedCarriedDepositIndexes(client: Pick<ReadClient, '
 
 async function loadRecursiveProofConsumedCarriedDepositIndexes(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey): Promise<bigint[]> {
 	const [localConsumedIndexes, forkContinuation] = await Promise.all([loadProofConsumedCarriedDepositIndexes(client, escalationGameAddress, outcome), readForkContinuation(client, escalationGameAddress)])
-	if (forkContinuation !== true) return localConsumedIndexes
+	if (forkContinuation !== true || (await readAppendOnlyCarry(client, escalationGameAddress))) return localConsumedIndexes
 	const parentEscalationGameAddress = await readParentEscalationGameAddress(client, escalationGameAddress)
 	if (parentEscalationGameAddress === undefined) return localConsumedIndexes
 	const inheritedConsumedIndexes = await loadRecursiveProofConsumedCarriedDepositIndexes(client, parentEscalationGameAddress, outcome)
@@ -428,14 +433,17 @@ async function buildCarriedProofs(client: Pick<ReadClient, 'readContract'>, pare
 	const consumedParentDepositIndexes = [...inheritedConsumedParentDepositIndexes, ...localConsumedParentDepositIndexes]
 	const { currentNullifierRoot: childNullifierRoot } = childOutcomeState
 	const { orderedLeaves, leafHashes } = authenticateCarrySnapshot(parentHistoricalLeaves, childOutcomeState)
-	const nullifierTree = createSparseNullifier(
-		consumedParentDepositIndexes.map(parentIndex => {
-			const index = orderedLeaves.findIndex(leaf => leaf.parentDepositIndex === parentIndex)
-			if (index < 0) throw new Error('Consumed carry deposit is absent from the snapshot')
-			return BigInt(index)
-		}),
-	)
-	if (nullifierTree.getRoot() !== childNullifierRoot) throw new Error('Child proof-consumed carry state is not locally reconstructible.')
+	const appendOnly = await readAppendOnlyCarry(client, childEscalationGameAddress)
+	const nullifierTree = appendOnly
+		? undefined
+		: createSparseNullifier(
+				consumedParentDepositIndexes.map(parentIndex => {
+					const index = orderedLeaves.findIndex(leaf => leaf.parentDepositIndex === parentIndex)
+					if (index < 0) throw new Error('Consumed carry deposit is absent from the snapshot')
+					return BigInt(index)
+				}),
+			)
+	if (nullifierTree !== undefined && nullifierTree.getRoot() !== childNullifierRoot) throw new Error('Child proof-consumed carry state is not locally reconstructible.')
 	const consumedParentDepositIndexSet = new Set(consumedParentDepositIndexes.map(parentDepositIndex => parentDepositIndex.toString()))
 	const proofs: CarriedDepositProof[] = []
 	for (const parentDepositIndex of parentDepositIndexes) {
@@ -446,7 +454,7 @@ async function buildCarriedProofs(client: Pick<ReadClient, 'readContract'>, pare
 		const targetLeaf = orderedLeaves[leafIndex]
 		if (targetLeaf === undefined) throw new Error(`Parent deposit #${parentDepositIndex.toString()} is unavailable.`)
 		const { leafIndex: globalLeafIndex, merkleMountainRangePeakIndex, merkleMountainRangeSiblings } = buildCarryMerkleMountainRangeProof(leafHashes, leafIndex)
-		const nullifierSiblings = nullifierTree.getProof(globalLeafIndex)
+		const nullifierSiblings = nullifierTree?.getProof(globalLeafIndex) ?? []
 		proofs.push({
 			amountAttoRep: targetLeaf.amountAttoRep,
 			cumulativeAmountAttoRep: targetLeaf.cumulativeAmountAttoRep,
@@ -458,7 +466,7 @@ async function buildCarriedProofs(client: Pick<ReadClient, 'readContract'>, pare
 			parentDepositIndex: targetLeaf.parentDepositIndex,
 			sourceNodeId: targetLeaf.sourceNodeId,
 		})
-		nullifierTree.consume(globalLeafIndex)
+		nullifierTree?.consume(globalLeafIndex)
 		consumedParentDepositIndexSet.add(parentDepositIndexKey)
 	}
 	return proofs

@@ -145,7 +145,7 @@ describe('Statoblast: security pool reporting carry and atomic claims', () => {
 		expect(after.wallets[0]).toBe((before.wallets[0] ?? 0n) + (differentOwners ? 52n : 112n) * unit)
 		expect(after.wallets[1]).toBe((before.wallets[1] ?? 0n) + (differentOwners ? 60n : 0n) * unit)
 		expect(after.escrow).toBe(0n)
-		await expect(owner.writeContract({ abi: poolArtifact.abi, address: child.pool, functionName: 'withdrawForkedEscalationDeposits', args: [1, [first]] })).rejects.toThrow('Bad nullifier proof')
+		await expect(owner.writeContract({ abi: poolArtifact.abi, address: child.pool, functionName: 'withdrawForkedEscalationDeposits', args: [1, [first]] })).rejects.toThrow('Deposit settled')
 	})
 
 	test('an unresolved continuation accepts a funded opposing challenge during its response window', async () => {
@@ -192,6 +192,6 @@ describe('Statoblast: security pool reporting carry and atomic claims', () => {
 		const after = await state(grandchild.pool, grandchild.universe)
 		expect(after.wallets[0]).toBe((before.wallets[0] ?? 0n) + 142n * unit)
 		expect(after.escrow).toBe(0n)
-		await expect(owner.writeContract({ abi: poolArtifact.abi, address: grandchild.pool, functionName: 'withdrawForkedEscalationDeposits', args: [1, [local]] })).rejects.toThrow('Bad nullifier proof')
+		await expect(owner.writeContract({ abi: poolArtifact.abi, address: grandchild.pool, functionName: 'withdrawForkedEscalationDeposits', args: [1, [local]] })).rejects.toThrow('Deposit settled')
 	})
 })

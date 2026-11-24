@@ -6,6 +6,8 @@ import { mergeLcovRecords, parseLcov, renderLcovRecords } from './coverage-repor
 import { runBunTestProcess } from './run-bun-test-process.mts'
 import { getWeightedTestFiles } from './run-balanced-test-shard.mts'
 import { createBalancedTestShards, discoverTestFiles, EXPLICIT_TEST_TIER_FILES, toBunTestPath, type WeightedTestFile } from './test-discovery.mts'
+import { captureCoverageProvenance, selectCoveragePilotFiles } from './coverage-pilot.mts'
+import { getChangedFiles } from '../repo/changed-files.mts'
 import { isMissingPathError } from '../repo/fs.mts'
 
 export const TYPESCRIPT_COVERAGE_SHARD_COUNT = 4
@@ -69,16 +71,19 @@ export async function replaceCoverageDirectory(stagingDirectory: string, coverag
 async function main() {
 	const repositoryRoot = process.cwd()
 	const coverageRoot = join(repositoryRoot, 'coverage')
-	const coverageDirectory = join(coverageRoot, 'typescript')
+	const pilot = process.env['ZOLTAR_TYPESCRIPT_COVERAGE_PILOT'] === '1'
+	const coverageDirectory = join(coverageRoot, pilot ? 'typescript-pilot' : 'typescript')
 	const startedAt = Date.now()
 	await mkdir(coverageRoot, { recursive: true })
 	const workingDirectory = await mkdtemp(join(coverageRoot, '.typescript-shards-'))
 
 	try {
 		const testFiles = await discoverTestFiles(repositoryRoot)
-		const weightedTestFiles = await getWeightedTestFiles(process.env['ZOLTAR_TEST_TIMING_HISTORY'])
+		const plan = pilot ? selectCoveragePilotFiles(testFiles, getChangedFiles()) : { mode: 'full', files: testFiles }
+		const selectedFiles = new Set(plan.files)
+		const weightedTestFiles = (await getWeightedTestFiles(process.env['ZOLTAR_TEST_TIMING_HISTORY'])).filter(entry => selectedFiles.has(entry.filePath))
 		const shards = createTypeScriptCoverageShards(weightedTestFiles)
-		assertCompleteCoverageOwnership(shards, testFiles)
+		assertCompleteCoverageOwnership(shards, plan.files)
 
 		const productionBuild = Bun.spawn({
 			cmd: [process.execPath, 'run', 'ui:build:prod'],
@@ -89,6 +94,7 @@ async function main() {
 		const productionBuildExitCode = await productionBuild.exited
 		if (productionBuildExitCode !== 0) return productionBuildExitCode
 
+		const provenance = await captureCoverageProvenance(repositoryRoot)
 		const lcovPaths: string[] = []
 		const exitCode = await runCoverageShards(shards, async (shardFiles, index) => {
 			const shardNumber = index + 1
@@ -118,6 +124,7 @@ async function main() {
 		const sourceMapsExitCode = await prepareCoverageSourceMaps(repositoryRoot)
 		if (sourceMapsExitCode !== 0) return sourceMapsExitCode
 
+		if (JSON.stringify(await captureCoverageProvenance(repositoryRoot)) !== JSON.stringify(provenance)) throw new Error('Coverage source or artifact provenance changed during capture')
 		const stagingDirectory = join(workingDirectory, 'complete')
 		await mkdir(stagingDirectory)
 		await writeFile(join(stagingDirectory, 'lcov.info'), await mergeTypeScriptCoverageFiles(lcovPaths, repositoryRoot))
@@ -125,10 +132,13 @@ async function main() {
 			join(stagingDirectory, 'test-files.json'),
 			`${JSON.stringify(
 				{
-					status: 'passed',
-					count: testFiles.length,
+					status: pilot ? 'report-only' : 'passed',
+					mode: plan.mode,
+					provenance,
+					metrics: { lines: 'exact identities', functions: 'Summary-only counts may not form an exact union', branches: 'Unavailable unless instrumented with identities' },
+					count: plan.files.length,
 					durationMs: Date.now() - startedAt,
-					files: testFiles,
+					files: plan.files,
 					browserFiles: [...EXPLICIT_TEST_TIER_FILES],
 					shards: shards.map((files, index) => ({ index: index + 1, count: shards.length, files })),
 				},
