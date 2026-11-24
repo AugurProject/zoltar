@@ -1,6 +1,6 @@
 import { getBrowserStorage } from '@zoltar/ui-core-shared/lib/browserStorage.js'
 import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
-import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
+import { formatUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
 import { requiredSecurityPoolCollateral } from '../lib/capital.js'
 import * as collateralCopy from '../../../copy/collateral.js'
@@ -26,15 +26,31 @@ import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { tryAgain } from '../../../copy/securityPoolPage.js'
 
-export function SecurityPoolTakeover({ model, actions, redesigned = false }: { redesigned?: boolean; model: { snapshot: TakeoverSnapshot | undefined; presentationSnapshot?: TakeoverSnapshot | undefined }; actions: Pick<SecurityPoolActions, 'ownerReason' | 'scope' | 'busy' | 'runSecurityPoolAction'> }) {
-	const positionInput = useSignal('')
+export function SecurityPoolTakeover({
+	model,
+	actions,
+	positionId,
+	wallet,
+	redesigned = false,
+}: {
+	redesigned?: boolean
+	positionId?: bigint | undefined
+	wallet?: Address | undefined
+	model: { snapshot: TakeoverSnapshot | undefined; presentationSnapshot?: TakeoverSnapshot | undefined }
+	actions: Pick<SecurityPoolActions, 'ownerReason' | 'scope' | 'busy' | 'runSecurityPoolAction'>
+}) {
+	const positionInput = useSignal(positionId?.toString() ?? '')
+	const openedPosition = useSignal(positionId)
 	const commitmentInput = useSignal('')
 	const ownInput = useSignal('')
 	const principalInput = useSignal('')
 	const totalCommitmentInput = useSignal('')
 	const sharedReasonId = useId()
+	const openReasonId = useId()
 	const snapshot = model.snapshot
-	const id = securityPoolUnsignedId(positionInput.value, 96)
+	const draftPosition = securityPoolUnsignedId(positionInput.value, 96)
+	const id = redesigned ? openedPosition.value : draftPosition
+	const canOpenPosition = draftPosition !== undefined && draftPosition > 0n
 	const pool = snapshot ?? model.presentationSnapshot
 	const target = useLiquidationTarget(snapshot, model.presentationSnapshot, id, redesigned)
 	const preview = target.target
@@ -42,6 +58,8 @@ export function SecurityPoolTakeover({ model, actions, redesigned = false }: { r
 	const fresh = target.fresh
 	const refreshError = useStatoblastRefreshError(target.error, target.displayedAt)
 	const [knownPositions, setKnownPositions] = useState<string[]>([])
+	const walletPosition = wallet !== undefined && pool?.owner.toLowerCase() === wallet.toLowerCase() && pool.ownerAccount.positionId !== 0n ? pool.ownerAccount.positionId.toString() : undefined
+	const selectablePositions = walletPosition === undefined || knownPositions.includes(walletPosition) ? knownPositions : [walletPosition, ...knownPositions]
 	const ledgerKey = pool === undefined ? undefined : `zoltar-ui:positions:${pool.chainId}:${pool.capitalLedger}`
 	const [elapsedSinceRead, setElapsedSinceRead] = useState(0n)
 	const visible = usePageVisible()
@@ -91,6 +109,7 @@ export function SecurityPoolTakeover({ model, actions, redesigned = false }: { r
 	const maximumOwnerPrincipal = securityPoolAmountOrUndefined(principalInput.value)
 	const maximumOwnerCommitment = securityPoolAmountOrUndefined(totalCommitmentInput.value, snapshot?.collateral.decimals ?? 18)
 	let reason = actions.ownerReason
+	if (reason === undefined && redesigned && draftPosition !== id) reason = canOpenPosition ? copy.openPositionFirst : copy.enterTarget
 	if (reason === undefined && (id === undefined || id === 0n)) reason = copy.enterTarget
 	if (reason === undefined && fresh === undefined) reason = redesigned && target.error !== undefined ? copy.currentTargetRequired : (target.error ?? copy.loading)
 	if (reason === undefined && snapshot !== undefined && (snapshot.forkTime !== 0n || snapshot.frozen || snapshot.importing)) reason = copy.inactive
@@ -165,20 +184,35 @@ export function SecurityPoolTakeover({ model, actions, redesigned = false }: { r
 	const displayCollateral = (value: bigint | undefined) => <CurrencyValue value={value} suffix={pool?.collateral.symbol ?? collateralCopy.fallback} units={pool?.collateral.decimals ?? 0} />
 	// Both actions often rest disabled for one shared cause, such as a missing position ID; that reason renders once for the pair.
 	const sharedReason = actions.busy === undefined && reason !== undefined && reason === cureReason ? reason : undefined
-	const reasonId = sharedReason === undefined ? undefined : sharedReasonId
+	const reasonShownInForm = redesigned && !canOpenPosition && sharedReason === copy.enterTarget
+	let reasonId = sharedReason === undefined ? undefined : sharedReasonId
+	if (reasonShownInForm) reasonId = openReasonId
+	const positionField = (
+		<SecurityPoolInput
+			label={copy.position}
+			hint={copy.hint}
+			value={positionInput.value}
+			onChange={value => {
+				positionInput.value = value
+			}}
+			disabled={actions.busy !== undefined}
+		/>
+	)
 	return (
 		<SectionBlock title={copy.title} description={redesigned ? undefined : copy.description}>
-			{redesigned && knownPositions.length > 0 && (
+			{redesigned && selectablePositions.length > 0 && (
 				<label className='field'>
 					<span>{copy.knownPositions}</span>
 					<select
-						value={knownPositions.includes(positionInput.value) ? positionInput.value : ''}
+						value={id === undefined ? '' : id.toString()}
+						disabled={actions.busy !== undefined}
 						onChange={event => {
 							positionInput.value = event.currentTarget.value
+							openedPosition.value = securityPoolUnsignedId(positionInput.value, 96)
 						}}
 					>
 						<option value=''>{copy.chooseKnownPosition}</option>
-						{knownPositions.map(known => (
+						{selectablePositions.map(known => (
 							<option key={known} value={known}>
 								{copy.formatPosition(known)}
 							</option>
@@ -186,15 +220,26 @@ export function SecurityPoolTakeover({ model, actions, redesigned = false }: { r
 					</select>
 				</label>
 			)}
-			<SecurityPoolInput
-				label={copy.position}
-				hint={copy.hint}
-				value={positionInput.value}
-				onChange={value => {
-					positionInput.value = value
-				}}
-				disabled={actions.busy !== undefined}
-			/>
+			{redesigned ? (
+				<form
+					onSubmit={event => {
+						event.preventDefault()
+						if (!canOpenPosition || actions.busy !== undefined) return
+						if (openedPosition.value === draftPosition) target.retry()
+						else openedPosition.value = draftPosition
+					}}
+				>
+					{positionField}
+					<div className='actions'>
+						<button type='submit' className='secondary' disabled={!canOpenPosition || actions.busy !== undefined} aria-describedby={canOpenPosition ? undefined : openReasonId}>
+							{copy.openPosition}
+						</button>
+					</div>
+					{!canOpenPosition && <InlineHint id={openReasonId} message={copy.enterTarget} />}
+				</form>
+			) : (
+				positionField
+			)}
 			{redesigned && target.displayedAt !== undefined && <UpdatedAgo updatedAt={target.displayedAt} refreshing={target.loading} />}
 			{redesigned && <RetryableNotice message={refreshError} retryLabel={tryAgain} onRetry={target.retry} />}
 			{redesigned && distressed && preview !== undefined && (
@@ -268,7 +313,7 @@ export function SecurityPoolTakeover({ model, actions, redesigned = false }: { r
 				<SecurityPoolButton model={actions} action='takeOverSecurityPoolPosition' label={copy.takeOver} pendingLabel={copy.takingOver} reason={reason} sharedReasonId={reasonId} onClick={takeOver} />
 				<SecurityPoolButton model={actions} action='cureSecurityPoolPosition' label={copy.cure} pendingLabel={copy.curing} reason={cureReason} sharedReasonId={reasonId} onClick={cure} />
 			</div>
-			{sharedReason === undefined ? undefined : (
+			{sharedReason === undefined || reasonShownInForm ? undefined : (
 				<div className='tx-action-feedback shared-action-reason'>
 					<InlineHint id={sharedReasonId} message={sharedReason} />
 				</div>

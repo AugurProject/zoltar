@@ -15,4 +15,7 @@ test('pool and question links preserve the network, universe, and simulation set
 	const page = parseStatoblastPage(href)
 	if (page.kind !== 'question') throw new Error('Expected question link.')
 	expect(statoblastPageHref({ kind: 'pool', pool: page.pool, tab: 'capital' }, 9n)).toBe(`#/pool/${pool}?simulate=1&genesis=yes&simScenario=securitypoolx2&universe=9`)
+	const positionHref = statoblastPageHref({ kind: 'pool', pool, tab: 'liquidations', positionId: 7n }, 9n)
+	expect(positionHref).toBe(`#/pool/${pool}/liquidations?simulate=1&genesis=yes&simScenario=securitypoolx2&universe=9&position=7`)
+	expect(parseStatoblastPage(positionHref)).toEqual({ kind: 'pool', pool, tab: 'liquidations', positionId: 7n })
 })

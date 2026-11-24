@@ -28,3 +28,11 @@ test('accepts explicit share actions only on the Shares route', () => {
 	expect(parseStatoblastPage(`${hash}?action=withdraw`)).toEqual(page)
 	expect(parseStatoblastPage(`${statoblastPageHash({ ...page, tab: 'reporting' })}?action=mint`)).toEqual({ ...page, tab: 'reporting' })
 })
+
+test('accepts a shared position ID only on Liquidations', () => {
+	const page = { kind: 'pool', pool, tab: 'liquidations' } as const
+	const hash = statoblastPageHash(page)
+	expect(parseStatoblastPage(`${hash}?position=7`)).toEqual({ ...page, positionId: 7n })
+	for (const invalid of ['0', '-1', 'abc', (1n << 96n).toString()]) expect(parseStatoblastPage(`${hash}?position=${invalid}`)).toEqual(page)
+	expect(parseStatoblastPage(`#/pool/${pool}?position=7`)).toEqual({ ...page, tab: 'capital' })
+})

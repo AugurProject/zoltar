@@ -41,7 +41,10 @@ export function parseStatoblastPage(hash: string): StatoblastPage {
 		}
 	} else if (id === undefined) {
 		const tab = path === undefined ? 'capital' : poolTabs.find(candidate => candidate === path)
-		if (tab !== undefined) return { kind: 'pool', pool, tab }
+		if (tab !== undefined) {
+			const position = tab === 'liquidations' ? designQuestionId(new URLSearchParams(search).get('position') ?? '') : undefined
+			return { kind: 'pool', pool, tab, ...(position !== undefined && position > 0n && position < 1n << 96n ? { positionId: position } : {}) }
+		}
 	}
 	return { kind: 'not-found' }
 }
@@ -80,6 +83,11 @@ export function statoblastPageHref(page: Parameters<typeof statoblastPageHash>[0
 	if (page.kind === 'question' && page.tab === 'shares' && page.sharesAction !== undefined) {
 		const params = new URLSearchParams(search)
 		params.set('action', page.sharesAction)
+		search = `?${params}`
+	}
+	if (page.kind === 'pool' && page.tab === 'liquidations' && page.positionId !== undefined) {
+		const params = new URLSearchParams(search)
+		params.set('position', page.positionId.toString())
 		search = `?${params}`
 	}
 	return buildRouteHref(statoblastPageHash(page), search)

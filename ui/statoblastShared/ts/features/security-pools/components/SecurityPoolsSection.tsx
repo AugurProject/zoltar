@@ -301,7 +301,7 @@ export function SecurityPoolsSection({
 							priceReport={page === undefined && shownAccount.current === accountIdentity ? unfolded => <SecurityPoolPriceReport scope='universe' target={unfolded ? accountPriceTarget(model.snapshot) : undefined} actions={actions} bidder={parameters.accountAddress} /> : undefined}
 						/>
 					)}
-					{(page === undefined || (page.tab === 'liquidations' && (shown?.forkTime ?? 0n) === 0n)) && <SecurityPoolTakeover model={model} actions={actions} redesigned={page !== undefined} />}
+					{(page === undefined || (page.tab === 'liquidations' && (shown?.forkTime ?? 0n) === 0n)) && <SecurityPoolTakeover key={page?.positionId?.toString()} positionId={page?.positionId} wallet={parameters.accountAddress} model={model} actions={actions} redesigned={page !== undefined} />}
 					{page === undefined && <SecurityPoolPurchasePanel model={model} purchase={purchase} actions={actions} />}
 					{page?.tab === 'questions' && (
 						<SecurityPoolQuestionsPanel pool={page.pool} universeId={activeUniverseId} actions={actions} admission={shown?.admission} forked={(shown?.forkTime ?? 0n) > 0n} owner={parameters.accountAddress} enabled={enabled} environmentKey={environmentKey} registerPageRefresh={registerPageRefresh} />

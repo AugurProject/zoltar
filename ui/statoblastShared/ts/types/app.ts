@@ -52,5 +52,5 @@ export type QuestionLedgerLifecycleState = 'operational' | 'ended' | 'poolForked
 export type PoolTab = 'capital' | 'questions' | 'price' | 'liquidations' | 'fork'
 type QuestionTab = 'shares' | 'reporting' | 'claims'
 export type StatoblastQuestionPage = { kind: 'question'; pool: Address; questionId: bigint; tab: QuestionTab; sharesAction?: 'mint' | 'redeem' | undefined }
-export type StatoblastPoolPage = { kind: 'pool'; pool: Address; tab: PoolTab }
+export type StatoblastPoolPage = { kind: 'pool'; pool: Address; tab: PoolTab; positionId?: bigint | undefined }
 export type StatoblastPage = StatoblastPoolPage | StatoblastQuestionPage | { kind: 'choose-universe' | 'watchlist' | 'migrate-rep' | 'deploy-pool' | 'not-found' }

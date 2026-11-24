@@ -1,6 +1,8 @@
 export const title = 'Liquidation takeover'
 export const description = 'Take over an underbacked commitment and earn future fees plus a takeover reward: REP from the provider’s pledged REP that grows over time and becomes part of your pledged REP.'
 export const position = 'Target position ID'
+export const openPosition = 'Open position'
+export const openPositionFirst = 'Open the entered position before continuing.'
 export const commitment = 'Commitment to take over (collateral)'
 export const maximumOwnRep = 'Maximum own REP to pledge'
 export const maximumPrincipal = 'Most pledged REP after takeover'
