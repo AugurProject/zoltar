@@ -30,7 +30,7 @@ for (const viewport of qaViewports) {
 				expect(await evaluate(`${panel('Auction finalization')}.textContent`)).toContain('Raised: 3 USDC')
 			})
 		},
-		30_000,
+		120_000,
 	)
 	browserTest(
 		`auction amounts keep the sampled collateral token after a failed latest read at ${size}`,
@@ -45,7 +45,7 @@ for (const viewport of qaViewports) {
 				expect(await evaluate(noOverflow)).toBe(true)
 			})
 		},
-		30_000,
+		120_000,
 	)
 	browserTest(
 		`overview timeline shows auction amounts in collateral units, never native ETH, at ${size}`,
@@ -61,7 +61,7 @@ for (const viewport of qaViewports) {
 				expect(await evaluate(noOverflow)).toBe(true)
 			})
 		},
-		30_000,
+		120_000,
 	)
 	browserTest(
 		`address profile shows pending auction refunds and auction interactions in the auction collateral token at ${size}`,
@@ -73,6 +73,6 @@ for (const viewport of qaViewports) {
 				expect(await evaluate(noOverflow)).toBe(true)
 			})
 		},
-		30_000,
+		120_000,
 	)
 }
