@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { Pagination } from './Pagination.sol';
+
 import { ScalarOutcomes } from './ScalarOutcomes.sol';
 
 contract ZoltarQuestionData {
@@ -92,7 +94,7 @@ contract ZoltarQuestionData {
 	}
 
 	function getQuestions(uint256 startIndex, uint256 numberOfEntries) external view returns (uint256[] memory returnQuestionIds) {
-		uint256 iterateUntil = _sliceEnd(startIndex, numberOfEntries, questionIds.length);
+		uint256 iterateUntil = Pagination.sliceEnd(startIndex, numberOfEntries, questionIds.length);
 		if (iterateUntil <= startIndex) return new uint256[](0);
 		returnQuestionIds = new uint256[](iterateUntil - startIndex);
 		for (uint256 i = startIndex; i < iterateUntil; i++) {
@@ -118,19 +120,12 @@ contract ZoltarQuestionData {
 	}
 
 	function getOutcomeLabels(uint256 questionId, uint256 startIndex, uint256 numberOfEntries) external view returns (string[] memory returnOutcomeLabels) {
-		uint256 iterateUntil = _sliceEnd(startIndex, numberOfEntries, outcomeLabels[questionId].length);
+		uint256 iterateUntil = Pagination.sliceEnd(startIndex, numberOfEntries, outcomeLabels[questionId].length);
 		if (iterateUntil <= startIndex) return new string[](0);
 		returnOutcomeLabels = new string[](iterateUntil - startIndex);
 		for (uint256 i = startIndex; i < iterateUntil; i++) {
 			returnOutcomeLabels[i - startIndex] = outcomeLabels[questionId][i];
 		}
-	}
-
-	function _sliceEnd(uint256 startIndex, uint256 count, uint256 total) internal pure returns (uint256) {
-		if (startIndex >= total || count == 0) return startIndex;
-		uint256 availableCount = total - startIndex;
-		if (count >= availableCount) return total;
-		return startIndex + count;
 	}
 
 	function isMalformedAnswerOption(uint256 questionId, uint256 answer) external view returns (bool) {

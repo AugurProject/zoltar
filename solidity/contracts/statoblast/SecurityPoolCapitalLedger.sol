@@ -126,7 +126,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		DelegateCall.invoke(address(repairAuctionDelegate), abi.encodeCall(repairAuctionDelegate.install, (adapter, lots, repPerLot, commitmentPerLot, minimumCommitmentAttoEth)));
 	}
 	function materializeRepairAuctionBid(uint256 bidId) external nonReentrant returns (address vault, uint96 id) {
-		_checkpoint();
+		_checkpointAccounting();
 		return _materializeRepairAuctionBid(bidId);
 	}
 	function _materializeRepairAuctionBid(uint256 bidId) private returns (address vault, uint96 id) {
@@ -182,7 +182,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	function _depositFor(address owner, uint256 amount) private {
 		_requireOpen();
 		require(owner == _capitalOwner() && owner != forkAuthority && amount > 0, 'Invalid capital deposit');
-		_checkpoint();
+		_checkpointAccounting();
 		_settleOwner(owner);
 		Owner storage account = owners[owner].account;
 		if (account.positionId == 0) {
@@ -199,7 +199,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	}
 
 	function withdrawPrincipal(uint256 amount, address recipient) external nonReentrant {
-		_checkpoint();
+		_checkpointAccounting();
 		_serveRetirement(owners[_capitalOwner()].account.positionId);
 		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.withdrawPrincipal, (amount, recipient)));
 	}
@@ -210,7 +210,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	function _setHealthTarget(uint256 targetHealthFactorBps) private {
 		_requireOpen();
 		require(targetHealthFactorBps >= BPS, 'Health below protocol floor');
-		_checkpoint();
+		_checkpointAccounting();
 		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.setHealthTarget, (targetHealthFactorBps)));
 		emit HealthTargetSet(_capitalOwner(), targetHealthFactorBps);
 	}
@@ -230,7 +230,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	}
 	function _setCommitment(uint256 commitment, uint256 reportId, bool useReport) private returns (uint96 id) {
 		_requireOpen();
-		_checkpoint();
+		_checkpointAccounting();
 		_settleOwner(_capitalOwner());
 		id = owners[_capitalOwner()].account.positionId;
 		SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(id);
@@ -256,7 +256,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	/// A position without a pending request is left unchanged.
 	function serveRetirement(uint96 id) external nonReentrant {
 		_requireOpen();
-		_checkpoint();
+		_checkpointAccounting();
 		require(id == 0 || id != repairAuctionCohort.positionId, 'Materialize an individual repair auction vault');
 		_serveRetirement(id);
 	}
@@ -278,7 +278,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	/// @dev All question liabilities enter through this aggregate, after old-time fees.
 	function setDemand(uint256 demand) external onlyDemandAccounting {
 		_requireOpen();
-		_checkpoint();
+		_checkpointAccounting();
 		if (demand > demandAttoEth) {
 			_requireFresh();
 			require(demand <= commitmentIndex.eligibleActiveCommitment(conservativePrice), 'Healthy commitment insufficient');
@@ -315,9 +315,6 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	}
 
 	function checkpoint() external nonReentrant {
-		_checkpoint();
-	}
-	function _checkpoint() private {
 		_checkpointAccounting();
 	}
 	function _checkpointAccounting() private {
@@ -375,14 +372,14 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 
 	function fundVestedFees(uint256 cash, uint256 repAmount) external onlyAccounting {
 		require(!importing, 'Capital imports are not complete');
-		_checkpoint();
+		_checkpointAccounting();
 		if (repAmount != 0) repToken().safeTransferFrom(msg.sender, address(this), repAmount);
 		Collateral.pull(ICollateralConfig(securityPool).collateralToken(), msg.sender, address(this), cash);
 		feeStreams.addStream(cash, repAmount);
 	}
 
 	function claimEarnings(address recipient) external nonReentrant {
-		_checkpoint();
+		_checkpointAccounting();
 		DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.claimEarnings, (recipient)));
 	}
 
@@ -404,7 +401,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	}
 	function takeOverRepairAuctionBid(uint256 bidId, uint256 commitment, uint256 minimumTakeoverReward, uint256 maximumOwnRep, TakeoverBounds calldata bounds) external nonReentrant returns (uint96 receiverId) {
 		_requireOpen();
-		_checkpoint();
+		_checkpointAccounting();
 		(, uint96 id) = _materializeRepairAuctionBid(bidId);
 		return _takeOver(id, commitment, minimumTakeoverReward, maximumOwnRep, bounds, ENFORCE_TAKEOVER_BOUNDS);
 	}
@@ -424,7 +421,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_requireOpen();
 		// The index requires an existing adverse observation. Its auction remains
 		// executable at the last accepted valuation after that report expires.
-		_checkpoint();
+		_checkpointAccounting();
 		return
 			abi.decode(DelegateCall.invoke(address(lifecycleDelegate), abi.encodeCall(lifecycleDelegate.takeOver, (id, commitment, minimumTakeoverReward, maximumOwnRep, bounds, enforceBounds, minimumCommitmentAttoEth))), (uint96));
 	}
@@ -432,7 +429,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	function freeze() external onlyForkAuthority {
 		require(zoltar.getForkTime(universeId()) != 0, 'Universe has not forked');
 		if (frozen) return;
-		_checkpoint();
+		_checkpointAccounting();
 		(frozenBackingAttoRep, frozenCommitmentAttoEth) = commitmentIndex.totals();
 		frozen = true;
 	}

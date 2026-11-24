@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { Pagination } from '../Pagination.sol';
+
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameCalculations } from './EscalationGameCalculations.sol';
 import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.sol';
@@ -148,7 +150,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 	function getProofConsumedCarriedDepositIndexesByOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 startIndex, uint256 numberOfEntries) external view returns (uint256[] memory parentDepositIndexes) {
 		if (outcome == BinaryOutcomes.BinaryOutcome.None) return new uint256[](0);
 		uint256[] storage consumedIndexes = outcomeState[uint8(outcome)].proofConsumedDepositIndexes;
-		uint256 endIndex = _sliceEnd(startIndex, numberOfEntries, consumedIndexes.length);
+		uint256 endIndex = Pagination.sliceEnd(startIndex, numberOfEntries, consumedIndexes.length);
 		if (endIndex <= startIndex) return new uint256[](0);
 		parentDepositIndexes = new uint256[](endIndex - startIndex);
 		for (uint256 index = startIndex; index < endIndex; index++) {

@@ -78,6 +78,8 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 
 	/// @notice Create a child with independently supplied ETH and every source outcome liability.
 	/// @dev Source fee escrow and finalized claims remain source obligations and are not duplicated.
+	/// Inherit claim weights and snapshot roots from the sealed source book.
+	/// The supplied cash and recovery REP set the balances available to the child.
 	function createChildBook(uint64 sourceBookId, uint256 fundedCashAttoEth, uint256 recoveryAttoRep) external onlySecurityPool returns (uint64 bookId) {
 		Book storage source = _book(sourceBookId);
 		require(source.isSealed, 'Settlement source not sealed');
@@ -238,6 +240,8 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		uint256 scaledRecovery = _scaledRecovery(bookId, book, questionId, state);
 		recoveryAttoRep = _quoteRecovery(book, state, frozenBookId, outcomeShares, scaledRecovery);
 		unitsBurned = SettlementMath.unitsForRedeemedShares(state.units, state.outcomeSupplyAttoShares, outcomeShares);
+		// Charge cash, recovery REP, and units to the book that backs the claim.
+		// Finalized claims draw from the frozen book owned by this source book.
 		if (frozenBookId == 0) {
 			require(!book.isSealed, 'Use child settlement book');
 			cashAttoEth = SettlementMath.cashForUnits(book.cashAttoEth, book.units, feeRemainders[bookId], unitsBurned);

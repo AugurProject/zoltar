@@ -208,7 +208,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 		}
 	}
 
-	test('settles a third-party report, accrues the reward inside OpenOracle, and withdraws it in one batch', async () => {
+	test.each(['immediate', 'transient failure'])('settles a third-party report and withdraws its reward with receipt confirmation: %s', async confirmation => {
 		const report = await submitReport()
 		expect(report.game.settlerRewardAttoEth).toBe(REWARD)
 		await pastSettlementWindow()
@@ -217,7 +217,15 @@ describe('third-party settlement execution against OpenOracle', () => {
 		const settlementContext = await context(records, activity)
 		// The settling wallet is also the reporter here; the queue excludes that case, so the executor is exercised directly.
 		const plan = settlementPlan(report)
-		const record = await executeSettlement(settlementContext, plan)
+		let receiptWaits = 0
+		const settlementWallet: WriteClient = {
+			...wallet,
+			waitForTransactionReceipt: async parameters => {
+				if (confirmation === 'transient failure' && receiptWaits++ === 0) throw new Error('receipt temporarily unavailable')
+				return wallet.waitForTransactionReceipt(parameters)
+			},
+		}
+		const record = await executeSettlement({ ...settlementContext, wallet: settlementWallet }, plan)
 		expect(record).toMatchObject({ account: account.address, coordinator: report.helper.creator, kind: 'settlement', reportId: report.helper.reportId.toString(), rewardEth: '0.017043310270400101', status: 'confirmed' })
 		expect(record.actualGasCostEth).toBeDefined()
 		// The durable nonce and intent are what recovery needs to tell a late inclusion from a replacement after a restart.
@@ -228,7 +236,10 @@ describe('third-party settlement execution against OpenOracle', () => {
 		expect(BigInt(record.lastValidBlockNumber)).toBe(BigInt(record.submissionBlockNumber) + 25n)
 		expect(Number.isFinite(Date.parse(record.includedAt ?? ''))).toBeTrue()
 		expect(records.map(entry => entry.status)).toEqual(['pending', 'confirmed'])
-		expect(activity.map(entry => `${entry.kind}:${entry.status}`)).toEqual(['settle:submitting', 'settle:pending', 'settle:confirmed'])
+		// Receipt RPC failures may add retry notifications between pending and confirmed.
+		if (confirmation === 'transient failure') expect(activity[2]).toMatchObject({ kind: 'settle', status: 'confirmation-unknown' })
+		expect(activity.filter(entry => entry.status !== 'confirmation-unknown').map(entry => `${entry.kind}:${entry.status}`)).toEqual(['settle:submitting', 'settle:pending', 'settle:confirmed'])
+		for (const entry of activity.filter(entry => entry.status === 'confirmation-unknown')) expect(entry.kind).toBe('settle')
 		// The tracking table nets the reward against the signed gas exposure of this transaction alone and then the receipt gas costs.
 		const settleGasPaid = parseDecimalWeth(record.actualGasCostEth ?? '0')
 		expect(activity.at(-1)).toMatchObject({ estimatedNetProfitEth: decimalSignedEth(REWARD - signedSettlementGasLimit(plan.gas) * settlementContext.maxFeePerGas), trackedNetProfitEth: decimalSignedEth(REWARD - settleGasPaid) })

@@ -49,13 +49,6 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 		_;
 	}
 
-	function _sliceEnd(uint256 startIndex, uint256 count, uint256 total) internal pure returns (uint256) {
-		if (startIndex >= total || count == 0) return startIndex;
-		uint256 availableCount = total - startIndex;
-		if (count >= availableCount) return total;
-		return startIndex + count;
-	}
-
 	function disputeStakedRepByVaultAttoRep(address vault) public view returns (uint256 amountAttoRep) {
 		return _claimEscrowedRepByVault(vault);
 	}
@@ -94,9 +87,5 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 
 	function _reporterRepBalance() internal view returns (uint256) {
 		return EscalationGameRepCustody.balance(address(questionLedger), address(repToken));
-	}
-
-	function _usesCentralReporterCustody() internal view returns (bool) {
-		return address(EscalationGameRepCustody.ledger(address(questionLedger))) != address(0);
 	}
 }

@@ -13,18 +13,14 @@ contract QuestionLedgerAccountingModule is QuestionLedgerAccountingDelegate {
 		require(msg.sender == address(pool.securityPoolFactory()), 'Only factory');
 		// Bootstrap placeholder until security pool binding checkpoints the central security pool clock.
 		lastSettlementSecurityPoolTime = block.timestamp;
-		_emitCheckpoint(AccountingReason.PoolInitialization);
+		_emitAccountingCheckpoint(AccountingReason.PoolInitialization);
 	}
 
 	function emitQuestionLedgerAccountingCheckpoint(AccountingReason reason) external payable {
-		_emitCheckpoint(reason);
+		_emitAccountingCheckpoint(reason);
 	}
 
 	function _emitAccountingCheckpoint(AccountingReason reason) internal override {
-		_emitCheckpoint(reason);
-	}
-
-	function _emitCheckpoint(AccountingReason reason) private {
 		// Every capacity/collateral checkpoint also reconciles the shared report security budget.
 		IQuestionLedger(payable(address(this))).openOraclePriceCoordinator().syncExposure();
 		emit QuestionAccountingCheckpoint(reason, settlementCollateralAttoEth, shareTokenSupplyAttoShares, lastSettlementSecurityPoolTime);

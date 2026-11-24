@@ -27,12 +27,8 @@ library CreationCodeStorage {
 	}
 
 	function load(address firstChunk, address secondChunk) internal view returns (bytes memory creationCode) {
-		uint256 firstLength;
-		uint256 secondLength;
-		assembly ('memory-safe') {
-			firstLength := extcodesize(firstChunk)
-			secondLength := extcodesize(secondChunk)
-		}
+		uint256 firstLength = firstChunk.code.length;
+		uint256 secondLength = secondChunk.code.length;
 		creationCode = new bytes(firstLength + secondLength - 2);
 		assembly ('memory-safe') {
 			extcodecopy(firstChunk, add(creationCode, 0x20), 1, sub(firstLength, 1))

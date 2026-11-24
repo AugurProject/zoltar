@@ -27,10 +27,6 @@ contract QuestionForker {
 		questionLedger.activateForkMode();
 	}
 
-	function _delegateMigrationCall(address delegate, bytes memory callData) private returns (bytes memory data) {
-		return DelegateCall.invoke(delegate, callData);
-	}
-
 	/// @notice Prepares a question pool in an eligible target universe; returns the existing child when it is already prepared.
 	function prepareSecurityPoolQuestion(IQuestionLedger source, uint248 targetUniverse) external returns (IQuestionLedger) {
 		return
@@ -43,7 +39,7 @@ contract QuestionForker {
 	}
 
 	function createChildUniverse(IQuestionLedger questionLedger, uint256 outcomeIndex) external {
-		_delegateMigrationCall(securityPoolDelegate, abi.encodeCall(QuestionForkerDelegate.materializeImmediateSecurityPoolChild, (questionLedger, outcomeIndex)));
+		DelegateCall.invoke(securityPoolDelegate, abi.encodeCall(QuestionForkerDelegate.materializeImmediateSecurityPoolChild, (questionLedger, outcomeIndex)));
 	}
 
 	/// @notice Forks the universe on the pool's own question once its escalation game allows it, burning reporter-ledger REP; callable by anyone.

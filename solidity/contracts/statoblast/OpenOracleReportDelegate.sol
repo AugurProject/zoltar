@@ -4,9 +4,6 @@ pragma solidity 0.8.35;
 import { Collateral } from '../Collateral.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
-import { IWeth9 } from './interfaces/IWeth9.sol';
-import { IQuestionLedger } from './interfaces/IQuestionLedger.sol';
-import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { ReputationToken } from '../ReputationToken.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
@@ -15,21 +12,6 @@ import { SharedPoolPriceFeed } from './SharedPoolPriceFeed.sol';
 interface IOracleReportConfig {
 	function sharedPriceFeed() external view returns (SharedPoolPriceFeed);
 	function reputationToken() external view returns (ReputationToken);
-	function openOracle() external view returns (OpenOracle);
-	function weth() external view returns (IWeth9);
-	function questionLedger() external view returns (IQuestionLedger);
-	function getSettlementCallbackGasLimit() external view returns (uint32);
-	function minimumToken1ReportAttoEth() external view returns (uint256);
-	function initialReportPriorityFeeAttoEthPerGas() external view returns (uint256);
-	function targetPriceErrorForDispute() external view returns (uint256);
-	function settlementTime() external view returns (uint48);
-	function disputeDelay() external view returns (uint24);
-	function protocolFee() external view returns (uint24);
-	function feePercentage() external view returns (uint24);
-	function multiplier() external view returns (uint16);
-	function protocolFeeRecipient() external view returns (address);
-	function escalationHaltMultiplierBps() external view returns (uint256);
-	function maxSettlementBaseFeeMultiplierBps() external view returns (uint256);
 }
 
 /// @notice Stateless standalone-report execution and validation shared by operation coordinators.

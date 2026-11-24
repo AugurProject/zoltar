@@ -201,7 +201,7 @@ contract QuestionForkerDelegate {
 		uint48 securityPoolTimeAnchor = securityPool.securityPoolTimeForNative(child.universeId(), 0);
 		uint256 sourceStart = game.forkContinuation() ? game.forkResumedAt() : game.activationTime();
 		require(sourceStart != 0 && sourceStart <= type(uint48).max, 'Source reporter clock is invalid');
-		uint256 securityPoolStartTime = securityPool.securityPoolTimeForNative(source.universeId(), CheckedCast.toUint48(sourceStart));
+		uint256 securityPoolStartTime = securityPool.securityPoolTimeForNative(source.universeId(), uint48(sourceStart));
 		int256 elapsed = game.forkContinuation() ? game.forkElapsedAtStart() : int256(0);
 		// Preserve pre-activation time too: dropping a negative offset makes the
 		// game finalize before its inherited settlement and reporter schedules.
