@@ -11,7 +11,7 @@ import { OraclePriceMath } from './OraclePriceMath.sol';
 import { SharedPoolPriceFeed } from './SharedPoolPriceFeed.sol';
 import { OpenOracleReportDelegate } from './OpenOracleReportDelegate.sol';
 import { DelegateCall } from './DelegateCall.sol';
-import './OpenOraclePriceCoordinatorTypes.sol';
+import { OPEN_ORACLE_PERCENTAGE_PRECISION } from './OpenOraclePriceCoordinatorTypes.sol';
 
 /// @notice Report lifecycle and price-source routing, using the security pool universe shared feed.
 abstract contract OpenOraclePriceSource {
@@ -37,6 +37,8 @@ abstract contract OpenOraclePriceSource {
 	SharedPoolPriceFeed public sharedPriceFeed;
 	event SharedPriceFeedSet(address indexed priceFeed);
 
+	/// @dev Oracle fees and uncertainty use 1e7 precision; the dispute multiplier
+	/// uses percent (100 = 100%). The parameters ending in Bps use 10,000 = 100%.
 	constructor(OpenOracle _openOracle, ReputationToken _reputationToken, IWeth9 _weth, uint256 _initialReportPriorityFeeAttoEthPerGas, uint256 _targetPriceErrorForDispute, uint48 _settlementTime, uint24 _disputeDelay, uint24 _protocolFee, uint24 _feePercentage, uint16 _multiplier, address _protocolFeeRecipient, uint256 _escalationHaltMultiplierBps, uint256 _maxSettlementBaseFeeMultiplierBps, uint256 _minLiquidationPriceDistanceBps, OpenOracleReportDelegate _reportDelegate) {
 		coordinatorFactory = msg.sender;
 		require(address(_reportDelegate).code.length != 0, 'Report delegate missing');

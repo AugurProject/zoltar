@@ -4,9 +4,14 @@ pragma solidity 0.8.35;
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 /// @notice Exact uint48 deadline prefixes, with at most 24 branch levels and immutable fork roots.
+/// @dev Roots are uint48 node IDs carried in uint64 values; zero means no node.
+/// Updates and aggregates are residues modulo 2^256: callers express removals as
+/// modular negative deltas and recover exact live amounts from prefix differences.
 library SecurityPoolMaturityMap {
 	struct Node {
-		// Four 48-bit child IDs, an 8-bit digit length, and a representative 48-bit key.
+		// Bits 0..191: four 48-bit child IDs, in increasing radix-digit order.
+		// Bits 192..199: radix level (zero denotes a leaf).
+		// Bits 200..247: representative uint48 key. Bits 248..255 are unused.
 		uint256 path;
 		uint256 units;
 		uint256 correction;
@@ -36,6 +41,7 @@ library SecurityPoolMaturityMap {
 		}
 	}
 
+	/// @notice Inclusive prefix through cutoff; both returned sums are modular residues.
 	function prefix(Store storage self, uint64 root, uint48 cutoff) internal view returns (uint256 units, uint256 correction) {
 		while (root != 0) {
 			Node storage node = self.nodes[uint48(root)];
@@ -63,6 +69,7 @@ library SecurityPoolMaturityMap {
 		}
 	}
 
+	/// @dev Zero keys and all-zero deltas preserve the original root.
 	function add(Store storage self, uint64 root, uint48 key, uint256 units, uint256 correction) internal returns (uint64) {
 		if (key == 0 || (units == 0 && correction == 0)) return root;
 		return _add(self, uint48(root), key, units, correction);
@@ -99,7 +106,7 @@ library SecurityPoolMaturityMap {
 	function _leaf(Store storage self, uint48 key, uint256 units, uint256 correction) private returns (uint48 id) {
 		if (units == 0 && correction == 0) return 0;
 		id = ++self.lastId;
-		self.nodes[id] = Node(uint256(key) << 200, units, correction);
+		self.nodes[id] = Node({path: uint256(key) << 200, units: units, correction: correction});
 	}
 
 	function _branch(Store storage self, uint256 level, uint256 children) private returns (uint48 id) {
@@ -120,7 +127,7 @@ library SecurityPoolMaturityMap {
 		}
 		if (count < 2) return first;
 		id = ++self.lastId;
-		self.nodes[id] = Node(children | (level << 192) | (uint256(_key(self.nodes[first].path)) << 200), units, correction);
+		self.nodes[id] = Node({path: children | (level << 192) | (uint256(_key(self.nodes[first].path)) << 200), units: units, correction: correction});
 	}
 
 	function _key(uint256 path) private pure returns (uint48) {

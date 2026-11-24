@@ -111,11 +111,17 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 
 	ITwoWayConstantProductFactory public immutable factory;
 	bool private entered;
+	// Enabled by _beginShareOperation until _endShareOperation for ordinary share callbacks.
 	bool private callbackActive;
+	// Enabled only around the exit swap to accept its internal YES/NO share callbacks.
 	bool private receiveInternalShareCallback;
+	// Enabled only around redemption or WETH withdrawal; receive() also checks the sender.
 	bool private ethCallbackActive;
+	// Ordinary operations bind this context in _beginShareOperation and clear it in
+	// _endShareOperation. Transfer-driven operations bind and clear it in the batch receiver.
 	IQuestionLedger private callbackPool;
 	ITradingShareToken private callbackShareToken;
+	// Additional ETH sender during redemption/withdrawal; cleared after each external call.
 	address private callbackSettlement;
 
 	modifier nonReentrant() {
@@ -134,19 +140,23 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		require(!entered && budget != 0, 'Invalid token budget');
 		_;
 	}
+
 	function enterPositionWithCollateral(ITwoWayConstantProductPair pair, uint256 cash, BinaryOutcomes.BinaryOutcome outcome, uint256 minimum, address recipient, uint256 deadline, uint256 budget) external validTokenBudget(budget) nonReentrant returns (EnterResult memory) {
 		return
 			_enterPosition(pair, cash, outcome, minimum, recipient, deadline, Funding(FundingMode.CollateralToken, budget));
 	}
+
 	function createPairAndInitializeWithCollateral(IQuestionLedger pool, uint256 cash, uint256 probability, uint256 maxYes, uint256 maxNo, uint256 minYes, uint256 minNo, uint256 minimum, address recipient, uint256 deadline, uint256 budget) external validTokenBudget(budget) nonReentrant returns (LiquidityResult memory) {
 		return
 			_provideLiquidity(factory.createPair(pool), LiquidityRequest({cash: cash, conditionalYesBps: probability, maxYes: maxYes, maxNo: maxNo, minYes: minYes, minNo: minNo, minimumLiquidity: minimum, recipient: recipient, deadline: deadline}), Funding(FundingMode.CollateralToken, budget));
 	}
+
 	function initializeWithCollateral(ITwoWayConstantProductPair pair, uint256 cash, uint256 probability, uint256 maxYes, uint256 maxNo, uint256 minYes, uint256 minNo, uint256 minimum, address recipient, uint256 deadline, uint256 budget) external validTokenBudget(budget) nonReentrant returns (LiquidityResult memory) {
 		_validatePair(pair);
 		return
 			_provideLiquidity(pair, LiquidityRequest({cash: cash, conditionalYesBps: probability, maxYes: maxYes, maxNo: maxNo, minYes: minYes, minNo: minNo, minimumLiquidity: minimum, recipient: recipient, deadline: deadline}), Funding(FundingMode.CollateralToken, budget));
 	}
+
 	function addLiquidityWithCollateral(ITwoWayConstantProductPair pair, uint256 cash, uint256 maxYes, uint256 maxNo, uint256 minimum, address recipient, uint256 deadline, uint256 budget) external validTokenBudget(budget) nonReentrant returns (LiquidityResult memory) {
 		_validatePair(pair);
 		return
@@ -176,7 +186,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		(uint256 yesAfter, uint256 noAfter) = pair.getReserves();
 		_endShareOperation(startInvalid, startYes, startNo);
 		_refundBudget(spent, funding);
-		result = EnterResult(spent, mintedInvalid, mintedInvalid, additionalLong, totalLong, mintedInvalid, feeAmount, TwoWayConstantProductMath.conditionalYesBps(yesBefore, noBefore), TwoWayConstantProductMath.conditionalYesBps(yesAfter, noAfter));
+		result = EnterResult({ethSpent: spent, completeSetShares: mintedInvalid, oppositeSharesSwapped: mintedInvalid, additionalLongShares: additionalLong, totalLongShares: totalLong, invalidInsurance: mintedInvalid, feeAmount: feeAmount, conditionalYesBpsBefore: TwoWayConstantProductMath.conditionalYesBps(yesBefore, noBefore), conditionalYesBpsAfter: TwoWayConstantProductMath.conditionalYesBps(yesAfter, noAfter)});
 	}
 
 	/// @notice Seeds the pair at `conditionalYesBpsValue`. If anyone already initialized it, the same call adds
@@ -397,7 +407,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		_transferShares(pool, request.recipient, mintedInvalid, yesReturned, noReturned);
 		_endShareOperation(startInvalid, startYes, startNo);
 		_refundBudget(spent, funding);
-		result = LiquidityResult(pair, mintedInvalid, yesUsed, noUsed, yesReturned, noReturned, mintedInvalid, liquidity);
+		result = LiquidityResult({pair: pair, completeSetShares: mintedInvalid, yesUsed: yesUsed, noUsed: noUsed, yesReturned: yesReturned, noReturned: noReturned, invalidInsurance: mintedInvalid, liquidity: liquidity});
 	}
 
 	function _mintCompleteSets(IQuestionLedger pool, uint256 cash, Funding memory funding) private returns (uint256 spent) {

@@ -158,6 +158,8 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		}
 	}
 
+	/// @dev Continuation IDs pack the game address, outcome and local index in
+	/// 160/8/88 bits, matching the deposit delegate. Ordinary IDs remain local indexes.
 	function _getStableLocalParentDepositIndex(uint8 outcomeIndex, uint256 depositIndex) internal view returns (uint256) {
 		if (!forkContinuation) return depositIndex;
 		return (uint256(uint160(address(this))) << 96) | (uint256(outcomeIndex) << 88) | depositIndex;
@@ -182,7 +184,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		require(!selectedOutcomeState.consumedParentDepositIndexes[stableParentDepositIndex], 'Deposit settled');
 		uint256 nodeId = selectedOutcomeState.localNodeIds[depositIndex];
 		Node storage node = nodes[nodeId];
-		deposit = Deposit(node.depositor, node.amountAttoRep, node.cumulativeAmountAttoRep);
+		deposit = Deposit({depositor: node.depositor, amountAttoRep: node.amountAttoRep, cumulativeAmountAttoRep: node.cumulativeAmountAttoRep});
 		_markLocalDepositConsumed(outcomeIndex, depositIndex, deposit.amountAttoRep, deposit.depositor);
 		_emitCarryDepositConsumed(outcomeIndex, deposit.depositor, deposit.amountAttoRep, nodes[nodeId].parentDepositIndex, nodeId, reason);
 	}

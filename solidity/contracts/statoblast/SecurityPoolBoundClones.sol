@@ -5,6 +5,7 @@ pragma solidity 0.8.35;
 library SecurityPoolBoundClones {
 	uint256 internal constant FORWARDER_LENGTH = 45;
 
+	/// @dev The 45-byte forwarder is followed by one packed 20-byte address.
 	function boundAddress() internal view returns (address binding) {
 		uint256 offset = FORWARDER_LENGTH;
 		require(address(this).code.length == offset + 20, 'Capital module requires a clone');
@@ -14,6 +15,8 @@ library SecurityPoolBoundClones {
 		}
 	}
 
+	/// @dev Bindings after the forwarder are a 31-byte uint248 universe ID,
+	/// then a 20-byte token address. The shifts discard each word's trailing bytes.
 	function universeBindings() internal view returns (uint248 universe, address token) {
 		uint256 offset = FORWARDER_LENGTH;
 		require(address(this).code.length == offset + 51, 'Universe module requires a clone');

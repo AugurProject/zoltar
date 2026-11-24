@@ -15,6 +15,9 @@ import { SecurityPoolBoundClones } from './SecurityPoolBoundClones.sol';
 /// new requests, which enter the next cohort. A reservation tracks the reduction
 /// requested when a position retires to its remaining commitment target.
 contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
+	uint256 private constant BPS_DENOMINATOR = 10_000;
+	uint256 private constant PRICE_SCALE = 1e18;
+
 	address private immutable initializer = msg.sender;
 	uint96 public lastPositionId;
 	uint96 public currentBatch;
@@ -22,14 +25,14 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	uint96 private lastBatch;
 	uint64 private lastRetirementOrder;
 	mapping(uint96 => uint64) public retirementOrder;
-	mapping(uint96 => uint256) private reservedReduction;
-	mapping(uint256 => uint256) private retirementSums;
+	mapping(uint96 positionId => uint256 reduction) private reservedReduction;
+	mapping(uint256 order => uint256 total) private retirementSums;
 	bool public importsOpen;
 	bool private importsInitialized;
 	uint64 public healthObservationEpoch;
 	uint48 private distressRestart;
 	uint256 private observedPrice;
-	mapping(uint64 => uint48) private observationTimes;
+	mapping(uint64 epoch => uint48 timestamp) private observationTimes;
 	struct Account {
 		address owner;
 		uint96 batch;
@@ -250,12 +253,14 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		_syncReservation(id, leaf.commitment - remainingCommitment);
 	}
 
-	/// @notice Record which existing live positions are healthy at a fresh price.
-	/// @dev Epochs distinguish recovery and relapse even within the same block.
+	/// @notice Record a fresh-price lower bound for the reported liquidation start.
+	/// @dev Compensation elapsed time retains the original adverse observation.
 	function restartLiquidationClock() external onlyCapitalLedger {
 		distressRestart = CheckedCast.toUint48(block.timestamp);
 	}
 
+	/// @notice Record which existing live positions are healthy at a fresh price.
+	/// @dev Epochs distinguish recovery and relapse even within the same block.
 	function observeHealthy(uint256 price) external onlyCapitalLedger operational {
 		require(block.timestamp <= type(uint48).max, 'Commitment clock exhausted');
 		uint64 epoch = ++healthObservationEpoch;
@@ -320,7 +325,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	function cure(uint96 id, uint256 price, uint256 multiplier, uint256 minimumCommitment, uint256 demand, uint256 target, bool ownerExit) public onlyCapitalLedger operational returns (Cure memory result) {
 		Account memory account = accountOf(id);
 		require(account.owner != address(0) && account.commitment > target, 'Position is not live');
-		uint256 supported = Math.mulDiv(Math.mulDiv(account.rep, 10_000, multiplier), 1e18, price);
+		uint256 supported = Math.mulDiv(Math.mulDiv(account.rep, BPS_DENOMINATOR, multiplier), PRICE_SCALE, price);
 		result.owner = account.owner;
 		if (supported >= account.commitment) {
 			positions[id].healthyMutationEpoch = healthObservationEpoch;
@@ -361,7 +366,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 				replace(id, 0, 0, 0);
 				result.freedRep = account.rep;
 			} else {
-				uint256 maxPrice = Math.mulDiv(Math.mulDiv(account.rep, 10_000, multiplier), 1e18, remaining);
+				uint256 maxPrice = Math.mulDiv(Math.mulDiv(account.rep, BPS_DENOMINATOR, multiplier), PRICE_SCALE, remaining);
 				replace(id, account.rep, remaining, maxPrice);
 			}
 		}
@@ -415,7 +420,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		if (cured.settled) return (cured, source, 0, 0, 0);
 		uint256 vestedPenalty = Math.mulDiv(source.rep + penaltyPaid, Math.min(elapsed, LIQUIDATION_AUCTION_DURATION), LIQUIDATION_AUCTION_DURATION);
 		uint256 availableTakeoverReward = vestedPenalty > penaltyPaid ? vestedPenalty - penaltyPaid : 0;
-		uint256 supported = Math.mulDiv(Math.mulDiv(source.rep - availableTakeoverReward, 10_000, multiplier), 1e18, repairPrice);
+		uint256 supported = Math.mulDiv(Math.mulDiv(source.rep - availableTakeoverReward, BPS_DENOMINATOR, multiplier), PRICE_SCALE, repairPrice);
 		uint256 fullCommitment = source.commitment - Math.min(source.commitment, supported);
 		if (source.commitment - fullCommitment < minimumCommitment) fullCommitment = source.commitment;
 		require(fullCommitment != 0, 'Position does not need takeover');
@@ -424,20 +429,33 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 			commitment = source.commitment - Math.min(source.commitment, minimumCommitment);
 		require(commitment != 0, 'Takeover commitment below minimum');
 		takeoverReward = Math.mulDiv(availableTakeoverReward, commitment, fullCommitment);
-		uint256 remainingBacking = Math.mulDiv(source.rep - takeoverReward, 10_000, multiplier);
-		require(commitment == fullCommitment || source.commitment - commitment <= Math.mulDiv(remainingBacking, 1e18, repairPrice) || source.commitment - commitment > Math.mulDiv(remainingBacking, 1e18, price), 'Takeover would strand source between prices');
+		uint256 remainingBacking = Math.mulDiv(source.rep - takeoverReward, BPS_DENOMINATOR, multiplier);
+		require(commitment == fullCommitment || source.commitment - commitment <= Math.mulDiv(remainingBacking, PRICE_SCALE, repairPrice) || source.commitment - commitment > Math.mulDiv(remainingBacking, PRICE_SCALE, price), 'Takeover would strand source between prices');
 		debit = commitment == source.commitment ? source.rep : takeoverReward;
 		liquidationPenalties[id] = LiquidationPenalty(started, penaltyPaid + takeoverReward);
 	}
+
+	/// @notice Returns required backing in attoREP for a commitment in raw collateral token units.
+	/// @param commitment Underwritten amount in raw collateral token units.
+	/// @param price AttoREP per raw collateral token unit, scaled by PRICE_SCALE.
+	/// @param multiplier Security multiplier in basis points.
+	/// @param health Target health factor in basis points; 10,000 is 100%.
+	/// @dev Each conversion rounds up separately to avoid understating required backing.
+	/// Preserve these intermediate rounding steps when changing the expression.
 	function requiredRep(uint256 commitment, uint256 price, uint256 multiplier, uint256 health) public pure returns (uint256) {
-		require(health >= 10_000 && price > 0, 'Invalid health or price');
-		uint256 base = Math.mulDiv(commitment, price, 1e18, Math.Rounding.Ceil);
-		base = Math.mulDiv(base, multiplier, 10_000, Math.Rounding.Ceil);
-		return Math.mulDiv(base, health, 10_000, Math.Rounding.Ceil);
+		require(health >= BPS_DENOMINATOR && price > 0, 'Invalid health or price');
+		uint256 base = Math.mulDiv(commitment, price, PRICE_SCALE, Math.Rounding.Ceil);
+		base = Math.mulDiv(base, multiplier, BPS_DENOMINATOR, Math.Rounding.Ceil);
+		return Math.mulDiv(base, health, BPS_DENOMINATOR, Math.Rounding.Ceil);
 	}
+
+	/// @notice Returns the maximum backing price, in attoREP per raw collateral token unit scaled by PRICE_SCALE.
+	/// @dev REP uses attoREP and commitment uses raw collateral token units; multiplier
+	/// is in basis points. Both divisions round down. A zero commitment returns
+	/// the uint256 maximum sentinel.
 	function maximumHealthyPrice(uint256 rep, uint256 commitment, uint256 multiplier) external pure returns (uint256) {
 		if (commitment == 0) return type(uint256).max;
-		return Math.mulDiv(Math.mulDiv(rep, 10_000, multiplier), 1e18, commitment);
+		return Math.mulDiv(Math.mulDiv(rep, BPS_DENOMINATOR, multiplier), PRICE_SCALE, commitment);
 	}
 
 	/// @notice Fresh demand can use active K and the residual K a retiring owner
@@ -631,8 +649,8 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		require(lastPositionId != type(uint96).max, 'Commitment IDs exhausted');
 		id = ++lastPositionId;
 		uint256 node = ++lastNode;
-		nodes[node] = Node(0, 0, 0, rep, commitment, 0, 0, price, price, id, 0, false, 0, remainingCommitment);
-		positions[id] = Position(owner, batch, node, 0, false, healthObservationEpoch, remainingCommitment);
+		nodes[node] = Node({parent: 0, left: 0, right: 0, rep: rep, commitment: commitment, ethFees: 0, repFees: 0, price: price, maximumPrice: price, positionId: id, height: 0, retired: false, healthEpoch: 0, retainedCommitment: remainingCommitment});
+		positions[id] = Position({owner: owner, batch: batch, node: node, releasedRep: 0, retiredRepClaimed: false, healthyMutationEpoch: healthObservationEpoch, remainingCommitment: remainingCommitment});
 		_insert(batch, node);
 		if (batch != 0) {
 			_assignRetirementOrder(id);

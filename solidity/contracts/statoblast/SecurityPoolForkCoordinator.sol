@@ -162,7 +162,7 @@ contract SecurityPoolForkCoordinator {
 
 	function initialize(uint248 origin) external {
 		require(msg.sender == address(securityPool) && !clocks[origin].registered, 'Fork clock initialization unavailable');
-		clocks[origin] = UniverseClock(0, 0, true, false);
+		clocks[origin] = UniverseClock({securityPoolTimeAnchor: 0, wallAnchor: 0, registered: true, ready: false});
 	}
 	function activateOrigin(uint248 origin) external {
 		require(msg.sender == address(securityPool) && clocks[origin].registered && !branchStates[origin].prepared, 'Origin activation unavailable');
@@ -285,7 +285,7 @@ contract SecurityPoolForkCoordinator {
 		if (branch.prepared) return child;
 		uint256 anchor = zoltar.getForkRecapitalizationDeadline(parent);
 		require(anchor <= type(uint48).max, 'Fork clock exhausted');
-		clocks[child] = UniverseClock(_securityPoolTimeAt(parent, zoltar.getForkTime(parent)), uint48(anchor), true, false);
+		clocks[child] = UniverseClock({securityPoolTimeAnchor: _securityPoolTimeAt(parent, zoltar.getForkTime(parent)), wallAnchor: uint48(anchor), registered: true, ready: false});
 		securityPool.prepareForkChild(parent, outcome);
 		branch.parent = parent;
 		branch.outcome = outcome;
@@ -463,11 +463,14 @@ contract SecurityPoolForkCoordinator {
 		uint256 afterShares = beforeShares + shares;
 		require(afterShares <= question.outcomeSupplyAttoShares, 'Recovery exceeds source supply');
 		recoveredQuestionShares[source][questionId] = afterShares;
+		// Differences of cumulative floors conserve every unit across partial claims;
+		// flooring each claim independently would leave rounding dust unallocated.
 		uint256 units =
 			Math.mulDiv(question.units, afterShares, question.outcomeSupplyAttoShares) -
 				Math.mulDiv(question.units, beforeShares, question.outcomeSupplyAttoShares);
 		// Fully accrued holding fees can exhaust ETH units while the separate
 		// prepaid resolution budget still belongs to these authenticated shares.
+		// Apply the same cumulative allocation to the fixed neutral cash basket.
 		if (fork.units != 0)
 			cash =
 				Math.mulDiv(fork.neutralCash, fork.recoveredUnits + units, fork.units) -

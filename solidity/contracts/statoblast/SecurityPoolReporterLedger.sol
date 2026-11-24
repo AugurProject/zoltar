@@ -114,7 +114,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		require((!book.isSealed && zoltar.getForkTime(universeId) == 0) || (finalClaim && state.balanceAttoRep != 0), 'Reporter universe sealed');
 		state.sourceGame = game;
 		_writeQuestion(book, questionId, state);
-		games[game] = Game(universeId, questionId, true);
+		games[game] = Game({universeId: universeId, questionId: questionId, registered: true});
 		registeredGames[universeId][questionId] = game;
 		emit GameRegistered(universeId, questionId, game);
 	}
@@ -132,7 +132,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 				IReporterSecurityPoolClock(securityPool).factory().securityPoolOf(pool) != securityPool ||
 				address(pool.escalationGame()) != game
 			) return 0;
-			identity = Game(pool.universeId(), pool.questionId(), false);
+			identity = Game({universeId: pool.universeId(), questionId: pool.questionId(), registered: false});
 		}
 		(Question memory state, ) = _question(identity.universeId, identity.questionId);
 		return state.balanceAttoRep;
@@ -289,7 +289,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 			zoltar.splitMigrationRep(sourceUniverseId, source.liveAttoRep, outcomes);
 		} else if (address(zoltar.getRepToken(childUniverseId)) == address(0))
 			zoltar.deployChild(sourceUniverseId, outcomeIndex);
-		books[childUniverseId] = Book(source.liveAttoRep, 0, source.questionRoot, source.finalityRoot, source.frozenRoot, source.timestamp, true, false, source.timestamp, source.finalizedRepPrefix);
+		books[childUniverseId] = Book({liveAttoRep: source.liveAttoRep, finalAttoRep: 0, questionRoot: source.questionRoot, finalityRoot: source.finalityRoot, frozenRoot: source.frozenRoot, timestamp: source.timestamp, exists: true, isSealed: false, minimumFinalAfter: source.timestamp, finalizedRepPrefix: source.finalizedRepPrefix});
 		(, uint256 forkQuestionId, , , ) = zoltar.universes(sourceUniverseId);
 		(Question memory fixedQuestion, bool alreadyFinal) = _question(childUniverseId, forkQuestionId);
 		if (!alreadyFinal && fixedQuestion.balanceAttoRep != 0) {
