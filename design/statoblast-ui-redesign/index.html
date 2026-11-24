@@ -151,7 +151,7 @@
 				<li><b>No global lists.</b> No screen lists questions, security pools or price reports that anyone can create. Users reach things by link, address, question ID inside a security pool, or their Watchlist. Spam can never reach the screen.</li>
 				<li><b>No Home page and no Questions tab.</b> A question exists only inside a security pool (the same question ID can be registered in any number of security pools, each with its own shares and reporting). A question is always addressed as <code>(security pool, question ID)</code>.</li>
 				<li><b>Primary navigation is Watchlist and Price reports.</b> The universe switcher is a menu in the header.</li>
-				<li><b>The UI never reads event logs.</b> No <code>eth_getLogs</code>, no event watching, no <code>fromBlock</code> scans. All information comes from contract state reads (see <a href="#data">Data loading</a>).</li>
+				<li><b>The UI never reads event logs.</b> No <code>eth_getLogs</code>, no event watching, no <code>fromBlock</code> scans. All information comes from contract state reads (decoding the receipt of the user's own transaction, e.g. a new report ID, is not a log query) (see <a href="#data">Data loading</a>).</li>
 				<li><b>No new contract indexes.</b> No per-account or per-deposit index contracts or storage are added for the UI.</li>
 				<li><b>The Watchlist holds only saved items</b> (★) plus a short recently-opened history; no app-shipped suggestions.</li>
 				<li><b>Question pages are full width</b> (no right-hand side column). The universe fork action appears <b>only</b> when the escalation game has reached the fork step (04e).</li>
@@ -367,7 +367,7 @@
 			<h3>09 Questions (09b, 09c)</h3>
 			<ul>
 				<li>Your saved questions in this pool (“Showing the 3 you saved, of 14 registered here.”) — never the full registry. Find or register by question ID: input starting with <code>0x</code> is hex, anything else is decimal.</li>
-				<li>09c states: Registered here (open, mint); Not registered here (Register question; for an open pool); invalid input; not a question. Register is disabled with its reason when the question can't be registered: only Yes/No questions, trading not yet ended, universe not forked (<code>SecurityPoolFactory.sol</code> registration checks). A question registered here but not yet prepared in the current child universe shows “Registered, not prepared in this universe” and links to Fork &amp; recovery. Invalidate the session entry-check cache after Register and after Prepare.</li>
+				<li>09c states: Registered here (open, mint); Not registered here (Register question; for an open pool); invalid input; not a question. Register is disabled with its reason when the question can't be registered: “Only Yes/No questions can be registered.”, “Trading on this question has already ended.”, “This universe has forked.” (<code>SecurityPoolFactory.sol</code> registration checks). A question registered here but not yet prepared in the current child universe shows “Registered, not prepared in this universe” and links to Fork &amp; recovery. Invalidate the session entry-check cache after Register and after Prepare.</li>
 				<li>09b fixed question list: “Which questions can be registered: Fixed question list” and the approved IDs; others can't be registered.</li>
 				<li>Mint drawer uses the shared mint form with a question picker and Find by ID.</li>
 			</ul>
@@ -400,7 +400,7 @@
 			<ul>
 				<li><b>14 Price reports</b>: latest report of each saved security pool (status dot, pool, REP price, status like “Dispute window · 3 min left”), Open report by ID, detail panel with the report stepper (Reported → Dispute window → Settle → Funds returned) and Settle (anyone can settle; shows the bounty).</li>
 				<li><b>17 Transaction states</b>: every transaction button goes through review → wallet → pending → confirmed in place; plus canceled, reverted (with reason), “Changed since you reviewed” (forces Review again), replaced. Disabled buttons always carry a visible reason.</li>
-				<li><b>18 App states</b>: no wallet, wrong network, loading (skeletons keep layout), empty, RPC error (data stays readable, retry), stale (“Updated 3h ago”), un-star confirmation for held positions.</li>
+				<li><b>18 App states</b>: no wallet, wrong network, loading (skeletons keep layout), empty, RPC error (data stays readable, retry), stale (“Block {n} · 3 min behind”, actions paused), un-star confirmation for held positions.</li>
 			</ul>
 
 			<h2 id="components">10. Shared components and behaviours</h2>
@@ -431,14 +431,14 @@
 			<h2 id="data">11. Data loading (no event logs)</h2>
 			<p>The full plan with per-row read counts, the request budget and the abuse analysis is <a href="mockups/19-refresh-plan.html">19 Refresh plan</a>. Summary:</p>
 			<ul>
-				<li><b>Refresh rules</b>: the open page every new block in one block-pinned multicall; saved items every block up to 25 (beyond that 10 rotate per block); recently opened never refreshed; hidden tab paused. <b>Staleness</b>: any row whose data is more than 3 minutes behind the chain head shows “Updated {time} ago” and its transaction buttons are paused with “Refresh to continue.” (18); within 3 minutes no age is shown.</li>
+				<li><b>Refresh rules</b>: the open page every new block in one block-pinned multicall; saved items every block up to 25 (beyond that 10 rotate per block); recently opened never refreshed; hidden tab paused. <b>Staleness</b>: within 3 minutes of the chain head no age is shown. Beyond that the page shows a chip “Block {n} · {age} behind” and the notice “Data is {age} old. Actions are paused until it catches up.” with a link to change the RPC (18); saved rows show “{age} behind” (18); within 3 minutes no age is shown.</li>
 				<li><b>Entry check</b> before anything joins a read batch: security pool via <code>isSecurityPool(address)</code> on the factory; a question via <code>getQuestionLedger(questionId, universeId)</code> on that security pool, read with <code>allowFailure</code>. It has three outcomes: a ledger address (registered and prepared); revert “Question not registered” (not registered here, “Not a Statoblast question”, offered for removal); revert “Question pool unavailable” (registered but not prepared in this universe, e.g. a child universe before “prepare question”: keep the item and link to Fork &amp; recovery). The check runs in the first multicall, reads in the second; results are cached per session and invalidated after Register and Prepare.</li>
 				<li><b>Universe scope</b>: a question is really (security pool, question ID, universe). Routes keep the existing universe / network / simulation query context (as <code>buildQuestionPoolHref</code> in <code>SS/lib/routing.ts</code> does today), so a shared link opens the same universe. Saved items are stored per network as (security pool, question ID) and shown with their state in the currently selected universe; where that universe has no ledger yet, the row shows “Not prepared in this universe”.</li>
-				<li id="storage"><b>Device storage and export</b>: reuse <code>localEntityStore.ts</code> (app “statoblast”, kinds “question” and “pool”, per network, limit 500) and <code>FavoriteToggle.tsx</code> (aria-pressed; label “Saved: {name} in security pool {address}”). Also stored per network: history (last 20), located deposits <code>{game, outcome, depositor, index}</code>, search cursors <code>{game, outcome, depositor, nextIndex, block}</code>, and deploy progress. Export file: <code>{"version": 1, "chainId", "saved": [{kind, pool, questionId?, label?}], "deposits": [{game, outcome, depositor, index}]}</code>. Import treats every entry as untrusted: validate the shape and chainId, run the entry check on saved items, and verify each deposit with one <code>getDepositsByOutcome(outcome, index, 1)</code> read (depositor must match); merge by key, never overwrite. Errors: “Not a Statoblast watchlist file.”, “This file is for another network.”, and a count of skipped entries.</li>
+				<li id="storage"><b>Device storage and export</b>: reuse <code>localEntityStore.ts</code> (app “statoblast”, kinds “question” and “pool”, per network, limit 500) and <code>FavoriteToggle.tsx</code> (aria-pressed; label “Saved: {name} in security pool {address}”). Also stored per network: history (last 20), located deposits <code>{game, outcome, depositor, index}</code>, search cursors <code>{game, outcome, depositor, nextIndex, block}</code>, and deploy progress. Export file: <code>{"version": 1, "chainId", "saved": [{kind, pool, questionId?, label?}], "deposits": [{pool, questionId, universeId, outcome, depositor, index}]}</code>. Import treats every entry as untrusted and never calls an address taken from the file: validate the shape and chainId; run the entry check on saved items and on each deposit's (pool, question ID, universe); take the game address from that ledger's <code>escalationGame()</code>, not from the file; then verify each deposit with one <code>getDepositsByOutcome(outcome, index, 1)</code> read on that game (depositor must match). Merge by key, never overwrite. Errors: “Not a Statoblast watchlist file.”, “This file is for another network.”, and a count of skipped entries. Located deposits stored on the device use the same keys (pool, question ID, universe, outcome, depositor, index).</li>
 				<li>
 					<b>Your deposits</b>:
 					<ul>
-						<li>Total per side with no search: <code>getLocalUnresolvedPrincipalByVaultAndOutcome(wallet, outcome)</code> × 3, where <code>wallet</code> is the depositing wallet address. All zero → nothing to locate.</li>
+						<li>Total per side with no search: <code>getLocalUnresolvedPrincipalByVaultAndOutcome(wallet, outcome)</code> × 3, where <code>wallet</code> is the depositing wallet address. No game yet (no report made) means zero; all zero → nothing to locate.</li>
 						<li>Saved at deposit time: after the report confirms, read <code>getDepositsByOutcomeLength</code> at the receipt block and its parent block; the entries between are that block's deposits (<code>getDepositsByOutcome</code>); those whose depositor is you are yours. Saved per chain, game, outcome and depositor. The first report of a game deploys the game in the same transaction, so a game with no code at the parent block counts as length 0. Both reads are of very recent state (the receipt's block and its parent), which ordinary nodes serve; if the parent-block read fails, fall back to the search below. See <a href="#open">open question</a> on decoding the receipt instead.</li>
 						<li>Carried to another device by Watchlist export/import.</li>
 						<li>Search only when totals differ: page <code>getDepositsByOutcome(outcome, start, 30)</code>, 2 pages per refresh, cursor saved, stop when located deposits add up to your total; only for the open question; cursors advance only to a block a few behind head (reorg safety). Losing sides read 0 after settlement and are never searched.</li>
@@ -577,11 +577,11 @@
 					<tbody>
 						<tr>
 							<td>225 000 REP per outcome (fork / non-decision threshold)</td>
-							<td>Per game: <code>EscalationGame.nonDecisionThresholdAttoRep</code>, set from <code>Zoltar.getNonDecisionThresholdAttoRep(universeId)</code>; it depends on REP supply.</td>
+							<td>Once the game exists: <code>EscalationGame.nonDecisionThresholdAttoRep</code>. Before the first report: <code>Zoltar.getNonDecisionThresholdAttoRep(universeId)</code>. It depends on REP supply.</td>
 						</tr>
 						<tr>
 							<td>1.00 REP minimum first report</td>
-							<td>Per game: <code>EscalationGame.startBondAttoRep</code>.</td>
+							<td>Once the game exists: <code>EscalationGame.startBondAttoRep</code>. Before the first report (04b “No reports yet”, 03 stepper): <code>QuestionLedger.initialEscalationGameDepositAttoRep</code>.</td>
 						</tr>
 						<tr>
 							<td>5-minute price-report dispute window</td>
@@ -750,10 +750,11 @@
 				<li>No request to <code>eth_getLogs</code> in any simulation scenario (count JSON-RPC methods in a browser test).</li>
 				<li>Request budget, measured in <code>simScenario=securitypoolx2</code> on the Capital tab with 25 saved items: at most 5 JSON-RPC requests per new block (target 3).</li>
 				<li>Deposits: a report saves its deposit; a fresh device locates it by search; an imported file restores it after one verification read; a reorg during search doesn't skip a deposit; a missing deposit shows Search again.</li>
+				<li>Import: a file whose deposit names a foreign contract or an unregistered question is skipped and counted; no address from the file is ever called.</li>
 				<li>Entry check: a bogus address, a non-Statoblast contract, an unregistered question and a registered-but-unprepared question each show their own state; none breaks the shared multicall.</li>
 				<li>The report that brings a second outcome to the threshold requires the confirmation checkbox.</li>
 				<li>No copy hard-codes thresholds, windows or percentages (values come from contract reads).</li>
-				<li>Old routes (<code>#/pools</code>, <code>#/pools/&lt;ledger&gt;</code>, <code>#/security-pools</code>) are dropped without redirects and show the not-found page.</li>
+				<li>Old routes (<code>#/pools</code>, <code>#/pools/&lt;ledger&gt;</code>, <code>#/security-pools</code>, <code>#/open-oracle</code>) are dropped without redirects and show the not-found page.</li>
 				<li><code>bun run check:repository:current</code> passes (includes <code>check:unit-terminology</code>).</li>
 				<li><code>bun run ui:layout-scan -- --app statoblast</code> clean at the five default viewports; additionally no text outside its box and no wrapped addresses at 1440, 1024, 768, 390.</li>
 				<li>Inputs don't change size while typing or checking.</li>
@@ -766,7 +767,7 @@
 			<ul>
 				<li>Whether the security pool setup transaction is best described as “claims &amp; redemption” (06b).</li>
 				<li>The exact wording for a pool's provider earning no fees before its branch is activated (12b).</li>
-				<li>Deposit capture at deposit time: the spec uses two state reads (deposit-list length at the receipt block and its parent). Decoding <code>DepositOnOutcome(depositor, outcome, amount, depositIndex, …)</code> from the user's own transaction receipt would be simpler and robust, but it reads receipt logs, and the product decision is that the UI reads no logs. Product owner to decide.</li>
+				<li>Deposit capture at deposit time: the spec uses two state reads (deposit-list length at the receipt block and its parent). Decoding <code>DepositOnOutcome(depositor, outcome, amount, depositIndex, …)</code> from the user's own transaction receipt would be simpler and robust, but it reads receipt logs, and the product decision is that the UI reads no logs. §14 already treats decoding the user's own receipt as acceptable for price-report IDs and the deployed pool address, so the same technique would be consistent; decision 4 in §2 forbids log <em>queries</em> (<code>eth_getLogs</code>, event watching), not reading the receipt of the user's own transaction. Product owner to decide which capture method to use.</li>
 			</ul>
 		</main>
 	</body>

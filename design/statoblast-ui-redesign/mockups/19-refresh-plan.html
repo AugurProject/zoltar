@@ -36,7 +36,7 @@
 						</tr>
 						<tr>
 							<td><b>★ Saved items</b></td>
-							<td>Every block, up to 25; beyond 25, 10 rotate per block and show “as of …”</td>
+							<td>Every block, up to 25; beyond 25, 10 rotate per block and show how far behind they are</td>
 							<td>3–5 sub-calls each, same multicall</td>
 						</tr>
 						<tr>
@@ -84,7 +84,7 @@
 					<dt>Question ID</dt>
 					<dd style="white-space: normal; text-align: left">Never searched app-wide: the same question can sit in any number of security pools. Inside one security pool (Find by question ID): one <code>getQuestionLedger(questionId, universeId)</code> read, “Not registered here” otherwise. On the Watchlist: the same read in each saved security pool only (≤ 25, allowFailure), plus one Zoltar read for the title; anything else needs a link or security pool address</dd>
 					<dt>Fails</dt>
-					<dd style="white-space: normal; text-align: left">“Not a Statoblast question / security pool”; never read, offered for removal</dd>
+					<dd style="white-space: normal; text-align: left">Not a security pool, or “Question not registered”: “Not a Statoblast question / security pool”, never read, offered for removal. “Question pool unavailable”: registered but not prepared in this universe; kept, linked to Fork &amp; recovery, never offered for removal. Cache cleared after Register and Prepare.</dd>
 					<dt>Order</dt>
 					<dd style="white-space: normal; text-align: left">The check runs in the first multicall and the target's reads in the second; results are cached for the session, so the ceiling holds on first open</dd>
 					<dt>Bytecode</dt>
@@ -152,7 +152,7 @@
 				<ol class="small" style="margin: 0; padding-left: 1.2rem; color: var(--text-2); display: flex; flex-direction: column; gap: 0.35rem">
 					<li><b>Per wallet:</b> deposits are made from your wallet. Totals, saved positions, searches and claims are per wallet address.</li>
 					<li><b>Your total per side, no search:</b> <code>getLocalUnresolvedPrincipalByVaultAndOutcome(you, outcome)</code> ×3. All zero → nothing to locate. Shown on Reporting while the game runs. Retired (losing) sides read 0 after settlement, so losing deposits are shown only when saved and are never searched; they return no REP and need no action.</li>
-					<li><b>Saved when you deposit:</b> after the transaction confirms, read <code>getDepositsByOutcomeLength</code> at the receipt's block and at its parent block. The entries between them are exactly that block's deposits (<code>getDepositsByOutcome</code>); every one whose depositor is you is yours. Saved per chain, game, outcome and depositor (about 3 reads, once).</li>
+					<li><b>Saved when you deposit:</b> after the transaction confirms, read <code>getDepositsByOutcomeLength</code> at the receipt's block and at its parent block. The entries between them are exactly that block's deposits (<code>getDepositsByOutcome</code>); every one whose depositor is you is yours. Saved per chain, question, outcome and depositor (about 3 reads, once). The first report deploys the game in the same transaction: no code at the parent block counts as length 0. If the parent-block read fails, fall back to the search below.</li>
 					<li><b>Carried by Watchlist export/import</b> to another device.</li>
 					<li><b>Search only when totals differ</b> (new device, another app, cleared storage): page <code>getDepositsByOutcome(outcome, start, 30)</code>, 2 pages per refresh, cursor saved, stop the moment located deposits add up to your total. Only for the open question; may start while the game runs. A deposit number can be entered and checked with one read; reaching the end unmatched shows “Search again”. Screen 04d.</li>
 					<li><b>Inherited claims:</b> read your REP in the frozen parent game first; zero → nothing more. Otherwise proofs need every parent entry, so the parent list is read in full once and kept (04c).</li>
@@ -259,7 +259,7 @@
 							</tr>
 							<tr>
 								<td>You star many items</td>
-								<td>Your own choice: 25 live, the rest rotate “as of …”</td>
+								<td>Your own choice: 25 live, the rest rotate and show how far behind they are</td>
 							</tr>
 						</tbody>
 					</table>
