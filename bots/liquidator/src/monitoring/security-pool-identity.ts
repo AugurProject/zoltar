@@ -19,7 +19,7 @@ const links = [
 	parseAbiItem('function feeStreams() view returns (address)'),
 	parseAbiItem('function services() view returns (address)'),
 	parseAbiItem('function lifecycleDelegate() view returns (address)'),
-	parseAbiItem('function auctionDelegate() view returns (address)'),
+	parseAbiItem('function repairAuctionDelegate() view returns (address)'),
 	parseAbiItem('function premiumLedger() view returns (address)'),
 ] as const
 
@@ -44,7 +44,7 @@ export async function verifySecurityPoolCustody(client: ReadClient, snapshot: Se
 		if ((await readAddress(address, 'capitalLedger')) !== snapshot.capitalLedger) throw new Error(`${name} belongs to another authority`)
 	}
 	await verifyCode(snapshot.securityPool, 'SecurityPool')
-	const [settlement, reporters, quote, fork, fees, services, lifecycle, auctionDelegate] = await Promise.all([
+	const [settlement, reporters, quote, fork, fees, services, lifecycle, repairAuctionDelegate] = await Promise.all([
 		readAddress(snapshot.securityPool, 'settlement'),
 		readAddress(snapshot.securityPool, 'reporters'),
 		readAddress(snapshot.securityPool, 'quoteHelper'),
@@ -52,7 +52,7 @@ export async function verifySecurityPoolCustody(client: ReadClient, snapshot: Se
 		readAddress(snapshot.capitalLedger, 'feeStreams'),
 		readAddress(snapshot.securityPool, 'services'),
 		readAddress(snapshot.capitalLedger, 'lifecycleDelegate'),
-		readAddress(snapshot.capitalLedger, 'auctionDelegate'),
+		readAddress(snapshot.capitalLedger, 'repairAuctionDelegate'),
 	])
 	const [book, premium, capitalServices, forkAuthority] = await Promise.all([readAddress(settlement, 'ledger'), readAddress(services, 'premiumLedger'), readAddress(snapshot.capitalLedger, 'services'), readAddress(snapshot.capitalLedger, 'forkAuthority')])
 	if (capitalServices !== services) throw new Error('Capital ledger uses another services authority')
@@ -72,7 +72,7 @@ export async function verifySecurityPoolCustody(client: ReadClient, snapshot: Se
 		verifyModule(fork, 'SecurityPoolForkCoordinator', snapshot.securityPool),
 		verifyModule(services, 'SecurityPoolServices', snapshot.securityPool),
 		verifyModule(lifecycle, 'SecurityPoolCapitalLifecycleDelegate', lifecycle, 'implementation'),
-		verifyModule(auctionDelegate, 'SecurityPoolCapitalAuctionDelegate', auctionDelegate, 'implementation'),
+		verifyModule(repairAuctionDelegate, 'SecurityPoolCapitalRepairAuctionDelegate', repairAuctionDelegate, 'implementation'),
 		verifyModule(premium, 'SecurityPoolResolutionPremiumBook', services, 'services'),
 	])
 }

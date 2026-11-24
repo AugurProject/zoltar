@@ -7,7 +7,7 @@ const abi = parseAbi([
 	'function open()',
 	'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot,uint256 targetHealthFactorBps) returns (uint256 bidId,address vault)',
 	'function settleRefund(uint256 bidId)',
-	'function materializeAuctionBid(uint256 bidId) returns (address vault,uint96 positionId)',
+	'function materializeRepairAuctionBid(uint256 bidId) returns (address vault,uint96 positionId)',
 	'function withdrawRefunds(address recipient)',
 	'function settleAndWithdrawRefund(uint256 bidId,address recipient) returns (uint256 amountAttoEth)',
 	'function execute(address target,uint256 value,bytes data) payable returns (bytes)',
@@ -100,7 +100,7 @@ export function buildSecurityPoolAuctionMaterializeRequest(snapshot: SecurityPoo
 	const auction = requireAuction(snapshot)
 	const bid = auction.bids.find(candidate => candidate.id === uint(bidId, 'Bid ID'))
 	if (!auction.finalized || bid === undefined || bid.fill === undefined || bid.fill.filledLots === 0n || bid.materialized) throw new Error('Choose a funded winning bid whose individual vault controls are not active.')
-	return { account: snapshot.bidder, to: snapshot.capitalLedger, value: 0n, data: encodeFunctionData({ abi, functionName: 'materializeAuctionBid', args: [bidId] }) }
+	return { account: snapshot.bidder, to: snapshot.capitalLedger, value: 0n, data: encodeFunctionData({ abi, functionName: 'materializeRepairAuctionBid', args: [bidId] }) }
 }
 export function buildSecurityPoolAuctionRefundCreditRequest(snapshot: SecurityPoolAuctionSnapshot, bidId: bigint) {
 	const auction = requireAuction(snapshot)

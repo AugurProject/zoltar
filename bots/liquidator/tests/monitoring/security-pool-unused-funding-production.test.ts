@@ -34,7 +34,7 @@ describe('security pool abandoned funding integration', () => {
 				const before = state.activities.filter(activity => activity.status === 'confirmed').length
 				await executeSecurityPoolTakeover(wallet, settings, state, pool, next, securityPoolTarget(winner), async () => true)
 				expect(state.activities.filter(activity => activity.status === 'confirmed')).toHaveLength(before + 1)
-				const after = await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'auctionPosition', args: [second.id] })
+				const after = await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'repairAuctionPosition', args: [second.id] })
 				expect(after.materialized).toBe(false)
 			}
 			const funded = await loadSecurityPoolObservation(reader, settings, account.address, scope, await reader.getBlockNumber())
@@ -56,7 +56,7 @@ describe('security pool abandoned funding integration', () => {
 			const returned = await loadSecurityPoolObservation(reader, settings, account.address, scope, await reader.getBlockNumber())
 			expect(unusedSecurityPoolFunding(state, returned).amount).toBe(0n)
 			expect(returned.snapshot.ownerPrincipalAttoRep).toBe(5n * unit)
-			expect((await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'auctionPosition', args: [second.id] })).materialized).toBe(false)
+			expect((await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'repairAuctionPosition', args: [second.id] })).materialized).toBe(false)
 			const persisted = await loadDurableState(settings.runtime.stateFile, settings.network.chainId)
 			expect(persisted.securityPoolFunding).toEqual({})
 			expect(await executeUnusedSecurityPoolFunding(wallet, settings, state, pool, returned, async () => true)).toBe(false)

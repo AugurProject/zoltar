@@ -22,7 +22,7 @@ import {
 	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCapitalLifecycleDelegate_SecurityPoolCapitalLifecycleDelegate as lifecycleArtifact,
-	statoblast_SecurityPoolCapitalAuctionDelegate_SecurityPoolCapitalAuctionDelegate as auctionDelegateArtifact,
+	statoblast_SecurityPoolCapitalRepairAuctionDelegate_SecurityPoolCapitalRepairAuctionDelegate as auctionDelegateArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
 	statoblast_SecurityPoolCapitalFeeStreams_SecurityPoolCapitalFeeStreams as feesArtifact,
 	statoblast_SecurityPoolSettlement_SecurityPoolSettlement as settlementArtifact,
@@ -37,7 +37,7 @@ import { getInfraContractAddresses, getSecurityPoolCreationCode, getSecurityPool
 import { requireAddressValue, requireBigintValue, requireIntegerLikeValue } from './decoders.js'
 import { readRequiredMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { loadSecurityPoolAdmission } from './securityPoolAdmission.js'
-import { authenticateSecurityPoolAuctionVault, isCanonicalAuctionVaultImplementation } from './securityPoolAuction.js'
+import { authenticateSecurityPoolAuctionVault, isCanonicalAuctionVaultImplementation } from './securityPoolRepairAuction.js'
 
 export type SecurityPoolTransaction = { account: Address; to?: Address; data: Hex; value?: bigint; gas?: bigint; reviewDescription?: string; validateBeforeSubmit?: () => Promise<void> }
 const linksAbi = parseAbi([
@@ -50,8 +50,8 @@ const linksAbi = parseAbi([
 	'function ledger() view returns (address)',
 	'function feeStreams() view returns (address)',
 	'function lifecycleDelegate() view returns (address)',
-	'function auctionDelegate() view returns (address)',
-	'function auctionDeployer() view returns (address)',
+	'function repairAuctionDelegate() view returns (address)',
+	'function repairAuctionDeployer() view returns (address)',
 	'function services() view returns (address)',
 	'function forkAuthority() view returns (address)',
 	'function premiumLedger() view returns (address)',
@@ -128,12 +128,12 @@ export async function loadSecurityPoolSetup(client: ReadClient, securityPool: Ad
 		client.readContract({ address: securityPool, abi: linksAbi, functionName: 'factory', blockNumber }),
 		client.readContract({ address: securityPool, abi: linksAbi, functionName: 'zoltar', blockNumber }),
 		client.readContract({ address: securityPool, abi: linksAbi, functionName: 'originUniverseId', blockNumber }),
-		client.readContract({ address: securityPool, abi: linksAbi, functionName: 'auctionDeployer', blockNumber }),
+		client.readContract({ address: securityPool, abi: linksAbi, functionName: 'repairAuctionDeployer', blockNumber }),
 		requireCanonicalSecurityPool(client, securityPool, blockNumber),
 	])
 	const infrastructure = getInfraContractAddresses()
 	if (getAddress(requireAddressValue(factoryValue, 'security pool factory')) !== getAddress(infrastructure.securityPoolFactory) || getAddress(requireAddressValue(zoltarValue, 'security pool protocol')) !== getAddress(infrastructure.zoltar)) throw new Error('Security pool uses unrecognized protocol contracts.')
-	if (getAddress(requireAddressValue(auctionDeployerValue, 'auction deployer')) !== getAddress(infrastructure.securityPoolAuctionDeployer)) throw new Error('Security pool uses an unrecognized auction deployer.')
+	if (getAddress(requireAddressValue(auctionDeployerValue, 'auction deployer')) !== getAddress(infrastructure.securityPoolRepairAuctionDeployer)) throw new Error('Security pool uses an unrecognized auction deployer.')
 	const stage = Number(requireIntegerLikeValue(stageValue, 'setup stage'))
 	if (stage < 0 || stage > 4) throw new Error('Invalid security pool setup stage.')
 	const originUniverseId = requireBigintValue(originValue, 'origin universe')
@@ -172,16 +172,16 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 		client.readContract({ address: snapshot.capitalLedger, abi: linksAbi, functionName: 'services', blockNumber }),
 		client.readContract({ address: snapshot.capitalLedger, abi: linksAbi, functionName: 'forkAuthority', blockNumber }),
 		client.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'questionCount', blockNumber }),
-		client.readContract({ address: snapshot.capitalLedger, abi: linksAbi, functionName: 'auctionDelegate', blockNumber }),
-		client.readContract({ address: securityPool, abi: linksAbi, functionName: 'auctionDeployer', blockNumber }),
+		client.readContract({ address: snapshot.capitalLedger, abi: linksAbi, functionName: 'repairAuctionDelegate', blockNumber }),
+		client.readContract({ address: securityPool, abi: linksAbi, functionName: 'repairAuctionDeployer', blockNumber }),
 		requireCanonicalSecurityPool(client, securityPool, blockNumber),
 	])
 	const feeStreams = requireAddressValue(feeStreamsValue, 'fee streams')
 	const lifecycle = requireAddressValue(lifecycleValue, 'capital lifecycle delegate')
-	const auctionDelegate = requireAddressValue(auctionDelegateValue, 'capital auction delegate')
+	const repairAuctionDelegate = requireAddressValue(auctionDelegateValue, 'capital auction delegate')
 	const infrastructure = getInfraContractAddresses()
 	if (getAddress(factory) !== getAddress(infrastructure.securityPoolFactory) || getAddress(zoltar) !== getAddress(infrastructure.zoltar)) throw new Error('Security pool uses unrecognized protocol contracts.')
-	if (getAddress(requireAddressValue(auctionDeployerValue, 'auction deployer')) !== getAddress(infrastructure.securityPoolAuctionDeployer)) throw new Error('Security pool uses an unrecognized auction deployer.')
+	if (getAddress(requireAddressValue(auctionDeployerValue, 'auction deployer')) !== getAddress(infrastructure.securityPoolRepairAuctionDeployer)) throw new Error('Security pool uses an unrecognized auction deployer.')
 	if (requireAddressValue(capitalServicesValue, 'capital services') !== getAddress(services)) throw new Error('Capital ledger uses another services authority.')
 	if (requireAddressValue(capitalForkValue, 'capital fork authority') !== getAddress(forkController)) throw new Error('Capital ledger uses another fork authority.')
 	const start = questionStart > questionCount ? 0n : questionStart
@@ -212,7 +212,7 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 	await Promise.all([
 		verifyCapitalLedgerClone(client, securityPool, snapshot.capitalLedger, universeId, snapshot.repToken, blockNumber),
 		verifyModule(client, lifecycle, lifecycleArtifact, lifecycle, 'capital lifecycle delegate', blockNumber, 'implementation'),
-		verifyModule(client, auctionDelegate, auctionDelegateArtifact, auctionDelegate, 'capital auction delegate', blockNumber, 'implementation'),
+		verifyModule(client, repairAuctionDelegate, auctionDelegateArtifact, repairAuctionDelegate, 'capital auction delegate', blockNumber, 'implementation'),
 		verifyCapitalModuleClone(client, snapshot.commitmentIndex, indexArtifact, snapshot.capitalLedger, 'commitment index', blockNumber),
 		verifyCapitalModuleClone(client, feeStreams, feesArtifact, snapshot.capitalLedger, 'capital fee streams', blockNumber),
 		verifyModule(client, settlement, settlementArtifact, securityPool, 'settlement engine', blockNumber),

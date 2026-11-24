@@ -179,15 +179,15 @@
 					>
 				</div>
 				<h3 id="winning-deposit-payout">Winning-deposit payout</h3>
-				<p>For an ordinary settlement, binding capital is the median outcome balance at settlement; no outcome balance can exceed the non-decision threshold. The reward-eligible cap is binding capital plus binding capital divided by <code>EXCESS_REWARD_WINDOW_DIVISOR</code> (2), so only the portion of winning deposits up to 1.5 × binding capital participates in the bonus. Of the binding capital, <code>3 / 5</code> funds the reward pool and <code>2 / 5</code> funds the escalation-haircut pool; both are shared pro rata across the reward-eligible principal, which is the smaller of the winning outcome balance and that cap.</p>
+				<p>For an ordinary settlement, binding capital is the median outcome balance at settlement; no outcome balance can exceed the non-decision threshold. The reward-eligible cap is binding capital plus binding capital divided by <code>EXCESS_REWARD_WINDOW_DIVISOR</code> (2), so only the portion of winning deposits up to 1.5 × binding capital participates in the escalation reward. Of the binding capital, <code>3 / 5</code> funds the reward pool and <code>2 / 5</code> funds the escalation-haircut pool; both are shared pro rata across the reward-eligible principal, which is the smaller of the winning outcome balance and that cap.</p>
 				<p>Let binding capital be <code>10 REP</code>, so the reward-eligible cap is <code>15 REP</code>, the reward pool is <code>6 REP</code>, and the escalation-haircut pool is <code>4 REP</code>. If the winning outcome holds <code>15 REP</code> and one deposit contributed <code>5 REP</code> as the final deposit, from cumulative 10 REP to 15 REP:</p>
 				<ul>
 					<li>Principal returned: <code>5 REP</code>.</li>
-					<li>Bonus: the difference of the rounded cumulative reward allocations at 15 REP and 10 REP is <code>2 REP</code>.</li>
+					<li>Escalation reward: the difference of the rounded cumulative reward allocations at 15 REP and 10 REP is <code>2 REP</code>.</li>
 					<li>Winning payout: <code>5 + 2 = 7 REP</code>.</li>
 					<li>Haircut burned: the difference of the rounded cumulative burn allocations is <code>1.333333333333333334 REP</code> at attoREP precision.</li>
 				</ul>
-				<p>A winning deposit position above <code>15 REP</code> returns its principal without a bonus. When the Zoltar fork threshold the game recorded at its last deposit is below the game's non-decision threshold, each cumulative payout is scaled by their ratio before taking the difference. If this game's non-decision threshold were <code>20 REP</code> and the fork threshold <code>16 REP</code>, the <code>7 REP</code> payout becomes <code>5.6 REP</code> after subtracting the two scaled cumulative payouts at attoREP precision. Fork scaling can therefore reduce the final transfer below principal.</p>
+				<p>A winning deposit position above <code>15 REP</code> returns its principal without an escalation reward. When the Zoltar fork threshold the game recorded at its last deposit is below the game's non-decision threshold, each cumulative payout is scaled by their ratio before taking the difference. If this game's non-decision threshold were <code>20 REP</code> and the fork threshold <code>16 REP</code>, the <code>7 REP</code> payout becomes <code>5.6 REP</code> after subtracting the two scaled cumulative payouts at attoREP precision. Fork scaling can therefore reduce the final transfer below principal.</p>
 			</article>
 		</main>
 		<script src="../../assets/js/responsiveDocs.js"></script>

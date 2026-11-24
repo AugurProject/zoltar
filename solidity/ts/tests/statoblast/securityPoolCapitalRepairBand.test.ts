@@ -141,7 +141,7 @@ describe('capital repairs never leave a position between the liquidation and con
 		expect(await healthy()).toBeGreaterThanOrEqual(195n * E)
 	})
 
-	test('a spare-limited conservative cure preserves an accrued auction bonus through the price band', async () => {
+	test('a spare-limited conservative cure preserves an accrued takeover reward through the price band', async () => {
 		await priceError(200_000n)
 		await price(E)
 		const principal = (10715n * E) / 100n

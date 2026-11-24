@@ -145,7 +145,7 @@ export const reportLifecycle = (input: ReportLifecycleInput): LifecycleState => 
 export type AuctionLifecycleInput = {
 	readonly started: boolean
 	readonly finalized: boolean
-	/** `AuctionStarted.opensAt` and `closesAt`, in Unix seconds. */
+	/** `RepairAuctionStarted.opensAt` and `closesAt`, in Unix seconds. */
 	readonly opensAt?: string | undefined
 	readonly closesAt?: string | undefined
 	readonly indexedTimestamp: string
@@ -153,7 +153,7 @@ export type AuctionLifecycleInput = {
 	readonly settlementCount: number
 }
 
-/** The bidding window from a stored `AuctionStarted(opensAt, closesAt, …)` event, in the field names auctionLifecycle reads. */
+/** The bidding window from a stored `RepairAuctionStarted(opensAt, closesAt, …)` event, in the field names auctionLifecycle reads. */
 export const auctionStartedWindow = (eventData: Readonly<Record<string, unknown>>) => ({
 	opensAt: typeof eventData['opensAt'] === 'string' ? eventData['opensAt'] : undefined,
 	closesAt: typeof eventData['closesAt'] === 'string' ? eventData['closesAt'] : undefined,
@@ -300,7 +300,7 @@ export type AuctionBidLevel = { readonly minimumAttoRepPerLot: unknown; readonly
 // The uniform-price auction fills bids in ascending minimumAttoRepPerLot order: a
 // lower REP-per-lot limit accepts less REP for the fixed collateral lot and is therefore the
 // better bid. Demand accumulates in that fill order. A lot is `lotAttoEth` of
-// collateral, known only once AuctionStarted is indexed.
+// collateral, known only once RepairAuctionStarted is indexed.
 export const auctionDemandCurve = (bids: readonly AuctionBidLevel[], lotAttoEth: string | undefined) => {
 	const lotSize = lotAttoEth === undefined ? undefined : positiveInteger(lotAttoEth, 'lotAttoEth')
 	const totals = new Map<bigint, bigint>()
@@ -388,7 +388,7 @@ export const capitalPositionRisk = (state: Readonly<Record<string, unknown>>): C
 			scannerReason: 'Pledged REP is below the requirement at the liquidation price and an adverse price observation has started the take-over clock. The ledger cures the position first and rejects the take-over while spare commitment covers the deficit',
 		}
 	// A cohort holds the unmaterialized winning bids of an auction; the ledger takes it over one materialized bid at a time.
-	if (state['belowLiquidationPrice'] === true && state['auctionCohort'] === true)
+	if (state['belowLiquidationPrice'] === true && state['repairAuctionCohort'] === true)
 		return { protocolState: 'under-collateralized', scannerSeverity: 'critical', scannerReason: `The auction cohort's pledged REP is below the requirement at the liquidation price; it is taken over per bid, once a bid is materialized.${stalePrice}` }
 	if (state['belowLiquidationPrice'] === true) return { protocolState: 'under-collateralized', scannerSeverity: 'critical', scannerReason: `Pledged REP is below the requirement at the liquidation price; a take-over additionally needs a fresh price and an adverse observation.${stalePrice}` }
 	const health = unsigned('healthFactorBps')

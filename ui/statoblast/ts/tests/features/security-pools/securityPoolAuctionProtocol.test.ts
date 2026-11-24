@@ -2,8 +2,12 @@ import { expect, test } from 'bun:test'
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { createMockReadClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { loadSecurityPoolAccount } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
-import { authenticateSecurityPoolAuctionVault, loadSecurityPoolBranchAuction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolAuction.js'
-import { statoblast_SecurityPoolAuction_SecurityPoolAuction as auctionArtifact, statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact, statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as vaultArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { authenticateSecurityPoolAuctionVault, loadSecurityPoolBranchAuction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolRepairAuction.js'
+import {
+	statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction as auctionArtifact,
+	statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as engineArtifact,
+	statoblast_SecurityPoolRepairAuctionVault_SecurityPoolRepairAuctionVault as vaultArtifact,
+} from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { auctionVaultRuntimeCode, predictAuctionVaultAddress } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { capitalClient, modules } from './capitalClient.js'
 import { capital, capitalSnapshot, index, owner, securityPool, token, unit } from './capitalFixture.js'
@@ -20,13 +24,13 @@ function fixture() {
 	source.codes.set(implementation, `0x${vaultArtifact.evm.deployedBytecode.object}`)
 	source.codes.set(vault, auctionVaultRuntimeCode(bindings))
 	const values: Record<string, unknown> = {
-		auctions: auction,
+		repairAuctions: auction,
 		engine,
 		vaultImplementation: implementation,
 		capital,
 		owner,
 		initialCapital: capital,
-		auction,
+		repairAuction: auction,
 		bidId: 3n,
 		bidIdForVault: 3n,
 		controller: auction,
@@ -50,7 +54,7 @@ function fixture() {
 		refundCreditAttoEth: 0n,
 		bids: [owner, vault, 12_000n, 1n, 3n * unit, false, false],
 		previewBid: { bidder: owner, vault, targetHealthBps: 12_000n, filledLots: 1n, usedAttoEth: unit, principalAttoRep: 10n * unit, refundAttoEth: 0n },
-		auctionPosition: { vault, positionId: 0n, principal: 10n * unit, commitment: unit, targetHealthFactorBps: 12_000n, liquidationStarted: 0n, materialized: false, earnedAttoEth: 7n, earnedAttoRep: 9n },
+		repairAuctionPosition: { vault, positionId: 0n, principal: 10n * unit, commitment: unit, targetHealthFactorBps: 12_000n, liquidationStarted: 0n, materialized: false, earnedAttoEth: 7n, earnedAttoRep: 9n },
 		clearing: [10n * unit, 1n, unit, 10n * unit, 0n, 0n, 0n, 1n, false],
 	}
 	const scoped = new Map<string, unknown>()
@@ -73,7 +77,7 @@ test('selected vault authentication uses its initial branch without scanning bid
 	expect(result).toEqual({ vault, bidder: owner, auction, initialCapital: capital, initialUniverse: 42n, bidId: 3n, filledLots: 1n, materialized: false })
 	expect(new Set(source.reads.map(read => read.blockNumber))).toEqual(new Set([10n]))
 	expect(source.reads.some(read => read.functionName === 'bidderBidCount' || read.functionName === 'bidderBidId')).toBe(false)
-	source.values['auctionPosition'] = { vault, positionId: 1n, principal: 10n * unit, commitment: unit, targetHealthFactorBps: 12_000n, liquidationStarted: 0n, materialized: true, earnedAttoEth: 7n, earnedAttoRep: 9n }
+	source.values['repairAuctionPosition'] = { vault, positionId: 1n, principal: 10n * unit, commitment: unit, targetHealthFactorBps: 12_000n, liquidationStarted: 0n, materialized: true, earnedAttoEth: 7n, earnedAttoRep: 9n }
 	expect((await authenticateSecurityPoolAuctionVault(source.client, securityPool, vault, 10n)).materialized).toBe(true)
 })
 
@@ -81,31 +85,31 @@ test('unopened or losing vaults need no nonexistent cohort position to recover a
 	const source = fixture()
 	source.values['finalized'] = false
 	expect(await authenticateSecurityPoolAuctionVault(source.client, securityPool, vault, 10n)).toMatchObject({ filledLots: 0n, materialized: false })
-	expect(source.reads.some(read => read.functionName === 'auctionPosition')).toBe(false)
+	expect(source.reads.some(read => read.functionName === 'repairAuctionPosition')).toBe(false)
 	source.values['finalized'] = true
 	source.values['previewBid'] = { bidder: owner, vault, filledLots: 0n }
 	expect(await authenticateSecurityPoolAuctionVault(source.client, securityPool, vault, 10n)).toMatchObject({ filledLots: 0n, materialized: false })
-	expect(source.reads.some(read => read.functionName === 'auctionPosition')).toBe(false)
+	expect(source.reads.some(read => read.functionName === 'repairAuctionPosition')).toBe(false)
 })
 
 test('vault binding rejects another owner, fork route, initial ledger, bid or compiled runtime', async () => {
 	for (const [address, getter, value] of [
 		[vault, 'owner', token],
-		[modules.fork, 'auctions', token],
+		[modules.fork, 'repairAuctions', token],
 		[securityPool, 'capitalLedger', token],
 		[auction, 'bidIdForVault', 4n],
 		[capital, 'securityPool', token],
-		[modules.auctionDelegate, 'implementation', token],
+		[modules.repairAuctionDelegate, 'implementation', token],
 		[index, 'capitalLedger', token],
 		[modules.fees, 'capitalLedger', token],
 		[capital, 'services', token],
-		[securityPool, 'auctionDeployer', token],
+		[securityPool, 'repairAuctionDeployer', token],
 	] as const) {
 		const source = fixture()
 		source.set(address, getter, value)
 		await expect(authenticateSecurityPoolAuctionVault(source.client, securityPool, vault, 10n)).rejects.toThrow()
 	}
-	for (const address of [vault, auction, engine, capital, modules.capitalImplementation, implementation, modules.fork, modules.lifecycle, modules.auctionDelegate, index, modules.indexImplementation, modules.fees, modules.feesImplementation, modules.services]) {
+	for (const address of [vault, auction, engine, capital, modules.capitalImplementation, implementation, modules.fork, modules.lifecycle, modules.repairAuctionDelegate, index, modules.indexImplementation, modules.fees, modules.feesImplementation, modules.services]) {
 		const source = fixture()
 		source.source.codes.set(address, '0x6000')
 		await expect(authenticateSecurityPoolAuctionVault(source.client, securityPool, vault, 10n)).rejects.toThrow('runtime')

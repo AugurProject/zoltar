@@ -9,7 +9,7 @@ const coordinator = getAddress('0x3333333333333333333333333333333333333333')
 
 for (const [entityType, contractKind] of [
 	['pool', 'questionLedger'],
-	['auction', 'securityPoolUniformPriceAuction'],
+	['auction', 'securityPoolUniformPriceRepairAuction'],
 	['escalation', 'escalationGame'],
 ] as const) {
 	test(`${entityType} snapshot reads match the compiled contract interfaces`, async () => {

@@ -2,11 +2,11 @@
  * The ledger applies this unpaid cure before quoting a takeover. No REP leaves the target during cure. It measures
  * health at the conservative repair price; `healthy` means the cure alone settles the takeover with no transfer.
  * A fill must restore conservative backing or leave the source below the liquidation price, open to repair:
- * `maximumPartialCommitment` is a search bound; each fill checks its exact post-bonus backing (#1570).
+ * `maximumPartialCommitment` is a search bound; each fill checks its exact post-takeover-reward backing (#1570).
  */
 export function securityPoolTakeoverSource(
 	snapshot: { timestamp?: bigint; conservativePrice: bigint; liquidationPrice: bigint; securityMultiplierBps: bigint; totalCommitmentAttoEth: bigint; demandAttoEth: bigint; economics: { minimumCommitmentAttoEth: bigint } },
-	position: { rep: bigint; commitment: bigint; batch: bigint; remainingCommitment: bigint; liquidationStarted?: bigint; liquidationAwarded?: bigint; liquidationElapsed?: bigint },
+	position: { rep: bigint; commitment: bigint; batch: bigint; remainingCommitment: bigint; liquidationStarted?: bigint; liquidationPenaltyPaid?: bigint; liquidationElapsed?: bigint },
 ) {
 	if (snapshot.conservativePrice <= 0n || snapshot.securityMultiplierBps <= 0n) throw new Error('Takeover requires a valid collateral price and multiplier')
 	const minimum = snapshot.economics.minimumCommitmentAttoEth
@@ -32,11 +32,11 @@ export function securityPoolTakeoverSource(
 	const retirementFulfilled = removed !== 0n && position.remainingCommitment !== 0n && commitment <= position.remainingCommitment
 	const started = position.liquidationStarted ?? 0n
 	const elapsed = position.liquidationElapsed ?? (started === 0n || snapshot.timestamp === undefined || snapshot.timestamp <= started ? 0n : snapshot.timestamp - started)
-	const paid = position.liquidationAwarded ?? 0n
-	const vested = ((position.rep + paid) * (elapsed < 3600n ? elapsed : 3600n)) / 3600n
+	const penaltyPaid = position.liquidationPenaltyPaid ?? 0n
+	const vestedPenalty = ((position.rep + penaltyPaid) * (elapsed < 3600n ? elapsed : 3600n)) / 3600n
 	const healthy = commitment <= supported
-	const maximumTakeoverAward = !healthy && vested > paid ? vested - paid : 0n
-	const repairSupported = ((((position.rep - maximumTakeoverAward) * 10_000n) / snapshot.securityMultiplierBps) * 10n ** 18n) / snapshot.conservativePrice
+	const maximumTakeoverReward = !healthy && vestedPenalty > penaltyPaid ? vestedPenalty - penaltyPaid : 0n
+	const repairSupported = ((((position.rep - maximumTakeoverReward) * 10_000n) / snapshot.securityMultiplierBps) * 10n ** 18n) / snapshot.conservativePrice
 	let maximumTakeoverCommitment = commitment > repairSupported ? commitment - repairSupported : 0n
 	if (maximumTakeoverCommitment !== 0n && commitment - maximumTakeoverCommitment < minimum) maximumTakeoverCommitment = commitment
 	let low = 0n
@@ -45,8 +45,8 @@ export function securityPoolTakeoverSource(
 	if (high > legalRemainder) high = legalRemainder
 	while (low < high) {
 		const middle = (low + high + 1n) / 2n
-		const award = maximumTakeoverCommitment === 0n ? 0n : (maximumTakeoverAward * middle) / maximumTakeoverCommitment
-		const postBacking = ((position.rep - award) * 10_000n) / snapshot.securityMultiplierBps
+		const takeoverReward = maximumTakeoverCommitment === 0n ? 0n : (maximumTakeoverReward * middle) / maximumTakeoverCommitment
+		const postBacking = ((position.rep - takeoverReward) * 10_000n) / snapshot.securityMultiplierBps
 		if (snapshot.liquidationPrice > 0n && commitment - middle > (postBacking * 10n ** 18n) / snapshot.liquidationPrice) low = middle
 		else high = middle - 1n
 	}
@@ -59,7 +59,7 @@ export function securityPoolTakeoverSource(
 		maximumPartialCommitment,
 		minimumCommitment: minimum,
 		maximumTakeoverCommitment,
-		maximumTakeoverAward,
+		maximumTakeoverReward,
 		commitment,
 		rep: position.rep,
 		batch: retirementFulfilled ? 0n : position.batch,
@@ -68,18 +68,21 @@ export function securityPoolTakeoverSource(
 	}
 }
 
-/** Clamp a requested fill to a legal source remainder and allocate only its share of the current bonus. */
-export function securityPoolTakeoverFill(source: { commitment: bigint; maximumTakeoverCommitment: bigint; maximumTakeoverAward: bigint }, requested: bigint, minimum: bigint) {
+/** Clamp a requested fill to a legal source remainder and allocate only its share of the current takeover reward. */
+export function securityPoolTakeoverFill(source: { commitment: bigint; maximumTakeoverCommitment: bigint; maximumTakeoverReward: bigint }, requested: bigint, minimum: bigint) {
 	let commitment = requested < source.maximumTakeoverCommitment ? requested : source.maximumTakeoverCommitment
 	if (source.commitment - commitment !== 0n && source.commitment - commitment < minimum) commitment = source.commitment > minimum ? source.commitment - minimum : 0n
-	const award = source.maximumTakeoverCommitment === 0n ? 0n : (source.maximumTakeoverAward * commitment) / source.maximumTakeoverCommitment
-	return { commitment, award }
+	const takeoverReward = source.maximumTakeoverCommitment === 0n ? 0n : (source.maximumTakeoverReward * commitment) / source.maximumTakeoverCommitment
+	return { commitment, takeoverReward }
 }
 
 /** Reject partial fills that would strand the source between liquidation and conservative prices. */
-export function securityPoolTakeoverTransfer(source: { commitment: bigint; maximumTakeoverCommitment: bigint; maximumTakeoverAward: bigint; maximumPartialCommitment: bigint; minimumCommitment: bigint; rep: bigint; conservativePrice: bigint; liquidationPrice: bigint; securityMultiplierBps: bigint }, requested: bigint) {
+export function securityPoolTakeoverTransfer(
+	source: { commitment: bigint; maximumTakeoverCommitment: bigint; maximumTakeoverReward: bigint; maximumPartialCommitment: bigint; minimumCommitment: bigint; rep: bigint; conservativePrice: bigint; liquidationPrice: bigint; securityMultiplierBps: bigint },
+	requested: bigint,
+) {
 	const fill = securityPoolTakeoverFill(source, requested, source.minimumCommitment)
-	const backing = (((source.rep - fill.award) * 10_000n) / source.securityMultiplierBps) * 10n ** 18n
+	const backing = (((source.rep - fill.takeoverReward) * 10_000n) / source.securityMultiplierBps) * 10n ** 18n
 	const remaining = source.commitment - fill.commitment
 	return fill.commitment === source.maximumTakeoverCommitment || remaining <= backing / source.conservativePrice || (source.liquidationPrice > 0n && remaining > backing / source.liquidationPrice) ? fill.commitment : undefined
 }

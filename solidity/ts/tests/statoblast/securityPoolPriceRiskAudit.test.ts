@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
-import { statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact, statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact } from '../../types/contractArtifact'
+import { statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact, statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as engineArtifact } from '../../types/contractArtifact'
 import { prepareSecurityPoolCollateralRepairAuction } from './securityPoolCollateralRepairAuctionFixture'
 import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 

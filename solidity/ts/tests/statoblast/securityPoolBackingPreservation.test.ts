@@ -17,7 +17,7 @@ describe('Statoblast: distress repair preserves pledged backing', () => {
 		return source
 	}
 
-	test('a full takeover request accounts for the pledged bonus while conserving custody', async () => {
+	test('a full takeover request accounts for the pledged takeover reward while conserving custody', async () => {
 		const source = await prepare()
 		const before = await f.client().readContract({ ...f.capital, functionName: 'totals' })
 		const keeper = f.client(2)
@@ -66,16 +66,16 @@ describe('Statoblast: distress repair preserves pledged backing', () => {
 		await expect(writeContractAndWait(keeper, () => keeper.writeContract({ ...f.capital, functionName: 'takeOver', args: [source, E, 0n, 0n] }))).rejects.toThrow('Adverse observation missing')
 	})
 
-	test('an award request above the entire source principal fails atomically', async () => {
+	test('a takeover reward request above the entire source principal fails atomically', async () => {
 		const source = await prepare()
 		await f.getAnvilWindowEthereum().advanceTime(3601n)
 		const before = await f.position(source)
-		await expect(writeContractAndWait(f.client(2), () => f.client(2).writeContract({ ...f.capital, functionName: 'takeOver', args: [source, 100n * E, 106n * E, 500n * E] }))).rejects.toThrow('Takeover award below minimum')
+		await expect(writeContractAndWait(f.client(2), () => f.client(2).writeContract({ ...f.capital, functionName: 'takeOver', args: [source, 100n * E, 106n * E, 500n * E] }))).rejects.toThrow('Takeover reward below minimum')
 		expect(await f.position(source)).toEqual(before)
 		expect((await f.owner(2)).freeAttoRep).toBe(500n * E)
 	})
 
-	test('receivers earn future fees and pledged bonus principal without acquiring past income', async () => {
+	test('receivers earn future fees and pledged takeover reward principal without acquiring past income', async () => {
 		const source = await prepare()
 		const keeper = f.client(2)
 		await writeContractAndWait(keeper, () => keeper.writeContract({ ...f.capital, functionName: 'takeOver', args: [source, 100n * E, 0n, 500n * E] }))

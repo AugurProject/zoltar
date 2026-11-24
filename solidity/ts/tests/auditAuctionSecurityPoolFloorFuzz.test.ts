@@ -7,11 +7,11 @@ import { writeContractAndWait, type WriteClient } from '../testSupport/simulator
 import { addRepToMigrationBalance, splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
 import { approveToken } from '../testSupport/simulator/utils/utilities'
 import {
-	statoblast_SecurityPoolAuction_SecurityPoolAuction as auctionArtifact,
-	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact,
+	statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction as auctionArtifact,
+	statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as engineArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
-	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as vaultArtifact,
+	statoblast_SecurityPoolRepairAuctionVault_SecurityPoolRepairAuctionVault as vaultArtifact,
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
 } from '../types/contractArtifact'
 
@@ -130,15 +130,15 @@ describe('audit fuzz: collateral repair auction closing-price floor on the full 
 			expect((await context.balance(context.capital)) - capitalRepBefore).toBe(expected.sold)
 			const refunds = bids.reduce((sum, bid) => sum + (bid.lots - (expected.fills.get(bid.id) ?? 0n)) * lot, 0n)
 			expect(await collateralBalance(context.owner, fixture.securityPool, context.engine)).toBe(refunds)
-			const cohort = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionCohort' })
+			const cohort = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'repairAuctionCohort' })
 			expect(cohort[2]).toBe(expected.filled)
 			if (expected.filled !== 0n) expect(cohort[3]).toBe(expected.attoRepPerLot)
 			let roundingOwned = 0n
 			// Without any filled lot no cohort is installed and the per-bid ledger view is unavailable by construction.
-			if (expected.filled === 0n) await expect(context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [1n] })).rejects.toThrow('Auction capital unavailable')
+			if (expected.filled === 0n) await expect(context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'repairAuctionPosition', args: [1n] })).rejects.toThrow('Auction capital unavailable')
 			for (const bid of expected.filled === 0n ? [] : bids) {
 				const fill = expected.fills.get(bid.id) ?? 0n
-				const position = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [bid.id] })
+				const position = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'repairAuctionPosition', args: [bid.id] })
 				expect({ label, bid: bid.id, principal: position.principal, commitment: position.commitment, materialized: position.materialized }).toEqual({ label, bid: bid.id, principal: fill * expected.attoRepPerLot, commitment: fill * lot, materialized: false })
 				roundingOwned += position.earnedAttoRep
 				if (fill !== 0n && BigInt(position.liquidationStarted) !== 0n) throw new Error(`winner ${bid.id} is under an adverse observation (${position.liquidationStarted}, ${typeof position.liquidationStarted}) immediately after closing: ${label}`)
@@ -173,7 +173,7 @@ describe('audit fuzz: collateral repair auction closing-price floor on the full 
 				expect(position.rep).toBeGreaterThanOrEqual(await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'requiredRep', args: [position.commitment, 10_000n] }))
 			}
 			expect(roundingPaid).toBe(0n)
-			expect((await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionCohort' }))[2]).toBe(0n)
+			expect((await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'repairAuctionCohort' }))[2]).toBe(0n)
 			for (const bidder of [context.owner, context.other]) {
 				const owed = bids.filter(bid => bid.bidder === bidder).reduce((sum, bid) => sum + (bid.lots - (expected.fills.get(bid.id) ?? 0n)) * lot, 0n)
 				const mine = bids.filter(bid => bid.bidder === bidder)

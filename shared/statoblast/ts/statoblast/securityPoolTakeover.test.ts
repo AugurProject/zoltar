@@ -13,12 +13,12 @@ test('a position supporting zero commitment may still be removed entirely', () =
 	expect(securityPoolTakeoverSource(snapshot, { ...position, rep: 0n })).toMatchObject({ removed: unit, commitment: 0n, healthy: true })
 })
 
-test('half-hour quotes account for the source REP bonus before sizing the commitment transfer', () => {
+test('half-hour quotes account for the takeover reward from the provider before sizing the commitment transfer', () => {
 	const state = { ...snapshot, timestamp: 2800n, conservativePrice: unit, liquidationPrice: unit, securityMultiplierBps: 20_000n, totalCommitmentAttoEth: 100n * unit }
-	const target = { ...position, rep: 150n * unit, commitment: 100n * unit, liquidationStarted: 1000n, liquidationAwarded: 0n }
-	expect(securityPoolTakeoverSource(state, target)).toMatchObject({ maximumTakeoverAward: 75n * unit, maximumTakeoverCommitment: (625n * unit) / 10n })
-	const remainder = { ...target, rep: (1125n * unit) / 10n, commitment: (6875n * unit) / 100n, liquidationAwarded: (375n * unit) / 10n }
-	expect(securityPoolTakeoverSource(state, remainder)).toMatchObject({ maximumTakeoverAward: (375n * unit) / 10n, maximumTakeoverCommitment: (3125n * unit) / 100n })
+	const target = { ...position, rep: 150n * unit, commitment: 100n * unit, liquidationStarted: 1000n, liquidationPenaltyPaid: 0n }
+	expect(securityPoolTakeoverSource(state, target)).toMatchObject({ maximumTakeoverReward: 75n * unit, maximumTakeoverCommitment: (625n * unit) / 10n })
+	const remainder = { ...target, rep: (1125n * unit) / 10n, commitment: (6875n * unit) / 100n, liquidationPenaltyPaid: (375n * unit) / 10n }
+	expect(securityPoolTakeoverSource(state, remainder)).toMatchObject({ maximumTakeoverReward: (375n * unit) / 10n, maximumTakeoverCommitment: (3125n * unit) / 100n })
 })
 
 test('#1571 the cure measures health at the conservative repair price, not the liquidation price', () => {
@@ -50,10 +50,10 @@ test('#1570 a partial takeover may not leave the source between the liquidation 
 	expect(securityPoolTakeoverTransfer(source, source.maximumPartialCommitment + 1n)).toBeUndefined()
 })
 
-test('partial repair safety uses backing after its proportional bonus', () => {
+test('partial repair safety uses backing after its proportional takeover reward', () => {
 	const band = { ...snapshot, timestamp: 1900n, conservativePrice: 4421052631578947369n, liquidationPrice: 4n * unit, totalCommitmentAttoEth: 200n * unit, demandAttoEth: 200n * unit }
 	const source = securityPoolTakeoverSource(band, { rep: 400n * unit, commitment: 100n * unit, batch: 0n, remainingCommitment: 0n, liquidationStarted: 1000n })
-	expect(source.maximumTakeoverAward).toBe(100n * unit)
+	expect(source.maximumTakeoverReward).toBe(100n * unit)
 	expect(securityPoolTakeoverTransfer(source, 10n * unit)).toBe(10n * unit)
 	expect(securityPoolTakeoverTransfer(source, 20n * unit)).toBeUndefined()
 	expect(securityPoolTakeoverTransfer(source, 100n * unit)).toBe(source.maximumTakeoverCommitment)

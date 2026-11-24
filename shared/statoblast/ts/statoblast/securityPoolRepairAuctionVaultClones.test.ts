@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, getCreate2Address, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { auctionVaultCreationCode, auctionVaultRuntimeCode, decodeAuctionVaultBindings, predictAuctionVaultAddress, verifyAuctionVaultCode } from './securityPoolAuctionVaultClones.js'
+import { auctionVaultCreationCode, auctionVaultRuntimeCode, decodeAuctionVaultBindings, predictAuctionVaultAddress, verifyAuctionVaultCode } from './securityPoolRepairAuctionVaultClones.js'
 
 const implementation: Address = '0x1111111111111111111111111111111111111111'
 const owner: Address = '0x2222222222222222222222222222222222222222'

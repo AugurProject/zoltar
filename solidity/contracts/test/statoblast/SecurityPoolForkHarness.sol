@@ -130,7 +130,7 @@ contract SecurityPoolForkHarness {
 	SecurityPoolSettlement public settlement;
 	SecurityPoolReporterLedger public reporters;
 	address public forkController;
-	address public immutable auctionDeployer;
+	address public immutable repairAuctionDeployer;
 	uint256 public constant minimumCommitmentAttoEth = 1e15;
 	uint256 public constant initialReportPriorityFeeAttoEthPerGas = 2e9;
 	struct Clock {
@@ -143,14 +143,14 @@ contract SecurityPoolForkHarness {
 	mapping(uint248 => SecurityPoolCapitalLedger) public capitalLedger;
 	mapping(uint248 => mapping(uint256 => IQuestionLedger)) private pools;
 
-	constructor(SecurityPoolForkZoltarMock protocol, SecurityPoolCapitalLedgerDeployer capitals, SecurityPoolCommitmentIndexDeployer indices, SecurityPoolCapitalFeeStreamsDeployer streams, address auctions) {
+	constructor(SecurityPoolForkZoltarMock protocol, SecurityPoolCapitalLedgerDeployer capitals, SecurityPoolCommitmentIndexDeployer indices, SecurityPoolCapitalFeeStreamsDeployer streams, address repairAuctions) {
 		collateralToken = new WETH9();
 		zoltar = protocol;
 		capitalDeployer = capitals;
 		capitalImplementation = capitals.createImplementation(Zoltar(address(protocol)), 10_500, 1e15, streams);
 		indexDeployer = indices;
 		streamsDeployer = streams;
-		auctionDeployer = auctions;
+		repairAuctionDeployer = repairAuctions;
 		clocks[0] = Clock(0, 0, true, true);
 	}
 	receive() external payable {}

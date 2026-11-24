@@ -401,13 +401,13 @@ postgresTest('renames v5 auction storage without losing canonical or orphan hist
 			await database.sql`
 				INSERT INTO logs (chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, topics, data, event_name, arguments, decode_status, summary, canonical)
 				VALUES (${migrationChainId}, ${txHash}, ${hash}, ${number}, 0, 0, ${address.toLowerCase()}, '[]'::jsonb, '0x', 'DeployQuestionLedger', (${deploymentArgs}::text)::jsonb, 'decoded', 'DeployQuestionLedger', ${canonical}),
-				(${migrationChainId}, ${txHash}, ${hash}, ${number}, 0, 1, ${discoveredAddress.toLowerCase()}, '[]'::jsonb, '0x', 'AuctionFinalized', (${auctionArgs}::text)::jsonb, 'decoded', 'AuctionFinalized', ${canonical})
+				(${migrationChainId}, ${txHash}, ${hash}, ${number}, 0, 1, ${discoveredAddress.toLowerCase()}, '[]'::jsonb, '0x', 'RepairAuctionFinalized', (${auctionArgs}::text)::jsonb, 'decoded', 'RepairAuctionFinalized', ${canonical})
 			`
 			await database.sql`
 				INSERT INTO pools (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, parent_address, universe_id, question_id, coordinator_address, share_token_address, security_multiplier_bps, initial_priority_fee_atto_eth_per_gas, canonical)
 				VALUES (${migrationChainId}, ${hash}, ${txHash}, 0, ${number}, ${address.toLowerCase()}, ${discoveredAddress.toLowerCase()}, 1, 2, ${address.toLowerCase()}, ${rediscoveredAddress.toLowerCase()}, 10500, 1, ${canonical})
 			`
-			await database.sql`INSERT INTO collateral_repair_auction_events (chain_id, block_hash, tx_hash, log_index, block_number, auction_address, event_name, event_data, canonical) VALUES (${migrationChainId}, ${hash}, ${txHash}, 1, ${number}, ${discoveredAddress.toLowerCase()}, 'AuctionFinalized', (${auctionArgs}::text)::jsonb, ${canonical})`
+			await database.sql`INSERT INTO collateral_repair_auction_events (chain_id, block_hash, tx_hash, log_index, block_number, auction_address, event_name, event_data, canonical) VALUES (${migrationChainId}, ${hash}, ${txHash}, 1, ${number}, ${discoveredAddress.toLowerCase()}, 'RepairAuctionFinalized', (${auctionArgs}::text)::jsonb, ${canonical})`
 		}
 		const historyBefore = await database.sql`SELECT block_number, auction_address, event_name, event_data, canonical, observed_at FROM collateral_repair_auction_events WHERE chain_id = ${migrationChainId} ORDER BY block_number`
 		const poolsBefore = await database.sql`SELECT pool_address, coordinator_address, canonical FROM pools WHERE chain_id = ${migrationChainId} ORDER BY block_number`

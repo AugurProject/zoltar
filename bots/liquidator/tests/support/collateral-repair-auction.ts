@@ -41,7 +41,7 @@ export async function distressedSecondWinner(context: RepairAuction, keeperOpera
 	const initialWinner = distressed.positions.find(position => position.auctionTarget?.bidId === secondBidId)
 	if (initialWinner === undefined) throw new Error('Second auction target disappeared')
 	expect(initialWinner.liquidationStarted).toBeGreaterThan(0n)
-	// Receiver-funded repair does not wait for a principal award.
+	// Receiver-funded repair does not wait for a takeover reward.
 	await context.mock.impersonateAccount(account.address)
 	const keeper = createWriteClient(context.mock, BigInt(account.address))
 	await writeContractAndWait(keeper, () => keeper.writeContract({ address: context.capital, abi: capitalAbi, functionName: 'setHealthTarget', args: [15_000n] }))

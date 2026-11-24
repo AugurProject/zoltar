@@ -3,7 +3,9 @@ import { parseAbi } from '@zoltar/core-shared/evm/ethereum'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { capitalUnit as E, useCapitalTestFixture } from './securityPoolCapitalTestFixture'
 
-const boundedAbi = parseAbi(['function takeOverWithBounds(uint96 id,uint256 commitment,uint256 minimumAward,uint256 maximumOwnRep,(uint256 maximumOwnerPrincipal,uint256 maximumOwnerCommitment,uint256 expectedTargetHealthFactorBps,uint256 expectedAcceptedPriceEpoch,uint96 expectedSourceBatch) bounds) returns(uint96)'])
+const boundedAbi = parseAbi([
+	'function takeOverWithBounds(uint96 id,uint256 commitment,uint256 minimumTakeoverReward,uint256 maximumOwnRep,(uint256 maximumOwnerPrincipal,uint256 maximumOwnerCommitment,uint256 expectedTargetHealthFactorBps,uint256 expectedAcceptedPriceEpoch,uint96 expectedSourceBatch) bounds) returns(uint96)',
+])
 
 describe('Statoblast: takeover owner consent bounds', () => {
 	const fixture = useCapitalTestFixture()

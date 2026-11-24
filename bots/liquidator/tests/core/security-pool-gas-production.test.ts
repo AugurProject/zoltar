@@ -226,7 +226,7 @@ describe('atomic unpaid cure and security pool takeover', () => {
 			const target = current.observation.positions[0]
 			if (target === undefined) throw new Error('Missing test target')
 			expect(target).toMatchObject({ rep: 105n * E, commitment: 100n * E, batch: retainedCommitment === 0n ? 0n : 1n, remainingCommitment: retainedCommitment })
-			expect(securityPoolTakeoverPlan(current.observation, target, settings, current.totalPrincipal, true).plan).toMatchObject({ commitment: 90n * E, minimumAward: 105n * E, ownFunding: 0n, expectedSourceBatch: 0n })
+			expect(securityPoolTakeoverPlan(current.observation, target, settings, current.totalPrincipal, true).plan).toMatchObject({ commitment: 90n * E, minimumTakeoverReward: 105n * E, ownFunding: 0n, expectedSourceBatch: 0n })
 			let submitted = 0
 			const submit: typeof submitCall = async (_wallet, _settings, _state, _pool, call) => {
 				await call.preSubmit?.()
@@ -277,7 +277,7 @@ describe('direct takeover against a holding-fee security pool', () => {
 		if (target === undefined) throw new Error('Missing keeper target')
 		const { plan, reason } = securityPoolTakeoverPlan(first, target, settings, first.managedPrincipalAttoRep ?? 0n, true)
 		if (plan === undefined) throw new Error(`Keeper could not quote the distressed position: ${reason}`)
-		expect(plan.minimumAward).toBe(0n)
+		expect(plan.minimumTakeoverReward).toBe(0n)
 		expect(plan.requestedCommitment).toBeGreaterThan(plan.commitment)
 		expect(plan.ownFunding).toBe(0n)
 		const refresh: typeof refreshSecurityPoolExecution = async () => {

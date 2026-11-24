@@ -226,7 +226,7 @@ describe('auditE2E: continuation games mix inherited and local claims across gen
 		const r2Claims = snapshot[YES].filter(leaf => leaf.depositor === r2.account.address)
 		expect(r2Claims.map(leaf => leaf.game)).toEqual([game0, childA.game])
 		expect((await e2e.rep(AA, r2.account.address)) - (beforeAA.get(r2.account.address) ?? 0n)).toBe(total(r2Claims.map(leaf => expectedWinningClaim(leaf.amount, leaf.cumulative, bindingAA, balancesA[YES]).payout)))
-		// 120k of the 130k winning principal is reward eligible: 48k bonus, 32k burn.
+		// 120k of the 130k winning principal is reward eligible: 48k reward, 32k burn.
 		expect(130n * K + 48n * K - settledAA.paid).toBeLessThanOrEqual(4n)
 		expect(32n * K - settledAA.burn).toBeLessThanOrEqual(4n)
 		expect(supplyAA - (await e2e.supply(AA))).toBe(settledAA.burn)
@@ -283,7 +283,7 @@ describe('auditE2E: continuation games mix inherited and local claims across gen
 	})
 
 	test('the claim mirror caps rewards at one and a half times binding capital', () => {
-		// 100 winning REP against 40 binding: the first 60 REP share a 24 REP bonus and 16 REP burn.
+		// 100 winning REP against 40 binding: the first 60 REP share a 24 REP reward and 16 REP burn.
 		expect(expectedWinningClaim(30n, 30n, 40n, 100n)).toEqual({ payout: 42n, burn: 8n })
 		expect(expectedWinningClaim(40n, 70n, 40n, 100n)).toEqual({ payout: 52n, burn: 8n })
 		expect(expectedWinningClaim(30n, 100n, 40n, 100n)).toEqual({ payout: 30n, burn: 0n })

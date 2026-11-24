@@ -1,5 +1,5 @@
 import { collateralSpendContinuation } from './collateral-approval.ts'
-import { erc20Abi, securityPoolAuctionAbi, securityPoolForkCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
+import { erc20Abi, securityPoolRepairAuctionAbi, securityPoolForkCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
 import { erc20WalletDebit, erc20AllowanceEvidence, amount, choose, eligible, encodeStep, mixSeed, optionAmount, planBase } from '../planning.ts'
 import { inputInteger, inputMatches } from '../input-values.ts'
 import { timestampDeadlineHasRequiredSafety } from '../timing.ts'
@@ -42,7 +42,7 @@ export function auctionDefinition(kind: 'bid' | 'withdraw-refund'): OperationDef
 		id,
 		label: 'Bid in security pool collateral repair auction',
 		method: 'submitBid',
-		contract: 'SecurityPoolAuction',
+		contract: 'SecurityPoolRepairAuction',
 		classification: 'selectable',
 		ecosystem: 'statoblast',
 		risk: 'high',
@@ -77,7 +77,7 @@ export function auctionDefinition(kind: 'bid' | 'withdraw-refund'): OperationDef
 								}),
 							]
 						: []),
-					encodeStep({ abi: securityPoolAuctionAbi, args: [terms.lots, terms.minimum, terms.health], functionName: 'submitBid', id: 'bid', label: 'Bid collateral lots', to: auction.address, value: 0n, walletAssetDebits: [erc20WalletDebit(auction.collateralToken, terms.value, 'weth')] }),
+					encodeStep({ abi: securityPoolRepairAuctionAbi, args: [terms.lots, terms.minimum, terms.health], functionName: 'submitBid', id: 'bid', label: 'Bid collateral lots', to: auction.address, value: 0n, walletAssetDebits: [erc20WalletDebit(auction.collateralToken, terms.value, 'weth')] }),
 				],
 			})
 		},
@@ -121,14 +121,14 @@ function auctionLifecycle(kind: LifecycleKind): OperationDefinition {
 			priority: 'urgent',
 			risk: 'low',
 			snapshot,
-			steps: [encodeStep({ abi: kind === 'finalize' ? securityPoolForkCoordinatorAbi : securityPoolAuctionAbi, args, functionName: method, id: method, label, to: kind === 'finalize' ? auction.forkController : auction.address })],
+			steps: [encodeStep({ abi: kind === 'finalize' ? securityPoolForkCoordinatorAbi : securityPoolRepairAuctionAbi, args, functionName: method, id: method, label, to: kind === 'finalize' ? auction.forkController : auction.address })],
 		})
 	}
 	return {
 		id,
 		label,
 		method,
-		contract: kind === 'finalize' ? 'SecurityPoolForkCoordinator' : 'SecurityPoolAuction',
+		contract: kind === 'finalize' ? 'SecurityPoolForkCoordinator' : 'SecurityPoolRepairAuction',
 		classification: 'lifecycle-obligation',
 		ecosystem: 'statoblast',
 		risk: 'low',

@@ -212,7 +212,7 @@ function vaultView(vault: VaultPosition, multiplierBps?: bigint, price?: bigint)
 
 function candidateView(candidate: LiquidationCandidate) {
 	return {
-		bonusValueEth: formatDecimalAmount(candidate.bonusValueAttoEth),
+		takeoverRewardValueEth: formatDecimalAmount(candidate.takeoverRewardValueAttoEth),
 		requestedDebtEth: formatDecimalAmount(candidate.requestedDebtAttoEth),
 		priceDistanceBps: candidate.priceDistanceBps.toString(),
 		vaultRepBackingToTransferRep: formatDecimalAmount(candidate.vaultAttoRepBackingToTransfer),

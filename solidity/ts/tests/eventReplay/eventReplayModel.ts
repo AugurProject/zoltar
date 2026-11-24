@@ -1032,7 +1032,7 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 }
 
 export function reduceAuctionEvent(state: ReplayState, log: ReplayLog) {
-	if (log.eventName === 'AuctionStarted') {
+	if (log.eventName === 'RepairAuctionStarted') {
 		state.auctions.set(log.emitter, {
 			opensAt: requireBigInt(log.args, 'opensAt'),
 			closesAt: requireBigInt(log.args, 'closesAt'),
@@ -1043,7 +1043,7 @@ export function reduceAuctionEvent(state: ReplayState, log: ReplayLog) {
 		})
 		return
 	}
-	if (log.eventName === 'AuctionFinalized') {
+	if (log.eventName === 'RepairAuctionFinalized') {
 		const auction = state.auctions.get(log.emitter) ?? {}
 		auction.attoRepPerLot = requireBigInt(log.args, 'attoRepPerLot')
 		auction.filledLots = requireBigInt(log.args, 'filledLots')

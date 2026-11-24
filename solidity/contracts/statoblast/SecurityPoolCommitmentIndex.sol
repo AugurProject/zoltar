@@ -170,7 +170,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// @notice Materialize an exact share of an active auction cohort without
 	/// granting a new liquidation clock. Custody and past cohort fees are handled
 	/// by the controller; this operation moves only principal and commitment.
-	function splitAuctionPosition(uint96 id, address receiver, uint256 rep, uint256 commitment) external onlyCapitalLedger operational returns (uint96 receiverId) {
+	function splitRepairAuctionPosition(uint96 id, address receiver, uint256 rep, uint256 commitment) external onlyCapitalLedger operational returns (uint96 receiverId) {
 		_touch(id);
 		Position storage source = positions[id];
 		Node storage leaf = nodes[source.node];
@@ -368,45 +368,47 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 			(currentBatch == 0 ? 0 : _eligible(roots[currentBatch], acceptedPrice)) +
 			_eligible(roots[nextBatch], acceptedPrice);
 	}
-	struct LiquidationAward {
+	struct LiquidationPenalty {
 		uint48 started;
-		uint256 rep;
+		uint256 paidAttoRep;
 	}
-	mapping(uint96 => LiquidationAward) private liquidationAwards;
+	mapping(uint96 => LiquidationPenalty) private liquidationPenalties;
 	uint256 public constant LIQUIDATION_AUCTION_DURATION = 1 hours;
 
-	function liquidationAwarded(uint96 id) public view returns (uint256) {
+	function liquidationPenaltyPaid(uint96 id) public view returns (uint256) {
 		return
-			liquidationAwards[id].started == observationTimes[_distressObservation(id)] ? liquidationAwards[id].rep : 0;
+			liquidationPenalties[id].started == observationTimes[_distressObservation(id)]
+				? liquidationPenalties[id].paidAttoRep
+				: 0;
 	}
 
-	/// @notice Cure at the conservative price, then quote a bonus-funded repair.
-	/// The pre-cure observation retains auction age even if a spare-limited cure
+	/// @notice Cure at the conservative price, then quote a repair funded by the takeover reward.
+	/// The pre-cure observation retains liquidation auction age even if a spare-limited cure
 	/// temporarily brings the source between the liquidation and repair prices.
 	function takeover(uint96 id, uint96 cohort, address receiver, uint256 requested, uint256 minimumCommitment, uint256 demand, uint256 price, uint256 repairPrice, uint256 multiplier)
 		external
 		onlyCapitalLedger
 		operational
-		returns (Cure memory cured, Account memory source, uint256 commitment, uint256 award, uint256 debit)
+		returns (Cure memory cured, Account memory source, uint256 commitment, uint256 takeoverReward, uint256 debit)
 	{
 		uint64 observation = _distressObservation(id);
 		require(observation != 0, 'Adverse observation missing');
 		uint48 started = observationTimes[observation];
 		uint256 elapsed = block.timestamp - started;
-		uint256 paid = liquidationAwarded(id);
+		uint256 penaltyPaid = liquidationPenaltyPaid(id);
 		source = accountOf(id);
 		require(source.owner != receiver && source.maxHealthyPrice < price, 'Position does not need takeover');
 		require(requested > 0 && requested <= source.commitment, 'Invalid takeover commitment');
-		require(id != cohort, 'Materialize an individual auction vault');
+		require(id != cohort, 'Materialize an individual repair auction vault');
 		cured = cure(id, repairPrice, multiplier, minimumCommitment, demand, 0, false);
 		source = accountOf(id);
-		// Minimum-size commitments can be replaced: unawarded REP is returned to
+		// Minimum-size commitments can be replaced: REP not paid as a takeover reward returns to
 		// the source owner's free principal rather than transferred to the receiver.
 		cured.settled = cured.removed != 0 && (source.commitment == 0 || source.maxHealthyPrice >= repairPrice);
 		if (cured.settled) return (cured, source, 0, 0, 0);
-		uint256 vested = Math.mulDiv(source.rep + paid, Math.min(elapsed, LIQUIDATION_AUCTION_DURATION), LIQUIDATION_AUCTION_DURATION);
-		uint256 offered = vested > paid ? vested - paid : 0;
-		uint256 supported = Math.mulDiv(Math.mulDiv(source.rep - offered, 10_000, multiplier), 1e18, repairPrice);
+		uint256 vestedPenalty = Math.mulDiv(source.rep + penaltyPaid, Math.min(elapsed, LIQUIDATION_AUCTION_DURATION), LIQUIDATION_AUCTION_DURATION);
+		uint256 availableTakeoverReward = vestedPenalty > penaltyPaid ? vestedPenalty - penaltyPaid : 0;
+		uint256 supported = Math.mulDiv(Math.mulDiv(source.rep - availableTakeoverReward, 10_000, multiplier), 1e18, repairPrice);
 		uint256 fullCommitment = source.commitment - Math.min(source.commitment, supported);
 		if (source.commitment - fullCommitment < minimumCommitment) fullCommitment = source.commitment;
 		require(fullCommitment != 0, 'Position does not need takeover');
@@ -414,11 +416,11 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		if (source.commitment - commitment != 0 && source.commitment - commitment < minimumCommitment)
 			commitment = source.commitment - Math.min(source.commitment, minimumCommitment);
 		require(commitment != 0, 'Takeover commitment below minimum');
-		award = Math.mulDiv(offered, commitment, fullCommitment);
-		uint256 remainingBacking = Math.mulDiv(source.rep - award, 10_000, multiplier);
+		takeoverReward = Math.mulDiv(availableTakeoverReward, commitment, fullCommitment);
+		uint256 remainingBacking = Math.mulDiv(source.rep - takeoverReward, 10_000, multiplier);
 		require(commitment == fullCommitment || source.commitment - commitment <= Math.mulDiv(remainingBacking, 1e18, repairPrice) || source.commitment - commitment > Math.mulDiv(remainingBacking, 1e18, price), 'Takeover would strand source between prices');
-		debit = commitment == source.commitment ? source.rep : award;
-		liquidationAwards[id] = LiquidationAward(started, paid + award);
+		debit = commitment == source.commitment ? source.rep : takeoverReward;
+		liquidationPenalties[id] = LiquidationPenalty(started, penaltyPaid + takeoverReward);
 	}
 	function requiredRep(uint256 commitment, uint256 price, uint256 multiplier, uint256 health) public pure returns (uint256) {
 		require(health >= 10_000 && price > 0, 'Invalid health or price');

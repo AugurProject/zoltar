@@ -4,7 +4,7 @@ pragma solidity 0.8.35;
 /// @notice The security pool auction controller authenticates one immutable bid
 /// owner and its exact winning lots. Fee amounts are accounting only: their
 /// assets stay in capital custody.
-interface ISecurityPoolAuctionCapital {
+interface ISecurityPoolRepairAuctionCapital {
 	struct BidPosition {
 		address vault;
 		uint256 targetHealthFactorBps;

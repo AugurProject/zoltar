@@ -147,7 +147,7 @@ describe('Statoblast: owner-wide deposited collateral', () => {
 		expect(laterAlice).toBe(laterBob)
 	})
 
-	test('a partial repair transfers a proportional pledged bonus without changing custody', async () => {
+	test('a partial repair transfers a proportional pledged takeover reward without changing custody', async () => {
 		await deposit(alice, 105n * E)
 		await deposit(keeper, 200n * E)
 		const id = await authorize(alice, 100n * E)

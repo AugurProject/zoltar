@@ -15,7 +15,7 @@ import { securityPoolObservation, securityPoolSettings, unit } from '../support/
 
 const abi = [
 	parseAbiItem('function depositFor(address owner,uint256 amount)'),
-	parseAbiItem('function takeOverWithBounds(uint96 id,uint256 commitment,uint256 minimumAward,uint256 maximumOwnRep,(uint256 maximumOwnerPrincipal,uint256 maximumOwnerCommitment,uint256 expectedTargetHealthFactorBps,uint256 expectedAcceptedPriceEpoch,uint96 expectedSourceBatch) bounds) returns (uint96)'),
+	parseAbiItem('function takeOverWithBounds(uint96 id,uint256 commitment,uint256 minimumTakeoverReward,uint256 maximumOwnRep,(uint256 maximumOwnerPrincipal,uint256 maximumOwnerCommitment,uint256 expectedTargetHealthFactorBps,uint256 expectedAcceptedPriceEpoch,uint96 expectedSourceBatch) bounds) returns (uint96)'),
 ] as const
 const confirmed: Hex = `0x${'1'.repeat(64)}`
 function fixture() {
@@ -123,7 +123,7 @@ test('security pool lifecycle needs only REP approval, deposit and bounded acqui
 	expect(fixtureValue.calls).toHaveLength(3)
 })
 
-test('a healing cure is one transaction that asks for no award, consents to no exposure and leaves takeover funding recorded', async () => {
+test('a healing cure is one transaction that asks for no takeover reward, consents to no exposure and leaves takeover funding recorded', async () => {
 	const fixtureValue = fixture()
 	const { observation } = fixtureValue
 	const position = observation.positions[0]
@@ -141,7 +141,7 @@ test('a healing cure is one transaction that asks for no award, consents to no e
 		functionName: 'takeOverWithBounds',
 		args: [1n, 100n * unit, 0n, 0n, { maximumOwnerPrincipal: 0n, maximumOwnerCommitment: 0n, expectedTargetHealthFactorBps: 15_000n, expectedAcceptedPriceEpoch: 3n, expectedSourceBatch: 0n }],
 	})
-	expect(call.label).toBe('Cure security pool position 1 without an award')
+	expect(call.label).toBe('Cure security pool position 1 without a takeover reward')
 	expect(call.securityPoolFunding).toBeUndefined()
 	// If the spare is gone before signing, the target is a paid takeover and the cure is not sent.
 	const drifted = fixture()
@@ -277,7 +277,7 @@ test('virtual winner takeover uses the bid API and rejects materialization or id
 	const call = f.calls[0]
 	if (call === undefined) throw new Error('Missing auction takeover')
 	expect(decodeFunctionData({ abi: securityPoolCapitalLedgerAbi, data: call.data })).toMatchObject({
-		functionName: 'takeOverAuctionBid',
+		functionName: 'takeOverRepairAuctionBid',
 		args: [44n, 100n * unit, 99n * unit, 100n * unit, { maximumOwnerPrincipal: 1000n * unit, maximumOwnerCommitment: 1000n * unit, expectedTargetHealthFactorBps: 15_000n, expectedAcceptedPriceEpoch: 3n, expectedSourceBatch: 0n }],
 	})
 	expect(call.label).toContain('auction bid 44')

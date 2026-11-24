@@ -43,14 +43,14 @@ type TakeoverSnapshot = Pick<
 
 async function loadTarget(snapshot: TakeoverSnapshot, id: bigint) {
 	const client = createConnectedReadClient()
-	const [position, started, epoch, awarded, elapsed] = await Promise.all([
+	const [position, started, epoch, penaltyPaid, elapsed] = await Promise.all([
 		client.readContract({ address: snapshot.commitmentIndex, abi: index.abi, functionName: 'accountOf', args: [id], blockNumber: snapshot.blockNumber }),
 		client.readContract({ address: snapshot.capitalLedger, abi: capital.abi, functionName: 'liquidationStarted', args: [id], blockNumber: snapshot.blockNumber }),
 		client.readContract({ address: snapshot.capitalLedger, abi: capital.abi, functionName: 'acceptedPriceEpoch', blockNumber: snapshot.blockNumber }),
-		client.readContract({ address: snapshot.capitalLedger, abi: capital.abi, functionName: 'liquidationAwarded', args: [id], blockNumber: snapshot.blockNumber }),
+		client.readContract({ address: snapshot.capitalLedger, abi: capital.abi, functionName: 'liquidationPenaltyPaid', args: [id], blockNumber: snapshot.blockNumber }),
 		client.readContract({ address: snapshot.capitalLedger, abi: capital.abi, functionName: 'liquidationElapsed', args: [id], blockNumber: snapshot.blockNumber }),
 	])
-	return { position, started, epoch, awarded, elapsed }
+	return { position, started, epoch, penaltyPaid, elapsed }
 }
 
 export function SecurityPoolTakeover({ model, actions }: { model: { snapshot: TakeoverSnapshot | undefined }; actions: Pick<SecurityPoolActions, 'ownerReason' | 'scope' | 'busy' | 'runSecurityPoolAction'> }) {
@@ -90,7 +90,7 @@ export function SecurityPoolTakeover({ model, actions }: { model: { snapshot: Ta
 	}, [key])
 	const loaded = target.value?.key === key ? target.value : undefined
 	const preview = loaded?.value
-	const source = snapshot !== undefined && preview !== undefined && snapshot.liquidationPrice > 0n ? securityPoolTakeoverSource(snapshot, { ...preview.position, liquidationStarted: preview.started, liquidationAwarded: preview.awarded, liquidationElapsed: preview.elapsed }) : undefined
+	const source = snapshot !== undefined && preview !== undefined && snapshot.liquidationPrice > 0n ? securityPoolTakeoverSource(snapshot, { ...preview.position, liquidationStarted: preview.started, liquidationPenaltyPaid: preview.penaltyPaid, liquidationElapsed: preview.elapsed }) : undefined
 	const commitment = securityPoolAmountOrUndefined(commitmentInput.value, snapshot?.collateral.decimals ?? 18)
 	const maximumOwnRep = securityPoolAmountOrUndefined(ownInput.value)
 	const maximumOwnerPrincipal = securityPoolAmountOrUndefined(principalInput.value)
@@ -100,7 +100,7 @@ export function SecurityPoolTakeover({ model, actions }: { model: { snapshot: Ta
 	if (reason === undefined && preview === undefined) reason = loaded?.error ?? copy.loading
 	if (reason === undefined && snapshot !== undefined && (snapshot.forkTime !== 0n || snapshot.frozen || snapshot.importing)) reason = copy.inactive
 	const distressed = preview !== undefined && snapshot !== undefined && preview.position.owner !== snapshot.owner && preview.position.commitment !== 0n && preview.position.maxHealthyPrice < snapshot.liquidationPrice && preview.started !== 0n
-	// Auction awards remain pledged in the receiver vault. A preliminary cure that restores health stands without a transfer.
+	// Takeover rewards remain pledged in the receiver vault. A preliminary cure that restores health stands without a transfer.
 	const curable = distressed && source?.healthy === true && source.removed !== 0n
 	let cureReason = reason
 	if (reason === undefined && (!distressed || (source?.healthy === true && !curable))) reason = cureReason = copy.notEligible
@@ -109,9 +109,9 @@ export function SecurityPoolTakeover({ model, actions }: { model: { snapshot: Ta
 	if (cureReason === undefined && !curable) cureReason = copy.takeOverInstead
 	if (reason === undefined && (commitment === undefined || commitment === 0n || maximumOwnRep === undefined || maximumOwnerPrincipal === undefined || maximumOwnerCommitment === undefined)) reason = copy.enterBounds
 	if (reason === undefined && snapshot !== undefined && source !== undefined && commitment !== undefined && maximumOwnRep !== undefined && maximumOwnerPrincipal !== undefined && maximumOwnerCommitment !== undefined) {
-		const { commitment: transferred, award } = securityPoolTakeoverFill(source, commitment, snapshot.economics.minimumCommitmentAttoEth)
+		const { commitment: transferred, takeoverReward } = securityPoolTakeoverFill(source, commitment, snapshot.economics.minimumCommitmentAttoEth)
 		const receiver = snapshot.positions.find(position => position.id === snapshot.ownerAccount.positionId)
-		const principal = (receiver?.rep ?? 0n) + snapshot.ownerAccount.freeAttoRep + award
+		const principal = (receiver?.rep ?? 0n) + snapshot.ownerAccount.freeAttoRep + takeoverReward
 		const totalCommitment = (receiver?.commitment ?? 0n) + transferred
 		if (securityPoolTakeoverTransfer(source, commitment) === undefined) reason = copy.strandsSource
 		else if (snapshot.ownerAccount.positionId !== 0n && receiver === undefined) reason = copy.receiverMissing
@@ -145,7 +145,7 @@ export function SecurityPoolTakeover({ model, actions }: { model: { snapshot: Ta
 				capitalLedger: snapshot.capitalLedger,
 				positionId: id,
 				commitment,
-				minimumAward: securityPoolTakeoverFill(source, commitment, snapshot.economics.minimumCommitmentAttoEth).award,
+				minimumTakeoverReward: securityPoolTakeoverFill(source, commitment, snapshot.economics.minimumCommitmentAttoEth).takeoverReward,
 				maximumOwnRep,
 				bounds: { maximumOwnerPrincipal, maximumOwnerCommitment, expectedTargetHealthFactorBps: snapshot.ownerAccount.targetHealthFactorBps || 10_000n, expectedAcceptedPriceEpoch: preview.epoch, expectedSourceBatch: source.batch },
 			}),
@@ -177,8 +177,8 @@ export function SecurityPoolTakeover({ model, actions }: { model: { snapshot: Ta
 				<MetricField label={copy.repairLimit}>
 					<CurrencyValue value={source?.maximumTakeoverCommitment} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 				</MetricField>
-				<MetricField label={copy.bonus}>
-					<CurrencyValue value={source?.maximumTakeoverAward} suffix={common.rep} />
+				<MetricField label={copy.takeoverReward}>
+					<CurrencyValue value={source?.maximumTakeoverReward} suffix={copy.takeoverRewardUnit} />
 				</MetricField>
 				<MetricField label={copy.started}>
 					<TimestampValue timestamp={preview?.started} relative={false} zeroText={copy.notStarted} />

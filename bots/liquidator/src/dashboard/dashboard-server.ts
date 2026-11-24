@@ -166,7 +166,7 @@ function publicPool(value: unknown) {
 	const candidates = source['candidates']
 	pool['candidateCount'] = Array.isArray(candidates) ? candidates.length : 0
 	const bestCandidate = Array.isArray(candidates) ? record(candidates[0]) : undefined
-	if (typeof bestCandidate?.['bonusValueEth'] === 'string') pool['bestCandidateBonusValueEth'] = bestCandidate['bonusValueEth']
+	if (typeof bestCandidate?.['takeoverRewardValueEth'] === 'string') pool['bestCandidateTakeoverRewardValueEth'] = bestCandidate['takeoverRewardValueEth']
 	return pool
 }
 

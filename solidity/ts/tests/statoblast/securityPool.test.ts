@@ -73,7 +73,7 @@ describe('Statoblast: central security pool and native question integration', ()
 		// which is what stops a factory whose pinned deployers are not all deployed yet from creating a security pool.
 		const construct = (modules: typeof deployers) =>
 			deployContract(fixture.owner(), encodeDeployData({ abi: securityPoolArtifact.abi, bytecode: creationCode, args: [infrastructure.securityPoolFactory, modules, origin(10_000_000_000n), maximumQuestionHorizonSeconds, fixture.questionAdmissionPolicy, securityPoolEconomics] }))
-		for (const key of Object.keys(deployers)) await expect(construct({ ...deployers, [key]: fixture.owner().account.address })).rejects.toThrow(key === 'auctions' ? 'Auction deployer has no code' : 'Security pool deployer has no code')
+		for (const key of Object.keys(deployers)) await expect(construct({ ...deployers, [key]: fixture.owner().account.address })).rejects.toThrow(key === 'repairAuctions' ? 'Auction deployer has no code' : 'Security pool deployer has no code')
 	})
 
 	test('security pool setup creates its shared capital and oracle without any seed question ledger', async () => {

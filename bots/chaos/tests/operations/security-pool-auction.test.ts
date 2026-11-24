@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
-import { erc20Abi, securityPoolAuctionAbi, securityPoolForkCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
+import { erc20Abi, securityPoolRepairAuctionAbi, securityPoolForkCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
 import { auctionFixture } from '../support/security-pool-fixtures.ts'
 import { auctionDefinition, startCollateralRepairAuction, finalizeCollateralRepairAuctionRoute, refundLosingAuctionBids, settleAuctionBids } from '../../src/operations/statoblast/auctions.ts'
 import { address, hash, snapshotFixture, planningOptionsFixture } from './fixture.ts'
@@ -15,7 +15,7 @@ test('security pool auction bids exact collateral lots and chosen REP price on t
 	if (step === undefined) throw new Error('Missing auction bid')
 	expect(step.to).toBe(auction.address)
 	expect(step.value).toBe('0')
-	expect(decodeFunctionData({ abi: securityPoolAuctionAbi, data: step.data }).args).toEqual([2n, 15n, 10000n])
+	expect(decodeFunctionData({ abi: securityPoolRepairAuctionAbi, data: step.data }).args).toEqual([2n, 15n, 10000n])
 	expect(operation.buildPlan(snapshot, { ...options, maxEthSpendAttoEth: 1999n.toString() })).toBeUndefined()
 	expect(operation.buildPlan(snapshot, { ...options, operationInputs: { minimumAttoRepPerLot: 14n.toString() } })).toBeUndefined()
 	expect(operation.buildPlan(snapshot, { ...options, allowHighRisk: false })).toBeUndefined()
@@ -30,7 +30,7 @@ test('losing bids can settle before closing and finalized refunds use the same n
 	const step = plan?.steps[0]
 	if (step === undefined) throw new Error('Missing refund settlement')
 	expect(plan?.metadata['bidId']).toBe('1')
-	expect(decodeFunctionData({ abi: securityPoolAuctionAbi, data: step.data })).toMatchObject({ functionName: 'settleRefund', args: [1n] })
+	expect(decodeFunctionData({ abi: securityPoolRepairAuctionAbi, data: step.data })).toMatchObject({ functionName: 'settleRefund', args: [1n] })
 	auction.finalized = true
 	expect(refundLosingAuctionBids.buildPlan(snapshot, options)).toBeUndefined()
 	expect(settleAuctionBids.buildLifecyclePlans?.(snapshot, options)).toHaveLength(1)

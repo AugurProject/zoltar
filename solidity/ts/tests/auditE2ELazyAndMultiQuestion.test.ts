@@ -129,7 +129,7 @@ describe('auditE2E: lazy materialization and a second escalated question keep re
 		if (loser !== undefined) await expect(e2e.simulateInheritedClaim(owner, child.pool, NO, losing, loser, new SparseNullifierTree())).rejects.toThrow('Not winning outcome')
 		const supplyA = await e2e.supply(A)
 		const { paid, burn } = await e2e.claimEveryWinner(r6, child.pool, YES, leaves, median(balances), balances[YES])
-		// 70k principal, 30k bonus and 20k burn spend the whole 120k that survived the origin's surplus release.
+		// 70k principal, 30k reward and 20k burn spend the whole 120k that survived the origin's surplus release.
 		expect(100n * K - paid).toBeLessThanOrEqual(2n)
 		expect(supplyA - (await e2e.supply(A))).toBe(burn)
 		const residual = await e2e.gameBalance(child.game)

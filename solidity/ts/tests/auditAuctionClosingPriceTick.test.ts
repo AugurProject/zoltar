@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import { prepareSecurityPoolCollateralRepairAuction } from './statoblast/securityPoolCollateralRepairAuctionFixture'
 import {
 	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
-	statoblast_SecurityPoolAuction_SecurityPoolAuction as auctionArtifact,
-	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact,
+	statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction as auctionArtifact,
+	statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as engineArtifact,
 	statoblast_SecurityPoolSettlement_SecurityPoolSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,

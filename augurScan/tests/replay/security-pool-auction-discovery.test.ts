@@ -20,7 +20,7 @@ test('branch events discover the uniform engine, index its auction event and sam
 			...position,
 			address: engine,
 			logIndex: 1n,
-			topics: [keccak256(stringToHex('AuctionStarted(uint256,uint256,uint256,uint256,uint256,uint256)'))],
+			topics: [keccak256(stringToHex('RepairAuctionStarted(uint256,uint256,uint256,uint256,uint256,uint256)'))],
 			data: encodeAbiParameters(
 				Array.from({ length: 6 }, () => ({ type: 'uint256' })),
 				[100n, 200n, 1n, 100n, 200n, 2n],
@@ -35,7 +35,7 @@ test('branch events discover the uniform engine, index its auction event and sam
 			expect(request.blockNumber).toBe(10n)
 			reads.push(request.functionName)
 			const result = (address: `0x${string}`) => decodeFunctionResult({ abi: request.abi, functionName: request.functionName, data: encodeAbiParameters([{ type: 'address' }], [address]) })
-			if (request.address === controller && request.functionName === 'auctions') {
+			if (request.address === controller && request.functionName === 'repairAuctions') {
 				expect(Array.from(request.args ?? [])).toEqual([2n])
 				return result(auction)
 			}
@@ -60,13 +60,13 @@ test('branch events discover the uniform engine, index its auction event and sam
 			async addresses => logs.filter(log => addresses.includes(log.address)),
 			async () => header,
 		)
-		expect(result.contracts.get(auction.toLowerCase())?.kind).toBe('securityPoolAuction')
-		expect(result.contracts.get(engine.toLowerCase())?.kind).toBe('securityPoolUniformPriceAuction')
-		expect(reads).toEqual(['auctions', 'forkAuthority', 'engine', 'controller', 'securityPool', 'collateralToken'])
+		expect(result.contracts.get(auction.toLowerCase())?.kind).toBe('securityPoolRepairAuction')
+		expect(result.contracts.get(engine.toLowerCase())?.kind).toBe('securityPoolUniformPriceRepairAuction')
+		expect(reads).toEqual(['repairAuctions', 'forkAuthority', 'engine', 'controller', 'securityPool', 'collateralToken'])
 		const indexed = result.block.logs.find(log => log.address === engine)
 		if (indexed === undefined) throw new Error('Engine event was not indexed')
-		const started = projectionsFrom(indexed).flatMap(projection => (projection.type === 'domainEvent' && projection.domain === 'auction' && projection.semanticEventKind === 'AuctionStarted' ? [projection] : []))[0]
-		if (started === undefined) throw new Error('AuctionStarted was not projected')
+		const started = projectionsFrom(indexed).flatMap(projection => (projection.type === 'domainEvent' && projection.domain === 'auction' && projection.semanticEventKind === 'RepairAuctionStarted' ? [projection] : []))[0]
+		if (started === undefined) throw new Error('RepairAuctionStarted was not projected')
 		// The stored event data drives the operations catalog status: open from opensAt (100) until closesAt (200).
 		const stored = jsonRecord(JSON.parse(databaseJsonText(started.data)))
 		expect(auctionLifecycle({ started: true, finalized: false, ...auctionStartedWindow(stored), indexedTimestamp: '150', bidCount: 0, settlementCount: 0 })).toBe('Open')

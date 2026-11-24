@@ -72,8 +72,8 @@ async function assertEscalationRulesMatchContracts(): Promise<void> {
 	])
 	assert.match(
 		withdrawal,
-		/bonusAttoRep =\s*\(rewardEligibleDepositAttoRep \*\s*\(\(bindingCapitalAttoRep \* Constants\.ESCALATION_WINNER_BONUS_NUMERATOR\) \/\s*Constants\.ESCALATION_PAYOUT_DENOMINATOR\)\) \/ rewardEligiblePrincipalAttoRep;/,
-		'the bonus must share the reward pool pro rata across the reward-eligible principal',
+		/rewardAttoRep =\s*\(rewardEligibleDepositAttoRep \*\s*\(\(bindingCapitalAttoRep \* Constants\.ESCALATION_REWARD_NUMERATOR\) \/\s*Constants\.ESCALATION_PAYOUT_DENOMINATOR\)\) \/ rewardEligiblePrincipalAttoRep;/,
+		'the escalation reward must share the reward pool pro rata across the reward-eligible principal',
 	)
 	assert.match(
 		withdrawal,
@@ -87,13 +87,13 @@ async function assertEscalationRulesMatchContracts(): Promise<void> {
 	// Sanity-check the TypeScript port with a boundary the Solidity guarantees: a full-cap position pays the whole pool.
 	const wholeCap = computeOrdinaryWinningWithdrawal({ ...escalationPayoutExample, cumulativeAmountAttoRep: 15n * attoPrecision, depositAmountAttoRep: 15n * attoPrecision, winningOutcomeBalanceAttoRep: 15n * attoPrecision })
 	assert.equal(wholeCap.rewardEligiblePrincipalAttoRep, wholeCap.rewardEligibleCapAttoRep, 'a winning balance at the cap makes the principal equal the cap')
-	assert.equal(wholeCap.bonusAttoRep, wholeCap.rewardPoolAttoRep)
+	assert.equal(wholeCap.rewardAttoRep, wholeCap.rewardPoolAttoRep)
 	assert.equal(wholeCap.burnAttoRep, wholeCap.haircutPoolAttoRep)
 	// The pools are divided by the reward-eligible principal, not the cap. Exercise a winning balance below the cap so the
 	// two differ; the published divisor must follow the principal.
 	const belowCap = computeOrdinaryWinningWithdrawal({ ...escalationPayoutExample, cumulativeAmountAttoRep: 12n * attoPrecision, winningOutcomeBalanceAttoRep: 12n * attoPrecision })
 	assert.ok(belowCap.rewardEligiblePrincipalAttoRep < belowCap.rewardEligibleCapAttoRep, 'the below-cap case must make the principal smaller than the cap')
-	assert.equal(belowCap.bonusAttoRep, (12n * attoPrecision * belowCap.rewardPoolAttoRep) / belowCap.rewardEligiblePrincipalAttoRep - (7n * attoPrecision * belowCap.rewardPoolAttoRep) / belowCap.rewardEligiblePrincipalAttoRep, 'the bonus must divide by the reward-eligible principal')
+	assert.equal(belowCap.rewardAttoRep, (12n * attoPrecision * belowCap.rewardPoolAttoRep) / belowCap.rewardEligiblePrincipalAttoRep - (7n * attoPrecision * belowCap.rewardPoolAttoRep) / belowCap.rewardEligiblePrincipalAttoRep, 'the escalation reward must divide by the reward-eligible principal')
 	assert.equal(belowCap.burnAttoRep, (12n * attoPrecision * belowCap.haircutPoolAttoRep) / belowCap.rewardEligiblePrincipalAttoRep - (7n * attoPrecision * belowCap.haircutPoolAttoRep) / belowCap.rewardEligiblePrincipalAttoRep, 'the haircut must divide by the reward-eligible principal')
 }
 
@@ -101,7 +101,7 @@ async function assertGeneratedPagesRenderComputedValues(): Promise<void> {
 	const page = async (slug: string) => htmlToDocumentationText(await readFile(`docs/reference/contracts/${slug}.html`, 'utf8'))
 	const escalation = await page('escalationgame')
 	const payout = computeOrdinaryWinningWithdrawal(escalationPayoutExample)
-	for (const value of [payout.bonusAttoRep, payout.payoutAttoRep, payout.burnAttoRep, payout.scaledPayoutAttoRep]) {
+	for (const value of [payout.rewardAttoRep, payout.payoutAttoRep, payout.burnAttoRep, payout.scaledPayoutAttoRep]) {
 		assert.ok(escalation.includes(`${formatRep(value)} REP`), `EscalationGame page must render the computed ${formatRep(value)} REP`)
 	}
 	assert.match(escalation, /Accounting examples/)

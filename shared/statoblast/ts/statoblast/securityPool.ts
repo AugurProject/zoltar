@@ -166,8 +166,8 @@ export {
 	buildSecurityPoolAuctionVaultExecuteRequest,
 	buildSecurityPoolAuctionVaultDepositRequest,
 	type SecurityPoolAuctionBid,
-} from './securityPoolAuction.js'
+} from './securityPoolRepairAuction.js'
 /** @public Vault clone code and address derivation for external verifiers, fixtures and smart-account tooling. */
-export { auctionVaultCreationCode, auctionVaultRuntimeCode } from './securityPoolAuctionVaultClones.js'
-export { decodeAuctionVaultBindings, predictAuctionVaultAddress, verifyAuctionVaultCode } from './securityPoolAuctionVaultClones.js'
+export { auctionVaultCreationCode, auctionVaultRuntimeCode } from './securityPoolRepairAuctionVaultClones.js'
+export { decodeAuctionVaultBindings, predictAuctionVaultAddress, verifyAuctionVaultCode } from './securityPoolRepairAuctionVaultClones.js'
 export { boundCloneImplementation, boundCloneRuntimeCode, verifyBoundCloneCode, universeCloneBindings } from './securityPoolBoundClone.js'

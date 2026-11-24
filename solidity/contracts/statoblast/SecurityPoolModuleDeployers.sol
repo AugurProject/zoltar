@@ -5,7 +5,7 @@ import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { SecurityPoolBoundClones } from './SecurityPoolBoundClones.sol';
 import { SecurityPoolCapitalLifecycleDelegate } from './SecurityPoolCapitalLifecycleDelegate.sol';
-import { SecurityPoolCapitalAuctionDelegate } from './SecurityPoolCapitalAuctionDelegate.sol';
+import { SecurityPoolCapitalRepairAuctionDelegate } from './SecurityPoolCapitalRepairAuctionDelegate.sol';
 import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
 import { SecurityPoolCapitalFeeStreams } from './SecurityPoolCapitalFeeStreams.sol';
 import { SecurityPoolCommitmentIndex } from './SecurityPoolCommitmentIndex.sol';
@@ -25,7 +25,7 @@ contract SecurityPoolCapitalLedgerDeployer is SecurityPoolCreationCodeDeployer {
 
 	function createImplementation(Zoltar zoltar, uint256 multiplier, uint256 minimumCommitment, SecurityPoolCapitalFeeStreamsDeployer modules) external returns (SecurityPoolCapitalLedger) {
 		return
-			SecurityPoolCapitalLedger(_deploy(abi.encode(msg.sender, zoltar, multiplier, minimumCommitment, lifecycleDelegate, modules.auctionDelegate())));
+			SecurityPoolCapitalLedger(_deploy(abi.encode(msg.sender, zoltar, multiplier, minimumCommitment, lifecycleDelegate, modules.repairAuctionDelegate())));
 	}
 
 	function create(SecurityPoolCapitalLedger implementation, uint248 universeId) external returns (SecurityPoolCapitalLedger capital) {
@@ -44,7 +44,9 @@ contract SecurityPoolCommitmentIndexDeployer {
 	}
 }
 contract SecurityPoolCapitalFeeStreamsDeployer {
-	SecurityPoolCapitalAuctionDelegate public immutable auctionDelegate = new SecurityPoolCapitalAuctionDelegate();
+	SecurityPoolCapitalRepairAuctionDelegate
+		public
+		immutable repairAuctionDelegate = new SecurityPoolCapitalRepairAuctionDelegate();
 	SecurityPoolCapitalFeeStreams public immutable implementation = new SecurityPoolCapitalFeeStreams();
 
 	function create(address authority, uint48 timestamp, uint48 vestingDuration) external returns (SecurityPoolCapitalFeeStreams streams) {

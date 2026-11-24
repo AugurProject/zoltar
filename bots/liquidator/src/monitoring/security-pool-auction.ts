@@ -1,4 +1,4 @@
-import { securityPoolRuntimeIdentities, securityPoolCapitalLedgerAbi as capitalAbi, securityPoolAuctionAbi as auctionAbi, securityPoolUniformPriceAuctionAbi as engineAbi, securityPoolAuctionVaultAbi as vaultAbi } from '@zoltar/bot-shared/contracts/abi'
+import { securityPoolRuntimeIdentities, securityPoolCapitalLedgerAbi as capitalAbi, securityPoolRepairAuctionAbi as auctionAbi, securityPoolUniformPriceRepairAuctionAbi as engineAbi, securityPoolRepairAuctionVaultAbi as vaultAbi } from '@zoltar/bot-shared/contracts/abi'
 import { getAddress, parseAbiItem, type Address } from '@zoltar/bot-shared/ethereum'
 import { verifyRuntimeIdentity } from '@zoltar/bot-shared/monitoring/runtime-identity'
 import { verifyAuctionVaultCode, type SecurityPoolCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
@@ -11,7 +11,7 @@ export const securityPoolTarget = (position: SecurityPoolPosition): SecurityPool
 export function sameSecurityPoolTarget(first: SecurityPoolTarget, second: SecurityPoolTarget) {
 	return typeof first === 'bigint' || typeof second === 'bigint' ? first === second : first.auction === second.auction && first.bidId === second.bidId && first.vault === second.vault
 }
-const links = [parseAbiItem('function forkController() view returns (address)'), parseAbiItem('function auctions(uint248 universeId) view returns (address)')] as const
+const links = [parseAbiItem('function forkController() view returns (address)'), parseAbiItem('function repairAuctions(uint248 universeId) view returns (address)')] as const
 
 /** Follow only remaining winners at the same confirmed block; no losing-history scan. */
 export async function securityPoolAuctionPage(client: ReadClient, engine: Address, blockNumber: bigint, afterBidId: bigint, count: bigint, maximum: number) {
@@ -42,11 +42,11 @@ export async function authenticateSecurityPoolAuction(client: ReadClient, snapsh
 		client.readContract({ address: auction, abi: auctionAbi, functionName: 'vaultImplementation', blockNumber }),
 	])
 	if (typeof fork !== 'string') throw new Error('Security pool fork authority is invalid')
-	verifyRuntimeIdentity(await client.getCode({ address: auction, blockNumber }), securityPoolRuntimeIdentities.SecurityPoolAuction, 'security pool auction')
-	verifyRuntimeIdentity(await client.getCode({ address: engine, blockNumber }), securityPoolRuntimeIdentities.SecurityPoolUniformPriceAuction, 'auction engine')
-	verifyRuntimeIdentity(await client.getCode({ address: implementation, blockNumber }), securityPoolRuntimeIdentities.SecurityPoolAuctionVault, 'auction vault implementation')
+	verifyRuntimeIdentity(await client.getCode({ address: auction, blockNumber }), securityPoolRuntimeIdentities.SecurityPoolRepairAuction, 'security pool auction')
+	verifyRuntimeIdentity(await client.getCode({ address: engine, blockNumber }), securityPoolRuntimeIdentities.SecurityPoolUniformPriceRepairAuction, 'auction engine')
+	verifyRuntimeIdentity(await client.getCode({ address: implementation, blockNumber }), securityPoolRuntimeIdentities.SecurityPoolRepairAuctionVault, 'auction vault implementation')
 	const [registered, controller, count, closed] = await Promise.all([
-		client.readContract({ address: getAddress(fork), abi: links, functionName: 'auctions', args: [snapshot.universeId], blockNumber }),
+		client.readContract({ address: getAddress(fork), abi: links, functionName: 'repairAuctions', args: [snapshot.universeId], blockNumber }),
 		client.readContract({ address: engine, abi: engineAbi, functionName: 'controller', blockNumber }),
 		client.readContract({ address: engine, abi: engineAbi, functionName: 'bidCount', blockNumber }),
 		client.readContract({ address: engine, abi: engineAbi, functionName: 'finalized', blockNumber }),
@@ -70,10 +70,10 @@ export async function authenticateSecurityPoolAuction(client: ReadClient, snapsh
 export async function loadSecurityPoolAuctionPosition(client: ReadClient, snapshot: SecurityPoolCapitalSnapshot, auction: Awaited<ReturnType<typeof authenticateSecurityPoolAuction>>, bidId: bigint, threshold: bigint): Promise<SecurityPoolPosition | undefined> {
 	if (bidId <= 0n || bidId > auction.bidCount) throw new Error('Auction bid is outside the authenticated registry')
 	const blockNumber = snapshot.blockNumber
-	const [position, fill] = await Promise.all([client.readContract({ address: snapshot.capitalLedger, abi: capitalAbi, functionName: 'auctionPosition', args: [bidId], blockNumber }), client.readContract({ address: auction.engine, abi: engineAbi, functionName: 'previewBid', args: [bidId], blockNumber })])
+	const [position, fill] = await Promise.all([client.readContract({ address: snapshot.capitalLedger, abi: capitalAbi, functionName: 'repairAuctionPosition', args: [bidId], blockNumber }), client.readContract({ address: auction.engine, abi: engineAbi, functionName: 'previewBid', args: [bidId], blockNumber })])
 	// A materialized bid belongs exclusively to the ordinary position registry.
 	if (position.materialized || fill.filledLots === 0n) return undefined
-	const cohort = await client.readContract({ address: snapshot.capitalLedger, abi: capitalAbi, functionName: 'auctionCohort', blockNumber })
+	const cohort = await client.readContract({ address: snapshot.capitalLedger, abi: capitalAbi, functionName: 'repairAuctionCohort', blockNumber })
 	const elapsed = await client.readContract({ address: snapshot.capitalLedger, abi: capitalAbi, functionName: 'liquidationElapsed', args: [cohort[1]], blockNumber })
 	const vault = getAddress(position.vault)
 	// The vault must be the exact clone the auction created for this bidder, ledger and bid.
@@ -81,7 +81,7 @@ export async function loadSecurityPoolAuctionPosition(client: ReadClient, snapsh
 	const [owner, initialCapital, controller, id, mappedId] = await Promise.all([
 		client.readContract({ address: vault, abi: vaultAbi, functionName: 'owner', blockNumber }),
 		client.readContract({ address: vault, abi: vaultAbi, functionName: 'initialCapital', blockNumber }),
-		client.readContract({ address: vault, abi: vaultAbi, functionName: 'auction', blockNumber }),
+		client.readContract({ address: vault, abi: vaultAbi, functionName: 'repairAuction', blockNumber }),
 		client.readContract({ address: vault, abi: vaultAbi, functionName: 'bidId', blockNumber }),
 		client.readContract({ address: auction.address, abi: auctionAbi, functionName: 'bidIdForVault', args: [vault], blockNumber }),
 	])
@@ -98,7 +98,7 @@ export async function loadSecurityPoolAuctionPosition(client: ReadClient, snapsh
 		remainingCommitment: 0n,
 		liquidationStarted: BigInt(position.liquidationStarted),
 		liquidationElapsed: BigInt(elapsed),
-		liquidationAwarded: 0n,
+		liquidationPenaltyPaid: 0n,
 		retirementStatus: 'Not retiring',
 		stalledRetirement: false,
 	}

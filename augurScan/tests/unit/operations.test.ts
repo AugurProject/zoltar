@@ -140,7 +140,7 @@ test('orders auction demand by fill priority and builds exact candles', () => {
 		{ minimumAttoRepPerLot: '100', lots: '3', cumulativeLots: '3', amountAttoEth: '21', cumulativeDemandAttoEth: '21' },
 		{ minimumAttoRepPerLot: '200', lots: '15', cumulativeLots: '18', amountAttoEth: '105', cumulativeDemandAttoEth: '126' },
 	])
-	// Without an indexed AuctionStarted lot size only lot counts are known.
+	// Without an indexed RepairAuctionStarted lot size only lot counts are known.
 	expect(auctionDemandCurve([{ minimumAttoRepPerLot: '100', lots: '3' }], undefined)).toEqual([{ minimumAttoRepPerLot: '100', lots: '3', cumulativeLots: '3' }])
 	expect(() => auctionDemandCurve([{ minimumAttoRepPerLot: 'null', lots: '3' }], '7')).toThrow('minimumAttoRepPerLot must be a non-negative integer')
 	expect(

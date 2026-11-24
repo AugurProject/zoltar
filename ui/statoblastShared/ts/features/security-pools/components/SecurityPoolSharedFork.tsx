@@ -16,7 +16,7 @@ import { SecurityPoolButton, SecurityPoolInput } from './SecurityPoolControls.js
 import { useSecurityPoolSharedFork, type SecurityPoolSharedForkParameters } from '../hooks/useSecurityPoolSharedFork.js'
 import { SecurityPoolPriceReport } from './SecurityPoolPriceReport.js'
 import { branchPriceTarget } from '../hooks/useSecurityPoolPrice.js'
-import { SecurityPoolAuction } from './SecurityPoolAuction.js'
+import { SecurityPoolRepairAuction } from './SecurityPoolRepairAuction.js'
 import * as copy from '../../../copy/securityPoolSharedFork.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
@@ -79,7 +79,7 @@ export function SecurityPoolSharedFork(parameters: SecurityPoolSharedForkParamet
 				<ActionLauncherButton tone='secondary' idleLabel={copy.open} pendingLabel={copy.loading} availability={{ disabled: disabled || model.openReason !== undefined, reason: disabled ? copy.busy : model.openReason }} onClick={model.open} />
 			</div>
 			<SecurityPoolPriceReport scope='branch' target={branchPriceTarget(state)} actions={parameters.actions} bidder={parameters.bidder} referencePrice={parameters.snapshot?.acceptedPrice} />
-			<SecurityPoolAuction fork={state} actions={parameters.actions} bidder={parameters.bidder} openVault={parameters.openVault} />
+			<SecurityPoolRepairAuction fork={state} actions={parameters.actions} bidder={parameters.bidder} openVault={parameters.openVault} />
 			<WorkflowSubsection title={copy.basketTitle}>
 				<UserMessage detail={copy.basketHint} />
 				<MetricGrid>

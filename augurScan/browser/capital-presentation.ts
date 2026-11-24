@@ -71,7 +71,7 @@ const capitalEventTitles: Readonly<Record<string, string>> = {
 	PrincipalWithdrawn: 'Principal withdrawal',
 	CommitmentAuthorized: 'Commitment authorized',
 	EarningsClaimed: 'Earnings claim',
-	AuctionBidMaterialized: 'Auction bid materialized',
+	RepairAuctionBidMaterialized: 'Auction bid materialized',
 }
 
 /** An owner's own ledger event with REP in REP and commitment in the ledger's collateral; undefined for any other event. */
@@ -86,7 +86,7 @@ export const capitalEventPresentation = (item: Readonly<Record<string, unknown>>
 		PrincipalWithdrawn: () => `${amount(data['amountAttoRep'], 18, 'REP')} to ${account(data['recipient']) ?? 'unknown recipient'}`,
 		CommitmentAuthorized: () => `position ${integer(data['positionId']) ?? '—'} · ${amount(data['rep'], 18, 'REP')} backing ${commitment(data['commitment'])} · target health ${capitalHealthText(data['targetHealthFactorBps'])}`,
 		EarningsClaimed: () => `${commitment(data['ethAmount'])} · ${amount(data['repAmount'], 18, 'REP')}`,
-		AuctionBidMaterialized: () => `bid ${integer(data['bidId']) ?? '—'} became position ${integer(data['positionId']) ?? '—'} · ${amount(data['principal'], 18, 'REP')} principal · ${commitment(data['commitment'])} commitment`,
+		RepairAuctionBidMaterialized: () => `bid ${integer(data['bidId']) ?? '—'} became position ${integer(data['positionId']) ?? '—'} · ${amount(data['principal'], 18, 'REP')} principal · ${commitment(data['commitment'])} commitment`,
 	}
 	return { title, summary: summaries[String(item['event_name'])]?.() ?? title }
 }
@@ -115,7 +115,7 @@ export const liquidationSummary = (item: Readonly<Record<string, unknown>>, { un
 	let parts: ReadonlyArray<string | undefined>
 	switch (item['event_name']) {
 		case 'CommitmentTakenOver':
-			parts = [[owner(data['sourceId'], item['source_owner']), owner(data['receiverId'], item['receiver_owner'])].filter(part => part !== undefined).join(' → '), `${amount(data['commitment'], collateral.decimals, collateral.symbol)} commitment`, `${amount(data['awardAttoRep'], 18, 'REP')} award`]
+			parts = [[owner(data['sourceId'], item['source_owner']), owner(data['receiverId'], item['receiver_owner'])].filter(part => part !== undefined).join(' → '), `${amount(data['commitment'], collateral.decimals, collateral.symbol)} commitment`, `${amount(data['takeoverRewardAttoRep'], 18, 'REP')} takeover reward`]
 			break
 		case 'CommitmentCured':
 			parts = [owner(data['positionId'], item['source_owner']), `${amount(data['removedCommitment'], collateral.decimals, collateral.symbol)} commitment removed`]

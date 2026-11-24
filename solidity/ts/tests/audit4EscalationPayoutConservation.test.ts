@@ -65,7 +65,7 @@ describe('audit4: escalation payouts conserve escrow under every threshold relat
 			// Ordinary claims telescope to the reserve exactly.
 			expect(ordinaryPaid, context).toBe(wholePayout)
 			expect(ordinaryBurned, context).toBe(wholeBurn)
-			// Continuation claims floor individually (bonus, then scaling): never more than the whole, short by at most two units per claim.
+			// Continuation claims floor individually (reward, then scaling): never more than the whole, short by at most two units per claim.
 			expect(paid, context).toBeLessThanOrEqual(wholePayout)
 			expect(wholePayout - paid, context).toBeLessThanOrEqual(2n * BigInt(ends.length))
 			expect(burned, context).toBeLessThanOrEqual(wholeBurn)

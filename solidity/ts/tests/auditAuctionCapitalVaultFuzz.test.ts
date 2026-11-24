@@ -10,12 +10,12 @@ import { auctionVaultCreationCode, decodeAuctionVaultBindings } from '@zoltar/st
 import {
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
-	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as vaultArtifact,
-	test_statoblast_CapitalAuctionHarness_CapitalAuctionHarness as harnessArtifact,
-	test_statoblast_CapitalAuctionHarness_CapitalAuctionAdapterMock as adapterArtifact,
-	test_statoblast_AuctionVaultDeploymentBenchmark_AuctionVaultDeploymentBenchmark as benchmarkArtifact,
-	test_statoblast_AuctionVaultDeploymentBenchmark_AuctionVaultBenchmarkAuctionMock as auctionMockArtifact,
-	test_statoblast_AuctionVaultDeploymentBenchmark_AuctionVaultBenchmarkCapitalMock as capitalMockArtifact,
+	statoblast_SecurityPoolRepairAuctionVault_SecurityPoolRepairAuctionVault as vaultArtifact,
+	test_statoblast_CapitalRepairAuctionHarness_CapitalRepairAuctionHarness as harnessArtifact,
+	test_statoblast_CapitalRepairAuctionHarness_CapitalRepairAuctionAdapterMock as adapterArtifact,
+	test_statoblast_RepairAuctionVaultDeploymentBenchmark_RepairAuctionVaultDeploymentBenchmark as benchmarkArtifact,
+	test_statoblast_RepairAuctionVaultDeploymentBenchmark_RepairAuctionVaultBenchmarkAuctionMock as auctionMockArtifact,
+	test_statoblast_RepairAuctionVaultDeploymentBenchmark_RepairAuctionVaultBenchmarkCapitalMock as capitalMockArtifact,
 	statoblast_WETH9_WETH9 as wethArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
 } from '../types/contractArtifact'
@@ -142,13 +142,13 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 			expect(decodeAuctionVaultBindings(runtime)).toEqual(bindings)
 			expect(getAddress(await caller.readContract({ abi: vaultArtifact.abi, address: vault, functionName: 'owner' }))).toBe(getAddress(owner))
 			expect(getAddress(await caller.readContract({ abi: vaultArtifact.abi, address: vault, functionName: 'initialCapital' }))).toBe(getAddress(boundCapital))
-			expect(getAddress(await caller.readContract({ abi: vaultArtifact.abi, address: vault, functionName: 'auction' }))).toBe(getAddress(boundAuction))
+			expect(getAddress(await caller.readContract({ abi: vaultArtifact.abi, address: vault, functionName: 'repairAuction' }))).toBe(getAddress(boundAuction))
 			expect(await caller.readContract({ abi: vaultArtifact.abi, address: vault, functionName: 'bidId' })).toBe(bidId)
 			expect(await caller.readContract({ abi: vaultArtifact.abi, address: vault, functionName: 'initialPositionMaterialized' })).toBe(false)
 			expect(await reasonOf(() => caller.simulateContract({ account: addressString(0x5757n), abi: vaultArtifact.abi, address: vault, functionName: 'execute', args: [auctionMock, 0n, '0x5c36b186'] }))).toContain('Only the auction vault owner')
 		}
 		// The implementation holds no bindings and refuses every use.
-		for (const functionName of ['owner', 'initialCapital', 'auction', 'bidId'] as const) expect(await reasonOf(() => caller.readContract({ abi: vaultArtifact.abi, address: implementation, functionName }))).toContain('Auction vault is not a clone')
+		for (const functionName of ['owner', 'initialCapital', 'repairAuction', 'bidId'] as const) expect(await reasonOf(() => caller.readContract({ abi: vaultArtifact.abi, address: implementation, functionName }))).toContain('Auction vault is not a clone')
 		expect(await reasonOf(() => caller.simulateContract({ abi: vaultArtifact.abi, address: implementation, functionName: 'execute', args: [auctionMock, 0n, '0x'] }))).toContain('Auction vault is not a clone')
 		expect(await reasonOf(() => caller.simulateContract({ abi: vaultArtifact.abi, address: implementation, functionName: 'depositPrincipal', args: [capitalMock, 1n, 10_000n] }))).toContain('Auction vault is not a clone')
 		expect(await caller.readContract({ abi: vaultArtifact.abi, address: implementation, functionName: 'initialPositionMaterialized' })).toBe(false)
@@ -198,7 +198,7 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 			const exactFees = scenarios % 2 === 1
 			const bidCount = 2 + below(4)
 			const repPerLot = GRID * (BigInt(below(3)) * 10n ** 14n + 8n * 10n ** 13n + BigInt(below(1_000_000)))
-			const bids: { id: bigint; lots: bigint; health: bigint; owner: WriteClient; vault: Address; materialized: boolean; takenOver: boolean; award: bigint; removed: bigint; expectedAttoEth: bigint; expectedAttoEthScaled: bigint }[] = []
+			const bids: { id: bigint; lots: bigint; health: bigint; owner: WriteClient; vault: Address; materialized: boolean; takenOver: boolean; takeoverReward: bigint; removed: bigint; expectedAttoEth: bigint; expectedAttoEthScaled: bigint }[] = []
 			for (let position = 0; position < bidCount; position++) {
 				const owner = bidders[position % bidders.length]
 				if (owner === undefined) throw new Error('Bidder client missing')
@@ -207,16 +207,16 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 				const lots = BigInt(1 + below(4))
 				const health = pick([10_000n, 12_000n, 15_000n])
 				await writeContractAndWait(caller, () => caller.writeContract({ abi: adapterArtifact.abi, address: adapter, functionName: 'setBid', args: [id, vault, health, lots] }))
-				bids.push({ id, lots, health, owner, vault, materialized: false, takenOver: false, award: 0n, removed: 0n, expectedAttoEth: 0n, expectedAttoEthScaled: 0n })
+				bids.push({ id, lots, health, owner, vault, materialized: false, takenOver: false, takeoverReward: 0n, removed: 0n, expectedAttoEth: 0n, expectedAttoEthScaled: 0n })
 			}
 			const totalLots = bids.reduce((sum, bid) => sum + bid.lots, 0n)
 			const context = () => `repPerLot=${repPerLot} bids=[${bids.map(bid => `#${bid.id % 1000n}:${bid.lots}lots@${bid.health}${bid.materialized ? 'M' : ''}${bid.takenOver ? 'T' : ''}`).join(' ')}]`
-			expect(await reasonOf(() => caller.simulateContract({ abi: harnessArtifact.abi, address: harness, functionName: 'installAuction', args: [adapter, totalLots, repPerLot, LOT] }))).toContain('Auction principal unfunded')
+			expect(await reasonOf(() => caller.simulateContract({ abi: harnessArtifact.abi, address: harness, functionName: 'installRepairAuction', args: [adapter, totalLots, repPerLot, LOT] }))).toContain('Auction principal unfunded')
 			await writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'mint', args: [capital, totalLots * repPerLot] }))
-			expect(await reasonOf(() => caller.simulateContract({ abi: harnessArtifact.abi, address: harness, functionName: 'installAuction', args: [adapter, totalLots, repPerLot + 1n, LOT] }))).toContain('Auction collateral ratio rounds per vault')
-			await writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'installAuction', args: [adapter, totalLots, repPerLot, LOT] }))
+			expect(await reasonOf(() => caller.simulateContract({ abi: harnessArtifact.abi, address: harness, functionName: 'installRepairAuction', args: [adapter, totalLots, repPerLot + 1n, LOT] }))).toContain('Auction collateral ratio rounds per vault')
+			await writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'installRepairAuction', args: [adapter, totalLots, repPerLot, LOT] }))
 			await writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'finishImport', args: [exactFees ? totalLots * LOT : 0n] }))
-			const cohortId = (await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'auctionCohort' }))[1]
+			const cohortId = (await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'repairAuctionCohort' }))[1]
 			let credited = 0n
 			let keeperDeposit = 0n
 			const setPrice = async (price: bigint) => {
@@ -225,19 +225,19 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 			}
 			const checkpoint = encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'checkpoint' })
 			const check = async (label: string) => {
-				const cohort = await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'auctionCohort' })
+				const cohort = await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'repairAuctionCohort' })
 				const remaining = bids.filter(bid => !bid.materialized).reduce((sum, bid) => sum + bid.lots, 0n)
 				if (cohort[2] !== remaining) throw new Error(`${label}: cohort remainingLots ${cohort[2]} != ${remaining}: ${context()}`)
 				const aggregate = await caller.readContract({ abi: indexArtifact.abi, address: index, functionName: 'accountOf', args: [cohortId] })
 				if (aggregate.rep !== remaining * repPerLot || aggregate.commitment !== remaining * LOT) throw new Error(`${label}: cohort position holds rep ${aggregate.rep} commitment ${aggregate.commitment}, expected ${remaining} lots: ${context()}`)
 				let earned = 0n
 				for (const bid of bids) {
-					const position = await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'auctionPosition', args: [bid.id] })
+					const position = await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'repairAuctionPosition', args: [bid.id] })
 					if (getAddress(position.vault) !== bid.vault || position.materialized !== bid.materialized) throw new Error(`${label}: bid ${bid.id} vault or materialized flag wrong: ${context()}`)
-					if (position.principal !== bid.lots * repPerLot - bid.award || position.commitment !== bid.lots * LOT - bid.removed || position.targetHealthFactorBps !== bid.health)
+					if (position.principal !== bid.lots * repPerLot - bid.takeoverReward || position.commitment !== bid.lots * LOT - bid.removed || position.targetHealthFactorBps !== bid.health)
 						throw new Error(`${label}: bid ${bid.id} principal ${position.principal} commitment ${position.commitment} target ${position.targetHealthFactorBps}, expected ${bid.lots} lots: ${context()}`)
 					const collateral = await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'ownerCollateral', args: [bid.vault] })
-					if (collateral[0] !== bid.lots * repPerLot - bid.award || collateral[1] !== bid.lots * LOT - bid.removed) throw new Error(`${label}: ownerCollateral of bid ${bid.id} is ${collateral[0]}/${collateral[1]}: ${context()}`)
+					if (collateral[0] !== bid.lots * repPerLot - bid.takeoverReward || collateral[1] !== bid.lots * LOT - bid.removed) throw new Error(`${label}: ownerCollateral of bid ${bid.id} is ${collateral[0]}/${collateral[1]}: ${context()}`)
 					earned += position.earnedAttoEth
 					if (exactFees) {
 						// Exact share is expectedAttoEthScaled / totalLots. Integer splits move less than an attoETH per
@@ -248,7 +248,7 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 					}
 				}
 				const keeperPrincipal = await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'ownerCollateral', args: [keeper.account.address] })
-				expect(keeperPrincipal[0]).toBe(keeperDeposit + bids.reduce((sum, bid) => sum + bid.award, 0n))
+				expect(keeperPrincipal[0]).toBe(keeperDeposit + bids.reduce((sum, bid) => sum + bid.takeoverReward, 0n))
 				if (earned > credited) throw new Error(`${label}: winners are owed ${earned} of ${credited} credited: ${context()}`)
 				const [ledgerCash, deferredCash] = await Promise.all([capital, harness].map(address => caller.readContract({ abi: wethArtifact.abi, address: weth, functionName: 'balanceOf', args: [address] })))
 				if (ledgerCash === undefined || deferredCash === undefined) throw new Error('Missing capital fee custody balances')
@@ -264,7 +264,7 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 			}
 			const materialize = async (bid: (typeof bids)[number]) => {
 				if (below(2) === 0) {
-					await writeContractAndWait(keeper, () => keeper.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'materializeAuctionBid', args: [bid.id] }))
+					await writeContractAndWait(keeper, () => keeper.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'materializeRepairAuctionBid', args: [bid.id] }))
 				} else {
 					await writeContractAndWait(bid.owner, () => bid.owner.writeContract({ abi: vaultArtifact.abi, address: bid.vault, functionName: 'execute', args: [capital, 0n, checkpoint] }))
 					expect(await caller.readContract({ abi: vaultArtifact.abi, address: bid.vault, functionName: 'initialPositionMaterialized' })).toBe(true)
@@ -292,7 +292,7 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 					expect(await reasonOf(() => keeper.simulateContract({ abi: capitalArtifact.abi, address: capital, functionName: 'serveRetirement', args: [cohortId] }))).not.toBe('no revert')
 					expect(await reasonOf(() => keeper.simulateContract({ abi: vaultArtifact.abi, address: bid.vault, functionName: 'execute', args: [capital, 0n, checkpoint] }))).toContain('Only the auction vault owner')
 				} else if (choice === 5 && !forked && !bids.some(other => other.takenOver)) {
-					// Distress every winner, wait out the award ramp, and let a keeper take one bid over.
+					// Distress every winner, wait out the takeover reward ramp, and let a keeper take one bid over.
 					await setPrice(10n * UNIT)
 					await getAnvilWindowEthereum().advanceTime(3601n)
 					const principal = bid.lots * repPerLot
@@ -305,7 +305,7 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 					const bounds = { maximumOwnerPrincipal: 100n * principal, maximumOwnerCommitment: bid.lots * LOT, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'acceptedPriceEpoch' }), expectedSourceBatch: 0n }
 					let takeoverHash: Hex | undefined
 					const outcome = await reasonOf(async () => {
-						takeoverHash = await writeContractAndWait(keeper, () => keeper.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'takeOverAuctionBid', args: [bid.id, bid.lots * LOT, 0n, keeperDeposit, bounds] }))
+						takeoverHash = await writeContractAndWait(keeper, () => keeper.writeContract({ abi: capitalArtifact.abi, address: capital, functionName: 'takeOverRepairAuctionBid', args: [bid.id, bid.lots * LOT, 0n, keeperDeposit, bounds] }))
 					})
 					if (outcome !== 'no revert') {
 						if (!outcome.includes('Position requires additional backing') && !outcome.includes('Receiver commitment below minimum')) throw new Error(`keeper takeover reverted unexpectedly: ${outcome}: ${context()}`)
@@ -317,12 +317,13 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 					for (const log of receipt.logs) {
 						if (
 							getAddress(log.address) !== getAddress(capital) ||
-							(log.topics[0] !== toEventSelector(parseAbiItem('event CommitmentTakenOver(uint96 indexed sourceId,uint96 indexed receiverId,uint256 commitment,uint256 awardAttoRep)')) && log.topics[0] !== toEventSelector(parseAbiItem('event CommitmentCured(uint96 indexed positionId,uint256 removedCommitment)')))
+							(log.topics[0] !== toEventSelector(parseAbiItem('event CommitmentTakenOver(uint96 indexed sourceId,uint96 indexed receiverId,uint256 commitment,uint256 takeoverRewardAttoRep)')) &&
+								log.topics[0] !== toEventSelector(parseAbiItem('event CommitmentCured(uint96 indexed positionId,uint256 removedCommitment)')))
 						)
 							continue
 						const event = decodeEventLog({ abi: capitalArtifact.abi, data: log.data, topics: log.topics })
 						if (event.eventName === 'CommitmentTakenOver') {
-							bid.award += event.args.awardAttoRep
+							bid.takeoverReward += event.args.takeoverRewardAttoRep
 							bid.removed += event.args.commitment
 						} else if (event.eventName === 'CommitmentCured') bid.removed += event.args.removedCommitment
 					}
@@ -345,7 +346,7 @@ describe('audit fuzz: capital auction cohort and auction vault clones', () => {
 				await materialize(bid)
 				await check(`final materialize ${bid.id}`)
 			}
-			expect((await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'auctionCohort' }))[2]).toBe(0n)
+			expect((await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'repairAuctionCohort' }))[2]).toBe(0n)
 			for (const bid of bids) {
 				const owner = await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'ownerAccount', args: [bid.vault] })
 				if (bid.takenOver) continue
