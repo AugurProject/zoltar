@@ -27,9 +27,7 @@ interface ISecurityPoolForkRoot {
 	function settlement() external view returns (SecurityPoolSettlement);
 	function reporters() external view returns (SecurityPoolReporterLedger);
 	function services() external view returns (address);
-	function securityPoolTime(uint248 universeId) external view returns (uint48);
 	function forkSecurityPoolTime(uint248 universeId) external view returns (uint48);
-	function clocks(uint248 universeId) external view returns (uint48, uint48, bool, bool);
 	function prepareForkChild(uint248 parent, uint256 outcome) external returns (SecurityPoolCapitalLedger);
 	function activateForkChild(uint248 child) external;
 	function getQuestionLedger(uint256 questionId, uint248 universeId) external view returns (IQuestionLedger);
@@ -210,7 +208,7 @@ contract SecurityPoolForkCoordinator {
 						: 0
 				);
 		require(securityPoolTimestamp <= type(uint48).max, 'Security pool clock exhausted');
-		return CheckedCast.toUint48(securityPoolTimestamp);
+		return uint48(securityPoolTimestamp);
 	}
 	function forkSecurityPoolTime(uint248 universeId) external view returns (uint48) {
 		uint256 forkTime = zoltar.getForkTime(universeId);
@@ -225,7 +223,7 @@ contract SecurityPoolForkCoordinator {
 		require(clock.registered && timestamp >= clock.securityPoolTimeAnchor, 'Security pool time precedes universe');
 		uint256 wall = uint256(clock.wallAnchor) + timestamp - clock.securityPoolTimeAnchor;
 		require(wall <= type(uint48).max, 'Native clock exhausted');
-		return CheckedCast.toUint48(wall);
+		return uint48(wall);
 	}
 
 	function inheritedFixedOutcome(uint248 universeId, uint256 questionId) external view returns (bool, uint256) {
@@ -287,7 +285,7 @@ contract SecurityPoolForkCoordinator {
 		if (branch.prepared) return child;
 		uint256 anchor = zoltar.getForkRecapitalizationDeadline(parent);
 		require(anchor <= type(uint48).max, 'Fork clock exhausted');
-		clocks[child] = UniverseClock(_securityPoolTimeAt(parent, zoltar.getForkTime(parent)), CheckedCast.toUint48(anchor), true, false);
+		clocks[child] = UniverseClock(_securityPoolTimeAt(parent, zoltar.getForkTime(parent)), uint48(anchor), true, false);
 		securityPool.prepareForkChild(parent, outcome);
 		branch.parent = parent;
 		branch.outcome = outcome;

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { Create2Address } from '../../Create2Address.sol';
+
 import { EscalationGameRepCustody } from '../EscalationGameRepCustody.sol';
 import { SecurityPoolReporterLedger } from '../SecurityPoolReporterLedger.sol';
 import { ISecurityPoolNative } from '../interfaces/ISecurityPoolNative.sol';
@@ -76,8 +78,7 @@ contract EscalationGameFactory {
 	}
 
 	function _create2Address(bytes memory initCode) private view returns (address) {
-		return
-			address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), address(this), bytes32(0), keccak256(initCode))))));
+		return Create2Address.predict(address(this), bytes32(0), keccak256(initCode));
 	}
 
 	function _escalationGameInitCode(IQuestionLedger questionLedger) private view returns (bytes memory) {

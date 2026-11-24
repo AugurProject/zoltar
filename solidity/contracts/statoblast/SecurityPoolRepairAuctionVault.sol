@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { IERC165 } from './interfaces/IERC165.sol';
+import { IERC1155Receiver } from './interfaces/IERC1155Receiver.sol';
+
+import { Create2Address } from '../Create2Address.sol';
+
 import { ISecurityPoolRepairAuctionCapital } from './interfaces/ISecurityPoolRepairAuctionCapital.sol';
 import { Collateral } from '../Collateral.sol';
 import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
@@ -42,8 +47,8 @@ library SecurityPoolRepairAuctionVaultClones {
 		require(vault != address(0), 'Auction vault deployment failed');
 	}
 	function predict(address deployer, address implementation, address owner, address capital, address repairAuction, uint256 bidId) internal pure returns (address) {
-		bytes32 hash = keccak256(abi.encodePacked(bytes1(0xff), deployer, bytes32(bidId), keccak256(creationCode(implementation, owner, capital, repairAuction, bidId))));
-		return address(uint160(uint256(hash)));
+		return
+			Create2Address.predict(deployer, bytes32(bidId), keccak256(creationCode(implementation, owner, capital, repairAuction, bidId)));
 	}
 }
 
@@ -83,11 +88,7 @@ contract SecurityPoolRepairAuctionVault {
 	/// @dev Under delegatecall `address()` is the clone, whose code ends with the
 	/// bindings. Any other code length is not a vault, including the implementation.
 	function _isClone() private view returns (bool) {
-		uint256 size;
-		assembly ('memory-safe') {
-			size := extcodesize(address())
-		}
-		return size == SecurityPoolRepairAuctionVaultClones.RUNTIME_LENGTH;
+		return address(this).code.length == SecurityPoolRepairAuctionVaultClones.RUNTIME_LENGTH;
 	}
 	function _requireClone() private view {
 		require(_isClone(), 'Auction vault is not a clone');
@@ -181,8 +182,8 @@ contract SecurityPoolRepairAuctionVault {
 	/// @notice ERC-165 discovery. Clones advertise the ERC-1155 receiver
 	/// interface they implement; the implementation, which refuses deposits, does not.
 	function supportsInterface(bytes4 interfaceId) external view returns (bool) {
-		if (interfaceId == 0x01ffc9a7) return true;
-		return interfaceId == 0x4e2312e0 && _isClone();
+		if (interfaceId == type(IERC165).interfaceId) return true;
+		return interfaceId == type(IERC1155Receiver).interfaceId && _isClone();
 	}
 }
 

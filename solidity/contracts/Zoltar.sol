@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { Pagination } from './Pagination.sol';
+
 import { UniverseIds } from './UniverseIds.sol';
 
 import './Constants.sol';
@@ -222,7 +224,7 @@ contract Zoltar {
 		returns (uint256[] memory outcomeIndexes, uint248[] memory childUniverseIds, Universe[] memory childUniverses)
 	{
 		uint256[] storage deployedOutcomeIndexes = deployedChildOutcomeIndexes[universeId];
-		uint256 iterateUntil = _sliceEnd(startIndex, count, deployedOutcomeIndexes.length);
+		uint256 iterateUntil = Pagination.sliceEnd(startIndex, count, deployedOutcomeIndexes.length);
 		if (iterateUntil <= startIndex) return (new uint256[](0), new uint248[](0), new Universe[](0));
 		uint256 resultLength = iterateUntil - startIndex;
 		outcomeIndexes = new uint256[](resultLength);
@@ -235,13 +237,6 @@ contract Zoltar {
 			childUniverseIds[resultIndex] = childUniverseId;
 			childUniverses[resultIndex] = universes[childUniverseId];
 		}
-	}
-
-	function _sliceEnd(uint256 startIndex, uint256 count, uint256 total) internal pure returns (uint256) {
-		if (startIndex >= total || count == 0) return startIndex;
-		uint256 availableCount = total - startIndex;
-		if (count >= availableCount) return total;
-		return startIndex + count;
 	}
 
 	/// @notice Burns the caller's REP in a forked universe and credits it 1:1 to the caller's migration balance.
