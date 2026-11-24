@@ -6,7 +6,7 @@ import { QUESTION_LEDGER_QUESTION_OUTCOME_ABI } from './questionLedgerAbi.js'
 import { requireAddressValue, requireBigintValue } from './decoders.js'
 import { loadCentralSecurityPoolQuestion } from './securityPoolState.js'
 import type { LinearFeeState } from '@zoltar/statoblast-shared/statoblast/linearFees'
-import { encodeFunctionData, getAddress, parseAbi, zeroAddress, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, parseAbi, zeroAddress, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { sortBigIntsAscending } from '@zoltar/core-shared/serialization/bigInt'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { statoblast_QuestionLedger_QuestionLedger, statoblast_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
@@ -361,7 +361,6 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 				const recovery = await loadRecoveryMintFunding(client, securityPool, universeId, client.account.address, fresh.recoveryAttoRep)
 				if (recovery.balance < maximumRecoveryAttoRep) throw new Error(collateralCopy.insufficientRecoveryRep)
 				if (recovery.allowance < maximumRecoveryAttoRep) throw new Error(collateralCopy.recoveryApprovalRequired)
-				await client.estimateGas({ account: client.account, to: callParams.address, data: encodeFunctionData(callParams), value: callParams.value })
 				const { blockNumber } = await validateBeforeSubmit()
 				if (blockNumber === undefined) throw new Error('Mint review requires a mined block.')
 				const [shareToken, mintedShares] = await Promise.all([

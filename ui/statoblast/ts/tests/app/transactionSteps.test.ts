@@ -867,10 +867,13 @@ test('broadcasts a prepared raw deployment transaction without app confirmation'
 function setupMintReview(alwaysReview: boolean) {
 	const { client, receipt, sendTransaction } = setup()
 	let balanceReads = 0
+	const estimateGas = mock(async () => 100000n)
+	const call = mock(async () => ({ data: '0x' as const }))
 	const mintClient = {
 		...client,
 		sendTransaction,
-		estimateGas: async () => 100000n,
+		estimateGas,
+		call,
 		getBalance: async () => 10n ** 18n,
 		getBlock: async () => ({ ...createBlockWithTimestamp(1n), number: 1n }),
 		readContract: createReadContractStub(request => {
@@ -898,7 +901,7 @@ function setupMintReview(alwaysReview: boolean) {
 		}),
 		waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }),
 	}
-	return { reviewed: createReviewedClient(mintClient, undefined, undefined, undefined, alwaysReview), sendTransaction }
+	return { reviewed: createReviewedClient(mintClient, undefined, undefined, undefined, alwaysReview), sendTransaction, estimateGas, call }
 }
 
 test('minting complete sets sends the transaction directly and tracks its receipt', async () => {
@@ -911,10 +914,12 @@ test('minting complete sets sends the transaction directly and tracks its receip
 })
 
 test('mint review shows the refreshed wallet collateral and free capacity', async () => {
-	const { reviewed, sendTransaction } = setupMintReview(true)
+	const { reviewed, sendTransaction, estimateGas, call } = setupMintReview(true)
 	const sending = createCompleteSetInQuestionLedger(reviewed, account, 10n ** 18n)
 	await waitForTransactionStep(0)
 	const rows = transactionSteps.value?.steps[0]?.reviewRows
+	expect(call).toHaveBeenCalledTimes(1)
+	expect(sendTransaction).not.toHaveBeenCalled()
 	transactionSteps.value?.confirmStep(0)
 	await expect(sending).resolves.toMatchObject({ hash })
 	expect(rows?.find(row => row.label === 'Wallet collateral')?.value).toMatch(/90.*WETH → 89.*WETH/)
@@ -922,6 +927,8 @@ test('mint review shows the refreshed wallet collateral and free capacity', asyn
 	expect(rows?.find(row => row.label === 'Yes shares')?.value).toMatch(/3.*→ 4/)
 	expect(rows?.find(row => row.label === 'No shares')?.value).toMatch(/4.*→ 5/)
 	expect(rows?.find(row => row.label === 'Invalid shares')?.value).toMatch(/2.*→ 3/)
+	expect(estimateGas).not.toHaveBeenCalled()
+	expect(call).toHaveBeenCalledTimes(1)
 	expect(sendTransaction).toHaveBeenCalledTimes(1)
 })
 
