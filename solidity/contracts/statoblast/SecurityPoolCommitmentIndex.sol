@@ -11,6 +11,9 @@ import { SecurityPoolBoundClones } from './SecurityPoolBoundClones.sol';
 /// @dev The controller settles time and prices before mutations and owns token
 /// custody. Keys are exact uint256 health thresholds followed by unique uint96
 /// position IDs. Balanced paths depend on live positions, never price-key entropy.
+/// Batch zero holds active positions. The current retirement cohort is closed to
+/// new requests, which enter the next cohort. A reservation tracks the reduction
+/// requested when a position retires to its remaining commitment target.
 contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	address private immutable initializer = msg.sender;
 	uint96 public lastPositionId;
@@ -149,6 +152,8 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 
 	/// @dev Fees remain attached to the old owner. The receiver gets a fresh ID
 	/// in precisely the source cohort; its insertion is balanced by source removal.
+	/// Each position uses its supplied post-split health price. The receiver can inherit
+	/// the portion of the target above the source's new commitment, subject to the minimum.
 	function split(uint96 id, address receiver, uint256 rep, uint256 commitment, uint256 remainingMaxPrice, uint256 receiverMaxPrice, uint256 minimumCommitment) external onlyCapitalLedger operational returns (uint96 receiverId) {
 		_touch(id);
 		Position storage source = positions[id];
@@ -192,7 +197,9 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	}
 
 	/// @dev Supports an existing receiver slot without refreshing retirement
-	/// priority. Both old fee entitlements stay with their respective owners.
+	/// priority for the source. Both old fee entitlements stay with their respective
+	/// owners. The positions use post-transfer health prices. A queued receiver can
+	/// inherit the portion of the target above the source's new commitment.
 	function transferTo(uint96 sourceId, uint96 receiverId, uint256 rep, uint256 commitment, uint256 sourceMaxPrice, uint256 receiverMaxPrice, uint256 minimumCommitment) external onlyCapitalLedger operational {
 		require(sourceId != receiverId, 'Same commitment position');
 		_touch(sourceId);

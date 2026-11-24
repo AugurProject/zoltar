@@ -95,8 +95,4 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	function _reporterRepBalance() internal view returns (uint256) {
 		return EscalationGameRepCustody.balance(address(questionLedger), address(repToken));
 	}
-
-	function _usesCentralReporterCustody() internal view returns (bool) {
-		return address(EscalationGameRepCustody.ledger(address(questionLedger))) != address(0);
-	}
 }
