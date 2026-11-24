@@ -142,7 +142,7 @@ describe('audit4: carry proofs three generations deep with multi-peak mountain r
 		const empty = () => new SparseNullifierTree()
 		const honest = e2e.proofFor(yes, leafAt(yes, 5), empty())
 		const lone = e2e.proofFor(yes, leafAt(yes, 8), empty())
-		await simulate(childAAA.pool, YES, [honest])
+		await simulate(childAAA.pool, YES, [{ ...honest, nullifierSiblings: [] }])
 		await simulate(childAAA.pool, YES, [lone])
 		const forgeries: readonly (readonly [string, ReturnType<typeof e2e.proofFor>, string])[] = [
 			['inflated amount', { ...honest, amountAttoRep: honest.amountAttoRep + 1n }, 'Bad carry proof'],
@@ -158,7 +158,6 @@ describe('audit4: carry proofs three generations deep with multi-peak mountain r
 			['truncated path', { ...honest, merkleMountainRangeSiblings: honest.merkleMountainRangeSiblings.slice(0, 3) }, 'Bad MMR proof length'],
 			['padded path', { ...honest, merkleMountainRangeSiblings: [...honest.merkleMountainRangeSiblings, honest.leafIndex === 5n ? leafAt(yes, 4).hash : leafAt(yes, 5).hash] }, 'Bad MMR proof length'],
 			['swapped siblings', { ...honest, merkleMountainRangeSiblings: [...honest.merkleMountainRangeSiblings.slice(0, 2).reverse(), ...honest.merkleMountainRangeSiblings.slice(2)] }, 'Bad carry proof'],
-			['short nullifier path', { ...honest, nullifierSiblings: honest.nullifierSiblings.slice(1) }, 'Bad nullifier length'],
 			['zero amount', { ...honest, amountAttoRep: 0n }, 'Proof amount zero'],
 		]
 		for (const [label, proof, reason] of forgeries) await expect(simulate(childAAA.pool, YES, [proof]), label).rejects.toThrow(reason)
@@ -169,11 +168,11 @@ describe('audit4: carry proofs three generations deep with multi-peak mountain r
 		// AAA's own local deposit is not part of the inherited commitment.
 		const localYes = await e2e.localLeaves(childAAA.game, YES)
 		await expect(simulate(childAAA.pool, YES, [e2e.proofFor([...yes, ...localYes], leafAt(localYes, 0), empty())])).rejects.toThrow('Bad carry')
-		// The same deposit twice in one transaction: the second proof meets a consumed nullifier, whichever path it brings.
-		await expect(simulate(childAAA.pool, YES, [honest, honest])).rejects.toThrow('Bad nullifier proof')
+		// The same deposit twice in one transaction: the second proof meets the consumed identity, regardless of witness bytes.
+		await expect(simulate(childAAA.pool, YES, [honest, honest])).rejects.toThrow('Deposit settled')
 		const advanced = empty()
 		advanced.consume(honest.leafIndex)
-		await expect(simulate(childAAA.pool, YES, [honest, { ...honest, nullifierSiblings: advanced.getProof(honest.leafIndex) }])).rejects.toThrow('Bad nullifier proof')
+		await expect(simulate(childAAA.pool, YES, [honest, { ...honest, nullifierSiblings: advanced.getProof(honest.leafIndex) }])).rejects.toThrow('Deposit settled')
 		// Losing outcomes never pay, here or in the sibling.
 		for (const outcome of OUTCOMES) {
 			if (outcome !== YES) await expect(simulate(childAAA.pool, outcome, [e2e.proofFor(snapshot[outcome], leafAt(snapshot[outcome], 0), empty())])).rejects.toThrow('Not winning outcome')
@@ -198,7 +197,7 @@ describe('audit4: carry proofs three generations deep with multi-peak mountain r
 			let burn = 0n
 			const leaves = snapshot[outcome]
 			if (leaves === undefined) throw new Error('Missing leaves')
-			// Newest first, one transaction per proof, so every nullifier path is rebuilt against a changed root.
+			// Newest first, one transaction per proof; game-local identities reject every replay.
 			for (const leaf of [...leaves].reverse()) {
 				const expected = expectedWinningClaim(leaf.amount, leaf.cumulative, binding, winning)
 				const before = await e2e.rep(child.universe, leaf.depositor)
@@ -211,9 +210,9 @@ describe('audit4: carry proofs three generations deep with multi-peak mountain r
 				burn += expected.burn
 				expect(await e2e.gameBalance(child.game)).toBe(startingBacking - paid - burn)
 				// Replays: the stale path, a fresh empty path, and the current path.
-				await expect(simulate(child.pool, outcome, [proof])).rejects.toThrow('Bad nullifier proof')
-				await expect(simulate(child.pool, outcome, [e2e.proofFor(leaves, leaf, empty())])).rejects.toThrow('Bad nullifier proof')
-				await expect(simulate(child.pool, outcome, [e2e.proofFor(leaves, leaf, tree)])).rejects.toThrow('Bad nullifier proof')
+				await expect(simulate(child.pool, outcome, [proof])).rejects.toThrow('Deposit settled')
+				await expect(simulate(child.pool, outcome, [e2e.proofFor(leaves, leaf, empty())])).rejects.toThrow('Deposit settled')
+				await expect(simulate(child.pool, outcome, [e2e.proofFor(leaves, leaf, tree)])).rejects.toThrow('Deposit settled')
 			}
 			for (const leaf of await e2e.localLeaves(child.game, outcome)) {
 				const expected = expectedWinningClaim(leaf.amount, leaf.cumulative, binding, winning)

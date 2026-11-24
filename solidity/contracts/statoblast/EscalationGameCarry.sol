@@ -164,12 +164,16 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 	function _verifyAndConsumeCarriedDepositProof(uint8 outcomeIndex, CarriedDepositProof calldata proof) internal {
 		require(forkCarrySnapshotInitialized(), 'Fork snapshot incomplete');
 		_verifyCarriedDepositMerkleMountainRangeProof(outcomeIndex, proof);
-		_verifyAndAdvanceNullifier(outcomeIndex, proof.parentDepositIndex, proof.leafIndex, proof.nullifierSiblings);
+		if (appendOnlyCarry()) outcomeState[outcomeIndex].proofConsumedDepositIndexes.push(proof.parentDepositIndex);
+		else
+			_verifyAndAdvanceNullifier(outcomeIndex, proof.parentDepositIndex, proof.leafIndex, proof.nullifierSiblings);
 		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.consumeCarriedDeposit, (outcomeIndex, proof.parentDepositIndex, proof.amountAttoRep, _getEffectiveInheritedUnresolvedTotalAttoRep(outcomeIndex))));
 	}
 
 	function _consumeLocalDeposit(uint8 outcomeIndex, uint256 depositIndex, CarryConsumptionReason reason) internal returns (Deposit memory deposit) {
 		require(!forkContinuation || forkCarrySnapshotInitialized(), 'Fork snapshot incomplete');
+		if (appendOnlyCarry())
+			require(getFinalQuestionResolution() != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
 		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
 		require(depositIndex < selectedOutcomeState.localNodeIds.length, 'Bad deposit index');
 		uint256 stableParentDepositIndex = _getStableLocalParentDepositIndex(outcomeIndex, depositIndex);
@@ -248,7 +252,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		state.consumedParentDepositIndexes[stableParentDepositIndex] = true;
 		state.localUnresolvedTotalAttoRep -= amountAttoRep;
 		uint256 nodeId = state.localNodeIds[depositIndex];
-		_clearLocalCarryLeafFromCurrentSnapshot(state, nodes[nodeId].carryLeafIndex);
+		if (!appendOnlyCarry()) _clearLocalCarryLeafFromCurrentSnapshot(state, nodes[nodeId].carryLeafIndex);
 		_consumeUnresolvedRepForClaimOwners(depositor, outcomeIndex, amountAttoRep);
 	}
 

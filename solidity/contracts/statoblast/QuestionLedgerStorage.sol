@@ -5,7 +5,10 @@ import { EscalationGame } from './EscalationGame.sol';
 import { SystemState } from './interfaces/IQuestionLedger.sol';
 import { ISecurityPoolAccounting } from './interfaces/ISecurityPoolAccounting.sol';
 
-/// @dev Per-question settlement caches and reporting state. All delegate targets share this layout.
+/// @dev Per-question checkpoint evidence and reporting state. All delegate targets share this layout.
+/// The three settlement fields describe the last synchronized mutation, not live quotes.
+/// Accounting events expose that snapshot to indexers; keepers use its clock to decide
+/// whether another checkpoint is needed. Live pricing reads the central settlement book.
 abstract contract QuestionLedgerStorage {
 	EscalationGame public escalationGame;
 	uint256 public settlementCollateralAttoEth;

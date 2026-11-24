@@ -31,8 +31,8 @@ describe('protocol boundary hardening', () => {
 		const artifact = artifacts.test_CheckedCastHarness_CheckedCastHarness
 		const address = await deployContract(fixture.owner(), encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}` }))
 		const target = { abi: artifact.abi, address }
-		expect(await fixture.owner().readContract({ ...target, functionName: 'toUint48', args: [(1n << 48n) - 1n] })).toBe((1n << 48n) - 1n)
-		await expect(fixture.owner().readContract({ ...target, functionName: 'toUint48', args: [1n << 48n] })).rejects.toThrow('Timestamp exceeds uint48')
+		for (const value of [0n, 1n, (1n << 48n) - 1n]) expect(await fixture.owner().readContract({ ...target, functionName: 'toUint48', args: [value] })).toBe(value)
+		for (const value of [1n << 48n, (1n << 256n) - 1n]) await expect(fixture.owner().readContract({ ...target, functionName: 'toUint48', args: [value] })).rejects.toThrow('Timestamp exceeds uint48')
 	})
 	test('#1357 handles full-width logarithm inputs without overflowing the normalization loop', async () => {
 		const result = await fixture.owner().readContract({ abi: verifierArtifact.abi, address: getInfraContractAddresses().escalationGameProofVerifier, functionName: 'computeLnRatioScaled', args: [1n, (1n << 256n) - 1n] })

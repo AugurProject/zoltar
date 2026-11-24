@@ -101,7 +101,7 @@ describe('Statoblast: native fork reporter registration', () => {
 		expect(await escrow()).toBe(0n)
 	})
 
-	test('child liquidation leaves both inherited and local reporter claims with their depositor', async () => {
+	test('#1539 child liquidation preserves reporter claims and canonical carry needs no nullifier witness', async () => {
 		const sourceGame = await prepareReport(400n * unit)
 		const owner = fixture.owner()
 		const reporter = fixture.other()
@@ -144,12 +144,12 @@ describe('Statoblast: native fork reporter registration', () => {
 		await fixture.base.mockWindow.setTime(end + 1n)
 		const reporterBefore = await getERC20Balance(owner, token, reporter.account.address)
 		const keeperBefore = await getERC20Balance(owner, token, owner.account.address)
-		await writeContractAndWait(owner, () => owner.writeContract({ ...pool, functionName: 'withdrawForkedEscalationDeposits', args: [1, [proof]] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ ...pool, functionName: 'withdrawForkedEscalationDeposits', args: [1, [{ ...proof, nullifierSiblings: [] }]] }))
 		await writeContractAndWait(reporter, () => reporter.writeContract({ ...pool, functionName: 'withdrawFromEscalationGame', args: [1, [0n]] }))
 		expect(await getERC20Balance(owner, token, reporter.account.address)).toBe(reporterBefore + totalEscrow)
 		expect(await getERC20Balance(owner, token, owner.account.address)).toBe(keeperBefore)
 		expect(await escrow()).toBe(0n)
-		await expect(owner.writeContract({ ...pool, functionName: 'withdrawForkedEscalationDeposits', args: [1, [proof]] })).rejects.toThrow()
+		await expect(owner.writeContract({ ...pool, functionName: 'withdrawForkedEscalationDeposits', args: [1, [{ ...proof, nullifierSiblings: [] }]] })).rejects.toThrow()
 	})
 
 	test('security pool reporter history freezes without the removed standalone fork registry', async () => {

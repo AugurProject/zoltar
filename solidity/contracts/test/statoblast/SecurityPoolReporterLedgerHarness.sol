@@ -37,6 +37,11 @@ contract SecurityPoolReporterLedgerHarness {
 		ledger.depositForGame(address(this), amountAttoRep);
 	}
 
+	function depositAndSchedule(uint256 amountAttoRep, uint48 finalAfter) external {
+		IERC20(address(zoltar.getRepToken(universeId))).safeTransferFrom(msg.sender, address(ledger), amountAttoRep);
+		ledger.depositAndScheduleFinality(address(this), amountAttoRep, finalAfter);
+	}
+
 	function creditUnfunded(uint256 amountAttoRep) external {
 		ledger.depositForGame(address(this), amountAttoRep);
 	}

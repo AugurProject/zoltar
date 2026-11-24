@@ -70,7 +70,7 @@ interface IQuestionLedger {
 	function updateSettlementCollateral() external;
 
 	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] calldata proofs) external;
-	function createCompleteSet(uint256 cash) external;
+	function createCompleteSet(uint256 cash, address recipient, uint256 minimumShares, uint256 fee, uint256 premium) external returns (uint256);
 	function redeemCompleteSet(uint256 amountAttoShares) external;
 
 	function escalationGame() external view returns (EscalationGame);

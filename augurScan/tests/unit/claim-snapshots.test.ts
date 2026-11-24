@@ -64,7 +64,7 @@ peaks[0] = third
 peaks[1] = bagCarryPeaks([first, second])
 
 const fixtureRead =
-	(options: { consumed?: bigint[]; badRoot?: boolean; badNullifier?: boolean; pending?: boolean; cycle?: boolean; recordedForkThreshold?: bigint; forkTime?: bigint } = {}): StateRead =>
+	(options: { appendOnly?: boolean; consumed?: bigint[]; badRoot?: boolean; badNullifier?: boolean; pending?: boolean; cycle?: boolean; recordedForkThreshold?: bigint; forkTime?: bigint } = {}): StateRead =>
 	async (target, _abi, name, args = []) => {
 		const kind = fixtureKinds.get(target)
 		if (kind === undefined) throw new Error(`Unexpected claim target ${target}`)
@@ -75,6 +75,8 @@ const fixtureRead =
 		switch (name) {
 			case 'questionLedger':
 				return target === root ? rootPool : childPool
+			case 'appendOnlyCarry':
+				return options.appendOnly ?? false
 			case 'forkContinuation':
 				return target === child
 			case 'parent':
@@ -100,7 +102,7 @@ const fixtureRead =
 					balanceAttoRep: 150n,
 					snapshotLeafCount: target === child && outcome === 1 ? 3n : 0n,
 					snapshotCarryRoot: target === child && outcome === 1 && !options.badRoot ? buildCarryMerkleMountainRangeProof(hashes, 0).root : zero,
-					currentNullifierRoot: options.badNullifier ? zero : createSparseNullifier(target === child && outcome === 1 ? (options.consumed ?? []) : []).getRoot(),
+					currentNullifierRoot: options.badNullifier ? zero : createSparseNullifier(!options.appendOnly && target === child && outcome === 1 ? (options.consumed ?? []) : []).getRoot(),
 					localHeadNodeId: target === root && outcome === 1 ? 3n : 0n,
 				}
 			case 'getCarryLeafPageByOutcome':
@@ -204,6 +206,8 @@ test('ancestry reconstruction accepts 32 games including the sampled game and re
 		switch (name) {
 			case 'questionLedger':
 				return pool(id - 1000)
+			case 'appendOnlyCarry':
+				return false
 			case 'forkContinuation':
 				return id !== 1000
 			case 'parent':
@@ -247,5 +251,14 @@ test('authenticated claims need no ancestor preparation', async () => {
 		expect(position['retained_principal_atto_rep']).toBe(position['principal_atto_rep'])
 		expect(position['reward_amount_atto_rep']).toBe(position['principal_atto_rep'])
 		expect(position['payout_atto_rep']).toBeDefined()
+	}
+})
+
+test('#1539 canonical claim samples omit nullifier witnesses and filter spent identities', async () => {
+	const result = await sampleClaimPositions(child, fixtureRead({ appendOnly: true, consumed: [0n] }), state)
+	expect(result.positions).toHaveLength(2)
+	for (const position of result.positions) {
+		const proof = position['proof']
+		expect(proof).toMatchObject({ nullifierSiblings: [] })
 	}
 })

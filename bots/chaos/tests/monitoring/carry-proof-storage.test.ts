@@ -208,3 +208,13 @@ test('derives the payout from the threshold frozen at the first winning claim', 
 	fixture.setFrozenForkThreshold(5n)
 	await expect(scan(fixture)).rejects.toThrow('economics')
 })
+
+test('#1539 canonical carry builds an empty witness and retains game-local replay filtering', async () => {
+	const fixture = storageFixture(true)
+	const result = await scan(fixture)
+	expect(result.withdrawals[0]?.proof.nullifierSiblings).toEqual([])
+	const target = fixture.games.find(game => game.game === child)
+	if (target === undefined) throw new Error('Missing child fixture')
+	target.consumed.push(fixture.leaf.leaf.parentDepositIndex)
+	expect(await load(fixture)).toEqual([])
+})

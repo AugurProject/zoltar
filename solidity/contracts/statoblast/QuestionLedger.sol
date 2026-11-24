@@ -33,6 +33,10 @@ import { QuestionLedgerSettlementSync } from './QuestionLedgerSettlementSync.sol
 import { QuestionLedgerAccountingDelegate } from './QuestionLedgerAccountingDelegate.sol';
 import { ISecurityPoolSettlement } from './interfaces/ISecurityPoolSettlement.sol';
 
+interface ICompletePurchaseFunding {
+	function completePurchaseFunding(uint256 fee, uint256 premium) external;
+}
+
 // Question ledger for one question and one universe, settled in its configured collateral token.
 contract QuestionLedger is QuestionLedgerStorage {
 	using SafeERC20Ops for IERC20;
@@ -185,12 +189,14 @@ contract QuestionLedger is QuestionLedgerStorage {
 
 	// Complete Sets
 	/// @notice Mints complete sets through the authorized security pool purchase path for `cash` raw collateral units while no escalation game exists.
-	function createCompleteSet(uint256 cash) external isOperational {
+	function createCompleteSet(uint256 cash, address recipient, uint256 minimumShares, uint256 fee, uint256 premium) external isOperational returns (uint256 completeSetsToMintAttoShares) {
 		bytes memory result = DelegateCall.invoke(operationsDelegate, abi.encodeCall(QuestionLedgerSettlementDelegate.createCompleteSet, (cash)));
-		uint256 completeSetsToMintAttoShares = abi.decode(result, (uint256));
+		completeSetsToMintAttoShares = abi.decode(result, (uint256));
+		require(completeSetsToMintAttoShares > 0 && completeSetsToMintAttoShares >= minimumShares, 'Minimum shares not met');
 		_emitQuestionLedgerAccountingCheckpoint(AccountingReason.CollateralReconciliation);
-		shareToken.mintCompleteSets(universeId, msg.sender, completeSetsToMintAttoShares);
 		refreshSecurityPoolFees();
+		ICompletePurchaseFunding(msg.sender).completePurchaseFunding(fee, premium);
+		shareToken.mintCompleteSets(universeId, recipient, completeSetsToMintAttoShares);
 	}
 
 	/// @notice Burns `amountAttoShares` complete sets from the caller and sends the matching settlement collateral in the configured token.

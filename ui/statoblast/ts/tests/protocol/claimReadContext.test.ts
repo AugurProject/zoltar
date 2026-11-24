@@ -12,6 +12,7 @@ const replacement = keccak256('0x02')
 
 function emptyCarryResponse(functionName: string) {
 	if (functionName === 'escalationGame') return game
+	if (functionName === 'appendOnlyCarry') return false
 	if (functionName === 'forkContinuation') return false
 	if (functionName === 'getOutcomeState') return { currentCarryRoot: zeroHash, currentLeafCount: 0n, currentNullifierRoot: zeroHash, localHeadNodeId: 0n, snapshotLeafCount: 0n, snapshotCarryRoot: zeroHash }
 	if (functionName === 'getCarryLeafPageByOutcome') return [[], 0n]
@@ -87,7 +88,7 @@ for (const mode of ['stable', 'reorg', 'continuous reorg', 'provider error', 'ba
 		if (mode === 'continuous reorg' || mode === 'provider error') await expect(result).rejects.toThrow(mode === 'continuous reorg' ? 'changed repeatedly' : 'RPC disconnected')
 		else await expect(result).resolves.toEqual([])
 		const expectedAttempts = mode === 'stable' || mode === 'provider error' ? 1 : 2
-		expect(requests).toBe(mode === 'provider error' ? 1 : expectedAttempts * 7)
+		expect(requests).toBe(mode === 'provider error' ? 1 : expectedAttempts * 8)
 		expect(attempts).toBe(expectedAttempts)
 		expect(anchors).toBe(expectedAttempts * 2)
 	})
@@ -119,5 +120,5 @@ test('separate claim requests never reuse mutable cached results', async () => {
 	}
 	await load(client)
 	await load(client)
-	expect(reads).toBe(14)
+	expect(reads).toBe(16)
 })

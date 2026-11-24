@@ -980,7 +980,9 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 				vaultTotals[index] = vaultOutcomeTotal - amountAttoRep
 			}
 			const leaves = state.escalationCarryLeaves.get(log.emitter)?.[index]
-			if (leaves !== undefined) {
+			// Canonical consumption retains the historical membership root. Standalone
+			// mutable consumption emits the root after removing this leaf.
+			if (leaves !== undefined && state.escalationCarryRoots.get(log.emitter)?.[index] !== resultingCarryRoot) {
 				const carryLeafIndex = Number.parseInt(deposit.carryLeafIndex.toString(), 10)
 				if (!Number.isSafeInteger(carryLeafIndex) || carryLeafIndex < 0 || carryLeafIndex >= leaves.length) throw new Error('local carry leaf index is out of range')
 				leaves[carryLeafIndex] = ZERO_HASH
