@@ -14,12 +14,12 @@ export const reportingActivationHint = 'Select an outcome side above to enable r
 export const settlementSelectionRequired = 'Select at least one deposit or use the claim or clear action for this side.'
 export const triggerZoltarFork = 'Trigger universe fork'
 export const selectedSideBelowMinimumReason = 'Remaining selected-side capacity is below the minimum report.'
-export const continueForkMigrationDetail = 'Your escalation deposits already carry over to each child pool. Once a child question finalizes, claim winning deposits there; the parent deposits do not need to be migrated.'
+export const continueForkMigrationDetail = 'Your escalation deposits already carry over to each child question. Once a child question finalizes, claim winning deposits there; the parent deposits do not need to be migrated.'
 export const reportAmountFieldLabel = 'Report amount'
 export const escalationStarted = 'Escalation started'
 export const chooseDepositsToSettle = 'Choose deposits to settle'
-export const forkAlreadyTriggeredReportReason = 'Escalation ended without a decision and the universe fork has already been triggered for this pool. Continue in Fork choices and recovery.'
-export const forkAlreadyTriggeredSettlementReason = 'Dispute-staked REP remains in escalation, which ended without a decision. The universe fork has already been triggered for this pool, so continue in Fork choices and recovery.'
+export const forkAlreadyTriggeredReportReason = 'Escalation ended without a decision and the universe fork has already been triggered for this question. Continue in Fork choices and recovery.'
+export const forkAlreadyTriggeredSettlementReason = 'Dispute-staked REP remains in escalation, which ended without a decision. The universe fork has already been triggered for this question, so continue in Fork choices and recovery.'
 export const forkTriggerInstruction = 'Escalation ended without a decision, so this question can only resolve through a universe fork. Trigger it unless someone else already has; until then, all escalation deposits stay locked. Triggering is permanent.'
 export const forkRequiredSettlementReason = 'Escalation ended without a decision, so deposits stay locked until someone triggers the universe fork. Settle them in Fork choices and recovery afterwards.'
 export const leadHoldingCapital = 'Amount needed to hold the lead'
@@ -46,9 +46,9 @@ export function formatAcceptedAmountTail(trimmedByTie: boolean, usesWalletFundin
 	return usesWalletFunding ? acceptedWalletAmountTail : acceptedAmountTail
 }
 export const openForkAndMigration = 'Open fork choices and recovery'
-export const managePoolPrice = 'Manage pool price'
-export const currentOraclePriceRequired = 'A current pool oracle price is required before reporting.'
-export const forkMigrationRequiredDetail = 'Set up the child pools in Fork choices and recovery. Escalation deposits carry over on their own; claim winning deposits in the child pool once its question finalizes.'
+export const managePoolPrice = 'Manage security pool price'
+export const currentOraclePriceRequired = 'A current security pool oracle price is required before reporting.'
+export const forkMigrationRequiredDetail = 'Set up the child questions in Fork choices and recovery. Escalation deposits carry over on their own; claim winning deposits in the child universe once its question finalizes.'
 export const submittingReportTitle = 'Submitting report'
 export const approvingRepTitle = 'Approving REP'
 export const settlingEscalationDepositsTitle = 'Settling escalation deposits'
@@ -61,7 +61,7 @@ export const winningPayout = 'Winning payout'
 export const losingDepositSettlement = 'Losing deposit settlement'
 export const currentClaimType = 'Current claim type:'
 export const refreshFinalizedOutcomeReason = 'Escalation has ended. Refresh reporting to view the finalized outcome before settling deposits.'
-export const poolFinalizedReason = 'This pool is already finalized.'
+export const poolFinalizedReason = 'This question is already finalized.'
 export const questionFinalizationRequired = 'Escalation deposits cannot be settled until the question is finalized.'
 export const worthAfterFinalizationPendingFinalization = 'Worth after finalization: Pending finalization'
 export const presetOutcomeSelectionRequired = 'Select an outcome side before using presets.'
@@ -74,7 +74,7 @@ export const totalSideDisputeStakedRep = 'All reporters'
 export const yourSideDisputeStakedRep = 'You'
 export const triggeringZoltarFork = 'Triggering universe fork…'
 export const walletUnsettledDepositsEmpty = 'Connected wallet has no unsettled escalation deposits.'
-export const forkCarriedSettlementRedirectDetail = 'This pool also has deposits carried from the parent universe. Settle those in Fork choices and recovery.'
+export const forkCarriedSettlementRedirectDetail = 'This question also has deposits carried from the parent universe. Settle those in Fork choices and recovery.'
 
 export const reportingParameters = 'Reporting parameters'
 
@@ -95,14 +95,14 @@ export const minimumPreset = <Amount>(kind: keyof typeof minimumPresetLabels, am
 export const rewardPreset = <Amount>(amount?: Amount): CopyParts<Amount> => (amount === undefined ? ['Max reward'] : ['Max reward (', amount, ')'])
 export const reportAmountPlaceholder = '0'
 export const reportAmountLabel = (outcome: string, amount: string) => `Report ${outcome} · ${amount} REP`
-export const paidFromVault = 'Paid from: pool vault REP (no approval needed)'
+export const paidFromVault = 'Paid from: security pool vault REP (no approval needed)'
 export const paidFromWallet = 'Paid from: wallet REP'
 export const availableBalance = (amount: string) => `Available: ${amount} REP.`
 export const yourPositions = 'Your positions'
 export const resultSummary = (outcome: string) => `Resolved as ${outcome}.`
 export const claimDeposits = (outcome: string, amount: string) => `Claim ${amount}\u00a0REP from ${outcome}`
 export const clearDeposits = (outcome: string) => `Clear ${outcome} deposits (worth 0 REP)`
-export const clearLosingDepositsDetail = 'Losing ordinary deposits return no REP and require no cleanup transaction. Reporter deposits are separate from portfolio capital.'
+export const clearLosingDepositsDetail = 'Losing ordinary deposits return no REP and require no cleanup transaction. Reporter deposits are separate from security pool capital.'
 export const clearLosingDepositsReviewDescription = 'Returns no REP. Ordinary losing deposits retire automatically at finality.'
 export const results = 'Results'
 
@@ -154,7 +154,7 @@ export const forkViewerStake = <Amount>(side: string, stake: Amount): CopyParts<
 
 export const updateReminder = 'Update your reminder (.ics)'
 export const zeroBalanceStatusDetail = 'If all balances stay at zero, the timeout outcome is Invalid.'
-export const noVaultRepSelectWallet = 'No REP is available in your pool vault. Select Wallet REP to report.'
+export const noVaultRepSelectWallet = 'No REP is available in your security pool vault. Select Wallet REP to report.'
 
 export const loadingVaultFunding = 'Loading vault funding requirements…'
 
@@ -163,10 +163,10 @@ export const forkTriggerWarningTitle = 'This report triggers a universe fork'
 export const forkTriggerWarning = (outcome: string, threshold: string) => `Another side already holds ${threshold} REP. Filling ${outcome} to the same threshold ends escalation without a decision: deposits lock, and the question can only resolve by forking the universe into Yes, No, and Invalid. This can’t be undone.`
 export const forkTriggerConfirmation = 'I understand this report ends escalation and leads to a universe fork.'
 export const forkTriggerConfirmationRequired = 'Confirm that this report triggers the universe fork.'
-export const reportingRepApprovalRequired = 'Approve REP for this security pool before reporting.'
+export const reportingRepApprovalRequired = 'Approve REP for this question before reporting.'
 export const reportingApprovalAction = 'reporting'
 export const reportAmountRequired = 'Enter a report amount.'
-export const forkTriggerConfirmationAndApprovalRequired = 'Confirm that this report triggers the universe fork and approve REP for this security pool before reporting.'
+export const forkTriggerConfirmationAndApprovalRequired = 'Confirm that this report triggers the universe fork and approve REP for this question before reporting.'
 export const maxBelowForkHint = <Amount>(amount: Amount): CopyParts<Amount> => ['Max stops at ', amount, ', just below the non-decision threshold. Confirm the fork warning to fill the side.']
 export const maxBelowForkReason = 'Max stops below the non-decision threshold, which leaves less than the minimum first report. Enter an amount to fill the side and trigger the fork.'
 export const reportAndTriggerForkLabel = (outcome: string, amount: string) => `Report ${outcome} & trigger fork · ${amount} REP`

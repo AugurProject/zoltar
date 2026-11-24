@@ -8,7 +8,7 @@ type RevertExplanation = TransactionFailureExplanation & Readonly<{ reasons: rea
 
 const SLIPPAGE_REASONS = ['Purchase fee exceeds budget', 'Minimum REP output', 'Minimum long shares', 'Maximum long shares', 'Minimum ETH output', 'Swap slippage', 'Liquidity slippage', 'Liquidity price slippage', 'Minimum liquidity', 'Refreshed estimate no longer satisfies']
 
-// Contracts revert with plain strings (see solidity/contracts/trading and SecurityPool); each group shares one explanation.
+// Contracts revert with plain strings (see solidity/contracts/trading and QuestionLedger); each group shares one explanation.
 const REVERT_EXPLANATIONS: readonly RevertExplanation[] = [
 	{
 		// The last reason is the client-side check that the pre-signing simulation still meets the approved estimate bounds.
@@ -24,8 +24,8 @@ const REVERT_EXPLANATIONS: readonly RevertExplanation[] = [
 		cause: 'Trading has ended for this market.',
 		nextStep: 'Reload the market to see its current status.',
 	},
-	{ reasons: ['Purchase exceeds healthy capacity'], cause: 'The security pool does not have enough minting capacity for this size.', nextStep: 'Try a smaller amount.' },
-	{ reasons: ['Portfolio backing insufficient'], cause: 'The security pool does not have enough backing for this size.', nextStep: 'Try a smaller amount.' },
+	{ reasons: ['Purchase exceeds healthy capacity'], cause: 'This question does not have enough minting capacity for this size.', nextStep: 'Try a smaller amount.' },
+	{ reasons: ['Security pool backing insufficient'], cause: 'The security pool does not have enough backing for this size.', nextStep: 'Try a smaller amount.' },
 	{
 		reasons: ['Insufficient output', 'Net input is zero', 'Input is zero', 'Complete set is zero', 'Exchange rate undefined', 'Liquidity rounds to zero', 'Liquidity output is zero', 'Liquidity is zero', 'Initial reserves round to zero', 'Initial liquidity too small'],
 		cause: 'The amount is too small to trade.',

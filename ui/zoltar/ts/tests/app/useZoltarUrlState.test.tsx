@@ -22,7 +22,7 @@ describe('useZoltarUrlState', () => {
 	beforeEach(() => {
 		installTestRouting()
 		cleanupDom = installDomEnvironment(
-			'http://localhost/#/zoltar?network=sepolia&rpcUrl=https%3A%2F%2Frpc.example&simulate=1&simScenario=deployed&simState=saved-1&universe=7&zoltarView=create&openOracleView=trading&openOracleReportId=10&securityPoolsView=operate&securityPool=0x1111111111111111111111111111111111111111',
+			'http://localhost/#/zoltar?network=sepolia&rpcUrl=https%3A%2F%2Frpc.example&simulate=1&simScenario=deployed&simState=saved-1&universe=7&zoltarView=create&openOracleView=trading&openOracleReportId=10&questionLedgersView=operate&questionLedger=0x1111111111111111111111111111111111111111',
 		).cleanup
 	})
 
@@ -58,13 +58,13 @@ describe('useZoltarUrlState', () => {
 		expect(requireState(hookState).activeUniverseId).toBe(7n)
 		expect(requireState(hookState).zoltarView).toBe('create')
 		expect(window.location.hash).not.toContain('openOracle')
-		expect(window.location.hash).not.toContain('securityPool')
+		expect(window.location.hash).not.toContain('questionLedger')
 		for (const sharedParameter of ['network=sepolia', 'rpcUrl=https%3A%2F%2Frpc.example', 'simulate=1', 'simScenario=deployed', 'simState=saved-1']) expect(window.location.hash).toContain(sharedParameter)
 		await act(() => requireState(hookState).setZoltarView('questions'))
 		expect(window.location.hash).toContain('universe=7')
 		expect(window.location.hash).toContain('zoltarView=questions')
 		expect(window.location.hash).not.toContain('openOracle')
-		expect(window.location.hash).not.toContain('securityPool')
+		expect(window.location.hash).not.toContain('questionLedger')
 		for (const sharedParameter of ['network=sepolia', 'rpcUrl=https%3A%2F%2Frpc.example', 'simulate=1', 'simScenario=deployed', 'simState=saved-1']) expect(window.location.hash).toContain(sharedParameter)
 
 		await act(() => requireState(hookState).setActiveUniverseId(9n))

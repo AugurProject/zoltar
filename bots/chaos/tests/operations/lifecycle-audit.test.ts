@@ -1,4 +1,4 @@
-import { auctionFixture, readyChildFixture } from '../support/portfolio-fixtures.ts'
+import { auctionFixture, readyChildFixture } from '../support/security-pool-fixtures.ts'
 import { describe, expect, test } from 'bun:test'
 import { canonicalLifecyclePresence, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
 import { classifiedMethod } from '../support/canonical-contracts.ts'
@@ -96,7 +96,7 @@ describe('raw lifecycle identity audit', () => {
 		expect(plan?.metadata).toEqual({ balanceBefore: '777', escalationGame: pool.escalationGame, pool: pool.address })
 		expect(plan?.classification).toBe('selectable')
 		expect(plan?.obligation).toBe(false)
-		expect(classifiedMethod('EscalationGame', 'sweepResidualRepToSecurityPool')).toMatchObject({ classification: 'selectable', operationId: 'statoblast.escalation.sweep-residual' })
+		expect(classifiedMethod('EscalationGame', 'sweepResidualRepToQuestionLedger')).toMatchObject({ classification: 'selectable', operationId: 'statoblast.escalation.sweep-residual' })
 	})
 })
 
@@ -108,7 +108,7 @@ test('native question preparation retains its identity while shared branch readi
 	pool.systemState = 1
 	universe.forkTime = '1999999000'
 	universe.forkQuestionId = pool.questionId
-	const preparation = { ...readyChildFixture(pool.address, pool.portfolio), childPool: address(0), historyReady: false }
+	const preparation = { ...readyChildFixture(pool.address, pool.securityPool), childPool: address(0), historyReady: false }
 	pool.childPoolPreparations['0'] = preparation
 	const first = urgentOperationPlans(snapshot, options).find(plan => plan.definitionId === 'statoblast.fork.create-child')
 	if (!first) throw new Error('Missing preparation')
@@ -123,7 +123,7 @@ test('pending native child history retains raw presence while branch activation 
 	const snapshot = snapshotFixture()
 	const pool = snapshot.pools[0]
 	if (!pool) throw new Error('Missing question')
-	const preparation = { ...readyChildFixture(pool.address, pool.portfolio), historyReady: false }
+	const preparation = { ...readyChildFixture(pool.address, pool.securityPool), historyReady: false }
 	pool.childPoolPreparations['0'] = preparation
 	const first = urgentOperationPlans(snapshot, options).find(plan => plan.definitionId === 'statoblast.child.initialize-history')
 	if (!first) throw new Error('Missing history')

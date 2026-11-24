@@ -7,7 +7,7 @@ import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { SecurityPoolCommitmentTree } from './SecurityPoolCommitmentTree.sol';
 import { SecurityPoolBoundClones } from './SecurityPoolBoundClones.sol';
 
-/// @notice Portfolio-owned collateral, commitment, fee and retirement accounting.
+/// @notice Security pool-owned collateral, commitment, fee and retirement accounting.
 /// @dev The controller settles time and prices before mutations and owns token
 /// custody. Keys are exact uint256 health thresholds followed by unique uint96
 /// position IDs. Balanced paths depend on live positions, never price-key entropy.

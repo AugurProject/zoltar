@@ -524,7 +524,7 @@ test('failed preflight invalidates an earlier preview and redacts sensitive erro
 	await expect(controller.handle({ action: 'execute', previewId: first['previewId'] })).rejects.toThrow('Preview the operation again')
 })
 
-test('manual portfolio mint refreshes the exact cash quote for both preview and execution', async () => {
+test('manual security pool mint refreshes the exact cash quote for both preview and execution', async () => {
 	const base = fixture('statoblast.complete-set.create')
 	base.configuration.settings.submission.mode = 'private'
 	const pool = base.scan.snapshot.pools[0]

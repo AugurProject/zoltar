@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { ISecurityPool } from '../../statoblast/interfaces/ISecurityPool.sol';
+import { IQuestionLedger } from '../../statoblast/interfaces/IQuestionLedger.sol';
 import { ITradingShareToken } from './ITradingShareToken.sol';
 
 interface ITwoWayConstantProductPair {
@@ -22,7 +22,7 @@ interface ITwoWayConstantProductPair {
 	function symbol() external view returns (string memory);
 	function decimals() external view returns (uint8);
 	function factory() external view returns (address);
-	function securityPool() external view returns (ISecurityPool);
+	function questionLedger() external view returns (IQuestionLedger);
 	function shareToken() external view returns (ITradingShareToken);
 	function universeId() external view returns (uint248);
 	function questionId() external view returns (uint256);

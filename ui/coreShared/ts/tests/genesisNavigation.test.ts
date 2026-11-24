@@ -16,7 +16,7 @@ test('initial choice preserves an addressed route and its fork universe', () => 
 
 test('switching genesis retires addressed entities, fork IDs, and saved states while keeping the chain environment', () => {
 	const url = new URL(
-		getGenesisUniverseHref('no', true, 'http://localhost/?genesis=yes&universe=42&simState=saved&simulate=1&simWallet=disconnected&questionId=0x321&securityPool=0x123&vault=0x456&zoltarView=migrate#/pools/0x123/vaults?universe=42&simState=saved&vault=0x456&rpcUrl=https%3A%2F%2Frpc.example&simScenario=deployed'),
+		getGenesisUniverseHref('no', true, 'http://localhost/?genesis=yes&universe=42&simState=saved&simulate=1&simWallet=disconnected&questionId=0x321&questionLedger=0x123&vault=0x456&zoltarView=migrate#/pools/0x123/vaults?universe=42&simState=saved&vault=0x456&rpcUrl=https%3A%2F%2Frpc.example&simScenario=deployed'),
 	)
 	expect(url.search).toBe('?genesis=no&simulate=1&simWallet=disconnected')
 	expect(url.hash).toBe('#/?rpcUrl=https%3A%2F%2Frpc.example&simScenario=deployed')

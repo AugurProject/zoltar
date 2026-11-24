@@ -9,8 +9,8 @@ import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { useTradingCollateral } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useTradingCollateral.js'
 import { renderHookWithProps } from '../../support/renderHook.js'
-import { capitalClient } from '../portfolios/capitalClient.js'
-import { capitalSnapshot, owner, portfolio, token } from '../portfolios/capitalFixture.js'
+import { capitalClient } from '../security-pools/capitalClient.js'
+import { capitalSnapshot, owner, securityPool, token } from '../security-pools/capitalFixture.js'
 
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 async function setup(balance = 0n, allowance = 0n, recoveryAttoRep = 0n, recoveryToken = token) {
@@ -18,7 +18,7 @@ async function setup(balance = 0n, allowance = 0n, recoveryAttoRep = 0n, recover
 	if (collateralToken === undefined) throw new Error('Missing USDC fixture')
 	const source = capitalClient(capitalSnapshot({ collateralToken, walletCollateral: balance, collateralAllowance: allowance }))
 	source.setRead('securityPoolFactory', token)
-	source.setRead('getSecurityPoolPortfolio', portfolio)
+	source.setRead('securityPoolOf', securityPool)
 	source.setRead('questionId', zeroHash)
 	source.setRead('purchaseQuote', [0n])
 	source.setRead('quoteMintRecoveryRep', recoveryAttoRep)

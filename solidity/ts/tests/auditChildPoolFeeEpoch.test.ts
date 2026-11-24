@@ -3,12 +3,12 @@ import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
 	Zoltar_Zoltar as zoltarArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as settlementArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_SecurityPoolSettlement_SecurityPoolSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 } from '../types/contractArtifact'
@@ -19,10 +19,10 @@ import { getInfraContractAddresses } from '../testSupport/simulator/utils/contra
 import { addRepToMigrationBalance, splitMigrationRep, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress, getZoltarForkThreshold } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
-describe('Shared portfolio child fee clock', () => {
-	const fixture = useSecurityPoolPortfolioFixture()
+describe('Shared security pool child fee clock', () => {
+	const fixture = useSecurityPoolFixture()
 	test.each([
 		{ own: false, delay: 0n },
 		{ own: false, delay: 10n * DAY },
@@ -33,14 +33,14 @@ describe('Shared portfolio child fee clock', () => {
 		await fixture.mint()
 		const { base } = fixture
 		const owner = fixture.owner()
-		const portfolio = { abi: portfolioArtifact.abi, address: fixture.portfolio }
-		const parent = fixture.poolFor(base.questionId).securityPool
+		const securityPool = { abi: securityPoolArtifact.abi, address: fixture.securityPool }
+		const parent = fixture.poolFor(base.questionId).questionLedger
 		const forkQuestion = { ...base.questionData, title: 'Unrelated child fee fork', endTime: (await base.mockWindow.getTime()) - 1n, startTime: 0n }
 		if (own) await base.mockWindow.setTime(base.questionData.endTime + 1n)
 		else await createQuestion(owner, forkQuestion, base.outcomes)
 		await approveToken(owner, getRepTokenAddress(base.genesisUniverse), getZoltarAddress())
 		await forkUniverse(owner, base.genesisUniverse, own ? base.questionId : getQuestionId(forkQuestion, base.outcomes))
-		const controller = await owner.readContract({ ...portfolio, functionName: 'forkController' })
+		const controller = await owner.readContract({ ...securityPool, functionName: 'forkController' })
 		const fork = { abi: forkArtifact.abi, address: controller }
 		await writeContractAndWait(owner, () => owner.writeContract({ ...fork, functionName: 'choose', args: [base.genesisUniverse, 1n] }))
 		// Fund a future child report without depending on underwriter principal withdrawals.
@@ -50,7 +50,7 @@ describe('Shared portfolio child fee clock', () => {
 		await splitMigrationRep(owner, base.genesisUniverse, reportingRep, [1n])
 		const forkTime = (await getUniverseData(owner, base.genesisUniverse)).forkTime
 		const child = getChildUniverseId(base.genesisUniverse, 1n)
-		const frozenCash = await owner.readContract({ ...portfolio, functionName: 'quoteQuestionSettlement', args: [parent, 10n * unit] })
+		const frozenCash = await owner.readContract({ ...securityPool, functionName: 'quoteQuestionSettlement', args: [parent, 10n * unit] })
 		await base.mockWindow.setTime(forkTime + 63n * DAY + delay)
 		await writeContractAndWait(owner, () => owner.writeContract({ ...fork, functionName: 'startBranch', args: [base.genesisUniverse, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...fork, functionName: 'finalizeBranch', args: [child] }))
@@ -58,17 +58,17 @@ describe('Shared portfolio child fee clock', () => {
 		const clock = await owner.readContract({ ...fork, functionName: 'clocks', args: [child] })
 		expect(clock[0]).toBe(forkTime)
 		expect(clock[1]).toBe(activatedAt)
-		expect(await owner.readContract({ ...fork, functionName: 'portfolioTime', args: [child] })).toBe(forkTime)
-		const engine = await owner.readContract({ ...portfolio, functionName: 'settlement' })
+		expect(await owner.readContract({ ...fork, functionName: 'securityPoolTime', args: [child] })).toBe(forkTime)
+		const engine = await owner.readContract({ ...securityPool, functionName: 'settlement' })
 		expect(await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'feeTimestamp', args: [child] })).toBe(activatedAt)
 		const book = await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'ledger' })
 		const bookId = await owner.readContract({ abi: settlementArtifact.abi, address: engine, functionName: 'bookIds', args: [child] })
 		const feeRate = async () => (await owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'question', args: [bookId, base.questionId] }))[0].feeRateAttoEthPerSecond
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'materializePortfolioQuestion', args: [parent, child] }))
-		const poolAddress = await owner.readContract({ ...portfolio, functionName: 'getPool', args: [base.questionId, child] })
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker, functionName: 'materializeSecurityPoolQuestion', args: [parent, child] }))
+		const poolAddress = await owner.readContract({ ...securityPool, functionName: 'getQuestionLedger', args: [base.questionId, child] })
 		const pool = { abi: poolArtifact.abi, address: poolAddress }
-		const refresh = () => writeContractAndWait(owner, () => owner.writeContract({ ...pool, functionName: 'refreshPortfolioFees' }))
-		const cash = () => owner.readContract({ ...portfolio, functionName: 'quoteQuestionSettlement', args: [poolAddress, 10n * unit] })
+		const refresh = () => writeContractAndWait(owner, () => owner.writeContract({ ...pool, functionName: 'refreshSecurityPoolFees' }))
+		const cash = () => owner.readContract({ ...securityPool, functionName: 'quoteQuestionSettlement', args: [poolAddress, 10n * unit] })
 		await refresh()
 		expect(await cash()).toBe(frozenCash)
 		await base.mockWindow.advanceTime(DAY)
@@ -87,7 +87,7 @@ describe('Shared portfolio child fee clock', () => {
 			expect(await cash()).toBe(frozenCash)
 		} else {
 			expect(await cash()).toBeLessThan(liveCash)
-			const capital = await owner.readContract({ ...portfolio, functionName: 'capitalLedger', args: [child] })
+			const capital = await owner.readContract({ ...securityPool, functionName: 'capitalLedger', args: [child] })
 			expect(await owner.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'demandAttoEth' })).toBe(await cash())
 			// Reporting replaces the holding charge with the prepaid resolution premium.
 			await base.mockWindow.setTime(base.questionData.endTime + 1n)

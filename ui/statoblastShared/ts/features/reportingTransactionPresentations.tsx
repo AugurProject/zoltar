@@ -1,6 +1,6 @@
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { createTransactionScope, securityPoolTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
+import { createTransactionScope, questionLedgerTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import * as reportingCopy from '../copy/reporting.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
@@ -27,7 +27,7 @@ export function createReportingTransactionIntent(actionName: ReportingActionResu
 	return buildIntent({
 		action: actionName,
 		rows: getReportingTransactionRows(context),
-		scope: securityPoolTransactionScope(context?.securityPoolAddress),
+		scope: questionLedgerTransactionScope(context?.questionLedgerAddress),
 		source: 'reporting',
 		submittedTitle,
 		universeId: context?.universeId,
@@ -46,7 +46,7 @@ export function createReportingSuccessPresentation(result: ReportingActionResult
 		detail,
 		hash: result.hash,
 		rows: [
-			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
+			{ label: transactionCopy.questionLedger, value: <AddressValue address={result.questionLedgerAddress} /> },
 			{ label: commonCopy.outcome, value: getReportingOutcomeLabel(result.outcome) },
 		],
 		title,

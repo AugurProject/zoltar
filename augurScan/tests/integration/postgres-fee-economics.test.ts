@@ -15,7 +15,7 @@ const address = (digit: string) => getAddress(`0x${digit.repeat(40)}`)
 const lower = (value: string) => value.toLowerCase()
 const ledger = address('1')
 const childLedger = address('2')
-const portfolio = address('3')
+const securityPool = address('3')
 const book = address('4')
 const services = address('5')
 const owner = address('a')
@@ -50,28 +50,28 @@ test.skipIf(url === undefined)('fee economics sum each universe own book, purcha
 		const snapshot = async (identity: string, blockNumber: number, readResult: Record<string, unknown>) =>
 			await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, block_timestamp, source_method, read_status, read_result, canonical)
 				VALUES (${chainId}, 'capital-ledger', ${identity}, ${blockNumber}, ${blockHash(blockNumber)}, now(), 'augurscan.capital-ledger-state.v1', 'success', ${JSON.stringify(readResult)}::text::jsonb, true)`
-		// Both universes share one portfolio, one settlement book contract and one services contract; each owns a numbered book.
-		await snapshot(lower(ledger), 1, { portfolio: lower(portfolio), universeId: '0', collateral: usdc, fees: fees('1') })
-		await snapshot(lower(ledger), 3, { portfolio: lower(portfolio), universeId: '0', collateral: usdc, fees: fees('1') })
-		await snapshot(lower(childLedger), 3, { portfolio: lower(portfolio), universeId: '7', collateral: usdc, feeReadError: 'execution reverted' })
+		// Both universes share one security pool, one settlement book contract and one services contract; each owns a numbered book.
+		await snapshot(lower(ledger), 1, { securityPool: lower(securityPool), universeId: '0', collateral: usdc, fees: fees('1') })
+		await snapshot(lower(ledger), 3, { securityPool: lower(securityPool), universeId: '0', collateral: usdc, fees: fees('1') })
+		await snapshot(lower(childLedger), 3, { securityPool: lower(securityPool), universeId: '7', collateral: usdc, feeReadError: 'execution reverted' })
 
 		const events: readonly StoredLog[] = [
-			event(1, 0, portfolio, 'CompleteSetsFunded', { universeId: '0', questionId: '42', recipient: owner, cashAttoEth: '1000', shares: '1000', purchaseFeeAttoEth: '30' }),
+			event(1, 0, securityPool, 'CompleteSetsFunded', { universeId: '0', questionId: '42', recipient: owner, cashAttoEth: '1000', shares: '1000', purchaseFeeAttoEth: '30' }),
 			event(1, 1, services, 'PremiumFunded', { universeId: '0', questionId: '42', amountAttoEth: '4', units: '4' }),
 			event(1, 2, book, 'FeeStreamReplaced', { bookId: '1', questionId: '42', rateAttoEthPerSecond: '2', end: '1800000000' }),
-			event(2, 0, book, 'AggregateFeesAccrued', { bookId: '1', portfolioTimestamp: '100', cashAttoEth: '11' }),
-			event(2, 1, book, 'AggregateFeesAccrued', { bookId: '1', portfolioTimestamp: '200', cashAttoEth: '9' }),
+			event(2, 0, book, 'AggregateFeesAccrued', { bookId: '1', securityPoolTimestamp: '100', cashAttoEth: '11' }),
+			event(2, 1, book, 'AggregateFeesAccrued', { bookId: '1', securityPoolTimestamp: '200', cashAttoEth: '9' }),
 			event(2, 2, ledger, 'EarningsClaimed', { owner, ethAmount: '15', repAmount: '2' }),
 			event(2, 3, ledger, 'UnassignedFeesBurned', { ethAmount: '1', repAmount: '0' }),
 			// The child universe's own purchase, book and ledger events must not be added to the origin universe.
-			event(2, 4, portfolio, 'CompleteSetsFunded', { universeId: '7', questionId: '42', recipient: owner, cashAttoEth: '500', shares: '500', purchaseFeeAttoEth: '99' }),
-			event(2, 5, book, 'AggregateFeesAccrued', { bookId: '2', portfolioTimestamp: '200', cashAttoEth: '77' }),
+			event(2, 4, securityPool, 'CompleteSetsFunded', { universeId: '7', questionId: '42', recipient: owner, cashAttoEth: '500', shares: '500', purchaseFeeAttoEth: '99' }),
+			event(2, 5, book, 'AggregateFeesAccrued', { bookId: '2', securityPoolTimestamp: '200', cashAttoEth: '77' }),
 			event(2, 6, childLedger, 'EarningsClaimed', { owner, ethAmount: '55', repAmount: '5' }),
 			event(2, 7, services, 'PremiumFunded', { universeId: '7', questionId: '42', amountAttoEth: '8', units: '8' }),
 			// A later replacement is the question's current stream; another question has ended its stream.
 			event(3, 0, book, 'FeeStreamReplaced', { bookId: '1', questionId: '42', rateAttoEthPerSecond: '3', end: '1900000000' }),
 			event(3, 1, book, 'FeeStreamReplaced', { bookId: '1', questionId: '43', rateAttoEthPerSecond: '0', end: '0' }),
-			event(3, 2, book, 'AggregateFeesAccrued', { bookId: '1', portfolioTimestamp: '300', cashAttoEth: '5' }),
+			event(3, 2, book, 'AggregateFeesAccrued', { bookId: '1', securityPoolTimestamp: '300', cashAttoEth: '5' }),
 		]
 		for (const item of events) await storeLogProjections(connection, chainId, item)
 
@@ -79,7 +79,7 @@ test.skipIf(url === undefined)('fee economics sum each universe own book, purcha
 		expect(rows).toHaveLength(2)
 		expect(rows[0]).toMatchObject({
 			ledger_address: lower(ledger),
-			portfolio: lower(portfolio),
+			securityPool: lower(securityPool),
 			universe_id: '0',
 			fees: fees('1'),
 			fee_read_error: null,
@@ -98,7 +98,7 @@ test.skipIf(url === undefined)('fee economics sum each universe own book, purcha
 			burn_count: 1,
 		})
 		// No read has ever carried the child's book or services contract, so its accrual and premium have no source and are
-		// left out, not reported as zero; ledger and portfolio events still count.
+		// left out, not reported as zero; ledger and security pool events still count.
 		expect(rows[1]).toMatchObject({ ledger_address: lower(childLedger), universe_id: '7', fees: null, fee_read_error: 'execution reverted', accrued_atto_eth: null, accrual_count: null, premium_funded_atto_eth: null, purchase_fees_atto_eth: '99', claimed_atto_eth: '55', claimed_atto_rep: '5', burn_count: 0 })
 		// At block 2 the third accrual has not happened.
 		expect((await feeEconomicsRows(connection, chainId, '2'))[0]).toMatchObject({ accrued_atto_eth: '20', accrual_count: 2 })
@@ -133,7 +133,7 @@ test.skipIf(url === undefined)('fee economics sum each universe own book, purcha
 		expect(((await (await api(`/api/v1/state/fees?chainId=${chainId}&atBlock=2`)).json()) as typeof body).data.universes[0]).toMatchObject({ accrued_atto_eth: '20' })
 		// The origin's latest fee read fails. Its book and services contract are known from the earlier read, so its totals stand.
 		await connection`INSERT INTO blocks (chain_id, number, hash, parent_hash, canonical, timestamp) VALUES (${chainId}, 4, ${blockHash(4)}, ${zeroHash}, true, now())`
-		await snapshot(lower(ledger), 4, { portfolio: lower(portfolio), universeId: '0', collateral: usdc, feeReadError: 'fee streams unavailable' })
+		await snapshot(lower(ledger), 4, { securityPool: lower(securityPool), universeId: '0', collateral: usdc, feeReadError: 'fee streams unavailable' })
 		expect((await feeEconomicsRows(connection, chainId, '4'))[0]).toMatchObject({ fees: null, fee_read_error: 'fee streams unavailable', accrued_atto_eth: '25', premium_funded_atto_eth: '4', purchase_fees_atto_eth: '30' })
 		expect(await questionFeeStreamRows(connection, chainId, '4', 10)).toHaveLength(2)
 		// A question created after the snapshot block lends no title to an earlier snapshot.

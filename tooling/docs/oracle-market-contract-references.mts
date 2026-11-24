@@ -1,12 +1,12 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const oracleMarketContractReferences: ContractReference[] = [
 	{
-		compiledAbiFingerprint: '4bec387c51f0e08af8b07d4b8f35af30f2fce89bab990a4dab47c3eff0fe74e8',
+		compiledAbiFingerprint: '465ae5e4cab4541e4697e17ffd30f4ba2628eb10743465b997b90b3ccee3f31c',
 		name: 'OpenOraclePriceCoordinator',
-		purpose: 'Per-question adapter to the portfolio universe\u2019s shared REP-per-collateral feed. It exposes reporting and canonical price reads without staging capital operations.',
-		readAbiFingerprint: '57561ab6a60dd586366a6da6ceb4eeeef28f14eb09d5a1a710d7c6edfc1e9e1f',
+		purpose: 'Per-question adapter to its security pool\u2019s shared REP-per-collateral feed for one universe. It exposes reporting and canonical price reads without staging capital operations.',
+		readAbiFingerprint: '42823cad2ad885dfb7efee89cf4967e14a7cbbd78fe60e6466c85499e199e283',
 		readSurface:
-			'`priceFeed` and `sharedPriceFeed` identify the shared universe feed. It owns accepted price, freshness and report candidates. `lastSettlementTimestamp` records settlement eligibility, not delayed execution time. `isPriceValid` checks the accepted price and canonical `priceValidUntil`; pending or rejected reports do not extend expiry. `pendingReportId` and `pendingReportSponsor` identify the latest candidate, without blocking independent candidates. Reports use separate escrows. `reportDelegate` implements authenticated shared report creation. `securityPool` is bound once by the coordinator factory. Capital operations may execute directly against an accepted price or as a sponsor-bound batch submitted through the shared feed. Additional validated getters: `lastPrice`, `pendingReportMaxSettlementBaseFeeAttoEthPerGas`, `minimumToken1ReportAttoEth`, `getRequestPriceCostAttoEth`, `getSettlementCallbackGasLimit`, `reputationToken`, `openOracle`, `collateralToken`, `weth`, `initialReportPriorityFeeAttoEthPerGas`, `targetPriceErrorForDispute`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, `minLiquidationPriceDistanceBps`.',
+			'`priceFeed` and `sharedPriceFeed` identify the shared universe feed. It owns accepted price, freshness and report candidates. `lastSettlementTimestamp` records settlement eligibility, not delayed execution time. `isPriceValid` checks the accepted price and canonical `priceValidUntil`; pending or rejected reports do not extend expiry. `pendingReportId` and `pendingReportSponsor` identify the latest candidate, without blocking independent candidates. Reports use separate escrows. `reportDelegate` implements authenticated shared report creation. `questionLedger` is bound once by the coordinator factory. Capital operations may execute directly against an accepted price or as a sponsor-bound batch submitted through the shared feed. Additional validated getters: `lastPrice`, `pendingReportMaxSettlementBaseFeeAttoEthPerGas`, `minimumToken1ReportAttoEth`, `getRequestPriceCostAttoEth`, `getSettlementCallbackGasLimit`, `reputationToken`, `openOracle`, `collateralToken`, `weth`, `initialReportPriorityFeeAttoEthPerGas`, `targetPriceErrorForDispute`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, `minLiquidationPriceDistanceBps`.',
 		securityBoundary:
 			'Report liveness depends on [A16 timely inclusion](./security-model.html#assumption-a16), [A17 corrector capability](./security-model.html#assumption-a17), [A18 independent correction incentive](./security-model.html#assumption-a18), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). When `lastPrice` is zero, the official client currently needs an offchain market quote to propose the first report; quote availability is a client limitation rather than a protocol security assumption. Proposals copied from a nonzero cached price do not use that quote path.',
 		readDeclarations: [
@@ -70,7 +70,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol',
 			},
 			{
-				name: 'securityPool',
+				name: 'questionLedger',
 				sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol',
 			},
 			{
@@ -171,8 +171,8 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			},
 			{
 				call: '`syncExposure()`',
-				caller: 'Anyone; pool accounting checkpoints also invoke it',
-				effect: 'Reads the live portfolio aggregate, max(standing commitments, branch-auction commitment, funded demand), and emits a checkpoint if it changed. Question finality does not independently clear this shared exposure.',
+				caller: 'Anyone; question ledger accounting checkpoints also invoke it',
+				effect: 'Reads the live security pool aggregate, max(standing commitments, branch-auction commitment, funded demand), and emits a checkpoint if it changed. Question finality does not independently clear this shared exposure.',
 				declarations: [
 					{
 						name: 'syncExposure',
@@ -180,31 +180,31 @@ export const oracleMarketContractReferences: ContractReference[] = [
 					},
 				],
 				preconditions: 'A shared coordinator must already be registered by its canonical factory.',
-				signals: 'Feed `ExposureCheckpoint` when the portfolio aggregate changes',
+				signals: 'Feed `ExposureCheckpoint` when the security pool aggregate changes',
 			},
 			{
-				call: '`setSecurityPool(securityPool)`',
+				call: '`setQuestionLedger(questionLedger)`',
 				caller: 'The coordinator\u2019s deployer only; production binding passes through the authenticated factory and deployment-worker chain',
 				effect:
-					'A nonzero value binds the pool permanently. A zero value emits SecurityPoolSet with zero but leaves the setter callable by its deployer. `SecurityPoolFactory` supplies the nonzero canonical pool immediately after deploying the pool. A prepared coordinator cannot be claimed by another caller between transactions.',
+					'A nonzero value binds the question ledger permanently. A zero value emits QuestionLedgerSet with zero but leaves the setter callable by its deployer. `SecurityPoolFactory` supplies the nonzero canonical question ledger immediately after deploying the question ledger. A prepared coordinator cannot be claimed by another caller between transactions.',
 				declarations: [
 					{
-						name: 'setSecurityPool',
+						name: 'setQuestionLedger',
 						sourcePath: 'solidity/contracts/statoblast/OpenOraclePriceSource.sol',
 					},
 				],
-				preconditions: 'Current `securityPool` is zero (`Security pool already set`); the argument itself is not required to be nonzero.',
-				signals: '`SecurityPoolSet`',
+				preconditions: 'Current `questionLedger` is zero (`Question ledger already set`); the argument itself is not required to be nonzero.',
+				signals: '`QuestionLedgerSet`',
 			},
 		],
 	},
 	{
-		compiledAbiFingerprint: 'a5a5bd5ea48f6e815f880a8e6b86840cc0793340eafff23ab28879af48c551cd',
+		compiledAbiFingerprint: '790ccaf0f17571515aaf5603b08550689b1deab361af6af68b9cf4c024534db3',
 		name: 'ShareToken',
 		purpose: "Stores universe-aware ERC-1155 [outcome shares](./glossary.html#outcome-share) and materializes a holder's persistent source entitlement in selected fork branches.",
-		readAbiFingerprint: '0194bb1e0f88ac06380299cf0929f248401c3fb6db8373010f01cba437918089',
+		readAbiFingerprint: '7579ee9d868a9c4ed0ce13e35d1286a34804e1dca9789be15dc5aaf7a2aa41d2',
 		readSurface:
-			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalPoolByUniverse`, `recoveredCompleteSetShares`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmountAttoShares`, `getTokenId`, `getTokenIds`, `unpackTokenId`, `isPortfolioRecoveryEligible`, and `balanceOfPortfolioRecoveryRights`. The eligibility getter applies the [source recovery rules](./contract-inventory.html#portfolio-recovery-rights), preserving ordinary source-pool redemption for protected finalized questions. The balance getter returns unspent Invalid, Yes and No recovery rights, or all zeros when ineligible; the minimum bounds complete-set cash recovery. Received rights are included independently of the holder\u2019s source-token balances.',
+			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalQuestionLedgerByUniverse`, `recoveredCompleteSetShares`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmountAttoShares`, `getTokenId`, `getTokenIds`, `unpackTokenId`, `isSecurityPoolRecoveryEligible`, and `balanceOfSecurityPoolRecoveryRights`. The eligibility getter applies the [source recovery rules](./contract-inventory.html#security-pool-recovery-rights), preserving ordinary source question ledger redemption for protected finalized questions. The balance getter returns unspent Invalid, Yes and No recovery rights, or all zeros when ineligible; the minimum bounds complete-set cash recovery. Received rights are included independently of the holder\u2019s source-token balances.',
 		readDeclarations: [
 			{
 				name: 'supportsInterface',
@@ -242,10 +242,10 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				name: 'balanceOfShares',
 			},
 			{
-				name: 'balanceOfPortfolioRecoveryRights',
+				name: 'balanceOfSecurityPoolRecoveryRights',
 			},
 			{
-				name: 'isPortfolioRecoveryEligible',
+				name: 'isSecurityPoolRecoveryEligible',
 			},
 			{
 				name: 'getMigratedShareAmountAttoShares',
@@ -271,7 +271,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				name: 'zoltar',
 			},
 			{
-				name: 'canonicalPoolByUniverse',
+				name: 'canonicalQuestionLedgerByUniverse',
 			},
 			{
 				name: 'recoveredCompleteSetShares',
@@ -333,63 +333,63 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				signals: '`TransferBatch`, including empty batches',
 			},
 			{
-				call: '`transferPortfolioRecoveryRights(sourceUniverse, recipient, amountsAttoShares)`',
+				call: '`transferSecurityPoolRecoveryRights(sourceUniverse, recipient, amountsAttoShares)`',
 				caller: 'Recovery-right holder transferring only their own rights; ERC-1155 operator approval does not authorize this call',
 				effect:
 					'Transfers the specified Invalid, Yes and No recovery rights independently. Source and child token balances and every branch migration entitlement remain intact. Received credits are spent first; spending source-backed rights locks that source token against transfer. No token-receiver callback is invoked.',
 				declarations: [
 					{
-						name: 'transferPortfolioRecoveryRights',
+						name: 'transferSecurityPoolRecoveryRights',
 					},
 				],
 				preconditions:
-					'Canonical source is a portfolio question in a forked universe with `isPortfolioRecoveryEligible(sourceUniverse) == true` (`No live source recovery right`); recipient is a different nonzero account; at least one amount is positive; every amount fits its corresponding unspent recovery-right balance.',
-				signals: '`PortfolioRecoveryRightsTransferred`',
+					'Canonical source is a security pool question in a forked universe with `isSecurityPoolRecoveryEligible(sourceUniverse) == true` (`No live source recovery right`); recipient is a different nonzero account; at least one amount is positive; every amount fits its corresponding unspent recovery-right balance.',
+				signals: '`SecurityPoolRecoveryRightsTransferred`',
 			},
 			{
-				call: '`consumePortfolioRecoveryCompleteSets(sourceUniverse, holder, amountAttoShares)`',
-				caller: 'The canonical source pool\u2019s portfolio or its configured fork coordinator',
+				call: '`consumeSecurityPoolRecoveryCompleteSets(sourceUniverse, holder, amountAttoShares)`',
+				caller: 'The canonical source question ledger\u2019s security pool or its configured fork coordinator',
 				effect:
 					'Consumes equal amounts of Invalid, Yes and No recovery rights, using independently received credits before source-backed rights. Spending a source-backed right locks that source token against transfer; spending received credits alone does not. Source balances and every branch\u2019s migration rights remain intact. Returns cumulative consumed shares.',
 				declarations: [
 					{
-						name: 'consumePortfolioRecoveryCompleteSets',
+						name: 'consumeSecurityPoolRecoveryCompleteSets',
 					},
 				],
 				preconditions:
-					'Canonical source is a portfolio question in a forked universe with `isPortfolioRecoveryEligible(sourceUniverse) == true` (`No live source recovery right`); positive amount no greater than any of the holder\u2019s three unspent recovery-right balances. The coordinator authenticates the holder and calculates the corresponding cash payout.',
-				signals: '`PortfolioRecoveryRightsConsumed`',
+					'Canonical source is a security pool question in a forked universe with `isSecurityPoolRecoveryEligible(sourceUniverse) == true` (`No live source recovery right`); positive amount no greater than any of the holder\u2019s three unspent recovery-right balances. The coordinator authenticates the holder and calculates the corresponding cash payout.',
+				signals: '`SecurityPoolRecoveryRightsConsumed`',
 			},
 			{
 				call: '`migrate(fromId, targetOutcomeIndexes)`',
 				caller: 'Holder of the source token ID',
 				effect:
-					"If needed, first puts the source pool into fork mode and records its fork snapshot; this applies to an operational source and to a ledger that was prepared in its universe but never activated before that universe forked. A single-target call may lazily materialize that child's question pool once the portfolio's fork branch into that universe is active; it never prepares, starts, or activates the branch itself, so the call stays within the transaction gas limit. It keeps and locks the holder's source entitlement, then mints each selected child-universe token ID up to the current source balance. Later source additions materialize only the unminted delta. A contract holder receives the ERC-1155 single-receiver callback for each mint; rejection rolls back the mint and preceding fork or child setup.",
+					"If needed, first puts the source question ledger into fork mode and records its fork snapshot; this applies to an operational source and to a ledger that was prepared in its universe but never activated before that universe forked. A single-target call may lazily materialize that child's question ledger once the security pool's fork branch into that universe is active; it never prepares, starts, or activates the branch itself, so the call stays within the transaction gas limit. It keeps and locks the holder's source entitlement, then mints each selected child-universe token ID up to the current source balance. Later source additions materialize only the unminted delta. A contract holder receives the ERC-1155 single-receiver callback for each mint; rejection rolls back the mint and preceding fork or child setup.",
 				declarations: [
 					{
 						name: 'migrate',
 					},
 				],
 				preconditions:
-					'Source universe forked; for a portfolio question, `isPortfolioRecoveryEligible(sourceUniverse)` is true (`ShareToken question finalized before fork`): shares of a question whose claims were final before the fork redeem in the source universe; a canonical source pool that is not yet `PoolForked` has no final outcome and no inherited fixed outcome, because fork-mode activation rejects both; positive source balance; nonempty, strictly increasing, well-formed outcomes; every target in a multi-target call already has a canonical child pool; a single target without one requires the portfolio\u2019s fork branch into that universe to be active (`Fork branch not active: run prepareBranch, startBranch and finalizeBranch first`); each target is an immediate native child, including when its bound question contract skips intermediate reporter ancestors; at least one selected child has an unmaterialized balance; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract holder accepts `onERC1155Received` for every target mint.',
-				signals: 'Canonical child preparation may emit `SecurityPoolRegistered`, `DeploySecurityPool`, and share-token `AuthorizationUpdated`. Successful materialization emits ERC-1155 `TransferSingle` and `Migrate` for each target.',
+					'Source universe forked; for a security pool question, `isSecurityPoolRecoveryEligible(sourceUniverse)` is true (`ShareToken question finalized before fork`): shares of a question whose claims were final before the fork redeem in the source universe; a canonical source question ledger that is not yet `PoolForked` has no final outcome and no inherited fixed outcome, because fork-mode activation rejects both; positive source balance; nonempty, strictly increasing, well-formed outcomes; every target in a multi-target call already has a canonical child question ledger; a single target without one requires the security pool\u2019s fork branch into that universe to be active (`Fork branch not active: run prepareBranch, startBranch and finalizeBranch first`); each target is an immediate native child, including when its bound question contract skips intermediate reporter ancestors; at least one selected child has an unmaterialized balance; under [A22 asset-recipient compatibility](./security-model.html#assumption-a22), a contract holder accepts `onERC1155Received` for every target mint.',
+				signals: 'Canonical child preparation may emit `QuestionLedgerRegistered`, `DeployQuestionLedger`, and share-token `AuthorizationUpdated`. Successful materialization emits ERC-1155 `TransferSingle` and `Migrate` for each target.',
 			},
 			{
-				call: '`authorize(securityPoolCandidate)`',
-				caller: 'Initially authorized `SecurityPoolFactory` for an origin pool; an authorized parent `SecurityPool` for a child pool',
-				effect: 'Establishes the candidate as `canonicalPoolByUniverse` for its universe and adds it to the set allowed to mint, burn, and authorize descendants. Reauthorizing the same candidate is a no-op.',
+				call: '`authorize(questionLedgerCandidate)`',
+				caller: 'Initially authorized `SecurityPoolFactory` for an origin question ledger; an authorized parent `QuestionLedger` for a child question ledger',
+				effect: 'Establishes the candidate as `canonicalQuestionLedgerByUniverse` for its universe and adds it to the set allowed to mint, burn, and authorize descendants. Reauthorizing the same candidate is a no-op.',
 				declarations: [
 					{
 						name: 'authorize',
 					},
 				],
-				preconditions: 'Caller is already authorized; the candidate reports this exact share token; its universe has no different canonical pool.',
+				preconditions: 'Caller is already authorized; the candidate reports this exact share token; its universe has no different canonical question ledger.',
 				signals: '`AuthorizationUpdated` on first authorization; no event when the same candidate is already authorized',
 			},
 			{
 				call: '`mintCompleteSets(universeId, account, amountAttoShares)`',
-				caller: 'An authorized `SecurityPool`',
-				effect: "Mints `amountAttoShares` each of Invalid, Yes, and No to `account`, then invokes its ERC-1155 batch-receiver callback when it is a contract. Rejection rolls back the mint and the authorized pool's surrounding transaction.",
+				caller: 'An authorized `QuestionLedger`',
+				effect: "Mints `amountAttoShares` each of Invalid, Yes, and No to `account`, then invokes its ERC-1155 batch-receiver callback when it is a contract. Rejection rolls back the mint and the authorized question ledger's surrounding transaction.",
 				declarations: [
 					{
 						name: 'mintCompleteSets',
@@ -400,7 +400,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			},
 			{
 				call: '`burnCompleteSets(universeId, owner, amountAttoShares)`',
-				caller: 'An authorized `SecurityPool`',
+				caller: 'An authorized `QuestionLedger`',
 				effect: 'Burns `amountAttoShares` each of Invalid, Yes, and No from `owner`; global outcome supplies may differ.',
 				declarations: [
 					{
@@ -412,7 +412,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			},
 			{
 				call: '`burnTokenIdAndGetRemainingSupply(tokenId, owner)`',
-				caller: 'An authorized `SecurityPool`',
+				caller: 'An authorized `QuestionLedger`',
 				effect: "Burns `owner`'s full balance of `tokenId` and returns the burned amount and that token ID's remaining supply.",
 				declarations: [
 					{

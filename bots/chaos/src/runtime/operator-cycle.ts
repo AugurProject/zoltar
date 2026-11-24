@@ -301,7 +301,7 @@ function genesisInitializationState(scan: CanonicalScanResult, { genesisPair, ge
 		hasPair: genesisPair !== undefined,
 		hasPool: genesisPool !== undefined,
 		hasQuestion: initializerQuestion !== undefined,
-		hasPortfolioCapital: genesisPool !== undefined && scan.snapshot.portfolioCapital.some(capital => capital.portfolio.toLowerCase() === genesisPool.portfolio.toLowerCase() && capital.universeId === genesisPool.universeId && BigInt(capital.principalAttoRep) > 0n),
+		hasSecurityPoolCapital: genesisPool !== undefined && scan.snapshot.securityPoolCapital.some(capital => capital.securityPool.toLowerCase() === genesisPool.securityPool.toLowerCase() && capital.universeId === genesisPool.universeId && BigInt(capital.principalAttoRep) > 0n),
 		hasUniswapPool: scan.snapshot.genesisUniswap?.pool !== undefined,
 		hasUniswapSeeder: scan.snapshot.genesisUniswap?.seeder ?? false,
 		hasWeth: BigInt(scan.snapshot.wallet.tokens.find(token => token.address.toLowerCase() === scan.snapshot.deployments.weth.toLowerCase())?.balance ?? '0') > 1n,

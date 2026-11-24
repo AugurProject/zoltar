@@ -1,4 +1,4 @@
-import { auctionFixture } from '../support/portfolio-fixtures.ts'
+import { auctionFixture } from '../support/security-pool-fixtures.ts'
 import { describe, expect, test } from 'bun:test'
 import { eligibleOperationPlans } from '../support/operation-plans.ts'
 import { planningOptionsFixture, snapshotFixture } from './fixture.ts'

@@ -1,7 +1,7 @@
 import { tokenDisplayText } from '../token-metadata-limits.ts'
 import { errorChainIncludes } from '../error-chain.ts'
 import { type CollateralIdentityCache, readContractCollateral, usesCollateralUnits, withCollateralIdentityCache } from '../collateral-metadata.ts'
-import { discoverPortfolioEventDependencies } from './portfolio-discovery.ts'
+import { discoverSecurityPoolEventDependencies } from './security-pool-discovery.ts'
 import { transactionCallTrace, unsupportedTraceError } from './transaction-selection.ts'
 import { canonicalBlockLogs, type IndexedBlock, type RichListBalance, type StoredTransaction } from '../database.ts'
 import { readRichListBalance } from '../direct-observations.ts'
@@ -92,7 +92,7 @@ export async function indexBlock(
 				const eventKey = `${receipt.transactionHash}:${log.logIndex}`
 				const dependencies = dependencyEvents.has(eventKey)
 					? []
-					: await discoverPortfolioEventDependencies(contract, decoded, async (address, abi, functionName, args) => {
+					: await discoverSecurityPoolEventDependencies(contract, decoded, async (address, abi, functionName, args) => {
 							const requestedBlock = number < state.stateBoundary.startBlock ? observedHead : number
 							const result = await readWithPrunedStateFallback(
 								requestedBlock,

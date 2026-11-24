@@ -1,5 +1,5 @@
 import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
-import { deploySecurityPoolEvent } from '@zoltar/bot-shared/contracts/abi'
+import { deployQuestionLedgerEvent } from '@zoltar/bot-shared/contracts/abi'
 import type { Address } from '@zoltar/bot-shared/ethereum'
 import type { ReadClient } from './read-client.ts'
 
@@ -58,7 +58,7 @@ export async function loadPoolDeploymentDate(client: ReadClient, factory: Addres
 }
 
 async function discoverDeploymentDate(client: ReadClient, factory: Address, pool: Address, snapshotBlock: bigint, read: <T>(operation: () => Promise<T>) => Promise<T>) {
-	const deploymentLogs = (fromBlock: bigint, toBlock: bigint) => read(() => client.getLogs({ address: factory, event: deploySecurityPoolEvent, args: { securityPool: pool }, fromBlock, toBlock }))
+	const deploymentLogs = (fromBlock: bigint, toBlock: bigint) => read(() => client.getLogs({ address: factory, event: deployQuestionLedgerEvent, args: { questionLedger: pool }, fromBlock, toBlock }))
 	const logs = await (async () => {
 		try {
 			return await deploymentLogs(0n, snapshotBlock)

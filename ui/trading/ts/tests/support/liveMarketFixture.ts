@@ -7,7 +7,7 @@ import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 /** Room left to mint in the open-market fixtures: a million ETH, so only tests that lower it meet the capacity limit. */
 const AMPLE_MINTING_CAPACITY_ATTO_ETH = 10n ** 24n
 
-/** An open, initialized market: one ETH backs one complete set, the pool holds 100 YES and 100 NO, and the security pool can still mint far more than any test trade. */
+/** An open, initialized market: one ETH backs one complete set, the pool holds 100 YES and 100 NO, and the question ledger can still mint far more than any test trade. */
 export function liveMarketFixture(overrides: Partial<LiveMarket> = {}): LiveMarket {
 	return {
 		pool: `0x${'22'.repeat(20)}` as Address,

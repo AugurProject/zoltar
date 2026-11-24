@@ -3,39 +3,37 @@ import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/
 import { statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact } from '../types/contractArtifact'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
-import { getSecurityPoolsEscalationGame, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
-import { getQuestionOutcome } from '../testSupport/simulator/utils/contracts/securityPoolForker'
+import { getQuestionLedgersEscalationGame, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/questionLedger'
+import { getQuestionOutcome } from '../testSupport/simulator/utils/contracts/questionForker'
 import assert from '../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
-import { getSettlementCollateralAttoEth, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
-import { statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, statoblast_SecurityPool_SecurityPool, Zoltar_Zoltar } from '../types/contractArtifact'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
+import { getSettlementCollateralAttoEth, redeemShares } from '../testSupport/simulator/utils/contracts/questionLedger'
+import { statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, statoblast_QuestionLedger_QuestionLedger, Zoltar_Zoltar } from '../types/contractArtifact'
 import { createWriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { approveToken, getERC20Balance } from '../testSupport/simulator/utils/utilities'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
-import { getTotalPoolHeldAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
 
 const ESCALATION_TIME_LENGTH = 4_233_600n
 
 describe('Audit PoC: escalation logarithm precision liveness', () => {
-	const portfolio = useSecurityPoolPortfolioFixture()
-	const fixture = portfolio.base
+	const securityPool = useSecurityPoolFixture()
+	const fixture = securityPool.base
 
 	const reportBond = 11n * 10n ** 17n
 	const depositToEscalationGame = async (client: typeof fixture.client, pool: `0x${string}`, outcome: QuestionOutcome, amount: bigint) => {
 		await approveToken(client, getRepTokenAddress(fixture.genesisUniverse), pool)
-		return writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] }))
+		return writeContractAndWait(client, () => client.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] }))
 	}
 
 	test('wallet-funded reports resolve and unlock after burning supply to a zero-log threshold ratio', async () => {
 		const { client, genesisUniverse, mockWindow, questionData } = fixture
-		const securityPoolAddresses = portfolio.poolFor(fixture.questionId)
-		const pool = securityPoolAddresses.securityPool
+		const questionLedgerAddresses = securityPool.poolFor(fixture.questionId)
+		const pool = questionLedgerAddresses.questionLedger
 		const token = getRepTokenAddress(genesisUniverse)
 		const zoltar = getZoltarAddress()
-		assert.strictEqual(await getTotalPoolHeldAttoRep(client, pool), 0n, 'wallet reporting must not depend on vault backing or its immutable minimum')
 		const readTrackedSupply = () => client.readContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'getUniverseTheoreticalSupplyAttoRep', args: [genesisUniverse] })
 		for (const account of TEST_ADDRESSES.slice(1)) {
 			const burner = createWriteClient(mockWindow, account)
@@ -62,16 +60,16 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 			[QuestionOutcome.Yes, reportBond + 2n],
 			[QuestionOutcome.No, reportBond + 1n],
 		] as const) {
-			await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] }))
 		}
-		const game = await getSecurityPoolsEscalationGame(client, pool)
+		const game = await getQuestionLedgersEscalationGame(client, pool)
 		assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getBindingCapitalAttoRep' }), reportBond + 1n, 'both successful deposits must leave binding capital strictly between the bond and threshold')
 		const activationTime = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'activationTime' })
 		const deadline = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: game, functionName: 'getEscalationGameEndDate' })
 		assert.strictEqual(deadline, activationTime + ESCALATION_TIME_LENGTH - 1n, 'the flat rounded curve stays unresolved until its terminal jump')
 		await mockWindow.setTime(deadline)
 		assert.strictEqual(await getQuestionOutcome(client, pool), QuestionOutcome.None, 'the exact deadline must remain unresolved')
-		await assert.rejects(client.simulateContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool, functionName: 'withdrawFromEscalationGame', args: [QuestionOutcome.Yes, [0n]] }), /Question not final/)
+		await assert.rejects(client.simulateContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool, functionName: 'withdrawFromEscalationGame', args: [QuestionOutcome.Yes, [0n]] }), /Question not final/)
 		await mockWindow.setTime(deadline + 1n)
 		assert.strictEqual(await getQuestionOutcome(client, pool), QuestionOutcome.Yes, 'the strict leader must finalize after the terminal deadline')
 		const walletBeforeClaim = await getERC20Balance(client, token, client.account.address)
@@ -83,11 +81,11 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 
 	test('a funded game with a power-of-two threshold ratio resolves and releases its assets', async () => {
 		const { client, genesisUniverse, mockWindow, questionData } = fixture
-		const securityPoolAddresses = portfolio.poolFor(fixture.questionId)
+		const questionLedgerAddresses = securityPool.poolFor(fixture.questionId)
 		const underwritingLimitAttoEth = 25n * 10n ** 18n
-		await portfolio.prepare(1_000n * unit, underwritingLimitAttoEth)
-		await portfolio.mint(unit, fixture.questionId, { sender: client })
-		assert.ok((await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)) > 0n, 'PoC pool must hold redeemable ETH collateral')
+		await securityPool.prepare(1_000n * unit, underwritingLimitAttoEth)
+		await securityPool.mint(unit, fixture.questionId, { sender: client })
+		assert.ok((await getSettlementCollateralAttoEth(client, questionLedgerAddresses.questionLedger)) > 0n, 'PoC pool must hold redeemable ETH collateral')
 
 		const nonDecisionThresholdAttoRep = reportBond * 2n
 		const trackedSupply = 2n * nonDecisionThresholdAttoRep * DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
@@ -101,11 +99,11 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 		})
 
 		await mockWindow.setTime(questionData.endTime + 1n)
-		await portfolio.refreshPrice()
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond + 2n)
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond + 1n)
+		await securityPool.refreshPrice()
+		await depositToEscalationGame(client, questionLedgerAddresses.questionLedger, QuestionOutcome.Yes, reportBond + 2n)
+		await depositToEscalationGame(client, questionLedgerAddresses.questionLedger, QuestionOutcome.No, reportBond + 1n)
 
-		const escalationGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
+		const escalationGame = await getQuestionLedgersEscalationGame(client, questionLedgerAddresses.questionLedger)
 		const activationTime = await client.readContract({
 			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGame,
@@ -128,13 +126,13 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 			functionName: 'getEscalationGameEndDate',
 		})
 		assert.ok(escalationEndDate < activationTime + ESCALATION_TIME_LENGTH, 'strict winner should end the game before the maximum escalation duration')
-		assert.strictEqual(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.Yes, 'pool should expose the strict winner after the computed deadline')
-		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond), /Invalid deposit preview/)
-		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
-		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, [0n])
-		await redeemShares(client, securityPoolAddresses.securityPool)
-		await portfolio.refreshPrice()
-		await portfolio.authorize(0n)
-		await writeContractAndWait(client, () => client.writeContract({ abi: capitalArtifact.abi, address: portfolio.capitalLedger, functionName: 'withdrawPrincipal', args: [1_000n * unit, client.account.address] }))
+		assert.strictEqual(await getQuestionOutcome(client, questionLedgerAddresses.questionLedger), QuestionOutcome.Yes, 'pool should expose the strict winner after the computed deadline')
+		await assert.rejects(depositToEscalationGame(client, questionLedgerAddresses.questionLedger, QuestionOutcome.No, reportBond), /Invalid deposit preview/)
+		await withdrawFromEscalationGame(client, questionLedgerAddresses.questionLedger, QuestionOutcome.Yes, [0n])
+		await withdrawFromEscalationGame(client, questionLedgerAddresses.questionLedger, QuestionOutcome.No, [0n])
+		await redeemShares(client, questionLedgerAddresses.questionLedger)
+		await securityPool.refreshPrice()
+		await securityPool.authorize(0n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: capitalArtifact.abi, address: securityPool.capitalLedger, functionName: 'withdrawPrincipal', args: [1_000n * unit, client.account.address] }))
 	})
 })

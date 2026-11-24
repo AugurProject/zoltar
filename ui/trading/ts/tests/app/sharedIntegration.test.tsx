@@ -6,8 +6,8 @@ import { act } from 'preact/test-utils'
 import { DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO, registerTradingSimulationScenario, withDefaultTradingSimulationScenario } from '../../simulation/index.js'
 import { getRegisteredSimulationScenarios, getSimulationScenarioDescription, getSimulationScenarioLabel } from '@zoltar/ui-core-shared/simulation/scenarios.js'
 import * as appCopy from '../../copy/app.js'
-import { TradingSecurityPoolLink } from '../../components/TradingSecurityPoolLink.js'
-import { SecurityPoolLink } from '@zoltar/ui-core-shared/components/SecurityPoolLink.js'
+import { TradingQuestionLedgerLink } from '../../components/TradingQuestionLedgerLink.js'
+import { QuestionLedgerLink } from '@zoltar/ui-core-shared/components/QuestionLedgerLink.js'
 import { renderRepPriceSourceLabel } from '@zoltar/ui-core-shared/lib/repPriceSource.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
@@ -76,7 +76,7 @@ test('Trading installs shared routing for simulation scenario navigation', () =>
 })
 
 test('Trading production links preserve the active simulation route query', async () => {
-	const productionSources = ['app/App.tsx', 'components/TradingSecurityPoolLink.tsx', 'features/LiveMarketBrowser.tsx', 'features/LiveSecurityPoolDetails.tsx', 'features/LiveTrading.tsx']
+	const productionSources = ['app/App.tsx', 'components/TradingQuestionLedgerLink.tsx', 'features/LiveMarketBrowser.tsx', 'features/LiveQuestionLedgerDetails.tsx', 'features/LiveTrading.tsx']
 	for (const source of productionSources) {
 		const contents = await readFile(join(import.meta.dir, '../..', source), 'utf8')
 		expect(contents).not.toMatch(/href=['"]#\//)
@@ -265,8 +265,8 @@ test('Trading reports a failed environment on the deployment route', async () =>
 test('Trading pool addresses offer explorer and copy controls beside the local pool link', async () => {
 	const dom = installDomEnvironment()
 	const address = '0x00000000000000000000000000000000000000a1'
-	const rendered = await renderIntoDocument(<TradingSecurityPoolLink value={address} />)
-	expect(rendered.container.querySelector('a.security-pool-link')?.getAttribute('href')).toBe(`#/security-pool/${address}`)
+	const rendered = await renderIntoDocument(<TradingQuestionLedgerLink value={address} />)
+	expect(rendered.container.querySelector('a.question-ledger-link')?.getAttribute('href')).toBe(`#/security-pool/${address}`)
 	expect(rendered.container.querySelector(`a[href="https://sepolia.etherscan.io/address/${address}"]`)).not.toBeNull()
 	expect(rendered.container.querySelector(`[role="button"][aria-label="Copy address ${address}"]`)).not.toBeNull()
 	expect(rendered.container.querySelector('a a, a button, a [role=button], button a, button button, button [role=button], [role=button] a')).toBeNull()
@@ -279,12 +279,12 @@ test('shared pool navigation preserves modified clicks and blocks disabled links
 	let navigations = 0
 	const props = {
 		href: '#/pool',
-		securityPoolAddress: '0x00000000000000000000000000000000000000a1',
+		questionLedgerAddress: '0x00000000000000000000000000000000000000a1',
 		onNavigate: () => {
 			navigations++
 		},
 	}
-	const view = await renderIntoDocument(<SecurityPoolLink {...props}>Selected pool</SecurityPoolLink>)
+	const view = await renderIntoDocument(<QuestionLedgerLink {...props}>Selected pool</QuestionLedgerLink>)
 	try {
 		const link = view.container.querySelector('a')
 		if (link === null) throw new Error('Missing pool link')
@@ -300,9 +300,9 @@ test('shared pool navigation preserves modified clicks and blocks disabled links
 		expect(navigations).toBe(1)
 		await act(() => {
 			render(
-				<SecurityPoolLink {...props} disabled>
+				<QuestionLedgerLink {...props} disabled>
 					Selected pool
-				</SecurityPoolLink>,
+				</QuestionLedgerLink>,
 				view.container,
 			)
 		})

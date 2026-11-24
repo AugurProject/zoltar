@@ -15,7 +15,7 @@ import {
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier,
 	ReputationToken_ReputationToken,
-	test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact,
+	test_statoblast_EscalationGameProofTestQuestionLedger_EscalationGameProofTestQuestionLedger as escalationGameProofTestPoolArtifact,
 	test_statoblast_FalseReturningERC20_FalseReturningERC20,
 	test_statoblast_IncompatibleEscalationGameProofVerifier_IncompatibleEscalationGameProofVerifier as incompatibleProofVerifierArtifact,
 } from '../../types/contractArtifact'
@@ -33,16 +33,16 @@ export function useEscalationGameFixture() {
 	const nonDecisionThresholdAttoRep = 1000n * 10n ** 18n
 	const recursiveResolutionTargetCost = (25n * reportBond) / 10n
 
-	const securityPoolByEscalationGame = new Map<Address, Address>()
+	const questionLedgerByEscalationGame = new Map<Address, Address>()
 
-	const deployEscalationGameTestSecurityPool = async () => {
+	const deployEscalationGameTestQuestionLedger = async () => {
 		const deployment = await deployEscalationGameWithProofPool()
 		await startEscalation(deployment.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
 		return deployment
 	}
 
 	async function deployEscalationGameWithProofPool(repTokenAddress: Address = getRepTokenAddress(0n), forkerAddress: Address = addressString(0n)) {
-		const testSecurityPoolAddress = await deployProofTestSecurityPool(forkerAddress)
+		const testQuestionLedgerAddress = await deployProofTestQuestionLedger(forkerAddress)
 		await writeContractAndWait(
 			client,
 			async () =>
@@ -50,7 +50,7 @@ export function useEscalationGameFixture() {
 					abi: ReputationToken_ReputationToken.abi,
 					address: getRepTokenAddress(0n),
 					functionName: 'approve',
-					args: [testSecurityPoolAddress, MAX_UINT256],
+					args: [testQuestionLedgerAddress, MAX_UINT256],
 				}),
 		)
 		const verifierDeploymentHash = await client.sendTransaction({
@@ -65,36 +65,36 @@ export function useEscalationGameFixture() {
 			data: encodeDeployData({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-				args: [testSecurityPoolAddress, repTokenAddress, proofVerifierAddress, getInfraContractAddresses().escalationGameDepositDelegate],
+				args: [testQuestionLedgerAddress, repTokenAddress, proofVerifierAddress, getInfraContractAddresses().escalationGameDepositDelegate],
 			}),
 		})
 		const escalationGameDeploymentReceipt = await client.waitForTransactionReceipt({ hash: escalationGameDeploymentHash })
 		const escalationGameAddress = requireContractAddress(escalationGameDeploymentReceipt.contractAddress, 'escalation game deployment address')
-		securityPoolByEscalationGame.set(escalationGameAddress, testSecurityPoolAddress)
+		questionLedgerByEscalationGame.set(escalationGameAddress, testQuestionLedgerAddress)
 		await writeContractAndWait(
 			client,
 			async () =>
 				await client.writeContract({
 					abi: escalationGameProofTestPoolArtifact.abi,
-					address: testSecurityPoolAddress,
+					address: testQuestionLedgerAddress,
 					functionName: 'setEscalationGame',
 					args: [escalationGameAddress],
 				}),
 		)
-		return { escalationGameAddress, testSecurityPoolAddress, proofVerifierAddress }
+		return { escalationGameAddress, testQuestionLedgerAddress, proofVerifierAddress }
 	}
 
-	async function deployProofTestSecurityPool(forkerAddress: Address = addressString(0n)) {
+	async function deployProofTestQuestionLedger(forkerAddress: Address = addressString(0n)) {
 		const zoltarAddress = getZoltarAddress()
-		const testSecurityPoolDeploymentHash = await client.sendTransaction({
+		const testQuestionLedgerDeploymentHash = await client.sendTransaction({
 			data: encodeDeployData({
 				abi: escalationGameProofTestPoolArtifact.abi,
 				bytecode: `0x${escalationGameProofTestPoolArtifact.evm.bytecode.object}`,
 				args: [zoltarAddress, 0n, forkerAddress],
 			}),
 		})
-		const testSecurityPoolDeploymentReceipt = await client.waitForTransactionReceipt({ hash: testSecurityPoolDeploymentHash })
-		return requireContractAddress(testSecurityPoolDeploymentReceipt.contractAddress, 'proof test security pool deployment address')
+		const testQuestionLedgerDeploymentReceipt = await client.waitForTransactionReceipt({ hash: testQuestionLedgerDeploymentHash })
+		return requireContractAddress(testQuestionLedgerDeploymentReceipt.contractAddress, 'proof test question ledger deployment address')
 	}
 
 	async function deployIncompatibleProofVerifier() {
@@ -144,14 +144,14 @@ export function useEscalationGameFixture() {
 		)
 
 	const resumeEscalationFromFork = async (escalationGameAddress: Address) => {
-		const securityPoolAddress = securityPoolByEscalationGame.get(escalationGameAddress)
-		if (securityPoolAddress === undefined) throw new Error('Missing escalation game security pool')
+		const questionLedgerAddress = questionLedgerByEscalationGame.get(escalationGameAddress)
+		if (questionLedgerAddress === undefined) throw new Error('Missing escalation game question ledger')
 		return await writeContractAndWait(
 			client,
 			async () =>
 				await client.writeContract({
 					abi: escalationGameProofTestPoolArtifact.abi,
-					address: securityPoolAddress,
+					address: questionLedgerAddress,
 					functionName: 'resumeEscalationGameFromFork',
 					args: [],
 				}),
@@ -192,13 +192,13 @@ export function useEscalationGameFixture() {
 		await mockWindow.setTime(forkResumedAt + elapsedAfterResume + 1n)
 	}
 
-	const depositOnOutcomeViaProofTestSecurityPool = async (testSecurityPoolAddress: Address, depositor: Address, outcome: QuestionOutcome, amountAttoRep: bigint) =>
+	const depositOnOutcomeViaProofTestQuestionLedger = async (testQuestionLedgerAddress: Address, depositor: Address, outcome: QuestionOutcome, amountAttoRep: bigint) =>
 		await writeContractAndWait(
 			client,
 			async () =>
 				await client.writeContract({
 					abi: escalationGameProofTestPoolArtifact.abi,
-					address: testSecurityPoolAddress,
+					address: testQuestionLedgerAddress,
 					functionName: 'depositOnOutcome',
 					args: [depositor, outcome, amountAttoRep],
 				}),
@@ -262,8 +262,8 @@ export function useEscalationGameFixture() {
 		)
 	}
 
-	const withdrawDepositViaProofTestSecurityPool = async (
-		testSecurityPoolAddress: Address,
+	const withdrawDepositViaProofTestQuestionLedger = async (
+		testQuestionLedgerAddress: Address,
 		outcome: QuestionOutcome,
 		proof: {
 			depositor: Address
@@ -282,14 +282,14 @@ export function useEscalationGameFixture() {
 			async () =>
 				await client.writeContract({
 					abi: escalationGameProofTestPoolArtifact.abi,
-					address: testSecurityPoolAddress,
+					address: testQuestionLedgerAddress,
 					functionName: 'withdrawDeposit',
 					args: [outcome, proof],
 				}),
 		)
 
-	const withdrawDepositViaProofTestSecurityPoolWithGas = async (
-		testSecurityPoolAddress: Address,
+	const withdrawDepositViaProofTestQuestionLedgerWithGas = async (
+		testQuestionLedgerAddress: Address,
 		outcome: QuestionOutcome,
 		proof: {
 			depositor: Address
@@ -307,7 +307,7 @@ export function useEscalationGameFixture() {
 			client,
 			async () =>
 				await client.sendTransaction({
-					to: testSecurityPoolAddress,
+					to: testQuestionLedgerAddress,
 					data: encodeFunctionData({
 						abi: escalationGameProofTestPoolArtifact.abi,
 						functionName: 'withdrawDeposit',
@@ -317,13 +317,13 @@ export function useEscalationGameFixture() {
 				}),
 		)
 
-	const claimDepositForWinningViaTestSecurityPool = async (testSecurityPoolAddress: Address, depositIndex: bigint, outcome: QuestionOutcome) =>
+	const claimDepositForWinningViaTestQuestionLedger = async (testQuestionLedgerAddress: Address, depositIndex: bigint, outcome: QuestionOutcome) =>
 		await writeContractAndWait(
 			client,
 			async () =>
 				await client.writeContract({
 					abi: escalationGameProofTestPoolArtifact.abi,
-					address: testSecurityPoolAddress,
+					address: testQuestionLedgerAddress,
 					functionName: 'claimDepositForWinning',
 					args: [depositIndex, outcome],
 				}),
@@ -343,25 +343,25 @@ export function useEscalationGameFixture() {
 
 	const computeLocalParentDepositIndex = (escalationGameAddress: Address, outcome: QuestionOutcome, depositIndex: bigint) => computeForkContinuationParentDepositIndex(escalationGameAddress, outcome, depositIndex)
 
-	const depositOnOutcomeViaTestSecurityPool = async (testSecurityPoolAddress: Address, depositor: Address, outcome: QuestionOutcome, amountAttoRep: bigint) =>
+	const depositOnOutcomeViaTestQuestionLedger = async (testQuestionLedgerAddress: Address, depositor: Address, outcome: QuestionOutcome, amountAttoRep: bigint) =>
 		await writeContractAndWait(
 			client,
 			async () =>
 				await client.writeContract({
 					abi: escalationGameProofTestPoolArtifact.abi,
-					address: testSecurityPoolAddress,
+					address: testQuestionLedgerAddress,
 					functionName: 'depositOnOutcome',
 					args: [depositor, outcome, amountAttoRep],
 				}),
 		)
 
-	const claimWinningDepositAndReadClaimLog = async (testSecurityPoolAddress: Address, depositIndex: bigint, outcome: QuestionOutcome) => {
+	const claimWinningDepositAndReadClaimLog = async (testQuestionLedgerAddress: Address, depositIndex: bigint, outcome: QuestionOutcome) => {
 		const claimHash = await writeContractAndWait(
 			client,
 			async () =>
 				await client.writeContract({
 					abi: escalationGameProofTestPoolArtifact.abi,
-					address: testSecurityPoolAddress,
+					address: testQuestionLedgerAddress,
 					functionName: 'claimDepositForWinning',
 					args: [depositIndex, outcome],
 				}),
@@ -409,9 +409,9 @@ export function useEscalationGameFixture() {
 		reportBond,
 		nonDecisionThresholdAttoRep,
 		recursiveResolutionTargetCost,
-		deployEscalationGameTestSecurityPool,
+		deployEscalationGameTestQuestionLedger,
 		deployEscalationGameWithProofPool,
-		deployProofTestSecurityPool,
+		deployProofTestQuestionLedger,
 		deployIncompatibleProofVerifier,
 		deployFalseReturningToken,
 		startEscalation,
@@ -421,18 +421,18 @@ export function useEscalationGameFixture() {
 		readOutcomeCarrySnapshot,
 		fundEscalationGame,
 		advanceForkContinuationPastStart,
-		depositOnOutcomeViaProofTestSecurityPool,
+		depositOnOutcomeViaProofTestQuestionLedger,
 		traceCarryLeafPage,
 		traceProofConsumedCarriedDepositIndexes,
 		assertEscrowAccounting,
 		assertLocalYesAccountingModel,
-		withdrawDepositViaProofTestSecurityPool,
-		withdrawDepositViaProofTestSecurityPoolWithGas,
-		claimDepositForWinningViaTestSecurityPool,
+		withdrawDepositViaProofTestQuestionLedger,
+		withdrawDepositViaProofTestQuestionLedgerWithGas,
+		claimDepositForWinningViaTestQuestionLedger,
 		readCarryLeafHash,
 		createCarryProof,
 		computeLocalParentDepositIndex,
-		depositOnOutcomeViaTestSecurityPool,
+		depositOnOutcomeViaTestQuestionLedger,
 		claimWinningDepositAndReadClaimLog,
 		...carryHelpers,
 	}

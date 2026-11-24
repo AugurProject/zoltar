@@ -1,4 +1,4 @@
-import { evaluateSecurityPoolState } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState.js'
+import { evaluateQuestionLedgerState } from '@zoltar/ui-statoblast-shared/features/question-ledgers/lib/questionLedgerState.js'
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
 
@@ -12,7 +12,7 @@ import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { ListedSecurityPool, TradingActionResult, TradingDetails, TradingShareBalances } from '@zoltar/ui-statoblast-shared/types/contracts.js'
+import type { ListedQuestionLedger, TradingActionResult, TradingDetails, TradingShareBalances } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { TradingSection as ProductionTradingSection } from '@zoltar/ui-statoblast-shared/features/markets/components/TradingSection.js'
 import { NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE, UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
@@ -42,9 +42,9 @@ function TradingSection(props: Parameters<typeof ProductionTradingSection>[0]) {
 	)
 }
 
-function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
-	const selectedPool: ListedSecurityPool = {
-		portfolioAddress: zeroAddress,
+function createSelectedPool(overrides: Partial<ListedQuestionLedger> = {}): ListedQuestionLedger {
+	const selectedPool: ListedQuestionLedger = {
+		securityPoolAddress: zeroAddress,
 		settlementCollateralAttoEth: 0n,
 		feeEligibleUnderwritingLimitAttoEth: overrides.totalUnderwritingLimitAttoEth ?? 5n * 10n ** 18n,
 		hasForkActivity: false,
@@ -59,7 +59,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		questionOutcome: 'none',
 		questionId: '0x01',
 		statoblastSecurityMultiplierBps: 20_000n,
-		securityPoolAddress: zeroAddress,
+		questionLedgerAddress: zeroAddress,
 		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
 		totalPoolHeldAttoRep: 0n,
@@ -99,7 +99,7 @@ function createTradingForm(overrides: Partial<TradingFormState> = {}): TradingFo
 	return {
 		completeSetAmount: '1',
 		redeemAmount: '1',
-		securityPoolAddress: zeroAddress,
+		questionLedgerAddress: zeroAddress,
 		selectedShareOutcome: 'yes',
 		targetOutcomeIndexes: '',
 		...overrides,
@@ -120,7 +120,7 @@ function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {})
 				address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
 				token: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
 				services: '0x0000000000000000000000000000000000000068',
-				portfolio: '0x0000000000000000000000000000000000000022',
+				securityPool: '0x0000000000000000000000000000000000000022',
 				symbol: 'WETH',
 				decimals: 18,
 				balance: overrides.accountState?.ethBalanceAttoEth ?? 10n ** 19n,
@@ -153,7 +153,7 @@ function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {})
 		repPerEthSourceUrl: undefined,
 		selectedPool: createSelectedPool(),
 		showHeader: false,
-		showSecurityPoolAddressInput: false,
+		showQuestionLedgerAddressInput: false,
 		tradingActiveAction: undefined,
 		tradingDetails: createTradingDetails(),
 		tradingError: undefined,
@@ -260,7 +260,7 @@ function TradingSectionWithMutableForm({
 	initialTradingForm?: Partial<TradingFormState>
 	tradingDetails?: TradingDetails
 	tradingForkUniverse: ZoltarUniverseSummary
-	selectedPool?: ListedSecurityPool
+	selectedPool?: ListedQuestionLedger
 }) {
 	const [tradingForm, setTradingForm] = useState<TradingFormState>({ ...createTradingForm(), ...initialTradingForm })
 
@@ -434,10 +434,10 @@ void describe('TradingSection', () => {
 		await act(() => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
 		})
-		await act(() => render(<TradingSection {...props} poolState={evaluateSecurityPoolState({ lifecycleState: 'ended', universeHasForked: false })} />, rendered.container))
+		await act(() => render(<TradingSection {...props} poolState={evaluateQuestionLedgerState({ lifecycleState: 'ended', universeHasForked: false })} />, rendered.container))
 		const state = getTransactionButtonState(within(document.body).getByRole('dialog'), 'Mint complete sets')
 		expect(state.disabled).toBe(true)
-		expect(state.reason).toBe('This action is unavailable in the current pool state.')
+		expect(state.reason).toBe('This action is unavailable in the current question state.')
 	})
 
 	void test('labels the max complete sets metric as redeemable complete sets', async () => {
@@ -482,7 +482,7 @@ void describe('TradingSection', () => {
 					tradingResult: {
 						action: 'createCompleteSet',
 						hash: zeroHash,
-						securityPoolAddress: poolAddress,
+						questionLedgerAddress: poolAddress,
 						universeId: 0n,
 					},
 				})}
@@ -542,7 +542,7 @@ void describe('TradingSection', () => {
 			completeTradingOperation({
 				action: 'createCompleteSet',
 				hash: zeroHash,
-				securityPoolAddress: zeroAddress,
+				questionLedgerAddress: zeroAddress,
 				universeId: 1n,
 			})
 		})
@@ -937,7 +937,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		const redeemSharesButton = documentQueries.getByRole('button', { name: 'Redeem resolved shares' }) as HTMLButtonElement
 		expect(redeemSharesButton.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Redeem resolved shares').reason).toBe('Wait for the selected pool to resolve before redeeming shares.')
+		expect(getTransactionButtonState(document.body, 'Redeem resolved shares').reason).toBe('Wait for the selected question to resolve before redeeming shares.')
 	})
 
 	test('keeps finalized parent winning-share redemption available after an unrelated fork', async () => {
@@ -1026,7 +1026,7 @@ void describe('TradingSection', () => {
 		const mintState = getTransactionButtonState(document.body, 'Mint complete sets')
 		expect(mintState.disabled).toBe(true)
 		// The stage, not the zero capacity the stale flag causes, explains why minting is closed.
-		expect(mintState.reason).toBe('This action is unavailable in the current pool state.')
+		expect(mintState.reason).toBe('This action is unavailable in the current question state.')
 	})
 
 	void test('shows how many shares of the selected outcome a migration moves and each outcome balance', async () => {
@@ -1097,7 +1097,7 @@ void describe('TradingSection', () => {
 		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ tradingDetails: createTradingDetails({ maxRedeemableCompleteSetsAttoShares: 0n, shareBalances: createShareBalances({ invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n }) }) })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.querySelector('.trading-holdings-empty')?.textContent).toBe('You hold no shares in this pool.')
+		expect(document.querySelector('.trading-holdings-empty')?.textContent).toBe('You hold no shares for this question.')
 		expect(document.querySelector('.trading-holdings-hero')).toBeNull()
 		expect(document.querySelector('.ranked-bar-list')).toBeNull()
 	})
@@ -1181,7 +1181,7 @@ void describe('TradingSection', () => {
 			const tradingResult: TradingActionResult = {
 				action: scenario.action,
 				hash: zeroHash,
-				securityPoolAddress: zeroAddress,
+				questionLedgerAddress: zeroAddress,
 				universeId: 1n,
 				...(scenario.action === 'migrateShares' ? { shareOutcome: 'yes', targetOutcomeIndexes: [0n, 1n] } : {}),
 			} as const
@@ -1200,17 +1200,17 @@ void describe('TradingSection', () => {
 		}
 	})
 
-	void test('renders security pool address input when enabled and updates it through onTradingFormChange', async () => {
-		let nextSecurityPoolAddress: string | undefined
+	void test('renders question ledger address input when enabled and updates it through onTradingFormChange', async () => {
+		let nextQuestionLedgerAddress: string | undefined
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
-					onTradingFormChange: ({ securityPoolAddress }) => {
-						if (securityPoolAddress !== undefined) {
-							nextSecurityPoolAddress = securityPoolAddress
+					onTradingFormChange: ({ questionLedgerAddress }) => {
+						if (questionLedgerAddress !== undefined) {
+							nextQuestionLedgerAddress = questionLedgerAddress
 						}
 					},
-					showSecurityPoolAddressInput: true,
+					showQuestionLedgerAddressInput: true,
 				})}
 			/>,
 		)
@@ -1223,7 +1223,7 @@ void describe('TradingSection', () => {
 		await act(() => {
 			fireEvent.input(input, { target: { value: '0xabc' } })
 		})
-		expect(nextSecurityPoolAddress).toBe('0xabc')
+		expect(nextQuestionLedgerAddress).toBe('0xabc')
 	})
 
 	void test('fills the redeem amount from the max helper in the redeem modal', async () => {
@@ -1296,7 +1296,7 @@ void describe('TradingSection', () => {
 		expect(yesTarget.getAttribute('aria-pressed')).toBe('false')
 	})
 
-	void test('selects only child universes a single migration can reach when a child has no security pool', async () => {
+	void test('selects only child universes a single migration can reach when a child has no question ledger', async () => {
 		const noMigratedShares = { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n }
 		const tradingDetails = createTradingDetails({
 			shareMigrationTargets: [

@@ -7,12 +7,12 @@ import { approveToken, getERC20Balance } from '../testSupport/simulator/utils/ut
 import { forkUniverse, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { statoblast_SecurityPool_SecurityPool as poolArtifact, statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact } from '../types/contractArtifact'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_QuestionForker_QuestionForker as forkerArtifact } from '../types/contractArtifact'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 describe('Wallet reporting without standalone vault backing', () => {
-	const fixture = useSecurityPoolPortfolioFixture()
-	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).securityPool })
+	const fixture = useSecurityPoolFixture()
+	const pool = () => ({ abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).questionLedger })
 	const token = () => getRepTokenAddress(fixture.base.genesisUniverse)
 	const game = () => fixture.owner().readContract({ ...pool(), functionName: 'escalationGame' })
 	const report = (sender = fixture.other(), outcome = 1, amount = 100n * unit) => writeContractAndWait(sender, () => sender.writeContract({ ...pool(), functionName: 'depositWalletRepToEscalationGame', args: [outcome, amount] }))
@@ -94,7 +94,7 @@ describe('Wallet reporting without standalone vault backing', () => {
 		await forkUniverse(owner, fixture.base.genesisUniverse, getQuestionId(question, fixture.base.outcomes))
 		const before = await snapshot(fixture.other())
 		await expect(report()).rejects.toThrow('Forked')
-		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'initiateSecurityPoolFork', args: [pool().address] }))
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker, functionName: 'initiateQuestionLedgerFork', args: [pool().address] }))
 		expect(await fixture.owner().readContract({ ...pool(), functionName: 'systemState' })).toBe(1n)
 		await expect(report()).rejects.toThrow('Forked')
 		expect(await snapshot(fixture.other())).toEqual(before)

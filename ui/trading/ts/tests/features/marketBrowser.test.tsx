@@ -144,11 +144,11 @@ test('an empty favorite pool list shows address lookup and no scan or pagination
 		expect(rendered.container.querySelector('form.market-list-search')).not.toBeNull()
 		expect(rendered.container.querySelector('.discovery-control')).toBeNull()
 		const empty = rendered.container.querySelector('.empty-state')
-		expect(empty?.textContent).toContain('No favorite security pools yet')
+		expect(empty?.textContent).toContain('No favorite questions yet')
 		// The list only covers this browser, so the empty state says so and points to where pool addresses come from.
-		expect(empty?.textContent).toContain('only shows security pools opened in this browser')
+		expect(empty?.textContent).toContain('only shows questions opened in this browser')
 		const guide = empty?.querySelector('a')
-		expect(guide?.textContent).toBe('How to find a security pool')
+		expect(guide?.textContent).toBe('How to find a question')
 		expect(guide?.getAttribute('href')).toContain('tutorials/trading-first-market.html#find-pool')
 		expect(guide?.getAttribute('target')).toBe('_blank')
 	} finally {
@@ -159,15 +159,15 @@ test('an empty favorite pool list shows address lookup and no scan or pagination
 
 test('a pool card states a status that rules out creating its market and stops promoting creation', async () => {
 	const dom = installDomEnvironment('http://localhost/#/create-market')
-	const open = liveMarketFixture({ pool: fixtureAddress('01'), title: 'Open pool', pair: undefined, endTime: FIXTURE_NOW + FIXTURE_DAY })
+	const open = liveMarketFixture({ pool: fixtureAddress('01'), title: 'Open question', pair: undefined, endTime: FIXTURE_NOW + FIXTURE_DAY })
 	const ended = liveMarketFixture({ pool: fixtureAddress('02'), title: 'Ended pool', pair: undefined, endTime: FIXTURE_NOW - FIXTURE_DAY })
 	const rendered = await renderIntoDocument(<LiveMarketBrowser lookupRoute='create-market' markets={[open, ended]} registry={undefined} discoveryState='ready' discoveryError={undefined} workflowLocked={false} nowSeconds={FIXTURE_NOW} retry={() => undefined} />)
 	try {
 		const card = (title: string) => Array.from(rendered.container.querySelectorAll('.market-record')).find(candidate => candidate.textContent?.includes(title) === true)
 		// Every listed pool lacks a market, so only the ended pool carries a status, in the warning tone.
-		expect(card('Open pool')?.textContent).not.toContain('Market not created')
+		expect(card('Open question')?.textContent).not.toContain('Market not created')
 		expect(card('Ended pool')?.textContent).toContain('Question ended')
-		expect(card('Open pool')?.querySelector('.button-link.primary')?.textContent).toBe('Create market')
+		expect(card('Open question')?.querySelector('.button-link.primary')?.textContent).toBe('Create market')
 		expect(card('Ended pool')?.querySelector('.button-link.primary')).toBeNull()
 	} finally {
 		await rendered.cleanup()
@@ -245,7 +245,7 @@ test('a favorite whose read on the registry page failed keeps its saved card', a
 	const dom = installDomEnvironment('http://localhost/#/market')
 	const savedCopy = liveMarketFixture({ pool: fixtureAddress('01'), title: 'Saved market', yesReserve: 38n * 10n ** 16n, noReserve: 62n * 10n ** 16n })
 	// A failed read on the page stands in for the market with a placeholder that carries only its load error.
-	const failedPageCopy = { ...savedCopy, pair: undefined, title: `Security pool ${fixtureAddress('01')}`, loadError: 'Market data could not be read.' }
+	const failedPageCopy = { ...savedCopy, pair: undefined, title: `Question ledger ${fixtureAddress('01')}`, loadError: 'Market data could not be read.' }
 	const other = liveMarketFixture({ pool: fixtureAddress('02'), title: 'Other market' })
 	const rendered = await renderIntoDocument(<LiveMarketBrowser lookupRoute='market' markets={[savedCopy]} registry={readyMarketRegistry([failedPageCopy, other])} discoveryState='ready' discoveryError={undefined} workflowLocked={false} nowSeconds={FIXTURE_NOW} retry={() => undefined} />)
 	try {
@@ -277,7 +277,7 @@ test('the market list explains an empty universe, a loading page, and a failed r
 		expect(waitingForUniverse.container.querySelector('.skeleton-list')?.textContent).toBe('Loading markets…')
 		await waitingForUniverse.cleanup()
 		const noUniverse = await render({ status: 'idle', page: undefined }, 'error')
-		expect(noUniverse.container.textContent).toContain('Security pool discovery failed: RPC unavailable')
+		expect(noUniverse.container.textContent).toContain('Question discovery failed: RPC unavailable')
 		expect(noUniverse.container.querySelector('.skeleton-list')).toBeNull()
 		expect(noUniverse.container.querySelector('.empty-state')).toBeNull()
 		expect(noUniverse.container.querySelector('.market-browser')?.getAttribute('aria-busy')).not.toBe('true')

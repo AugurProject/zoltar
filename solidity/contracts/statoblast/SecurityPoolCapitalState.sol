@@ -134,12 +134,12 @@ abstract contract SecurityPoolCapitalState {
 			pendingServiceCash = 0;
 			ICapitalServiceCash(services).withdrawCapitalCash();
 		}
-		Collateral.send(ICollateralConfig(ICapitalPortfolio(address(this)).portfolio()).collateralToken(), recipient, amount);
+		Collateral.send(ICollateralConfig(ICapitalSecurityPool(address(this)).securityPool()).collateralToken(), recipient, amount);
 	}
 }
 
-interface ICapitalPortfolio {
-	function portfolio() external view returns (address);
+interface ICapitalSecurityPool {
+	function securityPool() external view returns (address);
 }
 
 interface ICapitalServiceCash {

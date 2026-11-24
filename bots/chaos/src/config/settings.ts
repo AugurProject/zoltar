@@ -27,7 +27,7 @@ export type DeploymentSettings = {
 	openOracle: Address
 	questionData: Address
 	securityPoolFactory: Address
-	securityPoolForker: Address
+	questionForker: Address
 	tradingFactory: Address
 	tradingRouter: Address
 	uniswapV3Factory?: Address | undefined
@@ -267,7 +267,7 @@ function parseStrategy(value: unknown): StrategySettings {
 	}
 }
 
-export const DEPLOYMENT_PIN_ADDRESS_KEYS = ['multicall3', 'openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'uniswapV3Factory', 'weth', 'zoltar'] as const
+export const DEPLOYMENT_PIN_ADDRESS_KEYS = ['multicall3', 'openOracle', 'questionData', 'securityPoolFactory', 'questionForker', 'tradingFactory', 'tradingRouter', 'uniswapV3Factory', 'weth', 'zoltar'] as const
 
 /** Reads the pinned contract addresses; the caller owns the record's key set and its derived identities. */
 export function parseDeploymentPinAddresses(pin: Record<string, unknown>) {
@@ -283,7 +283,7 @@ export function parseDeploymentPinAddresses(pin: Record<string, unknown>) {
 		openOracle: address('openOracle'),
 		questionData: address('questionData'),
 		securityPoolFactory: address('securityPoolFactory'),
-		securityPoolForker: address('securityPoolForker'),
+		questionForker: address('questionForker'),
 		tradingFactory: address('tradingFactory'),
 		tradingRouter: address('tradingRouter'),
 		uniswapV3Factory: address('uniswapV3Factory'),

@@ -1,6 +1,6 @@
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { capitalClient } from '../portfolios/capitalClient.js'
-import { capitalSnapshot, portfolio, token } from '../portfolios/capitalFixture.js'
+import { capitalClient } from '../security-pools/capitalClient.js'
+import { capitalSnapshot, securityPool, token } from '../security-pools/capitalFixture.js'
 /// <reference types='bun-types' />
 
 import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
@@ -22,14 +22,14 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 
 type UseTradingOperationsParameters = Parameters<typeof useTradingOperations>[0]
-type MintCapacity = Awaited<ReturnType<UseTradingOperationsDependencies['loadSecurityPoolMintCapacity']>>
+type MintCapacity = Awaited<ReturnType<UseTradingOperationsDependencies['loadQuestionLedgerMintCapacity']>>
 // An explicit `accountAddress: undefined` renders without a connected wallet.
-type HarnessProps = { accountAddress?: Address | undefined; enabled?: boolean; selectedSecurityPoolAddress?: Address }
+type HarnessProps = { accountAddress?: Address | undefined; enabled?: boolean; selectedQuestionLedgerAddress?: Address }
 
 const ATTO_ETH_PER_ETH = 10n ** 18n
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
 const NEXT_WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a2')
-const SECURITY_POOL_ADDRESS = getAddress('0x00000000000000000000000000000000000000b2')
+const QUESTION_LEDGER_ADDRESS = getAddress('0x00000000000000000000000000000000000000b2')
 const WALLET_ACCOUNT_CHANGED = 'Wallet account changed. Review the action with the connected account and try again.'
 const PROXY_DEPLOYER_STEP: DeploymentStatus = {
 	address: zeroAddress,
@@ -92,16 +92,16 @@ function createTradingOperationsDependencies(overrides: Partial<UseTradingOperat
 		throw new Error(`${name} should not be called in this test`)
 	}
 	return {
-		createCompleteSetInSecurityPool: unexpected('createCompleteSetInSecurityPool'),
+		createCompleteSetInQuestionLedger: unexpected('createCompleteSetInQuestionLedger'),
 		getWalletEthBalance: unexpected('getWalletEthBalance'),
-		loadSecurityPoolMintCapacity: unexpected('loadSecurityPoolMintCapacity'),
-		// Every loaded child universe has a security pool and holds nothing migrated unless a test says otherwise.
-		loadShareMigrationTargets: async (_source, childUniverses) => childUniverses.map(child => ({ outcomeIndex: child.outcomeIndex, canonicalPool: SECURITY_POOL_ADDRESS, migratedAttoShares: { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n } })),
+		loadQuestionLedgerMintCapacity: unexpected('loadQuestionLedgerMintCapacity'),
+		// Every loaded child universe has a question ledger and holds nothing migrated unless a test says otherwise.
+		loadShareMigrationTargets: async (_source, childUniverses) => childUniverses.map(child => ({ outcomeIndex: child.outcomeIndex, canonicalPool: QUESTION_LEDGER_ADDRESS, migratedAttoShares: { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n } })),
 		loadTradingDetails: unexpected('loadTradingDetails'),
 		loadZoltarUniverseSummary: unexpected('loadZoltarUniverseSummary'),
 		migrateSharesFromUniverse: unexpected('migrateSharesFromUniverse'),
-		redeemCompleteSetInSecurityPool: unexpected('redeemCompleteSetInSecurityPool'),
-		redeemSharesInSecurityPool: unexpected('redeemSharesInSecurityPool'),
+		redeemCompleteSetInQuestionLedger: unexpected('redeemCompleteSetInQuestionLedger'),
+		redeemSharesInQuestionLedger: unexpected('redeemSharesInQuestionLedger'),
 		...overrides,
 	}
 }
@@ -110,7 +110,7 @@ function createTradingOperationsDependencies(overrides: Partial<UseTradingOperat
 function createMintDependencies(overrides: Partial<UseTradingOperationsDependencies>): UseTradingOperationsDependencies {
 	return createTradingOperationsDependencies({
 		getWalletEthBalance: mock(async () => 2n * ATTO_ETH_PER_ETH),
-		loadSecurityPoolMintCapacity: mock(async () => createMintCapacity()),
+		loadQuestionLedgerMintCapacity: mock(async () => createMintCapacity()),
 		loadTradingDetails: mock(async () => createTradingDetails()),
 		loadZoltarUniverseSummary: mock(async () => createUniverseSummary()),
 		...overrides,
@@ -120,9 +120,9 @@ function createMintDependencies(overrides: Partial<UseTradingOperationsDependenc
 /** Two pools on different universes, so a test can switch the selected pool and tell whose data is displayed. */
 function createTwoPoolReads(pools: { address: Address; details: TradingDetails; universe: ZoltarUniverseSummary }[]) {
 	return {
-		loadTradingDetails: mock(async (securityPoolAddress: Address) => {
-			const pool = pools.find(candidate => candidate.address === securityPoolAddress)
-			if (pool === undefined) throw new Error(`Unexpected security pool ${securityPoolAddress}`)
+		loadTradingDetails: mock(async (questionLedgerAddress: Address) => {
+			const pool = pools.find(candidate => candidate.address === questionLedgerAddress)
+			if (pool === undefined) throw new Error(`Unexpected question ledger ${questionLedgerAddress}`)
 			return pool.details
 		}),
 		loadZoltarUniverseSummary: mock(async (universeId: bigint) => {
@@ -140,7 +140,7 @@ describe('useTradingOperations', () => {
 		if (collateralAvailable) {
 			const source = capitalClient(capitalSnapshot({ collateralToken: collateralDecimals === 6 ? MAINNET_NETWORK_PROFILE.usdcAddress : MAINNET_NETWORK_PROFILE.wethAddress, walletCollateral: 100n * ATTO_ETH_PER_ETH, collateralAllowance: 100n * ATTO_ETH_PER_ETH }))
 			source.setRead('securityPoolFactory', token)
-			source.setRead('getSecurityPoolPortfolio', portfolio)
+			source.setRead('securityPoolOf', securityPool)
 			source.setRead('questionId', zeroHash)
 			source.setRead('purchaseQuote', [0n])
 			replaceEnvironment({ ...getActiveBackend(), createReadClient: () => source.client })
@@ -148,7 +148,7 @@ describe('useTradingOperations', () => {
 		const onTransactionFailed = mock((_message: string, _details?: unknown) => undefined)
 		let hookState: ReturnType<typeof useTradingOperations> | undefined
 		function TradingOperationsHarness(props: HarnessProps) {
-			const { enabled = true, selectedSecurityPoolAddress = SECURITY_POOL_ADDRESS } = props
+			const { enabled = true, selectedQuestionLedgerAddress = QUESTION_LEDGER_ADDRESS } = props
 			hookState = useTradingOperations(
 				{
 					accountAddress: 'accountAddress' in props ? props.accountAddress : WALLET_ADDRESS,
@@ -161,7 +161,7 @@ describe('useTradingOperations', () => {
 					onTransactionRequested: () => undefined,
 					onTransactionSubmitted: () => undefined,
 					refreshState: async () => undefined,
-					selectedSecurityPoolAddress,
+					selectedQuestionLedgerAddress,
 					...parameters,
 				},
 				dependencies,
@@ -193,7 +193,7 @@ describe('useTradingOperations', () => {
 			const write = mock(async () => {
 				throw new Error('Unexpected write')
 			})
-			const hook = await renderTradingHook(createMintDependencies({ createCompleteSetInSecurityPool: write, redeemCompleteSetInSecurityPool: write }), {}, {}, false)
+			const hook = await renderTradingHook(createMintDependencies({ createCompleteSetInQuestionLedger: write, redeemCompleteSetInQuestionLedger: write }), {}, {}, false)
 			await hook.setForm({ completeSetAmount: '5', redeemAmount: '5' })
 			await act(() => hook.state()[action]())
 			expect(hook.onTransactionFailed).toHaveBeenCalledWith('Collateral metadata is not loaded. Wait for funding details and try again.', expect.objectContaining({ kind: 'error' }))
@@ -205,13 +205,13 @@ describe('useTradingOperations', () => {
 		const redeemed: bigint[] = []
 		const hook = await renderTradingHook(
 			createMintDependencies({
-				createCompleteSetInSecurityPool: async (_wallet, _callbacks, securityPoolAddress, amount) => {
+				createCompleteSetInQuestionLedger: async (_wallet, _callbacks, questionLedgerAddress, amount) => {
 					minted.push(amount)
-					return { action: 'createCompleteSet', hash: zeroHash, securityPoolAddress, universeId: 1n }
+					return { action: 'createCompleteSet', hash: zeroHash, questionLedgerAddress, universeId: 1n }
 				},
-				redeemCompleteSetInSecurityPool: async (_wallet, _callbacks, securityPoolAddress, amount) => {
+				redeemCompleteSetInQuestionLedger: async (_wallet, _callbacks, questionLedgerAddress, amount) => {
 					redeemed.push(amount)
-					return { action: 'redeemCompleteSet', hash: zeroHash, securityPoolAddress, universeId: 1n }
+					return { action: 'redeemCompleteSet', hash: zeroHash, questionLedgerAddress, universeId: 1n }
 				},
 				loadTradingDetails: async () => createTradingDetails({ shareBalances: { invalidAttoShares: 10_000_000n, yesAttoShares: 10_000_000n, noAttoShares: 10_000_000n } }),
 			}),
@@ -246,7 +246,7 @@ describe('useTradingOperations', () => {
 	test.each([
 		{
 			capacity: createMintCapacity({ settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 10n * ATTO_ETH_PER_ETH }),
-			expectedMessage: 'Minting is unavailable because this pool has complete-set shares but no collateral.',
+			expectedMessage: 'Minting is unavailable because this question has complete-set shares but no collateral.',
 			name: 'latest pool capacity has no collateral exchange rate',
 		},
 		{
@@ -260,10 +260,10 @@ describe('useTradingOperations', () => {
 			name: 'an escalation game has started',
 		},
 	])('blocks complete-set mint writes when $name', async ({ capacity, expectedMessage }) => {
-		const createCompleteSetInSecurityPool = mock(async () => {
-			throw new Error('createCompleteSetInSecurityPool should not be called when minting is blocked')
+		const createCompleteSetInQuestionLedger = mock(async () => {
+			throw new Error('createCompleteSetInQuestionLedger should not be called when minting is blocked')
 		})
-		const hook = await renderTradingHook(createMintDependencies({ createCompleteSetInSecurityPool, loadSecurityPoolMintCapacity: mock(async () => capacity) }))
+		const hook = await renderTradingHook(createMintDependencies({ createCompleteSetInQuestionLedger, loadQuestionLedgerMintCapacity: mock(async () => capacity) }))
 
 		await hook.setForm({ completeSetAmount: '1' })
 		await act(async () => {
@@ -271,23 +271,23 @@ describe('useTradingOperations', () => {
 		})
 
 		expect(hook.onTransactionFailed).toHaveBeenCalledWith(expectedMessage, expect.objectContaining({ kind: 'error' }))
-		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
+		expect(createCompleteSetInQuestionLedger).not.toHaveBeenCalled()
 	})
 
 	test('allows the checkpoint-adjusted maximum mint amount through submit-time validation', async () => {
-		const createCompleteSetInSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: Address, amount: bigint) => ({
+		const createCompleteSetInQuestionLedger = mock(async (_accountAddress: Address, _callbacks: unknown, questionLedgerAddress: Address, amount: bigint) => ({
 			action: 'createCompleteSet' as const,
 			hash: zeroHash,
-			securityPoolAddress,
+			questionLedgerAddress,
 			universeId: 1n,
 			amount,
 		}))
 		const hook = await renderTradingHook(
 			createMintDependencies({
-				createCompleteSetInSecurityPool,
+				createCompleteSetInQuestionLedger,
 				// The wallet covers the amount plus the gas reserve, so only pool capacity limits this mint.
 				getWalletEthBalance: mock(async () => 3n * ATTO_ETH_PER_ETH),
-				loadSecurityPoolMintCapacity: mock(async () =>
+				loadQuestionLedgerMintCapacity: mock(async () =>
 					createMintCapacity({
 						linearFee: { rateAttoEthPerSecond: ATTO_ETH_PER_ETH, endTime: 100n },
 						currentTimestamp: 2n,
@@ -309,25 +309,25 @@ describe('useTradingOperations', () => {
 		})
 
 		expect(hook.onTransactionFailed.mock.calls).toEqual([])
-		expect(createCompleteSetInSecurityPool).toHaveBeenCalledTimes(1)
-		expect(createCompleteSetInSecurityPool.mock.calls[0]?.[3]).toBe(2n * ATTO_ETH_PER_ETH - 1n)
+		expect(createCompleteSetInQuestionLedger).toHaveBeenCalledTimes(1)
+		expect(createCompleteSetInQuestionLedger.mock.calls[0]?.[3]).toBe(2n * ATTO_ETH_PER_ETH - 1n)
 	})
 
 	test('submits complete-set inputs in fixed share units', async () => {
 		const firstMintShareAmount = ATTO_ETH_PER_ETH
 		let submittedRedeemAmount: bigint | undefined
-		const redeemCompleteSetInSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: Address, amount: bigint) => {
+		const redeemCompleteSetInQuestionLedger = mock(async (_accountAddress: Address, _callbacks: unknown, questionLedgerAddress: Address, amount: bigint) => {
 			submittedRedeemAmount = amount
 			return {
 				action: 'redeemCompleteSet' as const,
 				hash: zeroHash,
-				securityPoolAddress,
+				questionLedgerAddress,
 				universeId: 1n,
 			}
 		})
 		const hook = await renderTradingHook(
 			createMintDependencies({
-				loadSecurityPoolMintCapacity: mock(async () => createMintCapacity({ shareTokenSupplyAttoShares: firstMintShareAmount })),
+				loadQuestionLedgerMintCapacity: mock(async () => createMintCapacity({ shareTokenSupplyAttoShares: firstMintShareAmount })),
 				loadTradingDetails: mock(async () =>
 					createTradingDetails({
 						maxRedeemableCompleteSetsAttoShares: firstMintShareAmount,
@@ -338,7 +338,7 @@ describe('useTradingOperations', () => {
 						},
 					}),
 				),
-				redeemCompleteSetInSecurityPool,
+				redeemCompleteSetInQuestionLedger,
 			}),
 		)
 
@@ -348,20 +348,20 @@ describe('useTradingOperations', () => {
 		})
 
 		expect(hook.onTransactionFailed.mock.calls).toEqual([])
-		expect(redeemCompleteSetInSecurityPool).toHaveBeenCalled()
+		expect(redeemCompleteSetInQuestionLedger).toHaveBeenCalled()
 		expect(submittedRedeemAmount).toBe(firstMintShareAmount)
 	})
 
 	test('submits the amounts the mint and redeem guards accept, including a leading decimal point and digit grouping spaces', async () => {
 		const halfShare = ATTO_ETH_PER_ETH / 2n
-		const createCompleteSetInSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: Address, _amount: bigint) => ({ action: 'createCompleteSet' as const, hash: zeroHash, securityPoolAddress, universeId: 1n }))
-		const redeemCompleteSetInSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: Address, _amount: bigint) => ({ action: 'redeemCompleteSet' as const, hash: zeroHash, securityPoolAddress, universeId: 1n }))
+		const createCompleteSetInQuestionLedger = mock(async (_accountAddress: Address, _callbacks: unknown, questionLedgerAddress: Address, _amount: bigint) => ({ action: 'createCompleteSet' as const, hash: zeroHash, questionLedgerAddress, universeId: 1n }))
+		const redeemCompleteSetInQuestionLedger = mock(async (_accountAddress: Address, _callbacks: unknown, questionLedgerAddress: Address, _amount: bigint) => ({ action: 'redeemCompleteSet' as const, hash: zeroHash, questionLedgerAddress, universeId: 1n }))
 		const hook = await renderTradingHook(
 			createMintDependencies({
-				createCompleteSetInSecurityPool,
-				loadSecurityPoolMintCapacity: mock(async () => createMintCapacity({ shareTokenSupplyAttoShares: ATTO_ETH_PER_ETH })),
+				createCompleteSetInQuestionLedger,
+				loadQuestionLedgerMintCapacity: mock(async () => createMintCapacity({ shareTokenSupplyAttoShares: ATTO_ETH_PER_ETH })),
 				loadTradingDetails: mock(async () => createTradingDetails({ maxRedeemableCompleteSetsAttoShares: ATTO_ETH_PER_ETH, shareBalances: { invalidAttoShares: ATTO_ETH_PER_ETH, noAttoShares: ATTO_ETH_PER_ETH, yesAttoShares: ATTO_ETH_PER_ETH } })),
-				redeemCompleteSetInSecurityPool,
+				redeemCompleteSetInQuestionLedger,
 			}),
 		)
 
@@ -374,21 +374,21 @@ describe('useTradingOperations', () => {
 		})
 
 		expect(hook.onTransactionFailed.mock.calls).toEqual([])
-		expect(createCompleteSetInSecurityPool.mock.calls[0]?.[3]).toBe(halfShare)
-		expect(redeemCompleteSetInSecurityPool.mock.calls[0]?.[3]).toBe(halfShare)
+		expect(createCompleteSetInQuestionLedger.mock.calls[0]?.[3]).toBe(halfShare)
+		expect(redeemCompleteSetInQuestionLedger.mock.calls[0]?.[3]).toBe(halfShare)
 	})
 
 	test('redeems the exact share amount even when its ETH backing is zero', async () => {
 		let submittedRedeemAmount: bigint | undefined
-		const redeemCompleteSetInSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: Address, amount: bigint) => {
+		const redeemCompleteSetInQuestionLedger = mock(async (_accountAddress: Address, _callbacks: unknown, questionLedgerAddress: Address, amount: bigint) => {
 			submittedRedeemAmount = amount
-			return { action: 'redeemCompleteSet' as const, hash: zeroHash, securityPoolAddress, universeId: 1n }
+			return { action: 'redeemCompleteSet' as const, hash: zeroHash, questionLedgerAddress, universeId: 1n }
 		})
 		const hook = await renderTradingHook(
 			createMintDependencies({
-				loadSecurityPoolMintCapacity: mock(async () => createMintCapacity({ settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 100n })),
+				loadQuestionLedgerMintCapacity: mock(async () => createMintCapacity({ settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 100n })),
 				loadTradingDetails: mock(async () => createTradingDetails({ maxRedeemableCompleteSetsAttoShares: 99n, shareBalances: { invalidAttoShares: 99n, noAttoShares: 99n, yesAttoShares: 99n } })),
-				redeemCompleteSetInSecurityPool,
+				redeemCompleteSetInQuestionLedger,
 			}),
 		)
 
@@ -403,13 +403,13 @@ describe('useTradingOperations', () => {
 	})
 
 	test('starts with empty amounts and clears the submitted amount after a successful write', async () => {
-		const createCompleteSetInSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: Address) => ({ action: 'createCompleteSet' as const, hash: zeroHash, securityPoolAddress, universeId: 1n }))
-		const redeemCompleteSetInSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: Address) => ({ action: 'redeemCompleteSet' as const, hash: zeroHash, securityPoolAddress, universeId: 1n }))
+		const createCompleteSetInQuestionLedger = mock(async (_accountAddress: Address, _callbacks: unknown, questionLedgerAddress: Address) => ({ action: 'createCompleteSet' as const, hash: zeroHash, questionLedgerAddress, universeId: 1n }))
+		const redeemCompleteSetInQuestionLedger = mock(async (_accountAddress: Address, _callbacks: unknown, questionLedgerAddress: Address) => ({ action: 'redeemCompleteSet' as const, hash: zeroHash, questionLedgerAddress, universeId: 1n }))
 		const hook = await renderTradingHook(
 			createMintDependencies({
-				createCompleteSetInSecurityPool,
+				createCompleteSetInQuestionLedger,
 				loadTradingDetails: mock(async () => createTradingDetails({ maxRedeemableCompleteSetsAttoShares: ATTO_ETH_PER_ETH, shareBalances: { invalidAttoShares: ATTO_ETH_PER_ETH, noAttoShares: ATTO_ETH_PER_ETH, yesAttoShares: ATTO_ETH_PER_ETH } })),
-				redeemCompleteSetInSecurityPool,
+				redeemCompleteSetInQuestionLedger,
 			}),
 		)
 		expect(hook.state().tradingForm.completeSetAmount).toBe('')
@@ -419,22 +419,22 @@ describe('useTradingOperations', () => {
 		await act(async () => {
 			await hook.state().createCompleteSet()
 		})
-		expect(createCompleteSetInSecurityPool).toHaveBeenCalledTimes(1)
+		expect(createCompleteSetInQuestionLedger).toHaveBeenCalledTimes(1)
 		expect(hook.state().tradingForm.completeSetAmount).toBe('')
 		expect(hook.state().tradingForm.redeemAmount).toBe('0.25')
 
 		await act(async () => {
 			await hook.state().redeemCompleteSet()
 		})
-		expect(redeemCompleteSetInSecurityPool).toHaveBeenCalledTimes(1)
+		expect(redeemCompleteSetInQuestionLedger).toHaveBeenCalledTimes(1)
 		expect(hook.state().tradingForm.redeemAmount).toBe('')
 	})
 
 	test('passes the migrated outcome balance to the share-migration review', async () => {
-		const migrateSharesFromUniverse = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: Address, shareOutcome: 'invalid' | 'yes' | 'no', targetOutcomeIndexes: bigint[], _migratedAttoShares?: bigint) => ({
+		const migrateSharesFromUniverse = mock(async (_accountAddress: Address, _callbacks: unknown, questionLedgerAddress: Address, shareOutcome: 'invalid' | 'yes' | 'no', targetOutcomeIndexes: bigint[], _migratedAttoShares?: bigint) => ({
 			action: 'migrateShares' as const,
 			hash: zeroHash,
-			securityPoolAddress,
+			questionLedgerAddress,
 			shareOutcome,
 			targetOutcomeIndexes,
 			universeId: 1n,
@@ -456,13 +456,13 @@ describe('useTradingOperations', () => {
 		expect(migrateSharesFromUniverse.mock.calls[0]?.[5]).toBe(3n * ATTO_ETH_PER_ETH)
 	})
 
-	test('does not request a multi-target share migration while a selected child universe has no security pool', async () => {
+	test('does not request a multi-target share migration while a selected child universe has no question ledger', async () => {
 		const migrateSharesFromUniverse = mock(async () => {
-			throw new Error('migrateSharesFromUniverse should not be called while a selected child universe has no security pool')
+			throw new Error('migrateSharesFromUniverse should not be called while a selected child universe has no question ledger')
 		})
 		const noMigratedShares = { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n }
 		const loadShareMigrationTargets = mock(async () => [
-			{ outcomeIndex: 0n, canonicalPool: SECURITY_POOL_ADDRESS, migratedAttoShares: noMigratedShares },
+			{ outcomeIndex: 0n, canonicalPool: QUESTION_LEDGER_ADDRESS, migratedAttoShares: noMigratedShares },
 			{ outcomeIndex: 1n, canonicalPool: undefined, migratedAttoShares: noMigratedShares },
 			{ outcomeIndex: 2n, canonicalPool: undefined, migratedAttoShares: noMigratedShares },
 		])
@@ -483,7 +483,7 @@ describe('useTradingOperations', () => {
 		})
 
 		expect(migrateSharesFromUniverse.mock.calls).toEqual([])
-		expect(hook.state().tradingFeedback?.status.detail).toBe('This selection includes a child universe without a security pool. Migrate into each such child universe separately.')
+		expect(hook.state().tradingFeedback?.status.detail).toBe('This selection includes a child universe where this question is not registered yet. Migrate into each such child universe separately.')
 	})
 
 	function getMigrateGuardMessage(state: ReturnType<typeof useTradingOperations>) {
@@ -521,13 +521,13 @@ describe('useTradingOperations', () => {
 		expect(getMigrateGuardMessage(hook.state())).toBeUndefined()
 	})
 
-	test('keeps trading details usable when the child universe security pools cannot be read, and retries them on refresh', async () => {
+	test('keeps trading details usable when the child universe question ledgers cannot be read, and retries them on refresh', async () => {
 		const childUniverses = [createChildUniverse(1n, 0n, 'Invalid', 2n), createChildUniverse(1n, 1n, 'Yes', 3n)]
 		const shareBalances = { invalidAttoShares: ATTO_ETH_PER_ETH, noAttoShares: ATTO_ETH_PER_ETH, yesAttoShares: ATTO_ETH_PER_ETH }
 		let failTargetsRead = true
 		const loadShareMigrationTargets = mock(async (_source: Pick<TradingDetails, 'shareTokenAddress' | 'universeId'>, children: ZoltarUniverseSummary['childUniverses']) => {
 			if (failTargetsRead) throw new Error('multicall failed')
-			return children.map(child => ({ outcomeIndex: child.outcomeIndex, canonicalPool: SECURITY_POOL_ADDRESS, migratedAttoShares: { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n } }))
+			return children.map(child => ({ outcomeIndex: child.outcomeIndex, canonicalPool: QUESTION_LEDGER_ADDRESS, migratedAttoShares: { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n } }))
 		})
 		const hook = await renderTradingHook(
 			createTradingOperationsDependencies({
@@ -537,11 +537,11 @@ describe('useTradingOperations', () => {
 			}),
 		)
 
-		await waitFor(() => expect(hook.state().tradingDetails?.shareMigrationTargets).toEqual({ unavailableReason: 'Child universe security pools unavailable. Refresh pool to retry. Reason: multicall failed.' }))
+		await waitFor(() => expect(hook.state().tradingDetails?.shareMigrationTargets).toEqual({ unavailableReason: 'This question is unavailable in child universes. Refresh to retry. Reason: multicall failed.' }))
 		expect(hook.state().tradingError).toBeUndefined()
 		expect(hook.state().tradingDetails?.shareBalances).toEqual(shareBalances)
 		expect(hook.state().tradingDetails?.maxRedeemableCompleteSetsAttoShares).toBe(ATTO_ETH_PER_ETH)
-		expect(getMigrateGuardMessage(hook.state())).toBe('Child universe security pools unavailable. Refresh pool to retry. Reason: multicall failed.')
+		expect(getMigrateGuardMessage(hook.state())).toBe('This question is unavailable in child universes. Refresh to retry. Reason: multicall failed.')
 
 		failTargetsRead = false
 		await act(() => invalidateAppData())
@@ -558,10 +558,10 @@ describe('useTradingOperations', () => {
 			createTradingOperationsDependencies({
 				// The wallet's Yes balance is already migrated into the pooled child 0; child 1 has no pool yet.
 				loadShareMigrationTargets: mock(async (_source: Pick<TradingDetails, 'shareTokenAddress' | 'universeId'>, _children: ZoltarUniverseSummary['childUniverses'], walletAddress: Address | undefined) => [
-					{ outcomeIndex: 0n, canonicalPool: SECURITY_POOL_ADDRESS, migratedAttoShares: walletAddress === undefined ? noMigratedShares : yesShares },
+					{ outcomeIndex: 0n, canonicalPool: QUESTION_LEDGER_ADDRESS, migratedAttoShares: walletAddress === undefined ? noMigratedShares : yesShares },
 					{ outcomeIndex: 1n, canonicalPool: undefined, migratedAttoShares: noMigratedShares },
 				]),
-				loadTradingDetails: mock(async (_securityPoolAddress: Address, walletAddress: Address | undefined) => createTradingDetails({ shareBalances: walletAddress === undefined ? undefined : yesShares })),
+				loadTradingDetails: mock(async (_questionLedgerAddress: Address, walletAddress: Address | undefined) => createTradingDetails({ shareBalances: walletAddress === undefined ? undefined : yesShares })),
 				loadZoltarUniverseSummary: mock(async () => createUniverseSummary({ childUniverses, forkQuestionDetails: createMarketDetails(), forkTime: 5n, hasForked: true })),
 			}),
 			{},
@@ -586,7 +586,7 @@ describe('useTradingOperations', () => {
 			createTradingOperationsDependencies({
 				loadShareMigrationTargets: mock(async (_source: Pick<TradingDetails, 'shareTokenAddress' | 'universeId'>, children: ZoltarUniverseSummary['childUniverses']) => {
 					if (failTargetsRead) throw new Error('multicall failed')
-					return children.map(child => ({ outcomeIndex: child.outcomeIndex, canonicalPool: SECURITY_POOL_ADDRESS, migratedAttoShares: { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n } }))
+					return children.map(child => ({ outcomeIndex: child.outcomeIndex, canonicalPool: QUESTION_LEDGER_ADDRESS, migratedAttoShares: { invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n } }))
 				}),
 				loadTradingDetails: mock(async () => createTradingDetails({ shareBalances })),
 				loadZoltarUniverseSummary: mock(async () => createUniverseSummary({ childUniverses, forkQuestionDetails: createMarketDetails(), forkTime: 5n, hasForked: true })),
@@ -602,7 +602,7 @@ describe('useTradingOperations', () => {
 		// A wallet switch reloads the details, and this time the child universe read fails.
 		failTargetsRead = true
 		await hook.rerender({ accountAddress: NEXT_WALLET_ADDRESS })
-		await waitFor(() => expect(hook.state().tradingDetails?.shareMigrationTargets).toEqual({ unavailableReason: 'Child universe security pools unavailable. Refresh pool to retry. Reason: multicall failed.' }))
+		await waitFor(() => expect(hook.state().tradingDetails?.shareMigrationTargets).toEqual({ unavailableReason: 'This question is unavailable in child universes. Refresh to retry. Reason: multicall failed.' }))
 		expect(hook.state().tradingForm.targetOutcomeIndexes).toBe('1')
 
 		failTargetsRead = false
@@ -618,7 +618,7 @@ describe('useTradingOperations', () => {
 			createTradingOperationsDependencies({
 				// Only the Yes balance is already migrated, and only into child 0.
 				loadShareMigrationTargets: mock(async (_source: Pick<TradingDetails, 'shareTokenAddress' | 'universeId'>, children: ZoltarUniverseSummary['childUniverses']) =>
-					children.map(child => ({ outcomeIndex: child.outcomeIndex, canonicalPool: SECURITY_POOL_ADDRESS, migratedAttoShares: child.outcomeIndex === 0n ? { ...noMigratedShares, yesAttoShares: ATTO_ETH_PER_ETH } : noMigratedShares })),
+					children.map(child => ({ outcomeIndex: child.outcomeIndex, canonicalPool: QUESTION_LEDGER_ADDRESS, migratedAttoShares: child.outcomeIndex === 0n ? { ...noMigratedShares, yesAttoShares: ATTO_ETH_PER_ETH } : noMigratedShares })),
 				),
 				loadTradingDetails: mock(async () => createTradingDetails({ shareBalances: { invalidAttoShares: 0n, noAttoShares: ATTO_ETH_PER_ETH, yesAttoShares: ATTO_ETH_PER_ETH } })),
 				loadZoltarUniverseSummary: mock(async () => createUniverseSummary({ childUniverses, forkQuestionDetails: createMarketDetails(), forkTime: 5n, hasForked: true })),
@@ -640,22 +640,22 @@ describe('useTradingOperations', () => {
 	test('createCompleteSet ignores a stale post-success refresh after the selected pool changes', async () => {
 		const poolA = getAddress('0x00000000000000000000000000000000000000c1')
 		const poolB = getAddress('0x00000000000000000000000000000000000000d1')
-		const pendingResult = createDeferred<{ action: 'createCompleteSet'; hash: typeof zeroHash; securityPoolAddress: Address; universeId: bigint }>()
+		const pendingResult = createDeferred<{ action: 'createCompleteSet'; hash: typeof zeroHash; questionLedgerAddress: Address; universeId: bigint }>()
 		const detailsA = createTradingDetails({ shareBalances: { invalidAttoShares: 1n, noAttoShares: 2n, yesAttoShares: 3n }, universeId: 1n })
 		const detailsB = createTradingDetails({ shareBalances: { invalidAttoShares: 4n, noAttoShares: 5n, yesAttoShares: 6n }, universeId: 2n })
 		const universeA = createUniverseSummary({ childUniverses: [createChildUniverse(1n, 0n, 'Invalid', 11n)], hasForked: true, universeId: 1n })
 		const universeB = createUniverseSummary({ childUniverses: [createChildUniverse(2n, 1n, 'Yes', 22n)], hasForked: true, universeId: 2n })
-		const createCompleteSetInSecurityPool = mock(async () => await pendingResult.promise)
+		const createCompleteSetInQuestionLedger = mock(async () => await pendingResult.promise)
 		const hook = await renderTradingHook(
 			createMintDependencies({
-				createCompleteSetInSecurityPool,
+				createCompleteSetInQuestionLedger,
 				...createTwoPoolReads([
 					{ address: poolA, details: detailsA, universe: universeA },
 					{ address: poolB, details: detailsB, universe: universeB },
 				]),
 			}),
 			{},
-			{ selectedSecurityPoolAddress: poolA },
+			{ selectedQuestionLedgerAddress: poolA },
 		)
 
 		await waitFor(() => expect(hook.state().tradingDetails?.universeId).toBe(universeA.universeId))
@@ -667,9 +667,9 @@ describe('useTradingOperations', () => {
 			createPromise = hook.state().createCompleteSet()
 		})
 
-		await waitFor(() => expect(createCompleteSetInSecurityPool).toHaveBeenCalledTimes(1))
+		await waitFor(() => expect(createCompleteSetInQuestionLedger).toHaveBeenCalledTimes(1))
 
-		await hook.rerender({ selectedSecurityPoolAddress: poolB })
+		await hook.rerender({ selectedQuestionLedgerAddress: poolB })
 
 		await waitFor(() => expect(hook.state().tradingDetails?.universeId).toBe(universeB.universeId))
 		await waitFor(() => expect(hook.state().tradingForkUniverse?.universeId).toBe(universeB.universeId))
@@ -679,7 +679,7 @@ describe('useTradingOperations', () => {
 			pendingResult.resolve({
 				action: 'createCompleteSet',
 				hash: zeroHash,
-				securityPoolAddress: poolA,
+				questionLedgerAddress: poolA,
 				universeId: universeA.universeId,
 			})
 			await createPromise
@@ -697,10 +697,10 @@ describe('useTradingOperations', () => {
 		const deferredMintCapacity = createDeferred<MintCapacity>()
 		const universeA = createUniverseSummary({ hasForked: true, universeId: 1n })
 		const universeB = createUniverseSummary({ hasForked: true, universeId: 2n })
-		const createCompleteSetInSecurityPool = mock(async () => ({
+		const createCompleteSetInQuestionLedger = mock(async () => ({
 			action: 'createCompleteSet' as const,
 			hash: zeroHash,
-			securityPoolAddress: poolA,
+			questionLedgerAddress: poolA,
 			universeId: universeA.universeId,
 		}))
 		const poolReads = createTwoPoolReads([
@@ -710,8 +710,8 @@ describe('useTradingOperations', () => {
 		let transactionState = createInitialTransactionTrayState()
 		const hook = await renderTradingHook(
 			createMintDependencies({
-				createCompleteSetInSecurityPool,
-				loadSecurityPoolMintCapacity: mock(async () => await deferredMintCapacity.promise),
+				createCompleteSetInQuestionLedger,
+				loadQuestionLedgerMintCapacity: mock(async () => await deferredMintCapacity.promise),
 				...poolReads,
 			}),
 			{
@@ -725,7 +725,7 @@ describe('useTradingOperations', () => {
 					transactionState = markTransactionRequested(transactionState, intent)
 				},
 			},
-			{ selectedSecurityPoolAddress: poolA },
+			{ selectedQuestionLedgerAddress: poolA },
 		)
 
 		await waitFor(() => expect(hook.state().tradingDetails?.universeId).toBe(universeA.universeId))
@@ -740,7 +740,7 @@ describe('useTradingOperations', () => {
 		expect(hook.state().tradingFeedback?.status.tone).toBe('pending')
 		expect(transactionState.entries[0]?.intent.action).toBe('createCompleteSet')
 
-		await hook.rerender({ selectedSecurityPoolAddress: poolB })
+		await hook.rerender({ selectedQuestionLedgerAddress: poolB })
 
 		await waitFor(() => expect(hook.state().tradingDetails?.universeId).toBe(universeB.universeId))
 
@@ -751,7 +751,7 @@ describe('useTradingOperations', () => {
 
 		expect(hook.state().tradingDetails?.universeId).toBe(universeB.universeId)
 		expect(hook.state().tradingFeedback).toBeUndefined()
-		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
+		expect(createCompleteSetInQuestionLedger).not.toHaveBeenCalled()
 		expect(hook.onTransactionFailed.mock.calls).toEqual([])
 		expect(transactionState.active).toBeUndefined()
 		expect(transactionState.entries).toEqual([])
@@ -769,16 +769,16 @@ describe('useTradingOperations', () => {
 	test('does not request a mint transaction when the active wallet account changed', async () => {
 		replaceEnvironment(createFakeBackend({ accountAddress: NEXT_WALLET_ADDRESS }))
 
-		const createCompleteSetInSecurityPool = mock(async () => {
-			throw new Error('createCompleteSetInSecurityPool should not be called when the active wallet account changed')
+		const createCompleteSetInQuestionLedger = mock(async () => {
+			throw new Error('createCompleteSetInQuestionLedger should not be called when the active wallet account changed')
 		})
 		const getWalletEthBalance = mock(async () => 2n * ATTO_ETH_PER_ETH)
 		const onTransactionRequested = mock(() => undefined)
-		const loadSecurityPoolMintCapacity = mock(async () => createMintCapacity())
+		const loadQuestionLedgerMintCapacity = mock(async () => createMintCapacity())
 		const loadTradingDetails = mock(async () => createTradingDetails())
 		const loadZoltarUniverseSummary = mock(async () => createUniverseSummary())
-		const hook = await renderTradingHook(createTradingOperationsDependencies({ createCompleteSetInSecurityPool, getWalletEthBalance, loadSecurityPoolMintCapacity, loadTradingDetails, loadZoltarUniverseSummary }), { onTransactionRequested })
-		const reads = [getWalletEthBalance, loadTradingDetails, loadZoltarUniverseSummary, loadSecurityPoolMintCapacity]
+		const hook = await renderTradingHook(createTradingOperationsDependencies({ createCompleteSetInQuestionLedger, getWalletEthBalance, loadQuestionLedgerMintCapacity, loadTradingDetails, loadZoltarUniverseSummary }), { onTransactionRequested })
+		const reads = [getWalletEthBalance, loadTradingDetails, loadZoltarUniverseSummary, loadQuestionLedgerMintCapacity]
 		for (const read of reads) read.mockClear()
 
 		await hook.setForm({ completeSetAmount: '1' })
@@ -786,7 +786,7 @@ describe('useTradingOperations', () => {
 			await hook.state().createCompleteSet()
 		})
 
-		expectWalletAccountChangeStoppedBeforeReads(hook, onTransactionRequested, reads, createCompleteSetInSecurityPool)
+		expectWalletAccountChangeStoppedBeforeReads(hook, onTransactionRequested, reads, createCompleteSetInQuestionLedger)
 	})
 
 	test('does not request a share-migration transaction when the active wallet account changed', async () => {

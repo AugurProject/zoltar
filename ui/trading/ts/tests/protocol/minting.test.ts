@@ -23,10 +23,10 @@ function mintClient(current: ReturnType<typeof smallReserveMarketFixture>, requi
 test('cash-only mint submission rechecks recovery REP in the current central state', async () => {
 	const cached = smallReserveMarketFixture({ settlementRecoveryAttoRep: 0n })
 	const current = { ...cached, settlementRecoveryAttoRep: 1n }
-	await expect(loadBudgetMint(mintClient(current), cached, 10n, 1n)).rejects.toThrow('New complete sets require recovery REP. Purchase complete sets from this market’s portfolio in Statoblast.')
+	await expect(loadBudgetMint(mintClient(current), cached, 10n, 1n)).rejects.toThrow('New complete sets require recovery REP. Purchase complete sets from this market’s security pool in Statoblast.')
 })
 
 test('cash-only mint rejects a REP contribution even when the withdrawable REP snapshot rounds to zero', async () => {
 	const market = smallReserveMarketFixture({ settlementRecoveryAttoRep: 0n })
-	await expect(loadBudgetMint(mintClient(market, 1n), market, 10n, 1n)).rejects.toThrow('New complete sets require recovery REP. Purchase complete sets from this market’s portfolio in Statoblast.')
+	await expect(loadBudgetMint(mintClient(market, 1n), market, 10n, 1n)).rejects.toThrow('New complete sets require recovery REP. Purchase complete sets from this market’s security pool in Statoblast.')
 })

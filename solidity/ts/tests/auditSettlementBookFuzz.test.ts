@@ -588,7 +588,7 @@ describe('audit fuzz: settlement book ETH accounting against an eager reference 
 			if (chain.cash !== expected.cash) return `${where}: cash ${chain.cash} != model ${expected.cash}`
 			if (chain.units !== expected.units) return `${where}: units ${chain.units} != model ${expected.units}`
 			if (chain.feeCash !== expected.feeCash) return `${where}: feeCash ${chain.feeCash} != model ${expected.feeCash}`
-			if (chain.ts !== expected.ts) return `${where}: portfolio clock ${chain.ts} != model ${expected.ts}`
+			if (chain.ts !== expected.ts) return `${where}: security pool clock ${chain.ts} != model ${expected.ts}`
 			if (chain.offset !== expected.offset) return `${where}: fee offset ${chain.offset} != model ${expected.offset}`
 			if (chain.isSealed !== expected.isSealed || chain.enabled !== expected.enabled || chain.minimumFinalAfter !== expected.minimumFinalAfter) return `${where}: flags differ ${show(chain)}`
 			let liveUnits = 0n

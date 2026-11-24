@@ -5,16 +5,16 @@ import transaction from './delegation-transaction.json'
 
 const wrapperAbi = parseAbi(['function redeemDelegations(bytes[] _permissionContexts,bytes32[] _modes,bytes[] _executionCallDatas)'])
 const target = getAddress(transaction.target)
-const labels = new Map([[target.toLowerCase(), 'Security Pool']])
-const kinds = new Map([[target.toLowerCase(), 'securityPool']])
+const labels = new Map([[target.toLowerCase(), 'Question Ledger']])
+const kinds = new Map([[target.toLowerCase(), 'questionLedger']])
 const wrapped = (execution: `0x${string}`, mode = zeroHash) => encodeFunctionData({ abi: wrapperAbi, functionName: 'redeemDelegations', args: [['0x'], [mode], [execution]] })
 
-test('decodes a shared portfolio capital deposit inside a delegation', () => {
+test('decodes a shared security pool capital deposit inside a delegation', () => {
 	const depositAbi = parseAbi(['function depositAndSetHealthTarget(uint256 amount,uint256 targetHealthFactorBps)'])
 	const deposit = encodeFunctionData({ abi: depositAbi, functionName: 'depositAndSetHealthTarget', args: [110n * 10n ** 18n, 12000n] })
-	const decoded = decodeAction(undefined, wrapped(concatHex([target, toHex(0n, { size: 32 }), deposit])), new Map([[target.toLowerCase(), 'Portfolio capital']]), new Map(), new Map([[target.toLowerCase(), 'securityPoolCapitalLedger']]))
+	const decoded = decodeAction(undefined, wrapped(concatHex([target, toHex(0n, { size: 32 }), deposit])), new Map([[target.toLowerCase(), 'Security pool capital']]), new Map(), new Map([[target.toLowerCase(), 'securityPoolCapitalLedger']]))
 	expect(decoded.status).toBe('decoded')
-	expect(decoded.summary).toContain('Portfolio capital')
+	expect(decoded.summary).toContain('Security pool capital')
 	expect(decoded.summary).toContain('depositAndSetHealthTarget')
 	expect(decoded.summary).toContain('targetHealthFactorBps=12000')
 	expect(decoded.summary).not.toContain('Unknown call')
@@ -26,7 +26,7 @@ test('preserves the historical delegation wrapper while marking its retired inne
 	const decoded = decodeAction(undefined, `0x${transaction.input.slice(2)}`, labels, new Map(), kinds)
 	expect(decoded.status).toBe('decoded')
 	expect(decoded.name).toBe('redeemDelegations')
-	expect(decoded.summary).toContain('Security Pool')
+	expect(decoded.summary).toContain('Question Ledger')
 	expect(decoded.summary).toContain('Unknown call 0x3c80e292')
 	expect(decoded.referencedAddresses).toContain(target)
 	expect(decoded.displayArguments?.['_executionCallDatas']).not.toEqual(decoded.arguments?.['_executionCallDatas'])
@@ -92,7 +92,7 @@ test('bounds nested delegation decoding and keeps the wrapper identity', () => {
 })
 
 test('does not reinterpret known protocol calls as delegation wrappers', () => {
-	const contract = { address: target, kind: 'securityPool', label: 'Security Pool', provenance: 'test' }
+	const contract = { address: target, kind: 'questionLedger', label: 'Question Ledger', provenance: 'test' }
 	if (!isHex(transaction.input)) throw new Error('Invalid transaction fixture')
 	expect(decodeAction(contract, `0x${transaction.input.slice(2)}`, labels).status).toBe('failed')
 })

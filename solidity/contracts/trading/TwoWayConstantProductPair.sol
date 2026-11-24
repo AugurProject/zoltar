@@ -2,8 +2,8 @@
 pragma solidity 0.8.35;
 
 import { BinaryOutcomes } from '../statoblast/BinaryOutcomes.sol';
-import { ISecurityPool, SystemState } from '../statoblast/interfaces/ISecurityPool.sol';
-import { ISecurityPoolForker } from '../statoblast/interfaces/ISecurityPoolForker.sol';
+import { IQuestionLedger, SystemState } from '../statoblast/interfaces/IQuestionLedger.sol';
+import { IQuestionForker } from '../statoblast/interfaces/IQuestionForker.sol';
 import { IERC165 } from '../statoblast/interfaces/IERC165.sol';
 import { IERC1155Receiver } from '../statoblast/interfaces/IERC1155Receiver.sol';
 import { Math } from '../statoblast/openOracle/openzeppelin/contracts/utils/math/Math.sol';
@@ -25,7 +25,7 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 	address public constant MINIMUM_LIQUIDITY_LOCK = address(1);
 
 	address public immutable factory;
-	ISecurityPool public immutable securityPool;
+	IQuestionLedger public immutable questionLedger;
 	ITradingShareToken public immutable shareToken;
 	uint248 public immutable universeId;
 	uint256 public immutable questionId;
@@ -55,16 +55,16 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 		_;
 	}
 
-	constructor(address _factory, ISecurityPool _securityPool, uint256 _feeBps, address predeploymentShareSink) {
+	constructor(address _factory, IQuestionLedger _questionLedger, uint256 _feeBps, address predeploymentShareSink) {
 		require(_factory != address(0), 'Factory is zero');
-		require(address(_securityPool) != address(0), 'Security pool is zero');
+		require(address(_questionLedger) != address(0), 'Question ledger is zero');
 		require(_feeBps < TwoWayConstantProductMath.BPS_DENOMINATOR, 'Invalid fee');
 		require(predeploymentShareSink != address(0), 'Share sink is zero');
 		factory = _factory;
-		securityPool = _securityPool;
-		shareToken = ITradingShareToken(address(_securityPool.shareToken()));
-		universeId = _securityPool.universeId();
-		questionId = _securityPool.questionId();
+		questionLedger = _questionLedger;
+		shareToken = ITradingShareToken(address(_questionLedger.shareToken()));
+		universeId = _questionLedger.universeId();
+		questionId = _questionLedger.questionId();
 		invalidTokenId = shareToken.getTokenId(universeId, BinaryOutcomes.BinaryOutcome.Invalid);
 		yesTokenId = shareToken.getTokenId(universeId, BinaryOutcomes.BinaryOutcome.Yes);
 		noTokenId = shareToken.getTokenId(universeId, BinaryOutcomes.BinaryOutcome.No);
@@ -99,13 +99,13 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 
 	function tradingStatus() public view returns (TradingStatus status) {
 		if (totalSupply() == 0) return TradingStatus.Uninitialized;
-		if (block.timestamp >= securityPool.questionData().getQuestionEndDate(questionId))
+		if (block.timestamp >= questionLedger.questionData().getQuestionEndDate(questionId))
 			return TradingStatus.QuestionEnded;
-		if (securityPool.zoltar().getForkTime(universeId) != 0) return TradingStatus.UniverseForked;
-		if (securityPool.awaitingForkContinuation()) return TradingStatus.AwaitingForkContinuation;
-		if (securityPool.systemState() != SystemState.Operational) return TradingStatus.PoolInactive;
+		if (questionLedger.zoltar().getForkTime(universeId) != 0) return TradingStatus.UniverseForked;
+		if (questionLedger.awaitingForkContinuation()) return TradingStatus.AwaitingForkContinuation;
+		if (questionLedger.systemState() != SystemState.Operational) return TradingStatus.PoolInactive;
 		if (
-			ISecurityPoolForker(securityPool.securityPoolForker()).getQuestionOutcome(securityPool) !=
+			IQuestionForker(questionLedger.questionForker()).getQuestionOutcome(questionLedger) !=
 			BinaryOutcomes.BinaryOutcome.None
 		) return TradingStatus.QuestionResolved;
 		return TradingStatus.Open;
@@ -244,11 +244,11 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 
 	function _requireLifecycleOpen(bool requireInitialized) private view {
 		if (requireInitialized) require(totalSupply() > 0, 'Uninitialized');
-		require(block.timestamp < securityPool.questionData().getQuestionEndDate(questionId), 'Question ended');
-		require(securityPool.zoltar().getForkTime(universeId) == 0, 'Universe forked');
-		require(!securityPool.awaitingForkContinuation(), 'Fork continuation pending');
-		require(securityPool.systemState() == SystemState.Operational, 'Pool inactive');
-		require(ISecurityPoolForker(securityPool.securityPoolForker()).getQuestionOutcome(securityPool) == BinaryOutcomes.BinaryOutcome.None, 'Question resolved');
+		require(block.timestamp < questionLedger.questionData().getQuestionEndDate(questionId), 'Question ended');
+		require(questionLedger.zoltar().getForkTime(universeId) == 0, 'Universe forked');
+		require(!questionLedger.awaitingForkContinuation(), 'Fork continuation pending');
+		require(questionLedger.systemState() == SystemState.Operational, 'Pool inactive');
+		require(IQuestionForker(questionLedger.questionForker()).getQuestionOutcome(questionLedger) == BinaryOutcomes.BinaryOutcome.None, 'Question resolved');
 	}
 
 	function _effectiveReserves() private view returns (uint256 effectiveYes, uint256 effectiveNo) {

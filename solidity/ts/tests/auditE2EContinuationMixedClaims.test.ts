@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_SecurityPool_SecurityPool as poolArtifact } from '../types/contractArtifact'
+import { statoblast_QuestionLedger_QuestionLedger as poolArtifact } from '../types/contractArtifact'
 import type { WriteClient } from '../testSupport/simulator/utils/clients'
 import { DAY } from '../testSupport/simulator/utils/constants'
 import { SparseNullifierTree } from './carryProofHelpers'
 import { createE2E, expectedWinningClaim, INVALID, median, NO, NONE, OUTCOMES, YES, type CarryLeaf } from './auditE2EHarness'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 const K = 1_000n * unit
 
@@ -13,7 +13,7 @@ const K = 1_000n * unit
 // local reports and either settles (inherited proofs and local indexes mixed in any order) or
 // forks again before finality, so the grandchildren pay claims from three generations.
 describe('auditE2E: continuation games mix inherited and local claims across generations', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const e2e = createE2E(fixture)
 	const total = (values: readonly bigint[]) => values.reduce((sum, value) => sum + value, 0n)
 
@@ -23,7 +23,7 @@ describe('auditE2E: continuation games mix inherited and local claims across gen
 		const owner = fixture.owner()
 		const U0 = base.genesisUniverse
 		const q = base.questionId
-		const source = fixture.poolFor(q).securityPool
+		const source = fixture.poolFor(q).questionLedger
 		const [r2, r3, r4, r5, r6] = [e2e.account(2), e2e.account(3), e2e.account(4), e2e.account(5), e2e.account(6)]
 		await fixture.prepare()
 		await fixture.mint(10n * unit)
@@ -133,7 +133,7 @@ describe('auditE2E: continuation games mix inherited and local claims across gen
 				// A loser settles in the middle of the winners: zero payout, exactly once.
 				expect(await e2e.claimLocal(r5, childA.pool, NO, [0n], r5.account.address)).toBe(0n)
 				await expect(r5.simulateContract({ abi: poolArtifact.abi, address: childA.pool, functionName: 'withdrawFromEscalationGame', args: [NO, [0n]] })).rejects.toThrow('Deposit settled')
-				await expect(owner.simulateContract({ ...gA, functionName: 'sweepResidualRepToSecurityPool' })).rejects.toThrow('Principal remains')
+				await expect(owner.simulateContract({ ...gA, functionName: 'sweepResidualRepToQuestionLedger' })).rejects.toThrow('Principal remains')
 			}
 		}
 		// Reward coordinates run across the inherited/local boundary: 150k of 190k is reward eligible.
@@ -150,14 +150,14 @@ describe('auditE2E: continuation games mix inherited and local claims across gen
 		if (localLeaf !== undefined) await expect(e2e.simulateInheritedClaim(owner, childA.pool, YES, [...inherited[YES], ...local[YES]], localLeaf, new SparseNullifierTree())).rejects.toThrow()
 		await expect(owner.simulateContract({ abi: poolArtifact.abi, address: childA.pool, functionName: 'withdrawFromEscalationGame', args: [YES, [3n]] })).rejects.toThrow('Bad deposit index')
 		// The last losing local deposit must settle before the terminal sweep.
-		await expect(owner.simulateContract({ ...gA, functionName: 'sweepResidualRepToSecurityPool' })).rejects.toThrow('Principal remains')
+		await expect(owner.simulateContract({ ...gA, functionName: 'sweepResidualRepToQuestionLedger' })).rejects.toThrow('Principal remains')
 		expect(await e2e.claimLocal(r5, childA.pool, NO, [1n], r6.account.address)).toBe(0n)
 		const residual = await e2e.gameBalance(childA.game)
 		expect(residual).toBe(backing - paid - burn)
 		expect(residual).toBe(40n * K - burn)
 		await e2e.sweep(r6, childA.game)
 		expect(supplyBefore - (await e2e.supply(A))).toBe(40n * K)
-		await expect(owner.simulateContract({ ...gA, functionName: 'sweepResidualRepToSecurityPool' })).rejects.toThrow()
+		await expect(owner.simulateContract({ ...gA, functionName: 'sweepResidualRepToQuestionLedger' })).rejects.toThrow()
 		expect(await e2e.gameBalance(childA.game)).toBe(0n)
 		expect(await e2e.rep(A, ledger)).toBe(0n)
 		expect(await e2e.rep(A, childA.pool)).toBe(0n)
@@ -188,7 +188,7 @@ describe('auditE2E: continuation games mix inherited and local claims across gen
 		if (originYes === undefined) throw new Error('Missing origin leaf')
 		await expect(e2e.simulateInheritedClaim(owner, childA.pool, YES, originOnly[YES], originYes, new SparseNullifierTree())).rejects.toThrow('Question not final')
 		await expect(owner.simulateContract({ abi: poolArtifact.abi, address: childA.pool, functionName: 'withdrawFromEscalationGame', args: [YES, [0n]] })).rejects.toThrow('Deposits carry to child games')
-		await expect(owner.simulateContract({ ...gA, functionName: 'sweepResidualRepToSecurityPool' })).rejects.toThrow('Question not final')
+		await expect(owner.simulateContract({ ...gA, functionName: 'sweepResidualRepToQuestionLedger' })).rejects.toThrow('Question not final')
 		await expect(r2.simulateContract({ abi: poolArtifact.abi, address: childA.pool, functionName: 'depositWalletRepToEscalationGame', args: [YES, 10n * K] })).rejects.toThrow()
 		expect(snapshot[YES].map(leaf => leaf.amount)).toEqual([30n * K, 40n * K, 20n * K, 40n * K])
 		expect(snapshot[NO].map(leaf => leaf.amount)).toEqual([25n * K, 25n * K, 30n * K])
@@ -236,7 +236,7 @@ describe('auditE2E: continuation games mix inherited and local claims across gen
 			if (outcome !== YES && loser !== undefined) await expect(e2e.simulateInheritedClaim(owner, childAA.pool, outcome, snapshot[outcome], loser, new SparseNullifierTree())).rejects.toThrow('Not winning outcome')
 		}
 		const residualAA = await e2e.gameBalance(childAA.game)
-		if (residualAA === 0n) await expect(owner.simulateContract({ ...e2e.game(childAA.game), functionName: 'sweepResidualRepToSecurityPool' })).rejects.toThrow('No sweepable REP')
+		if (residualAA === 0n) await expect(owner.simulateContract({ ...e2e.game(childAA.game), functionName: 'sweepResidualRepToQuestionLedger' })).rejects.toThrow('No sweepable REP')
 		else await e2e.sweep(r6, childAA.game)
 		expect(await e2e.rep(AA, ledger)).toBe(0n)
 		expect(supplyAA - (await e2e.supply(AA))).toBe(settledAA.burn + residualAA)
@@ -260,7 +260,7 @@ describe('auditE2E: continuation games mix inherited and local claims across gen
 		expect(supplyAB - (await e2e.supply(AB))).toBe(burnAB)
 		const residualAB = await e2e.gameBalance(childAB.game)
 		expect(residualAB).toBe(backingAB - settledAB.paid - localPaid - burnAB)
-		if (residualAB === 0n) await expect(owner.simulateContract({ ...e2e.game(childAB.game), functionName: 'sweepResidualRepToSecurityPool' })).rejects.toThrow('No sweepable REP')
+		if (residualAB === 0n) await expect(owner.simulateContract({ ...e2e.game(childAB.game), functionName: 'sweepResidualRepToQuestionLedger' })).rejects.toThrow('No sweepable REP')
 		else await e2e.sweep(r6, childAB.game)
 		expect(await e2e.rep(AB, ledger)).toBe(0n)
 		expect(supplyAB - (await e2e.supply(AB))).toBe(burnAB + residualAB)

@@ -1,4 +1,4 @@
-import { capitalFixture } from '../support/portfolio-fixtures.ts'
+import { capitalFixture } from '../support/security-pool-fixtures.ts'
 import { describe, expect, test } from 'bun:test'
 import { evaluateSelectableOperationDefinition } from '../../src/operations/catalog.ts'
 import { TRADING_OPERATIONS } from '../../src/operations/trading/catalog.ts'
@@ -23,8 +23,8 @@ const options = {
 describe('genesis initialization', () => {
 	test('advances through every external and protocol trading prerequisite in order', () => {
 		expect(genesisInitializationDefinitionId(completeGenesisInitializationState({ hasQuestion: false }))).toBe('zoltar.question.create-binary')
-		expect(genesisInitializationDefinitionId(completeGenesisInitializationState({ hasPool: false }))).toBe('statoblast.portfolio.add-question')
-		expect(genesisInitializationDefinitionId(completeGenesisInitializationState({ hasPortfolioCapital: false }))).toBe('statoblast.capital.deposit')
+		expect(genesisInitializationDefinitionId(completeGenesisInitializationState({ hasPool: false }))).toBe('statoblast.security-pool.add-question')
+		expect(genesisInitializationDefinitionId(completeGenesisInitializationState({ hasSecurityPoolCapital: false }))).toBe('statoblast.capital.deposit')
 		expect(genesisInitializationDefinitionId(completeGenesisInitializationState({ hasUniswapSeeder: false }))).toBe('trading.genesis-uniswap.deploy-seeder')
 		expect(genesisInitializationDefinitionId(completeGenesisInitializationState({ hasUniswapPool: false }))).toBe('trading.genesis-uniswap.create-pool')
 		expect(genesisInitializationDefinitionId(completeGenesisInitializationState({ hasInitializedUniswapPool: false }))).toBe('trading.genesis-uniswap.initialize-pool')
@@ -36,7 +36,7 @@ describe('genesis initialization', () => {
 
 	test('builds bounded pool creation, initialization, and seeding plans from authenticated state', () => {
 		const snapshot = snapshotFixture()
-		snapshot.portfolioCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
+		snapshot.securityPoolCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
 		snapshot.deployments.uniswapV3Factory = address(40)
 		snapshot.genesisUniswap = { factory: true, initialized: false, liquidity: '0', proxy: true, seeder: true }
 		const creation = evaluateSelectableOperationDefinition('trading.genesis-uniswap.create-pool', snapshot, options)
@@ -63,25 +63,25 @@ describe('genesis initialization', () => {
 
 	test('binds pool and vault plans to the requested genesis topology despite competitors', () => {
 		const snapshot = snapshotFixture()
-		snapshot.portfolioCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
+		snapshot.securityPoolCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
 		const firstQuestion = snapshot.questions[0]
 		const firstPool = snapshot.pools[0]
 		if (firstQuestion === undefined || firstPool === undefined) throw new Error('Genesis fixtures missing')
 		const targetQuestion = { ...firstQuestion, endTime: '2000001000', id: '78' }
 		snapshot.questions.push(targetQuestion)
-		const deployment = evaluateSelectableOperationDefinition('statoblast.portfolio.add-question', snapshot, { ...options, genesisInitializationTarget: { questionId: targetQuestion.id, universeId: '0' } })
+		const deployment = evaluateSelectableOperationDefinition('statoblast.security-pool.add-question', snapshot, { ...options, genesisInitializationTarget: { questionId: targetQuestion.id, universeId: '0' } })
 		expect(deployment.plan?.metadata).toMatchObject({ questionId: targetQuestion.id, universeId: '0' })
 
-		const targetPool = { ...firstPool, address: address(42), questionId: targetQuestion.id, portfolio: address(43) }
+		const targetPool = { ...firstPool, address: address(42), questionId: targetQuestion.id, securityPool: address(43) }
 		snapshot.pools.push(targetPool)
-		snapshot.portfolioCapital.push({ ...capitalFixture(snapshot), portfolio: targetPool.portfolio, capitalLedger: address(44) })
+		snapshot.securityPoolCapital.push({ ...capitalFixture(snapshot), securityPool: targetPool.securityPool, capitalLedger: address(44) })
 		const deposit = evaluateSelectableOperationDefinition('statoblast.capital.deposit', snapshot, { ...options, genesisInitializationTarget: { pool: targetPool.address, questionId: targetQuestion.id, universeId: '0' } })
-		expect(deposit.plan?.metadata).toMatchObject({ portfolio: targetPool.portfolio })
+		expect(deposit.plan?.metadata).toMatchObject({ securityPool: targetPool.securityPool })
 	})
 
 	test('creates, initializes, and seeds REP/WETH pools for canonical child universes', () => {
 		const snapshot = snapshotFixture()
-		snapshot.portfolioCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
+		snapshot.securityPoolCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
 		const childRep = address(43)
 		const uniswapFactory = address(44)
 		const childPool = address(45)
@@ -139,7 +139,7 @@ describe('genesis initialization', () => {
 
 test('uses the Sepolia factory when an older snapshot omits the factory address', () => {
 	const snapshot = snapshotFixture()
-	snapshot.portfolioCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
+	snapshot.securityPoolCapital = [{ ...capitalFixture(snapshot), admissibleQuestionIds: ['78', '79'] }]
 	snapshot.chainId = 11155111
 	delete snapshot.deployments.uniswapV3Factory
 	snapshot.genesisUniswap = { factory: true, initialized: false, liquidity: '0', proxy: true, seeder: true }

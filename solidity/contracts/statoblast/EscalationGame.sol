@@ -2,7 +2,7 @@
 pragma solidity 0.8.35;
 
 import { ReputationToken } from '../ReputationToken.sol';
-import { ISecurityPool } from './interfaces/ISecurityPool.sol';
+import { IQuestionLedger } from './interfaces/IQuestionLedger.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameProofVerifier } from './EscalationGameProofVerifier.sol';
 import { EscalationGameSettlement } from './EscalationGameSettlement.sol';
@@ -13,7 +13,7 @@ import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.s
 contract EscalationGame is EscalationGameSettlement {
 	EscalationGameDepositDelegate private immutable depositDelegate;
 
-	constructor(ISecurityPool _securityPool, ReputationToken _repToken, EscalationGameProofVerifier _proofVerifier, EscalationGameDepositDelegate _depositDelegate) EscalationGameState(_securityPool, _repToken, _proofVerifier) {
+	constructor(IQuestionLedger _questionLedger, ReputationToken _repToken, EscalationGameProofVerifier _proofVerifier, EscalationGameDepositDelegate _depositDelegate) EscalationGameState(_questionLedger, _repToken, _proofVerifier) {
 		fixedQuestionOutcome = BinaryOutcomes.BinaryOutcome.None;
 		require(address(_depositDelegate).code.length > 0, 'Deposit delegate');
 		depositDelegate = _depositDelegate;
@@ -62,8 +62,8 @@ contract EscalationGame is EscalationGameSettlement {
 		}
 	}
 
-	function recordDepositFromSecurityPool(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, uint256 expectedCumulativeAttoRep) external returns (uint256 parentDepositIndex) {
-		require(msg.sender == address(securityPool), 'Only pool');
+	function recordDepositFromQuestionLedger(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, uint256 expectedCumulativeAttoRep) external returns (uint256 parentDepositIndex) {
+		require(msg.sender == address(questionLedger), 'Only pool');
 		bytes memory returnData = _delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.recordDeposit, (depositor, outcome, amountAttoRep, expectedCumulativeAttoRep)));
 		parentDepositIndex = abi.decode(returnData, (uint256));
 	}

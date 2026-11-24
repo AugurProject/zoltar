@@ -3,29 +3,29 @@ import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { mainnet, parseAbi } from '@zoltar/core-shared/evm/ethereum'
 import { securityPoolCapitalLedgerAbi as capitalAbi, erc20Abi } from '@zoltar/bot-shared/contracts/abi'
 import { expect } from 'bun:test'
-import { type useSecurityPoolPortfolioFixture, unit } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioFixture'
-import { preparePortfolioCollateralRepairAuction } from '../../../../solidity/ts/tests/statoblast/securityPoolPortfolioCollateralRepairAuctionFixture'
+import { type useSecurityPoolFixture, unit } from '../../../../solidity/ts/tests/statoblast/securityPoolFixture'
+import { prepareSecurityPoolCollateralRepairAuction } from '../../../../solidity/ts/tests/statoblast/securityPoolCollateralRepairAuctionFixture'
 import { getInfraContractAddresses } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
 import { getZoltarAddress } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { DAY } from '../../../../solidity/ts/testSupport/simulator/utils/constants'
 import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients'
-import { loadPortfolioObservation } from '../../src/monitoring/portfolio-monitor.ts'
-import { portfolioSettings } from './portfolio-observation.ts'
+import { loadSecurityPoolObservation } from '../../src/monitoring/security-pool-monitor.ts'
+import { securityPoolSettings } from './security-pool-observation.ts'
 
-type RepairAuction = Awaited<ReturnType<typeof preparePortfolioCollateralRepairAuction>>
+type RepairAuction = Awaited<ReturnType<typeof prepareSecurityPoolCollateralRepairAuction>>
 type KeeperOperator = ReturnType<typeof repairAuctionKeeper>
 
-/** A keeper signer, its reader and wallet over the auction's mock chain, and settings that select the auction's child-universe portfolio. */
-export function repairAuctionKeeper(fixture: ReturnType<typeof useSecurityPoolPortfolioFixture>, context: RepairAuction) {
+/** A keeper signer, its reader and wallet over the auction's mock chain, and settings that select the auction's child-universe security pool. */
+export function repairAuctionKeeper(fixture: ReturnType<typeof useSecurityPoolFixture>, context: RepairAuction) {
 	const account = privateKeyToAccount(`0x${'01'.repeat(32)}`)
 	const reader = createPublicClient({ chain: mainnet, transport: custom(context.mock) })
 	const wallet = createWalletClient({ account, chain: mainnet, transport: custom(context.mock) })
-	const settings = portfolioSettings()
-	const scope = { address: fixture.portfolio, universeId: context.child, nextPositionId: 1n, sweepEnd: 0n }
+	const settings = securityPoolSettings()
+	const scope = { address: fixture.securityPool, universeId: context.child, nextPositionId: 1n, sweepEnd: 0n }
 	settings.deployment.securityPoolFactory = getInfraContractAddresses().securityPoolFactory
 	settings.deployment.zoltar = getZoltarAddress()
 	settings.deployment.multicall3 = getInfraContractAddresses().multicall3
-	settings.selectedPortfolios = [scope]
+	settings.selectedSecurityPools = [scope]
 	settings.approvedUniverses = [context.child]
 	return { account, reader, scope, settings, wallet }
 }
@@ -37,7 +37,7 @@ export async function distressedSecondWinner(context: RepairAuction, keeperOpera
 	await context.report(unit)
 	await writeContractAndWait(context.owner, () => context.owner.writeContract({ address: context.capital, abi: capitalAbi, functionName: 'setCommitment', args: [5n * unit] }))
 	await context.report(4n * unit)
-	const distressed = await loadPortfolioObservation(reader, settings, account.address, scope, await reader.getBlockNumber())
+	const distressed = await loadSecurityPoolObservation(reader, settings, account.address, scope, await reader.getBlockNumber())
 	const initialWinner = distressed.positions.find(position => position.auctionTarget?.bidId === secondBidId)
 	if (initialWinner === undefined) throw new Error('Second auction target disappeared')
 	expect(initialWinner.liquidationStarted).toBeGreaterThan(0n)
@@ -47,7 +47,7 @@ export async function distressedSecondWinner(context: RepairAuction, keeperOpera
 	await writeContractAndWait(keeper, () => keeper.writeContract({ address: context.capital, abi: capitalAbi, functionName: 'setHealthTarget', args: [15_000n] }))
 	await writeContractAndWait(context.owner, () => context.owner.writeContract({ address: context.token, abi: erc20Abi, functionName: 'transfer', args: [account.address, 40n * unit] }))
 	settings.strategy.maximumGasCostAttoEth = unit / 50n
-	const next = await loadPortfolioObservation(reader, settings, account.address, scope, await reader.getBlockNumber())
+	const next = await loadSecurityPoolObservation(reader, settings, account.address, scope, await reader.getBlockNumber())
 	const winner = next.positions.find(position => position.auctionTarget?.bidId === secondBidId)
 	if (winner === undefined) throw new Error('Second auction target disappeared')
 	expect(next.snapshot.totalCommitmentAttoEth).toBeGreaterThanOrEqual(next.snapshot.demandAttoEth)
@@ -75,11 +75,11 @@ export async function repairAuctionTerms(context: RepairAuction) {
 }
 
 /** Keeps fee-bearing demand divisible without relying on the old one-ETH lots. */
-export async function prepareKeeperCollateralRepairAuction(fixture: ReturnType<typeof useSecurityPoolPortfolioFixture>) {
+export async function prepareKeeperCollateralRepairAuction(fixture: ReturnType<typeof useSecurityPoolFixture>) {
 	// An exact fee denominator makes the integer-per-second holding fee
 	// divisible by eight at any whole basis-point rate, preserving that divisor at a fork.
 	const quantum = 365n * DAY * 10_000n * 8n
-	return await preparePortfolioCollateralRepairAuction({
+	return await prepareSecurityPoolCollateralRepairAuction({
 		...fixture,
 		mint: async (amount = 10n * unit, question, options) => {
 			const principal = amount - (amount % quantum)

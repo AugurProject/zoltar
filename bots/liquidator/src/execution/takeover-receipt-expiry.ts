@@ -49,7 +49,7 @@ export async function explainTakeoverReceiptExpiry(intent: PendingTransactionInt
 	)
 	if (state.inactive) return 'Capital universe inactive'
 	if (state.epoch !== bounds.expectedAcceptedPriceEpoch) return 'Accepted price epoch changed'
-	if (state.oldDemand !== state.demand) return 'Portfolio demand changed'
+	if (state.oldDemand !== state.demand) return 'Security pool demand changed'
 	if (state.position !== undefined && state.position.commitment === 0n) return 'Target position is no longer live'
 	if (state.position !== undefined && state.position.batch !== bounds.expectedSourceBatch) return 'Target retirement cohort changed'
 	if (state.position !== undefined && state.priorPosition !== undefined && (state.position.owner !== state.priorPosition.owner || state.position.commitment !== state.priorPosition.commitment)) return 'Target position changed'

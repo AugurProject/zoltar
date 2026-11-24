@@ -37,7 +37,7 @@ export async function cancelDroppedIntent(settings: OperatorSettings, wallet: Wa
 		state.activities = next.activities
 		intent.cancellation = cancellation
 	}
-	// A cancellation has no portfolio calldata to disclose. Public propagation
+	// A cancellation has no security pool calldata to disclose. Public propagation
 	// prevents an expired private relay envelope from blocking nonce recovery.
 	const cancellation = intent.cancellation
 	if (cancellation === undefined) return

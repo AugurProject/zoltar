@@ -18,7 +18,7 @@ export function getTimingContextPaths(domain: TestDomain) {
 }
 
 export const KNOWN_FILE_WEIGHTS = new Map<string, number>([
-	['ui/statoblast/ts/tests/simulation/securityPoolEnvironments.test.ts', 80],
+	['ui/statoblast/ts/tests/simulation/questionLedgerEnvironments.test.ts', 80],
 	['solidity/ts/tests/statoblast/forkMigrationEntry.test.ts', 32],
 	['solidity/ts/tests/statoblast/forkMigrationMultiPool.test.ts', 13],
 	['solidity/ts/tests/statoblast/forkMigrationRecovery.test.ts', 19],
@@ -34,8 +34,8 @@ export const KNOWN_FILE_WEIGHTS = new Map<string, number>([
 	['solidity/ts/tests/escalationGame/recursiveCarry.test.ts', 23],
 	['solidity/ts/tests/escalationGame/winnerRewards.test.ts', 6],
 	['solidity/ts/tests/priceOracleSecurity.test.ts', 26],
-	['solidity/ts/tests/portfolioOracleConfiguration.test.ts', 6],
-	['solidity/ts/tests/statoblast/portfolioTransactionRollback.test.ts', 10],
+	['solidity/ts/tests/securityPoolOracleConfiguration.test.ts', 6],
+	['solidity/ts/tests/statoblast/securityPoolTransactionRollback.test.ts', 10],
 	['ui/zoltar/ts/tests/integration/activeEnvironment.test.ts', 15],
 	['solidity/ts/tests/statoblastInvariant.test.ts', 15],
 	['solidity/ts/tests/statoblast/escalationMigration.test.ts', 71],

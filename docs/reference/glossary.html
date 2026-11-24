@@ -43,38 +43,38 @@
 				</dl>
 			</section>
 			<section id="security-pools">
-				<h2>SecurityPools, shares, and vaults</h2>
+				<h2>Security pools, question ledgers, shares, and vaults</h2>
 				<dl>
-					<dt id="portfolio">Portfolio</dt>
-					<dd>A shared REP capital ledger and ERC-20 settlement system backing questions admitted by its configured policy. Owners retain individual commitments and health settings; questions have separate outcome shares and settlement balances. A portfolio with one fixed question uses the same architecture as a portfolio admitting many questions.</dd>
-					<dt id="security-pool">SecurityPool</dt>
-					<dd>The portfolio-bound contract for one question in one universe. It exposes shares, local reporting and redemption; its portfolio modules hold capital and settlement cash.</dd>
+					<dt id="security-pool">Security pool</dt>
+					<dd>A shared REP capital ledger and ERC-20 settlement system backing questions admitted by its configured policy. Owners retain individual commitments and health settings; questions have separate outcome shares and settlement balances. A security pool with one fixed question uses the same architecture as a security pool admitting many questions.</dd>
+					<dt id="question-ledger">Question ledger</dt>
+					<dd>The security-pool-bound contract for one question in one universe. It exposes shares, local reporting and redemption; its security pool modules hold capital and settlement cash.</dd>
 					<dt id="lineage">Lineage</dt>
-					<dd>An origin SecurityPool and every child pool forked from it. Pools in one lineage share an origin ID and one outcome-share token contract.</dd>
-					<dt id="origin-pool">Origin pool</dt>
-					<dd>A question pool first registered in a portfolio, before any child pool is prepared for its lineage.</dd>
+					<dd>An origin question ledger and every child question ledger forked from it. Question ledgers in one lineage share an origin ID and one outcome-share token contract.</dd>
+					<dt id="origin-pool">Origin question ledger</dt>
+					<dd>A question ledger first registered in a security pool, before any child question ledger is prepared for its lineage.</dd>
 					<dt id="settlement-collateral">Settlement collateral</dt>
-					<dd>The question’s backing in the portfolio settlement book. Complete sets and winning shares redeem their proportional value; holding fees reduce backing only above the configured floor.</dd>
+					<dd>The question’s backing in the security pool settlement book. Complete sets and winning shares redeem their proportional value; holding fees reduce backing only above the configured floor.</dd>
 					<dt id="open-interest">Open interest</dt>
-					<dd>The exposure created by outstanding question claims. Portfolio settlement demand aggregates the obligations that healthy underwriting commitments must support.</dd>
+					<dd>The exposure created by outstanding question claims. Security pool settlement demand aggregates the obligations that healthy underwriting commitments must support.</dd>
 					<dt id="complete-set">Complete set</dt>
-					<dd>One matching unit each of Invalid, Yes, and No shares, minted against portfolio collateral and redeemable together while the pool is operational.</dd>
+					<dd>One matching unit each of Invalid, Yes, and No shares, minted against security pool collateral and redeemable together while the question ledger is operational.</dd>
 					<dt id="outcome-share">Outcome share</dt>
-					<dd>An ERC-1155 token representing one outcome claim in one universe-specific SecurityPool.</dd>
+					<dd>An ERC-1155 token representing one outcome claim in one universe-specific question ledger.</dd>
 					<dt id="vault">Vault</dt>
 					<dd>An owner’s capital account: its own REP principal, commitment and fee claims in the shared capital ledger. An auction winner may control a separate vault contract that owns such an account.</dd>
 					<dt id="underwriting-commitment">Underwriting commitment</dt>
-					<dd>An owner’s authorized amount of collateral obligations. Healthy commitments contribute to shared portfolio capacity and earn fees; losses from a distressed position stay with that owner.</dd>
+					<dd>An owner’s authorized amount of collateral obligations. Healthy commitments contribute to shared security pool capacity and earn fees; losses from a distressed position stay with that owner.</dd>
 					<dt id="security-multiplier">Security multiplier</dt>
-					<dd>The portfolio’s fixed protocol backing multiplier, expressed in basis points. Owners can select an additional personal health target; the two settings have different purposes.</dd>
+					<dd>The security pool’s fixed protocol backing multiplier, expressed in basis points. Owners can select an additional personal health target; the two settings have different purposes.</dd>
 					<dt id="vault-health">Vault health</dt>
 					<dd>Whether an owner’s total free and pledged principal covers its commitment at the protocol backing requirement and liquidation REP price. See <a href="../explanation/liquidations.html#capacity-and-health">liquidations</a>.</dd>
 					<dt id="health-factor">Health target</dt>
 					<dd>An owner-selected target of at least 100% relative to the protocol backing requirement. It constrains commitment changes and surplus withdrawals; falling below that personal buffer alone does not trigger liquidation.</dd>
 					<dt id="minting-capacity">Minting capacity</dt>
-					<dd>The healthy portfolio commitment available to support additional settlement demand. Purchases also require a current funded price and an eligible question.</dd>
+					<dd>The healthy security pool commitment available to support additional settlement demand. Purchases also require a current funded price and an eligible question.</dd>
 					<dt id="utilization">Utilization</dt>
-					<dd>The fraction of shared capacity already supporting settlement demand. The portfolio’s configured annual holding-fee rate does not vary with utilization.</dd>
+					<dd>The fraction of shared capacity already supporting settlement demand. The security pool’s configured annual holding-fee rate does not vary with utilization.</dd>
 					<dt id="fee-reserve">Fee reserve</dt>
 					<dd>Fees retained for underwriters rather than for outcome-share redemption. Accumulators credit eligible owners without visiting every question when an owner claims.</dd>
 					<dt id="holding-fee">Holding fee</dt>
@@ -87,7 +87,7 @@
 					<dt id="escalation-game">Escalation Game</dt>
 					<dd>The local Statoblast dispute mechanism in which REP-backed balances accumulate behind Invalid, Yes, and No.</dd>
 					<dt id="start-bond">Start bond</dt>
-					<dd>The minimum Escalation Game deposit: the larger of 1 REP and the universe's theoretical REP supply when the pool was deployed ÷ 10<sup>7</sup>. Origin-pool deployment requires it to be below the non-decision threshold; a game started with a bond at or above that threshold is clamped to one attoREP below that threshold. A smaller deposit is accepted only when it fills an outcome exactly to that threshold, or when an offered start bond that would tie the leading outcome is trimmed by one attoREP. A child pool continuing a forked game keeps its parent's start bond.</dd>
+					<dd>The minimum Escalation Game deposit: the larger of 1 REP and the universe's theoretical REP supply when the question ledger was deployed ÷ 10<sup>7</sup>. Origin question ledger deployment requires it to be below the non-decision threshold; a game started with a bond at or above that threshold is clamped to one attoREP below that threshold. A smaller deposit is accepted only when it fills an outcome exactly to that threshold, or when an offered start bond that would tie the leading outcome is trimmed by one attoREP. A child question ledger continuing a forked game keeps its parent's start bond.</dd>
 					<dt id="binding-capital">Binding capital</dt>
 					<dd>The median of the three outcome balances. See <a href="../explanation/escalation-game.html#lifecycle-first">Escalation Game deadlines</a> for its role in finality.</dd>
 					<dt id="required-support">Required support</dt>
@@ -95,26 +95,26 @@
 					<dt id="non-decision-threshold">Non-decision threshold</dt>
 					<dd>The balance that two outcomes must each reach for the Escalation Game to enter non-decision: half of the universe's fork threshold, rounded up, read when the game opens and fixed for that game and any game carried from it.</dd>
 					<dt id="non-decision">Non-decision</dt>
-					<dd>The Escalation Game state in which two outcomes have each reached the non-decision threshold (<code>NonDecisionState.Local</code>). The game picks no winner, and anyone can fork the universe on the pool's own question.</dd>
+					<dd>The Escalation Game state in which two outcomes have each reached the non-decision threshold (<code>NonDecisionState.Local</code>). The game picks no winner, and anyone can fork the universe on the question ledger's own question.</dd>
 					<dt id="reward-eligible-cap">Reward-eligible cap</dt>
 					<dd>One and a half times binding capital. Only the portion of winning Escalation Game deposits up to this cap earns a bonus; deposits beyond it return principal only. See the <a href="./contracts/escalationgame.html#winning-deposit-payout">EscalationGame reference</a>.</dd>
 					<dt id="escalation-haircut">Escalation haircut</dt>
-					<dd>Two fifths of binding capital, burned at Escalation Game settlement instead of being paid to winners as a bonus, unless the pool's own fork already paid it through the fork haircut. The contracts call it the winner haircut (<code>burnEscalationWinnerHaircut</code>).</dd>
+					<dd>Two fifths of binding capital, burned at Escalation Game settlement instead of being paid to winners as a bonus, unless the question ledger's own fork already paid it through the fork haircut. The contracts call it the winner haircut (<code>burnEscalationWinnerHaircut</code>).</dd>
 				</dl>
 			</section>
 			<section id="forks-and-repair">
 				<h2>Forks and repair</h2>
 				<dl>
-					<dt id="security-pool-forker">SecurityPoolForker</dt>
-					<dd>The shared contract that prepares question children and their inherited reporting state after portfolio branch migration.</dd>
+					<dt id="question-forker">Question forker</dt>
+					<dd>The shared <code>QuestionForker</code> contract that prepares question children and their inherited reporting state after security pool branch migration.</dd>
 					<dt id="branch-choice-cutoff">Branch-choice cutoff</dt>
-					<dd>The deadline for portfolio owners to record their branch choice, eight weeks after the parent universe forks. Native REP migration can continue after this deadline.</dd>
+					<dd>The deadline for security pool owners to record their branch choice, eight weeks after the parent universe forks. Native REP migration can continue after this deadline.</dd>
 					<dt id="carried-game">Carried game</dt>
 					<dd>A child question’s continuation of an unresolved parent Escalation Game. Frozen history authenticates inherited claims; new wallet REP deposits use the continuation’s current rules.</dd>
 					<dt id="fork-continuation">Fork continuation</dt>
 					<dd>The preparation needed before a child question resumes an inherited unresolved reporting game. Purchases wait until the question and shared branch are ready.</dd>
 					<dt id="collateral-repair-auction">Collateral Repair Auction</dt>
-					<dd>A uniform-price auction of a portfolio branch’s saleable REP for the selected collateral to repair branch claims. Winning bids automatically own separately accounted capital positions. It does not select truth.</dd>
+					<dd>A uniform-price auction of a security pool branch’s saleable REP for the selected collateral to repair branch claims. Winning bids automatically own separately accounted capital positions. It does not select truth.</dd>
 				</dl>
 			</section>
 			<section id="liquidation">
@@ -134,16 +134,16 @@
 					<dt id="open-oracle">OpenOracle</dt>
 					<dd>An economically contestable price-reporting contract used by Statoblast for fresh REP-per-collateral-token prices, not market outcomes.</dd>
 					<dt id="price-coordinator">Price coordinator</dt>
-					<dd>A question-facing adapter to the portfolio’s shared REP/collateral feed. It exposes current prices and requests funded OpenOracle reports; it does not queue vault operations.</dd>
+					<dd>A question-facing adapter to the security pool’s shared REP/collateral feed. It exposes current prices and requests funded OpenOracle reports; it does not queue vault operations.</dd>
 				</dl>
 			</section>
 			<section id="trading">
 				<h2>Trading</h2>
 				<dl>
 					<dt id="trading-pool">Trading pool</dt>
-					<dd>The constant-product pair (<code>TwoWayConstantProductPair</code>, called the pair in the Trading reference) that trades one SecurityPool's Yes and No shares against each other. The Trading factory creates at most one per SecurityPool.</dd>
+					<dd>The constant-product pair (<code>TwoWayConstantProductPair</code>, called the pair in the Trading reference) that trades one question ledger's Yes and No shares against each other. The Trading factory creates at most one per question ledger.</dd>
 					<dt id="trading-router">Trading router</dt>
-					<dd>The <code>TwoWayConstantProductRouter</code> contract that turns collateral into a position and a position back into collateral by combining SecurityPool complete-set calls with trading-pool swaps. WETH-backed pools also support native-ETH convenience paths.</dd>
+					<dd>The <code>TwoWayConstantProductRouter</code> contract that turns collateral into a position and a position back into collateral by combining question ledger complete-set calls with trading-pool swaps. WETH-backed security pools also support native-ETH convenience paths.</dd>
 					<dt id="long-shares">Long shares</dt>
 					<dd>The Yes or No shares a trader holds on the side they expect to win. Entering through the trading router also leaves the trader one Invalid share for each complete set it minted, fewer than the long shares received.</dd>
 					<dt id="insured-exit">Insured exit</dt>

@@ -148,7 +148,7 @@ contract SecurityPoolAuctionVault {
 		result = _execute(target, value, data);
 		uint256 rep = token.balanceOf(address(this));
 		if (rep != 0) token.safeTransfer(recipient, rep);
-		IERC20 collateral = ICollateralConfig(IAuctionVaultPortfolio(address(initialCapital())).portfolio()).collateralToken();
+		IERC20 collateral = ICollateralConfig(IAuctionVaultSecurityPool(address(initialCapital())).securityPool()).collateralToken();
 		Collateral.send(collateral, recipient, collateral.balanceOf(address(this)));
 		uint256 eth = address(this).balance;
 		if (eth != 0) {
@@ -182,6 +182,6 @@ contract SecurityPoolAuctionVault {
 	}
 }
 
-interface IAuctionVaultPortfolio {
-	function portfolio() external view returns (address);
+interface IAuctionVaultSecurityPool {
+	function securityPool() external view returns (address);
 }

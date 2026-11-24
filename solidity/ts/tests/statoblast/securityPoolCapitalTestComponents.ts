@@ -1,6 +1,6 @@
 import { encodeDeployData, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
-	statoblast_SecurityPoolPortfolioModuleDeployers_SecurityPoolCapitalLedgerDeployer as capitalDeployer,
+	statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalLedgerDeployer as capitalDeployer,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	test_statoblast_CapitalLedgerHarness_CapitalLedgerTestComponents as components,
 	test_statoblast_CapitalLedgerHarness_CapitalLedgerHarness as harnessArtifact,

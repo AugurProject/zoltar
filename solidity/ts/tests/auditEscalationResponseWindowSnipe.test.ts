@@ -2,10 +2,10 @@ import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 } from '../types/contractArtifact'
 import { writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
@@ -14,18 +14,18 @@ import { approveToken, getChildUniverseId } from '../testSupport/simulator/utils
 import { getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { addRepToMigrationBalance, splitMigrationRep, forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 // A carried game resumes with exactly its remaining curve time at branch activation.
 // A late flip against a 50% leader margin raises the median and leaves time to reply,
 // including when activation happens after the recapitalization deadline.
 describe('a carried game: pause and resume the pure curve', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const YES = 1
 	const NO = 2
-	const sourcePool = () => fixture.poolFor(fixture.base.questionId).securityPool
-	const portfolio = () => ({ abi: portfolioArtifact.abi, address: fixture.portfolio })
-	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker })
+	const sourcePool = () => fixture.poolFor(fixture.base.questionId).questionLedger
+	const securityPool = () => ({ abi: securityPoolArtifact.abi, address: fixture.securityPool })
+	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker })
 	const gameFor = (pool: Address) => fixture.owner().readContract({ abi: poolArtifact.abi, address: pool, functionName: 'escalationGame' })
 	const readGame = <const Name extends 'getFinalQuestionResolution' | 'getQuestionResolution' | 'totalCostAttoRep' | 'getEscalationGameEndDate' | 'forkResumedAt' | 'activationTime' | 'startBondAttoRep' | 'getBindingCapitalAttoRep'>(game: Address, functionName: Name) =>
 		fixture.owner().readContract({ abi: gameArtifact.abi, address: game, functionName })
@@ -51,7 +51,7 @@ describe('a carried game: pause and resume the pure curve', () => {
 		await forkUniverse(owner, universe, getQuestionId(question, fixture.base.outcomes))
 		await addRepToMigrationBalance(owner, universe, 1_000_000n * unit)
 		await splitMigrationRep(owner, universe, 1_000_000n * unit, [1n])
-		const controller = await owner.readContract({ ...portfolio(), functionName: 'forkController' })
+		const controller = await owner.readContract({ ...securityPool(), functionName: 'forkController' })
 		const branch = { abi: forkArtifact.abi, address: controller }
 		const child = getChildUniverseId(universe, 1)
 		const forkTime = (await getUniverseData(owner, universe)).forkTime
@@ -59,8 +59,8 @@ describe('a carried game: pause and resume the pure curve', () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'startBranch', args: [universe, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...branch, functionName: 'finalizeBranch', args: [child] }))
 		const activatedAt = await latestBlockTimestamp()
-		for (let step = 0; step < 3; step++) await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'materializePortfolioQuestion', args: [source, child] }))
-		const pool = await owner.readContract({ ...portfolio(), functionName: 'getPool', args: [fixture.base.questionId, child] })
+		for (let step = 0; step < 3; step++) await writeContractAndWait(owner, () => owner.writeContract({ ...forker(), functionName: 'materializeSecurityPoolQuestion', args: [source, child] }))
+		const pool = await owner.readContract({ ...securityPool(), functionName: 'getQuestionLedger', args: [fixture.base.questionId, child] })
 		return { pool, game: await gameFor(pool), universe: child, forkTime, activatedAt }
 	}
 

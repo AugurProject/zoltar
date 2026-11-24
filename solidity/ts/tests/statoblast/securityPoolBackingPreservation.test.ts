@@ -40,7 +40,7 @@ describe('Statoblast: distress repair preserves pledged backing', () => {
 		await writeContractAndWait(keeper, () => keeper.writeContract({ ...f.capital, functionName: 'takeOver', args: [source, 100n * E, 0n, 500n * E] }))
 		const before = await keeper.readContract({ ...f.capital, functionName: 'totals' })
 		expect(before[2]).toBeLessThan(200n * E)
-		await expect(writeContractAndWait(keeper, () => keeper.writeContract({ ...f.capital, functionName: 'withdrawPrincipal', args: [E, keeper.account.address] }))).rejects.toThrow('Portfolio backing insufficient')
+		await expect(writeContractAndWait(keeper, () => keeper.writeContract({ ...f.capital, functionName: 'withdrawPrincipal', args: [E, keeper.account.address] }))).rejects.toThrow('Security pool backing insufficient')
 		expect(await keeper.readContract({ ...f.capital, functionName: 'totals' })).toEqual(before)
 	})
 	test('#1343 and #1344 accepted adverse prices can transfer principal only into a backed vault', async () => {

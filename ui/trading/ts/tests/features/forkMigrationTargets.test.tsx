@@ -156,7 +156,7 @@ describe('fork migration target selection', () => {
 		const rendered = await renderIntoDocument(<ForkMigrationTargets context={categoricalContext([target])} selectedTargets={[target]} sourceOutcome='YES' sourceBalance={10n} disabled={false} onChange={() => undefined} />)
 		cleanup = rendered.cleanup
 
-		expect(rendered.container.textContent).toContain('No pool yet')
+		expect(rendered.container.textContent).toContain('Not registered yet')
 		expect(rendered.container.textContent).not.toContain('Branch not active')
 	})
 
@@ -206,7 +206,7 @@ describe('fork migration target selection', () => {
 		expect(redRow?.textContent).toContain('This share is already migrated to this child universe.')
 		const blueButton = buttonByText(rendered.container, 'Blue')
 		expect(blueButton.disabled).toBe(false)
-		expect(blueButton.closest('.migration-outcome-row')?.textContent).toContain('Pool ready')
+		expect(blueButton.closest('.migration-outcome-row')?.textContent).toContain('Question ready')
 		const link = Array.from(rendered.container.querySelectorAll('.fork-migrated-list a')).find(anchor => anchor.textContent === 'Open in Red universe')
 		if (link === undefined) throw new Error('Missing child universe link')
 		expect(link.getAttribute('href')).toContain(`#/market/${childPool}`)
@@ -224,7 +224,7 @@ describe('fork migration target selection', () => {
 		await input(inputByLabel(rendered.container, 'Select scalar target'), '25')
 		expect(buttonByText(rendered.container, 'Add target').disabled).toBe(true)
 		expect(rendered.container.textContent).toContain('This share is already migrated to this child universe.')
-		expect(rendered.container.textContent).not.toContain('No pool yet')
+		expect(rendered.container.textContent).not.toContain('Not registered yet')
 	})
 
 	test('treats a balance that grew after migrating as not yet migrated there', async () => {

@@ -68,7 +68,7 @@ function evaluation(value: OperationPlan): EvaluatedOperation {
 	return {
 		definition: {
 			classification: 'lifecycle-obligation',
-			contract: value.ecosystem === 'statoblast' ? 'SecurityPool' : 'OpenOracle',
+			contract: value.ecosystem === 'statoblast' ? 'QuestionLedger' : 'OpenOracle',
 			description: 'settles',
 			discoveryInputs: [],
 			ecosystem: value.ecosystem,

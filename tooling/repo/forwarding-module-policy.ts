@@ -16,7 +16,7 @@ export const intentionalForwardingModules: Readonly<Record<string, string>> = {
 	'shared/core/ts/evm/ethereum/clients.ts': 'Client capability boundary joining client construction and extensible public actions.',
 	'ui/openoracle/ts/index.dev.ts': 'Development bootstrap whose side-effect imports enable live reload before starting the application.',
 	'ui/statoblast/ts/index.dev.ts': 'Development bootstrap whose side-effect imports enable live reload before starting the application.',
-	'ui/statoblastShared/ts/features/security-pools/lib/securityPoolState.ts': 'Cohesive public capability facade over the security-pool state engine, axes, and types.',
+	'ui/statoblastShared/ts/features/question-ledgers/lib/questionLedgerState.ts': 'Cohesive public capability facade over the security-pool state engine, axes, and types.',
 	'ui/trading/ts/index.dev.ts': 'Development bootstrap whose side-effect imports enable live reload before starting the application.',
 	'ui/zoltar/ts/index.dev.ts': 'Development bootstrap whose side-effect imports enable live reload before starting the application.',
 }

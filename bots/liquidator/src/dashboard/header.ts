@@ -14,7 +14,7 @@ export const operatorHeader = renderOperatorHeader({
 	notices: `<div id="global-error" class="notice error hidden" role="alert"></div>
 			<div aria-atomic="true" aria-live="assertive" role="alert"><ul id="operator-alerts" class="operator-alerts hidden" aria-label="Operator alerts"></ul></div>`,
 	navigation: `<a href="/overview">Overview</a>
-				<a href="/pools">Portfolios</a>
+				<a href="/pools">Security pools</a>
 				<a href="/markets">Market evidence</a>
 				<a href="/operations">Activity &amp; recovery</a>
 				<a href="/settings">Settings</a>`,

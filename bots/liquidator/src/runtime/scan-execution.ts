@@ -1,14 +1,14 @@
-import { executePendingPortfolioReport } from '#execution/portfolio-report'
-import { totalManagedPrincipalAttoRep } from '#core/portfolio-exposure'
-import { executeUnusedPortfolioFunding, unusedPortfolioFunding } from '#execution/portfolio-unused-funding'
-import { executePortfolioInstruction } from '#execution/portfolio-instructions'
-import { portfolioTakeoverPlan } from '#core/portfolio-strategy'
-import { PortfolioOpportunityExpired, executePortfolioTakeover } from '#execution/portfolio-executor'
-import type { PortfolioInstruction } from '#config/portfolio-instructions'
-import { executePortfolioEarnings } from '#execution/portfolio-earnings'
-import { portfolioEarningsCoverGas } from '#core/portfolio-earnings'
-import { portfolioTarget } from '#monitoring/portfolio-auction'
-import type { PortfolioObservation } from '#monitoring/portfolio-monitor'
+import { executePendingSecurityPoolReport } from '#execution/security-pool-report'
+import { totalManagedPrincipalAttoRep } from '#core/security-pool-exposure'
+import { executeUnusedSecurityPoolFunding, unusedSecurityPoolFunding } from '#execution/security-pool-unused-funding'
+import { executeSecurityPoolInstruction } from '#execution/security-pool-instructions'
+import { securityPoolTakeoverPlan } from '#core/security-pool-strategy'
+import { SecurityPoolOpportunityExpired, executeSecurityPoolTakeover } from '#execution/security-pool-executor'
+import type { SecurityPoolInstruction } from '#config/security-pool-instructions'
+import { executeSecurityPoolEarnings } from '#execution/security-pool-earnings'
+import { securityPoolEarningsCoverGas } from '#core/security-pool-earnings'
+import { securityPoolTarget } from '#monitoring/security-pool-auction'
+import type { SecurityPoolObservation } from '#monitoring/security-pool-monitor'
 import type { RuntimeState } from '#state/operator-state'
 import { recordActivity } from '#state/operator-state'
 import { canonicalMarketPriceAllowsExecution, marketPriceAllowsExecution } from '#core/candidate-selection'
@@ -19,7 +19,7 @@ import { saveDurableState } from '#state/operator-state'
 import { requireCurrentDexEvidence } from './dex-pairs.ts'
 import type { LiquidatorDeps, LiquidatorRuntime } from './liquidator-runtime.ts'
 
-/** Recovers pending transactions, then performs at most one funded portfolio action. */
+/** Recovers pending transactions, then performs at most one funded security pool action. */
 export async function runLiveExecutionStep(runtime: LiquidatorRuntime, deps: LiquidatorDeps) {
 	const { shutdown, state } = deps
 	if (runtime.wallet === undefined) throw new Error('Live execution requires an active signer')
@@ -34,12 +34,12 @@ export async function runLiveExecutionStep(runtime: LiquidatorRuntime, deps: Liq
 	}
 	const canonicalHash = (blockNumber: bigint) => canonicalBlockHash(runtime.settings, blockNumber, runtime.readPool)
 	const requireDexEvidence: Parameters<typeof canonicalMarketPriceAllowsExecution>[4] = (configuration, estimate) => requireCurrentDexEvidence(runtime, configuration, estimate)
-	const instructionExecuted = await executeQueuedPortfolioInstructions(state, runtime.settings.portfolioInstructions ?? [], instruction =>
-		executePortfolioInstruction(activeWallet, runtime.settings, state, runtime.readPool, instruction, current => canonicalMarketPriceAllowsExecution({ repToken: current.snapshot.repToken, lastPrice: current.snapshot.acceptedPrice }, runtime.settings, state, canonicalHash, requireDexEvidence)),
+	const instructionExecuted = await executeQueuedSecurityPoolInstructions(state, runtime.settings.securityPoolInstructions ?? [], instruction =>
+		executeSecurityPoolInstruction(activeWallet, runtime.settings, state, runtime.readPool, instruction, current => canonicalMarketPriceAllowsExecution({ repToken: current.snapshot.repToken, lastPrice: current.snapshot.acceptedPrice }, runtime.settings, state, canonicalHash, requireDexEvidence)),
 	)
 	if (instructionExecuted) return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
 	if (
-		await executePortfolioAutomation(runtime, state, current =>
+		await executeSecurityPoolAutomation(runtime, state, current =>
 			canonicalMarketPriceAllowsExecution({ repToken: current.snapshot.repToken, lastPrice: current.snapshot.acceptedPrice }, runtime.settings, state, canonicalHash, requireDexEvidence, !current.snapshot.priceValid || current.snapshot.timestamp >= current.snapshot.priceValidUntil),
 		)
 	) {
@@ -53,54 +53,54 @@ export async function runLiveExecutionStep(runtime: LiquidatorRuntime, deps: Liq
  * @internal Runs queued instructions in order and stops at the first submission. An instruction whose
  * opportunity has expired stays queued without blocking later instructions or automation.
  */
-export async function executeQueuedPortfolioInstructions(state: RuntimeState, instructions: readonly PortfolioInstruction[], execute: (instruction: PortfolioInstruction) => Promise<boolean>) {
+export async function executeQueuedSecurityPoolInstructions(state: RuntimeState, instructions: readonly SecurityPoolInstruction[], execute: (instruction: SecurityPoolInstruction) => Promise<boolean>) {
 	for (const instruction of instructions) {
 		try {
 			if (await execute(instruction)) return true
 		} catch (error) {
-			if (!(error instanceof PortfolioOpportunityExpired) || state.pendingTransactions.length !== 0) throw error
-			recordActivity(state, { kind: 'liquidation', status: 'info', message: `Portfolio instruction ${instruction.id} deferred; retry next cycle`, details: error.message })
+			if (!(error instanceof SecurityPoolOpportunityExpired) || state.pendingTransactions.length !== 0) throw error
+			recordActivity(state, { kind: 'liquidation', status: 'info', message: `Security pool instruction ${instruction.id} deferred; retry next cycle`, details: error.message })
 		}
 	}
 	return false
 }
 
-/** @internal Waiting candidates reserve only their own portfolio; a submission ends the cycle. */
-export async function executePortfolioAutomation(
+/** @internal Waiting candidates reserve only their own security pool; a submission ends the cycle. */
+export async function executeSecurityPoolAutomation(
 	runtime: Pick<LiquidatorRuntime, 'wallet' | 'settings' | 'readPool'>,
 	state: RuntimeState,
-	priceAllowsExecution: (observation: PortfolioObservation) => Promise<boolean>,
-	execution = { pendingReport: executePendingPortfolioReport, earnings: executePortfolioEarnings, takeover: executePortfolioTakeover, unusedFunding: executeUnusedPortfolioFunding },
+	priceAllowsExecution: (observation: SecurityPoolObservation) => Promise<boolean>,
+	execution = { pendingReport: executePendingSecurityPoolReport, earnings: executeSecurityPoolEarnings, takeover: executeSecurityPoolTakeover, unusedFunding: executeUnusedSecurityPoolFunding },
 ) {
 	const activeWallet = runtime.wallet
 	if (activeWallet === undefined) throw new Error('Live execution requires an active signer')
-	const waiting = new Set<PortfolioObservation>()
-	if (runtime.settings.portfolioPolicy.allowFundedTakeovers) {
-		const totalPrincipal = totalManagedPrincipalAttoRep(state.portfolios)
-		for (const portfolio of state.portfolios) {
-			const pending = await execution.pendingReport(activeWallet, runtime.settings, state, runtime.readPool, portfolio)
+	const waiting = new Set<SecurityPoolObservation>()
+	if (runtime.settings.securityPoolPolicy.allowFundedTakeovers) {
+		const totalPrincipal = totalManagedPrincipalAttoRep(state.securityPools)
+		for (const securityPool of state.securityPools) {
+			const pending = await execution.pendingReport(activeWallet, runtime.settings, state, runtime.readPool, securityPool)
 			if (pending === 'submitted') return true
 			if (pending === 'waiting') {
-				waiting.add(portfolio)
+				waiting.add(securityPool)
 				continue
 			}
-			const price = { repToken: portfolio.snapshot.repToken, lastPrice: portfolio.snapshot.acceptedPrice }
+			const price = { repToken: securityPool.snapshot.repToken, lastPrice: securityPool.snapshot.acceptedPrice }
 			const priceAllowed = priceAllowsExecution
-			if (portfolioEarningsCoverGas(portfolio, runtime.settings, marketPriceAllowsExecution(price, runtime.settings, state))) {
-				await execution.earnings(activeWallet, runtime.settings, state, runtime.readPool, portfolio, priceAllowed)
+			if (securityPoolEarningsCoverGas(securityPool, runtime.settings, marketPriceAllowsExecution(price, runtime.settings, state))) {
+				await execution.earnings(activeWallet, runtime.settings, state, runtime.readPool, securityPool, priceAllowed)
 				return true
 			}
-			for (const position of portfolio.positions) {
-				const marketAllowed = marketPriceAllowsExecution(price, runtime.settings, state, !portfolio.snapshot.priceValid || portfolio.snapshot.timestamp >= portfolio.snapshot.priceValidUntil)
-				if (portfolioTakeoverPlan(portfolio, position, runtime.settings, totalPrincipal, marketAllowed).plan === undefined) continue
-				await execution.takeover(activeWallet, runtime.settings, state, runtime.readPool, portfolio, portfolioTarget(position), priceAllowed)
+			for (const position of securityPool.positions) {
+				const marketAllowed = marketPriceAllowsExecution(price, runtime.settings, state, !securityPool.snapshot.priceValid || securityPool.snapshot.timestamp >= securityPool.snapshot.priceValidUntil)
+				if (securityPoolTakeoverPlan(securityPool, position, runtime.settings, totalPrincipal, marketAllowed).plan === undefined) continue
+				await execution.takeover(activeWallet, runtime.settings, state, runtime.readPool, securityPool, securityPoolTarget(position), priceAllowed)
 				return true
 			}
 		}
 	}
-	for (const portfolio of state.portfolios) {
-		if (waiting.has(portfolio) || unusedPortfolioFunding(state, portfolio).amount === 0n) continue
-		const executed = await execution.unusedFunding(activeWallet, runtime.settings, state, runtime.readPool, portfolio, priceAllowsExecution)
+	for (const securityPool of state.securityPools) {
+		if (waiting.has(securityPool) || unusedSecurityPoolFunding(state, securityPool).amount === 0n) continue
+		const executed = await execution.unusedFunding(activeWallet, runtime.settings, state, runtime.readPool, securityPool, priceAllowsExecution)
 		if (executed) return true
 	}
 	return false
@@ -109,20 +109,20 @@ export async function executePortfolioAutomation(
 /** Records the best dry-run candidate once per distinct pool, target, debt, and price. */
 export function runDryRunStep(runtime: LiquidatorRuntime, deps: LiquidatorDeps) {
 	const { state } = deps
-	const totalPrincipal = totalManagedPrincipalAttoRep(state.portfolios)
-	for (const portfolio of state.portfolios) {
-		for (const position of portfolio.positions) {
-			const marketAllowed = marketPriceAllowsExecution({ repToken: portfolio.snapshot.repToken, lastPrice: portfolio.snapshot.acceptedPrice }, runtime.settings, state, !portfolio.snapshot.priceValid || portfolio.snapshot.timestamp >= portfolio.snapshot.priceValidUntil)
-			const result = portfolioTakeoverPlan(portfolio, position, runtime.settings, totalPrincipal, marketAllowed)
+	const totalPrincipal = totalManagedPrincipalAttoRep(state.securityPools)
+	for (const securityPool of state.securityPools) {
+		for (const position of securityPool.positions) {
+			const marketAllowed = marketPriceAllowsExecution({ repToken: securityPool.snapshot.repToken, lastPrice: securityPool.snapshot.acceptedPrice }, runtime.settings, state, !securityPool.snapshot.priceValid || securityPool.snapshot.timestamp >= securityPool.snapshot.priceValidUntil)
+			const result = securityPoolTakeoverPlan(securityPool, position, runtime.settings, totalPrincipal, marketAllowed)
 			if (result.plan === undefined) continue
 			const label = position.auctionTarget === undefined ? `position=${position.id}` : `auction=${position.auctionTarget.auction} bid=${position.auctionTarget.bidId}`
-			const key = `portfolio:${portfolio.snapshot.capitalLedger}:${label}:${position.commitment}:${portfolio.acceptedPriceEpoch}`
+			const key = `securityPool:${securityPool.snapshot.capitalLedger}:${label}:${position.commitment}:${securityPool.acceptedPriceEpoch}`
 			if (runtime.lastDryRunKey !== key)
 				recordActivity(state, {
 					kind: 'liquidation',
 					status: 'dry-run',
-					message: 'Portfolio funded takeover candidate',
-					details: `${portfolio.selection.address} universe=${portfolio.selection.universeId} ${label} ownREP=${result.plan.ownFunding}; ${result.reason}`,
+					message: 'Security pool funded takeover candidate',
+					details: `${securityPool.selection.address} universe=${securityPool.selection.universeId} ${label} ownREP=${result.plan.ownFunding}; ${result.reason}`,
 				})
 			runtime.lastDryRunKey = key
 			return

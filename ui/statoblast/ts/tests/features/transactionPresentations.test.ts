@@ -34,19 +34,19 @@ describe('transaction presentations', () => {
 	test('distinguishes accepted prices and unconfirmed callbacks from report settlement', () => {
 		const accepted = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { status: 'accepted' } })
 		expect(accepted.tone).toBe('success')
-		expect(accepted.detail).toBe('Pool accepted this price.')
+		expect(accepted.detail).toBe('Security pool accepted this price.')
 		const unconfirmed = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { status: 'unconfirmed' } })
 		expect(unconfirmed.tone).toBe('warning')
 		expect(unconfirmed.title).toBe('Report settled; price acceptance unconfirmed')
 		const rejected = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { status: 'rejected', reason: 'Report uneconomic' } })
-		expect(rejected.detail).toBe('Pool rejected this price: Report uneconomic. Request a new price.')
+		expect(rejected.detail).toBe('Security pool rejected this price: Report uneconomic. Request a new price.')
 		const deferred = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { status: 'deferred', maxSettlementBaseFee: 33n * 10n ** 9n } })
 		expect(deferred.tone).toBe('warning')
 		expect(deferred.title).toBe('Report settled; price pending recovery')
 		expect(deferred.detail).toContain('33 nanoETH per gas limit')
 	})
 
-	test.each(['Portfolio reporting window closed', 'Report timestamp not newer'])('does not recommend another request for %s', reason => {
+	test.each(['Security pool reporting window closed', 'Report timestamp not newer'])('does not recommend another request for %s', reason => {
 		const presentation = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { status: 'rejected', reason } })
 		expect(presentation.detail).not.toContain('Request a new price')
 	})
@@ -65,42 +65,42 @@ describe('transaction presentations', () => {
 
 	test('keeps pool and action context in trading and reporting intents', () => {
 		const context = {
-			securityPoolAddress: '0x0000000000000000000000000000000000000001' as const,
+			questionLedgerAddress: '0x0000000000000000000000000000000000000001' as const,
 			universeId: 7n,
 		}
 		const tradingIntent = createTradingTransactionIntent('migrateShares', { ...context, shareOutcome: 'yes' })
 		const tradingPresentation = createTradingSuccessPresentation({
 			action: 'migrateShares',
 			hash: '0x1234',
-			securityPoolAddress: context.securityPoolAddress,
+			questionLedgerAddress: context.questionLedgerAddress,
 			shareOutcome: 'yes',
 			universeId: context.universeId,
 		})
 		const reportingIntent = createReportingTransactionIntent('reportOutcome', { ...context, outcome: 'no' })
 
-		expect(tradingIntent.rows?.map(row => row.label)).toEqual(['Pool', 'Share outcome'])
+		expect(tradingIntent.rows?.map(row => row.label)).toEqual(['Question ledger', 'Share outcome'])
 		expect(tradingIntent.rows?.map(row => row.identityKey)).toEqual(['security-pool', 'outcome'])
 		expect(tradingPresentation.rows?.map(row => row.identityKey)).toEqual(['security-pool', 'outcome'])
-		expect(reportingIntent.rows?.map(row => row.label)).toEqual(['Pool', 'Outcome'])
+		expect(reportingIntent.rows?.map(row => row.label)).toEqual(['Question ledger', 'Outcome'])
 	})
 
 	test('uses the same pool grammar without redundant universe rows in intent and success presentations', () => {
-		const securityPoolAddress = '0x0000000000000000000000000000000000000001'
-		const context = { securityPoolAddress, universeId: 7n }
+		const questionLedgerAddress = '0x0000000000000000000000000000000000000001'
+		const context = { questionLedgerAddress, universeId: 7n }
 		const cases = [
 			{
 				intent: createTradingTransactionIntent('createCompleteSet', context),
-				presentation: createTradingSuccessPresentation({ action: 'createCompleteSet', hash: '0x1234', securityPoolAddress, universeId: 7n }),
+				presentation: createTradingSuccessPresentation({ action: 'createCompleteSet', hash: '0x1234', questionLedgerAddress, universeId: 7n }),
 			},
 			{
 				intent: createReportingTransactionIntent('reportOutcome', { ...context, outcome: 'yes' }),
-				presentation: createReportingSuccessPresentation({ action: 'reportOutcome', hash: '0x1234', outcome: 'yes', securityPoolAddress, universeId: 7n }),
+				presentation: createReportingSuccessPresentation({ action: 'reportOutcome', hash: '0x1234', outcome: 'yes', questionLedgerAddress, universeId: 7n }),
 			},
 		]
 
 		for (const { intent, presentation } of cases) {
-			expect(intent.rows?.[0]?.label).toBe('Pool')
-			expect(presentation.rows?.[0]?.label).toBe('Pool')
+			expect(intent.rows?.[0]?.label).toBe('Question ledger')
+			expect(presentation.rows?.[0]?.label).toBe('Question ledger')
 			expect(intent.rows?.map(row => row.label)).not.toContain('Universe')
 			expect(presentation.rows?.map(row => row.label)).not.toContain('Universe')
 			expect(intent.universeId).toBe(7n)

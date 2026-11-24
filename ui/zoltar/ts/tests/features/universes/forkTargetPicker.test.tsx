@@ -5,7 +5,7 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { ForkTargetPicker, type ForkTargetOption } from '@zoltar/ui-zoltar-shared/features/universes/components/ForkTargetPicker.js'
 
 const MIGRATED = 'Already migrated to this child universe.'
-const ready = { label: 'Child security pool ready', tone: 'ok' } as const
+const ready = { label: 'Child question ledger ready', tone: 'ok' } as const
 const yes: ForkTargetOption = { label: 'Yes', outcomeIndex: 1n, status: ready }
 const migratedNo: ForkTargetOption = { disabledReason: MIGRATED, label: 'No', outcomeIndex: 2n, status: ready }
 

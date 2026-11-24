@@ -15,13 +15,13 @@ describe('EntityCard', () => {
 
 	test('renders data attributes on the card root so callers can key records without a wrapper', async () => {
 		const rendered = await renderIntoDocument(
-			<EntityCard title='Pool' className='market-record' dataAttributes={{ 'data-portfolio-pool': '0x1111111111111111111111111111111111111111' }}>
+			<EntityCard title='Pool' className='market-record' dataAttributes={{ 'data-security-pool-pool': '0x1111111111111111111111111111111111111111' }}>
 				<p>Balances</p>
 			</EntityCard>,
 		)
 		cleanupRendered = rendered.cleanup
 
-		const card = rendered.container.querySelector('[data-portfolio-pool="0x1111111111111111111111111111111111111111"]')
+		const card = rendered.container.querySelector('[data-security-pool-pool="0x1111111111111111111111111111111111111111"]')
 		expect(card).not.toBeNull()
 		expect(card?.classList.contains('entity-card')).toBeTrue()
 		expect(card?.classList.contains('market-record')).toBeTrue()

@@ -1,7 +1,7 @@
 import type { EcosystemSnapshot, OperationDefinition, OperationEvidence, PlanningOptions, PoolSnapshot } from '../types.ts'
 import { choose, eligible, encodeStep, eventEvidence, mixSeed, planBase } from '../planning.ts'
 import { zeroAddress } from '@zoltar/bot-shared/ethereum'
-import { securityPoolAbi, securityPoolForkerAbi } from '@zoltar/bot-shared/contracts/abi'
+import { questionLedgerAbi, questionForkerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { BINARY_OUTCOME_NONE, childRouteTopologyCapacityBlocker } from './planning.ts'
 
 /** A forked pool whose child escalation game is initialized but not yet resumed, funded or not. */
@@ -23,7 +23,7 @@ function resumeEscalationPlan(snapshot: EcosystemSnapshot, pool: PoolSnapshot) {
 		priority: 'urgent',
 		risk: 'low',
 		snapshot,
-		steps: [encodeStep({ abi: securityPoolAbi, evidence: [eventEvidence(pool.escalationGame, 'ForkContinuationResumed(uint256)')], functionName: 'resumeForkedEscalationGame', id: 'resume-escalation', label: 'Resume forked escalation game', to: pool.address })],
+		steps: [encodeStep({ abi: questionLedgerAbi, evidence: [eventEvidence(pool.escalationGame, 'ForkContinuationResumed(uint256)')], functionName: 'resumeForkedEscalationGame', id: 'resume-escalation', label: 'Resume forked escalation game', to: pool.address })],
 	})
 }
 
@@ -43,7 +43,7 @@ export const resumeEscalation: OperationDefinition = {
 		return snapshot.pools.filter(isAwaitingEscalationResume).map(pool => ({ pool: pool.address }))
 	},
 	classification: 'lifecycle-obligation',
-	contract: 'SecurityPool',
+	contract: 'QuestionLedger',
 	description: 'Permissionlessly resumes a child escalation game after its fork continuation is initialized.',
 	discoveryInputs: ['pool fork continuation flag/state', 'child escalation game'],
 	ecosystem: 'statoblast',
@@ -56,8 +56,8 @@ export const resumeEscalation: OperationDefinition = {
 
 export function forkDefinition(kind: 'initiate' | 'create-child' | 'own-question'): OperationDefinition {
 	const id = `statoblast.fork.${kind}`
-	const method = { initiate: 'initiateSecurityPoolFork', 'own-question': 'forkZoltarWithOwnEscalationGame', 'create-child': 'preparePortfolioQuestion' }[kind]
-	const label = `Portfolio question fork: ${kind}`
+	const method = { initiate: 'initiateQuestionLedgerFork', 'own-question': 'forkZoltarWithOwnEscalationGame', 'create-child': 'prepareSecurityPoolQuestion' }[kind]
+	const label = `Security pool question fork: ${kind}`
 	function candidates(snapshot: EcosystemSnapshot, options?: PlanningOptions) {
 		return snapshot.pools.flatMap(pool => {
 			const universe = snapshot.universes.find(universe => universe.id === pool.universeId)
@@ -66,7 +66,7 @@ export function forkDefinition(kind: 'initiate' | 'create-child' | 'own-question
 			if (kind === 'own-question') return pool.ownQuestionForkReady ? [{ pool, outcome: '0', targetUniverse: '0' }] : []
 			if (pool.systemState !== 1 || universe.forkTime === '0') return []
 			return Object.entries(pool.childPoolPreparations).flatMap(([outcome, preparation]) =>
-				(options === undefined || preparation.branchReady) && preparation.childPool === zeroAddress && (options === undefined || childRouteTopologyCapacityBlocker(snapshot, pool, outcome, options, 'Portfolio question materialization') === undefined)
+				(options === undefined || preparation.branchReady) && preparation.childPool === zeroAddress && (options === undefined || childRouteTopologyCapacityBlocker(snapshot, pool, outcome, options, 'Security pool question materialization') === undefined)
 					? [{ pool, outcome, targetUniverse: preparation.childUniverseId }]
 					: [],
 			)
@@ -76,7 +76,7 @@ export function forkDefinition(kind: 'initiate' | 'create-child' | 'own-question
 	function build(snapshot: EcosystemSnapshot, candidate: ReturnType<typeof candidates>[number]) {
 		const evidence: OperationEvidence[] =
 			kind === 'create-child'
-				? [{ kind: 'storage-postcondition', contract: candidate.pool.portfolio, abi: 'function getPool(uint256,uint248) view returns (address)', functionName: 'getPool', args: [candidate.pool.questionId, candidate.targetUniverse], relation: 'greater-than', expected: '0' }]
+				? [{ kind: 'storage-postcondition', contract: candidate.pool.securityPool, abi: 'function getQuestionLedger(uint256,uint248) view returns (address)', functionName: 'getQuestionLedger', args: [candidate.pool.questionId, candidate.targetUniverse], relation: 'greater-than', expected: '0' }]
 				: [{ kind: 'storage-postcondition', contract: candidate.pool.address, abi: 'function systemState() view returns (uint8)', functionName: 'systemState', args: [], relation: 'equals', expected: '1' }]
 
 		return planBase({
@@ -88,18 +88,18 @@ export function forkDefinition(kind: 'initiate' | 'create-child' | 'own-question
 			priority: kind === 'create-child' ? 'urgent' : 'random',
 			risk: 'irreversible',
 			snapshot,
-			steps: [encodeStep({ abi: securityPoolForkerAbi, evidence, args: kind === 'create-child' ? [candidate.pool.address, BigInt(candidate.targetUniverse)] : [candidate.pool.address], functionName: method, id: method, label, to: snapshot.deployments.securityPoolForker, gasLimit: 16_777_216n })],
+			steps: [encodeStep({ abi: questionForkerAbi, evidence, args: kind === 'create-child' ? [candidate.pool.address, BigInt(candidate.targetUniverse)] : [candidate.pool.address], functionName: method, id: method, label, to: snapshot.deployments.questionForker, gasLimit: 16_777_216n })],
 		})
 	}
 	return {
 		id,
 		label,
 		method,
-		contract: 'SecurityPoolForker',
+		contract: 'QuestionForker',
 		classification: kind === 'create-child' ? 'lifecycle-obligation' : 'selectable',
 		ecosystem: 'statoblast',
 		risk: 'irreversible',
-		description: 'Advances native portfolio question fork reporting and lazy child preparation.',
+		description: 'Advances native security pool question fork reporting and lazy child preparation.',
 		discoveryInputs: ['native question state', 'universe fork', 'shared branch readiness'],
 		evaluate: (snapshot, options) => eligible(options.allowIrreversibleOperations === true ? undefined : 'Irreversible operations disabled', candidates(snapshot, options).length > 0 ? undefined : 'No eligible question fork route'),
 		buildPlan(snapshot, options) {

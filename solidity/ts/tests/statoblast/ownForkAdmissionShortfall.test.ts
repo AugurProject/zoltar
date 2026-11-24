@@ -2,10 +2,10 @@ import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '../../abi/abis'
 import {
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
 	Zoltar_Zoltar as zoltarArtifact,
 } from '../../types/contractArtifact'
@@ -15,15 +15,15 @@ import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { approveToken, getERC20Balance, overrideGenesisTheoreticalSupply } from '../../testSupport/simulator/utils/utilities'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { useSecurityPoolFixture } from './securityPoolFixture'
 
 // A game fixes its non-decision threshold N when it starts, while the genesis fork threshold follows the
 // live external REP supply. Non-decision leaves exactly 2N in escrow, so any later supply growth leaves
 // the own-question fork short of admission REP; the trigger caller pays that shortfall.
 describe('own-question fork admission after genesis supply growth', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
-	const pool = () => fixture.poolFor(fixture.base.questionId).securityPool
-	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
+	const pool = () => fixture.poolFor(fixture.base.questionId).questionLedger
+	const forker = () => ({ abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker })
 	const zoltar = () => ({ abi: zoltarArtifact.abi, address: getZoltarAddress() })
 	const universe = () => fixture.base.genesisUniverse
 	const repToken = () => getRepTokenAddress(universe())
@@ -47,7 +47,7 @@ describe('own-question fork admission after genesis supply growth', () => {
 		await writeContractAndWait(other, () => other.writeContract({ abi: poolArtifact.abi, address: pool(), functionName: 'depositWalletRepToEscalationGame', args: [1, nonDecision - nonDecision / 3n - 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: pool(), functionName: 'depositWalletRepToEscalationGame', args: [2, nonDecision] }))
 		expect(await owner.readContract({ abi: gameArtifact.abi, address: game, functionName: 'canTriggerOwnFork' })).toBe(true)
-		const ledger = await owner.readContract({ abi: portfolioArtifact.abi, address: fixture.portfolio, functionName: 'reporterLedger', args: [universe()] })
+		const ledger = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'reporterLedger', args: [universe()] })
 		const escrow = await owner.readContract({ abi: reporterArtifact.abi, address: ledger, functionName: 'balanceOfGame', args: [game] })
 		expect(escrow).toBe(2n * nonDecision)
 		const threshold = await owner.readContract({ ...zoltar(), functionName: 'getForkThresholdAttoRep', args: [universe()] })

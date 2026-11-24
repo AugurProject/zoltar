@@ -1,4 +1,4 @@
-import { auctionFixture } from '../support/portfolio-fixtures.ts'
+import { auctionFixture } from '../support/security-pool-fixtures.ts'
 import { canonicalPoolReportRoutes } from '../../src/monitoring/discovery-price-feed.ts'
 import { indexWithCurrentRefunds, snapshotWithProtocolIndex } from '../../src/runtime/protocol-index-snapshot.ts'
 import { snapshotProtocolIndex } from '../../src/state/protocol-index-store.ts'
@@ -32,7 +32,7 @@ test('deduplicates shared question report aliases while rejecting inconsistent r
 	expect(() => trustedOpenOracleReportPredicate({ ...trust, coordinatorReports: canonicalPoolReportRoutes([first, second]) })).toThrow('assigned to multiple coordinators')
 })
 
-const indexDeployments = { openOracle: address(6), securityPoolForker: address(5), zoltar: address(2) } as const
+const indexDeployments = { openOracle: address(6), questionForker: address(5), zoltar: address(2) } as const
 const indexTrust = {
 	coordinatorReports: [],
 	maximumSettlementStepGasLimit: OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT,
@@ -614,7 +614,7 @@ describe('durable protocol index', () => {
 	test('binds persisted progress to the protocol deployments', async () => {
 		const initial = await updateProtocolIndex(indexContext(eventIndexClient([])))
 		await expect(updateProtocolIndex(indexContext(eventIndexClient([]), { anchorBlockNumber: 11n, previous: initial.index, zoltar: address(99) }))).rejects.toThrow('Zoltar deployment changed')
-		await expect(updateProtocolIndex(indexContext(eventIndexClient([]), { anchorBlockNumber: 11n, previous: initial.index, securityPoolForker: address(99) }))).rejects.toThrow('SecurityPoolForker deployment changed')
+		await expect(updateProtocolIndex(indexContext(eventIndexClient([]), { anchorBlockNumber: 11n, previous: initial.index, questionForker: address(99) }))).rejects.toThrow('QuestionForker deployment changed')
 	})
 
 	test('retains more than ten thousand distinct durable migration routes', async () => {
@@ -738,7 +738,7 @@ describe('durable protocol index', () => {
 	})
 })
 
-test('native portfolio auction replay tracks bid IDs and refund generations across settlement and withdrawal', async () => {
+test('native security pool auction replay tracks bid IDs and refund generations across settlement and withdrawal', async () => {
 	const submittedTopic = keccak256(toHex('BidSubmitted(uint256,address,address,uint256,uint256,uint256)'))
 	const settledTopic = keccak256(toHex('BidSettled(uint256,address,uint256,uint256)'))
 	const withdrawnTopic = keccak256(toHex('RefundWithdrawn(address,address,uint256)'))

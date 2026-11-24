@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getReportingOutcomeKey, getReportingOutcomeValue, getSecurityPoolSystemState, requireReportingOutcomeKey, tryGetSecurityPoolSystemState } from '../lib/contractEnums.js'
+import { getReportingOutcomeKey, getReportingOutcomeValue, getQuestionLedgerSystemState, requireReportingOutcomeKey, tryGetQuestionLedgerSystemState } from '../lib/contractEnums.js'
 
 void describe('contract enum helpers', () => {
 	void test('maps reporting outcome indexes to keys and back', () => {
@@ -15,12 +15,12 @@ void describe('contract enum helpers', () => {
 		expect(() => requireReportingOutcomeKey(9n)).toThrow('Unsupported child universe outcome index: 9')
 	})
 
-	void test('maps security pool system states', () => {
-		expect(getSecurityPoolSystemState(0)).toBe('operational')
-		expect(getSecurityPoolSystemState(1n)).toBe('poolForked')
-		expect(getSecurityPoolSystemState(2)).toBe('forkMigration')
-		expect(() => getSecurityPoolSystemState(3)).toThrow('Unhandled security pool system state: 3')
-		expect(() => getSecurityPoolSystemState(3n)).toThrow('Unhandled security pool system state: 3')
-		expect(tryGetSecurityPoolSystemState(3)).toBeUndefined()
+	void test('maps question ledger system states', () => {
+		expect(getQuestionLedgerSystemState(0)).toBe('operational')
+		expect(getQuestionLedgerSystemState(1n)).toBe('poolForked')
+		expect(getQuestionLedgerSystemState(2)).toBe('forkMigration')
+		expect(() => getQuestionLedgerSystemState(3)).toThrow('Unhandled question ledger system state: 3')
+		expect(() => getQuestionLedgerSystemState(3n)).toThrow('Unhandled question ledger system state: 3')
+		expect(tryGetQuestionLedgerSystemState(3)).toBeUndefined()
 	})
 })

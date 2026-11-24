@@ -10,7 +10,7 @@ It also contains the OpenOracle price feed integration, the Statoblast Trading e
 ## Documentation
 
 - [Protocol documentation](https://augurproject.github.io/zoltar/docs/documentation.html): start with the [system overview](https://augurproject.github.io/zoltar/docs/explanation/system-overview.html), then follow the tutorials, how-to guides, explanations, and contract reference. Trading is documented there too.
-- [Protocol glossary](https://augurproject.github.io/zoltar/docs/reference/glossary.html): the canonical definitions of REP, universe, security pool, fork, and the other protocol terms.
+- [Protocol glossary](https://augurproject.github.io/zoltar/docs/reference/glossary.html): the canonical definitions of REP, universe, question ledger, fork, and the other protocol terms.
 - [Further reading](https://augurproject.github.io/zoltar/docs/reference/further-reading.html): bot operator guides, the augurScan explorer, the security regression suite, and the design-research repository.
 - This README covers developer setup, local development, and repository commands.
 
@@ -120,7 +120,7 @@ While a dev server is running, `UI_DEV_SERVER_URL=http://localhost:4153 bun run 
 
 `bun run ui:layout-scan -- --app <apps>` builds and serves the named apps (one or more, comma separated; `--app` is required), then walks every route, view tab, disclosure, and dialog launcher it can reach in each simulation scenario at five viewport sizes, and reports content that is cut off, runs off the screen, overlaps, or is squeezed. Each finding explains the measured problem, the likely cause and fix, the source files involved, and links a highlighted screenshot; `--help` lists the options for narrowing the scan or scanning a running server.
 
-This mode does not require a wallet extension or `anvil`. Instead, it boots a Tevm-backed in-browser chain and seeds the QA accounts with ETH, WETH, and REP. Zoltar and Statoblast scenarios control whether application contracts are already deployed. In Trading, `simScenario=deployed` deploys a seeded SecurityPool plus the Trading factory and router so its market routes are immediately usable, and the default `simScenario=trading-funded` additionally initializes pair liquidity and funds the simulation wallet with Yes, No, Invalid, and LP shares. `simScenario=trading-forked` starts from that funded market and forks its universe directly through Zoltar, so Settlement offers Fork migration for the wallet's parent-universe shares.
+This mode does not require a wallet extension or `anvil`. Instead, it boots a Tevm-backed in-browser chain and seeds the QA accounts with ETH, WETH, and REP. Zoltar and Statoblast scenarios control whether application contracts are already deployed. In Trading, `simScenario=deployed` deploys a seeded QuestionLedger plus the Trading factory and router so its market routes are immediately usable, and the default `simScenario=trading-funded` additionally initializes pair liquidity and funds the simulation wallet with Yes, No, Invalid, and LP shares. `simScenario=trading-forked` starts from that funded market and forks its universe directly through Zoltar, so Settlement offers Fork migration for the wallet's parent-universe shares.
 
 Simulation mode details:
 

@@ -1,4 +1,4 @@
-import { securityPoolPortfolioAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
+import { securityPoolAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
 import { fetchLogsWithAdaptiveRanges } from '@zoltar/bot-shared/monitoring/block-sync'
 import type { Address, PublicClient } from '@zoltar/bot-shared/ethereum'
 
@@ -61,9 +61,9 @@ const preparedEvent = {
 
 export const finalizationRequest = ({ settlement, universeId, questionId }: Question & { settlement: Address }) => ({ address: settlement, abi: settlementAbi, functionName: 'finalizeQuestion' as const, args: [universeId, questionId] as const })
 
-export async function settlementFinalizationCandidate(client: Reader, portfolio: Address, { universeId, questionId }: Question, minimumCash: bigint, blockNumber: bigint) {
-	const root = { abi: securityPoolPortfolioAbi, address: portfolio, blockNumber }
-	const [zoltar, settlement, cutoff] = await Promise.all([client.readContract({ ...root, functionName: 'zoltar' }), client.readContract({ ...root, functionName: 'settlement' }), client.readContract({ ...root, functionName: 'portfolioTime', args: [universeId] })])
+export async function settlementFinalizationCandidate(client: Reader, securityPool: Address, { universeId, questionId }: Question, minimumCash: bigint, blockNumber: bigint) {
+	const root = { abi: securityPoolAbi, address: securityPool, blockNumber }
+	const [zoltar, settlement, cutoff] = await Promise.all([client.readContract({ ...root, functionName: 'zoltar' }), client.readContract({ ...root, functionName: 'settlement' }), client.readContract({ ...root, functionName: 'securityPoolTime', args: [universeId] })])
 	if ((await client.readContract({ address: zoltar, abi: zoltarAbi, functionName: 'getForkTime', args: [universeId], blockNumber })) !== 0n) return undefined
 	const [ledger, bookId] = await Promise.all([client.readContract({ address: settlement, abi: settlementAbi, functionName: 'ledger', blockNumber }), client.readContract({ address: settlement, abi: settlementAbi, functionName: 'bookIds', args: [universeId], blockNumber })])
 	if (bookId === 0n) return undefined
@@ -77,17 +77,17 @@ export async function settlementFinalizationCandidate(client: Reader, portfolio:
 	return { settlement, universeId, questionId, cash }
 }
 
-export async function* scanSettlementFinalizations(client: Reader, portfolio: Address, minimumCash: bigint) {
+export async function* scanSettlementFinalizations(client: Reader, securityPool: Address, minimumCash: bigint) {
 	const block = await client.getBlock()
 	if (block.number === undefined) throw new Error('Settlement scan requires a numbered block')
-	const root = { abi: securityPoolPortfolioAbi, address: portfolio, blockNumber: block.number }
+	const root = { abi: securityPoolAbi, address: securityPool, blockNumber: block.number }
 	const questionCount = await client.readContract({ ...root, functionName: 'questionCount' })
 	const seenUniverses = new Set<bigint>()
 	// Bound each historical RPC query and pin both discovery and eligibility to the same block.
 	const blockPageSize = 10_000n
 	for (let fromBlock = 0n; fromBlock <= block.number; fromBlock += blockPageSize) {
 		const toBlock = fromBlock + blockPageSize - 1n < block.number ? fromBlock + blockPageSize - 1n : block.number
-		const prepared = await fetchLogsWithAdaptiveRanges({ nextBlock: fromBlock }, toBlock, blockPageSize, range => client.getLogs({ address: portfolio, event: preparedEvent, ...range }))
+		const prepared = await fetchLogsWithAdaptiveRanges({ nextBlock: fromBlock }, toBlock, blockPageSize, range => client.getLogs({ address: securityPool, event: preparedEvent, ...range }))
 		for (const event of prepared) {
 			if (event.args === undefined) throw new Error('Prepared universe event arguments unavailable')
 			const { universeId } = event.args
@@ -97,7 +97,7 @@ export async function* scanSettlementFinalizations(client: Reader, portfolio: Ad
 			for (let start = 0n; start < questionCount; start += pageSize) {
 				const questions = await client.readContract({ ...root, functionName: 'getQuestions', args: [start, pageSize] })
 				for (const questionId of questions) {
-					const candidate = await settlementFinalizationCandidate(client, portfolio, { universeId, questionId }, minimumCash, block.number)
+					const candidate = await settlementFinalizationCandidate(client, securityPool, { universeId, questionId }, minimumCash, block.number)
 					if (candidate !== undefined) yield candidate
 				}
 			}

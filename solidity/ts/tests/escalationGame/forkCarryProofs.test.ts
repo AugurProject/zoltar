@@ -21,20 +21,20 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 		recursiveResolutionTargetCost,
 		fundEscalationGame,
 		advanceForkContinuationPastStart,
-		depositOnOutcomeViaProofTestSecurityPool,
+		depositOnOutcomeViaProofTestQuestionLedger,
 		traceCarryLeafPage,
 		traceProofConsumedCarriedDepositIndexes,
 		assertEscrowAccounting,
-		withdrawDepositViaProofTestSecurityPool,
-		withdrawDepositViaProofTestSecurityPoolWithGas,
-		claimDepositForWinningViaTestSecurityPool,
+		withdrawDepositViaProofTestQuestionLedger,
+		withdrawDepositViaProofTestQuestionLedgerWithGas,
+		claimDepositForWinningViaTestQuestionLedger,
 		createCarryProof,
-		depositOnOutcomeViaTestSecurityPool,
+		depositOnOutcomeViaTestQuestionLedger,
 		assertOutcomeCarryTotalsMatchComponents,
-		initializeSnapshotViaTestSecurityPool,
-		initializeSnapshotWithResolutionBalancesViaTestSecurityPool,
+		initializeSnapshotViaTestQuestionLedger,
+		initializeSnapshotWithResolutionBalancesViaTestQuestionLedger,
 		assertCarryCommitmentStructure,
-		deployEscalationGameTestSecurityPool,
+		deployEscalationGameTestQuestionLedger,
 		deployForkContinuationEscalationGame,
 		readOutcomeCarrySnapshot,
 	} = fixture
@@ -47,12 +47,12 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 	})
 
 	test('#1396 carry pagination rejects never-issued Invalid node cursors', async () => {
-		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		const { escalationGameAddress, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
 		const [empty, next] = await readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Invalid, 0n, 1n)
 		assert.strictEqual(empty.length, 0)
 		assert.strictEqual(next, 0n)
 		await assert.rejects(readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Invalid, 1n, 1n), /Unknown carry cursor/)
-		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, reportBond)
+		await depositOnOutcomeViaProofTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Invalid, reportBond)
 		const [first] = await readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Invalid, 0n, 1n)
 		const leaf = first[0]
 		if (leaf === undefined) throw new Error('Missing real Invalid deposit')
@@ -62,39 +62,39 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 	})
 
 	test('fork carry maintains an append-only Merkle Mountain Range root for inherited carryover deposits', async () => {
-		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		const { escalationGameAddress, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
 
-		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await depositOnOutcomeViaProofTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await assertCarryCommitmentStructure(escalationGameAddress, 'after first Yes deposit')
 
 		const firstLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, reportBond, 0n, reportBond, 1n)
 		const rootAfterFirstDeposit = await readCarryRoot(client, escalationGameAddress, QuestionOutcome.Yes)
 		assert.strictEqual(rootAfterFirstDeposit, firstLeafHash, 'single appended leaf should be its own Merkle Mountain Range root')
 
-		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await depositOnOutcomeViaProofTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await assertCarryCommitmentStructure(escalationGameAddress, 'after second Yes deposit')
 		const secondLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, reportBond, 1n, 2n * reportBond, 2n)
 		const expectedTwoLeafRoot = hashParent(firstLeafHash, secondLeafHash)
 		const rootAfterSecondDeposit = await readCarryRoot(client, escalationGameAddress, QuestionOutcome.Yes)
 		assert.strictEqual(rootAfterSecondDeposit, expectedTwoLeafRoot, 'two appended leaves should bag into the expected Merkle Mountain Range root')
 
-		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
-		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, 3n * reportBond)
+		await depositOnOutcomeViaProofTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
+		await depositOnOutcomeViaProofTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Invalid, 3n * reportBond)
 		await assertCarryCommitmentStructure(escalationGameAddress, 'after multi-peak and multi-outcome deposits')
 	})
 
 	test('fork carry leaf paging uses node cursors and skips consumed local leaves', async () => {
-		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
-		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
-		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
+		const { escalationGameAddress, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaProofTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await depositOnOutcomeViaProofTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
+		await depositOnOutcomeViaProofTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
 		await assertEscrowAccounting(escalationGameAddress, 6n * reportBond)
 		await assertOutcomeCarryTotalsMatchComponents(escalationGameAddress)
 		assert.strictEqual(await readCarryTotal(client, escalationGameAddress, QuestionOutcome.Yes), 6n * reportBond, 'all local Yes deposits should be represented in the carry total')
 
 		const activationTime = await getActivationTime(client, escalationGameAddress)
 		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
-		await claimDepositForWinningViaTestSecurityPool(testSecurityPoolAddress, 1n, QuestionOutcome.Yes)
+		await claimDepositForWinningViaTestQuestionLedger(testQuestionLedgerAddress, 1n, QuestionOutcome.Yes)
 		await assertEscrowAccounting(escalationGameAddress, 4n * reportBond)
 		await assertOutcomeCarryTotalsMatchComponents(escalationGameAddress)
 		assert.strictEqual(await readCarryTotal(client, escalationGameAddress, QuestionOutcome.Yes), 4n * reportBond, 'claiming the middle local deposit should remove only that unresolved carry')
@@ -118,14 +118,14 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 	})
 
 	test('fork carry leaf paging bounds visited nodes across consumed history without losing live leaves', async () => {
-		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		const { escalationGameAddress, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
 		for (let index = 0; index < 9; index++) {
-			await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+			await depositOnOutcomeViaProofTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		}
 		const activationTime = await getActivationTime(client, escalationGameAddress)
 		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
 		for (let index = 1n; index < 9n; index++) {
-			await claimDepositForWinningViaTestSecurityPool(testSecurityPoolAddress, index, QuestionOutcome.Yes)
+			await claimDepositForWinningViaTestQuestionLedger(testQuestionLedgerAddress, index, QuestionOutcome.Yes)
 		}
 
 		let cursor = 0n
@@ -143,9 +143,9 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 	})
 
 	test('fork carry leaf paging rejects cursors from another outcome chain', async () => {
-		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
-		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, 2n * reportBond)
+		const { escalationGameAddress, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaProofTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await depositOnOutcomeViaProofTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.No, 2n * reportBond)
 
 		const [yesPage] = await readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Yes, 0n, 1n)
 		const yesNodeId = yesPage[0]?.sourceNodeId
@@ -154,7 +154,7 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 	})
 
 	test('fork carry leaf paging rejects a never-issued cursor for every outcome, including the zero-valued Invalid outcome (#1396)', async () => {
-		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
+		const { escalationGameAddress, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
 		assert.deepStrictEqual(await readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Invalid, 0n, 1n), [[], 0n], 'a game without local deposits has an empty Invalid page')
 		// Node 1 has not been issued. An absent node's default outcome is Invalid,
 		// so only an existence check keeps it from reading as a zero-valued deposit.
@@ -162,7 +162,7 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 			await assert.rejects(readCarryLeafPage(client, escalationGameAddress, outcome, 1n, 1n), /Unknown carry cursor/)
 		}
 
-		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, reportBond)
+		await depositOnOutcomeViaProofTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Invalid, reportBond)
 		const [headPage, headNextNodeId] = await readCarryLeafPage(client, escalationGameAddress, QuestionOutcome.Invalid, 0n, 1n)
 		assert.strictEqual(headPage.length, 1, 'a real Invalid deposit is listed from the head')
 		assert.strictEqual(headNextNodeId, 0n)
@@ -175,7 +175,7 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 	test('fork carry snapshot initialization normalizes zero nullifier roots to the empty sparse-tree root', async () => {
 		const child = await deployForkContinuationEscalationGame()
 
-		const initializeSnapshotHash = await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+		const initializeSnapshotHash = await initializeSnapshotViaTestQuestionLedger(child.testQuestionLedgerAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
 
 		const emptyNullifierRoot = new SparseNullifierTree().root
 		const snapshotInitialized = await readForkCarrySnapshotInitialized(client, child.escalationGameAddress)
@@ -213,25 +213,25 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 	})
 
 	test('short carried proof reverts with a readable proof length reason', async () => {
-		const parent = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
-		await depositOnOutcomeViaTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		const parent = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await depositOnOutcomeViaTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		const parentYesPeaks = await readCarryPeaks(client, parent.escalationGameAddress, QuestionOutcome.Yes)
 
 		const child = await deployForkContinuationEscalationGame()
-		await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, 2n, 0n], [0n, 2n * reportBond, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
-		await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await initializeSnapshotWithResolutionBalancesViaTestQuestionLedger(child.testQuestionLedgerAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, 2n, 0n], [0n, 2n * reportBond, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+		await depositOnOutcomeViaProofTestQuestionLedger(child.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await fundEscalationGame(child.escalationGameAddress, 2n * reportBond)
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 
 		const shortProof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 1n, [], new SparseNullifierTree().getProof(0n))
-		await assert.rejects(withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, shortProof), /Bad MMR proof length/)
+		await assert.rejects(withdrawDepositViaProofTestQuestionLedger(child.testQuestionLedgerAddress, QuestionOutcome.Yes, shortProof), /Bad MMR proof length/)
 	})
 
 	test('fork carry child instances can settle multiple inherited carried deposits from proofs only', async () => {
-		const parent = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
-		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
+		const parent = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
 
 		const { peaks: parentYesPeaks, leafCount: parentLeafCount, carryTotal: parentCarryTotal, nullifierRoot: parentNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Yes)
 
@@ -239,19 +239,19 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 		const secondLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, 2n * reportBond, 1n, 3n * reportBond, 2n)
 
 		const child = await deployForkContinuationEscalationGame()
-		await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, parentCarryTotal, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
+		await initializeSnapshotViaTestQuestionLedger(child.testQuestionLedgerAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, parentCarryTotal, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 		await assertCarryCommitmentStructure(parent.escalationGameAddress, 'parent before inherited proof settlement')
 		await assertCarryCommitmentStructure(child.escalationGameAddress, 'child before inherited proof settlement')
 
 		const nullifierTree = new SparseNullifierTree()
 		const firstProof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 1n, [secondLeafHash], nullifierTree.getProof(0n))
-		await withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, firstProof)
+		await withdrawDepositViaProofTestQuestionLedger(child.testQuestionLedgerAddress, QuestionOutcome.Yes, firstProof)
 		nullifierTree.consume(0n)
 		await assertCarryCommitmentStructure(child.escalationGameAddress, 'child after first inherited proof settlement')
 
 		const secondProof = await createCarryProof(parent.escalationGameAddress, 1n, 1n, 1n, [firstLeafHash], nullifierTree.getProof(1n))
-		await withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, secondProof)
+		await withdrawDepositViaProofTestQuestionLedger(child.testQuestionLedgerAddress, QuestionOutcome.Yes, secondProof)
 		await assertCarryCommitmentStructure(child.escalationGameAddress, 'child after all inherited proof settlements')
 
 		const remainingCarryTotal = await readCarryTotal(client, child.escalationGameAddress, QuestionOutcome.Yes)
@@ -265,48 +265,48 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 	})
 
 	test('an inconsistent inherited snapshot cannot consume unrelated local principal', async () => {
-		const parent = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
+		const parent = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
 
 		const parentLeafCount = await readCarryLeafCount(client, parent.escalationGameAddress, QuestionOutcome.Yes)
 		const parentNullifierRoot = await readNullifierRoot(client, parent.escalationGameAddress, QuestionOutcome.Yes)
 		const parentYesPeaks = await readCarryPeaks(client, parent.escalationGameAddress, QuestionOutcome.Yes)
 
 		const child = await deployForkContinuationEscalationGame()
-		await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, reportBond, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
-		await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
+		await initializeSnapshotViaTestQuestionLedger(child.testQuestionLedgerAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, reportBond, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
+		await depositOnOutcomeViaProofTestQuestionLedger(child.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 
 		const proof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 0n, [], new SparseNullifierTree().getProof(0n))
 		const nullifierBefore = await readNullifierRoot(client, child.escalationGameAddress, QuestionOutcome.Yes)
 		const backingBefore = await getERC20Balance(client, getRepTokenAddress(0n), child.escalationGameAddress)
-		await assert.rejects(withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof), /Carried REP low/)
+		await assert.rejects(withdrawDepositViaProofTestQuestionLedger(child.testQuestionLedgerAddress, QuestionOutcome.Yes, proof), /Carried REP low/)
 		assert.strictEqual(await readNullifierRoot(client, child.escalationGameAddress, QuestionOutcome.Yes), nullifierBefore, 'rejection must not consume the proof identity')
 		assert.strictEqual(await getERC20Balance(client, getRepTokenAddress(0n), child.escalationGameAddress), backingBefore, 'rejection must preserve backing')
 
 		assert.strictEqual(await readCarryTotal(client, child.escalationGameAddress, QuestionOutcome.Yes), 3n * reportBond, 'rejection must preserve both inherited and local unresolved principal')
-		await claimDepositForWinningViaTestSecurityPool(child.testSecurityPoolAddress, 0n, QuestionOutcome.Yes)
+		await claimDepositForWinningViaTestQuestionLedger(child.testQuestionLedgerAddress, 0n, QuestionOutcome.Yes)
 		assert.strictEqual(await readCarryTotal(client, child.escalationGameAddress, QuestionOutcome.Yes), reportBond, 'the independently funded local deposit must still settle')
 		await assertOutcomeCarryTotalsMatchComponents(child.escalationGameAddress)
 	})
 
 	test('fork carry proof settlement rejects reusing the same carried proof twice', async () => {
-		const parent = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		const parent = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 
 		const { peaks: parentYesPeaks, leafCount: parentLeafCount, carryTotal: parentCarryTotal, nullifierRoot: parentNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Yes)
 
 		const child = await deployForkContinuationEscalationGame()
-		await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, parentCarryTotal, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
+		await initializeSnapshotViaTestQuestionLedger(child.testQuestionLedgerAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, parentCarryTotal, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
 		await advanceForkContinuationPastStart(child.escalationGameAddress)
 
 		const nullifierTree = new SparseNullifierTree()
 		const proof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 0n, [], nullifierTree.getProof(0n))
 		const invalidNullifierProof = { ...proof, nullifierSiblings: [oneHash(), ...nullifierTree.getProof(0n).slice(1)] }
-		await assert.rejects(withdrawDepositViaProofTestSecurityPoolWithGas(child.testSecurityPoolAddress, QuestionOutcome.Yes, { ...proof, nullifierSiblings: [] }), /Bad nullifier length/)
-		await assert.rejects(withdrawDepositViaProofTestSecurityPoolWithGas(child.testSecurityPoolAddress, QuestionOutcome.Yes, invalidNullifierProof), /Bad nullifier proof/)
-		await withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
-		await assert.rejects(withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof), /Bad nullifier proof|Deposit settled/)
+		await assert.rejects(withdrawDepositViaProofTestQuestionLedgerWithGas(child.testQuestionLedgerAddress, QuestionOutcome.Yes, { ...proof, nullifierSiblings: [] }), /Bad nullifier length/)
+		await assert.rejects(withdrawDepositViaProofTestQuestionLedgerWithGas(child.testQuestionLedgerAddress, QuestionOutcome.Yes, invalidNullifierProof), /Bad nullifier proof/)
+		await withdrawDepositViaProofTestQuestionLedger(child.testQuestionLedgerAddress, QuestionOutcome.Yes, proof)
+		await assert.rejects(withdrawDepositViaProofTestQuestionLedger(child.testQuestionLedgerAddress, QuestionOutcome.Yes, proof), /Bad nullifier proof|Deposit settled/)
 	})
 
 	test('fork carry proof settlement blocks incomplete initialization and rejects empty snapshots', async () => {
@@ -323,9 +323,9 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 			nullifierSiblings: new SparseNullifierTree().getProof(0n),
 		}
 		await assert.rejects(advanceForkContinuationPastStart(child.escalationGameAddress), /Fork snapshot incomplete/)
-		await assert.rejects(withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof), /Question not final/)
-		await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+		await assert.rejects(withdrawDepositViaProofTestQuestionLedger(child.testQuestionLedgerAddress, QuestionOutcome.Yes, proof), /Question not final/)
+		await initializeSnapshotViaTestQuestionLedger(child.testQuestionLedgerAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
 		await advanceForkContinuationPastStart(child.escalationGameAddress)
-		await assert.rejects(withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof), /Not winning outcome|Carry peak absent/)
+		await assert.rejects(withdrawDepositViaProofTestQuestionLedger(child.testQuestionLedgerAddress, QuestionOutcome.Yes, proof), /Not winning outcome|Carry peak absent/)
 	})
 })

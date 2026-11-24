@@ -4,8 +4,8 @@ import { ScannerDatabase } from '../../src/database.ts'
 import { getAddress } from '../../src/ethereum.ts'
 import { initializeSchema } from '../../src/schema.ts'
 import type { NetworkConfig } from '../../src/types.ts'
-import { type OperationsContext, seedBulkTradingHistory, seedRiskAndPortfolioEvidence, storeOperationsEvidenceBlock } from '../support/operations-fixtures.ts'
-import { expectQuestionHistoryCursors, expectReportCatalogGenerations, expectReportDetailPagination, expectRiskAndForkCatalogs, expectTimelinePagination, expectTradingAndPortfolioPagination, expectUnicodeTradingPagination } from '../support/operations-stages.ts'
+import { type OperationsContext, seedBulkTradingHistory, seedRiskAndSecurityPoolEvidence, storeOperationsEvidenceBlock } from '../support/operations-fixtures.ts'
+import { expectQuestionHistoryCursors, expectReportCatalogGenerations, expectReportDetailPagination, expectRiskAndForkCatalogs, expectTimelinePagination, expectTradingAndSecurityPoolPagination, expectUnicodeTradingPagination } from '../support/operations-stages.ts'
 import { address, blockHash, chainId, discoveredAddress, postgresTest, promotedAddress, requirePostgresUrl } from '../support/postgres-fixtures.ts'
 
 const uniswapOnlyMarket = getAddress('0x9999999999999999999999999999999999999999').toLowerCase()
@@ -196,10 +196,10 @@ const expectRiskHistoryAndSeverity = async ({ database, operationsChainId, oracl
 	const poolRiskResponse = await handleApi(new Request(poolRiskPath), database.sql)
 	if (poolRiskResponse === undefined) throw new Error('pool risk endpoint did not return a response')
 	const poolRisk = (await poolRiskResponse.json()) as { data: Record<string, unknown> }
-	// A question pool reports settlement state; capital risk belongs to the portfolio.
+	// A question pool reports settlement state; capital risk belongs to the security pool.
 	expect(poolRisk.data).toMatchObject({ protocol_state: '1', scanner_severity: 'unavailable' })
 	expect(poolRisk.data).toHaveProperty('history.stateSnapshots', expect.arrayContaining([expect.objectContaining({ source_method: 'augurscan.pool-risk.late' })]))
-	expect(poolRisk.data['scanner_reason']).toContain('shared portfolio capital positions')
+	expect(poolRisk.data['scanner_reason']).toContain('shared security pool capital positions')
 }
 
 const expectSnapshotsAndIndexedPlans = async ({ database, operationsChainId, oracle }: OperationsContext): Promise<void> => {
@@ -316,11 +316,11 @@ postgresTest(
 			await storeOperationsEvidenceBlock(context)
 			await expectTimelinePagination(context)
 			await seedBulkTradingHistory(context)
-			await seedRiskAndPortfolioEvidence(context)
+			await seedRiskAndSecurityPoolEvidence(context)
 			await expectUnicodeTradingPagination(context)
 			await expectReportDetailPagination(context)
 			await expectReportCatalogGenerations(context)
-			await expectTradingAndPortfolioPagination(context)
+			await expectTradingAndSecurityPoolPagination(context)
 			await expectRiskAndForkCatalogs(context)
 			await expectQuestionHistoryCursors(context)
 			await expectTradingObservationBoundary(context)

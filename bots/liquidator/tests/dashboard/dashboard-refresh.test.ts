@@ -1,5 +1,5 @@
 import { controlReconnectTimers } from './reconnect-test-clock.ts'
-import { parsePortfolioPolicy, serializePortfolioPolicy } from '../../src/config/portfolio-policy.ts'
+import { parseSecurityPoolPolicy, serializeSecurityPoolPolicy } from '../../src/config/security-pool-policy.ts'
 import { decodeSnapshot, type MarketSourceRow } from '../../src/dashboard/api-validation.ts'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { Browser } from 'happy-dom'
@@ -50,9 +50,9 @@ type DashboardConfiguration = {
 	network?: { chainId: number; explorerUrl: string; name: 'mainnet' | 'sepolia' }
 	networkConfigured?: boolean
 	runtime: { execute: boolean }
-	selectedPortfolios: { address: string; universeId: string }[]
+	selectedSecurityPools: { address: string; universeId: string }[]
 	strategy: Record<string, string | number | boolean>
-	portfolioPolicy: ReturnType<typeof serializePortfolioPolicy>
+	securityPoolPolicy: ReturnType<typeof serializeSecurityPoolPolicy>
 	submission: { minimumBundleRelaySuccesses: number; mode: 'private' | 'public'; relayUrls: string[] }
 }
 
@@ -82,9 +82,9 @@ function configuration(approvedUniverses = ['1'], network?: DashboardConfigurati
 		network: network ?? { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' },
 		networkConfigured: network !== undefined,
 		runtime: { execute: false },
-		selectedPortfolios: [{ address: '0x1111111111111111111111111111111111111111', universeId: '0' }],
+		selectedSecurityPools: [{ address: '0x1111111111111111111111111111111111111111', universeId: '0' }],
 		strategy: { ...example.strategy },
-		portfolioPolicy: serializePortfolioPolicy(parsePortfolioPolicy(undefined)),
+		securityPoolPolicy: serializeSecurityPoolPolicy(parseSecurityPoolPolicy(undefined)),
 		submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
 	}
 }
@@ -176,7 +176,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		isNetworkConfigured: () => true,
 		setApprovedUniverses: value => value,
 		setPaused: value => value,
-		setSelectedPortfolios: value => value,
+		setSelectedSecurityPools: value => value,
 		setSigner: value => value,
 		setStrategy: value => value,
 	})
@@ -273,7 +273,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 				const address = url.searchParams.get('address')
 				const pools = snapshot.pools
 					.filter(pool => address === null || pool.address.toLowerCase() === address.toLowerCase())
-					.map(pool => ({ ...pool, parent: '0x0000000000000000000000000000000000000000', universeId: '7', metrics: { systemState: pool.systemState, portfolio: pool.address, sharedCommittedRep: pool.totalPoolHeldRep, sharedCommitmentEth: pool.knownVaultCount } }))
+					.map(pool => ({ ...pool, parent: '0x0000000000000000000000000000000000000000', universeId: '7', metrics: { systemState: pool.systemState, securityPool: pool.address, sharedCommittedRep: pool.totalPoolHeldRep, sharedCommitmentEth: pool.knownVaultCount } }))
 				const page = Number(url.searchParams.get('page'))
 				return new window.Response(JSON.stringify({ chainId: currentConfiguration.network?.chainId, snapshotTimestamp: '1789560000', page, pageCount: String(Math.ceil(pools.length / 12)), total: String(pools.length), pools: pools.slice(page * 12, (page + 1) * 12) }))
 			}
@@ -300,7 +300,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 												questionId: String(42 + catalogRevision),
 												universeId: '7',
 												multiplierBps: '12500',
-												metrics: { systemState: '0', portfolio: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sharedCommittedRep: String(2 + catalogRevision), sharedCommitmentEth: String(3 + catalogRevision) },
+												metrics: { systemState: '0', securityPool: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sharedCommittedRep: String(2 + catalogRevision), sharedCommitmentEth: String(3 + catalogRevision) },
 												deploymentDate: '1789560000',
 												questionDates: { startTime: '1789473600', endTime: '1792065600' },
 											},
@@ -311,13 +311,13 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 				{ status: catalogFailure ? 503 : 200 },
 			)
 		}
-		if (url.pathname === '/api/supported-portfolio') {
+		if (url.pathname === '/api/supported-security-pool') {
 			supportedPoolRequests.push(JSON.parse(String(init?.body)))
 			if (releaseSelectedPoolRequest !== undefined) await new Promise<void>(resolve => (releaseSelectedPoolRequest = resolve))
 			if (selectionFailure) return new window.Response('{}', { status: 400 })
 			const value = JSON.parse(String(init?.body))
-			const remaining = currentConfiguration.selectedPortfolios.filter(item => item.address !== value.address || item.universeId !== value.universeId)
-			currentConfiguration = { ...currentConfiguration, selectedPortfolios: value.supported ? [...remaining, { address: value.address, universeId: value.universeId }] : remaining }
+			const remaining = currentConfiguration.selectedSecurityPools.filter(item => item.address !== value.address || item.universeId !== value.universeId)
+			currentConfiguration = { ...currentConfiguration, selectedSecurityPools: value.supported ? [...remaining, { address: value.address, universeId: value.universeId }] : remaining }
 			return new window.Response(JSON.stringify(currentConfiguration))
 		}
 		if (url.pathname === '/api/configuration') {
@@ -394,13 +394,13 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 			currentConfiguration = { ...currentConfiguration, approvedUniverses: approvedValues }
 			return new window.Response(JSON.stringify(currentConfiguration), { headers: { 'content-type': 'application/json' } })
 		}
-		if (url.pathname === '/api/selected-portfolios') {
+		if (url.pathname === '/api/selected-security-pools') {
 			const selected: unknown = JSON.parse(String(init?.body))
 			if (!Array.isArray(selected) || selected.some(value => typeof value !== 'string')) throw new Error('Unexpected selected-pool request')
 			const selectedValues = selected.map(String)
 			selectedPoolRequests.push(selectedValues)
 			if (releaseSelectedPoolRequest !== undefined) await new Promise<void>(resolve => (releaseSelectedPoolRequest = resolve))
-			currentConfiguration = { ...currentConfiguration, selectedPortfolios: selectedValues.map(address => ({ address, universeId: '0' })) }
+			currentConfiguration = { ...currentConfiguration, selectedSecurityPools: selectedValues.map(address => ({ address, universeId: '0' })) }
 			return new window.Response(JSON.stringify(currentConfiguration), { headers: { 'content-type': 'application/json' } })
 		}
 		if (url.pathname === '/api/network-connectivity') {
@@ -815,7 +815,7 @@ describe('liquidator dashboard refresh behavior', () => {
 			expect(control?.hasAttribute('disabled')).toBe(true)
 		}
 		const signerInput = page.window.document.querySelector('#signer-form input[name="privateKey"]')
-		const poolInput = page.window.document.querySelector('#portfolio-selection-form input[name="address"]')
+		const poolInput = page.window.document.querySelector('#security-pool-selection-form input[name="address"]')
 		const universeInput = page.window.document.querySelector('#universe-rows input')
 		if (!(signerInput instanceof page.window.HTMLInputElement) || !(poolInput instanceof page.window.HTMLInputElement) || !(universeInput instanceof page.window.HTMLInputElement)) throw new Error('Expected mutation controls')
 		expect(signerInput.disabled).toBe(true)
@@ -831,7 +831,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(page.window.document.getElementById('clear-signer-button')?.hasAttribute('disabled')).toBe(false)
 		expect(signerInput.disabled).toBe(false)
 		await page.openMonitoredPools()
-		const recoveredPoolInput = page.window.document.querySelector('#portfolio-selection-form input[name="address"]')
+		const recoveredPoolInput = page.window.document.querySelector('#security-pool-selection-form input[name="address"]')
 		const recoveredUniverseInput = page.window.document.querySelector('#universe-rows input')
 		if (!(recoveredPoolInput instanceof page.window.HTMLInputElement) || !(recoveredUniverseInput instanceof page.window.HTMLInputElement)) throw new Error('Expected recovered mutation controls')
 		expect(recoveredPoolInput.closest('fieldset')?.hasAttribute('disabled')).toBe(false)
@@ -846,7 +846,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(unconfigured.window.document.getElementById('network-fields')?.hasAttribute('disabled')).toBe(false)
 		for (const id of ['market-configuration-fields', 'strategy-fields']) expect(unconfigured.window.document.getElementById(id)?.hasAttribute('disabled')).toBe(true)
 		const signerInput = unconfigured.window.document.querySelector('#signer-form input[name="privateKey"]')
-		const poolInput = unconfigured.window.document.querySelector('#portfolio-selection-form input[name="address"]')
+		const poolInput = unconfigured.window.document.querySelector('#security-pool-selection-form input[name="address"]')
 		const universeInput = unconfigured.window.document.querySelector('#universe-rows input')
 		if (!(signerInput instanceof unconfigured.window.HTMLInputElement) || !(poolInput instanceof unconfigured.window.HTMLInputElement) || !(universeInput instanceof unconfigured.window.HTMLInputElement)) throw new Error('Expected chain-specific settings controls')
 		expect(signerInput.disabled).toBe(true)
@@ -1044,9 +1044,9 @@ describe('liquidator dashboard refresh behavior', () => {
 
 		const poolPage = await dashboard(mainnetConfiguration(), state())
 		poolPage.suspendNextSelectedPoolRequest()
-		const remove = poolPage.window.document.querySelector('#portfolio-selections button')
-		const fields = poolPage.window.document.querySelector('#portfolio-selection-form fieldset')
-		if (!(remove instanceof poolPage.window.HTMLButtonElement) || !(fields instanceof poolPage.window.HTMLFieldSetElement)) throw new Error('Expected portfolio controls')
+		const remove = poolPage.window.document.querySelector('#security-pool-selections button')
+		const fields = poolPage.window.document.querySelector('#security-pool-selection-form fieldset')
+		if (!(remove instanceof poolPage.window.HTMLButtonElement) || !(fields instanceof poolPage.window.HTMLFieldSetElement)) throw new Error('Expected security pool controls')
 		remove.click()
 		await Bun.sleep(1)
 		expect(fields.disabled).toBe(true)
@@ -1094,10 +1094,10 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(page.window.document.getElementById('resume-dialog')?.hasAttribute('open')).toBe(false)
 	})
 
-	test('preserves portfolio input focus and edits across polling', async () => {
+	test('preserves security pool input focus and edits across polling', async () => {
 		const page = await dashboard(mainnetConfiguration())
-		const input = page.window.document.querySelector('#portfolio-selection-form input[name="address"]')
-		if (!(input instanceof page.window.HTMLInputElement)) throw new Error('Expected portfolio address input')
+		const input = page.window.document.querySelector('#security-pool-selection-form input[name="address"]')
+		if (!(input instanceof page.window.HTMLInputElement)) throw new Error('Expected security pool address input')
 		input.value = '0x1234'
 		input.focus()
 		await page.refresh()
@@ -1300,7 +1300,7 @@ describe('liquidator go-live settings', () => {
 		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
 		await Bun.sleep(20)
 		expect(page.window.document.querySelector('.operator-confirm-dialog')).toBeNull()
-		expect(page.window.document.getElementById('strategy-status')?.textContent).toContain('Portfolio principal limit exceeds total portfolio principal limit')
+		expect(page.window.document.getElementById('strategy-status')?.textContent).toContain('Security pool principal limit exceeds total security pool principal limit')
 	})
 
 	test('strategy review includes units for ETH, REP, and bps changes', async () => {
@@ -1330,7 +1330,7 @@ describe('liquidator go-live settings', () => {
 		expect(review?.textContent).not.toContain('decimal places')
 	})
 
-	test('saves the reviewed portfolio limits in the executor policy', async () => {
+	test('saves the reviewed security pool limits in the executor policy', async () => {
 		const page = await dashboard(mainnetConfiguration(), state())
 		const form = page.window.document.getElementById('strategy-form')
 		if (!(form instanceof page.window.HTMLFormElement)) throw new Error('Missing strategy form')
@@ -1345,7 +1345,7 @@ describe('liquidator go-live settings', () => {
 		form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
 		await page.confirmOperatorAction()
 		for (let attempt = 0; attempt < 100 && page.strategyRequests.length === 0; attempt++) await Bun.sleep(10)
-		expect(page.strategyRequests).toEqual([expect.objectContaining({ portfolioPolicy: expect.objectContaining({ allowFundedTakeovers: true, maximumPrincipalRep: '5', maximumTotalPrincipalRep: '10', maximumCommitmentEth: '2', maximumOwnFundingRep: '3' }) })])
+		expect(page.strategyRequests).toEqual([expect.objectContaining({ securityPoolPolicy: expect.objectContaining({ allowFundedTakeovers: true, maximumPrincipalRep: '5', maximumTotalPrincipalRep: '10', maximumCommitmentEth: '2', maximumOwnFundingRep: '3' }) })])
 	})
 
 	test('reviews and saves the takeover income horizon in seconds', async () => {
@@ -1365,12 +1365,12 @@ describe('liquidator go-live settings', () => {
 		expect(review?.textContent).toContain('0 seconds→86400 seconds')
 		await page.confirmOperatorAction()
 		for (let attempt = 0; attempt < 100 && page.strategyRequests.length === 0; attempt++) await Bun.sleep(10)
-		expect(page.strategyRequests).toEqual([expect.objectContaining({ portfolioPolicy: expect.objectContaining({ takeoverIncomeHorizonSeconds: 86_400 }) })])
+		expect(page.strategyRequests).toEqual([expect.objectContaining({ securityPoolPolicy: expect.objectContaining({ takeoverIncomeHorizonSeconds: 86_400 }) })])
 	})
 
 	test('keeps saved policy settings that the policy form does not edit', async () => {
 		const saved = mainnetConfiguration()
-		saved.portfolioPolicy = { ...saved.portfolioPolicy, takeoverIncomeHorizonSeconds: 86_400 }
+		saved.securityPoolPolicy = { ...saved.securityPoolPolicy, takeoverIncomeHorizonSeconds: 86_400 }
 		const page = await dashboard(saved, state())
 		const form = page.window.document.getElementById('strategy-form')
 		const input = form?.querySelector('[name="minimumNetRewardEth"]')
@@ -1386,7 +1386,7 @@ describe('liquidator go-live settings', () => {
 		expect(review?.textContent).not.toContain('Enabled')
 		await page.confirmOperatorAction()
 		for (let attempt = 0; attempt < 100 && page.strategyRequests.length === 0; attempt++) await Bun.sleep(10)
-		expect(page.strategyRequests).toEqual([expect.objectContaining({ portfolioPolicy: expect.objectContaining({ minimumNetRewardEth: '0.123', takeoverIncomeHorizonSeconds: 86_400 }) })])
+		expect(page.strategyRequests).toEqual([expect.objectContaining({ securityPoolPolicy: expect.objectContaining({ minimumNetRewardEth: '0.123', takeoverIncomeHorizonSeconds: 86_400 }) })])
 	})
 
 	test('rejects an amount with more than 18 decimal places before opening strategy review', async () => {
@@ -1476,7 +1476,7 @@ describe('liquidator go-live settings', () => {
 			'true:Canonical contracts=Verified at block 120',
 			'true:Delivery=Public mempool',
 			'true~:Approved universes=1 approved',
-			'true~:Selected portfolios=1 selected',
+			'true~:Selected security pools=1 selected',
 			'false~:Market evidence=No market sources configured · optional',
 		])
 		const toggle = page.window.document.getElementById('execution-enabled')
@@ -1507,7 +1507,7 @@ describe('liquidator go-live settings', () => {
 			'false:Canonical contracts=Missing Security pool factory at block 121',
 			'false:Delivery=Private · 0 relays',
 			'true~:Approved universes=1 approved',
-			'true~:Selected portfolios=1 selected',
+			'true~:Selected security pools=1 selected',
 			'false~:Market evidence=No market sources configured · optional',
 		])
 		expect(toggle.disabled).toBe(true)
@@ -1828,7 +1828,7 @@ describe('liquidator dashboard operator safeguards', () => {
 		await page.refresh()
 		expect(page.configurationRequestCount()).toBe(loads)
 		// The scan loop added a supported pool on its own: the snapshot's revision changes and the page follows.
-		page.setConfiguration({ ...mainnetConfiguration(), selectedPortfolios: [], strategy: { walletReserveRep: '77' } })
+		page.setConfiguration({ ...mainnetConfiguration(), selectedSecurityPools: [], strategy: { walletReserveRep: '77' } })
 		page.setSnapshot({ ...state(), configurationRevision: 'revision-b' })
 		await page.refresh()
 		expect(page.configurationRequestCount()).toBe(loads + 1)
@@ -1839,7 +1839,7 @@ describe('liquidator dashboard operator safeguards', () => {
 
 	test('resume preflight names the saved automatic actions instead of unsaved form edits', async () => {
 		const saved = mainnetConfiguration()
-		saved.portfolioPolicy = { ...saved.portfolioPolicy, allowFundedTakeovers: true, maximumPrincipalRep: '1000', maximumTotalPrincipalRep: '1000', maximumCommitmentEth: '100' }
+		saved.securityPoolPolicy = { ...saved.securityPoolPolicy, allowFundedTakeovers: true, maximumPrincipalRep: '1000', maximumTotalPrincipalRep: '1000', maximumCommitmentEth: '100' }
 		const page = await dashboard(saved, state(undefined, [], { execute: true, paused: true }))
 		for (const name of ['allowFundedTakeovers']) {
 			const toggle = control(page, `#strategy-form input[name="${name}"]`, page.window.HTMLInputElement)
@@ -2046,22 +2046,22 @@ describe('liquidator dashboard operator safeguards', () => {
 		expect(page.window.document.getElementById('global-error')?.textContent).toContain('State polling failed')
 	})
 
-	test('labels portfolio selection, recovery refresh, and activity filters in operator terms', async () => {
+	test('labels security pool selection, recovery refresh, and activity filters in operator terms', async () => {
 		const saved = mainnetConfiguration()
 		const page = await dashboard(saved, state())
-		expect(page.window.document.querySelector('#portfolio-selection-form')?.textContent).toContain('Universe ID')
+		expect(page.window.document.querySelector('#security-pool-selection-form')?.textContent).toContain('Universe ID')
 		expect(page.window.document.getElementById('recheck-recovery')?.textContent).toBe('Refresh')
 		expect(Array.from(page.window.document.querySelectorAll('#activity-filter option'), option => option.getAttribute('value'))).toEqual(['all', 'failed', 'pending', 'confirmed', 'dry-run', 'info'])
-		expect(Array.from(page.window.document.querySelectorAll('#metrics dt'), term => term.textContent).slice(0, 2)).toEqual(['Managed portfolios', 'Selected portfolios'])
+		expect(Array.from(page.window.document.querySelectorAll('#metrics dt'), term => term.textContent).slice(0, 2)).toEqual(['Managed security pools', 'Selected security pools'])
 	})
 })
 
-test('adds exact portfolio/universe scopes and preserves entered values after a failed save', async () => {
+test('adds exact security pool/universe scopes and preserves entered values after a failed save', async () => {
 	const page = await dashboard(mainnetConfiguration(), state())
-	const form = page.window.document.querySelector('#portfolio-selection-form')
+	const form = page.window.document.querySelector('#security-pool-selection-form')
 	const address = page.window.document.querySelector('input[name="address"]')
 	const universeId = page.window.document.querySelector('input[name="universeId"]')
-	if (!(form instanceof page.window.HTMLFormElement) || !(address instanceof page.window.HTMLInputElement) || !(universeId instanceof page.window.HTMLInputElement)) throw new Error('Portfolio form missing')
+	if (!(form instanceof page.window.HTMLFormElement) || !(address instanceof page.window.HTMLInputElement) || !(universeId instanceof page.window.HTMLInputElement)) throw new Error('Security pool form missing')
 	address.value = '0x2222222222222222222222222222222222222222'
 	universeId.value = '7'
 	page.setSelectionFailure(true)
@@ -2069,12 +2069,12 @@ test('adds exact portfolio/universe scopes and preserves entered values after a 
 	await page.waitUntilComplete()
 	expect(address.value).toBe('0x2222222222222222222222222222222222222222')
 	expect(universeId.value).toBe('7')
-	expect(page.window.document.querySelector('#portfolio-selection-status')?.textContent).toContain('Could not save')
+	expect(page.window.document.querySelector('#security-pool-selection-status')?.textContent).toContain('Could not save')
 	page.setSelectionFailure(false)
 	form.dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
 	await page.waitUntilComplete()
 	expect(page.supportedPoolRequests.at(-1)).toEqual({ address: address.value, universeId: '7', supported: true, chainId: 1 })
-	expect(page.window.document.querySelector('#portfolio-selections')?.textContent).toContain('universe 7')
+	expect(page.window.document.querySelector('#security-pool-selections')?.textContent).toContain('universe 7')
 })
 
 test('shows independent wallet REP balances for distinct tokens without summing them', async () => {

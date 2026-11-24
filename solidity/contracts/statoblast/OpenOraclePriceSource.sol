@@ -5,7 +5,7 @@ import { IERC20 } from '../IERC20.sol';
 import { IWeth9 } from './interfaces/IWeth9.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { ReputationToken } from '../ReputationToken.sol';
-import { ISecurityPool } from './interfaces/ISecurityPool.sol';
+import { IQuestionLedger } from './interfaces/IQuestionLedger.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { OraclePriceMath } from './OraclePriceMath.sol';
 import { SharedPoolPriceFeed } from './SharedPoolPriceFeed.sol';
@@ -13,10 +13,10 @@ import { OpenOracleReportDelegate } from './OpenOracleReportDelegate.sol';
 import { DelegateCall } from './DelegateCall.sol';
 import './OpenOraclePriceCoordinatorTypes.sol';
 
-/// @notice Report lifecycle and price-source routing, using the portfolio universe shared feed.
+/// @notice Report lifecycle and price-source routing, using the security pool universe shared feed.
 abstract contract OpenOraclePriceSource {
 	ReputationToken public immutable reputationToken;
-	ISecurityPool public securityPool;
+	IQuestionLedger public questionLedger;
 	OpenOracle public immutable openOracle;
 	IWeth9 public immutable weth;
 	uint256 public immutable initialReportPriorityFeeAttoEthPerGas;
@@ -33,7 +33,7 @@ abstract contract OpenOraclePriceSource {
 	address internal immutable coordinatorFactory;
 	OpenOracleReportDelegate public immutable reportDelegate;
 
-	event SecurityPoolSet(ISecurityPool indexed securityPool);
+	event QuestionLedgerSet(IQuestionLedger indexed questionLedger);
 	SharedPoolPriceFeed public sharedPriceFeed;
 	event SharedPriceFeedSet(address indexed priceFeed);
 
@@ -75,7 +75,7 @@ abstract contract OpenOraclePriceSource {
 	}
 
 	function setSharedPriceFeed(SharedPoolPriceFeed feed) external {
-		require(msg.sender == coordinatorFactory && address(securityPool) == address(0) && address(sharedPriceFeed) == address(0) && address(feed) != address(0), 'Shared feed setup invalid');
+		require(msg.sender == coordinatorFactory && address(questionLedger) == address(0) && address(sharedPriceFeed) == address(0) && address(feed) != address(0), 'Shared feed setup invalid');
 		require(address(feed.reputationToken()) == address(reputationToken) && address(feed.openOracle()) == address(openOracle) && address(feed.weth()) == address(weth), 'Shared feed assets mismatch');
 		sharedPriceFeed = feed;
 		emit SharedPriceFeedSet(address(feed));
@@ -105,11 +105,11 @@ abstract contract OpenOraclePriceSource {
 		return sharedPriceFeed.pendingReportMaxSettlementBaseFeeAttoEthPerGas();
 	}
 
-	function setSecurityPool(ISecurityPool _securityPool) public {
-		require(address(securityPool) == address(0x0), 'Security pool already set');
+	function setQuestionLedger(IQuestionLedger _questionLedger) public {
+		require(address(questionLedger) == address(0x0), 'Question ledger already set');
 		require(msg.sender == coordinatorFactory, 'Only coordinator factory');
-		securityPool = _securityPool;
-		emit SecurityPoolSet(securityPool);
+		questionLedger = _questionLedger;
+		emit QuestionLedgerSet(questionLedger);
 	}
 
 	function getRequestPriceCostAttoEth() public view returns (uint256) {
@@ -153,7 +153,7 @@ abstract contract OpenOraclePriceSource {
 		return sharedPriceFeed.isPriceValid();
 	}
 
-	/// @notice Canonical expiry for the portfolio universe shared price.
+	/// @notice Canonical expiry for the security pool universe shared price.
 	function priceValidUntil() public view returns (uint256) {
 		return sharedPriceFeed.priceValidUntil();
 	}

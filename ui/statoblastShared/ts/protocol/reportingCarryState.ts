@@ -1,12 +1,12 @@
 import { bigintToSafeNumber, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
+import { statoblast_EscalationGame_EscalationGame, statoblast_QuestionLedger_QuestionLedger } from '../contractArtifact.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { ReadClient, ReportingOutcomeKey, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { AuthenticatedForkClaim, CarriedDepositProof, ImportedEscalationDeposit } from '../types/contracts.js'
 import { readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { requireAddressValue, requireArrayValue, requireBigintValue, requireIntegerLikeValue, requireObjectValue, requireTupleValue } from './decoders.js'
 import { getReportingOutcomeValue } from '@zoltar/ui-core-shared/lib/contractEnums.js'
-import { executeForkAuctionAction, readSecurityPoolUniverseId } from './securityPoolActions.js'
+import { executeForkAuctionAction, readQuestionLedgerUniverseId } from './questionLedgerActions.js'
 import { buildCarryMerkleMountainRangeProof, createSparseNullifier, hashCarryLeaf } from './reportingCarryProof.js'
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { claimStateChanged } from './claimActionState.js'
@@ -178,22 +178,22 @@ async function loadRecursiveProofConsumedCarriedDepositIndexes(client: Pick<Read
 
 /** The escalation game of the parent pool a fork continuation inherits from, or `undefined` when there is none. */
 async function readParentEscalationGameAddress(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address) {
-	const securityPoolAddress = await client.readContract({
+	const questionLedgerAddress = await client.readContract({
 		abi: statoblast_EscalationGame_EscalationGame.abi,
 		address: escalationGameAddress,
-		functionName: 'securityPool',
+		functionName: 'questionLedger',
 		args: [],
 	})
-	const parentSecurityPoolAddress = await client.readContract({
-		abi: statoblast_SecurityPool_SecurityPool.abi,
-		address: securityPoolAddress,
+	const parentQuestionLedgerAddress = await client.readContract({
+		abi: statoblast_QuestionLedger_QuestionLedger.abi,
+		address: questionLedgerAddress,
 		functionName: 'parent',
 		args: [],
 	})
-	if (parentSecurityPoolAddress === zeroAddress) return undefined
+	if (parentQuestionLedgerAddress === zeroAddress) return undefined
 	const parentEscalationGameAddress = await client.readContract({
-		abi: statoblast_SecurityPool_SecurityPool.abi,
-		address: parentSecurityPoolAddress,
+		abi: statoblast_QuestionLedger_QuestionLedger.abi,
+		address: parentQuestionLedgerAddress,
 		functionName: 'escalationGame',
 		args: [],
 	})
@@ -259,10 +259,10 @@ function authenticateCarrySnapshot(parentHistoricalLeaves: readonly HistoricalCa
 	return { orderedEntries, orderedLeaves, leafHashes, snapshotRoot }
 }
 
-async function loadParentSnapshot(client: Pick<ReadClient, 'readContract'>, childEscalationGameAddress: Address, parentSecurityPoolAddress: Address, outcome: ReportingOutcomeKey, depositor: Address): Promise<ImportedEscalationDeposit[]> {
+async function loadParentSnapshot(client: Pick<ReadClient, 'readContract'>, childEscalationGameAddress: Address, parentQuestionLedgerAddress: Address, outcome: ReportingOutcomeKey, depositor: Address): Promise<ImportedEscalationDeposit[]> {
 	const parentEscalationGameAddress = await client.readContract({
-		abi: statoblast_SecurityPool_SecurityPool.abi,
-		address: parentSecurityPoolAddress,
+		abi: statoblast_QuestionLedger_QuestionLedger.abi,
+		address: parentQuestionLedgerAddress,
 		functionName: 'escalationGame',
 		args: [],
 	})
@@ -298,30 +298,30 @@ async function loadParentSnapshot(client: Pick<ReadClient, 'readContract'>, chil
 			}),
 	)
 }
-export async function loadForkCarriedEscalationDepositsFromParentSnapshot(client: Parameters<typeof withClaimReadContext>[0], childEscalationGameAddress: Address, parentSecurityPoolAddress: Address, outcome: ReportingOutcomeKey, depositor: Address): Promise<ImportedEscalationDeposit[]> {
-	return await withClaimReadContext(client, context => loadParentSnapshot(context, childEscalationGameAddress, parentSecurityPoolAddress, outcome, depositor))
+export async function loadForkCarriedEscalationDepositsFromParentSnapshot(client: Parameters<typeof withClaimReadContext>[0], childEscalationGameAddress: Address, parentQuestionLedgerAddress: Address, outcome: ReportingOutcomeKey, depositor: Address): Promise<ImportedEscalationDeposit[]> {
+	return await withClaimReadContext(client, context => loadParentSnapshot(context, childEscalationGameAddress, parentQuestionLedgerAddress, outcome, depositor))
 }
 
-export async function buildForkCarriedEscalationProofs(client: ReadClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, parentDepositIndexes: readonly bigint[]): Promise<CarriedDepositProof[]> {
+export async function buildForkCarriedEscalationProofs(client: ReadClient, questionLedgerAddress: Address, outcome: ReportingOutcomeKey, parentDepositIndexes: readonly bigint[]): Promise<CarriedDepositProof[]> {
 	return await withClaimReadContext(client, async (context, blockNumber) => {
-		const [parentSecurityPoolAddress, childEscalationGameAddress] = await readRequiredMulticall(
+		const [parentQuestionLedgerAddress, childEscalationGameAddress] = await readRequiredMulticall(
 			client,
 			[
-				{ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'parent', args: [] },
-				{ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'escalationGame', args: [] },
+				{ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'parent', args: [] },
+				{ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'escalationGame', args: [] },
 			],
 			blockNumber,
 		)
-		return await buildCarriedProofs(context, parentSecurityPoolAddress, childEscalationGameAddress, outcome, parentDepositIndexes)
+		return await buildCarriedProofs(context, parentQuestionLedgerAddress, childEscalationGameAddress, outcome, parentDepositIndexes)
 	})
 }
 
-async function buildCarriedProofs(client: Pick<ReadClient, 'readContract'>, parentSecurityPoolAddress: Address, childEscalationGameAddress: Address, outcome: ReportingOutcomeKey, parentDepositIndexes: readonly bigint[]): Promise<CarriedDepositProof[]> {
-	if (parentSecurityPoolAddress === zeroAddress) throw new Error('Parent deposits can only be settled in a child pool.')
+async function buildCarriedProofs(client: Pick<ReadClient, 'readContract'>, parentQuestionLedgerAddress: Address, childEscalationGameAddress: Address, outcome: ReportingOutcomeKey, parentDepositIndexes: readonly bigint[]): Promise<CarriedDepositProof[]> {
+	if (parentQuestionLedgerAddress === zeroAddress) throw new Error('Parent deposits can only be settled in a child question.')
 	if (childEscalationGameAddress === zeroAddress) throw new Error('The child escalation game is unavailable for settling parent deposits.')
 	const parentEscalationGameAddress = await client.readContract({
-		address: parentSecurityPoolAddress,
-		abi: statoblast_SecurityPool_SecurityPool.abi,
+		address: parentQuestionLedgerAddress,
+		abi: statoblast_QuestionLedger_QuestionLedger.abi,
 		functionName: 'escalationGame',
 		args: [],
 	})
@@ -371,16 +371,16 @@ async function buildCarriedProofs(client: Pick<ReadClient, 'readContract'>, pare
 	return proofs
 }
 
-export async function withdrawForkedEscalationDeposits(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, proofs: readonly CarriedDepositProof[]) {
-	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
+export async function withdrawForkedEscalationDeposits(client: WriteClient, questionLedgerAddress: Address, outcome: ReportingOutcomeKey, proofs: readonly CarriedDepositProof[]) {
+	const universeId = await readQuestionLedgerUniverseId(client, questionLedgerAddress)
 	return await executeForkAuctionAction(
 		'settleForkedEscalation',
-		securityPoolAddress,
+		questionLedgerAddress,
 		universeId,
 		async () =>
 			await writeContractAndWait(client, () => ({
-				address: securityPoolAddress,
-				abi: statoblast_SecurityPool_SecurityPool.abi,
+				address: questionLedgerAddress,
+				abi: statoblast_QuestionLedger_QuestionLedger.abi,
 				functionName: 'withdrawForkedEscalationDeposits',
 				args: [
 					getReportingOutcomeValue(outcome),

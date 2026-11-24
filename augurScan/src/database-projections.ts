@@ -92,7 +92,7 @@ const storeProjection = async (transaction: SQL, chainId: number, item: StoredLo
 	if (projection.type === 'poolSnapshot') {
 		await transaction`
 			INSERT INTO pool_snapshots (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, reason, settlement_collateral_atto_eth, share_token_supply_atto_shares, last_settlement_portfolio_time, canonical)
-			VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.reason}, ${projection.settlementCollateralAttoEth}, ${projection.shareTokenSupplyAttoShares}, ${projection.lastSettlementPortfolioTime}, true)
+			VALUES (${position[0]}, ${position[1]}, ${position[2]}, ${position[3]}, ${position[4]}, ${projection.poolAddress}, ${projection.reason}, ${projection.settlementCollateralAttoEth}, ${projection.shareTokenSupplyAttoShares}, ${projection.lastSettlementSecurityPoolTime}, true)
 			ON CONFLICT (chain_id, block_hash, tx_hash, log_index, pool_address) DO UPDATE SET canonical = true
 		`
 		return

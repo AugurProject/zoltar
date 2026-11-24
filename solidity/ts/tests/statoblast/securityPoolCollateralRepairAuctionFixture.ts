@@ -1,0 +1,75 @@
+import { type Address, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import {
+	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
+	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact,
+	statoblast_SecurityPoolAuction_SecurityPoolAuction as auctionArtifact,
+	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact,
+	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
+	ReputationToken_ReputationToken as tokenArtifact,
+} from '../../types/contractArtifact'
+import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
+import { DAY } from '../../testSupport/simulator/utils/constants'
+import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { openOracleSettle, wrapWeth } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { addRepToMigrationBalance, getRepTokenAddress, splitMigrationRep } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { approveToken } from '../../testSupport/simulator/utils/utilities'
+import { unit, type useSecurityPoolFixture } from './securityPoolFixture'
+
+export async function prepareSecurityPoolCollateralRepairAuction(fixture: ReturnType<typeof useSecurityPoolFixture>, mintAttoEth = 10n * unit) {
+	const owner = fixture.owner()
+	const other = fixture.other()
+	const mock = fixture.base.mockWindow
+	const source = fixture.base.genesisUniverse
+	await fixture.prepare()
+	await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: getRepTokenAddress(source), functionName: 'transfer', args: [other.account.address, 1_000n * unit] }))
+	await fixture.deposit(1_000n * unit, other)
+	await fixture.authorize(200n * unit, other)
+	await fixture.mint(mintAttoEth)
+	const { forks, forkTime, child } = await fixture.forkAndStartYesBranch()
+	const auction = await owner.readContract({ abi: forkArtifact.abi, address: forks, functionName: 'auctions', args: [child] })
+	if (auction === zeroAddress) throw new Error('Collateral repair auction was not created')
+	const engine = await owner.readContract({ abi: auctionArtifact.abi, address: auction, functionName: 'engine' })
+	const capital = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'capitalLedger', args: [child] })
+	const index = await owner.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'commitmentIndex' })
+	await writeContractAndWait(owner, () => owner.writeContract({ abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory, functionName: 'prepareSecurityPoolPriceFeed', args: [fixture.poolFor(fixture.base.questionId).questionLedger, child] }))
+	const feed = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'priceFeed', args: [child] })
+	await addRepToMigrationBalance(owner, source, 200n * unit)
+	await splitMigrationRep(owner, source, 200n * unit, [1])
+	const token = getRepTokenAddress(child)
+	const weth = await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'weth' })
+	await wrapWeth(owner, 100n * unit)
+	await approveToken(owner, weth, feed)
+	await approveToken(owner, token, feed)
+	const deadline = forkTime + 63n * DAY
+	const report = async (price = unit, budget?: bigint) => {
+		const minimum = await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [price] })
+		const funding = budget ?? (minimum > 10n * unit ? minimum : 10n * unit)
+		const bounty = await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'getRequestPriceCostAttoEth' })
+		await writeContractAndWait(owner, () => owner.writeContract({ abi: feedArtifact.abi, address: feed, functionName: 'requestSecurityPoolPrice', args: [price, funding, bounty], value: bounty }))
+		const id = await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'pendingReportId' })
+		await mock.advanceTime(481n)
+		await openOracleSettle(owner, id)
+		if ((await owner.readContract({ abi: feedArtifact.abi, address: feed, functionName: 'reportOutcome', args: [id] })) !== 1n) throw new Error('Collateral repair auction price report was not accepted')
+		return id
+	}
+	const open = () => writeContractAndWait(owner, () => owner.writeContract({ abi: auctionArtifact.abi, address: auction, functionName: 'open' }))
+	const bid = async (bidder: WriteClient, lots: bigint, price = 6n * unit, health = 12_000n) => {
+		const id = (await bidder.readContract({ abi: engineArtifact.abi, address: engine, functionName: 'bidCount' })) + 1n
+		await approveToken(bidder, weth, auction)
+		const hash = await writeContractAndWait(bidder, () => bidder.writeContract({ abi: auctionArtifact.abi, address: auction, functionName: 'submitBid', args: [lots, price, health] }))
+		const [, vault] = await bidder.readContract({ abi: engineArtifact.abi, address: engine, functionName: 'bids', args: [id] })
+		return { id, vault, hash }
+	}
+	const closingQuote = async (price = unit) => {
+		await mock.setTime(deadline - 1_000n)
+		await report(price)
+	}
+	const finalize = async (at = deadline) => {
+		await mock.setTime(at)
+		return writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'finalizeBranch', args: [child] }))
+	}
+	const balance = (recipient: Address, asset = token) => owner.readContract({ abi: tokenArtifact.abi, address: asset, functionName: 'balanceOf', args: [recipient] })
+	return { owner, other, mock, source, child, forks, auction, engine, capital, index, feed, token, deadline, report, open, bid, closingQuote, finalize, balance }
+}

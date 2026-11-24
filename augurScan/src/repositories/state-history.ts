@@ -116,7 +116,7 @@ export const poolStateHistory = async (sql: SQL, address: string, query: StateHi
 			WHERE pool.chain_id = ${chainId} AND pool.pool_address = ${address} AND pool.canonical AND log.canonical
 				AND log.block_number BETWEEN ${fromBlock} AND ${toBlock}
 				AND log.event_name IN (
-					'PriceRequested', 'PriceReportDeferred', 'PriceReportRejected', 'PriceReported', 'PendingReportRecovered', 'SecurityPoolSet',
+					'PriceRequested', 'PriceReportDeferred', 'PriceReportRejected', 'PriceReported', 'PendingReportRecovered', 'QuestionLedgerSet',
 					'SharedPriceFeedSet', 'ReportFundingAssigned', 'ReportOperationAttempted', 'ExposureCheckpoint'
 				)
 			ORDER BY log.block_number DESC, log.transaction_index DESC, log.log_index DESC, log.tx_hash DESC, log.block_hash DESC

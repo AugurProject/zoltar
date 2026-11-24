@@ -1,7 +1,7 @@
 import { readOperationClient, runReadOperation } from '@zoltar/ui-core-shared/lib/readOperation.js'
 import { useEnvironmentRevision } from '@zoltar/ui-core-shared/app/hooks/useEnvironmentRevision.js'
 import { useRouteSignal } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
-import { securityPoolAddressFromRoute } from '../features/liveTradingControllerHelpers.js'
+import { questionLedgerAddressFromRoute } from '../features/liveTradingControllerHelpers.js'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import type { PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import type { LiveTradingControllerServices } from '../features/live/liveTradingTypes.js'
@@ -56,7 +56,7 @@ function tradingPageTitle(route: ResolvedTradingRoute) {
 	if (route === 'market') label = appCopy.markets
 	if (route.startsWith('market/')) label = appCopy.market
 	if (route.startsWith('liquidity/')) label = appCopy.liquidity
-	if (route.startsWith('security-pool/')) label = appCopy.securityPool
+	if (route.startsWith('security-pool/')) label = appCopy.questionLedger
 	return label
 }
 
@@ -152,7 +152,7 @@ export function App({
 		setLiveWalletSummary(current => walletSummaryAfterRouteChange(current, previous, next, selectedUniverseId))
 		return true
 	}).value
-	const addressedPool = securityPoolAddressFromRoute(route)
+	const addressedPool = questionLedgerAddressFromRoute(route)
 	const universeSelection = resolveUniverseSelection({ ...urlState, addressedPool: addressedPool?.toLowerCase() }, liveUniverses)
 	const selectedUniverseId = universeSelection.requestedUniverseId
 	const confirmedUniverseId = universeSelection.confirmedUniverseId
@@ -166,7 +166,7 @@ export function App({
 	const liveDeploymentUsable = liveDeploymentStatus === 'loading' || liveDeploymentStatus === 'verified'
 	const showUniverseField = routeOwnsLiveWallet(route) && liveDeploymentUsable
 	// The header names the universe the routes follow, like the other applications; it is chosen on the universe route and shown once discovery confirms it.
-	// An address with no security pool says nothing about the universe, so the header keeps the last universe discovery confirmed.
+	// An address with no question ledger says nothing about the universe, so the header keeps the last universe discovery confirmed.
 	const lastConfirmedUniverseId = useRef<string>()
 	if (confirmedUniverseId !== undefined) lastConfirmedUniverseId.current = confirmedUniverseId
 	const headerUniverseId = confirmedUniverseId ?? (discoveryState === 'not-found' ? lastConfirmedUniverseId.current : undefined)

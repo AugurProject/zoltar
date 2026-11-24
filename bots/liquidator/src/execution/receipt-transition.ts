@@ -1,4 +1,4 @@
-import { applyPortfolioFundingEffect } from '#state/portfolio-instructions'
+import { applySecurityPoolFundingEffect } from '#state/security-pool-instructions'
 import { decodeEventLog, decodeFunctionData, keccak256, parseTransaction, toHex, type TransactionReceipt } from '@zoltar/bot-shared/ethereum'
 import { securityPoolCapitalLedgerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { sameAddress } from '@zoltar/core-shared/evm/address'
@@ -34,17 +34,17 @@ export async function resolveFinalizedReceipt(path: string, state: RuntimeState,
 	if (!state.pendingTransactions.some(pending => pending.hash.toLowerCase() === intent.hash.toLowerCase())) return
 	const outcome = validateReceiptExpectation(receipt, intent.receiptExpectation, intent)
 	const mayRescreen = state.lastExpiredTakeoverBlock === undefined || receipt.blockNumber >= state.lastExpiredTakeoverBlock + TAKEOVER_REVERT_BUDGET_BLOCKS
-	const expiredReason = mayRescreen && outcome.type === 'terminal-failure' && intent.kind === 'liquidation' && intent.portfolioInstruction === undefined && intent.reportOperations === undefined ? await explainTakeoverExpiry?.().catch(() => undefined) : undefined
+	const expiredReason = mayRescreen && outcome.type === 'terminal-failure' && intent.kind === 'liquidation' && intent.securityPoolInstruction === undefined && intent.reportOperations === undefined ? await explainTakeoverExpiry?.().catch(() => undefined) : undefined
 	const next = { ...state, activities: [...state.activities], pendingTransactions: [...state.pendingTransactions] }
 	if (expiredReason !== undefined) next.lastExpiredTakeoverBlock = receipt.blockNumber
 	resolveRecoveredIntentJournal(next, intent.hash, receipt.status)
 	// Funding deposited for a takeover stays journaled, and so returnable, until a takeover actually acquires the target.
-	const curedWithoutTakeover = outcome.type === 'terminal-success' && intent.portfolioFunding?.operation === 'consume' && !takeoverAcquiredTarget(intent, receipt)
-	if (outcome.type === 'terminal-success' && intent.portfolioFunding !== undefined && !curedWithoutTakeover) next.portfolioFunding = applyPortfolioFundingEffect(state.portfolioFunding ?? {}, intent.portfolioFunding)
-	if (intent.portfolioInstruction !== undefined) {
+	const curedWithoutTakeover = outcome.type === 'terminal-success' && intent.securityPoolFunding?.operation === 'consume' && !takeoverAcquiredTarget(intent, receipt)
+	if (outcome.type === 'terminal-success' && intent.securityPoolFunding !== undefined && !curedWithoutTakeover) next.securityPoolFunding = applySecurityPoolFundingEffect(state.securityPoolFunding ?? {}, intent.securityPoolFunding)
+	if (intent.securityPoolInstruction !== undefined) {
 		// Consume reverted instructions too: retrying a deliberate financial action
 		// requires a new operator instruction, rather than repeatedly spending gas.
-		next.completedPortfolioInstructions = { ...state.completedPortfolioInstructions, [intent.portfolioInstruction.id]: intent.portfolioInstruction.fingerprint }
+		next.completedSecurityPoolInstructions = { ...state.completedSecurityPoolInstructions, [intent.securityPoolInstruction.id]: intent.securityPoolInstruction.fingerprint }
 	}
 	const operations = outcome.type === 'terminal-success' ? reportOperationOutcomes(intent, receipt) : undefined
 	let result: { message: string; status: 'confirmed' | 'failed' | 'info' } = operations ?? { message: `${intent.label}: completed`, status: 'confirmed' }
@@ -57,8 +57,8 @@ export async function resolveFinalizedReceipt(path: string, state: RuntimeState,
 		...result,
 	})
 	await saveDurableState(path, next)
-	state.portfolioFunding = next.portfolioFunding
-	state.completedPortfolioInstructions = next.completedPortfolioInstructions
+	state.securityPoolFunding = next.securityPoolFunding
+	state.completedSecurityPoolInstructions = next.completedSecurityPoolInstructions
 	state.lastExpiredTakeoverBlock = next.lastExpiredTakeoverBlock
 	state.activities = next.activities
 	state.pendingTransactions = next.pendingTransactions

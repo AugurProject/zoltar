@@ -13,7 +13,7 @@ export const PREFLIGHT_BALANCE = 1n << 128n // Leave ample uint256 headroom for 
  * The native capital gas regression bounds a cold checkpoint below 3M gas.
  * This is included in signing and the spend ceiling, not an extra payment.
  */
-export const PORTFOLIO_CHECKPOINT_GAS_RESERVE = 3_000_000n
+export const SECURITY_POOL_CHECKPOINT_GAS_RESERVE = 3_000_000n
 
 /** Clients may use different estimation heuristics: require a successful quorum, then use its largest estimate. */
 export async function estimateExecutionGas(readers: readonly Reader[], request: Parameters<Reader['client']['estimateGas']>[0], requirement: RpcQuorumRequirement, validateCanonicalBlock: () => Promise<void>, revalidateRevert?: () => Promise<unknown>) {
@@ -30,5 +30,5 @@ export async function estimateExecutionGas(readers: readonly Reader[], request: 
 	)
 	await validateCanonicalBlock()
 	const available = availableSettledValues(await Promise.allSettled(observations), { requirement, endpointOf: observation => observation.endpoint })
-	return available.reduce((maximum, observation) => (observation.value > maximum ? observation.value : maximum), 0n) + PORTFOLIO_CHECKPOINT_GAS_RESERVE
+	return available.reduce((maximum, observation) => (observation.value > maximum ? observation.value : maximum), 0n) + SECURITY_POOL_CHECKPOINT_GAS_RESERVE
 }

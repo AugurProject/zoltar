@@ -2,9 +2,9 @@ import { simulateSettlement } from '../../protocol/settlementSimulation.js'
 import { encodeAbiParameters, getAddress, keccak256 } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as coordinatorArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as coordinatorArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
 } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 /// <reference types='bun-types' />
 
@@ -67,7 +67,7 @@ describe(`${FORKED_TRADING_SIMULATION_SCENARIO} simulation scenario`, () => {
 		for (const balance of [balances.yes, balances.no, balances.invalid, balances.lp]) expect(balance).toBeGreaterThan(0n)
 		const context = await loadForkMigrationContext(client, market)
 		expect(context.kind).toBe('categorical')
-		expect(context.question).toMatchObject({ title: 'Will this resolve? (portfolio question 1)', marketType: 'binary', outcomeLabels: ['Yes', 'No'], outcomesComplete: true })
+		expect(context.question).toMatchObject({ title: 'Will this resolve? (security pool question 1)', marketType: 'binary', outcomeLabels: ['Yes', 'No'], outcomesComplete: true })
 		expect(context.question.createdAt).toBeGreaterThan(0n)
 		expect(context.question.endTime).toBeGreaterThan(0n)
 		expect(context.availableTargets.map(target => target.label)).toEqual(['Invalid', 'Yes', 'No'])
@@ -142,8 +142,8 @@ describe(`${FORKED_TRADING_SIMULATION_SCENARIO} simulation scenario`, () => {
 				// The scenario activates only the Yes branch. Migrating into a child universe without a pool
 				// requires its fork branch to be active (#1565), so start and activate the No branch first.
 				const factory = await client.readContract({ abi: poolArtifact.abi, address: market.pool, functionName: 'securityPoolFactory' })
-				const portfolio = await client.readContract({ abi: factoryArtifact.abi, address: getAddress(factory), functionName: 'getSecurityPoolPortfolio', args: [market.pool] })
-				const coordinator = getAddress(await client.readContract({ abi: portfolioArtifact.abi, address: getAddress(portfolio), functionName: 'forkController' }))
+				const portfolio = await client.readContract({ abi: factoryArtifact.abi, address: getAddress(factory), functionName: 'securityPoolOf', args: [market.pool] })
+				const coordinator = getAddress(await client.readContract({ abi: securityPoolArtifact.abi, address: getAddress(portfolio), functionName: 'forkController' }))
 				const noUniverse = BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [market.universeId, 2n]))) & ((1n << 248n) - 1n)
 				for (const [functionName, args] of [
 					['startBranch', [market.universeId, 2n]],

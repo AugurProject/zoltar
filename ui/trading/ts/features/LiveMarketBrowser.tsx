@@ -19,7 +19,7 @@ import { marketsCopy } from '../copy/markets.js'
 import { arrangeMarkets, type MarketFilter, type MarketListOptions, type MarketSort } from '../lib/marketListing.js'
 import { DEFAULT_MARKET_LIST_OPTIONS, readMarketListParams, replaceRouteHashSearch, writeMarketListParams } from '../lib/routeState.js'
 import { getTradingRouteHref, tradingListKindFor, type TradingListKind, type TradingLookupRoute } from '../lib/routing.js'
-import { findSecurityPoolGuideHref } from '../lib/docsLinks.js'
+import { findQuestionLedgerGuideHref } from '../lib/docsLinks.js'
 import type { LiveMarket } from '../protocol/live.js'
 import type { MarketRegistry } from './live/useMarketRegistry.js'
 import { MarketCard } from './MarketCard.js'
@@ -37,9 +37,9 @@ const SORT_OPTIONS: readonly { value: MarketSort; label: string }[] = [
 	{ value: 'recent', label: marketsCopy.defaultOrder },
 ]
 
-const poolListPresentation = { empty: liveCopy.noFavoritePools, emptyDetail: liveCopy.noFavoritePoolsDetail, guide: { href: findSecurityPoolGuideHref, label: liveCopy.findSecurityPoolGuide } }
+const poolListPresentation = { empty: liveCopy.noFavoritePools, emptyDetail: liveCopy.noFavoritePoolsDetail, guide: { href: findQuestionLedgerGuideHref, label: liveCopy.findQuestionLedgerGuide } }
 
-/** A pasted security pool address opens that pool in the lookup route's workflow, whether or not it is among the downloaded markets. */
+/** A pasted question ledger address opens that pool in the lookup route's workflow, whether or not it is among the downloaded markets. */
 function searchedPoolAddress(query: string) {
 	const parsed = tryParseAddressInput(query.trim())
 	return parsed === undefined || parsed === zeroAddress ? undefined : parsed
@@ -71,7 +71,7 @@ function MarketSearchRow({ options, arrangeable, lookupRoute, onChange }: { opti
 					<FormInput type='search' aria-label={lookupRoute === 'create-market' ? marketsCopy.searchPoolsLabel : marketsCopy.searchLabel} placeholder={marketsCopy.searchPlaceholder} value={options.query} error={addressError} liveError onInput={event => onChange({ ...options, query: event.currentTarget.value })} />
 				</div>
 				<button className='primary' type='submit'>
-					{liveCopy.openSecurityPool}
+					{liveCopy.openQuestionLedger}
 				</button>
 			</form>
 			{arrangeable ? (
@@ -251,7 +251,7 @@ export function LiveMarketBrowser({
 		setStoredListOptions(next)
 		if (persistsListOptions) replaceRouteHashSearch(search => writeMarketListParams(search, next), `#/${lookupRoute}`)
 	}
-	const discoveryNotice = discoveryState === 'error' ? <RetryableNotice message={liveCopy.securityPoolDiscoveryFailed(discoveryError)} retryLabel={liveCopy.retryDiscovery} disabled={workflowLocked} onRetry={retry} /> : undefined
+	const discoveryNotice = discoveryState === 'error' ? <RetryableNotice message={liveCopy.questionLedgerDiscoveryFailed(discoveryError)} retryLabel={liveCopy.retryDiscovery} disabled={workflowLocked} onRetry={retry} /> : undefined
 	if (registry !== undefined) {
 		// Without a universe the registry is idle: it waits while discovery names one and shows nothing once discovery fails.
 		const loading = registry.status === 'loading' || (registry.status === 'idle' && discoveryState === 'loading')

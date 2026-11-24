@@ -110,7 +110,7 @@ const seedV1TimelineEvidence = async (database: ScannerDatabase, migrationChainI
 		const hash = blockHash(`v1-migration-block-${item.block}`)
 		const txHash = blockHash(`v1-migration-transaction-${item.block}`)
 		const argumentsValue = {
-			securityPool: discoveredAddress.toLowerCase(),
+			questionLedger: discoveredAddress.toLowerCase(),
 			shareToken: wethAddress.toLowerCase(),
 			universeId: '10',
 			pair: item.pair,
@@ -396,11 +396,11 @@ postgresTest('renames v5 auction storage without losing canonical or orphan hist
 			await database.sql`INSERT INTO blocks (chain_id, number, hash, parent_hash, timestamp, canonical) VALUES (${migrationChainId}, ${number}, ${hash}, ${blockHash('auction-rename-parent')}, now(), ${canonical})`
 			await database.sql`INSERT INTO transactions (chain_id, hash, block_hash, block_number, transaction_index, from_address, to_address, value, input, status, receipt, canonical) VALUES (${migrationChainId}, ${txHash}, ${hash}, ${number}, 0, ${address.toLowerCase()}, ${discoveredAddress.toLowerCase()}, 0, '0x', 'success', '{}'::jsonb, ${canonical})`
 			// These are historical v5 decoded arguments; schema migration must not rewrite their provenance.
-			const deploymentArgs = JSON.stringify({ securityPool: address, truthAuction: discoveredAddress })
+			const deploymentArgs = JSON.stringify({ questionLedger: address, truthAuction: discoveredAddress })
 			const auctionArgs = JSON.stringify({ raisedAttoEth: 7n.toString(), soldAttoRep: 11n.toString() })
 			await database.sql`
 				INSERT INTO logs (chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, topics, data, event_name, arguments, decode_status, summary, canonical)
-				VALUES (${migrationChainId}, ${txHash}, ${hash}, ${number}, 0, 0, ${address.toLowerCase()}, '[]'::jsonb, '0x', 'DeploySecurityPool', (${deploymentArgs}::text)::jsonb, 'decoded', 'DeploySecurityPool', ${canonical}),
+				VALUES (${migrationChainId}, ${txHash}, ${hash}, ${number}, 0, 0, ${address.toLowerCase()}, '[]'::jsonb, '0x', 'DeployQuestionLedger', (${deploymentArgs}::text)::jsonb, 'decoded', 'DeployQuestionLedger', ${canonical}),
 				(${migrationChainId}, ${txHash}, ${hash}, ${number}, 0, 1, ${discoveredAddress.toLowerCase()}, '[]'::jsonb, '0x', 'AuctionFinalized', (${auctionArgs}::text)::jsonb, 'decoded', 'AuctionFinalized', ${canonical})
 			`
 			await database.sql`
@@ -443,7 +443,7 @@ postgresTest('replaces v6 accounting storage and keeps the logs a projection reb
 		const txHash = blockHash('accounting-storage-transaction')
 		await database.sql`INSERT INTO blocks (chain_id, number, hash, parent_hash, timestamp, canonical) VALUES (${migrationChainId}, 1, ${hash}, ${blockHash('accounting-storage-parent')}, now(), true)`
 		await database.sql`INSERT INTO transactions (chain_id, hash, block_hash, block_number, transaction_index, from_address, to_address, value, input, status, receipt, canonical) VALUES (${migrationChainId}, ${txHash}, ${hash}, 1, 0, ${address.toLowerCase()}, ${discoveredAddress.toLowerCase()}, 0, '0x', 'success', '{}'::jsonb, true)`
-		const checkpoint = JSON.stringify({ reason: 2, settlementCollateralAttoEth: 7n.toString(), shareTokenSupplyAttoShares: 9n.toString(), lastSettlementPortfolioTime: '100' })
+		const checkpoint = JSON.stringify({ reason: 2, settlementCollateralAttoEth: 7n.toString(), shareTokenSupplyAttoShares: 9n.toString(), lastSettlementSecurityPoolTime: '100' })
 		await database.sql`
 			INSERT INTO logs (chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, topics, data, event_name, arguments, decode_status, summary, canonical)
 			VALUES (${migrationChainId}, ${txHash}, ${hash}, 1, 0, 0, ${address.toLowerCase()}, '[]'::jsonb, '0x', 'QuestionAccountingCheckpoint', (${checkpoint}::text)::jsonb, 'decoded', 'QuestionAccountingCheckpoint', true)
@@ -479,7 +479,7 @@ postgresTest('replaces v6 accounting storage and keeps the logs a projection reb
 		// A second startup must accept the migrated layout without replaying DDL.
 		await initializeSchema(database.sql)
 		expect(await database.sql`SELECT settlement_collateral_atto_eth::text, share_token_supply_atto_shares::text FROM pool_snapshots WHERE chain_id = ${migrationChainId}`).toEqual([{ settlement_collateral_atto_eth: '7', share_token_supply_atto_shares: '9' }])
-		// A v9 timestamp stores portfolio-clock seconds, including orphaned evidence.
+		// A v9 timestamp stores security-pool-clock seconds, including orphaned evidence.
 		await database.sql`UPDATE pool_snapshots SET canonical = false WHERE chain_id = ${migrationChainId}`
 		await database.sql.unsafe('ALTER TABLE public.pool_snapshots DROP CONSTRAINT pool_snapshots_reason_check, DROP CONSTRAINT pool_snapshots_portfolio_time_check, ALTER COLUMN last_settlement_portfolio_time TYPE timestamp with time zone USING to_timestamp(last_settlement_portfolio_time::double precision)')
 		await database.sql`UPDATE augurscan_schema SET schema_version = '9' WHERE singleton`
@@ -514,7 +514,7 @@ postgresTest('removes v7 seed prices and constant pool columns while keeping acc
 		await database.sql`INSERT INTO blocks (chain_id, number, hash, parent_hash, timestamp, canonical) VALUES (${migrationChainId}, 1, ${hash}, ${blockHash('stale-values-parent')}, now(), true)`
 		await database.sql`INSERT INTO transactions (chain_id, hash, block_hash, block_number, transaction_index, from_address, to_address, value, input, status, receipt, canonical) VALUES (${migrationChainId}, ${txHash}, ${hash}, 1, 0, ${address.toLowerCase()}, ${coordinator}, 0, '0x', 'success', '{}'::jsonb, true)`
 		for (const [logIndex, eventName] of [
-			[0, 'DeploySecurityPool'],
+			[0, 'DeployQuestionLedger'],
 			[1, 'RepEthPriceSet'],
 			[2, 'PriceReported'],
 		] as const) {

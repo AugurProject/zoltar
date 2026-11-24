@@ -226,10 +226,10 @@ export const addressActivityFrom = (transactions: readonly StoredTransaction[], 
 		const transactionLogs = logs.filter(log => log.transactionHash === transaction.hash)
 		const referencedAddresses = [...traceParticipants(transaction.receipt).map(address => getAddress(address)), ...(transaction.decoded.referencedAddresses ?? []), ...transactionLogs.flatMap(log => log.decoded.referencedAddresses ?? [])]
 		const pools = new Set<Address>()
-		if (transaction.to !== null && contracts.get(transaction.to.toLowerCase())?.kind === 'securityPool') pools.add(transaction.to)
-		for (const log of transactionLogs) if (contracts.get(log.address.toLowerCase())?.kind === 'securityPool') pools.add(log.address)
+		if (transaction.to !== null && contracts.get(transaction.to.toLowerCase())?.kind === 'questionLedger') pools.add(transaction.to)
+		for (const log of transactionLogs) if (contracts.get(log.address.toLowerCase())?.kind === 'questionLedger') pools.add(log.address)
 		for (const candidate of referencedAddresses) {
-			if (contracts.get(candidate.toLowerCase())?.kind === 'securityPool') pools.add(candidate)
+			if (contracts.get(candidate.toLowerCase())?.kind === 'questionLedger') pools.add(candidate)
 		}
 		const participants = new Map<string, { address: Address; role: 'sender' | 'referenced' }>()
 		participants.set(transaction.from.toLowerCase(), { address: transaction.from, role: 'sender' })

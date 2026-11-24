@@ -80,7 +80,7 @@ for (const viewport of qaViewports) {
 		async () => {
 			await withBrowserPage(`${origin}/address/${owner}?demo=1&chainId=1`, viewport, async ({ evaluate, waitFor }) => {
 				await waitFor(`document.querySelector('.address-profile-panel .rich-position') !== null`)
-				const involvement = await evaluate(`[...document.querySelectorAll('.address-profile-panel')].find(section => section.querySelector('h3')?.textContent === 'Security pools and capital positions')?.textContent`)
+				const involvement = await evaluate(`[...document.querySelectorAll('.address-profile-panel')].find(section => section.querySelector('h3')?.textContent === 'Question ledgers and capital positions')?.textContent`)
 				expect(involvement).toContain('Capital position · universe 0')
 				expect(involvement).toContain('12,350 REP principal · 50 USDC commitment · health 86.66%')
 				expect(await evaluate(`[...document.querySelectorAll('.state-stat')].find(card => card.querySelector('span')?.textContent === 'Capital positions')?.querySelector('strong')?.textContent`)).toBe('1')

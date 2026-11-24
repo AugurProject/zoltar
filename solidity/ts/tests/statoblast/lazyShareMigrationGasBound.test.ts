@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
 import { createE2E, INVALID, NO, WEEK, YES } from '../auditE2EHarness'
-import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 
 /** EIP-7825 per-transaction gas limit. */
 const TRANSACTION_GAS_CAP = 16_777_216n
@@ -13,7 +13,7 @@ const REFUSAL_GAS_BUDGET = 3_000_000n
 const BRANCH_NOT_ACTIVE = 'Fork branch not active: run prepareBranch, startBranch and finalizeBranch first'
 
 describe('Statoblast: lazy share migration into an unprepared fork branch', () => {
-	const fixture = useSecurityPoolPortfolioFixture()
+	const fixture = useSecurityPoolFixture()
 	const e2e = createE2E(fixture)
 
 	const callFailure = async (from: Address, to: Address, data: Hex, gas: bigint) => {
@@ -74,7 +74,7 @@ describe('Statoblast: lazy share migration into an unprepared fork branch', () =
 		await fixture.mint(10n * unit, questionId)
 		await fixture.mint(10n * unit, fixture.secondQuestionId)
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
-		const pool = fixture.poolFor(questionId).securityPool
+		const pool = fixture.poolFor(questionId).questionLedger
 		for (const [index, outcome] of [YES, NO, INVALID].entries()) await e2e.deposit(e2e.account(2 + index), pool, outcome, 2n * unit)
 		await assertMigrationGasBound(questionId)
 	})

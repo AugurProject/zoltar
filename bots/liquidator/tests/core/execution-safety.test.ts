@@ -51,8 +51,8 @@ describe('liquidator execution safety', () => {
 		const observations = await Promise.allSettled([Promise.resolve({ endpoint: 'rpc-a', walletRepByToken: [['0xrep', 10n]] }), Promise.resolve({ endpoint: 'rpc-b', walletRepByToken: [['0xrep', 10n]] }), Promise.resolve({ endpoint: 'rpc-c', walletRepByToken: [['0xrep', 11n]] })])
 		expect(() => availableExecutionObservations('liquidation execution snapshot', observations, observation => ({ endpoint: observation.endpoint, value: observation.walletRepByToken }), 2)).toThrow('RPC disagreement')
 	})
-	test('fails closed when execution readers observe matching portfolio data at different blocks', async () => {
-		const scan = { block: { hash: `0x${'11'.repeat(32)}`, number: 1n, timestamp: 1n }, portfolios: [], universes: [], walletRepByToken: new Map<string, bigint>() }
+	test('fails closed when execution readers observe matching security pool data at different blocks', async () => {
+		const scan = { block: { hash: `0x${'11'.repeat(32)}`, number: 1n, timestamp: 1n }, securityPools: [], universes: [], walletRepByToken: new Map<string, bigint>() }
 		const observations = await Promise.allSettled([Promise.resolve({ endpoint: 'rpc-a', scan }), Promise.resolve({ endpoint: 'rpc-b', scan: { ...scan, block: { ...scan.block, hash: `0x${'22'.repeat(32)}`, number: 2n } } })])
 		expect(() => availableExecutionObservations('liquidation execution snapshot', observations, liquidationExecutionSnapshotObservation, 2)).toThrow('RPC disagreement')
 	})

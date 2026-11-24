@@ -4,14 +4,14 @@ import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
 	ReputationToken_ReputationToken as tokenArtifact,
 	Zoltar_Zoltar as zoltarArtifact,
-	statoblast_SecurityPool_SecurityPool as poolArtifact,
-	statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact,
-	statoblast_SecurityPoolPortfolioForkCoordinator_SecurityPoolPortfolioForkCoordinator as forkArtifact,
-	statoblast_SecurityPoolForker_SecurityPoolForker as forkerArtifact,
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact,
+	statoblast_QuestionForker_QuestionForker as forkerArtifact,
 	statoblast_SecurityPoolReporterLedger_SecurityPoolReporterLedger as reporterArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
-	test_statoblast_CounterfeitPortfolioQuestionSource_CounterfeitPortfolioQuestionSource as counterfeitArtifact,
+	test_statoblast_CounterfeitSecurityPoolQuestionSource_CounterfeitSecurityPoolQuestionSource as counterfeitArtifact,
 } from '../../types/contractArtifact'
 import { deployContract } from '../../testSupport/deployContract'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
@@ -20,10 +20,10 @@ import { approveToken, getChildUniverseId, getERC20Balance } from '../../testSup
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { forkUniverse, getRepTokenAddress, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 
-describe('Statoblast: shared portfolio fork entry', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+describe('Statoblast: shared security pool fork entry', () => {
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	test.each([
 		{ own: false, surplus: 1n },
 		{ own: false, surplus: 1_000n * unit },
@@ -34,11 +34,11 @@ describe('Statoblast: shared portfolio fork entry', () => {
 		await fixture.mint()
 		const owner = fixture.owner()
 		const universe = fixture.base.genesisUniverse
-		const pool = fixture.poolFor(fixture.base.questionId).securityPool
-		const portfolio = { abi: portfolioArtifact.abi, address: fixture.portfolio }
-		const controller = await owner.readContract({ ...portfolio, functionName: 'forkController' })
-		const reporters = await owner.readContract({ ...portfolio, functionName: 'reporterLedger', args: [universe] })
-		const forker = getInfraContractAddresses().securityPoolForker
+		const pool = fixture.poolFor(fixture.base.questionId).questionLedger
+		const securityPool = { abi: securityPoolArtifact.abi, address: fixture.securityPool }
+		const controller = await owner.readContract({ ...securityPool, functionName: 'forkController' })
+		const reporters = await owner.readContract({ ...securityPool, functionName: 'reporterLedger', args: [universe] })
+		const forker = getInfraContractAddresses().questionForker
 		const token = getRepTokenAddress(universe)
 		for (const recipient of [fixture.capitalLedger, reporters, forker, controller]) {
 			await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'transfer', args: [recipient, surplus] }))
@@ -59,7 +59,7 @@ describe('Statoblast: shared portfolio fork entry', () => {
 			await approveToken(owner, token, getZoltarAddress())
 			await forkUniverse(owner, universe, getQuestionId(question, fixture.base.outcomes))
 		}
-		for (let retry = 0; retry < 2; retry++) forkModeHashes.push(await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: forkerArtifact.abi, address: forker, functionName: 'initiateSecurityPoolFork', args: [pool] })))
+		for (let retry = 0; retry < 2; retry++) forkModeHashes.push(await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: forkerArtifact.abi, address: forker, functionName: 'initiateQuestionLedgerFork', args: [pool] })))
 		expect(await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'systemState' })).toBe(1n)
 		// Entering fork mode is a pool state change like any other: indexers follow the pool's own event.
 		// An own-question fork enters fork mode inside the fork transaction. Repeated calls change nothing.
@@ -85,15 +85,15 @@ describe('Statoblast: shared portfolio fork entry', () => {
 		const child = getChildUniverseId(universe, 1)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'startBranch', args: [universe, 1n] }))
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: controller, functionName: 'finalizeBranch', args: [child] }))
-		for (let outcome = 0; outcome < 3; outcome++) await writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: forker, functionName: 'materializePortfolioQuestion', args: [pool, child] }))
-		const childPool = await owner.readContract({ ...portfolio, functionName: 'getPool', args: [fixture.base.questionId, child] })
+		for (let outcome = 0; outcome < 3; outcome++) await writeContractAndWait(owner, () => owner.writeContract({ abi: forkerArtifact.abi, address: forker, functionName: 'materializeSecurityPoolQuestion', args: [pool, child] }))
+		const childPool = await owner.readContract({ ...securityPool, functionName: 'getQuestionLedger', args: [fixture.base.questionId, child] })
 		const childGame = await owner.readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'escalationGame' })
 		expect(await owner.readContract({ abi: reporterArtifact.abi, address: reporters, functionName: 'balanceOfGame', args: [childGame] })).toBe(reporterBacking)
-		const childCapital = await owner.readContract({ ...portfolio, functionName: 'capitalLedger', args: [child] })
+		const childCapital = await owner.readContract({ ...securityPool, functionName: 'capitalLedger', args: [child] })
 		expect((await owner.readContract({ abi: capitalArtifact.abi, address: childCapital, functionName: 'ownerCollateral', args: [owner.account.address] }))[0]).toBe(1_000n * unit)
 		for (const address of [fixture.capitalLedger, reporters, forker, controller]) expect(await getERC20Balance(owner, token, address)).toBe(surplus)
 		const factory = { abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory }
-		expect(await owner.readContract({ ...factory, functionName: 'getSecurityPoolPortfolio', args: [childPool] })).toBe(fixture.portfolio)
+		expect(await owner.readContract({ ...factory, functionName: 'securityPoolOf', args: [childPool] })).toBe(fixture.securityPool)
 		expect(await owner.readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'parent' })).toBe(pool)
 		expect(await owner.readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'shareToken' })).toBe(fixture.poolFor(fixture.base.questionId).shareToken)
 	})
@@ -101,12 +101,12 @@ describe('Statoblast: shared portfolio fork entry', () => {
 		const owner = fixture.owner()
 		const outsider = fixture.other()
 		const universe = fixture.base.genesisUniverse
-		const secondPortfolio = await fixture.deployPortfolio()
-		await fixture.register(fixture.base.questionId, secondPortfolio)
-		const first = { abi: portfolioArtifact.abi, address: fixture.portfolio }
-		const second = { abi: portfolioArtifact.abi, address: secondPortfolio }
-		const firstPool = fixture.poolFor(fixture.base.questionId).securityPool
-		const secondPool = await owner.readContract({ ...second, functionName: 'getPool', args: [fixture.base.questionId, universe] })
+		const secondSecurityPool = await fixture.deploySecurityPool()
+		await fixture.register(fixture.base.questionId, secondSecurityPool)
+		const first = { abi: securityPoolArtifact.abi, address: fixture.securityPool }
+		const second = { abi: securityPoolArtifact.abi, address: secondSecurityPool }
+		const firstPool = fixture.poolFor(fixture.base.questionId).questionLedger
+		const secondPool = await owner.readContract({ ...second, functionName: 'getQuestionLedger', args: [fixture.base.questionId, universe] })
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
 		const token = getRepTokenAddress(universe)
 		for (const pool of [firstPool, secondPool]) {
@@ -128,28 +128,28 @@ describe('Statoblast: shared portfolio fork entry', () => {
 		await expect(outsider.writeContract({ ...first, functionName: 'registerReporterGame', args: [secondGame] })).rejects.toThrow('Unknown question callback')
 		await expect(outsider.writeContract({ ...first, functionName: 'forkWithReporterQuestion', args: [secondPool, outsider.account.address] })).rejects.toThrow('Unknown question callback')
 		await expect(outsider.writeContract({ ...first, functionName: 'forkWithReporterQuestion', args: [firstPool, outsider.account.address] })).rejects.toThrow('Only canonical native forker')
-		await expect(outsider.writeContract({ ...target, functionName: 'registerGame', args: [fixture.base.questionId, secondGame] })).rejects.toThrow('Only portfolio')
+		await expect(outsider.writeContract({ ...target, functionName: 'registerGame', args: [fixture.base.questionId, secondGame] })).rejects.toThrow('Only security pool')
 		await expect(outsider.writeContract({ ...target, functionName: 'transferFromGame', args: [firstGame, outsider.account.address, unit] })).rejects.toThrow('Only canonical reporter game')
 		expect(await snapshot()).toEqual(before)
 		const factory = { abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory }
-		const firstOrigin = await owner.readContract({ ...factory, functionName: 'getSecurityPoolOriginId', args: [firstPool] })
-		const secondOrigin = await owner.readContract({ ...factory, functionName: 'getSecurityPoolOriginId', args: [secondPool] })
+		const firstOrigin = await owner.readContract({ ...factory, functionName: 'getQuestionLedgerOriginId', args: [firstPool] })
+		const secondOrigin = await owner.readContract({ ...factory, functionName: 'getQuestionLedgerOriginId', args: [secondPool] })
 		expect(firstOrigin).not.toBe(secondOrigin)
 		expect(firstGame).not.toBe(secondGame)
 	})
-	test.each(['preparePortfolioQuestion', 'materializePortfolioQuestion', 'createChildUniverse'] as const)('%s rejects a counterfeit source that returns a real pool as its new child', async functionName => {
+	test.each(['prepareSecurityPoolQuestion', 'materializeSecurityPoolQuestion', 'createChildUniverse'] as const)('%s rejects a counterfeit source that returns a real pool as its new child', async functionName => {
 		await fixture.prepare()
 		const owner = fixture.owner()
 		const attacker = fixture.other()
 		const universe = fixture.base.genesisUniverse
-		const victim = { abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).securityPool }
+		const victim = { abi: poolArtifact.abi, address: fixture.poolFor(fixture.base.questionId).questionLedger }
 		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
 		const question = { ...fixture.base.questionData, title: 'Unrelated fork for counterfeit source' }
 		await createQuestion(owner, question, fixture.base.outcomes)
 		await approveToken(owner, getRepTokenAddress(universe), getZoltarAddress())
 		await forkUniverse(owner, universe, getQuestionId(question, fixture.base.outcomes))
 		const counterfeit = await deployContract(attacker, encodeDeployData({ abi: counterfeitArtifact.abi, bytecode: `0x${counterfeitArtifact.evm.bytecode.object}`, args: [universe, victim.address] }))
-		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().securityPoolForker }
+		const forker = { abi: forkerArtifact.abi, address: getInfraContractAddresses().questionForker }
 		expect(await owner.readContract({ ...victim, functionName: 'systemState' })).toBe(0n)
 		const attack = () => (functionName === 'createChildUniverse' ? attacker.writeContract({ ...forker, functionName, args: [counterfeit, 1n] }) : attacker.writeContract({ ...forker, functionName, args: [counterfeit, universe] }))
 		// The counterfeit names its own universe as the target, which no longer descends from it, for the two

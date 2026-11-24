@@ -255,7 +255,7 @@ void describe('trading helpers', () => {
 				totalPoolHeldAttoRep: 0n,
 				mintingCapacityAttoEth: 10n,
 			}),
-		).toBe('Select a pool before minting.')
+		).toBe('Select a question before minting.')
 
 		expect(
 			getTradingMintGuardMessage({
@@ -387,7 +387,7 @@ void describe('trading helpers', () => {
 				totalPoolHeldAttoRep: 20n * 10n ** 18n,
 				mintingCapacityAttoEth: 2n * 10n ** 18n,
 			}),
-		).toBe('Minting is unavailable because this pool has complete-set shares but no collateral.')
+		).toBe('Minting is unavailable because this question has complete-set shares but no collateral.')
 	})
 
 	void test('allows minting when the pool has capacity and the wallet has enough ETH', () => {
@@ -648,10 +648,10 @@ void describe('trading helpers', () => {
 			{ outcomeIndex: 2n, canonicalPool: undefined, migratedAttoShares: noMigratedShares },
 		]
 
-		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: freshForkTargets, targetOutcomeIndexesInput: '0, 1, 2' })).toBe('This selection includes a child universe without a security pool. Migrate into each such child universe separately.')
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: freshForkTargets, targetOutcomeIndexesInput: '0, 1, 2' })).toBe('This selection includes a child universe where this question is not registered yet. Migrate into each such child universe separately.')
 		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: freshForkTargets, targetOutcomeIndexesInput: '1' })).toBeUndefined()
-		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: undefined, targetOutcomeIndexesInput: '0, 1, 2' })).toBe('Loading child universe security pools…')
-		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: { unavailableReason: 'Child universe security pools unavailable. Refresh pool to retry.' }, targetOutcomeIndexesInput: '0, 1, 2' })).toBe('Child universe security pools unavailable. Refresh pool to retry.')
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: undefined, targetOutcomeIndexesInput: '0, 1, 2' })).toBe('Loading this question in child universes…')
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: { unavailableReason: 'This question is unavailable in child universes. Refresh to retry.' }, targetOutcomeIndexesInput: '0, 1, 2' })).toBe('This question is unavailable in child universes. Refresh to retry.')
 
 		const migratedYes = { ...noMigratedShares, yesAttoShares: shareBalances.yesAttoShares }
 		const migratedTargets: ShareMigrationTarget[] = [
@@ -677,7 +677,7 @@ void describe('trading helpers', () => {
 		expect(defaultTargets([target(0n, pool, migratedYes), target(1n, pool), target(2n, undefined)])).toBe('1')
 		expect(defaultTargets([target(0n, pool, migratedYes), target(1n, pool, migratedYes), target(2n, undefined)])).toBe('2')
 		expect(defaultTargets([target(0n, pool, migratedYes), target(1n, pool, migratedYes), target(2n, undefined)], 'no')).toBe('0, 1')
-		expect(defaultTargets({ unavailableReason: 'Child universe security pools unavailable.' })).toBe('0, 1, 2')
+		expect(defaultTargets({ unavailableReason: 'This question is unavailable in child universes.' })).toBe('0, 1, 2')
 		for (const shareMigrationTargets of [
 			[target(0n, pool), target(1n, undefined), target(2n, undefined)],
 			[target(0n, pool, migratedYes), target(1n, pool, migratedYes), target(2n, undefined)],
@@ -728,12 +728,12 @@ void describe('trading helpers', () => {
 
 		for (const shareMigrationTargets of [everyChildMigrated, noChildPools]) expect(getDefaultShareMigrationTargetOutcomeIndexes({ ...guardInput, shareMigrationTargets })).toBe('')
 		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: everyChildMigrated })).toBe('Your Yes shares are already migrated into every child universe.')
-		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: noChildPools })).toBe('No child universe has a security pool yet. Select one child universe; migrating into it creates its pool.')
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: noChildPools })).toBe('This question is not registered in any child universe yet. Select one child universe; migrating into it registers the question there.')
 		// The default for another outcome, or a cleared selection with reachable pooled children, still asks for a target.
 		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, selectedShareOutcome: 'no', shareMigrationTargets: everyChildMigrated })).toBe('Select at least one target child universe.')
 		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: withCanonicalPools(binaryForkUniverse) })).toBe('Select at least one target child universe.')
 		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, loadingTradingDetails: true, shareMigrationTargets: everyChildMigrated })).toBe('Select at least one target child universe.')
-		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: { unavailableReason: 'Child universe security pools unavailable.' } })).toBe('Select at least one target child universe.')
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, shareMigrationTargets: { unavailableReason: 'This question is unavailable in child universes.' } })).toBe('Select at least one target child universe.')
 	})
 
 	void test('checks local and network prerequisites before resolved-share redemption', () => {
@@ -751,7 +751,7 @@ void describe('trading helpers', () => {
 				hasSelectedPool: false,
 				isOnActiveAppChain: true,
 			}),
-		).toBe('Select a pool before redeeming shares.')
+		).toBe('Select a question before redeeming shares.')
 
 		expect(
 			getTradingRedeemSharesGuardMessage({
@@ -783,7 +783,7 @@ void describe('trading helpers', () => {
 		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'yes', shareBalances: { ...shareBalances, yesAttoShares: 0n } })).toBe('You hold no winning Yes shares to redeem.')
 		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'invalid', shareBalances: undefined })).toBe('Loading wallet share balances…')
 		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'no', shareBalances })).toBeUndefined()
-		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'none', shareBalances })).toBe('Wait for the selected pool to resolve before redeeming shares.')
+		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'none', shareBalances })).toBe('Wait for the selected question to resolve before redeeming shares.')
 	})
 })
 
@@ -796,7 +796,7 @@ const linearFeeMintCheckpoint = {
 	linearFee: { rateAttoEthPerSecond: 3n, endTime: 25n },
 }
 
-test('portfolio-native mint previews use the linear funded fee stream', () => {
+test('security-pool-native mint previews use the linear funded fee stream', () => {
 	expect(estimateMintCheckpoint(linearFeeMintCheckpoint)).toEqual({ estimatedRetentionFeeAttoEth: 45n, settlementCollateralAfterFeesAttoEth: 255n })
 })
 

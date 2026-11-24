@@ -25,11 +25,11 @@ test('formats auction collateral amounts, including nested clearing, with the co
 	])
 })
 
-test('timeline portfolio premiums use the portfolio collateral token, never native ETH', () => {
-	const premium = { entity_type: 'portfolio-services', summary_data: { universeId: '0', amountAttoEth: '14247' } }
+test('timeline security pool premiums use the security pool collateral token, never native ETH', () => {
+	const premium = { entity_type: 'security-pool-services', summary_data: { universeId: '0', amountAttoEth: '14247' } }
 	expect(timelineTransitionSummary({ ...premium, collateral: { symbol: 'USDC', decimals: 6 } }, 'ETH')).toBe('Universe Id: 0 · Amount: 0.014247 USDC')
 	expect(timelineTransitionSummary(premium, 'ETH')).toBe('Universe Id: 0 · Amount: 14,247 collateral units')
-	for (const entity_type of ['pool', 'portfolio-settlement', 'portfolio-auction']) {
+	for (const entity_type of ['pool', 'security-pool-settlement', 'security-pool-auction']) {
 		expect(timelineTransitionSummary({ entity_type, collateral: { symbol: 'USDC', decimals: 6 }, summary_data: { amountAttoEth: '1000000' } }, 'ETH')).toBe('Amount: 1 USDC')
 	}
 })
@@ -71,11 +71,11 @@ test('formats pool share supply and coordinator prices with collateral precision
 	])
 })
 
-test('formats auction windows as dates without treating portfolio clock values as timestamps', () => {
-	expect(semanticFields({ opensAt: '1750000000', closesAt: '1750000000', lastSettlementPortfolioTime: '1750000000' }, 'ETH')).toEqual([
+test('formats auction windows as dates without treating security pool clock values as timestamps', () => {
+	expect(semanticFields({ opensAt: '1750000000', closesAt: '1750000000', lastSettlementSecurityPoolTime: '1750000000' }, 'ETH')).toEqual([
 		['Opens At', '2025-06-15 15:06:40 UTC'],
 		['Closes At', '2025-06-15 15:06:40 UTC'],
-		['Last Settlement Portfolio Time', '1,750,000,000'],
+		['Last Settlement Security Pool Time', '1,750,000,000'],
 	])
 })
 
@@ -88,6 +88,6 @@ test('renders raw pool accounting columns without requiring an event payload', (
 	const summary = semanticSummary(record, 'ETH', { symbol: 'USDC', decimals: 6 })
 	expect(summary).toContain('Settlement collateral: 1.5 USDC')
 	expect(summary).toContain('Share token supply: 2 shares')
-	expect(summary).toContain('Last settlement portfolio time: 120')
+	expect(summary).toContain('Last settlement security pool time: 120')
 	expect(summary).not.toContain('99')
 })

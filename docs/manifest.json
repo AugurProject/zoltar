@@ -92,16 +92,16 @@
 			"keywords": ["factory", "deployment", "registration", "CREATE2"]
 		},
 		{
-			"path": "reference/contracts/securitypool.html",
-			"title": "SecurityPool",
+			"path": "reference/contracts/questionledger.html",
+			"title": "QuestionLedger",
 			"summary": "Question-ledger reads, complete-set purchases and redemptions, wallet reporting, and shared-fork entrypoints.",
 			"section": "reference",
 			"topic": "Contracts",
-			"keywords": ["portfolio", "question", "complete set", "reporting", "settlement"]
+			"keywords": ["securityPool", "question", "complete set", "reporting", "settlement"]
 		},
 		{
-			"path": "reference/contracts/securitypoolforker.html",
-			"title": "SecurityPoolForker",
+			"path": "reference/contracts/questionforker.html",
+			"title": "QuestionForker",
 			"summary": "Read surface, the child-game trust boundary, question fork activation, reporter continuations, and owner-selected capital branches.",
 			"section": "reference",
 			"topic": "Contracts",
@@ -118,7 +118,7 @@
 		{
 			"path": "reference/contracts/openoraclepricecoordinator.html",
 			"title": "OpenOraclePriceCoordinator",
-			"summary": "Shared portfolio price adapter reads, report requests, recovery, and exposure checkpoints.",
+			"summary": "Shared security pool price adapter reads, report requests, recovery, and exposure checkpoints.",
 			"section": "reference",
 			"topic": "Contracts",
 			"keywords": ["OpenOracle", "price", "coordinator", "shared feed"]
@@ -209,7 +209,7 @@
 			"summary": "A market lifecycle from creation through local resolution or fork migration to redemption.",
 			"section": "explanation",
 			"topic": "Protocol",
-			"keywords": ["Statoblast", "markets", "security pools", "overview"]
+			"keywords": ["Statoblast", "markets", "security pools", "question ledgers", "overview"]
 		},
 		{
 			"path": "explanation/zoltar.html",
@@ -246,10 +246,10 @@
 		{
 			"path": "explanation/fees.html",
 			"title": "Open-interest fees",
-			"summary": "How healthy portfolio commitments earn fixed annual holding fees, how prepaid rewards vest, and when accrual stops.",
+			"summary": "How healthy security pool commitments earn fixed annual holding fees, how prepaid rewards vest, and when accrual stops.",
 			"section": "explanation",
 			"topic": "Economics",
-			"keywords": ["fees", "holding fees", "vesting", "capital", "portfolios"]
+			"keywords": ["fees", "holding fees", "vesting", "capital", "securityPools"]
 		},
 		{
 			"path": "explanation/collateral-repair-auctions.html",
@@ -278,7 +278,7 @@
 		{
 			"path": "reference/open-oracle.html",
 			"title": "OpenOracle integration reference",
-			"summary": "Funding, report sizing, settlement validation, recovery, parameters, and shared portfolio price coverage.",
+			"summary": "Funding, report sizing, settlement validation, recovery, parameters, and shared security pool price coverage.",
 			"section": "reference",
 			"topic": "Mechanisms",
 			"keywords": ["OpenOracle", "parameters", "funding", "callbacks", "estimators"]
@@ -293,16 +293,16 @@
 		},
 		{
 			"path": "tutorials/statoblast-first-pool.html",
-			"title": "Back a shared portfolio and mint shares",
-			"summary": "Add REP to a simulated portfolio and purchase complete sets for one question.",
+			"title": "Back a shared security pool and mint shares",
+			"summary": "Add REP to a simulated security pool and purchase complete sets for one question.",
 			"section": "tutorials",
 			"topic": "Statoblast",
-			"keywords": ["Statoblast", "portfolio", "REP", "complete sets", "screenshots"]
+			"keywords": ["Statoblast", "securityPool", "REP", "complete sets", "screenshots"]
 		},
 		{
 			"path": "tutorials/trading-first-market.html",
 			"title": "Your first Trading market",
-			"summary": "Create and seed the trading pool for a SecurityPool in the UI.",
+			"summary": "Create and seed the trading pool for a QuestionLedger in the UI.",
 			"section": "tutorials",
 			"topic": "Trading",
 			"keywords": ["Trading", "liquidity", "initialize", "pair", "screenshots"]

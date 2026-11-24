@@ -69,7 +69,7 @@ function canonicalClaimableAssetCount(snapshot: EcosystemSnapshot, retirement: D
 	count += (snapshot.forkedCarryWithdrawalPresence ?? snapshot.forkedCarryWithdrawals ?? []).length
 	if (BigInt(snapshot.wallet.openOracleEthCredit) > 1n) count += 1
 	if (retirement.policies.migrateExistingClaims) count += snapshot.universes.filter(universe => BigInt(universe.migrationBalance) > 0n).length
-	for (const capital of snapshot.portfolioCapital) {
+	for (const capital of snapshot.securityPoolCapital) {
 		if (BigInt(capital.feesAttoEth) + BigInt(capital.feesAttoRep) > 0n) count += 1
 		if (BigInt(capital.withdrawableAttoRep) > 0n) count += 1
 	}

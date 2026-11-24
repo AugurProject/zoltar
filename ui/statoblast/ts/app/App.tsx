@@ -1,8 +1,8 @@
-import type { SecurityPoolsView } from '@zoltar/ui-statoblast-shared/features/types.js'
-import { resolveRepPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
+import type { QuestionLedgersView } from '@zoltar/ui-statoblast-shared/features/types.js'
+import { resolveRepPrice } from '@zoltar/ui-statoblast-shared/features/question-ledgers/lib/uiPriceOracle.js'
 import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import { RepPriceRefreshContext } from '@zoltar/ui-statoblast-shared/features/security-pools/components/RepPriceStatusLabel.js'
+import { RepPriceRefreshContext } from '@zoltar/ui-statoblast-shared/features/question-ledgers/components/RepPriceStatusLabel.js'
 import { TransactionStepsModal } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
 import { UniverseNamesProvider } from '@zoltar/ui-core-shared/components/UniverseNames.js'
 import { UniverseSwitcher } from '@zoltar/ui-core-shared/components/UniverseSwitcher.js'
@@ -35,7 +35,7 @@ import { useOpenOracleRoute } from './hooks/useOpenOracleRoute.js'
 
 export function App() {
 	const urlState = useStatoblastUrlState()
-	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, securityPoolAddress, setActiveUniverseId, setOpenOracleReport, setSecurityPoolsView } = urlState
+	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, questionLedgerAddress, setActiveUniverseId, setOpenOracleReport, setQuestionLedgersView } = urlState
 	const { navigate, route } = useHashRoute()
 	const resolvedRoute = resolveEnumValue<StatoblastRoute>(route, 'not-found', STATOBLAST_ROUTES)
 	const repPrices = useRepPrices()
@@ -76,7 +76,7 @@ export function App() {
 		onRefresh: refreshRepPrices,
 	})
 	const { transactionState } = transactionTray
-	const includeRelatedUniverses = route === 'pools' && urlState.securityPoolsView === 'migrate'
+	const includeRelatedUniverses = route === 'pools' && urlState.questionLedgersView === 'migrate'
 	const marketCreation = useMarketCreation({
 		...walletScopedHookConfig,
 		activeUniverseId,
@@ -95,11 +95,11 @@ export function App() {
 		urlOpenOracleReportId,
 		walletScopedHookConfig,
 	})
-	const activeSecurityPoolsView = resolveEnumValue<SecurityPoolsView>(urlState.securityPoolsView, securityPoolAddress === '' ? 'browse' : 'operate', ['browse', 'operate', 'universes', 'migrate'])
+	const activeQuestionLedgersView = resolveEnumValue<QuestionLedgersView>(urlState.questionLedgersView, questionLedgerAddress === '' ? 'browse' : 'operate', ['browse', 'operate', 'universes', 'migrate'])
 	const overviewProps = {
 		...overviewWalletProps,
 		activeUniverseId,
-		...getStatoblastOverviewUniverse({ ...marketCreation, migrationActive: route === 'pools' && activeSecurityPoolsView === 'migrate' }),
+		...getStatoblastOverviewUniverse({ ...marketCreation, migrationActive: route === 'pools' && activeQuestionLedgersView === 'migrate' }),
 		onGoToGenesisUniverse: () => setActiveUniverseId(0n),
 		repPrices: {
 			isLoading: isLoadingRepPrices,
@@ -127,11 +127,11 @@ export function App() {
 		tabs: getStatoblastRouteTabs({ applicationDeploymentMissing, route, showDeployTab }),
 		onRouteChange: navigate,
 	}
-	const pageTitle = getAppPageTitle({ activeSecurityPoolsView, route: activeRoute })
+	const pageTitle = getAppPageTitle({ activeQuestionLedgersView, route: activeRoute })
 	useOpenOracleRouteSync({ activeEnvironmentNonce, environmentReady: canReadOnchainData, isOpenOracleRoute: activeRoute === 'open-oracle', loadOracleReport, reportId: urlOpenOracleReportId, setOpenOracleFormReportId: setOpenOracleReportId })
 	useMissingDeploymentRedirect({ isDeploymentRoute: route === 'deploy', missing: applicationDeploymentMissing, navigateToDeployment: () => navigate('deploy') })
-	const secondaryNavigation = getRouteSecondaryNavigation({ activeSecurityPoolsView, route: activeRoute, setSecurityPoolsView })
-	const transactionRouteKey = getTransactionRouteKey({ activeSecurityPoolsView, route })
+	const secondaryNavigation = getRouteSecondaryNavigation({ activeQuestionLedgersView, route: activeRoute, setQuestionLedgersView })
+	const transactionRouteKey = getTransactionRouteKey({ activeQuestionLedgersView, route })
 
 	return (
 		<UniverseNamesProvider includeRelatedUniverses={includeRelatedUniverses} universe={zoltarUniverse}>
@@ -172,7 +172,7 @@ export function App() {
 					<AppRouteContent
 						deploy={deployRouteContentProps}
 						openOracle={openOracleRouteContentProps}
-						portfolios={{ parameters: walletScopedHookConfig, walletConnected: accountState.address !== undefined, enabled: canReadOnchainData && walletBootstrapComplete, environmentKey: activeEnvironmentNonce, activeUniverseId }}
+						securityPools={{ parameters: walletScopedHookConfig, walletConnected: accountState.address !== undefined, enabled: canReadOnchainData && walletBootstrapComplete, environmentKey: activeEnvironmentNonce, activeUniverseId }}
 						readBackendMessage={readBackendMessage}
 						route={activeRoute}
 						questions={{
@@ -183,11 +183,11 @@ export function App() {
 							environmentKey: activeEnvironmentNonce,
 							universeId: activeUniverseId,
 							currentTimestamp,
-							selectedAddress: securityPoolAddress,
-							onSelect: urlState.openSecurityPoolInUniverse,
+							selectedAddress: questionLedgerAddress,
+							onSelect: urlState.openQuestionLedgerInUniverse,
 						}}
-						questionView={activeSecurityPoolsView}
-						universeDirectory={{ activeUniverseId, zoltarUniverse, universeMissing: marketCreation.zoltarUniverseMissing, universeError: marketCreation.zoltarUniverseError, onRetryUniverse: () => void marketCreation.loadZoltarUniverse(), onMigrateRep: () => setSecurityPoolsView('migrate') }}
+						questionView={activeQuestionLedgersView}
+						universeDirectory={{ activeUniverseId, zoltarUniverse, universeMissing: marketCreation.zoltarUniverseMissing, universeError: marketCreation.zoltarUniverseError, onRetryUniverse: () => void marketCreation.loadZoltarUniverse(), onMigrateRep: () => setQuestionLedgersView('migrate') }}
 						migration={{ accountState, activeUniverseId, operations: marketCreation, universeState: resolveLoadableValueState({ isLoading: marketCreation.loadingZoltarUniverse, isMissing: marketCreation.zoltarUniverseMissing, value: zoltarUniverse }), universeBrowserHref: '#/pools/universes' }}
 					/>
 				</RepPriceRefreshContext.Provider>

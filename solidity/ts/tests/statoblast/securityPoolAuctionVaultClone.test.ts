@@ -6,7 +6,7 @@ import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnv
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
-import { auctionVaultCreationCode, auctionVaultRuntimeCode, decodeAuctionVaultBindings } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { auctionVaultCreationCode, auctionVaultRuntimeCode, decodeAuctionVaultBindings } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import {
 	test_statoblast_AuctionVaultDeploymentBenchmark_AuctionVaultDeploymentBenchmark as benchmarkArtifact,
 	test_statoblast_AuctionVaultDeploymentBenchmark_AuctionVaultBenchmarkAuctionMock as auctionArtifact,

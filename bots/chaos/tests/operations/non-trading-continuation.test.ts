@@ -1,4 +1,4 @@
-import { capitalFixture } from '../support/portfolio-fixtures.ts'
+import { capitalFixture } from '../support/security-pool-fixtures.ts'
 import { describe, expect, test } from 'bun:test'
 import { genesisReputationTokenAbi, escalationGameAbi, openOracleAbi, securityPoolCapitalLedgerAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
 import { reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
@@ -106,7 +106,7 @@ describe('non-Trading exact approval continuations', () => {
 				abi: securityPoolCapitalLedgerAbi,
 				definitionId: 'statoblast.capital.deposit',
 				prepare: snapshot => {
-					snapshot.portfolioCapital = [capitalFixture(snapshot)]
+					snapshot.securityPoolCapital = [capitalFixture(snapshot)]
 				},
 			},
 			{ abi: escalationGameAbi, definitionId: 'statoblast.escalation.deposit-wallet-rep', prepare: () => undefined },
@@ -161,7 +161,7 @@ describe('non-Trading exact approval continuations', () => {
 
 		const poolSnapshot = snapshotFixture()
 		const capital = capitalFixture(poolSnapshot)
-		poolSnapshot.portfolioCapital = [capital]
+		poolSnapshot.securityPoolCapital = [capital]
 		const deposit = requiredPlan(poolSnapshot, 'statoblast.capital.deposit')
 		const poolApproval = approvalSteps(deposit)[0]
 		if (poolApproval === undefined) throw new Error('Missing vault approval')

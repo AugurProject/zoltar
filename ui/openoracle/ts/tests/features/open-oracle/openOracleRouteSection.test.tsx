@@ -428,11 +428,11 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Standalone only. Start portfolio-managed requests from the portfolio price panel.')).not.toBeNull()
+		expect(documentQueries.getByText('Standalone only. Start security-pool-managed requests from the security pool price panel.')).not.toBeNull()
 		expect(documentQueries.getByRole('textbox', { name: 'Base token address' })).not.toBeNull()
 		expect(documentQueries.getByRole('textbox', { name: 'Quote token address' })).not.toBeNull()
 		expect(document.body.textContent?.includes('Standalone operator workflow')).toBe(false)
-		expect(document.body.textContent?.match(/portfolio-managed/gi) ?? []).toHaveLength(1)
+		expect(document.body.textContent?.match(/security-pool-managed/gi) ?? []).toHaveLength(1)
 	})
 
 	test('reviews lifecycle delays in human-readable and exact protocol units', async () => {
@@ -929,7 +929,7 @@ describe('OpenOracleSection route create view', () => {
 			)
 			cleanupRenderedComponent = rendered.cleanup
 			expect(within(document.body).getByText(settled ? 'Settled after price expired' : 'Price expired')).not.toBeNull()
-			expect(document.body.textContent).toContain(settled ? 'Request a new price.' : 'Settlement will clear this report, but the pool will reject its price.')
+			expect(document.body.textContent).toContain(settled ? 'Request a new price.' : 'Settlement will clear this report, but the security pool will reject its price.')
 			if (!settled) expectTransactionButtonEnabled(document.body, 'Settle report')
 		})
 	}

@@ -8,7 +8,7 @@ import type { WriteClient } from '../testSupport/simulator/utils/clients'
 import { DAY } from '../testSupport/simulator/utils/constants'
 import { getActivationTime, getBalances, getEscalationGameDeposits, readCarryTotal } from '../testSupport/simulator/utils/contracts/escalationGame'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
-import { statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, statoblast_EscalationGame_EscalationGame, test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact } from '../types/contractArtifact'
+import { statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, statoblast_EscalationGame_EscalationGame, test_statoblast_EscalationGameProofTestQuestionLedger_EscalationGameProofTestQuestionLedger as escalationGameProofTestPoolArtifact } from '../types/contractArtifact'
 import { computeEscalationCurveAttoRep, computeEscalationFinalityElapsed, ESCALATION_TIME_LENGTH, getWinningEscalationDepositClaimAmount, getWinningImportedEscalationDepositClaimAmount, projectEscalationDeposit, projectEscalationEndTime } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
 import { requireContractAddress } from './escalationGame/carryHelpers'
 import { useEscalationGameFixture } from './escalationGame/fixture'
@@ -20,12 +20,12 @@ describe('Escalation math parity', () => {
 		nonDecisionThresholdAttoRep,
 		recursiveResolutionTargetCost,
 		deployEscalationGameWithProofPool,
-		deployEscalationGameTestSecurityPool,
+		deployEscalationGameTestQuestionLedger,
 		deployForkContinuationEscalationGame,
 		readOutcomeCarrySnapshot,
-		depositOnOutcomeViaTestSecurityPool,
-		initializeSnapshotViaTestSecurityPool,
-		withdrawDepositViaProofTestSecurityPool,
+		depositOnOutcomeViaTestQuestionLedger,
+		initializeSnapshotViaTestQuestionLedger,
+		withdrawDepositViaProofTestQuestionLedger,
 		advanceForkContinuationPastStart,
 		createCarryProof,
 	} = fixture
@@ -158,9 +158,9 @@ describe('Escalation math parity', () => {
 
 	test('shared finality cutoffs match deployed forward-curve deadlines', async () => {
 		for (const binding of [reportBond, 7n * reportBond, 11n * reportBond, nonDecisionThresholdAttoRep - 1n]) {
-			const { escalationGameAddress: game, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
-			await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, binding + reportBond)
-			await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, binding)
+			const { escalationGameAddress: game, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
+			await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, binding + reportBond)
+			await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.No, binding)
 			assert.strictEqual(await readBindingCapital(game), binding)
 			const elapsed = computeEscalationFinalityElapsed(reportBond, nonDecisionThresholdAttoRep, binding)
 			assert.strictEqual(await readEscalationEndDate(game), (await getActivationTime(client, game)) + elapsed)
@@ -171,8 +171,8 @@ describe('Escalation math parity', () => {
 	})
 
 	test('a sub-bond threshold remainder still requires an offer of the full start bond', async () => {
-		const { escalationGameAddress: game, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, nonDecisionThresholdAttoRep - 1n)
+		const { escalationGameAddress: game, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, nonDecisionThresholdAttoRep - 1n)
 		const balances = await getBalances(client, game)
 		const project = (amountAttoRep: bigint) => projectEscalationDeposit({ amountAttoRep, balancesAttoRep: [balances.invalid, balances.yes, balances.no], nonDecisionThresholdAttoRep, outcome: 'yes', startBondAttoRep: reportBond })
 		assert.strictEqual(project(1n), undefined)
@@ -184,9 +184,9 @@ describe('Escalation math parity', () => {
 	})
 
 	test('shared deposit projection matches previewDepositOnOutcome and projected end time', async () => {
-		const { escalationGameAddress: escalationGame, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 9n * reportBond)
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, 6n * reportBond)
+		const { escalationGameAddress: escalationGame, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 9n * reportBond)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.No, 6n * reportBond)
 
 		const balances = await getBalances(client, escalationGame)
 		const requestedAmount = 8n * reportBond
@@ -205,15 +205,15 @@ describe('Escalation math parity', () => {
 		assert.strictEqual(resultingCumulativeAmount, projection.projectedBalancesAttoRep[0], 'projected invalid balance should match preview cumulative amount')
 
 		const activationTime = await getActivationTime(client, escalationGame)
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, acceptedAmount)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Invalid, acceptedAmount)
 		const expectedEndTime = activationTime + computeEscalationFinalityElapsed(reportBond, nonDecisionThresholdAttoRep, await readBindingCapital(escalationGame))
 		assert.strictEqual(await readEscalationEndDate(escalationGame), expectedEndTime, 'shared projected end time should match the contract after the same deposit')
 	})
 
 	test('shared projection matches the curve deadline after a change of leader and a below-curve deposit', async () => {
-		const { escalationGameAddress: escalationGame, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 9n * reportBond)
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, 6n * reportBond)
+		const { escalationGameAddress: escalationGame, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 9n * reportBond)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.No, 6n * reportBond)
 		const activationTime = await getActivationTime(client, escalationGame)
 		const project = (balances: Awaited<ReturnType<typeof getBalances>>, outcome: 'invalid' | 'no', amountAttoRep: bigint) => projectEscalationDeposit({ amountAttoRep, balancesAttoRep: [balances.invalid, balances.yes, balances.no], nonDecisionThresholdAttoRep, outcome, startBondAttoRep: reportBond })
 
@@ -222,7 +222,7 @@ describe('Escalation math parity', () => {
 		const leadProjection = project(await getBalances(client, escalationGame), 'no', 4n * reportBond)
 		assert.ok(leadProjection !== undefined)
 		if (leadProjection === undefined) return
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, 4n * reportBond)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.No, 4n * reportBond)
 		const projectedEndTime = projectEscalationEndTime({ activationTime, balancesAttoRep: leadProjection.projectedBalancesAttoRep, nonDecisionThresholdAttoRep, startBondAttoRep: reportBond })
 		assert.strictEqual(projectedEndTime, activationTime + computeEscalationFinalityElapsed(reportBond, nonDecisionThresholdAttoRep, 9n * reportBond), 'the deadline is the curve crossing of the new median')
 		assert.strictEqual(await readEscalationEndDate(escalationGame), projectedEndTime, 'shared projected end time should match the contract after a change of leader')
@@ -236,7 +236,7 @@ describe('Escalation math parity', () => {
 		const [acceptedAmount, resultingCumulativeAmount] = await readPreviewDepositOnOutcome(escalationGame, QuestionOutcome.Invalid, reportBond)
 		assert.strictEqual(acceptedAmount, smallProjection?.acceptedAmountAttoRep)
 		assert.strictEqual(resultingCumulativeAmount, smallProjection?.projectedBalancesAttoRep[0])
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, reportBond)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Invalid, reportBond)
 		assert.strictEqual(await readEscalationEndDate(escalationGame), projectEscalationEndTime({ activationTime, balancesAttoRep: [reportBond, balances.yes, balances.no], nonDecisionThresholdAttoRep, startBondAttoRep: reportBond }))
 
 		// Once the curve passes the median the game accepts no deposit.
@@ -245,10 +245,10 @@ describe('Escalation math parity', () => {
 	})
 
 	test('shared winning-withdrawal math matches claimDepositForWinning', async () => {
-		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 5n * reportBond)
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 5n * reportBond)
-		await depositOnOutcomeViaTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.No, 10n * reportBond)
+		const { escalationGameAddress, testQuestionLedgerAddress } = await deployEscalationGameTestQuestionLedger()
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 5n * reportBond)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 5n * reportBond)
+		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, client.account.address, QuestionOutcome.No, 10n * reportBond)
 
 		const activationTime = await getActivationTime(client, escalationGameAddress)
 		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
@@ -269,7 +269,7 @@ describe('Escalation math parity', () => {
 		})
 		const preview = await client.simulateContract({
 			abi: escalationGameProofTestPoolArtifact.abi,
-			address: testSecurityPoolAddress,
+			address: testQuestionLedgerAddress,
 			functionName: 'claimDepositForWinning',
 			args: [0n, QuestionOutcome.Yes],
 		})
@@ -279,14 +279,14 @@ describe('Escalation math parity', () => {
 	})
 
 	test('shared imported winning-withdrawal math matches carried proof settlement at the reward-cap boundary', async () => {
-		const parent = await deployEscalationGameTestSecurityPool()
+		const parent = await deployEscalationGameTestQuestionLedger()
 		const firstWinningDepositAmount = 2n * reportBond
 		const secondWinningDepositAmount = 2n * reportBond
 		const losingDepositAmount = 2n * reportBond
 
-		await depositOnOutcomeViaTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, firstWinningDepositAmount)
-		await depositOnOutcomeViaTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, secondWinningDepositAmount)
-		await depositOnOutcomeViaTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.No, losingDepositAmount)
+		await depositOnOutcomeViaTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, firstWinningDepositAmount)
+		await depositOnOutcomeViaTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, secondWinningDepositAmount)
+		await depositOnOutcomeViaTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.No, losingDepositAmount)
 
 		const { peaks: emptyOutcomePeaks, leafCount: emptyOutcomeLeafCount, carryTotal: emptyOutcomeCarryTotal, nullifierRoot: emptyOutcomeNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Invalid)
 		const { peaks: parentYesPeaks, leafCount: parentYesLeafCount, carryTotal: parentYesCarryTotal, nullifierRoot: parentYesNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Yes)
@@ -294,8 +294,8 @@ describe('Escalation math parity', () => {
 
 		const firstLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, firstWinningDepositAmount, 0n, firstWinningDepositAmount, 1n)
 		const child = await deployForkContinuationEscalationGame()
-		await initializeSnapshotViaTestSecurityPool(
-			child.testSecurityPoolAddress,
+		await initializeSnapshotViaTestQuestionLedger(
+			child.testQuestionLedgerAddress,
 			[emptyOutcomePeaks, parentYesPeaks, parentNoPeaks],
 			[emptyOutcomeLeafCount, parentYesLeafCount, parentNoLeafCount],
 			[emptyOutcomeCarryTotal, parentYesCarryTotal, parentNoCarryTotal],
@@ -317,7 +317,7 @@ describe('Escalation math parity', () => {
 		})
 		const preview = await client.simulateContract({
 			abi: escalationGameProofTestPoolArtifact.abi,
-			address: child.testSecurityPoolAddress,
+			address: child.testQuestionLedgerAddress,
 			functionName: 'withdrawDeposit',
 			args: [QuestionOutcome.Yes, secondProof],
 		})
@@ -325,7 +325,7 @@ describe('Escalation math parity', () => {
 		assert.strictEqual(originalDepositAmountAttoRep, secondProof.amountAttoRep, 'proof preview should preserve the original imported winning principal size')
 		assert.strictEqual(sharedWithdrawal, claimedAmount, 'shared imported model should match carried proof settlement')
 
-		await withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, secondProof)
+		await withdrawDepositViaProofTestQuestionLedger(child.testQuestionLedgerAddress, QuestionOutcome.Yes, secondProof)
 		assert.strictEqual(await readCarryTotal(client, child.escalationGameAddress, QuestionOutcome.Yes), firstWinningDepositAmount, 'withdrawing the later carried proof should leave only the first winning imported principal unresolved')
 	})
 })

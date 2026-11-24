@@ -1,13 +1,13 @@
 import { attoSharesToRecoveryAttoRep } from '../lib/shareValue.js'
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_QuestionLedger_QuestionLedger } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
 import type { LiveMarket } from './liveMarket.js'
 import type { SettlementOperation, ShareOutcome } from './settlement.js'
 import { minimumAfterSlippage, requireTransactionSlippageBps, simulateWithDeadline, stableSimulation, UI_SLIPPAGE_BPS, type TransactionExpiry } from './tradeQuote.js'
 import { encodeReceiveBasedRedeemRequest, shareOperationRouter, shareTokenAbi } from './authorization.js'
 import { loadTransactionFeeMarket, sellHoldingFeeBlocker } from './holdingFees.js'
-const securityPoolAbi = statoblast_SecurityPool_SecurityPool.abi
+const questionLedgerAbi = statoblast_QuestionLedger_QuestionLedger.abi
 
 export function outcomeValue(outcome: ShareOutcome) {
 	if (outcome === 'INVALID') return 0n
@@ -72,7 +72,7 @@ export async function simulateSettlement(
 		return { blockNumber, blockHash, operation, market: simulation.feeMarket, amount, deadline, slippageBps, expectedAttoEth: simulation.result, expectedAttoRep: simulation.expectedAttoRep, minimumAttoEth: minimumAfterSlippage(simulation.result, slippageBps) }
 	}
 	if (operation === 'redeem-winning-shares') {
-		const { blockNumber, blockHash } = await stableSimulation(client, async block => await client.simulateContract({ abi: securityPoolAbi, address: market.pool, functionName: 'redeemShares', account, args: [], blockNumber: block.blockNumber }))
+		const { blockNumber, blockHash } = await stableSimulation(client, async block => await client.simulateContract({ abi: questionLedgerAbi, address: market.pool, functionName: 'redeemShares', account, args: [], blockNumber: block.blockNumber }))
 		return { blockNumber, blockHash, operation, market }
 	}
 	if (parameters.sourceOutcome === undefined || parameters.targetOutcomeIndexes === undefined) throw new Error('Select a share and at least one child universe')

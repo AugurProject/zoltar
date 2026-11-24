@@ -42,7 +42,7 @@ test('keeps runnable applications as dependency leaves behind shared-library API
 	expect(findUiLayerBoundaryViolations('ui/statoblast/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar-shared/protocol/core.js'")).toEqual([])
 	expect(findUiLayerBoundaryViolations('ui/trading/ts/app/App.tsx', "import { helper } from '@zoltar/ui-statoblast/app/App.js'").map(finding => finding.rule)).toEqual(['cross-package-import-boundary'])
 	expect(findUiLayerBoundaryViolations('ui/trading/ts/app/App.tsx', "import { helper } from '@zoltar/ui-statoblast-shared/protocol/trading.js'")).toEqual([])
-	expect(findUiLayerBoundaryViolations('ui/trading/ts/features/LivePortfolio.tsx', "import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'")).toEqual([])
+	expect(findUiLayerBoundaryViolations('ui/trading/ts/features/LiveSecurityPool.tsx', "import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'")).toEqual([])
 })
 
 test('keeps the OpenOracle console behind shared APIs', () => {
@@ -82,11 +82,11 @@ test('rejects test imports that bypass mirrored ownership', () => {
 })
 
 test('keeps Statoblast product types out of the generic UI packages', () => {
-	const sourceText = ['export type ListedSecurityPool = { vaultCount: bigint }', 'interface ReportingFormState { reportAmount: string }', 'export type MarketDetails = { questionId: string }'].join('\n')
+	const sourceText = ['export type ListedQuestionLedger = { vaultCount: bigint }', 'interface ReportingFormState { reportAmount: string }', 'export type MarketDetails = { questionId: string }'].join('\n')
 	for (const packageId of ['coreShared', 'zoltarShared']) {
 		const findings = findUiLayerBoundaryViolations(`ui/${packageId}/ts/types/contracts.ts`, sourceText)
 		expect(findings.map(finding => [finding.rule, 'declaredName' in finding ? finding.declaredName : undefined])).toEqual([
-			['statoblast-product-type-outside-statoblast-shared', 'ListedSecurityPool'],
+			['statoblast-product-type-outside-statoblast-shared', 'ListedQuestionLedger'],
 			['statoblast-product-type-outside-statoblast-shared', 'ReportingFormState'],
 		])
 	}
@@ -113,9 +113,9 @@ test('derives the Statoblast product type denylist from the Statoblast types mod
 })
 
 test('collects only the type names a module declares and exports itself', () => {
-	const sourceText = ["export type { AccountState } from './core.js'", 'export type SecurityPoolFormState = { marketId: string }', 'export interface VaultView { owner: string }', 'type LocalHelper = string', "export const ROUTES = ['pools'] as const"].join('\n')
+	const sourceText = ["export type { AccountState } from './core.js'", 'export type QuestionLedgerFormState = { marketId: string }', 'export interface VaultView { owner: string }', 'type LocalHelper = string', "export const ROUTES = ['pools'] as const"].join('\n')
 
-	expect([...collectExportedTypeNames('ui/statoblastShared/ts/types/app.ts', sourceText)]).toEqual(['SecurityPoolFormState', 'VaultView'])
+	expect([...collectExportedTypeNames('ui/statoblastShared/ts/types/app.ts', sourceText)]).toEqual(['QuestionLedgerFormState', 'VaultView'])
 })
 
 test('exports manifest guard requires existing source targets and explicit tsx entries', () => {

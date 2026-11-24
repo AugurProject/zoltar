@@ -25,7 +25,7 @@ export function renderBalances(snapshot: PublicOperatorSnapshot) {
 	else element('wallet-address').title = snapshot.wallet
 	const list = element('balance-list')
 	if (snapshot.balances === undefined) {
-		render(h('p', { class: 'balance-empty' }, 'Set a local signer to load its ETH, WETH, REP, and executable portfolio balances.'), list)
+		render(h('p', { class: 'balance-empty' }, 'Set a local signer to load its ETH, WETH, REP, and executable security pool balances.'), list)
 		return
 	}
 	const values: [string, string][] = [
@@ -33,7 +33,7 @@ export function renderBalances(snapshot: PublicOperatorSnapshot) {
 		['WETH', exactAmount(snapshot.balances.availableWeth, 'WETH')],
 		['REP', exactAmount(snapshot.balances.availableRep, 'REP')],
 		['REP executable value', exactAmount(snapshot.balances.repValueWeth, 'WETH')],
-		['Executable portfolio', exactAmount(snapshot.balances.totalValueWeth, 'WETH')],
+		['Executable security pool', exactAmount(snapshot.balances.totalValueWeth, 'WETH')],
 	]
 	render(h(Fragment, null, ...values.map(([label, value]) => h('div', { class: 'balance-row', key: label }, h('span', null, label), h('strong', null, value)))), list)
 }

@@ -3,18 +3,18 @@ import { bagCarryPeaks } from '@zoltar/core-shared/evm/carryProof'
 
 import { describe, expect, test } from 'bun:test'
 import { concatHex, decodeFunctionData, encodeAbiParameters, getAddress, keccak256, parseAbiParameters, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { approveOwnForkAdmission, approveReportingRep, forkWithOwnEscalationGame, loadOwnForkAdmission, loadReportingDetails, reportOutcomeInSecurityPool, withdrawEscalationFromSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
+import { approveOwnForkAdmission, approveReportingRep, forkWithOwnEscalationGame, loadOwnForkAdmission, loadReportingDetails, reportOutcomeInQuestionLedger, withdrawEscalationFromQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
 import { buildForkCarriedEscalationProofs, withdrawForkedEscalationDeposits } from '@zoltar/ui-statoblast-shared/protocol/reportingCarryState.js'
-import { statoblast_SecurityPool_SecurityPool, statoblast_factories_EscalationGameFactory_EscalationGameFactory } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_QuestionLedger_QuestionLedger, statoblast_factories_EscalationGameFactory_EscalationGameFactory } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import type { EscalationSide } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { asWriteClient, createBlockWithTimestamp, createMockWriteClient, createMulticallStub, createReadContractStub, getContractFunctionName, mockTransactionHash } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
-import * as portfolioCopy from '@zoltar/ui-statoblast-shared/copy/portfolio.js'
+import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 
-const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
+const questionLedgerAddress = getAddress('0x00000000000000000000000000000000000000a1')
 const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
-const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000a2')
+const alternateQuestionLedgerAddress = getAddress('0x00000000000000000000000000000000000000a2')
 const escalationGameAddress = getAddress('0x00000000000000000000000000000000000000e6')
 const zoltarAddress = getAddress('0x00000000000000000000000000000000000000e7')
 const repTokenAddress = getAddress('0x00000000000000000000000000000000000000e8')
@@ -122,20 +122,20 @@ describe('reporting protocol client', () => {
 	test('blocks an unresumed continuation and a fixed inherited game', async () => {
 		const waiting = await loadReportingDetails(
 			createActiveReportingClient(() => [], { resumedAt: 0n, fixedOutcome: 3 }),
-			securityPoolAddress,
+			questionLedgerAddress,
 			undefined,
 		)
 		expect(waiting.reportingBlockedReason).toBe('Resume the continuation game before reporting.')
 		const fixed = await loadReportingDetails(
 			createActiveReportingClient(() => [], { resumedAt: 10n, fixedOutcome: 1 }),
-			securityPoolAddress,
+			questionLedgerAddress,
 			undefined,
 		)
 		expect(fixed.reportingBlockedReason).toBe('This branch inherits a fixed question outcome; new reports are closed.')
 		expect(fixed.canTriggerOwnFork).toBe(false)
 		const resumed = await loadReportingDetails(
 			createActiveReportingClient(() => [], { resumedAt: 10n, fixedOutcome: 3 }),
-			securityPoolAddress,
+			questionLedgerAddress,
 			undefined,
 		)
 		expect(resumed.reportingBlockedReason).toBeUndefined()
@@ -146,7 +146,7 @@ describe('reporting protocol client', () => {
 		const client = testDouble<Parameters<typeof loadReportingDetails>[0]>({
 			getBlock: async () => createBlockWithTimestamp(88n),
 			multicall: createMulticallStub(async request => {
-				if (getContractFunctionName(request.contracts[0]) === 'questionId') return [1n, zeroAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, alternateSecurityPoolAddress]
+				if (getContractFunctionName(request.contracts[0]) === 'questionId') return [1n, zeroAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, alternateQuestionLedgerAddress]
 				return [questionTuple, 10n]
 			}),
 			readContract: createReadContractStub(async request => {
@@ -156,7 +156,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected read ${request.functionName}`)
 			}),
 		})
-		const details = await loadReportingDetails(client, securityPoolAddress, undefined)
+		const details = await loadReportingDetails(client, questionLedgerAddress, undefined)
 		expect(details.status).toBe('not-started')
 		expect(details.questionOutcome).toBe('none')
 		expect(details.reportingBlockedReason).toBe('This branch inherits a fixed question outcome; new reports are closed.')
@@ -177,13 +177,13 @@ describe('reporting protocol client', () => {
 					return base.readContract(request)
 				}),
 			}
-			expect((await loadReportingDetails(client, securityPoolAddress, undefined)).settlementState).toBe(expectedState)
+			expect((await loadReportingDetails(client, questionLedgerAddress, undefined)).settlementState).toBe(expectedState)
 		}
 	})
 
 	test('loads the payout threshold the game recorded instead of the live fork threshold', async () => {
 		const base = createActiveReportingClient(() => [])
-		expect((await loadReportingDetails(base, securityPoolAddress, undefined)).forkThresholdAttoRep).toBe(100n)
+		expect((await loadReportingDetails(base, questionLedgerAddress, undefined)).forkThresholdAttoRep).toBe(100n)
 		const client = {
 			...base,
 			readContract: createReadContractStub(async request => {
@@ -191,7 +191,7 @@ describe('reporting protocol client', () => {
 				return base.readContract(request)
 			}),
 		}
-		expect((await loadReportingDetails(client, securityPoolAddress, undefined)).forkThresholdAttoRep).toBe(61n)
+		expect((await loadReportingDetails(client, questionLedgerAddress, undefined)).forkThresholdAttoRep).toBe(61n)
 	})
 
 	test('a game with no recorded threshold uses the live fork threshold even after a later fork', async () => {
@@ -203,13 +203,13 @@ describe('reporting protocol client', () => {
 				return base.readContract(request)
 			}),
 		}
-		expect((await loadReportingDetails(client, securityPoolAddress, undefined)).forkThresholdAttoRep).toBe(100n)
+		expect((await loadReportingDetails(client, questionLedgerAddress, undefined)).forkThresholdAttoRep).toBe(100n)
 	})
 
 	test('loads the earliest Zoltar fork time for an active escalation game', async () => {
 		const details = await loadReportingDetails(
 			createActiveReportingClient(() => []),
-			securityPoolAddress,
+			questionLedgerAddress,
 			undefined,
 		)
 		if (details.status !== 'active') throw new Error('Expected active reporting details')
@@ -241,10 +241,10 @@ describe('reporting protocol client', () => {
 		client.getBlock = async () => createBlockWithTimestamp(1n)
 		client.getCode = async () => preparedGameCode
 		client.onTransactionPrepared = preview => previews.push(preview)
-		await approveReportingRep(client, securityPoolAddress, 'yes', 7n)
+		await approveReportingRep(client, questionLedgerAddress, 'yes', 7n)
 		expect(previews[0]?.functionName).toBe('approve')
-		expect(previews[0]?.args).toEqual([securityPoolAddress, 7n])
-		await reportOutcomeInSecurityPool(client, securityPoolAddress, 'yes', 7n)
+		expect(previews[0]?.args).toEqual([questionLedgerAddress, 7n])
+		await reportOutcomeInQuestionLedger(client, questionLedgerAddress, 'yes', 7n)
 		expect(previews[1]?.functionName).toBe('depositWalletRepToEscalationGame')
 		expect(previews[1]?.args).toEqual([1, 7n])
 	})
@@ -270,27 +270,27 @@ describe('reporting protocol client', () => {
 		}
 
 		test('loads the shortfall, the reporter ledger allowance and a supply-growth buffer recommendation', async () => {
-			expect(await loadOwnForkAdmission(createShortfallClient(40n, 7n, []), securityPoolAddress, walletAddress)).toEqual({ allowanceAttoRep: 7n, recommendedApprovalAttoRep: 40n + 10n ** 18n, shortfallAttoRep: 40n })
-			expect(await loadOwnForkAdmission(createShortfallClient(40n, 7n, []), securityPoolAddress, undefined)).toEqual({ allowanceAttoRep: undefined, recommendedApprovalAttoRep: 40n + 10n ** 18n, shortfallAttoRep: 40n })
-			expect(await loadOwnForkAdmission(createShortfallClient(0n, 7n, []), securityPoolAddress, walletAddress)).toEqual({ allowanceAttoRep: 7n, recommendedApprovalAttoRep: 0n, shortfallAttoRep: 0n })
+			expect(await loadOwnForkAdmission(createShortfallClient(40n, 7n, []), questionLedgerAddress, walletAddress)).toEqual({ allowanceAttoRep: 7n, recommendedApprovalAttoRep: 40n + 10n ** 18n, shortfallAttoRep: 40n })
+			expect(await loadOwnForkAdmission(createShortfallClient(40n, 7n, []), questionLedgerAddress, undefined)).toEqual({ allowanceAttoRep: undefined, recommendedApprovalAttoRep: 40n + 10n ** 18n, shortfallAttoRep: 40n })
+			expect(await loadOwnForkAdmission(createShortfallClient(0n, 7n, []), questionLedgerAddress, walletAddress)).toEqual({ allowanceAttoRep: 7n, recommendedApprovalAttoRep: 0n, shortfallAttoRep: 0n })
 		})
 
 		test('approves the reporter ledger for exactly the selected amount', async () => {
 			const previews: TransactionRequestPreview[] = []
-			expect(await approveOwnForkAdmission(createShortfallClient(40n, 0n, previews), securityPoolAddress, 55n)).toBe(mockTransactionHash)
+			expect(await approveOwnForkAdmission(createShortfallClient(40n, 0n, previews), questionLedgerAddress, 55n)).toBe(mockTransactionHash)
 			expect(previews.map(preview => [preview.functionName, preview.args])).toEqual([['approve', [reporterLedgerAddress, 55n]]])
 		})
 
 		test('the fork sends only the fork and refuses while the allowance is below the shortfall', async () => {
 			const blocked: TransactionRequestPreview[] = []
-			await expect(forkWithOwnEscalationGame(createShortfallClient(40n, 39n, blocked), securityPoolAddress)).rejects.toThrow(portfolioCopy.forkAdmissionApprovalRequired)
+			await expect(forkWithOwnEscalationGame(createShortfallClient(40n, 39n, blocked), questionLedgerAddress)).rejects.toThrow(securityPoolCopy.forkAdmissionApprovalRequired)
 			expect(blocked).toEqual([])
 			for (const [shortfallAttoRep, allowanceAttoRep] of [
 				[0n, 0n],
 				[40n, 40n],
 			] as const) {
 				const previews: TransactionRequestPreview[] = []
-				expect(await forkWithOwnEscalationGame(createShortfallClient(shortfallAttoRep, allowanceAttoRep, previews), securityPoolAddress)).toBe(mockTransactionHash)
+				expect(await forkWithOwnEscalationGame(createShortfallClient(shortfallAttoRep, allowanceAttoRep, previews), questionLedgerAddress)).toBe(mockTransactionHash)
 				expect(previews.map(preview => preview.functionName)).toEqual(['forkZoltarWithOwnEscalationGame'])
 			}
 		})
@@ -315,7 +315,7 @@ describe('reporting protocol client', () => {
 					if (request.functionName === 'questionId') return 5n
 					if (request.functionName === 'getQuestionEndDate') return questionEndTime
 					if (request.functionName === 'escalationGameAddress') {
-						expect(request.args).toEqual([securityPoolAddress])
+						expect(request.args).toEqual([questionLedgerAddress])
 						return escalationGameAddress
 					}
 					throw new Error(`Unexpected read: ${request.functionName}`)
@@ -325,13 +325,13 @@ describe('reporting protocol client', () => {
 		client.getCode = async () => gameCode
 		client.getBlock = async () => createBlockWithTimestamp(questionEndTime)
 		client.onTransactionPlan = plan => steps.push(plan.map(step => step.functionName))
-		await reportOutcomeInSecurityPool(client, securityPoolAddress, 'yes', 7n)
+		await reportOutcomeInQuestionLedger(client, questionLedgerAddress, 'yes', 7n)
 		expect(steps).toEqual([['prepareEscalationGame', 'depositWalletRepToEscalationGame']])
-		expect(sent.map(transaction => transaction.to)).toEqual([escalationGameFactoryAddress, securityPoolAddress])
+		expect(sent.map(transaction => transaction.to)).toEqual([escalationGameFactoryAddress, questionLedgerAddress])
 		const prepare = decodeFunctionData({ abi: statoblast_factories_EscalationGameFactory_EscalationGameFactory.abi, data: sent[0]?.data ?? '0x' })
 		expect(prepare.functionName).toBe('prepareEscalationGame')
-		expect(prepare.args).toEqual([securityPoolAddress])
-		expect(decodeFunctionData({ abi: statoblast_SecurityPool_SecurityPool.abi, data: sent[1]?.data ?? '0x' }).functionName).toBe('depositWalletRepToEscalationGame')
+		expect(prepare.args).toEqual([questionLedgerAddress])
+		expect(decodeFunctionData({ abi: statoblast_QuestionLedger_QuestionLedger.abi, data: sent[1]?.data ?? '0x' }).functionName).toBe('depositWalletRepToEscalationGame')
 	})
 
 	test('#1453: no escalation game is prepared before the question ends', async () => {
@@ -352,7 +352,7 @@ describe('reporting protocol client', () => {
 		)
 		client.getBlock = async () => createBlockWithTimestamp(questionEndTime)
 		client.getCode = async () => '0x'
-		await expect(reportOutcomeInSecurityPool(client, securityPoolAddress, 'yes', 7n)).rejects.toThrow('Reporting opens when the question ends.')
+		await expect(reportOutcomeInQuestionLedger(client, questionLedgerAddress, 'yes', 7n)).rejects.toThrow('Reporting opens when the question ends.')
 		expect(sent).toEqual([])
 	})
 
@@ -377,7 +377,7 @@ describe('reporting protocol client', () => {
 		client.getCode = async () => preparedGameCode
 		client.getBlock = async () => createBlockWithTimestamp(questionEndTime)
 		client.onTransactionPrepared = preview => previews.push(preview)
-		await reportOutcomeInSecurityPool(client, securityPoolAddress, 'yes', 7n, 7n, 'wallet', false, true)
+		await reportOutcomeInQuestionLedger(client, questionLedgerAddress, 'yes', 7n, 7n, 'wallet', false, true)
 		expect(previews[0]?.functionName).toBe('depositWalletRepToEscalationGameWithLead')
 		expect(previews[0]?.args).toEqual([1, 7n])
 	})
@@ -399,11 +399,11 @@ describe('reporting protocol client', () => {
 		const previews: TransactionRequestPreview[] = []
 		client.getBlock = async () => createBlockWithTimestamp(1n)
 		client.onTransactionPrepared = preview => previews.push(preview)
-		await expect(reportOutcomeInSecurityPool(client, securityPoolAddress, 'yes', 7n, 7n, 'vault')).rejects.toThrow('Reports use wallet REP')
+		await expect(reportOutcomeInQuestionLedger(client, questionLedgerAddress, 'yes', 7n, 7n, 'vault')).rejects.toThrow('Reports use wallet REP')
 		expect(previews).toEqual([])
 	})
 
-	test('reportOutcomeInSecurityPool routes active ordinary-game wallet contributions through the pool to game escrow', async () => {
+	test('reportOutcomeInQuestionLedger routes active ordinary-game wallet contributions through the pool to game escrow', async () => {
 		let capturedData: Hex | undefined
 		let capturedTo: Address | null | undefined
 		const client = createMockWriteClient(
@@ -425,23 +425,23 @@ describe('reporting protocol client', () => {
 		const writeClient = asWriteClient(client)
 		writeClient.getBlock = async () => createBlockWithTimestamp(1n)
 		writeClient.onTransactionPrepared = preview => previews.push(preview)
-		const result = await reportOutcomeInSecurityPool(writeClient, securityPoolAddress, 'yes', 7n, 6n)
+		const result = await reportOutcomeInQuestionLedger(writeClient, questionLedgerAddress, 'yes', 7n, 6n)
 		expect(previews[0]?.reviewAmount).toBe('0.000000000000000006\u00a0REP')
 		expect(previews[0]?.reviewTitle).toBe('Report Yes · 0.000000000000000006\u00a0REP')
 		expect(previews[0]?.reviewDescription).toBe('Deposits REP on Yes. If Yes loses, this REP is lost; if it wins, it returns with any earned reward.')
 
-		expect(capturedTo).toBe(securityPoolAddress)
+		expect(capturedTo).toBe(questionLedgerAddress)
 		expect(capturedData).toBeDefined()
 		const decodedCall = decodeFunctionData({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
+			abi: statoblast_QuestionLedger_QuestionLedger.abi,
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
 		expect(decodedCall.functionName).toBe('depositWalletRepToEscalationGame')
 		expect(decodedCall.args).toEqual([1n, 7n])
-		expect(result).toMatchObject({ action: 'reportOutcome', securityPoolAddress, universeId: 9n })
+		expect(result).toMatchObject({ action: 'reportOutcome', questionLedgerAddress, universeId: 9n })
 	})
 
-	test('reportOutcomeInSecurityPool explains a fork-triggering report in its review step', async () => {
+	test('reportOutcomeInQuestionLedger explains a fork-triggering report in its review step', async () => {
 		const client = createMockWriteClient(
 			() => undefined,
 			async request => {
@@ -457,12 +457,12 @@ describe('reporting protocol client', () => {
 		const writeClient = asWriteClient(client)
 		writeClient.getBlock = async () => createBlockWithTimestamp(1n)
 		writeClient.onTransactionPrepared = preview => previews.push(preview)
-		await reportOutcomeInSecurityPool(writeClient, securityPoolAddress, 'no', 6n, 6n, 'wallet', true)
+		await reportOutcomeInQuestionLedger(writeClient, questionLedgerAddress, 'no', 6n, 6n, 'wallet', true)
 		expect(previews[0]?.reviewTitle).toBe('Report No & trigger fork · 0.000000000000000006\u00a0REP')
 		expect(previews[0]?.reviewDescription).toBe('Fills No to the non-decision threshold while another side is already there. Escalation ends without a decision, deposits lock, and the question can only resolve through a universe fork. This can’t be undone.')
 	})
 
-	test('withdrawEscalationFromSecurityPool explains that clearing losing deposits returns no REP', async () => {
+	test('withdrawEscalationFromQuestionLedger explains that clearing losing deposits returns no REP', async () => {
 		const client = createMockWriteClient(
 			() => undefined,
 			async request => {
@@ -473,14 +473,14 @@ describe('reporting protocol client', () => {
 		const previews: TransactionRequestPreview[] = []
 		const writeClient = asWriteClient(client)
 		writeClient.onTransactionPrepared = preview => previews.push(preview)
-		await withdrawEscalationFromSecurityPool(writeClient, securityPoolAddress, 'no', [0n], 0n)
+		await withdrawEscalationFromQuestionLedger(writeClient, questionLedgerAddress, 'no', [0n], 0n)
 		expect(previews[0]?.reviewTitle).toBe('Clear No deposits (worth 0 REP)')
 		expect(previews[0]?.reviewDescription).toBe('Returns no REP. Ordinary losing deposits retire automatically at finality.')
-		await withdrawEscalationFromSecurityPool(writeClient, securityPoolAddress, 'yes', [0n], 4n)
+		await withdrawEscalationFromQuestionLedger(writeClient, questionLedgerAddress, 'yes', [0n], 4n)
 		expect(previews[1]?.reviewDescription).toBeUndefined()
 	})
 
-	test('reportOutcomeInSecurityPool uses wallet-funded deposits for fork continuations', async () => {
+	test('reportOutcomeInQuestionLedger uses wallet-funded deposits for fork continuations', async () => {
 		let capturedData: Hex | undefined
 		let capturedTo: Address | null | undefined
 		const client = createMockWriteClient(
@@ -500,12 +500,12 @@ describe('reporting protocol client', () => {
 			},
 		)
 
-		await reportOutcomeInSecurityPool({ ...asWriteClient(client), getBlock: async () => createBlockWithTimestamp(1n) }, securityPoolAddress, 'no', 11n)
+		await reportOutcomeInQuestionLedger({ ...asWriteClient(client), getBlock: async () => createBlockWithTimestamp(1n) }, questionLedgerAddress, 'no', 11n)
 
-		expect(capturedTo).toBe(securityPoolAddress)
+		expect(capturedTo).toBe(questionLedgerAddress)
 		expect(capturedData).toBeDefined()
 		const decodedCall = decodeFunctionData({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
+			abi: statoblast_QuestionLedger_QuestionLedger.abi,
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
 		expect(decodedCall.functionName).toBe('depositWalletRepToEscalationGame')
@@ -569,7 +569,7 @@ describe('reporting protocol client', () => {
 			}),
 		})
 
-		const details = await loadReportingDetails(client, securityPoolAddress, viewerAddress)
+		const details = await loadReportingDetails(client, questionLedgerAddress, viewerAddress)
 
 		if (details.status !== 'active') throw new Error('Expected active reporting details')
 		expect(details.contributionFunding).toBe('wallet')
@@ -639,7 +639,7 @@ describe('reporting protocol client', () => {
 			}),
 		})
 
-		const details = await loadReportingDetails(client, securityPoolAddress, viewerAddress)
+		const details = await loadReportingDetails(client, questionLedgerAddress, viewerAddress)
 
 		if (details.status !== 'active') throw new Error('Expected active reporting details')
 		expect(details.status).toBe('active')
@@ -694,7 +694,7 @@ describe('reporting protocol client', () => {
 			}),
 		})
 
-		const details = await loadReportingDetails(client, securityPoolAddress, undefined)
+		const details = await loadReportingDetails(client, questionLedgerAddress, undefined)
 
 		if (details.status !== 'active') throw new Error('Expected active reporting details')
 		expect(details.settlementState).toBe(expected)
@@ -757,7 +757,7 @@ describe('reporting protocol client', () => {
 			}),
 		})
 
-		const details = await loadReportingDetails(client, securityPoolAddress, viewerAddress)
+		const details = await loadReportingDetails(client, questionLedgerAddress, viewerAddress)
 
 		if (details.status !== 'active') throw new Error('Expected active reporting details')
 		expect(details.settlementState).toBe('locked')
@@ -784,7 +784,7 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'repToken') return repTokenAddress
 				if (request.functionName === 'balanceOf') return 100n
 				if (request.functionName === 'allowance') {
-					expect(request.args).toEqual([vaultAddress, securityPoolAddress])
+					expect(request.args).toEqual([vaultAddress, questionLedgerAddress])
 					return 0n
 				}
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
@@ -792,7 +792,7 @@ describe('reporting protocol client', () => {
 			}),
 		})
 
-		const details = await loadReportingDetails(client, securityPoolAddress, vaultAddress)
+		const details = await loadReportingDetails(client, questionLedgerAddress, vaultAddress)
 
 		expect(details.status).toBe('not-started')
 		expect(details.contributionFunding).toBe('wallet')
@@ -830,7 +830,7 @@ describe('reporting protocol client', () => {
 			}),
 		})
 
-		const details = await loadReportingDetails(client, securityPoolAddress, undefined)
+		const details = await loadReportingDetails(client, questionLedgerAddress, undefined)
 
 		expect(details.status).toBe('not-started')
 		expect(forkContinuationRead).toBe(false)
@@ -856,7 +856,7 @@ describe('reporting protocol client', () => {
 			}),
 		})
 
-		await expect(loadReportingDetails(client, securityPoolAddress, undefined)).rejects.toThrow(missingForkContinuationGetterMessage)
+		await expect(loadReportingDetails(client, questionLedgerAddress, undefined)).rejects.toThrow(missingForkContinuationGetterMessage)
 	})
 
 	test('loadReportingDetails keeps a known child outcome locked until the pool becomes operational', async () => {
@@ -879,7 +879,7 @@ describe('reporting protocol client', () => {
 			}),
 		})
 
-		const details = await loadReportingDetails(client, securityPoolAddress, undefined)
+		const details = await loadReportingDetails(client, questionLedgerAddress, undefined)
 
 		expect(details.status).toBe('not-started')
 		expect(details.questionOutcome).toBe('yes')
@@ -905,7 +905,7 @@ describe('reporting protocol client', () => {
 			throw new Error(`Unexpected start index: ${startIndex.toString()}`)
 		})
 
-		const details = await loadReportingDetails(client, securityPoolAddress, undefined)
+		const details = await loadReportingDetails(client, questionLedgerAddress, undefined)
 		if (details.status !== 'active') throw new Error('Expected active reporting details')
 		const deposits = details.sides.find(side => side.key === 'yes')?.deposits
 		if (deposits === undefined) throw new Error('Expected yes side deposits')
@@ -920,7 +920,7 @@ describe('reporting protocol client', () => {
 	test('loadReportingDetails rejects malformed deposit pages instead of dropping entries', async () => {
 		const client = createActiveReportingClient(() => [{ amountAttoRep: 1n, cumulativeAmountAttoRep: 1n, depositor: 'not-an-address' }])
 
-		await expect(loadReportingDetails(client, securityPoolAddress, undefined)).rejects.toThrow('Unexpected escalation deposit page response')
+		await expect(loadReportingDetails(client, questionLedgerAddress, undefined)).rejects.toThrow('Unexpected escalation deposit page response')
 	})
 
 	test('buildForkCarriedEscalationProofs rejects malformed historical carry nodes instead of dropping entries', async () => {
@@ -932,7 +932,7 @@ describe('reporting protocol client', () => {
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'parent') return [alternateSecurityPoolAddress, escalationGameAddress]
+				if (functionName === 'parent') return [alternateQuestionLedgerAddress, escalationGameAddress]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
@@ -954,7 +954,7 @@ describe('reporting protocol client', () => {
 			}),
 		})
 
-		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [1n])).rejects.toThrow('Unexpected historical carry node parent deposit index response')
+		await expect(buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [1n])).rejects.toThrow('Unexpected historical carry node parent deposit index response')
 	})
 
 	test('buildForkCarriedEscalationProofs requires the forkContinuation getter', async () => {
@@ -966,7 +966,7 @@ describe('reporting protocol client', () => {
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'parent') return [alternateSecurityPoolAddress, escalationGameAddress]
+				if (functionName === 'parent') return [alternateQuestionLedgerAddress, escalationGameAddress]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
@@ -984,14 +984,14 @@ describe('reporting protocol client', () => {
 			}),
 		})
 
-		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [])).rejects.toThrow(missingForkContinuationGetterMessage)
+		await expect(buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [])).rejects.toThrow(missingForkContinuationGetterMessage)
 	})
 
 	test('buildForkCarriedEscalationProofs retains historical leaves when hashing the frozen child snapshot', async () => {
 		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
 		const firstDepositor = getAddress('0x00000000000000000000000000000000000000f2')
 		const secondDepositor = getAddress('0x00000000000000000000000000000000000000f3')
-		const securityPoolForkerAddress = getAddress('0x00000000000000000000000000000000000000f4')
+		const questionForkerAddress = getAddress('0x00000000000000000000000000000000000000f4')
 		const zeroHash = ('0x' + '00'.repeat(32)) as Hex
 		const emptyNullifierRoot = computeEmptyNullifierRootForTest()
 		const firstLeaf = {
@@ -1019,11 +1019,11 @@ describe('reporting protocol client', () => {
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'parent') return [alternateSecurityPoolAddress, escalationGameAddress]
+				if (functionName === 'parent') return [alternateQuestionLedgerAddress, escalationGameAddress]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.address === alternateSecurityPoolAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
+				if (request.address === alternateQuestionLedgerAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
 				if (request.address === parentEscalationGameAddress && request.functionName === 'getOutcomeState') {
 					return {
 						currentCarryRoot: secondLeafHash,
@@ -1043,9 +1043,9 @@ describe('reporting protocol client', () => {
 					}
 				}
 				if (request.address === parentEscalationGameAddress && request.functionName === 'forkContinuation') return false
-				if (request.address === parentEscalationGameAddress && request.functionName === 'securityPool') return alternateSecurityPoolAddress
-				if (request.address === alternateSecurityPoolAddress && request.functionName === 'securityPoolForker') return securityPoolForkerAddress
-				if (request.address === securityPoolForkerAddress && request.functionName === 'isEscalationDepositClaimedDirectly') return true
+				if (request.address === parentEscalationGameAddress && request.functionName === 'questionLedger') return alternateQuestionLedgerAddress
+				if (request.address === alternateQuestionLedgerAddress && request.functionName === 'questionForker') return questionForkerAddress
+				if (request.address === questionForkerAddress && request.functionName === 'isEscalationDepositClaimedDirectly') return true
 				if (request.address === parentEscalationGameAddress && request.functionName === 'getCarryLeafPageByOutcome') return [[firstLeaf, secondLeaf], 0n]
 				if (request.address === parentEscalationGameAddress && request.functionName === 'nodes') {
 					const args = request.args
@@ -1059,7 +1059,7 @@ describe('reporting protocol client', () => {
 			}),
 		})
 
-		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [secondLeaf.parentDepositIndex])).resolves.toMatchObject([
+		await expect(buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [secondLeaf.parentDepositIndex])).resolves.toMatchObject([
 			{
 				depositor: secondDepositor,
 				leafIndex: 1n,
@@ -1071,7 +1071,7 @@ describe('reporting protocol client', () => {
 
 	test('buildForkCarriedEscalationProofs preserves recursive carry append order instead of sorting by parentDepositIndex', async () => {
 		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
-		const grandparentSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000f2')
+		const grandparentQuestionLedgerAddress = getAddress('0x00000000000000000000000000000000000000f2')
 		const grandparentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f3')
 		const depositor = getAddress('0x00000000000000000000000000000000000000f4')
 		const zeroHash = '0x0000000000000000000000000000000000000000000000000000000000000000' satisfies Hex
@@ -1101,12 +1101,12 @@ describe('reporting protocol client', () => {
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'parent') return [alternateSecurityPoolAddress, escalationGameAddress]
+				if (functionName === 'parent') return [alternateQuestionLedgerAddress, escalationGameAddress]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.address === alternateSecurityPoolAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
-				if (request.address === grandparentSecurityPoolAddress && request.functionName === 'escalationGame') return grandparentEscalationGameAddress
+				if (request.address === alternateQuestionLedgerAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
+				if (request.address === grandparentQuestionLedgerAddress && request.functionName === 'escalationGame') return grandparentEscalationGameAddress
 				if (request.address === parentEscalationGameAddress && request.functionName === 'getOutcomeState') {
 					return {
 						currentCarryRoot: parentCarryRoot,
@@ -1136,10 +1136,10 @@ describe('reporting protocol client', () => {
 				}
 				if (request.address === parentEscalationGameAddress && request.functionName === 'forkContinuation') return true
 				if (request.address === grandparentEscalationGameAddress && request.functionName === 'forkContinuation') return false
-				if (request.address === parentEscalationGameAddress && request.functionName === 'securityPool') return alternateSecurityPoolAddress
-				if (request.address === grandparentEscalationGameAddress && request.functionName === 'securityPool') return grandparentSecurityPoolAddress
-				if (request.address === alternateSecurityPoolAddress && request.functionName === 'parent') return grandparentSecurityPoolAddress
-				if (request.address === grandparentSecurityPoolAddress && request.functionName === 'parent') return zeroAddress
+				if (request.address === parentEscalationGameAddress && request.functionName === 'questionLedger') return alternateQuestionLedgerAddress
+				if (request.address === grandparentEscalationGameAddress && request.functionName === 'questionLedger') return grandparentQuestionLedgerAddress
+				if (request.address === alternateQuestionLedgerAddress && request.functionName === 'parent') return grandparentQuestionLedgerAddress
+				if (request.address === grandparentQuestionLedgerAddress && request.functionName === 'parent') return zeroAddress
 				if (request.address === parentEscalationGameAddress && request.functionName === 'nodes') {
 					return [0n, childLocalLeaf.depositor, 1, childLocalLeaf.amountAttoRep, childLocalLeaf.parentDepositIndex, childLocalLeaf.cumulativeAmountAttoRep, 1n]
 				}
@@ -1157,7 +1157,7 @@ describe('reporting protocol client', () => {
 			}),
 		})
 
-		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [9n, 1n])).resolves.toMatchObject([
+		await expect(buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [9n, 1n])).resolves.toMatchObject([
 			{ leafIndex: 0n, parentDepositIndex: 9n },
 			{ leafIndex: 1n, parentDepositIndex: 1n },
 		])
@@ -1165,10 +1165,10 @@ describe('reporting protocol client', () => {
 
 	test('buildForkCarriedEscalationProofs preserves a zeroed local position in a recursive frozen snapshot', async () => {
 		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
-		const grandparentSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000f2')
+		const grandparentQuestionLedgerAddress = getAddress('0x00000000000000000000000000000000000000f2')
 		const grandparentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f3')
 		const depositor = getAddress('0x00000000000000000000000000000000000000f4')
-		const securityPoolForkerAddress = getAddress('0x00000000000000000000000000000000000000f5')
+		const questionForkerAddress = getAddress('0x00000000000000000000000000000000000000f5')
 		const zeroHash = ('0x' + '00'.repeat(32)) as Hex
 		const emptyNullifierRoot = computeEmptyNullifierRootForTest()
 		const inheritedLeaf = {
@@ -1195,12 +1195,12 @@ describe('reporting protocol client', () => {
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'parent') return [alternateSecurityPoolAddress, escalationGameAddress]
+				if (functionName === 'parent') return [alternateQuestionLedgerAddress, escalationGameAddress]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.address === alternateSecurityPoolAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
-				if (request.address === grandparentSecurityPoolAddress && request.functionName === 'escalationGame') return grandparentEscalationGameAddress
+				if (request.address === alternateQuestionLedgerAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
+				if (request.address === grandparentQuestionLedgerAddress && request.functionName === 'escalationGame') return grandparentEscalationGameAddress
 				if (request.address === parentEscalationGameAddress && request.functionName === 'getOutcomeState') {
 					return { currentNullifierRoot: emptyNullifierRoot, localHeadNodeId: 2n, snapshotLeafCount: 1n }
 				}
@@ -1212,11 +1212,11 @@ describe('reporting protocol client', () => {
 				}
 				if (request.address === parentEscalationGameAddress && request.functionName === 'forkContinuation') return true
 				if (request.address === grandparentEscalationGameAddress && request.functionName === 'forkContinuation') return false
-				if (request.address === parentEscalationGameAddress && request.functionName === 'securityPool') return alternateSecurityPoolAddress
-				if (request.address === grandparentEscalationGameAddress && request.functionName === 'securityPool') return grandparentSecurityPoolAddress
-				if (request.address === alternateSecurityPoolAddress && request.functionName === 'parent') return grandparentSecurityPoolAddress
-				if (request.address === grandparentSecurityPoolAddress && request.functionName === 'parent') return zeroAddress
-				if (request.functionName === 'securityPoolForker') return securityPoolForkerAddress
+				if (request.address === parentEscalationGameAddress && request.functionName === 'questionLedger') return alternateQuestionLedgerAddress
+				if (request.address === grandparentEscalationGameAddress && request.functionName === 'questionLedger') return grandparentQuestionLedgerAddress
+				if (request.address === alternateQuestionLedgerAddress && request.functionName === 'parent') return grandparentQuestionLedgerAddress
+				if (request.address === grandparentQuestionLedgerAddress && request.functionName === 'parent') return zeroAddress
+				if (request.functionName === 'questionForker') return questionForkerAddress
 				if (request.functionName === 'isEscalationDepositClaimedDirectly') return false
 				if (request.address === parentEscalationGameAddress && request.functionName === 'nodes') {
 					return [0n, settledLocalLeaf.depositor, 1, settledLocalLeaf.amountAttoRep, settledLocalLeaf.parentDepositIndex, settledLocalLeaf.cumulativeAmountAttoRep, 1n]
@@ -1231,7 +1231,7 @@ describe('reporting protocol client', () => {
 			}),
 		})
 
-		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [inheritedLeaf.parentDepositIndex])).resolves.toMatchObject([
+		await expect(buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [inheritedLeaf.parentDepositIndex])).resolves.toMatchObject([
 			{
 				leafIndex: 0n,
 				merkleMountainRangeSiblings: [zeroHash],
@@ -1242,7 +1242,7 @@ describe('reporting protocol client', () => {
 
 	test('buildForkCarriedEscalationProofs inherits recursive proof consumption and rejects the consumed leaf', async () => {
 		const parentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f1')
-		const grandparentSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000f2')
+		const grandparentQuestionLedgerAddress = getAddress('0x00000000000000000000000000000000000000f2')
 		const grandparentEscalationGameAddress = getAddress('0x00000000000000000000000000000000000000f3')
 		const depositor = getAddress('0x00000000000000000000000000000000000000f4')
 		const zeroHash = ('0x' + '00'.repeat(32)) as Hex
@@ -1260,12 +1260,12 @@ describe('reporting protocol client', () => {
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'parent') return [alternateSecurityPoolAddress, escalationGameAddress]
+				if (functionName === 'parent') return [alternateQuestionLedgerAddress, escalationGameAddress]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.address === alternateSecurityPoolAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
-				if (request.address === grandparentSecurityPoolAddress && request.functionName === 'escalationGame') return grandparentEscalationGameAddress
+				if (request.address === alternateQuestionLedgerAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
+				if (request.address === grandparentQuestionLedgerAddress && request.functionName === 'escalationGame') return grandparentEscalationGameAddress
 				if (request.address === escalationGameAddress && request.functionName === 'getOutcomeState') {
 					return { currentNullifierRoot: inheritedNullifierRoot, snapshotLeafCount: 2n, snapshotCarryRoot: getCarrySnapshotRoot(2n, snapshotPeaks) }
 				}
@@ -1278,12 +1278,12 @@ describe('reporting protocol client', () => {
 				if (request.address === escalationGameAddress && request.functionName === 'forkContinuation') return true
 				if (request.address === parentEscalationGameAddress && request.functionName === 'forkContinuation') return true
 				if (request.address === grandparentEscalationGameAddress && request.functionName === 'forkContinuation') return false
-				if (request.address === escalationGameAddress && request.functionName === 'securityPool') return securityPoolAddress
-				if (request.address === parentEscalationGameAddress && request.functionName === 'securityPool') return alternateSecurityPoolAddress
-				if (request.address === grandparentEscalationGameAddress && request.functionName === 'securityPool') return grandparentSecurityPoolAddress
-				if (request.address === securityPoolAddress && request.functionName === 'parent') return alternateSecurityPoolAddress
-				if (request.address === alternateSecurityPoolAddress && request.functionName === 'parent') return grandparentSecurityPoolAddress
-				if (request.address === grandparentSecurityPoolAddress && request.functionName === 'parent') return zeroAddress
+				if (request.address === escalationGameAddress && request.functionName === 'questionLedger') return questionLedgerAddress
+				if (request.address === parentEscalationGameAddress && request.functionName === 'questionLedger') return alternateQuestionLedgerAddress
+				if (request.address === grandparentEscalationGameAddress && request.functionName === 'questionLedger') return grandparentQuestionLedgerAddress
+				if (request.address === questionLedgerAddress && request.functionName === 'parent') return alternateQuestionLedgerAddress
+				if (request.address === alternateQuestionLedgerAddress && request.functionName === 'parent') return grandparentQuestionLedgerAddress
+				if (request.address === grandparentQuestionLedgerAddress && request.functionName === 'parent') return zeroAddress
 				if (request.address === grandparentEscalationGameAddress && request.functionName === 'nodes') {
 					const args = request.args
 					if (!Array.isArray(args)) throw new Error('Expected node args')
@@ -1299,8 +1299,8 @@ describe('reporting protocol client', () => {
 			}),
 		})
 
-		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [secondLeaf.parentDepositIndex])).resolves.toMatchObject([{ leafIndex: 1n, parentDepositIndex: secondLeaf.parentDepositIndex }])
-		await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [firstLeaf.parentDepositIndex])).rejects.toThrow('Parent deposit #9 is already settled.')
+		await expect(buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [secondLeaf.parentDepositIndex])).resolves.toMatchObject([{ leafIndex: 1n, parentDepositIndex: secondLeaf.parentDepositIndex }])
+		await expect(buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [firstLeaf.parentDepositIndex])).rejects.toThrow('Parent deposit #9 is already settled.')
 	})
 
 	test('buildForkCarriedEscalationProofs encodes global leaf indexes with the containing peak height for three- and six-leaf tail peaks', async () => {
@@ -1327,11 +1327,11 @@ describe('reporting protocol client', () => {
 				multicall: createMulticallStub(async request => {
 					const firstContract = request.contracts[0]
 					const functionName = getContractFunctionName(firstContract)
-					if (functionName === 'parent') return [alternateSecurityPoolAddress, escalationGameAddress]
+					if (functionName === 'parent') return [alternateQuestionLedgerAddress, escalationGameAddress]
 					throw new Error(`Unexpected multicall contract: ${functionName}`)
 				}),
 				readContract: createReadContractStub(async request => {
-					if (request.address === alternateSecurityPoolAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
+					if (request.address === alternateQuestionLedgerAddress && request.functionName === 'escalationGame') return parentEscalationGameAddress
 					if (request.address === escalationGameAddress && request.functionName === 'getOutcomeState') {
 						return { currentNullifierRoot: computeEmptyNullifierRootForTest(), snapshotLeafCount: BigInt(leafCount), snapshotCarryRoot: getCarrySnapshotRoot(BigInt(leafCount), snapshotPeaks) }
 					}
@@ -1353,7 +1353,7 @@ describe('reporting protocol client', () => {
 				}),
 			})
 
-			await expect(buildForkCarriedEscalationProofs(client, securityPoolAddress, 'yes', [targetLeaf.parentDepositIndex])).resolves.toMatchObject([{ leafIndex: BigInt(targetGlobalIndex), merkleMountainRangePeakIndex: targetPeakHeight, parentDepositIndex: targetLeaf.parentDepositIndex }])
+			await expect(buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [targetLeaf.parentDepositIndex])).resolves.toMatchObject([{ leafIndex: BigInt(targetGlobalIndex), merkleMountainRangePeakIndex: targetPeakHeight, parentDepositIndex: targetLeaf.parentDepositIndex }])
 		}
 	})
 
@@ -1373,7 +1373,7 @@ describe('reporting protocol client', () => {
 			},
 		)
 
-		const result = await withdrawForkedEscalationDeposits(asWriteClient(client), securityPoolAddress, 'yes', [
+		const result = await withdrawForkedEscalationDeposits(asWriteClient(client), questionLedgerAddress, 'yes', [
 			{
 				depositor: vaultAddress,
 				amountAttoRep: 5n,
@@ -1387,10 +1387,10 @@ describe('reporting protocol client', () => {
 			},
 		])
 
-		expect(capturedTo).toBe(securityPoolAddress)
+		expect(capturedTo).toBe(questionLedgerAddress)
 		expect(capturedData).toBeDefined()
 		const decodedCall = decodeFunctionData({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
+			abi: statoblast_QuestionLedger_QuestionLedger.abi,
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
 		expect(decodedCall.functionName).toBe('withdrawForkedEscalationDeposits')
@@ -1411,7 +1411,7 @@ describe('reporting protocol client', () => {
 		expect(result).toEqual({
 			action: 'settleForkedEscalation',
 			hash: mockTransactionHash,
-			securityPoolAddress,
+			questionLedgerAddress,
 			universeId: 12n,
 		})
 	})
@@ -1434,7 +1434,7 @@ for (const remaining of [0n, 1n, 60n, 61n]) {
 			},
 		)
 		const client = { ...asWriteClient(writer), getBlock: async () => createBlockWithTimestamp(1000n - remaining) }
-		const result = reportOutcomeInSecurityPool(client, securityPoolAddress, 'no', 2n)
+		const result = reportOutcomeInQuestionLedger(client, questionLedgerAddress, 'no', 2n)
 		if (remaining > 60n) {
 			await expect(result).resolves.toHaveProperty('action', 'reportOutcome')
 			expect(sends).toBe(1)

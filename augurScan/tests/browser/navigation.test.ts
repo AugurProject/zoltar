@@ -64,7 +64,7 @@ browserTest(
 			await evaluate(`document.querySelector('#richlist-rows .rich-address').click()`)
 			await waitFor(`document.querySelector('.address-profile-panel .rich-position') !== null`)
 			expect(await evaluate(`new URL(document.querySelector('#address-back').href).pathname`)).toBe('/addresses')
-			expect(await evaluate(`document.querySelector('#address-profile')?.textContent ?? document.body.textContent`)).toContain('Security pools')
+			expect(await evaluate(`document.querySelector('#address-profile')?.textContent ?? document.body.textContent`)).toContain('Question ledgers')
 			await session.send('Page.navigate', { url: `${origin}/question/501?demo=1&chainId=1&entity501=1` })
 			await waitFor(`document.querySelector('#state-detail')?.textContent.includes('Question 501')`)
 			expect(await evaluate(`document.querySelector('#state-detail .state-detail-title')?.textContent`)).toBe('Question 501')

@@ -235,7 +235,7 @@ function largestTradableBuy(market: LiveMarket, side: Side, ceiling: bigint, sli
 
 /**
  * The 25%, 50%, and Max shortcuts for a buy, trimmed to eight decimals like the sell shortcuts. They divide what can be
- * bought now: the wallet's ETH less the gas reserve and the security pool's remaining minting capacity, capped where the
+ * bought now: the wallet's ETH less the gas reserve and the question ledger's remaining minting capacity, capped where the
  * price impact would pass the refused tier, so no shortcut fills an amount the ticket would then refuse.
  */
 function buyShortcuts(market: LiveMarket, side: Side, walletEthAttoEth: bigint | undefined, slippageBps: bigint) {
@@ -256,7 +256,7 @@ function insufficientEthReason(payAttoEth: bigint, walletEthAttoEth: bigint) {
 }
 
 /**
- * A buy mints complete sets, which the security pool refuses past its remaining capacity. The reason states the largest
+ * A buy mints complete sets, which the question ledger refuses past its remaining capacity. The reason states the largest
  * buy that is accepted: the capacity, or the price-impact limit when buying the whole capacity would itself be refused.
  */
 function mintingCapacityReason(payAttoEth: bigint, market: LiveMarket, side: Side, slippageBps: bigint) {

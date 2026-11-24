@@ -14,10 +14,10 @@
 			"bun": "./ts/trading/positions.ts",
 			"default": "./js/trading/positions.js"
 		},
-		"./trading/portfolioMint": {
-			"types": "./ts/trading/portfolioMint.ts",
-			"bun": "./ts/trading/portfolioMint.ts",
-			"default": "./js/trading/portfolioMint.js"
+		"./trading/securityPoolMint": {
+			"types": "./ts/trading/securityPoolMint.ts",
+			"bun": "./ts/trading/securityPoolMint.ts",
+			"default": "./js/trading/securityPoolMint.js"
 		},
 		"./trading/receiveRequest": {
 			"types": "./ts/trading/receiveRequest.ts",

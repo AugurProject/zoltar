@@ -1,7 +1,7 @@
 import { hasSubmissionWindow } from '@zoltar/ui-core-shared/transactions/submissionTiming.js'
 import type { WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_QuestionLedger_QuestionLedger } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import type { LiveMarket } from './liveMarket.js'
 import { latestBlockIdentity } from './tradeQuote.js'
 import * as copy from '../copy/availability.js'
@@ -23,7 +23,7 @@ export function capSubmissionDeadline(timing: SubmissionTiming, operation: Submi
 
 export async function submissionDeadline(client: WalletClient, market: LiveMarket, operation: SubmissionOperation, block: Readonly<{ blockNumber: bigint; blockTimestamp: bigint }>, requestedDeadline: bigint) {
 	if (operation === 'remove') return requestedDeadline
-	const questionData = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: market.pool, functionName: 'questionData', blockNumber: block.blockNumber })
+	const questionData = await client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: market.pool, functionName: 'questionData', blockNumber: block.blockNumber })
 	const endTime = await client.readContract({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, address: questionData, functionName: 'getQuestionEndDate', args: [market.questionId], blockNumber: block.blockNumber })
 	const blocker = submissionWindowBlocker({ endTime }, operation, block.blockTimestamp)
 	if (blocker !== undefined) throw new Error(blocker)

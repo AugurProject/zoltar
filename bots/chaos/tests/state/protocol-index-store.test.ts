@@ -96,7 +96,7 @@ function protocolIndex(cursorBlockNumber = '50', cursorByte = '44'): ChaosProtoc
 		openOracle,
 		reports: [report(openOracle)],
 		schemaVersion: 5,
-		securityPoolForker: address(30),
+		questionForker: address(30),
 		startBlock: '10',
 		wallet: address(22),
 		zoltar: address(31),

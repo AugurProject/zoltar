@@ -1,0 +1,121 @@
+import { describe, expect, test } from 'bun:test'
+import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
+import {
+	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
+	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
+	statoblast_SecurityPoolSettlement_SecurityPoolSettlement as engineArtifact,
+	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
+} from '../../types/contractArtifact'
+import { createQuestion, makeQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { approveToken } from '../../testSupport/simulator/utils/utilities'
+import { unit, useSecurityPoolFixture } from './securityPoolFixture'
+
+// On-chain redemption gas regression with densely populated reachable fee-end buckets.
+const CAP = 16_777_216n
+const YEAR = 365n * 86_400n
+const REACHABLE_LEVELS = 11n
+
+describe('Statoblast security pool: fee-stream end keys chosen by dust buyers', () => {
+	const fixture = useSecurityPoolFixture()
+
+	test('dust neighbours in every reachable sibling subtree leave complete-set redemption well under the gas cap', async () => {
+		const attacker = fixture.owner()
+		const victim = fixture.other()
+		const window = fixture.base.mockWindow
+		const engine = await attacker.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'settlement' })
+		const book = await attacker.readContract({ abi: engineArtifact.abi, address: engine, functionName: 'ledger' })
+		const bookId = await attacker.readContract({ abi: engineArtifact.abi, address: engine, functionName: 'bookIds', args: [fixture.base.genesisUniverse] })
+		const feeEnd = async (questionId: bigint) => BigInt((await attacker.readContract({ abi: bookArtifact.abi, address: book, functionName: 'question', args: [bookId, questionId] }))[0].feeEnd)
+		const granularity = await attacker.readContract({ abi: bookArtifact.abi, address: book, functionName: 'feeEndGranularity' })
+		expect(granularity).toBe(86_400n)
+		const annualFeeBps = await attacker.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'annualFeeBps' })
+		const minimumRate = await attacker.readContract({ abi: bookArtifact.abi, address: book, functionName: 'minimumOutcomeExchangeRate' })
+		const services = await attacker.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'services' })
+		const collateral = await attacker.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'collateralToken' })
+		await approveToken(attacker, collateral, services)
+		await approveToken(victim, collateral, services)
+		await fixture.prepare()
+
+		// Unrounded stream length of a first purchase of n attoETH into an empty question of a book whose
+		// unit price is exactly 1e-9 attoETH (SecurityPoolPurchase.feeStream and the book budget).
+		const duration = (n: bigint) => {
+			const units = n * 10n ** 9n
+			const reservedCash = (n * minimumRate + 10n ** 18n - 1n) / 10n ** 18n
+			if (reservedCash >= n) return 0n
+			const rate = (units * annualFeeBps) / (10_000n * YEAR)
+			return rate === 0n ? 0n : (units - reservedCash * 10n ** 9n) / rate
+		}
+		// Largest duration(n) <= need for n in [2, 10^12]; duration grows with n up to integer jitter.
+		const bestDust = (need: bigint) => {
+			let low = 2n
+			let high = 10n ** 12n
+			if (duration(high) <= need) return high
+			while (low < high) {
+				const middle = (low + high + 1n) / 2n
+				if (duration(middle) <= need) low = middle
+				else high = middle - 1n
+			}
+			let best = low
+			for (let n = low > 400n ? low - 400n : 2n; n <= low + 400n; n++) if (duration(n) <= need && duration(n) > duration(best)) best = n
+			return best
+		}
+		const now0 = await window.getTime()
+		const makeId = async (title: string) => {
+			// The fixture can advance by up to 2,048 daily buckets.
+			const data = makeQuestion(title, now0 + 15n * YEAR)
+			await createQuestion(attacker, data, fixture.base.outcomes)
+			return getQuestionId(data, fixture.base.outcomes)
+		}
+
+		// Place the reference stream above the other reachable buckets in the fixture.
+		const victimId = await makeId('fee end depth victim')
+		await fixture.register(victimId, fixture.securityPool, victim)
+		const victimPool = fixture.poolFor(victimId).questionLedger
+		const victimDuration = duration(10n * unit)
+		const mask = (1n << REACHABLE_LEVELS) - 1n
+		const earliest = (await window.getTime()) + 2n * granularity + 5_000n + victimDuration
+		const bucket = ((earliest + granularity - 1n) / granularity) | mask
+		const key = bucket * granularity
+		const victimPurchase = key - victimDuration + granularity / 2n
+		await window.setTime(victimPurchase - 700n)
+		await fixture.refreshPrice()
+		await window.setTime(victimPurchase - 1n)
+		await fixture.mint(10n * unit, victimId, { sender: victim })
+		expect(await feeEnd(victimId)).toBe(key)
+		const redeemWithCap = async () => {
+			const hash = await victim.writeContract({ abi: poolArtifact.abi, address: victimPool, functionName: 'redeemCompleteSet', args: [unit], gas: CAP })
+			return victim.waitForTransactionReceipt({ hash })
+		}
+		const snapshot = await window.anvilSnapshot()
+		const baseline = await redeemWithCap()
+		expect(baseline.status).toBe('success')
+		await window.anvilRevert(snapshot)
+
+		const placed: bigint[] = []
+		for (let level = 0n; level < REACHABLE_LEVELS; level++) {
+			const width = (1n << level) * granularity
+			const lo = (((bucket >> level) ^ 1n) << level) * granularity
+			await fixture.refreshPrice()
+			const when = (await window.getTime()) + 3n
+			const amount = bestDust(lo + width - 1n - width / 8n - when)
+			expect(when + duration(amount)).toBeGreaterThanOrEqual(lo + width / 8n)
+			const id = await makeId(`fee end depth dust ${level}`)
+			await fixture.register(id, fixture.securityPool, attacker)
+			await window.setTime(when - 1n)
+			await fixture.mint(amount, id, { sender: attacker })
+			const end = await feeEnd(id)
+			expect(end % granularity).toBe(0n)
+			expect(end >= lo && end < lo + width).toBe(true)
+			placed.push(level)
+		}
+		expect(placed.length).toBe(Number(REACHABLE_LEVELS))
+		expect(await feeEnd(victimId)).toBe(key)
+
+		await fixture.refreshPrice()
+		const receipt = await redeemWithCap()
+		console.log({ victimFeeEndKey: key, placedLevels: placed.length, baselineRedeemCompleteSetGas: baseline.gasUsed, attackedRedeemCompleteSetGas: receipt.gasUsed })
+		expect(receipt.status).toBe('success')
+		// The settlement-book test separately covers all 17 possible branching levels.
+		expect(receipt.gasUsed).toBeLessThan(10_000_000n)
+	})
+})

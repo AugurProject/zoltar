@@ -19,7 +19,7 @@ for (const mode of ['committed', 'reorg', 'store failure'] as const) {
 			spyOn(indexer.providers.client, 'readContract').mockImplementation(async ({ abi, functionName }) => {
 				const method = abi.find(entry => entry.type === 'function' && entry.name === functionName)
 				if (method?.type !== 'function' || method.outputs === undefined) throw new Error(`Missing fixture function ${functionName}`)
-				const values: Readonly<Record<string, unknown>> = { securityPoolFactory: pool, getSecurityPoolPortfolio: pool, collateralToken: pool, symbol: 'USDC', decimals: 6n, awaitingForkContinuation: false, isEscalationResolved: false }
+				const values: Readonly<Record<string, unknown>> = { securityPoolFactory: pool, securityPoolOf: pool, collateralToken: pool, symbol: 'USDC', decimals: 6n, awaitingForkContinuation: false, isEscalationResolved: false }
 				const value = values[functionName] ?? 1n
 				return decodeFunctionResult({ abi, functionName, data: encodeAbiParameters(method.outputs, [value]) })
 			}),

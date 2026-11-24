@@ -1,0 +1,81 @@
+import type { SecurityPoolObservation } from '../../src/monitoring/security-pool-monitor.ts'
+import { parseSettings } from '../../src/config/settings.ts'
+import example from '../../config/operator.example.json'
+import { getAddress } from '@zoltar/bot-shared/ethereum'
+
+export const unit = 10n ** 18n
+export const securityPoolAddress = getAddress('0x0000000000000000000000000000000000000011')
+export const ownerAddress = getAddress('0x0000000000000000000000000000000000000012')
+export const targetAddress = getAddress('0x0000000000000000000000000000000000000013')
+export function securityPoolSettings() {
+	return parseSettings({
+		...example,
+		selectedSecurityPools: [{ address: securityPoolAddress, universeId: '0' }],
+		approvedUniverses: ['0'],
+		securityPoolPolicy: { takeoverIncomeHorizonSeconds: 31_536_000, allowFundedTakeovers: true, maximumPrincipalRep: '1000', maximumTotalPrincipalRep: '2000', maximumCommitmentEth: '1000', maximumOwnFundingRep: '1000', minimumNetRewardEth: '0.001', walletReserveEth: '0.01', targetHealthFactorBps: 15000 },
+		strategy: { ...example.strategy, maximumGasCostEth: '0.001', walletReserveRep: '1' },
+	})
+}
+export function securityPoolObservation(): SecurityPoolObservation {
+	const position = { id: 1n, owner: targetAddress, batch: 0n, rep: 99n * unit, commitment: 100n * unit, maxHealthyPrice: unit - 1n, remainingCommitment: 0n, liquidationStarted: 100n, retirementStatus: 'No pending reduction', stalledRetirement: false }
+	return {
+		selection: { address: securityPoolAddress, universeId: 0n },
+		selected: true,
+		approvedUniverse: true,
+		acceptedPriceEpoch: 3n,
+		knownPositionCount: 1n,
+		positions: [position],
+		nextScope: { address: securityPoolAddress, universeId: 0n, nextPositionId: 1n, sweepEnd: 0n },
+		walletRep: 10_000n * unit,
+		walletAttoEth: 10n * unit,
+		snapshot: {
+			chainId: 1,
+			blockNumber: 123n,
+			blockHash: `0x${'a'.repeat(64)}`,
+			timestamp: 3700n,
+			securityPool: securityPoolAddress,
+			owner: ownerAddress,
+			universeId: 0n,
+			capitalLedger: securityPoolAddress,
+			priceFeed: securityPoolAddress,
+			commitmentIndex: securityPoolAddress,
+			repToken: securityPoolAddress,
+			acceptedPrice: unit,
+			conservativePrice: unit,
+			liquidationPrice: unit,
+			ownerConservativePrice: unit,
+			oracleExposureLimitAttoEth: 100n * unit,
+			securityMultiplierBps: 10_500n,
+			priceValidUntil: 5000n,
+			priceValid: true,
+			demandAttoEth: 100n * unit,
+			totalPledgedAttoRep: 99n * unit,
+			totalCommitmentAttoEth: 100n * unit,
+			healthyCommitmentAttoEth: 0n,
+			availableMintCapacityAttoEth: 0n,
+			totalFreeAttoRep: 0n,
+			currentBatch: 0n,
+			nextBatch: 1n,
+			forkTime: 0n,
+			forkChoiceDeadline: 0n,
+			frozen: false,
+			importing: false,
+			exported: false,
+			ownerAccount: { freeAttoRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, targetHealthFactorBps: 15_000n, positionId: 0n },
+			positions: [],
+			ownerPrincipalAttoRep: 0n,
+			ownerCommitmentAttoEth: 0n,
+			withdrawableAttoRep: 0n,
+			accruedFeesAttoEth: 0n,
+			accruedFeesAttoRep: 0n,
+			economics: {
+				purchaseFeeBps: 100n,
+				annualFeeBps: 100n,
+				minimumPurchaseFeeAttoEth: 1n,
+				minimumCommitmentAttoEth: unit,
+				minimumOutcomeRate: 1n,
+				rewardVestingSeconds: 86_400n,
+			},
+		},
+	}
+}

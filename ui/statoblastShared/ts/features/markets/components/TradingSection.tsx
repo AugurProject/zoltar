@@ -25,8 +25,8 @@ import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getActiveAppChainWalletBlocker, withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../../reporting/lib/reporting.js'
-import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
-import { isMintingPausedByEscalation } from '../../security-pools/lib/poolLifecycle.js'
+import { deriveQuestionLedgerLifecycleState, evaluateQuestionLedgerState } from '../../question-ledgers/lib/questionLedgerState.js'
+import { isMintingPausedByEscalation } from '../../question-ledgers/lib/poolLifecycle.js'
 import {
 	estimateMintCheckpoint,
 	getDefaultShareMigrationTargetOutcomeIndexes,
@@ -76,7 +76,7 @@ export function TradingSection({
 	tradingForkUniverse,
 	tradingResult,
 	showHeader = true,
-	showSecurityPoolAddressInput = true,
+	showQuestionLedgerAddressInput = true,
 }: TradingSectionProps) {
 	const collateralDecimals = collateralFunding?.collateral?.decimals ?? 18
 	const collateralSymbol = collateralFunding?.collateral?.symbol ?? collateralCopy.fallback
@@ -87,8 +87,8 @@ export function TradingSection({
 	const poolUniverseHasForked = selectedPool?.universeHasForked === true || tradingForkUniverse?.hasForked === true
 	const resolvedPoolState =
 		poolState ??
-		evaluateSecurityPoolState({
-			lifecycleState: deriveSecurityPoolLifecycleState({
+		evaluateQuestionLedgerState({
+			lifecycleState: deriveQuestionLedgerLifecycleState({
 				questionOutcome: selectedPool?.questionOutcome,
 				systemState: selectedPool?.systemState,
 				universeHasForked: poolUniverseHasForked,
@@ -261,7 +261,7 @@ export function TradingSection({
 			? []
 			: [
 					{ label: commonCopy.question, value: selectedPool.marketDetails.title },
-					{ identityKey: 'security-pool', label: commonCopy.securityPoolAddress, value: <AddressValue address={selectedPool.securityPoolAddress} /> },
+					{ identityKey: 'security-pool', label: commonCopy.questionLedgerAddress, value: <AddressValue address={selectedPool.questionLedgerAddress} /> },
 					{ identityKey: 'outcome', label: commonCopy.outcome, value: outcome },
 				]
 	const toggleTargetOutcomeIndex = (outcomeIndex: bigint) => {
@@ -321,11 +321,11 @@ export function TradingSection({
 	]
 	const sections = (
 		<>
-			{!showSecurityPoolAddressInput ? undefined : (
+			{!showQuestionLedgerAddressInput ? undefined : (
 				<SectionBlock density='compact' variant='embedded'>
 					<label className='field'>
-						<span>{commonCopy.securityPoolAddress}</span>
-						<FormInput value={tradingForm.securityPoolAddress} onInput={event => onTradingFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder={commonCopy.hexValuePlaceholder} />
+						<span>{commonCopy.questionLedgerAddress}</span>
+						<FormInput value={tradingForm.questionLedgerAddress} onInput={event => onTradingFormChange({ questionLedgerAddress: event.currentTarget.value })} placeholder={commonCopy.hexValuePlaceholder} />
 					</label>
 				</SectionBlock>
 			)}
@@ -427,7 +427,7 @@ export function TradingSection({
 					pending={collateralFunding?.pending ?? false}
 					pendingLabel={commonCopy.formatApprovingToken(collateralSymbol)}
 					requiredAmount={collateralFunding?.requiredCollateral}
-					resetKey={`${selectedPool?.securityPoolAddress}:${collateralFunding?.requiredCollateral}`}
+					resetKey={`${selectedPool?.questionLedgerAddress}:${collateralFunding?.requiredCollateral}`}
 					tokenSymbol={collateralFunding?.collateral?.symbol ?? collateralCopy.fallback}
 					tokenUnits={collateralFunding?.collateral?.decimals ?? 18}
 				/>
@@ -455,7 +455,7 @@ export function TradingSection({
 							disabled={tradingActiveAction !== undefined || collateralFunding?.approvalActive === true || collateralFunding?.recovery === undefined || collateralFunding.error !== undefined}
 							pending={collateralFunding?.pendingRecovery ?? false}
 							pendingLabel={commonCopy.formatApprovingToken(commonCopy.rep)}
-							resetKey={`${selectedPool?.securityPoolAddress}:${collateralFunding?.recovery?.required}`}
+							resetKey={`${selectedPool?.questionLedgerAddress}:${collateralFunding?.recovery?.required}`}
 							onApprove={amount => {
 								if (amount !== undefined) void collateralFunding?.approveRecovery(amount)
 							}}

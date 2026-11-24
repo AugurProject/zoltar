@@ -1,8 +1,8 @@
 import { tokenFunded, loadTradingCollateralAsset } from './collateral.js'
-import { statoblast_SecurityPoolPortfolio_SecurityPoolPortfolio as portfolioArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_SecurityPool_SecurityPool as securityPoolArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { loadBudgetMint, loadMintFees } from './minting.js'
-import { loadCentralPortfolioQuestion } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPortfolioState.js'
-import { requireCanonicalPoolPortfolio } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
+import { loadCentralSecurityPoolQuestion } from '@zoltar/ui-statoblast-shared/protocol/securityPoolState.js'
+import { requireCanonicalSecurityPoolOf } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { submissionDeadline, requireFreshSubmissionWindow } from './submissionWindow.js'
 import { outcomeLabel } from '../copy/outcomes.js'
 import { createRegistryIndex, readIncrementalRegistry, type RegistryIndex } from '@zoltar/ui-core-shared/lib/incrementalRegistry.js'
@@ -10,11 +10,11 @@ import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { estimateMintCheckpoint } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
 import { bigintToSafeNumber, getAddress, zeroAddress, type Address, type Hash, type PublicClient, type WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { tradingContracts } from '../generated/contractArtifact.js'
-import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_QuestionLedger_QuestionLedger } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-statoblast-shared/protocol/securityPoolAbi.js'
+import { QUESTION_LEDGER_QUESTION_OUTCOME_ABI } from '@zoltar/ui-statoblast-shared/protocol/questionLedgerAbi.js'
 import { shareBalanceScope, type LiveBalances, type LiveMarket } from './liveMarket.js'
 import { latestBlockIdentity, maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum, simulateWithDeadline, UI_SLIPPAGE_BPS, type GuardedWalletWrite, type TransactionExpiry } from './tradeQuote.js'
 import { loadTransactionFeeMarket, sellHoldingFeeBlocker } from './holdingFees.js'
@@ -32,29 +32,29 @@ import { isRecoverableContractReadError } from '@zoltar/ui-core-shared/lib/error
 export { forkMigrationSettled, liveBalancesForMarket, lockedMigratedBalance, marketAcceptsNewRisk, marketNewRiskBlocker, marketSettlementPath, OUTCOME_BALANCE_KEYS, shareBalanceScope, type LiveBalances, type LiveMarket } from './liveMarket.js'
 
 const securityPoolFactoryAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
-const securityPoolAbi = statoblast_SecurityPool_SecurityPool.abi
+const questionLedgerAbi = statoblast_QuestionLedger_QuestionLedger.abi
 const zoltarAbi = Zoltar_Zoltar.abi
 const questionDataAbi = ZoltarQuestionData_ZoltarQuestionData.abi
 const pair = tradingContracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
 const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
-async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address, securityPoolFactory: Address) {
+async function loadLiveQuestionLedgerSettings(client: PublicClient, pool: Address, securityPoolFactory: Address) {
 	const block = await client.getBlock()
 	const blockNumber = block.number
 	if (block.hash === null || block.hash === undefined || blockNumber === undefined) throw new Error('Latest block identity is unavailable')
 	const [questionData, zoltar, parent, systemState, awaitingForkContinuation, forker, escalationGame, capital] = await Promise.all([
-		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'questionData' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'zoltar' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'parent' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'systemState' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'awaitingForkContinuation' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'securityPoolForker' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'escalationGame' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'portfolioCustody' }),
+		client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'questionData' }),
+		client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'zoltar' }),
+		client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'parent' }),
+		client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'systemState' }),
+		client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'awaitingForkContinuation' }),
+		client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'questionForker' }),
+		client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'escalationGame' }),
+		client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'securityPoolCustody' }),
 	])
-	const central = await loadCentralPortfolioQuestion(client, pool, capital, blockNumber)
-	// A pool's own custody link is not proof: the market is offered only when the factory deployed the portfolio it reports.
-	if ((await requireCanonicalPoolPortfolio(client, securityPoolFactory, pool, blockNumber)) !== getAddress(central.portfolioAddress)) throw new Error('Market custody belongs to another portfolio.')
-	const token = await client.readContract({ address: central.portfolioAddress, abi: portfolioArtifact.abi, functionName: 'collateralToken', blockNumber })
+	const central = await loadCentralSecurityPoolQuestion(client, pool, capital, blockNumber)
+	// A pool's own custody link is not proof: the market is offered only when the factory deployed the security pool it reports.
+	if ((await requireCanonicalSecurityPoolOf(client, securityPoolFactory, pool, blockNumber)) !== getAddress(central.securityPoolAddress)) throw new Error('Market custody belongs to another portfolio.')
+	const token = await client.readContract({ address: central.securityPoolAddress, abi: securityPoolArtifact.abi, functionName: 'collateralToken', blockNumber })
 	const collateral = await loadTradingCollateralAsset(client, token, blockNumber)
 	const mintFees = await loadMintFees(client, central, blockNumber)
 	const feeAccounting = central
@@ -63,7 +63,7 @@ async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address,
 	const checkpoint = (timestamp: bigint) => estimateMintCheckpoint({ ...feeAccounting, currentTimestamp: timestamp, feeEndTimestamp: feeEndTime })
 	const current = checkpoint(block.timestamp)
 	const projected = checkpoint(block.timestamp + 30n * 24n * 60n * 60n)
-	if (current === undefined || projected === undefined) throw new Error('Security pool fee accounting unavailable')
+	if (current === undefined || projected === undefined) throw new Error('Question ledger fee accounting unavailable')
 	return {
 		questionData,
 		collateral,
@@ -90,9 +90,9 @@ async function loadOriginUniverseId(client: PublicClient, parent: Address, curre
 	const visited = new Set<string>()
 	while (ancestor !== zeroAddress) {
 		const key = ancestor.toLowerCase()
-		if (visited.has(key)) throw new Error('SecurityPool parent lineage contains a cycle')
+		if (visited.has(key)) throw new Error('QuestionLedger parent lineage contains a cycle')
 		visited.add(key)
-		const [universeId, nextParent] = await Promise.all([client.readContract({ abi: securityPoolAbi, address: ancestor, functionName: 'universeId' }), client.readContract({ abi: securityPoolAbi, address: ancestor, functionName: 'parent' })])
+		const [universeId, nextParent] = await Promise.all([client.readContract({ abi: questionLedgerAbi, address: ancestor, functionName: 'universeId' }), client.readContract({ abi: questionLedgerAbi, address: ancestor, functionName: 'parent' })])
 		originUniverseId = universeId
 		ancestor = getAddress(nextParent)
 	}
@@ -128,7 +128,7 @@ type MarketDiscoveryResult = ReturnType<typeof marketDiscoveryPage> & {
 }
 export type MarketDiscoveryProgress = (result: Omit<MarketDiscoveryResult, 'markets'> & { markets: (LiveMarket | undefined)[] }) => void
 
-async function loadDiscoveredMarket(client: PublicClient, configuration: DeploymentConfiguration, deployment: SecurityPoolDeployment) {
+async function loadDiscoveredMarket(client: PublicClient, configuration: DeploymentConfiguration, deployment: QuestionLedgerDeployment) {
 	try {
 		return await loadLiveMarket(client, configuration, deployment)
 	} catch (error) {
@@ -150,8 +150,8 @@ export function marketDiscoveryPage(total: bigint, requestedStart = 0n, pageSize
 	}
 }
 
-export type SecurityPoolDeployment = Readonly<{
-	securityPool: Address
+export type QuestionLedgerDeployment = Readonly<{
+	questionLedger: Address
 	shareToken: Address
 	universeId: bigint
 	questionId: bigint
@@ -159,15 +159,15 @@ export type SecurityPoolDeployment = Readonly<{
 	initialReportPriorityFeeAttoEthPerGas: bigint
 }>
 
-export function unavailableMarket(deployment: SecurityPoolDeployment, error: unknown, feeBps: number): LiveMarket {
+export function unavailableMarket(deployment: QuestionLedgerDeployment, error: unknown, feeBps: number): LiveMarket {
 	return {
 		loadError: publicErrorMessage(error, 'Market data could not be read.'),
-		pool: getAddress(deployment.securityPool),
+		pool: getAddress(deployment.questionLedger),
 		pair: undefined,
 		shareToken: getAddress(deployment.shareToken),
 		universeId: deployment.universeId,
 		questionId: deployment.questionId,
-		title: `Security pool ${formatQuestionIdHex(deployment.questionId)}`,
+		title: `Question ${formatQuestionIdHex(deployment.questionId)}`,
 		description: 'Live market data is temporarily unavailable.',
 		endTime: 0n,
 		statoblastSecurityMultiplierBps: deployment.statoblastSecurityMultiplierBps,
@@ -190,16 +190,16 @@ export function unavailableMarket(deployment: SecurityPoolDeployment, error: unk
 	}
 }
 
-export async function loadLiveMarket(client: PublicClient, configuration: DeploymentConfiguration, deployment: SecurityPoolDeployment): Promise<LiveMarket> {
-	const { securityPool: poolAddress, shareToken: shareTokenAddress, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas } = deployment
+export async function loadLiveMarket(client: PublicClient, configuration: DeploymentConfiguration, deployment: QuestionLedgerDeployment): Promise<LiveMarket> {
+	const { questionLedger: poolAddress, shareToken: shareTokenAddress, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas } = deployment
 	const pool = getAddress(poolAddress)
 	const shareToken = getAddress(shareTokenAddress)
 	const factoryArtifact = tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
-	const [poolSettings, pairAddress] = await Promise.all([loadLiveSecurityPoolSettings(client, pool, configuration.securityPoolFactory), client.readContract({ abi: factoryArtifact.abi, address: configuration.factory, functionName: 'getPair', args: [pool] })])
+	const [poolSettings, pairAddress] = await Promise.all([loadLiveQuestionLedgerSettings(client, pool, configuration.securityPoolFactory), client.readContract({ abi: factoryArtifact.abi, address: configuration.factory, functionName: 'getPair', args: [pool] })])
 	const { questionData, zoltar, parent, shareTokenSupplyAttoShares, settlementCollateralAttoEth, settlementRecoveryAttoRep, totalUnderwritingLimitAttoEth, feeEligibleUnderwritingLimitAttoEth, mintingCapacityCeilingAttoEth, availableMintingCapacityAttoEth, systemState, awaitingForkContinuation, forker } = poolSettings
 	const [question, questionOutcome, universeForkTime, originUniverseId] = await Promise.all([
 		client.readContract({ abi: questionDataAbi, address: getAddress(questionData), functionName: 'questions', args: [questionId] }),
-		client.readContract({ abi: SECURITY_POOL_QUESTION_OUTCOME_ABI, address: getAddress(forker), functionName: 'getQuestionOutcome', args: [pool] }),
+		client.readContract({ abi: QUESTION_LEDGER_QUESTION_OUTCOME_ABI, address: getAddress(forker), functionName: 'getQuestionOutcome', args: [pool] }),
 		client.readContract({ abi: zoltarAbi, address: getAddress(zoltar), functionName: 'getForkTime', args: [universeId] }),
 		loadOriginUniverseId(client, getAddress(parent), universeId),
 	])
@@ -235,7 +235,7 @@ export async function loadLiveMarket(client: PublicClient, configuration: Deploy
 		endTime: questionFields.endTime,
 		statoblastSecurityMultiplierBps,
 		initialReportPriorityFeeAttoEthPerGas,
-		systemState: bigintToSafeNumber(systemState, 'SecurityPool system state'),
+		systemState: bigintToSafeNumber(systemState, 'QuestionLedger system state'),
 		awaitingForkContinuation,
 		universeForkTime,
 		shareTokenSupplyAttoShares,
@@ -261,19 +261,19 @@ function liveQuestionFields(question: readonly [title: string, description: stri
 	return { title: question[0], description: question[1], endTime: question[3] }
 }
 
-export type SecurityPoolDeploymentIndex<Deployment, Anchor> = {
+export type QuestionLedgerDeploymentIndex<Deployment, Anchor> = {
 	key: string | undefined
 	deployments: Deployment[]
 	anchor: Anchor | undefined
 	pending: Promise<void> | undefined
-	registry: RegistryIndex<SecurityPoolDeployment>
+	registry: RegistryIndex<QuestionLedgerDeployment>
 }
 
-export function createSecurityPoolDeploymentIndex<Deployment, Anchor>(): SecurityPoolDeploymentIndex<Deployment, Anchor> {
+export function createQuestionLedgerDeploymentIndex<Deployment, Anchor>(): QuestionLedgerDeploymentIndex<Deployment, Anchor> {
 	return { key: undefined, deployments: [], anchor: undefined, pending: undefined, registry: createRegistryIndex() }
 }
 
-function clearSecurityPoolDeploymentIndex<Deployment, Anchor>(index: SecurityPoolDeploymentIndex<Deployment, Anchor>, key: string) {
+function clearQuestionLedgerDeploymentIndex<Deployment, Anchor>(index: QuestionLedgerDeploymentIndex<Deployment, Anchor>, key: string) {
 	index.key = key
 	index.deployments = []
 	index.anchor = undefined
@@ -289,8 +289,8 @@ export async function registryBlockAnchorIsCanonical(anchor: RegistryBlockAnchor
 	return (await loadByNumber(anchor.blockNumber)).blockHash === anchor.blockHash
 }
 
-export async function refreshSecurityPoolDeploymentIndex<Deployment>(
-	index: SecurityPoolDeploymentIndex<Deployment, RegistryBlockAnchor>,
+export async function refreshQuestionLedgerDeploymentIndex<Deployment>(
+	index: QuestionLedgerDeploymentIndex<Deployment, RegistryBlockAnchor>,
 	key: string,
 	loadLatest: () => Promise<RegistryBlockAnchor>,
 	isAnchorCanonical: (anchor: RegistryBlockAnchor) => Promise<boolean>,
@@ -300,13 +300,13 @@ export async function refreshSecurityPoolDeploymentIndex<Deployment>(
 	let snapshot: Deployment[] = []
 	const refresh = (async () => {
 		if (previous !== undefined) await previous.catch(() => undefined)
-		if (index.key !== key) clearSecurityPoolDeploymentIndex(index, key)
+		if (index.key !== key) clearQuestionLedgerDeploymentIndex(index, key)
 		const anchor = await loadLatest()
 		const cached = index.anchor?.blockNumber === anchor.blockNumber && index.anchor.blockHash === anchor.blockHash
 		const deployments = cached ? index.deployments : await loadSnapshot(anchor)
 		if (!(await isAnchorCanonical(anchor))) {
-			clearSecurityPoolDeploymentIndex(index, key)
-			throw new Error('SecurityPool registry changed during discovery')
+			clearQuestionLedgerDeploymentIndex(index, key)
+			throw new Error('QuestionLedger registry changed during discovery')
 		}
 		index.key = key
 		index.deployments = [...deployments]
@@ -332,17 +332,17 @@ export async function loadSelectedUniverseIds(client: PublicClient, configuratio
 	return { universeIds: selectedUniverseId === 0n ? [0n] : [0n, selectedUniverseId], selectedUniverseId }
 }
 
-export async function loadSecurityPoolRegistry(client: PublicClient, configuration: DeploymentConfiguration, universeId: bigint, blockNumber: bigint, isCurrent = () => true, registry?: { index: RegistryIndex<SecurityPoolDeployment>; anchor: RegistryBlockAnchor }) {
+export async function loadQuestionLedgerRegistry(client: PublicClient, configuration: DeploymentConfiguration, universeId: bigint, blockNumber: bigint, isCurrent = () => true, registry?: { index: RegistryIndex<QuestionLedgerDeployment>; anchor: RegistryBlockAnchor }) {
 	if (registry !== undefined) {
 		const deployments = await readIncrementalRegistry({
 			index: registry.index,
 			key: `${configuration.chainId}:${configuration.securityPoolFactory}:${configuration.rpcUrl}`,
 			anchor: registry.anchor,
-			loadCount: async () => await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentCount', blockNumber }),
+			loadCount: async () => await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'questionLedgerDeploymentCount', blockNumber }),
 			loadRange: async (start, count) => {
 				if (!isCurrent()) throw new Error('Market discovery cancelled')
-				const page = await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentsRange', args: [start, count], blockNumber })
-				return page.map(deployment => ({ ...deployment, securityPool: getAddress(deployment.securityPool), shareToken: getAddress(deployment.shareToken) }))
+				const page = await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'questionLedgerDeploymentsRange', args: [start, count], blockNumber })
+				return page.map(deployment => ({ ...deployment, questionLedger: getAddress(deployment.questionLedger), shareToken: getAddress(deployment.shareToken) }))
 			},
 			isCanonical: async candidate => {
 				const block = await client.getBlock({ blockNumber: candidate.blockNumber })
@@ -351,25 +351,25 @@ export async function loadSecurityPoolRegistry(client: PublicClient, configurati
 		})
 		return deployments.filter(deployment => deployment.universeId === universeId)
 	}
-	const count = await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentCount', blockNumber })
-	const deployments: SecurityPoolDeployment[] = []
+	const count = await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'questionLedgerDeploymentCount', blockNumber })
+	const deployments: QuestionLedgerDeployment[] = []
 	for (let start = 0n; start < count; start += 100n) {
 		if (!isCurrent()) throw new Error('Market discovery cancelled')
-		const page = await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentsRange', args: [start, count - start < 100n ? count - start : 100n], blockNumber })
+		const page = await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'questionLedgerDeploymentsRange', args: [start, count - start < 100n ? count - start : 100n], blockNumber })
 		for (const deployment of page) {
-			if (deployment.universeId === universeId) deployments.push({ ...deployment, securityPool: getAddress(deployment.securityPool), shareToken: getAddress(deployment.shareToken) })
+			if (deployment.universeId === universeId) deployments.push({ ...deployment, questionLedger: getAddress(deployment.questionLedger), shareToken: getAddress(deployment.shareToken) })
 		}
 	}
 	return deployments
 }
 
-async function loadSecurityPoolDeploymentsInUniverse(client: PublicClient, configuration: DeploymentConfiguration, universeId: bigint, index: SecurityPoolDeploymentIndex<SecurityPoolDeployment, RegistryBlockAnchor>, isCurrent = () => true) {
-	return await refreshSecurityPoolDeploymentIndex(
+async function loadQuestionLedgerDeploymentsInUniverse(client: PublicClient, configuration: DeploymentConfiguration, universeId: bigint, index: QuestionLedgerDeploymentIndex<QuestionLedgerDeployment, RegistryBlockAnchor>, isCurrent = () => true) {
+	return await refreshQuestionLedgerDeploymentIndex(
 		index,
 		`${configuration.chainId}:${configuration.securityPoolFactory}:${configuration.rpcUrl}:${universeId}`,
 		async () => await latestBlockIdentity(client),
 		async anchor => await registryBlockAnchorIsCanonical(anchor, async () => await latestBlockIdentity(client), getActiveBackend().id === 'simulation' ? undefined : async blockNumber => await latestBlockIdentity({ getBlock: async () => await client.getBlock({ blockNumber }) })),
-		async anchor => await loadSecurityPoolRegistry(client, configuration, universeId, anchor.blockNumber, isCurrent, { index: index.registry, anchor }),
+		async anchor => await loadQuestionLedgerRegistry(client, configuration, universeId, anchor.blockNumber, isCurrent, { index: index.registry, anchor }),
 	)
 }
 
@@ -379,11 +379,11 @@ export async function discoverLiveUniverseMarketPage(
 	requestedUniverseId: bigint | undefined,
 	requestedStart = 0n,
 	pageSize = 25n,
-	index = createSecurityPoolDeploymentIndex<SecurityPoolDeployment, RegistryBlockAnchor>(),
+	index = createQuestionLedgerDeploymentIndex<QuestionLedgerDeployment, RegistryBlockAnchor>(),
 	onProgress?: MarketDiscoveryProgress,
 ) {
 	const { universeIds, selectedUniverseId } = await loadSelectedUniverseIds(client, configuration, requestedUniverseId)
-	const selectedDeployments = selectedUniverseId === undefined ? [] : await loadSecurityPoolDeploymentsInUniverse(client, configuration, selectedUniverseId, index)
+	const selectedDeployments = selectedUniverseId === undefined ? [] : await loadQuestionLedgerDeploymentsInUniverse(client, configuration, selectedUniverseId, index)
 	const page = marketDiscoveryPage(BigInt(selectedDeployments.length), requestedStart, pageSize)
 	const pageEnd = page.start + page.count
 	const pageDeployments = selectedDeployments.filter((_deployment, index) => {

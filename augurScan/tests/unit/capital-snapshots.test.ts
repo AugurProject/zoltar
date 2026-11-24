@@ -6,7 +6,7 @@ import { normalizeSnapshotTarget, type StateRead, sampleEntityStateWithRead } fr
 
 const ledger = getAddress('0x1111111111111111111111111111111111111111')
 const index = getAddress('0x2222222222222222222222222222222222222222')
-const portfolio = getAddress('0x3333333333333333333333333333333333333333')
+const securityPool = getAddress('0x3333333333333333333333333333333333333333')
 const feed = getAddress('0x4444444444444444444444444444444444444444')
 const token = getAddress('0x5555555555555555555555555555555555555555')
 const owner = getAddress('0x6666666666666666666666666666666666666666')
@@ -19,16 +19,16 @@ const services = getAddress('0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC')
 const kinds: Readonly<Record<string, string>> = {
 	[ledger]: 'securityPoolCapitalLedger',
 	[index]: 'securityPoolCommitmentIndex',
-	[portfolio]: 'securityPoolPortfolio',
+	[securityPool]: 'securityPool',
 	[zoltar]: 'zoltar',
 	[streams]: 'securityPoolCapitalFeeStreams',
-	[settlement]: 'securityPoolPortfolioSettlement',
+	[settlement]: 'securityPoolSettlement',
 	[book]: 'securityPoolSettlementBook',
 }
 
 type Outputs = Readonly<Record<string, readonly unknown[] | ((args: readonly unknown[]) => readonly unknown[])>>
 const ledgerOutputs: Outputs = {
-	portfolio: [portfolio],
+	securityPool: [securityPool],
 	universeId: [3n],
 	commitmentIndex: [index],
 	securityMultiplierBps: [15_000n],
@@ -94,7 +94,7 @@ test('a capital ledger snapshot reads its price, totals, feed and last position 
 	const snapshot = await sampleEntityStateWithRead({ entityType: 'capital-ledger', entityIdentity: ledger.toLowerCase(), address: ledger }, reader())
 	expect(snapshot).toMatchObject({ entityType: 'capital-ledger', sourceMethod: 'augurscan.capital-ledger-state.v1', readStatus: 'success' })
 	expect(snapshot.readResult).toEqual({
-		portfolio: portfolio.toLowerCase(),
+		securityPool: securityPool.toLowerCase(),
 		universeId: '3',
 		securityMultiplierBps: '15000',
 		acceptedPrice: (200n * 10n ** 18n).toString(),
@@ -203,7 +203,7 @@ test('a capital owner snapshot reads principal, commitment and the health of the
 	expect(snapshot.readResult).toMatchObject({
 		ledger: ledger.toLowerCase(),
 		owner: owner.toLowerCase(),
-		portfolio: portfolio.toLowerCase(),
+		securityPool: securityPool.toLowerCase(),
 		universeId: '3',
 		positionId: '7',
 		principalAttoRep: '520',

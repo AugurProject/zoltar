@@ -19,7 +19,7 @@ import {
 	type TransactionActivityEntry,
 } from '../transactions/transactionActivity.js'
 import { isTransactionTrackingStopped, subscribeTransactionTrackingStopped } from '../transactions/transactionTrackingStop.js'
-import { createTransactionScope, mergeTransactionScopes, securityPoolTransactionScope, transactionScopesOverlap, universeTransactionScope } from '../transactions/transactionScope.js'
+import { createTransactionScope, mergeTransactionScopes, questionLedgerTransactionScope, transactionScopesOverlap, universeTransactionScope } from '../transactions/transactionScope.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'
 import { getGenesisNetworkProfile, SEPOLIA_NETWORK_PROFILE } from '../wallet/networkProfile.js'
@@ -38,7 +38,7 @@ function entry(index: number, status: TransactionActivityEntry['status'] = 'conf
 
 describe('transaction scopes', () => {
 	test('normalizes object ids and overlaps only on shared keys', () => {
-		expect(securityPoolTransactionScope(' 0xABC ')).toEqual(['security-pool:0xabc'])
+		expect(questionLedgerTransactionScope(' 0xABC ')).toEqual(['security-pool:0xabc'])
 		expect(universeTransactionScope(255n, ' 0xABC ')).toEqual(['universe:0xabc:0xff'])
 		expect(universeTransactionScope(undefined, '0xABC')).toEqual([])
 		expect(createTransactionScope('market', undefined)).toEqual([])

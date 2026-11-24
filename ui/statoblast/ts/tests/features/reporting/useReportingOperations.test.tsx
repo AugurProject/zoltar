@@ -42,7 +42,7 @@ function userDeposit(depositIndex: bigint, amountAttoRep: bigint, cumulativeAmou
 	return { amountAttoRep, cumulativeAmountAttoRep, depositIndex, depositor: zeroAddress }
 }
 
-function createReportingDetails(securityPoolAddress: Address, overrides: Partial<ActiveReportingDetails> = {}): ActiveReportingDetails {
+function createReportingDetails(questionLedgerAddress: Address, overrides: Partial<ActiveReportingDetails> = {}): ActiveReportingDetails {
 	return {
 		bindingCapital: 10n,
 		settlementCollateralAttoEth: 1n,
@@ -56,7 +56,7 @@ function createReportingDetails(securityPoolAddress: Address, overrides: Partial
 		marketDetails: MARKET_DETAILS,
 		nonDecisionThresholdAttoRep: 20n,
 		questionOutcome: 'none',
-		securityPoolAddress,
+		questionLedgerAddress,
 		sides: [side('invalid', 5n), side('yes', 2n), side('no', 1n)],
 		activationTime: 120n,
 		startBondAttoRep: 1n,
@@ -107,11 +107,11 @@ function createReportingOperationsDependencies(overrides: Partial<UseReportingOp
 		loadReportingDetails: async () => {
 			throw new Error('loadReportingDetails should not be called in this test')
 		},
-		reportOutcomeInSecurityPool: async () => {
-			throw new Error('reportOutcomeInSecurityPool should not be called in this test')
+		reportOutcomeInQuestionLedger: async () => {
+			throw new Error('reportOutcomeInQuestionLedger should not be called in this test')
 		},
-		withdrawEscalationFromSecurityPool: async () => {
-			throw new Error('withdrawEscalationFromSecurityPool should not be called in this test')
+		withdrawEscalationFromQuestionLedger: async () => {
+			throw new Error('withdrawEscalationFromQuestionLedger should not be called in this test')
 		},
 		...overrides,
 	}
@@ -152,7 +152,7 @@ describe('useReportingOperations', () => {
 			return pending ? await oldLoad.promise : oldDetails
 		})
 		const { Harness, container, state, setForm } = await renderOperations(createReportingOperationsDependencies({ loadReportingDetails }))
-		await setForm({ securityPoolAddress: pool })
+		await setForm({ questionLedgerAddress: pool })
 		let firstLoad: Promise<void> | undefined
 		await act(async () => {
 			firstLoad = state().loadReporting()
@@ -178,10 +178,10 @@ describe('useReportingOperations', () => {
 	test('loadReporting ignores stale results when overlapping requests resolve out of order', async () => {
 		const firstPoolAddress = getAddress('0x00000000000000000000000000000000000000c1')
 		const secondPoolAddress = getAddress('0x00000000000000000000000000000000000000c2')
-		const deferredLoads: { deferred: ReturnType<typeof createDeferred<ReportingDetails>>; securityPoolAddress: Address }[] = []
-		const loadReportingDetails = mock(async (securityPoolAddress: Address) => {
+		const deferredLoads: { deferred: ReturnType<typeof createDeferred<ReportingDetails>>; questionLedgerAddress: Address }[] = []
+		const loadReportingDetails = mock(async (questionLedgerAddress: Address) => {
 			const deferred = createDeferred<ReportingDetails>()
-			deferredLoads.push({ deferred, securityPoolAddress })
+			deferredLoads.push({ deferred, questionLedgerAddress })
 			return await deferred.promise
 		})
 
@@ -192,7 +192,7 @@ describe('useReportingOperations', () => {
 		const { state, setForm } = await renderOperations(dependencies)
 
 		await setForm({
-			securityPoolAddress: firstPoolAddress,
+			questionLedgerAddress: firstPoolAddress,
 		})
 
 		let firstLoadPromise = Promise.resolve()
@@ -204,7 +204,7 @@ describe('useReportingOperations', () => {
 		})
 
 		await setForm({
-			securityPoolAddress: secondPoolAddress,
+			questionLedgerAddress: secondPoolAddress,
 		})
 
 		let secondLoadPromise = Promise.resolve()
@@ -216,7 +216,7 @@ describe('useReportingOperations', () => {
 		})
 
 		expect(loadReportingDetails).toHaveBeenCalledTimes(2)
-		expect(deferredLoads.map(load => load.securityPoolAddress)).toEqual([firstPoolAddress, secondPoolAddress])
+		expect(deferredLoads.map(load => load.questionLedgerAddress)).toEqual([firstPoolAddress, secondPoolAddress])
 
 		await act(async () => {
 			deferredLoads[0]?.deferred.resolve(createReportingDetails(firstPoolAddress))
@@ -233,13 +233,13 @@ describe('useReportingOperations', () => {
 
 		expect(state().reportingError).toBeUndefined()
 		expect(state().loadingReportingDetails).toBe(false)
-		expect(state().reportingDetails?.securityPoolAddress).toBe(secondPoolAddress)
+		expect(state().reportingDetails?.questionLedgerAddress).toBe(secondPoolAddress)
 		expect(state().reportingDetails?.viewerWalletRepBalanceAttoRep).toBe(100n * ATTO_REP)
 		expect(state().reportingDetails?.viewerWalletRepAllowanceAttoRep).toBe(100n * ATTO_REP)
 	})
 
 	test('reportOutcome blocks pre-start contributions that would exceed the remaining selected-side threshold capacity', async () => {
-		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d0')
+		const questionLedgerAddress = getAddress('0x00000000000000000000000000000000000000d0')
 		const latestDetails: ReportingDetails = {
 			settlementCollateralAttoEth: 1n,
 			currentTime: 150n,
@@ -247,7 +247,7 @@ describe('useReportingOperations', () => {
 			marketDetails: MARKET_DETAILS,
 			nonDecisionThresholdAttoRep: 20n * ATTO_REP,
 			questionOutcome: 'none',
-			securityPoolAddress,
+			questionLedgerAddress,
 			startBondAttoRep: 1n * ATTO_REP,
 			status: 'not-started',
 			systemState: 'operational',
@@ -256,20 +256,20 @@ describe('useReportingOperations', () => {
 			parentWithdrawalEnabled: false,
 		}
 		const loadReportingDetails = mock(async () => latestDetails)
-		const reportOutcomeInSecurityPool = mock(async () => {
-			throw new Error('reportOutcomeInSecurityPool should not be called when the remaining selected-side threshold capacity is exhausted')
+		const reportOutcomeInQuestionLedger = mock(async () => {
+			throw new Error('reportOutcomeInQuestionLedger should not be called when the remaining selected-side threshold capacity is exhausted')
 		})
 
 		const dependencies = createReportingOperationsDependencies({
 			loadReportingDetails,
-			reportOutcomeInSecurityPool,
+			reportOutcomeInQuestionLedger,
 		})
 
 		const { state, setForm } = await renderOperations(dependencies)
 
 		await setForm({
 			reportAmount: '25',
-			securityPoolAddress,
+			questionLedgerAddress,
 			selectedOutcome: 'yes',
 		})
 
@@ -278,49 +278,49 @@ describe('useReportingOperations', () => {
 		})
 
 		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
-		expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(0)
+		expect(reportOutcomeInQuestionLedger).toHaveBeenCalledTimes(0)
 		expect(state().reportingResult).toBeUndefined()
 		expect(state().reportingFeedback?.status.detail).toBe('Only 20 REP remains before the selected side reaches the non-decision threshold.')
 	})
 
 	test('reportOutcome refresh blocks a newly closing response window before writing', async () => {
 		const pool = getAddress('0x00000000000000000000000000000000000000d0')
-		const reportOutcomeInSecurityPool = mock(async () => {
+		const reportOutcomeInQuestionLedger = mock(async () => {
 			throw new Error('Must not write')
 		})
 		const { state, setForm } = await renderOperations(
 			createReportingOperationsDependencies({
 				loadReportingDetails: mock(async () => createReportingDetails(pool, { currentTime: 299n, escalationEndTime: 300n })),
-				reportOutcomeInSecurityPool,
+				reportOutcomeInQuestionLedger,
 			}),
 		)
-		await setForm({ securityPoolAddress: pool, selectedOutcome: 'yes', reportAmount: '5' })
+		await setForm({ questionLedgerAddress: pool, selectedOutcome: 'yes', reportAmount: '5' })
 		await act(async () => await state().onReportOutcome())
-		expect(reportOutcomeInSecurityPool).not.toHaveBeenCalled()
+		expect(reportOutcomeInQuestionLedger).not.toHaveBeenCalled()
 		expect(state().reportingFeedback?.status.detail).toContain('response window ends too soon')
 	})
 
 	test('reportOutcome blocks writes while the pool is not operational', async () => {
-		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d0')
+		const questionLedgerAddress = getAddress('0x00000000000000000000000000000000000000d0')
 		const loadReportingDetails = mock(async () =>
-			createReportingDetails(securityPoolAddress, {
+			createReportingDetails(questionLedgerAddress, {
 				systemState: 'forkMigration',
 			}),
 		)
-		const reportOutcomeInSecurityPool = mock(async () => {
-			throw new Error('reportOutcomeInSecurityPool should not be called while the pool is not operational')
+		const reportOutcomeInQuestionLedger = mock(async () => {
+			throw new Error('reportOutcomeInQuestionLedger should not be called while the pool is not operational')
 		})
 
 		const dependencies = createReportingOperationsDependencies({
 			loadReportingDetails,
-			reportOutcomeInSecurityPool,
+			reportOutcomeInQuestionLedger,
 		})
 
 		const { state, setForm } = await renderOperations(dependencies)
 
 		await setForm({
 			reportAmount: '5',
-			securityPoolAddress,
+			questionLedgerAddress,
 			selectedOutcome: 'yes',
 		})
 
@@ -329,14 +329,14 @@ describe('useReportingOperations', () => {
 		})
 
 		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
-		expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(0)
+		expect(reportOutcomeInQuestionLedger).toHaveBeenCalledTimes(0)
 		expect(state().reportingResult).toBeUndefined()
-		expect(state().reportingFeedback?.status.detail).toBe('Reporting actions are unavailable until this pool is operational.')
+		expect(state().reportingFeedback?.status.detail).toBe('Reporting actions are unavailable until this question is operational.')
 	})
 
 	test.each([false, true])('reportOutcome uses wallet REP in ordinary and continuation games (continuation: %s)', async forkContinuation => {
-		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d2')
-		const walletFundingDetails = createReportingDetails(securityPoolAddress, {
+		const questionLedgerAddress = getAddress('0x00000000000000000000000000000000000000d2')
+		const walletFundingDetails = createReportingDetails(questionLedgerAddress, {
 			forkContinuation,
 			contributionFunding: 'wallet',
 			viewerWalletRepAllowanceAttoRep: 10n * ATTO_REP,
@@ -347,7 +347,7 @@ describe('useReportingOperations', () => {
 		let submittedMaximumAttoRep: bigint | undefined
 		let submittedReviewAttoRep: bigint | undefined
 		const loadReportingDetails = mock(async () => walletFundingDetails)
-		const reportOutcomeInSecurityPool = mock(async (...args: Parameters<UseReportingOperationsDependencies['reportOutcomeInSecurityPool']>) => {
+		const reportOutcomeInQuestionLedger = mock(async (...args: Parameters<UseReportingOperationsDependencies['reportOutcomeInQuestionLedger']>) => {
 			submittedMaximumAttoRep = args[4]
 			submittedReviewAttoRep = args[5]
 			submittedFunding = args[6]
@@ -356,24 +356,24 @@ describe('useReportingOperations', () => {
 				action: 'reportOutcome' as const,
 				hash: '0x00000000000000000000000000000000000000000000000000000000000000a1' as const,
 				outcome: 'yes' as const,
-				securityPoolAddress,
+				questionLedgerAddress,
 				universeId: 1n,
 			}
 		})
 
-		const { state, setForm } = await renderOperations(createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInSecurityPool }))
+		const { state, setForm } = await renderOperations(createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInQuestionLedger }))
 
 		await setForm({
 			contributionFunding: 'wallet',
 			reportAmount: '5',
-			securityPoolAddress,
+			questionLedgerAddress,
 			selectedOutcome: 'yes',
 		})
 		await act(async () => {
 			await state().onReportOutcome()
 		})
 
-		expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(1)
+		expect(reportOutcomeInQuestionLedger).toHaveBeenCalledTimes(1)
 		expect(submittedFunding).toBe('wallet')
 		expect(submittedRequireLead).toBe(true)
 		// The typed 5 REP exceeds the remaining threshold room, so the previewed accepted amount is smaller.
@@ -387,9 +387,9 @@ describe('useReportingOperations', () => {
 	})
 
 	test('reportOutcome submits the offered start bond when a tie trims the accepted wallet amount below it', async () => {
-		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d4')
+		const questionLedgerAddress = getAddress('0x00000000000000000000000000000000000000d4')
 		const bond = 1n * ATTO_REP
-		const tiedDetails = createReportingDetails(securityPoolAddress, {
+		const tiedDetails = createReportingDetails(questionLedgerAddress, {
 			contributionFunding: 'wallet',
 			nonDecisionThresholdAttoRep: 275_000n * ATTO_REP,
 			sides: [side('invalid', 0n), side('yes', bond), side('no', 0n)],
@@ -400,18 +400,18 @@ describe('useReportingOperations', () => {
 		let submittedMaximumAttoRep: bigint | undefined
 		let submittedReviewAttoRep: bigint | undefined
 		const loadReportingDetails = mock(async () => tiedDetails)
-		const reportOutcomeInSecurityPool = mock(async (...args: Parameters<UseReportingOperationsDependencies['reportOutcomeInSecurityPool']>) => {
+		const reportOutcomeInQuestionLedger = mock(async (...args: Parameters<UseReportingOperationsDependencies['reportOutcomeInQuestionLedger']>) => {
 			submittedMaximumAttoRep = args[4]
 			submittedReviewAttoRep = args[5]
 			submittedRequireLead = args[8]
-			return { action: 'reportOutcome' as const, hash: '0x00000000000000000000000000000000000000000000000000000000000000a4' as const, outcome: 'no' as const, securityPoolAddress, universeId: 1n }
+			return { action: 'reportOutcome' as const, hash: '0x00000000000000000000000000000000000000000000000000000000000000a4' as const, outcome: 'no' as const, questionLedgerAddress, universeId: 1n }
 		})
-		const { state, setForm } = await renderOperations(createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInSecurityPool }))
-		await setForm({ contributionFunding: 'wallet', reportAmount: '1', securityPoolAddress, selectedOutcome: 'no' })
+		const { state, setForm } = await renderOperations(createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInQuestionLedger }))
+		await setForm({ contributionFunding: 'wallet', reportAmount: '1', questionLedgerAddress, selectedOutcome: 'no' })
 		await act(async () => {
 			await state().onReportOutcome()
 		})
-		expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(1)
+		expect(reportOutcomeInQuestionLedger).toHaveBeenCalledTimes(1)
 		// The tie leaves the report one attoREP behind the leader, but the game's preview only accepts offers of at least the start bond.
 		expect(submittedReviewAttoRep).toBe(bond - 1n)
 		expect(submittedMaximumAttoRep).toBe(bond)
@@ -419,19 +419,19 @@ describe('useReportingOperations', () => {
 	})
 
 	test.each([true, false])('reportOutcome marks fork-triggering reports for review only when the displayed report already triggered the fork (displayed: %s)', async displayedTriggersFork => {
-		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d3')
+		const questionLedgerAddress = getAddress('0x00000000000000000000000000000000000000d3')
 		// Invalid already sits at the 20 attoREP threshold, so filling Yes with 18 attoREP ends escalation and triggers the fork.
 		const forkReadySides: ActiveReportingDetails['sides'] = [side('invalid', 20n), side('yes', 2n), side('no', 1n)]
-		const latestDetails = createReportingDetails(securityPoolAddress, { sides: forkReadySides })
-		const displayedDetails = displayedTriggersFork ? latestDetails : createReportingDetails(securityPoolAddress, {})
+		const latestDetails = createReportingDetails(questionLedgerAddress, { sides: forkReadySides })
+		const displayedDetails = displayedTriggersFork ? latestDetails : createReportingDetails(questionLedgerAddress, {})
 		const loadReportingDetails = mock(async () => (loadReportingDetails.mock.calls.length === 1 ? displayedDetails : latestDetails))
 		let submittedTriggersFork: boolean | undefined
-		const reportOutcomeInSecurityPool = mock(async (...args: Parameters<UseReportingOperationsDependencies['reportOutcomeInSecurityPool']>) => {
+		const reportOutcomeInQuestionLedger = mock(async (...args: Parameters<UseReportingOperationsDependencies['reportOutcomeInQuestionLedger']>) => {
 			submittedTriggersFork = args[7]
-			return { action: 'reportOutcome' as const, hash: '0x00000000000000000000000000000000000000000000000000000000000000a2' as const, outcome: 'yes' as const, securityPoolAddress, universeId: 1n }
+			return { action: 'reportOutcome' as const, hash: '0x00000000000000000000000000000000000000000000000000000000000000a2' as const, outcome: 'yes' as const, questionLedgerAddress, universeId: 1n }
 		})
-		const { state, setForm } = await renderOperations(createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInSecurityPool }))
-		await setForm({ contributionFunding: 'wallet', reportAmount: '0.000000000000000018', securityPoolAddress, selectedOutcome: 'yes' })
+		const { state, setForm } = await renderOperations(createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInQuestionLedger }))
+		await setForm({ contributionFunding: 'wallet', reportAmount: '0.000000000000000018', questionLedgerAddress, selectedOutcome: 'yes' })
 		await act(async () => {
 			await state().loadReporting()
 		})
@@ -439,11 +439,11 @@ describe('useReportingOperations', () => {
 			await state().onReportOutcome()
 		})
 		if (displayedTriggersFork) {
-			expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(1)
+			expect(reportOutcomeInQuestionLedger).toHaveBeenCalledTimes(1)
 			expect(submittedTriggersFork).toBe(true)
 		} else {
 			// The user never saw or confirmed the fork warning, so the report stops and shows the updated state.
-			expect(reportOutcomeInSecurityPool).not.toHaveBeenCalled()
+			expect(reportOutcomeInQuestionLedger).not.toHaveBeenCalled()
 			expect(state().reportingFeedback?.status.detail).toBe('This report would now trigger the universe fork. Review the fork warning and confirm before reporting.')
 			expect(state().reportingDetails).toBe(latestDetails)
 			expect(state().reportingForm.reportAmount).toBe('0.000000000000000018')
@@ -451,8 +451,8 @@ describe('useReportingOperations', () => {
 	})
 
 	test.each([undefined, 8n * ATTO_REP])('onApproveReportingRep approves the chosen amount, or the accepted contribution by default, for an active ordinary game (%s)', async chosenAmount => {
-		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d3')
-		const walletFundingDetails = createReportingDetails(securityPoolAddress, {
+		const questionLedgerAddress = getAddress('0x00000000000000000000000000000000000000d3')
+		const walletFundingDetails = createReportingDetails(questionLedgerAddress, {
 			contributionFunding: 'wallet',
 			nonDecisionThresholdAttoRep: 20n * ATTO_REP,
 			sides: [side('invalid', 1n * ATTO_REP), side('yes', 5n * ATTO_REP), side('no', 8n * ATTO_REP)],
@@ -464,13 +464,13 @@ describe('useReportingOperations', () => {
 			action: 'approveReportingRep' as const,
 			hash: '0x00000000000000000000000000000000000000000000000000000000000000a2' as const,
 			outcome,
-			securityPoolAddress,
+			questionLedgerAddress,
 			universeId: 1n,
 		}))
 
 		const { state, setForm } = await renderOperations(createReportingOperationsDependencies({ approveReportingRep, loadReportingDetails }))
 
-		await setForm({ reportAmount: '5', securityPoolAddress, selectedOutcome: 'yes' })
+		await setForm({ reportAmount: '5', questionLedgerAddress, selectedOutcome: 'yes' })
 		await act(async () => {
 			await state().onApproveReportingRep(chosenAmount)
 		})
@@ -481,13 +481,13 @@ describe('useReportingOperations', () => {
 	})
 
 	test('onApproveReportingRep rejects an amount that does not raise the allowance', async () => {
-		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d4')
-		const details = createReportingDetails(securityPoolAddress, { contributionFunding: 'wallet', nonDecisionThresholdAttoRep: 20n * ATTO_REP, viewerWalletRepAllowanceAttoRep: 3n * ATTO_REP, viewerWalletRepBalanceAttoRep: 10n * ATTO_REP })
+		const questionLedgerAddress = getAddress('0x00000000000000000000000000000000000000d4')
+		const details = createReportingDetails(questionLedgerAddress, { contributionFunding: 'wallet', nonDecisionThresholdAttoRep: 20n * ATTO_REP, viewerWalletRepAllowanceAttoRep: 3n * ATTO_REP, viewerWalletRepBalanceAttoRep: 10n * ATTO_REP })
 		const approveReportingRep = mock(async () => {
 			throw new Error('Must not approve')
 		})
 		const { state, setForm } = await renderOperations(createReportingOperationsDependencies({ approveReportingRep, loadReportingDetails: mock(async () => details) }))
-		await setForm({ reportAmount: '5', securityPoolAddress, selectedOutcome: 'yes' })
+		await setForm({ reportAmount: '5', questionLedgerAddress, selectedOutcome: 'yes' })
 		await act(async () => await state().onApproveReportingRep(2n * ATTO_REP))
 		expect(approveReportingRep).not.toHaveBeenCalled()
 		const detail = state().reportingFeedback?.status.detail
@@ -495,27 +495,27 @@ describe('useReportingOperations', () => {
 	})
 
 	test('withdrawEscalation validates requested deposit indexes against the provided outcome', async () => {
-		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d1')
+		const questionLedgerAddress = getAddress('0x00000000000000000000000000000000000000d1')
 		const loadReportingDetails = mock(async () =>
-			createReportingDetails(securityPoolAddress, {
+			createReportingDetails(questionLedgerAddress, {
 				sides: [side('invalid', 1n), side('yes', 5n, [userDeposit(0n, 1n)]), side('no', 2n, [userDeposit(1n, 1n)])],
 				settlementState: 'resolved',
 				parentWithdrawalEnabled: true,
 			}),
 		)
-		const withdrawEscalationFromSecurityPool = mock(async () => {
-			throw new Error('withdrawEscalationFromSecurityPool should not be called when indexes mismatch the requested side')
+		const withdrawEscalationFromQuestionLedger = mock(async () => {
+			throw new Error('withdrawEscalationFromQuestionLedger should not be called when indexes mismatch the requested side')
 		})
 
 		const dependencies = createReportingOperationsDependencies({
 			loadReportingDetails,
-			withdrawEscalationFromSecurityPool,
+			withdrawEscalationFromQuestionLedger,
 		})
 
 		const { state, setForm } = await renderOperations(dependencies)
 
 		await setForm({
-			securityPoolAddress,
+			questionLedgerAddress,
 		})
 
 		await act(async () => {
@@ -523,21 +523,21 @@ describe('useReportingOperations', () => {
 		})
 
 		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
-		expect(withdrawEscalationFromSecurityPool).toHaveBeenCalledTimes(0)
+		expect(withdrawEscalationFromQuestionLedger).toHaveBeenCalledTimes(0)
 		expect(state().reportingResult).toBeUndefined()
 		expect(state().reportingFeedback?.status.detail).toBe('Selected deposit #0 is no longer available to settle on No.')
 	})
 
 	test('withdrawEscalation prunes selections per side after a successful refresh', async () => {
-		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d2')
-		const latestDetails = createReportingDetails(securityPoolAddress, {
+		const questionLedgerAddress = getAddress('0x00000000000000000000000000000000000000d2')
+		const latestDetails = createReportingDetails(questionLedgerAddress, {
 			sides: [side('invalid', 1n, [userDeposit(0n, 1n)]), side('yes', 5n, [userDeposit(0n, 1n), userDeposit(1n, 2n, 3n)]), side('no', 2n)],
 			currentTime: 301n,
 			escalationEndTime: 300n,
 			settlementState: 'resolved',
 			parentWithdrawalEnabled: true,
 		})
-		const refreshedDetails = createReportingDetails(securityPoolAddress, {
+		const refreshedDetails = createReportingDetails(questionLedgerAddress, {
 			sides: [side('invalid', 1n, [userDeposit(0n, 1n)]), side('yes', 3n, [userDeposit(1n, 2n, 3n)]), side('no', 2n)],
 			currentTime: 301n,
 			escalationEndTime: 300n,
@@ -550,31 +550,31 @@ describe('useReportingOperations', () => {
 			if (response === undefined) throw new Error('Unexpected loadReportingDetails call')
 			return response
 		})
-		const withdrawEscalationCalls: { depositIndexes: bigint[]; outcome: string; securityPoolAddress: Address }[] = []
-		const withdrawEscalationFromSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, requestedSecurityPoolAddress: Address, outcome: string, depositIndexes: bigint[]) => {
+		const withdrawEscalationCalls: { depositIndexes: bigint[]; outcome: string; questionLedgerAddress: Address }[] = []
+		const withdrawEscalationFromQuestionLedger = mock(async (_accountAddress: Address, _callbacks: unknown, requestedQuestionLedgerAddress: Address, outcome: string, depositIndexes: bigint[]) => {
 			withdrawEscalationCalls.push({
 				depositIndexes,
 				outcome,
-				securityPoolAddress: requestedSecurityPoolAddress,
+				questionLedgerAddress: requestedQuestionLedgerAddress,
 			})
 			return {
 				action: 'withdrawEscalation' as const,
 				hash: '0x00000000000000000000000000000000000000000000000000000000000000ef' as const,
 				outcome: 'yes' as const,
-				securityPoolAddress,
+				questionLedgerAddress,
 				universeId: 1n,
 			}
 		})
 
 		const dependencies = createReportingOperationsDependencies({
 			loadReportingDetails,
-			withdrawEscalationFromSecurityPool,
+			withdrawEscalationFromQuestionLedger,
 		})
 
 		const { state, setForm } = await renderOperations(dependencies)
 
 		await setForm({
-			securityPoolAddress,
+			questionLedgerAddress,
 			selectedWithdrawDepositIndexesByOutcome: {
 				invalid: [0n],
 				yes: [0n, 1n],
@@ -587,12 +587,12 @@ describe('useReportingOperations', () => {
 		})
 
 		expect(loadReportingDetails).toHaveBeenCalledTimes(2)
-		expect(withdrawEscalationFromSecurityPool).toHaveBeenCalledTimes(1)
+		expect(withdrawEscalationFromQuestionLedger).toHaveBeenCalledTimes(1)
 		expect(withdrawEscalationCalls).toEqual([
 			{
 				depositIndexes: [0n],
 				outcome: 'yes',
-				securityPoolAddress,
+				questionLedgerAddress,
 			},
 		])
 		expect(state().reportingResult).toEqual({
@@ -600,7 +600,7 @@ describe('useReportingOperations', () => {
 			action: 'withdrawEscalation',
 			hash: '0x00000000000000000000000000000000000000000000000000000000000000ef',
 			outcome: 'yes',
-			securityPoolAddress,
+			questionLedgerAddress,
 			universeId: 1n,
 		})
 		expect(state().reportingForm.selectedWithdrawDepositIndexesByOutcome).toEqual({
@@ -625,32 +625,32 @@ describe('useReportingOperations', () => {
 			settlementState: 'resolved',
 			parentWithdrawalEnabled: true,
 		})
-		const loadReportingDetails = mock(async (securityPoolAddress: Address) => {
-			if (securityPoolAddress === firstPoolAddress) {
+		const loadReportingDetails = mock(async (questionLedgerAddress: Address) => {
+			if (questionLedgerAddress === firstPoolAddress) {
 				firstPoolLoadCount += 1
 				if (firstPoolLoadCount === 1) return firstPoolDetails
 				return await staleRefresh.promise
 			}
-			if (securityPoolAddress === secondPoolAddress) return secondPoolDetails
-			throw new Error(`Unexpected security pool ${securityPoolAddress}`)
+			if (questionLedgerAddress === secondPoolAddress) return secondPoolDetails
+			throw new Error(`Unexpected question ledger ${questionLedgerAddress}`)
 		})
-		const withdrawEscalationFromSecurityPool = mock(async () => ({
+		const withdrawEscalationFromQuestionLedger = mock(async () => ({
 			action: 'withdrawEscalation' as const,
 			hash: '0x00000000000000000000000000000000000000000000000000000000000000aa' as const,
 			outcome: 'yes' as const,
-			securityPoolAddress: firstPoolAddress,
+			questionLedgerAddress: firstPoolAddress,
 			universeId: 1n,
 		}))
 
 		const dependencies = createReportingOperationsDependencies({
 			loadReportingDetails,
-			withdrawEscalationFromSecurityPool,
+			withdrawEscalationFromQuestionLedger,
 		})
 
 		const { state, setForm } = await renderOperations(dependencies)
 
 		await setForm({
-			securityPoolAddress: firstPoolAddress,
+			questionLedgerAddress: firstPoolAddress,
 			selectedWithdrawDepositIndexesByOutcome: {
 				invalid: [],
 				yes: [0n],
@@ -666,7 +666,7 @@ describe('useReportingOperations', () => {
 		await waitFor(() => expect(loadReportingDetails).toHaveBeenCalledTimes(2))
 
 		await setForm({
-			securityPoolAddress: secondPoolAddress,
+			questionLedgerAddress: secondPoolAddress,
 			selectedWithdrawDepositIndexesByOutcome: {
 				invalid: [],
 				yes: [2n],
@@ -678,7 +678,7 @@ describe('useReportingOperations', () => {
 			await state().loadReporting()
 		})
 
-		await waitFor(() => expect(state().reportingDetails?.securityPoolAddress).toBe(secondPoolAddress))
+		await waitFor(() => expect(state().reportingDetails?.questionLedgerAddress).toBe(secondPoolAddress))
 		expect(state().reportingForm.selectedWithdrawDepositIndexesByOutcome).toEqual({
 			invalid: [],
 			yes: [2n],
@@ -690,36 +690,36 @@ describe('useReportingOperations', () => {
 			await withdrawPromise
 		})
 
-		expect(state().reportingDetails?.securityPoolAddress).toBe(secondPoolAddress)
+		expect(state().reportingDetails?.questionLedgerAddress).toBe(secondPoolAddress)
 		expect(state().reportingForm.selectedWithdrawDepositIndexesByOutcome).toEqual({
 			invalid: [],
 			yes: [2n],
 			no: [3n],
 		})
-		expect(withdrawEscalationFromSecurityPool).toHaveBeenCalledTimes(1)
+		expect(withdrawEscalationFromQuestionLedger).toHaveBeenCalledTimes(1)
 	})
 
 	test('reportOutcome ignores a stale preflight reload after the selected pool changes', async () => {
 		const firstPoolAddress = getAddress('0x00000000000000000000000000000000000000f1')
 		const secondPoolAddress = getAddress('0x00000000000000000000000000000000000000f2')
 		const stalePreflight = createDeferred<ReportingDetails>()
-		const loadReportingDetails = mock(async (securityPoolAddress: Address) => {
-			if (securityPoolAddress === firstPoolAddress) return await stalePreflight.promise
-			if (securityPoolAddress === secondPoolAddress) return createReportingDetails(secondPoolAddress)
-			throw new Error(`Unexpected security pool ${securityPoolAddress}`)
+		const loadReportingDetails = mock(async (questionLedgerAddress: Address) => {
+			if (questionLedgerAddress === firstPoolAddress) return await stalePreflight.promise
+			if (questionLedgerAddress === secondPoolAddress) return createReportingDetails(secondPoolAddress)
+			throw new Error(`Unexpected question ledger ${questionLedgerAddress}`)
 		})
-		const reportOutcomeInSecurityPool = mock(async () => ({
+		const reportOutcomeInQuestionLedger = mock(async () => ({
 			action: 'reportOutcome' as const,
 			hash: '0x00000000000000000000000000000000000000000000000000000000000000ab' as const,
 			outcome: 'yes' as const,
-			securityPoolAddress: firstPoolAddress,
+			questionLedgerAddress: firstPoolAddress,
 			universeId: 1n,
 		}))
 		let transactionState = createInitialTransactionTrayState()
 
 		const dependencies = createReportingOperationsDependencies({
 			loadReportingDetails,
-			reportOutcomeInSecurityPool,
+			reportOutcomeInQuestionLedger,
 		})
 
 		const { state, setForm } = await renderOperations(dependencies, {
@@ -736,7 +736,7 @@ describe('useReportingOperations', () => {
 
 		await setForm({
 			reportAmount: '1',
-			securityPoolAddress: firstPoolAddress,
+			questionLedgerAddress: firstPoolAddress,
 			selectedOutcome: 'yes',
 		})
 
@@ -750,23 +750,23 @@ describe('useReportingOperations', () => {
 		expect(transactionState.entries[0]?.intent.action).toBe('reportOutcome')
 
 		await setForm({
-			securityPoolAddress: secondPoolAddress,
+			questionLedgerAddress: secondPoolAddress,
 		})
 
 		await act(async () => {
 			await state().loadReporting()
 		})
 
-		await waitFor(() => expect(state().reportingDetails?.securityPoolAddress).toBe(secondPoolAddress))
+		await waitFor(() => expect(state().reportingDetails?.questionLedgerAddress).toBe(secondPoolAddress))
 
 		await act(async () => {
 			stalePreflight.resolve(createReportingDetails(firstPoolAddress))
 			await reportPromise
 		})
 
-		expect(state().reportingDetails?.securityPoolAddress).toBe(secondPoolAddress)
+		expect(state().reportingDetails?.questionLedgerAddress).toBe(secondPoolAddress)
 		expect(state().reportingFeedback).toBeUndefined()
-		expect(reportOutcomeInSecurityPool).not.toHaveBeenCalled()
+		expect(reportOutcomeInQuestionLedger).not.toHaveBeenCalled()
 		expect(transactionState.active).toBeUndefined()
 		expect(transactionState.entries).toEqual([])
 		expect(transactionState.entries.length).toBe(0)

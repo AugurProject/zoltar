@@ -1,4 +1,4 @@
-import { securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
+import { questionLedgerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import type { EcosystemSnapshot, OperationDefinition, PlanningOptions } from '../types.ts'
 import { ONE_TOKEN, allowance, amount, choose, eligible, encodePreflightCall, encodeStep, erc20WalletDebit, mixSeed, optionAmount, planBase, tokenInventory } from '../planning.ts'
@@ -26,14 +26,14 @@ function candidates(snapshot: EcosystemSnapshot, options: PlanningOptions) {
 
 function depositStep(snapshot: EcosystemSnapshot, pool: `0x${string}`, repToken: `0x${string}`, outcome: number, maximum: bigint) {
 	return encodeStep({
-		abi: securityPoolAbi,
+		abi: questionLedgerAbi,
 		args: [outcome, maximum],
 		functionName: 'depositWalletRepToEscalationGame',
 		id: 'start-wallet-report',
 		label: 'Start reporting with wallet REP',
 		to: pool,
 		walletAssetDebits: [erc20WalletDebit(repToken, maximum, 'rep')],
-		preflightCalls: [encodePreflightCall({ abi: securityPoolAbi, args: [outcome, maximum], caller: snapshot.wallet.address, expectedResult: '0x', functionName: 'depositWalletRepToEscalationGame', label: 'Revalidate exact initial wallet report', to: pool })],
+		preflightCalls: [encodePreflightCall({ abi: questionLedgerAbi, args: [outcome, maximum], caller: snapshot.wallet.address, expectedResult: '0x', functionName: 'depositWalletRepToEscalationGame', label: 'Revalidate exact initial wallet report', to: pool })],
 	})
 }
 
@@ -41,7 +41,7 @@ export const escalationDeposit: OperationDefinition = {
 	id: 'statoblast.escalation.deposit',
 	label: 'Start wallet-funded reporting',
 	method: 'depositWalletRepToEscalationGame',
-	contract: 'SecurityPool',
+	contract: 'QuestionLedger',
 	classification: 'selectable',
 	ecosystem: 'statoblast',
 	risk: 'high',

@@ -17,7 +17,7 @@
 			</header>
 			<section id="what-closes">
 				<h2>What closes a pair</h2>
-				<p>Swaps, initialization, and added liquidity close permanently at question end, when the <a href="../../reference/glossary.html#universe">universe</a> forks, or when the <a href="../../reference/glossary.html#security-pool-forker">SecurityPoolForker</a> exposes a final <a href="../../reference/glossary.html#outcome">outcome</a>. They are also blocked while the <a href="../../reference/glossary.html#security-pool">SecurityPool</a> is not operational or is awaiting <a href="../../reference/glossary.html#fork-continuation">fork continuation</a>. LP removal deliberately has none of those guards. <a href="../../reference/trading/contracts.html#pair"><code>tradingStatus()</code></a> reports which condition applies.</p>
+				<p>Swaps, initialization, and added liquidity close permanently at question end, when the <a href="../../reference/glossary.html#universe">universe</a> forks, or when the <a href="../../reference/glossary.html#question-forker">QuestionForker</a> exposes a final <a href="../../reference/glossary.html#outcome">outcome</a>. They are also blocked while the <a href="../../reference/glossary.html#question-ledger">question ledger</a> is not operational or is awaiting <a href="../../reference/glossary.html#fork-continuation">fork continuation</a>. LP removal deliberately has none of those guards. <a href="../../reference/trading/contracts.html#pair"><code>tradingStatus()</code></a> reports which condition applies.</p>
 			</section>
 			<section id="after-a-fork">
 				<h2>After a fork</h2>
@@ -27,27 +27,27 @@
 						<li><strong>Parent pair → LP:</strong> parent Yes + No</li>
 						<li><strong>LP → ShareToken:</strong> <code>migrate(fromId, chosen outcomes)</code></li>
 						<li><strong>ShareToken → LP:</strong> selected child shares</li>
-						<li>Wait until migration and any <a href="../../reference/glossary.html#collateral-repair-auction">Collateral Repair Auction</a> return the child pool to Operational</li>
-						<li><strong>LP → Factory:</strong> <code>createPair(exact child pool)</code></li>
+						<li>Wait until migration and any <a href="../../reference/glossary.html#collateral-repair-auction">Collateral Repair Auction</a> return the child question ledger to Operational</li>
+						<li><strong>LP → Factory:</strong> <code>createPair(exact child question ledger)</code></li>
 						<li><strong>Factory → LP:</strong> isolated child pair</li>
 					</ol>
 					<figcaption id="fig-trading-fork-migration-caption"><span class="figure-label">Carrying liquidity across a fork.</span> Every step is the LP's own decision; nothing here happens automatically.</figcaption>
 				</figure>
-				<p>A fork does not select a branch or migrate LP. A child pair can be initialized only if the child SecurityPool is back to Operational before the question's end date, which requires a fork caused by another question: pairs refuse initialization and swaps once the question has ended, and a fork caused by disputing this question always comes after its end date. Parent and child pools may share one <a href="../../reference/glossary.html#outcome-share">ShareToken</a> contract, but they have different universe-specific token IDs and different pair addresses. <a href="../../how-to/trading-handle-a-fork.html">Handle a universe fork</a> gives the step-by-step procedure.</p>
+				<p>A fork does not select a branch or migrate LP. A child pair can be initialized only if the child question ledger is back to Operational before the question's end date, which requires a fork caused by another question: pairs refuse initialization and swaps once the question has ended, and a fork caused by disputing this question always comes after its end date. Parent and child question ledgers may share one <a href="../../reference/glossary.html#outcome-share">ShareToken</a> contract, but they have different universe-specific token IDs and different pair addresses. <a href="../../how-to/trading-handle-a-fork.html">Handle a universe fork</a> gives the step-by-step procedure.</p>
 			</section>
 			<section id="after-resolution">
 				<h2>After resolution</h2>
 				<figure class="diagram" id="fig-trading-resolution" aria-labelledby="fig-trading-resolution-caption">
 					<ol class="protocol-flow">
-						<li><strong>Pair → Forker:</strong> <code>getQuestionOutcome(pool)</code></li>
+						<li><strong>Pair → Forker:</strong> <code>getQuestionOutcome(questionLedger)</code></li>
 						<li><strong>Forker → Pair:</strong> current Yes / No / Invalid outcome</li>
 						<li><strong>Pair → Pair:</strong> swaps and additions closed</li>
 						<li><strong>Holder → Pair:</strong> <code>removeLiquidity</code> remains available</li>
 						<li><strong>Pair → Holder:</strong> raw Yes + No</li>
-						<li><strong>Holder → SecurityPool:</strong> <code>redeemShares()</code> for the winning token</li>
-						<li><strong>SecurityPool → Holder:</strong> current collateral value</li>
+						<li><strong>Holder → question ledger:</strong> <code>redeemShares()</code> for the winning token</li>
+						<li><strong>Question ledger → Holder:</strong> current collateral value</li>
 					</ol>
-					<figcaption id="fig-trading-resolution-caption"><span class="figure-label">Settling after resolution.</span> The pair only closes; value is redeemed at the SecurityPool, never at the pair.</figcaption>
+					<figcaption id="fig-trading-resolution-caption"><span class="figure-label">Settling after resolution.</span> The pair only closes; value is redeemed at the question ledger, never at the pair.</figcaption>
 				</figure>
 				<p>If the question resolves Invalid, the Invalid shares held in the wallet are the settlement insurance. Fee growth in the pair's Yes and No reserves creates no redemption value on an Invalid result. <a href="../../how-to/trading-handle-resolution.html">Handle resolution</a> gives the procedure.</p>
 			</section>

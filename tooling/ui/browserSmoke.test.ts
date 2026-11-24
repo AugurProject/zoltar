@@ -13,7 +13,7 @@ const mountedState = {
 	height: 844,
 	hasMain: true,
 	readyState: 'complete' as const,
-	title: 'Security pools | Augur Statoblast',
+	title: 'Question ledgers | Augur Statoblast',
 	width: 390,
 }
 const viewport = { height: 844, width: 390 }
@@ -39,12 +39,12 @@ const getAvailablePort = async (): Promise<number> => {
 
 test('browser smoke readiness requires the selected application identity', () => {
 	expect(isBrowserSmokeReady(mountedState, 'Augur Statoblast', undefined, viewport)).toBe(true)
-	expect(isBrowserSmokeReady({ ...mountedState, body: 'Security pools' }, 'Augur Statoblast', undefined, viewport)).toBe(false)
+	expect(isBrowserSmokeReady({ ...mountedState, body: 'Question ledgers' }, 'Augur Statoblast', undefined, viewport)).toBe(false)
 })
 
 test('browser smoke readiness can wait for route-specific loaded content', () => {
-	expect(isBrowserSmokeReady(mountedState, 'Augur Statoblast', 'Open pool', viewport)).toBe(false)
-	expect(isBrowserSmokeReady({ ...mountedState, body: `${mountedState.body}\nOpen pool` }, 'Augur Statoblast', 'Open pool', viewport)).toBe(true)
+	expect(isBrowserSmokeReady(mountedState, 'Augur Statoblast', 'Open question', viewport)).toBe(false)
+	expect(isBrowserSmokeReady({ ...mountedState, body: `${mountedState.body}\nOpen question` }, 'Augur Statoblast', 'Open question', viewport)).toBe(true)
 })
 
 test('an explicit route-ready marker overrides stale bootstrap copy outside the route', () => {

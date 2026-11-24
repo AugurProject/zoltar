@@ -1,6 +1,6 @@
 import { erc20Abi, securityPoolCapitalLedgerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
-import type { PortfolioCapitalSnapshot } from '../portfolio-types.ts'
+import type { SecurityPoolCapitalSnapshot } from '../security-pool-types.ts'
 import type { EcosystemSnapshot, OperationContinuationContext, OperationDefinition, PlanningOptions } from '../types.ts'
 import { allowance, amount, choose, eligible, encodePreflightCall, encodeStep, erc20AllowanceEvidence, erc20WalletDebit, mixSeed, ONE_TOKEN, optionAmount, planBase, tokenInventory } from '../planning.ts'
 import { repSpend } from '../input-funding.ts'
@@ -10,12 +10,12 @@ import { requiredVaultMetadataAmount, requiredVaultMetadataString } from './plan
 function ownerCapital(snapshot: EcosystemSnapshot, options: PlanningOptions) {
 	const target = options.genesisInitializationTarget
 	const pool = target?.pool === undefined ? undefined : snapshot.pools.find(pool => pool.address.toLowerCase() === target.pool?.toLowerCase())
-	return snapshot.portfolioCapital.filter(
+	return snapshot.securityPoolCapital.filter(
 		capital =>
 			capital.owner.toLowerCase() === snapshot.wallet.address.toLowerCase() &&
-			inputMatches(options, 'portfolio', capital.portfolio) &&
+			inputMatches(options, 'securityPool', capital.securityPool) &&
 			inputMatches(options, 'universeId', capital.universeId) &&
-			(target === undefined || (capital.universeId === target.universeId && (target.pool === undefined || pool?.portfolio.toLowerCase() === capital.portfolio.toLowerCase()))),
+			(target === undefined || (capital.universeId === target.universeId && (target.pool === undefined || pool?.securityPool.toLowerCase() === capital.securityPool.toLowerCase()))),
 	)
 }
 
@@ -30,7 +30,7 @@ function approval(snapshot: EcosystemSnapshot, token: `0x${string}`, ledger: `0x
 		evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, ledger, spend)],
 		functionName: 'approve',
 		id: revoke ? 'revoke-capital-rep' : 'approve-capital-rep',
-		label: revoke ? 'Revoke portfolio capital approval' : 'Approve portfolio capital REP',
+		label: revoke ? 'Revoke security pool capital approval' : 'Approve security pool capital REP',
 		to: token,
 	})
 }
@@ -41,10 +41,10 @@ function depositStep(snapshot: EcosystemSnapshot, token: `0x${string}`, ledger: 
 		args: [snapshot.wallet.address, spend],
 		functionName: 'depositFor',
 		id: 'deposit-capital',
-		label: 'Deposit REP into portfolio capital',
+		label: 'Deposit REP into security pool capital',
 		to: ledger,
 		walletAssetDebits: [erc20WalletDebit(token, spend, 'rep')],
-		preflightCalls: [encodePreflightCall({ abi: securityPoolCapitalLedgerAbi, args: [snapshot.wallet.address, spend], caller: snapshot.wallet.address, expectedResult: '0x', functionName: 'depositFor', label: 'Revalidate portfolio REP deposit', to: ledger })],
+		preflightCalls: [encodePreflightCall({ abi: securityPoolCapitalLedgerAbi, args: [snapshot.wallet.address, spend], caller: snapshot.wallet.address, expectedResult: '0x', functionName: 'depositFor', label: 'Revalidate REP deposit into the security pool', to: ledger })],
 	})
 }
 
@@ -71,7 +71,7 @@ function cleanup(snapshot: EcosystemSnapshot, context: OperationContinuationCont
 		continuationDisposition: 'cleanup-only',
 		definitionId: depositCapital.id,
 		ecosystem: 'statoblast',
-		label: 'Clean up portfolio capital approval',
+		label: 'Clean up security pool capital approval',
 		metadata: context.previousPlan.metadata,
 		postconditions: ['Workflow-created capital allowance is zero'],
 		risk: 'medium',
@@ -82,15 +82,15 @@ function cleanup(snapshot: EcosystemSnapshot, context: OperationContinuationCont
 
 export const depositCapital: OperationDefinition = {
 	id: 'statoblast.capital.deposit',
-	label: 'Deposit portfolio REP',
+	label: 'Deposit REP into the security pool',
 	method: 'depositFor',
 	contract: 'SecurityPoolCapitalLedger',
 	classification: 'selectable',
 	ecosystem: 'statoblast',
 	risk: 'medium',
-	description: 'Deposits REP into the wallet’s portfolio position, backing all its questions without changing the chosen health target.',
-	discoveryInputs: ['portfolio capital', 'wallet REP balances and capital ledger allowances'],
-	evaluate: (snapshot, options) => eligible(depositCandidates(snapshot, options).length > 0 ? undefined : 'No active portfolio with spendable wallet REP'),
+	description: 'Deposits REP into the wallet’s security pool position, backing all its questions without changing the chosen health target.',
+	discoveryInputs: ['security pool capital', 'wallet REP balances and capital ledger allowances'],
+	evaluate: (snapshot, options) => eligible(depositCandidates(snapshot, options).length > 0 ? undefined : 'No active security pool with spendable wallet REP'),
 	buildPlan(snapshot, options) {
 		const candidate = choose(depositCandidates(snapshot, options), mixSeed(options.seed, depositCapital.id))
 		if (candidate === undefined) return undefined
@@ -100,9 +100,9 @@ export const depositCapital: OperationDefinition = {
 			definitionId: depositCapital.id,
 			ecosystem: 'statoblast',
 			label: depositCapital.label,
-			metadata: { portfolio: capital.portfolio, universeId: capital.universeId, capitalLedger: capital.capitalLedger, repToken: capital.repToken, amountAttoRep: spend.toString() },
+			metadata: { securityPool: capital.securityPool, universeId: capital.universeId, capitalLedger: capital.capitalLedger, repToken: capital.repToken, amountAttoRep: spend.toString() },
 			maximumCleanupTransactionCount: needsApproval ? 1 : undefined,
-			postconditions: ['The owner’s portfolio REP principal increases'],
+			postconditions: ['The owner’s REP principal in the security pool increases'],
 			risk: 'medium',
 			snapshot,
 			steps: [...(needsApproval ? [approval(snapshot, capital.repToken, capital.capitalLedger, spend)] : []), depositStep(snapshot, capital.repToken, capital.capitalLedger, spend)],
@@ -112,12 +112,12 @@ export const depositCapital: OperationDefinition = {
 		const metadata = context.previousPlan.metadata
 		const token = getAddress(requiredVaultMetadataString(metadata, 'repToken'))
 		const ledger = getAddress(requiredVaultMetadataString(metadata, 'capitalLedger'))
-		const portfolio = getAddress(requiredVaultMetadataString(metadata, 'portfolio'))
+		const securityPool = getAddress(requiredVaultMetadataString(metadata, 'securityPool'))
 		const universeId = requiredVaultMetadataString(metadata, 'universeId')
 		const spend = requiredVaultMetadataAmount(metadata, 'amountAttoRep')
 		const revoke = () => cleanup(snapshot, context, token, ledger, spend)
 		if (context.continuationDisposition === 'cleanup-only') return revoke()
-		const capital = openCapital(snapshot, options).find(candidate => candidate.portfolio.toLowerCase() === portfolio.toLowerCase() && candidate.universeId === universeId && candidate.capitalLedger.toLowerCase() === ledger.toLowerCase() && candidate.repToken.toLowerCase() === token.toLowerCase())
+		const capital = openCapital(snapshot, options).find(candidate => candidate.securityPool.toLowerCase() === securityPool.toLowerCase() && candidate.universeId === universeId && candidate.capitalLedger.toLowerCase() === ledger.toLowerCase() && candidate.repToken.toLowerCase() === token.toLowerCase())
 		const previousApproval = context.previousPlan.steps.find(step => step.id === 'approve-capital-rep')
 		const expectedApproval = approval(snapshot, token, ledger, spend)
 		const expectedAction = spend > 0n ? depositStep(snapshot, token, ledger, spend) : undefined
@@ -144,7 +144,7 @@ export const depositCapital: OperationDefinition = {
 			label: depositCapital.label,
 			metadata,
 			maximumCleanupTransactionCount: previousApproval === undefined ? undefined : 1,
-			postconditions: ['The owner’s portfolio REP principal increases'],
+			postconditions: ['The owner’s REP principal in the security pool increases'],
 			risk: 'medium',
 			snapshot,
 			steps: [...(approved ? [] : [expectedApproval]), expectedAction],
@@ -156,7 +156,7 @@ type CapitalAction = 'withdraw' | 'claim' | 'retire' | 'serve-retirement'
 export function capitalAction(kind: CapitalAction): OperationDefinition {
 	const id = `statoblast.capital.${kind}`
 	const method = { withdraw: 'withdrawPrincipal', claim: 'claimEarnings', retire: 'setCommitment', 'serve-retirement': 'serveRetirement' }[kind]
-	const label = { withdraw: 'Withdraw free portfolio REP', claim: 'Claim portfolio earnings', retire: 'Retire portfolio commitment', 'serve-retirement': 'Serve portfolio retirement' }[kind]
+	const label = { withdraw: 'Withdraw free REP from the security pool', claim: 'Claim security pool earnings', retire: 'Retire security pool commitment', 'serve-retirement': 'Serve security pool retirement' }[kind]
 	function candidates(snapshot: EcosystemSnapshot, options: PlanningOptions) {
 		return (kind === 'withdraw' || kind === 'claim' ? ownerCapital(snapshot, options) : openCapital(snapshot, options)).filter(capital => {
 			if (kind === 'withdraw') return amount(capital.withdrawableAttoRep) > 0n
@@ -165,7 +165,7 @@ export function capitalAction(kind: CapitalAction): OperationDefinition {
 			return capital.retirementReady
 		})
 	}
-	function build(snapshot: EcosystemSnapshot, capital: PortfolioCapitalSnapshot) {
+	function build(snapshot: EcosystemSnapshot, capital: SecurityPoolCapitalSnapshot) {
 		let args: (bigint | string)[] = []
 		if (kind === 'withdraw') args = [amount(capital.withdrawableAttoRep), snapshot.wallet.address]
 		if (kind === 'claim') args = [snapshot.wallet.address]
@@ -175,7 +175,7 @@ export function capitalAction(kind: CapitalAction): OperationDefinition {
 			definitionId: id,
 			ecosystem: 'statoblast',
 			label,
-			metadata: { portfolio: capital.portfolio, universeId: capital.universeId, capitalLedger: capital.capitalLedger },
+			metadata: { securityPool: capital.securityPool, universeId: capital.universeId, capitalLedger: capital.capitalLedger },
 			postconditions: [label],
 			risk: 'medium',
 			snapshot,
@@ -191,8 +191,8 @@ export function capitalAction(kind: CapitalAction): OperationDefinition {
 		ecosystem: 'statoblast',
 		risk: 'medium',
 		description: `${label} through the owner’s shared capital ledger.`,
-		discoveryInputs: ['portfolio owner capital and retirement preview'],
-		evaluate: (snapshot, options) => eligible(candidates(snapshot, options).length > 0 ? undefined : 'No eligible portfolio capital'),
+		discoveryInputs: ['security pool owner capital and retirement preview'],
+		evaluate: (snapshot, options) => eligible(candidates(snapshot, options).length > 0 ? undefined : 'No eligible security pool capital'),
 		buildPlan(snapshot, options) {
 			const capital = choose(candidates(snapshot, options), mixSeed(options.seed, id))
 			return capital === undefined ? undefined : build(snapshot, capital)
@@ -201,7 +201,7 @@ export function capitalAction(kind: CapitalAction): OperationDefinition {
 }
 
 /** Invert the contract's three ceil divisions with floors, preserving its rounding. */
-function affordableCommitment(capital: PortfolioCapitalSnapshot, health: bigint, principal = amount(capital.principalAttoRep)) {
+function affordableCommitment(capital: SecurityPoolCapitalSnapshot, health: bigint, principal = amount(capital.principalAttoRep)) {
 	const price = amount(capital.ownerConservativePrice)
 	const multiplier = amount(capital.securityMultiplierBps)
 	if (price === 0n || multiplier === 0n) return 0n
@@ -211,7 +211,7 @@ function affordableCommitment(capital: PortfolioCapitalSnapshot, health: bigint,
 export function capitalPolicy(kind: 'commitment' | 'health'): OperationDefinition {
 	const id = `statoblast.capital.set-${kind}`
 	const method = kind === 'commitment' ? 'setCommitment' : 'setHealthTarget'
-	const label = kind === 'commitment' ? 'Set portfolio commitment' : 'Set owner health target'
+	const label = kind === 'commitment' ? 'Set security pool commitment' : 'Set owner health target'
 	function candidates(snapshot: EcosystemSnapshot, options: PlanningOptions) {
 		return openCapital(snapshot, options).flatMap(capital => {
 			const fresh = capital.priceValid && amount(capital.priceValidUntil) > amount(snapshot.anchor.timestamp)
@@ -239,9 +239,9 @@ export function capitalPolicy(kind: 'commitment' | 'health'): OperationDefinitio
 		classification: 'selectable',
 		ecosystem: 'statoblast',
 		risk: 'medium',
-		description: kind === 'health' ? 'Sets the wallet’s own health target above the protocol floor.' : 'Sets the wallet’s portfolio commitment within its chosen collateral target.',
+		description: kind === 'health' ? 'Sets the wallet’s own health target above the protocol floor.' : 'Sets the wallet’s security pool commitment within its chosen collateral target.',
 		discoveryInputs: ['owner principal and health', 'fresh conservative price', 'retirement state'],
-		evaluate: (snapshot, options) => eligible(candidates(snapshot, options).length > 0 ? undefined : 'No affordable portfolio policy change'),
+		evaluate: (snapshot, options) => eligible(candidates(snapshot, options).length > 0 ? undefined : 'No affordable security pool policy change'),
 		buildPlan(snapshot, options) {
 			const candidate = choose(candidates(snapshot, options), mixSeed(options.seed, id))
 			if (candidate === undefined) return undefined
@@ -249,7 +249,7 @@ export function capitalPolicy(kind: 'commitment' | 'health'): OperationDefinitio
 				definitionId: id,
 				ecosystem: 'statoblast',
 				label,
-				metadata: { portfolio: candidate.capital.portfolio, universeId: candidate.capital.universeId, capitalLedger: candidate.capital.capitalLedger, value: candidate.value.toString() },
+				metadata: { securityPool: candidate.capital.securityPool, universeId: candidate.capital.universeId, capitalLedger: candidate.capital.capitalLedger, value: candidate.value.toString() },
 				postconditions: [label],
 				risk: 'medium',
 				snapshot,

@@ -35,7 +35,7 @@ function calendarTimestamp(seconds: bigint) {
 		.replace(/\.\d{3}Z$/, 'Z')
 }
 
-export function buildEscalationReminder({ securityPoolAddress, escalationEndTime, generatedAt, questionTitle, status, pageUrl }: { securityPoolAddress: string; escalationEndTime: bigint; generatedAt: bigint; questionTitle: string; status: string; pageUrl: string }) {
+export function buildEscalationReminder({ questionLedgerAddress, escalationEndTime, generatedAt, questionTitle, status, pageUrl }: { questionLedgerAddress: string; escalationEndTime: bigint; generatedAt: bigint; questionTitle: string; status: string; pageUrl: string }) {
 	const summary = escapeCalendarText(copy.reminderSummary(questionTitle))
 	return (
 		[
@@ -43,7 +43,7 @@ export function buildEscalationReminder({ securityPoolAddress, escalationEndTime
 			'VERSION:2.0',
 			'PRODID:-//Statoblast//Escalation reminder//EN',
 			'BEGIN:VEVENT',
-			`UID:${escapeCalendarText(`${securityPoolAddress}-${escalationEndTime}@statoblast`)}`,
+			`UID:${escapeCalendarText(`${questionLedgerAddress}-${escalationEndTime}@statoblast`)}`,
 			`DTSTAMP:${calendarTimestamp(generatedAt)}`,
 			`DTSTART:${calendarTimestamp(escalationEndTime - 3600n)}`,
 			`DTEND:${calendarTimestamp(escalationEndTime - 2700n)}`,

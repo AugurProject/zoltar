@@ -1,13 +1,13 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { encodeDeployData, encodeFunctionData, getAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact, statoblast_SecurityPoolPortfolioSettlement_SecurityPoolPortfolioSettlement as custodyArtifact, test_statoblast_CollateralTestToken_CollateralTestToken as tokenArtifact } from '../types/contractArtifact'
+import { statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact, statoblast_SecurityPoolSettlement_SecurityPoolSettlement as custodyArtifact, test_statoblast_CollateralTestToken_CollateralTestToken as tokenArtifact } from '../types/contractArtifact'
 import type { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 
-// Custody fuzz of SecurityPoolPortfolioSettlement around the settlement book, with real ERC20
+// Custody fuzz of SecurityPoolSettlement around the settlement book, with real ERC20
 // collateral and one recovery token per child universe. No reference model: after every accepted
 // call the token balances held by the custody contract must equal the ledger's liabilities
 // (book cash or unassigned fork cash, fee escrow, frozen books; live and frozen recovery REP),

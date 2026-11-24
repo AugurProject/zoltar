@@ -5,32 +5,32 @@ import '../../statoblast/interfaces/IERC1155Receiver.sol';
 import { IWeth9 } from '../../statoblast/interfaces/IWeth9.sol';
 import { IERC20 } from '../../IERC20.sol';
 import { SafeERC20Ops } from '../../SafeERC20Ops.sol';
-import { SecurityPoolPortfolio } from '../../statoblast/SecurityPoolPortfolio.sol';
+import { SecurityPool } from '../../statoblast/SecurityPool.sol';
 
 contract CompleteSetReentrantReceiver is IERC1155Receiver {
 	using SafeERC20Ops for IERC20;
-	SecurityPoolPortfolio public immutable portfolio;
+	SecurityPool public immutable securityPool;
 	uint248 public immutable universeId;
 	uint256 public immutable questionId;
 	uint256 public reentrantValue;
 	uint256 public reentryCount;
 	string public reentryRevertReason;
 
-	constructor(SecurityPoolPortfolio root, uint248 universe, uint256 question) {
-		portfolio = root;
+	constructor(SecurityPool root, uint248 universe, uint256 question) {
+		securityPool = root;
 		universeId = universe;
 		questionId = question;
 	}
 
 	function attack(uint256 initialValue, uint256 nestedValue) external payable {
 		reentrantValue = nestedValue;
-		(uint256 fee, ) = portfolio.purchaseQuote(universeId, questionId, initialValue);
-		IERC20 collateral = portfolio.collateralToken();
-		(uint256 nestedFee, ) = portfolio.purchaseQuote(universeId, questionId, nestedValue);
+		(uint256 fee, ) = securityPool.purchaseQuote(universeId, questionId, initialValue);
+		IERC20 collateral = securityPool.collateralToken();
+		(uint256 nestedFee, ) = securityPool.purchaseQuote(universeId, questionId, nestedValue);
 		uint256 total = initialValue + fee + nestedValue + nestedFee;
 		IWeth9(address(collateral)).deposit{value: total}();
-		collateral.safeApprove(address(portfolio.services()), total);
-		portfolio.createCompleteSet(universeId, questionId, initialValue, address(this), 0, fee);
+		collateral.safeApprove(address(securityPool.services()), total);
+		securityPool.createCompleteSet(universeId, questionId, initialValue, address(this), 0, fee);
 	}
 
 	function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
@@ -44,9 +44,9 @@ contract CompleteSetReentrantReceiver is IERC1155Receiver {
 	function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata) external returns (bytes4) {
 		if (reentryCount == 0 && reentrantValue > 0) {
 			reentryCount = 1;
-			(uint256 fee, ) = portfolio.purchaseQuote(universeId, questionId, reentrantValue);
+			(uint256 fee, ) = securityPool.purchaseQuote(universeId, questionId, reentrantValue);
 			try
-				portfolio.createCompleteSet(universeId, questionId, reentrantValue, address(this), 0, fee)
+				securityPool.createCompleteSet(universeId, questionId, reentrantValue, address(this), 0, fee)
 			{} catch Error(string memory reason) {
 				reentryRevertReason = reason;
 			}

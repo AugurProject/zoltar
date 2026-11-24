@@ -14,7 +14,7 @@ import { drainEscalationGameRepForTest } from '../testSupport/simulator/utils/co
 import { ensureZoltarDeployed, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import {
-	test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as proofTestPoolArtifact,
+	test_statoblast_EscalationGameProofTestQuestionLedger_EscalationGameProofTestQuestionLedger as proofTestPoolArtifact,
 	ReputationToken_ReputationToken,
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
@@ -41,7 +41,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 	type StartFromForkArgs = readonly [startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, elapsedAtFork: bigint, fixedQuestionOutcome: QuestionOutcome, winnerHaircutPaidByFork: boolean, forkCarryInitialBackingAttoRep: bigint]
 
 	const deployStartedForkContinuation = async (zoltar: Address, proofVerifier: Address, startFromForkArgs: StartFromForkArgs) => {
-		const securityPool = await deployContract(
+		const questionLedger = await deployContract(
 			client,
 			encodeDeployData({
 				abi: proofTestPoolArtifact.abi,
@@ -54,13 +54,13 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			encodeDeployData({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-				args: [securityPool, repTokenAddress, proofVerifier, depositDelegate],
+				args: [questionLedger, repTokenAddress, proofVerifier, depositDelegate],
 			}),
 		)
 		await writeContractAndWait(client, () =>
 			client.writeContract({
 				abi: proofTestPoolArtifact.abi,
-				address: securityPool,
+				address: questionLedger,
 				functionName: 'setEscalationGame',
 				args: [escalationGame],
 			}),
@@ -70,7 +70,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 				abi: ReputationToken_ReputationToken.abi,
 				address: repTokenAddress,
 				functionName: 'approve',
-				args: [securityPool, MAX_UINT256],
+				args: [questionLedger, MAX_UINT256],
 			}),
 		)
 		await writeContractAndWait(client, () =>
@@ -81,7 +81,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 				args: startFromForkArgs,
 			}),
 		)
-		return { escalationGame, securityPool }
+		return { escalationGame, questionLedger }
 	}
 
 	beforeEach(async () => {
@@ -97,19 +97,19 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			const proofVerifier = await deployContract(client, encodeDeployData({ abi: statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi, bytecode: `0x${statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}` }))
 			const lowStake = NON_DECISION_THRESHOLD - START_BOND
 			const childBacking = FORK_THRESHOLD - (ownFork ? FORK_THRESHOLD / 5n : 0n)
-			const { escalationGame, securityPool } = await deployStartedForkContinuation(getZoltarAddress(), proofVerifier, [START_BOND, NON_DECISION_THRESHOLD, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes, ownFork, childBacking])
+			const { escalationGame, questionLedger } = await deployStartedForkContinuation(getZoltarAddress(), proofVerifier, [START_BOND, NON_DECISION_THRESHOLD, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes, ownFork, childBacking])
 			const balances = [lowStake, NON_DECISION_THRESHOLD, NON_DECISION_THRESHOLD] as const
 			const peaks = [zeroPeaks(), zeroPeaks(), zeroPeaks()] as const
 			for (const outcome of [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No] as const) {
 				peaks[outcome][0] = hashCarryLeaf(client.account.address, outcome, balances[outcome], BigInt(outcome), balances[outcome], BigInt(outcome + 1))
 			}
 			for (let outcome = 0; outcome < 3; outcome++) {
-				await writeContractAndWait(client, () => client.writeContract({ abi: initializeForkCarrySnapshotWithResolutionBalancesAbi, address: securityPool, functionName: 'initializeForkCarrySnapshotWithResolutionBalances', args: [peaks, [1n, 1n, 1n], balances, balances, [zeroHash, zeroHash, zeroHash]] }))
+				await writeContractAndWait(client, () => client.writeContract({ abi: initializeForkCarrySnapshotWithResolutionBalancesAbi, address: questionLedger, functionName: 'initializeForkCarrySnapshotWithResolutionBalances', args: [peaks, [1n, 1n, 1n], balances, balances, [zeroHash, zeroHash, zeroHash]] }))
 			}
 			await drainEscalationGameRepForTest(mockWindow, repTokenAddress, escalationGame, client.account.address)
 			await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repTokenAddress, functionName: 'transfer', args: [escalationGame, childBacking] }))
 			assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'isForkCarryFundingComplete' }), true, 'mutually exclusive reporter claims must use the actual remaining escrow, not sum of all original principal')
-			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'resumeEscalationGameFromFork' }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: questionLedger, functionName: 'resumeEscalationGameFromFork' }))
 			const resumedAt = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'forkResumedAt' })
 			await mockWindow.setTime(resumedAt + 3n * 24n * 60n * 60n + 1n)
 			const walletBefore = await getERC20Balance(client, repTokenAddress, client.account.address)
@@ -124,7 +124,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 				merkleMountainRangePeakIndex: 0n,
 				nullifierSiblings: new SparseNullifierTree().getProof(1n),
 			}
-			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'withdrawDeposit', args: [QuestionOutcome.Yes, proof] }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: questionLedger, functionName: 'withdrawDeposit', args: [QuestionOutcome.Yes, proof] }))
 			assert.strictEqual((await getERC20Balance(client, repTokenAddress, client.account.address)) - walletBefore, NON_DECISION_THRESHOLD + (NON_DECISION_THRESHOLD * 3n) / 5n, 'the full original winning payout must remain funded after the surplus is removed')
 			assert.strictEqual(await getERC20Balance(client, repTokenAddress, escalationGame), 0n)
 		})
@@ -141,7 +141,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		const exactMinimumBacking = sourcePrincipalAtFork
 
 		const deployContinuation = async (initialBacking: bigint) => {
-			const { escalationGame, securityPool } = await deployStartedForkContinuation(getZoltarAddress(), proofVerifier, [1n, 10n, 0n, QuestionOutcome.Yes, true, initialBacking])
+			const { escalationGame, questionLedger } = await deployStartedForkContinuation(getZoltarAddress(), proofVerifier, [1n, 10n, 0n, QuestionOutcome.Yes, true, initialBacking])
 
 			const invalidPeaks = zeroPeaks()
 			const yesPeaks = zeroPeaks()
@@ -151,7 +151,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 				await writeContractAndWait(client, () =>
 					client.writeContract({
 						abi: initializeForkCarrySnapshotWithResolutionBalancesAbi,
-						address: securityPool,
+						address: questionLedger,
 						functionName: 'initializeForkCarrySnapshotWithResolutionBalances',
 						args: [
 							[invalidPeaks, yesPeaks, noPeaks],
@@ -163,10 +163,10 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 					}),
 				)
 			}
-			return { escalationGame, securityPool }
+			return { escalationGame, questionLedger }
 		}
 
-		const { escalationGame: underfundedGame, securityPool: underfundedPool } = await deployContinuation(exactMinimumBacking)
+		const { escalationGame: underfundedGame, questionLedger: underfundedPool } = await deployContinuation(exactMinimumBacking)
 		await drainEscalationGameRepForTest(mockWindow, repTokenAddress, underfundedGame, client.account.address)
 		await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repTokenAddress, functionName: 'transfer', args: [underfundedGame, exactMinimumBacking - 1n] }))
 		assert.strictEqual(
@@ -189,7 +189,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			/Fork carry underfunded/,
 		)
 
-		const { escalationGame: exactlyFundedGame, securityPool: exactlyFundedPool } = await deployContinuation(exactMinimumBacking)
+		const { escalationGame: exactlyFundedGame, questionLedger: exactlyFundedPool } = await deployContinuation(exactMinimumBacking)
 		assert.strictEqual(
 			await client.readContract({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
@@ -225,13 +225,13 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			const zoltar = await deployContract(client, encodeDeployData({ abi: Zoltar_Zoltar.abi, bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`, args: [canonicalQuestionData, repTokenAddress, 20n, forkBurnDivisor] }))
 			await overrideGenesisTheoreticalSupply(mockWindow, client, repTokenAddress, FORK_THRESHOLD * 20n)
 			const proofVerifier = await deployContract(client, encodeDeployData({ abi: statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi, bytecode: `0x${statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}` }))
-			const { escalationGame, securityPool } = await deployStartedForkContinuation(zoltar, proofVerifier, [START_BOND, NON_DECISION_THRESHOLD, ESCALATION_TIME_LENGTH, QuestionOutcome.None, false, FORK_THRESHOLD])
+			const { escalationGame, questionLedger } = await deployStartedForkContinuation(zoltar, proofVerifier, [START_BOND, NON_DECISION_THRESHOLD, ESCALATION_TIME_LENGTH, QuestionOutcome.None, false, FORK_THRESHOLD])
 			const inheritedBalance = NON_DECISION_THRESHOLD / (2n * forkBurnDivisor)
 			for (let outcome = 0; outcome < 3; outcome++) {
 				await writeContractAndWait(client, () =>
 					client.writeContract({
 						abi: initializeForkCarrySnapshotWithResolutionBalancesAbi,
-						address: securityPool,
+						address: questionLedger,
 						functionName: 'initializeForkCarrySnapshotWithResolutionBalances',
 						args: [
 							[zeroPeaks(), zeroPeaks(), zeroPeaks()],
@@ -246,7 +246,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			const backing = await getERC20Balance(client, repTokenAddress, escalationGame)
 			await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repTokenAddress, functionName: 'transfer', args: [escalationGame, FORK_THRESHOLD - backing] }))
 			assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'canTriggerOwnFork' }), false)
-			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'resumeEscalationGameFromFork' }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: questionLedger, functionName: 'resumeEscalationGameFromFork' }))
 			// A real REP burn lowers the universe threshold without changing this game's
 			// inherited threshold. A new report must use the game threshold consistently.
 			await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repTokenAddress, functionName: 'approve', args: [zoltar, MAX_UINT256] }))
@@ -254,7 +254,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			const liveThreshold = await client.readContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'getForkThresholdAttoRep', args: [0n] })
 			assert.strictEqual(liveThreshold, FORK_THRESHOLD / 2n)
 			const preview = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'previewDepositOnOutcome', args: [QuestionOutcome.Yes, NON_DECISION_THRESHOLD] })
-			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'depositOnOutcome', args: [client.account.address, QuestionOutcome.Yes, NON_DECISION_THRESHOLD] }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: questionLedger, functionName: 'depositOnOutcome', args: [client.account.address, QuestionOutcome.Yes, NON_DECISION_THRESHOLD] }))
 			assert.strictEqual(preview[1], NON_DECISION_THRESHOLD)
 			assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'nonDecisionState' }), 0n, 'a strict winning report must not fabricate a local non-decision')
 			assert.strictEqual(await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'canTriggerOwnFork' }), false)
@@ -316,7 +316,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		)
 
 		const childBacking = FORK_THRESHOLD - FORK_THRESHOLD / forkBurnDivisor
-		const { escalationGame, securityPool } = await deployStartedForkContinuation(zoltar, proofVerifier, [START_BOND, NON_DECISION_THRESHOLD, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes, true, childBacking])
+		const { escalationGame, questionLedger } = await deployStartedForkContinuation(zoltar, proofVerifier, [START_BOND, NON_DECISION_THRESHOLD, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes, true, childBacking])
 
 		const yesParentDepositIndex = 1_001n + forkBurnDivisor
 		const noParentDepositIndex = 2_001n + forkBurnDivisor
@@ -331,7 +331,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			await writeContractAndWait(client, () =>
 				client.writeContract({
 					abi: initializeForkCarrySnapshotWithResolutionBalancesAbi,
-					address: securityPool,
+					address: questionLedger,
 					functionName: 'initializeForkCarrySnapshotWithResolutionBalances',
 					args: [
 						[invalidPeaks, yesPeaks, noPeaks],
@@ -370,7 +370,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		await assert.rejects(
 			client.writeContract({
 				abi: proofTestPoolArtifact.abi,
-				address: securityPool,
+				address: questionLedger,
 				functionName: 'resumeEscalationGameFromFork',
 				args: [],
 			}),
@@ -398,7 +398,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		await writeContractAndWait(client, () =>
 			client.writeContract({
 				abi: proofTestPoolArtifact.abi,
-				address: securityPool,
+				address: questionLedger,
 				functionName: 'resumeEscalationGameFromFork',
 				args: [],
 			}),
@@ -438,7 +438,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		await writeContractAndWait(client, () =>
 			client.writeContract({
 				abi: proofTestPoolArtifact.abi,
-				address: securityPool,
+				address: questionLedger,
 				functionName: 'withdrawDeposit',
 				args: [QuestionOutcome.Yes, proof],
 			}),

@@ -1,15 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact, statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact } from '../../types/contractArtifact'
-import { preparePortfolioCollateralRepairAuction } from './securityPoolPortfolioCollateralRepairAuctionFixture'
-import { unit, useSecurityPoolPortfolioFixture } from './securityPoolPortfolioFixture'
+import { prepareSecurityPoolCollateralRepairAuction } from './securityPoolCollateralRepairAuctionFixture'
+import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 
 // Executable audit boundaries, not assertions that the oracle is truthful.
 // These cases deliberately settle undisputed wrong prices through the real feed.
 // They prevent the backing-preserving repair change being mistaken for a fix
 // to #1344's separate withdrawal and auction-allocation risks.
 describe('Statoblast: remaining accepted-price assumptions (#1344)', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 
 	test('an undisputed wrong-low price still permits a withdrawal that the fair quote blocks', async () => {
 		await fixture.prepare(400n * unit, 100n * unit)
@@ -26,7 +26,7 @@ describe('Statoblast: remaining accepted-price assumptions (#1344)', () => {
 	})
 
 	test('an undisputed wrong-high closing price still increases a winning bid’s REP allocation', async () => {
-		const context = await preparePortfolioCollateralRepairAuction(fixture)
+		const context = await prepareSecurityPoolCollateralRepairAuction(fixture)
 		await context.report()
 		await context.open()
 		const bid = await context.bid(context.other, 5n, 6n * unit)

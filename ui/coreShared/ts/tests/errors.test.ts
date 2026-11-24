@@ -90,7 +90,7 @@ void describe('error helpers', () => {
 
 	void test('formats write failures with transaction-oriented wording', () => {
 		expect(formatWriteErrorMessage(new Error('execution reverted: ERC20: transfer amount exceeds balance'), 'Failed to report on outcome')).toBe('Transaction failed while attempting to report on outcome. Reason: ERC20: transfer amount exceeds balance.')
-		expect(formatWriteErrorMessage(new Error('No market found for that ID'), 'Failed to create security pool')).toBe('No market found for that ID.')
+		expect(formatWriteErrorMessage(new Error('No market found for that ID'), 'Failed to create question ledger')).toBe('No market found for that ID.')
 	})
 
 	void test('maps stale-price provider failures to an actionable recovery step', () => {

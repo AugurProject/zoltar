@@ -220,7 +220,7 @@ describe('QuestionCreateSection', () => {
 		expect(selectedQuestionIds).toEqual([question.questionId])
 		expect(openedViews).toEqual(['fork'])
 		expect(resetCount).toBe(1)
-		expect(document.body.textContent).not.toContain('Security Pool')
+		expect(document.body.textContent).not.toContain('Question Ledger')
 	})
 
 	test('keeps the post-create fork handoff in place, disabled with a reason, until the question ends or the universe loads', async () => {

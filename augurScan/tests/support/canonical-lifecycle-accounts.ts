@@ -198,7 +198,7 @@ export const expectRichListProfiles = async ({ database }: LifecycleContext): Pr
 	expect(await addressIdentityResponse.json()).toMatchObject({
 		address: discoveredAddress.toLowerCase(),
 		label: 'Discovered pool',
-		kind: 'securityPool',
+		kind: 'questionLedger',
 	})
 	expect(addressRichList?.rep_balances).toEqual([
 		expect.objectContaining({

@@ -1,5 +1,5 @@
 import type { UniverseNode } from '@zoltar/bot-shared/dashboard/universe-explorer'
-import { portfolioView, type PortfolioView } from './portfolio-response.ts'
+import { securityPoolView, type SecurityPoolView } from './security-pool-response.ts'
 import type { MonitoredPool } from './pool-presentation.ts'
 import { array, booleanValue, decode, dictionary, numberValue, object, oneOf, optional, stringValue, unknownValue } from '@zoltar/bot-shared/dashboard/response-validation'
 
@@ -89,7 +89,7 @@ export type Snapshot = {
 	rpcEndpointHealth?: { consecutiveFailures: number; error?: string; latencyMilliseconds?: number; nextRetryAt?: string; status: string; target: string }[]
 	pendingTransactions: { hash: string; label: string; mode: 'private' | 'public'; nonce: string; submissionBlock: string }[]
 	operatorCapable: boolean
-	portfolios?: PortfolioView[]
+	securityPools?: SecurityPoolView[]
 	pools: MonitoredPool[]
 	scanning: boolean
 	status: 'connectivity-degraded' | 'dry-run' | 'error' | 'paused' | 'running' | 'starting'
@@ -108,9 +108,9 @@ export type Configuration = {
 	runtime: { execute: boolean }
 	/** Address of the key saved in the operator file, which live execution requires to match the active signer. */
 	savedSigner?: string | undefined
-	selectedPortfolios: { address: string; universeId: string }[]
+	selectedSecurityPools: { address: string; universeId: string }[]
 	strategy: Record<string, string | number | boolean>
-	portfolioPolicy: Record<string, string | number | boolean>
+	securityPoolPolicy: Record<string, string | number | boolean>
 	submission: { minimumBundleRelaySuccesses: number; mode: 'private' | 'public'; relayUrls: string[] }
 }
 
@@ -171,7 +171,7 @@ const snapshot = object<Snapshot>({
 	rpcEndpointHealth: optional(array(object<NonNullable<Snapshot['rpcEndpointHealth']>[number]>({ consecutiveFailures: numberValue, error: optionalString, latencyMilliseconds: optional(numberValue), nextRetryAt: optionalString, status: stringValue, target: stringValue }))),
 	pendingTransactions: array(object<Snapshot['pendingTransactions'][number]>({ hash: stringValue, label: stringValue, mode: oneOf('private', 'public'), nonce: stringValue, submissionBlock: stringValue })),
 	operatorCapable: booleanValue,
-	portfolios: optional(array(portfolioView)),
+	securityPools: optional(array(securityPoolView)),
 	pools: array(pool),
 	scanning: booleanValue,
 	status: oneOf('connectivity-degraded', 'dry-run', 'error', 'paused', 'running', 'starting'),
@@ -190,8 +190,8 @@ const configuration = object<Configuration>({
 	networkConfigured: optional(booleanValue),
 	runtime: object<Configuration['runtime']>({ execute: booleanValue }),
 	savedSigner: optional(address),
-	selectedPortfolios: array(object<{ address: string; universeId: string }>({ address: stringValue, universeId: stringValue })),
-	portfolioPolicy: dictionary((value): value is string | number | boolean => stringValue(value) || numberValue(value) || booleanValue(value)),
+	selectedSecurityPools: array(object<{ address: string; universeId: string }>({ address: stringValue, universeId: stringValue })),
+	securityPoolPolicy: dictionary((value): value is string | number | boolean => stringValue(value) || numberValue(value) || booleanValue(value)),
 	strategy: dictionary((value): value is string | number | boolean => stringValue(value) || numberValue(value) || booleanValue(value)),
 	submission: object<Configuration['submission']>({ minimumBundleRelaySuccesses: numberValue, mode: oneOf('private', 'public'), relayUrls: strings }),
 })

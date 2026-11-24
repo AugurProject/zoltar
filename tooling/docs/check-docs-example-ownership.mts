@@ -21,10 +21,10 @@ async function assertExplanationPagesDelegateToReference(): Promise<void> {
 	assert.match(escalationGameHtml, /href="\.\.\/reference\/contracts\/escalationgame\.html#winning-deposit-payout"/, 'escalation explanation must delegate the exact payout to the EscalationGame reference')
 	assert.match(escalationGameHtml, /href="\.\.\/reference\/contracts\/escalationgame\.html#required-support-threshold"/, 'escalation explanation must delegate the attrition curve to the EscalationGame reference')
 	assert.doesNotMatch(escalationGameHtml, /class="equation"/, 'escalation explanation must not repeat the attrition formula')
-	assert.match(feesHtml, /href="\.\.\/reference\/contract-inventory\.html#portfolio-underwriting"/, 'fees explanation must delegate fee configuration to the portfolio reference')
+	assert.match(feesHtml, /href="\.\.\/reference\/contract-inventory\.html#security-pool-underwriting"/, 'fees explanation must delegate fee configuration to the security pool reference')
 	assert.doesNotMatch(feesHtml, /class="equation"/, 'fees explanation must not repeat the annualization formula')
-	assert.match(liquidationsHtml, /href="\.\.\/reference\/contract-inventory\.html#portfolio-liquidation"/, 'liquidation explanation must delegate liquidation details to the portfolio reference')
-	assert.match(collateralRepairAuctionsHtml, /href="\.\.\/reference\/contract-inventory\.html#portfolio-collateral-repair-auction"/, 'collateral repair auction explanation must delegate lot pricing to the portfolio auction reference')
+	assert.match(liquidationsHtml, /href="\.\.\/reference\/contract-inventory\.html#security-pool-liquidation"/, 'liquidation explanation must delegate liquidation details to the security pool reference')
+	assert.match(collateralRepairAuctionsHtml, /href="\.\.\/reference\/contract-inventory\.html#security-pool-collateral-repair-auction"/, 'collateral repair auction explanation must delegate lot pricing to the security pool auction reference')
 	assert.doesNotMatch(collateralRepairAuctionsHtml, /class="equation"/, 'collateral repair auction explanation must not repeat the auction allocation formula')
 }
 

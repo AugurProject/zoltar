@@ -1,20 +1,20 @@
 import type { Configuration } from './api-validation.ts'
 import { parseDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { formatAmount } from '@zoltar/bot-shared/dashboard/amount'
-import { parsePortfolioPolicy, type serializePortfolioPolicy } from '../config/portfolio-policy.ts'
+import { parseSecurityPoolPolicy, type serializeSecurityPoolPolicy } from '../config/security-pool-policy.ts'
 
 export type StrategyUpdate = {
 	maximumGasCostEth: string
 	walletReserveRep: string
-	portfolioPolicy: ReturnType<typeof serializePortfolioPolicy>
+	securityPoolPolicy: ReturnType<typeof serializeSecurityPoolPolicy>
 }
 
 const amountFields = [
 	['maximumGasCostEth', 'Maximum gas cost (ETH)', 'ETH'],
 	['walletReserveRep', 'Wallet REP reserve', 'REP'],
-	['maximumPrincipalRep', 'Principal per portfolio (REP)', 'REP'],
+	['maximumPrincipalRep', 'Principal per security pool (REP)', 'REP'],
 	['maximumTotalPrincipalRep', 'Total managed principal (REP)', 'REP'],
-	['maximumCommitmentEth', 'Commitment per portfolio (ETH)', 'ETH'],
+	['maximumCommitmentEth', 'Commitment per security pool (ETH)', 'ETH'],
 	['maximumOwnFundingRep', 'Own funding per takeover (REP)', 'REP'],
 	['minimumNetRewardEth', 'Minimum net reward (ETH)', 'ETH'],
 	['walletReserveEth', 'Wallet ETH reserve', 'ETH'],
@@ -29,13 +29,13 @@ const integerFields = [
 export function validateStrategyReview(next: StrategyUpdate) {
 	parseDecimalAmount(next.maximumGasCostEth, 'Maximum gas cost (ETH)')
 	parseDecimalAmount(next.walletReserveRep, 'Wallet REP reserve')
-	parsePortfolioPolicy(next.portfolioPolicy)
+	parseSecurityPoolPolicy(next.securityPoolPolicy)
 }
 
 export function strategyReviewRows(saved: Configuration, next: StrategyUpdate) {
-	const beforeValues: Record<string, string | number | boolean> = { ...saved.strategy, ...saved.portfolioPolicy }
-	const { portfolioPolicy, ...common } = next
-	return Object.entries({ ...common, ...portfolioPolicy }).flatMap(([name, after]) => {
+	const beforeValues: Record<string, string | number | boolean> = { ...saved.strategy, ...saved.securityPoolPolicy }
+	const { securityPoolPolicy, ...common } = next
+	return Object.entries({ ...common, ...securityPoolPolicy }).flatMap(([name, after]) => {
 		const before = beforeValues[name]
 		if (String(before) === String(after)) return []
 		const amount = amountFields.find(field => field[0] === name)

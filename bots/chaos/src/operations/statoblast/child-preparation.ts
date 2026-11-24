@@ -1,4 +1,4 @@
-import { securityPoolForkerAbi } from '@zoltar/bot-shared/contracts/abi'
+import { questionForkerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { choose, eligible, encodeStep, mixSeed, planBase } from '../planning.ts'
 import type { EcosystemSnapshot, OperationDefinition, OperationEvidence } from '../types.ts'
@@ -15,8 +15,8 @@ const initializationMetadata = (candidate: ReturnType<typeof initializationCandi
 
 function initializationEvidence(candidate: ReturnType<typeof initializationCandidates>[number]): OperationEvidence[] {
 	const { preparation } = candidate
-	if (preparation.portfolio !== zeroAddress && preparation.sourceGame === zeroAddress) return [{ kind: 'storage-postcondition', contract: preparation.childPool, abi: 'function systemState() view returns (uint8)', functionName: 'systemState', args: [], relation: 'equals', expected: '0' }]
-	if (preparation.portfolio !== zeroAddress && preparation.game === zeroAddress) return [{ kind: 'storage-postcondition', contract: preparation.childPool, abi: 'function escalationGame() view returns (address)', functionName: 'escalationGame', args: [], relation: 'greater-than', expected: '0' }]
+	if (preparation.securityPool !== zeroAddress && preparation.sourceGame === zeroAddress) return [{ kind: 'storage-postcondition', contract: preparation.childPool, abi: 'function systemState() view returns (uint8)', functionName: 'systemState', args: [], relation: 'equals', expected: '0' }]
+	if (preparation.securityPool !== zeroAddress && preparation.game === zeroAddress) return [{ kind: 'storage-postcondition', contract: preparation.childPool, abi: 'function escalationGame() view returns (address)', functionName: 'escalationGame', args: [], relation: 'greater-than', expected: '0' }]
 	return [{ kind: 'storage-postcondition', contract: preparation.game, abi: 'function forkCarrySnapshotOutcomesInitialized() view returns (uint8)', functionName: 'forkCarrySnapshotOutcomesInitialized', args: [], relation: 'greater-than', expected: preparation.historyOutcomesInitialized.toString() }]
 }
 
@@ -32,10 +32,10 @@ function initializationPlan(snapshot: EcosystemSnapshot, candidate: ReturnType<t
 		postconditions: ['The next bounded child-history outcome is initialized without extending any migration window'],
 		steps: [
 			encodeStep({
-				abi: securityPoolForkerAbi,
-				functionName: 'materializePortfolioQuestion',
+				abi: questionForkerAbi,
+				functionName: 'materializeSecurityPoolQuestion',
 				args: [candidate.preparation.sourcePool, BigInt(candidate.preparation.childUniverseId)],
-				to: snapshot.deployments.securityPoolForker,
+				to: snapshot.deployments.questionForker,
 				id: 'initialize-child-history',
 				label: 'Initialize one child history outcome',
 				gasLimit: 16_777_216n,
@@ -47,10 +47,10 @@ function initializationPlan(snapshot: EcosystemSnapshot, candidate: ReturnType<t
 
 export const initializeChildHistory: OperationDefinition = {
 	id: 'statoblast.child.initialize-history',
-	method: 'materializePortfolioQuestion',
+	method: 'materializeSecurityPoolQuestion',
 	label: 'Initialize child dispute history',
 	classification: 'lifecycle-obligation',
-	contract: 'SecurityPoolForker',
+	contract: 'QuestionForker',
 	ecosystem: 'statoblast',
 	risk: 'low',
 	description: 'Permissionlessly initializes one inherited outcome for a registered child, including after the migration deadline.',

@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { concatHex, encodeDeployData, hexToBytes, toHex, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { boundCloneRuntimeCode } from '@zoltar/statoblast-shared/statoblast/securityPoolPortfolio'
+import { boundCloneRuntimeCode } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { deployContract } from '../../testSupport/deployContract'
 import { test_statoblast_CommitmentIndexHarness_InspectableCommitmentIndex as artifact } from '../../types/contractArtifact'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'

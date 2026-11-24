@@ -58,7 +58,7 @@ test('builds scanner metadata from source with verified compiler caches and vend
 		const [status, stdout, stderr] = await Promise.all([build.exited, new Response(build.stdout).text(), new Response(build.stderr).text()])
 		expect(status, `${stdout}\n${stderr}`).toBe(0)
 		for (const output of ['abis.json', 'system-contracts.generated.ts', 'dependency-abis.json', 'manifests/mainnet.json', 'manifests/sepolia.json']) expect(await Bun.file(path.join(workspace, 'augurScan/config', output)).exists(), output).toBe(true)
-		const decoder = Bun.spawn([process.execPath, '-e', "const {abiForKind}=await import('./src/abi-catalog.ts'); if(!abiForKind('delegationManager')?.some(item=>item.name==='redeemDelegations') || !abiForKind('securityPool')?.length) process.exit(1)"], {
+		const decoder = Bun.spawn([process.execPath, '-e', "const {abiForKind}=await import('./src/abi-catalog.ts'); if(!abiForKind('delegationManager')?.some(item=>item.name==='redeemDelegations') || !abiForKind('questionLedger')?.length) process.exit(1)"], {
 			cwd: path.join(workspace, 'augurScan'),
 			stdout: 'pipe',
 			stderr: 'pipe',

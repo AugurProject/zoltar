@@ -1,4 +1,4 @@
-import { parseInstructionIdentity, parseFundingEffect } from './portfolio-instructions.ts'
+import { parseInstructionIdentity, parseFundingEffect } from './security-pool-instructions.ts'
 import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Hex } from '@zoltar/bot-shared/ethereum'
 import { isHash32 } from '@zoltar/bot-shared/infrastructure/json-validation'
 import type { PendingTransactionIntent } from './operator-state.ts'
@@ -77,8 +77,8 @@ export async function parsePendingTransactionIntent(intent: unknown, expectedCha
 		mode,
 		nonce: parsedNonce,
 		reportOperations: parseReportOperations(Reflect.get(intent, 'reportOperations')),
-		portfolioFunding: parseFundingEffect(Reflect.get(intent, 'portfolioFunding')),
-		portfolioInstruction: parseInstructionIdentity(Reflect.get(intent, 'portfolioInstruction')),
+		securityPoolFunding: parseFundingEffect(Reflect.get(intent, 'securityPoolFunding')),
+		securityPoolInstruction: parseInstructionIdentity(Reflect.get(intent, 'securityPoolInstruction')),
 		receiptExpectation,
 		requiresMarketEvidence,
 		sender: normalizedSender,

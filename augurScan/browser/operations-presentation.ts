@@ -144,7 +144,7 @@ export const operationsFailureMessage = (refresh: boolean, status: number | unde
 	return status === 404 ? `No indexed record matches this address or identifier on the selected network: ${detail}` : `Could not load protocol operations: ${detail}`
 }
 
-// Portfolio fork events are keyed by coordinator and universe; the fork page is keyed by the universe alone.
+// Security pool fork events are keyed by coordinator and universe; the fork page is keyed by the universe alone.
 export const forkParticipationUniverse = (event: Readonly<Record<string, unknown>>): string => {
 	const identity = String(event['universe_identity'] ?? '')
 	const eventData = isPlainRecord(event['event_data']) ? event['event_data'] : {}

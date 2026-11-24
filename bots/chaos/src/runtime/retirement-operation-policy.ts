@@ -56,7 +56,7 @@ const PROHIBITED_OPERATIONS = [
 	'statoblast.fork.initiate',
 	'statoblast.fork.own-question',
 	'statoblast.oracle.request-price',
-	'statoblast.portfolio.add-question',
+	'statoblast.security-pool.add-question',
 	'statoblast.capital.deposit',
 	'statoblast.capital.set-commitment',
 	'statoblast.capital.set-health',

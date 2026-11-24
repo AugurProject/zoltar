@@ -9,7 +9,7 @@ import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accou
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as transactionStepsCopy from '@zoltar/ui-core-shared/copy/transactionSteps.js'
-import * as portfolioCopy from '@zoltar/ui-statoblast-shared/copy/portfolio.js'
+import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 import { ReportingSection } from '@zoltar/ui-statoblast-shared/features/reporting/components/ReportingSection.js'
 import type { OwnForkAdmission } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
 import type { ActiveReportingDetails, EscalationSide } from '@zoltar/ui-statoblast-shared/types/contracts.js'
@@ -40,7 +40,7 @@ const reportingDetails: ActiveReportingDetails = {
 	nonDecisionThresholdAttoRep: 20n,
 	parentWithdrawalEnabled: false,
 	questionOutcome: 'none',
-	securityPoolAddress: pool,
+	questionLedgerAddress: pool,
 	settlementCollateralAttoEth: 1n,
 	settlementState: 'locked',
 	sides: [side('invalid', 'Invalid', 20n), side('yes', 'Yes', 20n), side('no', 'No', 0n)],
@@ -59,7 +59,7 @@ function Harness({ dependencies }: { dependencies: UseOwnForkTriggerDependencies
 			active: true,
 			onForked: async () => undefined,
 			parameters: { accountAddress: zeroAddress, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined, onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, refreshState: async () => undefined },
-			question: { securityPoolAddress: pool, universeId: 1n },
+			question: { questionLedgerAddress: pool, universeId: 1n },
 			refreshKey: 0,
 		},
 		dependencies,
@@ -78,10 +78,10 @@ function Harness({ dependencies }: { dependencies: UseOwnForkTriggerDependencies
 			reportingActiveAction={undefined}
 			reportingDetails={reportingDetails}
 			reportingError={undefined}
-			reportingForm={{ reportAmount: '', securityPoolAddress: pool, selectedOutcome: undefined, selectedWithdrawDepositIndexesByOutcome: { invalid: [], no: [], yes: [] } }}
+			reportingForm={{ reportAmount: '', questionLedgerAddress: pool, selectedOutcome: undefined, selectedWithdrawDepositIndexesByOutcome: { invalid: [], no: [], yes: [] } }}
 			reportingResult={undefined}
 			showHeader={false}
-			showSecurityPoolAddressInput={false}
+			showQuestionLedgerAddressInput={false}
 			triggerZoltarForkApproval={ownFork.approval}
 			triggerZoltarForkAvailability={ownFork.triggerForkAvailability}
 			triggerZoltarForkPending={ownFork.forkPending}
@@ -108,7 +108,7 @@ function createDependencies(initial: OwnForkAdmission) {
 }
 
 const forkSection = () => {
-	const heading = within(document.body).getByRole('heading', { name: portfolioCopy.forkAdmission })
+	const heading = within(document.body).getByRole('heading', { name: securityPoolCopy.forkAdmission })
 	const section = heading.closest('section')
 	if (section === null) throw new Error('Missing fork admission section')
 	return section
@@ -133,16 +133,16 @@ describe('own-question fork admission', () => {
 			within(forkSection())
 				.getAllByRole('button')
 				.map(button => button.textContent),
-		).toEqual([approveButton().textContent, portfolioCopy.triggerUniverseFork])
-		expectTransactionButtonDisabled(document.body, portfolioCopy.triggerUniverseFork, portfolioCopy.forkAdmissionApprovalRequired)
+		).toEqual([approveButton().textContent, securityPoolCopy.triggerUniverseFork])
+		expectTransactionButtonDisabled(document.body, securityPoolCopy.triggerUniverseFork, securityPoolCopy.forkAdmissionApprovalRequired)
 		await act(async () => {
 			fireEvent.click(approveButton())
 		})
-		await waitFor(() => expectTransactionButtonEnabled(document.body, portfolioCopy.triggerUniverseFork))
+		await waitFor(() => expectTransactionButtonEnabled(document.body, securityPoolCopy.triggerUniverseFork))
 		expect(sent).toEqual([`approve:${(shortfall + ATTO_REP).toString()}`])
 		expectTransactionButtonDisabled(document.body, commonCopy.approvalSatisfied)
 		await act(async () => {
-			fireEvent.click(within(document.body).getByRole('button', { name: portfolioCopy.triggerUniverseFork }))
+			fireEvent.click(within(document.body).getByRole('button', { name: securityPoolCopy.triggerUniverseFork }))
 		})
 		await waitFor(() => expect(sent).toEqual([`approve:${(shortfall + ATTO_REP).toString()}`, 'fork']))
 	})
@@ -151,12 +151,12 @@ describe('own-question fork admission', () => {
 		const { dependencies, sent } = createDependencies({ allowanceAttoRep: 0n, recommendedApprovalAttoRep: 0n, shortfallAttoRep: 0n })
 		const rendered = await renderIntoDocument(<Harness dependencies={dependencies} />)
 		trackCleanup(rendered.cleanup)
-		await waitFor(() => expectTransactionButtonEnabled(document.body, portfolioCopy.triggerUniverseFork))
+		await waitFor(() => expectTransactionButtonEnabled(document.body, securityPoolCopy.triggerUniverseFork))
 		expectTransactionButtonDisabled(forkSection(), transactionStepsCopy.skipped)
 		// A finished step shows the read allowance, not a loading placeholder.
 		expect(forkSection().textContent).not.toContain('—')
 		await act(async () => {
-			fireEvent.click(within(document.body).getByRole('button', { name: portfolioCopy.triggerUniverseFork }))
+			fireEvent.click(within(document.body).getByRole('button', { name: securityPoolCopy.triggerUniverseFork }))
 		})
 		await waitFor(() => expect(sent).toEqual(['fork']))
 	})

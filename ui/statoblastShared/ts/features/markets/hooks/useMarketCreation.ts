@@ -5,7 +5,7 @@ export type UseMarketCreationDependencies = {
 	createMarket: UseQuestionCreationDependencies['createQuestion']
 }
 
-// Security pools only accept binary questions, and each universe keeps its own draft.
+// Question ledgers only accept binary questions, and each universe keeps its own draft.
 export function useMarketCreation(parameters: UseQuestionCreationParameters, dependencies?: UseMarketCreationDependencies) {
 	const { createQuestion, questionCreating, questionError, questionFeedback, questionForm, questionResult, resetQuestion, setQuestionForm, ...zoltar } = useQuestionCreation(parameters, dependencies === undefined ? undefined : { createQuestion: dependencies.createMarket }, {
 		fixedMarketType: 'binary',

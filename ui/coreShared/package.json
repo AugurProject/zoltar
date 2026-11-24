@@ -1070,9 +1070,9 @@
 			"bun": "./ts/components/DeploymentStepList.tsx",
 			"default": "./js/components/DeploymentStepList.js"
 		},
-		"./components/SecurityPoolLink.js": {
-			"bun": "./ts/components/SecurityPoolLink.tsx",
-			"default": "./js/components/SecurityPoolLink.js"
+		"./components/QuestionLedgerLink.js": {
+			"bun": "./ts/components/QuestionLedgerLink.tsx",
+			"default": "./js/components/QuestionLedgerLink.js"
 		},
 		"./components/TransactionStepsContent.js": {
 			"bun": "./ts/components/TransactionStepsContent.tsx",

@@ -27,7 +27,7 @@ type Props = {
 export function InheritedReporterClaims({ parameters, accountState, details, onRefresh }: Props) {
 	const error = useSignal<string | undefined>(undefined)
 	const pending = useSignal<string | undefined>(undefined)
-	const selection = `${details?.securityPoolAddress ?? ''}:${accountState.address ?? ''}:${accountState.chainId ?? ''}`
+	const selection = `${details?.questionLedgerAddress ?? ''}:${accountState.address ?? ''}:${accountState.chainId ?? ''}`
 	const current = useRef(selection)
 	current.current = selection
 	useEffect(
@@ -42,7 +42,7 @@ export function InheritedReporterClaims({ parameters, accountState, details, onR
 	const walletReason = getWalletActiveAppChainGuardState({ accountAddress: accountState.address, isOnActiveAppChain: isActiveAppChain(accountState.chainId) })?.reason
 	const run = async (identity: AuthenticatedForkClaim) => {
 		if (pending.value !== undefined || active === undefined) return
-		const pool = active.securityPoolAddress
+		const pool = active.questionLedgerAddress
 		const key = `${identity.outcome}:${identity.parentDepositIndex}`
 		pending.value = key
 		error.value = undefined

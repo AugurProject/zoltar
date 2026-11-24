@@ -34,7 +34,7 @@ Under the two-reader policy, fewer than two available agreeing readers therefore
 - Bun and this project's frozen dependencies.
 - An RPC endpoint for Ethereum mainnet or Sepolia. Approved-coordinator discovery uses current contract state and does not require historical log access. [Coordinator-free diagnostic mode](./CONFIGURATION.md#coordinator-free-diagnostic-mode) reads only the configured latest-block window.
 - OpenOracle deployed at the address in the selected network manifest.
-- Approved Zoltar universes whose pool reports this wallet may dispute. Each scan authenticates the portfolio feed through its canonical security-pool factory registration, then verifies each report’s registered escrow and matching OpenOracle, feed and report ID at the selected block. Feed and escrow addresses are not configurable.
+- Approved Zoltar universes whose pool reports this wallet may dispute. Each scan authenticates the security pool feed through its canonical security-pool factory registration, then verifies each report’s registered escrow and matching OpenOracle, feed and report ID at the selected block. Feed and escrow addresses are not configurable.
 - A deployed `OpenOracleArbitrageExecutor`. Deploy the stateless executor at a fixed CREATE2 address from the dashboard or with [`bun run deploy-executor`](#deploy-the-executor). The bot derives the address and checks that code exists there; the CREATE2 address commits to the bundled contract, so no executor address is entered manually.
 - At least one enabled Uniswap version available on the selected network.
 - `deployment.uniswapV3Enabled` (`true` in the example configuration) enables V3 with its spot/TWAP check.
@@ -126,7 +126,7 @@ Execution supports **Private relays** and **Public mempool** delivery. Private m
 
 Before each dispute, the bot:
 
-1. Authenticates `helper.creator` as the report escrow registered by an approved portfolio feed, and checks the report against that feed’s OpenOracle, collateral, REP, callback, timing, fee, multiplier and flag template. Shared-feed callback gas may range from the template minimum up to 10,000,000; other template fields must match. Independent hard bounds reject callback gas above 10,000,000, timestamp settlement windows above seven days, block settlement windows above 50,400 blocks, and multipliers above 2x even when a discovered coordinator exposes them.
+1. Authenticates `helper.creator` as the report escrow registered by an approved security pool feed, and checks the report against that feed’s OpenOracle, collateral, REP, callback, timing, fee, multiplier and flag template. Shared-feed callback gas may range from the template minimum up to 10,000,000; other template fields must match. Independent hard bounds reject callback gas above 10,000,000, timestamp settlement windows above seven days, block settlement windows above 50,400 blocks, and multipliers above 2x even when a discovered coordinator exposes them.
 2. Checks that the game pairs [allowed report collateral](CONFIGURATION.md#collateral-tokens) with a usable token and is inside its dispute window. In execute mode, token 2 must be the REP of an explicitly approved Zoltar universe through the canonical universe registry. Other observed tokens are monitor-only.
 3. Finds candidates for each enabled Uniswap version. V3 candidates must pass the configured spot/TWAP check; V2 and V4 do not depend on V3 liquidity.
 4. Models both directions across configured venues: QuoterV2 for V3, exact constant-product reserve math for V2, and the authenticated V4 Quoter across every standard fee/tick-spacing pair. Each venue supplies its own replacement exact-input quote. Selection and final validation both require successful sell, buy, and replacement quotes; incomplete candidates cannot block other venues.
@@ -187,9 +187,9 @@ The dashboard balance calculation reports:
 - Native ETH.
 - Wallet WETH and REP.
 - The best executable WETH output for selling the entire REP balance through a currently accepted pool.
-- Estimated executable portfolio value: `ETH + WETH + quoted REP value`, treating 1 ETH as 1 WETH.
+- Estimated executable security pool value: `ETH + WETH + quoted REP value`, treating 1 ETH as 1 WETH.
 
-That portfolio value is a liquidation estimate. It is not cost-basis accounting and can move sharply when REP/WETH liquidity is shallow.
+That security pool value is a liquidation estimate. It is not cost-basis accounting and can move sharply when REP/WETH liquidity is shallow.
 
 ## Transaction delivery and tracking
 

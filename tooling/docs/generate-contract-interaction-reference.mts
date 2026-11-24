@@ -580,7 +580,7 @@ function assertDeclarationCheckerRegression(): void {
 }
 
 function assertProductionSoliditySourceClassifierRegression(): void {
-	assert.equal(isProductionSoliditySourcePath('solidity/contracts/SecurityPool.sol'), true)
-	assert.equal(isProductionSoliditySourcePath('solidity/contracts/test/SecurityPoolHarness.sol'), false)
+	assert.equal(isProductionSoliditySourcePath('solidity/contracts/QuestionLedger.sol'), true)
+	assert.equal(isProductionSoliditySourcePath('solidity/contracts/test/QuestionLedgerHarness.sol'), false)
 	assert.equal(isProductionSoliditySourcePath('solidity/contracts/trading/test/TwoWayConstantProductMathHarness.sol'), false)
 }

@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { encodeAbiParameters, encodeDeployData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate as operationsArtifact, statoblast_SecurityPoolEventEmitter_SecurityPoolEventEmitter as accountingArtifact } from '../../types/contractArtifact'
+import { statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate as operationsArtifact, statoblast_QuestionLedgerEventEmitter_QuestionLedgerEventEmitter as accountingArtifact } from '../../types/contractArtifact'
 import { deployContract } from '../../testSupport/deployContract'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient } from '../../testSupport/simulator/utils/clients'

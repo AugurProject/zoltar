@@ -87,7 +87,7 @@ function protocolIndex(): NonNullable<DurableState['protocolIndex']> {
 			},
 		],
 		schemaVersion: 5,
-		securityPoolForker: getAddress('0x0000000000000000000000000000000000000030'),
+		questionForker: getAddress('0x0000000000000000000000000000000000000030'),
 		startBlock: '10',
 		wallet: getAddress('0x0000000000000000000000000000000000000022'),
 		zoltar: getAddress('0x0000000000000000000000000000000000000031'),
@@ -101,10 +101,10 @@ function workflow(): DurableWorkflow {
 		createdAt,
 		ecosystem: 'statoblast',
 		id: 'workflow:one',
-		label: 'Advance portfolio setup',
+		label: 'Advance security pool setup',
 		metadata: { reportId: '7' },
 		obligation: false,
-		operationId: 'statoblast.portfolio.setup',
+		operationId: 'statoblast.security-pool.setup',
 		planId: 'plan:one',
 		planningSeed: 1,
 		postconditions: ['Setup advanced'],
@@ -183,7 +183,7 @@ async function pendingIntent(): Promise<PendingTransactionIntent> {
 		maxBlockNumber: 120n,
 		mode: 'public',
 		nonce: 3n,
-		operationId: 'statoblast.portfolio.setup',
+		operationId: 'statoblast.security-pool.setup',
 		semanticExpectation: {
 			balanceBaselines: [{ account: account.address, asset: 'ETH', balance: '1000000000000000000' }],
 			evidence: [
@@ -198,7 +198,7 @@ async function pendingIntent(): Promise<PendingTransactionIntent> {
 					relation: 'changed',
 				},
 			],
-			postconditions: ['The portfolio setup stage advanced'],
+			postconditions: ['The security pool setup stage advanced'],
 			storageBaselines: [{ args: [account.address, emitter], contract: emitter, functionName: 'tokenHolder', value: '9' }],
 		},
 		sender: account.address,
@@ -447,7 +447,7 @@ describe('chaos-bot durable state', () => {
 			lastDelaySeconds: 60,
 			lastRunAt: createdAt,
 			nextRunAt: '2026-08-24T00:01:00.000Z',
-			selectedOperationId: 'statoblast.portfolio.setup',
+			selectedOperationId: 'statoblast.security-pool.setup',
 			status: 'running',
 		}
 		const state = initialRuntimeState(false, undefined, 1, durable)
@@ -460,7 +460,7 @@ describe('chaos-bot durable state', () => {
 			lastDelaySeconds: 60,
 			lastRunAt: createdAt,
 			nextRunAt: '2026-08-24T00:01:00.000Z',
-			selectedOperationId: 'statoblast.portfolio.setup',
+			selectedOperationId: 'statoblast.security-pool.setup',
 			status: 'running',
 		}
 		const state = initialRuntimeState(false, undefined, 1, durable)
@@ -476,7 +476,7 @@ describe('chaos-bot durable state', () => {
 			data: '0x1234',
 			maxBlockNumber: 120n,
 			nonce: 3n,
-			operationId: 'statoblast.portfolio.setup',
+			operationId: 'statoblast.security-pool.setup',
 			to: emitter,
 			value: 7n,
 			workflowId: 'workflow:one',

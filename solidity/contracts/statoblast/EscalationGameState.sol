@@ -2,7 +2,7 @@
 pragma solidity 0.8.35;
 
 import { ReputationToken } from '../ReputationToken.sol';
-import { ISecurityPool } from './interfaces/ISecurityPool.sol';
+import { IQuestionLedger } from './interfaces/IQuestionLedger.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameProofVerifier } from './EscalationGameProofVerifier.sol';
 import { IEscalationGameEvents } from './interfaces/IEscalationGame.sol';
@@ -13,7 +13,7 @@ import { DelegateCall } from './DelegateCall.sol';
 import { EscalationGameRepCustody } from './EscalationGameRepCustody.sol';
 
 abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameEvents {
-	ISecurityPool public immutable securityPool;
+	IQuestionLedger public immutable questionLedger;
 	ReputationToken public immutable repToken;
 	EscalationGameProofVerifier internal immutable proofVerifier;
 	address internal immutable owner;
@@ -27,8 +27,8 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	event OrdinarySettlementInitialized(BinaryOutcomes.BinaryOutcome indexed outcome, uint256 winningPrincipalAttoRep, uint256 reservedAttoRep);
 	event ForkContinuationResidualRepBurned(uint256 amountAttoRep);
 
-	constructor(ISecurityPool _securityPool, ReputationToken _repToken, EscalationGameProofVerifier _proofVerifier) {
-		securityPool = _securityPool;
+	constructor(IQuestionLedger _questionLedger, ReputationToken _repToken, EscalationGameProofVerifier _proofVerifier) {
+		questionLedger = _questionLedger;
 		repToken = _repToken;
 		proofVerifier = _proofVerifier;
 		owner = msg.sender;
@@ -41,10 +41,10 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 		return _proofVerifier.computeEmptyNullifierRoot();
 	}
 
-	modifier onlySecurityPoolOrForker() {
+	modifier onlyQuestionLedgerOrForker() {
 		// This guard is repeated across the size-constrained escalation runtime. A
 		// data-free revert keeps the deployed game below EIP-170's code-size limit.
-		if (msg.sender != address(securityPool) && msg.sender != address(securityPool.securityPoolForker())) {
+		if (msg.sender != address(questionLedger) && msg.sender != address(questionLedger.questionForker())) {
 			revert();
 		}
 		_;
@@ -96,10 +96,10 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	}
 
 	function _reporterRepBalance() internal view returns (uint256) {
-		return EscalationGameRepCustody.balance(address(securityPool), address(repToken));
+		return EscalationGameRepCustody.balance(address(questionLedger), address(repToken));
 	}
 
 	function _usesCentralReporterCustody() internal view returns (bool) {
-		return address(EscalationGameRepCustody.ledger(address(securityPool))) != address(0);
+		return address(EscalationGameRepCustody.ledger(address(questionLedger))) != address(0);
 	}
 }

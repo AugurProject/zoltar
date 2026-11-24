@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { decodeFunctionData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { securityPoolFactoryAbi, securityPoolForkerAbi } from '@zoltar/bot-shared/contracts/abi'
+import { securityPoolFactoryAbi, questionForkerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { canonicalLifecyclePresence } from '../../src/operations/catalog.ts'
 import { initializeChildHistory } from '../../src/operations/statoblast/child-preparation.ts'
 import { forkDefinition } from '../../src/operations/statoblast/forks.ts'
@@ -28,7 +28,7 @@ function forkFixture() {
 	pool.systemState = 1
 	universe.forkTime = '1999999000'
 	universe.forkQuestionId = question.id
-	pool.childPoolPreparations['0'] = { portfolio: address(90), branchReady: true, sourcePool: pool.address, sourceGame: zeroAddress, childUniverseId: '88', childPool: zeroAddress, game: zeroAddress, historyOutcomesInitialized: 0, historyReady: false, feedRequired: true, dependenciesRequired: true }
+	pool.childPoolPreparations['0'] = { securityPool: address(90), branchReady: true, sourcePool: pool.address, sourceGame: zeroAddress, childUniverseId: '88', childPool: zeroAddress, game: zeroAddress, historyOutcomesInitialized: 0, historyReady: false, feedRequired: true, dependenciesRequired: true }
 	return { snapshot, pool }
 }
 
@@ -37,10 +37,10 @@ test('shared child creation prepares its native namespace only after the shared 
 	const plan = forkDefinition('create-child')
 		.buildLifecyclePlans?.(snapshot, options)
 		.find(plan => plan.metadata?.['outcome'] === '0')
-	expect(plan?.steps.map(step => decodeFunctionData({ abi: [...securityPoolFactoryAbi, ...securityPoolForkerAbi], data: step.data }).functionName)).toEqual(['preparePortfolioQuestion'])
+	expect(plan?.steps.map(step => decodeFunctionData({ abi: [...securityPoolFactoryAbi, ...questionForkerAbi], data: step.data }).functionName)).toEqual(['prepareSecurityPoolQuestion'])
 	if (plan === undefined) throw new Error('Missing shared child creation plan')
 	expect(assertWorkflowPrerequisiteLimit(plan)).toBe(0)
-	expect(plan.steps[0]?.evidence).toMatchObject([{ functionName: 'getPool', args: [snapshot.pools[0]?.questionId, '88'], relation: 'greater-than', expected: '0' }])
+	expect(plan.steps[0]?.evidence).toMatchObject([{ functionName: 'getQuestionLedger', args: [snapshot.pools[0]?.questionId, '88'], relation: 'greater-than', expected: '0' }])
 })
 
 for (const expired of [false, true])
@@ -59,7 +59,7 @@ for (const expired of [false, true])
 		expect(canonicalLifecyclePresence(snapshot, options).find(item => item.definitionId === initializeChildHistory.id)?.metadata).toEqual(plan?.metadata)
 		const step = plan?.steps[0]
 		if (step === undefined) throw new Error('Missing initialization step')
-		expect(decodeFunctionData({ abi: securityPoolForkerAbi, data: step.data })).toMatchObject({ functionName: 'materializePortfolioQuestion', args: [pool.address, 88n] })
+		expect(decodeFunctionData({ abi: questionForkerAbi, data: step.data })).toMatchObject({ functionName: 'materializeSecurityPoolQuestion', args: [pool.address, 88n] })
 		expect(step.evidence).toMatchObject([{ contract: address(94), functionName: 'forkCarrySnapshotOutcomesInitialized', expected: '1' }])
 		preparation.historyReady = true
 		preparation.historyOutcomesInitialized = 3
@@ -94,7 +94,7 @@ test('shared reporter initialization uses its last live source and one bounded m
 	const plan = initializeChildHistory.buildPlan(snapshot, options)
 	const step = plan?.steps[0]
 	if (step === undefined) throw new Error('Missing materialization')
-	expect(decodeFunctionData({ abi: securityPoolForkerAbi, data: step.data })).toMatchObject({ functionName: 'materializePortfolioQuestion', args: [address(95), 88n] })
+	expect(decodeFunctionData({ abi: questionForkerAbi, data: step.data })).toMatchObject({ functionName: 'materializeSecurityPoolQuestion', args: [address(95), 88n] })
 	expect(step.gasLimit).toBe('16777216')
 	preparation.branchReady = false
 	expect(initializeChildHistory.buildPlan(snapshot, options)).toBeUndefined()

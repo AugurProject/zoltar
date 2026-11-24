@@ -12,7 +12,7 @@ import { TEST_ADDRESSES, MAX_UINT256 } from '../testSupport/simulator/utils/cons
 import { ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
-import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as proofTestPoolArtifact } from '../types/contractArtifact'
+import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, test_statoblast_EscalationGameProofTestQuestionLedger_EscalationGameProofTestQuestionLedger as proofTestPoolArtifact } from '../types/contractArtifact'
 import { computeForkContinuationParentDepositIndex, createCarryProof, hashParent, readCarryLeafHash, SparseNullifierTree } from './carryProofHelpers'
 
 const REPORT_BOND = 10n ** 18n
@@ -21,7 +21,7 @@ const FRESH_FORK_RESPONSE_PERIOD = 3n * 24n * 60n * 60n
 const zeroHash: Hex = `0x${'0'.repeat(64)}`
 const zeroPeaks = () => Array.from({ length: 64 }, () => zeroHash)
 
-type Game = { escalationGame: Address; securityPool: Address }
+type Game = { escalationGame: Address; questionLedger: Address }
 
 describe('Audit regression: escalation carry proofs use global MMR leaf positions', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
@@ -37,22 +37,22 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 		await ensureInfraDeployed(client)
 	})
 
-	const depositYes = async (securityPool: Address, depositor: Address, amountAttoRep: bigint) => await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'depositOnOutcome', args: [depositor, QuestionOutcome.Yes, amountAttoRep] }))
+	const depositYes = async (questionLedger: Address, depositor: Address, amountAttoRep: bigint) => await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: questionLedger, functionName: 'depositOnOutcome', args: [depositor, QuestionOutcome.Yes, amountAttoRep] }))
 
 	const deployGame = async (): Promise<Game> => {
-		const securityPool = await deployContract(client, encodeDeployData({ abi: proofTestPoolArtifact.abi, bytecode: `0x${proofTestPoolArtifact.evm.bytecode.object}`, args: [getZoltarAddress(), 0n, zeroAddress] }))
-		await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repToken, functionName: 'approve', args: [securityPool, MAX_UINT256] }))
+		const questionLedger = await deployContract(client, encodeDeployData({ abi: proofTestPoolArtifact.abi, bytecode: `0x${proofTestPoolArtifact.evm.bytecode.object}`, args: [getZoltarAddress(), 0n, zeroAddress] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repToken, functionName: 'approve', args: [questionLedger, MAX_UINT256] }))
 		const proofVerifier = await deployContract(client, encodeDeployData({ abi: statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi, bytecode: `0x${statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}` }))
 		const escalationGame = await deployContract(
 			client,
 			encodeDeployData({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-				args: [securityPool, repToken, proofVerifier, getInfraContractAddresses().escalationGameDepositDelegate],
+				args: [questionLedger, repToken, proofVerifier, getInfraContractAddresses().escalationGameDepositDelegate],
 			}),
 		)
-		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'setEscalationGame', args: [escalationGame] }))
-		return { escalationGame, securityPool }
+		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: questionLedger, functionName: 'setEscalationGame', args: [escalationGame] }))
+		return { escalationGame, questionLedger }
 	}
 
 	const readYesState = async (escalationGame: Address) => await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'getOutcomeState', args: [QuestionOutcome.Yes] })
@@ -66,7 +66,7 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 			await writeContractAndWait(client, () =>
 				client.writeContract({
 					abi: initializeForkCarrySnapshotFromSourceAbi,
-					address: continuation.securityPool,
+					address: continuation.questionLedger,
 					functionName: 'initializeForkCarrySnapshotFromSource',
 					args: [source, zeroHash, [zeroPeaks(), yesPeaks, zeroPeaks()], [0n, sourceYes.currentLeafCount, 0n], [0n, sourceYes.currentCarryTotalAttoRep, 0n], [zeroHash, sourceYes.currentNullifierRoot, zeroHash]],
 				}),
@@ -75,8 +75,8 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 		return continuation
 	}
 
-	const finalizeContinuation = async ({ escalationGame, securityPool }: Game) => {
-		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'resumeEscalationGameFromFork', args: [] }))
+	const finalizeContinuation = async ({ escalationGame, questionLedger }: Game) => {
+		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: questionLedger, functionName: 'resumeEscalationGameFromFork', args: [] }))
 		const forkResumedAt = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'forkResumedAt' })
 		const endDate = await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'getEscalationGameEndDate' })
 		await mockWindow.setTime((endDate > forkResumedAt + FRESH_FORK_RESPONSE_PERIOD ? endDate : forkResumedAt + FRESH_FORK_RESPONSE_PERIOD) + 1n)
@@ -90,13 +90,13 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 		// Root game: one YES leaf (global index 0).
 		const root = await deployGame()
 		await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: root.escalationGame, functionName: 'start', args: [REPORT_BOND, NON_DECISION_THRESHOLD] }))
-		await depositYes(root.securityPool, client.account.address, 4n * REPORT_BOND)
+		await depositYes(root.questionLedger, client.account.address, 4n * REPORT_BOND)
 
 		// Child continuation inherits leaf 0 and appends
 		// two local YES leaves (global indexes 1 and 2). Leaf 2 is alone in the height-0 peak.
 		const child = await deployContinuation(root.escalationGame)
-		await depositYes(child.securityPool, childDepositorA, REPORT_BOND)
-		await depositYes(child.securityPool, childDepositorB, 2n * REPORT_BOND)
+		await depositYes(child.questionLedger, childDepositorA, REPORT_BOND)
+		await depositYes(child.questionLedger, childDepositorB, 2n * REPORT_BOND)
 		const childYes = await readYesState(child.escalationGame)
 		assert.strictEqual(childYes.snapshotLeafCount, 1n)
 		assert.strictEqual(childYes.currentLeafCount, 3n)
@@ -121,9 +121,9 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 		})
 		// The offset inside the height-0 peak (0) would alias global leaf 0, which the
 		// child inherited from the root. It must not verify.
-		await assert.rejects(client.writeContract({ abi: proofTestPoolArtifact.abi, address: grandchild.securityPool, functionName: 'withdrawDeposit', args: [QuestionOutcome.Yes, { ...lowerPeakProof, leafIndex: 0n }] }), /Bad carry peak/)
+		await assert.rejects(client.writeContract({ abi: proofTestPoolArtifact.abi, address: grandchild.questionLedger, functionName: 'withdrawDeposit', args: [QuestionOutcome.Yes, { ...lowerPeakProof, leafIndex: 0n }] }), /Bad carry peak/)
 		const balanceBefore = await getERC20Balance(client, repToken, childDepositorB)
-		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: grandchild.securityPool, functionName: 'withdrawDeposit', args: [QuestionOutcome.Yes, lowerPeakProof] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: grandchild.questionLedger, functionName: 'withdrawDeposit', args: [QuestionOutcome.Yes, lowerPeakProof] }))
 		const payout = (await getERC20Balance(client, repToken, childDepositorB)) - balanceBefore
 		assert.strictEqual(payout, 2n * REPORT_BOND, 'the authenticated child-local depositor receives its complete original stake')
 		nullifiers.consume(2n)
@@ -138,7 +138,7 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 			merkleMountainRangeSiblings: [childLeafA, childLeafB],
 			nullifierSiblings: nullifiers.getProof(0n),
 		})
-		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: grandchild.securityPool, functionName: 'withdrawDeposit', args: [QuestionOutcome.Yes, rootProof] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: grandchild.questionLedger, functionName: 'withdrawDeposit', args: [QuestionOutcome.Yes, rootProof] }))
 		nullifiers.consume(0n)
 		const firstChildParentDepositIndex = computeForkContinuationParentDepositIndex(child.escalationGame, QuestionOutcome.Yes, 0n)
 		const firstChildProof = await createCarryProof(client, child.escalationGame, {
@@ -150,7 +150,7 @@ describe('Audit regression: escalation carry proofs use global MMR leaf position
 			merkleMountainRangeSiblings: [rootLeaf, childLeafB],
 			nullifierSiblings: nullifiers.getProof(1n),
 		})
-		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: grandchild.securityPool, functionName: 'withdrawDeposit', args: [QuestionOutcome.Yes, firstChildProof] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: grandchild.questionLedger, functionName: 'withdrawDeposit', args: [QuestionOutcome.Yes, firstChildProof] }))
 		assert.strictEqual((await readYesState(grandchild.escalationGame)).currentCarryTotalAttoRep, 0n, 'every inherited leaf settled, so no inherited principal may remain')
 	})
 })

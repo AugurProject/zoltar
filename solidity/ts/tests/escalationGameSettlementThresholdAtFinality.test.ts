@@ -4,14 +4,14 @@ import { getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/u
 import { approveToken } from '../testSupport/simulator/utils/utilities'
 import { SparseNullifierTree } from './carryProofHelpers'
 import { BRANCH_GAS, createE2E, expectedWinningClaim, INVALID, median, NO, YES } from './auditE2EHarness'
-import { unit, useSecurityPoolPortfolioFixture } from './statoblast/securityPoolPortfolioFixture'
+import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 
 const K = 1_000n * unit
 
 // Winning claims scale by the fork threshold recorded when the game last changed. REP burned
 // after that, while the game is final but before anyone claims, cannot lower any payout.
 describe('escalation game: the settlement fork threshold is fixed before finality', () => {
-	const fixture = useSecurityPoolPortfolioFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
 	const e2e = createE2E(fixture)
 
 	const burnUntilBelow = async (universe: bigint, holders: readonly WriteClient[], nonDecision: bigint, keepFor?: WriteClient) => {
@@ -34,7 +34,7 @@ describe('escalation game: the settlement fork threshold is fixed before finalit
 		const { base } = fixture
 		const owner = fixture.owner()
 		const U0 = base.genesisUniverse
-		const source = fixture.poolFor(base.questionId).securityPool
+		const source = fixture.poolFor(base.questionId).questionLedger
 		const [r2, r3, r4, r5, r6] = [e2e.account(2), e2e.account(3), e2e.account(4), e2e.account(5), e2e.account(6)]
 		await fixture.prepare()
 		await fixture.mint(10n * unit)
@@ -79,7 +79,7 @@ describe('escalation game: the settlement fork threshold is fixed before finalit
 		const { base } = fixture
 		const owner = fixture.owner()
 		const U0 = base.genesisUniverse
-		const source = fixture.poolFor(base.questionId).securityPool
+		const source = fixture.poolFor(base.questionId).questionLedger
 		const [r2, r3, r4, r5, r6] = [e2e.account(2), e2e.account(3), e2e.account(4), e2e.account(5), e2e.account(6)]
 		await fixture.prepare()
 		await fixture.mint(10n * unit)
@@ -138,7 +138,7 @@ describe('escalation game: the settlement fork threshold is fixed before finalit
 		const { base } = fixture
 		const owner = fixture.owner()
 		const U0 = base.genesisUniverse
-		const source = fixture.poolFor(base.questionId).securityPool
+		const source = fixture.poolFor(base.questionId).questionLedger
 		const [r2, r3, r5] = [e2e.account(2), e2e.account(3), e2e.account(5)]
 		await fixture.prepare()
 		await fixture.mint(10n * unit)
@@ -168,7 +168,7 @@ describe('escalation game: the settlement fork threshold is fixed before finalit
 		const { base } = fixture
 		const owner = fixture.owner()
 		const U0 = base.genesisUniverse
-		const source = fixture.poolFor(base.questionId).securityPool
+		const source = fixture.poolFor(base.questionId).questionLedger
 		const [r2, r3, r4, r5, r6] = [e2e.account(2), e2e.account(3), e2e.account(4), e2e.account(5), e2e.account(6)]
 		await fixture.prepare()
 		await fixture.mint(10n * unit)

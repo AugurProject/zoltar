@@ -128,7 +128,7 @@ export const reportFiltersEmpty = 'No favorite reports match the current search 
 export const refreshReport = 'Refresh report'
 export const reportAmounts = 'Report amounts'
 export const openOracleReportDetails = 'OpenOracle report details'
-export const standaloneOracleWarningDetail = 'Standalone only. Start portfolio-managed requests from the portfolio price panel.'
+export const standaloneOracleWarningDetail = 'Standalone only. Start security-pool-managed requests from the security pool price panel.'
 export const advancedDisputeAndTimingSettings = 'Advanced dispute & timing settings'
 export const advancedDisputeAndTimingSettingsDetail = 'These values control how challenges escalate and when settlement becomes available. Keep the defaults unless your report requires different economics.'
 export const secondsAbbreviation = 's'
@@ -180,27 +180,27 @@ export const formatDisputeSwapTokenChanged = (newTokenSymbol: CopyTemplateValue,
 
 export const priceExpired = 'Price expired'
 export const settledAfterPriceExpired = 'Settled after price expired'
-export const staleSettlementWarning = 'Settlement will clear this report, but the pool will reject its price.'
+export const staleSettlementWarning = 'Settlement will clear this report, but the security pool will reject its price.'
 export const staleSettledReportWarning = 'Request a new price.'
 export const expiredReportPrice = 'This report’s price has expired.'
 export const reportPriceRejected = 'Report settled; price rejected'
-export const poolPriceAccepted = 'Pool accepted this price.'
+export const poolPriceAccepted = 'Security pool accepted this price.'
 
 export function formatPriceSettlementRejection(reason: string) {
-	if (reason === 'Portfolio reporting window closed') return 'Reporting is closed in this portfolio universe. Check its fork and branch status.'
+	if (reason === 'Security pool reporting window closed') return 'Reporting is closed in this security pool universe. Check its fork and branch status.'
 	if (reason === 'Report timestamp not newer') return 'This report did not replace the newer accepted price. Check the accepted price and any attached operation results.'
-	return reason === 'Report stale' ? 'Price expired before settlement. Request a new price.' : `Pool rejected this price: ${reason}. Request a new price.`
+	return reason === 'Report stale' ? 'Price expired before settlement. Request a new price.' : `Security pool rejected this price: ${reason}. Request a new price.`
 }
 
 export const reportPriceDeferred = 'Report settled; price pending recovery'
 
 export function formatPriceSettlementDeferral(maxSettlementBaseFeeNanoEthPerGas: string) {
-	return `The base fee was above this report’s ${maxSettlementBaseFeeNanoEthPerGas} nanoETH per gas limit, so the pool kept the report pending. Recover it from the portfolio price panel once the base fee is at or below the limit, before the price expires.`
+	return `The base fee was above this report’s ${maxSettlementBaseFeeNanoEthPerGas} nanoETH per gas limit, so the security pool kept the report pending. Recover it from the security pool price panel once the base fee is at or below the limit, before the price expires.`
 }
 
-export const priceExpiredDuringReview = 'Price expired while reviewing. Review settlement again; the pool will reject this price.'
+export const priceExpiredDuringReview = 'Price expired while reviewing. Review settlement again; the security pool will reject this price.'
 export const priceSettlementUnconfirmed = 'Report settled; price acceptance unconfirmed'
-export const priceSettlementUnconfirmedDetail = 'The pool did not confirm accepting this price. Check the pool oracle before using it.'
+export const priceSettlementUnconfirmedDetail = 'The security pool did not confirm accepting this price. Check the security pool oracle before using it.'
 
 export const priceReports = 'Price reports'
 export const reportStatus = 'Report status'

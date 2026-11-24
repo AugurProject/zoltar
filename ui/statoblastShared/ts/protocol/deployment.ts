@@ -22,41 +22,41 @@ import {
 	getPriceCoordinatorDeploymentWorkerByteCode,
 	getSharedPoolPriceFeedDeploymentWorkerByteCode,
 	getSecurityPoolFactoryByteCode,
-	getSecurityPoolForkerByteCode,
-	getSecurityPoolForkerPortfolioDelegateByteCode,
-	portfolioModuleDeployments,
-	getSecurityPoolOperationsDelegateByteCode,
-	getSecurityPoolOperationsDelegateRuntimeCode,
-	getSecurityPoolEventEmitterByteCode,
-	getSecurityPoolEventEmitterRuntimeCode,
+	getQuestionForkerByteCode,
+	getQuestionForkerDelegateByteCode,
+	securityPoolModuleDeployments,
+	getQuestionLedgerOperationsDelegateByteCode,
+	getQuestionLedgerOperationsDelegateRuntimeCode,
+	getQuestionLedgerEventEmitterByteCode,
+	getQuestionLedgerEventEmitterRuntimeCode,
 	getShareTokenFactoryByteCode,
 } from './deploymentHelpers.js'
 import { DeploymentStatusOracle_DeploymentStatusOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate, statoblast_SecurityPoolForkerPortfolioDelegate_SecurityPoolForkerPortfolioDelegate as nativePortfolioForkArtifact, statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
+import { statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate, statoblast_QuestionForkerDelegate_QuestionForkerDelegate as nativeSecurityPoolForkArtifact, statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
 import { constructorArgumentsFromInitCode, createDeploymentStatusOracleAddressHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from './deploymentHelpers.js'
 
 export { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 
 export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
-	escalationGameDepositDelegate: '0xda256a67867e1022593f87c847844fb5d1cfd8ef96dd11e5f62dcad2fd8c167d',
-	escalationGameFactory: '0x547465438d13b43177d7b247b89b11c854c582f790717c8af9abc5cfb240b5c5',
+	escalationGameDepositDelegate: '0x8f9169219b370b115e2b13a3c79c80ab954616566500bf6c00d7050ec98e8745',
+	escalationGameFactory: '0x8ea69f66a0cc07c022a800d56dadd706f0f6c4ba267393d18b40e1ef24234d56',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	openOraclePriceCoordinatorFactory: '0x4b165f501d203fd2e17b2815a30738179b997a746950ab98f260d05dc137fed1',
-	priceCoordinatorDeploymentWorker: '0x098071f12c722141ed4ae18b7cfdc94c0b912ac4706cce8c129873809c8abe99',
-	securityPoolEventEmitter: '0xd6334e44947bed787f35654d650504061ec1f632f1bf6f7e7370b0e108609e73',
-	securityPoolFactory: '0x0d34bc8ab18796e7bd015dbfaa86a8f066528c42965686d1696d44677333834c',
-	securityPoolForker: '0x7c1cef971f40dc1e5f93e457c27ede81da73d53850ab3863208af8508cc378b7',
-	securityPoolOperationsDelegate: '0xf36906d0baf47720831d3de59569a335c42978ab78ed3c3c5d534b76f2da157a',
-	shareTokenFactory: '0xd28c77a265fd0f096de4bc2fe784619b702240e0b4f5502a36ca29ef87ea57e5',
-	sharedPoolPriceFeedDeploymentWorker: '0xfd64747ad861babffe3a5eb634c98d33fc59d75628e9f777f10141737017d161',
+	openOraclePriceCoordinatorFactory: '0x7c1f5f7d1acf26baa86673c19bc4a661f3fe8f2e2828a2ac02cdbbbc92f68fb8',
+	priceCoordinatorDeploymentWorker: '0xb5424f26ea14d1c67967a435d09a8c86cc12ae1bccc921c2b5a6b1522be3bb24',
+	questionLedgerEventEmitter: '0x31da561a9213ba7aed899f3d0e6873d1d7ce1111f421c79c0658db13704b1039',
+	securityPoolFactory: '0x54c475e67ad982688be712e98765d4b786d96c2c375ee613a70e805455892e91',
+	questionForker: '0xeea43b5a22e97b7103cd2d8dd8bd85e1ec9298aa711e3f0b302b3a7b8b346213',
+	questionLedgerOperationsDelegate: '0x8fff325ee801aa4b7f7e4f7bcad7a8cd2a365386c0c873c2bb05ec62ee4f419e',
+	shareTokenFactory: '0xdc3c829696741d1c28ba6303d276d818bd38de385555a6d6cf036cc8b93f955e',
+	sharedPoolPriceFeedDeploymentWorker: '0x8074bccd7cd4b0fb1472a672c6c215f027da5dcccec05b8857eff1615c2e2a02',
 }
 
 const EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0x7fab358cc217080345a4b07e61b49345dd4a87dff8268a5df453a848053a7e32',
-	securityPoolForker: '0xabe5deb329eac34d73d341d00d5dc89acf94669741b688f4d7d707af13040753',
-	shareTokenFactory: '0x985bd19a37e9cf1e615db519ce89ec60585bd616844c89c0b2a46915e60043cd',
+	securityPoolFactory: '0x73621b6637a46c1c351827977aa41a1ce25cc4af87c4a013b591872956015ef8',
+	questionForker: '0x0936b5beca00c3ad0f91e57fde6b85156d59c16f6393404ee5d8940307d69653',
+	shareTokenFactory: '0xd878e68de39dc839beea8abda13aa8e3b193b7d092e8c58ffb734ddf08c82559',
 }
 
 function runtimeWithAddresses(artifact: { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } }, addresses: readonly Address[]) {
@@ -74,21 +74,33 @@ function runtimeWithAddresses(artifact: { evm: { deployedBytecode: { object: str
 	}
 	return bytesToHex(code)
 }
-function moduleRuntimeCode(module: (typeof portfolioModuleDeployments)[number], addresses: ReturnType<typeof getInfraContractAddresses>) {
+function moduleRuntimeCode(module: (typeof securityPoolModuleDeployments)[number], addresses: ReturnType<typeof getInfraContractAddresses>) {
 	if (module.id === 'securityPoolCommitmentIndexDeployer' || module.id === 'securityPoolCapitalFeeStreamsDeployer') return runtimeWithAddresses(module.artifact, [getCreateAddress({ from: addresses[module.id], nonce: 1n })])
-	if (module.id === 'securityPoolCapitalLedgerDeployer' || module.id === 'securityPoolPortfolioServicesDeployer' || module.id === 'securityPoolSettlementBookDeployer')
+	if (module.id === 'securityPoolCapitalLedgerDeployer' || module.id === 'securityPoolServicesDeployer' || module.id === 'securityPoolSettlementBookDeployer')
 		return runtimeWithAddresses(module.artifact, [getCreateAddress({ from: addresses[module.id], nonce: 1n }), getCreateAddress({ from: addresses[module.id], nonce: 2n })])
-	if (module.id === 'securityPoolPortfolioForkCoordinatorDeployer') return runtimeWithAddresses(module.artifact, [getCreateAddress({ from: addresses[module.id], nonce: 1n }), getCreateAddress({ from: addresses[module.id], nonce: 2n })])
-	// The auction deployer also publishes the shared vault implementation after its two creation-code chunks.
-	if (module.id === 'securityPoolPortfolioAuctionDeployer') return runtimeWithAddresses(module.artifact, [getCreateAddress({ from: addresses[module.id], nonce: 1n }), getCreateAddress({ from: addresses[module.id], nonce: 2n }), getCreateAddress({ from: addresses[module.id], nonce: 3n })])
+	if (module.id === 'securityPoolForkCoordinatorDeployer') return runtimeWithAddresses(module.artifact, [getCreateAddress({ from: addresses[module.id], nonce: 1n }), getCreateAddress({ from: addresses[module.id], nonce: 2n })])
+	// The auction deployer also publishes the shared vault implementation after its two creation-code chunks. Immutable
+	// groups follow AST ids, which depend on source file order, so the chunks are placed by the ids of the shared
+	// SecurityPoolCreationCodeDeployer immutables instead of by position.
+	if (module.id === 'securityPoolAuctionDeployer') {
+		const chunkDeployer = securityPoolModuleDeployments.find(candidate => candidate.id === 'securityPoolForkCoordinatorDeployer')
+		if (chunkDeployer === undefined) throw new Error('Missing creation-code chunk deployer layout')
+		const chunkIds = Object.keys(chunkDeployer.artifact.evm.deployedBytecode.immutableReferences)
+		const chunkAddresses = [getCreateAddress({ from: addresses[module.id], nonce: 1n }), getCreateAddress({ from: addresses[module.id], nonce: 2n })]
+		const vaultImplementation = getCreateAddress({ from: addresses[module.id], nonce: 3n })
+		return runtimeWithAddresses(
+			module.artifact,
+			Object.keys(module.artifact.evm.deployedBytecode.immutableReferences).map(id => chunkAddresses[chunkIds.indexOf(id)] ?? vaultImplementation),
+		)
+	}
 	return runtimeWithAddresses(module.artifact, [])
 }
 
 const STATIC_STATOBLAST_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID = {
 	escalationGameDepositDelegate: `0x${statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.evm.deployedBytecode.object}`,
 	openOracle: `0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.deployedBytecode.object}`,
-	securityPoolOperationsDelegate: getSecurityPoolOperationsDelegateRuntimeCode(),
-	securityPoolEventEmitter: getSecurityPoolEventEmitterRuntimeCode(),
+	questionLedgerOperationsDelegate: getQuestionLedgerOperationsDelegateRuntimeCode(),
+	questionLedgerEventEmitter: getQuestionLedgerEventEmitterRuntimeCode(),
 } satisfies Readonly<Partial<Record<DeploymentStepId, Hex>>>
 
 export function assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes(
@@ -101,24 +113,24 @@ export function assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes(
 }
 
 const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
-	escalationGameDepositDelegate: '0xda256a67867e1022593f87c847844fb5d1cfd8ef96dd11e5f62dcad2fd8c167d',
-	escalationGameFactory: '0x547465438d13b43177d7b247b89b11c854c582f790717c8af9abc5cfb240b5c5',
+	escalationGameDepositDelegate: '0x8f9169219b370b115e2b13a3c79c80ab954616566500bf6c00d7050ec98e8745',
+	escalationGameFactory: '0x8ea69f66a0cc07c022a800d56dadd706f0f6c4ba267393d18b40e1ef24234d56',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	openOraclePriceCoordinatorFactory: '0x1886743b1028c549b05941d8a94f7536fd42aea34adecfcb02f5df1f560bee71',
-	priceCoordinatorDeploymentWorker: '0x098071f12c722141ed4ae18b7cfdc94c0b912ac4706cce8c129873809c8abe99',
-	securityPoolEventEmitter: '0xd6334e44947bed787f35654d650504061ec1f632f1bf6f7e7370b0e108609e73',
-	securityPoolFactory: '0xc89b890cb41473e38cf96244873cccf90447e3d370ffbf9119e602c2e5626b9b',
-	securityPoolForker: '0xd3c06c28d76c851cb3367b8bf739b133b3bf0809292f24a7595e60c9d605f416',
-	securityPoolOperationsDelegate: '0xf36906d0baf47720831d3de59569a335c42978ab78ed3c3c5d534b76f2da157a',
-	shareTokenFactory: '0xc13a937e5271a9ba274c312ea8150c408290823eaef5f735215322fe18772f06',
-	sharedPoolPriceFeedDeploymentWorker: '0xfd64747ad861babffe3a5eb634c98d33fc59d75628e9f777f10141737017d161',
+	openOraclePriceCoordinatorFactory: '0x7fbe87d0928383b0c2477ee905ad2d2b1e4028f091f7f596fb24293ed41e3206',
+	priceCoordinatorDeploymentWorker: '0xb5424f26ea14d1c67967a435d09a8c86cc12ae1bccc921c2b5a6b1522be3bb24',
+	questionLedgerEventEmitter: '0x31da561a9213ba7aed899f3d0e6873d1d7ce1111f421c79c0658db13704b1039',
+	securityPoolFactory: '0x10076b310e00ee2685578ecc5f930e5bc28db1170303c79e1f4099bd112bf017',
+	questionForker: '0x8916fd856a386c48bf8e90e21a568ae898c7d543ceeffd43d98ed66f06e995c6',
+	questionLedgerOperationsDelegate: '0x8fff325ee801aa4b7f7e4f7bcad7a8cd2a365386c0c873c2bb05ec62ee4f419e',
+	shareTokenFactory: '0x49bd454447ab5bf1f718798def3bf27e0f604973a451b9034ec4a7c6c3e52633',
+	sharedPoolPriceFeedDeploymentWorker: '0x8074bccd7cd4b0fb1472a672c6c215f027da5dcccec05b8857eff1615c2e2a02',
 }
 
 const EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_MAINNET_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0x65b44dacaf14bed89bafe8644bedc76e3b8ebceb53f4d47f1263da933261b38d',
-	securityPoolForker: '0xd9b10c414a8b2f6462b887bb743521646e13f2755d5ba9a5ee869db1d322ff69',
-	shareTokenFactory: '0xe81c47093ab19173d8ab9cfa6e55613fda6291e8722fe8b9b72cbf57f499733a',
+	securityPoolFactory: '0xc62e6015fec79ee673b8c832b83eff2f2f9cc0fb3e3b73132dc8062c816a5237',
+	questionForker: '0x08f5242607b06ab7277d0b70d676c6a607898411fa7a7abaf44eeed0b2924e1d',
+	shareTokenFactory: '0xc6fcb892969422ddf4d583d4ce9a3a0eee603fba18557bba0ec3b68996768f3a',
 }
 const EXPECTED_PUBLIC_RUNTIME_CODE_HASHES = {
 	mainnet: { yes: EXPECTED_MAINNET_RUNTIME_CODE_HASHES, no: EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES },
@@ -143,18 +155,18 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 		),
 
 		{
-			id: 'securityPoolOperationsDelegate',
-			label: 'SecurityPoolOperationsDelegate',
-			address: addresses.securityPoolOperationsDelegate,
+			id: 'questionLedgerOperationsDelegate',
+			label: 'QuestionLedgerOperationsDelegate',
+			address: addresses.questionLedgerOperationsDelegate,
 			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, getSecurityPoolOperationsDelegateByteCode()),
+			deploy: async client => await deployViaProxy(client, getQuestionLedgerOperationsDelegateByteCode()),
 		},
 		{
-			id: 'securityPoolEventEmitter',
-			label: 'SecurityPoolEventEmitter',
-			address: addresses.securityPoolEventEmitter,
+			id: 'questionLedgerEventEmitter',
+			label: 'QuestionLedgerEventEmitter',
+			address: addresses.questionLedgerEventEmitter,
 			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, getSecurityPoolEventEmitterByteCode()),
+			deploy: async client => await deployViaProxy(client, getQuestionLedgerEventEmitterByteCode()),
 		},
 		{
 			id: 'openOracle',
@@ -192,19 +204,19 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 			deploy: async client => await deployViaProxy(client, getOpenOraclePriceCoordinatorFactoryByteCode(profile.wethAddress)),
 		},
 		{
-			id: 'securityPoolForkerPortfolioDelegate',
-			label: 'SecurityPoolForkerPortfolioDelegate',
-			address: addresses.securityPoolForkerPortfolioDelegate,
+			id: 'questionForkerDelegate',
+			label: 'QuestionForkerDelegate',
+			address: addresses.questionForkerDelegate,
 			dependencies: ['proxyDeployer', 'zoltar'],
-			deploy: async client => await deployViaProxy(client, getSecurityPoolForkerPortfolioDelegateByteCode(addresses.zoltar)),
-			expectedRuntimeCodeHash: keccak256(runtimeWithAddresses(nativePortfolioForkArtifact, [addresses.zoltar])),
+			deploy: async client => await deployViaProxy(client, getQuestionForkerDelegateByteCode(addresses.zoltar)),
+			expectedRuntimeCodeHash: keccak256(runtimeWithAddresses(nativeSecurityPoolForkArtifact, [addresses.zoltar])),
 		},
 		{
-			id: 'securityPoolForker',
-			label: 'SecurityPoolForker',
-			address: addresses.securityPoolForker,
-			dependencies: ['proxyDeployer', 'zoltar', 'securityPoolForkerPortfolioDelegate'],
-			deploy: async client => await deployViaProxy(client, getSecurityPoolForkerByteCode(addresses.zoltar)),
+			id: 'questionForker',
+			label: 'QuestionForker',
+			address: addresses.questionForker,
+			dependencies: ['proxyDeployer', 'zoltar', 'questionForkerDelegate'],
+			deploy: async client => await deployViaProxy(client, getQuestionForkerByteCode(addresses.zoltar)),
 		},
 		{
 			id: 'escalationGameDepositDelegate',
@@ -224,10 +236,10 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 			id: 'securityPoolFactory',
 			label: 'SecurityPoolFactory',
 			address: addresses.securityPoolFactory,
-			dependencies: ['proxyDeployer', 'securityPoolForker', 'securityPoolOperationsDelegate', 'securityPoolEventEmitter', 'zoltarQuestionData', 'escalationGameFactory', 'openOracle', 'zoltar', 'shareTokenFactory', 'openOraclePriceCoordinatorFactory'],
+			dependencies: ['proxyDeployer', 'questionForker', 'questionLedgerOperationsDelegate', 'questionLedgerEventEmitter', 'zoltarQuestionData', 'escalationGameFactory', 'openOracle', 'zoltar', 'shareTokenFactory', 'openOraclePriceCoordinatorFactory'],
 			deploy: async client => await deployViaProxy(client, getSecurityPoolFactoryByteCode(addresses)),
 		},
-		...portfolioModuleDeployments.map(
+		...securityPoolModuleDeployments.map(
 			module =>
 				({
 					id: module.id,
@@ -265,19 +277,19 @@ function getStatoblastDeploymentStatusOracleStepAddresses(profile = getRuntimeNe
 	const addresses = getInfraContractAddresses(profile)
 	return [
 		...getZoltarDeploymentStatusOracleStepAddresses(profile),
-		addresses.securityPoolOperationsDelegate,
-		addresses.securityPoolEventEmitter,
+		addresses.questionLedgerOperationsDelegate,
+		addresses.questionLedgerEventEmitter,
 		addresses.openOracle,
 		addresses.shareTokenFactory,
 		addresses.priceCoordinatorDeploymentWorker,
 		addresses.sharedPoolPriceFeedDeploymentWorker,
 		addresses.openOraclePriceCoordinatorFactory,
-		addresses.securityPoolForkerPortfolioDelegate,
-		addresses.securityPoolForker,
+		addresses.questionForkerDelegate,
+		addresses.questionForker,
 		addresses.escalationGameDepositDelegate,
 		addresses.escalationGameFactory,
 		addresses.securityPoolFactory,
-		...portfolioModuleDeployments.map(module => addresses[module.id]),
+		...securityPoolModuleDeployments.map(module => addresses[module.id]),
 	] satisfies Address[]
 }
 

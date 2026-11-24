@@ -220,7 +220,7 @@ test('rejects export cursor indexes outside PostgreSQL integer bounds before que
 test('validates operations catalogs and timeline identities before querying', async () => {
 	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
 	databases.push(database)
-	for (const path of ['operations', 'state/reports', 'state/escalations', 'state/auctions', 'state/risk', 'state/forks', 'state/trading', 'state/direct-observations', 'state/timeline', 'state/address-portfolio']) {
+	for (const path of ['operations', 'state/reports', 'state/escalations', 'state/auctions', 'state/risk', 'state/forks', 'state/trading', 'state/direct-observations', 'state/timeline', 'state/address-security-pool']) {
 		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
 		expect(response?.status).toBe(400)
 		expect(await response?.json()).toEqual({ error: 'chainId is required' })

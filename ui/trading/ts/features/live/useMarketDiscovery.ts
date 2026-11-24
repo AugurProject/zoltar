@@ -2,7 +2,7 @@ import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import { useRef, useState } from 'preact/hooks'
 import type { DataFreshness } from '@zoltar/ui-core-shared/lib/freshness.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
-import { createSecurityPoolDeploymentIndex, type LiveMarket, type SecurityPoolDeployment } from '../../protocol/live.js'
+import { createQuestionLedgerDeploymentIndex, type LiveMarket, type QuestionLedgerDeployment } from '../../protocol/live.js'
 
 type DiscoverySnapshot = {
 	configuration: DeploymentConfiguration | undefined
@@ -30,7 +30,7 @@ export function useMarketDiscovery(configuration: DeploymentConfiguration | unde
 		if (!matchesContext(context.current)) return
 		setSnapshot(previous => apply(matchesContext(previous) ? previous : emptyDiscovery(configuration, scope)))
 	}
-	const deploymentIndex = useRef(createSecurityPoolDeploymentIndex<SecurityPoolDeployment, { blockNumber: bigint; blockHash: Hash }>()).current
+	const deploymentIndex = useRef(createQuestionLedgerDeploymentIndex<QuestionLedgerDeployment, { blockNumber: bigint; blockHash: Hash }>()).current
 
 	return {
 		markets: current.markets,

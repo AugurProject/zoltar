@@ -21,7 +21,7 @@ contract SecurityPoolReporterLedgerHarness {
 		questionId = question;
 	}
 
-	function securityPool() external view returns (address) {
+	function questionLedger() external view returns (address) {
 		return address(this);
 	}
 	function escalationGame() external view returns (address) {
@@ -57,14 +57,14 @@ contract SecurityPoolReporterAuthorityHarness {
 		zoltar = protocol;
 		owner = msg.sender;
 	}
-	function portfolioTime(uint248 universeId) external view returns (uint48) {
+	function securityPoolTime(uint248 universeId) external view returns (uint48) {
 		uint256 forkTime = zoltar.getForkTime(universeId);
 		return uint48(forkTime == 0 ? block.timestamp : forkTime);
 	}
 	function forkController() external view returns (address) {
 		return owner;
 	}
-	function forkPortfolioTime(uint248 universeId) external view returns (uint48) {
+	function forkSecurityPoolTime(uint248 universeId) external view returns (uint48) {
 		return uint48(zoltar.getForkTime(universeId));
 	}
 	function execute(address target, bytes calldata callData) external returns (bytes memory result) {

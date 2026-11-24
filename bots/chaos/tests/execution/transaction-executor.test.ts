@@ -63,7 +63,7 @@ function settings(readRpcUrl: string, quorumRpcUrls: string[]): OperatorSettings
 			openOracle: zeroAddress,
 			questionData: zeroAddress,
 			securityPoolFactory: zeroAddress,
-			securityPoolForker: zeroAddress,
+			questionForker: zeroAddress,
 			tradingFactory: zeroAddress,
 			tradingRouter: zeroAddress,
 			weth: zeroAddress,
@@ -1539,7 +1539,7 @@ describe('included transaction rollback', () => {
 			fixture.state,
 			[
 				{
-					definition: { classification: 'lifecycle-obligation', contract: 'SecurityPool', description: 'Test lifecycle', discoveryInputs: [], ecosystem: plan.ecosystem, id: plan.definitionId, label: plan.label, method: 'checkpointCollateral', risk: 'low' },
+					definition: { classification: 'lifecycle-obligation', contract: 'QuestionLedger', description: 'Test lifecycle', discoveryInputs: [], ecosystem: plan.ecosystem, id: plan.definitionId, label: plan.label, method: 'checkpointCollateral', risk: 'low' },
 					eligibility: { blockers: [], eligible: true },
 					plan,
 				},

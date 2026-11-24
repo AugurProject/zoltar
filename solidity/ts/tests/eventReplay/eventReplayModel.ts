@@ -16,7 +16,7 @@ export type QuestionAccountingReplay = {
 	reason: bigint
 	settlementCollateralAttoEth: bigint
 	shareTokenSupplyAttoShares: bigint
-	lastSettlementPortfolioTime: bigint
+	lastSettlementSecurityPoolTime: bigint
 }
 
 export type PoolStateReplay = {
@@ -149,7 +149,7 @@ export type CoordinatorReportReplay = {
 }
 
 export type CoordinatorReplay = {
-	securityPool?: Address
+	questionLedger?: Address
 	lastPrice: bigint
 	lastSettlementTimestamp: bigint
 	pendingReportId: bigint
@@ -640,10 +640,10 @@ export function reduceReputationTokenEvent(state: ReplayState, log: ReplayLog, r
 }
 
 export function reducePoolFactoryEvent(state: ReplayState, log: ReplayLog) {
-	if (log.eventName !== 'DeploySecurityPool') return
-	const securityPool = requireAddress(log.args, 'securityPool')
+	if (log.eventName !== 'DeployQuestionLedger') return
+	const questionLedger = requireAddress(log.args, 'questionLedger')
 	const parent = requireAddress(log.args, 'parent')
-	state.poolDeployments.set(securityPool, {
+	state.poolDeployments.set(questionLedger, {
 		factory: log.emitter,
 		parent,
 		universeId: requireBigInt(log.args, 'universeId'),
@@ -653,9 +653,9 @@ export function reducePoolFactoryEvent(state: ReplayState, log: ReplayLog) {
 		statoblastSecurityMultiplierBps: requireBigInt(log.args, 'statoblastSecurityMultiplierBps'),
 		initialReportPriorityFeeAttoEthPerGas: requireBigInt(log.args, 'initialReportPriorityFeeAttoEthPerGas'),
 	})
-	const poolState = state.poolStates.get(securityPool) ?? {}
+	const poolState = state.poolStates.get(questionLedger) ?? {}
 	poolState.systemState = parent === ZERO_ADDRESS ? 0n : 2n
-	state.poolStates.set(securityPool, poolState)
+	state.poolStates.set(questionLedger, poolState)
 }
 
 function applyShareTokenTransfer(state: ReplayState, token: Address, from: Address, to: Address, id: bigint, value: bigint) {
@@ -717,13 +717,13 @@ export function reduceShareTokenEvent(state: ReplayState, log: ReplayLog) {
 	}
 }
 
-export function reduceSecurityPoolEvent(state: ReplayState, log: ReplayLog) {
+export function reduceQuestionLedgerEvent(state: ReplayState, log: ReplayLog) {
 	if (log.eventName === 'QuestionAccountingCheckpoint') {
 		state.pools.set(log.emitter, {
 			reason: requireBigInt(log.args, 'reason'),
 			settlementCollateralAttoEth: requireBigInt(log.args, 'settlementCollateralAttoEth'),
 			shareTokenSupplyAttoShares: requireBigInt(log.args, 'shareTokenSupplyAttoShares'),
-			lastSettlementPortfolioTime: requireBigInt(log.args, 'lastSettlementPortfolioTime'),
+			lastSettlementSecurityPoolTime: requireBigInt(log.args, 'lastSettlementSecurityPoolTime'),
 		})
 		return
 	}
@@ -1078,7 +1078,7 @@ export function reduceAuctionEvent(state: ReplayState, log: ReplayLog) {
 }
 
 export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
-	const coordinatorEventNames = new Set(['SecurityPoolSet', 'PriceRequested', 'PriceReported', 'PriceReportRejected', 'PendingReportRecovered'])
+	const coordinatorEventNames = new Set(['QuestionLedgerSet', 'PriceRequested', 'PriceReported', 'PriceReportRejected', 'PendingReportRecovered'])
 	if (!coordinatorEventNames.has(log.eventName)) return
 	let coordinator = state.coordinators.get(log.emitter)
 	if (coordinator === undefined) {
@@ -1091,8 +1091,8 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 		}
 		state.coordinators.set(log.emitter, coordinator)
 	}
-	if (log.eventName === 'SecurityPoolSet') {
-		coordinator.securityPool = requireAddress(log.args, 'securityPool')
+	if (log.eventName === 'QuestionLedgerSet') {
+		coordinator.questionLedger = requireAddress(log.args, 'questionLedger')
 		return
 	}
 	if (log.eventName === 'PriceRequested') {
@@ -1148,9 +1148,9 @@ export function reduceZoltarLog(state: ReplayState, log: ReplayLog, recognizedRe
 	reduceReputationTokenEvent(state, log, recognizedRepTokens)
 	if (poolRelationships === undefined || poolRelationships.factories.has(emitter)) reducePoolFactoryEvent(state, log)
 	if (poolRelationships === undefined || poolRelationships.shareTokens.has(emitter)) reduceShareTokenEvent(state, log)
-	if (poolRelationships === undefined || poolRelationships.pools.has(emitter)) reduceSecurityPoolEvent(state, log)
+	if (poolRelationships === undefined || poolRelationships.pools.has(emitter)) reduceQuestionLedgerEvent(state, log)
 	if (poolRelationships === undefined || poolRelationships.escalationGames.has(emitter)) reduceEscalationEvent(state, log)
-	// Portfolio auctions are not announced by pool deployments, so relationship-scoped replays skip them.
+	// Security pool auctions are not announced by pool deployments, so relationship-scoped replays skip them.
 	if (poolRelationships === undefined) reduceAuctionEvent(state, log)
 	if (poolRelationships === undefined || poolRelationships.coordinators.has(emitter)) reduceCoordinatorEvent(state, log)
 }
@@ -1210,9 +1210,9 @@ export function replayZoltarEvents(logs: readonly ReplayLog[], orphanedBlockHash
 		const coordinators = new Set<Address>()
 		const escalationGames = new Set<Address>()
 		for (const log of orderedLogs) {
-			if (log.eventName !== 'DeploySecurityPool' || !factories.has(getAddress(log.emitter))) continue
+			if (log.eventName !== 'DeployQuestionLedger' || !factories.has(getAddress(log.emitter))) continue
 			reducePoolFactoryEvent(state, log)
-			pools.add(requireAddress(log.args, 'securityPool'))
+			pools.add(requireAddress(log.args, 'questionLedger'))
 			shareTokens.add(requireAddress(log.args, 'shareToken'))
 			coordinators.add(requireAddress(log.args, 'openOraclePriceCoordinator'))
 		}

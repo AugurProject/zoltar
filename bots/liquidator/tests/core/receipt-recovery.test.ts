@@ -10,7 +10,7 @@ import { TransactionAwaitingCanonicalFinality, requireFinalizedTransactionReceip
 import { settleInterruptedCycle } from '../../src/runtime/scan-cycle.ts'
 
 import { initialRuntimeState, loadDurableState, saveDurableState } from '#state/operator-state'
-import { portfolioReceiptIntent } from './portfolio-receipt-fixture.ts'
+import { securityPoolReceiptIntent } from './security-pool-receipt-fixture.ts'
 
 const blockHash = `0x${'11'.repeat(32)}` as const
 const descendantHash = `0x${'22'.repeat(32)}` as const
@@ -99,9 +99,9 @@ async function recoveryContext(primaryPort: number, secondaryPort: number) {
 }
 
 /** Serves `receipt` from two recovery RPC servers and runs `scenario` with chain 1 state that tracks `intent` in a temporary state file. */
-async function withPortfolioRecovery(
+async function withSecurityPoolRecovery(
 	directoryPrefix: string,
-	intent: Awaited<ReturnType<typeof portfolioReceiptIntent>>['intent'],
+	intent: Awaited<ReturnType<typeof securityPoolReceiptIntent>>['intent'],
 	receipt: TransactionReceipt,
 	pendingNonce: number | undefined,
 	scenario: (context: Awaited<ReturnType<typeof recoveryContext>> & { state: ReturnType<typeof initialRuntimeState> }) => Promise<void>,
@@ -156,10 +156,10 @@ test('rejects finalized receipts whose canonical block evidence disagrees', asyn
 })
 
 for (const status of ['success', 'reverted'] as const) {
-	test(`restart recovery handles a finalized portfolio ${status}`, async () => {
-		const { intent, receipt } = await portfolioReceiptIntent()
+	test(`restart recovery handles a finalized security pool ${status}`, async () => {
+		const { intent, receipt } = await securityPoolReceiptIntent()
 		receipt.status = status
-		await withPortfolioRecovery('receipt-recovery-', intent, receipt, undefined, async ({ settings, state, wallet }) => {
+		await withSecurityPoolRecovery('receipt-recovery-', intent, receipt, undefined, async ({ settings, state, wallet }) => {
 			await saveDurableState(settings.runtime.stateFile, state)
 			state.pendingTransactions = (await loadDurableState(settings.runtime.stateFile, 1)).pendingTransactions
 			const recovery = recoverPendingTransactions(settings, wallet, state)
@@ -173,9 +173,9 @@ for (const status of ['success', 'reverted'] as const) {
 }
 
 for (const nonce of [0, 1]) {
-	test(`retains ambiguous portfolio intent with signer nonce ${nonce} instead of replaying stale decisions`, async () => {
-		const { intent, receipt } = await portfolioReceiptIntent()
-		await withPortfolioRecovery('portfolio-ambiguous-', intent, receipt, nonce, async ({ settings, state, wallet }) => {
+	test(`retains ambiguous security pool intent with signer nonce ${nonce} instead of replaying stale decisions`, async () => {
+		const { intent, receipt } = await securityPoolReceiptIntent()
+		await withSecurityPoolRecovery('security-pool-ambiguous-', intent, receipt, nonce, async ({ settings, state, wallet }) => {
 			await saveDurableState(settings.runtime.stateFile, state)
 			if (nonce === 0) expect(await recoverPendingTransactions(settings, wallet, state)).toBe(true)
 			else await expect(recoverPendingTransactions(settings, wallet, state)).rejects.toThrow('nonce was consumed')
@@ -207,7 +207,7 @@ function laggingRpcServer() {
 }
 
 test('#1455 a read endpoint lagging behind the receipt block leaves the transaction awaiting finality instead of pausing', async () => {
-	const { intent } = await portfolioReceiptIntent()
+	const { intent } = await securityPoolReceiptIntent()
 	const primary = rpcServer(true)
 	const secondary = laggingRpcServer()
 	const directory = await mkdtemp(join(tmpdir(), 'receipt-lagging-'))
@@ -219,7 +219,7 @@ test('#1455 a read endpoint lagging behind the receipt block leaves the transact
 		expect(result).toEqual({ observed: true, receipt: undefined })
 		let failure: unknown
 		try {
-			requireFinalizedTransactionReceipt('Take over portfolio position 1', transactionHash, result)
+			requireFinalizedTransactionReceipt('Take over security pool position 1', transactionHash, result)
 		} catch (error) {
 			failure = error
 		}

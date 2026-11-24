@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createRpcEndpointPool, type Address } from '@zoltar/bot-shared/ethereum'
 import type { OperatorSettings } from '../../src/config/settings.ts'
-import type { PortfolioScope } from '../../src/monitoring/portfolio-monitor.ts'
+import type { SecurityPoolScope } from '../../src/monitoring/security-pool-monitor.ts'
 import { initialRuntimeState } from '../../src/state/operator-state.ts'
 
 type MockChain = { request: (args: { method: string; params?: unknown }) => Promise<unknown> }
@@ -12,8 +12,8 @@ type MockChain = { request: (args: { method: string; params?: unknown }) => Prom
  * Serves a mock chain over JSON-RPC and points the operator settings and runtime state at it, so production
  * execution paths run against deployed contracts. Each submitted transaction is mined immediately.
  */
-export async function serveMockChainRpc(mock: MockChain, settings: OperatorSettings, account: Address, scope: PortfolioScope, onResult: (method: string, result: unknown) => void = () => undefined) {
-	const directory = await mkdtemp(join(tmpdir(), 'portfolio-production-'))
+export async function serveMockChainRpc(mock: MockChain, settings: OperatorSettings, account: Address, scope: SecurityPoolScope, onResult: (method: string, result: unknown) => void = () => undefined) {
+	const directory = await mkdtemp(join(tmpdir(), 'security-pool-production-'))
 	const server = Bun.serve({
 		hostname: '127.0.0.1',
 		port: 0,
@@ -39,7 +39,7 @@ export async function serveMockChainRpc(mock: MockChain, settings: OperatorSetti
 	settings.runtime.pollMilliseconds = 100
 	settings.runtime.stateFile = join(directory, 'state.json')
 	const state = initialRuntimeState(false, account, 1)
-	state.portfolioScopes = [scope]
+	state.securityPoolScopes = [scope]
 	return {
 		pool: createRpcEndpointPool([endpoint]),
 		state,

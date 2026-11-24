@@ -15,7 +15,7 @@ test('the market list search opens a pasted pool address even before any market 
 		const form = rendered.container.querySelector<HTMLFormElement>('form.market-list-search')
 		const input = form?.querySelector<HTMLInputElement>('input[type="search"]')
 		if (form === null || input === null || input === undefined) throw new Error('Market search did not render')
-		expect(input.placeholder).toContain('paste a pool address')
+		expect(input.placeholder).toContain('paste address')
 		const type = (value: string) =>
 			act(() => {
 				input.value = value
@@ -24,21 +24,21 @@ test('the market list search opens a pasted pool address even before any market 
 		// The open action stays in place; submitting anything but a full pool address explains what the field needs instead of doing nothing.
 		for (const notAnAddress of ['hello', '0x0000000000000000000000000000000000000000', '0x111111111111111111111111111111111111111']) {
 			await type(notAnAddress)
-			expect(form.querySelector('button[type="submit"]')?.textContent).toBe('Open security pool')
-			expect(form.textContent).not.toContain('Enter a full security pool address')
+			expect(form.querySelector('button[type="submit"]')?.textContent).toBe('Open question')
+			expect(form.textContent).not.toContain('Enter a full question ledger address')
 			await act(() => {
 				form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
 			})
 			expect(tradingRouting.resolve(window.location.hash)).toBe('market')
-			expect(form.textContent).toContain('Enter a full security pool address')
+			expect(form.textContent).toContain('Enter a full question ledger address')
 			expect(input.getAttribute('aria-invalid')).toBe('true')
 		}
 		const pool = '0x1111111111111111111111111111111111111111'
 		await type(` ${pool} `)
 		// Editing clears the message, and the field is never replaced, so typing keeps focus.
-		expect(form.textContent).not.toContain('Enter a full security pool address')
+		expect(form.textContent).not.toContain('Enter a full question ledger address')
 		expect(form.querySelector('input[type="search"]')).toBe(input)
-		expect(form.querySelector('button[type="submit"]')?.textContent).toBe('Open security pool')
+		expect(form.querySelector('button[type="submit"]')?.textContent).toBe('Open question')
 		await act(() => {
 			form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
 		})

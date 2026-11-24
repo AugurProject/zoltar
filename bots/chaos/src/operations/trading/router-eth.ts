@@ -131,7 +131,7 @@ export function routerEthDefinition(kind: RouterEthKind): OperationDefinition {
 		discoveryInputs: ['pair/pool lifecycle', 'ETH reserve', 'factory mapping'],
 		ecosystem: 'trading',
 		evaluate(snapshot, options) {
-			return eligible(buildRouterEthPlan(snapshot, options, kind, id, method) === undefined ? 'No anchored portfolio mint fits the router lifecycle and full ETH budget' : undefined)
+			return eligible(buildRouterEthPlan(snapshot, options, kind, id, method) === undefined ? 'No anchored security pool mint fits the router lifecycle and full ETH budget' : undefined)
 		},
 		id,
 		label: `Router ${kind}`,

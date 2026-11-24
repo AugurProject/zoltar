@@ -3,7 +3,7 @@ import { installRouting, resetRoutingForTesting } from '../../navigation/routing
 const DEFAULT_TEST_ROUTES = [
 	{ hash: '#/deploy', name: 'deploy' },
 	{ hash: '#/zoltar', name: 'zoltar' },
-	{ hash: '#/security-pools', name: 'security-pools', queryParameters: new Set(['questionId', 'securityPool', 'securityPoolAddress', 'securityPoolQuestionId', 'securityPoolsView', 'selectedPoolView']) },
+	{ hash: '#/security-pools', name: 'security-pools', queryParameters: new Set(['questionId', 'questionLedger', 'questionLedgerAddress', 'questionLedgerQuestionId', 'questionLedgersView', 'selectedPoolView']) },
 	{ hash: '#/open-oracle', name: 'open-oracle', queryParameters: new Set(['openOracleReportId', 'openOracleView']) },
 ] as const
 

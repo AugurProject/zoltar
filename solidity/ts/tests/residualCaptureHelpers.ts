@@ -3,7 +3,7 @@ import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtif
 import type { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import type { WriteClient } from '../testSupport/simulator/utils/clients'
 import { DAY } from '../testSupport/simulator/utils/constants'
-import { getSecurityPoolsEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
+import { getQuestionLedgersEscalationGame } from '../testSupport/simulator/utils/contracts/questionLedger'
 
 const ATTO_REP = 10n ** 18n
 const lowLosingPrincipal = 100n * ATTO_REP
@@ -18,8 +18,8 @@ export const ordinaryEscalationPrincipals = {
 	totalPrincipal: lowLosingPrincipal + bindingLosingPrincipal + winningPrincipal,
 }
 
-export async function advancePastOrdinaryEscalationDeadline(client: WriteClient, mockWindow: AnvilWindowEthereum, securityPool: Address) {
-	const escalationGame = await getSecurityPoolsEscalationGame(client, securityPool)
+export async function advancePastOrdinaryEscalationDeadline(client: WriteClient, mockWindow: AnvilWindowEthereum, questionLedger: Address) {
+	const escalationGame = await getQuestionLedgersEscalationGame(client, questionLedger)
 	const activationTime = await client.readContract({
 		abi: statoblast_EscalationGame_EscalationGame.abi,
 		address: escalationGame,

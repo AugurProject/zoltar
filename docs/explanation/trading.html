@@ -13,7 +13,7 @@
 			<header>
 				<p class="kicker">Explanation</p>
 				<h1>How Trading works</h1>
-				<p>Trading is a separate on-chain exchange for Statoblast <a href="../reference/glossary.html#outcome-share">outcome shares</a>, one of possibly many that can be built on Statoblast. Statoblast still owns market creation, collateral, migration, resolution, and redemption through each market's <a href="../reference/glossary.html#security-pool">SecurityPool</a>.</p>
+				<p>Trading is a separate on-chain exchange for Statoblast <a href="../reference/glossary.html#outcome-share">outcome shares</a>, one of possibly many that can be built on Statoblast. Statoblast still owns market creation, collateral, migration, resolution, and redemption through each market's <a href="../reference/glossary.html#question-ledger">question ledger</a>.</p>
 			</header>
 			<section id="complete-set-entry">
 				<h2>From collateral to a directional position</h2>
@@ -22,11 +22,11 @@
 			<section id="prices">
 				<h2>What the prices mean</h2>
 				<p>Yes and No prices are conditional on valid resolution. They describe the relative price of the two directional outcomes; they are not estimates of invalidity. Interfaces should therefore label the Yes and No values directly and present Invalid separately.</p>
-				<p>Spot prices come from current reserves and are <a href="./trading/pricing.html#not-an-oracle">not an oracle</a>. Settlement uses the SecurityPool's resolved outcome, while solvency-sensitive REP/collateral operations use OpenOracle.</p>
+				<p>Spot prices come from current reserves and are <a href="./trading/pricing.html#not-an-oracle">not an oracle</a>. Settlement uses the question ledger's resolved outcome, while solvency-sensitive REP/collateral operations use OpenOracle.</p>
 			</section>
 			<section id="market-isolation">
-				<h2>One pair per SecurityPool</h2>
-				<p>Each SecurityPool maps to its own pair. Parent and child pools therefore have separate pairs, reserves, prices, and liquidity-provider tokens; liquidity, like <a href="./zoltar.html#non-guarantees">everything else in a fork</a>, is not copied between them.</p>
+				<h2>One pair per question ledger</h2>
+				<p>Each question ledger maps to its own pair. Parent and child question ledgers therefore have separate pairs, reserves, prices, and liquidity-provider tokens; liquidity, like <a href="./zoltar.html#non-guarantees">everything else in a fork</a>, is not copied between them.</p>
 			</section>
 			<section id="reading-paths">
 				<h2>Where to go next</h2>

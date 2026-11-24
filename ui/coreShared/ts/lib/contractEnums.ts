@@ -1,4 +1,4 @@
-import type { ReportingOutcomeKey, SecurityPoolSystemState } from '../types/contracts.js'
+import type { ReportingOutcomeKey, QuestionLedgerSystemState } from '../types/contracts.js'
 
 /** Maps a raw question outcome index to its key; anything outside the reported range means the question is still unresolved. */
 export function getReportingOutcomeKey(outcome: bigint | number): ReportingOutcomeKey | 'none' {
@@ -39,7 +39,7 @@ export function getReportingOutcomeValue(outcome: ReportingOutcomeKey) {
 }
 
 /** Maps a raw system state index to its key, or undefined for values the UI does not know how to present. */
-export function tryGetSecurityPoolSystemState(value: bigint | number): SecurityPoolSystemState | undefined {
+export function tryGetQuestionLedgerSystemState(value: bigint | number): QuestionLedgerSystemState | undefined {
 	switch (value) {
 		case 0:
 		case 0n:
@@ -55,8 +55,8 @@ export function tryGetSecurityPoolSystemState(value: bigint | number): SecurityP
 	}
 }
 
-export function getSecurityPoolSystemState(value: bigint | number): SecurityPoolSystemState {
-	const state = tryGetSecurityPoolSystemState(value)
-	if (state === undefined) throw new Error(`Unhandled security pool system state: ${value.toString()}`)
+export function getQuestionLedgerSystemState(value: bigint | number): QuestionLedgerSystemState {
+	const state = tryGetQuestionLedgerSystemState(value)
+	if (state === undefined) throw new Error(`Unhandled question ledger system state: ${value.toString()}`)
 	return state
 }

@@ -64,7 +64,7 @@ export const operationalPools = (snapshot: EcosystemSnapshot) => snapshot.pools.
 
 export function feeCheckpointDue(snapshot: EcosystemSnapshot, pool: PoolSnapshot) {
 	const target = feeCheckpointTarget(snapshot, pool)
-	return target !== undefined && amount(pool.lastSettlementPortfolioTime) < target
+	return target !== undefined && amount(pool.lastSettlementSecurityPoolTime) < target
 }
 
 function feeCheckpointTarget(snapshot: EcosystemSnapshot, pool: PoolSnapshot) {
@@ -80,11 +80,11 @@ export function poolAccountingCurrentEvidence(snapshot: EcosystemSnapshot, pool:
 	const target = feeCheckpointTarget(snapshot, pool)
 	if (target === undefined) throw new Error(`Pool ${pool.address} is missing its fee checkpoint boundary`)
 	return {
-		abi: 'function lastSettlementPortfolioTime() view returns (uint256)',
+		abi: 'function lastSettlementSecurityPoolTime() view returns (uint256)',
 		args: [],
 		contract: pool.address,
 		expected: target.toString(),
-		functionName: 'lastSettlementPortfolioTime',
+		functionName: 'lastSettlementSecurityPoolTime',
 		kind: 'storage-postcondition',
 		relation: 'at-least',
 	}
@@ -108,7 +108,7 @@ export function approvePool(snapshot: EcosystemSnapshot, pool: PoolSnapshot, req
 	return [poolApprovalStep(snapshot, pool.repToken, pool.address, required)]
 }
 
-function poolApprovalStep(snapshot: EcosystemSnapshot, token: `0x${string}`, pool: `0x${string}`, required: bigint, id = 'approve-rep', label = 'Approve REP for security pool') {
+function poolApprovalStep(snapshot: EcosystemSnapshot, token: `0x${string}`, pool: `0x${string}`, required: bigint, id = 'approve-rep', label = 'Approve REP for question ledger') {
 	return encodeStep({ abi: erc20Abi, args: [pool, required], evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, pool, required)], functionName: 'approve', id, label, to: token })
 }
 

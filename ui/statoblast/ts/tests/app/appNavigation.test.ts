@@ -5,11 +5,11 @@ import { getRouteSecondaryNavigation, getStatoblastRouteTabs, getTransactionRout
 
 installDomTestLifecycle({ url: 'http://localhost/#/pools?universe=7' })
 
-test('shows one primary row with Pools, Portfolios and Price reports', () => {
+test('shows one primary row with Pools, Security pools and Price reports', () => {
 	const tabs = getStatoblastRouteTabs({ applicationDeploymentMissing: false, route: 'pools', showDeployTab: false })
-	expect(tabs.map(tab => tab.route)).toEqual(['pools', 'portfolios', 'open-oracle'])
-	expect(tabs.map(tab => tab.label)).toEqual(['Questions', 'Portfolios', 'Price reports'])
-	expect(tabs.map(tab => tab.hash)).toEqual(['#/pools', '#/portfolios', '#/open-oracle'])
+	expect(tabs.map(tab => tab.route)).toEqual(['pools', 'security-pools', 'open-oracle'])
+	expect(tabs.map(tab => tab.label)).toEqual(['Questions', 'Security pools', 'Price reports'])
+	expect(tabs.map(tab => tab.hash)).toEqual(['#/pools', '#/security-pools', '#/open-oracle'])
 })
 
 test('keeps deployment reachable while needed and while its route is active', () => {
@@ -22,40 +22,40 @@ test('disables the other sections with a reason while required contracts are mis
 	expect(tabs.map(tab => [tab.route, tab.disabled === true, tab.disabledReason])).toEqual([
 		['deploy', false, undefined],
 		['pools', true, 'Deploy the required contracts first'],
-		['portfolios', true, 'Deploy the required contracts first'],
+		['security-pools', true, 'Deploy the required contracts first'],
 		['open-oracle', true, 'Deploy the required contracts first'],
 	])
 	expect(getStatoblastRouteTabs({ applicationDeploymentMissing: false, route: 'deploy', showDeployTab: true }).some(tab => tab.disabled === true)).toBe(false)
 })
 
 test('lists pool views as paths without a Manage Pool peer and preserves the universe', () => {
-	const setSecurityPoolsView = mock(() => undefined)
-	const navigation = getRouteSecondaryNavigation({ activeSecurityPoolsView: 'browse', route: 'pools', setSecurityPoolsView })
+	const setQuestionLedgersView = mock(() => undefined)
+	const navigation = getRouteSecondaryNavigation({ activeQuestionLedgersView: 'browse', route: 'pools', setQuestionLedgersView })
 	if (navigation === undefined) throw new Error('Expected secondary navigation')
 	// Browse search opens a pasted pool address, so there is no separate Open pool view.
 	expect(navigation.options.map(option => option.value)).toEqual(['browse', 'universes'])
 	expect(navigation.options.map(option => option.href)).toEqual(['#/pools?universe=7', '#/pools/universes?universe=7'])
 	navigation.onChange('universes')
 	navigation.onChange('operate')
-	expect(setSecurityPoolsView).toHaveBeenCalledTimes(1)
-	expect(setSecurityPoolsView).toHaveBeenCalledWith('universes')
+	expect(setQuestionLedgersView).toHaveBeenCalledTimes(1)
+	expect(setQuestionLedgersView).toHaveBeenCalledWith('universes')
 })
 
 test('hides the list views on a pool page', () => {
-	expect(getRouteSecondaryNavigation({ activeSecurityPoolsView: 'operate', route: 'pools', setSecurityPoolsView: () => undefined })).toBeUndefined()
+	expect(getRouteSecondaryNavigation({ activeQuestionLedgersView: 'operate', route: 'pools', setQuestionLedgersView: () => undefined })).toBeUndefined()
 })
 
 test('price requests expose no standalone report navigation', () => {
-	expect(getRouteSecondaryNavigation({ activeSecurityPoolsView: 'browse', route: 'open-oracle', setSecurityPoolsView: () => undefined })).toBeUndefined()
-	expect(getTransactionRouteKey({ activeSecurityPoolsView: 'browse', route: 'open-oracle' })).toBe('open-oracle')
+	expect(getRouteSecondaryNavigation({ activeQuestionLedgersView: 'browse', route: 'open-oracle', setQuestionLedgersView: () => undefined })).toBeUndefined()
+	expect(getTransactionRouteKey({ activeQuestionLedgersView: 'browse', route: 'open-oracle' })).toBe('open-oracle')
 })
 
-test('lands on Browse pools by default and rejects the removed portfolio route', () => {
+test('lands on Browse pools by default and rejects the removed security pool route', () => {
 	expect(statoblastRouting.resolve('')).toBe('pools')
 	expect(statoblastRouting.getHash('pools')).toBe('#/pools')
 	expect(statoblastRouting.resolve('#/pools/browse')).toBe('pools')
-	expect(statoblastRouting.resolve('#/portfolio')).toBe('not-found')
-	expect(statoblastRouting.resolve('#/portfolios')).toBe('portfolios')
+	expect(statoblastRouting.resolve('#/securityPool')).toBe('not-found')
+	expect(statoblastRouting.resolve('#/security-pools')).toBe('security-pools')
 })
 
 test('treats a malformed pools path as not found instead of falling back to Browse pools', () => {
@@ -64,8 +64,8 @@ test('treats a malformed pools path as not found instead of falling back to Brow
 })
 
 test('keeps the active migration screen in navigation with the same universe', () => {
-	const navigation = getRouteSecondaryNavigation({ activeSecurityPoolsView: 'migrate', route: 'pools', setSecurityPoolsView: () => undefined })
+	const navigation = getRouteSecondaryNavigation({ activeQuestionLedgersView: 'migrate', route: 'pools', setQuestionLedgersView: () => undefined })
 	expect(navigation?.value).toBe('migrate')
 	expect(navigation?.options.find(option => option.value === 'migrate')?.href).toBe('#/pools/migrate?universe=7')
-	expect(getTransactionRouteKey({ activeSecurityPoolsView: 'migrate', route: 'pools' })).toBe('pools:migrate')
+	expect(getTransactionRouteKey({ activeQuestionLedgersView: 'migrate', route: 'pools' })).toBe('pools:migrate')
 })
