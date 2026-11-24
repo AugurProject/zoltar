@@ -18,7 +18,7 @@ import { readQuestionLedgerUniverseId } from './questionLedgerActions.js'
 import { formatAmount, formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as tradingCopy from '../copy/trading.js'
 import * as collateralCopy from '../copy/collateral.js'
-import { estimatedPurchaseFee, mintReview } from '../copy/securityPool.js'
+import { estimatedPurchaseFee, mintingAfterReportingStarts, mintReview, questionNotLinkedToSecurityPool, questionPoolVerificationFailed } from '../copy/securityPool.js'
 import { availableCapacity } from '../copy/securityPoolCapital.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
@@ -54,7 +54,7 @@ export async function loadQuestionLedgerMintCapacity(client: Pick<ReadClient, 'g
 		currentBlock.number,
 	)
 	const capital = requireAddressValue(custody, 'security pool custody')
-	if (capital === zeroAddress) throw new Error('Question ledger is not bound to a security pool.')
+	if (capital === zeroAddress) throw new Error(questionNotLinkedToSecurityPool)
 	const central = await loadCentralSecurityPoolQuestion(client, questionLedgerAddress, capital, currentBlock.number)
 	const escalationGameActive = requireAddressValue(escalationGame, 'escalation game') !== zeroAddress
 	return { ...central, currentTimestamp: currentBlock.timestamp, escalationGameActive, mintingCapacityAttoEth: escalationGameActive ? 0n : central.mintingCapacityAttoEth }
@@ -292,7 +292,7 @@ const purchaseAbi = parseAbi([
 export async function createCompleteSetInQuestionLedger(client: WriteClient, questionLedgerAddress: Address, amount: bigint) {
 	const validateBeforeSubmit = async () => {
 		const game = await client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'escalationGame' })
-		if (BigInt(game) !== 0n) throw new Error('Minting closed after escalation starts.')
+		if (BigInt(game) !== 0n) throw new Error(mintingAfterReportingStarts)
 		const [questionData, questionId] = await Promise.all([
 			client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'questionData' }),
 			client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'questionId' }),
@@ -306,7 +306,7 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 	const securityPool = await requireCanonicalSecurityPoolOf(client, factory, questionLedgerAddress)
 	const quote = async () => {
 		const canonicalPool = await client.readContract({ abi: purchaseAbi, address: securityPool, functionName: 'getQuestionLedger', args: [questionId, universeId] })
-		if (typeof canonicalPool !== 'string' || canonicalPool.toLowerCase() !== questionLedgerAddress.toLowerCase()) throw new Error('Security pool question ledger is not canonical.')
+		if (typeof canonicalPool !== 'string' || canonicalPool.toLowerCase() !== questionLedgerAddress.toLowerCase()) throw new Error(questionPoolVerificationFailed)
 		const [quoted, capacity, recoveryValue] = await Promise.all([
 			client.readContract({ abi: purchaseAbi, address: securityPool, functionName: 'purchaseQuote', args: [universeId, questionId, amount] }),
 			client.readContract({ abi: purchaseAbi, address: securityPool, functionName: 'availableMintCapacity', args: [universeId] }),

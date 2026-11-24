@@ -29,6 +29,11 @@ test('step progress counts the escalation phases', () => {
 	expect(reportingCopy.phaseProgress(2, 'Response window')).toBe(`Step 2 of ${reportingCopy.phaseLabels.length} · Response window`)
 })
 
+test('registration describes the actual question horizon in days or seconds', () => {
+	expect(securityPoolCopy.formatQuestionHorizonReason(30n * 86_400n)).toContain('30-day question horizon')
+	expect(securityPoolCopy.formatQuestionHorizonReason(90n)).toContain('90-second question horizon')
+})
+
 test('Statoblast workflow copy uses the redesign glossary and live values', () => {
 	const copy = [reportingCopy, securityPoolCopy, securityPoolCapitalCopy, securityPoolSharedForkCopy, securityPoolPriceCopy, glossaryCopy, auctionCopy, appCopy]
 	const labels = [
@@ -39,6 +44,7 @@ test('Statoblast workflow copy uses the redesign glossary and live values', () =
 		reportingCopy.clearDeposits('No'),
 		securityPoolCopy.fixedQuestionRulesReview(1n, [1n]),
 		securityPoolCopy.fixedQuestionLimit(1),
+		securityPoolCopy.formatRegisterQuestionReview('0x123'),
 		securityPoolCapitalCopy.reductionWithCure('1 WETH', true),
 		securityPoolCapitalCopy.reductionWithCure('1 WETH', false),
 		reportingCopy.forkTriggerWarning('No', '1'),

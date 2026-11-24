@@ -64,6 +64,18 @@ export const openQuestionRulesReview = 'Deploy open question rules. Anyone may a
 export const fixedQuestionRulesReview = (universeId: bigint, questionIds: readonly bigint[]) => `Deploy a fixed question list for universe ${universeId}. Only these question IDs may be backed: ${questionIds.map(id => `0x${id.toString(16)}`).join(', ')}. Nobody can change the list.`
 export const fixedQuestionLimit = (maximum: number) => `A fixed question list can hold up to ${maximum} approved questions.`
 export const questionRulesDisallowRegistration = 'This question is not allowed by the security pool’s rules.'
+export const questionMissingForRegistration = 'This question does not exist.'
+export const questionEndedForRegistration = 'This question has ended.'
+export const formatQuestionHorizonReason = (seconds: bigint) => {
+	const horizon = seconds % 86_400n === 0n ? `${seconds / 86_400n}-day` : `${seconds}-second`
+	return `This question ends after the security pool’s ${horizon} question horizon.`
+}
+export const questionOutcomeRegistrationRequired = 'Only questions with Yes and No outcomes can be registered.'
+export const registrationForkThresholdTooLow = 'This universe’s fork threshold is too low to register questions.'
+export const formatRegisterQuestionReview = (questionId: string) => `Add question ${questionId} to this security pool.`
+export const questionNotLinkedToSecurityPool = 'This question has no security pool.'
+export const questionPoolVerificationFailed = 'Could not verify that this question belongs to this security pool.'
+export const mintingAfterReportingStarts = 'Minting closes once reporting starts.'
 export const creationInvalid = 'Check the security pool configuration.'
 export const unsupportedAdmission = 'These question rules are unsupported. Withdrawals and fork recovery remain available.'
 export const admissionCustom = 'Custom policy — underwriting unavailable'

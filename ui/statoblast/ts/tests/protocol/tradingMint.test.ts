@@ -251,7 +251,7 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 			await expect(validate()).rejects.toThrow('question ended')
 			timestamp = 1n
 			game = pool
-			await expect(validate()).rejects.toThrow('escalation starts')
+			await expect(validate()).rejects.toThrow('Minting closes once reporting starts.')
 			// A security pool the factory did not deploy is rejected before its collateral token or spender is read.
 			game = zeroAddress
 			canonicalSecurityPool = false

@@ -5,6 +5,7 @@ import { ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui
 import { verifyRuntimeCode, type SecurityPoolTransaction } from './securityPool.js'
 import { getZoltarContractAddresses } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 import { requireBigintValue } from './decoders.js'
+import { createUserFacingError } from '@zoltar/ui-core-shared/lib/errors.js'
 import * as copy from '../copy/securityPool.js'
 
 const admissionAbi = parseAbi(['function universeId() view returns (uint248)', 'function isQuestionAllowed(address securityPool,uint248 universeId,uint256 questionId) view returns (bool)', 'function questionCount() view returns (uint256)', 'function getQuestions(uint256 start,uint256 count) view returns (uint256[])'])
@@ -72,13 +73,13 @@ export async function requireSecurityPoolQuestionHorizon(client: Pick<ReadClient
 	])
 	const horizon = requireBigintValue(horizonValue, 'security pool question horizon')
 	const end = requireBigintValue(endValue, 'question end time')
-	if (end === 0n) throw new Error('This question does not exist.')
-	if (end <= inclusionTimestamp) throw new Error('This question has ended and can no longer be registered.')
-	if (end - inclusionTimestamp > horizon) throw new Error(`This question ends after the security pool's ${horizon % 86_400n === 0n ? `${horizon / 86_400n}-day` : `${horizon}-second`} question horizon.`)
+	if (end === 0n) throw createUserFacingError(copy.questionMissingForRegistration)
+	if (end <= inclusionTimestamp) throw createUserFacingError(copy.questionEndedForRegistration)
+	if (end - inclusionTimestamp > horizon) throw createUserFacingError(copy.formatQuestionHorizonReason(horizon))
 }
 
 export async function requireSecurityPoolQuestionAdmission(client: Pick<ReadClient, 'readContract'>, policy: Address, securityPool: Address, universeId: bigint, questionId: bigint, blockNumber?: bigint) {
-	if ((await client.readContract({ address: policy, abi: admissionAbi, functionName: 'isQuestionAllowed', args: [securityPool, universeId, questionId], blockNumber })) !== true) throw new Error(copy.questionRulesDisallowRegistration)
+	if ((await client.readContract({ address: policy, abi: admissionAbi, functionName: 'isQuestionAllowed', args: [securityPool, universeId, questionId], blockNumber })) !== true) throw createUserFacingError(copy.questionRulesDisallowRegistration)
 }
 
 /** Checks the factory's binary question shape and minimum escalation headroom at one block. */
@@ -89,10 +90,10 @@ export async function requireSecurityPoolQuestionEligibility(client: Pick<ReadCl
 		client.readContract({ address: addresses.zoltar, abi: Zoltar_Zoltar.abi, functionName: 'getNonDecisionThresholdAttoRep', args: [universeId], blockNumber }),
 		client.readContract({ address: addresses.zoltar, abi: Zoltar_Zoltar.abi, functionName: 'getUniverseTheoreticalSupplyAttoRep', args: [universeId], blockNumber }),
 	])
-	if (!Array.isArray(labels) || labels.length !== 2 || labels[0] !== 'Yes' || labels[1] !== 'No') throw new Error('Registration supports only Yes/No binary questions.')
+	if (!Array.isArray(labels) || labels.length !== 2 || labels[0] !== 'Yes' || labels[1] !== 'No') throw createUserFacingError(copy.questionOutcomeRegistrationRequired)
 	const threshold = requireBigintValue(thresholdValue, 'non-decision threshold')
 	const supply = requireBigintValue(supplyValue, 'universe theoretical REP supply')
 	const supplyBasedDeposit = supply / 10_000_000n
 	const initialDeposit = supplyBasedDeposit < 10n ** 18n ? 10n ** 18n : supplyBasedDeposit
-	if (threshold <= initialDeposit) throw new Error('The universe escalation threshold is too low to register a question.')
+	if (threshold <= initialDeposit) throw createUserFacingError(copy.registrationForkThresholdTooLow)
 }

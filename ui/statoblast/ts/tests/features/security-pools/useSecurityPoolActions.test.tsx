@@ -393,7 +393,7 @@ test('question registration is blocked outside the security pool horizon by chai
 	expect(new Set(submitReads.map(read => read.blockNumber))).toEqual(new Set([blockNumber + 1n]))
 })
 
-test('registration rejects non-binary questions and insufficient escalation thresholds before signing', async () => {
+test('registration explains the question outcomes and fork threshold before signing', async () => {
 	const now = capitalSnapshot().timestamp
 	const source = capitalClient()
 	source.setRead('isQuestionAllowed', true)
@@ -406,13 +406,13 @@ test('registration rejects non-binary questions and insufficient escalation thre
 	await act(() => {
 		hook.state().setQuestionInput('7')
 	})
-	await waitFor(() => expect(hook.state().registerReason).toContain('Yes/No binary'))
+	await waitFor(() => expect(hook.state().registerReason).toBe('Only questions with Yes and No outcomes can be registered'))
 	source.setRead('getOutcomeLabels', ['Yes', 'No'])
 	source.setRead('getNonDecisionThresholdAttoRep', 10n ** 18n)
 	await act(() => {
 		hook.state().setQuestionInput('8')
 	})
-	await waitFor(() => expect(hook.state().registerReason).toContain('threshold is too low'))
+	await waitFor(() => expect(hook.state().registerReason).toBe('This universe’s fork threshold is too low to register questions'))
 	source.setRead('getNonDecisionThresholdAttoRep', 2n * 10n ** 18n)
 	await act(() => {
 		hook.state().setQuestionInput('9')
@@ -427,5 +427,5 @@ test('registration rejects non-binary questions and insufficient escalation thre
 		await hook.state().register()
 	})
 	expect(requests).toHaveLength(1)
-	expect(hook.state().error).toContain('Yes/No binary')
+	expect(hook.state().error).toContain('Only questions with Yes and No outcomes can be registered.')
 })

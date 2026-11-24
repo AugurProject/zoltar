@@ -7,7 +7,8 @@ import { getAddress, parseUnits, type Address } from '@zoltar/core-shared/evm/et
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { createTransactionScope, mergeTransactionScopes } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
-import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
+import { getErrorDetail, getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
+import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { getActiveBackend, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { WriteOperationsParameters } from '../../../types/app.js'
 import { isUniverseForked, loadSecurityPoolSetup, securityPoolPreparationRequest, securityPoolAddressFromCreationReceipt, securityPoolContractRequest, securityPoolCreationRequest, sendSecurityPoolTransaction, type SecurityPoolTransaction } from '../../../protocol/securityPool.js'
@@ -177,7 +178,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 					if (current) registration.value = { key: registrationKey }
 				})
 				.catch(failure => {
-					if (current) registration.value = { key: registrationKey, reason: getErrorMessage(failure, copy.admissionCheckFailed) }
+					if (current) registration.value = { key: registrationKey, reason: getErrorDetail(failure, copy.admissionCheckFailed) ?? copy.admissionCheckFailed }
 				})
 		}
 		return () => {
@@ -339,7 +340,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 				const id = questionId
 				return {
 					...securityPoolContractRequest(parameters.accountAddress, selected.securityPool, 'addQuestion', [id]),
-					reviewDescription: `Register question 0x${id.toString(16)} in security pool ${selected.securityPool}. Registration does not pledge additional REP.`,
+					reviewDescription: copy.formatRegisterQuestionReview(formatQuestionIdHex(id)),
 					validateBeforeSubmit: async () => {
 						const client = createConnectedReadClient()
 						await requireSecurityPoolQuestionAdmission(client, selected.questionAdmissionPolicy, selected.securityPool, selected.originUniverseId, id)

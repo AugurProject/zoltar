@@ -5,6 +5,7 @@ import { statoblast_SecurityPool_SecurityPool as securityPoolArtifact, statoblas
 import { getZoltarContractAddresses } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 import { requireSecurityPoolQuestionAdmission, requireSecurityPoolQuestionEligibility, requireSecurityPoolQuestionHorizon } from './securityPoolAdmission.js'
 import type { SecurityPoolAccountSnapshot } from './securityPool.js'
+import { questionPoolVerificationFailed } from '../copy/securityPool.js'
 
 /** Read exactly one question; the registry page never limits which question can be quoted. */
 export async function loadSecurityPoolMintQuestion(client: ReadClient, snapshot: Pick<SecurityPoolAccountSnapshot, 'securityPool' | 'universeId' | 'blockNumber' | 'blockHash' | 'chainId'>, questionId: bigint) {
@@ -35,7 +36,7 @@ export async function loadSecurityPoolMintQuestion(client: ReadClient, snapshot:
 		client.readContract({ address: pool, abi: poolArtifact.abi, functionName: 'escalationGame', blockNumber }),
 		client.readContract({ address: pool, abi: poolArtifact.abi, functionName: 'systemState', blockNumber }),
 	])
-	if (nativeQuestionId !== questionId || nativeUniverseId !== universeId) throw new Error('Question ledger identity mismatch.')
+	if (nativeQuestionId !== questionId || nativeUniverseId !== universeId) throw new Error(questionPoolVerificationFailed)
 	const questionEndTime = await client.readContract({ address: questionData, abi: ZoltarQuestionData_ZoltarQuestionData.abi, functionName: 'getQuestionEndDate', args: [questionId], blockNumber })
 	const [block, chainId] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
 	if (block.hash !== snapshot.blockHash || chainId !== snapshot.chainId) throw new Error('Chain changed while reading the question. Refresh and try again.')
