@@ -11,8 +11,8 @@ import { SecurityPoolMaturityMap } from './SecurityPoolMaturityMap.sol';
 import { DelegateCall } from './DelegateCall.sol';
 import { SecurityPoolFrozenHistory } from './SecurityPoolFrozenHistory.sol';
 
-/// @notice Central ETH settlement accounting with distinct internal units and outcome supply.
-/// @dev This contract records liabilities; its authority holds and transfers the actual ETH.
+/// @notice Central collateral settlement accounting with distinct internal units and outcome supply.
+/// @dev This contract records liabilities; its authority holds and transfers the configured ERC-20 collateral.
 /// Every reported funding delta must be atomically backed by that custody. The authority also
 /// authenticates complete-set or winning-outcome burns and supplies irreversible finality.
 /// Finality uses a security pool clock paused during forks; fee deadlines retain native calendar time.
@@ -76,7 +76,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		book.isSealed = true;
 	}
 
-	/// @notice Create a child with independently supplied ETH and every source outcome liability.
+	/// @notice Create a child with independently supplied collateral and every source outcome liability.
 	/// @dev Source fee escrow and finalized claims remain source obligations and are not duplicated.
 	/// Inherit claim weights and snapshot roots from the sealed source book.
 	/// The supplied cash and recovery REP set the balances available to the child.
@@ -392,7 +392,7 @@ contract SecurityPoolSettlementBook is SecurityPoolSettlementPricing {
 		return (SettlementMath.cashForUnits(frozen.cashAttoEth, frozen.units, 0, unitsBurned), _descaled(unitsBurned));
 	}
 
-	/// @notice Quote REP directly from outcome-share ownership, before rounding ETH units.
+	/// @notice Quote REP directly from outcome-share ownership, before rounding collateral claim units.
 	function quoteRecoveryRep(uint64 bookId, uint256 questionId, uint256 outcomeShares) external view returns (uint256) {
 		Book storage book = _book(bookId);
 		(Question memory state, uint64 frozenBookId) = scaledQuestion(bookId, questionId);

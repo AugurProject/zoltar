@@ -26,14 +26,14 @@ contract OpenOracleReportDelegate {
 		SharedPoolPriceFeed feed = config.sharedPriceFeed();
 		uint256 minimum = feed.minimumToken1ReportAttoEthForPrice(proposedRepPerEthPrice);
 		require(requestedInitialAttoWeth >= minimum, 'Report funding below minimum');
-		uint256 wethAmount = requestedInitialAttoWeth;
-		uint256 repAmount = Math.mulDiv(wethAmount, proposedRepPerEthPrice, SecurityPoolUtils.PRICE_PRECISION, Math.Rounding.Ceil);
-		IERC20 weth = feed.collateralToken();
+		uint256 collateralAmount = requestedInitialAttoWeth;
+		uint256 repAmount = Math.mulDiv(collateralAmount, proposedRepPerEthPrice, SecurityPoolUtils.PRICE_PRECISION, Math.Rounding.Ceil);
+		IERC20 collateral = feed.collateralToken();
 		ReputationToken reputationToken = config.reputationToken();
-		Collateral.pull(weth, sponsor, address(this), wethAmount);
+		Collateral.pull(collateral, sponsor, address(this), collateralAmount);
 		require(reputationToken.transferFrom(sponsor, address(this), repAmount), 'REP transfer for initial report failed');
-		weth.safeApprove(address(feed), wethAmount);
+		collateral.safeApprove(address(feed), collateralAmount);
 		require(reputationToken.approve(address(feed), repAmount), 'REP approval for shared report failed');
-		feed.requestPrice{value: bountyAttoEth}(sponsor, proposedRepPerEthPrice, wethAmount, bountyAttoEth);
+		feed.requestPrice{value: bountyAttoEth}(sponsor, proposedRepPerEthPrice, collateralAmount, bountyAttoEth);
 	}
 }

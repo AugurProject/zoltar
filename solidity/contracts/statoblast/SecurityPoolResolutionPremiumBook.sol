@@ -133,7 +133,7 @@ contract SecurityPoolResolutionPremiumBook {
 		if (state.units == 0) return 0;
 		_removeSchedule(book, state);
 		unusedCash = _takeUnits(book, state.units);
-		_write(book, id, Question(0, 0, 0, 0, 0));
+		_write(book, id, Question({units: 0, rate: 0, securityPoolStartTime: 0, securityPoolEndTime: 0, securityPoolFundedEndTime: 0}));
 	}
 	function checkpoint(uint248 universe, uint48 securityPoolTimestamp) external onlyServices returns (uint256 earnedCash, uint256 unusedCash) {
 		Book storage book = books[universe];
@@ -186,10 +186,10 @@ contract SecurityPoolResolutionPremiumBook {
 			parent.cash -= cash;
 			totalCash -= cash;
 			branchCash[child] = 0;
-			books[child] = Book(0, 0, 0, 0, 0, 0, 0, 0, parent.securityPoolTimestamp, parent.securityPoolTimestamp, parent.refundedBefore, true, false);
+			books[child] = Book({cash: 0, units: 0, assignedCash: 0, recoveredUnits: 0, refundedPrefix: 0, questionRoot: 0, rateRoot: 0, tailRoot: 0, securityPoolTimestamp: parent.securityPoolTimestamp, minimumFinalAfter: parent.securityPoolTimestamp, refundedBefore: parent.refundedBefore, exists: true, isSealed: false});
 			return cash;
 		}
-		books[child] = Book(cash, parent.units, 0, 0, parent.refundedPrefix, parent.questionRoot, parent.rateRoot, parent.tailRoot, parent.securityPoolTimestamp, parent.securityPoolTimestamp, parent.refundedBefore, true, false);
+		books[child] = Book({cash: cash, units: parent.units, assignedCash: 0, recoveredUnits: 0, refundedPrefix: parent.refundedPrefix, questionRoot: parent.questionRoot, rateRoot: parent.rateRoot, tailRoot: parent.tailRoot, securityPoolTimestamp: parent.securityPoolTimestamp, minimumFinalAfter: parent.securityPoolTimestamp, refundedBefore: parent.refundedBefore, exists: true, isSealed: false});
 	}
 	function recover(uint248 source, uint256 id, uint256 shares, uint256 supply) external onlyServices returns (uint256 cash) {
 		Book storage book = books[source];
@@ -200,9 +200,12 @@ contract SecurityPoolResolutionPremiumBook {
 		uint256 afterShares = beforeShares + shares;
 		require(afterShares <= supply, 'Premium recovery exceeds supply');
 		recoveredShares[source][id] = afterShares;
+		// Differences of cumulative floors conserve every unit across partial claims;
+		// flooring each claim independently would leave rounding dust unallocated.
 		uint256 units =
 			Math.mulDiv(questionUnits, afterShares, supply) - Math.mulDiv(questionUnits, beforeShares, supply);
 		uint256 neutral = book.cash - book.assignedCash;
+		// Apply the same cumulative allocation to the fixed neutral cash basket.
 		cash =
 			Math.mulDiv(neutral, book.recoveredUnits + units, book.units) -
 			Math.mulDiv(neutral, book.recoveredUnits, book.units);
@@ -213,7 +216,9 @@ contract SecurityPoolResolutionPremiumBook {
 		state = questions[uint64(questionMap.get(book.questionRoot, id))];
 		if (state.securityPoolEndTime == 0) return state;
 		// A child response window cannot restore units already refunded in any ancestor.
-		if (state.securityPoolEndTime < book.refundedBefore) return Question(0, 0, 0, 0, 0);
+		if (state.securityPoolEndTime < book.refundedBefore)
+			return
+				Question({units: 0, rate: 0, securityPoolStartTime: 0, securityPoolEndTime: 0, securityPoolFundedEndTime: 0});
 		uint48 end = uint48(Math.min(book.securityPoolTimestamp, state.securityPoolEndTime));
 		if (end == state.securityPoolFundedEndTime) state.units = 0;
 		else if (end > state.securityPoolStartTime)

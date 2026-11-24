@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import './Constants.sol';
+import { Constants } from './Constants.sol';
 import { ERC20 } from './ERC20.sol';
 import { ERC20Authorization } from './vendor/authorization/ERC20Authorization.sol';
 

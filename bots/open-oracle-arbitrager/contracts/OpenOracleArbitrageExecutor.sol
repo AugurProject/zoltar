@@ -18,6 +18,10 @@ contract OpenOracleArbitrageExecutor is OpenOracleV4Hedge {
 	using SafeERC20Ops for IERC20;
 
 	uint256 private constant PERCENTAGE_PRECISION = 1e7;
+	uint8 private constant VENUE_UNISWAP_V3 = 0;
+	uint8 private constant VENUE_UNISWAP_V2 = 1;
+	uint8 private constant VENUE_UNISWAP_V4 = 2;
+	uint8 private constant FLAG_FEES_ONLY_AT_HALT = 1 << 5;
 
 	struct HedgeRequest {
 		address openOracle;
@@ -391,7 +395,7 @@ contract OpenOracleArbitrageExecutor is OpenOracleV4Hedge {
 		require(result.contribution2 >= result.hedgeAmountToken2, 'OpenOracle buy hedge exceeds token2 contribution');
 		_pullExact(token1, result.contribution1 + request.hedgeWethLimitAttoEth, balances.executorToken1);
 		_pullExact(token2, result.contribution2 - result.hedgeAmountToken2, balances.executorToken2);
-		if (request.venue == 2) {
+		if (request.venue == VENUE_UNISWAP_V4) {
 			result.hedgeAmountAttoWeth = _executeV4Hedge(
 				request.router,
 				request.poolFee,
@@ -404,7 +408,7 @@ contract OpenOracleArbitrageExecutor is OpenOracleV4Hedge {
 		} else {
 			_approveExact(token1, request.router, request.hedgeWethLimitAttoEth);
 		}
-		if (request.venue == 0) {
+		if (request.venue == VENUE_UNISWAP_V3) {
 			result.hedgeAmountAttoWeth = IUniswapV3SwapRouter(request.router).exactOutputSingle(
 				IUniswapV3SwapRouter.ExactOutputSingleParams({
 					tokenIn: game.token1,
@@ -417,7 +421,7 @@ contract OpenOracleArbitrageExecutor is OpenOracleV4Hedge {
 					sqrtPriceLimitX96: 0
 				})
 			);
-		} else if (request.venue == 1) {
+		} else if (request.venue == VENUE_UNISWAP_V2) {
 			address[] memory path = new address[](2);
 			path[0] = game.token1;
 			path[1] = game.token2;
@@ -431,10 +435,10 @@ contract OpenOracleArbitrageExecutor is OpenOracleV4Hedge {
 			require(amounts.length == 2 && amounts[1] == result.hedgeAmountToken2, 'Uniswap V2 buy amounts invalid');
 			result.hedgeAmountAttoWeth = amounts[0];
 		} else {
-			require(request.venue == 2, 'Unsupported hedge venue');
+			require(request.venue == VENUE_UNISWAP_V4, 'Unsupported hedge venue');
 		}
 		require(result.hedgeAmountAttoWeth <= request.hedgeWethLimitAttoEth, 'Uniswap buy hedge exceeded maximum WETH');
-		if (request.venue != 2) _approveExact(token1, request.router, 0);
+		if (request.venue != VENUE_UNISWAP_V4) _approveExact(token1, request.router, 0);
 		return result;
 	}
 
@@ -449,7 +453,7 @@ contract OpenOracleArbitrageExecutor is OpenOracleV4Hedge {
 		result.hedgeAmountToken2 = game.currentAmount2;
 		_pullExact(token1, result.contribution1, balances.executorToken1);
 		_pullExact(token2, result.contribution2 + result.hedgeAmountToken2, balances.executorToken2);
-		if (request.venue == 2) {
+		if (request.venue == VENUE_UNISWAP_V4) {
 			result.hedgeAmountAttoWeth = _executeV4Hedge(
 				request.router,
 				request.poolFee,
@@ -462,7 +466,7 @@ contract OpenOracleArbitrageExecutor is OpenOracleV4Hedge {
 		} else {
 			_approveExact(token2, request.router, result.hedgeAmountToken2);
 		}
-		if (request.venue == 0) {
+		if (request.venue == VENUE_UNISWAP_V3) {
 			result.hedgeAmountAttoWeth = IUniswapV3SwapRouter(request.router).exactInputSingle(
 				IUniswapV3SwapRouter.ExactInputSingleParams({
 					tokenIn: game.token2,
@@ -475,7 +479,7 @@ contract OpenOracleArbitrageExecutor is OpenOracleV4Hedge {
 					sqrtPriceLimitX96: 0
 				})
 			);
-		} else if (request.venue == 1) {
+		} else if (request.venue == VENUE_UNISWAP_V2) {
 			address[] memory path = new address[](2);
 			path[0] = game.token2;
 			path[1] = game.token1;
@@ -489,13 +493,13 @@ contract OpenOracleArbitrageExecutor is OpenOracleV4Hedge {
 			require(amounts.length == 2 && amounts[0] == result.hedgeAmountToken2, 'Uniswap V2 sell amounts invalid');
 			result.hedgeAmountAttoWeth = amounts[1];
 		} else {
-			require(request.venue == 2, 'Unsupported hedge venue');
+			require(request.venue == VENUE_UNISWAP_V4, 'Unsupported hedge venue');
 		}
 		require(
 			result.hedgeAmountAttoWeth >= request.hedgeWethLimitAttoEth,
 			'Uniswap sell hedge received too little WETH'
 		);
-		if (request.venue != 2) _approveExact(token2, request.router, 0);
+		if (request.venue != VENUE_UNISWAP_V4) _approveExact(token2, request.router, 0);
 		return result;
 	}
 
@@ -532,7 +536,7 @@ contract OpenOracleArbitrageExecutor is OpenOracleV4Hedge {
 	}
 
 	function _chargesFees(IOpenOracleDispute.OracleGame calldata game) private pure returns (bool) {
-		return (game.flags & (1 << 5)) == 0 || game.currentAmount1 >= game.escalationHalt;
+		return (game.flags & FLAG_FEES_ONLY_AT_HALT) == 0 || game.currentAmount1 >= game.escalationHalt;
 	}
 
 	function _fee(uint256 amount, uint256 rate) private pure returns (uint256) {

@@ -12,6 +12,7 @@ library SecurityPoolPersistentMap {
 		uint256 total;
 		uint64 left;
 		uint64 right;
+		// Zero denotes a leaf; branches store the tested bit index plus one.
 		uint16 bit;
 	}
 
@@ -33,6 +34,7 @@ library SecurityPoolPersistentMap {
 	}
 
 	/// @dev Used only for fee-mode histories whose keys are uint48 timestamps.
+	/// Returns zero when no predecessor exists; stored values are nonzero IDs.
 	function floor(Store storage self, uint64 root, uint256 key) internal view returns (uint256 value) {
 		if (root == 0) return 0;
 		Node storage node = self.nodes[root];
@@ -133,7 +135,7 @@ library SecurityPoolPersistentMap {
 
 	function _leaf(Store storage self, uint256 key, uint256 value, uint256 weight) private returns (uint64 id) {
 		id = ++self.lastId;
-		self.nodes[id] = Node(key, value, weight, 0, 0, 0);
+		self.nodes[id] = Node({key: key, value: value, total: weight, left: 0, right: 0, bit: 0});
 	}
 
 	function _join(Store storage self, uint64 left, uint64 right, bool modular) private returns (uint64 id) {
@@ -148,6 +150,6 @@ library SecurityPoolPersistentMap {
 			}
 		} else weight = first.total + second.total;
 		id = ++self.lastId;
-		self.nodes[id] = Node(first.key, 0, weight, left, right, uint16(Math.log2(first.key ^ second.key) + 1));
+		self.nodes[id] = Node({key: first.key, value: 0, total: weight, left: left, right: right, bit: uint16(Math.log2(first.key ^ second.key) + 1)});
 	}
 }

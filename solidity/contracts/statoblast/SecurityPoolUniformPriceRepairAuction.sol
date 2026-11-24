@@ -138,7 +138,7 @@ contract SecurityPoolUniformPriceRepairAuction {
 		require(collateralToken.balanceOf(address(this)) + withdrawnCollateral >= depositedAttoEth + lots * lotAttoEth, 'Auction bid collateral missing');
 		depositedAttoEth += lots * lotAttoEth;
 		bidId = ++bidCount;
-		bids[bidId] = Bid(bidder, vault, targetHealthBps, lots, minimumAttoRepPerLot, false, false);
+		bids[bidId] = Bid({bidder: bidder, vault: vault, targetHealthBps: targetHealthBps, lots: lots, minimumAttoRepPerLot: minimumAttoRepPerLot, settled: false, feesRemoved: false});
 		nodes[bidId].height = 1;
 		nodes[bidId].subtreeLots = _amount128(lots);
 		root = _insert(root, uint96(bidId));
@@ -277,7 +277,7 @@ contract SecurityPoolUniformPriceRepairAuction {
 		else {
 			uint256 refund = earlyRefundAttoEth(bidId);
 			require(refund != 0, 'Bid may still win');
-			fill = Fill(bid.bidder, bid.vault, bid.targetHealthBps, 0, 0, 0, refund);
+			fill = Fill({bidder: bid.bidder, vault: bid.vault, targetHealthBps: bid.targetHealthBps, filledLots: 0, usedAttoEth: 0, principalAttoRep: 0, refundAttoEth: refund});
 		}
 		bid.settled = true;
 		refundCreditAttoEth[fill.bidder] += fill.refundAttoEth;

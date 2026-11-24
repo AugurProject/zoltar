@@ -40,7 +40,7 @@ library SecurityPoolFrozenHistory {
 			}
 		}
 		id = ++self.lastId;
-		self.nodes[id] = Node(timestamp, size, left, right, next, value);
+		self.nodes[id] = Node({timestamp: timestamp, size: size, left: left, right: right, next: next, value: value});
 	}
 
 	/// @notice The earliest checkpoint at or after a question's finality deadline.

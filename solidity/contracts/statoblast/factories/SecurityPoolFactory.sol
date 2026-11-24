@@ -162,7 +162,12 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		questionLedger = deployQuestionLedger(shareToken, parent, openOraclePriceCoordinator, universeId, questionId, statoblastSecurityMultiplierBps);
 		_registerQuestionLedger(originId, universeId, questionLedger, hasInheritedForkOutcome, securityPool);
 		_initializeQuestionLedger(questionLedger, openOraclePriceCoordinator, securityPool);
-		_recordQuestionLedgerDeployment(QuestionLedgerDeployment(questionLedger, openOraclePriceCoordinator, shareToken, parent, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas));
+		_recordQuestionLedgerDeployment(QuestionLedgerDeployment({questionLedger: questionLedger, openOraclePriceCoordinator: openOraclePriceCoordinator, shareToken: shareToken, parent: parent, universeId: universeId, questionId: questionId, statoblastSecurityMultiplierBps: statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas: initialReportPriorityFeeAttoEthPerGas}));
+	}
+
+	/// @notice Maximum supported priority fee for a new oracle configuration.
+	function maximumReportPriorityFeeAttoEthPerGas() external view override returns (uint256) {
+		return openOraclePriceCoordinatorFactory.maximumReportPriorityFeeAttoEthPerGas();
 	}
 
 	/// @notice Deploys a security pool from the canonical creation code with this factory and
@@ -171,10 +176,6 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	/// @dev A security pool's modules hold provider REP and trader collateral, and each fork
 	/// child gets fresh ones from the same deployers. Fixing the code and the deployers
 	/// here is what lets pools, the forker and exchanges trust a registered security pool.
-	function maximumReportPriorityFeeAttoEthPerGas() external view override returns (uint256) {
-		return openOraclePriceCoordinatorFactory.maximumReportPriorityFeeAttoEthPerGas();
-	}
-
 	function deploySecurityPool(bytes calldata creationCode, bytes calldata configuration) external returns (address securityPool) {
 		require(keccak256(creationCode) == securityPoolCreationCodeHash, 'Security pool creation code is not canonical');
 		require(configuration.length == SECURITY_POOL_CONFIGURATION_BYTES, 'Security pool configuration length invalid');
@@ -233,7 +234,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		_registerQuestionLedger(originId, universeId, questionLedger, false, securityPool);
 		_initializeQuestionLedger(questionLedger, openOraclePriceCoordinator, securityPool);
 		shareToken.authorize(questionLedger);
-		_recordQuestionLedgerDeployment(QuestionLedgerDeployment(questionLedger, openOraclePriceCoordinator, shareToken, IQuestionLedger(payable(address(0))), universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas));
+		_recordQuestionLedgerDeployment(QuestionLedgerDeployment({questionLedger: questionLedger, openOraclePriceCoordinator: openOraclePriceCoordinator, shareToken: shareToken, parent: IQuestionLedger(payable(address(0))), universeId: universeId, questionId: questionId, statoblastSecurityMultiplierBps: statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas: initialReportPriorityFeeAttoEthPerGas}));
 	}
 
 	function _reserveQuestionLedger(bytes32 originId, uint248 universeId) private {
@@ -246,7 +247,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		bytes32 poolId = getQuestionLedgerId(originId, universeId);
 		require(address(questionLedgerRegistrations[poolId].pool) == address(0x0), 'Pool already registered');
 		questionLedgerRegistrations[poolId].pool = questionLedger;
-		questionLedgerMetadata[questionLedger] = QuestionLedgerMetadata(originId, securityPool, hasInheritedForkOutcome);
+		questionLedgerMetadata[questionLedger] = QuestionLedgerMetadata({originId: originId, securityPool: securityPool, hasInheritedForkOutcome: hasInheritedForkOutcome});
 		emit QuestionLedgerRegistered(originId, poolId, universeId, questionLedger);
 	}
 

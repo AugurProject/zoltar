@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import '../interfaces/IQuestionLedger.sol';
-import '../BinaryOutcomes.sol';
+import { IQuestionLedger } from '../interfaces/IQuestionLedger.sol';
+import { BinaryOutcomes } from '../BinaryOutcomes.sol';
 
 interface IShareToken {
 	function balanceOfSecurityPoolRecoveryRights(uint248 sourceUniverse, address holder) external view returns (uint256[3] memory amountsAttoShares);

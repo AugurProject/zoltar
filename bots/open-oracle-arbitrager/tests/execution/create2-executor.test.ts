@@ -57,7 +57,7 @@ test('derives a stable executor address and canonical proxy calldata from a byte
 	const salt = `0x${'00'.repeat(32)}` as Hex
 	const plan = executorDeploymentPlan(salt)
 	expect(deterministicDeploymentProxy).toBe('0x4e59b44847b379578588920cA78FbF26c0B4956C')
-	expect(plan.address).toBe('0x888022f10E133a40f7396Dc0DB47125D6fa28e29')
+	expect(plan.address).toBe('0x6c0dAA9a8D47c97AB7fbeC4ACF28b3037E264D8e')
 	expect(plan.salt).toBe(salt)
 	expect(plan.calldata).toBe(`${salt}${plan.bytecode.slice(2)}` as Hex)
 })
