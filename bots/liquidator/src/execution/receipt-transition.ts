@@ -9,12 +9,13 @@ import { FinalizedTakeoverExpired } from '#execution/execution-safety'
 
 const TAKEOVER_REVERT_BUDGET_BLOCKS = 300n
 const takenOverTopic = keccak256(toHex('CommitmentTakenOver(uint96,uint96,uint256,uint256)'))
+type ReceiptLogs = { logs: readonly Pick<TransactionReceipt['logs'][number], 'address' | 'data' | 'topics'>[] }
 
 /**
  * The in-call cure can heal a target and return successfully without a takeover. Only a
  * `CommitmentTakenOver` log from the called ledger for the signed source proves the position moved.
  */
-function takeoverAcquiredTarget(intent: PendingTransactionIntent, receipt: TransactionReceipt) {
+function takeoverAcquiredTarget(intent: PendingTransactionIntent, receipt: ReceiptLogs) {
 	const transaction = parseTransaction(intent.serializedTransaction)
 	const ledger = transaction.to
 	if (ledger === undefined || ledger === null || transaction.data === undefined) return false
@@ -28,6 +29,19 @@ function takeoverAcquiredTarget(intent: PendingTransactionIntent, receipt: Trans
 	})
 }
 
+export function applySuccessfulSecurityPoolFunding(state: RuntimeState, intent: PendingTransactionIntent, receipt: ReceiptLogs) {
+	const funding = intent.securityPoolFunding
+	if (funding === undefined) return false
+	if (funding.operation === 'consume' && !takeoverAcquiredTarget(intent, receipt)) return true
+	state.securityPoolFunding = applySecurityPoolFundingEffect(state.securityPoolFunding ?? {}, funding)
+	return false
+}
+
+export function completeSecurityPoolInstruction(state: RuntimeState, intent: PendingTransactionIntent) {
+	const instruction = intent.securityPoolInstruction
+	if (instruction !== undefined) state.completedSecurityPoolInstructions = { ...state.completedSecurityPoolInstructions, [instruction.id]: instruction.fingerprint }
+}
+
 // Persist removal and activity together before publishing the in-memory transition.
 // A failed disk write leaves the original intent retryable.
 export async function resolveFinalizedReceipt(path: string, state: RuntimeState, intent: PendingTransactionIntent, receipt: TransactionReceipt, explainTakeoverExpiry?: () => Promise<string | undefined>) {
@@ -39,13 +53,9 @@ export async function resolveFinalizedReceipt(path: string, state: RuntimeState,
 	if (expiredReason !== undefined) next.lastExpiredTakeoverBlock = receipt.blockNumber
 	resolveRecoveredIntentJournal(next, intent.hash, receipt.status)
 	// Funding deposited for a takeover stays journaled, and so returnable, until a takeover actually acquires the target.
-	const curedWithoutTakeover = outcome.type === 'terminal-success' && intent.securityPoolFunding?.operation === 'consume' && !takeoverAcquiredTarget(intent, receipt)
-	if (outcome.type === 'terminal-success' && intent.securityPoolFunding !== undefined && !curedWithoutTakeover) next.securityPoolFunding = applySecurityPoolFundingEffect(state.securityPoolFunding ?? {}, intent.securityPoolFunding)
-	if (intent.securityPoolInstruction !== undefined) {
-		// Consume reverted instructions too: retrying a deliberate financial action
-		// requires a new operator instruction, rather than repeatedly spending gas.
-		next.completedSecurityPoolInstructions = { ...state.completedSecurityPoolInstructions, [intent.securityPoolInstruction.id]: intent.securityPoolInstruction.fingerprint }
-	}
+	const curedWithoutTakeover = outcome.type === 'terminal-success' && applySuccessfulSecurityPoolFunding(next, intent, receipt)
+	// Consume reverted instructions too: retrying a deliberate financial action requires a new operator instruction.
+	completeSecurityPoolInstruction(next, intent)
 	const operations = outcome.type === 'terminal-success' ? reportOperationOutcomes(intent, receipt) : undefined
 	let result: { message: string; status: 'confirmed' | 'failed' | 'info' } = operations ?? { message: `${intent.label}: completed`, status: 'confirmed' }
 	if (outcome.type === 'terminal-failure') result = { message: `${intent.label} failed: ${outcome.reason}`, status: 'failed' }

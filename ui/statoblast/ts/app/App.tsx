@@ -89,7 +89,6 @@ export function App() {
 	const { loadOracleReport, openOracleRouteContentProps, setOpenOracleReportId } = useOpenOracleRoute({
 		accountState,
 		canReadOnchainData,
-		navigate,
 		route,
 		setOpenOracleReport,
 		urlOpenOracleReportId,
@@ -188,7 +187,13 @@ export function App() {
 						}}
 						questionView={activeQuestionLedgersView}
 						universeDirectory={{ activeUniverseId, zoltarUniverse, universeMissing: marketCreation.zoltarUniverseMissing, universeError: marketCreation.zoltarUniverseError, onRetryUniverse: () => void marketCreation.loadZoltarUniverse(), onMigrateRep: () => setQuestionLedgersView('migrate') }}
-						migration={{ accountState, activeUniverseId, operations: marketCreation, universeState: resolveLoadableValueState({ isLoading: marketCreation.loadingZoltarUniverse, isMissing: marketCreation.zoltarUniverseMissing, value: zoltarUniverse }), universeBrowserHref: '#/pools/universes' }}
+						migration={{
+							accountState,
+							activeUniverseId,
+							operations: marketCreation,
+							universeState: resolveLoadableValueState({ isLoading: marketCreation.loadingZoltarUniverse, isMissing: marketCreation.zoltarUniverseMissing, value: zoltarUniverse }),
+							universeBrowserHref: buildRouteHref('#/pools/universes', getTopLevelRouteSearch('pools')),
+						}}
 					/>
 				</RepPriceRefreshContext.Provider>
 				<TransactionStepsModal contextKey={`${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}`} />

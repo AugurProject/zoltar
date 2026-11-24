@@ -76,9 +76,10 @@ const reportFieldChanges = (before: unknown, after: unknown): readonly ReportFie
 
 // Evidence is newest first. The extra row fetched for keyset pagination provides
 // the comparison baseline for the last row that is returned to the client.
-export const reportRoundChanges = (rows: readonly ReportRoundEvidence[]): readonly ReportRoundEvidence[] =>
-	rows.map((row, index) => {
-		const previous = rows[index + 1]
+export const reportRoundChanges = (rows: readonly ReportRoundEvidence[]): readonly ReportRoundEvidence[] => {
+	const rounds = rows.filter(row => row['event_name'] === 'ReportSubmitted' || row['event_name'] === 'ReportDisputed')
+	return rounds.map((row, index) => {
+		const previous = rounds[index + 1]
 		const currentData = plainRecord(row['report_data'])
 		const previousData = previous === undefined ? {} : plainRecord(previous['report_data'])
 		return {
@@ -92,6 +93,7 @@ export const reportRoundChanges = (rows: readonly ReportRoundEvidence[]): readon
 			},
 		}
 	})
+}
 
 const nonNegative = (value: string | undefined): bigint | undefined => {
 	if (value === undefined || !/^\d+$/.test(value)) return undefined

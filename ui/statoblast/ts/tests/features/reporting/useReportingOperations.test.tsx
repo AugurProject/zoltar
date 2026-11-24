@@ -79,7 +79,7 @@ type HarnessCallbacks = {
 }
 
 function createHarness(onRender: (state: UseReportingOperationsState) => void, dependencies: UseReportingOperationsDependencies, { onTransactionCanceled = () => undefined, onTransactionFinished = () => undefined, onTransactionRequested = () => undefined }: HarnessCallbacks = {}) {
-	return function ReportingOperationsHarness({ accountAddress = zeroAddress }: { accountAddress?: Address }) {
+	return function ReportingOperationsHarness({ accountAddress = zeroAddress, selectedQuestionLedgerAddress }: { accountAddress?: Address; selectedQuestionLedgerAddress?: string }) {
 		const state = useReportingOperations(
 			{
 				accountAddress,
@@ -89,6 +89,7 @@ function createHarness(onRender: (state: UseReportingOperationsState) => void, d
 				onTransactionRequested,
 				onTransactionSubmitted: () => undefined,
 				refreshState: async () => undefined,
+				...(selectedQuestionLedgerAddress === undefined ? {} : { selectedQuestionLedgerAddress }),
 			},
 			dependencies,
 		)
@@ -139,6 +140,31 @@ describe('useReportingOperations', () => {
 		}
 		return { Harness, container: rendered.container, state, setForm }
 	}
+
+	test('clears the draft and details when selecting another question and ignores the previous refresh', async () => {
+		const first = getAddress('0x00000000000000000000000000000000000000c1')
+		const second = getAddress('0x00000000000000000000000000000000000000c2')
+		const firstRefresh = createDeferred<ReportingDetails>()
+		let loads = 0
+		const loadReportingDetails = mock(async (address: Address) => {
+			loads++
+			if (loads === 2) return await firstRefresh.promise
+			return createReportingDetails(address)
+		})
+		const { Harness, container, state, setForm } = await renderOperations(createReportingOperationsDependencies({ loadReportingDetails }))
+		await act(() => render(<Harness selectedQuestionLedgerAddress={first} />, container))
+		await act(() => state().loadReporting())
+		await setForm({ reportAmount: '12', selectedOutcome: 'yes' })
+		const pending = state().loadReporting()
+		await act(() => render(<Harness selectedQuestionLedgerAddress={second} />, container))
+		expect(state().reportingForm.reportAmount).toBe('')
+		expect(state().reportingForm.selectedOutcome).toBeUndefined()
+		expect(state().reportingDetails).toBeUndefined()
+		await act(() => state().loadReporting())
+		firstRefresh.resolve(createReportingDetails(first))
+		await pending
+		expect(state().reportingDetails?.questionLedgerAddress).toBe(second)
+	})
 
 	test.each([false, true])('refreshes balances after an account change and ignores old-account loads (pending: %s)', async pending => {
 		const pool = getAddress('0x00000000000000000000000000000000000000c1')

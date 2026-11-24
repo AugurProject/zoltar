@@ -36,6 +36,7 @@ export class ScannerDatabase {
 	networkStartBlock = history.networkStartBlock
 	hasStoredBlocks = history.hasStoredBlocks
 	storedBlockTip = history.storedBlockTip
+	retainedEntitySampleBlocks = history.retainedEntitySampleBlocks
 	canonicalHash = history.canonicalHash
 	canonicalCheckpointAtOrBefore = history.canonicalCheckpointAtOrBefore
 	rewind = history.rewind

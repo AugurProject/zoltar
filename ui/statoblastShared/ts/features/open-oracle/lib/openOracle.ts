@@ -19,6 +19,7 @@ import * as statoblastAppCopy from '../../../copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
+import { ETH_GAS_RESERVE_ATTO_ETH } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 /** ERC-20 decimals are a uint8, so reading an amount at this scale never rejects precision a real token allows. */
 const OPEN_ORACLE_UNKNOWN_SCALE_DECIMALS = 255
 type OpenOracleReportStatus = 'Pending' | 'Disputed' | 'Settled'
@@ -103,6 +104,14 @@ export function getOpenOracleCreateGuardMessage({ isOnActiveAppChain, settlerRew
 /** ERC-20 report creation sends exactly the settler reward, so the ETH sent is derived instead of entered separately. */
 export function getOpenOracleCreateEthSent(settlerRewardInput: string) {
 	return tryParseDecimalInput(settlerRewardInput)
+}
+
+export function getOpenOracleCreateWrapGuardMessage(wrap: bigint, reward: bigint, walletBalanceAttoEth: bigint | undefined) {
+	if (wrap === 0n) return undefined
+	if (walletBalanceAttoEth === undefined) return statoblastAppCopy.loadingWalletEthBalance
+	const needed = wrap + reward + ETH_GAS_RESERVE_ATTO_ETH
+	if (walletBalanceAttoEth < needed) return `Need ${formatAdditionalCurrencyBalance(needed - walletBalanceAttoEth, 'ETH')} to wrap and leave enough for the settler reward and network fees.`
+	return undefined
 }
 
 function getOpenOracleCreateAddressValidationMessage(addressInput: string, role: 'base' | 'quote') {

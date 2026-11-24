@@ -23,8 +23,12 @@ export function createConfirmedReadTransport(transport: Transport, getConfirmedB
 			request: async parameters => {
 				const index = blockParameterIndex(parameters.method)
 				const params = parameters.params
+				const blockIndex = parameters.method === 'eth_estimateGas' ? 1 : index
 				// Preserve explicit historical blocks, block hashes, and pending-state reads.
-				if (index === undefined || !Array.isArray(params) || params[index] !== 'latest') return await requestRpc(transport, parameters)
+				if (blockIndex === undefined || !Array.isArray(params)) return await requestRpc(transport, parameters)
+				const blockTag = params[blockIndex]
+				const usesImplicitLatest = parameters.method === 'eth_estimateGas' && params.length === 1
+				if (blockTag !== 'latest' && !usesImplicitLatest) return await requestRpc(transport, parameters)
 				while (true) {
 					let confirmedBlock = getConfirmedBlock()
 					let nextParams = params
@@ -33,7 +37,7 @@ export function createConfirmedReadTransport(transport: Transport, getConfirmedB
 						confirmedBlock = getConfirmedBlock() ?? confirmedBlock
 						const block = head > confirmedBlock ? head : confirmedBlock
 						nextParams = [...params]
-						nextParams[index] = `0x${block.toString(16)}`
+						nextParams[blockIndex] = `0x${block.toString(16)}`
 					}
 					const result = await requestRpc(transport, { ...parameters, params: nextParams })
 					// Also retire reads started before confirmation, including background allowance loads.

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { bigintToSafeNumber, getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { createMockLoaderClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { loadQuestionLedgerRegistry } from '../../protocol/live.js'
 import { deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../../protocol/deployment.js'
@@ -27,7 +27,7 @@ test('pages the current pool registry and filters the requested universe without
 			const [start, count] = request.args ?? []
 			if (typeof start !== 'bigint' || typeof count !== 'bigint') throw new Error('Missing registry range')
 			ranges.push([start, count])
-			return Array.from({ length: Number(count) }, (_, offset) => ({
+			return Array.from({ length: bigintToSafeNumber(count, 'Registry page length') }, (_, offset) => ({
 				questionLedger: getAddress(`0x${(start + BigInt(offset) + 1n).toString(16).padStart(40, '0')}`),
 				shareToken: zeroAddress,
 				universeId: (start + BigInt(offset)) % 2n,

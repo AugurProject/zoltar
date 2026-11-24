@@ -32,10 +32,10 @@ export function securityPoolTakeoverSource(
 	const retirementFulfilled = removed !== 0n && position.remainingCommitment !== 0n && commitment <= position.remainingCommitment
 	const started = position.liquidationStarted ?? 0n
 	const elapsed = position.liquidationElapsed ?? (started === 0n || snapshot.timestamp === undefined || snapshot.timestamp <= started ? 0n : snapshot.timestamp - started)
-	const paid = position.liquidationPenaltyPaid ?? 0n
-	const vested = ((position.rep + paid) * (elapsed < 3600n ? elapsed : 3600n)) / 3600n
+	const penaltyPaid = position.liquidationPenaltyPaid ?? 0n
+	const vestedPenalty = ((position.rep + penaltyPaid) * (elapsed < 3600n ? elapsed : 3600n)) / 3600n
 	const healthy = commitment <= supported
-	const maximumTakeoverReward = !healthy && vested > paid ? vested - paid : 0n
+	const maximumTakeoverReward = !healthy && vestedPenalty > penaltyPaid ? vestedPenalty - penaltyPaid : 0n
 	const repairSupported = ((((position.rep - maximumTakeoverReward) * 10_000n) / snapshot.securityMultiplierBps) * 10n ** 18n) / snapshot.conservativePrice
 	let maximumTakeoverCommitment = commitment > repairSupported ? commitment - repairSupported : 0n
 	if (maximumTakeoverCommitment !== 0n && commitment - maximumTakeoverCommitment < minimum) maximumTakeoverCommitment = commitment

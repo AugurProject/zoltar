@@ -1,6 +1,6 @@
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import type { Address, PublicClient } from '@zoltar/core-shared/evm/ethereum'
+import { bigintToSafeNumber, type Address, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { formatRoundedUnits } from '../lib/format.js'
 import { collateralPresentation } from '@zoltar/ui-statoblast-shared/protocol/collateral.js'
@@ -28,9 +28,9 @@ export async function loadTradingCollateralAsset(client: Pick<PublicClient, 'rea
 	if (token.toLowerCase() === getActiveNetworkProfile().wethAddress.toLowerCase()) return { token, symbol: 'ETH', decimals: 18, native: true }
 	if (known.symbol === 'USDC') return { token, symbol: known.symbol, decimals: known.decimals, native: false }
 	const [symbolResult, decimalsResult] = await Promise.allSettled([client.readContract({ address: token, abi: ABIS.mainnet.erc20, functionName: 'symbol', blockNumber }), client.readContract({ address: token, abi: ABIS.mainnet.erc20, functionName: 'decimals', blockNumber })])
-	const units = decimalsResult.status === 'fulfilled' ? Number(decimalsResult.value) : undefined
-	if (units === undefined || !Number.isInteger(units) || units < 0 || units > 255) return { token, symbol: 'Collateral base units', decimals: 0, native: false }
+	const rawDecimals = decimalsResult.status === 'fulfilled' ? decimalsResult.value : undefined
+	if (rawDecimals === undefined || rawDecimals < 0n || rawDecimals > 255n) return { token, symbol: 'Collateral base units', decimals: 0, native: false }
 	// Only the profile's WETH and USDC are identified by address; any other token's self-reported symbol carries its address (#1462).
 	const symbol = tokenDisplayLabel({ address: token, symbol: symbolResult.status === 'fulfilled' ? symbolResult.value : undefined, verified: false })
-	return { token, symbol, decimals: units, native: false }
+	return { token, symbol, decimals: bigintToSafeNumber(rawDecimals, 'Collateral decimals'), native: false }
 }

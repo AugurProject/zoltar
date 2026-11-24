@@ -5,12 +5,13 @@ import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { chainFor } from '../../src/monitoring/operator-chain.ts'
 import { initialRuntimeState } from '../../src/state/operator-state.ts'
 import { securityPoolObservation, securityPoolSettings, unit } from '../support/security-pool-observation.ts'
+import { SecurityPoolGasBudgetExceeded } from '../../src/execution/security-pool-executor.ts'
 
-for (const deselected of [false, true]) {
+for (const pendingState of ['waiting', 'deselected', 'over-budget'] as const) {
 	for (const action of ['takeover', 'recovery'] as const) {
-		test(`a pending ${deselected ? 'deselected' : 'waiting'} report does not block another security pool's ${action}`, async () => {
+		test(`a pending ${pendingState} report does not block another security pool's ${action}`, async () => {
 			const first = securityPoolObservation()
-			first.selected = !deselected
+			first.selected = pendingState !== 'deselected'
 			const second = securityPoolObservation()
 			second.selection = { ...second.selection, address: getAddress('0x0000000000000000000000000000000000000099') }
 			second.snapshot.capitalLedger = second.selection.address
@@ -42,7 +43,11 @@ for (const deselected of [false, true]) {
 			}
 			const calls: string[] = []
 			const actions: Parameters<typeof executeSecurityPoolAutomation>[3] = {
-				pendingReport: async (_wallet, _settings, _state, _pool, observation) => (observation === first ? 'waiting' : 'none'),
+				pendingReport: async (_wallet, _settings, _state, _pool, observation) => {
+					if (observation !== first) return 'none'
+					if (pendingState === 'over-budget') throw new SecurityPoolGasBudgetExceeded('Report settlement exceeds gas budget')
+					return 'waiting'
+				},
 				earnings: async () => {
 					throw new Error('Unexpected earnings action')
 				},

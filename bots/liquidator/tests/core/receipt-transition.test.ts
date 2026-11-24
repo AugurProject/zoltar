@@ -206,6 +206,33 @@ test('a settlement above the report base-fee ceiling is recorded as deferred', a
 	}
 })
 
+test.each(['Report stale', 'Report uneconomic'])('journals a finalized report rejection with no operations (%s)', async reason => {
+	const directory = await mkdtemp(join(tmpdir(), 'report-rejection-'))
+	try {
+		const path = join(directory, 'state.json')
+		const { intent, receipt } = await securityPoolReceiptIntent()
+		const feed = getAddress('0x0000000000000000000000000000000000000040')
+		intent.reportOperations = { feed, reportId: 7n }
+		receipt.logs = [
+			{
+				address: feed,
+				blockHash: receipt.blockHash,
+				blockNumber: receipt.blockNumber,
+				topics: encodeEventTopics({ abi: sharedPoolPriceFeedAbi, eventName: 'PriceReportRejected', args: { reportId: 7n } }).filter(topic => topic !== null),
+				data: encodeAbiParameters([{ type: 'string' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [reason, 0n, 0n, 5n, 10n]),
+			},
+		]
+		const state = initialRuntimeState(false, intent.sender, 1)
+		state.pendingTransactions.push(intent)
+		await resolveFinalizedReceipt(path, state, intent, receipt)
+		const saved = await loadDurableState(path, 1)
+		expect(saved.activities[0]?.status).toBe('confirmed')
+		expect(saved.activities[0]?.message).toContain(reason)
+	} finally {
+		await rm(directory, { recursive: true, force: true })
+	}
+})
+
 function takenOverLog(receipt: TransactionReceipt, ledger: Address, sourceId: bigint) {
 	return {
 		address: ledger,

@@ -1,3 +1,5 @@
+import { errorChain } from '@zoltar/core-shared/errors/errorChain'
+import { hasErrorCode, hasErrorMessage, isTransactionReviewCancellation, isWalletRejection } from '@zoltar/ui-core-shared/lib/errors.js'
 import { encodeFunctionData, RpcError, type Abi, type Account, type Address, type ContractFunctionParameters, type Hash, type MulticallReturnType, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { createTransactionFailureError } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
 import { getMulticall3Address } from './zoltarDeploymentHelpers.js'
@@ -90,10 +92,13 @@ async function getContractRevertReason<TCallParams extends ContractRevertReasonP
 	}
 }
 
-function getOriginalErrorMessage(error: unknown) {
-	if (error instanceof RpcError) return error.shortMessage ?? error.message ?? (error.cause instanceof Error ? error.cause.message : undefined)
-	if (error instanceof Error) return error.message
-	return undefined
+function isSubmissionRevert(error: unknown) {
+	if (isWalletRejection(error) || isTransactionReviewCancellation(error)) return false
+	for (const cause of errorChain(error)) {
+		if (hasErrorCode(cause) && cause.code === 3) return true
+		if (hasErrorMessage(cause) && /\b(?:execution|transaction|call) reverted\b/i.test(cause.message)) return true
+	}
+	return false
 }
 
 export async function writeContractAndWait<TCallParams extends ContractRevertReasonParams, TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, getCallParams: () => TCallParams) {
@@ -109,22 +114,22 @@ export async function writeContractAndWaitForReceipt<TCallParams extends Contrac
 		functionName: callParams.functionName,
 	})
 	const account = callParams.account ?? undefined
+	client.onTransactionPrepared?.({
+		account,
+		args: callParams.args,
+		chainName: client.chain?.name,
+		contractAddress: callParams.address,
+		contractLabel: callParams.contractLabel ?? resolveContractLabel(callParams.abi, callParams.functionName),
+		data,
+		functionName: callParams.functionName,
+		requiresWalletConfirmation: client.requiresWalletConfirmation,
+		reviewDescription: callParams.reviewDescription,
+		reviewAmount: callParams.reviewAmount,
+		reviewTitle: callParams.reviewTitle,
+		value: callParams.value,
+	})
 	let hash: Hash
 	try {
-		client.onTransactionPrepared?.({
-			account,
-			args: callParams.args,
-			chainName: client.chain?.name,
-			contractAddress: callParams.address,
-			contractLabel: callParams.contractLabel ?? resolveContractLabel(callParams.abi, callParams.functionName),
-			data,
-			functionName: callParams.functionName,
-			requiresWalletConfirmation: client.requiresWalletConfirmation,
-			reviewDescription: callParams.reviewDescription,
-			reviewAmount: callParams.reviewAmount,
-			reviewTitle: callParams.reviewTitle,
-			value: callParams.value,
-		})
 		hash = await client.sendTransaction({
 			account,
 			data,
@@ -133,8 +138,10 @@ export async function writeContractAndWaitForReceipt<TCallParams extends Contrac
 			value: callParams.value,
 		})
 	} catch (error) {
+		if (!isSubmissionRevert(error)) throw error
 		const reason = await getContractRevertReason(client, callParams)
-		throw new Error(reason ?? getOriginalErrorMessage(error) ?? 'Transaction reverted')
+		if (reason === undefined) throw error
+		throw new Error(reason, { cause: error })
 	}
 	const { hash: resolvedHash, receipt } = await waitForSubmittedTransactionReceipt(client, hash, { allowRevertedReceipt: true })
 	if (receipt.status === 'reverted') {

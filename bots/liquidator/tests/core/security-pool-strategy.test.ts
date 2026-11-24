@@ -3,7 +3,9 @@ import { securityPoolCureOutcome } from '../../src/core/security-pool-cure-state
 import { SIGNED_TRANSACTION_SLOT_SECONDS, securityPoolTakeoverPlan } from '../../src/core/security-pool-strategy.ts'
 import { DEFAULT_TRANSACTION_VALIDITY_BLOCKS } from '@zoltar/bot-shared/execution/transaction-submission'
 import { assertSecurityPoolPlanStillAllowed } from '../../src/execution/security-pool-executor.ts'
-import { securityPoolObservation, securityPoolSettings, unit } from '../support/security-pool-observation.ts'
+import { initialRuntimeState } from '../../src/state/operator-state.ts'
+import { securityPoolScanMetrics } from '../../src/state/security-pool-view.ts'
+import { ownerAddress, securityPoolObservation, securityPoolSettings, unit } from '../support/security-pool-observation.ts'
 
 function evaluate(observation = securityPoolObservation(), settings = securityPoolSettings(), totalPrincipal = observation.snapshot.ownerPrincipalAttoRep, marketAllowed = true) {
 	const position = observation.positions[0]
@@ -15,6 +17,19 @@ test('funded takeover bounds the entire transferred obligation, owner collateral
 	const plan = evaluate().plan
 	expect(plan).toMatchObject({ commitment: 100n * unit, minimumTakeoverReward: 99n * unit, ownFunding: (585n * unit) / 10n, maximumOwnRep: (585n * unit) / 10n, maximumOwnerPrincipal: 1000n * unit, expectedSourceBatch: 0n })
 	expect(plan?.netRewardAttoEth).toBeGreaterThan(0n)
+})
+
+test('scan metrics use active security pool observations', () => {
+	const settings = securityPoolSettings()
+	const state = initialRuntimeState(true, ownerAddress, settings.network.chainId)
+	const eligible = securityPoolObservation()
+	const inactive = securityPoolObservation()
+	inactive.snapshot.forkTime = 1n
+	const unselected = securityPoolObservation()
+	unselected.selected = false
+	state.securityPools = [eligible, inactive, unselected]
+	expect(state.pools).toHaveLength(0)
+	expect(securityPoolScanMetrics(state, settings)).toMatchObject({ poolCount: 3, selectedPoolCount: 2, eligiblePoolCount: 1 })
 })
 
 test('an independently accounted auction vault controlled by the keeper is not an external profit opportunity', () => {

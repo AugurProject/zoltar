@@ -95,7 +95,7 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 	return {
 		reportId,
 		openOracleAddress,
-		coordinatorPriceValidUntilTimestamp: await loadCoordinatorPriceValidUntilTimestamp(client, openOracleAddress, game, undefined, reportId),
+		coordinatorPriceValidUntilTimestamp: await loadCoordinatorPriceValidUntilTimestamp(client, openOracleAddress, game, client.chain?.id, reportId),
 		currentTime: block.timestamp,
 		currentBlockNumber: block.number,
 		exactToken1Report: storedState.initialAmount1,

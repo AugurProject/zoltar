@@ -65,6 +65,7 @@ contract CapitalLedgerHarness {
 	SecurityPoolCapitalLedger public immutable ledger;
 	CapitalLedgerZoltarMock public immutable zoltar;
 	ReputationToken public immutable token;
+	uint256 internal assignedCapitalCash;
 	constructor(CapitalLedgerTestComponents components) {
 		collateralToken = new WETH9();
 		zoltar = new CapitalLedgerZoltarMock();
@@ -72,7 +73,13 @@ contract CapitalLedgerHarness {
 		SecurityPoolCapitalLedgerDeployer deployer = components.capitalDeployer();
 		SecurityPoolCapitalLedger implementation = deployer.createImplementation(Zoltar(address(zoltar)), 10_500, 1e15, components.streamsDeployer());
 		ledger = deployer.create(implementation, 1);
-		ledger.initialize(components.createIndex(address(ledger)), components.createStreams(address(ledger), 1 days), address(0), address(0));
+		ledger.initialize(components.createIndex(address(ledger)), components.createStreams(address(ledger), 1 days), address(0), address(this));
+	}
+	function withdrawCapitalCash() external {
+		require(msg.sender == address(ledger), 'Only capital ledger');
+		uint256 amount = assignedCapitalCash;
+		assignedCapitalCash = 0;
+		require(collateralToken.transfer(msg.sender, amount), 'Capital cash transfer failed');
 	}
 	function mint(address owner, uint256 amount) external {
 		zoltar.mint(owner, amount);

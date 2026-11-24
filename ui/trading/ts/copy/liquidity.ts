@@ -59,3 +59,4 @@ export const initializeLocalEstimateNote = `${initializeEstimateNote} ${rechecke
 export const minimumDeposit = 'Minimum Yes / No deposit'
 
 export const maximumDeposit = 'Maximum deposit'
+export const mintingCapacityExceeded = 'This question cannot mint enough complete sets for this deposit.'

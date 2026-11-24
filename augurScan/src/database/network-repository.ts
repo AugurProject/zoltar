@@ -342,6 +342,7 @@ const stateSnapshotTargetsFrom = async (sql: SQL, chainId: number, throughBlock:
 					SELECT contract.address AS entity_identity, latest.last_position_id FROM contracts contract
 					JOIN LATERAL (
 						SELECT (state.read_result->>'lastPositionId')::numeric AS last_position_id FROM entity_state_snapshots state
+						JOIN blocks block ON block.chain_id = state.chain_id AND block.hash = state.block_hash AND block.canonical
 						WHERE state.chain_id = ${chainId} AND state.entity_type = 'capital-ledger' AND state.entity_identity = contract.address
 							AND state.canonical AND state.read_status = 'success' AND state.read_result->>'lastPositionId' ~ '^[0-9]+$'
 						ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1
@@ -349,7 +350,9 @@ const stateSnapshotTargetsFrom = async (sql: SQL, chainId: number, throughBlock:
 					WHERE contract.chain_id = ${chainId} AND contract.canonical AND contract.kind = 'securityPoolCapitalLedger'
 				) ledger CROSS JOIN LATERAL generate_series(1::numeric, ledger.last_position_id) series(id)
 				WHERE NOT EXISTS (
-					SELECT 1 FROM entity_state_snapshots resolved WHERE resolved.chain_id = ${chainId} AND resolved.entity_type = 'capital-position'
+					SELECT 1 FROM entity_state_snapshots resolved
+					JOIN blocks block ON block.chain_id = resolved.chain_id AND block.hash = resolved.block_hash AND block.canonical
+					WHERE resolved.chain_id = ${chainId} AND resolved.entity_type = 'capital-position'
 						AND resolved.entity_identity = ledger.entity_identity || ':' || series.id::text AND resolved.canonical AND resolved.read_status = 'success')
 				UNION ALL
 				-- An owner is known from a capital event that names it or from the read of one of its positions.
@@ -359,6 +362,7 @@ const stateSnapshotTargetsFrom = async (sql: SQL, chainId: number, throughBlock:
 					WHERE chain_id = ${chainId} AND canonical AND entity_type = 'vault'
 					UNION
 					SELECT resolved.read_result->>'ledger' || ':' || (resolved.read_result->>'owner') FROM entity_state_snapshots resolved
+					JOIN blocks block ON block.chain_id = resolved.chain_id AND block.hash = resolved.block_hash AND block.canonical
 					WHERE resolved.chain_id = ${chainId} AND resolved.entity_type = 'capital-position' AND resolved.canonical AND resolved.read_status = 'success'
 						-- A position read outlives a projection rebuild; its owner is sampled only while the ledger is a registered contract.
 						AND EXISTS (SELECT 1 FROM contracts registered WHERE registered.chain_id = ${chainId} AND registered.canonical

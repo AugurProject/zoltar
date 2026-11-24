@@ -32,14 +32,17 @@ test('development server port defaults per app and accepts an explicit override'
 	expect(() => resolveDevServerPort('trading', '70000')).toThrow('Invalid UI_DEV_SERVER_PORT')
 })
 
-test('development server resolves files inside the app root first and never outside the configured roots', () => {
+test('development server restricts static files to browser assets', () => {
 	const roots = { repositoryRootDirectory: path.resolve('/repository'), uiRootDirectory: path.resolve('/repository/ui/zoltar') }
-	expect(getServedFilePaths('/', roots)).toEqual([path.resolve('/repository/ui/zoltar/index.html'), path.resolve('/repository/index.html')])
-	expect(getServedFilePaths('/js/index.js', roots)).toEqual([path.resolve('/repository/ui/zoltar/js/index.js'), path.resolve('/repository/js/index.js')])
+	expect(getServedFilePaths('/', roots)).toEqual([path.resolve('/repository/ui/zoltar/index.html')])
+	expect(getServedFilePaths('/js/index.js', roots)).toEqual([path.resolve('/repository/ui/zoltar/js/index.js')])
+	expect(getServedFilePaths('/ui/zoltar/js/simulation/tevmWorker.worker.js', roots)).toEqual([path.resolve('/repository/ui/zoltar/js/simulation/tevmWorker.worker.js')])
+	expect(getServedFilePaths('/ui/trading/js/index.js', roots)).toEqual([])
 	expect(getServedFilePaths('/shared/core/js/index.js', roots)).toEqual([path.resolve('/repository/shared/core/js/index.js')])
 	expect(getServedFilePaths('/../outside.txt', roots)).toEqual([])
 	expect(getServedFilePaths('/%2E%2E/outside.txt', roots)).toEqual([])
-	expect(getServedFilePaths('/../zoltar/index.html', roots)).toEqual([path.resolve('/repository/ui/zoltar/index.html')])
+	expect(getServedFilePaths('/ui/coreShared/css/index.css', roots)).toEqual([path.resolve('/repository/ui/coreShared/css/index.css')])
+	expect(getServedFilePaths('/notes.txt', roots)).toEqual([])
 })
 
 test('development server maps file extensions to MIME types and omits unknown types', () => {

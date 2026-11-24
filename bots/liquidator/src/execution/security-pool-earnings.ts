@@ -4,7 +4,7 @@ import type { SecurityPoolObservation } from '#monitoring/security-pool-monitor'
 import type { RuntimeState } from '#state/operator-state'
 import { securityPoolCapitalLedgerAbi as capitalAbi } from '@zoltar/bot-shared/contracts/abi'
 import { encodeFunctionData, type Account, type Chain, type Transport, type WalletClient, type createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
-import { SecurityPoolOpportunityExpired, refreshSecurityPoolExecution } from './security-pool-executor.ts'
+import { SecurityPoolGasBudgetExceeded, SecurityPoolOpportunityExpired, refreshSecurityPoolExecution } from './security-pool-executor.ts'
 import { submitCall } from './submit-call.ts'
 
 type Wallet = WalletClient<Transport, Chain, Account>
@@ -35,7 +35,7 @@ export async function executeSecurityPoolEarnings(wallet: Wallet, settings: Oper
 			preSubmit: refresh,
 			revalidateSimulationRevert: refresh,
 			gasBudgetExceeded: () => {
-				throw new SecurityPoolOpportunityExpired('Estimated earnings claim gas exceeds the configured budget')
+				throw new SecurityPoolGasBudgetExceeded('Estimated earnings claim gas exceeds the configured budget')
 			},
 		},
 		'fees',

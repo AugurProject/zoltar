@@ -36,6 +36,20 @@ export async function storedBlockTip(this: ScannerDatabase, chainId: number, lea
 	})
 }
 
+/** An interpretation replay keeps direct samples. Their sparse block anchors need a fresh chain read. */
+export async function retainedEntitySampleBlocks(this: ScannerDatabase, chainId: number, start: bigint, end: bigint, lease?: IndexerLease): Promise<readonly bigint[]> {
+	return await withOptionalIndexerLease(this.sql, lease, async sql => {
+		const rows = await sql`
+			SELECT DISTINCT sample.block_number
+			FROM entity_state_observations sample
+			JOIN blocks block ON block.chain_id = sample.chain_id AND block.hash = sample.block_hash AND NOT block.canonical
+			WHERE sample.chain_id = ${chainId} AND sample.canonical AND sample.block_number BETWEEN ${start.toString()} AND ${end.toString()}
+			ORDER BY sample.block_number
+		`
+		return rows.map((row: Record<string, unknown>) => BigInt(String(row['block_number'])))
+	})
+}
+
 export async function canonicalHash(this: ScannerDatabase, chainId: number, number: bigint, lease?: IndexerLease): Promise<Hash | undefined> {
 	return await withOptionalIndexerLease(this.sql, lease, async sql => {
 		const rows = await sql`SELECT hash FROM blocks WHERE chain_id = ${chainId} AND number = ${number.toString()} AND canonical`

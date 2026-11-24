@@ -154,9 +154,19 @@ contract SecurityPoolForkHarness {
 		clocks[0] = Clock(0, 0, true, true);
 	}
 	receive() external payable {}
+	mapping(address => uint256) private assignedCapitalCash;
+
 	function _creditFees(uint248 u, uint256 amount) private {
-		collateralToken.approve(address(capitalLedger[u]), amount);
-		capitalLedger[u].creditTimedFees(amount);
+		SecurityPoolCapitalLedger capital = capitalLedger[u];
+		assignedCapitalCash[address(capital)] += amount;
+		capital.creditDeferredTimedFees(amount);
+	}
+
+	function withdrawCapitalCash() external {
+		uint256 amount = assignedCapitalCash[msg.sender];
+		require(amount != 0, 'No assigned capital cash');
+		assignedCapitalCash[msg.sender] = 0;
+		require(collateralToken.transfer(msg.sender, amount), 'Capital cash transfer failed');
 	}
 
 	function initialize(SecurityPoolSettlement engine, SecurityPoolSettlementBook book, SecurityPoolReporterLedger reporter, address coordinator) external {

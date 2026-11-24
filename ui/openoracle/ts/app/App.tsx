@@ -15,7 +15,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { resolveEnumValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import { setFormField } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import { createSecondaryNavigation, withDeploymentTab } from '@zoltar/ui-core-shared/navigation/appNavigation.js'
-import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
+import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch, getTopLevelRouteSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { readOpenOracleReportIdQueryParam, readOpenOracleViewQueryParam, writeOpenOracleReportIdQueryParam, writeOpenOracleViewQueryParam } from '@zoltar/ui-core-shared/navigation/openOracleUrlParams.js'
 import { hasInvalidViewQueryParam } from '@zoltar/ui-core-shared/navigation/viewQueryParam.js'
 import { useProtocolAppShell } from '@zoltar/ui-zoltar-shared/features/appShell/hooks/useProtocolAppShell.js'
@@ -42,7 +42,7 @@ export function App() {
 	const invalidView = hasInvalidViewQueryParam({ allowedRoutes: ['open-oracle'], allowedViews: views, key: 'openOracleView', resolvedRoute: route, search: getRouteHashSearch(), value: state.view })
 	const activeRoute = invalidView ? 'not-found' : route
 	const shell = useProtocolAppShell({
-		deploymentRoute: { deploymentCompleteHref: '#/open-oracle', deploymentCompleteLabel: appCopy.browseReports, getSections: getOpenOracleDeploymentSections },
+		deploymentRoute: { deploymentCompleteHref: buildRouteHref('#/open-oracle', getTopLevelRouteSearch('deploy')), deploymentCompleteLabel: appCopy.browseReports, getSections: getOpenOracleDeploymentSections },
 		initializeEnvironment: options => initializeOpenOracleActiveEnvironment(window.location, options),
 		isDeploymentRoute: route === 'deploy',
 		onchainStateDependencies,

@@ -9,6 +9,7 @@ import { availableExecutionObservations, liquidationExecutionSnapshotObservation
 import { canonicalBlockHash, chainFor } from '#monitoring/operator-chain'
 import { scanSecurityPoolContext } from '#monitoring/security-pool-context'
 import { recordActivity, saveDurableState } from '#state/operator-state'
+import { securityPoolScanMetrics } from '#state/security-pool-view'
 import { recordSystemDeploymentCheck } from '../core/deployment-observation.ts'
 import { createLiquidatorScanReport, cycleFailureMessage, runningStatus } from '../monitoring/scan-status.ts'
 import { createPublicClient } from '@zoltar/bot-shared/ethereum'
@@ -63,6 +64,13 @@ export function unscannablePollResult(once: boolean, reason: 'unconfigured' | 'u
 	return true
 }
 
+/** @internal Tests verify that RPC lag does not reset discovery. */
+export async function checkScanHead(...parameters: Parameters<typeof clearOrphanedDexEvidenceForHeadReplacement>) {
+	const [previous, current] = parameters
+	if (previous.number !== undefined && current.number < previous.number) return 'lagging'
+	return (await clearOrphanedDexEvidenceForHeadReplacement(...parameters)) ? 'replaced' : 'current'
+}
+
 /** The scan cycle body; resolves to the poll loop's stop decision, or `'deferred'` while the system is undeployed. */
 async function scanAndAct(runtime: LiquidatorRuntime, deps: LiquidatorDeps, scanReport: ReturnType<typeof createLiquidatorScanReport>, markScanCompleted: () => void): Promise<boolean | 'deferred'> {
 	const { shutdown, state } = deps
@@ -80,11 +88,15 @@ async function scanAndAct(runtime: LiquidatorRuntime, deps: LiquidatorDeps, scan
 	if (shutdown.isRequested()) return true
 	const scannedBlock = primary.block
 	scanReport.update({ block: scannedBlock.number })
-	const replacedMarketHead = await clearOrphanedDexEvidenceForHeadReplacement({ hash: state.lastScannedBlockHash, number: state.lastScannedBlock }, { hash: scannedBlock.hash, number: scannedBlock.number }, state, previousBlockNumber => canonicalBlockHash(runtime.settings, previousBlockNumber, runtime.readPool))
+	const scanHead = await checkScanHead({ hash: state.lastScannedBlockHash, number: state.lastScannedBlock }, { hash: scannedBlock.hash, number: scannedBlock.number }, state, previousBlockNumber => canonicalBlockHash(runtime.settings, previousBlockNumber, runtime.readPool))
+	if (scanHead === 'lagging') {
+		scanReport.update({ status: 'waiting' })
+		return shouldStopAfterSuccessfulCycle(runtime.settings.runtime.once)
+	}
 	state.lastScannedBlock = scannedBlock.number
 	state.lastScannedBlockHash = scannedBlock.hash
 	state.lastScannedTimestamp = scannedBlock.timestamp
-	if (replacedMarketHead) {
+	if (scanHead === 'replaced') {
 		state.securityPoolScopes = state.securityPoolScopes.map(scope => ({ ...scope, nextPositionId: 1n, sweepEnd: 0n, retirementObservations: [] }))
 		recordActivity(state, {
 			details: `block=${scannedBlock.number.toString()}`,
@@ -196,7 +208,10 @@ export async function runPollCycle(runtime: LiquidatorRuntime, deps: LiquidatorD
 		await recordCycleFailure(runtime, deps, error)
 		throw error
 	} finally {
-		if (scanCompleted) scanReport.update({ status: state.paused ? 'paused' : 'live', details: { pools: state.pools.length, candidates: state.pools.reduce((count, pool) => count + pool.candidates.length, 0), pendingTransactions: state.pendingTransactions.length } })
+		if (scanCompleted) {
+			const { poolCount, candidateCount } = securityPoolScanMetrics(state, runtime.settings)
+			scanReport.update({ status: state.paused ? 'paused' : 'live', details: { pools: poolCount, candidates: candidateCount, pendingTransactions: state.pendingTransactions.length } })
+		}
 		await scanReport.finish(shutdown.isRequested() ? 'incomplete' : undefined)
 		state.scanning = false
 	}

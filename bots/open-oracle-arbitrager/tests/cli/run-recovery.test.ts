@@ -276,16 +276,21 @@ function entryReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly big
 	return receiptClients(blockNumber, 'success', [log], transactionHash, headBlockNumbers ?? [blockNumber + 12n, blockNumber + 12n])
 }
 
-function replacementCreditReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly bigint[] | undefined, credit: { amount: bigint; token: Hex } = { amount: 2n * 10n ** 18n, token: weth }) {
+function replacementCreditReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly bigint[] | undefined, credit: { amount: bigint; token: Hex } = { amount: 2n * 10n ** 18n, token: weth }, residual?: { amount: bigint; token: Hex }) {
 	const account = getAddress('0x0000000000000000000000000000000000000002')
-	const topics = encodeEventTopics({
-		abi: openOracleArbitrageExecutorAbi,
-		eventName: 'ReplacementCreditWithdrawn',
-		args: { account, reportId: 7n, token: credit.token },
-	})
-	if (topics.some(topic => topic === null)) throw new Error('Replacement-credit event topics are incomplete')
-	const data = encodeAbiParameters([{ name: 'amount', type: 'uint256' }], [credit.amount])
-	return executorEventReceiptClients(topics, data, blockNumber, headBlockNumbers)
+	const credits = residual === undefined ? [credit] : [credit, residual]
+	const logs = credits.map((credit, index) => ({
+		address: executor,
+		blockHash: `0x${'aa'.repeat(32)}`,
+		blockNumber: `0x${blockNumber.toString(16)}`,
+		data: encodeAbiParameters([{ name: 'amount', type: 'uint256' }], [credit.amount]),
+		logIndex: `0x${index.toString(16)}`,
+		removed: false,
+		topics: encodeEventTopics({ abi: openOracleArbitrageExecutorAbi, eventName: 'ReplacementCreditWithdrawn', args: { account, reportId: 7n, token: credit.token } }),
+		transactionHash: lifecycleTransactionHash,
+		transactionIndex: '0x0',
+	}))
+	return receiptClients(blockNumber, 'success', logs, lifecycleTransactionHash, headBlockNumbers)
 }
 
 function successfulMismatchedIntentClients(receiptTransactionHash = transactionHash) {
@@ -666,6 +671,19 @@ describe('atomic lifecycle crash recovery', () => {
 		expect(finalized.lifecycleTransactionHashes).toEqual([])
 	})
 
+	test('requires receipt evidence for both replacement collateral and dispute-time token2 credit', async () => {
+		const credit = { amount: 2n * 10n ** 18n, token: weth }
+		const residual = { amount: 3n * 10n ** 17n, token }
+		const position = withdrawingPosition({ lifecycleKind: 'replacement-credit', replacementCreditAmount: credit.amount.toString(), replacementCreditToken: weth, replacementResidualTokenAmount: residual.amount.toString() })
+		const incomplete = await recoverPendingLifecycleWithQuorum(replacementCreditReceiptClients(100n, undefined, credit), recoveryConfiguration, position, 100n)
+		expect(incomplete.status).toBe('recovery-required')
+		const clients = replacementCreditReceiptClients(100n, undefined, credit, residual)
+		const provisional = await recoverPendingLifecycleWithQuorum(clients, recoveryConfiguration, position, 100n)
+		expect(provisional).toMatchObject({ status: 'closed-pending-finality', withdrawnWeth: '2', withdrawnToken: '0.3' })
+		const finalized = await finalizeLifecycleAfterFinalityWithQuorum(clients, recoveryConfiguration, provisional, 112n)
+		expect(finalized).toMatchObject({ status: 'replaced', withdrawnWeth: '2', withdrawnToken: '0.3' })
+	})
+
 	test('classifies fewer than two available finality descendants as degraded connectivity', async () => {
 		const position = withdrawingPosition()
 		const quorumTwoConfiguration = { ...recoveryConfiguration, rpcQuorum: 2 as const }
@@ -796,7 +814,7 @@ test('keeps a durable position through read disagreement and records agreed entr
 			}),
 		)
 		const config = { ...(await loadConfiguration(settingsFile)), executor }
-		const position = openPositionFixture({ account: localAccount.address, entryReceiptBlockHash: receiptHash, entryReceiptBlockNumber: '100', status: 'open-pending-finality', executionIntent: executionIntentFixture() })
+		const position = openPositionFixture({ account: localAccount.address, entryReceiptBlockHash: receiptHash, entryReceiptBlockNumber: '100', status: 'open-pending-finality', executionIntent: executionIntentFixture(), reportAmount1: '1', reportAmount2: '2', reportDisputeIndex: '0', reportFeePercentage: '0' })
 		await savePositionJournal(journal, [position], 1)
 		let mode: 'disagree' | 'agree' = 'disagree'
 		let reads = 0

@@ -5,7 +5,6 @@ import { capSubmissionDeadline } from '../../protocol/submissionWindow.js'
 import * as workflowCopy from '../../copy/workflows.js'
 import { useEffect, useState } from 'preact/hooks'
 import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
-import { SHARE_QUANTITY_DECIMALS } from '../../lib/shareValue.js'
 import { marketAcceptsNewRisk, type LiquidityOperation, type LiveMarket } from '../../protocol/live.js'
 import * as liquidityCopy from '../../copy/liquidity.js'
 import type { LiveLiquidityServices } from '../LiveLiquidityControls.js'
@@ -60,8 +59,7 @@ export function useLiquidityWorkflowController({
 	const [operation, setOperation] = useState<LiquidityOperation>(() => defaultLiquidityOperation(market, nowSeconds))
 	const [amount, setAmount] = useState('')
 	const [probability, setProbability] = useState('50')
-	// ETH deposits and fixed-scale LP quantities use different decimal precisions.
-	const parsed = tryParseNonNegativeDecimalInput(amount.trim(), operation === 'remove' ? SHARE_QUANTITY_DECIMALS : collateralAsset(market).decimals)
+	const parsed = tryParseNonNegativeDecimalInput(amount.trim(), collateralAsset(market).decimals)
 	const parsedProbability = tryParseNonNegativeDecimalInput(probability.trim(), 2)
 	const conditionalBps = parsedProbability !== undefined && parsedProbability > 0n && parsedProbability < 10_000n ? parsedProbability : undefined
 	const operationAvailable = liquidityOperationAvailable(operation, market, nowSeconds)
@@ -82,11 +80,13 @@ export function useLiquidityWorkflowController({
 	const bounds = estimate === undefined ? undefined : liquiditySlippageBounds(liquidityExpectation(estimate), settings.slippageBps)
 	let previewBlocker: string | undefined
 	const recoveryBlocker = operation === 'remove' ? undefined : recoveryMintBlocker(market)
+	const mintAmount = operation === 'remove' || parsed === undefined ? undefined : estimateBudgetMint(market, parsed)
 	if (recoveryBlocker !== undefined) previewBlocker = recoveryBlocker
+	else if (mintAmount !== undefined && mintAmount > market.availableMintingCapacityAttoEth) previewBlocker = liquidityCopy.mintingCapacityExceeded
 	else if (estimate === undefined || bounds === undefined) {
 		if (parsed !== undefined && parsed > 0n) previewBlocker = operation === 'remove' ? liquidityCopy.removalAmountTooSmall : liquidityCopy.initialAmountTooSmall
 	} else if (estimate.operation === 'add')
-		previewBlocker = liquidityHoldingFeeBlocker(market, estimateBudgetMint(market, estimate.amount) ?? 0n, bounds.maximumYesDeposit, bounds.maximumNoDeposit, capSubmissionDeadline(market, 'add', nowSeconds + settings.validityMinutes * 60n), {
+		previewBlocker = liquidityHoldingFeeBlocker(market, mintAmount ?? 0n, bounds.maximumYesDeposit, bounds.maximumNoDeposit, capSubmissionDeadline(market, 'add', nowSeconds + settings.validityMinutes * 60n), {
 			completeSetShares: estimate.completeSets,
 			yesUsed: estimate.yesUsed,
 			noUsed: estimate.noUsed,

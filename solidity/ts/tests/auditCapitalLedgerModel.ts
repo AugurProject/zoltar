@@ -468,7 +468,7 @@ const takeover = (m: Model, o: number, id: bigint, k: bigint, minimumTakeoverRew
 	requireModel(source.owner !== o && source.price < m.liq, 'Position does not need takeover')
 	requireModel(k > 0n && k <= source.k, 'Invalid takeover commitment')
 	const start = source.auctionStart ?? started(m, id)
-	const paid = source.penaltyStarted === start ? (source.penaltyPaid ?? 0n) : 0n
+	const penaltyPaid = source.penaltyStarted === start ? (source.penaltyPaid ?? 0n) : 0n
 	// A cure limited by nominal spare continues into a receiver-funded repair.
 	if (cure(m, id, 0n, false, m.cons) !== 0n && (!inTree(source) || source.price >= m.cons)) {
 		return { cured: true, full: false, merged: false, takeoverReward: 0n, debit: 0n, sourceOwner: source.owner, sourceBatch: source.batch, receiverPrincipal: 0n, receiverCommitment: 0n }
@@ -476,16 +476,16 @@ const takeover = (m: Model, o: number, id: bigint, k: bigint, minimumTakeoverRew
 	requireModel(start !== 0n, 'Adverse observation missing')
 	requireModel(k > 0n, 'Invalid takeover commitment')
 	const elapsed = max(0n, m.now - start)
-	const vested = ((source.rep + paid) * min(elapsed, HOUR)) / HOUR
-	const offered = max(0n, vested - paid)
-	const supported = ((((source.rep - offered) * BPS) / MULTIPLIER) * WAD) / m.cons
+	const vestedPenalty = ((source.rep + penaltyPaid) * min(elapsed, HOUR)) / HOUR
+	const availableTakeoverReward = max(0n, vestedPenalty - penaltyPaid)
+	const supported = ((((source.rep - availableTakeoverReward) * BPS) / MULTIPLIER) * WAD) / m.cons
 	let fullK = source.k - min(source.k, supported)
 	if (source.k - fullK < MINC) fullK = source.k
 	requireModel(fullK !== 0n, 'Position does not need takeover')
 	k = min(k, fullK)
 	if (source.k - k !== 0n && source.k - k < MINC) k = source.k - min(source.k, MINC)
 	requireModel(k !== 0n, 'Takeover commitment below minimum')
-	const takeoverReward = (offered * k) / fullK
+	const takeoverReward = (availableTakeoverReward * k) / fullK
 	const remainingBacking = ((source.rep - takeoverReward) * BPS) / MULTIPLIER
 	requireModel(k === fullK || source.k - k <= (remainingBacking * WAD) / m.cons || source.k - k > (remainingBacking * WAD) / m.liq, 'Takeover would strand source between prices')
 	const debit = k === source.k ? source.rep : takeoverReward
@@ -515,7 +515,7 @@ const takeover = (m: Model, o: number, id: bigint, k: bigint, minimumTakeoverRew
 		requireModel(existingK + k <= bounds.maximumOwnerCommitment, 'Takeover owner commitment exceeds limit')
 	}
 	source.penaltyStarted = start
-	source.penaltyPaid = paid + takeoverReward
+	source.penaltyPaid = penaltyPaid + takeoverReward
 	source.rep = remainingRep
 	source.k = remainingK
 	source.price = maxHealthyPrice(remainingRep, remainingK)

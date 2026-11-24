@@ -42,7 +42,7 @@ export function useOwnForkTrigger({ active, onForked, parameters, question, refr
 	const admission = useSignal<{ key: string; value: OwnForkAdmission } | undefined>(undefined)
 	const admissionError = useSignal<string | undefined>(undefined)
 	const admissionLoading = useSignal(false)
-	const actionError = useSignal<string | undefined>(undefined)
+	const actionError = useSignal<{ key: string; message: string } | undefined>(undefined)
 	const approvePending = useSignal(false)
 	const forkPending = useSignal(false)
 	const reloadCount = useSignal(0)
@@ -50,6 +50,17 @@ export function useOwnForkTrigger({ active, onForked, parameters, question, refr
 	const admissionKey = `${poolAddress ?? ''}:${parameters.accountAddress ?? ''}`
 	const admissionKeyRef = useRef(admissionKey)
 	admissionKeyRef.current = admissionKey
+	useEffect(() => {
+		actionError.value = undefined
+	}, [admissionKey, actionError])
+	const forkActionError = {
+		get value() {
+			return actionError.value?.key === admissionKey ? actionError.value.message : undefined
+		},
+		set value(message: string | undefined) {
+			if (admissionKeyRef.current === admissionKey) actionError.value = message === undefined ? undefined : { key: admissionKey, message }
+		},
+	}
 	useEffect(() => {
 		if (!active || poolAddress === undefined) return
 		let current = true
@@ -80,7 +91,7 @@ export function useOwnForkTrigger({ active, onForked, parameters, question, refr
 		approvePending.value = true
 		try {
 			await runWriteAction(
-				buildWriteActionConfig(writeParameters, actionError, commonCopy.formatConnectWalletBefore('approving fork admission REP'), { action: 'approveForkAdmission', source: 'Question reporting', submittedTitle: copy.approveForkAdmission, universeId }),
+				buildWriteActionConfig(writeParameters, forkActionError, commonCopy.formatConnectWalletBefore('approving fork admission REP'), { action: 'approveForkAdmission', source: 'Question reporting', submittedTitle: copy.approveForkAdmission, universeId }),
 				async (account, context) => ({ hash: await dependencies.approveOwnForkAdmission(account, writeCallbacks(context), poolAddress, amountAttoRep) }),
 				'Unable to approve fork admission REP.',
 				result => {
@@ -98,7 +109,7 @@ export function useOwnForkTrigger({ active, onForked, parameters, question, refr
 		forkPending.value = true
 		try {
 			await runWriteAction(
-				buildWriteActionConfig(writeParameters, actionError, commonCopy.formatConnectWalletBefore('triggering a universe fork'), { action: 'forkQuestion', source: 'Question reporting', submittedTitle: copy.triggerUniverseFork, universeId }),
+				buildWriteActionConfig(writeParameters, forkActionError, commonCopy.formatConnectWalletBefore('triggering a universe fork'), { action: 'forkQuestion', source: 'Question reporting', submittedTitle: copy.triggerUniverseFork, universeId }),
 				// The protocol call rereads the shortfall and allowance before sending, since REP supply can grow after this view loaded.
 				async (account, context) => ({ hash: await dependencies.forkWithOwnEscalationGame(account, writeCallbacks(context), poolAddress) }),
 				'Unable to trigger the universe fork.',
@@ -125,5 +136,5 @@ export function useOwnForkTrigger({ active, onForked, parameters, question, refr
 		recommendedAmount: currentAdmission?.recommendedApprovalAttoRep,
 		requiredAmount: currentAdmission?.shortfallAttoRep,
 	}
-	return { approval, error: actionError.value, forkPending: forkPending.value, triggerFork, triggerForkAvailability }
+	return { approval, error: forkActionError.value, forkPending: forkPending.value, triggerFork, triggerForkAvailability }
 }

@@ -839,7 +839,7 @@ const createDriver = (getEthereum: ReturnType<typeof useIsolatedAnvilNode>['getA
 			),
 		)
 		const repBalances = [...addresses, ledger, harness].map(address => balance(token, address))
-		const wethBalances = [...addresses, ledger, burnAddress].map(address => balance(weth, address))
+		const wethBalances = [...addresses, ledger, burnAddress, harness].map(address => balance(weth, address))
 		const [aggregate, timestamp] = await Promise.all([adminClient().readContract({ abi: multicallArtifact.abi, address: multicall, functionName: 'aggregate3', args: [batch] }), latestTimestamp()])
 		returned = aggregate
 		return {
@@ -1001,10 +1001,11 @@ const compare = (m: Model, a: Snapshot, owners: number, addressOf: (o: number) =
 	const ledgerRep = a.repBalances[owners]
 	const ledgerEth = a.wethBalances[owners]
 	const burnedEth = a.wethBalances[owners + 1]
-	if (ledgerRep === undefined || ledgerEth === undefined || burnedEth === undefined) throw new Error('Balance read missing')
-	// (a) custody: every REP and collateral unit the ledger holds has exactly one claimant.
+	const serviceEth = a.wethBalances[owners + 2]
+	if (ledgerRep === undefined || ledgerEth === undefined || burnedEth === undefined || serviceEth === undefined) throw new Error('Balance read missing')
+	// (a) custody: every held REP and collateral unit has exactly one claimant, including cash held by the fee service until withdrawal.
 	check('CONSERVATION.rep', ledgerRep + (m.backingReleased ? m.frozenBacking : 0n), a.indexTotals[0] + a.totalFree + a.retirementCash + pendingRep + ownerRep + a.mockRep + a.outstandingRep + a.deferredRep)
-	check('CONSERVATION.eth', ledgerEth, pendingEth + ownerEth + a.mockEth + a.outstandingEth + a.deferredEth + a.pendingBurn)
+	check('CONSERVATION.eth', ledgerEth + serviceEth, pendingEth + ownerEth + a.mockEth + a.outstandingEth + a.deferredEth + a.pendingBurn)
 	// (c) every funded unit is credited, still vesting, or burned: no dust is created or lost.
 	check('FEES.totalEth', pendingEth + ownerEth + a.mockEth + earnedEth + burnedEth + a.outstandingEth + a.deferredEth + a.pendingBurn, m.fundedEth)
 	check('FEES.unassignedEth', burnedEth + a.pendingBurn, m.unassignedEth)

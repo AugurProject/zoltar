@@ -223,13 +223,16 @@ export function useSecurityPoolPrice({ scope, target, bidder, actions, reference
 				version.value += 1
 			},
 		)
-	const freshFunding = (latest: SecurityPoolPriceSnapshot) => {
+	const freshFunding = (latest: SecurityPoolPriceSnapshot, submitsRequest = false) => {
 		if (!latest.reportingOpen) throw new Error(scoped.closed)
 		if (reportingDeadline !== undefined && latest.observation !== undefined && latest.timestamp + latest.observation.settlementSeconds >= reportingDeadline) throw new Error(copy.tooLate)
 		if (price === undefined || requestedWeth === undefined || funding === undefined) throw new Error(copy.priceInvalid)
 		const fresh = quoteSecurityPoolPriceFunding(latest, price, requestedWeth)
-		if (fresh.weth !== funding.weth || fresh.rep !== funding.rep || fresh.bounty !== funding.bounty) throw new Error('Report funding changed. Refresh and review the new amounts.')
-		return fresh
+		if (fresh.weth !== funding.weth || fresh.rep !== funding.rep || (submitsRequest && fresh.bounty > funding.bounty)) {
+			version.value += 1
+			throw new Error('Report funding changed. Review the updated amounts before trying again.')
+		}
+		return submitsRequest ? { ...fresh, bounty: funding.bounty, requiredEth: fresh.wrap + funding.bounty } : fresh
 	}
 	const withReport = (build: (selected: SecurityPoolPriceSnapshot, selectedReport: SecurityPoolPriceReport) => SecurityPoolTransaction) => (selected: SecurityPoolPriceSnapshot) => {
 		if (report === undefined) throw new Error(copy.noReport)
@@ -348,7 +351,7 @@ export function useSecurityPoolPrice({ scope, target, bidder, actions, reference
 					}
 				},
 				async latest => {
-					const fresh = freshFunding(latest)
+					const fresh = freshFunding(latest, true)
 					const observation = latest.observation
 					if (observation === undefined || observation.wethBalanceAttoEth < fresh.weth || observation.repBalanceAttoRep < fresh.rep || latest.ethBalanceAttoEth < fresh.bounty) throw new Error('Wallet report funding is insufficient.')
 					if (observation.wethAllowanceAttoEth < fresh.weth || observation.repAllowanceAttoRep < fresh.rep) throw new Error(copy.approvalRequired)

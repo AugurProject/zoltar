@@ -5,7 +5,7 @@ import { createNetworkIndexer } from '../../src/indexer/network-state.ts'
 import { indexBlock } from '../../src/indexer/ingestion-operations.ts'
 import { poll, type PollOperations } from '../../src/indexer/network-synchronization.ts'
 
-for (const mode of ['quiet', 'events', 'event-reorg'] as const) {
+for (const mode of ['quiet', 'retained-sample', 'events', 'event-reorg'] as const) {
 	test(`indexes a 100000-block ${mode} range with sparse checkpoints`, async () => {
 		const database = new ScannerDatabase('postgres://unused')
 		const indexer = createNetworkIndexer({ id: 'sepolia', name: 'Sepolia', chainId: 11_155_111, rpcUrls: ['http://unused.invalid'], startBlock: 10n, confirmationDepth: 12n, explorerBaseUrl: '', nativeSymbol: 'ETH', contracts: [] }, database, new AbortController().signal)
@@ -13,7 +13,7 @@ for (const mode of ['quiet', 'events', 'event-reorg'] as const) {
 		indexer.lease = { backendPid: 1, connection: Object.assign(database.sql, { async release() {}, [Symbol.dispose]() {} }), assertHeld: async () => {}, release: async () => {} }
 		const header = (number: bigint) => ({ hash: toHex(number, { size: 32 }), parentHash: toHex(number - 1n, { size: 32 }), timestamp: 1_700_000_000n + number })
 		const contracts = new Map([[zeroAddress, { address: zeroAddress, label: 'Oracle', kind: 'openOracle', provenance: 'manifest', deploymentBlock: 10n, deploymentBlockExact: true }]])
-		const logs = mode === 'quiet' ? [] : [10n, 50n].map(number => ({ address: zeroAddress, blockNumber: number, blockHash: header(number).hash, transactionHash: toHex(number + 1_000n, { size: 32 }), transactionIndex: 0n, logIndex: 0n, topics: [zeroHash], data: '0x' as const }))
+		const logs = mode === 'quiet' || mode === 'retained-sample' ? [] : [10n, 50n].map(number => ({ address: zeroAddress, blockNumber: number, blockHash: header(number).hash, transactionHash: toHex(number + 1_000n, { size: 32 }), transactionIndex: 0n, logIndex: 0n, topics: [zeroHash], data: '0x' as const }))
 		const stored: IndexedBlock[] = []
 		const fullBlocks = spyOn(indexer.providers.client, 'getBlock').mockImplementation(async () => {
 			throw new Error('Unexpected full-block read')
@@ -27,6 +27,7 @@ for (const mode of ['quiet', 'events', 'event-reorg'] as const) {
 			spyOn(database, 'contracts').mockResolvedValue(contracts),
 			spyOn(database, 'tokenMetadata').mockResolvedValue(new Map()),
 			spyOn(database, 'logScanCursors').mockResolvedValue(new Map()),
+			spyOn(database, 'retainedEntitySampleBlocks').mockResolvedValue(mode === 'retained-sample' ? [25n] : []),
 			spyOn(indexer.providers.client, 'getBlockNumber').mockResolvedValue(100_009n),
 			spyOn(indexer.providers.client, 'getTransaction').mockImplementation(async ({ hash }) => {
 				transactionReads.push(hash)
@@ -56,7 +57,7 @@ for (const mode of ['quiet', 'events', 'event-reorg'] as const) {
 		}
 		try {
 			expect(await poll(indexer, operations)).toBe(mode !== 'event-reorg')
-			const expectedBlocks = { quiet: [100_009n], 'event-reorg': [], events: [10n, 50n, 100_009n] }[mode]
+			const expectedBlocks = { quiet: [100_009n], 'retained-sample': [25n, 100_009n], 'event-reorg': [], events: [10n, 50n, 100_009n] }[mode]
 			expect(stored.map(block => block.number)).toEqual(expectedBlocks)
 			if (mode !== 'event-reorg') expect(stored.at(-1)?.logScanCursors).toEqual([{ contractAddress: zeroAddress, startBlock: 10n, lastRetrievedBlock: 100_009n }])
 			expect(transactionReads).toEqual(logs.map(log => log.transactionHash))

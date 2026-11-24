@@ -1,9 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { RpcError } from '@zoltar/bot-shared/ethereum'
 import { shouldStopAfterSuccessfulCycle } from '../../src/core/cycle-control.ts'
-import { assertExecutionActive, assertGasCostLimitForBaseFee, requireFinalizedTransactionReceipt, setExecutionShutdownCheck } from '../../src/execution/execution-safety.ts'
+import { assertExecutionActive, requireFinalizedTransactionReceipt, setExecutionShutdownCheck } from '../../src/execution/execution-safety.ts'
 import { initialRuntimeState } from '../../src/state/operator-state.ts'
-import { maximumFeePerGas, paddedTransactionGas } from '@zoltar/bot-shared/execution/transaction-submission'
 import { availableExecutionObservations, liquidationExecutionSnapshotObservation } from '../../src/monitoring/execution-quorum.ts'
 
 describe('liquidator execution safety', () => {
@@ -81,14 +80,5 @@ describe('liquidator execution safety', () => {
 			dependentTransactionStarted = true
 		}).toThrow('awaiting canonical finality')
 		expect(dependentTransactionStarted).toBe(false)
-	})
-
-	test('applies the exact signed-transaction fee horizon to the gas-cap precheck', () => {
-		const baseFeePerGas = 10n * 10n ** 9n
-		const capThatOnlyCoversTheFormerDoubleBaseFeeEstimate = 3_000_000_000_000_000n
-		expect(() => assertGasCostLimitForBaseFee(100_000n, baseFeePerGas, capThatOnlyCoversTheFormerDoubleBaseFeeEstimate)).toThrow('maximumGasCostEth')
-		const paddedCeiling = paddedTransactionGas(100_000n) * maximumFeePerGas(baseFeePerGas)
-		expect(() => assertGasCostLimitForBaseFee(100_000n, baseFeePerGas, paddedCeiling)).not.toThrow()
-		expect(() => assertGasCostLimitForBaseFee(100_000n, baseFeePerGas, paddedCeiling - 1n)).toThrow('maximumGasCostEth')
 	})
 })

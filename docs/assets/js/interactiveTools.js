@@ -24,16 +24,19 @@ async function copyText(value) {
 var presetDefinitions = {
   "escalation-game-example": [
     {
+      id: "leader-deposit",
       label: "Leader deposit does not extend",
-      values: { days: "7", invalid: "1", no: "1", yes: "4" }
+      values: { days: "7", depositOutcome: "yes", invalid: "1", no: "2", yes: "4" }
     },
     {
+      id: "median-increase",
       label: "Median increases",
-      values: { days: "7", invalid: "1", no: "4", yes: "4" }
+      values: { days: "7", depositOutcome: "no", invalid: "1", no: "2", yes: "4" }
     },
     {
+      id: "after-deadline",
       label: "After the deadline",
-      values: { days: "56", invalid: "1", no: "4", yes: "4" }
+      values: { days: "56", depositOutcome: "no", invalid: "1", no: "2", yes: "4" }
     }
   ],
   "initial-report-estimator-example": [
@@ -179,6 +182,8 @@ function createToolbar(tool) {
     const button = document.createElement("button");
     button.type = "button";
     button.dataset["presetIndex"] = String(index);
+    if (preset.id !== undefined)
+      button.dataset["scenario"] = preset.id;
     button.textContent = preset.label;
     button.setAttribute("aria-pressed", "false");
     button.addEventListener("click", () => {

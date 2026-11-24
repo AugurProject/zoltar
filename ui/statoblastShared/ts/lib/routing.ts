@@ -18,7 +18,7 @@ const STATOBLAST_ROUTING_CONFIG: RoutingConfig<NavigableStatoblastRoute> = {
 		const nextSearch = updateSearchParams(search, next => next.delete('poolsView'))
 		if (route === 'pools') {
 			if (isHexAddressInput(address)) return buildRouteHref(buildPoolsRouteHash({ questionLedgerAddress: address, view: 'operate' }), nextSearch)
-			const rememberedView = resolveEnumValue(params.get('poolsView') ?? '', 'browse', ['browse', 'create', 'universes', 'migrate'])
+			const rememberedView = resolveEnumValue(params.get('poolsView') ?? '', 'browse', ['browse', 'universes', 'migrate'])
 			const view = current !== undefined && current.view !== 'operate' ? current.view : rememberedView
 			return buildRouteHref(buildPoolsRouteHash({ view }), nextSearch)
 		}
@@ -39,7 +39,7 @@ const STATOBLAST_ROUTING_CONFIG: RoutingConfig<NavigableStatoblastRoute> = {
 	routes: [
 		{ hash: '#/deploy', name: 'deploy', queryParameters: new Set(STATOBLAST_CONTEXT_QUERY_PARAMS) },
 		// The questions route lands on Browse questions.
-		{ hash: POOLS_ROUTE_HASH, name: 'pools', queryParameters: new Set(['questionId', ...STATOBLAST_CONTEXT_QUERY_PARAMS]) },
+		{ hash: POOLS_ROUTE_HASH, name: 'pools', queryParameters: new Set(STATOBLAST_CONTEXT_QUERY_PARAMS) },
 		{ match: routeHash => (parsePoolsRouteHash(routeHash) === undefined ? undefined : 'pools') },
 		{ hash: '#/security-pools', name: 'security-pools', queryParameters: new Set(['securityPool', 'owner', ...STATOBLAST_CONTEXT_QUERY_PARAMS]) },
 		{ hash: '#/open-oracle', name: 'open-oracle', queryParameters: new Set(STATOBLAST_CONTEXT_QUERY_PARAMS) },

@@ -370,7 +370,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	}
 	struct LiquidationPenalty {
 		uint48 started;
-		uint256 rep;
+		uint256 paidAttoRep;
 	}
 	mapping(uint96 => LiquidationPenalty) private liquidationPenalties;
 	uint256 public constant LIQUIDATION_AUCTION_DURATION = 1 hours;
@@ -378,7 +378,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	function liquidationPenaltyPaid(uint96 id) public view returns (uint256) {
 		return
 			liquidationPenalties[id].started == observationTimes[_distressObservation(id)]
-				? liquidationPenalties[id].rep
+				? liquidationPenalties[id].paidAttoRep
 				: 0;
 	}
 
@@ -395,7 +395,7 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		require(observation != 0, 'Adverse observation missing');
 		uint48 started = observationTimes[observation];
 		uint256 elapsed = block.timestamp - started;
-		uint256 paid = liquidationPenaltyPaid(id);
+		uint256 penaltyPaid = liquidationPenaltyPaid(id);
 		source = accountOf(id);
 		require(source.owner != receiver && source.maxHealthyPrice < price, 'Position does not need takeover');
 		require(requested > 0 && requested <= source.commitment, 'Invalid takeover commitment');
@@ -406,9 +406,9 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		// the source owner's free principal rather than transferred to the receiver.
 		cured.settled = cured.removed != 0 && (source.commitment == 0 || source.maxHealthyPrice >= repairPrice);
 		if (cured.settled) return (cured, source, 0, 0, 0);
-		uint256 vested = Math.mulDiv(source.rep + paid, Math.min(elapsed, LIQUIDATION_AUCTION_DURATION), LIQUIDATION_AUCTION_DURATION);
-		uint256 offered = vested > paid ? vested - paid : 0;
-		uint256 supported = Math.mulDiv(Math.mulDiv(source.rep - offered, 10_000, multiplier), 1e18, repairPrice);
+		uint256 vestedPenalty = Math.mulDiv(source.rep + penaltyPaid, Math.min(elapsed, LIQUIDATION_AUCTION_DURATION), LIQUIDATION_AUCTION_DURATION);
+		uint256 availableTakeoverReward = vestedPenalty > penaltyPaid ? vestedPenalty - penaltyPaid : 0;
+		uint256 supported = Math.mulDiv(Math.mulDiv(source.rep - availableTakeoverReward, 10_000, multiplier), 1e18, repairPrice);
 		uint256 fullCommitment = source.commitment - Math.min(source.commitment, supported);
 		if (source.commitment - fullCommitment < minimumCommitment) fullCommitment = source.commitment;
 		require(fullCommitment != 0, 'Position does not need takeover');
@@ -416,11 +416,11 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 		if (source.commitment - commitment != 0 && source.commitment - commitment < minimumCommitment)
 			commitment = source.commitment - Math.min(source.commitment, minimumCommitment);
 		require(commitment != 0, 'Takeover commitment below minimum');
-		takeoverReward = Math.mulDiv(offered, commitment, fullCommitment);
+		takeoverReward = Math.mulDiv(availableTakeoverReward, commitment, fullCommitment);
 		uint256 remainingBacking = Math.mulDiv(source.rep - takeoverReward, 10_000, multiplier);
 		require(commitment == fullCommitment || source.commitment - commitment <= Math.mulDiv(remainingBacking, 1e18, repairPrice) || source.commitment - commitment > Math.mulDiv(remainingBacking, 1e18, price), 'Takeover would strand source between prices');
 		debit = commitment == source.commitment ? source.rep : takeoverReward;
-		liquidationPenalties[id] = LiquidationPenalty(started, paid + takeoverReward);
+		liquidationPenalties[id] = LiquidationPenalty(started, penaltyPaid + takeoverReward);
 	}
 	function requiredRep(uint256 commitment, uint256 price, uint256 multiplier, uint256 health) public pure returns (uint256) {
 		require(health >= 10_000 && price > 0, 'Invalid health or price');

@@ -72,6 +72,33 @@ function fixture() {
 	}
 }
 
+test.each([false, true])('an unpaid cure refreshes the position it unlocks before signing (still profitable: %s)', async stillProfitable => {
+	const f = fixture()
+	const first = f.observation.positions[0]
+	if (first === undefined) throw new Error('Fixture position missing')
+	first.rep = 100n * unit
+	const second = { ...first, id: 2n }
+	f.observation.positions.push(second)
+	f.observation.snapshot.totalCommitmentAttoEth = 200n * unit
+	f.observation.snapshot.demandAttoEth = 195n * unit
+	let refreshes = 0
+	const refresh: typeof refreshSecurityPoolExecution = async (...parameters) => {
+		refreshes++
+		const unlocked = parameters[7]
+		const positions = unlocked === second.id && (refreshes === 1 || stillProfitable) ? [first, second] : [first]
+		return { observation: { ...f.observation, positions }, totalPrincipal: 0n, allowance: 0n }
+	}
+	const submit: typeof submitCall = async (_wallet, _settings, _state, _pool, call) => {
+		await call.preSubmit?.()
+		f.calls.push(call)
+		return confirmed
+	}
+	const result = executeSecurityPoolTakeover(f.wallet, f.settings, f.state, f.pool, f.observation, first.id, async () => true, { refresh, submit }, second.id)
+	if (stillProfitable) await result
+	else await expect(result).rejects.toThrow('Cure restores target health')
+	expect(f.calls).toHaveLength(stillProfitable ? 1 : 0)
+})
+
 test('security pool lifecycle needs only REP approval, deposit and bounded acquisition without ETH funding', async () => {
 	const fixtureValue = fixture()
 	await fixtureValue.run()

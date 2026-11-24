@@ -40,8 +40,8 @@ function formatCollateralValue(amountAttoShares: bigint, rate: ShareValueRate, m
 	return value > 0n && formatted === '0' ? `<${formatTrimmedUnits(1n, maximumFractionDigits, maximumFractionDigits)}` : formatted
 }
 
-/** LP tokens use their fixed ERC20 precision; outcome quantities follow their security pool collateral unit. */
-export const SHARE_QUANTITY_DECIMALS = 18
+/** Default quantity precision when collateral metadata is unavailable. */
+const SHARE_QUANTITY_DECIMALS = 18
 
 function formatShareQuantity(amount: bigint, maximumFractionDigits: number, rounding: ShareValueRounding, decimals = SHARE_QUANTITY_DECIMALS) {
 	if (amount < 0n) throw new Error('Share amounts cannot be negative')
@@ -56,9 +56,9 @@ export function formatOutcomeQuantity(amountAttoShares: bigint, outcome: 'YES' |
 	return `${formatShareQuantity(amountAttoShares, maximumFractionDigits, rounding, collateralAsset(market).decimals)} ${outcomeLabel(outcome)}`
 }
 
-/** LP quantities use a fixed scale too; their underlying reserve claims are displayed separately. */
-export function formatLpQuantity(amountLp: bigint, maximumFractionDigits = 2, rounding: ShareValueRounding = 'nearest') {
-	return `${formatShareQuantity(amountLp, maximumFractionDigits, rounding)} LP`
+/** LP minting uses the underlying shares’ base units. */
+export function formatLpQuantity(amountLp: bigint, maximumFractionDigits = 2, rounding: ShareValueRounding = 'nearest', market: CollateralMarket = {}) {
+	return `${formatShareQuantity(amountLp, maximumFractionDigits, rounding, collateralAsset(market).decimals)} LP`
 }
 
 export function formatCompleteSetQuantity(amountAttoShares: bigint, maximumFractionDigits = 2, rounding: ShareValueRounding = 'nearest', market: CollateralMarket = {}) {
@@ -128,5 +128,5 @@ export function formatLpPayout(amount: bigint, market: LiveMarket, rounding: Sha
 }
 
 export function formatLpWithValue(amount: bigint, market: LiveMarket, digits = 2, rounding: ShareValueRounding = 'nearest') {
-	return `${formatLpQuantity(amount, digits, rounding)} (${formatLpPayout(amount, market, rounding)})`
+	return `${formatLpQuantity(amount, digits, rounding, market)} (${formatLpPayout(amount, market, rounding)})`
 }

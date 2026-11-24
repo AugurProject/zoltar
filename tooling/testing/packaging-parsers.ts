@@ -41,15 +41,6 @@ function* dockerInstructionLines(source: string): Generator<DockerInstruction & 
 	}
 }
 
-export function dockerGlobalArguments(source: string): readonly string[] {
-	const arguments_: string[] = []
-	for (const { keyword, value } of dockerInstructionLines(source)) {
-		if (keyword === 'FROM') break
-		if (keyword === 'ARG') arguments_.push(value)
-	}
-	return arguments_
-}
-
 export function parseDockerfile(source: string): readonly DockerStage[] {
 	const stages: { base: string; instructions: DockerInstruction[]; name?: string }[] = []
 	for (const { keyword, line, value } of dockerInstructionLines(source)) {

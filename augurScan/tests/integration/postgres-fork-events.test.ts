@@ -44,19 +44,32 @@ test.skipIf(url === undefined)('fork summaries attribute security pool fork even
 		for (const [index, [identity, name, data]] of events.entries())
 			await connection`INSERT INTO fork_migration_events (chain_id, block_hash, tx_hash, log_index, block_number, universe_identity, event_name, event_data, canonical) VALUES (${chainId}, ${hash}, ${hash}, ${index + 10}, 1, ${identity}, ${name}, ${JSON.stringify(data)}::text::jsonb, true)`
 
+		const earlierHash = `0x${'4'.repeat(64)}`
+		const otherTx = `0x${'5'.repeat(64)}`
+		await connection`INSERT INTO blocks (chain_id, number, hash, canonical, timestamp) VALUES (${chainId}, 0, ${earlierHash}, true, now())`
+		const insertBurn = (identity: string, amount: string, burner: string, block: number, blockHash: string, tx: string, index: number) =>
+			connection`INSERT INTO fork_migration_events (chain_id, block_hash, tx_hash, log_index, block_number, universe_identity, event_name, event_data, canonical)
+				VALUES (${chainId}, ${blockHash}, ${tx}, ${index}, ${block}, ${identity}, 'RepBurned', ${JSON.stringify({ universeId: identity, amountAttoRep: amount, burner })}::text::jsonb, true)`
+		await insertBurn('1', '500', ownerA, 0, earlierHash, earlierHash, 1)
+		await insertBurn('1', '8', ownerA, 1, hash, hash, 1)
+		await insertBurn('2', '25', coordinator, 1, hash, hash, 2)
+		await insertBurn('2', '700', coordinator, 1, hash, otherTx, 3)
+		await insertBurn('2', '900', ownerB, 1, hash, hash, 4)
+
 		const catalog = await forkCatalogData(connection, chainId, '1')
 		const catalogCounts = Object.fromEntries(catalog.map((row: Record<string, unknown>) => [String(row['universe_identity']), row['portfolio_fork_events']]))
 		// Universe 1: its freeze and two choices plus the start and activation of its child 2.
 		// Universe 2: its freeze and one choice plus the start of its child 4, but not its own start and activation.
 		expect(catalogCounts).toEqual({ '1': 5, '2': 3 })
+		expect(catalog.find((row: Record<string, unknown>) => row['universe_identity'] === '1')?.['burned_atto_rep']).toBe('33')
 
 		const page = { block: '1', log: 2_147_483_647, tx: `0x${'f'.repeat(64)}`, limit: 100 }
 		const parentFork = await forkDetailData(connection, { chainId, snapshotBlock: '1', identity: '1', page })
-		expect(parentFork.summary).toMatchObject({ portfolio_fork_events: 5, branch_chooser_count: 2 })
+		expect(parentFork.summary).toMatchObject({ portfolio_fork_events: 5, branch_chooser_count: 2, burned_atto_rep: '33' })
 		const childFork = await forkDetailData(connection, { chainId, snapshotBlock: '1', identity: '2', page })
 		expect(childFork.summary).toMatchObject({ portfolio_fork_events: 3, branch_chooser_count: 1 })
 		// The detail event list still shows every event that names the universe, including its own branch start.
-		expect(childFork.rows.map((row: Record<string, unknown>) => row['event_name']).sort()).toEqual(['BranchActivated', 'BranchChosen', 'BranchStarted', 'BranchStarted', 'ForkFrozen', 'UniverseForked'])
+		expect(childFork.rows.map((row: Record<string, unknown>) => row['event_name']).sort()).toEqual(['BranchActivated', 'BranchChosen', 'BranchStarted', 'BranchStarted', 'ForkFrozen', 'RepBurned', 'RepBurned', 'RepBurned', 'UniverseForked'])
 
 		const participation = await addressSecurityPoolRows(connection, { chainId, snapshotBlock: '1', address: ownerA, limit: 100, lpOffset: 0, forkOffset: 0, reportOffset: 0 })
 		expect(participation.forkRows.map((row: Record<string, unknown>) => [row['universe_identity'], row['event_name']]).sort()).toEqual([

@@ -17,6 +17,7 @@ export const unknownNetwork = 'Unknown network'
 export const refreshRepPrices = 'Refresh REP prices'
 export const formatRepPricingUnavailable = (networkName: string) => `Not configured on ${networkName}`
 export const repPriceNoLiquidity = 'No liquidity available'
+export const directRepUsdcPoolUnavailable = 'Direct REP/USDC pool unavailable'
 export const repPriceRequestFailed = 'Quote failed'
 export const repPerEthCompact = 'REP per ETH'
 export const skipToMainContent = 'Skip to main content'

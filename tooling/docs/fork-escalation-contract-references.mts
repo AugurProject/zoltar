@@ -373,7 +373,7 @@ export const forkEscalationContractReferences: ContractReference[] = [
 			{
 				call: '`sweepResidualRepToQuestionLedger()`',
 				caller: 'Anyone',
-				effect: 'Applies ordinary winner-reserve settlement and burns its terminal excess. Also burns fork-continuation residual so pre-child capital cannot accrue to late or nonexistent child owners.',
+				effect: 'Applies ordinary winner-reserve settlement when applicable. Sends terminal surplus through the question ledger to burn it, with no credit to capital owners.',
 				declarations: [
 					{
 						name: 'sweepResidualRepToQuestionLedger',
