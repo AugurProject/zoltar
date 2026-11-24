@@ -154,6 +154,8 @@ type BootstrapDescendantAddresses = {
 	questionLedgerCreationCodeFirstChunk: Address
 	questionLedgerCreationCodeSecondChunk: Address
 	securityPoolCommitmentIndexImplementation: Address
+	securityPoolCapitalLifecycleDelegate: Address
+	securityPoolCapitalAuctionDelegate: Address
 	securityPoolCapitalFeeStreamsImplementation: Address
 	questionLedgerDeployer: Address
 	questionLedgerDeploymentWorker: Address
@@ -180,7 +182,9 @@ export function getBootstrapDescendantAddresses(profile: NetworkProfile = getRun
 		securityPoolCapitalCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 1n }),
 		securityPoolCapitalCreationCodeSecondChunk: getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 2n }),
 		securityPoolCommitmentIndexImplementation: getCreateAddress({ from: infrastructure.securityPoolCommitmentIndexDeployer, nonce: 1n }),
-		securityPoolCapitalFeeStreamsImplementation: getCreateAddress({ from: infrastructure.securityPoolCapitalFeeStreamsDeployer, nonce: 1n }),
+		securityPoolCapitalLifecycleDelegate: getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 3n }),
+		securityPoolCapitalAuctionDelegate: getCreateAddress({ from: infrastructure.securityPoolCapitalFeeStreamsDeployer, nonce: 1n }),
+		securityPoolCapitalFeeStreamsImplementation: getCreateAddress({ from: infrastructure.securityPoolCapitalFeeStreamsDeployer, nonce: 2n }),
 		securityPoolServicesCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.securityPoolServicesDeployer, nonce: 1n }),
 		securityPoolServicesCreationCodeSecondChunk: getCreateAddress({ from: infrastructure.securityPoolServicesDeployer, nonce: 2n }),
 		securityPoolSettlementBookCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.securityPoolSettlementBookDeployer, nonce: 1n }),

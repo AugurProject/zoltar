@@ -8,7 +8,6 @@ import { EscalationGameProofVerifier } from './EscalationGameProofVerifier.sol';
 import { IEscalationGameEvents } from './interfaces/IEscalationGame.sol';
 import { EscalationGameStorage } from './EscalationGameStorage.sol';
 import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.sol';
-import { EscalationClaimBundle } from './EscalationGameTypes.sol';
 import { DelegateCall } from './DelegateCall.sol';
 import { EscalationGameRepCustody } from './EscalationGameRepCustody.sol';
 
@@ -63,10 +62,8 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 
 	function _consumeEscrowedRepForBundle(address depositor, uint256 amountAttoRep) internal {
 		if (amountAttoRep == 0) return;
-		EscalationClaimBundle storage bundle = vaultAccounting[depositor].claimBundle;
-		uint256 claimUnits = amountAttoRep;
-		require(bundle.disputeStakedRepClaimUnits >= claimUnits, 'Escrowed REP low');
-		bundle.disputeStakedRepClaimUnits -= claimUnits;
+		// Local principal was consumed once by consumeUnresolvedRepForClaimOwners.
+		// This separate step accounts for global logical escrow and its event.
 		totalDisputeStakedAttoRep -= amountAttoRep;
 		emit VaultEscrowUpdated(depositor, disputeStakedRepByVaultAttoRep(depositor), totalDisputeStakedAttoRep);
 	}

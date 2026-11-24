@@ -160,17 +160,17 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		await context.finalize()
 		const result = await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewFinalization', args: [5n, 0n] })
 		expect(result.soldAttoRep).toBe(3n * minimum)
-		expect(result.roundingAttoRep).toBe(0n)
+		expect(result.soldAttoRep).toBe(result.filledLots * result.attoRepPerLot)
 		const virtual = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [bid.id] })
 		expect(virtual.principal).toBe(3n * result.attoRepPerLot)
 		expect(virtual.principal).toBeGreaterThanOrEqual(3n * required)
-		expect(virtual.earnedAttoRep).toBe(result.roundingAttoRep)
+		expect(virtual.earnedAttoRep).toBe(0n)
 		const incumbent = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerAccount', args: [context.owner.account.address] })
 		expect(incumbent.feesAttoRep).toBe(0n)
 		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'materializeAuctionBid', args: [bid.id] }))
 		const materialized = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [bid.id] })
 		expect(materialized.principal + materialized.earnedAttoRep).toBe(3n * minimum)
-		expect(materialized.earnedAttoRep).toBe(result.roundingAttoRep)
+		expect(materialized.earnedAttoRep).toBe(0n)
 		expect(await context.balance(context.capital)).toBe(1_000n * unit + result.soldAttoRep)
 		// Unsold inventory creates no winner earning, including after the winner
 		// migrates its purchased principal to another fork.
@@ -187,7 +187,7 @@ describe('Statoblast: ETH-only collateral-repair-auction funding', () => {
 		await writeContractAndWait(context.other, () =>
 			context.other.writeContract({ abi: vaultArtifact.abi, address: bid.vault, functionName: 'executeAndSweep', args: [context.capital, 0n, encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'claimEarnings', args: [bid.vault] }), context.token, context.other.account.address] }),
 		)
-		expect(await context.balance(context.other.account.address)).toBe(before + result.roundingAttoRep)
+		expect(await context.balance(context.other.account.address)).toBe(before + 0n)
 		expect((await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [bid.id] })).earnedAttoRep).toBe(0n)
 	})
 

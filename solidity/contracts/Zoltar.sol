@@ -24,7 +24,7 @@ contract Zoltar {
 	// Universe ID keys each mapping; child outcome indexes follow deployment order.
 	mapping(uint248 => Universe) public universes;
 	mapping(uint248 => uint256[]) private deployedChildOutcomeIndexes;
-	mapping(uint248 => uint256) private universeTheoreticalSupplies;
+	uint256 private frozenGenesisTheoreticalSupply;
 	mapping(uint248 => uint256) private childUniverseTheoreticalSupplySnapshotsAttoRep;
 	uint256 public childReputationTokenCount;
 
@@ -61,7 +61,7 @@ contract Zoltar {
 		uint256 genesisSupply = _genesisReputationToken.getTotalTheoreticalSupply();
 		require(genesisSupply != 0, 'Genesis REP missing supply: theoretical supply must be non-zero');
 		require(genesisSupply <= Constants.MAX_ATTO_REP, 'Genesis REP exceeds maximum supply');
-		universeTheoreticalSupplies[0] = genesisSupply;
+		frozenGenesisTheoreticalSupply = genesisSupply;
 		emit UniverseInitialized(0, 0, 0, 0, ReputationToken(address(_genesisReputationToken)), 0, genesisSupply);
 	}
 
@@ -122,7 +122,9 @@ contract Zoltar {
 			require(externalSupply >= burnedGenesisAttoRep, 'Genesis supply below burned REP');
 			return externalSupply - burnedGenesisAttoRep;
 		}
-		return universeTheoreticalSupplies[universeId];
+		if (universeId == 0) return frozenGenesisTheoreticalSupply;
+		ReputationToken token = universes[universeId].reputationToken;
+		return address(token) == address(0) ? 0 : token.getTotalTheoreticalSupply();
 	}
 
 	/// @notice Forks an unforked universe on an ended question, burning the fork threshold from the caller and crediting it to migration net of the burn haircut.
@@ -133,10 +135,10 @@ contract Zoltar {
 	function _forkUniverse(address owner, uint248 universeId, uint256 questionId) private {
 		Universe storage universe = universes[universeId];
 		if (universeId == 0 && universe.forkTime == 0)
-			universeTheoreticalSupplies[0] = getUniverseTheoreticalSupplyAttoRep(0);
+			frozenGenesisTheoreticalSupply = getUniverseTheoreticalSupplyAttoRep(0);
 		require(address(universe.reputationToken) != address(0x0), 'Universe REP token missing');
 		require(address(universe.reputationToken).code.length != 0, 'Universe REP token address must contain code');
-		require(universeTheoreticalSupplies[universeId] != 0, 'Universe theoretical REP supply must be non-zero');
+		require(getUniverseTheoreticalSupplyAttoRep(universeId) != 0, 'Universe theoretical REP supply must be non-zero');
 		require(universe.forkTime == 0, 'Universe already forked');
 		require(block.timestamp >= getEarliestForkTime(universeId), 'Parent fork response period is still active');
 		// Intended behavior: Zoltar treats questions as global protocol objects rather
@@ -151,14 +153,14 @@ contract Zoltar {
 		uint256 forkThresholdAttoRep = getForkThresholdAttoRep(universeId);
 		require(forkThresholdAttoRep != 0, 'Fork threshold must be non-zero');
 		_burnRep(universes[universeId].reputationToken, owner, forkThresholdAttoRep);
-		universeTheoreticalSupplies[universeId] -= forkThresholdAttoRep;
+		if (universeId == 0) frozenGenesisTheoreticalSupply -= forkThresholdAttoRep;
 		uint256 migrationRepBalanceAttoRep = forkThresholdAttoRep - forkThresholdAttoRep / forkBurnDivisor;
 		// The initiator's uncredited admission haircut is permanently absent from
 		// every child. Later REP added to the migration balance still converts 1:1.
 		childUniverseTheoreticalSupplySnapshotsAttoRep[universeId] =
-			universeTheoreticalSupplies[universeId] + migrationRepBalanceAttoRep;
+			getUniverseTheoreticalSupplyAttoRep(universeId) + migrationRepBalanceAttoRep;
 		migrationRepBalances[owner][universeId].migrationRepBalanceAttoRep = migrationRepBalanceAttoRep;
-		emit UniverseForked(owner, universeId, questionId, universes[universeId].forkTime, forkThresholdAttoRep, migrationRepBalanceAttoRep, universeTheoreticalSupplies[universeId]);
+		emit UniverseForked(owner, universeId, questionId, universes[universeId].forkTime, forkThresholdAttoRep, migrationRepBalanceAttoRep, getUniverseTheoreticalSupplyAttoRep(universeId));
 	}
 
 	/// @notice Burns the caller's REP in `universeId` without creating migration credit.
@@ -172,12 +174,12 @@ contract Zoltar {
 		require(amountAttoRep > 0, 'Burn amount zero');
 		Universe storage universe = universes[universeId];
 		if (universeId == 0 && universe.forkTime == 0)
-			universeTheoreticalSupplies[0] = getUniverseTheoreticalSupplyAttoRep(0);
+			frozenGenesisTheoreticalSupply = getUniverseTheoreticalSupplyAttoRep(0);
 		require(address(universe.reputationToken) != address(0x0), 'Universe REP token missing');
-		require(universeTheoreticalSupplies[universeId] >= amountAttoRep, 'Burn exceeds theoretical supply');
+		require(getUniverseTheoreticalSupplyAttoRep(universeId) >= amountAttoRep, 'Burn exceeds theoretical supply');
 		_burnRep(universe.reputationToken, owner, amountAttoRep);
-		universeTheoreticalSupplies[universeId] -= amountAttoRep;
-		emit RepBurned(owner, universeId, amountAttoRep, universeTheoreticalSupplies[universeId]);
+		if (universeId == 0) frozenGenesisTheoreticalSupply -= amountAttoRep;
+		emit RepBurned(owner, universeId, amountAttoRep, getUniverseTheoreticalSupplyAttoRep(universeId));
 	}
 
 	function _burnRep(ReputationToken reputationToken, address migrator, uint256 amountAttoRep) private {
@@ -207,7 +209,6 @@ contract Zoltar {
 		uint256 repNumber = childReputationTokenCount + 1;
 		childReputationToken.initialize(childUniverseId, childUniverseTheoreticalSupplyAttoRep, repNumber);
 		childReputationTokenCount = repNumber;
-		universeTheoreticalSupplies[childUniverseId] = childUniverseTheoreticalSupplyAttoRep;
 		universes[childUniverseId] = Universe(0, universe.forkQuestionId, outcomeIndex, childReputationToken, universeId);
 		deployedChildOutcomeIndexes[universeId].push(outcomeIndex);
 		emit DeployChild(msg.sender, universeId, outcomeIndex, childUniverseId, childReputationToken, childUniverseTheoreticalSupplyAttoRep);
@@ -251,11 +252,11 @@ contract Zoltar {
 	function _addRepToMigrationBalance(address owner, uint248 universeId, uint256 amountAttoRep) private {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime != 0, 'Universe has not forked, so migration balance cannot be added');
-		require(universeTheoreticalSupplies[universeId] >= amountAttoRep, 'Migration exceeds theoretical supply');
+		require(getUniverseTheoreticalSupplyAttoRep(universeId) >= amountAttoRep, 'Migration exceeds theoretical supply');
 		_burnRep(universe.reputationToken, owner, amountAttoRep);
-		universeTheoreticalSupplies[universeId] -= amountAttoRep;
+		if (universeId == 0) frozenGenesisTheoreticalSupply -= amountAttoRep;
 		migrationRepBalances[owner][universeId].migrationRepBalanceAttoRep += amountAttoRep;
-		emit MigrationRepAdded(owner, universeId, amountAttoRep, migrationRepBalances[owner][universeId].migrationRepBalanceAttoRep, universeTheoreticalSupplies[universeId]);
+		emit MigrationRepAdded(owner, universeId, amountAttoRep, migrationRepBalances[owner][universeId].migrationRepBalanceAttoRep, getUniverseTheoreticalSupplyAttoRep(universeId));
 	}
 	/// @notice Mints `amountAttoRep` of child REP to the caller in each selected outcome universe, capped per child by the caller's migration balance.
 	function splitMigrationRep(uint248 universeId, uint256 amountAttoRep, uint256[] memory outcomeIndexes) public {

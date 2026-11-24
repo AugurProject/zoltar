@@ -103,7 +103,7 @@ describe('live settlement contract encoding', () => {
 			expect(transfer.ids).toEqual([1792n, 1792n | BigInt(outcome)])
 			expect(transfer.amounts).toEqual([10n, 23n])
 			const request = decodeReceiveRequest(transfer.data)
-			expect(request).toEqual([2n, 0n, shareToken, pool, pair, 7n, 8n, 1792n, 1793n, 1794n, BigInt(outcome), 10n, 23n, 9n, account, account, 421n, 5n])
+			expect(request).toEqual([3n, 0n, pool, pair, BigInt(outcome), 10n, 23n, 9n, account, account, 421n, 5n])
 		})
 	}
 
@@ -163,7 +163,7 @@ describe('live settlement contract encoding', () => {
 		expect(decodedTransfer.args.slice(0, 4)).toEqual([account, configuration.router, [1792n, 1793n, 1794n], [10n, 10n, 10n]])
 		// Decode independently from the production encoder and assert the router ABI contract.
 		const request = decodeReceiveRequest(decodedTransfer.args[4])
-		expect(request).toEqual([2n, 1n, shareToken, pool, pair, 7n, 8n, 1792n, 1793n, 1794n, 3n, 10n, 0n, 9n, account, account, 421n, 0n])
+		expect(request).toEqual([3n, 1n, pool, pair, 3n, 10n, 0n, 9n, account, account, 421n, 0n])
 	})
 
 	test('rejects complete-set submission when refreshed output falls below the approved minimum', async () => {

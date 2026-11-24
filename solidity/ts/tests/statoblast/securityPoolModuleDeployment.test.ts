@@ -12,6 +12,31 @@ describe('Statoblast: production security pool module deployment', () => {
 	// The fixture measures every staged deployment receipt against Osaka's
 	// transaction cap, including constructor-created module descendants.
 	const fixture = useSecurityPoolFixture()
+	test('#1547: independent security pools share stateless delegates with isolated host state', async () => {
+		const client = fixture.owner()
+		const second = await fixture.deploySecurityPool()
+		const firstCapital = fixture.capitalLedger
+		const secondCapital = await client.readContract({ abi: securityPoolArtifact.abi, address: second, functionName: 'capitalLedger', args: [fixture.base.genesisUniverse] })
+		expect(secondCapital).not.toBe(firstCapital)
+		for (const functionName of ['lifecycleDelegate', 'auctionDelegate'] as const) {
+			const first = await client.readContract({ abi: capitalArtifact.abi, address: firstCapital, functionName })
+			expect(await client.readContract({ abi: capitalArtifact.abi, address: secondCapital, functionName })).toBe(first)
+		}
+		await fixture.deposit()
+		expect(await client.readContract({ abi: capitalArtifact.abi, address: secondCapital, functionName: 'totalFreeAttoRep' })).toBe(0n)
+		await fixture.deposit(200n, client, second)
+		await client.writeContract({ abi: capitalArtifact.abi, address: firstCapital, functionName: 'setHealthTarget', args: [15_000n] }).then(hash => client.waitForTransactionReceipt({ hash }))
+		const firstOwner = await client.readContract({ abi: capitalArtifact.abi, address: firstCapital, functionName: 'ownerAccount', args: [client.account.address] })
+		const secondOwner = await client.readContract({ abi: capitalArtifact.abi, address: secondCapital, functionName: 'ownerAccount', args: [client.account.address] })
+		expect(firstOwner.targetHealthFactorBps).toBe(15_000n)
+		expect(secondOwner.targetHealthFactorBps).not.toBe(15_000n)
+		expect(secondOwner.freeAttoRep).toBe(200n)
+		const lifecycle = await client.readContract({ abi: capitalArtifact.abi, address: firstCapital, functionName: 'lifecycleDelegate' })
+		const auction = await client.readContract({ abi: capitalArtifact.abi, address: firstCapital, functionName: 'auctionDelegate' })
+		await expect(client.writeContract({ abi: lifecycleArtifact.abi, address: lifecycle, functionName: 'setHealthTarget', args: [15_000n] })).rejects.toThrow('Only capital delegatecall')
+		await expect(client.writeContract({ abi: auctionArtifact.abi, address: auction, functionName: 'install', args: [firstCapital, 1n, 1n, 1n, 1n] })).rejects.toThrow('Only capital delegatecall')
+	})
+
 	test('staged setup creates correctly bound lifecycle and reporting modules with runtime headroom', async () => {
 		const client = fixture.owner()
 		const capital = { abi: capitalArtifact.abi, address: fixture.capitalLedger }

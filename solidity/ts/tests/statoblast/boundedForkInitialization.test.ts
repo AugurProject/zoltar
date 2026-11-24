@@ -87,9 +87,9 @@ describe('Statoblast: bounded fork initialization', () => {
 		// Exercise the largest fixed-width carry representation, independent of the
 		// number of historical questions, deposits and prior native forks.
 		for (const outcome of outcomes) {
-			const outcomeSlot = 8n + 78n * BigInt(outcome)
-			stateDiff[formatStorageSlot(outcomeSlot + 6n)] = leafCount
-			for (let peak = 0; peak < 64; peak++) stateDiff[formatStorageSlot(outcomeSlot + 7n + BigInt(peak))] = BigInt(keccak256(formatStorageSlot(BigInt(1 + outcome * 64 + peak))))
+			const outcomeSlot = 8n + 76n * BigInt(outcome)
+			stateDiff[formatStorageSlot(outcomeSlot + 4n)] = leafCount
+			for (let peak = 0; peak < 64; peak++) stateDiff[formatStorageSlot(outcomeSlot + 5n + BigInt(peak))] = BigInt(keccak256(formatStorageSlot(BigInt(1 + outcome * 64 + peak))))
 		}
 		await base.mockWindow.addStateOverrides({ [parentGame]: { stateDiff } })
 		const parentStates = await Promise.all(outcomes.map(outcome => getEscalationGameOutcomeState(owner(), parentGame, outcome)))

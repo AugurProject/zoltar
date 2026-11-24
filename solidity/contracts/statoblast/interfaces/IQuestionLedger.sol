@@ -60,7 +60,7 @@ interface IQuestionLedger {
 	function attoSharesToAttoRep(uint256 amountAttoShares) external view returns (uint256);
 	function attoEthToAttoShares(uint256 amountAttoEth) external view returns (uint256);
 
-	function getCurrentMintingCapacityAttoEth() external view returns (uint256);
+	function additionalMintCapacityAttoEth() external view returns (uint256);
 	function isEscalationResolved() external view returns (bool);
 	function initialEscalationGameDepositAttoRep() external view returns (uint256);
 	function burnEscalationWinnerHaircut(uint256 amountAttoRep) external;

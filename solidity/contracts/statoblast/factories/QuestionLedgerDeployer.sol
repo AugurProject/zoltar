@@ -10,7 +10,7 @@ import { IShareToken } from '../interfaces/IShareToken.sol';
 import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
 import { EscalationGameFactory } from './EscalationGameFactory.sol';
 import { QuestionLedgerEventEmitter } from '../QuestionLedgerEventEmitter.sol';
-import { CreationCodeStorage } from './OpenOraclePriceCoordinatorFactory.sol';
+import { CreationCodeStorage } from '../CreationCodeStorage.sol';
 import { Create2Deployment } from './Create2Deployment.sol';
 
 contract QuestionLedgerDeployer {

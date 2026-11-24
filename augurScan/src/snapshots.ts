@@ -151,7 +151,7 @@ const auctionSnapshot = async (target: StateSnapshotTarget, read: StateRead): Pr
 	const quantities = ['opensAt', 'closesAt', 'lotAttoEth', 'targetLots', 'inventoryAttoRep', 'maximumBidAttoRepPerLot', 'repGrid', 'depositedAttoEth', 'bidCount'] as const
 	const values = await Promise.all(quantities.map(name => read(target.address, auctionAbi, name)))
 	const [initialized, finalized, rawClearing] = await Promise.all([read(target.address, auctionAbi, 'initialized'), read(target.address, auctionAbi, 'finalized'), read(target.address, auctionAbi, 'clearing')])
-	const clearing = tuple(rawClearing, 10, 'clearing')
+	const clearing = tuple(rawClearing, 9, 'clearing')
 	// Bids, clearing proceeds and refunds are amounts of the auction's collateral token, not native ETH.
 	// Token metadata is optional: a failed read keeps the accounting snapshot and leaves explicit raw collateral units.
 	const collateral: Record<string, unknown> = {}
@@ -175,12 +175,11 @@ const auctionSnapshot = async (target: StateSnapshotTarget, read: StateRead): Pr
 			filledLots: exact(clearing[1], 'clearing.filledLots'),
 			raisedAttoEth: exact(clearing[2], 'clearing.raisedAttoEth'),
 			soldAttoRep: exact(clearing[3], 'clearing.soldAttoRep'),
-			roundingAttoRep: exact(clearing[4], 'clearing.roundingAttoRep'),
-			marginalMinimumAttoRepPerLot: exact(clearing[5], 'clearing.marginalMinimumAttoRepPerLot'),
-			marginalFillLots: exact(clearing[6], 'clearing.marginalFillLots'),
-			marginalDemandLots: exact(clearing[7], 'clearing.marginalDemandLots'),
-			fullBeforeLots: exact(clearing[8], 'clearing.fullBeforeLots'),
-			raiseLimitReached: flag(clearing[9], 'clearing.raiseLimitReached'),
+			marginalMinimumAttoRepPerLot: exact(clearing[4], 'clearing.marginalMinimumAttoRepPerLot'),
+			marginalFillLots: exact(clearing[5], 'clearing.marginalFillLots'),
+			marginalDemandLots: exact(clearing[6], 'clearing.marginalDemandLots'),
+			fullBeforeLots: exact(clearing[7], 'clearing.fullBeforeLots'),
+			raiseLimitReached: flag(clearing[8], 'clearing.raiseLimitReached'),
 		},
 		...collateral,
 	}

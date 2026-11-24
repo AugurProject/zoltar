@@ -736,16 +736,10 @@ describe('factory, pair, and router integration', () => {
 		const ids = [universe << 8n, (universe << 8n) | 1n, (universe << 8n) | 2n] as const
 		const deadline = 10n ** 12n
 		const redeemRequest = ({
-			version = 2,
+			version = 3,
 			operation = 1,
-			shareToken = token,
 			questionLedger = pool,
 			configuredPair = currentPair,
-			universeId = universe,
-			questionId = question,
-			invalidTokenId = ids[0],
-			yesTokenId = ids[1],
-			noTokenId = ids[2],
 			longOutcome = 3,
 			completeSetShares = redeemAmount,
 			maxLongSharesIn = 0n,
@@ -756,14 +750,8 @@ describe('factory, pair, and router integration', () => {
 		}: Partial<{
 			version: number
 			operation: number
-			shareToken: Address
 			questionLedger: Address
 			configuredPair: Address
-			universeId: bigint
-			questionId: bigint
-			invalidTokenId: bigint
-			yesTokenId: bigint
-			noTokenId: bigint
 			longOutcome: number
 			completeSetShares: bigint
 			maxLongSharesIn: bigint
@@ -771,7 +759,7 @@ describe('factory, pair, and router integration', () => {
 			payoutRecipient: Address
 			refundRecipient: Address
 			requestDeadline: bigint
-		}> = {}) => encodeReceiveRequest([version, operation, shareToken, questionLedger, configuredPair, universeId, questionId, invalidTokenId, yesTokenId, noTokenId, longOutcome, completeSetShares, maxLongSharesIn, minEthOut, payoutRecipient, refundRecipient, requestDeadline, 0n])
+		}> = {}) => encodeReceiveRequest([version, operation, questionLedger, configuredPair, longOutcome, completeSetShares, maxLongSharesIn, minEthOut, payoutRecipient, refundRecipient, requestDeadline, 0n])
 		const requestData = encodeReceiveBasedRedeemRequest({ shareToken: token, pool, pair: currentPair, universeId: universe, questionId: question }, redeemAmount, 1n, recipient, deadline)
 		const sharesBeforeRedeem = await shareBalances(account)
 		expect(await client.readContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'isApprovedForAll', args: [account, currentRouter] })).toBe(false)
@@ -794,7 +782,7 @@ describe('factory, pair, and router integration', () => {
 		const maximumLongShares = exitAmount + swapInput + 17n
 		const yesBeforeExit = await tokenBalance(account, 1n)
 		const exitRecipientEthBefore = await client.getBalance({ address: recipient })
-		const exitData = encodeReceiveRequest([2, 0, token, pool, currentPair, universe, question, ids[0], ids[1], ids[2], 1, exitAmount, maximumLongShares, 1n, recipient, account, deadline, 0n])
+		const exitData = encodeReceiveRequest([3, 0, pool, currentPair, 1, exitAmount, maximumLongShares, 1n, recipient, account, deadline, 0n])
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeBatchTransferFrom', args: [account, currentRouter, [ids[0], ids[1]], [exitAmount, maximumLongShares], exitData] }))
 		expect(yesBeforeExit - (await tokenBalance(account, 1n))).toBe(exitAmount + swapInput)
 		expect((await client.getBalance({ address: recipient })) - exitRecipientEthBefore).toBe(1n)
@@ -804,14 +792,8 @@ describe('factory, pair, and router integration', () => {
 		const malformedRequests = [
 			{ name: 'version', data: redeemRequest({ version: 1 }) },
 			{ name: 'operation', data: redeemRequest({ operation: 2 }) },
-			{ name: 'share token', data: redeemRequest({ shareToken: account }) },
 			{ name: 'question ledger', data: redeemRequest({ questionLedger: account }) },
 			{ name: 'pair', data: redeemRequest({ configuredPair: account }) },
-			{ name: 'universe', data: redeemRequest({ universeId: universe + 1n }) },
-			{ name: 'question', data: redeemRequest({ questionId: question + 1n }) },
-			{ name: 'INVALID ID', data: redeemRequest({ invalidTokenId: ids[0] + 3n }) },
-			{ name: 'YES ID', data: redeemRequest({ yesTokenId: ids[2] }) },
-			{ name: 'NO ID', data: redeemRequest({ noTokenId: ids[1] }) },
 			...([0, 1, 2] as const).map(longOutcome => ({ name: `long outcome ${longOutcome}`, data: redeemRequest({ longOutcome }) })),
 			{ name: 'maximum input', data: redeemRequest({ maxLongSharesIn: 1n }) },
 			{ name: 'zero payout', data: redeemRequest({ payoutRecipient: `0x${'00'.repeat(20)}` }) },

@@ -2,7 +2,6 @@
 pragma solidity 0.8.35;
 
 import { QuestionLedgerLinearFees } from './QuestionLedgerLinearFees.sol';
-import { DelegateErrorReason } from './DelegateErrorReason.sol';
 import { IQuestionLedger, AccountingReason } from './interfaces/IQuestionLedger.sol';
 import { ISecurityPoolAccounting } from './interfaces/ISecurityPoolAccounting.sol';
 import { IERC20 } from '../IERC20.sol';
@@ -21,10 +20,6 @@ abstract contract QuestionLedgerAccountingDelegate is QuestionLedgerLinearFees {
 		uint256 previousTimestamp = lastSettlementSecurityPoolTime;
 		updateLinearFees();
 		if (lastSettlementSecurityPoolTime != previousTimestamp) _emitAccountingCheckpoint(AccountingReason.Accrual);
-	}
-
-	function decodeError(bytes calldata result) external pure returns (string memory reason) {
-		return DelegateErrorReason.decode(result);
 	}
 
 	function setSecurityPoolCustody(address custody) external {
