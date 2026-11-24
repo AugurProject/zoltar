@@ -101,7 +101,7 @@ const expectedCanonicalManifest = [
 	'QuestionLedgerDeploymentWorker:contracts/statoblast/factories/QuestionLedgerDeployer.sol:deployment-helper',
 	'QuestionLedger:contracts/statoblast/QuestionLedger.sol:dynamic-endpoint',
 	'QuestionLedgerOperationsDelegate:contracts/statoblast/QuestionLedgerOperationsDelegate.sol:delegate-module',
-	'QuestionLedgerEventEmitter:contracts/statoblast/QuestionLedgerEventEmitter.sol:delegate-module',
+	'QuestionLedgerAccountingModule:contracts/statoblast/QuestionLedgerAccountingModule.sol:delegate-module',
 	'OpenOraclePriceCoordinator:contracts/statoblast/OpenOraclePriceCoordinator.sol:dynamic-endpoint',
 	'SharedPoolPriceFeed:contracts/statoblast/SharedPoolPriceFeed.sol:dynamic-endpoint',
 	'SharedPoolReportEscrow:contracts/statoblast/SharedPoolReportEscrow.sol:dynamic-endpoint',

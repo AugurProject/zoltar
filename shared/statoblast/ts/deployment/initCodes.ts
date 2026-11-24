@@ -115,7 +115,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 		concatHex([`0x${artifacts.openOraclePriceCoordinatorFactory.evm.bytecode.object}`, encodeOpenOraclePriceCoordinatorFactoryArguments(weth, getWorkerAddress(getPriceCoordinatorDeploymentWorkerByteCode()), getWorkerAddress(getSharedPoolPriceFeedDeploymentWorkerByteCode()))])
 	const getQuestionForkerDelegateByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.questionForkerDelegate.abi, bytecode: `0x${artifacts.questionForkerDelegate.evm.bytecode.object}`, args: [zoltar] })
 	const getQuestionForkerByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.questionForker.abi, bytecode: `0x${artifacts.questionForker.evm.bytecode.object}`, args: [zoltar, getWorkerAddress(getQuestionForkerDelegateByteCode(zoltar))] })
-	const getQuestionLedgerEventEmitterByteCode = (): Hex => `0x${artifacts.questionLedgerEventEmitter.evm.bytecode.object}`
+	const getQuestionLedgerAccountingModuleByteCode = (): Hex => `0x${artifacts.questionLedgerEventEmitter.evm.bytecode.object}`
 	const getQuestionLedgerOperationsDelegateByteCode = (): Hex => `0x${artifacts.questionLedgerOperationsDelegate.evm.bytecode.object}`
 	const getSecurityPoolCapitalLedgerDeployerByteCode = (): Hex => `0x${artifacts.securityPoolCapitalLedgerDeployer.evm.bytecode.object}`
 	const getSecurityPoolCommitmentIndexDeployerByteCode = (): Hex => `0x${artifacts.securityPoolCommitmentIndexDeployer.evm.bytecode.object}`
@@ -176,7 +176,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 			sharedPoolPriceFeedDeploymentWorkerBytecode: getSharedPoolPriceFeedDeploymentWorkerByteCode(),
 			proxyDeployerAddress,
 			questionLedgerOperationsDelegateBytecode: getQuestionLedgerOperationsDelegateByteCode(),
-			questionLedgerEventEmitterBytecode: getQuestionLedgerEventEmitterByteCode(),
+			questionLedgerEventEmitterBytecode: getQuestionLedgerAccountingModuleByteCode(),
 			securityPoolCapitalLedgerDeployerBytecode: getSecurityPoolCapitalLedgerDeployerByteCode(),
 			securityPoolCommitmentIndexDeployerBytecode: getSecurityPoolCommitmentIndexDeployerByteCode(),
 			securityPoolCapitalFeeStreamsDeployerBytecode: getSecurityPoolCapitalFeeStreamsDeployerByteCode(),
@@ -200,7 +200,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 		getQuestionForkerByteCode,
 		getQuestionForkerDelegateByteCode,
 		getQuestionLedgerOperationsDelegateByteCode,
-		getQuestionLedgerEventEmitterByteCode,
+		getQuestionLedgerAccountingModuleByteCode,
 		getSecurityPoolCapitalLedgerDeployerByteCode,
 		getSecurityPoolCommitmentIndexDeployerByteCode,
 		getSecurityPoolCapitalFeeStreamsDeployerByteCode,

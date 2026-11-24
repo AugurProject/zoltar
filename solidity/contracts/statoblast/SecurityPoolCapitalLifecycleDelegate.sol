@@ -158,7 +158,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		owner.feesAttoEth = 0;
 		owner.feesAttoRep = 0;
 		if (repAmount != 0) ICapitalLifecycleHost(address(this)).repToken().safeTransfer(recipient, repAmount);
-		_sendEth(recipient, ethAmount);
+		_sendCollateral(recipient, ethAmount);
 		emit EarningsClaimed(_capitalOwner(), ethAmount, repAmount);
 	}
 

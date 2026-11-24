@@ -5,7 +5,7 @@ import { AccountingReason, IQuestionLedger } from './interfaces/IQuestionLedger.
 import { QuestionLedgerAccountingDelegate } from './QuestionLedgerAccountingDelegate.sol';
 
 /// @notice Fixed delegate for native fee accounting, security pool credits and verbose checkpoint encoding.
-contract QuestionLedgerEventEmitter is QuestionLedgerAccountingDelegate {
+contract QuestionLedgerAccountingModule is QuestionLedgerAccountingDelegate {
 	event QuestionAccountingCheckpoint(AccountingReason reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastSettlementSecurityPoolTime);
 
 	function setStartingParams() external {

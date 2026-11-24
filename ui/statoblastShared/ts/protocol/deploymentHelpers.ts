@@ -7,7 +7,7 @@ import { statoblast_Multicall3_Multicall3 } from '@zoltar/ui-core-shared/contrac
 import {
 	statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
 	statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate,
-	statoblast_QuestionLedgerEventEmitter_QuestionLedgerEventEmitter,
+	statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule,
 	statoblast_QuestionForker_QuestionForker,
 	statoblast_SecurityPool_SecurityPool,
 	statoblast_QuestionForkerDelegate_QuestionForkerDelegate,
@@ -56,7 +56,7 @@ const statoblastInitCodes = createStatoblastInitCodes(
 		securityPoolForkCoordinatorDeployer: statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinatorDeployer,
 		securityPoolRepairAuctionDeployer: statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuctionDeployer,
 		questionLedgerOperationsDelegate: statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate,
-		questionLedgerEventEmitter: statoblast_QuestionLedgerEventEmitter_QuestionLedgerEventEmitter,
+		questionLedgerEventEmitter: statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule,
 		shareTokenFactory: statoblast_factories_ShareTokenFactory_ShareTokenFactory,
 	},
 	{ proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS, zeroSalt: ZERO_SALT },
@@ -80,7 +80,7 @@ const {
 	getSecurityPoolForkCoordinatorDeployerByteCode,
 	getSecurityPoolRepairAuctionDeployerByteCode,
 	getQuestionLedgerOperationsDelegateByteCode,
-	getQuestionLedgerEventEmitterByteCode,
+	getQuestionLedgerAccountingModuleByteCode,
 	getShareTokenFactoryByteCode,
 } = statoblastInitCodes
 
@@ -93,7 +93,7 @@ export {
 	getQuestionForkerByteCode,
 	getQuestionForkerDelegateByteCode,
 	getQuestionLedgerOperationsDelegateByteCode,
-	getQuestionLedgerEventEmitterByteCode,
+	getQuestionLedgerAccountingModuleByteCode,
 	getShareTokenFactoryByteCode,
 }
 
@@ -102,7 +102,7 @@ export const getSecurityPoolCreationCode = statoblastInitCodes.getSecurityPoolCr
 
 export const getSecurityPoolRuntimeCode = (): Hex => `0x${statoblast_SecurityPool_SecurityPool.evm.deployedBytecode.object}`
 
-export const getQuestionLedgerEventEmitterRuntimeCode = (): Hex => `0x${statoblast_QuestionLedgerEventEmitter_QuestionLedgerEventEmitter.evm.deployedBytecode.object}`
+export const getQuestionLedgerAccountingModuleRuntimeCode = (): Hex => `0x${statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule.evm.deployedBytecode.object}`
 export const getQuestionLedgerOperationsDelegateRuntimeCode = (): Hex => `0x${statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate.evm.deployedBytecode.object}`
 
 export function getInfraContractAddresses(profile: NetworkProfile = getRuntimeNetworkProfile()) {
@@ -119,7 +119,7 @@ export function getInfraContractAddresses(profile: NetworkProfile = getRuntimeNe
 export function getInfraStepConstructorArguments(profile: NetworkProfile = getRuntimeNetworkProfile()): Partial<Record<DeploymentStepId, string>> {
 	const addresses = getInfraContractAddresses(profile)
 	return {
-		questionLedgerEventEmitter: constructorArgumentsFromInitCode(getQuestionLedgerEventEmitterByteCode(), statoblast_QuestionLedgerEventEmitter_QuestionLedgerEventEmitter.evm.bytecode.object),
+		questionLedgerEventEmitter: constructorArgumentsFromInitCode(getQuestionLedgerAccountingModuleByteCode(), statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule.evm.bytecode.object),
 		questionLedgerOperationsDelegate: constructorArgumentsFromInitCode(getQuestionLedgerOperationsDelegateByteCode(), statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate.evm.bytecode.object),
 		openOracle: '',
 		priceCoordinatorDeploymentWorker: '',

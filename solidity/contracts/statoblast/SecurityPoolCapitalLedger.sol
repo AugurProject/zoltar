@@ -362,7 +362,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	function flushBurn() external nonReentrant {
 		uint256 amount = pendingBurnCash;
 		pendingBurnCash = 0;
-		_sendEth(Constants.BURN_ADDRESS, amount);
+		_sendCollateral(Constants.BURN_ADDRESS, amount);
 		if (amount != 0) emit UnassignedFeesBurned(amount, 0);
 	}
 

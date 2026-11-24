@@ -12,10 +12,10 @@ import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { EscalationGameFactory } from './EscalationGameFactory.sol';
 import { IQuestionForker } from '../interfaces/IQuestionForker.sol';
-import { QuestionLedgerDeployer } from './QuestionLedgerDeployer.sol';
+import { QuestionLedgerDeployer, QuestionLedgerConfiguration } from './QuestionLedgerDeployer.sol';
 import { SecurityPoolUtils } from '../SecurityPoolUtils.sol';
 import { SharedPoolPriceFeed } from '../SharedPoolPriceFeed.sol';
-import { QuestionLedgerEventEmitter } from '../QuestionLedgerEventEmitter.sol';
+import { QuestionLedgerAccountingModule } from '../QuestionLedgerAccountingModule.sol';
 
 contract SecurityPoolFactory is ISecurityPoolFactory {
 	ShareTokenFactory immutable shareTokenFactory;
@@ -68,7 +68,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	event SharedPriceFeedRegistered(address indexed securityPool, uint248 indexed universeId, address indexed priceFeed);
 	event SecurityPoolDeployed(address indexed securityPool, address indexed creator);
 
-	constructor(IQuestionForker _questionForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, OpenOraclePriceCoordinatorFactory _openOraclePriceCoordinatorFactory, address operationsDelegate, QuestionLedgerEventEmitter eventEmitter, bytes32 _securityPoolCreationCodeHash, address[9] memory securityPoolModuleDeployers) {
+	constructor(IQuestionForker _questionForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, OpenOraclePriceCoordinatorFactory _openOraclePriceCoordinatorFactory, address operationsDelegate, QuestionLedgerAccountingModule accountingModule, bytes32 _securityPoolCreationCodeHash, address[9] memory securityPoolModuleDeployers) {
 		require(_securityPoolCreationCodeHash != bytes32(0), 'Security pool creation code hash missing');
 		// The deployers are deterministic addresses that may be deployed after this
 		// factory. Every security pool constructor requires each of them to hold code.
@@ -91,8 +91,8 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		questionData = _questionData;
 		require(operationsDelegate != address(0), 'Operations delegate zero');
 		require(operationsDelegate.code.length != 0, 'Operations delegate has no code');
-		require(address(eventEmitter).code.length != 0, 'Accounting delegate has no code');
-		questionLedgerDeployer = new QuestionLedgerDeployer(operationsDelegate, eventEmitter);
+		require(address(accountingModule).code.length != 0, 'Accounting delegate has no code');
+		questionLedgerDeployer = new QuestionLedgerDeployer(operationsDelegate, accountingModule);
 	}
 
 	function questionLedgerDeploymentCount() external view returns (uint256) {
@@ -256,7 +256,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	}
 
 	function deployQuestionLedger(IShareToken shareToken, IQuestionLedger parent, OpenOraclePriceCoordinator openOraclePriceCoordinator, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps) private returns (IQuestionLedger questionLedger) {
-		questionLedger = questionLedgerDeployer.deploy(address(questionForker), questionData, escalationGameFactory, openOraclePriceCoordinator, shareToken, openOracle, parent, zoltar, universeId, questionId, statoblastSecurityMultiplierBps);
+		questionLedger = questionLedgerDeployer.deploy(QuestionLedgerConfiguration({questionForker: address(questionForker), questionData: questionData, escalationGameFactory: escalationGameFactory, openOraclePriceCoordinator: openOraclePriceCoordinator, shareToken: shareToken, openOracle: openOracle, parent: parent, zoltar: zoltar, universeId: universeId, questionId: questionId, statoblastSecurityMultiplierBps: statoblastSecurityMultiplierBps}));
 
 		openOraclePriceCoordinatorFactory.configureQuestionLedger(openOraclePriceCoordinator, questionLedger);
 	}

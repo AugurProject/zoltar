@@ -44,3 +44,9 @@ test('decodes another delegation manager method from the upstream ABI', () => {
 	const input = encodeFunctionData({ abi: parseAbi(['function transferOwnership(address newOwner)']), functionName: 'transferOwnership', args: [address] })
 	expect(decodeAction({ address, kind: 'delegationManager', label: 'Delegation Manager', provenance: 'test' }, input, new Map())).toMatchObject({ status: 'decoded', name: 'transferOwnership', arguments: { newOwner: address } })
 })
+
+test('accounting module uses the deployed status step identity', () => {
+	const mappings = systemContractMappings(['QuestionLedgerAccountingModule'], ['questionLedgerEventEmitter'])
+	expect(mappings.deploymentKinds['questionLedgerEventEmitter']).toBe('questionLedgerEventEmitter')
+	expect(mappings.interfaces['questionLedgerEventEmitter']).toEqual({ type: 'artifact', name: 'QuestionLedgerAccountingModule' })
+})

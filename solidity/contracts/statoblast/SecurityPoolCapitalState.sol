@@ -128,7 +128,7 @@ abstract contract SecurityPoolCapitalState {
 	function _target(Owner storage owner) internal view returns (uint256) {
 		return owner.targetHealthFactorBps == 0 ? BPS : owner.targetHealthFactorBps;
 	}
-	function _sendEth(address recipient, uint256 amount) internal {
+	function _sendCollateral(address recipient, uint256 amount) internal {
 		if (amount == 0) return;
 		if (pendingServiceCash != 0) {
 			pendingServiceCash = 0;

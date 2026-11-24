@@ -37,7 +37,7 @@ import {
 	statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 	statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate,
-	statoblast_QuestionLedgerEventEmitter_QuestionLedgerEventEmitter,
+	statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule,
 	test_statoblast_CoverageHelpersHarness_CoverageAttributionDecoy,
 	test_statoblast_CoverageHelpersHarness_CoverageAttributionExecuted,
 	test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness,
@@ -399,8 +399,8 @@ describe('Solidity bytecode coverage helpers', () => {
 		const eventEmitter = await deployContract(
 			client,
 			encodeDeployData({
-				abi: statoblast_QuestionLedgerEventEmitter_QuestionLedgerEventEmitter.abi,
-				bytecode: `0x${statoblast_QuestionLedgerEventEmitter_QuestionLedgerEventEmitter.evm.bytecode.object}`,
+				abi: statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule.abi,
+				bytecode: `0x${statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule.evm.bytecode.object}`,
 			}),
 		)
 
@@ -1689,7 +1689,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker.abi,
 				address: deploymentWorkerAddress,
 				functionName: 'deploy',
-				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n],
+				args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, openOraclePriceCoordinator: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
 			}),
 			/Only QuestionLedgerDeployer can use the deployment worker/,
 		)
@@ -1700,7 +1700,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					data: encodeFunctionData({
 						abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker.abi,
 						functionName: 'deploy',
-						args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, zeroAddress],
+						args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, openOraclePriceCoordinator: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
 					}),
 					gas: 10_000_000n,
 				}),
@@ -1720,7 +1720,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeployer.abi,
 				address: questionLedgerDeployerAddress,
 				functionName: 'deploy',
-				args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n],
+				args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, openOraclePriceCoordinator: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
 			}),
 			/Only SecurityPoolFactory can use the deployer/,
 		)
@@ -1731,7 +1731,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					data: encodeFunctionData({
 						abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeployer.abi,
 						functionName: 'deploy',
-						args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, zeroAddress],
+						args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, openOraclePriceCoordinator: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
 					}),
 					gas: 10_000_000n,
 				}),

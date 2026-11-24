@@ -104,9 +104,9 @@ export const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 		contractName: 'SecurityPoolRepairAuctionDeployer',
 	},
 	questionLedgerEventEmitter: {
-		artifactPath: 'contracts/statoblast/QuestionLedgerEventEmitter.sol',
+		artifactPath: 'contracts/statoblast/QuestionLedgerAccountingModule.sol',
 		compilerProfile: 'main',
-		contractName: 'QuestionLedgerEventEmitter',
+		contractName: 'QuestionLedgerAccountingModule',
 	},
 	questionLedgerOperationsDelegate: {
 		artifactPath: 'contracts/statoblast/QuestionLedgerOperationsDelegate.sol',
