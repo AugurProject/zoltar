@@ -43,7 +43,6 @@ export const estimatedPurchaseFee = 'Purchase fee'
 export const registeredQuestions = 'Question'
 export const findQuestionById = 'Find by question ID'
 export const retryQuestionDetails = 'Retry question details'
-export const formatStaleQuestionDetails = (reason: string) => `Showing the last loaded question details. ${reason}`
 export const reviewQuestionDetails = 'Wait for question details before purchasing.'
 export const chooseQuestion = 'Choose a question'
 export const admissionMode = 'Question rules'

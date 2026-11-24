@@ -12,6 +12,7 @@ export const repLead = '1 REP = '
 export const ethTail = ' ETH'
 export const refresh = 'Refresh'
 export const refreshing = 'Refreshing…'
+export const formatSavedReadFailure = (age: string, reason: string) => `Couldn’t refresh, showing data from ${age} ago. ${reason}`
 export const autoLead = 'Auto '
 export const on = 'on'
 export const off = 'off'

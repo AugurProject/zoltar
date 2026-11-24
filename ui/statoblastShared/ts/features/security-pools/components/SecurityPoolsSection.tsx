@@ -1,7 +1,7 @@
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import * as pageCopy from '../../../copy/securityPoolPage.js'
-import { useStatoblastPageRefresh, type RegisterStatoblastPageRefresh, type ReportStatoblastReadStatus } from '../../useStatoblastPageRefresh.js'
+import { useStatoblastPageRefresh, useStatoblastRefreshError, type RegisterStatoblastPageRefresh, type ReportStatoblastReadStatus } from '../../useStatoblastPageRefresh.js'
 import { SecurityPoolQuestionsPanel } from './SecurityPoolQuestionsPanel.js'
 import { StatoblastPoolHead } from './StatoblastPoolHead.js'
 import { statoblastPageHref, type StatoblastPoolPage } from '../../../lib/routing.js'
@@ -69,6 +69,7 @@ export function SecurityPoolsSection({
 	const [deployStep, setDeployStep] = useState(0)
 	const deploySteps = [pageCopy.deployCollateralAndPrice, pageCopy.deployQuestionsSection, pageCopy.deployEconomicsSection, pageCopy.deployAndSetup]
 	const model = useSecurityPool({ accountAddress: parameters.accountAddress, enabled, environmentKey, activeUniverseId, cacheReads: cacheReads && !deploying, resumeSetup: deploying, securityPoolAddress: page?.pool })
+	const refreshError = useStatoblastRefreshError(model.error, model.displayedAt)
 	useStatoblastPageRefresh(registerPageRefresh, model.refresh)
 	useEffect(() => onReadStatus?.(model.displayedAt, undefined), [model.displayedAt, onReadStatus])
 	const actions = useSecurityPoolActions(model, parameters)
@@ -84,7 +85,6 @@ export function SecurityPoolsSection({
 	// Only a visitor with no wallet at all is asked to connect one; a wallet on another network is flagged in the header.
 	if (ownerMissing) ownerMessage = walletConnected ? copy.ownerAddressNeeded : copy.ownerNeeded
 	const disabled = actions.busy !== undefined
-	const isPresentationOnly = (model.snapshot === undefined && model.presentationSnapshot !== undefined) || (deploying && model.setup === undefined && model.savedSetupStage !== undefined)
 	const shown = model.presentationSnapshot
 	const deployReasonId = useId()
 	// Once an account has been shown, its price report stays mounted through a failed refresh so typed drafts survive;
@@ -284,16 +284,7 @@ export function SecurityPoolsSection({
 							{pageCopy.tryAgain}
 						</button>
 					}
-					detail={
-						isPresentationOnly ? (
-							<>
-								{pageCopy.staleDataLead}
-								{model.error}
-							</>
-						) : (
-							model.error
-						)
-					}
+					detail={refreshError}
 				/>
 			)}
 			{actions.error === undefined ? undefined : <UserMessage placement='section' tone='error' announcement='polite' detail={actions.error} />}

@@ -1,5 +1,5 @@
 import * as pageCopy from '@zoltar/ui-statoblast-shared/copy/watchlist.js'
-import { useStatoblastPageRefresh, type RegisterStatoblastPageRefresh, type ReportStatoblastReadStatus } from '@zoltar/ui-statoblast-shared/features/useStatoblastPageRefresh.js'
+import { useStatoblastPageRefresh, useStatoblastRefreshError, type RegisterStatoblastPageRefresh, type ReportStatoblastReadStatus } from '@zoltar/ui-statoblast-shared/features/useStatoblastPageRefresh.js'
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { getAddress, isAddress, formatUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -19,7 +19,7 @@ import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { useFavorites } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { createActiveEnvironmentGuard, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
+import { ensureSentence, getErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { hasInvalidUniverseQueryParam, readUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
@@ -93,6 +93,7 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 	const [loading, setLoading] = useState(false)
 	const [progress, setProgress] = useState<{ completed: number; total: number }>()
 	const [readAt, setReadAt] = useState<number>()
+	const refreshError = useStatoblastRefreshError(readError, readAt)
 	const [rows, setRows] = useState<ReadonlyMap<string, WatchlistRow>>(new Map())
 	const inputId = useId()
 	const fileId = useId()
@@ -136,7 +137,7 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 					if (!automatic && anchor !== undefined) displayCache.write(result, anchor)
 				},
 				error => {
-					if (current()) setReadError(getErrorMessage(error, pageCopy.refreshFailedError))
+					if (current()) setReadError(ensureSentence(getErrorDetail(error) ?? pageCopy.refreshFailedError))
 				},
 			)
 			.finally(() => {
@@ -274,7 +275,7 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 					tone='error'
 					detail={
 						<>
-							{readError}{' '}
+							{refreshError}{' '}
 							<button className='secondary' type='button' onClick={() => void refresh()}>
 								{pageCopy.tryAgain}
 							</button>

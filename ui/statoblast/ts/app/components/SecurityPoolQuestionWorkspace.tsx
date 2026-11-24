@@ -3,7 +3,7 @@ import { decodeReportingOverview, reportingOverview, StatoblastReportingOverview
 import { decodeStoredValue } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
 import { openHistory } from '../lib/watchlistHistory.js'
 import * as pageCopy from '@zoltar/ui-statoblast-shared/copy/questionPage.js'
-import { useStatoblastPageRefresh, type RegisterStatoblastPageRefresh, type ReportStatoblastReadStatus } from '@zoltar/ui-statoblast-shared/features/useStatoblastPageRefresh.js'
+import { useStatoblastPageRefresh, useStatoblastRefreshError, type RegisterStatoblastPageRefresh, type ReportStatoblastReadStatus } from '@zoltar/ui-statoblast-shared/features/useStatoblastPageRefresh.js'
 import { StatoblastSharesFacts } from './StatoblastSharesFacts.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -90,6 +90,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 	const sharesFallback = cachedShares?.scope === cacheScope && trading.tradingDetails === undefined ? cachedShares : undefined
 	const dataAge = entry.tab === 'shares' ? sharesFallback?.savedAt : reportFallback?.checkedAt
 	const displayedAt = dataAge ?? (lastRead?.scope === readScope ? lastRead.at : cached?.savedAt)
+	const refreshError = useStatoblastRefreshError(loadError, displayedAt)
 	const readQuestion = () => {
 		if (!enabled || document.hidden) return Promise.resolve()
 		if (activeRead.current?.scope === readScope) return activeRead.current.promise
@@ -240,19 +241,34 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 					{tabs}
 					{entry.tab === 'shares' && cachedShares?.scope === cacheScope && <SavedShares {...cachedShares.data} />}
 					{entry.tab === 'reporting' && cachedReporting?.scope === cacheScope && <StatoblastReportingOverview view={cachedReporting.data} now={cached.timestamp} autoRefresh={autoRefresh} />}
-					<RetryableNotice message={loadError === undefined ? undefined : copy.formatStaleQuestionDetails(loadError)} retryLabel={copy.retryQuestionDetails} onRetry={retryQuestion} disabled={loading} />
+					<RetryableNotice message={refreshError} retryLabel={pageCopy.tryAgain} onRetry={retryQuestion} disabled={loading} />
 				</div>
 			)
 		}
 		const destination = unavailable ? statoblastPageHref({ kind: 'pool', pool: entry.pool, tab: 'fork' }) : statoblastPageHref({ kind: 'watchlist' })
-		return <EmptyState title={loading ? copy.loadingQuestion : copy.questionUnavailable} detail={unavailable ? pageCopy.questionUnprepared : (loadError ?? pageCopy.loadingQuestionDetails)} actions={<a href={destination}>{unavailable ? pageCopy.forkRecovery : pageCopy.watchlist}</a>} />
+		return (
+			<EmptyState
+				title={loading ? copy.loadingQuestion : copy.questionUnavailable}
+				detail={unavailable ? pageCopy.questionUnprepared : (loadError ?? pageCopy.loadingQuestionDetails)}
+				actions={
+					<>
+						{loadError !== undefined && !unavailable && (
+							<button className='secondary' type='button' onClick={retryQuestion}>
+								{pageCopy.tryAgain}
+							</button>
+						)}
+						<a href={destination}>{unavailable ? pageCopy.forkRecovery : pageCopy.watchlist}</a>
+					</>
+				}
+			/>
+		)
 	}
 
 	return (
 		<div className='route-view-flow'>
 			<StatoblastQuestionHead page={entry} question={selected} reporting={reportingDetails} now={now} checkingDeadline={checkingDeadline} hasShares={Object.values(trading.tradingDetails?.shareBalances ?? {}).some(balance => balance > 0n)} />
 			<UpdatedAgo updatedAt={displayedAt} refreshing={loading} />
-			<RetryableNotice message={loadError === undefined ? undefined : copy.formatStaleQuestionDetails(loadError)} retryLabel={copy.retryQuestionDetails} onRetry={retryQuestion} disabled={loading} />
+			<RetryableNotice message={refreshError} retryLabel={pageCopy.tryAgain} onRetry={retryQuestion} disabled={loading} />
 			<ErrorNotice message={ownFork.error} />
 			{tabs}
 			{entry.tab === 'shares' && <StatoblastSharesFacts question={selected} facts={snapshot?.sharesFacts} now={now} />}

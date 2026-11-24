@@ -23,7 +23,7 @@ test(
 			const questionId = pool?.questionIds[0]
 			const [owner] = await backend.getAccounts()
 			if (pool === undefined || questionId === undefined || owner === undefined) throw new Error('Missing seeded pool, question or wallet.')
-			let offline = false
+			let offline = true
 			const client = backend.createReadClient()
 			const readContract: typeof client.readContract = async request => {
 				if (offline && request.functionName === 'initialReportPriorityFeeAttoEthPerGas') throw new Error('Temporary question read failure.')
@@ -43,6 +43,15 @@ test(
 				entry: { kind: 'question', pool: pool.address, questionId, tab: 'shares' } as const,
 			}
 			const view = lifecycle.trackRendered(await renderIntoDocument(h(SecurityPoolQuestionWorkspace, props)))
+			const clickRetry = async () => {
+				const retry = [...view.container.querySelectorAll('button')].find(button => button.textContent === 'Try again')
+				if (retry === undefined) throw new Error('Missing question retry')
+				await act(() => retry.click())
+			}
+			await waitFor(() => expect(view.container.textContent).toContain('Temporary question read failure.'), simulationWaitOptions)
+			expect(view.container.textContent).not.toContain('showing data from')
+			offline = false
+			await clickRetry()
 			await waitFor(() => expect(view.container.textContent).toContain('Mint complete sets'), simulationWaitOptions)
 			expect(view.container.textContent).toContain('Resolution rules and details')
 			expect(view.container.querySelector('[aria-current="page"]')?.textContent).toBe('Question')
@@ -51,8 +60,11 @@ test(
 			offline = true
 			await act(() => invalidateAppData())
 			await waitFor(() => expect(view.container.textContent).toContain('Temporary question read failure.'), simulationWaitOptions)
+			expect(view.container.textContent).toMatch(/Couldn’t refresh, showing data from \d+s ago\./)
 			expect(view.container.textContent).toContain('Mint complete sets')
 			offline = false
+			await clickRetry()
+			await waitFor(() => expect(view.container.textContent).not.toContain('showing data from'), simulationWaitOptions)
 			await act(() => render(h(SecurityPoolQuestionWorkspace, { ...props, entry: { ...props.entry, tab: 'reporting' } }), view.container))
 			await waitFor(() => expect(view.container.textContent).toContain('Add to calendar'), simulationWaitOptions)
 		} finally {

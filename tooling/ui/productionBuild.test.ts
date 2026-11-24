@@ -612,10 +612,11 @@ test(
 				expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5000REP')
 				expect(await intercept(undefined)).toBe(true)
 				await driver.clickButton('Refresh')
-				await driver.waitForBodyText('Showing saved data')
+				await driver.waitForBodyText('Couldn’t refresh, showing data from')
+				expect(await driver.evaluate('document.body.innerText')).toMatch(/showing data from \d+s ago/)
 				expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5000REP')
 				await driver.clickButton('Try again')
-				await driver.waitForBodyWithoutText('Showing saved data')
+				await driver.waitForBodyWithoutText('Couldn’t refresh, showing data from')
 			},
 			SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS - PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS,
 		)
