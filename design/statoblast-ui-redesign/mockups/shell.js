@@ -46,7 +46,7 @@
 		<a class="brand" href="02-watchlist.html" aria-label="Augur Statoblast, Watchlist"><img src="favicon.svg" alt="" />Augur Statoblast</a>
 		<div class="header-right">
 			<span class="chip hide-m num" title="REP price">1 REP = 0.0045 ETH</span>
-			<span class="refresh-ctl"><button type="button" class="chip" aria-label="Refresh. Updated 2 min ago">↻ <span class="num">2 min ago</span><span class="show-m"> · auto off</span></button><label class="chip hide-m auto-refresh"><input type="checkbox" /> Auto-refresh</label></span>
+			<span class="refresh-ctl"><button type="button" class="chip" aria-label="Refresh. Updated 2 min ago. Auto-refresh off">↻ <span class="num">2 min ago</span><span class="show-m"> · auto off</span></button><label class="chip hide-m auto-refresh"><input type="checkbox" /> Auto-refresh</label></span>
 			<span class="umenu-wrap"><button type="button" class="chip universe-chip${menuOpen ? ' open' : ''}" aria-expanded="${menuOpen}"${menuOpen ? ' aria-controls="umenu"' : ''}><span class="hide-m" style="font-weight: 400; opacity: .75">Universe </span>Augur v2 › Yes${alert ? ` <span class="count" aria-hidden="true">!</span><span class="sr">, ${alertLabel}</span>` : ''} ▾</button>${menuOpen ? universeMenu : ''}</span>
 			<span class="chip num"><span class="dot"></span>0x7a3f…91c2</span>
 			<span class="chip" aria-label="Activity">◴<span class="icon-label"> Activity</span></span>

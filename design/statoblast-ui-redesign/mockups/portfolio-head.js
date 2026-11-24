@@ -37,7 +37,7 @@
 		<div><span class="k">Security multiplier</span><span class="v num">200%</span></div>
 		<div><span class="k">Min commitment</span><span class="v num">1.00 WETH</span></div>
 	</div>
-	<div class="view-tabs many">${tabs.map(([id, label, extra]) => `<a class="${on === id ? 'on' : ''} ">${label} ${extra}</a>`).join('')}</div>
+	<div class="view-tabs many">${tabs.map(([id, label, extra]) => `<a class="${on === id ? 'on' : ''}">${label} ${extra}</a>`).join('')}</div>
 	<div class="view-select field"><label>Page</label><div class="input select" style="font-family: var(--sans)">${current[1]}${(() => {
 		const m = current[2].replace(/<[^>]+>/g, '').trim()
 		return m === '' ? '' : ' · ' + (m === '!' ? 'action needed' : m.toLowerCase())

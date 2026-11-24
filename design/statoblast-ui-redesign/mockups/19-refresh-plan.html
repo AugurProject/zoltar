@@ -51,7 +51,7 @@
 						</tr>
 						<tr>
 							<td><b>Deposit search, inherited-claim preparation</b></td>
-							<td>Foreground jobs: run on their own loop while their screen is open, independent of Auto-refresh; one request in flight; pausable; cursor saved; back off on timeout</td>
+							<td>Foreground jobs: run on their own loop while their screen is open, independent of Auto-refresh; one request in flight; paused while the tab is hidden and resumed when it is visible; cursor saved; back off on timeout</td>
 							<td>2 pages of 30 per request</td>
 						</tr>
 						<tr>
@@ -230,7 +230,7 @@
 							<tr>
 								<td>Per Refresh (or per block with Auto-refresh)</td>
 								<td class="r num">≥ 130 (page only)</td>
-								<td class="r num"><b>≈ 3–5</b></td>
+								<td class="r num"><b>≤ 4</b></td>
 							</tr>
 							<tr>
 								<td>Sub-calls per Refresh</td>
