@@ -791,7 +791,7 @@ describe('#1274: positions collateralized in an allowlisted non-WETH token', () 
 	})
 })
 
-test('keeps a durable position through read disagreement and records agreed entry finality exactly once', async () => {
+test.each(['disagree', 'disconnect'] as const)('#1523 keeps a durable position through %s and records agreed entry finality exactly once', async initialMode => {
 	const receiptHash = `0x${'aa'.repeat(32)}` as Hex
 	const descendantHash = `0x${'bb'.repeat(32)}` as Hex
 	const newDescendantHash = `0x${'cc'.repeat(32)}` as Hex
@@ -816,7 +816,7 @@ test('keeps a durable position through read disagreement and records agreed entr
 		const config = { ...(await loadConfiguration(settingsFile)), executor }
 		const position = openPositionFixture({ account: localAccount.address, entryReceiptBlockHash: receiptHash, entryReceiptBlockNumber: '100', status: 'open-pending-finality', executionIntent: executionIntentFixture(), reportAmount1: '1', reportAmount2: '2', reportDisputeIndex: '0', reportFeePercentage: '0' })
 		await savePositionJournal(journal, [position], 1)
-		let mode: 'disagree' | 'agree' = 'disagree'
+		let mode: 'disagree' | 'disconnect' | 'agree' = initialMode
 		let reads = 0
 		const buildReader = (index: number) =>
 			createPublicClient({
@@ -824,6 +824,7 @@ test('keeps a durable position through read disagreement and records agreed entr
 				transport: custom({
 					request: async ({ method, params }) => {
 						reads += 1
+						if (mode === 'disconnect') throw new Error('RPC disconnected during lifecycle read')
 						if (!Array.isArray(params)) throw new Error(`Missing arguments: ${method}`)
 						if (method === 'eth_getBlockByNumber') {
 							const block = String(params[0])
@@ -889,7 +890,7 @@ test('keeps a durable position through read disagreement and records agreed entr
 		}
 		expect(await runAt(111n)).toBe('waiting')
 		expect(reads).toBe(0)
-		await expect(runAt(112n)).rejects.toThrow('RPC disagreement')
+		await expect(runAt(112n)).rejects.toThrow(mode === 'disagree' ? 'RPC disagreement' : 'RPC disconnected')
 		expect(writes).toHaveLength(0)
 		const [interrupted] = await loadPositionJournal(journal, 1)
 		expect(interrupted).toMatchObject({ status: 'open-pending-finality', entryReceiptBlockHash: receiptHash, actualEntryGasCostEth: '0.001', executionIntent: position.executionIntent })
