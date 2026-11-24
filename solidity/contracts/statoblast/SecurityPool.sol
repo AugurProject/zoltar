@@ -34,7 +34,7 @@ interface ISecurityPoolForkCoordinator {
 	function clocks(uint248 universeId) external view returns (uint48, uint48, bool, bool);
 	function isReady(uint248 universeId) external view returns (bool);
 	function isPriceReportingOpen(uint248 universeId) external view returns (bool);
-	function auctionExposure(uint248 universeId) external view returns (uint256 commitment, uint256 rep);
+	function repairAuctionExposure(uint248 universeId) external view returns (uint256 commitment, uint256 rep);
 	function securityPoolTime(uint248 universeId) external view returns (uint48);
 	function forkSecurityPoolTime(uint248 universeId) external view returns (uint48);
 	function nativeTimeForSecurityPoolTime(uint248 universeId, uint48 timestamp) external view returns (uint48);
@@ -43,7 +43,7 @@ interface ISecurityPoolForkCoordinator {
 	function freeze(uint248 universeId) external;
 	function inheritedFixedOutcome(uint248 universeId, uint256 questionId) external view returns (bool, uint256);
 }
-interface ISecurityPoolAuctionDeployer {
+interface ISecurityPoolRepairAuctionDeployer {
 	function create(address authority, address securityPool, uint248 child, uint256 close, uint256 inventory, uint256 shortfall) external returns (address);
 }
 interface ISecurityPoolForkCoordinatorDeployer {
@@ -82,7 +82,7 @@ contract SecurityPool is ISecurityPoolSettlement {
 		SecurityPoolReporterLedgerDeployer reporters;
 		ISecurityPoolForkCoordinatorDeployer forks;
 		SecurityPoolServicesDeployer services;
-		ISecurityPoolAuctionDeployer auctions;
+		ISecurityPoolRepairAuctionDeployer repairAuctions;
 	}
 	ISecurityPoolFactory public immutable factory;
 
@@ -101,7 +101,7 @@ contract SecurityPool is ISecurityPoolSettlement {
 	uint256 public immutable minimumOutcomeRate;
 	uint48 public constant MAXIMUM_REWARD_VESTING_SECONDS = 3650 days;
 	uint48 public immutable rewardVestingSeconds;
-	ISecurityPoolAuctionDeployer public immutable auctionDeployer;
+	ISecurityPoolRepairAuctionDeployer public immutable repairAuctionDeployer;
 	SecurityPoolPurchase public immutable quoteHelper;
 	SecurityPoolServices public immutable services;
 	SecurityPoolSettlement public settlement;
@@ -134,7 +134,7 @@ contract SecurityPool is ISecurityPoolSettlement {
 	constructor(ISecurityPoolFactory _factory, Deployers memory deployment, OriginConfig memory origin, uint256 horizon, ISecurityPoolQuestionAdmissionPolicy admission, EconomicsConfig memory config) {
 		require(address(admission).code.length != 0, 'Admission policy has no code');
 		require(config.purchaseFeeBps <= 10_000 && config.annualFeeBps <= 10_000 && config.minimumCommitmentAttoEth > 0, 'Invalid security pool economics');
-		require(address(deployment.auctions).code.length != 0, 'Auction deployer has no code');
+		require(address(deployment.repairAuctions).code.length != 0, 'Auction deployer has no code');
 		require(config.minimumOutcomeRate > 0 && config.minimumOutcomeRate <= 1e18, 'Invalid minimum exchange rate');
 		require(address(deployment.capital).code.length != 0 && address(deployment.commitments).code.length != 0 && address(deployment.fees).code.length != 0 && address(deployment.books).code.length != 0 && address(deployment.settlement).code.length != 0 && address(deployment.reporters).code.length != 0 && address(deployment.forks).code.length != 0 && address(deployment.services).code.length != 0, 'Security pool deployer has no code');
 		// A fee stream ends one vesting duration after its funding time and must fit the uint48 clock.
@@ -169,7 +169,7 @@ contract SecurityPool is ISecurityPoolSettlement {
 		minimumCommitmentAttoEth = config.minimumCommitmentAttoEth;
 		minimumOutcomeRate = config.minimumOutcomeRate;
 		rewardVestingSeconds = config.rewardVestingSeconds;
-		auctionDeployer = deployment.auctions;
+		repairAuctionDeployer = deployment.repairAuctions;
 		deployers = deployment;
 		quoteHelper = new SecurityPoolPurchase(address(this));
 		services = deployment.services.create(address(this));
@@ -239,11 +239,11 @@ contract SecurityPool is ISecurityPoolSettlement {
 	}
 	function oracleExposure(uint248 universeId) external view returns (uint256) {
 		(, uint256 commitment, ) = capitalLedger[universeId].totals();
-		(uint256 auctionCommitment, ) = ISecurityPoolForkCoordinator(forkController).auctionExposure(universeId);
-		return Math.max(Math.max(commitment, auctionCommitment), capitalLedger[universeId].demandAttoEth());
+		(uint256 repairAuctionCommitment, ) = ISecurityPoolForkCoordinator(forkController).repairAuctionExposure(universeId);
+		return Math.max(Math.max(commitment, repairAuctionCommitment), capitalLedger[universeId].demandAttoEth());
 	}
 	function oracleRepExposure(uint248 universeId) external view returns (uint256 rep) {
-		(, rep) = ISecurityPoolForkCoordinator(forkController).auctionExposure(universeId);
+		(, rep) = ISecurityPoolForkCoordinator(forkController).repairAuctionExposure(universeId);
 		(uint256 pledged, , ) = capitalLedger[universeId].totals();
 		rep += pledged;
 	}

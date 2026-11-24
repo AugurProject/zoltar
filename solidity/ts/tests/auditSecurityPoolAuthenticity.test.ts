@@ -50,7 +50,7 @@ describe('audit: only security pools the factory deployed are canonical', () => 
 		reporters: infrastructure().securityPoolReporterLedgerDeployer,
 		forks: infrastructure().securityPoolForkCoordinatorDeployer,
 		services: infrastructure().securityPoolServicesDeployer,
-		auctions: infrastructure().securityPoolAuctionDeployer,
+		repairAuctions: infrastructure().securityPoolRepairAuctionDeployer,
 	})
 	/** The pre-fix route: the creator deploys the security pool contract and so chooses its module deployers. */
 	const deployOutsideFactory = (deployers = canonicalDeployers()) =>
@@ -132,13 +132,13 @@ describe('audit: only security pools the factory deployed are canonical', () => 
 	test('a factory-deployed security pool is built by the pinned module deployers', async () => {
 		const owner = fixture.owner()
 		const created = await fixture.deploySecurityPool()
-		expect(getAddress(await owner.readContract({ abi: securityPoolArtifact.abi, address: created, functionName: 'auctionDeployer' }))).toBe(getAddress(infrastructure().securityPoolAuctionDeployer))
+		expect(getAddress(await owner.readContract({ abi: securityPoolArtifact.abi, address: created, functionName: 'repairAuctionDeployer' }))).toBe(getAddress(infrastructure().securityPoolRepairAuctionDeployer))
 		const capital = await fixture.capitalFor(created)
 		const root = { abi: capitalArtifact.abi, address: capital } as const
 		const modules: readonly [Address, Address, Hex, RuntimeArtifact][] = [
 			[capital, await owner.readContract({ abi: securityPoolArtifact.abi, address: created, functionName: 'capitalImplementation' }), universeCloneBindings(fixture.base.genesisUniverse, getRepTokenAddress(fixture.base.genesisUniverse)), capitalArtifact],
 			[await owner.readContract({ ...root, functionName: 'commitmentIndex' }), getCreateAddress({ from: infrastructure().securityPoolCommitmentIndexDeployer, nonce: 1n }), capital, indexArtifact],
-			[await owner.readContract({ ...root, functionName: 'feeStreams' }), getCreateAddress({ from: infrastructure().securityPoolCapitalFeeStreamsDeployer, nonce: 1n }), capital, streamsArtifact],
+			[await owner.readContract({ ...root, functionName: 'feeStreams' }), getCreateAddress({ from: infrastructure().securityPoolCapitalFeeStreamsDeployer, nonce: 2n }), capital, streamsArtifact],
 		]
 		for (const [clone, implementation, bindings, artifact] of modules) {
 			expect((await owner.getCode({ address: clone }))?.toLowerCase()).toBe(boundCloneRuntimeCode(implementation, bindings).toLowerCase())

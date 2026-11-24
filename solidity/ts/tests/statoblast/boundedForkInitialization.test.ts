@@ -87,9 +87,9 @@ describe('Statoblast: bounded fork initialization', () => {
 		// Exercise the largest fixed-width carry representation, independent of the
 		// number of historical questions, deposits and prior native forks.
 		for (const outcome of outcomes) {
-			const outcomeSlot = 8n + 78n * BigInt(outcome)
-			stateDiff[formatStorageSlot(outcomeSlot + 6n)] = leafCount
-			for (let peak = 0; peak < 64; peak++) stateDiff[formatStorageSlot(outcomeSlot + 7n + BigInt(peak))] = BigInt(keccak256(formatStorageSlot(BigInt(1 + outcome * 64 + peak))))
+			const outcomeSlot = 8n + 76n * BigInt(outcome)
+			stateDiff[formatStorageSlot(outcomeSlot + 4n)] = leafCount
+			for (let peak = 0; peak < 64; peak++) stateDiff[formatStorageSlot(outcomeSlot + 5n + BigInt(peak))] = BigInt(keccak256(formatStorageSlot(BigInt(1 + outcome * 64 + peak))))
 		}
 		await base.mockWindow.addStateOverrides({ [parentGame]: { stateDiff } })
 		const parentStates = await Promise.all(outcomes.map(outcome => getEscalationGameOutcomeState(owner(), parentGame, outcome)))
@@ -119,7 +119,7 @@ describe('Statoblast: bounded fork initialization', () => {
 		const ledger = { abi: capitalArtifact.abi, address: childLedger } as const
 		expect(await owner().readContract({ abi: tokenArtifact.abi, address: getRepTokenAddress(childUniverse), functionName: 'allowance', args: [childLedger, getZoltarAddress()] })).toBe(0n)
 		await expect(other().simulateContract({ ...ledger, functionName: 'initialize', args: emptyModules })).rejects.toThrow('Only security pool')
-		for (const functionName of ['lifecycleDelegate', 'auctionDelegate'] as const) {
+		for (const functionName of ['lifecycleDelegate', 'repairAuctionDelegate'] as const) {
 			const origin = await owner().readContract({ ...ledger, address: fixture.capitalLedger, functionName })
 			expect(await owner().readContract({ ...ledger, functionName })).toBe(origin)
 		}

@@ -1,5 +1,5 @@
 import { test, beforeEach, describe } from 'bun:test'
-import { formatStorageSlot, getUintMappingStorageSlot } from '../testSupport/storage'
+import { formatStorageSlot } from '../testSupport/storage'
 import type { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
@@ -37,7 +37,6 @@ import { PERMIT_TYPES, signTypedDataV4, tokenDomain } from '../testSupport/simul
 // Forker deposit fraction: the deposit is 5% of total supply (1/20).
 const FORKER_DEPOSIT_FRACTION = 20n
 const SCALAR_RESERVED_BITS_MASK = ((1n << 15n) - 1n) << 240n
-const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
 
 function withScalarReservedBits(answer: bigint, reservedBits = 1n) {
 	return answer | ((reservedBits << 240n) & SCALAR_RESERVED_BITS_MASK)
@@ -121,7 +120,14 @@ describe('Contract Test Suite', () => {
 	})
 
 	test('rounds every nonzero universe supply up to a positive fork threshold without overflow', async () => {
-		const universeSupplySlot = formatStorageSlot(getUintMappingStorageSlot(1n, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT))
+		const question = makeQuestion('Canonical child supply authority #1533')
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, question, outcomes)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(client, GENESIS_UNIVERSE, getQuestionId(question, outcomes))
+		await deployChild(client, GENESIS_UNIVERSE, 1n)
+		const child = getChildUniverseId(GENESIS_UNIVERSE, 1n)
+		const universeSupplySlot = formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)
 		const divisor = DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
 		const boundarySupplies = [0n, 1n, divisor - 1n, divisor, divisor + 1n, MAX_UINT256 - (MAX_UINT256 % divisor)]
 		let state = 0x5eedn
@@ -131,10 +137,10 @@ describe('Contract Test Suite', () => {
 		})
 		for (const supply of [...boundarySupplies, ...generatedSupplies]) {
 			await mockWindow.addStateOverrides({
-				[getZoltarAddress()]: { stateDiff: { [universeSupplySlot]: supply } },
+				[getRepTokenAddress(child)]: { stateDiff: { [universeSupplySlot]: supply } },
 			})
 			const expected = supply === 0n ? 0n : supply / divisor + (supply % divisor === 0n ? 0n : 1n)
-			assert.strictEqual(await getZoltarForkThreshold(client, 1n), expected, `ceiling threshold mismatch for supply ${supply.toString()}`)
+			assert.strictEqual(await getZoltarForkThreshold(client, child), expected, `ceiling threshold mismatch for supply ${supply.toString()}`)
 		}
 	})
 

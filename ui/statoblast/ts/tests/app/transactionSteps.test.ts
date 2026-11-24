@@ -886,7 +886,7 @@ test('minting complete sets sends the transaction directly and tracks its receip
 			if (request.functionName === 'universeId') return 0n
 			if (request.functionName === 'openOraclePriceCoordinator') return account
 			if (request.functionName === 'lastSettlementTimestamp') return 1n
-			if (request.functionName === 'getCurrentMintingCapacityAttoEth') return 10n ** 18n
+			if (request.functionName === 'additionalMintCapacityAttoEth') return 10n ** 18n
 			throw new Error(`Unexpected read: ${request.functionName}`)
 		}),
 		waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }),

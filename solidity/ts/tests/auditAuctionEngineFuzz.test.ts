@@ -4,7 +4,7 @@ import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilN
 import { createWriteClient, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'
-import { statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact, statoblast_Multicall3_Multicall3 as multicallArtifact, test_statoblast_CollateralTestToken_CollateralTestToken as tokenArtifact } from '../types/contractArtifact'
+import { statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as engineArtifact, statoblast_Multicall3_Multicall3 as multicallArtifact, test_statoblast_CollateralTestToken_CollateralTestToken as tokenArtifact } from '../types/contractArtifact'
 
 // Randomized and exhaustive-small differential test of the uniform-price auction engine
 // against an independent brute-force model (sections A and B of the audit brief).
@@ -46,7 +46,6 @@ type ModelClearing = {
 	filledLots: bigint
 	raisedAttoEth: bigint
 	soldAttoRep: bigint
-	roundingAttoRep: bigint
 	marginalMinimumAttoRepPerLot: bigint
 	marginalFillLots: bigint
 	marginalDemandLots: bigint
@@ -78,7 +77,7 @@ function modelClearing(config: Config, bids: readonly ModelBid[], maximum: bigin
 	}
 	const fills = new Map<bigint, bigint>()
 	for (const bid of bids) fills.set(bid.id, 0n)
-	if (filled === 0n) return { attoRepPerLot: 0n, filledLots: 0n, raisedAttoEth: 0n, soldAttoRep: 0n, roundingAttoRep: 0n, marginalMinimumAttoRepPerLot: 0n, marginalFillLots: 0n, marginalDemandLots: 0n, fullBeforeLots: 0n, raiseLimitReached: false, fills }
+	if (filled === 0n) return { attoRepPerLot: 0n, filledLots: 0n, raisedAttoEth: 0n, soldAttoRep: 0n, marginalMinimumAttoRepPerLot: 0n, marginalFillLots: 0n, marginalDemandLots: 0n, fullBeforeLots: 0n, raiseLimitReached: false, fills }
 	const marginal = lotPrice[Number(filled) - 1]
 	if (marginal === undefined) throw new Error('Model marginal missing')
 	const fullBefore = BigInt(lotPrice.filter(price => price < marginal).length)
@@ -87,15 +86,14 @@ function modelClearing(config: Config, bids: readonly ModelBid[], maximum: bigin
 	const reached = filled === maximum
 	const unrounded = maxOf(marginal, floor)
 	const attoRepPerLot = unrounded - (unrounded % config.grid)
-	const principal = filled * attoRepPerLot
-	const sold = principal
+	const sold = filled * attoRepPerLot
 	// Price-time priority: equal limits fill in submission (id) order.
 	let cumulative = 0n
 	for (const bid of order) {
 		fills.set(bid.id, minOf(bid.lots, maxOf(filled - cumulative, 0n)))
 		cumulative += bid.lots
 	}
-	return { attoRepPerLot, filledLots: filled, raisedAttoEth: filled * config.lot, soldAttoRep: sold, roundingAttoRep: sold - principal, marginalMinimumAttoRepPerLot: marginal, marginalFillLots: marginalFill, marginalDemandLots: demand, fullBeforeLots: fullBefore, raiseLimitReached: reached, fills }
+	return { attoRepPerLot, filledLots: filled, raisedAttoEth: filled * config.lot, soldAttoRep: sold, marginalMinimumAttoRepPerLot: marginal, marginalFillLots: marginalFill, marginalDemandLots: demand, fullBeforeLots: fullBefore, raiseLimitReached: reached, fills }
 }
 
 // The specification's properties, checked on whatever result is supplied (model or chain).
@@ -108,13 +106,11 @@ function specViolations(config: Config, bids: readonly ModelBid[], maximum: bigi
 	if (result.attoRepPerLot % config.grid !== 0n) problems.push('clearing REP per lot is off the grid')
 	if (result.filledLots * result.attoRepPerLot > config.inventory) problems.push('principal exceeds inventory')
 	if (result.soldAttoRep > config.inventory) problems.push('sold exceeds inventory')
-	if (result.soldAttoRep !== result.filledLots * result.attoRepPerLot + result.roundingAttoRep) problems.push('sold != principal + rounding')
+	if (result.soldAttoRep !== result.filledLots * result.attoRepPerLot) problems.push('sold != grid-priced principal')
 	if (result.raisedAttoEth !== result.filledLots * config.lot) problems.push('raised != filled * lot')
 	if (result.filledLots !== 0n) {
 		if (result.attoRepPerLot < floor) problems.push('clearing REP per lot is below the floor')
 		if (result.raiseLimitReached !== (result.filledLots === maximum)) problems.push('raise limit flag wrong')
-		if (result.roundingAttoRep !== 0n) problems.push('clearing must sell only grid-priced principal')
-		if (!result.raiseLimitReached && result.roundingAttoRep >= result.filledLots * config.grid + config.grid) problems.push('weak demand rounding exceeds one grid step per lot')
 	} else if (result.soldAttoRep !== 0n || result.attoRepPerLot !== 0n) problems.push('empty clearing sells REP')
 	// Maximality: one more lot is over the limit, beyond demand, or unaffordable.
 	const nextLength = result.filledLots + 1n
@@ -246,7 +242,7 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 
 	const createEngine = async (config: Config): Promise<Engine> => {
 		const address = await deploy(encodeDeployData({ abi: engineArtifact.abi, bytecode: `0x${engineArtifact.evm.bytecode.object}`, args: [controller, token] }))
-		await send(address, encodeFunctionData({ abi: engineArtifact.abi, functionName: 'startAuction', args: [0n, CLOSE, config.lot, config.target, config.inventory, config.grid, controller] }))
+		await send(address, encodeFunctionData({ abi: engineArtifact.abi, functionName: 'startRepairAuction', args: [0n, CLOSE, config.lot, config.target, config.inventory, config.grid, controller] }))
 		const floors: bigint[] = []
 		const steps = config.inventory / config.grid + 2n
 		if (steps <= 44n) for (let step = 0n; step <= steps; step++) floors.push(step * config.grid)
@@ -279,18 +275,17 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 		combos.forEach((combo, index) => {
 			const outcome = results[index]
 			if (outcome === undefined || !outcome.success) throw new Error(`previewFinalization(${combo.maximum}, ${combo.floor}) reverted: ${describeEngine(engine)}`)
-			const words = wordsOf(outcome.returnData, 10)
+			const words = wordsOf(outcome.returnData, 9)
 			const actual = {
 				attoRepPerLot: wordAt(words, 0),
 				filledLots: wordAt(words, 1),
 				raisedAttoEth: wordAt(words, 2),
 				soldAttoRep: wordAt(words, 3),
-				roundingAttoRep: wordAt(words, 4),
-				marginalMinimumAttoRepPerLot: wordAt(words, 5),
-				marginalFillLots: wordAt(words, 6),
-				marginalDemandLots: wordAt(words, 7),
-				fullBeforeLots: wordAt(words, 8),
-				raiseLimitReached: wordAt(words, 9) === 1n,
+				marginalMinimumAttoRepPerLot: wordAt(words, 4),
+				marginalFillLots: wordAt(words, 5),
+				marginalDemandLots: wordAt(words, 6),
+				fullBeforeLots: wordAt(words, 7),
+				raiseLimitReached: wordAt(words, 8) === 1n,
 			}
 			const expected = modelClearing(config, bids, combo.maximum, combo.floor)
 			const context = () => `previewFinalization(max=${combo.maximum}, floor=${combo.floor}) ${describeEngine(engine)}`
@@ -302,7 +297,6 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 				actual.filledLots !== expectedFields.filledLots ||
 				actual.raisedAttoEth !== expectedFields.raisedAttoEth ||
 				actual.soldAttoRep !== expectedFields.soldAttoRep ||
-				actual.roundingAttoRep !== expectedFields.roundingAttoRep ||
 				actual.marginalMinimumAttoRepPerLot !== expectedFields.marginalMinimumAttoRepPerLot ||
 				actual.marginalFillLots !== expectedFields.marginalFillLots ||
 				actual.marginalDemandLots !== expectedFields.marginalDemandLots ||
@@ -373,8 +367,8 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 		clock = maxOf(clock, CLOSE)
 		await send(engine.address, encodeFunctionData({ abi: engineArtifact.abi, functionName: 'finalize', args: [maximum, floor] }))
 		const stored = await client.readContract({ abi: engineArtifact.abi, address: engine.address, functionName: 'clearing' })
-		const [attoRepPerLot, filledLots, raisedAttoEth, soldAttoRep, roundingAttoRep, marginalMinimumAttoRepPerLot, marginalFillLots, marginalDemandLots, fullBeforeLots, raiseLimitReached] = stored
-		expect({ context, attoRepPerLot, filledLots, raisedAttoEth, soldAttoRep, roundingAttoRep, marginalMinimumAttoRepPerLot, marginalFillLots, marginalDemandLots, fullBeforeLots, raiseLimitReached }).toEqual({ context, ...expectedFields })
+		const [attoRepPerLot, filledLots, raisedAttoEth, soldAttoRep, marginalMinimumAttoRepPerLot, marginalFillLots, marginalDemandLots, fullBeforeLots, raiseLimitReached] = stored
+		expect({ context, attoRepPerLot, filledLots, raisedAttoEth, soldAttoRep, marginalMinimumAttoRepPerLot, marginalFillLots, marginalDemandLots, fullBeforeLots, raiseLimitReached }).toEqual({ context, ...expectedFields })
 		expect(await client.readContract({ abi: engineArtifact.abi, address: engine.address, functionName: 'remainingFeeLots' })).toBe(expected.filledLots)
 
 		const order = priceOrder(bids)
@@ -425,10 +419,10 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 		const entitlementRep = new Map<bigint, Fraction>()
 		for (const bid of winners) {
 			entitlementEth.set(bid.id, fraction(0n, 1n))
-			entitlementRep.set(bid.id, fraction(expected.roundingAttoRep * (fills.get(bid.id) ?? 0n), expected.filledLots))
+			entitlementRep.set(bid.id, fraction(0n, 1n))
 		}
 		let addedEthTotal = 0n
-		let addedRepTotal = expected.roundingAttoRep
+		let addedRepTotal = 0n
 		let paidEth = 0n
 		let paidRep = 0n
 		const depth = Math.ceil(Math.log2(bids.length + 1)) + 2
@@ -464,7 +458,7 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 			return { eth, rep }
 		}
 		const initial = await pendingSum()
-		if (initial.eth !== 0n || initial.rep !== expected.roundingAttoRep) throw new Error(`initial fee ownership ${initial.rep} != rounding ${expected.roundingAttoRep}: ${context}`)
+		if (initial.eth !== 0n || initial.rep !== 0n) throw new Error(`initial fee ownership ${initial.rep} != zero: ${context}`)
 		for (const step of steps) {
 			if (step.kind === 'settle') {
 				const refund = (step.bid.lots - (fills.get(step.bid.id) ?? 0n)) * config.lot
@@ -610,7 +604,7 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'settleBid', args: [1n] }))).toContain('Auction bid does not exist')
 		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'withdrawRaised', args: [controller] }))).toContain('not withdrawable')
 		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'allocateAndRemoveFees', args: [1n, 0n, 0n] }), stranger)).toContain('Only the auction fee allocator')
-		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'startAuction', args: [0n, CLOSE, 1n, 1n, 1n, 1n, controller] }))).toContain('already started')
+		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'startRepairAuction', args: [0n, CLOSE, 1n, 1n, 1n, 1n, controller] }))).toContain('already started')
 		await send(engine.address, bid(1n, 14n))
 		engine.bids.push({ id: 1n, lots: 1n, min: 14n, bidder: bidderPool[0] ?? controller })
 		expect(await reasonOf(encodeFunctionData({ abi: engineArtifact.abi, functionName: 'settleBid', args: [1n] }))).toContain('Bid may still win')

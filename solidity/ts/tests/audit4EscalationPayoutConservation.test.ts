@@ -65,7 +65,7 @@ describe('audit4: escalation payouts conserve escrow under every threshold relat
 			// Ordinary claims telescope to the reserve exactly.
 			expect(ordinaryPaid, context).toBe(wholePayout)
 			expect(ordinaryBurned, context).toBe(wholeBurn)
-			// Continuation claims floor individually (bonus, then scaling): never more than the whole, short by at most two units per claim.
+			// Continuation claims floor individually (reward, then scaling): never more than the whole, short by at most two units per claim.
 			expect(paid, context).toBeLessThanOrEqual(wholePayout)
 			expect(wholePayout - paid, context).toBeLessThanOrEqual(2n * BigInt(ends.length))
 			expect(burned, context).toBeLessThanOrEqual(wholeBurn)
@@ -136,7 +136,11 @@ describe('audit4: escalation payouts conserve escrow under every threshold relat
 		const tree = new SparseNullifierTree()
 		const firstExpected = scaledClaim(first.amount, first.cumulative, binding, balances[INVALID], await threshold(), nonDecision)
 		expect(firstExpected.payout).toBe(40n * K + 16n * K)
+		// #1541: inherited depletion cannot consume a reporter's child-local deposit.
+		expect((await owner.readContract({ ...g, functionName: 'getOutcomeState', args: [INVALID] })).inheritedUnresolvedTotalAttoRep).toBe(first.amount)
 		expect(await e2e.claimInherited(r6, child.pool, INVALID, inherited, [first], tree)).toBe(firstExpected.payout)
+		expect((await owner.readContract({ ...g, functionName: 'getOutcomeState', args: [INVALID] })).inheritedUnresolvedTotalAttoRep).toBe(0n)
+		expect(await owner.readContract({ ...g, functionName: 'disputeStakedRepByVaultAttoRep', args: [second.depositor] })).toBe(second.amount)
 		paid += firstExpected.payout
 		burned += firstExpected.burn
 		expect(await owner.readContract({ ...g, functionName: 'settlementForkThresholdAttoRep' })).toBe(frozen)
@@ -155,6 +159,9 @@ describe('audit4: escalation payouts conserve escrow under every threshold relat
 		const secondExpected = scaledClaim(second.amount, second.cumulative, binding, balances[INVALID], frozen, nonDecision)
 		expect(secondExpected.payout).toBeGreaterThan(scaledClaim(second.amount, second.cumulative, binding, balances[INVALID], reduced, nonDecision).payout)
 		expect(await e2e.claimLocal(r6, child.pool, INVALID, [second.localIndex], second.depositor)).toBe(secondExpected.payout)
+		// #1540: consume local principal exactly once, without touching another owner.
+		expect(await owner.readContract({ ...g, functionName: 'disputeStakedRepByVaultAttoRep', args: [second.depositor] })).toBe(0n)
+		expect(await owner.readContract({ ...g, functionName: 'disputeStakedRepByVaultAttoRep', args: [third.depositor] })).toBe(third.amount)
 		paid += secondExpected.payout
 		burned += secondExpected.burn
 		// The claim's own haircut burn lowered the live threshold, which no longer matters to this game.

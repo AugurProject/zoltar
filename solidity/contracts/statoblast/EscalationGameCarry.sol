@@ -273,10 +273,8 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 
 	function _getEffectiveInheritedUnresolvedTotalAttoRep(uint8 outcomeIndex) internal view returns (uint256) {
 		OutcomeState storage state = outcomeState[outcomeIndex];
-		uint256 inheritedUnresolvedTotalAttoRep =
-			state.inheritedUnresolvedTotalAttoRep + state.inheritedConsumedSourceAttoRep;
 		BinaryOutcomes.BinaryOutcome finalResolution = getFinalQuestionResolution();
 		if (finalResolution != BinaryOutcomes.BinaryOutcome.None && uint8(finalResolution) != outcomeIndex) return 0;
-		return (inheritedUnresolvedTotalAttoRep) - state.inheritedConsumedRetainedAttoRep;
+		return state.inheritedUnresolvedTotalAttoRep;
 	}
 }

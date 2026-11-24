@@ -92,9 +92,9 @@ export const auctionDetailData = async (sql: SQL, chainId: number, address: stri
 				AND event_data->>'minimumAttoRepPerLot' ~ '^[0-9]+$' AND event_data->>'lots' ~ '^[0-9]+$'
 			GROUP BY event_data->>'minimumAttoRepPerLot' ORDER BY (event_data->>'minimumAttoRepPerLot')::numeric ASC LIMIT 1001`,
 		sql`SELECT event_data->>'lotAttoEth' AS lot_atto_eth FROM collateral_repair_auction_events WHERE chain_id = ${chainId} AND auction_address = ${address}
-			AND canonical AND block_number <= ${snapshotBlock} AND event_name = 'AuctionStarted' ORDER BY block_number DESC, log_index DESC LIMIT 1`,
+			AND canonical AND block_number <= ${snapshotBlock} AND event_name = 'RepairAuctionStarted' ORDER BY block_number DESC, log_index DESC LIMIT 1`,
 		sql`SELECT * FROM collateral_repair_auction_events WHERE chain_id = ${chainId} AND auction_address = ${address}
-			AND canonical AND block_number <= ${snapshotBlock} AND event_name = 'AuctionFinalized' ORDER BY block_number DESC, log_index DESC LIMIT 1`,
+			AND canonical AND block_number <= ${snapshotBlock} AND event_name = 'RepairAuctionFinalized' ORDER BY block_number DESC, log_index DESC LIMIT 1`,
 	])
 	const lotAttoEth: unknown = starts[0]?.['lot_atto_eth']
 	return { bids, lotAttoEth: typeof lotAttoEth === 'string' && /^\d+$/.test(lotAttoEth) ? lotAttoEth : undefined, finalization: finalizations[0] }

@@ -4,8 +4,8 @@ import {
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
 	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact,
-	statoblast_SecurityPoolAuction_SecurityPoolAuction as auctionArtifact,
-	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact,
+	statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction as auctionArtifact,
+	statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as engineArtifact,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
 } from '../../types/contractArtifact'
@@ -28,7 +28,7 @@ export async function prepareSecurityPoolCollateralRepairAuction(fixture: Return
 	await fixture.authorize(200n * unit, other)
 	await fixture.mint(mintAttoEth)
 	const { forks, forkTime, child } = await fixture.forkAndStartYesBranch()
-	const auction = await owner.readContract({ abi: forkArtifact.abi, address: forks, functionName: 'auctions', args: [child] })
+	const auction = await owner.readContract({ abi: forkArtifact.abi, address: forks, functionName: 'repairAuctions', args: [child] })
 	if (auction === zeroAddress) throw new Error('Collateral repair auction was not created')
 	const engine = await owner.readContract({ abi: auctionArtifact.abi, address: auction, functionName: 'engine' })
 	const capital = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'capitalLedger', args: [child] })

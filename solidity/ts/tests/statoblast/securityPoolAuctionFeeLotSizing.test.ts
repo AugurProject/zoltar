@@ -2,10 +2,10 @@ import { describe, expect, test } from 'bun:test'
 import {
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
-	statoblast_SecurityPoolAuction_SecurityPoolAuction as auctionArtifact,
+	statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction as auctionArtifact,
 	statoblast_SecurityPoolSettlement_SecurityPoolSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
-	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact,
+	statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as engineArtifact,
 } from '../../types/contractArtifact'
 import { burnedCollateralBalance, collateralBalance } from './burnEvidence'
 import { prepareSecurityPoolCollateralRepairAuction } from './securityPoolCollateralRepairAuctionFixture'

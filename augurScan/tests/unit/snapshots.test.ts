@@ -9,14 +9,14 @@ const coordinator = getAddress('0x3333333333333333333333333333333333333333')
 
 for (const [entityType, contractKind] of [
 	['pool', 'questionLedger'],
-	['auction', 'securityPoolUniformPriceAuction'],
+	['auction', 'securityPoolUniformPriceRepairAuction'],
 	['escalation', 'escalationGame'],
 ] as const) {
 	test(`${entityType} snapshot reads match the compiled contract interfaces`, async () => {
 		const mismatches: string[] = []
 		const outputValues: Readonly<Record<string, readonly unknown[]>> = {
 			getOutcomeBalancesAttoRep: [[1n, 2n, 3n]],
-			clearing: [2n, 200n, 400n, 800n, 0n, 2n, 100n, 100n, 100n, true],
+			clearing: [2n, 200n, 400n, 800n, 2n, 100n, 100n, 100n, true],
 			initialized: [true],
 			awaitingForkContinuation: [false],
 			isEscalationResolved: [false],
@@ -74,7 +74,7 @@ test('samples a complete auction state through tagged reads', async () => {
 		bidCount: 3n,
 		initialized: true,
 		finalized: true,
-		clearing: [2n, 200n, 400n, 800n, 0n, 2n, 100n, 100n, 100n, true],
+		clearing: [2n, 200n, 400n, 800n, 2n, 100n, 100n, 100n, true],
 	}
 	const read: StateRead = async (_address, _abi, functionName) => {
 		const value = values[functionName]
@@ -95,7 +95,7 @@ test('samples a complete auction state through tagged reads', async () => {
 
 test('records the auction collateral token metadata so attoEth amounts use its decimals', async () => {
 	const token = getAddress('0x5555555555555555555555555555555555555555')
-	const metadata: Readonly<Record<string, unknown>> = { collateralToken: token, symbol: 'USDC', decimals: 6n, initialized: true, finalized: false, clearing: [0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false] }
+	const metadata: Readonly<Record<string, unknown>> = { collateralToken: token, symbol: 'USDC', decimals: 6n, initialized: true, finalized: false, clearing: [0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false] }
 	const read: StateRead = async (_address, _abi, functionName) => metadata[functionName] ?? 1n
 	const snapshot = await sampleEntityStateWithRead({ entityType: 'auction', entityIdentity: pool.toLowerCase(), address: pool }, read)
 	expect(snapshot.readStatus).toBe('success')

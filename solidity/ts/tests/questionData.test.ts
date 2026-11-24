@@ -118,12 +118,12 @@ describe('Question Data', () => {
 		assert.strictEqual(await getAnswerOptionName(client, questionId, answer), expectedName, `${context} outcome name mismatch`)
 	}
 
-	test.each(['Invalid', 'invalid', ' INVALID ', 'Malformed', 'malformed', '\u00a0Invalid\u00a0', 'In\u200bvalid', '\ufeffMalformed', 'Invalid\u2060'])('reserves protocol outcome name %s at the contract boundary', async label => {
+	test.each(['Invalid', 'invalid', 'In valid', 'Malformed', 'malformed', 'M a l f o r m e d'])('reserves protocol outcome name %s at the contract boundary', async label => {
 		const question = await futureQuestion({ title: `Reserved label ${label}` })
 		await assert.rejects(createQuestion(client, question, sortStringArrayByKeccak(['Yes', label])), /Reserved protocol outcome label/)
 	})
 
-	test.each(['Invalid\u2061', 'Іnvalid', 'Yes\u034f', ' ', '\u200b', 'A  B', 'A'.repeat(65)])('#1352 rejects ambiguous categorical label %s', async label => {
+	test.each([' INVALID ', '\u00a0Invalid\u00a0', 'In\u200bvalid', '\ufeffMalformed', 'Invalid\u2060', 'Invalid\u2061', 'Іnvalid', 'Yes\u034f', ' ', '\u200b', 'A  B', 'A'.repeat(65)])('#1352 rejects ambiguous categorical label %s', async label => {
 		const question = await futureQuestion({ title: `Ambiguous label ${label}` })
 		await assert.rejects(createQuestion(client, question, sortStringArrayByKeccak(['No', label])), /Outcome label must use 1-64 printable ASCII characters with single interior spaces/)
 	})

@@ -67,7 +67,7 @@ describe('Statoblast: permissionless settlement repair', () => {
 		await fixture.authorize(minimum, other)
 		await fixture.mint(10n * unit, fixture.secondQuestionId)
 		const { forks, forkTime, child } = await fixture.forkAndStartYesBranch()
-		expect(await owner.readContract({ abi: forkArtifact.abi, address: forks, functionName: 'auctions', args: [child] })).toBe(zeroAddress)
+		expect(await owner.readContract({ abi: forkArtifact.abi, address: forks, functionName: 'repairAuctions', args: [child] })).toBe(zeroAddress)
 		await fixture.base.mockWindow.setTime(forkTime + 63n * DAY)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: forkArtifact.abi, address: forks, functionName: 'finalizeBranch', args: [child] }))
 		const settlement = await owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'settlement' })

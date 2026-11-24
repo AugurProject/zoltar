@@ -1,9 +1,9 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { encodeDeployData, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
-	test_statoblast_CapitalAuctionHarness_AuctionLotSizingHarness as harnessArtifact,
-	statoblast_SecurityPoolAuction_SecurityPoolAuction as auctionArtifact,
-	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as vaultArtifact,
+	test_statoblast_CapitalRepairAuctionHarness_RepairAuctionLotSizingHarness as harnessArtifact,
+	statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction as auctionArtifact,
+	statoblast_SecurityPoolRepairAuctionVault_SecurityPoolRepairAuctionVault as vaultArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 } from '../../types/contractArtifact'

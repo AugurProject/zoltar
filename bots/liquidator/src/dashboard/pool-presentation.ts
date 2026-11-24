@@ -10,7 +10,7 @@ export type MonitoredPool = {
 	knownVaultCount: string
 	address: string
 	approvedUniverse: boolean
-	bestCandidateBonusValueEth?: string
+	bestCandidateTakeoverRewardValueEth?: string
 	botVault: Vault
 	candidateCount: number
 	centralizedPriceAllowed: boolean

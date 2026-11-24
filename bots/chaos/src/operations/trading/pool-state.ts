@@ -2,9 +2,8 @@ import { sameAddress } from '@zoltar/core-shared/evm/address'
 import { encodeReceiveRequest, RECEIVE_REQUEST_VERSION } from '@zoltar/trading-shared/trading/receiveRequest'
 import { inputInteger } from '../input-values.ts'
 import { amount, randomDeadline } from '../planning.ts'
-import { shareTokenId } from '../statoblast/planning.ts'
 import { timestampDeadlineHasRequiredSafety } from '../timing.ts'
-import type { EcosystemSnapshot, PairSnapshot, PlanningOptions, PoolSnapshot, ShareInventory } from '../types.ts'
+import type { EcosystemSnapshot, PairSnapshot, PlanningOptions, PoolSnapshot } from '../types.ts'
 
 export const poolForPair = (snapshot: EcosystemSnapshot, pair: PairSnapshot) => snapshot.pools.find(pool => sameAddress(pool.address, pair.pool))
 
@@ -40,26 +39,6 @@ export function protocolQuestionDeadline(snapshot: EcosystemSnapshot, pool: Pool
 	return question === undefined ? undefined : (amount(question.endTime) - 1n).toString()
 }
 
-export function receiveRequestData(snapshot: EcosystemSnapshot, pool: PoolSnapshot, pair: PairSnapshot, shares: ShareInventory, operation: 0 | 1, longOutcome: 1 | 2 | 3, completeAmount: bigint, maximumLong: bigint, minimumEthAttoEth: bigint, deadline: bigint, minimumRepAttoRep: bigint) {
-	const invalidTokenId = shareTokenId(shares.universeId, 0)
-	return encodeReceiveRequest([
-		RECEIVE_REQUEST_VERSION,
-		operation,
-		shares.shareToken,
-		pool.address,
-		pair.address,
-		amount(pool.universeId),
-		amount(pool.questionId),
-		invalidTokenId,
-		invalidTokenId | 1n,
-		invalidTokenId | 2n,
-		longOutcome,
-		completeAmount,
-		maximumLong,
-		minimumEthAttoEth,
-		snapshot.wallet.address,
-		snapshot.wallet.address,
-		deadline,
-		minimumRepAttoRep,
-	])
+export function receiveRequestData(snapshot: EcosystemSnapshot, pool: PoolSnapshot, pair: PairSnapshot, operation: 0 | 1, longOutcome: 1 | 2 | 3, completeAmount: bigint, maximumLong: bigint, minimumEthAttoEth: bigint, deadline: bigint, minimumRepAttoRep: bigint) {
+	return encodeReceiveRequest([RECEIVE_REQUEST_VERSION, operation, pool.address, pair.address, longOutcome, completeAmount, maximumLong, minimumEthAttoEth, snapshot.wallet.address, snapshot.wallet.address, deadline, minimumRepAttoRep])
 }

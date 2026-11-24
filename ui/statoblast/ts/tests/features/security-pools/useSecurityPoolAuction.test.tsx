@@ -15,7 +15,7 @@ const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentFor
 const abi = parseAbi([
 	'function open()',
 	'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot,uint256 targetHealthFactorBps) payable returns (uint256,address)',
-	'function materializeAuctionBid(uint256 bidId) returns (address,uint96)',
+	'function materializeRepairAuctionBid(uint256 bidId) returns (address,uint96)',
 	'function settleRefund(uint256 bidId)',
 	'function withdrawRefunds(address recipient)',
 	'function settleAndWithdrawRefund(uint256 bidId,address recipient) returns (uint256)',
@@ -126,10 +126,10 @@ test('automatic winners expose live principal and fees before activating individ
 	await act(() => state.hook.state().activate(bid))
 	expect(state.requests).toHaveLength(1)
 	expect(last(state.requests)).toMatchObject({ account: owner, to: capital, value: 0n })
-	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'materializeAuctionBid', args: [1n] })
+	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'materializeRepairAuctionBid', args: [1n] })
 	await last(state.requests).validateBeforeSubmit?.()
 	state.values['bids'] = [owner, auctionVault, 12_000n, 2n, 60n * unit, false, true]
-	state.values['auctionPosition'] = [auctionVault, 8n, 100n * unit, unit, 12_000n, 0n, true, 7n * unit, 9n * unit]
+	state.values['repairAuctionPosition'] = [auctionVault, 8n, 100n * unit, unit, 12_000n, 0n, true, 7n * unit, 9n * unit]
 	await expect(last(state.requests).validateBeforeSubmit?.()).rejects.toThrow()
 })
 
@@ -229,7 +229,7 @@ test('an auction disappearing before approval submission invalidates the request
 	await terms(state)
 	await act(() => state.hook.state().approve(2n * unit))
 	const request = last(state.requests)
-	state.values['auctions'] = zeroAddress
+	state.values['repairAuctions'] = zeroAddress
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow()
 })
 

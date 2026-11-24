@@ -185,7 +185,7 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 		if (mode !== 'insufficient backing') {
 			await createCompleteSetInQuestionLedger(client, pool, 100n)
 			expect(send).toHaveBeenCalledTimes(1)
-			expect(reads).not.toContain('getCurrentMintingCapacityAttoEth')
+			expect(reads).not.toContain('additionalMintCapacityAttoEth')
 			const validate = plans[0]?.validateBeforeSubmit
 			if (validate === undefined) throw new Error('Missing purchase review validation')
 			await validate()

@@ -15,7 +15,7 @@ export async function explainTakeoverReceiptExpiry(intent: PendingTransactionInt
 	if (signed.to === undefined || signed.data === undefined || signed.gas === undefined || receipt.gasUsed >= signed.gas) return undefined
 	const ledger = signed.to
 	const call = decodeFunctionData({ abi: securityPoolCapitalLedgerAbi, data: signed.data })
-	if (call.functionName !== 'takeOverWithBounds' && call.functionName !== 'takeOverAuctionBid') return undefined
+	if (call.functionName !== 'takeOverWithBounds' && call.functionName !== 'takeOverRepairAuctionBid') return undefined
 	const [target, , , , bounds] = call.args
 	const state = await settledQuorumValue(
 		'finalized takeover evidence',
@@ -36,7 +36,7 @@ export async function explainTakeoverReceiptExpiry(intent: PendingTransactionInt
 				client.readContract({ ...atReceipt, functionName: 'universeId' }),
 			])
 			const forkTime = await client.readContract({ address: zoltar, abi: zoltarAbi, functionName: 'getForkTime', args: [universeId], blockNumber })
-			const positionId = call.functionName === 'takeOverWithBounds' ? target : await client.readContract({ ...atReceipt, functionName: 'auctionBidPositionIds', args: [target] })
+			const positionId = call.functionName === 'takeOverWithBounds' ? target : await client.readContract({ ...atReceipt, functionName: 'repairAuctionBidPositionIds', args: [target] })
 			const position = positionId === 0n ? undefined : await client.readContract({ address: index, abi: securityPoolCommitmentIndexAbi, functionName: 'accountOf', args: [positionId], blockNumber })
 			const priorPosition = call.functionName === 'takeOverWithBounds' ? await client.readContract({ address: index, abi: securityPoolCommitmentIndexAbi, functionName: 'accountOf', args: [target], blockNumber: intent.submissionBlock }) : undefined
 			const [receiptCheck, submissionCheck] = await Promise.all([client.getBlock({ blockNumber }), client.getBlock({ blockNumber: intent.submissionBlock })])

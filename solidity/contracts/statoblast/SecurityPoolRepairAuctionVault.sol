@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { ISecurityPoolAuctionCapital } from './interfaces/ISecurityPoolAuctionCapital.sol';
+import { ISecurityPoolRepairAuctionCapital } from './interfaces/ISecurityPoolRepairAuctionCapital.sol';
 import { Collateral } from '../Collateral.sol';
 import { ICollateralConfig } from './interfaces/ICollateralConfig.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { SecurityPoolBoundClones } from './SecurityPoolBoundClones.sol';
 
-interface IAuctionVaultCapital {
-	function materializeAuctionBid(uint256 bidId) external returns (address vault, uint96 positionId);
+interface IRepairAuctionVaultCapital {
+	function materializeRepairAuctionBid(uint256 bidId) external returns (address vault, uint96 positionId);
 	function repToken() external view returns (IERC20);
 	function depositAndSetHealthTarget(uint256 amount, uint256 targetHealthFactorBps) external;
 }
@@ -20,29 +20,29 @@ interface IAuctionVaultCapital {
 /// trailing bindings never affect it, and the implementation reads them from
 /// the clone's own code. Nothing is initialized later: every binding is fixed by
 /// the creation code, and the CREATE2 salt is the bid identifier.
-library SecurityPoolAuctionVaultClones {
+library SecurityPoolRepairAuctionVaultClones {
 	uint256 internal constant BINDINGS_LENGTH = 92;
 	uint256 internal constant RUNTIME_LENGTH = SecurityPoolBoundClones.FORWARDER_LENGTH + BINDINGS_LENGTH;
 
-	function runtimeCode(address implementation, address owner, address capital, address auction, uint256 bidId) internal pure returns (bytes memory) {
+	function runtimeCode(address implementation, address owner, address capital, address repairAuction, uint256 bidId) internal pure returns (bytes memory) {
 		return
-			abi.encodePacked(hex'363d3d373d3d3d363d73', implementation, hex'5af43d82803e903d91602b57fd5bf3', owner, capital, auction, bidId);
+			abi.encodePacked(hex'363d3d373d3d3d363d73', implementation, hex'5af43d82803e903d91602b57fd5bf3', owner, capital, repairAuction, bidId);
 	}
-	function creationCode(address implementation, address owner, address capital, address auction, uint256 bidId) internal pure returns (bytes memory) {
-		bytes memory runtime = runtimeCode(implementation, owner, capital, auction, bidId);
+	function creationCode(address implementation, address owner, address capital, address repairAuction, uint256 bidId) internal pure returns (bytes memory) {
+		bytes memory runtime = runtimeCode(implementation, owner, capital, repairAuction, bidId);
 		return abi.encodePacked(hex'3d61', uint16(runtime.length), hex'80600b3d3981f3', runtime);
 	}
-	function create(address implementation, address owner, address capital, address auction, uint256 bidId) internal returns (address vault) {
-		require(owner != address(0) && capital != address(0) && auction != address(0), 'Auction vault dependencies missing');
-		bytes memory code = creationCode(implementation, owner, capital, auction, bidId);
+	function create(address implementation, address owner, address capital, address repairAuction, uint256 bidId) internal returns (address vault) {
+		require(owner != address(0) && capital != address(0) && repairAuction != address(0), 'Auction vault dependencies missing');
+		bytes memory code = creationCode(implementation, owner, capital, repairAuction, bidId);
 		bytes32 salt = bytes32(bidId);
 		assembly ('memory-safe') {
 			vault := create2(0, add(code, 32), mload(code), salt)
 		}
 		require(vault != address(0), 'Auction vault deployment failed');
 	}
-	function predict(address deployer, address implementation, address owner, address capital, address auction, uint256 bidId) internal pure returns (address) {
-		bytes32 hash = keccak256(abi.encodePacked(bytes1(0xff), deployer, bytes32(bidId), keccak256(creationCode(implementation, owner, capital, auction, bidId))));
+	function predict(address deployer, address implementation, address owner, address capital, address repairAuction, uint256 bidId) internal pure returns (address) {
+		bytes32 hash = keccak256(abi.encodePacked(bytes1(0xff), deployer, bytes32(bidId), keccak256(creationCode(implementation, owner, capital, repairAuction, bidId))));
 		return address(uint160(uint256(hash)));
 	}
 }
@@ -52,7 +52,7 @@ library SecurityPoolAuctionVaultClones {
 /// The account remains usable for child-universe choices and later capital ledgers.
 /// @dev Deployed only as a clone; the shared implementation holds no bindings and
 /// refuses direct use. Each clone keeps its own guard and materialization flag.
-contract SecurityPoolAuctionVault {
+contract SecurityPoolRepairAuctionVault {
 	using SafeERC20Ops for IERC20;
 	bool private entered;
 	/// @notice This bid's position in its initial capital ledger has been
@@ -69,13 +69,13 @@ contract SecurityPoolAuctionVault {
 	function owner() public view returns (address value) {
 		(value, , , ) = _bindings();
 	}
-	function initialCapital() public view returns (IAuctionVaultCapital value) {
+	function initialCapital() public view returns (IRepairAuctionVaultCapital value) {
 		(, address capital, , ) = _bindings();
-		return IAuctionVaultCapital(capital);
+		return IRepairAuctionVaultCapital(capital);
 	}
-	function auction() public view returns (ISecurityPoolAuctionCapital value) {
+	function repairAuction() public view returns (ISecurityPoolRepairAuctionCapital value) {
 		(, , address controller, ) = _bindings();
-		return ISecurityPoolAuctionCapital(controller);
+		return ISecurityPoolRepairAuctionCapital(controller);
 	}
 	function bidId() public view returns (uint256 value) {
 		(, , , value) = _bindings();
@@ -87,21 +87,25 @@ contract SecurityPoolAuctionVault {
 		assembly ('memory-safe') {
 			size := extcodesize(address())
 		}
-		return size == SecurityPoolAuctionVaultClones.RUNTIME_LENGTH;
+		return size == SecurityPoolRepairAuctionVaultClones.RUNTIME_LENGTH;
 	}
 	function _requireClone() private view {
 		require(_isClone(), 'Auction vault is not a clone');
 	}
-	function _bindings() private view returns (address owner_, address capital_, address auction_, uint256 bidId_) {
+	function _bindings()
+		private
+		view
+		returns (address owner_, address capital_, address repairAuction_, uint256 bidId_)
+	{
 		_requireClone();
 		uint256 bindingsOffset = SecurityPoolBoundClones.FORWARDER_LENGTH;
-		uint256 bindingsLength = SecurityPoolAuctionVaultClones.BINDINGS_LENGTH;
+		uint256 bindingsLength = SecurityPoolRepairAuctionVaultClones.BINDINGS_LENGTH;
 		assembly ('memory-safe') {
 			let pointer := mload(0x40)
 			extcodecopy(address(), pointer, bindingsOffset, bindingsLength)
 			owner_ := shr(96, mload(pointer))
 			capital_ := shr(96, mload(add(pointer, 20)))
-			auction_ := shr(96, mload(add(pointer, 40)))
+			repairAuction_ := shr(96, mload(add(pointer, 40)))
 			bidId_ := mload(add(pointer, 60))
 		}
 	}
@@ -122,15 +126,15 @@ contract SecurityPoolAuctionVault {
 	/// recognized through the same call. The flag reverts with the operation.
 	function _materializeInitialPosition() private {
 		(, address capital, address controller, uint256 id) = _bindings();
-		if (ISecurityPoolAuctionCapital(controller).bidPosition(id).filledLots == 0) return;
-		(address vault, uint96 positionId) = IAuctionVaultCapital(capital).materializeAuctionBid(id);
+		if (ISecurityPoolRepairAuctionCapital(controller).bidPosition(id).filledLots == 0) return;
+		(address vault, uint96 positionId) = IRepairAuctionVaultCapital(capital).materializeRepairAuctionBid(id);
 		require(vault == address(this) && positionId != 0, 'Auction vault materialization failed');
 		initialPositionMaterialized = true;
 	}
 
 	/// @notice Deposit directly from the controlling wallet in one operation;
 	/// the wallet approves this vault and its chosen health target stays explicit.
-	function depositPrincipal(IAuctionVaultCapital capital, uint256 amount, uint256 targetHealthFactorBps) external onlyOwner {
+	function depositPrincipal(IRepairAuctionVaultCapital capital, uint256 amount, uint256 targetHealthFactorBps) external onlyOwner {
 		IERC20 token = capital.repToken();
 		token.safeTransferFrom(msg.sender, address(this), amount);
 		token.safeApprove(address(capital), amount);
@@ -148,7 +152,7 @@ contract SecurityPoolAuctionVault {
 		result = _execute(target, value, data);
 		uint256 rep = token.balanceOf(address(this));
 		if (rep != 0) token.safeTransfer(recipient, rep);
-		IERC20 collateral = ICollateralConfig(IAuctionVaultSecurityPool(address(initialCapital())).securityPool()).collateralToken();
+		IERC20 collateral = ICollateralConfig(IRepairAuctionVaultSecurityPool(address(initialCapital())).securityPool()).collateralToken();
 		Collateral.send(collateral, recipient, collateral.balanceOf(address(this)));
 		uint256 eth = address(this).balance;
 		if (eth != 0) {
@@ -182,6 +186,6 @@ contract SecurityPoolAuctionVault {
 	}
 }
 
-interface IAuctionVaultSecurityPool {
+interface IRepairAuctionVaultSecurityPool {
 	function securityPool() external view returns (address);
 }

@@ -53,7 +53,7 @@ export function snapshotFixture(): EcosystemSnapshot {
 				childPoolPreparations: {},
 				priceFeed: address(80),
 				oracleExposureAttoEth: (10n ** 18n).toString(),
-				currentMintingCapacityAttoEth: (10n ** 19n).toString(),
+				additionalMintCapacityAttoEth: (10n ** 19n).toString(),
 				ownQuestionForkReady: false,
 				escalationCanTriggerOwnFork: false,
 				escalationForkContinuation: false,

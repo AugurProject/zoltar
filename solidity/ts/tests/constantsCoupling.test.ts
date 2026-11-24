@@ -61,14 +61,14 @@ describe('protocol constant coupling', () => {
 		expect(constants.resolutionPremiumWindow).toBe(constants.forkResponseDelay + constants.escalationTimeLength)
 		expect(resolutionWindow).toBe(constants.resolutionPremiumWindow)
 		expect(BigInt(maximumReportingWindow)).toBe(constants.resolutionPremiumWindow)
-		// Bonus and burn split binding capital; after an own-question fork the child escrow (2N − T/d)
-		// covers winners (N + bonus) only when the minimum burn divisor is large enough.
-		expect(constants.winnerBonusNumerator + constants.burnNumerator).toBe(constants.payoutDenominator)
-		expect(constants.minimumForkBurnDivisor * (constants.payoutDenominator - constants.winnerBonusNumerator)).toBeGreaterThanOrEqual(2n * constants.payoutDenominator)
+		// Reward and burn split binding capital; after an own-question fork the child escrow (2N − T/d)
+		// covers winners (N + reward) only when the minimum burn divisor is large enough.
+		expect(constants.rewardNumerator + constants.burnNumerator).toBe(constants.payoutDenominator)
+		expect(constants.minimumForkBurnDivisor * (constants.payoutDenominator - constants.rewardNumerator)).toBeGreaterThanOrEqual(2n * constants.payoutDenominator)
 		// The fee-end granularity keeps every bucket number within the 17-level gas bound.
 		expect(((BigInt(feeEndLimit) - 1n) / BigInt(feeEndGranularity)).toString(2).length).toBeLessThanOrEqual(Number(MAXIMUM_FEE_END_LEVELS))
 		// Auction vault bindings start right after the shared forwarder prologue.
-		expect(constants.auctionVaultRuntimeLength).toBe(constants.forwarderLength + constants.auctionVaultBindingsLength)
+		expect(constants.repairAuctionVaultRuntimeLength).toBe(constants.forwarderLength + constants.repairAuctionVaultBindingsLength)
 	})
 
 	test('the three-day response is defined once and not repeated as a literal', async () => {

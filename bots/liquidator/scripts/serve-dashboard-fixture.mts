@@ -64,7 +64,7 @@ function pool(address: string, questionId: string, selected: boolean, isPriceVal
 			claimableFeesEth: selected ? '0.0084' : '0',
 		},
 		candidates: Array.from({ length: candidateCount }, (_, index) => ({
-			bonusValueEth: (1.25 - index * 0.1).toFixed(2),
+			takeoverRewardValueEth: (1.25 - index * 0.1).toFixed(2),
 			requestedDebtEth: (25 - index).toString(),
 			priceDistanceBps: '1820',
 			vaultRepBackingToTransferRep: '262.5',

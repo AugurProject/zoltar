@@ -9,9 +9,9 @@ import { encodeFunctionData, getAddress, parseAbi } from '../../src/ethereum.ts'
 import { decodeAction } from '../../src/metadata.ts'
 
 test('generates routes for new compiled contracts and deployment IDs without a registry edit', () => {
-	const mappings = systemContractMappings(['FutureFactory', 'WETH9', 'SecurityPoolUniformPriceAuction'], ['futureFactory', 'weth', 'securityPoolUniformPriceAuction', 'proxyDeployer'])
+	const mappings = systemContractMappings(['FutureFactory', 'WETH9', 'SecurityPoolUniformPriceRepairAuction'], ['futureFactory', 'weth', 'securityPoolUniformPriceRepairAuction', 'proxyDeployer'])
 	expect(mappings.interfaces['futureFactory']).toEqual({ type: 'artifact', name: 'FutureFactory' })
-	expect(mappings.deploymentKinds).toEqual({ futureFactory: 'futureFactory', proxyDeployer: 'proxyDeployer', securityPoolUniformPriceAuction: 'securityPoolUniformPriceAuction', weth: 'weth' })
+	expect(mappings.deploymentKinds).toEqual({ futureFactory: 'futureFactory', proxyDeployer: 'proxyDeployer', securityPoolUniformPriceRepairAuction: 'securityPoolUniformPriceRepairAuction', weth: 'weth' })
 })
 
 test('every compiled ABI has a generated route and generation is deterministic', () => {

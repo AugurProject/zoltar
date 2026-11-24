@@ -233,9 +233,9 @@ function getWinningWithdrawalAmount({
 		const eligibleEndAttoRep = depositEndAttoRep < rewardEligibleCapAttoRep ? depositEndAttoRep : rewardEligibleCapAttoRep
 		const rewardEligibleDepositAttoRep = eligibleEndAttoRep > depositStartAttoRep ? eligibleEndAttoRep - depositStartAttoRep : 0n
 		const cappedRewardEligibleDepositAttoRep = rewardEligibleDepositAttoRep > depositAmountAttoRep ? depositAmountAttoRep : rewardEligibleDepositAttoRep
-		const rewardBonusPoolAttoRep = (bindingCapitalAttoRep * 3n) / 5n
-		const bonusAttoRep = (cappedRewardEligibleDepositAttoRep * rewardBonusPoolAttoRep) / rewardEligiblePrincipalAttoRep
-		amountToWithdrawAttoRep = principalAttoRep + bonusAttoRep
+		const rewardPoolAttoRep = (bindingCapitalAttoRep * 3n) / 5n
+		const rewardAttoRep = (cappedRewardEligibleDepositAttoRep * rewardPoolAttoRep) / rewardEligiblePrincipalAttoRep
+		amountToWithdrawAttoRep = principalAttoRep + rewardAttoRep
 	}
 	if (forkThresholdAttoRep < nonDecisionThresholdAttoRep) return (amountToWithdrawAttoRep * forkThresholdAttoRep) / nonDecisionThresholdAttoRep
 	return amountToWithdrawAttoRep

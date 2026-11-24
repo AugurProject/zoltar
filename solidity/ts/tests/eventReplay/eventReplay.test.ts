@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { decodeEventLog, zeroAddress, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
-	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as uniformAuctionArtifact,
+	statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as uniformAuctionArtifact,
 	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact,
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
@@ -101,9 +101,9 @@ describe('event-only replay', () => {
 		const bidder = '0x2222222222222222222222222222222222222222'
 		const vault = '0x3333333333333333333333333333333333333333'
 		const logs = [
-			createReplayLog({ emitter: auction, logIndex: 0, eventName: 'AuctionStarted', args: { opensAt: 10n, closesAt: 20n, lotAttoEth: 5n, targetLots: 3n, inventoryAttoRep: 60n, maximumAttoRepPerLot: 20n } }),
+			createReplayLog({ emitter: auction, logIndex: 0, eventName: 'RepairAuctionStarted', args: { opensAt: 10n, closesAt: 20n, lotAttoEth: 5n, targetLots: 3n, inventoryAttoRep: 60n, maximumAttoRepPerLot: 20n } }),
 			createReplayLog({ emitter: auction, logIndex: 1, eventName: 'BidSubmitted', args: { bidId: 1n, bidder, vault, lots: 4n, minimumAttoRepPerLot: 20n, targetHealthBps: 15_000n } }),
-			createReplayLog({ emitter: auction, logIndex: 2, eventName: 'AuctionFinalized', args: { attoRepPerLot: 20n, filledLots: 3n, raisedAttoEth: 15n, soldAttoRep: 60n } }),
+			createReplayLog({ emitter: auction, logIndex: 2, eventName: 'RepairAuctionFinalized', args: { attoRepPerLot: 20n, filledLots: 3n, raisedAttoEth: 15n, soldAttoRep: 60n } }),
 			createReplayLog({ emitter: auction, logIndex: 3, eventName: 'BidSettled', args: { bidId: 1n, bidder, filledLots: 3n, refundAttoEth: 5n } }),
 		]
 		for (const log of logs) {
@@ -930,13 +930,13 @@ describe('event-only replay', () => {
 			}),
 			createReplayLog({
 				emitter: auction,
-				eventName: 'AuctionStarted',
+				eventName: 'RepairAuctionStarted',
 				logIndex: 10,
 				args: { opensAt: 20n, closesAt: 30n, lotAttoEth: 5n, targetLots: 1n, inventoryAttoRep: 8n, maximumAttoRepPerLot: 8n },
 			}),
 			createReplayLog({
 				emitter: auction,
-				eventName: 'AuctionFinalized',
+				eventName: 'RepairAuctionFinalized',
 				logIndex: 11,
 				args: { attoRepPerLot: 8n, filledLots: 1n, raisedAttoEth: 5n, soldAttoRep: 8n },
 			}),

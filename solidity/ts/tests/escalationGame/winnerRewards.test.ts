@@ -103,7 +103,7 @@ describe('Escalation Game: tie-breaking and winner rewards', () => {
 
 		// Reward eligibility is intentionally append-order dependent on the winning side.
 		// The first 20 REP deposit fills the binding-capital region, so the later 14 REP deposit
-		// only overlaps the final 10 REP safety-boundary slice and earns bonus on that slice alone.
+		// only overlaps the final 10 REP safety-boundary slice and earns a reward on that slice alone.
 		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, firstWinningDepositorAddress, QuestionOutcome.Yes, firstWinningDeposit)
 		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, secondWinningDepositorAddress, QuestionOutcome.Yes, secondWinningDeposit)
 		await depositOnOutcomeViaTestQuestionLedger(testQuestionLedgerAddress, losingDepositorAddress, QuestionOutcome.No, losingDeposit)

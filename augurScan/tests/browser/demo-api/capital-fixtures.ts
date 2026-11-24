@@ -121,7 +121,7 @@ export const demoLiquidations = (blockNumber: string) => {
 		...owners,
 	})
 	return [
-		evidence('CommitmentTakenOver', 3, { sourceId: '7', receiverId: '12', commitment: usdcUnits(40n), awardAttoRep: rep(300n) }, { source_owner: demoCapitalOwner, receiver_owner: receiver }),
+		evidence('CommitmentTakenOver', 3, { sourceId: '7', receiverId: '12', commitment: usdcUnits(40n), takeoverRewardAttoRep: rep(300n) }, { source_owner: demoCapitalOwner, receiver_owner: receiver }),
 		evidence('CommitmentCured', 2, { positionId: '7', removedCommitment: usdcUnits(10n) }, { source_owner: demoCapitalOwner, receiver_owner: null }),
 		evidence('ReportOperationAttempted', 1, { reportId: '1842', sponsor: receiver, operationIndex: '0', success: true }, { source_owner: null, receiver_owner: null }),
 	]

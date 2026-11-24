@@ -401,25 +401,25 @@
 			"bun": "./ts/features/security-pools/hooks/useSecurityPoolPrice.ts",
 			"default": "./js/features/security-pools/hooks/useSecurityPoolPrice.js"
 		},
-		"./features/security-pools/components/SecurityPoolAuction.js": {
-			"bun": "./ts/features/security-pools/components/SecurityPoolAuction.tsx",
-			"default": "./js/features/security-pools/components/SecurityPoolAuction.js"
+		"./features/security-pools/components/SecurityPoolRepairAuction.js": {
+			"bun": "./ts/features/security-pools/components/SecurityPoolRepairAuction.tsx",
+			"default": "./js/features/security-pools/components/SecurityPoolRepairAuction.js"
 		},
 		"./features/security-pools/hooks/useSecurityPoolAuction.js": {
 			"bun": "./ts/features/security-pools/hooks/useSecurityPoolAuction.ts",
 			"default": "./js/features/security-pools/hooks/useSecurityPoolAuction.js"
 		},
-		"./copy/securityPoolAuction.js": {
-			"bun": "./ts/copy/securityPoolAuction.ts",
-			"default": "./js/copy/securityPoolAuction.js"
+		"./copy/securityPoolRepairAuction.js": {
+			"bun": "./ts/copy/securityPoolRepairAuction.ts",
+			"default": "./js/copy/securityPoolRepairAuction.js"
 		},
 		"./copy/securityPoolPrice.js": {
 			"bun": "./ts/copy/securityPoolPrice.ts",
 			"default": "./js/copy/securityPoolPrice.js"
 		},
-		"./protocol/securityPoolAuction.js": {
-			"bun": "./ts/protocol/securityPoolAuction.ts",
-			"default": "./js/protocol/securityPoolAuction.js"
+		"./protocol/securityPoolRepairAuction.js": {
+			"bun": "./ts/protocol/securityPoolRepairAuction.ts",
+			"default": "./js/protocol/securityPoolRepairAuction.js"
 		},
 		"./protocol/securityPoolPrice.js": {
 			"bun": "./ts/protocol/securityPoolPrice.ts",

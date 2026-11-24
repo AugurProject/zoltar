@@ -25,7 +25,7 @@ export type DeploymentStepId =
 	| 'securityPoolServicesDeployer'
 	| 'securityPoolReporterLedgerDeployer'
 	| 'securityPoolForkCoordinatorDeployer'
-	| 'securityPoolAuctionDeployer'
+	| 'securityPoolRepairAuctionDeployer'
 export type MarketType = 'binary' | 'categorical' | 'scalar'
 
 export type ReportingOutcomeKey = 'invalid' | 'yes' | 'no'

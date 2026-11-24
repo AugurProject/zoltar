@@ -46,8 +46,8 @@ export async function readContractCollateral(address: Address, kind: string, rea
 		return getAddress(value)
 	}
 	const poolKinds = ['questionLedger', 'priceCoordinator', 'ammPair']
-	const securityPoolKinds = ['securityPoolReporterLedger', 'securityPoolSettlementBook', 'securityPoolServices', 'securityPoolPurchase', 'securityPoolCapitalLedger', 'securityPoolForkCoordinator', 'securityPoolAuction']
-	const tokenKinds = ['securityPool', 'sharedPoolPriceFeed', 'securityPoolSettlement', 'securityPoolUniformPriceAuction']
+	const securityPoolKinds = ['securityPoolReporterLedger', 'securityPoolSettlementBook', 'securityPoolServices', 'securityPoolPurchase', 'securityPoolCapitalLedger', 'securityPoolForkCoordinator', 'securityPoolRepairAuction']
+	const tokenKinds = ['securityPool', 'sharedPoolPriceFeed', 'securityPoolSettlement', 'securityPoolUniformPriceRepairAuction']
 	if (![...poolKinds, ...securityPoolKinds, ...tokenKinds].includes(kind)) return undefined
 	try {
 		let source = address

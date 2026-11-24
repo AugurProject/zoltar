@@ -32,7 +32,7 @@ type PoolRiskContext = {
 }
 
 export type LiquidationCandidate = {
-	bonusValueAttoEth: bigint
+	takeoverRewardValueAttoEth: bigint
 	underwritingLimitToMoveAttoEth: bigint
 	debtToMoveAttoEth: bigint
 	pool: PoolRiskContext

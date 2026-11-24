@@ -8,7 +8,7 @@ import { createCompleteSetInQuestionLedger, loadShareMigrationTargets, loadTradi
 import { loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import { discoverSimulationSecurityPool, securityPoolReadClient } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
 import { loadSecurityPoolForkSnapshot, quoteSecurityPoolAuctionRefundClaim } from '@zoltar/statoblast-shared/statoblast/securityPool'
-import { loadSecurityPoolBranchAuction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolAuction.js'
+import { loadSecurityPoolBranchAuction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolRepairAuction.js'
 import { expect, test } from 'bun:test'
 import { createPublicClient, custom } from '@zoltar/core-shared/evm/ethereum'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'

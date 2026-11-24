@@ -16,7 +16,7 @@ import * as copy from '../../../copy/securityPool.js'
 import { defaultSecurityPoolCreationDraft, parseFixedSecurityPoolQuestions, parseSecurityPoolCreationEconomics, securityPoolDeploymentReviewDescription, type CuratedAdmissionMode, type SecurityPoolCreationDraft } from '../lib/creation.js'
 import { loadSecurityPoolAdmission, securityPoolAdmissionCreationRequest, requireSecurityPoolQuestionAdmission, requireSecurityPoolQuestionHorizon, requireSecurityPoolQuestionEligibility } from '../../../protocol/securityPoolAdmission.js'
 import { buildSecurityPoolAuctionVaultExecuteRequest } from '@zoltar/statoblast-shared/statoblast/securityPool'
-import { authenticateSecurityPoolAuctionVault } from '../../../protocol/securityPoolAuction.js'
+import { authenticateSecurityPoolAuctionVault } from '../../../protocol/securityPoolRepairAuction.js'
 
 export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>, parameters: WriteOperationsParameters) {
 	const collateralSymbol = useSignal<CollateralSymbol>('WETH')

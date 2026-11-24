@@ -4,7 +4,7 @@ import { verifySecurityPoolCustody } from './security-pool-identity.ts'
 import { authenticateSecurityPoolAuction, loadSecurityPoolAuctionPosition, securityPoolAuctionPage, type SecurityPoolAuctionTarget, type SecurityPoolTarget } from './security-pool-auction.ts'
 import type { OperatorSettings } from '#config/settings'
 import type { SecurityPoolSelection } from '#config/security-pool-policy'
-import { erc20Abi, securityPoolCapitalLedgerAbi, securityPoolAuctionVaultAbi, securityPoolRuntimeIdentities } from '@zoltar/bot-shared/contracts/abi'
+import { erc20Abi, securityPoolCapitalLedgerAbi, securityPoolRepairAuctionVaultAbi, securityPoolRuntimeIdentities } from '@zoltar/bot-shared/contracts/abi'
 import { verifyRuntimeIdentity } from '@zoltar/bot-shared/monitoring/runtime-identity'
 import { getAddress, parseAbiItem, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { decodeAuctionVaultBindings, loadSecurityPoolCapitalSnapshot, type SecurityPoolCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
@@ -36,7 +36,7 @@ const securityPoolMonitorAbi = [
 	parseAbiItem('function lastPositionId() view returns (uint96)'),
 	parseAbiItem('function accountOf(uint96 id) view returns ((address owner,uint96 batch,uint256 rep,uint256 commitment,uint256 maxHealthyPrice,uint256 releasedRep,uint256 ethFees,uint256 repFees,uint256 remainingCommitment) account)'),
 	parseAbiItem('function liquidationStarted(uint96 id) view returns (uint48)'),
-	parseAbiItem('function liquidationAwarded(uint96 id) view returns (uint256)'),
+	parseAbiItem('function liquidationPenaltyPaid(uint96 id) view returns (uint256)'),
 	parseAbiItem('function liquidationElapsed(uint96 id) view returns (uint256)'),
 	parseAbiItem('function previewRetirement(uint96 id,uint256 acceptedPrice,uint256 demand) view returns ((uint8 status,uint96 effectiveCurrentBatch,uint256 healthyCommitment,uint256 spareCommitment,uint256 queuedAheadCommitment,uint256 commitmentReduction,uint256 releasedRep) preview)'),
 ] as const
@@ -53,7 +53,7 @@ export type SecurityPoolPosition = {
 	maxHealthyPrice: bigint
 	remainingCommitment: bigint
 	liquidationStarted: bigint
-	liquidationAwarded?: bigint
+	liquidationPenaltyPaid?: bigint
 	liquidationElapsed?: bigint
 	retirementStatus: string
 	stalledRetirement: boolean
@@ -108,7 +108,7 @@ export function securityPoolPositionPage(scope: SecurityPoolScope, lastPositionI
 
 async function isCanonicalAuctionVaultImplementation(client: ReadClient, implementation: Address, blockNumber: bigint) {
 	try {
-		verifyRuntimeIdentity(await client.getCode({ address: implementation, blockNumber }), securityPoolRuntimeIdentities.SecurityPoolAuctionVault, 'position auction vault implementation')
+		verifyRuntimeIdentity(await client.getCode({ address: implementation, blockNumber }), securityPoolRuntimeIdentities.SecurityPoolRepairAuctionVault, 'position auction vault implementation')
 		return true
 	} catch (error) {
 		if (error instanceof Error && ['Unrecognized position auction vault implementation runtime code', 'Inconsistent position auction vault implementation runtime immutable values'].includes(error.message)) return false
@@ -118,10 +118,10 @@ async function isCanonicalAuctionVaultImplementation(client: ReadClient, impleme
 
 async function loadSecurityPoolPosition(client: ReadClient, snapshot: SecurityPoolCapitalSnapshot, id: bigint): Promise<SecurityPoolPosition> {
 	const blockNumber = snapshot.blockNumber
-	const [rawAccount, started, awarded, elapsed] = await Promise.all([
+	const [rawAccount, started, penaltyPaid, elapsed] = await Promise.all([
 		client.readContract({ address: snapshot.commitmentIndex, abi: securityPoolMonitorAbi, functionName: 'accountOf', args: [id], blockNumber }),
 		client.readContract({ address: snapshot.capitalLedger, abi: securityPoolMonitorAbi, functionName: 'liquidationStarted', args: [id], blockNumber }),
-		client.readContract({ address: snapshot.capitalLedger, abi: securityPoolMonitorAbi, functionName: 'liquidationAwarded', args: [id], blockNumber }),
+		client.readContract({ address: snapshot.capitalLedger, abi: securityPoolMonitorAbi, functionName: 'liquidationPenaltyPaid', args: [id], blockNumber }),
 		client.readContract({ address: snapshot.capitalLedger, abi: securityPoolMonitorAbi, functionName: 'liquidationElapsed', args: [id], blockNumber }),
 	])
 	const account = record(rawAccount, 'Security pool position')
@@ -134,7 +134,7 @@ async function loadSecurityPoolPosition(client: ReadClient, snapshot: SecurityPo
 	const bindings = decodeAuctionVaultBindings(await client.getCode({ address: owner, blockNumber }))
 	let controllingOwner = owner
 	if (bindings !== undefined && (await isCanonicalAuctionVaultImplementation(client, bindings.implementation, blockNumber))) {
-		controllingOwner = getAddress(await client.readContract({ address: owner, abi: securityPoolAuctionVaultAbi, functionName: 'owner', blockNumber }))
+		controllingOwner = getAddress(await client.readContract({ address: owner, abi: securityPoolRepairAuctionVaultAbi, functionName: 'owner', blockNumber }))
 		if (controllingOwner !== bindings.owner) throw new Error('Position auction vault owner does not match its code')
 	}
 	let retirementStatus = 'No pending reduction'
@@ -159,7 +159,7 @@ async function loadSecurityPoolPosition(client: ReadClient, snapshot: SecurityPo
 		maxHealthyPrice: uint(account['maxHealthyPrice']),
 		remainingCommitment: uint(account['remainingCommitment']),
 		liquidationStarted: uint(started),
-		liquidationAwarded: uint(awarded),
+		liquidationPenaltyPaid: uint(penaltyPaid),
 		liquidationElapsed: uint(elapsed),
 	}
 }
@@ -193,7 +193,7 @@ export async function loadSecurityPoolObservation(client: ReadClient, settings: 
 	])
 	if (address(authority) !== scope.address || address(indexAuthority) !== snapshot.capitalLedger || universeId !== scope.universeId || address(token) !== snapshot.repToken || snapshot.chainId !== settings.network.chainId) throw new Error('Security pool capital identity does not match the approved universe')
 	const page = securityPoolPositionPage(scope, uint(lastPositionId), settings.securityPoolPolicy.maximumPositionsPerScan)
-	const cohort = await client.readContract({ address: snapshot.capitalLedger, abi: securityPoolCapitalLedgerAbi, functionName: 'auctionCohort', blockNumber })
+	const cohort = await client.readContract({ address: snapshot.capitalLedger, abi: securityPoolCapitalLedgerAbi, functionName: 'repairAuctionCohort', blockNumber })
 	const owned = await loadOwnedSecurityPoolVaults(client, snapshot, scope.managedVaults ?? [])
 	page.nextScope.managedVaults = owned.vaults
 	const chosenVaultChildUniverseIds = await Promise.all(owned.chosenOutcomes.map(async outcome => uint(await client.readContract({ address: settings.deployment.zoltar, abi: securityPoolMonitorAbi, functionName: 'getChildUniverseId', args: [scope.universeId, outcome], blockNumber }))))

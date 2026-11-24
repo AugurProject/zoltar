@@ -3,11 +3,11 @@ pragma solidity 0.8.35;
 
 import { CapitalLedgerHarness, CapitalLedgerTestComponents } from './CapitalLedgerHarness.sol';
 import { SecurityPoolCapitalLedger } from '../../statoblast/SecurityPoolCapitalLedger.sol';
-import { ISecurityPoolAuctionCapital } from '../../statoblast/interfaces/ISecurityPoolAuctionCapital.sol';
+import { ISecurityPoolRepairAuctionCapital } from '../../statoblast/interfaces/ISecurityPoolRepairAuctionCapital.sol';
 
 /// @dev Controlled adapter isolates the capital boundary. The actual auction's
 /// tree, fills and exact fee distribution have separate engine tests.
-contract CapitalAuctionAdapterMock is ISecurityPoolAuctionCapital {
+contract CapitalRepairAuctionAdapterMock is ISecurityPoolRepairAuctionCapital {
 	SecurityPoolCapitalLedger public immutable capital;
 	mapping(uint256 => BidPosition) private bids;
 	mapping(address => uint256) public bidIdForVault;
@@ -49,10 +49,10 @@ contract CapitalAuctionAdapterMock is ISecurityPoolAuctionCapital {
 	}
 }
 
-contract CapitalAuctionHarness is CapitalLedgerHarness {
+contract CapitalRepairAuctionHarness is CapitalLedgerHarness {
 	constructor(CapitalLedgerTestComponents components) CapitalLedgerHarness(components) {}
-	function installAuction(address adapter, uint256 lots, uint256 repPerLot, uint256 commitmentPerLot) external {
-		ledger.installAuctionCohort(adapter, lots, repPerLot, commitmentPerLot);
+	function installRepairAuction(address adapter, uint256 lots, uint256 repPerLot, uint256 commitmentPerLot) external {
+		ledger.installRepairAuctionCohort(adapter, lots, repPerLot, commitmentPerLot);
 	}
 	function creditFees() external payable {
 		collateralToken.deposit{value: msg.value}();
@@ -62,7 +62,7 @@ contract CapitalAuctionHarness is CapitalLedgerHarness {
 }
 
 /// @dev Controlled fresh quote isolates lot selection from report funding economics.
-contract AuctionLotSizingHarness is CapitalLedgerHarness {
+contract RepairAuctionLotSizingHarness is CapitalLedgerHarness {
 	uint256 public minimumCommitmentAttoEth = 1;
 	uint256 public conservativePrice = 1e18;
 	uint256 public lastSettlementTimestamp;

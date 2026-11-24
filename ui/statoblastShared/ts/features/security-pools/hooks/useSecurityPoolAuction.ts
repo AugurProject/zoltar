@@ -19,11 +19,11 @@ import {
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
-import { loadSecurityPoolBranchAuction } from '../../../protocol/securityPoolAuction.js'
+import { loadSecurityPoolBranchAuction } from '../../../protocol/securityPoolRepairAuction.js'
 import type { SecurityPoolTransaction } from '../../../protocol/securityPool.js'
 import type { SecurityPoolSharedForkParameters } from './useSecurityPoolSharedFork.js'
 import { securityPoolAmountOrUndefined, securityPoolUnsignedId } from '../lib/draft.js'
-import * as copy from '../../../copy/securityPoolAuction.js'
+import * as copy from '../../../copy/securityPoolRepairAuction.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 
 export type SecurityPoolAuctionParameters = { fork: SecurityPoolForkSnapshot | undefined; bidder: Address | undefined; actions: SecurityPoolSharedForkParameters['actions']; openVault?: ((vault: Address, universeId: bigint) => void) | undefined }

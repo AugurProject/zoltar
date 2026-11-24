@@ -6,7 +6,7 @@ import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/act
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { unscopedTransaction } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
-import { SecurityPoolAuction } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolAuction.js'
+import { SecurityPoolRepairAuction } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolRepairAuction.js'
 import type { SecurityPoolAuctionParameters } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolAuction.js'
 import { auctionFixture, auctionVault } from './auctionFixture.js'
 import { owner, unit } from './capitalFixture.js'
@@ -31,7 +31,7 @@ function metric(container: HTMLElement, text: string) {
 test('#1371 a full book displays no admissible limit rather than a price below the backing floor', async () => {
 	const fixture = await auctionFixture()
 	fixture.values['maximumAdmissibleBidAttoRepPerLot'] = 3n * unit
-	const view = await renderIntoDocument(<SecurityPoolAuction fork={fixture.fork} bidder={owner} actions={actions} />)
+	const view = await renderIntoDocument(<SecurityPoolRepairAuction fork={fixture.fork} bidder={owner} actions={actions} />)
 	lifecycle.trackRendered(view)
 	await waitFor(() => expect(view.container.textContent).toContain('Bid 1'))
 	expect(view.container.textContent).toContain('No admissible new limit')
@@ -39,7 +39,7 @@ test('#1371 a full book displays no admissible limit rather than a price below t
 
 test('auction funding controls and bid rows stay in place through reload and failure', async () => {
 	const fixture = await auctionFixture()
-	const view = await renderIntoDocument(<SecurityPoolAuction fork={fixture.fork} bidder={owner} actions={actions} />)
+	const view = await renderIntoDocument(<SecurityPoolRepairAuction fork={fixture.fork} bidder={owner} actions={actions} />)
 	lifecycle.trackRendered(view)
 	await waitFor(() => expect(view.container.textContent).toContain('Bid 1'))
 	expect(view.container.querySelectorAll('.card .card')).toHaveLength(0)
@@ -80,7 +80,7 @@ test('funded unclaimed winners show live fees and separate activation from manag
 	const fixture = await auctionFixture()
 	fixture.values['finalized'] = true
 	const opened: string[] = []
-	const view = await renderIntoDocument(<SecurityPoolAuction fork={fixture.fork} bidder={owner} actions={actions} openVault={vault => opened.push(vault)} />)
+	const view = await renderIntoDocument(<SecurityPoolRepairAuction fork={fixture.fork} bidder={owner} actions={actions} openVault={vault => opened.push(vault)} />)
 	lifecycle.trackRendered(view)
 	await waitFor(() => expect(view.container.textContent).toContain('Funded vault'))
 	expect(metric(view.container, 'Current vault REP principal')).toContain('100.00')
@@ -91,7 +91,7 @@ test('funded unclaimed winners show live fees and separate activation from manag
 	expect(button(view.container, 'Activate vault controls').disabled).toBe(false)
 	expect(button(view.container, 'Manage vault').disabled).toBe(true)
 	fixture.values['bids'] = [owner, auctionVault, 12_000n, 2n, 60n * unit, false, true]
-	fixture.values['auctionPosition'] = [auctionVault, 8n, 100n * unit, unit, 12_000n, 0n, true, 7n * unit, 9n * unit]
+	fixture.values['repairAuctionPosition'] = [auctionVault, 8n, 100n * unit, unit, 12_000n, 0n, true, 7n * unit, 9n * unit]
 	await act(() => button(view.container, 'Refresh auction').click())
 	await waitFor(() => expect(button(view.container, 'Manage vault').disabled).toBe(false))
 	expect(button(view.container, 'Activate vault controls').disabled).toBe(true)
@@ -101,7 +101,7 @@ test('funded unclaimed winners show live fees and separate activation from manag
 
 test('early refund status enables only crediting then a separate unrestricted withdrawal', async () => {
 	const fixture = await auctionFixture()
-	const view = await renderIntoDocument(<SecurityPoolAuction fork={fixture.fork} bidder={owner} actions={actions} />)
+	const view = await renderIntoDocument(<SecurityPoolRepairAuction fork={fixture.fork} bidder={owner} actions={actions} />)
 	lifecycle.trackRendered(view)
 	await waitFor(() => expect(view.container.textContent).toContain('Bid 1'))
 	const credit = button(view.container, 'Credit this bid’s refunds')
@@ -148,7 +148,7 @@ test.each([
 	const fixture = await auctionFixture()
 	// The default 120% health target requires 4.8 REP per lot.
 	fixture.values['maximumAdmissibleBidAttoRepPerLot'] = maximumAcceptableBid
-	const view = await renderIntoDocument(<SecurityPoolAuction fork={fixture.fork} bidder={owner} actions={actions} />)
+	const view = await renderIntoDocument(<SecurityPoolRepairAuction fork={fixture.fork} bidder={owner} actions={actions} />)
 	lifecycle.trackRendered(view)
 	await waitFor(() => expect(view.container.textContent).toContain('Bid 1'))
 	await act(() => {

@@ -200,11 +200,11 @@ export const auctionCatalogData = async (sql: SQL, chainId: number, asOf: Record
 			ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1) latest ON true
 		LEFT JOIN LATERAL (SELECT * FROM collateral_repair_auction_events event WHERE event.chain_id = ${chainId}
 			AND event.auction_address = auction.auction_address AND event.canonical AND event.block_number <= ${snapshotBlock}
-			AND event.event_name = 'AuctionStarted'
+			AND event.event_name = 'RepairAuctionStarted'
 			ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1) started ON true
 		LEFT JOIN LATERAL (SELECT * FROM collateral_repair_auction_events event WHERE event.chain_id = ${chainId}
 			AND event.auction_address = auction.auction_address AND event.canonical AND event.block_number <= ${snapshotBlock}
-			AND event.event_name = 'AuctionFinalized'
+			AND event.event_name = 'RepairAuctionFinalized'
 			ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT 1) finalized ON true
 		WHERE (latest.block_number, latest.log_index, latest.tx_hash) < (${cursorBlock}::bigint, ${cursorLog}::integer, ${cursorTx})
 		ORDER BY latest.block_number DESC, latest.log_index DESC, latest.tx_hash DESC LIMIT ${queryLimit}

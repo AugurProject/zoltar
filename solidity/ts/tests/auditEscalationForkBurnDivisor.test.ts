@@ -264,7 +264,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		})
 	}
 
-	test('rejects unsafe divisors and blocks fork resume until the maximum-bonus winner is fully backed', async () => {
+	test('rejects unsafe divisors and blocks fork resume until the maximum-reward winner is fully backed', async () => {
 		const canonicalQuestionData = await client.readContract({
 			abi: Zoltar_Zoltar.abi,
 			address: getZoltarAddress(),
@@ -434,7 +434,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		}
 		const walletRepBeforeClaim = await getERC20Balance(client, repTokenAddress, client.account.address)
 
-		assert.strictEqual(childBacking, expectedWinningPayout, 'divisor 5 must leave exactly enough REP for the maximum-bonus winner')
+		assert.strictEqual(childBacking, expectedWinningPayout, 'divisor 5 must leave exactly enough REP for the maximum-reward winner')
 		await writeContractAndWait(client, () =>
 			client.writeContract({
 				abi: proofTestPoolArtifact.abi,

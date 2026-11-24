@@ -33,7 +33,7 @@ export const contractSafetyPolicy = {
 	exactLayoutPairs: [
 		{
 			host: { sourcePath: 'contracts/statoblast/SecurityPoolCapitalLedger.sol', contractName: 'SecurityPoolCapitalLedger' },
-			delegate: { sourcePath: 'contracts/statoblast/SecurityPoolCapitalAuctionDelegate.sol', contractName: 'SecurityPoolCapitalAuctionDelegate' },
+			delegate: { sourcePath: 'contracts/statoblast/SecurityPoolCapitalRepairAuctionDelegate.sol', contractName: 'SecurityPoolCapitalRepairAuctionDelegate' },
 			reason: 'Auction winners detach exact funded positions in the original capital ledger without changing custody or health history.',
 		},
 		{

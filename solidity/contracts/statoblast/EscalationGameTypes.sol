@@ -45,8 +45,6 @@ struct OutcomeState {
 	uint256 snapshotLeafCount;
 	bytes32 snapshotCarryRoot;
 	uint256 inheritedUnresolvedTotalAttoRep;
-	uint256 inheritedConsumedSourceAttoRep;
-	uint256 inheritedConsumedRetainedAttoRep;
 	uint256 currentLeafCount;
 	bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS] currentPeaks;
 	// The current unresolved carry state after local and inherited deposits are consumed.
@@ -101,10 +99,4 @@ struct CarriedDepositProof {
 	// Height of the peak containing leafIndex; must match the height derived from it.
 	uint256 merkleMountainRangePeakIndex;
 	bytes32[] nullifierSiblings;
-}
-
-// Escalation claims are deliberately not tokens. A bundle is keyed by, and
-// permanently owned by, the vault that originated its deposits.
-struct EscalationClaimBundle {
-	uint256 disputeStakedRepClaimUnits;
 }

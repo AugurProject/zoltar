@@ -95,7 +95,7 @@ export function previousReceiveActionMatches(snapshot: EcosystemSnapshot, contex
 				decodedAddressMatches(call.args[1], snapshot.deployments.tradingRouter) &&
 				sameBigintArray(call.args[2], tokenIds) &&
 				sameBigintArray(call.args[3], values) &&
-				call.args[4] === receiveRequestData(snapshot, pool, pair, shares, operation, longOutcome, completeAmount, maximumLong, minimumEthAttoEth, BigInt(deadline), minimumRepAttoRep)
+				call.args[4] === receiveRequestData(snapshot, pool, pair, operation, longOutcome, completeAmount, maximumLong, minimumEthAttoEth, BigInt(deadline), minimumRepAttoRep)
 			)
 		}) ?? false
 	)

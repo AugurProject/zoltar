@@ -134,7 +134,7 @@ describe('audit4: a second fork interrupts a continued game while holding fees a
 		const supplyAA = await e2e.supply(AA)
 		const settled = await e2e.claimEveryWinner(r6, childAA.pool, NO, leavesNo, median(balancesAA), balancesAA[NO])
 		const local = await e2e.claimLocal(r6, childAA.pool, NO, [0n], r5.account.address)
-		// 105k principal, 54k bonus, 36k burn spend the whole 195k.
+		// 105k principal, 54k reward, 36k burn spend the whole 195k.
 		expect(105n * K + 54n * K - settled.paid - local).toBeLessThanOrEqual(5n)
 		const residualAA = await e2e.gameBalance(childAA.game)
 		if (residualAA !== 0n) await e2e.sweep(r6, childAA.game)

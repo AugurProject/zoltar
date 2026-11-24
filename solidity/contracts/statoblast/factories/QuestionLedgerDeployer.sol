@@ -10,7 +10,7 @@ import { IShareToken } from '../interfaces/IShareToken.sol';
 import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
 import { EscalationGameFactory } from './EscalationGameFactory.sol';
 import { QuestionLedgerAccountingModule } from '../QuestionLedgerAccountingModule.sol';
-import { CreationCodeStorage } from './OpenOraclePriceCoordinatorFactory.sol';
+import { CreationCodeStorage } from '../CreationCodeStorage.sol';
 import { Create2Deployment } from './Create2Deployment.sol';
 
 /// @dev Static fields follow the QuestionLedger constructor argument order.

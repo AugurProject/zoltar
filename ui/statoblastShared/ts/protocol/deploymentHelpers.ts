@@ -19,7 +19,7 @@ import {
 	statoblast_SecurityPoolModuleDeployers_SecurityPoolServicesDeployer,
 	statoblast_SecurityPoolModuleDeployers_SecurityPoolReporterLedgerDeployer,
 	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinatorDeployer,
-	statoblast_SecurityPoolAuction_SecurityPoolAuctionDeployer,
+	statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuctionDeployer,
 	statoblast_factories_EscalationGameFactory_EscalationGameFactory,
 	statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory,
 	statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker,
@@ -54,7 +54,7 @@ const statoblastInitCodes = createStatoblastInitCodes(
 		securityPoolServicesDeployer: statoblast_SecurityPoolModuleDeployers_SecurityPoolServicesDeployer,
 		securityPoolReporterLedgerDeployer: statoblast_SecurityPoolModuleDeployers_SecurityPoolReporterLedgerDeployer,
 		securityPoolForkCoordinatorDeployer: statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinatorDeployer,
-		securityPoolAuctionDeployer: statoblast_SecurityPoolAuction_SecurityPoolAuctionDeployer,
+		securityPoolRepairAuctionDeployer: statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuctionDeployer,
 		questionLedgerOperationsDelegate: statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate,
 		questionLedgerEventEmitter: statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule,
 		shareTokenFactory: statoblast_factories_ShareTokenFactory_ShareTokenFactory,
@@ -78,7 +78,7 @@ const {
 	getSecurityPoolServicesDeployerByteCode,
 	getSecurityPoolReporterLedgerDeployerByteCode,
 	getSecurityPoolForkCoordinatorDeployerByteCode,
-	getSecurityPoolAuctionDeployerByteCode,
+	getSecurityPoolRepairAuctionDeployerByteCode,
 	getQuestionLedgerOperationsDelegateByteCode,
 	getQuestionLedgerAccountingModuleByteCode,
 	getShareTokenFactoryByteCode,
@@ -135,7 +135,7 @@ export function getInfraStepConstructorArguments(profile: NetworkProfile = getRu
 		securityPoolServicesDeployer: constructorArgumentsFromInitCode(getSecurityPoolServicesDeployerByteCode(), statoblast_SecurityPoolModuleDeployers_SecurityPoolServicesDeployer.evm.bytecode.object),
 		securityPoolReporterLedgerDeployer: constructorArgumentsFromInitCode(getSecurityPoolReporterLedgerDeployerByteCode(), statoblast_SecurityPoolModuleDeployers_SecurityPoolReporterLedgerDeployer.evm.bytecode.object),
 		securityPoolForkCoordinatorDeployer: constructorArgumentsFromInitCode(getSecurityPoolForkCoordinatorDeployerByteCode(), statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinatorDeployer.evm.bytecode.object),
-		securityPoolAuctionDeployer: constructorArgumentsFromInitCode(getSecurityPoolAuctionDeployerByteCode(), statoblast_SecurityPoolAuction_SecurityPoolAuctionDeployer.evm.bytecode.object),
+		securityPoolRepairAuctionDeployer: constructorArgumentsFromInitCode(getSecurityPoolRepairAuctionDeployerByteCode(), statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuctionDeployer.evm.bytecode.object),
 		questionForker: constructorArgumentsFromInitCode(getQuestionForkerByteCode(addresses.zoltar), statoblast_QuestionForker_QuestionForker.evm.bytecode.object),
 		escalationGameDepositDelegate: '',
 		escalationGameFactory: constructorArgumentsFromInitCode(getEscalationGameFactoryByteCode(addresses.escalationGameDepositDelegate), statoblast_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object),
@@ -154,6 +154,8 @@ type BootstrapDescendantAddresses = {
 	questionLedgerCreationCodeFirstChunk: Address
 	questionLedgerCreationCodeSecondChunk: Address
 	securityPoolCommitmentIndexImplementation: Address
+	securityPoolCapitalLifecycleDelegate: Address
+	securityPoolCapitalRepairAuctionDelegate: Address
 	securityPoolCapitalFeeStreamsImplementation: Address
 	questionLedgerDeployer: Address
 	questionLedgerDeploymentWorker: Address
@@ -180,16 +182,18 @@ export function getBootstrapDescendantAddresses(profile: NetworkProfile = getRun
 		securityPoolCapitalCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 1n }),
 		securityPoolCapitalCreationCodeSecondChunk: getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 2n }),
 		securityPoolCommitmentIndexImplementation: getCreateAddress({ from: infrastructure.securityPoolCommitmentIndexDeployer, nonce: 1n }),
-		securityPoolCapitalFeeStreamsImplementation: getCreateAddress({ from: infrastructure.securityPoolCapitalFeeStreamsDeployer, nonce: 1n }),
+		securityPoolCapitalLifecycleDelegate: getCreateAddress({ from: infrastructure.securityPoolCapitalLedgerDeployer, nonce: 3n }),
+		securityPoolCapitalRepairAuctionDelegate: getCreateAddress({ from: infrastructure.securityPoolCapitalFeeStreamsDeployer, nonce: 1n }),
+		securityPoolCapitalFeeStreamsImplementation: getCreateAddress({ from: infrastructure.securityPoolCapitalFeeStreamsDeployer, nonce: 2n }),
 		securityPoolServicesCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.securityPoolServicesDeployer, nonce: 1n }),
 		securityPoolServicesCreationCodeSecondChunk: getCreateAddress({ from: infrastructure.securityPoolServicesDeployer, nonce: 2n }),
 		securityPoolSettlementBookCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.securityPoolSettlementBookDeployer, nonce: 1n }),
 		securityPoolSettlementBookCreationCodeSecondChunk: getCreateAddress({ from: infrastructure.securityPoolSettlementBookDeployer, nonce: 2n }),
 		securityPoolForkCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.securityPoolForkCoordinatorDeployer, nonce: 1n }),
-		securityPoolAuctionCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.securityPoolAuctionDeployer, nonce: 1n }),
+		securityPoolAuctionCreationCodeFirstChunk: getCreateAddress({ from: infrastructure.securityPoolRepairAuctionDeployer, nonce: 1n }),
 		securityPoolForkCreationCodeSecondChunk: getCreateAddress({ from: infrastructure.securityPoolForkCoordinatorDeployer, nonce: 2n }),
-		securityPoolAuctionCreationCodeSecondChunk: getCreateAddress({ from: infrastructure.securityPoolAuctionDeployer, nonce: 2n }),
-		securityPoolAuctionVaultImplementation: getCreateAddress({ from: infrastructure.securityPoolAuctionDeployer, nonce: 3n }),
+		securityPoolAuctionCreationCodeSecondChunk: getCreateAddress({ from: infrastructure.securityPoolRepairAuctionDeployer, nonce: 2n }),
+		securityPoolAuctionVaultImplementation: getCreateAddress({ from: infrastructure.securityPoolRepairAuctionDeployer, nonce: 3n }),
 	}
 }
 
@@ -206,7 +210,7 @@ type SecurityPoolModuleId =
 	| 'securityPoolServicesDeployer'
 	| 'securityPoolReporterLedgerDeployer'
 	| 'securityPoolForkCoordinatorDeployer'
-	| 'securityPoolAuctionDeployer'
+	| 'securityPoolRepairAuctionDeployer'
 type SecurityPoolModuleDeployment = { id: SecurityPoolModuleId; label: string; bytecode: typeof getSecurityPoolCapitalLedgerDeployerByteCode; artifact: { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } } }
 export const securityPoolModuleDeployments: readonly SecurityPoolModuleDeployment[] = [
 	{ id: 'securityPoolCapitalLedgerDeployer', label: 'SecurityPoolCapitalLedgerDeployer', artifact: statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalLedgerDeployer, bytecode: getSecurityPoolCapitalLedgerDeployerByteCode },
@@ -217,5 +221,5 @@ export const securityPoolModuleDeployments: readonly SecurityPoolModuleDeploymen
 	{ id: 'securityPoolServicesDeployer', label: 'SecurityPoolServicesDeployer', artifact: statoblast_SecurityPoolModuleDeployers_SecurityPoolServicesDeployer, bytecode: getSecurityPoolServicesDeployerByteCode },
 	{ id: 'securityPoolReporterLedgerDeployer', label: 'SecurityPoolReporterLedgerDeployer', artifact: statoblast_SecurityPoolModuleDeployers_SecurityPoolReporterLedgerDeployer, bytecode: getSecurityPoolReporterLedgerDeployerByteCode },
 	{ id: 'securityPoolForkCoordinatorDeployer', label: 'SecurityPoolForkCoordinatorDeployer', artifact: statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinatorDeployer, bytecode: getSecurityPoolForkCoordinatorDeployerByteCode },
-	{ id: 'securityPoolAuctionDeployer', label: 'SecurityPoolAuctionDeployer', artifact: statoblast_SecurityPoolAuction_SecurityPoolAuctionDeployer, bytecode: getSecurityPoolAuctionDeployerByteCode },
+	{ id: 'securityPoolRepairAuctionDeployer', label: 'SecurityPoolRepairAuctionDeployer', artifact: statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuctionDeployer, bytecode: getSecurityPoolRepairAuctionDeployerByteCode },
 ] as const

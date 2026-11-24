@@ -96,10 +96,12 @@
 					<dd>The balance that two outcomes must each reach for the Escalation Game to enter non-decision: half of the universe's fork threshold, rounded up, read when the game opens and fixed for that game and any game carried from it.</dd>
 					<dt id="non-decision">Non-decision</dt>
 					<dd>The Escalation Game state in which two outcomes have each reached the non-decision threshold (<code>NonDecisionState.Local</code>). The game picks no winner, and anyone can fork the universe on the question ledger's own question.</dd>
+					<dt id="escalation-reward">Escalation reward</dt>
+					<dd>REP a winning Escalation Game deposit receives on top of its returned principal. It is a share of the runner-up’s forfeited stake, not paid by the protocol: three fifths of binding capital, split across winning deposits up to the reward-eligible cap. See the <a href="./contracts/escalationgame.html#winning-deposit-payout">EscalationGame reference</a>.</dd>
 					<dt id="reward-eligible-cap">Reward-eligible cap</dt>
-					<dd>One and a half times binding capital. Only the portion of winning Escalation Game deposits up to this cap earns a bonus; deposits beyond it return principal only. See the <a href="./contracts/escalationgame.html#winning-deposit-payout">EscalationGame reference</a>.</dd>
+					<dd>One and a half times binding capital. Only the portion of winning Escalation Game deposits up to this cap earns an <a href="#escalation-reward">escalation reward</a>; deposits beyond it return principal only. See the <a href="./contracts/escalationgame.html#winning-deposit-payout">EscalationGame reference</a>.</dd>
 					<dt id="escalation-haircut">Escalation haircut</dt>
-					<dd>Two fifths of binding capital, burned at Escalation Game settlement instead of being paid to winners as a bonus, unless the question ledger's own fork already paid it through the fork haircut. The contracts call it the winner haircut (<code>burnEscalationWinnerHaircut</code>).</dd>
+					<dd>Two fifths of binding capital, burned at Escalation Game settlement instead of being paid to winners as an escalation reward, unless the question ledger's own fork already paid it through the fork haircut. The contracts call it the winner haircut (<code>burnEscalationWinnerHaircut</code>).</dd>
 				</dl>
 			</section>
 			<section id="forks-and-repair">
@@ -123,7 +125,11 @@
 					<dt id="target-vault">Target vault</dt>
 					<dd>The unhealthy vault whose underwriting commitment a liquidation reduces.</dd>
 					<dt id="receiver-vault">Receiver vault</dt>
-					<dd>The vault that receives a liquidation REP bonus and transferred commitment, supplies the remaining backing and earns future fees. It must remain healthy on its whole resulting commitment; the bonus remains pledged principal.</dd>
+					<dd>The vault that receives transferred commitment and a <a href="#takeover-reward">takeover reward</a> taken from the target vault’s pledged REP, supplies the remaining backing and earns future fees. It must remain healthy on its whole resulting commitment; the takeover reward remains pledged principal.</dd>
+					<dt id="takeover-reward">Takeover reward</dt>
+					<dd>REP a receiver vault gains by taking over distressed commitment. It is taken from the <a href="#target-vault">target vault</a>’s pledged REP, not paid by the protocol, and grows linearly from zero to all of that REP over one hour from the start of liquidation; a partial takeover receives a proportional share.</dd>
+					<dt id="liquidation-penalty">Liquidation penalty</dt>
+					<dd>The same REP seen from the side of the target vault’s owner: up to all of the vault’s pledged REP, rising over one hour from the start of liquidation, which moves to whoever takes over its commitment.</dd>
 					<dt id="operator">Operator</dt>
 					<dd>An account submitting permissionless maintenance transactions, such as a funded takeover of distressed commitment. A takeover receiver must authorize its own capital and satisfy the transaction bounds.</dd>
 				</dl>

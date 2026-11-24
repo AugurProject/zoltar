@@ -382,7 +382,7 @@ assert.equal(
 		winningOutcomeBalanceAttoRep: 15n * payoutFixture,
 	}),
 	7n * payoutFixture,
-	'published payout example should match the shared contract fixture for principal plus bonus',
+	'published payout example should match the shared contract fixture for principal plus escalation reward',
 )
 assert.equal(
 	getWinningEscalationDepositClaimAmount({

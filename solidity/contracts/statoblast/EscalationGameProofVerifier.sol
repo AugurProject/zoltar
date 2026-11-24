@@ -84,15 +84,15 @@ contract EscalationGameProofVerifier {
 				eligibleEndAttoRep > depositStartAttoRep ? eligibleEndAttoRep - depositStartAttoRep : 0;
 			if (rewardEligibleDepositAttoRep > depositAmountAttoRep)
 				rewardEligibleDepositAttoRep = depositAmountAttoRep;
-			uint256 bonusAttoRep =
+			uint256 rewardAttoRep =
 				(rewardEligibleDepositAttoRep *
-					((bindingCapitalAttoRep * Constants.ESCALATION_WINNER_BONUS_NUMERATOR) /
+					((bindingCapitalAttoRep * Constants.ESCALATION_REWARD_NUMERATOR) /
 						Constants.ESCALATION_PAYOUT_DENOMINATOR)) / rewardEligiblePrincipalAttoRep;
 			burnAmountAttoRep =
 				(rewardEligibleDepositAttoRep *
 					((bindingCapitalAttoRep * Constants.ESCALATION_BURN_NUMERATOR) /
 						Constants.ESCALATION_PAYOUT_DENOMINATOR)) / rewardEligiblePrincipalAttoRep;
-			amountToWithdrawAttoRep = principalAttoRep + bonusAttoRep;
+			amountToWithdrawAttoRep = principalAttoRep + rewardAttoRep;
 		}
 		if (actualForkThresholdAttoRep < nonDecisionThresholdAttoRep) {
 			amountToWithdrawAttoRep =

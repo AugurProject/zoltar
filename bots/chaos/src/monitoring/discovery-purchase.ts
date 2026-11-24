@@ -4,13 +4,11 @@ import type { EcosystemDiscoveryContext } from './discovery-context.ts'
 import { contractSimulationReverted } from './discovery-client.ts'
 
 /** Quote the collateral amount and simulate the exact user entry point at the anchor. */
-export async function discoverPurchaseQuote(context: EcosystemDiscoveryContext, pool: Pick<PoolSnapshot, 'address' | 'securityPool' | 'universeId' | 'questionId' | 'currentMintingCapacityAttoEth' | 'settlementCollateralAttoEth'>, blockNumber: bigint): Promise<PoolSnapshot['purchaseQuote']> {
+export async function discoverPurchaseQuote(context: EcosystemDiscoveryContext, pool: Pick<PoolSnapshot, 'address' | 'securityPool' | 'universeId' | 'questionId' | 'additionalMintCapacityAttoEth'>, blockNumber: bigint): Promise<PoolSnapshot['purchaseQuote']> {
 	const { client, wallet } = context
 	const mint = context.purchaseQuoteAttoEth ?? 10n ** 15n
 	if (wallet === undefined || mint <= 0n) return undefined
-	const ceiling = BigInt(pool.currentMintingCapacityAttoEth)
-	const cash = BigInt(pool.settlementCollateralAttoEth)
-	const available = ceiling > cash ? ceiling - cash : 0n
+	const available = BigInt(pool.additionalMintCapacityAttoEth)
 	if (mint > available) return undefined
 	try {
 		// This strategy budgets in ETH; other collateral requires a separate token budget policy.

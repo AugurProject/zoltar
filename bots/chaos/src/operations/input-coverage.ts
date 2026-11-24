@@ -14,7 +14,7 @@ const bindings: Record<string, Abi> = {
 	QuestionLedger: abis.questionLedgerAbi,
 	OpenOraclePriceCoordinator: abis.openOraclePriceCoordinatorAbi,
 	QuestionForker: abis.questionForkerAbi,
-	SecurityPoolAuction: abis.securityPoolAuctionAbi,
+	SecurityPoolRepairAuction: abis.securityPoolRepairAuctionAbi,
 	SecurityPool: abis.securityPoolAbi,
 	SecurityPoolCapitalLedger: abis.securityPoolCapitalLedgerAbi,
 	SecurityPoolForkCoordinator: abis.securityPoolForkCoordinatorAbi,

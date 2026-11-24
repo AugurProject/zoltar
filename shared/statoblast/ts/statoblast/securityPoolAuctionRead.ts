@@ -1,6 +1,6 @@
 import { parseAbi, zeroAddress, type AbiValue, type Address } from '@zoltar/core-shared/evm/ethereum'
 import type { SecurityPoolReadClient } from './securityPoolRead.js'
-import { predictAuctionVaultAddress } from './securityPoolAuctionVaultClones.js'
+import { predictAuctionVaultAddress } from './securityPoolRepairAuctionVaultClones.js'
 import { decodeAddress, decodeBool, decodeFields, decodeUint } from './securityPoolDecoding.js'
 
 const abi = parseAbi([
@@ -11,7 +11,7 @@ const abi = parseAbi([
 	'function forkController() view returns (address)',
 	'function securityPool() view returns (address)',
 	'function zoltar() view returns (address)',
-	'function auctions(uint248 universeId) view returns (address)',
+	'function repairAuctions(uint248 universeId) view returns (address)',
 	'function capitalLedger(uint248 universeId) view returns (address)',
 	'function priceFeed(uint248 universeId) view returns (address)',
 	'function oracleExposure(uint248 universeId) view returns (uint256)',
@@ -50,12 +50,12 @@ const abi = parseAbi([
 	'function bidderBidId(address bidder,uint256 index) view returns (uint256)',
 	'function bids(uint256 id) view returns (address bidder,address vault,uint256 targetHealthBps,uint256 lots,uint256 minimumAttoRepPerLot,bool settled,bool feesRemoved)',
 	'function previewBid(uint256 id) view returns ((address bidder,address vault,uint256 targetHealthBps,uint256 filledLots,uint256 usedAttoEth,uint256 principalAttoRep,uint256 refundAttoEth) fill)',
-	'function auctionPosition(uint256 bidId) view returns ((address vault,uint96 positionId,uint256 principal,uint256 commitment,uint256 targetHealthFactorBps,uint48 liquidationStarted,bool materialized,uint256 earnedAttoEth,uint256 earnedAttoRep) result)',
-	'function clearing() view returns (uint256 attoRepPerLot,uint256 filledLots,uint256 raisedAttoEth,uint256 soldAttoRep,uint256 roundingAttoRep,uint256 marginalMinimumAttoRepPerLot,uint256 marginalFillLots,uint256 marginalDemandLots,uint256 fullBeforeLots,bool raiseLimitReached)',
+	'function repairAuctionPosition(uint256 bidId) view returns ((address vault,uint96 positionId,uint256 principal,uint256 commitment,uint256 targetHealthFactorBps,uint48 liquidationStarted,bool materialized,uint256 earnedAttoEth,uint256 earnedAttoRep) result)',
+	'function clearing() view returns (uint256 attoRepPerLot,uint256 filledLots,uint256 raisedAttoEth,uint256 soldAttoRep,uint256 marginalMinimumAttoRepPerLot,uint256 marginalFillLots,uint256 marginalDemandLots,uint256 fullBeforeLots,bool raiseLimitReached)',
 	'function bidIdForVault(address vault) view returns (uint256)',
 	'function owner() view returns (address)',
 	'function initialCapital() view returns (address)',
-	'function auction() view returns (address)',
+	'function repairAuction() view returns (address)',
 	'function bidId() view returns (uint256)',
 ])
 type AuctionReadClient = SecurityPoolReadClient & { getBalance(parameters: { address: Address; blockNumber: bigint }): Promise<bigint> }
@@ -99,7 +99,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 	const factory = decodeAddress(factoryValue, 'Factory')
 	const capitalLedger = decodeAddress(capitalValue, 'Capital ledger', true)
 	const priceFeed = decodeAddress(feedValue, 'Price feed', true)
-	const [authorityValue, controllerProtocol, auctionValue, tokenValue, forkTimeValue] = await Promise.all([read(controller, 'securityPool'), read(controller, 'zoltar'), read(controller, 'auctions', [universeId]), read(zoltar, 'getRepToken', [universeId]), read(zoltar, 'getForkTime', [universeId])])
+	const [authorityValue, controllerProtocol, auctionValue, tokenValue, forkTimeValue] = await Promise.all([read(controller, 'securityPool'), read(controller, 'zoltar'), read(controller, 'repairAuctions', [universeId]), read(zoltar, 'getRepToken', [universeId]), read(zoltar, 'getForkTime', [universeId])])
 	if (decodeAddress(authorityValue, 'Fork authority') !== securityPool || decodeAddress(controllerProtocol, 'Fork protocol') !== zoltar) throw new Error('Auction fork controller belongs to another security pool.')
 	const auctionAddress = decodeAddress(auctionValue, 'Auction', true)
 	const repToken = decodeAddress(tokenValue, 'Branch REP', true)
@@ -225,16 +225,15 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 		const remaining = totalBidCount - start
 		const size = Number(remaining < BigInt(pageSize) ? remaining : BigInt(pageSize))
 		const bids = await Promise.all(Array.from({ length: size }, (_, offset) => readBid(decodeUint(start + BigInt(offset), 'Bid index'))))
-		let clearing: { attoRepPerLot: bigint; filledLots: bigint; raisedAttoEth: bigint; soldAttoRep: bigint; roundingAttoRep: bigint; raiseLimitReached: boolean } | undefined
+		let clearing: { attoRepPerLot: bigint; filledLots: bigint; raisedAttoEth: bigint; soldAttoRep: bigint; raiseLimitReached: boolean } | undefined
 		if (opened && finalized) {
-			const result = decodeFields(await read(engine, 'clearing'), ['attoRepPerLot', 'filledLots', 'raisedAttoEth', 'soldAttoRep', 'roundingAttoRep', 'marginalMinimumAttoRepPerLot', 'marginalFillLots', 'marginalDemandLots', 'fullBeforeLots', 'raiseLimitReached'], 'Invalid auction response.')
+			const result = decodeFields(await read(engine, 'clearing'), ['attoRepPerLot', 'filledLots', 'raisedAttoEth', 'soldAttoRep', 'marginalMinimumAttoRepPerLot', 'marginalFillLots', 'marginalDemandLots', 'fullBeforeLots', 'raiseLimitReached'], 'Invalid auction response.')
 			clearing = {
 				attoRepPerLot: decodeUint(result[0], 'Clearing REP per lot'),
 				filledLots: decodeUint(result[1], 'Filled lots'),
 				raisedAttoEth: decodeUint(result[2], 'Raised ETH'),
 				soldAttoRep: decodeUint(result[3], 'Sold REP'),
-				roundingAttoRep: decodeUint(result[4], 'REP rounding fees'),
-				raiseLimitReached: decodeBool(result[9], 'Invalid auction state.'),
+				raiseLimitReached: decodeBool(result[8], 'Invalid auction state.'),
 			}
 		}
 		return { ...terms, price, clearing, totalBidCount, bidStart: start, bids }
@@ -244,7 +243,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			if (id === 0n) throw new Error('Auction bid ID is missing.')
 			const values = decodeFields(await read(engine, 'bids', [id]), ['bidder', 'vault', 'targetHealthBps', 'lots', 'minimumAttoRepPerLot', 'settled', 'feesRemoved'], 'Invalid auction response.')
 			const vault = decodeAddress(values[1], 'Auction vault')
-			const [vaultOwner, vaultCapital, vaultAuction, vaultId, registeredId] = await Promise.all([read(vault, 'owner'), read(vault, 'initialCapital'), read(vault, 'auction'), read(vault, 'bidId'), read(auctionAddress, 'bidIdForVault', [vault])])
+			const [vaultOwner, vaultCapital, vaultAuction, vaultId, registeredId] = await Promise.all([read(vault, 'owner'), read(vault, 'initialCapital'), read(vault, 'repairAuction'), read(vault, 'bidId'), read(auctionAddress, 'bidIdForVault', [vault])])
 			if (
 				decodeAddress(values[0], 'Bid owner') !== bidder ||
 				decodeAddress(vaultOwner, 'Vault owner') !== bidder ||
@@ -274,7 +273,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 				fill = { filledLots, usedAttoEth: decodeUint(result[4], 'Used ETH'), refundAttoEth: decodeUint(result[6], 'Unused bid ETH'), principalAttoRep: decodeUint(result[5], 'Purchased collateral REP') }
 				if (filledLots > bid.lots || fill.usedAttoEth !== filledLots * terms.lotAttoEth || fill.refundAttoEth !== (bid.lots - filledLots) * terms.lotAttoEth) throw new Error('Invalid auction fill accounting.')
 				if (filledLots !== 0n) {
-					const current = decodeFields(await read(capitalLedger, 'auctionPosition', [id]), ['vault', 'positionId', 'principal', 'commitment', 'targetHealthFactorBps', 'liquidationStarted', 'materialized', 'earnedAttoEth', 'earnedAttoRep'], 'Invalid auction response.')
+					const current = decodeFields(await read(capitalLedger, 'repairAuctionPosition', [id]), ['vault', 'positionId', 'principal', 'commitment', 'targetHealthFactorBps', 'liquidationStarted', 'materialized', 'earnedAttoEth', 'earnedAttoRep'], 'Invalid auction response.')
 					if (decodeAddress(current[0], 'Capital auction vault') !== vault || decodeBool(current[6], 'Invalid auction state.') !== bid.materialized) throw new Error('Auction capital position identity mismatch.')
 					position = {
 						positionId: decodeUint(current[1], 'Auction position ID', 96),

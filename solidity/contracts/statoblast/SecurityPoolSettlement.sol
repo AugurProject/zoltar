@@ -230,15 +230,15 @@ contract SecurityPoolSettlement {
 	}
 
 	/// @notice Fund one child's claim basket with assigned collateral and forfeited child REP.
-	/// @dev Pull auctionCash collateral tokens from the fork authority. Only assigned source
+	/// @dev Pull repairAuctionCash collateral tokens from the fork authority. Only assigned source
 	/// cash consumes the parent's balance; unsold and old recovery REP stay claims.
-	function createChildUniverse(uint248 sourceUniverseId, uint248 childUniverseId, uint256 parentContributionAttoEth, IERC20 recoveryToken, uint256 recoveryAttoRep, uint256 auctionCash) external onlyForkAuthority nonReentrant returns (uint64 bookId) {
+	function createChildUniverse(uint248 sourceUniverseId, uint248 childUniverseId, uint256 parentContributionAttoEth, IERC20 recoveryToken, uint256 recoveryAttoRep, uint256 repairAuctionCash) external onlyForkAuthority nonReentrant returns (uint64 bookId) {
 		require(universes[childUniverseId].bookId == 0, 'Settlement universe registered');
 		uint256 available = universes[sourceUniverseId].availableForkCashAttoEth;
 		require(parentContributionAttoEth <= available, 'Fork settlement cash insufficient');
 		universes[sourceUniverseId].availableForkCashAttoEth = available - parentContributionAttoEth;
-		Collateral.pull(collateralToken, msg.sender, address(this), auctionCash);
-		bookId = ledger.createChildBook(_bookId(sourceUniverseId), parentContributionAttoEth + auctionCash, recoveryAttoRep);
+		Collateral.pull(collateralToken, msg.sender, address(this), repairAuctionCash);
+		bookId = ledger.createChildBook(_bookId(sourceUniverseId), parentContributionAttoEth + repairAuctionCash, recoveryAttoRep);
 		(, , , uint48 timestamp, ) = ledger.totals(bookId);
 		ledger.setFeeAccrualEnabled(bookId, false, timestamp);
 		universes[childUniverseId].bookId = bookId;

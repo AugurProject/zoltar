@@ -27,7 +27,7 @@ export const CONSERVATIVE_DEPLOYMENT_GAS: Readonly<Record<string, bigint>> = {
 	securityPoolServicesDeployer: 13_000_000n,
 	securityPoolReporterLedgerDeployer: 6_000_000n,
 	securityPoolForkCoordinatorDeployer: 8_000_000n,
-	securityPoolAuctionDeployer: 10_500_000n,
+	securityPoolRepairAuctionDeployer: 10_500_000n,
 	openOracle: 4_250_000n,
 	zoltarQuestionData: 2_750_000n,
 	zoltar: 5_750_000n,

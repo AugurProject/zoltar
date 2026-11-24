@@ -239,13 +239,13 @@ export const capitalOwnerSnapshot = async (ledger: Address, owner: Address, read
 	const call = caller(read)
 	const state = await ledgerState(ledger, read)
 	const kind = 'securityPoolCapitalLedger'
-	const [rawAccount, rawCollateral, ownerPrice, rawCohort] = await Promise.all([call(ledger, kind, 'ownerAccount', [owner]), call(ledger, kind, 'ownerCollateral', [owner]), call(ledger, kind, 'ownerConservativePrice', [owner]), call(ledger, kind, 'auctionCohort')])
+	const [rawAccount, rawCollateral, ownerPrice, rawCohort] = await Promise.all([call(ledger, kind, 'ownerAccount', [owner]), call(ledger, kind, 'ownerCollateral', [owner]), call(ledger, kind, 'ownerConservativePrice', [owner]), call(ledger, kind, 'repairAuctionCohort')])
 	const account = struct(rawAccount, 'ownerAccount')
 	const collateral = tuple(rawCollateral, 3, 'ownerCollateral')
-	const cohort = tuple(rawCohort, 5, 'auctionCohort')
+	const cohort = tuple(rawCohort, 5, 'repairAuctionCohort')
 	// The auction adapter owns the cohort's aggregate position in the index, but the ledger keeps its id in
-	// `auctionCohort` and reports zero principal and commitment for the adapter itself.
-	const cohortId = address(cohort[0], 'auctionCohort.adapter') === owner ? quantity(cohort[1], 'auctionCohort.positionId') : 0n
+	// `repairAuctionCohort` and reports zero principal and commitment for the adapter itself.
+	const cohortId = address(cohort[0], 'repairAuctionCohort.adapter') === owner ? quantity(cohort[1], 'repairAuctionCohort.positionId') : 0n
 	const positionId = cohortId === 0n ? quantity(account['positionId'], 'ownerAccount.positionId') : cohortId
 	const freeAttoRep = quantity(account['freeAttoRep'], 'ownerAccount.freeAttoRep')
 	let principal = quantity(collateral[0], 'ownerCollateral.principal')
@@ -289,7 +289,7 @@ export const capitalOwnerSnapshot = async (ledger: Address, owner: Address, read
 		ledger: ledger.toLowerCase(),
 		owner: owner.toLowerCase(),
 		positionId: positionId.toString(),
-		...(cohortId === 0n ? {} : { auctionCohort: true, auctionCohortRemainingLots: quantity(cohort[2], 'auctionCohort.remainingLots').toString() }),
+		...(cohortId === 0n ? {} : { repairAuctionCohort: true, repairAuctionCohortRemainingLots: quantity(cohort[2], 'repairAuctionCohort.remainingLots').toString() }),
 		principalAttoRep: principal.toString(),
 		commitmentAttoEth: commitment.toString(),
 		withdrawableAttoRep: quantity(collateral[2], 'ownerCollateral.withdrawable').toString(),

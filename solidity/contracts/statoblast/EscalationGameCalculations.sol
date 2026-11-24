@@ -56,6 +56,16 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	/// @dev Finality is strictly after this last second at or below binding capital.
 	/// Search the forward curve so reporter and settlement schedules cannot mature early.
 	function _finalityElapsed() private view returns (uint256) {
+		// Incomplete carry installation exposes a partial balance snapshot only to
+		// authenticated setup paths. Preserve its exact read semantics until sealed.
+		if (startBondAttoRep != 0 && (!forkContinuation || forkCarrySnapshotOutcomesInitialized == 3))
+			return cachedFinalityElapsed;
+		return computeCurveFinalityElapsed();
+	}
+
+	/// @notice Exact last-open curve second for the current balances, independent of cached state.
+	/// @dev Deposit delegates use this when the median changes, including the threshold plateau.
+	function computeCurveFinalityElapsed() public view returns (uint256) {
 		uint256 bindingCapital = getBindingCapitalAttoRep();
 		if (bindingCapital < startBondAttoRep) return 0;
 		if (bindingCapital >= nonDecisionThresholdAttoRep) return ESCALATION_TIME_LENGTH;

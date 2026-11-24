@@ -125,7 +125,7 @@ const pool = object<MonitoredPool>({
 	knownVaultCount: stringValue,
 	address: stringValue,
 	approvedUniverse: booleanValue,
-	bestCandidateBonusValueEth: optionalString,
+	bestCandidateTakeoverRewardValueEth: optionalString,
 	botVault: object<MonitoredPool['botVault']>({ capacityOwnershipEth: stringValue, openInterestDisplay: stringValue, healthBps: optional(unsignedInteger), vaultRepBacking: stringValue, claimableFeesEth: stringValue }),
 	candidateCount: numberValue,
 	centralizedPriceAllowed: booleanValue,

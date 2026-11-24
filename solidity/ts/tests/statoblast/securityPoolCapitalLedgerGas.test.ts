@@ -94,7 +94,7 @@ describe('Statoblast: production bounded takeover gas', () => {
 				const epoch = await buyer.readContract({ ...fixture.capital, functionName: 'acceptedPriceEpoch' })
 				const started = await buyer.readContract({ ...fixture.capital, functionName: 'liquidationStarted', args: [id] })
 				// Match the bot's full-source path: no unused commitment to cure,
-				// an empty funded receiver, matching target, and a fully earned award.
+				// an empty funded receiver, matching target, and a fully earned takeover reward.
 				expect(before[1]).toBe(demand)
 				expect(owner).toMatchObject({ positionId: 0n, freeAttoRep: 100n * E, targetHealthFactorBps: 15_000n })
 				expect(source.maxHealthyPrice).toBeLessThan(price)

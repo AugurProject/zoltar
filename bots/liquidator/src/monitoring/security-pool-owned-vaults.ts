@@ -1,6 +1,6 @@
 import { verifyRuntimeIdentity } from '@zoltar/bot-shared/monitoring/runtime-identity'
 import { loadSecurityPoolAuctionSnapshot, loadSecurityPoolCapitalSnapshot, decodeAuctionVaultBindings, verifyAuctionVaultCode, type SecurityPoolCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
-import { securityPoolRuntimeIdentities, securityPoolAuctionAbi as auctionAbi, securityPoolUniformPriceAuctionAbi as engineAbi, securityPoolCapitalLedgerAbi as capitalAbi, securityPoolForkCoordinatorAbi as forkAbi } from '@zoltar/bot-shared/contracts/abi'
+import { securityPoolRuntimeIdentities, securityPoolRepairAuctionAbi as auctionAbi, securityPoolUniformPriceRepairAuctionAbi as engineAbi, securityPoolCapitalLedgerAbi as capitalAbi, securityPoolForkCoordinatorAbi as forkAbi } from '@zoltar/bot-shared/contracts/abi'
 import { getAddress, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import type { ReadClient } from './read-client.ts'
 
@@ -12,7 +12,7 @@ export async function loadOwnedSecurityPoolVaults(client: ReadClient, snapshot: 
 	let pendingPrincipal = 0n
 	let pendingCommitment = 0n
 	const controller = await client.readContract({ address: snapshot.capitalLedger, abi: capitalAbi, functionName: 'forkAuthority', blockNumber })
-	const auctionAddress = await client.readContract({ address: controller, abi: forkAbi, functionName: 'auctions', args: [snapshot.universeId], blockNumber })
+	const auctionAddress = await client.readContract({ address: controller, abi: forkAbi, functionName: 'repairAuctions', args: [snapshot.universeId], blockNumber })
 	const engine = auctionAddress === zeroAddress ? zeroAddress : await client.readContract({ address: auctionAddress, abi: auctionAbi, functionName: 'engine', blockNumber })
 	const count = engine === zeroAddress ? 0n : await client.readContract({ address: engine, abi: engineAbi, functionName: 'bidderBidCount', args: [snapshot.owner], blockNumber })
 	if (count > 0n) {
@@ -39,7 +39,7 @@ export async function loadOwnedSecurityPoolVaults(client: ReadClient, snapshot: 
 		const bindings = decodeAuctionVaultBindings(code)
 		if (bindings === undefined || bindings.owner !== snapshot.owner) throw new Error('Managed vault does not belong to the operator')
 		verifyAuctionVaultCode(code, bindings)
-		verifyRuntimeIdentity(await client.getCode({ address: bindings.implementation, blockNumber }), securityPoolRuntimeIdentities.SecurityPoolAuctionVault, 'managed vault implementation')
+		verifyRuntimeIdentity(await client.getCode({ address: bindings.implementation, blockNumber }), securityPoolRuntimeIdentities.SecurityPoolRepairAuctionVault, 'managed vault implementation')
 		const [securityPool, id] = await Promise.all([client.readContract({ address: bindings.auction, abi: auctionAbi, functionName: 'securityPool', blockNumber }), client.readContract({ address: bindings.auction, abi: auctionAbi, functionName: 'bidIdForVault', args: [vault], blockNumber })])
 		if (securityPool !== snapshot.securityPool || id !== bindings.bidId) throw new Error('Managed vault is outside the selected security pool')
 		const account = await loadSecurityPoolCapitalSnapshot({ client, securityPool: snapshot.securityPool, universeId: snapshot.universeId, owner: vault, blockNumber })

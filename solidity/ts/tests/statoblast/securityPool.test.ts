@@ -73,7 +73,7 @@ describe('Statoblast: central security pool and native question integration', ()
 		// which is what stops a factory whose pinned deployers are not all deployed yet from creating a security pool.
 		const construct = (modules: typeof deployers) =>
 			deployContract(fixture.owner(), encodeDeployData({ abi: securityPoolArtifact.abi, bytecode: creationCode, args: [infrastructure.securityPoolFactory, modules, origin(10_000_000_000n), maximumQuestionHorizonSeconds, fixture.questionAdmissionPolicy, securityPoolEconomics] }))
-		for (const key of Object.keys(deployers)) await expect(construct({ ...deployers, [key]: fixture.owner().account.address })).rejects.toThrow(key === 'auctions' ? 'Auction deployer has no code' : 'Security pool deployer has no code')
+		for (const key of Object.keys(deployers)) await expect(construct({ ...deployers, [key]: fixture.owner().account.address })).rejects.toThrow(key === 'repairAuctions' ? 'Auction deployer has no code' : 'Security pool deployer has no code')
 	})
 
 	test('security pool setup creates its shared capital and oracle without any seed question ledger', async () => {
@@ -143,7 +143,7 @@ describe('Statoblast: central security pool and native question integration', ()
 		await fixture.prepare()
 		const { base } = fixture
 		const pool = { abi: poolArtifact.abi, address: fixture.poolFor(base.questionId).questionLedger }
-		const capacity = () => fixture.owner().readContract({ ...pool, functionName: 'getCurrentMintingCapacityAttoEth' })
+		const capacity = () => fixture.owner().readContract({ ...pool, functionName: 'additionalMintCapacityAttoEth' })
 		await base.mockWindow.setTime(base.questionData.endTime - 600n)
 		await fixture.refreshPrice()
 		await base.mockWindow.setTime(base.questionData.endTime - 1n)
@@ -151,6 +151,16 @@ describe('Statoblast: central security pool and native question integration', ()
 		await base.mockWindow.setTime(base.questionData.endTime)
 		expect(await fixture.owner().readContract({ ...securityPool(), functionName: 'availableMintCapacity', args: [base.genesisUniverse] })).toBeGreaterThan(0n)
 		expect(await capacity()).toBe(0n)
+	})
+
+	test('#1506: existing question cash is not additional mint capacity', async () => {
+		await fixture.prepare(1_000n * unit, 100n * unit)
+		await fixture.mint(60n * unit)
+		const available = await fixture.owner().readContract({ ...securityPool(), functionName: 'availableMintCapacity', args: [fixture.base.genesisUniverse] })
+		for (const question of [fixture.base.questionId, fixture.secondQuestionId]) {
+			const address = fixture.poolFor(question).questionLedger
+			expect(await fixture.owner().readContract({ abi: poolArtifact.abi, address, functionName: 'additionalMintCapacityAttoEth' })).toBe(available)
+		}
 	})
 
 	test('two questions consume one capacity budget while REP remains in one ledger', async () => {

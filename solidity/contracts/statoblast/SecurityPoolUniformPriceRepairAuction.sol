@@ -11,7 +11,7 @@ import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 /// Only filled lots sell REP; unsold inventory, including grid residue, returns as recovery REP.
 /// Its AVL tree freezes at closing and also owns unmaterialized winners' fees.
 /// Bidding, clearing and detaching one winner use logarithmic paths, never scans.
-contract SecurityPoolUniformPriceAuction {
+contract SecurityPoolUniformPriceRepairAuction {
 	enum PriceBoundary {
 		Exclusive,
 		Inclusive
@@ -31,7 +31,6 @@ contract SecurityPoolUniformPriceAuction {
 		uint256 filledLots;
 		uint256 raisedAttoEth;
 		uint256 soldAttoRep;
-		uint256 roundingAttoRep;
 		uint256 marginalMinimumAttoRepPerLot;
 		uint256 marginalFillLots;
 		uint256 marginalDemandLots;
@@ -84,9 +83,9 @@ contract SecurityPoolUniformPriceAuction {
 	mapping(uint256 => Node) private nodes;
 	uint96 private root;
 
-	event AuctionStarted(uint256 opensAt, uint256 closesAt, uint256 lotAttoEth, uint256 targetLots, uint256 inventoryAttoRep, uint256 maximumAttoRepPerLot);
+	event RepairAuctionStarted(uint256 opensAt, uint256 closesAt, uint256 lotAttoEth, uint256 targetLots, uint256 inventoryAttoRep, uint256 maximumAttoRepPerLot);
 	event BidSubmitted(uint256 indexed bidId, address indexed bidder, address indexed vault, uint256 lots, uint256 minimumAttoRepPerLot, uint256 targetHealthBps);
-	event AuctionFinalized(uint256 attoRepPerLot, uint256 filledLots, uint256 raisedAttoEth, uint256 soldAttoRep);
+	event RepairAuctionFinalized(uint256 attoRepPerLot, uint256 filledLots, uint256 raisedAttoEth, uint256 soldAttoRep);
 	event BidSettled(uint256 indexed bidId, address indexed bidder, uint256 filledLots, uint256 refundAttoEth);
 	event FeesRemoved(uint256 indexed bidId, uint256 attoEth, uint256 attoRep);
 	event RefundWithdrawn(address indexed bidder, address indexed recipient, uint256 amountAttoEth);
@@ -104,7 +103,7 @@ contract SecurityPoolUniformPriceAuction {
 		_;
 	}
 
-	function startAuction(uint256 opensAt_, uint256 closesAt_, uint256 lotAttoEth_, uint256 targetLots_, uint256 inventoryAttoRep_, uint256 repGrid_, address feeAllocator_) external onlyController {
+	function startRepairAuction(uint256 opensAt_, uint256 closesAt_, uint256 lotAttoEth_, uint256 targetLots_, uint256 inventoryAttoRep_, uint256 repGrid_, address feeAllocator_) external onlyController {
 		require(!initialized && !finalized, 'Auction has already started');
 		require(closesAt_ > opensAt_, 'Auction closing time must follow opening time');
 		require(lotAttoEth_ > 0 && targetLots_ > 0 && targetLots_ <= type(uint128).max / lotAttoEth_, 'Auction ETH target is outside the supported range');
@@ -121,7 +120,7 @@ contract SecurityPoolUniformPriceAuction {
 		maximumBidAttoRepPerLot = maximum;
 		repGrid = repGrid_;
 		feeAllocator = feeAllocator_;
-		emit AuctionStarted(opensAt_, closesAt_, lotAttoEth_, targetLots_, inventoryAttoRep_, maximum);
+		emit RepairAuctionStarted(opensAt_, closesAt_, lotAttoEth_, targetLots_, inventoryAttoRep_, maximum);
 	}
 
 	function submitBid(address bidder, address vault, uint256 targetHealthBps, uint256 lots, uint256 minimumAttoRepPerLot) external onlyController returns (uint256 bidId) {
@@ -151,7 +150,7 @@ contract SecurityPoolUniformPriceAuction {
 	function finalizeUnopened() external onlyController {
 		require(!initialized && !finalized, 'Auction cannot be finalized');
 		finalized = true;
-		emit AuctionFinalized(0, 0, 0, 0);
+		emit RepairAuctionFinalized(0, 0, 0, 0);
 	}
 
 	/// @notice Zero capacity cancels safely. Otherwise the winning prefix must
@@ -162,9 +161,8 @@ contract SecurityPoolUniformPriceAuction {
 		result = previewFinalization(maximumFilledLots, floorAttoRepPerLot);
 		clearing = result;
 		remainingFeeLots = result.filledLots;
-		if (result.roundingAttoRep != 0) nodes[root].pendingAttoRep = _amount128(result.roundingAttoRep);
 		finalized = true;
-		emit AuctionFinalized(result.attoRepPerLot, result.filledLots, result.raisedAttoEth, result.soldAttoRep);
+		emit RepairAuctionFinalized(result.attoRepPerLot, result.filledLots, result.raisedAttoEth, result.soldAttoRep);
 	}
 
 	/// @notice Highest grid-aligned limit that a new bid can enter at this block.
@@ -202,11 +200,9 @@ contract SecurityPoolUniformPriceAuction {
 		result.marginalFillLots = result.filledLots - result.fullBeforeLots;
 		result.raiseLimitReached = result.filledLots == maximumFilledLots;
 		result.attoRepPerLot = Math.max(marginal, floorAttoRepPerLot);
-		result.attoRepPerLot -= result.attoRepPerLot % repGrid;
 		result.raisedAttoEth = result.filledLots * lotAttoEth;
-		uint256 principal = result.filledLots * result.attoRepPerLot;
-		result.soldAttoRep = principal;
-		result.roundingAttoRep = result.soldAttoRep - principal;
+		// Both bid limits and the floor are already REP-grid aligned.
+		result.soldAttoRep = result.filledLots * result.attoRepPerLot;
 	}
 
 	function previewBid(uint256 bidId) public view returns (Fill memory fill) {

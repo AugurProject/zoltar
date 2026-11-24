@@ -5,14 +5,14 @@ import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import {
 	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
 	statoblast_SecurityPoolCapitalLifecycleDelegate_SecurityPoolCapitalLifecycleDelegate as lifecycleArtifact,
-	statoblast_SecurityPoolCapitalAuctionDelegate_SecurityPoolCapitalAuctionDelegate as auctionDelegateArtifact,
+	statoblast_SecurityPoolCapitalRepairAuctionDelegate_SecurityPoolCapitalRepairAuctionDelegate as auctionDelegateArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
 	statoblast_SecurityPoolCapitalFeeStreams_SecurityPoolCapitalFeeStreams as feesArtifact,
 	statoblast_SecurityPoolServices_SecurityPoolServices as servicesArtifact,
 	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact,
-	statoblast_SecurityPoolAuction_SecurityPoolAuction as auctionArtifact,
-	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact,
-	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as vaultArtifact,
+	statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction as auctionArtifact,
+	statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as engineArtifact,
+	statoblast_SecurityPoolRepairAuctionVault_SecurityPoolRepairAuctionVault as vaultArtifact,
 } from '../contractArtifact.js'
 import { getInfraContractAddresses, getSecurityPoolRuntimeCode } from './deploymentHelpers.js'
 import { securityPoolReadClient, verifyCapitalLedgerClone, verifyCapitalModuleClone, verifyRuntimeCode } from './securityPool.js'
@@ -21,19 +21,19 @@ import { requireAddressValue, requireBigintValue, requireTupleValue, requireObje
 const vaultIdentityAbi = parseAbi([
 	'function owner() view returns (address)',
 	'function initialCapital() view returns (address)',
-	'function auction() view returns (address)',
+	'function repairAuction() view returns (address)',
 	'function bidId() view returns (uint256)',
 	'function vaultImplementation() view returns (address)',
 	'function forkController() view returns (address)',
 	'function factory() view returns (address)',
 	'function securityPool() view returns (address)',
 	'function lifecycleDelegate() view returns (address)',
-	'function auctionDelegate() view returns (address)',
+	'function repairAuctionDelegate() view returns (address)',
 	'function commitmentIndex() view returns (address)',
 	'function feeStreams() view returns (address)',
 	'function services() view returns (address)',
 	'function ledger() view returns (address)',
-	'function auctionDeployer() view returns (address)',
+	'function repairAuctionDeployer() view returns (address)',
 	'function zoltar() view returns (address)',
 	'function getRepToken(uint248 universeId) view returns (address)',
 	'function universeId() view returns (uint248)',
@@ -41,13 +41,13 @@ const vaultIdentityAbi = parseAbi([
 	'function forkAuthority() view returns (address)',
 	'function engine() view returns (address)',
 	'function capitalLedger(uint248 universeId) view returns (address)',
-	'function auctions(uint248 universeId) view returns (address)',
+	'function repairAuctions(uint248 universeId) view returns (address)',
 	'function controller() view returns (address)',
 	'function bids(uint256 id) view returns (address bidder,address vault,uint256 targetHealthBps,uint256 lots,uint256 minimumAttoRepPerLot,bool settled,bool feesRemoved)',
 	'function bidIdForVault(address vault) view returns (uint256)',
 	'function finalized() view returns (bool)',
 	'function previewBid(uint256 id) view returns ((address bidder,address vault,uint256 targetHealthBps,uint256 filledLots,uint256 usedAttoEth,uint256 principalAttoRep,uint256 refundAttoEth) fill)',
-	'function auctionPosition(uint256 bidId) view returns ((address vault,uint96 positionId,uint256 principal,uint256 commitment,uint256 targetHealthFactorBps,uint48 liquidationStarted,bool materialized,uint256 earnedAttoEth,uint256 earnedAttoRep) result)',
+	'function repairAuctionPosition(uint256 bidId) view returns ((address vault,uint96 positionId,uint256 principal,uint256 commitment,uint256 targetHealthFactorBps,uint48 liquidationStarted,bool materialized,uint256 earnedAttoEth,uint256 earnedAttoRep) result)',
 ])
 
 /** Authenticate compiler runtime and canonical bindings before presenting any funding action. */
@@ -95,7 +95,7 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 	const [ownerValue, capitalValue, auctionValue, idValue, controllerValue, protocolValue, factoryValue] = await Promise.all([
 		read(vault, 'owner'),
 		read(vault, 'initialCapital'),
-		read(vault, 'auction'),
+		read(vault, 'repairAuction'),
 		read(vault, 'bidId'),
 		read(securityPool, 'forkController'),
 		read(securityPool, 'zoltar'),
@@ -127,7 +127,7 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 	const initialUniverse = requireBigintValue(universeValue, 'initial auction universe')
 	const engine = requireAddressValue(engineValue, 'auction engine')
 	if (getAddress(requireAddressValue(implementationValue, 'vault implementation')) !== bindings.implementation) throw new Error('Auction vault uses another implementation.')
-	const [canonicalCapital, canonicalAuction, engineController, bidValue, registeredId] = await Promise.all([read(securityPool, 'capitalLedger', [initialUniverse]), read(controller, 'auctions', [initialUniverse]), read(engine, 'controller'), read(engine, 'bids', [bidId]), read(auction, 'bidIdForVault', [vault])])
+	const [canonicalCapital, canonicalAuction, engineController, bidValue, registeredId] = await Promise.all([read(securityPool, 'capitalLedger', [initialUniverse]), read(controller, 'repairAuctions', [initialUniverse]), read(engine, 'controller'), read(engine, 'bids', [bidId]), read(auction, 'bidIdForVault', [vault])])
 	const bid = requireTupleValue(bidValue, 7, 'auction bid')
 	if (
 		[capitalRoot, auctionRoot, controllerRoot].some(value => getAddress(requireAddressValue(value, 'module security pool')) !== getAddress(securityPool)) ||
@@ -164,7 +164,7 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 		filledLots = requireBigintValue(Reflect.get(fill, 'filledLots'), 'winning auction lots')
 		if (getAddress(requireAddressValue(Reflect.get(fill, 'vault'), 'fill vault')) !== getAddress(vault) || getAddress(requireAddressValue(Reflect.get(fill, 'bidder'), 'fill bidder')) !== getAddress(bidder)) throw new Error('Auction fill identity mismatch.')
 		if (filledLots > 0n) {
-			const position = requireObjectValue(await read(initialCapital, 'auctionPosition', [bidId]), 'auction position')
+			const position = requireObjectValue(await read(initialCapital, 'repairAuctionPosition', [bidId]), 'auction position')
 			const materializedValue = Reflect.get(position, 'materialized')
 			if (getAddress(requireAddressValue(Reflect.get(position, 'vault'), 'position vault')) !== getAddress(vault) || typeof materializedValue !== 'boolean') throw new Error('Invalid auction position identity.')
 			materialized = materializedValue
@@ -176,20 +176,20 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 /** Delegate and accounting contracts can spend or mutate deposited capital. */
 async function verifyAuctionCapitalCustody(client: ReadClient, securityPool: Address, capitalLedger: Address, blockNumber: bigint) {
 	const read = (address: Address, functionName: string) => client.readContract({ abi: vaultIdentityAbi, address, functionName, blockNumber })
-	const [lifecycle, auctionDelegate, index, fees, capitalServices, securityPoolServices, deployer] = await Promise.all([
+	const [lifecycle, repairAuctionDelegate, index, fees, capitalServices, securityPoolServices, deployer] = await Promise.all([
 		read(capitalLedger, 'lifecycleDelegate'),
-		read(capitalLedger, 'auctionDelegate'),
+		read(capitalLedger, 'repairAuctionDelegate'),
 		read(capitalLedger, 'commitmentIndex'),
 		read(capitalLedger, 'feeStreams'),
 		read(capitalLedger, 'services'),
 		read(securityPool, 'services'),
-		read(securityPool, 'auctionDeployer'),
+		read(securityPool, 'repairAuctionDeployer'),
 	])
-	if (getAddress(requireAddressValue(capitalServices, 'capital services')) !== getAddress(requireAddressValue(securityPoolServices, 'security pool services')) || getAddress(requireAddressValue(deployer, 'auction deployer')) !== getAddress(getInfraContractAddresses().securityPoolAuctionDeployer))
+	if (getAddress(requireAddressValue(capitalServices, 'capital services')) !== getAddress(requireAddressValue(securityPoolServices, 'security pool services')) || getAddress(requireAddressValue(deployer, 'auction deployer')) !== getAddress(getInfraContractAddresses().securityPoolRepairAuctionDeployer))
 		throw new Error('Auction custody uses another services authority or deployer.')
 	const modules = [
 		{ value: lifecycle, artifact: lifecycleArtifact, label: 'capital lifecycle delegate', getter: 'implementation', authority: undefined },
-		{ value: auctionDelegate, artifact: auctionDelegateArtifact, label: 'capital auction delegate', getter: 'implementation', authority: undefined },
+		{ value: repairAuctionDelegate, artifact: auctionDelegateArtifact, label: 'capital auction delegate', getter: 'implementation', authority: undefined },
 		{ value: securityPoolServices, artifact: servicesArtifact, label: 'security pool services', getter: 'securityPool', authority: securityPool },
 	]
 	await Promise.all([

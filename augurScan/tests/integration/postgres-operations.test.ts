@@ -113,7 +113,7 @@ const expectRecentTakeovers = async ({ database, operationsChainId, oracle }: Op
 	if (overviewResponse === undefined) throw new Error('operations endpoint did not return a response')
 	const overview = (await overviewResponse.json()) as { data: Record<string, unknown> & { risk: Record<string, unknown>; totals: Record<string, unknown> } }
 	// The liquidation feed names the owner that the read of position 1 supplied; position 2 has not been read.
-	const takeover = { event_name: 'CommitmentTakenOver', source_contract: oracle.toLowerCase(), event_data: { sourceId: '1', receiverId: '2', commitment: '90', awardAttoRep: '5' }, source_owner: address.toLowerCase(), receiver_owner: null }
+	const takeover = { event_name: 'CommitmentTakenOver', source_contract: oracle.toLowerCase(), event_data: { sourceId: '1', receiverId: '2', commitment: '90', takeoverRewardAttoRep: '5' }, source_owner: address.toLowerCase(), receiver_owner: null }
 	const cure = { event_name: 'CommitmentCured', event_data: { positionId: '1', removedCommitment: '10' }, source_owner: address.toLowerCase(), receiver_owner: null }
 	expect(overview.data.risk['recentLiquidations']).toEqual([expect.objectContaining(takeover), expect.objectContaining(cure)])
 	expect(overview.data.risk).toMatchObject({ capitalPositions: [], capitalPositionTotal: 0, capitalLedgers: [] })

@@ -16,9 +16,9 @@ import {
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
-	statoblast_SecurityPoolAuction_SecurityPoolAuction as auctionArtifact,
-	statoblast_SecurityPoolUniformPriceAuction_SecurityPoolUniformPriceAuction as engineArtifact,
-	statoblast_SecurityPoolAuctionVault_SecurityPoolAuctionVault as vaultArtifact,
+	statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction as auctionArtifact,
+	statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as engineArtifact,
+	statoblast_SecurityPoolRepairAuctionVault_SecurityPoolRepairAuctionVault as vaultArtifact,
 	statoblast_SecurityPoolSettlement_SecurityPoolSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
@@ -129,7 +129,7 @@ describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 		expect(virtual[1]).toBe(2n * unit)
 		const accountBefore = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerAccount', args: [first.vault] })
 		expect(accountBefore.positionId).toBe(0n)
-		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'materializeAuctionBid', args: [first.id] }))
+		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'materializeRepairAuctionBid', args: [first.id] }))
 		expect(await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'totals' })).toEqual(totalsBefore)
 		const account = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerAccount', args: [first.vault] })
 		expect(account.positionId).not.toBe(0n)
@@ -174,7 +174,7 @@ describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 		await context.report()
 		await context.open()
 		const vaultFlag = (vault: Address) => context.owner.readContract({ abi: vaultArtifact.abi, address: vault, functionName: 'initialPositionMaterialized' })
-		const ledgerFlag = async (bidId: bigint) => (await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [bidId] })).materialized
+		const ledgerFlag = async (bidId: bigint) => (await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'repairAuctionPosition', args: [bidId] })).materialized
 		const positionId = async (vault: Address) => (await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerAccount', args: [vault] })).positionId
 		const operate = async (client: WriteClient, vault: Address, data: Hex = encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'setHealthTarget', args: [12_000n] }), target = context.capital) => {
 			const hash = await writeContractAndWait(client, () => client.writeContract({ abi: vaultArtifact.abi, address: vault, functionName: 'execute', args: [target, 0n, data] }))
@@ -191,7 +191,7 @@ describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 		expect(await vaultFlag(winner.vault)).toBe(false)
 		expect(await ledgerFlag(winner.id)).toBe(false)
 		// A keeper's materialization is recognized by the owner's next operation.
-		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'materializeAuctionBid', args: [winner.id] }))
+		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'materializeRepairAuctionBid', args: [winner.id] }))
 		expect(await ledgerFlag(winner.id)).toBe(true)
 		expect(await vaultFlag(winner.vault)).toBe(false)
 		const first = await operate(context.other, winner.vault)
@@ -221,7 +221,7 @@ describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 			expect(await vaultFlag(loser.vault)).toBe(false)
 			expect(await positionId(loser.vault)).toBe(0n)
 		}
-		await expect(context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionPosition', args: [loser.id] })).resolves.toMatchObject({ materialized: false, principal: 0n })
+		await expect(context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'repairAuctionPosition', args: [loser.id] })).resolves.toMatchObject({ materialized: false, principal: 0n })
 	})
 
 	test('#1363 a week-old opening quote cannot settle the collateral repair sale', async () => {

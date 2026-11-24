@@ -804,6 +804,18 @@ productWorkflow('trading-liquidity', 'trading', '#/markets?simulate=1&genesis=no
 	expect(minted).toBeGreaterThan(0n)
 	expect((await shares(yes)) - yesBefore).toBe(minted + (yesReserve * netSwap) / (noReserve + netSwap))
 	expect(await driver.evaluate('window.__zoltarBuySends')).toBe(1)
+
+	// #1532: the production UI must submit the compact authenticated callback,
+	// including a funded directional exit after the buy receipt refreshes holdings.
+	const yesBeforeExit = await shares(yes)
+	await driver.clickButton('Sell')
+	await driver.setInputByLabel('Shares to sell', '0.0001')
+	await driver.clickButton('Sell Yes')
+	await driver.waitForBodyText('Sell Yes confirmed.')
+	expect(await shares(yes)).toBeLessThan(yesBeforeExit)
+	const pairInvalid = await readBrowserContract(driver, shareToken, encodeFunctionData({ abi: shareTokenAbi, functionName: 'balanceOf', args: [getAddress(pair), invalid] }))
+	expect(BigInt(pairInvalid)).toBe(0n)
+	expect(await driver.evaluate('window.__zoltarBuySends')).toBe(2)
 })
 
 productWorkflow('openoracle-report', 'openoracle', '#/open-oracle?simulate=1&genesis=yes&simScenario=deployed', async driver => {

@@ -254,7 +254,7 @@ describe('Statoblast: shared security pool multi-branch migration', () => {
 		const child = await activateBranch(1n)
 		const target = await controller()
 		expect((await client.readContract({ ...target, functionName: 'branches', args: [child] })).ready).toBe(true)
-		expect(BigInt(await client.readContract({ ...target, functionName: 'auctions', args: [child] }))).toBe(0n)
+		expect(BigInt(await client.readContract({ ...target, functionName: 'repairAuctions', args: [child] }))).toBe(0n)
 		const childPool = await client.readContract({ ...securityPool(), functionName: 'getQuestionLedger', args: [questionId, child] })
 		expect(await getSystemState(client, childPool)).toBe(SystemState.Operational)
 		expect(await client.readContract({ ...securityPool(), functionName: 'quoteQuestionSettlement', args: [childPool, 0n] })).toBe(0n)

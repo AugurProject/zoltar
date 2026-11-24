@@ -132,7 +132,7 @@ describe('liquidator dashboard server', () => {
 							protectedPath,
 							vaultRepBacking: '7',
 						},
-						candidates: [{ bonusValueEth: '0.25', calldata: calldataMarker, requestedDebtEth: '8', target: 'candidate-target-marker' }],
+						candidates: [{ takeoverRewardValueEth: '0.25', calldata: calldataMarker, requestedDebtEth: '8', target: 'candidate-target-marker' }],
 						centralizedPriceAllowed: true,
 						isPriceValid: true,
 						knownVaultCount: '9',
@@ -192,7 +192,7 @@ describe('liquidator dashboard server', () => {
 			{
 				address: '0x2222222222222222222222222222222222222222',
 				approvedUniverse: true,
-				bestCandidateBonusValueEth: '0.25',
+				bestCandidateTakeoverRewardValueEth: '0.25',
 				botVault: { capacityOwnershipEth: '6', claimableFeesEth: '0.1', healthBps: '12500', openInterestDisplay: '2', vaultRepBacking: '7' },
 				candidateCount: 1,
 				centralizedPriceAllowed: true,
