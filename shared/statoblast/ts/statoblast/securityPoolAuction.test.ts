@@ -103,7 +103,7 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 		auction,
 		balanceOf: options.walletAttoEth ?? 100n * unit,
 		allowance: 100n * unit,
-		clearing: [6n * unit, 3n, 3n * unit, 18n * unit, 0n, 0n, 0n, 0n, 3n, false],
+		clearing: [6n * unit, 3n, 3n * unit, 18n * unit, 0n, 0n, 0n, 3n, false],
 		...overrides,
 	}
 	const client: Parameters<typeof loadSecurityPoolAuctionSnapshot>[0]['client'] = {
@@ -299,7 +299,7 @@ describe('security pool collateral repair auction SDK', () => {
 	test('partial fills expose original principal while unused bid refunds remain separate transactions', async () => {
 		const snapshot = await load(fixture({ [`${engine}:refundCreditAttoEth`]: unit }, { finalized: true }))
 		expect(snapshot.auction?.bids[0]?.fill).toEqual({ filledLots: 1n, usedAttoEth: unit, refundAttoEth: unit, principalAttoRep: 6n * unit })
-		expect(snapshot.auction).toMatchObject({ refundAttoEth: unit, clearing: { soldAttoRep: 18n * unit, roundingAttoRep: 0n } })
+		expect(snapshot.auction).toMatchObject({ refundAttoEth: unit, clearing: { soldAttoRep: 18n * unit } })
 		expect(snapshot.auction?.bids[0]?.position).toMatchObject({ positionId: 0n, materialized: false, principalAttoRep: 6n * unit, commitmentAttoEth: unit, liquidationStarted: 30n, earnedAttoEth: 7n, earnedAttoRep: 9n })
 		expect(decodeFunctionData({ abi, data: buildSecurityPoolAuctionRefundCreditRequest(snapshot, 1n).data })).toEqual({ functionName: 'settleRefund', args: [1n] })
 		expect(buildSecurityPoolAuctionMaterializeRequest(snapshot, 1n)).toMatchObject({ account: bidder, to: capital, value: 0n })

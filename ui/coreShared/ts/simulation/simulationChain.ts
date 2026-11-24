@@ -149,11 +149,14 @@ function createLiveSimulationVm(vm: SimulationVm): SimulationVm {
 
 /** Runs `work` inside a state checkpoint that is always reverted, so the live VM can execute calls without keeping their effects. */
 async function withRevertedStateCheckpoint<TResult>(vm: SimulationVm, work: () => Promise<TResult>) {
+	// Original slot values belong to one execution, not to the reused live VM.
+	vm.stateManager.originalStorageCache.clear()
 	await vm.stateManager.checkpoint()
 	try {
 		return await work()
 	} finally {
 		await vm.stateManager.revert()
+		vm.stateManager.originalStorageCache.clear()
 	}
 }
 

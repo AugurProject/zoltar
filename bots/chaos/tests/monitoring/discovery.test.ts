@@ -644,7 +644,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'priceValidUntil':
 				case 'pendingReportId':
 				case 'getQuestionOutcome':
-				case 'getCurrentMintingCapacityAttoEth':
+				case 'additionalMintCapacityAttoEth':
 				case 'getVaultOpenInterestAttoEth':
 				case 'vaultBadDebtAttoEth':
 					return 0n
@@ -1741,16 +1741,16 @@ test('discovery samples recovery REP redemption alongside the live collateral qu
 	expect(snapshot.pools[0]?.projectedSettlementRecoveryAttoRep).toBe('250')
 })
 
-test('purchase discovery subtracts existing question cash from its displayed mint ceiling', async () => {
-	const snapshot = snapshotFixture()
-	const pool = snapshot.pools[0]
+test('#1506: purchase discovery uses additional capacity without subtracting existing question cash', async () => {
+	const { pools, deployments, wallet } = snapshotFixture()
+	const pool = pools[0]
 	if (pool === undefined) throw new Error('Missing purchase fixture')
-	pool.currentMintingCapacityAttoEth = '100'
-	pool.settlementCollateralAttoEth = '50'
-	const fake = refundBackfillClient(0n, false, { purchaseShares: 50n })
-	const context = { anchorBlockNumber: 10n, client: fake.client, deployments: snapshot.deployments, wallet: snapshot.wallet.address }
-	expect(await discoverPurchaseQuote({ ...context, purchaseQuoteAttoEth: 51n }, pool, 10n)).toBeUndefined()
-	expect(await discoverPurchaseQuote({ ...context, purchaseQuoteAttoEth: 50n }, pool, 10n)).toMatchObject({ mintAttoEth: 50n.toString() })
+	Object.assign(pool, { additionalMintCapacityAttoEth: 100n.toString(), settlementCollateralAttoEth: 50n.toString() })
+	const context = { anchorBlockNumber: 10n, client: refundBackfillClient(0n, false, { purchaseShares: 50n }).client, deployments, wallet: wallet.address }
+	expect(await discoverPurchaseQuote({ ...context, purchaseQuoteAttoEth: 101n }, pool, 10n)).toBeUndefined()
+	expect(await discoverPurchaseQuote({ ...context, purchaseQuoteAttoEth: 100n }, pool, 10n)).toMatchObject({ mintAttoEth: 100n.toString() })
 	pool.settlementCollateralAttoEth = '101'
+	expect(await discoverPurchaseQuote({ ...context, purchaseQuoteAttoEth: 1n }, pool, 10n)).toMatchObject({ mintAttoEth: 1n.toString() })
+	pool.additionalMintCapacityAttoEth = '0'
 	expect(await discoverPurchaseQuote({ ...context, purchaseQuoteAttoEth: 1n }, pool, 10n)).toBeUndefined()
 })

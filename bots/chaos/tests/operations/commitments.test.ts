@@ -11,7 +11,7 @@ function fixture() {
 	pool.escalationGame = '0x0000000000000000000000000000000000000000'
 	pool.settlementCollateralAttoEth = '1'
 	pool.projectedSettlementCollateralAttoEth = '1'
-	pool.currentMintingCapacityAttoEth = '0'
+	pool.additionalMintCapacityAttoEth = '0'
 	return { snapshot, pool }
 }
 
@@ -20,7 +20,7 @@ describe('standing commitment keeper planning', () => {
 		const { snapshot, pool } = fixture()
 		const question = snapshot.questions[0]
 		if (question === undefined) throw new Error('Missing question fixture')
-		pool.currentMintingCapacityAttoEth = '10000000000000000000'
+		pool.additionalMintCapacityAttoEth = '10000000000000000000'
 		question.endTime = (BigInt(snapshot.anchor.timestamp) + 1_000n).toString()
 		pool.purchaseQuote = { spender: pool.coordinator, mintAttoEth: 1000n.toString(), feeAttoEth: 100n.toString(), premiumAttoEth: 200n.toString(), minimumShares: '1000' }
 		const mint = completeSetDefinition('create')

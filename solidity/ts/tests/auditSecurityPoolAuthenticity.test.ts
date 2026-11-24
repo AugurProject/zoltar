@@ -138,7 +138,7 @@ describe('audit: only security pools the factory deployed are canonical', () => 
 		const modules: readonly [Address, Address, Hex, RuntimeArtifact][] = [
 			[capital, await owner.readContract({ abi: securityPoolArtifact.abi, address: created, functionName: 'capitalImplementation' }), universeCloneBindings(fixture.base.genesisUniverse, getRepTokenAddress(fixture.base.genesisUniverse)), capitalArtifact],
 			[await owner.readContract({ ...root, functionName: 'commitmentIndex' }), getCreateAddress({ from: infrastructure().securityPoolCommitmentIndexDeployer, nonce: 1n }), capital, indexArtifact],
-			[await owner.readContract({ ...root, functionName: 'feeStreams' }), getCreateAddress({ from: infrastructure().securityPoolCapitalFeeStreamsDeployer, nonce: 1n }), capital, streamsArtifact],
+			[await owner.readContract({ ...root, functionName: 'feeStreams' }), getCreateAddress({ from: infrastructure().securityPoolCapitalFeeStreamsDeployer, nonce: 2n }), capital, streamsArtifact],
 		]
 		for (const [clone, implementation, bindings, artifact] of modules) {
 			expect((await owner.getCode({ address: clone }))?.toLowerCase()).toBe(boundCloneRuntimeCode(implementation, bindings).toLowerCase())

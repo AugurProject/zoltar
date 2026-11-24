@@ -76,7 +76,6 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('QuestionLedger', 'setSystemState', 'role-restricted', undefined, 'Only QuestionForker controls lifecycle state.'),
 	entry('QuestionLedger', 'setShareTokenSupplyAttoShares', 'role-restricted', undefined, 'Only QuestionForker migrates share supply.'),
 	entry('QuestionLedger', 'authorizeChildQuestionLedger', 'role-restricted', undefined, 'Only QuestionForker authorizes child pools.'),
-	entry('QuestionLedgerOperationsDelegate', 'decodeError', 'excluded-dangerous', undefined, 'This helper decodes revert data for canonical QuestionLedger delegate calls and has no direct protocol effect.'),
 	entry('QuestionLedgerOperationsDelegate', 'depositWalletRepToEscalationGame', 'excluded-dangerous', undefined, 'Wallet reporting must use the QuestionLedger host, which checks inherited outcomes before delegating; direct calls use isolated delegate storage.'),
 	entry('QuestionLedgerOperationsDelegate', 'depositWalletRepToEscalationGameWithLead', 'excluded-dangerous', undefined, 'Protected wallet reporting must use the QuestionLedger host; direct calls use isolated delegate storage.'),
 
@@ -329,7 +328,6 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('SecurityPoolForkCoordinator', 'startBranch', 'excluded-dangerous', undefined, 'Branch opening requires the completed owner-choice window and shared capital import; use the security pool fork workflow.'),
 	entry('SecurityPoolForkCoordinatorDeployer', 'create', 'excluded-dangerous', undefined, 'The deployment workflow supplies authenticated constructor dependencies; random helper calls create unattached components.'),
 	entry('SecurityPoolCapitalFeeStreamsDeployer', 'create', 'excluded-dangerous', undefined, 'The deployment workflow supplies authenticated constructor dependencies; random helper calls create unattached components.'),
-	entry('SecurityPoolCapitalFeeStreamsDeployer', 'createAuctionDelegate', 'excluded-dangerous', undefined, 'Security pool setup wires this delegate into its shared capital implementation.'),
 	entry('SecurityPoolCapitalLedgerDeployer', 'create', 'excluded-dangerous', undefined, 'The deployment workflow supplies authenticated constructor dependencies; random helper calls create unattached components.'),
 	entry('SecurityPoolCapitalLedgerDeployer', 'createImplementation', 'excluded-dangerous', undefined, 'Security pool setup supplies authentic protocol dependencies and registers the shared implementation.'),
 	entry('SecurityPoolCommitmentIndexDeployer', 'create', 'excluded-dangerous', undefined, 'The deployment workflow supplies authenticated constructor dependencies; random helper calls create unattached components.'),

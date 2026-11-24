@@ -14,6 +14,7 @@ interface IEscalationGameDepositContext {
 	function previewLeadingDepositOnOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external view returns (uint256 acceptedAmountAttoRep, uint256 resultingCumulativeAmountAttoRep);
 	function repToken() external view returns (address);
 	function questionLedger() external view returns (address);
+	function computeCurveFinalityElapsed() external view returns (uint256);
 	function getBindingCapitalAttoRep() external view returns (uint256);
 	function totalCostAttoRep() external view returns (uint256);
 	function computeTimeSinceStartFromAttritionCostAttoRep(uint256 amountAttoRep) external view returns (uint256);

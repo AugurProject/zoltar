@@ -9,11 +9,10 @@ import { EscalationGame } from '../EscalationGame.sol';
 import { EscalationGameProofVerifier } from '../EscalationGameProofVerifier.sol';
 import { BinaryOutcomes } from '../BinaryOutcomes.sol';
 import { EscalationGameDepositDelegate } from '../EscalationGameDepositDelegate.sol';
+import { CreationCodeStorage } from '../CreationCodeStorage.sol';
 import { Create2Deployment } from './Create2Deployment.sol';
 
 contract EscalationGameFactory {
-	uint256 private constant CREATION_CODE_CHUNK_SIZE = 24_000;
-
 	EscalationGameProofVerifier public immutable proofVerifier;
 	EscalationGameDepositDelegate public immutable depositDelegate;
 	address private immutable escalationGameCreationCodePartOne;
@@ -22,29 +21,9 @@ contract EscalationGameFactory {
 	constructor(EscalationGameDepositDelegate _depositDelegate) {
 		require(address(_depositDelegate).code.length > 0, 'Deposit delegate');
 		proofVerifier = new EscalationGameProofVerifier();
-		bytes memory creationCode = type(EscalationGame).creationCode;
-		uint256 firstPartLength =
-			creationCode.length < CREATION_CODE_CHUNK_SIZE ? creationCode.length : CREATION_CODE_CHUNK_SIZE;
-		escalationGameCreationCodePartOne = _deployCodePart(creationCode, 0, firstPartLength);
-		escalationGameCreationCodePartTwo = _deployCodePart(creationCode, firstPartLength, creationCode.length - firstPartLength);
+		(escalationGameCreationCodePartOne, escalationGameCreationCodePartTwo) = CreationCodeStorage.store(type(EscalationGame).creationCode);
 		// Stateless delegate code is shared by every game; game storage stays isolated through delegatecall.
 		depositDelegate = _depositDelegate;
-	}
-
-	function _deployCodePart(bytes memory completeCode, uint256 offset, uint256 length) private returns (address codePart) {
-		require(length <= CREATION_CODE_CHUNK_SIZE, 'Creation code chunk too large');
-		bytes memory part = new bytes(length);
-		assembly {
-			mcopy(add(part, 0x20), add(add(completeCode, 0x20), offset), length)
-		}
-		// The carrier starts with STOP: it can never execute, and a chunk that happens
-		// to begin with 0xEF cannot make its deployment fail under EIP-3541.
-		uint16 carrierLength = uint16(length + 1);
-		bytes memory deployCode = abi.encodePacked(hex'61', bytes2(carrierLength), hex'600e60003961', bytes2(carrierLength), hex'6000f3', hex'00', part);
-		assembly {
-			codePart := create(0, add(deployCode, 0x20), mload(deployCode))
-		}
-		require(codePart != address(0x0), 'Creation code chunk deployment failed');
 	}
 
 	function deployEscalationGame(uint256 startBondAttoRep, uint256 _nonDecisionThresholdAttoRep) external returns (EscalationGame) {
@@ -101,19 +80,7 @@ contract EscalationGameFactory {
 	}
 
 	function _escalationGameInitCode(IQuestionLedger questionLedger) private view returns (bytes memory) {
-		address partOne = escalationGameCreationCodePartOne;
-		address partTwo = escalationGameCreationCodePartTwo;
-		uint256 partOneLength;
-		uint256 partTwoLength;
-		assembly {
-			partOneLength := sub(extcodesize(partOne), 1)
-			partTwoLength := sub(extcodesize(partTwo), 1)
-		}
-		bytes memory creationCode = new bytes(partOneLength + partTwoLength);
-		assembly {
-			extcodecopy(partOne, add(creationCode, 0x20), 1, partOneLength)
-			extcodecopy(partTwo, add(add(creationCode, 0x20), partOneLength), 1, partTwoLength)
-		}
+		bytes memory creationCode = CreationCodeStorage.load(escalationGameCreationCodePartOne, escalationGameCreationCodePartTwo);
 		// Code storage is cheaper to deploy and read than one storage slot per 32-byte
 		// word, while two fixed parts keep each carrier below EIP-170.
 		return

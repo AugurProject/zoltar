@@ -27,7 +27,7 @@ import { QuestionLedgerEventEmitter } from './QuestionLedgerEventEmitter.sol';
 import { QuestionLedgerStorage } from './QuestionLedgerStorage.sol';
 import { QuestionLedgerOperationsDelegate } from './QuestionLedgerOperationsDelegate.sol';
 import { QuestionLedgerSettlementDelegate } from './QuestionLedgerSettlementDelegate.sol';
-import { DelegateCallForwarder } from './DelegateCallForwarder.sol';
+import { DelegateCall } from './DelegateCall.sol';
 import { IQuestionLedgerDeploymentWorkerConfiguration } from './interfaces/IQuestionLedgerDeploymentWorkerConfiguration.sol';
 import { QuestionLedgerLinearFees } from './QuestionLedgerLinearFees.sol';
 import { QuestionLedgerAccountingDelegate } from './QuestionLedgerAccountingDelegate.sol';
@@ -134,7 +134,7 @@ contract QuestionLedger is QuestionLedgerStorage {
 	/// @dev The fixed eventEmitter target also owns security pool accounting and fee mutations.
 	/// Delegatecall preserves the original caller; authorization lives in each named target method.
 	function _delegateAccounting(bytes memory callData) private {
-		DelegateCallForwarder.invokeWithDecodedRevert(address(eventEmitter), callData);
+		DelegateCall.invoke(address(eventEmitter), callData);
 	}
 
 	/// @notice Factory-only: initializes the question fee clock.
@@ -169,16 +169,12 @@ contract QuestionLedger is QuestionLedgerStorage {
 		_delegateAccounting(eventCall);
 	}
 
-	/// @notice Returns zero once the question ends or a game exists; otherwise question cash plus available shared security pool capacity.
-	function getCurrentMintingCapacityAttoEth() public view returns (uint256) {
+	/// @notice Additional collateral this question may mint, excluding its existing cash.
+	function additionalMintCapacityAttoEth() public view returns (uint256) {
 		if (address(escalationGame) != address(0) || block.timestamp >= questionData.getQuestionEndDate(questionId))
 			return 0;
 		if (securityPoolCustody != address(0)) {
-			// Existing consumers subtract this question's cash from the reported
-			// ceiling. Shared capacity excludes pending retirement commitments.
-			return
-				settlementCollateralAttoEth +
-				ISecurityPoolSettlement(address(securityPoolAccounting)).availableMintCapacity(universeId);
+			return ISecurityPoolSettlement(address(securityPoolAccounting)).availableMintCapacity(universeId);
 		}
 		revert('Security pool settlement missing');
 	}
@@ -203,7 +199,7 @@ contract QuestionLedger is QuestionLedgerStorage {
 	// Complete Sets
 	/// @notice Mints complete sets through the authorized security pool purchase path for `cash` raw collateral units while no escalation game exists.
 	function createCompleteSet(uint256 cash) external isOperational {
-		bytes memory result = DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(QuestionLedgerSettlementDelegate.createCompleteSet, (cash)));
+		bytes memory result = DelegateCall.invoke(operationsDelegate, abi.encodeCall(QuestionLedgerSettlementDelegate.createCompleteSet, (cash)));
 		uint256 completeSetsToMintAttoShares = abi.decode(result, (uint256));
 		_emitQuestionLedgerAccountingCheckpoint(AccountingReason.CollateralReconciliation);
 		shareToken.mintCompleteSets(universeId, msg.sender, completeSetsToMintAttoShares);
@@ -215,7 +211,7 @@ contract QuestionLedger is QuestionLedgerStorage {
 	/// accrual, preserving the exchange rate for remaining complete sets.
 	function redeemCompleteSet(uint256 amountAttoShares) external isOperational {
 		updateSettlementCollateral();
-		bytes memory result = DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(QuestionLedgerOperationsDelegate.redeemCompleteSet, (shareToken, universeId, msg.sender, amountAttoShares)));
+		bytes memory result = DelegateCall.invoke(operationsDelegate, abi.encodeCall(QuestionLedgerOperationsDelegate.redeemCompleteSet, (shareToken, universeId, msg.sender, amountAttoShares)));
 		uint256 settlementCollateralRedeemedAttoEth = abi.decode(result, (uint256));
 		refreshSecurityPoolFees();
 		emit CompleteSetRedeemed(msg.sender, amountAttoShares, settlementCollateralRedeemedAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
@@ -226,7 +222,7 @@ contract QuestionLedger is QuestionLedgerStorage {
 	function redeemShares() external {
 		require(systemState == SystemState.Operational, 'Pool inactive');
 		updateSettlementCollateral();
-		bytes memory result = DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(QuestionLedgerOperationsDelegate.redeemShares, (shareToken, IQuestionForker(questionForker), universeId, msg.sender)));
+		bytes memory result = DelegateCall.invoke(operationsDelegate, abi.encodeCall(QuestionLedgerOperationsDelegate.redeemShares, (shareToken, IQuestionForker(questionForker), universeId, msg.sender)));
 		(uint256 winningSharesBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth) = abi.decode(result, (uint256, uint256));
 		refreshSecurityPoolFees();
 		emit SharesRedeemed(msg.sender, winningSharesBurnedAttoShares, settlementCollateralRedeemedAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
@@ -259,13 +255,13 @@ contract QuestionLedger is QuestionLedgerStorage {
 	/// @dev Wallet-funded deposits never acquire pool backing or capacity.
 	function depositWalletRepToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
 		if (hasInheritedForkOutcome) revert('Forked');
-		DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(QuestionLedgerOperationsDelegate.depositWalletRepToEscalationGame, (outcome, maximumDepositAttoRep)));
+		DelegateCall.invoke(operationsDelegate, abi.encodeCall(QuestionLedgerOperationsDelegate.depositWalletRepToEscalationGame, (outcome, maximumDepositAttoRep)));
 	}
 
 	/// @notice Reverts unless the deposit leads outright or fills its non-decision threshold.
 	function depositWalletRepToEscalationGameWithLead(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
 		if (hasInheritedForkOutcome) revert('Forked');
-		DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(QuestionLedgerOperationsDelegate.depositWalletRepToEscalationGameWithLead, (outcome, maximumDepositAttoRep)));
+		DelegateCall.invoke(operationsDelegate, abi.encodeCall(QuestionLedgerOperationsDelegate.depositWalletRepToEscalationGameWithLead, (outcome, maximumDepositAttoRep)));
 	}
 
 	/// @notice Withdraws local escalation deposits after the question is final; all indexes must share one depositor.
@@ -320,7 +316,7 @@ contract QuestionLedger is QuestionLedgerStorage {
 
 	/// @notice Resumes a paused fork-continuation escalation game once its carry is funded; callable by anyone.
 	function resumeForkedEscalationGame() external {
-		DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(QuestionLedgerOperationsDelegate.resumeForkedEscalationGame, ()));
+		DelegateCall.invoke(operationsDelegate, abi.encodeCall(QuestionLedgerOperationsDelegate.resumeForkedEscalationGame, ()));
 	}
 
 	/// @notice Forker-only: sets whether the pool awaits escalation fork continuation.

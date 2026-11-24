@@ -76,7 +76,7 @@ test('branch events discover the uniform engine, index its auction event and sam
 			expect(abi.some(item => item.type === 'function' && item.name === name && toFunctionSelector(item).length === 10)).toBe(true)
 			if (name === 'initialized') return true
 			if (name === 'finalized') return false
-			if (name === 'clearing') return [0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false]
+			if (name === 'clearing') return [0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false]
 			return 1n
 		})
 		expect(snapshot.readStatus).toBe('success')

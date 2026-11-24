@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { EscalationClaimBundle, Node, NonDecisionState, OutcomeState } from './EscalationGameTypes.sol';
+import { Node, NonDecisionState, OutcomeState } from './EscalationGameTypes.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { Constants } from '../Constants.sol';
 
@@ -25,7 +25,6 @@ abstract contract EscalationGameStorage {
 	// Game-local node ID -> deposit node; zero is the absent-node sentinel.
 	mapping(uint256 => Node) public nodes;
 	struct VaultAccounting {
-		EscalationClaimBundle claimBundle;
 		uint256 unresolvedAttoRep;
 		// Original unconsumed principal indexed by BinaryOutcome (Invalid, Yes, No).
 		uint256[3] localUnresolvedPrincipalByOutcome;
@@ -59,6 +58,10 @@ abstract contract EscalationGameStorage {
 	// burned once the game can no longer change, including each claim's own haircut,
 	// cannot pay any winner less.
 	uint256 public settlementForkThresholdAttoRep;
+	// Cache elapsed curve time, never the wall-clock deadline: fork pauses and
+	// activation/resume anchors remain authoritative when the deadline is read.
+	uint256 internal cachedBindingCapitalAttoRep;
+	uint256 internal cachedFinalityElapsed;
 
 	function _strictStakeLeader() internal view returns (BinaryOutcomes.BinaryOutcome leader) {
 		uint256 highest;
@@ -80,7 +83,7 @@ abstract contract EscalationGameStorage {
 	function _claimEscrowedRepByVault(address vault) internal view returns (uint256 amountAttoRep) {
 		if (ordinarySettlementInitialized)
 			return vaultAccounting[vault].localUnresolvedPrincipalByOutcome[uint8(ordinarySettlementOutcome)];
-		return (vaultAccounting[vault].claimBundle.disputeStakedRepClaimUnits);
+		return vaultAccounting[vault].unresolvedAttoRep;
 	}
 
 	function _isRetiredOrdinaryOutcome(uint8 outcomeIndex) internal view returns (bool) {
@@ -88,8 +91,7 @@ abstract contract EscalationGameStorage {
 	}
 
 	function _increaseEscrowedRepForBundle(address bundleId, uint256 amountAttoRep) internal {
-		uint256 claimUnits = amountAttoRep;
-		vaultAccounting[bundleId].claimBundle.disputeStakedRepClaimUnits += claimUnits;
+		vaultAccounting[bundleId].unresolvedAttoRep += amountAttoRep;
 		totalDisputeStakedAttoRep += amountAttoRep;
 	}
 }

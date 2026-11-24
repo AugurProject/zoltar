@@ -48,7 +48,7 @@ function modelClearing(inventory: bigint, grid: bigint, bids: readonly ModelBid[
 	}
 	const fills = new Map<bigint, bigint>()
 	for (const bid of bids) fills.set(bid.id, 0n)
-	if (filled === 0n) return { filled, attoRepPerLot: 0n, sold: 0n, rounding: 0n, fills }
+	if (filled === 0n) return { filled, attoRepPerLot: 0n, sold: 0n, fills }
 	const marginal = lotPrice[Number(filled) - 1]
 	if (marginal === undefined) throw new Error('Model marginal missing')
 	const unrounded = maxOf(marginal, floor)
@@ -60,7 +60,7 @@ function modelClearing(inventory: bigint, grid: bigint, bids: readonly ModelBid[
 		fills.set(bid.id, minOf(bid.lots, maxOf(filled - cumulative, 0n)))
 		cumulative += bid.lots
 	}
-	return { filled, attoRepPerLot, sold, rounding: sold - filled * attoRepPerLot, fills }
+	return { filled, attoRepPerLot, sold, fills }
 }
 
 describe('audit fuzz: collateral repair auction closing-price floor on the full stack', () => {
@@ -122,7 +122,7 @@ describe('audit fuzz: collateral repair auction closing-price floor on the full 
 			const capitalRepBefore = await context.balance(context.capital)
 			await context.finalize()
 			const clearing = await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewFinalization', args: [targetLots, floor] })
-			expect({ label, filled: clearing.filledLots, attoRepPerLot: clearing.attoRepPerLot, sold: clearing.soldAttoRep, rounding: clearing.roundingAttoRep }).toEqual({ label, filled: expected.filled, attoRepPerLot: expected.attoRepPerLot, sold: expected.sold, rounding: expected.rounding })
+			expect({ label, filled: clearing.filledLots, attoRepPerLot: clearing.attoRepPerLot, sold: clearing.soldAttoRep }).toEqual({ label, filled: expected.filled, attoRepPerLot: expected.attoRepPerLot, sold: expected.sold })
 			// Every winning lot is backed at the closing conservative price, and at its own minimum.
 			if (clearing.filledLots !== 0n) expect(clearing.attoRepPerLot).toBeGreaterThanOrEqual(floor)
 			// Custody: sold REP reaches the ledger, the rest returns to the fork authority, the auction keeps nothing.
@@ -143,7 +143,7 @@ describe('audit fuzz: collateral repair auction closing-price floor on the full 
 				roundingOwned += position.earnedAttoRep
 				if (fill !== 0n && BigInt(position.liquidationStarted) !== 0n) throw new Error(`winner ${bid.id} is under an adverse observation (${position.liquidationStarted}, ${typeof position.liquidationStarted}) immediately after closing: ${label}`)
 			}
-			expect(roundingOwned).toBe(expected.rounding)
+			expect(roundingOwned).toBe(0n)
 			// Refunds and lazy materialization through each bidder's own vault, in random order.
 			const order = [...bids]
 			for (let index = order.length - 1; index > 0; index--) {
@@ -172,7 +172,7 @@ describe('audit fuzz: collateral repair auction closing-price floor on the full 
 				// Backed at 100% at the ledger's current conservative price.
 				expect(position.rep).toBeGreaterThanOrEqual(await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'requiredRep', args: [position.commitment, 10_000n] }))
 			}
-			expect(roundingPaid).toBe(expected.rounding)
+			expect(roundingPaid).toBe(0n)
 			expect((await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'auctionCohort' }))[2]).toBe(0n)
 			for (const bidder of [context.owner, context.other]) {
 				const owed = bids.filter(bid => bid.bidder === bidder).reduce((sum, bid) => sum + (bid.lots - (expected.fills.get(bid.id) ?? 0n)) * lot, 0n)

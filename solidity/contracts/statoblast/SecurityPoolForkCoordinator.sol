@@ -138,15 +138,11 @@ contract SecurityPoolForkCoordinator {
 		uint256 outcome;
 		bool recorded;
 	}
-	struct FixedOutcome {
-		uint256 outcome;
-	}
 	mapping(uint248 => Fork) public forks;
 	mapping(uint248 => Branch) private branchStates;
 	mapping(uint248 => mapping(address => Choice)) public choices;
 	mapping(uint248 => mapping(uint256 => uint256)) public recoveredQuestionShares;
 	SecurityPoolQuestionMap.Store private fixedTree;
-	FixedOutcome[] private fixedOutcomes;
 
 	event ForkFrozen(uint248 indexed universeId, uint256 backing, uint256 cash, uint256 units, uint256 recoveryAttoRep);
 	event BranchChosen(uint248 indexed universeId, address indexed owner, uint256 indexed outcome, uint256 backing, uint256 commitment);
@@ -158,7 +154,6 @@ contract SecurityPoolForkCoordinator {
 		require(authority != address(0) && address(protocol).code.length != 0, 'Fork dependencies missing');
 		securityPool = ISecurityPoolForkRoot(authority);
 		zoltar = protocol;
-		fixedOutcomes.push(FixedOutcome(0));
 	}
 	modifier nonReentrant() {
 		require(!entered, 'Fork operation active');
@@ -232,7 +227,7 @@ contract SecurityPoolForkCoordinator {
 
 	function inheritedFixedOutcome(uint248 universeId, uint256 questionId) external view returns (bool, uint256) {
 		uint256 id = fixedTree.get(branchStates[universeId].fixedRoot, questionId);
-		return id == 0 ? (false, uint256(0)) : (true, fixedOutcomes[id].outcome);
+		return id == 0 ? (false, uint256(0)) : (true, id - 1);
 	}
 
 	function freeze(uint248 universeId) external nonReentrant {
@@ -298,8 +293,9 @@ contract SecurityPoolForkCoordinator {
 		(, uint256 questionId, , , ) = zoltar.universes(parent);
 		// A later fork cannot overwrite a question outcome already fixed in an ancestor.
 		if (fixedTree.get(root, questionId) == 0) {
-			fixedOutcomes.push(FixedOutcome(outcome));
-			root = fixedTree.set(root, questionId, fixedOutcomes.length - 1);
+			// Valid scalar outcomes have reserved zero bits below bit 255; categorical
+			// outcomes are bounded by the label count. Neither can be uint256.max.
+			root = fixedTree.set(root, questionId, outcome + 1);
 		}
 		branch.fixedRoot = root;
 	}
