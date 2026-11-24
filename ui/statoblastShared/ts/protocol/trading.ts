@@ -241,7 +241,7 @@ export async function migrateSharesFromUniverse<TReceipt extends Pick<Transactio
 		args: [getShareTokenId(universeId, shareOutcome), sortedTargetOutcomeIndexes],
 		reviewTitle: tradingCopy.formatMigrateSharesReviewTitle(shareOutcomeLabel),
 		reviewDescription: tradingCopy.formatMigrateSharesReviewDescription(shareOutcomeLabel),
-		...(migratedAttoShares === undefined ? {} : { reviewAmount: formatCurrencyBalanceWithUnit(migratedAttoShares, tradingCopy.formatMigrateSharesReviewUnit(shareOutcomeLabel), collateral?.decimals) }),
+		...(migratedAttoShares === undefined ? {} : { reviewAmount: formatCurrencyBalanceWithUnit(migratedAttoShares, tradingCopy.formatOutcomeShares(shareOutcomeLabel), collateral?.decimals) }),
 	}))
 	return {
 		action: 'migrateShares',
@@ -275,9 +275,9 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 		])
 		const [endTime, block] = await Promise.all([client.readContract({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, address: questionData, functionName: 'getQuestionEndDate', args: [questionId] }), client.getBlock()])
 		if (block.timestamp >= endTime) throw new Error('Minting closed when the question ended.')
-		return questionId
+		return { questionId, blockNumber: block.number }
 	}
-	const questionId = await validateBeforeSubmit()
+	const { questionId } = await validateBeforeSubmit()
 	const [universeId, factory] = await Promise.all([readQuestionLedgerUniverseId(client, questionLedgerAddress), client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'securityPoolFactory' })])
 	const securityPool = await requireCanonicalSecurityPoolOf(client, factory, questionLedgerAddress)
 	const quote = async () => {
@@ -338,11 +338,25 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 				if (recovery.balance < maximumRecoveryAttoRep) throw new Error(collateralCopy.insufficientRecoveryRep)
 				if (recovery.allowance < maximumRecoveryAttoRep) throw new Error(collateralCopy.recoveryApprovalRequired)
 				await client.estimateGas({ account: client.account, to: callParams.address, data: encodeFunctionData(callParams), value: callParams.value })
-				await validateBeforeSubmit()
+				const { blockNumber } = await validateBeforeSubmit()
+				if (blockNumber === undefined) throw new Error('Mint review requires a mined block.')
+				const [shareToken, mintedShares] = await Promise.all([
+					client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'shareToken', blockNumber }),
+					client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'attoEthToAttoShares', args: [amount], blockNumber }),
+				])
+				if (mintedShares < minimumShares) throw new Error('The shares received changed. Review the mint amount again.')
+				const [invalidShares, yesShares, noShares] = await client.readContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: shareToken, functionName: 'balanceOfShares', args: [universeId, client.account.address], blockNumber })
+				const shareRow = (outcome: ReportingOutcomeKey, balance: bigint) => ({
+					label: tradingCopy.formatOutcomeShares(getShareOutcomeLabel(outcome)),
+					value: `${formatCurrencyBalance(balance, collateral.decimals)} → ${formatCurrencyBalance(balance + mintedShares, collateral.decimals)}`,
+				})
 				reviewRows = [
 					{ label: estimatedPurchaseFee, value: `${formatCurrencyBalance(fresh.fee, collateral.decimals)} ${collateral.symbol}` },
 					{ label: collateralCopy.wallet, value: `${collateralPreview(latest.balance)} → ${collateralPreview(latest.balance - amount - fresh.fee)}` },
 					{ label: availableCapacity, value: `${collateralPreview(fresh.capacity)} → ${collateralPreview(fresh.capacity - amount)}` },
+					shareRow('yes', yesShares),
+					shareRow('no', noShares),
+					shareRow('invalid', invalidShares),
 				]
 			},
 		},

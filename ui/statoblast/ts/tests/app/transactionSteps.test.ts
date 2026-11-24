@@ -872,7 +872,7 @@ function setupMintReview(alwaysReview: boolean) {
 		sendTransaction,
 		estimateGas: async () => 100000n,
 		getBalance: async () => 10n ** 18n,
-		getBlock: async () => createBlockWithTimestamp(1n),
+		getBlock: async () => ({ ...createBlockWithTimestamp(1n), number: 1n }),
 		readContract: createReadContractStub(request => {
 			if (request.functionName === 'escalationGame') return '0x0000000000000000000000000000000000000000'
 			if (request.functionName === 'securityPoolFactory') return account
@@ -887,6 +887,8 @@ function setupMintReview(alwaysReview: boolean) {
 			if (request.functionName === 'availableMintCapacity' || request.functionName === 'attoEthToAttoShares') return 10n ** 18n
 			if (request.functionName === 'questionData') return account
 			if (request.functionName === 'questionId') return 1n
+			if (request.functionName === 'shareToken') return account
+			if (request.functionName === 'balanceOfShares') return [2n, 3n, 4n].map(value => value * 10n ** 18n)
 			if (request.functionName === 'getQuestionEndDate') return 1000n
 			if (request.functionName === 'universeId') return 0n
 			if (request.functionName === 'openOraclePriceCoordinator') return account
@@ -917,6 +919,9 @@ test('mint review shows the refreshed wallet collateral and free capacity', asyn
 	await expect(sending).resolves.toMatchObject({ hash })
 	expect(rows?.find(row => row.label === 'Wallet collateral')?.value).toMatch(/90.*WETH → 89.*WETH/)
 	expect(rows?.find(row => row.label === 'Free capacity')?.value).toMatch(/1.*WETH → 0.*WETH/)
+	expect(rows?.find(row => row.label === 'Yes shares')?.value).toMatch(/3.*→ 4/)
+	expect(rows?.find(row => row.label === 'No shares')?.value).toMatch(/4.*→ 5/)
+	expect(rows?.find(row => row.label === 'Invalid shares')?.value).toMatch(/2.*→ 3/)
 	expect(sendTransaction).toHaveBeenCalledTimes(1)
 })
 
@@ -952,6 +957,27 @@ test('a refreshed review shows verified rows and permits a changing simulation r
 	}
 })
 
+test('an aged review shows newly checked comparison rows and stops when they changed', async () => {
+	const { client, sendTransaction } = setup()
+	let wallet = '10 REP → 8 REP'
+	const now = spyOn(performance, 'now').mockReturnValue(0)
+	const reviewed = createReviewedClient({ ...client, sendTransaction, call: async () => ({ data: '0x01' }) }, undefined, undefined, undefined, true)
+	try {
+		reviewed.onTransactionPlan?.([{ functionName: 'report', contractAddress: account, readReviewRows: () => [{ label: 'Wallet REP', value: wallet }] }])
+		reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, contractAddress: account, functionName: 'report', args: [], data: '0x1234', value: undefined })
+		const sending = reviewed.sendTransaction({ to: account, data: '0x1234' })
+		await waitForTransactionStep(0)
+		wallet = '11 REP → 9 REP'
+		now.mockReturnValue(31_000)
+		transactionSteps.value?.confirmStep(0)
+		await expect(sending).rejects.toThrow('Changed since you reviewed')
+		expect(transactionSteps.value?.steps[0]?.reviewRows).toEqual([{ label: 'Wallet REP', value: '11 REP → 9 REP' }])
+		expect(sendTransaction).not.toHaveBeenCalled()
+	} finally {
+		now.mockRestore()
+	}
+})
+
 test('a report that becomes fork-triggering during review requires new confirmation even when the amount is unchanged', async () => {
 	const { client, receipt, sendTransaction } = setup()
 	let noBalance = 10n
@@ -970,6 +996,7 @@ test('a report that becomes fork-triggering during review requires new confirmat
 				if (request.functionName === 'previewLeadingDepositOnOutcome') return [5n, threshold]
 				if (request.functionName === 'nonDecisionThresholdAttoRep') return threshold
 				if (request.functionName === 'getOutcomeBalancesAttoRep') return [0n, 15n, noBalance]
+				if (request.functionName === 'getLocalUnresolvedPrincipalByVaultAndOutcome') return 0n
 				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return maxUint256
 				throw new Error(`Unexpected read: ${request.functionName}`)
 			}),
@@ -985,4 +1012,33 @@ test('a report that becomes fork-triggering during review requires new confirmat
 	transactionSteps.value?.confirmStep(0)
 	await expect(sending).rejects.toThrow(forkTriggerChangedSinceReview)
 	expect(sendTransaction).not.toHaveBeenCalled()
+})
+
+test('report review shows the wallet and staked REP at the freshly checked block', async () => {
+	const { client, receipt, sendTransaction } = setup()
+	const rep = 10n ** 18n
+	const readContract = createReadContractStub(async request => {
+		if (request.functionName === 'universeId') return 0n
+		if (request.functionName === 'escalationGame' || request.functionName === 'repToken') return account
+		if (request.functionName === 'systemState') return 0
+		if (request.functionName === 'getEscalationGameEndDate') return 1000n
+		if (request.functionName === 'previewLeadingDepositOnOutcome') return [2n * rep, 15n * rep]
+		if (request.functionName === 'nonDecisionThresholdAttoRep') return 20n * rep
+		if (request.functionName === 'getLocalUnresolvedPrincipalByVaultAndOutcome') {
+			expect(request.blockNumber).toBe(1n)
+			return 4n * rep
+		}
+		if (request.functionName === 'balanceOf') return 10n * rep
+		if (request.functionName === 'allowance') return maxUint256
+		throw new Error(`Unexpected read: ${request.functionName}`)
+	})
+	const reviewed = createReviewedClient({ ...client, sendTransaction, getBlock: async () => ({ ...createBlockWithTimestamp(10n), number: 1n }), waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }), readContract }, undefined, undefined, undefined, true)
+	const sending = reportOutcomeInQuestionLedger(reviewed, account, 'yes', 2n * rep, 2n * rep, false, true)
+	await waitForTransactionStep(0)
+	const rows = transactionSteps.value?.steps[0]?.reviewRows
+	transactionSteps.value?.confirmStep(0)
+	await expect(sending).resolves.toMatchObject({ hash })
+	expect(rows?.find(row => row.label === 'Wallet REP')?.value).toMatch(/10.*REP → 8.*REP/)
+	expect(rows?.find(row => row.label === 'Your REP staked on Yes')?.value).toMatch(/4.*REP → 6.*REP/)
+	expect(sendTransaction).toHaveBeenCalledTimes(1)
 })

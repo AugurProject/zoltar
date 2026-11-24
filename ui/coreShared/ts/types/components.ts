@@ -255,6 +255,8 @@ export type OperationModalProps = {
 	children?: ComponentChildren
 	closeDisabled?: boolean
 	closeOnSuccessKey?: string | undefined
+	/** Optional label for the final confirmation within this dialog's review. */
+	finalActionLabel?: string | undefined
 	getReturnFocusTarget?: (() => HTMLElement | null) | undefined
 	/** Objects the action touches (question, pool, vault), shown above the form; transaction notices inside the dialog omit matching rows. */
 	context?: TransactionContextItem[]

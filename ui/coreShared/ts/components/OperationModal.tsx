@@ -27,7 +27,7 @@ function getModalTransactionPresentation(transaction: ReturnType<typeof useGloba
 	return { ...compactTransaction, rows: transaction.rows.filter(row => (row.identityKey === undefined || !contextIdentityKeys.has(row.identityKey)) && !contextLabels.has(row.label)) }
 }
 
-export function OperationModal({ children, confirmSingleStepFromForm = false, closeDisabled = false, closeOnSuccessKey, context = [], description, embedTransactionSteps = true, getReturnFocusTarget, hostsExternalReview = false, isOpen, onClose, title }: OperationModalProps) {
+export function OperationModal({ children, confirmSingleStepFromForm = false, closeDisabled = false, closeOnSuccessKey, context = [], description, embedTransactionSteps = true, finalActionLabel, getReturnFocusTarget, hostsExternalReview = false, isOpen, onClose, title }: OperationModalProps) {
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
 	const [reviewScope, setReviewScope] = useState<AbortController>()
@@ -165,7 +165,7 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 						{hostsExternalReview && reviewError !== undefined ? <UserMessage placement='section' tone='error' announcement='polite' detail={reviewError} /> : undefined}
 						{/* The dialog already shows its context rows above the form, so the step review only keeps the rows it does not cover. */}
 						<GlobalTransactionPresentationProvider transaction={modalTransaction}>
-							<TransactionStepsContent contextKey={titleId} focusOnMount keepActionsVisible onClose={returnToForm} retainedWorkflow={ownedWorkflow === undefined ? retainedWorkflow : undefined} />
+							<TransactionStepsContent contextKey={titleId} finalActionLabel={finalActionLabel} focusOnMount keepActionsVisible onClose={returnToForm} retainedWorkflow={ownedWorkflow === undefined ? retainedWorkflow : undefined} />
 						</GlobalTransactionPresentationProvider>
 					</div>
 				) : undefined}

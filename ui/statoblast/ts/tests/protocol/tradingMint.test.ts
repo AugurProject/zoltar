@@ -22,6 +22,8 @@ function mintClient(send: Parameters<typeof createMockWriteClient>[0], currentTi
 				if (request.address === pool && request.functionName === 'allowance') return recovery.allowance
 				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 10n ** 21n
 				if (request.functionName === 'escalationGame') return zeroAddress
+				if (request.functionName === 'shareToken') return pool
+				if (request.functionName === 'balanceOfShares') return [0n, 0n, 0n]
 				if (request.functionName === 'universeId' || request.functionName === 'questionId') return 1n
 				if (request.functionName === 'securityPoolFactory') return pool
 				if (request.functionName === 'securityPoolOf') return securityPool
@@ -37,7 +39,7 @@ function mintClient(send: Parameters<typeof createMockWriteClient>[0], currentTi
 			}),
 		),
 		account: { address: pool, type: 'json-rpc' as const },
-		getBlock: async () => createBlockWithTimestamp(currentTimestamp),
+		getBlock: async () => ({ ...createBlockWithTimestamp(currentTimestamp), number: 1n }),
 	}
 }
 
@@ -169,13 +171,17 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 							return mode === 'insufficient backing' ? 99n : 100n
 						case 'attoEthToAttoShares':
 							return 90n
+						case 'shareToken':
+							return pool
+						case 'balanceOfShares':
+							return [0n, 0n, 0n]
 						default:
 							throw new Error(`Unexpected read ${request.functionName}`)
 					}
 				}),
 			),
 			account: { address: pool, type: 'json-rpc' as const },
-			getBlock: async () => createBlockWithTimestamp(timestamp),
+			getBlock: async () => ({ ...createBlockWithTimestamp(timestamp), number: 1n }),
 			getBalance: async () => walletBalance,
 			estimateGas: async () => 100_000n,
 			onTransactionPlan: (steps: readonly TransactionPlanStep[]) => {

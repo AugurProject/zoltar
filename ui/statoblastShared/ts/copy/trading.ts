@@ -1,6 +1,7 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 export const migrateShares = 'Migrate shares'
 export const mintCompleteSets = 'Mint complete sets'
+export const continueInWallet = 'Continue in wallet'
 export const redeemCompleteSets = 'Redeem complete sets'
 export const childDeployed = 'Child deployed'
 export const childNotDeployed = 'Child not deployed'
@@ -74,7 +75,7 @@ export const formatShareOutcomeOption = (outcomeLabel: string, amount: string) =
 export const formatMigratingShares = (amount: string, outcomeLabel: string) => `Migrating ${amount} ${outcomeLabel} shares`
 export const shareMigrationIrreversible = 'Migration cannot be undone.'
 export const formatMigrateSharesReviewTitle = (outcomeLabel: string) => `Migrate ${outcomeLabel} shares`
-export const formatMigrateSharesReviewUnit = (outcomeLabel: string) => `${outcomeLabel} shares`
+export const formatOutcomeShares = (outcomeLabel: string) => `${outcomeLabel} shares`
 export const formatMigrateSharesReviewDescription = (outcomeLabel: string) => `Creates your whole ${outcomeLabel} balance in each selected child universe and keeps the source balance locked. ${shareMigrationIrreversible}`
 export const mintAmountRequired = 'Enter a mint amount.'
 export const redeemAmountRequired = 'Enter a redeem amount.'

@@ -406,7 +406,14 @@ export function TradingSection({
 
 			<ErrorNotice message={tradingError} />
 
-			<OperationModal closeOnSuccessKey={tradingResult?.action === 'createCompleteSet' ? tradingResult.hash : undefined} context={getTransactionContext('Complete set · Yes + No + Invalid')} isOpen={activeModal === 'mint'} onClose={closeActiveModal} title={tradingCopy.mintCompleteSets}>
+			<OperationModal
+				closeOnSuccessKey={tradingResult?.action === 'createCompleteSet' ? tradingResult.hash : undefined}
+				context={getTransactionContext('Complete set · Yes + No + Invalid')}
+				finalActionLabel={tradingCopy.continueInWallet}
+				isOpen={activeModal === 'mint'}
+				onClose={closeActiveModal}
+				title={tradingCopy.mintCompleteSets}
+			>
 				<MetricGrid>
 					<MetricField label={collateralCopy.wallet}>
 						<CurrencyValue exactWhenRoundedToZero value={collateralFunding?.collateral?.balance} suffix={collateralFunding?.collateral?.symbol ?? collateralCopy.fallback} units={collateralFunding?.collateral?.decimals ?? 0} />

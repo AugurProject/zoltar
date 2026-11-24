@@ -11,6 +11,7 @@ import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { humanizeTransactionAction } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import { createTransactionStepController, type TransactionStepDetails } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { createTransactionFailure, createTransactionFailureError } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
+import { changedSinceReview } from '../copy/app.js'
 
 async function describeTransaction(client: WriteClient, preview: TransactionRequestPreview & Pick<TransactionPlanStep, 'optional' | 'tokenFunding' | 'oracleOutcome' | 'approvalPurpose'>, requiredApprovalAmount?: bigint): Promise<TransactionStepDetails> {
 	const action = transactionCopy.reviewedActions[preview.functionName]
@@ -137,7 +138,8 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			const check = (candidate: TransactionRequestPreview) => withTimeout(checkTransaction(candidate, expected, gas, raw), 15_000, transactionCopy.currentStateCheckFailed)
 			const alreadyReviewedFunding = selectedFunding !== undefined
 			if (alwaysReview && !alreadyReviewedFunding) await check(transaction)
-			if (expected.readReviewRows !== undefined) controller.setReviewRows(stepIndex, expected.readReviewRows())
+			const reviewedRows = expected.readReviewRows?.()
+			if (reviewedRows !== undefined) controller.setReviewRows(stepIndex, reviewedRows)
 			const checkedAt = performance.now()
 			let selectedAmount = selectedFunding?.amount
 			if (selectedFunding === undefined) {
@@ -186,8 +188,14 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			controller.assertActive()
 			if (alwaysReview && (approvalArgs !== undefined || alreadyReviewedFunding)) await check(transaction)
-			else if (alwaysReview && performance.now() - checkedAt > 30_000) await check(transaction)
-			else if (expected.validateBeforeSubmit !== undefined) await withTimeout(expected.validateBeforeSubmit(), 15_000, transactionCopy.currentStateCheckFailed)
+			else if (alwaysReview && performance.now() - checkedAt > 30_000) {
+				await check(transaction)
+				const currentRows = expected.readReviewRows?.()
+				if (reviewedRows !== undefined && currentRows !== undefined && (reviewedRows.length !== currentRows.length || reviewedRows.some((row, index) => row.label !== currentRows[index]?.label || row.value !== currentRows[index]?.value))) {
+					controller.setReviewRows(stepIndex - 1, currentRows)
+					throw new Error(changedSinceReview)
+				}
+			} else if (expected.validateBeforeSubmit !== undefined) await withTimeout(expected.validateBeforeSubmit(), 15_000, transactionCopy.currentStateCheckFailed)
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			controller.assertActive()
 			client.onTransactionPrepared?.(transaction)

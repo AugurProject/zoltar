@@ -212,3 +212,6 @@ export const inheritedAttritionElapsed = 'Inherited attrition elapsed'
 export const attritionBeginsAfter = (duration: string) => `${duration} until attrition begins`
 
 export const readyToFork = 'Ready to fork'
+export const walletRepReviewLabel = 'Wallet REP'
+export const stakedRepReviewLabel = (outcome: string) => `Your REP staked on ${outcome}`
+export const reportReviewInsufficientRep = 'Wallet REP changed. Add enough REP for this report and try again.'

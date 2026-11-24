@@ -355,10 +355,12 @@ export async function reportOutcomeInQuestionLedger(client: WriteClient, questio
 		...getReportReviewText(outcome, reviewAmountAttoRep, triggersFork),
 		args: [getReportingOutcomeValue(outcome), amountAttoRep],
 	}
+	let reviewRows: readonly { label: string; value: string }[] = []
 	const reportSteps = [
 		{
 			...callParams,
 			contractAddress: questionLedgerAddress,
+			readReviewRows: () => reviewRows,
 			refreshFundingRequirements: async () => {
 				const tokenAddress = await client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'repToken' })
 				return [{ tokenAddress, amount: reviewAmountAttoRep }]
@@ -388,6 +390,18 @@ export async function reportOutcomeInQuestionLedger(client: WriteClient, questio
 						}
 					}
 				}
+				const wallet = client.account.address
+				const repToken = await client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'repToken', blockNumber })
+				const [walletRep, stakedRep] = await Promise.all([
+					client.readContract({ address: repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [wallet], blockNumber }),
+					currentGame === zeroAddress ? 0n : client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getLocalUnresolvedPrincipalByVaultAndOutcome', args: [wallet, getReportingOutcomeValue(outcome)], blockNumber }),
+				])
+				if (walletRep < reviewAmountAttoRep) throw new Error(reportingCopy.reportReviewInsufficientRep)
+				const comparison = (before: bigint, after: bigint) => `${formatCurrencyBalanceWithUnit(before, commonCopy.rep)} → ${formatCurrencyBalanceWithUnit(after, commonCopy.rep)}`
+				reviewRows = [
+					{ label: reportingCopy.walletRepReviewLabel, value: comparison(walletRep, walletRep - reviewAmountAttoRep) },
+					{ label: reportingCopy.stakedRepReviewLabel(getEscalationSideLabel(outcome)), value: comparison(stakedRep, stakedRep + reviewAmountAttoRep) },
+				]
 			},
 		},
 	] as const
