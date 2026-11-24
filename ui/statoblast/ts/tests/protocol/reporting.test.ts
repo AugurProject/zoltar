@@ -1085,7 +1085,7 @@ describe('reporting protocol client', () => {
 				if (request.address === parentEscalationGameAddress && request.functionName === 'nodes') {
 					const args = request.args
 					if (!Array.isArray(args)) throw new Error('Expected node args')
-					if (args[0] === 2n) return [1n, secondLeaf.depositor, 1, secondLeaf.amountAttoRep, secondLeaf.parentDepositIndex, secondLeaf.cumulativeAmountAttoRep, 1n]
+					if (args[0] === 2n) return [1n, secondLeaf.depositor, 1n, secondLeaf.amountAttoRep, secondLeaf.parentDepositIndex, secondLeaf.cumulativeAmountAttoRep, 1n]
 					if (args[0] === 1n) return [0n, firstLeaf.depositor, 1, firstLeaf.amountAttoRep, firstLeaf.parentDepositIndex, firstLeaf.cumulativeAmountAttoRep, 0n]
 					throw new Error(`Unexpected node id: ${String(args[0])}`)
 				}
@@ -1327,7 +1327,7 @@ describe('reporting protocol client', () => {
 				if (request.address === grandparentEscalationGameAddress && request.functionName === 'nodes') {
 					const args = request.args
 					if (!Array.isArray(args)) throw new Error('Expected node args')
-					if (args[0] === 2n) return [1n, secondLeaf.depositor, 1, secondLeaf.amountAttoRep, secondLeaf.parentDepositIndex, secondLeaf.cumulativeAmountAttoRep, 1n]
+					if (args[0] === 2n) return [1n, secondLeaf.depositor, 1n, secondLeaf.amountAttoRep, secondLeaf.parentDepositIndex, secondLeaf.cumulativeAmountAttoRep, 1n]
 					if (args[0] === 1n) return [0n, firstLeaf.depositor, 1, firstLeaf.amountAttoRep, firstLeaf.parentDepositIndex, firstLeaf.cumulativeAmountAttoRep, 0n]
 				}
 				if (request.address === parentEscalationGameAddress && request.functionName === 'getCarryLeafPageByOutcome') return [[], 0n]

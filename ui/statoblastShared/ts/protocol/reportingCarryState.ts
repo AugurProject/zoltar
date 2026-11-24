@@ -8,7 +8,7 @@ import type { ReadClient, ReportingOutcomeKey, WriteClient } from '@zoltar/ui-co
 import type { AuthenticatedForkClaim, CarriedDepositProof, ImportedEscalationDeposit } from '../types/contracts.js'
 import { readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { requireAddressValue, requireArrayValue, requireBigintValue, requireIntegerLikeValue, requireObjectValue, requireTupleValue } from './decoders.js'
-import { getReportingOutcomeValue } from '@zoltar/ui-core-shared/lib/contractEnums.js'
+import { getReportingOutcomeKey, getReportingOutcomeValue } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import { executeForkAuctionAction, readQuestionLedgerUniverseId } from './questionLedgerActions.js'
 import { buildCarryMerkleMountainRangeProof, createSparseNullifier, hashCarryLeaf } from './reportingCarryProof.js'
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
@@ -17,6 +17,9 @@ import { withClaimReadContext } from './claimReadContext.js'
 import { CONTRACT_PAGE_SIZE } from './pagination.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import * as copy from '../copy/reporting.js'
+import { ABIS } from '@zoltar/ui-core-shared/abis.js'
+import { rep } from '@zoltar/ui-core-shared/copy/common.js'
+import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 
 const EMPTY_CARRY_LEAF_HASH = ('0x' + '00'.repeat(32)) as Hex
 
@@ -83,7 +86,7 @@ async function loadCarryLeafPage(client: Pick<ReadClient, 'readContract'>, escal
 
 function requireHistoricalCarryNode(value: unknown, sourceNodeId: bigint, outcome: ReportingOutcomeKey): { leaf: HistoricalCarryLeafViewStruct; parentNodeId: bigint } {
 	const [parentNodeId, depositor, nodeOutcome, amountAttoRep, parentDepositIndex, cumulativeAmountAttoRep, carryLeafIndex] = requireTupleValue(value, 7, 'historical carry node')
-	if (requireIntegerLikeValue(nodeOutcome, 'historical carry node outcome') !== getReportingOutcomeValue(outcome)) throw new Error('Unexpected historical carry node outcome')
+	if (getReportingOutcomeKey(requireIntegerLikeValue(nodeOutcome, 'historical carry node outcome')) !== outcome) throw new Error('Unexpected historical carry node outcome')
 	return {
 		leaf: {
 			amountAttoRep: requireBigintValue(amountAttoRep, 'historical carry node amount'),
@@ -475,23 +478,41 @@ async function buildCarriedProofs(client: Pick<ReadClient, 'readContract'>, pare
 
 export async function withdrawForkedEscalationDeposits(client: WriteClient, questionLedgerAddress: Address, outcome: ReportingOutcomeKey, proofs: readonly CarriedDepositProof[]) {
 	const universeId = await readQuestionLedgerUniverseId(client, questionLedgerAddress)
-	return await executeForkAuctionAction(
-		'settleForkedEscalation',
-		questionLedgerAddress,
-		universeId,
-		async () =>
-			await writeContractAndWait(client, () => ({
-				address: questionLedgerAddress,
-				abi: statoblast_QuestionLedger_QuestionLedger.abi,
-				functionName: 'withdrawForkedEscalationDeposits',
-				args: [
-					getReportingOutcomeValue(outcome),
-					proofs.map(proof => ({
-						...proof,
-						merkleMountainRangeSiblings: Array.from(proof.merkleMountainRangeSiblings),
-						nullifierSiblings: Array.from(proof.nullifierSiblings),
-					})),
-				],
+	const claim = {
+		address: questionLedgerAddress,
+		abi: statoblast_QuestionLedger_QuestionLedger.abi,
+		functionName: 'withdrawForkedEscalationDeposits',
+		reviewTitle: proofs.length === 1 ? copy.settleInheritedClaim : copy.settleInheritedClaims,
+		args: [
+			getReportingOutcomeValue(outcome),
+			proofs.map(proof => ({
+				...proof,
+				merkleMountainRangeSiblings: Array.from(proof.merkleMountainRangeSiblings),
+				nullifierSiblings: Array.from(proof.nullifierSiblings),
 			})),
-	)
+		],
+	} as const
+	let rows: readonly { label: string; value: string }[] = []
+	client.onTransactionPlan?.([
+		{
+			...claim,
+			contractAddress: questionLedgerAddress,
+			readReviewRows: () => rows,
+			validateBeforeSubmit: async () => {
+				const owner = client.account.address
+				if (proofs.some(proof => !sameAddress(proof.depositor, owner))) throw new Error(copy.inheritedClaimDepositChanged)
+				const repToken = await client.readContract({ address: questionLedgerAddress, abi: claim.abi, functionName: 'repToken' })
+				const balance = { address: repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [owner] } as const
+				// The ledger pays the proven depositor regardless of caller. One eth_call runs the
+				// whole proof batch and measures its wallet effect without repeating the parent scan.
+				const [before, , after] = await readRequiredMulticall(client, [balance, claim, balance])
+				const formatRep = (amount: bigint) => formatCurrencyBalanceWithUnit(amount, rep)
+				rows = [
+					{ label: copy.claimPayoutReviewLabel, value: formatRep(after - before) },
+					{ label: copy.walletRepReviewLabel, value: `${formatRep(before)} → ${formatRep(after)}` },
+				]
+			},
+		},
+	])
+	return await executeForkAuctionAction('settleForkedEscalation', questionLedgerAddress, universeId, async () => await writeContractAndWait(client, () => claim))
 }

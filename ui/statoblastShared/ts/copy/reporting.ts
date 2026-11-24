@@ -190,6 +190,7 @@ export const responseWindowEndsTooSoon = 'The response window ends too soon to r
 export const recoverySource = 'Inherited reporting deposits'
 
 export const settleInheritedClaim = 'Claim inherited reporting deposit'
+export const settleInheritedClaims = 'Claim inherited reporting deposits'
 
 export const claimSettled = 'Inherited deposit claimed'
 
