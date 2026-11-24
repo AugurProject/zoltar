@@ -1,5 +1,6 @@
 import { loadRecoveryMintFunding } from '../../../protocol/recoveryMintFunding.js'
 import * as collateralCopy from '../../../copy/collateral.js'
+import { mintReview } from '../../../copy/securityPool.js'
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { encodeFunctionData, formatUnits, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -140,9 +141,16 @@ export function useSecurityPoolPurchase(model: Pick<ReturnType<typeof useSecurit
 				const selected = snapshot
 				const buyer = selected.auctionVault?.bidder ?? selected.owner
 				const captured = { questionId, mintAttoEth: amount, maximumPurchaseFeeAttoEth: fee, minimumShares: minimum, maximumRecoveryAttoRep: recoveryBudget }
+				const collateral = (value: bigint) => `${formatUnits(value, decimals)} ${selected.collateral.symbol}`
 				return {
 					...buildSecurityPoolMintRequest({ trader: buyer, securityPool: selected.securityPool, universeId: selected.universeId, recipient: buyer, ...captured }),
-					reviewDescription: `Buy complete sets for question 0x${questionId.toString(16)} with ${formatUnits(amount, decimals)} ${selected.collateral.symbol}. The total charge for backing and the resolution premium is ${formatUnits(quote.purchaseFeeAttoEth, decimals)} ${selected.collateral.symbol}, capped at ${formatUnits(fee, decimals)} ${selected.collateral.symbol}. Receive at least ${formatUnits(minimum, decimals)} of each outcome. The proportional recovery contribution is ${formatUnits(quote.recoveryAttoRep, 18)} REP, capped at ${formatUnits(recoveryBudget, 18)} REP. Available backing excludes queued retirement reductions; this purchase does not process retirement.`,
+					reviewDescription: mintReview({
+						amount: collateral(amount),
+						purchaseFee: collateral(quote.purchaseFeeAttoEth),
+						feeCap: collateral(fee),
+						minimum: formatUnits(minimum, decimals),
+						recovery: quote.recoveryAttoRep === 0n ? undefined : { amount: formatUnits(quote.recoveryAttoRep, 18), cap: formatUnits(recoveryBudget, 18) },
+					}),
 					validateBeforeSubmit: async () => {
 						const client = createConnectedReadClient()
 						const latest = await loadSecurityPoolAccount(client, selected.securityPool, selected.owner, selected.universeId)

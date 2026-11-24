@@ -5,6 +5,7 @@ import { ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui
 import { verifyRuntimeCode, type SecurityPoolTransaction } from './securityPool.js'
 import { getZoltarContractAddresses } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 import { requireBigintValue } from './decoders.js'
+import * as copy from '../copy/securityPool.js'
 
 const admissionAbi = parseAbi(['function universeId() view returns (uint248)', 'function isQuestionAllowed(address securityPool,uint248 universeId,uint256 questionId) view returns (bool)', 'function questionCount() view returns (uint256)', 'function getQuestions(uint256 start,uint256 count) view returns (uint256[])'])
 export type SecurityPoolAdmission = { address: Address; mode: 'open' | 'custom' } | { address: Address; mode: 'fixed'; questions: readonly bigint[]; questionCount: bigint; questionStart: bigint }
@@ -13,7 +14,7 @@ export type SecurityPoolAdmission = { address: Address; mode: 'open' | 'custom' 
 const maxFixedAdmissionQuestions = 700
 
 export function requireFixedAdmissionQuestionLimit(count: number) {
-	if (count > maxFixedAdmissionQuestions) throw new Error(`A fixed admission policy supports up to ${maxFixedAdmissionQuestions} approved questions per deployment.`)
+	if (count > maxFixedAdmissionQuestions) throw new Error(copy.fixedQuestionLimit(maxFixedAdmissionQuestions))
 }
 
 /** Classify known open and fixed-list policies from runtime code. */
@@ -48,7 +49,7 @@ export async function loadSecurityPoolAdmission(client: Pick<ReadClient, 'getCod
 }
 
 export function securityPoolAdmissionCreationRequest(owner: Address, mode: 'open' | 'fixed', universeId: bigint, questionIds: readonly bigint[]): SecurityPoolTransaction {
-	if (mode === 'open') return { account: owner, value: 0n, data: encodeDeployData({ abi: openArtifact.abi, bytecode: `0x${openArtifact.evm.bytecode.object}` }), reviewDescription: 'Deploy an immutable open admission policy. Anyone may add eligible questions to security pools using this policy.' }
+	if (mode === 'open') return { account: owner, value: 0n, data: encodeDeployData({ abi: openArtifact.abi, bytecode: `0x${openArtifact.evm.bytecode.object}` }), reviewDescription: copy.openQuestionRulesReview }
 	requireFixedAdmissionQuestionLimit(questionIds.length)
 	if (questionIds.length === 0) throw new Error('Choose at least one approved question.')
 	if (questionIds.some((id, index) => id < 0n || id >= 1n << 256n || (index > 0 && id <= (questionIds[index - 1] ?? id)))) throw new Error('Choose increasing unique question IDs.')
@@ -56,7 +57,7 @@ export function securityPoolAdmissionCreationRequest(owner: Address, mode: 'open
 		account: owner,
 		value: 0n,
 		data: encodeDeployData({ abi: fixedArtifact.abi, bytecode: `0x${fixedArtifact.evm.bytecode.object}`, args: [universeId, questionIds] }),
-		reviewDescription: `Deploy a permanently fixed admission policy for universe ${universeId}. Only these question IDs may be backed: ${questionIds.map(id => `0x${id.toString(16)}`).join(', ')}. Nobody can change the list.`,
+		reviewDescription: copy.fixedQuestionRulesReview(universeId, questionIds),
 	}
 }
 
@@ -77,7 +78,7 @@ export async function requireSecurityPoolQuestionHorizon(client: Pick<ReadClient
 }
 
 export async function requireSecurityPoolQuestionAdmission(client: Pick<ReadClient, 'readContract'>, policy: Address, securityPool: Address, universeId: bigint, questionId: bigint, blockNumber?: bigint) {
-	if ((await client.readContract({ address: policy, abi: admissionAbi, functionName: 'isQuestionAllowed', args: [securityPool, universeId, questionId], blockNumber })) !== true) throw new Error('This question is not allowed by the security pool admission policy.')
+	if ((await client.readContract({ address: policy, abi: admissionAbi, functionName: 'isQuestionAllowed', args: [securityPool, universeId, questionId], blockNumber })) !== true) throw new Error(copy.questionRulesDisallowRegistration)
 }
 
 /** Checks the factory's binary question shape and minimum escalation headroom at one block. */

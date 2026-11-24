@@ -2,6 +2,8 @@ import * as securityPoolPriceCopy from '@zoltar/ui-statoblast-shared/copy/securi
 import * as securityPoolSharedForkCopy from '@zoltar/ui-statoblast-shared/copy/securityPoolSharedFork.js'
 import * as securityPoolCapitalCopy from '@zoltar/ui-statoblast-shared/copy/securityPoolCapital.js'
 import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
+import * as glossaryCopy from '@zoltar/ui-statoblast-shared/copy/glossary.js'
+import * as auctionCopy from '@zoltar/ui-statoblast-shared/copy/securityPoolRepairAuction.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import { expect, test } from 'bun:test'
@@ -27,7 +29,17 @@ test('step progress counts the escalation phases', () => {
 })
 
 test('Statoblast workflow copy uses the redesign glossary and live values', () => {
-	const copy = [reportingCopy, securityPoolCopy, securityPoolCapitalCopy, securityPoolSharedForkCopy, securityPoolPriceCopy]
-	const labels = [...copy.flatMap(module => Object.values(module).filter(value => typeof value === 'string')), reportingCopy.clearDeposits('No')]
-	for (const label of labels) expect(label).not.toMatch(/7 weeks|3-day|eight weeks|5% headroom|adds 1 REP|settlement demand|unused healthy capacity|retiring|conservative health|liquidation boundary|scanner or liquidator|funding recipient|vault owners|clear no deposits|\bprincipal\b/i)
+	const copy = [reportingCopy, securityPoolCopy, securityPoolCapitalCopy, securityPoolSharedForkCopy, securityPoolPriceCopy, glossaryCopy, auctionCopy]
+	const labels = [
+		...copy.flatMap(module => Object.values(module).filter(value => typeof value === 'string')),
+		...securityPoolCapitalCopy.prepareStages,
+		reportingCopy.clearDeposits('No'),
+		securityPoolCopy.fixedQuestionRulesReview(1n, [1n]),
+		securityPoolCopy.fixedQuestionLimit(1),
+		securityPoolCopy.mintReview({ amount: '1 WETH', purchaseFee: '0.01 WETH', feeCap: '0.02 WETH', minimum: '1', recovery: undefined }),
+		auctionCopy.bidReview(1n, 1n, 1n),
+	]
+	for (const label of labels) {
+		expect(label).not.toMatch(/7 weeks|3-day|eight weeks|5% headroom|adds 1 REP|settlement demand|unused healthy capacity|retiring|conservative health|liquidation boundary|scanner or liquidator|funding recipient|vault owners|clear no deposits|admission policy|\b(?:principal|ledger|callback|retirement)\b/i)
+	}
 })

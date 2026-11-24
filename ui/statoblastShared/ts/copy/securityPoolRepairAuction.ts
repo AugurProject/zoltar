@@ -83,7 +83,7 @@ export const refreshing = 'Refreshing auction…'
 export const busy = 'Wait for the current transaction.'
 export const pages = (start: bigint, count: number, total: bigint) => `${start + (count === 0 ? 0n : 1n)}–${start + BigInt(count)} of ${total} bids`
 export const bidReview = (lots: bigint, bidAttoEth: bigint, minimumAttoRepPerLot: bigint, decimals = 18, symbol = 'collateral') =>
-	`Bid ${formatUnits(bidAttoEth, decimals)} ${symbol} for ${lots} lots with at least ${formatEther(minimumAttoRepPerLot)} REP collateral per winning lot. Purchased REP backs the vault’s accepted collateral commitment immediately at closing. If better funded bids rule out this bid, its collateral can be refunded early; otherwise unused collateral refunds after closing.`
+	`Bid ${formatUnits(bidAttoEth, decimals)} ${symbol} for ${lots} lots with at least ${formatEther(minimumAttoRepPerLot)} REP per winning lot. At closing, that REP backs the position’s commitment. If your bid is outbid, you can get your collateral back early. Otherwise, unused collateral is refundable after closing.`
 
 export const maximumAdmissible = 'Highest currently admissible limit'
 export const noAdmissibleLimit = 'No admissible new limit'

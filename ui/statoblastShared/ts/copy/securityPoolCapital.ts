@@ -106,7 +106,7 @@ export const outcomeRateHint = 'Holding fees stop before reducing backing below 
 
 export const prepareTitle = 'Complete security pool setup'
 export const prepareHint = 'Each stage is one transaction with bounded deployment work. Until the origin universe forks, anyone can resume setup before deposits and purchases open.'
-export const prepareStages = ['1. Prepare settlement', '2. Prepare reporting and forks', '3. Prepare capital ledger', '4. Activate security pool']
+export const prepareStages = ['1. Set up claims & redemption', '2. Set up reporting & forks', '3. Set up capital', '4. Activate security pool']
 export const prepareProgress = (stage: number) => `${stage} of 4 setup stages complete`
 export const prepareProgressUnknown = 'Setup progress appears once the security pool account loads.'
 export const preparing = 'Preparing modules…'

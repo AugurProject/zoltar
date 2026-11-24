@@ -8,4 +8,4 @@ export const nonDecisionThresholdDefinition = 'The most REP one outcome can hold
 export const universeForkTerm = 'Universe fork'
 export const universeForkDefinition = 'When the universe forks, REP holders can split their migration balance into each child outcome they select.'
 export const universeTerm = 'Universe'
-export const universeDefinition = 'A separate REP ledger and set of security pools. Questions are global; the same question may be registered in multiple universes.'
+export const universeDefinition = 'A universe has its own REP and security pools. A question can be registered in multiple universes.'

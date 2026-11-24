@@ -245,7 +245,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 					},
 				},
 				async (walletAddress, activeWallet) => {
-					const questionLedgerAddress = parseAddressInput(resolveEffectiveTradingPoolAddressInput(), 'Question ledger address')
+					const questionLedgerAddress = parseAddressInput(resolveEffectiveTradingPoolAddressInput(), commonCopy.questionLedgerAddress)
 					const isOnActiveAppChain = isActiveAppChain(activeWallet.chainId)
 					const { details: latestTradingDetails, forkUniverse: latestForkUniverse } = await loadTradingState(questionLedgerAddress, walletAddress)
 					if (isActionSelectionCurrent()) {

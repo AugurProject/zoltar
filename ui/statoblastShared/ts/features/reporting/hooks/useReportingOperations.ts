@@ -133,7 +133,7 @@ export function useReportingOperations(
 	}
 	const isReportingSelectionCurrent = (selectionKey: string) => currentReportingSelectionKeyRef.current === selectionKey && currentAccountRef.current === accountAddress
 
-	const resolveReportingQuestionLedgerAddress = () => parseAddressInput(effectiveReportingPoolAddressInput, 'Question ledger address')
+	const resolveReportingQuestionLedgerAddress = () => parseAddressInput(effectiveReportingPoolAddressInput, commonCopy.questionLedgerAddress)
 
 	const readReporting = async () => {
 		const selectionKey = currentReportingSelectionKey

@@ -72,7 +72,7 @@ test('auction bidding sends only the reviewed collateral bid without REP approva
 	expect(state.requests).toHaveLength(1)
 	expect(last(state.requests)).toMatchObject({ account: owner, to: auctionAddress, value: 0n })
 	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'submitBid', args: [2n, 5n * unit, 12_000n] })
-	expect(last(state.requests).reviewDescription).toContain('Purchased REP backs')
+	expect(last(state.requests).reviewDescription).toContain('At closing, that REP backs the position’s commitment.')
 	await last(state.requests).validateBeforeSubmit?.()
 	state.values['lotAttoEth'] = 2n * unit
 	state.values['targetLots'] = 5n

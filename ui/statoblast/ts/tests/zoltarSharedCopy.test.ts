@@ -34,3 +34,7 @@ test('transaction actions and pending labels use sentence case independently of 
 	expect(simulationCopy.removeCorruptedSaves).toBe('Remove corrupted saved states')
 	expect(zoltarCopy.migratingRepPending).toBe('Migrating REP…')
 })
+
+test('the Statoblast question address label uses the glossary', () => {
+	expect(commonCopy.questionLedgerAddress).toBe('Question contract address')
+})

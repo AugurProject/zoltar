@@ -222,5 +222,5 @@ test('the first origin purchase registers an eligible question in the same trans
 	expect(decodeFunctionData({ abi, data: request.data }).functionName).toBe('createCompleteSet')
 	await request.validateBeforeSubmit?.()
 	source.setRead('isQuestionAllowed', false)
-	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('admission policy')
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('This question is not allowed by the security pool’s rules.')
 })

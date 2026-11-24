@@ -2,7 +2,7 @@ import { formatActionTense } from './transactionActionTenses.js'
 import { ethWrapped, wrapEthIntoWeth } from './transactionSteps.js'
 import type { CopyTemplateValue } from './types.js'
 
-export const questionLedger = 'Question ledger'
+export const questionLedger = 'Question contract'
 export const undefinedValue = 'undefined'
 export const nullValue = 'null'
 export const circularValue = '[circular value]'
