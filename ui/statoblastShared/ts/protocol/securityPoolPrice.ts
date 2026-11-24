@@ -1,5 +1,7 @@
 import { decodeEventLog, encodeFunctionData, getAddress, parseAbi, parseAbiItem, toEventSelector, zeroAddress, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { getErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
+import { decodeStoredValue } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
+import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hasOpenOracleFlag, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { loadSecurityPoolPriceSnapshot, type SecurityPoolPriceSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -9,6 +11,7 @@ import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { getOpenOracleSettleGasLimit } from './openOracle.js'
 import { loadOpenOracleStoredState } from './openOracleState.js'
 import { securityPoolReadClient, type SecurityPoolTransaction } from './securityPool.js'
+import { statoblastDisplayCache } from './statoblastPageCache.js'
 
 const abi = parseAbi([
 	'function reportCandidates(uint256 id) view returns (address escrow,address sponsor,address coordinator,uint256 maxSettlementBaseFee)',
@@ -86,6 +89,23 @@ function releasedCredit(value: unknown) {
 	return amount > 1n ? amount - 1n : 0n
 }
 export type SecurityPoolPriceReport = Awaited<ReturnType<typeof loadSecurityPoolPriceReport>>
+
+export function securityPoolPriceReportCache(profile: NetworkProfile, pool: Address, universeId: bigint, owner: Address, reportId: bigint) {
+	return statoblastDisplayCache(profile, { universeId, owner, page: `price-report:${pool.toLowerCase()}:${reportId}` }, value =>
+		decodeStoredValue(value, read => ({
+			reportId,
+			sponsor: read.address('sponsor'),
+			outcome: read.bigint('outcome'),
+			state: { settled: read.record('state').boolean('settled') },
+			eligibleAt: read.bigint('eligibleAt'),
+			baseFeePerGas: read.optional('baseFeePerGas', read.bigint),
+			maxSettlementBaseFee: read.bigint('maxSettlementBaseFee'),
+			wethCredit: read.bigint('wethCredit'),
+			repCredit: read.bigint('repCredit'),
+			collateralToken: read.address('collateralToken'),
+		})),
+	)
+}
 export function buildSecurityPoolPriceSettlement(snapshot: SecurityPoolPriceSnapshot, report: SecurityPoolPriceReport): SecurityPoolTransaction {
 	if (snapshot.observation === undefined) throw new Error('Branch price feed is unavailable.')
 	return {

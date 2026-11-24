@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { decodeFunctionData, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { unscopedTransaction } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
@@ -78,6 +78,31 @@ test('auction bidding sends only the reviewed collateral bid without REP approva
 	state.values['targetLots'] = 5n
 	await expect(last(state.requests).validateBeforeSubmit?.()).rejects.toThrow()
 	expect(state.requests).toHaveLength(1)
+})
+
+test('a visited bid page stays readable after remount when the auction RPC fails', async () => {
+	const state = await setup()
+	const bid = firstBid(state, 'verified bid')
+	const failed = state.client.extend(() => ({
+		getBlock: async () => {
+			throw new Error('RPC unavailable')
+		},
+	}))
+	installActiveEnvironmentForTesting({ ...state.backend, createReadClient: () => failed })
+	const restored = await renderHookWithProps(useSecurityPoolAuction, { fork: state.fork, bidder: owner, actions: state.actions })
+	lifecycle.trackRendered(restored)
+	await waitFor(() => expect(restored.state().error).toContain('RPC unavailable'))
+	expect(restored.state().snapshot?.auction?.bids[0]).toEqual(bid)
+	expect(restored.state().claimReason(bid)).toContain('RPC unavailable')
+	await expect(restored.state().claim(bid)).rejects.toThrow('RPC unavailable')
+	expect(state.requests).toHaveLength(0)
+	const child = state.fork.branch
+	if (child === undefined) throw new Error('Missing branch')
+	await restored.setProps({ fork: undefined, savedBranch: { securityPool: state.fork.securityPool, universeId: child.universeId } })
+	expect(restored.state().snapshot?.auction?.bids[0]).toEqual(bid)
+	expect(restored.state().claimReason(bid)).toContain('Select a fork branch')
+	await restored.setProps({ savedBranch: { securityPool: state.fork.securityPool, universeId: child.universeId + 1n } })
+	expect(restored.state().snapshot).toBeUndefined()
 })
 
 test('chosen health, integer lots and price grid are checked before sending', async () => {

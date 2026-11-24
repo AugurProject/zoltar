@@ -1,6 +1,8 @@
 import { readUnavailable } from './securityPool.js'
 
 export const reportBaseFee = 'Block base fee'
+export const readTimeout = 'Price report read timed out. Try again.'
+export const savedReport = 'Saved report details'
 export const reportBaseFeeCeiling = 'Report base-fee ceiling'
 export const reportBaseFeeUnit = 'nanoETH/gas'
 export const waitForBaseFee = 'Wait for the block base fee to fall to the report’s ceiling.'

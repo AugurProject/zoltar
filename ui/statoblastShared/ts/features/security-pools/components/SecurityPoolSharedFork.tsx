@@ -195,10 +195,10 @@ export function SecurityPoolSharedFork({ redesigned = false, forkQuestion, onBra
 				</ol>
 			</SectionBlock>
 			<div ref={priceSection} tabIndex={-1}>
-				<SecurityPoolPriceReport hideReportingDeadline={redesigned} scope='branch' target={priceTarget} actions={parameters.actions} bidder={parameters.bidder} referencePrice={parameters.snapshot?.acceptedPrice} onPriceAccepted={setPricedBranch} />
+				<SecurityPoolPriceReport hideReportingDeadline={redesigned} scope='branch' target={priceTarget} displayTarget={priceTarget ?? model.savedBranch} actions={parameters.actions} bidder={parameters.bidder} referencePrice={parameters.snapshot?.acceptedPrice} onPriceAccepted={setPricedBranch} />
 			</div>
 			<div ref={auctionSection} tabIndex={-1}>
-				<SecurityPoolRepairAuction fork={state} actions={parameters.actions} bidder={parameters.bidder} openVault={parameters.openVault} onAuctionFinalized={setFinalizedAuctionBranch} />
+				<SecurityPoolRepairAuction fork={state} savedBranch={model.savedBranch} actions={parameters.actions} bidder={parameters.bidder} openVault={parameters.openVault} onAuctionFinalized={setFinalizedAuctionBranch} />
 			</div>
 			<SectionBlock title={pageCopy.shareRecovery}>
 				<WorkflowSubsection title={copy.basketTitle}>

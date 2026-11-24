@@ -320,6 +320,7 @@ export function SecurityPoolsSection({
 							redesigned
 							scope='universe'
 							target={accountPriceTarget(model.snapshot)}
+							displayTarget={accountPriceTarget(shown)}
 							actions={actions}
 							bidder={parameters.accountAddress}
 							returnFundsOnly={(shown?.forkTime ?? 0n) > 0n}
@@ -335,6 +336,7 @@ export function SecurityPoolsSection({
 							forkQuestion={forkQuestion}
 							onBranchCommitted={onBranchCommitted}
 							snapshot={model.snapshot}
+							presentationSnapshot={shown}
 							actions={actions}
 							bidder={parameters.accountAddress}
 							openUniverse={universeId => {

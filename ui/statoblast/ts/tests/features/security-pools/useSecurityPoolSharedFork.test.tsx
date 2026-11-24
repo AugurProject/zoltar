@@ -96,6 +96,24 @@ function fillMigrationDraft(hook: Awaited<ReturnType<typeof setup>>['hook']) {
 	hook.state().setYesRights('2')
 	hook.state().setNoRights('3')
 }
+test('a previously verified branch identifies its saved views before live fork data returns', async () => {
+	const { hook, parameters, snapshot, setChosen } = await setup()
+	const branch = hook.state().state?.branch
+	if (branch === undefined) throw new Error('Missing verified branch')
+	setChosen(true)
+	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'aa'.repeat(32)}` } })
+	await waitFor(() => expect(hook.state().state?.choice.recorded).toBe(true))
+	const restored = await renderHookWithProps(useSecurityPoolSharedFork, { ...parameters, snapshot: undefined, presentationSnapshot: snapshot })
+	lifecycle.trackRendered(restored)
+	expect(restored.state().savedBranch?.universeId).toBe(branch.universeId)
+	await act(() => restored.state().setOutcome('1'))
+	expect(restored.state().state).toBeUndefined()
+	expect(restored.state().savedBranch?.universeId).toBe(branch.universeId)
+	expect(restored.state().chooseReason).toContain('Checking fork status')
+	await act(() => restored.state().setOutcome('2'))
+	expect(restored.state().savedBranch).toBeUndefined()
+})
+
 test('one irreversible choice has an explicit review and rechecks the strict native cutoff', async () => {
 	const { hook, requests, source, snapshot } = await setup()
 	expect(hook.state().chooseReason).toBeUndefined()

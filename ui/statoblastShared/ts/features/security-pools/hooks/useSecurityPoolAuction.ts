@@ -1,7 +1,7 @@
 import { encodeFunctionData } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { useSignal } from '@preact/signals'
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useMemo, useRef } from 'preact/hooks'
 import { parseUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
 	buildSecurityPoolAuctionBidRequest,
@@ -17,24 +17,26 @@ import {
 	type SecurityPoolForkSnapshot,
 } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getActiveBackend, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
-import { loadSecurityPoolBranchAuction } from '../../../protocol/securityPoolRepairAuction.js'
+import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
+import { loadSecurityPoolBranchAuction, securityPoolAuctionCache } from '../../../protocol/securityPoolRepairAuction.js'
 import type { SecurityPoolTransaction } from '../../../protocol/securityPool.js'
 import type { SecurityPoolSharedForkParameters } from './useSecurityPoolSharedFork.js'
 import { securityPoolAmountOrUndefined, securityPoolUnsignedId } from '../lib/draft.js'
 import * as copy from '../../../copy/securityPoolRepairAuction.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 
-export type SecurityPoolAuctionParameters = { fork: SecurityPoolForkSnapshot | undefined; bidder: Address | undefined; actions: SecurityPoolSharedForkParameters['actions']; openVault?: ((vault: Address, universeId: bigint) => void) | undefined }
-export function useSecurityPoolAuction({ fork, bidder, actions, openVault }: SecurityPoolAuctionParameters) {
+export type SecurityPoolAuctionParameters = { fork: SecurityPoolForkSnapshot | undefined; savedBranch?: { securityPool: Address; universeId: bigint } | undefined; bidder: Address | undefined; actions: SecurityPoolSharedForkParameters['actions']; openVault?: ((vault: Address, universeId: bigint) => void) | undefined }
+export function useSecurityPoolAuction({ fork, savedBranch, bidder, actions, openVault }: SecurityPoolAuctionParameters) {
 	const backend = getActiveBackend()
+	const profile = getActiveNetworkProfile()
 	const lotsInput = useSignal('')
 	const repInput = useSignal('')
 	const healthInput = useSignal('120')
 	const pageStart = useSignal(0n)
 	const version = useSignal(0)
-	const loaded = useSignal<{ identity: string; key: string; snapshot?: Awaited<ReturnType<typeof loadSecurityPoolBranchAuction>> | undefined; error?: string } | undefined>(undefined)
+	const loaded = useSignal<{ backend: typeof backend; page: string; key: string; snapshot?: Awaited<ReturnType<typeof loadSecurityPoolBranchAuction>> | undefined; readAt?: number | undefined; error?: string } | undefined>(undefined)
 	const identity = fork?.branch === undefined || bidder === undefined ? undefined : `${backend.id}:${fork.securityPool}:${bidder}:${fork.branch.universeId}`
 	const currentIdentity = useRef(identity)
 	currentIdentity.current = identity
@@ -47,27 +49,37 @@ export function useSecurityPoolAuction({ fork, bidder, actions, openVault }: Sec
 		healthInput.value = '120'
 		pageStart.value = 0n
 	}, [backend, bidder, identity])
-	const key = `${identity}:${fork?.blockHash}:${pageStart.value}:${version.value}`
+	const shownPool = fork?.branch === undefined ? savedBranch?.securityPool : fork.securityPool
+	const shownUniverse = fork?.branch?.universeId ?? savedBranch?.universeId
+	const page = `${profile.id}:${shownPool}:${bidder}:${shownUniverse}:${pageStart.value}`
+	const key = `${page}:${fork?.blockHash}:${version.value}`
+	const cache = useMemo(() => (shownPool === undefined || shownUniverse === undefined || bidder === undefined ? undefined : securityPoolAuctionCache(profile, shownPool, shownUniverse, bidder, pageStart.value)), [profile, shownPool, shownUniverse, bidder, pageStart.value])
+	const saved = useMemo(() => cache?.read(), [cache, key])
 	useEffect(() => {
 		let active = true
 		if (fork?.branch !== undefined && bidder !== undefined && identity !== undefined) {
-			void loadSecurityPoolBranchAuction(createConnectedReadClient(), fork.securityPool, bidder, fork.branch.universeId, pageStart.value)
+			void withTimeout(loadSecurityPoolBranchAuction(createConnectedReadClient(), fork.securityPool, bidder, fork.branch.universeId, pageStart.value), 15_000, copy.readTimeout)
 				.then(snapshot => {
-					if (active && getActiveBackend() === backend) loaded.value = { identity, key, snapshot }
+					if (!active || getActiveBackend() !== backend) return
+					if (snapshot.auction !== undefined) cache?.write({ ...snapshot, auction: snapshot.auction }, { number: snapshot.blockNumber, timestamp: snapshot.timestamp })
+					loaded.value = { backend, page, key, snapshot, readAt: Date.now() }
 				})
 				.catch(error => {
-					if (active && getActiveBackend() === backend) loaded.value = { identity, key, snapshot: loaded.value?.identity === identity ? loaded.value.snapshot : undefined, error: getErrorMessage(error, copy.loadError) }
+					if (active && getActiveBackend() === backend) {
+						const previousPage = loaded.value?.backend === backend && loaded.value.page === page ? loaded.value : undefined
+						loaded.value = { backend, page, key, snapshot: previousPage?.snapshot, readAt: previousPage?.readAt, error: getErrorMessage(error, copy.loadError) }
+					}
 				})
 		}
 		return () => {
 			active = false
 		}
-	}, [backend, key])
-	const presentationIdentity = identity ?? (previous.current?.backend === backend && previous.current.bidder === bidder ? previous.current.identity : undefined)
-	const current = loaded.value?.identity === presentationIdentity ? loaded.value : undefined
+	}, [backend, cache, key])
+	const current = loaded.value?.backend === backend && loaded.value.page === page ? loaded.value : undefined
 	const snapshot = current?.snapshot
 	const loading = identity !== undefined && current?.key !== key
 	const baseReason = (bidder === undefined ? copy.connect : undefined) ?? (fork?.branch === undefined ? copy.selectBranch : undefined) ?? current?.error ?? (loading || snapshot === undefined ? copy.loading : undefined)
+	const savedSnapshot = snapshot === undefined ? saved : undefined
 	const auction = snapshot?.auction
 	const auctionReason = baseReason ?? (auction === undefined ? copy.noAuction : undefined)
 	const openReason = baseReason ?? (snapshot === undefined ? copy.loading : securityPoolAuctionOpeningReason(snapshot))
@@ -171,7 +183,9 @@ export function useSecurityPoolAuction({ fork, bidder, actions, openVault }: Sec
 				},
 				verifyQuote,
 			),
-		snapshot,
+		snapshot: snapshot ?? savedSnapshot?.value,
+		savedAt: savedSnapshot?.savedAt ?? (loading || current?.error !== undefined || fork?.branch === undefined ? current?.readAt : undefined),
+		manageReadReason: baseReason,
 		quote,
 		loading,
 		error: current?.error,

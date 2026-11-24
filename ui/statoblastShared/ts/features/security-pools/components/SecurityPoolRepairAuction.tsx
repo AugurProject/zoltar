@@ -18,10 +18,12 @@ import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import type { SecurityPoolAuctionBid } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import * as copy from '../../../copy/securityPoolRepairAuction.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
+import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 
 export function SecurityPoolRepairAuction({ onAuctionFinalized, ...parameters }: SecurityPoolAuctionParameters & { onAuctionFinalized?: ((universeId: bigint) => void) | undefined }) {
 	const model = useSecurityPoolAuction(parameters)
 	const snapshot = model.snapshot
+	const loadingDetails = model.loading && snapshot === undefined
 	const auction = snapshot?.auction
 	const childUniverse = parameters.fork?.branch?.universeId
 	useEffect(() => {
@@ -43,29 +45,34 @@ export function SecurityPoolRepairAuction({ onAuctionFinalized, ...parameters }:
 		<WorkflowSubsection title={copy.title}>
 			<UserMessage detail={copy.description} />
 			{model.error === undefined ? undefined : <UserMessage tone='error' detail={model.error} />}
+			{model.savedAt !== undefined && (
+				<p className='detail'>
+					{copy.savedBids} <UpdatedAgo updatedAt={model.savedAt} />
+				</p>
+			)}
 			<MetricGrid>
-				<MetricField label={copy.status} loading={model.loading}>
+				<MetricField label={copy.status} loading={loadingDetails}>
 					{auction === undefined ? undefined : status}
 				</MetricField>
 				<MetricField label={copy.closes}>
 					<TimestampValue timestamp={auction?.closesAt} relative={false} />
 				</MetricField>
-				<MetricField label={copy.inventory} loading={model.loading}>
+				<MetricField label={copy.inventory} loading={loadingDetails}>
 					<CurrencyValue value={auction?.inventoryAttoRep} suffix={common.rep} />
 				</MetricField>
-				<MetricField label={copy.shortfall} loading={model.loading}>
+				<MetricField label={copy.shortfall} loading={loadingDetails}>
 					<CurrencyValue value={auction?.shortfallAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 				</MetricField>
 			</MetricGrid>
 			<SecurityPoolButton model={parameters.actions} action='openSecurityPoolAuction' label={copy.open} pendingLabel={copy.opening} reason={model.openReason} onClick={model.open} />
 			<MetricGrid>
-				<MetricField label={copy.lotPrice} loading={model.loading}>
+				<MetricField label={copy.lotPrice} loading={loadingDetails}>
 					<CurrencyValue value={auction?.lotAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 				</MetricField>
-				<MetricField label={copy.minimumCollateral} loading={model.loading}>
+				<MetricField label={copy.minimumCollateral} loading={loadingDetails}>
 					<CurrencyValue value={auction?.opened ? auction.minimumCollateralAttoRepPerLot : undefined} suffix={common.rep} />
 				</MetricField>
-				<MetricField label={auction?.finalized ? copy.clearingRep : copy.maximumAdmissible} loading={model.loading}>
+				<MetricField label={auction?.finalized ? copy.clearingRep : copy.maximumAdmissible} loading={loadingDetails}>
 					{noAdmissibleLimit ? copy.noAdmissibleLimit : <CurrencyValue value={displayedAttoRepPerLot} suffix={common.rep} />}
 				</MetricField>
 			</MetricGrid>
@@ -115,8 +122,7 @@ export function SecurityPoolRepairAuction({ onAuctionFinalized, ...parameters }:
 				let refundAttoEth = bid.earlyRefundAttoEth > 0n ? bid.earlyRefundAttoEth : undefined
 				if (bid.refundSettled) refundAttoEth = bid.lots * auction.lotAttoEth
 				if (bid.fill !== undefined) refundAttoEth = bid.fill.refundAttoEth
-				const manageReason =
-					(disabled ? copy.busy : undefined) ?? (model.loading ? copy.loading : undefined) ?? (bid.fill === undefined || bid.fill.filledLots === 0n ? copy.managePending : undefined) ?? (!bid.materialized ? copy.activateFirst : undefined) ?? (parameters.openVault === undefined ? copy.manageUnavailable : undefined)
+				const manageReason = (disabled ? copy.busy : undefined) ?? model.manageReadReason ?? (bid.fill === undefined || bid.fill.filledLots === 0n ? copy.managePending : undefined) ?? (!bid.materialized ? copy.activateFirst : undefined) ?? (parameters.openVault === undefined ? copy.manageUnavailable : undefined)
 				return (
 					<article key={bid.id.toString()}>
 						<h5>

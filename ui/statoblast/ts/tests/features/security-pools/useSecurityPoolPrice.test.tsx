@@ -199,6 +199,26 @@ test('settlement and recovery remain independent after funding closes', async ()
 	expect(state.requests).toHaveLength(3)
 })
 
+test('an older report remains readable on a cold open while its RPC reads are unavailable', async () => {
+	const state = await setup()
+	await act(() => state.hook.state().setReportId('9'))
+	await waitFor(() => expect(state.hook.state().report?.wethCredit).toBe(2n * unit))
+	const failedClient = state.client.extend(() => ({
+		getBlock: async () => {
+			throw new Error('RPC unavailable')
+		},
+	}))
+	installActiveEnvironmentForTesting({ ...state.backend, createReadClient: () => failedClient })
+	const restored = await renderHookWithProps(useSecurityPoolPrice, { scope: 'branch', target: state.target, actions: state.actions })
+	lifecycle.trackRendered(restored)
+	await act(() => restored.state().setReportId('9'))
+	await waitFor(() => expect(restored.state().error).toContain('RPC unavailable'))
+	expect(restored.state().report).toMatchObject({ reportId: 9n, wethCredit: 2n * unit, repCredit: 4n * unit })
+	expect(restored.state().withdrawReason).toContain('RPC unavailable')
+	await expect(restored.state().withdraw()).rejects.toThrow('RPC unavailable')
+	expect(state.requests).toHaveLength(0)
+})
+
 test('settlement can complete OpenOracle above the price-acceptance ceiling', async () => {
 	const state = await setup(fixture => {
 		fixture.values['pendingReportId'] = 9n

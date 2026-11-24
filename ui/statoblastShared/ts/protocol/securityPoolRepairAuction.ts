@@ -1,7 +1,10 @@
 import { collateralPresentation } from './collateral.js'
 import { getAddress, parseAbi, type AbiValue, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { decodeAuctionVaultBindings, loadSecurityPoolAuctionSnapshot, predictAuctionVaultAddress, verifyAuctionVaultCode } from '@zoltar/statoblast-shared/statoblast/securityPool'
+import { decodeAuctionVaultBindings, loadSecurityPoolAuctionSnapshot, predictAuctionVaultAddress, verifyAuctionVaultCode, type SecurityPoolAuctionBid } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import { decodeStoredValue, isStoredRecord } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
+import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { statoblastDisplayCache } from './statoblastPageCache.js'
 import {
 	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
 	statoblast_SecurityPoolCapitalLifecycleDelegate_SecurityPoolCapitalLifecycleDelegate as lifecycleArtifact,
@@ -70,6 +73,74 @@ export async function loadSecurityPoolBranchAuction(client: ReadClient, security
 	const [block, chainId] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
 	if (block.hash !== snapshot.blockHash || chainId !== snapshot.chainId) throw new Error('Auction authentication changed. Refresh and retry.')
 	return { ...snapshot, collateral: collateralPresentation(snapshot.collateralToken) }
+}
+
+function decodeAuctionBid(value: unknown): SecurityPoolAuctionBid | undefined {
+	return decodeStoredValue(value, read => {
+		const fill = read.optional('fill', read.record)
+		const position = read.optional('position', read.record)
+		return {
+			id: read.bigint('id'),
+			bidder: read.address('bidder'),
+			vault: read.address('vault'),
+			targetHealthFactorBps: read.bigint('targetHealthFactorBps'),
+			lots: read.bigint('lots'),
+			minimumAttoRepPerLot: read.bigint('minimumAttoRepPerLot'),
+			refundSettled: read.boolean('refundSettled'),
+			earlyRefundAttoEth: read.bigint('earlyRefundAttoEth'),
+			materialized: read.boolean('materialized'),
+			fill: fill && { filledLots: fill.bigint('filledLots'), usedAttoEth: fill.bigint('usedAttoEth'), refundAttoEth: fill.bigint('refundAttoEth'), principalAttoRep: fill.bigint('principalAttoRep') },
+			position: position && {
+				positionId: position.bigint('positionId'),
+				principalAttoRep: position.bigint('principalAttoRep'),
+				commitmentAttoEth: position.bigint('commitmentAttoEth'),
+				targetHealthFactorBps: position.bigint('targetHealthFactorBps'),
+				liquidationStarted: position.bigint('liquidationStarted'),
+				materialized: position.boolean('materialized'),
+				earnedAttoEth: position.bigint('earnedAttoEth'),
+				earnedAttoRep: position.bigint('earnedAttoRep'),
+			},
+		}
+	})
+}
+
+export function securityPoolAuctionCache(profile: NetworkProfile, pool: Address, universeId: bigint, bidder: Address, start: bigint) {
+	return statoblastDisplayCache(profile, { universeId, owner: bidder, page: `auction:${pool.toLowerCase()}:${start}` }, value => {
+		if (!isStoredRecord(value) || !isStoredRecord(value['auction']) || !Array.isArray(value['auction']['bids']) || value['auction']['bids'].length > 16) return undefined
+		const bids: SecurityPoolAuctionBid[] = []
+		for (const raw of value['auction']['bids']) {
+			const bid = decodeAuctionBid(raw)
+			if (bid === undefined || bid.bidder.toLowerCase() !== bidder.toLowerCase()) return undefined
+			bids.push(bid)
+		}
+		return decodeStoredValue(value, read => {
+			const auction = read.record('auction')
+			const clearing = auction.optional('clearing', auction.record)
+			return {
+				universeId,
+				timestamp: read.bigint('timestamp'),
+				collateral: collateralPresentation(read.address('collateralToken')),
+				collateralAllowance: read.bigint('collateralAllowance'),
+				auction: {
+					address: auction.address('address'),
+					opened: auction.boolean('opened'),
+					finalized: auction.boolean('finalized'),
+					closesAt: auction.bigint('closesAt'),
+					inventoryAttoRep: auction.bigint('inventoryAttoRep'),
+					shortfallAttoEth: auction.bigint('shortfallAttoEth'),
+					lotAttoEth: auction.bigint('lotAttoEth'),
+					minimumCollateralAttoRepPerLot: auction.bigint('minimumCollateralAttoRepPerLot'),
+					maximumAdmissibleBidAttoRepPerLot: auction.bigint('maximumAdmissibleBidAttoRepPerLot'),
+					repGrid: auction.bigint('repGrid'),
+					clearing: clearing && { attoRepPerLot: clearing.bigint('attoRepPerLot') },
+					refundAttoEth: auction.bigint('refundAttoEth'),
+					bidStart: auction.bigint('bidStart'),
+					totalBidCount: auction.bigint('totalBidCount'),
+					bids,
+				},
+			}
+		})
+	})
 }
 
 /** Authenticate one selected vault directly, including its original branch after later forks. */

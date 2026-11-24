@@ -1,11 +1,12 @@
 import { collateralPresentation } from '../../../protocol/collateral.js'
 import { useSignal } from '@preact/signals'
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useMemo, useRef } from 'preact/hooks'
 import { formatEther, formatUnits, getAddress, isAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { buildSecurityPoolPriceApprovalRequest, buildSecurityPoolPricePreparationRequest, buildSecurityPoolPriceRequest, buildSecurityPoolPriceWrapRequest, quoteSecurityPoolPriceFunding, type SecurityPoolForkSnapshot, type SecurityPoolPriceSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getActiveBackend, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
+import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import {
 	buildSecurityPoolPriceFundingWithdrawal,
 	buildSecurityPoolPriceTokenWithdrawal,
@@ -13,6 +14,7 @@ import {
 	buildSecurityPoolPriceSettlement,
 	loadSecurityPoolBranchPrice,
 	loadSecurityPoolPriceReport,
+	securityPoolPriceReportCache,
 	submittedSecurityPoolPriceReport,
 	type SecurityPoolPriceReport,
 } from '../../../protocol/securityPoolPrice.js'
@@ -61,23 +63,26 @@ function securityPoolPriceAction(scope: copy.SecurityPoolPriceScope, name: keyof
 export type SecurityPoolPriceParameters = {
 	scope: copy.SecurityPoolPriceScope
 	target: SecurityPoolPriceTarget | undefined
+	displayTarget?: SecurityPoolPriceTarget | undefined
 	bidder?: Address | undefined
 	actions: SecurityPoolSharedForkParameters['actions']
 	/** Compared with the proposed price until this branch's feed has accepted one of its own. */
 	referencePrice?: bigint | undefined
 }
-export function useSecurityPoolPrice({ scope, target, bidder, actions, referencePrice }: SecurityPoolPriceParameters) {
+export function useSecurityPoolPrice({ scope, target, displayTarget = target, bidder, actions, referencePrice }: SecurityPoolPriceParameters) {
 	const backend = getActiveBackend()
+	const profile = getActiveNetworkProfile()
 	const scoped = copy.scopes[scope]
 	const priceInput = useSignal('')
 	const wethInput = useSignal('')
 	const reportInput = useSignal('')
 	const recipientInput = useSignal<{ reportId: bigint; value: string } | undefined>(undefined)
 	const version = useSignal(0)
-	const loaded = useSignal<{ key: string; snapshot?: SecurityPoolPriceSnapshot; error?: string } | undefined>(undefined)
-	const reports = useSignal<{ key: string; report?: SecurityPoolPriceReport; error?: string } | undefined>(undefined)
-	const sponsor = bidder ?? target?.owner
-	const identity = target === undefined ? undefined : `${target.securityPool}:${sponsor}:${target.universeId}`
+	const loaded = useSignal<{ backend: typeof backend; key: string; snapshot?: SecurityPoolPriceSnapshot; error?: string } | undefined>(undefined)
+	const reports = useSignal<{ backend: typeof backend; key: string; report?: SecurityPoolPriceReport; error?: string } | undefined>(undefined)
+	const shownTarget = target ?? displayTarget
+	const sponsor = bidder ?? shownTarget?.owner
+	const identity = shownTarget === undefined ? undefined : `${shownTarget.securityPool}:${sponsor}:${shownTarget.universeId}`
 	const previous = useRef<{ backend: typeof backend; identity: string }>()
 	const loadedReference = useRef<{ backend: typeof backend; identity: string; price: bigint | undefined; collateralToken: Address | undefined }>()
 	useEffect(() => {
@@ -93,48 +98,55 @@ export function useSecurityPoolPrice({ scope, target, bidder, actions, reference
 		let active = true
 		loaded.value = undefined
 		if (target !== undefined && sponsor !== undefined) {
-			void loadSecurityPoolBranchPrice(createConnectedReadClient(), target.securityPool, sponsor, target.universeId)
+			void withTimeout(loadSecurityPoolBranchPrice(createConnectedReadClient(), target.securityPool, sponsor, target.universeId), 15_000, copy.readTimeout)
 				.then(snapshot => {
-					if (active && getActiveBackend() === backend) loaded.value = { key, snapshot }
+					if (active && getActiveBackend() === backend) loaded.value = { backend, key, snapshot }
 				})
 				.catch(error => {
-					if (active && getActiveBackend() === backend) loaded.value = { key, error: getErrorMessage(error, 'Unable to load price requirements.') }
+					if (active && getActiveBackend() === backend) loaded.value = { backend, key, error: getErrorMessage(error, 'Unable to load price requirements.') }
 				})
 		}
 		return () => {
 			active = false
 		}
 	}, [backend, key])
-	const current = loaded.value?.key === key ? loaded.value : undefined
+	const current = loaded.value?.backend === backend && loaded.value.key === key ? loaded.value : undefined
 	const snapshot = current?.snapshot
 	// The target reloads on every block, so its last loaded reference stands in until the next load instead of the security pool's price.
 	if (loadedReference.current?.backend !== backend || (identity !== undefined && loadedReference.current.identity !== identity)) loadedReference.current = undefined
-	const collateral = collateralPresentation(snapshot?.observation?.weth ?? loadedReference.current?.collateralToken)
 	// `previous` updates after the render that follows a backend change, so a snapshot from the old environment cannot set the new reference.
 	if (identity !== undefined && snapshot !== undefined && previous.current?.backend === backend) {
 		const observation = snapshot.observation
 		loadedReference.current = { backend, identity, collateralToken: observation?.weth, price: observation !== undefined && observation.lastSettlementTimestamp !== 0n ? observation.lastPrice : referencePrice }
 	}
 	const reportId = reportInput.value.trim() === '' ? snapshot?.observation?.pendingReportId : securityPoolUnsignedId(reportInput.value)
+	const cache = useMemo(() => (shownTarget === undefined || sponsor === undefined || reportId === undefined || reportId === 0n ? undefined : securityPoolPriceReportCache(profile, shownTarget.securityPool, shownTarget.universeId, sponsor, reportId)), [profile, identity, reportId])
+	const saved = useMemo(() => cache?.read(), [cache, version.value, snapshot?.blockHash])
 	const reportKey = `${key}:${snapshot?.blockHash}:${reportId}`
 	useEffect(() => {
 		let active = true
 		reports.value = undefined
 		if (snapshot !== undefined && snapshot.observation !== undefined && reportId !== undefined && reportId > 0n) {
-			void loadSecurityPoolPriceReport(createConnectedReadClient(), snapshot, reportId)
+			const collateralToken = snapshot.observation.weth
+			void withTimeout(loadSecurityPoolPriceReport(createConnectedReadClient(), snapshot, reportId), 15_000, copy.readTimeout)
 				.then(report => {
-					if (active && getActiveBackend() === backend) reports.value = { key: reportKey, report }
+					if (!active || getActiveBackend() !== backend) return
+					const { sponsor, outcome, eligibleAt, baseFeePerGas, maxSettlementBaseFee, wethCredit, repCredit } = report
+					cache?.write({ reportId, sponsor, outcome, state: { settled: report.state.settled }, eligibleAt, baseFeePerGas, maxSettlementBaseFee, wethCredit, repCredit, collateralToken }, { number: snapshot.blockNumber, timestamp: snapshot.timestamp })
+					reports.value = { backend, key: reportKey, report }
 				})
 				.catch(error => {
-					if (active && getActiveBackend() === backend) reports.value = { key: reportKey, error: getErrorMessage(error, 'Unable to load the selected price report.') }
+					if (active && getActiveBackend() === backend) reports.value = { backend, key: reportKey, error: getErrorMessage(error, 'Unable to load the selected price report.') }
 				})
 		}
 		return () => {
 			active = false
 		}
-	}, [backend, reportKey])
-	const reportState = reports.value?.key === reportKey ? reports.value : undefined
+	}, [backend, cache, reportKey])
+	const reportState = reports.value?.backend === backend && reports.value.key === reportKey ? reports.value : undefined
 	const report = reportState?.report
+	const savedReport = report === undefined ? saved : undefined
+	const collateral = collateralPresentation(snapshot?.observation?.weth ?? savedReport?.value.collateralToken ?? loadedReference.current?.collateralToken)
 	const price = securityPoolAmountOrUndefined(priceInput.value, 36 - collateral.decimals)
 	const requestedWeth = wethInput.value.trim() === '' ? 0n : securityPoolAmountOrUndefined(wethInput.value, collateral.decimals)
 	let funding: ReturnType<typeof quoteSecurityPoolPriceFunding> | undefined
@@ -266,7 +278,9 @@ export function useSecurityPoolPrice({ scope, target, bidder, actions, reference
 		proposedPrice: price,
 		comparisonPrice: loadedReference.current?.price,
 		snapshot,
-		report,
+		report: report ?? savedReport?.value,
+		savedReportAt: savedReport?.savedAt,
+		savedReportTimestamp: savedReport?.timestamp,
 		funding,
 		minimumWethAttoEth,
 		reportingDeadline,

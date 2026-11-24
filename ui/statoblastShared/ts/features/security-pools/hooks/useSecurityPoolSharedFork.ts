@@ -1,5 +1,5 @@
 import { useSignal } from '@preact/signals'
-import { useEffect, useRef } from 'preact/hooks'
+import { useEffect, useMemo, useRef } from 'preact/hooks'
 import { formatUnits, getAddress, isAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
 	buildSecurityPoolForkChoiceRequest,
@@ -12,23 +12,37 @@ import {
 	type SecurityPoolForkSnapshot,
 } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getActiveBackend, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
+import { decodeStoredValue } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
+import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { securityPoolReadClient, type SecurityPoolAccountSnapshot, type SecurityPoolTransaction } from '../../../protocol/securityPool.js'
 import { loadSharedForkOutcome, loadSecurityPoolSourceRecovery, buildSecurityPoolRecoveryPreparation } from '../../../protocol/securityPoolSharedFork.js'
 import { securityPoolAmountOrUndefined, securityPoolUnsignedId } from '../lib/draft.js'
 import type { SecurityPoolActions } from '../components/SecurityPoolControls.js'
 import * as copy from '../../../copy/securityPoolSharedFork.js'
+import { branchPriceTarget } from './useSecurityPoolPrice.js'
+import { statoblastDisplayCache } from '../../../protocol/statoblastPageCache.js'
+import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 
 export type SecurityPoolSharedForkParameters = {
 	snapshot: SecurityPoolAccountSnapshot | undefined
+	presentationSnapshot?: SecurityPoolAccountSnapshot | undefined
 	actions: Pick<SecurityPoolActions, 'scope' | 'busy' | 'ownerReason' | 'runSecurityPoolAction'>
 	openUniverse: (universeId: bigint) => void
 	bidder?: Address | undefined
 	openVault?: ((vault: Address, universeId: bigint) => void) | undefined
 }
-export function useSecurityPoolSharedFork({ snapshot: securityPool, actions, openUniverse }: SecurityPoolSharedForkParameters) {
+
+function branchDisplayCache(profile: NetworkProfile, pool: Address, owner: Address, universeId: bigint, outcomeIndex?: bigint) {
+	return statoblastDisplayCache(profile, { universeId, owner, page: `fork-branch:${pool.toLowerCase()}:${outcomeIndex ?? 'chosen'}` }, value =>
+		decodeStoredValue(value, read => ({ securityPool: pool, owner, universeId: read.bigint('universeId'), blockHash: read.string('blockHash'), started: read.boolean('started'), reportingDeadline: read.optional('reportingDeadline', read.bigint) })),
+	)
+}
+
+export function useSecurityPoolSharedFork({ snapshot: securityPool, presentationSnapshot = securityPool, actions, openUniverse }: SecurityPoolSharedForkParameters) {
 	const backend = getActiveBackend()
+	const profile = getActiveNetworkProfile()
 	const sourceInput = useSignal('')
 	const outcomeInput = useSignal('')
 	const questionInput = useSignal('')
@@ -37,15 +51,15 @@ export function useSecurityPoolSharedFork({ snapshot: securityPool, actions, ope
 	const invalidRightsInput = useSignal('0')
 	const yesRightsInput = useSignal('0')
 	const noRightsInput = useSignal('0')
-	const loaded = useSignal<{ key: string; state?: SecurityPoolForkSnapshot; outcome?: Awaited<ReturnType<typeof loadSharedForkOutcome>>; error?: string } | undefined>(undefined)
+	const loaded = useSignal<{ backend: typeof backend; key: string; state?: SecurityPoolForkSnapshot; outcome?: Awaited<ReturnType<typeof loadSharedForkOutcome>>; error?: string } | undefined>(undefined)
 	const recovered = useSignal<{ key: string; source?: Awaited<ReturnType<typeof loadSecurityPoolSourceRecovery>>; error?: string } | undefined>(undefined)
 	const draftIdentity = useRef<{ backend: typeof backend; key: string } | undefined>(undefined)
 	useEffect(() => {
-		const identity = securityPool === undefined ? undefined : `${securityPool.securityPool}:${securityPool.owner}:${securityPool.universeId}`
+		const identity = presentationSnapshot === undefined ? undefined : `${presentationSnapshot.securityPool}:${presentationSnapshot.owner}:${presentationSnapshot.universeId}`
 		const sameBackend = draftIdentity.current?.backend === backend
 		if (sameBackend && (identity === undefined || draftIdentity.current?.key === identity)) return
 		draftIdentity.current = identity === undefined ? undefined : { backend, key: identity }
-		sourceInput.value = securityPool?.universeId.toString() ?? ''
+		sourceInput.value = presentationSnapshot?.universeId.toString() ?? ''
 		outcomeInput.value = ''
 		questionInput.value = ''
 		sharesInput.value = ''
@@ -53,7 +67,7 @@ export function useSecurityPoolSharedFork({ snapshot: securityPool, actions, ope
 		invalidRightsInput.value = '0'
 		yesRightsInput.value = '0'
 		noRightsInput.value = '0'
-	}, [backend, securityPool?.securityPool, securityPool?.owner, securityPool?.universeId])
+	}, [backend, presentationSnapshot?.securityPool, presentationSnapshot?.owner, presentationSnapshot?.universeId])
 	const universeId = securityPoolUnsignedId(sourceInput.value, 248)
 	const outcomeIndex = securityPoolUnsignedId(outcomeInput.value)
 	const questionId = securityPoolUnsignedId(questionInput.value)
@@ -63,26 +77,44 @@ export function useSecurityPoolSharedFork({ snapshot: securityPool, actions, ope
 	const yesRights = securityPoolAmountOrUndefined(yesRightsInput.value, securityPool?.collateral.decimals ?? 18)
 	const noRights = securityPoolAmountOrUndefined(noRightsInput.value, securityPool?.collateral.decimals ?? 18)
 	const transferAmounts = invalidRights === undefined || yesRights === undefined || noRights === undefined ? undefined : ([invalidRights, yesRights, noRights] satisfies readonly [bigint, bigint, bigint])
-	const key = `${backend}:${securityPool?.securityPool}:${securityPool?.owner}:${securityPool?.blockHash}:${universeId}:${outcomeIndex}`
+	const branchCache = useMemo(() => {
+		if (presentationSnapshot === undefined || universeId === undefined) return undefined
+		const { securityPool: pool, owner } = presentationSnapshot
+		return branchDisplayCache(profile, pool, owner, universeId, outcomeIndex)
+	}, [profile, presentationSnapshot?.securityPool, presentationSnapshot?.owner, universeId, outcomeIndex])
+	const key = `${securityPool?.securityPool}:${securityPool?.owner}:${securityPool?.blockHash}:${universeId}:${outcomeIndex}`
 	useEffect(() => {
 		let current = true
 		loaded.value = undefined
 		if (securityPool !== undefined && universeId !== undefined) {
 			const client = createConnectedReadClient()
-			void (async () => {
+			const read = async () => {
 				const state = await loadSecurityPoolForkSnapshot({ client: securityPoolReadClient(client), securityPool: securityPool.securityPool, owner: securityPool.owner, universeId, ...(outcomeIndex === undefined ? {} : { outcomeIndex }) })
 				const outcome = state.forkTime === 0n || state.branch === undefined ? undefined : await loadSharedForkOutcome(client, state, state.branch.outcomeIndex)
-				if (current && getActiveBackend() === backend) loaded.value = { key, state, ...(outcome === undefined ? {} : { outcome }) }
-			})().catch(error => {
-				if (current && getActiveBackend() === backend) loaded.value = { key, error: getErrorMessage(error, 'Unable to load this fork.') }
-			})
+				return { state, outcome }
+			}
+			void withTimeout(read(), 15_000, copy.readTimeout)
+				.then(({ state, outcome }) => {
+					if (!current || getActiveBackend() !== backend) return
+					const child = branchPriceTarget(state)
+					if (child !== undefined && state.forkTime > 0n) {
+						const block = { number: state.blockNumber, timestamp: state.timestamp }
+						branchCache?.write(child, block)
+						if (outcomeIndex !== undefined && state.choice.recorded && state.choice.outcomeIndex === outcomeIndex) branchDisplayCache(profile, state.securityPool, state.owner, state.universeId).write(child, block)
+					}
+					loaded.value = { backend, key, state, ...(outcome === undefined ? {} : { outcome }) }
+				})
+				.catch(error => {
+					if (current && getActiveBackend() === backend) loaded.value = { backend, key, error: getErrorMessage(error, 'Unable to load this fork.') }
+				})
 		}
 		return () => {
 			current = false
 		}
-	}, [key])
-	const current = loaded.value?.key === key ? loaded.value : undefined
+	}, [backend, key, branchCache])
+	const current = loaded.value?.backend === backend && loaded.value.key === key ? loaded.value : undefined
 	const state = current?.state
+	const savedBranch = useMemo(() => (state === undefined ? branchCache?.read()?.value : undefined), [branchCache, key, state])
 	const recoveryKey = `${key}:${state?.blockHash}:${questionId}`
 	useEffect(() => {
 		let current = true
@@ -166,6 +198,7 @@ export function useSecurityPoolSharedFork({ snapshot: securityPool, actions, ope
 	const base = (selected: SecurityPoolForkSnapshot) => ({ owner: selected.owner, controller: selected.controller, universeId: selected.universeId })
 	return {
 		state,
+		savedBranch,
 		recovery,
 		outcome: current?.outcome,
 		error: current?.error ?? recoveryState?.error,

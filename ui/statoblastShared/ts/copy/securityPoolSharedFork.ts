@@ -52,3 +52,4 @@ export const questionOutcomeSeparator = ' — '
 export const forkQuestionId = 'Fork question ID'
 export const busy = 'Another security pool action is pending.'
 export const branchStates = { choose: 'Choose an outcome', unprepared: 'Not prepared', chosen: 'Capital prepared', waiting: 'Awaiting activation', active: 'Active' }
+export const readTimeout = 'Fork read timed out. Try again.'

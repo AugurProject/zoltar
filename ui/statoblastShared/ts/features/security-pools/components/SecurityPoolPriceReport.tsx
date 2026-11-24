@@ -12,6 +12,7 @@ import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.j
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
+import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import { SecurityPoolButton, SecurityPoolInput } from './SecurityPoolControls.js'
@@ -73,7 +74,8 @@ export function SecurityPoolPriceReport({
 	let reportStatus: string | undefined
 	if (report !== undefined) {
 		reportStatus = copy.states.pending
-		if (model.snapshot !== undefined && model.snapshot.timestamp >= report.eligibleAt) reportStatus = copy.states.settle
+		const reportTimestamp = model.savedReportTimestamp ?? model.snapshot?.timestamp
+		if (reportTimestamp !== undefined && reportTimestamp >= report.eligibleAt) reportStatus = copy.states.settle
 		if (report.state.settled) reportStatus = copy.states.recovery
 		if (report.outcome === 1n) reportStatus = copy.states.accepted
 		if (report.outcome === 2n) reportStatus = copy.states.rejected
@@ -182,31 +184,38 @@ export function SecurityPoolPriceReport({
 		</>
 	)
 	const reportDetails = (
-		<MetricGrid>
-			<MetricField label={copy.reportState}>{reportStatus}</MetricField>
-			<MetricField label={copy.settleAt}>
-				<TimestampValue timestamp={report?.eligibleAt} relative={false} />
-			</MetricField>
-			{report === undefined ? undefined : (
-				<>
-					<MetricField label={copy.reportBaseFee}>
-						<CurrencyValue value={report.baseFeePerGas} suffix={copy.reportBaseFeeUnit} units={9} precision='exact' />
-					</MetricField>
-					<MetricField label={copy.reportBaseFeeCeiling}>
-						<CurrencyValue value={report.maxSettlementBaseFee} suffix={copy.reportBaseFeeUnit} units={9} precision='exact' />
-					</MetricField>
-				</>
+		<>
+			{model.savedReportAt !== undefined && (
+				<p className='detail'>
+					{copy.savedReport} <UpdatedAgo updatedAt={model.savedReportAt} />
+				</p>
 			)}
-			<MetricField label={copy.sponsor}>
-				<AddressValue longAbbreviation address={report?.sponsor} />
-			</MetricField>
-			<MetricField label={collateralCopy.released(model.collateral.symbol)}>
-				<CurrencyValue value={report?.wethCredit} suffix={model.collateral.symbol} units={model.collateral.decimals} />
-			</MetricField>
-			<MetricField label={scoped.releasedRep}>
-				<CurrencyValue value={report?.repCredit} suffix={common.rep} />
-			</MetricField>
-		</MetricGrid>
+			<MetricGrid>
+				<MetricField label={copy.reportState}>{reportStatus}</MetricField>
+				<MetricField label={copy.settleAt}>
+					<TimestampValue timestamp={report?.eligibleAt} relative={false} />
+				</MetricField>
+				{report === undefined ? undefined : (
+					<>
+						<MetricField label={copy.reportBaseFee}>
+							<CurrencyValue value={report.baseFeePerGas} suffix={copy.reportBaseFeeUnit} units={9} precision='exact' />
+						</MetricField>
+						<MetricField label={copy.reportBaseFeeCeiling}>
+							<CurrencyValue value={report.maxSettlementBaseFee} suffix={copy.reportBaseFeeUnit} units={9} precision='exact' />
+						</MetricField>
+					</>
+				)}
+				<MetricField label={copy.sponsor}>
+					<AddressValue longAbbreviation address={report?.sponsor} />
+				</MetricField>
+				<MetricField label={collateralCopy.released(model.collateral.symbol)}>
+					<CurrencyValue value={report?.wethCredit} suffix={model.collateral.symbol} units={model.collateral.decimals} />
+				</MetricField>
+				<MetricField label={scoped.releasedRep}>
+					<CurrencyValue value={report?.repCredit} suffix={common.rep} />
+				</MetricField>
+			</MetricGrid>
+		</>
 	)
 	const settleActions = (
 		<div className='actions'>
