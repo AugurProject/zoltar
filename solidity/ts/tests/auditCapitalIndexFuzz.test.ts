@@ -851,32 +851,25 @@ describe('audit fuzz: commitment index and fee streams against naive reference m
 		expect(outcome.failure).toBeUndefined()
 	})
 
-	test('random index operations keep every aggregate, cohort, fee, clock and preview equal to the reference model', async () => {
+	test.each(auditFuzzSeeds([1, 2, 3, 19, 37, 54]))('random index operations keep every aggregate, cohort, fee, clock and preview equal to the reference model (seed %i)', async seed => {
 		// The shared fixture reverts to its own snapshot before each test, which consumes ours.
 		baseline = ''
 		const steps = positiveFuzzInteger('AUDIT_FUZZ_STEPS', 260)
-		const failures: string[] = []
-		const seeds = auditFuzzSeeds([1, 2, 3, 19, 37, 54])
-		for (const seed of seeds) {
-			const outcome = await run(seed, steps, undefined)
-			if (outcome.failure === undefined) continue
-			const failing = outcome.trace.slice(0, outcome.failure.step + 1)
-			const minimal = process.env['AUDIT_FUZZ_SHRINK'] === '0' ? failing : await shrink(seed, steps, failing, outcome.failure.tag)
-			const replay = await run(seed, steps, minimal)
-			const report = [
-				`seed ${seed} step ${outcome.failure.step} tag ${outcome.failure.tag}`,
-				`Replay: AUDIT_FUZZ_SEEDS=1 AUDIT_FUZZ_SEED_START=${seed} AUDIT_FUZZ_STEPS=${steps} bun ./tooling/testing/bun-test.mts solidity/ts/tests/auditCapitalIndexFuzz.test.ts`,
-				...outcome.failure.issues.slice(0, 10),
-				`minimal sequence (${minimal.length} operations):`,
-				...minimal.map((op, position) => `  ${position}: ${stringify(op)}`),
-				'issues on the minimal sequence:',
-				...(replay.failure?.issues.slice(0, 10) ?? ['(did not reproduce)']),
-			].join('\n')
-			console.log(`\nINDEX FUZZ FAILURE\n${report}\n`)
-			failures.push(report)
-			if (failures.length >= 3) break
-		}
-		expect(failures).toEqual([])
+		const outcome = await run(seed, steps, undefined)
+		if (outcome.failure === undefined) return
+		const failing = outcome.trace.slice(0, outcome.failure.step + 1)
+		const minimal = process.env['AUDIT_FUZZ_SHRINK'] === '0' ? failing : await shrink(seed, steps, failing, outcome.failure.tag)
+		const replay = await run(seed, steps, minimal)
+		const report = [
+			`seed ${seed} step ${outcome.failure.step} tag ${outcome.failure.tag}`,
+			`Replay: AUDIT_FUZZ_SEEDS=1 AUDIT_FUZZ_SEED_START=${seed} AUDIT_FUZZ_STEPS=${steps} bun ./tooling/testing/bun-test.mts solidity/ts/tests/auditCapitalIndexFuzz.test.ts`,
+			...outcome.failure.issues.slice(0, 10),
+			`minimal sequence (${minimal.length} operations):`,
+			...minimal.map((op, position) => `  ${position}: ${stringify(op)}`),
+			'issues on the minimal sequence:',
+			...(replay.failure?.issues.slice(0, 10) ?? ['(did not reproduce)']),
+		].join('\n')
+		throw new Error(`INDEX FUZZ FAILURE\n${report}`)
 	})
 
 	test('random funding and release schedules pay each stream exactly its linear amount', async () => {
