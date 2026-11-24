@@ -13,51 +13,20 @@ import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
-import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capital, statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as index } from '../../../contractArtifact.js'
-import type { useSecurityPool } from '../hooks/useSecurityPool.js'
 import { securityPoolAmountOrUndefined, securityPoolUnsignedId } from '../lib/draft.js'
 import { SecurityPoolButton, SecurityPoolInput, type SecurityPoolActions } from './SecurityPoolControls.js'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import * as copy from '../../../copy/securityPoolTakeover.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
-type TakeoverSnapshot = Pick<
-	NonNullable<ReturnType<typeof useSecurityPool>['snapshot']>,
-	| 'timestamp'
-	| 'chainId'
-	| 'blockNumber'
-	| 'blockHash'
-	| 'capitalLedger'
-	| 'commitmentIndex'
-	| 'owner'
-	| 'economics'
-	| 'forkTime'
-	| 'frozen'
-	| 'importing'
-	| 'liquidationPrice'
-	| 'conservativePrice'
-	| 'ownerConservativePrice'
-	| 'securityMultiplierBps'
-	| 'totalCommitmentAttoEth'
-	| 'demandAttoEth'
-	| 'ownerAccount'
-	| 'positions'
-> & { collateral: { symbol: string; decimals: number }; liquidationDuration?: bigint | undefined }
+import { useLiquidationTarget, type LiquidationTarget, type TakeoverSnapshot } from '../hooks/useLiquidationTarget.js'
+import { useStatoblastRefreshError } from '../../useStatoblastPageRefresh.js'
+import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
+import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
+import { tryAgain } from '../../../copy/securityPoolPage.js'
 
-async function loadTarget(snapshot: TakeoverSnapshot, id: bigint) {
-	const client = createConnectedReadClient()
-	const [position, started, epoch, penaltyPaid, elapsed] = await Promise.all([
-		client.readContract({ address: snapshot.commitmentIndex, abi: index.abi, functionName: 'accountOf', args: [id], blockNumber: snapshot.blockNumber }),
-		client.readContract({ address: snapshot.capitalLedger, abi: capital.abi, functionName: 'liquidationStarted', args: [id], blockNumber: snapshot.blockNumber }),
-		client.readContract({ address: snapshot.capitalLedger, abi: capital.abi, functionName: 'acceptedPriceEpoch', blockNumber: snapshot.blockNumber }),
-		client.readContract({ address: snapshot.capitalLedger, abi: capital.abi, functionName: 'liquidationPenaltyPaid', args: [id], blockNumber: snapshot.blockNumber }),
-		client.readContract({ address: snapshot.capitalLedger, abi: capital.abi, functionName: 'liquidationElapsed', args: [id], blockNumber: snapshot.blockNumber }),
-	])
-	return { position, started, epoch, penaltyPaid, elapsed }
-}
-
-export function SecurityPoolTakeover({ model, actions, redesigned = false }: { redesigned?: boolean; model: { snapshot: TakeoverSnapshot | undefined }; actions: Pick<SecurityPoolActions, 'ownerReason' | 'scope' | 'busy' | 'runSecurityPoolAction'> }) {
+export function SecurityPoolTakeover({ model, actions, redesigned = false }: { redesigned?: boolean; model: { snapshot: TakeoverSnapshot | undefined; presentationSnapshot?: TakeoverSnapshot | undefined }; actions: Pick<SecurityPoolActions, 'ownerReason' | 'scope' | 'busy' | 'runSecurityPoolAction'> }) {
 	const positionInput = useSignal('')
 	const commitmentInput = useSignal('')
 	const ownInput = useSignal('')
@@ -66,9 +35,14 @@ export function SecurityPoolTakeover({ model, actions, redesigned = false }: { r
 	const sharedReasonId = useId()
 	const snapshot = model.snapshot
 	const id = securityPoolUnsignedId(positionInput.value, 96)
-	const key = `${snapshot?.chainId}:${snapshot?.capitalLedger}:${snapshot?.owner}:${snapshot?.blockHash}:${id}`
+	const pool = snapshot ?? model.presentationSnapshot
+	const target = useLiquidationTarget(snapshot, model.presentationSnapshot, id, redesigned)
+	const preview = target.target
+	const displayedSnapshot = target.displaySnapshot
+	const fresh = target.fresh
+	const refreshError = useStatoblastRefreshError(target.error, target.displayedAt)
 	const [knownPositions, setKnownPositions] = useState<string[]>([])
-	const ledgerKey = snapshot === undefined ? undefined : `zoltar-ui:positions:${snapshot.chainId}:${snapshot.capitalLedger}`
+	const ledgerKey = pool === undefined ? undefined : `zoltar-ui:positions:${pool.chainId}:${pool.capitalLedger}`
 	const [elapsedSinceRead, setElapsedSinceRead] = useState(0n)
 	const visible = usePageVisible()
 	useEffect(() => {
@@ -79,9 +53,8 @@ export function SecurityPoolTakeover({ model, actions, redesigned = false }: { r
 			if (!(error instanceof DOMException)) throw error
 		}
 	}, [ledgerKey, redesigned])
-	const target = useSignal<{ key: string; value?: Awaited<ReturnType<typeof loadTarget>>; error?: string }>()
 	// Bounds are consent for one position of one owner, so another target starts with none. A snapshot refresh or a half-typed ID is not a new target.
-	const boundsTarget = snapshot === undefined || id === undefined ? undefined : `${snapshot.chainId}:${snapshot.capitalLedger}:${snapshot.owner}:${id}`
+	const boundsTarget = pool === undefined || id === undefined ? undefined : `${pool.chainId}:${pool.universeId}:${pool.capitalLedger}:${pool.owner}:${id}`
 	const lastBoundsTarget = useRef(boundsTarget)
 	useEffect(() => {
 		if (boundsTarget === undefined || boundsTarget === lastBoundsTarget.current) return
@@ -90,24 +63,7 @@ export function SecurityPoolTakeover({ model, actions, redesigned = false }: { r
 		if (replacedTarget) for (const bound of [commitmentInput, ownInput, principalInput, totalCommitmentInput]) bound.value = ''
 	}, [boundsTarget])
 	useEffect(() => {
-		let current = true
-		target.value = undefined
-		if (snapshot !== undefined && id !== undefined && id > 0n)
-			void loadTarget(snapshot, id)
-				.then(value => {
-					if (current) target.value = { key, value }
-				})
-				.catch(error => {
-					if (current) target.value = { key, error: getErrorMessage(error, copy.unavailable) }
-				})
-		return () => {
-			current = false
-		}
-	}, [key])
-	const loaded = target.value?.key === key ? target.value : undefined
-	const preview = loaded?.value
-	useEffect(() => {
-		if (!redesigned || ledgerKey === undefined || id === undefined || preview === undefined || preview.position.commitment === 0n) return
+		if (!redesigned || ledgerKey === undefined || id === undefined || fresh === undefined || fresh.position.commitment === 0n) return
 		const selected = id.toString()
 		setKnownPositions(previous => {
 			if (previous.includes(selected)) return previous
@@ -119,24 +75,26 @@ export function SecurityPoolTakeover({ model, actions, redesigned = false }: { r
 			}
 			return updated
 		})
-	}, [ledgerKey, redesigned, id, preview])
+	}, [ledgerKey, redesigned, id, fresh])
 	useEffect(() => {
 		setElapsedSinceRead(0n)
-		if (!redesigned || !visible || preview === undefined || preview.started === 0n) return
-		const readAt = Date.now()
+		if (!redesigned || !visible || fresh === undefined || fresh.started === 0n || target.displayedAt === undefined) return
+		const readAt = target.displayedAt
 		const timer = setInterval(() => setElapsedSinceRead(BigInt(Math.floor((Date.now() - readAt) / 1000))), 1000)
 		return () => clearInterval(timer)
-	}, [redesigned, preview, visible])
-	const source = snapshot !== undefined && preview !== undefined && snapshot.liquidationPrice > 0n ? securityPoolTakeoverSource(snapshot, { ...preview.position, liquidationStarted: preview.started, liquidationPenaltyPaid: preview.penaltyPaid, liquidationElapsed: preview.elapsed }) : undefined
+	}, [redesigned, fresh, target.displayedAt, visible])
+	const displayedSource =
+		displayedSnapshot !== undefined && preview !== undefined && displayedSnapshot.liquidationPrice > 0n ? securityPoolTakeoverSource(displayedSnapshot, { ...preview.position, liquidationStarted: preview.started, liquidationPenaltyPaid: preview.penaltyPaid, liquidationElapsed: preview.elapsed }) : undefined
+	const source = fresh === undefined ? undefined : displayedSource
 	const commitment = securityPoolAmountOrUndefined(commitmentInput.value, snapshot?.collateral.decimals ?? 18)
 	const maximumOwnRep = securityPoolAmountOrUndefined(ownInput.value)
 	const maximumOwnerPrincipal = securityPoolAmountOrUndefined(principalInput.value)
 	const maximumOwnerCommitment = securityPoolAmountOrUndefined(totalCommitmentInput.value, snapshot?.collateral.decimals ?? 18)
 	let reason = actions.ownerReason
 	if (reason === undefined && (id === undefined || id === 0n)) reason = copy.enterTarget
-	if (reason === undefined && preview === undefined) reason = loaded?.error ?? copy.loading
+	if (reason === undefined && fresh === undefined) reason = redesigned && target.error !== undefined ? copy.currentTargetRequired : (target.error ?? copy.loading)
 	if (reason === undefined && snapshot !== undefined && (snapshot.forkTime !== 0n || snapshot.frozen || snapshot.importing)) reason = copy.inactive
-	const distressed = preview !== undefined && snapshot !== undefined && preview.position.owner !== snapshot.owner && preview.position.commitment !== 0n && preview.position.maxHealthyPrice < snapshot.liquidationPrice && preview.started !== 0n
+	const distressed = preview !== undefined && displayedSnapshot !== undefined && preview.position.owner !== displayedSnapshot.owner && preview.position.commitment !== 0n && preview.position.maxHealthyPrice < displayedSnapshot.liquidationPrice && preview.started !== 0n
 	// Takeover rewards remain pledged in the receiver vault. A preliminary cure that restores health stands without a transfer.
 	const curable = distressed && source?.healthy === true && source.removed !== 0n
 	let cureReason = reason
@@ -160,22 +118,22 @@ export function SecurityPoolTakeover({ model, actions, redesigned = false }: { r
 		else if (totalCommitment > maximumOwnerCommitment) reason = copy.receiverCommitmentBound
 	}
 
-	const validateTarget = (current: NonNullable<typeof preview>, capitalLedger: NonNullable<typeof snapshot>['capitalLedger'], commitmentIndex: NonNullable<typeof snapshot>['commitmentIndex'], positionId: bigint) => async () => {
+	const validateTarget = (current: LiquidationTarget, capitalLedger: TakeoverSnapshot['capitalLedger'], commitmentIndex: TakeoverSnapshot['commitmentIndex'], positionId: bigint) => async () => {
 		const client = createConnectedReadClient()
 		const epoch = await client.readContract({ address: capitalLedger, abi: capital.abi, functionName: 'acceptedPriceEpoch' })
 		const position = await client.readContract({ address: commitmentIndex, abi: index.abi, functionName: 'accountOf', args: [positionId] })
 		if (epoch !== current.epoch || position.rep !== current.position.rep || position.commitment !== current.position.commitment || position.owner !== current.position.owner || position.batch !== current.position.batch) throw new Error(copy.changed)
 	}
 	const cure = async () => {
-		if (cureReason !== undefined || snapshot === undefined || preview === undefined || source === undefined || id === undefined) throw new Error(cureReason ?? copy.notEligible)
+		if (cureReason !== undefined || snapshot === undefined || fresh === undefined || source === undefined || id === undefined) throw new Error(cureReason ?? copy.notEligible)
 		await actions.runSecurityPoolAction('cureSecurityPoolPosition', copy.cure, () => ({
-			...buildSecurityPoolCapitalCureRequest({ owner: snapshot.owner, capitalLedger: snapshot.capitalLedger, positionId: id, commitment: preview.position.commitment, expectedAcceptedPriceEpoch: preview.epoch, expectedSourceBatch: source.batch }),
+			...buildSecurityPoolCapitalCureRequest({ owner: snapshot.owner, capitalLedger: snapshot.capitalLedger, positionId: id, commitment: fresh.position.commitment, expectedAcceptedPriceEpoch: fresh.epoch, expectedSourceBatch: source.batch }),
 			reviewDescription: copy.cureReview,
-			validateBeforeSubmit: validateTarget(preview, snapshot.capitalLedger, snapshot.commitmentIndex, id),
+			validateBeforeSubmit: validateTarget(fresh, snapshot.capitalLedger, snapshot.commitmentIndex, id),
 		}))
 	}
 	const takeOver = async () => {
-		if (reason !== undefined || snapshot === undefined || preview === undefined || source === undefined || id === undefined || commitment === undefined || maximumOwnRep === undefined || maximumOwnerPrincipal === undefined || maximumOwnerCommitment === undefined) throw new Error(reason ?? copy.enterBounds)
+		if (reason !== undefined || snapshot === undefined || fresh === undefined || source === undefined || id === undefined || commitment === undefined || maximumOwnRep === undefined || maximumOwnerPrincipal === undefined || maximumOwnerCommitment === undefined) throw new Error(reason ?? copy.enterBounds)
 		await actions.runSecurityPoolAction('takeOverSecurityPoolPosition', copy.takeOver, () => ({
 			...buildSecurityPoolCapitalTakeOverWithBoundsRequest({
 				owner: snapshot.owner,
@@ -184,26 +142,27 @@ export function SecurityPoolTakeover({ model, actions, redesigned = false }: { r
 				commitment,
 				minimumTakeoverReward: securityPoolTakeoverFill(source, commitment, snapshot.economics.minimumCommitmentAttoEth).takeoverReward,
 				maximumOwnRep,
-				bounds: { maximumOwnerPrincipal, maximumOwnerCommitment, expectedTargetHealthFactorBps: snapshot.ownerAccount.targetHealthFactorBps || 10_000n, expectedAcceptedPriceEpoch: preview.epoch, expectedSourceBatch: source.batch },
+				bounds: { maximumOwnerPrincipal, maximumOwnerCommitment, expectedTargetHealthFactorBps: snapshot.ownerAccount.targetHealthFactorBps || 10_000n, expectedAcceptedPriceEpoch: fresh.epoch, expectedSourceBatch: source.batch },
 			}),
 			reviewDescription: copy.review,
-			validateBeforeSubmit: validateTarget(preview, snapshot.capitalLedger, snapshot.commitmentIndex, id),
+			validateBeforeSubmit: validateTarget(fresh, snapshot.capitalLedger, snapshot.commitmentIndex, id),
 		}))
 	}
-	const duration = snapshot?.liquidationDuration
+	const duration = displayedSnapshot?.liquidationDuration
 	const liveElapsed = preview === undefined ? undefined : preview.elapsed + elapsedSinceRead
 	const rewardProgress = getVisualRatio({ value: liveElapsed, maxValue: duration })
 	const timeBasedReward = preview === undefined || rewardProgress === undefined || duration === undefined || liveElapsed === undefined ? undefined : ((preview.position.rep + preview.penaltyPaid) * (liveElapsed > duration ? duration : liveElapsed)) / duration - preview.penaltyPaid
-	const laterTakeover = snapshot === undefined || preview === undefined || source === undefined || duration === undefined ? undefined : securityPoolTakeoverSource(snapshot, { ...preview.position, liquidationStarted: preview.started, liquidationPenaltyPaid: preview.penaltyPaid, liquidationElapsed: duration })
-	const receiver = snapshot?.positions.find(position => position.id === snapshot.ownerAccount.positionId)
-	const fill = snapshot === undefined || source === undefined || commitment === undefined ? undefined : securityPoolTakeoverFill(source, commitment, snapshot.economics.minimumCommitmentAttoEth)
-	const pledgedBefore = (receiver?.rep ?? 0n) + (snapshot?.ownerAccount.freeAttoRep ?? 0n)
+	const laterTakeover =
+		displayedSnapshot === undefined || preview === undefined || displayedSource === undefined || duration === undefined ? undefined : securityPoolTakeoverSource(displayedSnapshot, { ...preview.position, liquidationStarted: preview.started, liquidationPenaltyPaid: preview.penaltyPaid, liquidationElapsed: duration })
+	const receiver = displayedSnapshot?.positions.find(position => position.id === displayedSnapshot.ownerAccount.positionId)
+	const fill = displayedSnapshot === undefined || displayedSource === undefined || commitment === undefined ? undefined : securityPoolTakeoverFill(displayedSource, commitment, displayedSnapshot.economics.minimumCommitmentAttoEth)
+	const pledgedBefore = (receiver?.rep ?? 0n) + (displayedSnapshot?.ownerAccount.freeAttoRep ?? 0n)
 	const commitmentBefore = receiver?.commitment ?? 0n
 	const applySuggestedBound = () => {
 		if (snapshot === undefined || source === undefined || duration === undefined) return
 		principalInput.value = formatUnits(pledgedBefore + source.rep, 18)
 	}
-	const displayCollateral = (value: bigint | undefined) => <CurrencyValue value={value} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
+	const displayCollateral = (value: bigint | undefined) => <CurrencyValue value={value} suffix={pool?.collateral.symbol ?? collateralCopy.fallback} units={pool?.collateral.decimals ?? 0} />
 	// Both actions often rest disabled for one shared cause, such as a missing position ID; that reason renders once for the pair.
 	const sharedReason = actions.busy === undefined && reason !== undefined && reason === cureReason ? reason : undefined
 	const reasonId = sharedReason === undefined ? undefined : sharedReasonId
@@ -236,18 +195,20 @@ export function SecurityPoolTakeover({ model, actions, redesigned = false }: { r
 				}}
 				disabled={actions.busy !== undefined}
 			/>
+			{redesigned && target.displayedAt !== undefined && <UpdatedAgo updatedAt={target.displayedAt} refreshing={target.loading} />}
+			{redesigned && <RetryableNotice message={refreshError} retryLabel={tryAgain} onRetry={target.retry} />}
 			{redesigned && distressed && preview !== undefined && (
 				<div className='statoblast-liquidation-reward'>
 					<strong>{copy.takeoverReward}</strong>
 					<progress aria-label={copy.takeoverReward} max={1} value={rewardProgress} />
 					<MetricGrid>
 						<MetricField label={copy.rewardNow}>
-							<CurrencyValue value={source?.healthy !== true && timeBasedReward !== undefined && timeBasedReward >= 0n ? timeBasedReward : source?.maximumTakeoverReward} suffix={common.rep} />
+							<CurrencyValue value={displayedSource?.healthy !== true && timeBasedReward !== undefined && timeBasedReward >= 0n ? timeBasedReward : displayedSource?.maximumTakeoverReward} suffix={common.rep} />
 						</MetricField>
 						<MetricField label={copy.rewardMax}>
 							<CurrencyValue value={preview.position.rep} suffix={common.rep} />
 						</MetricField>
-						<MetricField label={copy.takeoverNow}>{displayCollateral(source?.maximumTakeoverCommitment)}</MetricField>
+						<MetricField label={copy.takeoverNow}>{displayCollateral(displayedSource?.maximumTakeoverCommitment)}</MetricField>
 						<MetricField label={copy.takeoverLater}>{displayCollateral(laterTakeover?.maximumTakeoverCommitment)}</MetricField>
 					</MetricGrid>
 				</div>
@@ -257,13 +218,13 @@ export function SecurityPoolTakeover({ model, actions, redesigned = false }: { r
 					<CurrencyValue value={preview?.position.rep} suffix={common.rep} />
 				</MetricField>
 				<MetricField label={copy.targetCommitment}>
-					<CurrencyValue value={preview?.position.commitment} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
+					<CurrencyValue value={preview?.position.commitment} suffix={pool?.collateral.symbol ?? collateralCopy.fallback} units={pool?.collateral.decimals ?? 0} />
 				</MetricField>
 				<MetricField label={copy.repairLimit}>
-					<CurrencyValue value={source?.maximumTakeoverCommitment} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
+					<CurrencyValue value={displayedSource?.maximumTakeoverCommitment} suffix={pool?.collateral.symbol ?? collateralCopy.fallback} units={pool?.collateral.decimals ?? 0} />
 				</MetricField>
 				<MetricField label={copy.takeoverReward}>
-					<CurrencyValue value={source?.maximumTakeoverReward} suffix={copy.takeoverRewardUnit} />
+					<CurrencyValue value={displayedSource?.maximumTakeoverReward} suffix={copy.takeoverRewardUnit} />
 				</MetricField>
 				<MetricField label={copy.started}>
 					<TimestampValue timestamp={preview?.started} relative={false} zeroText={copy.notStarted} />

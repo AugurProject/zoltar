@@ -41,6 +41,27 @@ async function fill(field: HTMLInputElement | undefined, value: string) {
 	})
 }
 
+test('keeps a saved target readable while the pool is loading and makes no reads from saved addresses', async () => {
+	const snapshot = capitalSnapshot({ totalCommitmentAttoEth: 20n * unit, demandAttoEth: 10n * unit })
+	const reader = installTakeoverReader(snapshot)
+	const live = await renderIntoDocument(<SecurityPoolTakeover redesigned model={{ snapshot }} actions={idleActions} />)
+	lifecycle.trackRendered(live)
+	await fill(live.container.querySelector('input') ?? undefined, '2')
+	await waitFor(() => expect(live.container.textContent).toContain('15.00 REP'))
+	const liveCure = [...live.container.querySelectorAll('button')].find(button => button.textContent === 'Cure position')
+	expect(liveCure?.disabled).toBe(false)
+	const requests = reader.reads.length
+	const saved = await renderIntoDocument(<SecurityPoolTakeover redesigned model={{ snapshot: undefined, presentationSnapshot: snapshot }} actions={idleActions} />)
+	lifecycle.trackRendered(saved)
+	await fill(saved.container.querySelector('input') ?? undefined, '2')
+	await waitFor(() => expect(saved.container.textContent).toContain('15.00 REP'))
+	expect(saved.container.querySelector('.freshness-indicator')?.textContent).toContain('Updated')
+	const transactionButtons = [...saved.container.querySelectorAll('button')].filter(button => /^(Cure|Take over) position$/.test(button.textContent ?? ''))
+	expect(transactionButtons).toHaveLength(2)
+	expect(transactionButtons.every(button => button.disabled)).toBe(true)
+	expect(reader.reads).toHaveLength(requests)
+})
+
 test.each([true, false])('an existing auction permits manual takeover with consent bounds after price expiry (fresh=%s)', async priceValid => {
 	const snapshot = capitalSnapshot({ totalCommitmentAttoEth: 20n * unit, demandAttoEth: 20n * unit, priceValid, ...(priceValid ? {} : { priceValidUntil: 1n }) })
 	snapshot.ownerPrincipalAttoRep = 40n * unit
