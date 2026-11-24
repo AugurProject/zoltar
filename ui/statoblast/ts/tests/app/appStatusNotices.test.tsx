@@ -15,16 +15,17 @@ import { buildDeploymentRouteContentProps } from '@zoltar/ui-zoltar-shared/featu
 import { onchainStateDependencies } from '../../app/onchainStateDependencies.js'
 
 const moduleMocks = installModuleMocks(specifier => import.meta.resolve(specifier))
+let contractsMissing = true
 
 // Keep the real notices, routing and deployment page. Only the shell's wallet/deployment
-// session and the Uniswap REP price reads are replaced, with every contract reported missing.
+// session and the Uniswap REP price reads are replaced so the fixture can control deployment status.
 await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/appShell/hooks/useProtocolAppShell.js', () => ({
 	useProtocolAppShell: ({ deploymentRoute }: Parameters<typeof useProtocolAppShell>[0]) => {
-		const deploymentStatuses = onchainStateDependencies.getDeploymentSteps().map(step => ({ ...step, deployed: false }))
+		const deploymentStatuses = onchainStateDependencies.getDeploymentSteps().map(step => ({ ...step, deployed: !contractsMissing }))
 		return {
 			accountState: disconnectedAccountState,
 			activeEnvironmentNonce: 0,
-			applicationDeploymentMissing: true,
+			applicationDeploymentMissing: contractsMissing,
 			canReadOnchainData: true,
 			currentBlockNumber: 10n,
 			currentTimestamp: 200n,
@@ -77,6 +78,7 @@ const { App } = await import('../../app/App.js')
 
 const lifecycle = installDomTestLifecycle({
 	beforeTest: () => {
+		contractsMissing = true
 		installStatoblastRouting()
 		installActiveEnvironmentForTesting(createInjectedBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
 	},
@@ -103,14 +105,19 @@ describe('Statoblast setup-incomplete notice', () => {
 		expect(document.body.textContent).not.toContain(appCopy.deploymentIncompleteReason)
 	})
 
-	test('still explains missing contracts on a not-found page under the deploy path', async () => {
-		// The page is not the deploy page, and the missing-deployment redirect leaves an
-		// unrecognised deploy URL alone, so the notice is the only sign of missing contracts here.
+	test('shows the contracts gate without redirecting a removed deploy URL', async () => {
+		await renderApp('#/deploy?openOracleView=create')
+		const query = within(document.body)
+		await waitFor(() => expect(query.getByRole('heading', { level: 1, name: 'Deploy contracts' })).toBeTruthy())
+		expect(window.location.hash).toBe('#/deploy?openOracleView=create')
+		expect(document.body.textContent).toContain('SecurityPoolFactory')
+	})
+
+	test('shows not found on a removed route once contracts are available', async () => {
+		contractsMissing = false
 		await renderApp('#/deploy?openOracleView=create')
 		const query = within(document.body)
 		await waitFor(() => expect(query.getByRole('heading', { level: 1, name: 'Page not found' })).toBeTruthy())
 		expect(window.location.hash).toBe('#/deploy?openOracleView=create')
-		expect(query.getByText(appCopy.setupIncomplete)).toBeTruthy()
-		expect(query.getByText(appCopy.deploymentIncompleteReason)).toBeTruthy()
 	})
 })
