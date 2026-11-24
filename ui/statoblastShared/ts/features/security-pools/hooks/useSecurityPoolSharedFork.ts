@@ -18,6 +18,7 @@ import { securityPoolReadClient, type SecurityPoolAccountSnapshot, type Security
 import { loadSharedForkOutcome, loadSecurityPoolSourceRecovery, buildSecurityPoolRecoveryPreparation } from '../../../protocol/securityPoolSharedFork.js'
 import { securityPoolAmountOrUndefined, securityPoolUnsignedId } from '../lib/draft.js'
 import type { SecurityPoolActions } from '../components/SecurityPoolControls.js'
+import * as copy from '../../../copy/securityPoolSharedFork.js'
 
 export type SecurityPoolSharedForkParameters = {
 	snapshot: SecurityPoolAccountSnapshot | undefined
@@ -208,7 +209,7 @@ export function useSecurityPoolSharedFork({ snapshot: securityPool, actions, ope
 		finalizeReason,
 		prepareReason,
 		recoverReason,
-		openReason: state?.branch?.ready ? undefined : 'Activate the branch before opening its account.',
+		openReason: state?.branch?.ready ? undefined : copy.openAfterActivation,
 		open: () => {
 			if (state?.branch?.ready) openUniverse(state.branch.universeId)
 		},
@@ -218,10 +219,11 @@ export function useSecurityPoolSharedFork({ snapshot: securityPool, actions, ope
 				'Commit fork branch',
 				chooseReason,
 				selected => {
-					if (selected.branch === undefined) throw new Error('Select a branch.')
+					const outcomeLabel = current?.outcome?.outcomeLabel
+					if (selected.branch === undefined || outcomeLabel === undefined) throw new Error('Select a branch.')
 					return {
 						...buildSecurityPoolForkChoiceRequest({ ...base(selected), outcomeIndex: selected.branch.outcomeIndex }),
-						reviewDescription: `Irreversibly choose outcome ${selected.branch.outcomeIndex} for your committed principal in universe ${selected.universeId}. Idle REP and old fees remain in the source. REP in every unchosen branch belongs to that branch’s outcome claimants. There is no revoke action.`,
+						reviewDescription: copy.choiceReview(outcomeLabel),
 					}
 				},
 				async latest => {
@@ -264,7 +266,7 @@ export function useSecurityPoolSharedFork({ snapshot: securityPool, actions, ope
 		prepare: () =>
 			run('prepareSecurityPoolRecovery', 'Prepare source question', prepareReason, selected => {
 				if (recovery === undefined) throw new Error('Source question unavailable.')
-				return { ...buildSecurityPoolRecoveryPreparation(selected, recovery), reviewDescription: 'Prepare this question’s source share namespace for all holders. This does not claim or migrate vault principal.' }
+				return { ...buildSecurityPoolRecoveryPreparation(selected, recovery), reviewDescription: 'Prepare recovery rights for everyone holding shares in this question.' }
 			}),
 		transfer: () =>
 			run(

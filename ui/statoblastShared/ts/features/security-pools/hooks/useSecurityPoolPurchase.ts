@@ -78,7 +78,7 @@ export function useSecurityPoolPurchase(model: Pick<ReturnType<typeof useSecurit
 		else if (current?.error !== undefined) reason = current.error
 		else if (quote === undefined || current?.question === undefined) reason = 'Loading the purchase quote.'
 		else if (current.question.escalationGame !== zeroAddress || current.question.systemState !== 0n || snapshot.timestamp >= current.question.questionEndTime) reason = 'Question minting has closed.'
-		else if (amount > quote.availableCommitmentAttoEth) reason = 'Insufficient available backing after queued retirement.'
+		else if (amount > quote.availableCommitmentAttoEth) reason = 'Insufficient backing after queued reductions.'
 		else if (fee === undefined || fee < quote.purchaseFeeAttoEth) reason = 'Set a maximum fee that covers the quote.'
 		else if (minimum > quote.shares) reason = 'Minimum shares exceed the current quote.'
 		else if (amount + quote.purchaseFeeAttoEth > snapshot.walletCollateral) reason = collateralCopy.formatInsufficientBalance(snapshot.collateral.symbol)

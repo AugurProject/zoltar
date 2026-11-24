@@ -32,7 +32,7 @@ test('partial retirement keeps a meaningful residual and requires one complete r
 })
 test('authorizations cannot cut obligations, bypass personal collateral or consume unfunded commitments', () => {
 	const snapshot = capitalSnapshot()
-	expect(capitalAuthorizationReason(snapshot, 9n * unit)).toContain('retirement')
+	expect(capitalAuthorizationReason(snapshot, 9n * unit)).toContain('Reduce commitment')
 	expect(capitalAuthorizationReason({ ...snapshot, ownerPrincipalAttoRep: unit }, 10n * unit)).toContain('health')
 	expect(capitalAuthorizationReason({ ...snapshot, priceValid: false }, 10n * unit)).toContain('price')
 	expect(capitalAuthorizationReason({ ...snapshot, forkTime: 1n }, 10n * unit)).toContain('closed')
@@ -47,7 +47,7 @@ test('current and next retirement cohorts remain distinct without question-histo
 test('all owner principal backs authorization and a pending retirement locks the commitment', () => {
 	const snapshot = capitalSnapshot({ withdrawableAttoRep: 0n })
 	expect(capitalAuthorizationReason(snapshot, 10n * unit)).toBeUndefined()
-	expect(capitalAuthorizationReason({ ...snapshot, positions: snapshot.positions.map(position => ({ ...position, batch: 2n })) }, 10n * unit)).toContain('locked until its retirement is released')
+	expect(capitalAuthorizationReason({ ...snapshot, positions: snapshot.positions.map(position => ({ ...position, batch: 2n })) }, 10n * unit)).toContain('locked until the reduction is released')
 })
 
 test('a funded report permits growth only with its conservative collateral price', () => {
@@ -72,5 +72,5 @@ test('a pending retirement can repeat only its saved target for an in-place cure
 	const snapshot = capitalSnapshot()
 	const pending = { ...snapshot, positions: snapshot.positions.map(position => ({ ...position, batch: 1n, remainingCommitment: 5n * unit })) }
 	expect(capitalRetirementReason(pending, 1n, 5n * unit)).toBeUndefined()
-	expect(capitalRetirementReason(pending, 1n, 4n * unit)).toBe('Retirement already requested.')
+	expect(capitalRetirementReason(pending, 1n, 4n * unit)).toBe('A reduction is already in queue.')
 })

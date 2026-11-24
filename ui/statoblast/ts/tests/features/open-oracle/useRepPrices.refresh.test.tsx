@@ -109,7 +109,7 @@ describe('useRepPrices refresh races', () => {
 		expect(readRepPriceProbe().repPerEth).toBe('7')
 	})
 
-	test('keeps the newest REP price refresh when overlapping requests resolve out of order', async () => {
+	test('coalesces overlapping refreshes and saves the next completed REP price', async () => {
 		const oldEthQuote = createDeferred<RepQuote>()
 		const oldUsdcQuote = createDeferred<RepQuote>()
 		const newEthQuote = createDeferred<RepQuote>()
@@ -146,9 +146,20 @@ describe('useRepPrices refresh races', () => {
 		})
 
 		await waitFor(() => {
-			expect(ethCallCount).toBe(3)
-			expect(usdcCallCount).toBe(3)
+			expect(ethCallCount).toBe(2)
+			expect(usdcCallCount).toBe(2)
 		})
+
+		await act(async () => {
+			oldEthQuote.resolve(mockQuote(2n))
+			oldUsdcQuote.resolve(mockQuote(20n))
+			await Promise.all([oldEthQuote.promise, oldUsdcQuote.promise])
+		})
+
+		await waitFor(() => expectPrices('2', '20'))
+		await act(() => clickRefresh())
+		expect(ethCallCount).toBe(3)
+		expect(usdcCallCount).toBe(3)
 
 		await act(async () => {
 			newEthQuote.resolve(mockQuote(3n))
@@ -157,14 +168,6 @@ describe('useRepPrices refresh races', () => {
 		})
 
 		await waitFor(() => expectPrices('3', '30'))
-
-		await act(async () => {
-			oldEthQuote.resolve(mockQuote(2n))
-			oldUsdcQuote.resolve(mockQuote(20n))
-			await Promise.all([oldEthQuote.promise, oldUsdcQuote.promise])
-		})
-
-		expectPrices('3', '30')
 
 		await repPrices.remount()
 

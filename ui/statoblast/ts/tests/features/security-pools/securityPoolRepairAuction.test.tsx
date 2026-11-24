@@ -44,7 +44,7 @@ test('auction funding controls and bid rows stay in place through reload and fai
 	await waitFor(() => expect(view.container.textContent).toContain('Bid 1'))
 	expect(view.container.querySelectorAll('.card .card')).toHaveLength(0)
 	const original = Array.from(view.container.querySelectorAll('button'))
-	for (const name of ['Open collateral repair auction', 'Submit funded bid', 'Credit this bid’s refunds', 'Credit and withdraw refunds', 'Activate vault controls', 'Manage vault', 'Withdraw credited refunds', 'Refresh auction']) expect(original.some(node => node.textContent === name)).toBe(true)
+	for (const name of ['Open collateral repair auction', 'Submit funded bid', 'Credit this bid’s refunds', 'Credit and withdraw refunds', 'Activate position controls', 'Manage position', 'Withdraw credited refunds', 'Refresh auction']) expect(original.some(node => node.textContent === name)).toBe(true)
 	await act(() => {
 		for (const [name, value] of [
 			['Number of lots', '2'],
@@ -82,20 +82,20 @@ test('funded unclaimed winners show live fees and separate activation from manag
 	const opened: string[] = []
 	const view = await renderIntoDocument(<SecurityPoolRepairAuction fork={fixture.fork} bidder={owner} actions={actions} openVault={vault => opened.push(vault)} />)
 	lifecycle.trackRendered(view)
-	await waitFor(() => expect(view.container.textContent).toContain('Funded vault'))
+	await waitFor(() => expect(view.container.textContent).toContain('Funded position'))
 	expect(metric(view.container, 'Current pledged REP')).toContain('100.00')
 	expect(metric(view.container, 'Clearing REP per winning lot')).toContain('100.00')
 	expect(metric(view.container, 'REP pledged at closing')).toContain('100.00')
 	expect(metric(view.container, 'Unclaimed collateral fees')).toContain('7.00')
 	expect(metric(view.container, 'Unclaimed REP fees')).toContain('9.00')
-	expect(button(view.container, 'Activate vault controls').disabled).toBe(false)
-	expect(button(view.container, 'Manage vault').disabled).toBe(true)
+	expect(button(view.container, 'Activate position controls').disabled).toBe(false)
+	expect(button(view.container, 'Manage position').disabled).toBe(true)
 	fixture.values['bids'] = [owner, auctionVault, 12_000n, 2n, 60n * unit, false, true]
 	fixture.values['repairAuctionPosition'] = [auctionVault, 8n, 100n * unit, unit, 12_000n, 0n, true, 7n * unit, 9n * unit]
 	await act(() => button(view.container, 'Refresh auction').click())
-	await waitFor(() => expect(button(view.container, 'Manage vault').disabled).toBe(false))
-	expect(button(view.container, 'Activate vault controls').disabled).toBe(true)
-	await act(() => button(view.container, 'Manage vault').click())
+	await waitFor(() => expect(button(view.container, 'Manage position').disabled).toBe(false))
+	expect(button(view.container, 'Activate position controls').disabled).toBe(true)
+	await act(() => button(view.container, 'Manage position').click())
 	expect(opened).toEqual([auctionVault])
 })
 

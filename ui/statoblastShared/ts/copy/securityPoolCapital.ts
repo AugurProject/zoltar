@@ -123,7 +123,7 @@ export const reportChanged = 'Report terms changed. Review the commitment again.
 
 export { readUnavailable } from './securityPool.js'
 export const lastConfirmed = 'Last confirmed balances. Account refresh pending.'
-export const auctionVaultOwnership = 'This auction vault has separate collateral and obligations. Your connected wallet controls it, funds deposits and receives withdrawals.'
+export const auctionVaultOwnership = 'This auction position has separate collateral. Your wallet controls it and receives withdrawals.'
 
 export const depositLiquidating = 'This position is liquidating. REP top-ups are unavailable.'
 

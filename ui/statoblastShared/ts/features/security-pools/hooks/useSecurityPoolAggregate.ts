@@ -44,11 +44,11 @@ const proofAbi = [
 
 /** Describe an eligible immediate cure and the portion that can still queue. */
 function retirementQueueDescription(covered: bigint | undefined, remainingCommitment: bigint, collateral: Readonly<{ decimals: number; symbol: string }>) {
-	if (covered === undefined) return ' The reduction waits for spare capacity behind earlier retirement requests.'
+	if (covered === undefined) return ' The reduction waits for free capacity behind earlier reductions.'
 	// Rounding down keeps "covers only" conservative.
 	const coverage = ` Your REP covers only ${formatRoundedCurrencyBalance(covered, collateral.decimals, 4, 'down')} ${collateral.symbol} at the current price, so`
 	if (remainingCommitment >= covered) return `${coverage} this reduction is removed at once where spare capacity allows; any shortfall waits behind earlier retirement requests.`
-	return `${coverage} the uncovered part is removed at once where spare capacity allows. The rest waits for spare capacity behind earlier retirement requests.`
+	return `${coverage} the uncovered part is removed at once where spare capacity allows. The rest waits for free capacity behind earlier reductions.`
 }
 
 async function readAuthorizationProof(snapshot: SecurityPoolCapitalSnapshot, reportId: bigint, commitment: bigint) {
@@ -158,7 +158,7 @@ export function useSecurityPoolAggregate(
 	const pendingRetirement = livePositions.find(position => position.batch !== 0n)
 	const claimReason = ownerReason
 	const retirementReadinessReason = () => {
-		if (pendingRetirement === undefined) return 'No pending retirement.'
+		if (pendingRetirement === undefined) return 'No reduction in queue.'
 		if (snapshot?.priceValid === false) return 'A new accepted REP price is required.'
 		const preview = pendingRetirement.retirementPreview
 		if (preview !== undefined && preview.status !== 'ready') return capitalCopy.waitingForFreeCapacity
@@ -367,12 +367,12 @@ export function useSecurityPoolAggregate(
 					if (commitmentAttoEth === undefined) throw new Error('Enter a commitment.')
 					return {
 						...buildSecurityPoolCapitalSetCommitmentRequest({ ...base(selected), commitment: commitmentAttoEth, ...(reportId === undefined ? {} : { reportId }) }),
-						reviewDescription: `Authorize ${formatCurrencyBalance(commitmentAttoEth, selected.collateral.decimals)} ${selected.collateral.symbol} commitment backed by all ${formatCurrencyBalance(selected.ownerPrincipalAttoRep)} REP in your account at your saved ${formatCurrencyBalance(selected.ownerAccount.targetHealthFactorBps || 10_000n, 2)}% health target. All eligible questions share this capacity. Your account bears its own liquidation losses; retirement waits for spare capacity.${reportId === undefined ? '' : ` Report ${reportId} sets a collateral price floor until a later canonical report covers the full pool commitment.`}`,
+						reviewDescription: `Authorize ${formatCurrencyBalance(commitmentAttoEth, selected.collateral.decimals)} ${selected.collateral.symbol} commitment backed by all ${formatCurrencyBalance(selected.ownerPrincipalAttoRep)} REP in your position at your saved ${formatCurrencyBalance(selected.ownerAccount.targetHealthFactorBps || 10_000n, 2)}% health target. All eligible questions share this capacity. Your position bears its own liquidation losses. Reductions wait for free capacity.${reportId === undefined ? '' : ` Report ${reportId} sets a collateral price floor until a later canonical report covers the full pool commitment.`}`,
 					}
 				},
 				async latest => {
 					if (latest.ownerAccount.targetHealthFactorBps !== snapshot?.ownerAccount.targetHealthFactorBps) throw new Error('Your health target changed. Review the commitment again.')
-					if (latest.ownerPrincipalAttoRep !== snapshot?.ownerPrincipalAttoRep) throw new Error('Your principal changed. Review the commitment again.')
+					if (latest.ownerPrincipalAttoRep !== snapshot?.ownerPrincipalAttoRep) throw new Error('Your pledged REP changed. Review the commitment again.')
 					const freshProofPrice = reportId !== undefined && commitmentAttoEth !== undefined ? await readAuthorizationProof(latest, reportId, commitmentAttoEth) : undefined
 					if (freshProofPrice !== proofPrice) throw new Error(capitalCopy.reportChanged)
 					const reason = capitalAuthorizationReason(latest, commitmentAttoEth, freshProofPrice)
@@ -382,7 +382,7 @@ export function useSecurityPoolAggregate(
 		claim: () =>
 			run('claimSecurityPoolEarnings', 'Claim earnings', claimReason, selected => ({
 				...buildSecurityPoolCapitalClaimEarningsRequest(base(selected)),
-				reviewDescription: `Checkpoint and collect your earned ${selected.collateral.symbol} and REP. Future vesting rewards stay in the security pool. This does not withdraw your principal.`,
+				reviewDescription: `Checkpoint and collect your earned ${selected.collateral.symbol} and REP. Future vesting rewards stay in the security pool. Your pledged REP stays in the position.`,
 			})),
 		serve: () =>
 			run(
@@ -390,7 +390,7 @@ export function useSecurityPoolAggregate(
 				capitalCopy.releaseReduction,
 				serveReason,
 				selected => {
-					if (pendingRetirement === undefined) throw new Error('No pending retirement.')
+					if (pendingRetirement === undefined) throw new Error('No reduction in queue.')
 					return {
 						...buildSecurityPoolCapitalServeRetirementRequest({ ...base(selected), positionId: pendingRetirement.id }),
 						reviewDescription: `Finish your request at ${formatCurrencyBalance(pendingRetirement.remainingCommitment, selected.collateral.decimals)} ${selected.collateral.symbol} commitment. Earlier requested reductions remain reserved even if their owners have not claimed. ${capitalCopy.retirementPreviewHint}`,
@@ -398,17 +398,17 @@ export function useSecurityPoolAggregate(
 				},
 				latest => {
 					if (!latest.priceValid) throw new Error('A new accepted REP price is required.')
-					if (latest.forkTime > 0n || latest.frozen || latest.importing) throw new Error('This universe is closed to retirement.')
-					if (pendingRetirement === undefined) throw new Error('No pending retirement.')
+					if (latest.forkTime > 0n || latest.frozen || latest.importing) throw new Error('This universe is closed to commitment reductions.')
+					if (pendingRetirement === undefined) throw new Error('No reduction in queue.')
 					const current = latest.positions.find(position => position.id === pendingRetirement.id && position.commitment > 0n && position.batch !== 0n)
-					if (current === undefined || current.remainingCommitment !== pendingRetirement.remainingCommitment) throw new Error('Retirement request changed. Review the transaction again.')
-					if (pendingRetirement.retirementPreview?.status === 'ready' && current.retirementPreview?.status !== 'ready') throw new Error('Retirement capacity changed. Refresh the preview and review the transaction again.')
+					if (current === undefined || current.remainingCommitment !== pendingRetirement.remainingCommitment) throw new Error('Commitment reduction changed. Review the transaction again.')
+					if (pendingRetirement.retirementPreview?.status === 'ready' && current.retirementPreview?.status !== 'ready') throw new Error('Free capacity changed. Refresh the preview and review the transaction again.')
 				},
 			),
 		retire: (id: bigint, requestedCommitment = remainingCommitment) =>
 			run(
 				`retireSecurityPool-${id}`,
-				livePositions.some(position => position.id === id && position.batch !== 0n) ? capitalCopy.resubmitRetirement : 'Request retirement',
+				livePositions.some(position => position.id === id && position.batch !== 0n) ? capitalCopy.resubmitRetirement : capitalCopy.retire,
 				ownerReason ?? inactiveReason,
 				selected => {
 					const reason = capitalRetirementReason(selected, id, requestedCommitment)
@@ -419,11 +419,11 @@ export function useSecurityPoolAggregate(
 					const queue = retirementQueueDescription(queuesWithoutCure ? undefined : covered, requestedCommitment, selected.collateral)
 					const description =
 						position !== undefined && position.batch !== 0n
-							? `Re-submit position ${id}'s saved retirement target of ${formatCurrencyBalance(requestedCommitment, selected.collateral.decimals)} ${selected.collateral.symbol}. Its target stays fixed.`
+							? `Re-submit position ${id}'s saved reduction target of ${formatCurrencyBalance(requestedCommitment, selected.collateral.decimals)} ${selected.collateral.symbol}. Its target stays fixed.`
 							: `Reduce position ${id} to ${formatCurrencyBalance(requestedCommitment, selected.collateral.decimals)} ${selected.collateral.symbol} commitment.`
 					return {
 						...buildSecurityPoolCapitalSetCommitmentRequest({ ...base(selected), commitment: requestedCommitment }),
-						reviewDescription: `${description} ${requestedCommitment === 0n ? 'Full retirement releases its REP.' : 'The reduction stops at this amount and keeps its REP backing the remaining commitment.'}${queue} Once submitted, the request cannot be changed or cancelled. The saved health target stays unchanged.`,
+						reviewDescription: `${description} ${requestedCommitment === 0n ? 'Reducing to zero releases its pledged REP.' : 'The reduction stops at this amount and keeps its REP backing the remaining commitment.'}${queue} Once submitted, the request cannot be changed or cancelled. The saved health target stays unchanged.`,
 					}
 				},
 				latest => {

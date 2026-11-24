@@ -27,6 +27,7 @@ export function SecurityPoolPriceReport({
 	redesigned = false,
 	priceBand,
 	openOracleHref,
+	onPriceAccepted,
 	...parameters
 }: SecurityPoolPriceParameters & {
 	returnFundsOnly?: boolean
@@ -35,6 +36,7 @@ export function SecurityPoolPriceReport({
 	redesigned?: boolean
 	priceBand?: { accepted: bigint; health: bigint; liquidation: bigint; validUntil: bigint; timestamp: bigint; decimals: number } | undefined
 	openOracleHref?: string | undefined
+	onPriceAccepted?: ((universeId: bigint) => void) | undefined
 }) {
 	const model = useSecurityPoolPrice(parameters)
 	const scoped = copy.scopes[parameters.scope]
@@ -43,6 +45,10 @@ export function SecurityPoolPriceReport({
 	const branch = parameters.scope === 'branch'
 	const priceWarningId = useId()
 	const observation = model.snapshot?.observation
+	const observedUniverse = model.snapshot?.universeId
+	useEffect(() => {
+		if (observedUniverse !== undefined && observation !== undefined && observation.lastSettlementTimestamp > 0n) onPriceAccepted?.(observedUniverse)
+	}, [observedUniverse, observation?.lastSettlementTimestamp, onPriceAccepted])
 	const disabled = parameters.actions.busy !== undefined
 	const report = model.report
 	const fundsRemain = report !== undefined && (report.wethCredit > 0n || report.repCredit > 0n || !report.state.settled || report.outcome === 0n)

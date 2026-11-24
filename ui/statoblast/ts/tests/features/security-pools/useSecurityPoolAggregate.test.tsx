@@ -99,7 +99,7 @@ test('stale prices block live-principal withdrawal and authorization while prese
 	expect(hook.state().withdrawReason).toContain('price')
 	await act(() => hook.state().claim())
 	expect(requests).toHaveLength(1)
-	expect(hook.state().serveReason).toBe('No pending retirement.')
+	expect(hook.state().serveReason).toBe('No reduction in queue.')
 })
 test('authorizing backed capacity sends zero ETH without a separate funding action', async () => {
 	const { hook, requests } = await setup(capitalSnapshot({ walletAttoEth: 0n }))
@@ -129,9 +129,9 @@ test('a pending retirement locks the commitment: no cancel, no new request and n
 	const { hook } = await setup(retiring)
 	expect(Object.keys(hook.state().positionReasons(1n))).toEqual(['retire'])
 	expect('cancelRetirement' in hook.state()).toBe(false)
-	expect(hook.state().positionReasons(1n).retire).toBe('Retirement already requested.')
+	expect(hook.state().positionReasons(1n).retire).toBe('A reduction is already in queue.')
 	await act(() => hook.state().setCommitmentAmount('11'))
-	expect(hook.state().authorizeReason).toBe('Your commitment is locked until its retirement is released.')
+	expect(hook.state().authorizeReason).toBe('Your commitment is locked until the reduction is released.')
 })
 test('commitment starts from funded target capacity and lowering a target never sends authorization', async () => {
 	const { hook, requests } = await setup()
@@ -188,14 +188,14 @@ test('the retirement review omits the immediate cure for a covered position', as
 	const { hook, requests } = await setup()
 	await act(() => hook.state().retire(1n))
 	expect(requests[0]?.reviewDescription).not.toContain('removed at once')
-	expect(requests[0]?.reviewDescription).toContain('The reduction waits for spare capacity')
+	expect(requests[0]?.reviewDescription).toContain('The reduction waits for free capacity')
 })
 test('the retirement review states the immediate cure for a position underwater at a fresh price', async () => {
 	const { hook, requests } = await setup(underwaterSnapshot())
 	await act(() => hook.state().retire(1n))
 	// 30 REP at a 10,500 bps multiplier and a liquidation price of 4 backs 7.142857… WETH, shown rounded down.
-	expect(requests[0]?.reviewDescription).toContain('Your REP covers only 7.1428 WETH at the current price, so the uncovered part is removed at once where spare capacity allows. The rest waits for spare capacity behind earlier retirement requests.')
-	expect(requests[0]?.reviewDescription).toContain('The rest waits for spare capacity')
+	expect(requests[0]?.reviewDescription).toContain('Your REP covers only 7.1428 WETH at the current price, so the uncovered part is removed at once where spare capacity allows. The rest waits for free capacity behind earlier reductions.')
+	expect(requests[0]?.reviewDescription).toContain('The rest waits for free capacity')
 })
 test.each(['0', '5'])('the retirement review queues target %s when the uncovered deficit is below the minimum cure', async remaining => {
 	const snapshot = underwaterSnapshot()
@@ -205,7 +205,7 @@ test.each(['0', '5'])('the retirement review queues target %s when the uncovered
 	})
 	await act(() => hook.state().retire(1n))
 	expect(requests[0]?.reviewDescription).not.toContain('removed at once')
-	expect(requests[0]?.reviewDescription).toContain('The reduction waits for spare capacity')
+	expect(requests[0]?.reviewDescription).toContain('The reduction waits for free capacity')
 })
 test('the retirement review states six-decimal collateral amounts in collateral units', async () => {
 	const usdc = 10n ** 6n
@@ -270,7 +270,7 @@ test('personal health and exact commitment consent are rechecked after the revie
 	transport.setSnapshot(capitalSnapshot({ ownerAccount: { ...capitalSnapshot().ownerAccount, targetHealthFactorBps: 15_000n } }))
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('health target changed')
 	transport.setSnapshot(capitalSnapshot({ ownerPrincipalAttoRep: 31n * unit }))
-	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('principal changed')
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('pledged REP changed')
 })
 test('custom admission blocks new underwriting while keeping existing owners exits available', async () => {
 	const snapshot = capitalSnapshot()
@@ -341,7 +341,7 @@ test('retirement service stays disabled while the owner request lacks capacity',
 
 test('retirement service without an owner request cannot process other owners', async () => {
 	const { hook, requests } = await setup()
-	expect(hook.state().serveReason).toBe('No pending retirement.')
+	expect(hook.state().serveReason).toBe('No reduction in queue.')
 	expect(() => act(() => hook.state().serve())).toThrow(hook.state().serveReason)
 	expect(requests).toHaveLength(0)
 })
@@ -356,7 +356,7 @@ test('a retirement reviewed as ready is stopped if its capacity disappears befor
 	if (request === undefined) throw new Error('Missing retirement request')
 	await request.validateBeforeSubmit?.()
 	transport.setSnapshot({ ...snapshot, demandAttoEth: 20n * unit, positions: snapshot.positions.map(position => ({ ...position, retirementPreview: { ...preview, status: 'insufficient-spare', spareCommitment: 0n } })) })
-	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Retirement capacity changed')
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Free capacity changed')
 })
 
 test('withdrawals use the on-chain allowance and recheck it before submission', async () => {
@@ -478,7 +478,7 @@ test('re-submits the saved pending target while keeping other retirement values 
 	const pending = { ...snapshot, positions: snapshot.positions.map(position => ({ ...position, batch: 1n, remainingCommitment: 5n * unit })) }
 	const { hook, requests } = await setup(pending)
 	expect(hook.state().positionReasons(1n, 5n * unit).retire).toBeUndefined()
-	expect(hook.state().positionReasons(1n, 4n * unit).retire).toBe('Retirement already requested.')
+	expect(hook.state().positionReasons(1n, 4n * unit).retire).toBe('A reduction is already in queue.')
 	await act(async () => {
 		await hook.state().retire(1n, 5n * unit)
 	})

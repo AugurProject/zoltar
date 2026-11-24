@@ -13,16 +13,20 @@ import { PaginationControls } from '@zoltar/ui-core-shared/components/Pagination
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import { SecurityPoolButton, SecurityPoolInput } from './SecurityPoolControls.js'
 import { useSecurityPoolAuction, type SecurityPoolAuctionParameters } from '../hooks/useSecurityPoolAuction.js'
-import { useId } from 'preact/hooks'
+import { useEffect, useId } from 'preact/hooks'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import type { SecurityPoolAuctionBid } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import * as copy from '../../../copy/securityPoolRepairAuction.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
-export function SecurityPoolRepairAuction(parameters: SecurityPoolAuctionParameters) {
+export function SecurityPoolRepairAuction({ onAuctionFinalized, ...parameters }: SecurityPoolAuctionParameters & { onAuctionFinalized?: ((universeId: bigint) => void) | undefined }) {
 	const model = useSecurityPoolAuction(parameters)
 	const snapshot = model.snapshot
 	const auction = snapshot?.auction
+	const childUniverse = parameters.fork?.branch?.universeId
+	useEffect(() => {
+		if (childUniverse !== undefined && auction?.finalized) onAuctionFinalized?.(childUniverse)
+	}, [childUniverse, auction?.finalized, onAuctionFinalized])
 	const disabled = parameters.actions.busy !== undefined
 	const noAdmissibleLimit = auction?.opened && !auction.finalized && auction.maximumAdmissibleBidAttoRepPerLot < auction.minimumCollateralAttoRepPerLot
 	let displayedAttoRepPerLot: bigint | undefined

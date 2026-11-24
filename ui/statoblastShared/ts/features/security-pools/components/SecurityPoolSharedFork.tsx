@@ -2,6 +2,7 @@ import { useFavorites } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { parseWatchlistEntity, decodeWatchlistRows } from '../../../protocol/watchlistRows.js'
 import { statoblastDisplayCache } from '../../../protocol/statoblastPageCache.js'
 import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getBrowserStorage } from '@zoltar/ui-core-shared/lib/browserStorage.js'
 import { formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import { ScalarOutcomePicker } from '@zoltar/ui-core-shared/components/ScalarOutcomePicker.js'
 import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -43,6 +44,27 @@ export function SecurityPoolSharedFork({ redesigned = false, forkQuestion, onBra
 	const checkedStep = (done: boolean) => (done && redesigned ? <span className='statoblast-step-done'>{pageCopy.completedStep}</span> : undefined)
 	const disabled = parameters.actions.busy !== undefined
 	const branch = state?.branch
+	const [pricedBranch, setPricedBranch] = useState<bigint>()
+	const [finalizedAuctionBranch, setFinalizedAuctionBranch] = useState<bigint>()
+	const openedPositionKey = state === undefined || branch === undefined ? undefined : `statoblast:opened-branch-position:${state.chainId}:${state.securityPool}:${state.owner}:${branch.universeId}`
+	const rememberOpen = () => {
+		if (openedPositionKey !== undefined && model.openReason === undefined) {
+			try {
+				getBrowserStorage('localStorage')?.setItem(openedPositionKey, 'yes')
+			} catch (error) {
+				if (!(error instanceof DOMException)) throw error
+			}
+		}
+		model.open()
+	}
+	let opened = false
+	if (openedPositionKey !== undefined) {
+		try {
+			opened = getBrowserStorage('localStorage')?.getItem(openedPositionKey) === 'yes'
+		} catch (error) {
+			if (!(error instanceof DOMException)) throw error
+		}
+	}
 	const choices = namedBranchChoices(forkQuestion)
 	const priceSection = useRef<HTMLDivElement>(null)
 	const auctionSection = useRef<HTMLDivElement>(null)
@@ -153,13 +175,13 @@ export function SecurityPoolSharedFork({ redesigned = false, forkQuestion, onBra
 					{redesigned && (
 						<li>
 							<ActionLauncherButton tone='secondary' idleLabel={pageCopy.branchRepPrice} pendingLabel={pageCopy.branchRepPrice} availability={{ disabled: priceReason !== undefined, reason: priceReason }} onClick={() => openSection(priceSection.current)} />
-							{checkedStep(branch?.ready === true)}
+							{checkedStep(branch !== undefined && pricedBranch === branch.universeId)}
 						</li>
 					)}
 					{redesigned && (
 						<li>
 							<ActionLauncherButton tone='secondary' idleLabel={pageCopy.repairAuction} pendingLabel={pageCopy.repairAuction} availability={{ disabled: auctionReason !== undefined, reason: auctionReason }} onClick={() => openSection(auctionSection.current)} />
-							{checkedStep(branch?.ready === true)}
+							{checkedStep(branch !== undefined && finalizedAuctionBranch === branch.universeId)}
 						</li>
 					)}
 					<li>
@@ -167,15 +189,16 @@ export function SecurityPoolSharedFork({ redesigned = false, forkQuestion, onBra
 						{checkedStep(branch?.ready === true)}
 					</li>
 					<li>
-						<ActionLauncherButton tone='secondary' idleLabel={copy.open} pendingLabel={copy.loading} availability={{ disabled: disabled || model.openReason !== undefined, reason: disabled ? copy.busy : model.openReason }} onClick={model.open} />
+						<ActionLauncherButton tone='secondary' idleLabel={copy.open} pendingLabel={copy.loading} availability={{ disabled: disabled || model.openReason !== undefined, reason: disabled ? copy.busy : model.openReason }} onClick={rememberOpen} />
+						{checkedStep(opened)}
 					</li>
 				</ol>
 			</SectionBlock>
 			<div ref={priceSection} tabIndex={-1}>
-				<SecurityPoolPriceReport hideReportingDeadline={redesigned} scope='branch' target={priceTarget} actions={parameters.actions} bidder={parameters.bidder} referencePrice={parameters.snapshot?.acceptedPrice} />
+				<SecurityPoolPriceReport hideReportingDeadline={redesigned} scope='branch' target={priceTarget} actions={parameters.actions} bidder={parameters.bidder} referencePrice={parameters.snapshot?.acceptedPrice} onPriceAccepted={setPricedBranch} />
 			</div>
 			<div ref={auctionSection} tabIndex={-1}>
-				<SecurityPoolRepairAuction fork={state} actions={parameters.actions} bidder={parameters.bidder} openVault={parameters.openVault} />
+				<SecurityPoolRepairAuction fork={state} actions={parameters.actions} bidder={parameters.bidder} openVault={parameters.openVault} onAuctionFinalized={setFinalizedAuctionBranch} />
 			</div>
 			<SectionBlock title={pageCopy.shareRecovery}>
 				<WorkflowSubsection title={copy.basketTitle}>
