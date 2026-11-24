@@ -102,6 +102,7 @@ export function TradingSection({
 	const migrateSharesEnabled = resolvedPoolState.actions.migrateShares.enabled
 	const redeemSharesEnabled = resolvedPoolState.actions.redeemShares.enabled
 	const shareBalances = tradingDetails?.shareBalances
+	const loadingShareValues = loadingTradingDetails && tradingDetails === undefined
 	const maxRedeemableCompleteSetsAttoShares = tradingDetails?.maxRedeemableCompleteSetsAttoShares
 	const displayMaxRedeemableCompleteSets = convertAttoSharesToSettlementCollateralAttoEth(maxRedeemableCompleteSetsAttoShares, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const recoveryRep = (shares: bigint | undefined) => {
@@ -282,7 +283,7 @@ export function TradingSection({
 	}
 	const renderShareMetricValue = (value: bigint | undefined, backing?: bigint) => (
 		<>
-			<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={value} units={collateralDecimals} />
+			<CurrencyValue exactWhenRoundedToZero loading={loadingShareValues} value={value} units={collateralDecimals} />
 			{backing === undefined ? undefined : (
 				<>
 					{' '}
@@ -295,13 +296,13 @@ export function TradingSection({
 	const renderPayoutMetrics = ({ attoShares, collateralLabel, collateralPayout, repLabel, sharesLabel, sharesUnit }: { attoShares: bigint | undefined; collateralLabel: string; collateralPayout: bigint | undefined; repLabel: string; sharesLabel: string; sharesUnit: string }) => (
 		<MetricGrid>
 			<MetricField label={sharesLabel}>
-				<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={attoShares} suffix={sharesUnit} units={collateralDecimals} />
+				<CurrencyValue exactWhenRoundedToZero loading={loadingShareValues} value={attoShares} suffix={sharesUnit} units={collateralDecimals} />
 			</MetricField>
 			<MetricField label={collateralLabel}>
-				<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} decimals={4} value={collateralPayout} suffix={collateralSymbol} units={collateralDecimals} />
+				<CurrencyValue exactWhenRoundedToZero loading={loadingShareValues} decimals={4} value={collateralPayout} suffix={collateralSymbol} units={collateralDecimals} />
 			</MetricField>
 			<MetricField label={repLabel}>
-				<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={recoveryRep(attoShares)} suffix={commonCopy.rep} />
+				<CurrencyValue exactWhenRoundedToZero loading={loadingShareValues} value={recoveryRep(attoShares)} suffix={commonCopy.rep} />
 			</MetricField>
 		</MetricGrid>
 	)
@@ -354,7 +355,7 @@ export function TradingSection({
 								<div className='trading-holdings-hero'>
 									<span className='trading-holdings-label'>{tradingCopy.redeemableCompleteSets}</span>
 									<strong className='trading-holdings-value'>
-										<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maxRedeemableCompleteSetsAttoShares} suffix={tradingCopy.setsUnit} units={collateralDecimals} />
+										<CurrencyValue exactWhenRoundedToZero loading={loadingShareValues} value={maxRedeemableCompleteSetsAttoShares} suffix={tradingCopy.setsUnit} units={collateralDecimals} />
 										{displayMaxRedeemableCompleteSets === undefined ? undefined : (
 											<span className='trading-holdings-backing'>
 												(<CurrencyValue exactWhenRoundedToZero decimals={4} value={displayMaxRedeemableCompleteSets} suffix={collateralSymbol} units={collateralDecimals} />)

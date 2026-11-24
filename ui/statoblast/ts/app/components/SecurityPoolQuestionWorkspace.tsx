@@ -60,6 +60,8 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 	const displayCache = statoblastDisplayCache(getActiveNetworkProfile(), { universeId, owner: accountState.address, page: selectionKey }, decodeQuestionHeading)
 	const cached = cacheScope === cachedHeading?.scope ? cachedHeading.page : undefined
 	const [lastRead, setLastRead] = useState<{ scope: string; at: number }>()
+	const [reportRead, setReportRead] = useState<{ scope: string; at: number }>()
+	const [sharesRead, setSharesRead] = useState<{ scope: string; at: number }>()
 	const [loading, setLoading] = useState(false)
 	const [loadError, setLoadError] = useState<string>()
 	const [refresh, setRefresh] = useState(0)
@@ -88,7 +90,9 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 	const [readStep, setReadStep] = useState(1)
 	const reportFallback = cachedReporting?.scope === cacheScope && reportingDetails === undefined ? cachedReporting.data : undefined
 	const sharesFallback = cachedShares?.scope === cacheScope && trading.tradingDetails === undefined ? cachedShares : undefined
-	const dataAge = entry.tab === 'shares' ? sharesFallback?.savedAt : reportFallback?.checkedAt
+	const reportCheckedAt = reportRead?.scope === cacheScope ? reportRead.at : undefined
+	const sharesCheckedAt = sharesRead?.scope === cacheScope ? sharesRead.at : undefined
+	const dataAge = entry.tab === 'shares' ? (sharesFallback?.savedAt ?? sharesCheckedAt) : (reportFallback?.checkedAt ?? reportCheckedAt)
 	const displayedAt = dataAge ?? (lastRead?.scope === readScope ? lastRead.at : cached?.savedAt)
 	const refreshError = useStatoblastRefreshError(loadError, displayedAt)
 	const readQuestion = () => {
@@ -98,6 +102,9 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 			scope: readScope,
 			promise: Promise.resolve().then(async () => {
 				const isCurrent = () => requestScope.current === readScope && activeRead.current === request
+				const showReadError = (error: unknown) => {
+					if (isCurrent()) setLoadError(getErrorMessage(error, copy.questionUnavailable))
+				}
 				setLoadError(undefined)
 				setReadStep(1)
 				setLoading(true)
@@ -108,7 +115,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 					displayCache.write(question, block)
 					if (ledgerAddress === question.questionLedgerAddress) {
 						setReadStep(2)
-						const details = await (entry.tab === 'shares' ? trading.refreshShares() : reporting.readReporting())
+						const details = await (entry.tab === 'shares' ? trading.refreshShares(showReadError) : reporting.readReporting(showReadError))
 						if (details === undefined) return
 					}
 					if (isCurrent()) {
@@ -116,7 +123,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 						setRefresh(value => value + 1)
 					}
 				} catch (error) {
-					if (isCurrent()) setLoadError(getErrorMessage(error, copy.questionUnavailable))
+					showReadError(error)
 				} finally {
 					if (isCurrent()) {
 						setLoading(false)
@@ -198,19 +205,22 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 		setDeadlineFailed(false)
 		void readQuestion()
 	}
-	const lastDisplayedDetails = useRef(reportingDetails)
-	const [reportCheckedAt, setReportCheckedAt] = useState<number>()
+	const lastDisplayedDetails = useRef<{ scope: string; data: typeof reportingDetails }>()
 	useEffect(() => {
-		if (reportingDetails === undefined || lastDisplayedDetails.current === reportingDetails || snapshot?.identity !== selectionKey) return
-		lastDisplayedDetails.current = reportingDetails
+		if (reportingDetails === undefined || (lastDisplayedDetails.current?.scope === cacheScope && lastDisplayedDetails.current.data === reportingDetails) || snapshot?.identity !== selectionKey) return
+		lastDisplayedDetails.current = { scope: cacheScope, data: reportingDetails }
 		const checkedAt = Date.now()
-		setReportCheckedAt(checkedAt)
+		setReportRead({ scope: cacheScope, at: checkedAt })
 		reportCache.write(reportingOverview(reportingDetails, checkedAt), snapshot.block)
 	}, [reportingDetails, cacheScope, snapshot])
+	const shareBalances = trading.tradingDetails?.shareBalances
+	const lastDisplayedBalances = useRef<{ scope: string; data: typeof shareBalances }>()
 	useEffect(() => {
-		const balances = trading.tradingDetails?.shareBalances
-		if (balances !== undefined && snapshot?.identity === selectionKey && selected !== undefined) sharesCache.write(balances, snapshot.block)
-	}, [trading.tradingDetails, snapshot, cacheScope])
+		if (shareBalances === undefined || (lastDisplayedBalances.current?.scope === cacheScope && lastDisplayedBalances.current.data === shareBalances) || snapshot?.identity !== selectionKey || selected === undefined) return
+		lastDisplayedBalances.current = { scope: cacheScope, data: shareBalances }
+		setSharesRead({ scope: cacheScope, at: Date.now() })
+		sharesCache.write(shareBalances, snapshot.block)
+	}, [shareBalances, snapshot, cacheScope])
 	useEffect(() => {
 		if (selected === undefined) return
 		openHistory(profile).add({ ...entry, tab: 'shares', sharesAction: undefined }, selected.marketDetails.title, universeId)

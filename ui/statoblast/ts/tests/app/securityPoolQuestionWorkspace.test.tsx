@@ -10,6 +10,11 @@ import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accou
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs, simulationWaitOptions } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import type { RegisterStatoblastPageRefresh, ReportStatoblastReadStatus } from '@zoltar/ui-statoblast-shared/features/useStatoblastPageRefresh.js'
+import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { statoblastDisplayCache } from '@zoltar/ui-statoblast-shared/protocol/statoblastPageCache.js'
 
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 const callbacks = { onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined, refreshState: async () => undefined }
@@ -24,18 +29,46 @@ test(
 			const [owner] = await backend.getAccounts()
 			if (pool === undefined || questionId === undefined || owner === undefined) throw new Error('Missing seeded pool, question or wallet.')
 			let offline = true
+			let balanceRead: ReturnType<typeof createDeferred<void>> | undefined
+			let reportingRead: ReturnType<typeof createDeferred<void>> | undefined
+			let detailsReadStarted = false
 			const client = backend.createReadClient()
 			const readContract: typeof client.readContract = async request => {
 				if (offline && request.functionName === 'initialReportPriorityFeeAttoEthPerGas') throw new Error('Temporary question read failure.')
+				if (request.functionName === 'balanceOfShares' && balanceRead !== undefined) {
+					detailsReadStarted = true
+					await balanceRead.promise
+				}
 				return await client.readContract(request)
 			}
-			installActiveEnvironmentForTesting({ ...backend, createReadClient: () => client.extend(() => ({ readContract })) })
+			const multicall: typeof client.multicall = async request => {
+				if (reportingRead !== undefined && request.contracts.some(call => call.functionName === 'initialEscalationGameDepositAttoRep')) {
+					detailsReadStarted = true
+					await reportingRead.promise
+				}
+				return await client.multicall(request)
+			}
+			installActiveEnvironmentForTesting({ ...backend, createReadClient: () => client.extend(() => ({ readContract, multicall })) })
 			installStatoblastRouting()
 			window.history.replaceState({}, '', `#/pool/${pool.address}/question/${questionId}/shares?simulate=1&genesis=yes&simScenario=securitypoolx2`)
+			const deployments: DeploymentStatus[] = [{ address: zeroAddress, dependencies: [], deploy: async () => zeroAddress, deployed: true, id: 'proxyDeployer', label: 'proxyDeployer' }]
+			let refresh: (() => Promise<unknown>) | undefined
+			let status: { readAt: number | undefined; progress: string | undefined } | undefined
+			const registerPageRefresh: RegisterStatoblastPageRefresh = callback => {
+				refresh = callback
+				return () => {
+					refresh = undefined
+				}
+			}
+			const onReadStatus: ReportStatoblastReadStatus = (readAt, progress) => {
+				status = { readAt, progress }
+			}
 			const props = {
 				parameters: { ...callbacks, accountAddress: owner },
 				accountState: createAccountState({ address: owner, chainId: backend.profile.chainIdHex }),
-				deploymentStatuses: [],
+				deploymentStatuses: deployments,
+				registerPageRefresh,
+				onReadStatus,
 				enabled: true,
 				environmentKey: 0,
 				universeId: 0n,
@@ -65,8 +98,47 @@ test(
 			offline = false
 			await clickRetry()
 			await waitFor(() => expect(view.container.textContent).not.toContain('showing data from'), simulationWaitOptions)
+			const checkDetailsFailure = async (gate: ReturnType<typeof createDeferred<void>>, assertVisible: () => void, fail: string) => {
+				if (refresh === undefined || status?.readAt === undefined) throw new Error('Missing verified question refresh status')
+				const previousReadAt = status.readAt
+				detailsReadStarted = false
+				let completed = false
+				const pending = refresh().then(() => {
+					completed = true
+				})
+				await waitFor(() => expect(status?.progress).toBe('Refreshing… 2 of 2'), simulationWaitOptions)
+				await waitFor(() => expect(detailsReadStarted).toBe(true), simulationWaitOptions)
+				expect(status?.readAt).toBe(previousReadAt)
+				assertVisible()
+				expect(completed).toBe(false)
+				gate.reject(new Error(fail))
+				await pending
+				await waitFor(() => expect(view.container.textContent).toMatch(/Couldn’t refresh, showing data from \d+s ago\./), simulationWaitOptions)
+				assertVisible()
+				expect(view.container.textContent).toContain(fail)
+				expect(status?.readAt).toBe(previousReadAt)
+			}
+			const assertSharesVisible = () => expect(view.container.textContent).toContain('1.00 sets')
+			await waitFor(assertSharesVisible, simulationWaitOptions)
+			await waitFor(() => expect(status?.progress).toBeUndefined(), simulationWaitOptions)
+			const sharesCache = statoblastDisplayCache(backend.profile, { universeId: 0n, owner, page: `shares:${pool.address}:${questionId}:0` }, value => value)
+			const savedBalances = sharesCache.read()
+			if (savedBalances === undefined) throw new Error('Missing saved share balances')
+			balanceRead = createDeferred<void>()
+			await checkDetailsFailure(balanceRead, assertSharesVisible, 'Share balances temporarily unavailable.')
+			expect(sharesCache.read()).toEqual(savedBalances)
+			balanceRead = undefined
+			await clickRetry()
+			await waitFor(() => expect(view.container.textContent).not.toContain('showing data from'), simulationWaitOptions)
 			await act(() => render(h(SecurityPoolQuestionWorkspace, { ...props, entry: { ...props.entry, tab: 'reporting' } }), view.container))
-			await waitFor(() => expect(view.container.textContent).toContain('Add to calendar'), simulationWaitOptions)
+			const assertReportingVisible = () => expect(view.container.querySelector('.statoblast-report-banner')).not.toBeNull()
+			await waitFor(assertReportingVisible, simulationWaitOptions)
+			await waitFor(() => expect(status?.progress).toBeUndefined(), simulationWaitOptions)
+			reportingRead = createDeferred<void>()
+			await checkDetailsFailure(reportingRead, assertReportingVisible, 'Reporting details temporarily unavailable.')
+			reportingRead = undefined
+			await clickRetry()
+			await waitFor(() => expect(view.container.textContent).not.toContain('showing data from'), simulationWaitOptions)
 		} finally {
 			await backend.dispose()
 		}

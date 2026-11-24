@@ -94,7 +94,7 @@ export function useReportingOperations(
 	{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState, selectedQuestionLedgerAddress, includeSchedule = false }: ResolvedReportingOperationsParameters,
 	dependencies: UseReportingOperationsDependencies = defaultUseReportingOperationsDependencies,
 ) {
-	const reportingLoad = useLoadController()
+	const reportingLoad = useLoadController({ timeoutMilliseconds: 15_000 })
 	const reportingDetails = useSignal<ReportingDetails | undefined>(undefined)
 	const reportingError = useSignal<string | undefined>(undefined)
 	const { state: reportingForm, setState: setReportingForm } = useFormState<ReportingFormState>(getDefaultReportingFormState())
@@ -135,7 +135,7 @@ export function useReportingOperations(
 
 	const resolveReportingQuestionLedgerAddress = () => parseAddressInput(effectiveReportingPoolAddressInput, commonCopy.questionLedgerAddress)
 
-	const readReporting = async () => {
+	const readReporting = async (onReadError?: (error: unknown) => void) => {
 		const selectionKey = currentReportingSelectionKey
 		const isCurrentLoad = nextReportingLoad()
 		return await reportingLoad.run({
@@ -150,9 +150,11 @@ export function useReportingOperations(
 			onSuccess: details => {
 				reportingDetails.value = details
 			},
-			onError: error => {
-				reportingError.value = getErrorMessage(error, 'Failed to load reporting details')
-			},
+			onError:
+				onReadError ??
+				(error => {
+					reportingError.value = getErrorMessage(error, 'Failed to load reporting details')
+				}),
 		})
 	}
 	const loadReporting = async () => {

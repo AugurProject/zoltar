@@ -68,7 +68,7 @@ const defaultUseTradingOperationsDependencies: UseTradingOperationsDependencies 
 
 export function useTradingOperations(parameters: UseTradingOperationsParameters, dependencies: UseTradingOperationsDependencies = defaultUseTradingOperationsDependencies) {
 	const { accountAddress, deploymentStatuses, enabled, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState, selectedQuestionLedgerAddress } = parameters
-	const tradingDetailsLoad = useLoadController()
+	const tradingDetailsLoad = useLoadController({ timeoutMilliseconds: 15_000 })
 	const nextTradingDetailsLoad = useRequestGuard()
 	const tradingDetails = useSignal<TradingDetails | undefined>(undefined)
 	const loadedDetailsScope = useSignal<string>()
@@ -169,7 +169,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 			})
 	}, enabled)
 
-	const refreshTradingDetails = async (questionLedgerAddressInput: string, walletAddress: Address | undefined, isCurrent?: () => boolean) => {
+	const refreshTradingDetails = async (questionLedgerAddressInput: string, walletAddress: Address | undefined, isCurrent?: () => boolean, onReadError?: (error: unknown) => void) => {
 		if (!tradingSystemDeployed) {
 			tradingDetails.value = undefined
 			tradingForkUniverse.value = undefined
@@ -194,9 +194,11 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 				tradingDetails.value = details
 				tradingForkUniverse.value = forkUniverse
 			},
-			onError: (error: unknown) => {
-				tradingError.value = getErrorMessage(error, 'Failed to load trading details.')
-			},
+			onError:
+				onReadError ??
+				((error: unknown) => {
+					tradingError.value = getErrorMessage(error, 'Failed to load trading details.')
+				}),
 		}
 
 		return await tradingDetailsLoad.run(isCurrent === undefined ? loadOptions : { ...loadOptions, isCurrent })
@@ -473,7 +475,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 		migrateShares,
 		redeemCompleteSet,
 		redeemShares,
-		refreshShares: () => refreshTradingDetails(resolveEffectiveTradingPoolAddressInput(), accountAddress, nextTradingDetailsLoad()),
+		refreshShares: (onReadError: (error: unknown) => void) => refreshTradingDetails(resolveEffectiveTradingPoolAddressInput(), accountAddress, nextTradingDetailsLoad(), onReadError),
 		setTradingForm: (updater: (current: TradingFormState) => TradingFormState) => {
 			tradingForm.value = updater(tradingForm.value)
 		},
