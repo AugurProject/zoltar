@@ -633,8 +633,6 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 					return 0n
 				case 'awaitingForkContinuation':
 					return false
-				case 'getFeeEpochEndTime':
-					return 2_000n
 				case 'shareTokenSupplyAttoShares':
 				case 'totalRepBackingUnits':
 				case 'totalBadDebtAttoEth':

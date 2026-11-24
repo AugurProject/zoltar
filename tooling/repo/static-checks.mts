@@ -7,6 +7,7 @@ const customChecks = [
 	'tooling/repo/lint-no-rendered-null.mts',
 	'tooling/repo/lint-no-double-casts.mts',
 	'tooling/contracts/lint-no-nested-solidity-ternaries.mts',
+	'tooling/contracts/check-trading-number-casts.mts',
 	'tooling/ui/lint-ui-layer-boundaries.mts',
 	'tooling/repo/check-shared-boundaries.mts',
 ] as const

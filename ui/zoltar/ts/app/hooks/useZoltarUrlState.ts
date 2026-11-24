@@ -22,7 +22,7 @@ function writeForkQuestionQueryParam(search: string, questionId: string | undefi
 
 function readZoltarUrlState(search: string): ZoltarUrlState {
 	return {
-		activeUniverseId: readUniverseQueryParam(search) ?? 0n,
+		activeUniverseId: readUniverseQueryParam(search) ?? readUniverseQueryParam(window.location.search) ?? 0n,
 		forkQuestionId: readForkQuestionQueryParam(search) ?? '',
 		zoltarView: readZoltarViewQueryParam(search) ?? '',
 	}

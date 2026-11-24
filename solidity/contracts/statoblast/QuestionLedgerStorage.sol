@@ -15,7 +15,6 @@ abstract contract QuestionLedgerStorage {
 	uint256 public lastSettlementSecurityPoolTime;
 	bool public awaitingForkContinuation;
 	SystemState public systemState;
-	uint256 internal feeEpochEndTime;
 	address public securityPoolCustody;
 	ISecurityPoolAccounting internal securityPoolAccounting;
 

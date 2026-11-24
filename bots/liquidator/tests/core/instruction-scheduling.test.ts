@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { executeSecurityPoolAutomation, executeQueuedSecurityPoolInstructions } from '../../src/runtime/scan-execution.ts'
-import { SecurityPoolOpportunityExpired } from '../../src/execution/security-pool-executor.ts'
+import { SecurityPoolGasBudgetExceeded, SecurityPoolOpportunityExpired } from '../../src/execution/security-pool-executor.ts'
 import { securityPoolInstructionKind } from '../../src/execution/security-pool-instructions.ts'
 import type { SecurityPoolInstruction } from '../../src/config/security-pool-instructions.ts'
 import { createWalletClient, createRpcEndpointPool, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
@@ -41,10 +41,13 @@ test('#1450 an over-budget queued instruction stays queued while later instructi
 	])
 
 	const takeovers: unknown[] = []
+	observation.snapshot.accruedFeesAttoEth = settings.strategy.maximumGasCostAttoEth + settings.securityPoolPolicy.minimumNetRewardAttoEth
+	let earningsChecks = 0
 	const actions: Parameters<typeof executeSecurityPoolAutomation>[3] = {
 		pendingReport: async () => 'none',
 		earnings: async () => {
-			throw new Error('Unexpected earnings action')
+			earningsChecks++
+			throw new SecurityPoolGasBudgetExceeded('Earnings exceed gas budget')
 		},
 		takeover: async (_wallet, _settings, _state, _pool, target) => {
 			takeovers.push(target)
@@ -52,6 +55,7 @@ test('#1450 an over-budget queued instruction stays queued while later instructi
 		unusedFunding: async () => false,
 	}
 	expect(await executeSecurityPoolAutomation({ wallet, settings, readPool: createRpcEndpointPool(['https://read.example']) }, state, async () => true, actions)).toBe(true)
+	expect(earningsChecks).toBe(1)
 	expect(takeovers).toEqual([observation])
 })
 

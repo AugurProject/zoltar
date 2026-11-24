@@ -363,7 +363,7 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 	let execution: ReturnType<typeof lifecycleExecutionFromLogs> | ReturnType<typeof replacementCreditExecutionFromLogs> | undefined
 	if (receipt.status === 'success') {
 		try {
-			execution = position.lifecycleKind === 'replacement-credit' ? replacementCreditExecutionFromLogs(receipt.logs, executor) : lifecycleExecutionFromLogs(receipt.logs, executor)
+			execution = position.lifecycleKind === 'replacement-credit' ? replacementCreditExecutionFromLogs(receipt.logs, executor, position.replacementCreditToken) : lifecycleExecutionFromLogs(receipt.logs, executor)
 		} catch (error) {
 			const expectedMessage = position.lifecycleKind === 'replacement-credit' ? 'Confirmed executor transaction did not emit ReplacementCreditWithdrawn' : 'Confirmed executor transaction did not emit LifecycleExecuted'
 			if (!(error instanceof Error) || error.message !== expectedMessage) throw error
@@ -399,6 +399,19 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 		const creditIsCollateral = execution.token.toLowerCase() === positionCollateralToken(position, config.network.weth).toLowerCase()
 		const creditIsPositionToken = execution.token.toLowerCase() === position.token.toLowerCase()
 		if (!creditIsCollateral && !creditIsPositionToken) return { ...accountedPosition, lifecycleReceiptRecovered: true, status: 'recovery-required' }
+		let withdrawnToken = creditIsPositionToken ? execution.amount : 0n
+		if (position.replacementResidualTokenAmount !== undefined) {
+			try {
+				const residual = replacementCreditExecutionFromLogs(receipt.logs, executor, position.token)
+				if (!creditIsCollateral || residual.account.toLowerCase() !== position.account.toLowerCase() || residual.reportId.toString() !== position.reportId || residual.amount !== BigInt(position.replacementResidualTokenAmount)) {
+					return { ...accountedPosition, lifecycleReceiptRecovered: true, status: 'recovery-required' }
+				}
+				withdrawnToken = residual.amount
+			} catch (error) {
+				if (!(error instanceof Error) || error.message !== 'Confirmed executor transaction did not emit ReplacementCreditWithdrawn') throw error
+				return { ...accountedPosition, lifecycleReceiptRecovered: true, status: 'recovery-required' }
+			}
+		}
 		return {
 			...accountedPosition,
 			closedAt: undefined,
@@ -408,7 +421,7 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 			lifecycleSettlerRewardEth: '0',
 			realizedNetProfitEth: undefined,
 			status: 'closed-pending-finality',
-			withdrawnToken: creditIsPositionToken ? formatUnits(execution.amount, tokenDecimals) : '0',
+			withdrawnToken: formatUnits(withdrawnToken, tokenDecimals),
 			withdrawnWeth: creditIsCollateral ? formatPositionCollateralAmount(position, execution.amount) : '0',
 		}
 	}

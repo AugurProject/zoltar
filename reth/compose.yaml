@@ -1,6 +1,6 @@
 services:
   jwt-init:
-    image: busybox:1.37.0
+    image: busybox:1.37.0@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
     command:
       - sh
       - -ec
@@ -14,7 +14,7 @@ services:
     restart: "no"
 
   reth:
-    image: ghcr.io/paradigmxyz/reth:v2.2.0
+    image: ghcr.io/paradigmxyz/reth:v2.2.0@sha256:505fca5e87d6411fc7117f29a87e42787ec2eebe8225506e9ddb4759ae2ba5cc
     restart: unless-stopped
     depends_on:
       jwt-init:
@@ -54,7 +54,7 @@ services:
     stop_grace_period: 2m
 
   lighthouse:
-    image: sigp/lighthouse:v8.2.1
+    image: sigp/lighthouse:v8.2.1@sha256:9538f53d8e11766e3cb5de1889b292074f8e518e0dabe6df13d9054d504d1d62
     restart: unless-stopped
     depends_on:
       jwt-init:

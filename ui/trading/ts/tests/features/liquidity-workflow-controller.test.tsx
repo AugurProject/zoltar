@@ -20,6 +20,7 @@ const account = `0x${'11'.repeat(20)}` as Address
 const transactionHash = `0x${'88'.repeat(32)}` as Hash
 const configuration = deploymentConfigurationFixture({ securityPoolFactory: `0x${'22'.repeat(20)}`, factory: `0x${'33'.repeat(20)}`, router: `0x${'44'.repeat(20)}` })
 const market = smallReserveMarketFixture({
+	availableMintingCapacityAttoEth: 10n ** 19n,
 	pool: `0x${'55'.repeat(20)}`,
 	pair: `0x${'66'.repeat(20)}`,
 	shareToken: `0x${'77'.repeat(20)}`,

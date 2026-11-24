@@ -138,6 +138,11 @@ describe('security pool branch price SDK', () => {
 		const anchored = { ...client, getBlock: async () => ({ number: 10n, hash, timestamp: 1_000n, baseFeePerGas: 7n }) }
 		const snapshot = await load(anchored)
 		expect(snapshot.observation?.bounty).toBe(15_804_573n * (10_000_000_000n + 7n) + 101n)
+		const reviewed = quoteSecurityPoolPriceFunding(snapshot, unit)
+		const nextBlock = await load({ ...client, getBlock: async () => ({ number: 10n, hash, timestamp: 1_000n, baseFeePerGas: 8n }) })
+		const laterBlock = await load({ ...client, getBlock: async () => ({ number: 10n, hash, timestamp: 1_000n, baseFeePerGas: 9n }) })
+		expect(nextBlock.observation?.bounty).toBe(reviewed.bounty)
+		expect(laterBlock.observation?.bounty ?? 0n).toBeGreaterThan(reviewed.bounty)
 		expect(calls.find(call => call.functionName === 'getSettlementCallbackGasLimit')).toMatchObject({ blockNumber: 10n })
 	})
 

@@ -25,6 +25,7 @@ import {
 	getEffectiveOpenOracleReportDetails,
 	getOpenOracleCreateEthSent,
 	getOpenOracleCreateGuardMessage,
+	getOpenOracleCreateWrapGuardMessage,
 	getOpenOracleCreateValidation,
 	getOpenOracleImpliedPrice,
 	OPEN_ORACLE_CREATE_FIELD_ORDER,
@@ -457,7 +458,8 @@ export function OpenOracleSection({
 									units={[token1Decimals, token2Decimals]}
 									symbols={[token1Symbol, token2Symbol]}
 									disabled={!isConnected || !isOnActiveAppChain || openOracleActiveAction !== undefined}
-									guard={rawCreateGuardMessage}
+									wrapGuard={getOpenOracleCreateWrapGuardMessage(createFunding.wrap, createParameters?.settlerRewardAttoEth ?? 0n, accountState.ethBalanceAttoEth)}
+									approvalGuard={accountState.ethBalanceAttoEth === 0n ? openOracleCopy.approvalGasRequired : undefined}
 									activeAction={openOracleActiveAction}
 									approve={onApproveCreateToken}
 									wrap={onWrapCreateWeth}

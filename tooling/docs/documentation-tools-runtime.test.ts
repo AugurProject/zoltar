@@ -684,10 +684,29 @@ for (const scenario of [{ input: 'nonDecisionThreshold', mount: 'fig-statoblast-
 				expect(yesArena.style.getPropertyValue('--balance-after')).not.toBe('')
 				expect(yesValue.value).toBe('1 → 2 REP')
 
+				const depositResult = tool.querySelector<HTMLOutputElement>('[data-escalation-output="deposit"]')
+				const deadline = tool.querySelector<HTMLOutputElement>('[data-escalation-output="deadline"]')
+				if (depositResult === null || deadline === null) throw new Error('Escalation preset results are missing')
+				const applyPreset = (id: string) => {
+					const button = tool.querySelector<HTMLButtonElement>(`button[data-scenario="${id}"]`)
+					if (button === null) throw new Error(`Missing preset ${id}`)
+					button.click()
+					return deadline.value.split(' → ')
+				}
+				const [leaderBefore, leaderAfter] = applyPreset('leader-deposit')
+				expect(depositResult.value).toMatch(/^accepted:/)
+				expect(leaderAfter).toBe(leaderBefore)
+				const [medianBefore, medianAfter] = applyPreset('median-increase').map(day => Number.parseFloat(day.replace('day ', '')))
+				expect(depositResult.value).toMatch(/^accepted:/)
+				expect(medianAfter ?? 0).toBeGreaterThan(medianBefore ?? 0)
+				applyPreset('after-deadline')
+				expect(depositResult.value).toBe('rejected: game closed')
+
 				threshold.value = '2'
 				yes.value = '2'
 				no.value = '1'
 				outcome.value = 'no'
+				days.value = '0'
 				deposit.value = '1'
 				deposit.dispatchEvent(new Event('input', { bubbles: true }))
 				expect(state.value).toBe('non-decision: fork path')

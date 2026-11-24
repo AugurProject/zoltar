@@ -364,12 +364,12 @@ describe('chaos operation catalog', () => {
 			escalationHalt: '100000',
 			flags: 7,
 			game: { callbackContract: address(87), callbackGasLimit: 500000, feePercentage: 0, lastReportOppoTime: '1', numReports: 1, protocolFee: 0, protocolFeeRecipient: address(30), settlerReward: '0' },
-			helper: { blockNumber: '99', blockTimestamp: '1999999500', creator: address(87) },
+			helper: { blockNumber: '99', blockTimestamp: '1999999880', creator: address(87) },
 			multiplier: 140,
 			openOracle: snapshot.deployments.openOracle,
 			reportId: '41',
-			reportTimestamp: '1999999500',
-			settlementTime: '4000',
+			reportTimestamp: '1999999880',
+			settlementTime: '480',
 			settlementTimestamp: '0',
 			stateHash: hash(41),
 			token1: snapshot.deployments.weth,
@@ -1132,12 +1132,13 @@ describe('chaos operation catalog', () => {
 			openOracle: snapshot.deployments.openOracle,
 			reportId: '42',
 			reportTimestamp: '1999999880',
-			settlementTime: '720',
+			settlementTime: '250',
 			settlementTimestamp: '0',
 			stateHash: hash(42),
 			token1: snapshot.deployments.weth,
 			token2: pool.repToken,
 		})
+		expect(eligibleOperationPlans(snapshot, permissiveOptions).some(candidate => candidate.definitionId === 'open-oracle.dispute')).toBe(true)
 		const plan = eligibleOperationPlans(snapshot, { ...permissiveOptions, maximumBlockIntervalSeconds: 30 }).find(candidate => candidate.definitionId === 'open-oracle.dispute')
 		expect(plan).toBeUndefined()
 	})

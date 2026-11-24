@@ -3,12 +3,10 @@ import { useOpenOracleOperations } from '@zoltar/ui-statoblast-shared/features/o
 import { selectOpenOracleReport } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleRouteSync.js'
 import { setFormField } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import type { WriteOperationsParameters } from '@zoltar/ui-zoltar-shared/types/app.js'
-import type { StatoblastRoute } from '@zoltar/ui-statoblast-shared/types/app.js'
 
 export function useOpenOracleRoute({
 	accountState,
 	canReadOnchainData,
-	navigate,
 	route,
 	setOpenOracleReport,
 	urlOpenOracleReportId,
@@ -16,7 +14,6 @@ export function useOpenOracleRoute({
 }: {
 	accountState: PriceRequestStatusProps['accountState']
 	canReadOnchainData: boolean
-	navigate: (route: Exclude<StatoblastRoute, 'not-found'>) => void
 	route: string
 	setOpenOracleReport: (reportId: string, historyMode?: 'push' | 'replace') => void
 	urlOpenOracleReportId: string
@@ -26,12 +23,6 @@ export function useOpenOracleRoute({
 		...walletScopedHookConfig,
 		enabled: (route === 'open-oracle' || route === 'pools') && canReadOnchainData,
 	})
-	const onViewPendingReport = (reportId: bigint) => {
-		// Open the request status route first, then record the report on that entry, so Back returns to the pool page that linked here.
-		navigate('open-oracle')
-		setOpenOracleReport(reportId.toString(), 'replace')
-		setOpenOracleForm(current => ({ ...current, reportId: reportId.toString() }))
-	}
 	const openOracleRouteContentProps: PriceRequestStatusProps = {
 		...openOracleSectionState,
 		accountState,
@@ -49,7 +40,6 @@ export function useOpenOracleRoute({
 	}
 	return {
 		loadOracleReport,
-		onViewPendingReport,
 		openOracleRouteContentProps,
 		setOpenOracleReportId: (reportId: string) => setFormField(setOpenOracleForm, 'reportId', reportId),
 	}

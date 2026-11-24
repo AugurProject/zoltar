@@ -1,8 +1,4 @@
-ARG BUN_VERSION=1.4.4
-# Multi-arch index digest of oven/bun:${BUN_VERSION}-alpine; update it together with BUN_VERSION.
-ARG BUN_IMAGE_DIGEST=sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a
-
-FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST} AS shared-builder
+FROM oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a AS shared-builder
 
 WORKDIR /source
 
@@ -24,7 +20,7 @@ COPY ui/zoltarShared/package.json /source/ui/zoltarShared/package.json
 RUN bun install --frozen-lockfile \
 	&& bun ./tooling/repo/build-shared.mts
 
-FROM oven/bun:${BUN_VERSION}-alpine@${BUN_IMAGE_DIGEST}
+FROM oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a
 
 ENV BUN_ENV=production
 WORKDIR /app

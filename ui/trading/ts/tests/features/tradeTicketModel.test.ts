@@ -259,6 +259,13 @@ describe('trade ticket inputs', () => {
 		expect(tradeTicketModel({ ...ready, market: exhausted, mode: 'exit', amount: '1' }).availability).toEqual({ disabled: false, reason: undefined })
 	})
 
+	test('allows a fee-inclusive buy above the limit when the mint cash fits', () => {
+		if (market.mintFees === undefined) throw new Error('Missing mint fee fixture')
+		const limited = { ...market, availableMintingCapacityAttoEth: 2n * eth, mintFees: { ...market.mintFees, minimumPurchaseFeeAttoEth: eth / 10n } }
+		expect(tradeTicketModel({ ...ready, market: limited, amount: '2.1' }).availability.disabled).toBe(false)
+		expect(tradeTicketModel({ ...ready, market: limited, amount: '2.2' }).availability.reason).toContain('cannot mint more')
+	})
+
 	test('states the price-impact limit instead of the minting capacity when the capacity itself would be refused for impact', () => {
 		// The pool could mint far more than this market absorbs within the 15% impact limit.
 		const deepCapacity = { ...market, availableMintingCapacityAttoEth: 500n * eth }

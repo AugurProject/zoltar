@@ -1,6 +1,7 @@
 import { zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { amount, mixSeed, ONE_TOKEN, optionAmount, tokenInventory } from '../planning.ts'
 import type { EcosystemSnapshot, OracleGameSnapshot, PlanningOptions } from '../types.ts'
+import { requiredTimestampSubmissionSafetySeconds } from '../timing.ts'
 import { approveToken } from './approvals.ts'
 import { MAX_UINT128, reportWindow } from './planning.ts'
 
@@ -73,7 +74,13 @@ export function disputeQuote(snapshot: EcosystemSnapshot, report: OracleGameSnap
 
 export function disputeWindow(snapshot: EcosystemSnapshot, report: OracleGameSnapshot, quote: NonNullable<ReturnType<typeof disputeQuote>>, options: PlanningOptions) {
 	const prerequisites = approveToken(snapshot, report.token1, quote.external1).length + approveToken(snapshot, report.token2, quote.external2).length
-	return reportWindow(snapshot, report, options, prerequisites)
+	const window = reportWindow(snapshot, report, options, prerequisites)
+	if (!window.timestampClock) return window
+	// Deadline-bound steps are submitted for the next block. The rollback
+	// journal tracks inclusion while canonical rediscovery checks each approval.
+	const cadence = options.maximumBlockIntervalSeconds
+	const approvalSafety = BigInt(prerequisites) * 2n * BigInt(cadence)
+	return { ...window, safetyMargin: requiredTimestampSubmissionSafetySeconds(cadence) + approvalSafety }
 }
 
 export function disputableReport(snapshot: EcosystemSnapshot, report: OracleGameSnapshot, options: PlanningOptions) {

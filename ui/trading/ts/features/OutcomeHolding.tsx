@@ -37,7 +37,7 @@ export function OutcomeHoldingItem({ children, ...holding }: Parameters<typeof O
 export function LpHolding({ amount, market, rounding = 'nearest' }: { amount: bigint; market: LiveMarket; rounding?: ShareValueRounding }) {
 	return (
 		<>
-			{formatLpQuantity(amount, 4, rounding)}
+			{formatLpQuantity(amount, 4, rounding, market)}
 			<small className='payout-caption'> {formatLpPayout(amount, market, rounding)}</small>
 		</>
 	)

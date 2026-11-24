@@ -86,6 +86,7 @@ describe('Statoblast: individually owned lazy auction capital', () => {
 		expect(await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'ownerCollateral', args: [first.account.address] })).toMatchObject({ principal: 2n * REP, commitment: 2n * LOT, withdrawable: 2n * REP - (2n * LOT * 105n * 12n) / 1000n })
 		expect((await owner(first.account.address)).targetHealthFactorBps).toBe(12_000n)
 		await writeContractAndWait(caller, () => caller.writeContract({ abi: harnessArtifact.abi, address: harness, functionName: 'creditFees', value: 30n }))
+		expect(await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'pendingServiceCash' })).toBe(30n)
 		expect(await caller.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'auctionPosition', args: [1n] })).toMatchObject({ principal: 2n * REP, commitment: 2n * LOT, earnedAttoEth: 20n, earnedAttoRep: 0n, materialized: false })
 		await materialize(1n)
 		const firstOwner = await owner(first.account.address)

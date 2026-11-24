@@ -45,7 +45,7 @@ function lifecycleOperationSummary(result: 'processed' | 'progressed', reportId:
 }
 
 function recordLifecycleProgress(state: OperatorState, result: 'processed' | 'progressed', position: PositionRecord) {
-	const updatedPosition = state.positions.find(candidate => candidate.reportId === position.reportId)
+	const updatedPosition = state.positions.find(candidate => candidate.reportId === position.reportId && (candidate.positionId ?? candidate.entryTransactionHash) === (position.positionId ?? position.entryTransactionHash))
 	const summary = lifecycleOperationSummary(result, position.reportId, updatedPosition)
 	recordOperation(state, {
 		category: 'transaction',

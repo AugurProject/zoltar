@@ -3,7 +3,7 @@ import { totalManagedPrincipalAttoRep } from '#core/security-pool-exposure'
 import { executeUnusedSecurityPoolFunding, unusedSecurityPoolFunding } from '#execution/security-pool-unused-funding'
 import { executeSecurityPoolInstruction } from '#execution/security-pool-instructions'
 import { securityPoolTakeoverPlan } from '#core/security-pool-strategy'
-import { SecurityPoolOpportunityExpired, executeSecurityPoolTakeover } from '#execution/security-pool-executor'
+import { SecurityPoolGasBudgetExceeded, SecurityPoolOpportunityExpired, executeSecurityPoolTakeover } from '#execution/security-pool-executor'
 import type { SecurityPoolInstruction } from '#config/security-pool-instructions'
 import { executeSecurityPoolEarnings } from '#execution/security-pool-earnings'
 import { securityPoolEarningsCoverGas } from '#core/security-pool-earnings'
@@ -78,7 +78,11 @@ export async function executeSecurityPoolAutomation(
 	if (runtime.settings.securityPoolPolicy.allowFundedTakeovers) {
 		const totalPrincipal = totalManagedPrincipalAttoRep(state.securityPools)
 		for (const securityPool of state.securityPools) {
-			const pending = await execution.pendingReport(activeWallet, runtime.settings, state, runtime.readPool, securityPool)
+			const pending = await execution.pendingReport(activeWallet, runtime.settings, state, runtime.readPool, securityPool).catch(error => {
+				if (!(error instanceof SecurityPoolGasBudgetExceeded) || state.pendingTransactions.length !== 0) throw error
+				recordActivity(state, { kind: 'liquidation', status: 'info', message: error.message })
+				return 'waiting' as const
+			})
 			if (pending === 'submitted') return true
 			if (pending === 'waiting') {
 				waiting.add(securityPool)
@@ -87,13 +91,19 @@ export async function executeSecurityPoolAutomation(
 			const price = { repToken: securityPool.snapshot.repToken, lastPrice: securityPool.snapshot.acceptedPrice }
 			const priceAllowed = priceAllowsExecution
 			if (securityPoolEarningsCoverGas(securityPool, runtime.settings, marketPriceAllowsExecution(price, runtime.settings, state))) {
-				await execution.earnings(activeWallet, runtime.settings, state, runtime.readPool, securityPool, priceAllowed)
-				return true
+				try {
+					await execution.earnings(activeWallet, runtime.settings, state, runtime.readPool, securityPool, priceAllowed)
+					return true
+				} catch (error) {
+					if (!(error instanceof SecurityPoolGasBudgetExceeded) || state.pendingTransactions.length !== 0) throw error
+					recordActivity(state, { kind: 'fees', status: 'info', message: error.message })
+				}
 			}
 			for (const position of securityPool.positions) {
 				const marketAllowed = marketPriceAllowsExecution(price, runtime.settings, state, !securityPool.snapshot.priceValid || securityPool.snapshot.timestamp >= securityPool.snapshot.priceValidUntil)
-				if (securityPoolTakeoverPlan(securityPool, position, runtime.settings, totalPrincipal, marketAllowed).plan === undefined) continue
-				await execution.takeover(activeWallet, runtime.settings, state, runtime.readPool, securityPool, securityPoolTarget(position), priceAllowed)
+				const { plan } = securityPoolTakeoverPlan(securityPool, position, runtime.settings, totalPrincipal, marketAllowed)
+				if (plan === undefined) continue
+				await execution.takeover(activeWallet, runtime.settings, state, runtime.readPool, securityPool, securityPoolTarget(position), priceAllowed, undefined, plan.unlockedTarget)
 				return true
 			}
 		}

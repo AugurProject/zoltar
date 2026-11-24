@@ -1,4 +1,11 @@
+import type { PositionRecord } from '#state/position-store'
+import { positionConsumesRisk } from '#core/safety-controls'
+
 export type ReportWorkCursor = { urgent: bigint; settlement: bigint }
+
+export function watchedPositionReportIds(positions: readonly Pick<PositionRecord, 'reportId' | 'status' | 'expiredTransactionAttempts' | 'manualReconciliation'>[]) {
+	return [...new Set(positions.filter(position => positionConsumesRisk(position.status) || (position.manualReconciliation === undefined && (position.expiredTransactionAttempts?.length ?? 0) > 0)).map(position => BigInt(position.reportId)))]
+}
 
 /** Give live disputes and old settlement work separate budgets, rotating each by report id. */
 export function scheduleReportWork<Entry extends { reportId: bigint; urgent: boolean }>(entries: readonly Entry[], cursor?: ReportWorkCursor) {

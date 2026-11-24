@@ -1,3 +1,5 @@
+import type { OpenOracleGame } from '@zoltar/open-oracle-shared/openOracle/openOracle'
+import type { PositionRecord } from '#state/position-store'
 import type { ArbitrageDirection } from '#core/strategy'
 import { attoWethValue, type CollateralValuation } from '#core/collateral-valuation'
 
@@ -35,4 +37,14 @@ export function replacementCredit(parameters: { feePercentage: bigint; newAmount
 		amount: 2n * parameters.oldAmount1 + (parameters.oldAmount1 * parameters.feePercentage) / OPEN_ORACLE_PERCENTAGE_PRECISION,
 		token: 'token1' as const,
 	}
+}
+
+export function classifyPositionReport(position: Pick<PositionRecord, 'account' | 'reportAmount1' | 'reportAmount2' | 'reportDisputeIndex'>, game: Pick<OpenOracleGame, 'currentReporter' | 'currentAmount1' | 'currentAmount2' | 'numReports'>) {
+	const sameReporter = position.account.toLowerCase() === game.currentReporter.toLowerCase()
+	// A signer and repeated report amounts cannot prove a missing dispute cursor.
+	if (position.reportDisputeIndex === undefined) return sameReporter ? 'unknown' : 'replaced'
+	const positionReportCount = BigInt(position.reportDisputeIndex) + 1n
+	if (positionReportCount < game.numReports) return 'replaced'
+	if (game.numReports === (1n << 24n) - 1n || positionReportCount !== game.numReports || !sameReporter || position.reportAmount1 !== game.currentAmount1.toString() || position.reportAmount2 !== game.currentAmount2.toString()) return 'unknown'
+	return 'current'
 }

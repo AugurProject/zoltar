@@ -7,6 +7,7 @@ import {
 	formatOpenOracleTimingDuration,
 	getOpenOracleCreateEthSent,
 	getOpenOracleCreateValidation,
+	getOpenOracleCreateWrapGuardMessage,
 	getOpenOracleImpliedPrice,
 	getOpenOracleReportProgress,
 	getOpenOracleReportProgressLabel,
@@ -16,9 +17,18 @@ import {
 import { getCreatedOpenOracleReportId } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
 import { getDecimalSeparatorError, getLocaleDecimalSeparator } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { describe, expect, test } from 'bun:test'
+import { ETH_GAS_RESERVE_ATTO_ETH } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 
 const TOKEN1_ADDRESS = '0x2000000000000000000000000000000000000000'
 const TOKEN2_ADDRESS = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
+
+test('a create wrap leaves ETH for the reward and network fees', () => {
+	const wrap = 2n * 10n ** 18n
+	const reward = 10n ** 18n
+	const needed = wrap + reward + ETH_GAS_RESERVE_ATTO_ETH
+	expect(getOpenOracleCreateWrapGuardMessage(wrap, reward, needed - 1n)).toContain('settler reward and network fees')
+	expect(getOpenOracleCreateWrapGuardMessage(wrap, reward, needed)).toBeUndefined()
+})
 
 function createValidForm(overrides: Partial<ReturnType<typeof getDefaultOpenOracleCreateFormState>> = {}) {
 	return {

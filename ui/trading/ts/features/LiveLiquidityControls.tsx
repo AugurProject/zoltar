@@ -11,7 +11,7 @@ import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getAmountInputErrorMessage, validateAmountInput } from '@zoltar/ui-core-shared/forms/amountInput.js'
-import { formatCompleteSetWithValue, formatLpQuantity, formatLpWithValue, formatOutcomeQuantity, formatOutcomeWithValue, SHARE_QUANTITY_DECIMALS, shareOutcome } from '../lib/shareValue.js'
+import { formatCompleteSetWithValue, formatLpQuantity, formatLpWithValue, formatOutcomeQuantity, formatOutcomeWithValue, shareOutcome } from '../lib/shareValue.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { formatSlippagePercent } from '../lib/tradeSettings.js'
 import { marketNewRiskBlocker, marketSettlementPath, submitFreshLiquidity, type LiveMarket } from '../protocol/live.js'
@@ -81,8 +81,7 @@ export function LiveLiquidityControls({
 	const closedForAdding = !liquidityOperationAvailable('add', market, nowSeconds)
 	const newRiskBlocker = marketNewRiskBlocker(market, nowSeconds)
 	const walletConnected = account !== undefined && walletClient !== undefined
-	// ETH deposits and fixed-scale LP quantities use different decimal precisions.
-	const amountDecimals = operation === 'remove' ? SHARE_QUANTITY_DECIMALS : asset.decimals
+	const amountDecimals = asset.decimals
 	// A typed amount that cannot be read says what is wrong with it: a stray separator, too many decimals, or not a number.
 	const amountFormatError = getAmountInputErrorMessage(validateAmountInput(amount, { decimals: amountDecimals }), { decimals: amountDecimals })
 	const availability = resolveLiquidityAvailability({
@@ -147,7 +146,7 @@ export function LiveLiquidityControls({
 					hint={amountHint}
 					action={
 						removableLp === undefined ? undefined : (
-							<button type='button' className='secondary' disabled={inputsDisabled} onClick={() => updateAmount(formatCurrencyInputBalance(removableLp, SHARE_QUANTITY_DECIMALS))}>
+							<button type='button' className='secondary' disabled={inputsDisabled} onClick={() => updateAmount(formatCurrencyInputBalance(removableLp, amountDecimals))}>
 								{liquidityCopy.max}
 							</button>
 						)
@@ -243,7 +242,7 @@ function LiquidityPreviewSection({ preview, bounds, market, connected, protectio
 							{formatOutcomeQuantity(bounds.minimumYes, shareOutcome.yes, 4, 'down', market)} / {formatOutcomeQuantity(bounds.minimumNo, shareOutcome.no, 4, 'down', market)}
 						</>
 					) : (
-						formatLpQuantity(bounds.minimumLiquidity, 4, 'down')
+						formatLpQuantity(bounds.minimumLiquidity, 4, 'down', market)
 					)}
 				</MetricField>
 			</DataGrid>

@@ -79,6 +79,10 @@ describe('Statoblast: reporting and unresolved capital compensation', () => {
 		await fixture.mint(10n * unit)
 		const question = await questionState()
 		expect(BigInt(question.feeEnd)).toBeGreaterThan(fixture.base.questionData.endTime)
+		await fixture.base.mockWindow.setTime(fixture.base.questionData.endTime + 1n)
+		expect((await questionState()).feeRateAttoEthPerSecond).toBeGreaterThan(0n)
+		await report(fixture.other(), 1)
+		expect((await questionState()).feeRateAttoEthPerSecond).toBe(0n)
 	})
 	test('purchases above healthy capacity fail atomically', async () => {
 		await fixture.prepare()

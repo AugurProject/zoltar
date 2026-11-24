@@ -7,7 +7,7 @@ import { quorumPendingNonce, settledQuorumValue, sharedQuorumReadTargets } from 
 import type { OperatorSettings } from '#config/settings'
 import { recordActivity, saveDurableState, type PendingTransactionIntent, type RuntimeState } from '#state/operator-state'
 import { finalizedReceiptWithQuorum, resolveSecurityPoolReceipt } from '#execution/recovery'
-import { assertExecutionActive, assertGasCostLimitForBaseFee, assertOperatorNotStopping, requireFinalizedTransactionReceipt, TransactionAwaitingCanonicalFinality } from '#execution/execution-safety'
+import { assertExecutionActive, assertOperatorNotStopping, requireFinalizedTransactionReceipt, TransactionAwaitingCanonicalFinality } from '#execution/execution-safety'
 
 type WriteClient = WalletClient<Transport, Chain, Account>
 type RpcPool = ReturnType<typeof createRpcEndpointPool>
@@ -97,9 +97,9 @@ export async function submitCall(wallet: WriteClient, settings: OperatorSettings
 			feeCap = allowedFee
 			maxFeePerGas = allowedFee
 		}
-	} else {
-		if (maximumFeePerGas(block.baseFeePerGas) * paddedTransactionGas(gas) > settings.strategy.maximumGasCostAttoEth) call.gasBudgetExceeded?.()
-		assertGasCostLimitForBaseFee(gas, block.baseFeePerGas, settings.strategy.maximumGasCostAttoEth, call.label)
+	} else if (maxFeePerGas * paddedTransactionGas(gas) > settings.strategy.maximumGasCostAttoEth) {
+		call.gasBudgetExceeded?.()
+		throw new Error(`${call.label} estimated gas ceiling exceeds strategy.maximumGasCostEth`)
 	}
 	const fees = feeEnvelope(maxFeePerGas)
 	await simulateWithRevalidation(

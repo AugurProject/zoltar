@@ -21,7 +21,6 @@ describe('explicit security pool instruction lifecycle', () => {
 		await context.open()
 		const { account, reader: client, scope, settings, wallet } = repairAuctionKeeper(fixture, context)
 		await context.mock.setBalance(account.address, 100n * unit)
-		await wallet.sendTransaction({ to: settings.deployment.weth, value: 10n * unit })
 		settings.securityPoolPolicy.maximumPrincipalAttoRep = 1_000_000n * unit
 		settings.securityPoolPolicy.maximumTotalPrincipalAttoRep = 1_000_000n * unit
 		settings.securityPoolPolicy.maximumCommitmentAttoEth = 1000n * unit
@@ -33,6 +32,9 @@ describe('explicit security pool instruction lifecycle', () => {
 		const base = { securityPool: fixture.securityPool, universeId: context.child }
 		const bid = { ...base, id: 'one-bid', action: 'auction-bid' as const, lots: bidLots, minimumAttoRepPerLot: terms.minimumRepPerLot, targetHealthFactorBps: 10_000n, maximumValueAttoEth: bidCollateral }
 		try {
+			await expect(executeSecurityPoolInstruction(wallet, settings, state, pool, bid, async () => true)).rejects.toThrow('Insufficient wallet collateral for the bid')
+			expect(state.completedSecurityPoolInstructions?.[bid.id]).toBeUndefined()
+			await wallet.sendTransaction({ to: settings.deployment.weth, value: 10n * unit })
 			const lowBid = { ...bid, id: 'losing-bid', minimumAttoRepPerLot: terms.repPerLot * 2n }
 			await expect(executeSecurityPoolInstruction(wallet, settings, state, pool, { ...lowBid, maximumValueAttoEth: bidCollateral - 1n }, async () => true)).rejects.toThrow('exceeds collateral or commitment limits')
 			await wallet.writeContract({ address: settings.deployment.weth, abi: erc20Abi, functionName: 'approve', args: [context.auction, 1n] })
@@ -75,6 +77,10 @@ describe('explicit security pool instruction lifecycle', () => {
 			state.securityPoolScopes = [pending.nextScope]
 			await context.closingQuote()
 			await context.finalize()
+			const closedBid = { ...bid, id: 'closed-auction-bid' }
+			expect(await executeSecurityPoolInstruction(wallet, settings, state, pool, closedBid, async () => true)).toBe(false)
+			expect((await loadDurableState(settings.runtime.stateFile, settings.network.chainId)).completedSecurityPoolInstructions?.[closedBid.id]).toBeDefined()
+			expect(state.activities[0]?.message).toContain('skipped')
 			const auction = await loadSecurityPoolAuctionSnapshot({ client, securityPool: fixture.securityPool, universeId: context.child, bidder: account.address })
 			const winner = auction.auction?.bids.find(candidate => candidate.id !== loser.id)
 			if (winner === undefined) throw new Error('Missing operator bid')
@@ -130,7 +136,7 @@ describe('explicit security pool instruction lifecycle', () => {
 			state.securityPoolScopes.push({ ...scope, universeId: descendant, managedVaults: [winner.vault] })
 			expect(await executeSecurityPoolInstruction(wallet, settings, state, pool, { ...base, id: 'direct-choice', action: 'fork-choice', outcome: 1n }, async () => true)).toBe(true)
 			expect([...(await client.readContract({ address: context.forks, abi: forkAbi, functionName: 'choices', args: [context.child, account.address] }))]).toEqual([1n, true])
-			expect(Object.keys(state.completedSecurityPoolInstructions ?? {})).toEqual(['losing-bid', 'early-refund', 'one-bid', 'activate', 'health', 'deposit', 'withdraw', 'earnings', 'retire', 'choose', 'direct-choice'])
+			expect(Object.keys(state.completedSecurityPoolInstructions ?? {})).toEqual(['losing-bid', 'early-refund', 'one-bid', 'closed-auction-bid', 'activate', 'health', 'deposit', 'withdraw', 'earnings', 'retire', 'choose', 'direct-choice'])
 		} finally {
 			await stop()
 		}

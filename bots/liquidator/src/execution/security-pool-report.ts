@@ -3,7 +3,7 @@ import type { RuntimeState } from '#state/operator-state'
 import type { SecurityPoolObservation } from '#monitoring/security-pool-monitor'
 import { sharedPoolPriceFeedAbi, openOracleAbi } from '@zoltar/bot-shared/contracts/abi'
 import { encodeFunctionData, type Account, type Chain, type Transport, type WalletClient, type createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
-import { SecurityPoolOpportunityExpired } from './security-pool-executor.ts'
+import { SecurityPoolGasBudgetExceeded, SecurityPoolOpportunityExpired } from './security-pool-executor.ts'
 import { readSecurityPoolExecutionSnapshot } from './security-pool-execution-snapshot.ts'
 import { submitCall } from './submit-call.ts'
 
@@ -72,7 +72,7 @@ export async function executePendingSecurityPoolReport(wallet: Wallet, settings:
 			preSubmit: revalidate,
 			revalidateSimulationRevert: revalidate,
 			gasBudgetExceeded: () => {
-				throw new SecurityPoolOpportunityExpired('Sponsored report settlement exceeds gas budget; retry later')
+				throw new SecurityPoolGasBudgetExceeded('Sponsored report settlement exceeds gas budget; retry later')
 			},
 		},
 		'liquidation',

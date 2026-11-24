@@ -12,7 +12,8 @@ export function CreateFundingControls({
 	units,
 	symbols,
 	disabled,
-	guard,
+	wrapGuard,
+	approvalGuard,
 	activeAction,
 	approve,
 	wrap,
@@ -21,12 +22,13 @@ export function CreateFundingControls({
 	units: readonly (number | undefined)[]
 	symbols: readonly (string | undefined)[]
 	disabled: boolean
-	guard: string | undefined
+	wrapGuard: string | undefined
+	approvalGuard: string | undefined
 	activeAction: string | undefined
 	approve: ((token: 'token1' | 'token2', amount: bigint) => void) | undefined
 	wrap: (() => void) | undefined
 }) {
-	let wrapReason = guard
+	let wrapReason = wrapGuard
 	if (wrapReason === undefined && funding.loading) wrapReason = copy.loading
 	else if (wrapReason === undefined && funding.wrap === 0n) wrapReason = common.notNeeded
 	const tokens = funding.tokens
@@ -35,7 +37,7 @@ export function CreateFundingControls({
 		<div className='workflow-stack'>
 			{funding.error === undefined ? undefined : <RetryableNotice message={funding.error} retryLabel={common.retry} onRetry={funding.retry} disabled={disabled} />}
 			{funding.tokens.some(token => token.token === getWethAddress()) ? (
-				<TransactionActionButton idleLabel={oracleCopy.wrapEth} pendingLabel={oracleCopy.wrappingEth} availability={{ disabled: disabled || funding.loading || funding.wrap === 0n || wrap === undefined, reason: wrapReason }} pending={activeAction === 'wrapWeth'} onClick={() => wrap?.()} tone='secondary' />
+				<TransactionActionButton idleLabel={oracleCopy.wrapEth} pendingLabel={oracleCopy.wrappingEth} availability={{ disabled: disabled || wrapReason !== undefined || wrap === undefined, reason: wrapReason }} pending={activeAction === 'wrapWeth'} onClick={() => wrap?.()} tone='secondary' />
 			) : undefined}
 			{tokens.map((token, index) => {
 				const symbol = symbols[index] ?? copy.funding
@@ -48,7 +50,7 @@ export function CreateFundingControls({
 							allowanceLoading={funding.loading}
 							approvedAmount={token.access?.allowance}
 							disabled={disabled || approve === undefined}
-							guardMessage={guard}
+							guardMessage={approvalGuard}
 							onApprove={amount => {
 								if (amount !== undefined) approve?.(token.key, amount)
 							}}

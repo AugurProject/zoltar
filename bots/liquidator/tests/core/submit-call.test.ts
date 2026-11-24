@@ -37,6 +37,7 @@ async function fixture() {
 
 test.each([false, true])('submission uses a common block when honest RPC endpoints differ by one head (budget cap %s)', async capFeeToGasBudget => {
 	const f = await fixture()
+	if (!capFeeToGasBudget) f.settings.strategy.maximumGasCostAttoEth = 1_000_000n
 	const directory = await mkdtemp(join(tmpdir(), 'liquidator-quorum-'))
 	f.settings.runtime.stateFile = join(directory, 'state.json')
 	const simulations: unknown[] = []

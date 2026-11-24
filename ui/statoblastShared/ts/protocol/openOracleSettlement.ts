@@ -90,7 +90,18 @@ export async function loadCoordinatorPriceValidUntilTimestamp(client: Pick<ReadC
 	}
 	const [coordinator] = await readOptionalMulticall(client, [{ address: questionLedger, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'openOraclePriceCoordinator' }])
 	if (coordinator.status !== 'success' || !sameAddress(coordinator.result, game.callbackContract)) return undefined
-	return getOracleManagerPriceValidUntilTimestamp(game.reportTimestamp + game.settlementTime, chainId)
+	const priceTimestamp = game.reportTimestamp + game.settlementTime
+	const [acceptedTimestamp, expiry, sharedFeed] = await readOptionalMulticall(client, [
+		{ address: coordinator.result, abi, functionName: 'lastSettlementTimestamp' },
+		{ address: coordinator.result, abi, functionName: 'priceValidUntil' },
+		{ address: coordinator.result, abi, functionName: 'sharedPriceFeed' },
+	])
+	if (acceptedTimestamp.status === 'success' && acceptedTimestamp.result === priceTimestamp && expiry.status === 'success' && expiry.result > priceTimestamp) return expiry.result
+	if (sharedFeed.status === 'success' && sharedFeed.result !== zeroAddress) {
+		const [validity] = await readOptionalMulticall(client, [{ address: sharedFeed.result, abi: sharedFeedLinkAbi, functionName: 'priceValidityWindowSeconds' }])
+		if (validity.status === 'success' && validity.result > 0n) return priceTimestamp + validity.result
+	}
+	return getOracleManagerPriceValidUntilTimestamp(priceTimestamp, chainId)
 }
 
 /**

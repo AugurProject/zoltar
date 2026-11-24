@@ -1,5 +1,5 @@
 import { lookupUniverse } from './universe-lookup.ts'
-import { securityPoolViews } from '#state/security-pool-view'
+import { securityPoolScanMetrics, securityPoolViews } from '#state/security-pool-view'
 import { serializedSettings } from '#config/settings'
 import { marketConfigurations } from '#core/candidate-selection'
 import { createGoLiveControls } from '#core/go-live-controls'
@@ -40,7 +40,7 @@ export function startLiquidatorDashboard(runtime: LiquidatorRuntime, deps: Liqui
 			state.rpcEndpointHealth = runtime.readPool.snapshot()
 			const snapshot = operatorSnapshot(state, runtime.settings.runtime.execute, marketConfigurations(runtime.settings))
 			if (!snapshot.execute && deps.processLocks.startupSignerConflict !== undefined) snapshot.alerts.unshift({ message: deps.processLocks.startupSignerConflict, severity: 'error' })
-			return { ...snapshot, securityPools: securityPoolViews(state, runtime.settings), configurationRevision: runtime.settingsRevision, network: runtime.settings.network.name }
+			return { ...snapshot, metrics: { ...snapshot.metrics, ...securityPoolScanMetrics(state, runtime.settings) }, securityPools: securityPoolViews(state, runtime.settings), configurationRevision: runtime.settingsRevision, network: runtime.settings.network.name }
 		},
 		hostname: runtime.settings.runtime.uiHost,
 		isNetworkConfigured: () => runtime.settings.networkConfigured,

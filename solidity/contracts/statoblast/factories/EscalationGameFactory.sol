@@ -73,8 +73,9 @@ contract EscalationGameFactory {
 	}
 
 	/// @notice Deploys `questionLedger`'s Escalation Game without starting it, so the first report does not pay
-	/// the deployment gas (#1453). Permissionless: the creation arguments bind the game to `questionLedger`, only
-	/// this factory can start it, and its clock starts with the first report, not with this call.
+	/// the deployment gas (#1453). Anyone can prepare a game for `questionLedger`. The factory starts an ordinary
+	/// game on the first report or initializes an inherited game through `startFromFork`. The inherited clock stays
+	/// paused until the question ledger resumes the continuation.
 	function prepareEscalationGame(IQuestionLedger questionLedger) external returns (EscalationGame) {
 		return _deployOrReuseEscalationGame(questionLedger);
 	}

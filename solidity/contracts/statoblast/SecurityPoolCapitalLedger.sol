@@ -370,12 +370,6 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		_creditEarnings(cash, 0);
 	}
 
-	/// @dev An already time-earned amount; only the canonical checkpoint may call.
-	function creditTimedFees(uint256 cash) external onlyAccounting {
-		Collateral.pull(ICollateralConfig(securityPool).collateralToken(), msg.sender, address(this), cash);
-		_creditEarnings(cash, 0);
-	}
-
 	function fundVestedFees(uint256 cash, uint256 repAmount) external onlyAccounting {
 		require(!importing, 'Capital imports are not complete');
 		_checkpoint();

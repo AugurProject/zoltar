@@ -4,6 +4,7 @@ import { securityPoolTakeoverFill, securityPoolTakeoverTransfer, securityPoolTak
 import { securityPoolCureOutcome } from './security-pool-cure-state.ts'
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import { DEFAULT_TRANSACTION_VALIDITY_BLOCKS } from '@zoltar/bot-shared/execution/transaction-submission'
+import { securityPoolTarget, type SecurityPoolTarget } from '#monitoring/security-pool-auction'
 
 const UNIT = 10n ** 18n
 const BPS = 10_000n
@@ -25,6 +26,7 @@ export type SecurityPoolTakeover = {
 	netRewardAttoEth: bigint
 	/** The ledger's preliminary cure alone restores the target: the call pays no award and must ask for none. */
 	unpaidCure: boolean
+	unlockedTarget?: SecurityPoolTarget
 }
 
 /**
@@ -58,6 +60,7 @@ function unlockingCurePlan(observation: SecurityPoolObservation, position: Secur
 				expectedDemand: snapshot.demandAttoEth,
 				netRewardAttoEth: unlocked.netRewardAttoEth - cureGas,
 				unpaidCure: true,
+				unlockedTarget: securityPoolTarget(candidate),
 			},
 		}
 	}
