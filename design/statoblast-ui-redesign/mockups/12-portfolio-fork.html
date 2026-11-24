@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Fork and recovery</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="portfolios" data-ptab="fork" data-forked="1">
+		<div class="page">
+			<div class="portfolio-head"></div>
+
+			<div class="next bad" style="margin-bottom: var(--s4)">
+				<div>
+					<div class="eyebrow">Choose a branch by Jan 18, 14:00 UTC · 55 days left</div>
+					<h3>If you don't choose by Jan 18, 14:00 UTC, your 5 000.00 pledged REP goes to claimants in every branch and your commitment ends.</h3>
+				</div>
+				<span class="btn">Add to calendar</span>
+			</div>
+			<div class="p mock-note" style="margin-bottom: var(--s4)">Design note: shown on Nov 24.</div>
+
+			<div class="main-side">
+				<div class="stack">
+					<div class="card">
+						<h2>Your branch migration</h2>
+						<div class="p small muted" style="margin: var(--s1) 0 var(--s3)">A branch is this security pool's copy in a child universe.</div>
+						<svg class="diagram" viewBox="0 0 640 170" role="img" aria-label="Choosing No moves 5 000 pledged REP and the 10.00 WETH commitment to the No branch in universe 13. 0.42 WETH of earned fees stays in this universe.">
+							<defs>
+								<marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="arrow" d="M0 0L10 5L0 10z" /></marker>
+								<marker id="ahs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="arrow stay" d="M0 0L10 5L0 10z" /></marker>
+							</defs>
+							<rect class="node" x="6" y="52" width="190" height="62" rx="8" />
+							<text x="20" y="76" class="muted" font-size="12">This universe</text>
+							<text x="20" y="98" font-size="15" font-weight="700">Augur v2 › Yes</text>
+							<rect class="node acc" x="444" y="8" width="190" height="62" rx="8" />
+							<text x="458" y="32" class="muted" font-size="12">Your branch · universe #13</text>
+							<text x="458" y="54" font-size="15" font-weight="700">No</text>
+							<rect class="node" x="444" y="100" width="190" height="62" rx="8" stroke-dasharray="4 4" />
+							<text x="458" y="124" class="muted" font-size="12">Stays here</text>
+							<text x="458" y="146" font-size="12" class="mono">0.42 WETH + 12.00 REP</text>
+							<path class="edge" d="M196 72 C 320 72, 320 40, 440 40" marker-end="url(#ah)" />
+							<text x="236" y="40" font-size="12" class="mono">5 000 REP + 10.00 WETH</text>
+							<path class="edge stay" d="M196 96 C 320 96, 320 131, 440 131" marker-end="url(#ahs)" />
+							<text x="236" y="140" font-size="12" class="muted">earned fees</text>
+						</svg>
+						<div class="diagram-fallback stack-sm">
+							<div class="small"><span class="muted">This universe</span> <b>Augur v2 › Yes</b></div>
+							<div class="small" style="color: var(--accent)">Moves to <b>No (universe #13)</b>: <span class="mono">5 000 REP + 10.00 WETH</span></div>
+							<div class="small muted">Stays here: <span class="mono">0.42 WETH + 12.00 REP</span> earned fees, claim in Capital</div>
+						</div>
+
+						<div class="field" style="margin: var(--s4) 0">
+							<span class="label">Branch you will back</span>
+							<span class="hint">REP committed so far</span>
+							<div class="radio-list">
+								<div class="opt">
+									<span class="dot"></span>
+									<div>
+										<div class="name">Yes</div>
+										<div class="meta num">Universe #12 · 41 200 REP committed</div>
+										<div class="bar" style="margin-top: 0.3rem; max-width: 320px"><i style="width: 39%; background: var(--muted)"></i></div>
+									</div>
+								</div>
+								<div class="opt on">
+									<span class="dot"></span>
+									<div>
+										<div class="name">No</div>
+										<div class="meta num">Universe #13 · 63 900 REP committed</div>
+										<div class="bar" style="margin-top: 0.3rem; max-width: 320px"><i style="width: 61%"></i></div>
+									</div>
+								</div>
+								<div class="opt">
+									<span class="dot"></span>
+									<div>
+										<div class="name">Invalid</div>
+										<div class="meta num">Not created yet · 0 REP committed</div>
+										<div class="bar" style="margin-top: 0.3rem; max-width: 320px"><i style="width: 0"></i></div>
+									</div>
+								</div>
+							</div>
+							<span class="mock-note">Design note: a scalar question shows a value picker here; a filter appears above about 8 outcomes.</span>
+						</div>
+						<div class="steps">
+							<div class="step done">
+								<span class="mk">✓</span>
+								<div><div class="t">Prepare the No branch</div></div>
+								<div class="act"><span class="btn sm done">Prepared</span></div>
+							</div>
+							<div class="step now">
+								<span class="mk">2</span>
+								<div>
+									<div class="t">Commit your branch choice</div>
+									<div class="body">
+										<label class="check"
+											><input type="checkbox" checked /><span>Move 5 000 REP and 10.00 WETH to <b>No</b>. This is <b>irreversible</b>.</span></label
+										>
+									</div>
+								</div>
+								<div class="act"><span class="btn sm primary">Commit choice: No</span></div>
+							</div>
+							<div class="step">
+								<span class="mk">3</span>
+								<div>
+									<div class="t">Start branch migration</div>
+									<div class="s">Anyone can send this; needed once</div>
+								</div>
+								<div class="act"><span class="btn sm disabled">Start migration</span><span class="why">Opens Jan 18, 14:00 UTC.</span></div>
+							</div>
+							<div class="step locked">
+								<span class="mk"></span>
+								<div>
+									<div>
+										<div class="t">Branch REP price report</div>
+										<div class="s">Due Jan 25, 14:00 UTC. Without one, the branch activates short of collateral.</div>
+									</div>
+								</div>
+								<div class="act"><span class="why">Opens when migration starts.</span></div>
+							</div>
+							<div class="step locked">
+								<span class="mk"></span>
+								<div>
+									<div>
+										<div class="t">Collateral repair auction</div>
+										<div class="s">Only if the branch's collateral is short.</div>
+									</div>
+								</div>
+								<div class="act"><span class="why">Opens after a branch REP price is accepted.</span></div>
+							</div>
+							<div class="step">
+								<span class="mk">6</span>
+								<div>
+									<div class="t">Activate branch</div>
+									<div class="s">Anyone can send this; needed once. Starts the branch's timers.</div>
+								</div>
+								<div class="act"><span class="btn sm disabled">Activate branch</span><span class="why">Earliest Jan 25.</span></div>
+							</div>
+							<div class="step locked">
+								<span class="mk"></span>
+								<div>
+									<div><div class="t">Open your position in No</div></div>
+								</div>
+								<div class="act"><span class="btn sm disabled">Open position</span><span class="why">Activate the branch first.</span></div>
+							</div>
+						</div>
+					</div>
+
+					<div class="card">
+						<div class="spread">
+							<h2>Recovery for share holders</h2>
+							<span class="badge mute">Opens Jan 18</span>
+						</div>
+						<div class="p small" style="color: var(--warning); margin-top: var(--s1)">Full repayment in collateral is not guaranteed.</div>
+						<details class="disc how">
+							<summary>How recovery works</summary>
+							<p>After activation, a branch pays complete sets and winning shares from its collateral plus pledged REP nobody moved. From Jan 18 you can also recover collateral left in this universe: one recovery right per share.</p>
+						</details>
+						<div class="metrics" style="margin: var(--s3) 0">
+							<div class="metric"><span class="k">Your recovery rights</span><span class="v">1.00 Yes · 1.00 No · 1.00 Invalid</span></div>
+						</div>
+						<div class="grid-2">
+							<div class="field">
+								<label>Question</label>
+								<div class="input select" style="font-family: var(--sans)">Will this resolve? (security pool question 1)</div>
+							</div>
+							<div class="field">
+								<label>Complete sets to recover</label>
+								<div class="input"><span class="ph">0.00</span><span class="unit">max 1.00</span></div>
+							</div>
+						</div>
+						<div class="steps compact" style="margin-top: var(--s3)">
+							<div class="step">
+								<span class="mk">1</span>
+								<div><div class="t">Prepare this question</div></div>
+								<div class="act"><span class="btn sm disabled">Prepare question</span><span class="why">Opens Jan 18.</span></div>
+							</div>
+							<div class="step locked">
+								<span class="mk"></span>
+								<div>
+									<div><div class="t">Recover collateral</div></div>
+								</div>
+								<div class="act"><span class="btn sm disabled">Recover collateral</span><span class="why">Prepare the question first.</span></div>
+							</div>
+						</div>
+						<details class="disc how">
+							<summary>Optional: send recovery rights to another address</summary>
+							<div class="stack-sm" style="margin-top: var(--s2)">
+								<p class="small">Sending rights locks the matching shares in this universe.</p>
+								<div class="grid-2">
+									<div class="field">
+										<label class="small">Recipient</label>
+										<div class="input"><span class="ph">0x…</span></div>
+									</div>
+									<div class="field">
+										<label class="small">Yes, No, Invalid rights</label>
+										<div class="input"><span class="ph">0 Yes, 0 No, 0 Invalid</span></div>
+									</div>
+								</div>
+								<div class="row"><span class="btn sm disabled">Transfer rights</span><span class="why">Prepare the question first.</span></div>
+							</div>
+						</details>
+					</div>
+				</div>
+
+				<aside class="stack sticky">
+					<div class="card stack-sm">
+						<h3>Fork timeline</h3>
+						<div class="timeline">
+							<div class="ev done">
+								<span class="dot"></span>
+								<div>
+									<div class="t">Fork triggered</div>
+									<div class="s">Nov 24</div>
+								</div>
+							</div>
+							<div class="ev now">
+								<span class="dot"></span>
+								<div>
+									<div class="t">Choose a branch</div>
+									<div class="s">Until Jan 18, 14:00 UTC</div>
+								</div>
+							</div>
+							<div class="ev">
+								<span class="dot"></span>
+								<div>
+									<div class="t">Migration can start</div>
+									<div class="s">Jan 18</div>
+								</div>
+							</div>
+							<div class="ev">
+								<span class="dot"></span>
+								<div>
+									<div class="t">Branch REP price accepted</div>
+									<div class="s">By Jan 25, 14:00 UTC</div>
+								</div>
+							</div>
+							<div class="ev">
+								<span class="dot"></span>
+								<div>
+									<div class="t">Earliest activation</div>
+									<div class="s">Jan 25</div>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="card stack-sm">
+						<h3>Related</h3>
+						<a class="small">Migrate wallet REP →</a>
+						<a class="small">Migrate forked question shares →</a>
+					</div>
+				</aside>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+		<script src="portfolio-head.js"></script>
+	</body>
+</html>

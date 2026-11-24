@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Branch price</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="portfolios" data-ptab="fork" data-forked="1" data-branch-chosen="1">
+		<div class="page">
+			<div class="portfolio-head"></div>
+			<div class="p mock-note" style="margin-bottom: var(--s4)">Design note: shown on Jan 19. Branch price reports, the repair auction and earliest activation share one deadline (Jan 25, 14:00 UTC); the auction needs at least one day of bidding and a price settled within its last day.</div>
+
+			<div class="main-side">
+				<div class="card">
+					<div class="card-head" style="margin-bottom: var(--s3)"><h2>Your branch migration · No</h2></div>
+					<div class="steps">
+						<div class="step done">
+							<span class="mk">✓</span>
+							<div><div class="t">Prepare the No branch</div></div>
+							<div class="act"><span class="btn sm done">Prepared</span></div>
+						</div>
+						<div class="step done">
+							<span class="mk">✓</span>
+							<div>
+								<div class="t">Commit your branch choice</div>
+								<div class="s">Dec 2</div>
+							</div>
+							<div class="act"><span class="btn sm done">Committed: No</span></div>
+						</div>
+						<div class="step done">
+							<span class="mk">✓</span>
+							<div><div class="t">Start branch migration</div></div>
+							<div class="act"><span class="btn sm done">Started</span></div>
+						</div>
+						<div class="step now info">
+							<span class="mk">4</span>
+							<div>
+								<div class="t">Branch REP price report</div>
+								<div class="s">Reports close Jan 25, 14:00 UTC. If none is accepted, the repair auction can't run and the branch activates short of collateral.</div>
+								<div class="body">
+									<div class="price-report" data-branch="1"></div>
+									<div class="spread" style="margin-top: var(--s2)"><span class="section-label">Latest branch report</span><span class="badge mute">None yet</span></div>
+									<div class="stepper" role="img" aria-label="No branch report yet. A report is reported, can be disputed for 5 minutes, is settled, then its funds are returned.">
+										<div class="st"><span class="t">Reported</span><span class="s">Not yet</span></div>
+										<div class="st"><span class="t">Dispute window</span><span class="s">5 min</span></div>
+										<div class="st"><span class="t">Settle</span><span class="s">Earns the bounty</span></div>
+										<div class="st"><span class="t">Funds returned</span><span class="s">To the funder</span></div>
+									</div>
+									<a class="small">Open an older report by ID</a>
+								</div>
+							</div>
+						</div>
+						<div class="step locked">
+							<span class="mk"></span>
+							<div>
+								<div>
+									<div class="t">Collateral repair auction</div>
+									<div class="s">Only if the branch's collateral is short.</div>
+								</div>
+							</div>
+							<div class="act"><span class="why">Opens after a branch REP price is accepted.</span></div>
+						</div>
+						<div class="step">
+							<span class="mk">6</span>
+							<div>
+								<div class="t">Activate branch</div>
+								<div class="s">Anyone can send this; needed once. Starts the branch's timers.</div>
+							</div>
+							<div class="act"><span class="btn sm disabled">Activate branch</span><span class="why">Earliest Jan 25.</span></div>
+						</div>
+						<div class="step locked">
+							<span class="mk"></span>
+							<div>
+								<div><div class="t">Open your position in No</div></div>
+							</div>
+							<div class="act"><span class="btn sm disabled">Open position</span><span class="why">Activate the branch first.</span></div>
+						</div>
+					</div>
+				</div>
+				<aside class="stack sticky">
+					<div class="card stack-sm">
+						<h3>Fork timeline</h3>
+						<div class="timeline">
+							<div class="ev done">
+								<span class="dot"></span>
+								<div>
+									<div class="t">Branch choice closed</div>
+									<div class="s">Jan 18</div>
+								</div>
+							</div>
+							<div class="ev now">
+								<span class="dot"></span>
+								<div>
+									<div class="t">Branch REP price</div>
+									<div class="s">Reports close Jan 25, 14:00 UTC</div>
+								</div>
+							</div>
+							<div class="ev">
+								<span class="dot"></span>
+								<div>
+									<div class="t">Earliest activation</div>
+									<div class="s">Jan 25</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</aside>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+		<script src="portfolio-head.js"></script>
+		<script src="price-report.js"></script>
+	</body>
+</html>

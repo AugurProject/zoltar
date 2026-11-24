@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Transaction states</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="questions">
+		<div class="page">
+			<div class="route-head">
+				<div>
+					<p class="section-label">Pattern · every transaction button</p>
+					<h1 style="margin-top: 0.4rem">Transaction lifecycle</h1>
+					<p class="mock-note">Design note: example is “Report Yes” (screen 04). Same for every transaction.</p>
+				</div>
+			</div>
+
+			<div class="frame-grid">
+				<div>
+					<div class="frame-cap"><span>1 · Review</span><span class="mock-note">after click</span></div>
+					<div class="dialog stack">
+						<div class="dlg-head">
+							<h2>Report Yes · 500.00 REP</h2>
+							<span class="btn sm link" aria-label="Close">✕</span>
+						</div>
+						<dl class="kv">
+							<dt>Question</dt>
+							<dd style="white-space: normal">Spot ETH ETF inflows &gt; $1B</dd>
+							<dt>Security pool</dt>
+							<dd>0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</dd>
+							<dt>Contract</dt>
+							<dd>0x58b23c49f06EFACC6ff6cD7c20aCc0272e9C8EF1 ↗</dd>
+						</dl>
+						<div class="diff"><span>REP staked on Yes</span><span class="before">120.00</span><span class="arrow">→</span><span class="after">620.00</span> <span>Leader</span><span class="before">No</span><span class="arrow">→</span><span class="after">Yes</span> <span>Wallet REP</span><span class="before">2 310.00</span><span class="arrow">→</span><span class="after">1 810.00</span> <span>Reporting window ends</span><span class="before">Jan 9</span><span class="arrow">→</span><span class="after">Jan 12</span></div>
+						<div class="notice warn">
+							<b>Risks</b>
+							<ul class="small" style="margin: 0.3rem 0 0; padding-left: 1.1rem">
+								<li>If Yes loses, you lose this 500.00 REP.</li>
+								<li>Yes can still be overtaken before the window ends.</li>
+							</ul>
+						</div>
+						<details class="disc how">
+							<summary>Transaction details</summary>
+							<dl class="kv" style="margin-top: var(--s2)">
+								<dt>Function</dt>
+								<dd>report</dd>
+								<dt>Arguments</dt>
+								<dd>1, 500000000000000000000</dd>
+								<dt>ETH value</dt>
+								<dd>0</dd>
+								<dt>Network</dt>
+								<dd>Ethereum</dd>
+							</dl>
+						</details>
+						<div class="row" style="justify-content: flex-end"><span class="btn">Cancel</span><span class="btn primary">Continue in wallet</span></div>
+					</div>
+				</div>
+
+				<div>
+					<div class="frame-cap"><span>2 · Waiting for the wallet</span><span class="mock-note">signature requested</span></div>
+					<div class="dialog stack">
+						<div class="dlg-head"><h2>Report Yes · 500.00 REP</h2></div>
+						<div class="big-state"><span class="spinner" style="width: 2rem; height: 2rem; border-width: 3px"></span><b>Confirm the transaction in your wallet.</b><span class="small muted">Reject there to stop.</span></div>
+					</div>
+				</div>
+
+				<div>
+					<div class="frame-cap"><span>3 · Pending</span><span class="mock-note">submitted</span></div>
+					<div class="dialog stack">
+						<div class="dlg-head">
+							<h2>Reporting Yes · 500.00 REP…</h2>
+							<span class="btn sm link">Close</span>
+						</div>
+						<div class="steps compact">
+							<div class="step done">
+								<span class="mk">✓</span>
+								<div><div class="t">Signed</div></div>
+								<div class="act"></div>
+							</div>
+							<div class="step now">
+								<span class="mk"><span class="spinner" style="width: 0.9rem; height: 0.9rem; border-color: rgba(255, 255, 255, 0.4); border-top-color: #fff"></span></span>
+								<div>
+									<div class="t">Waiting for confirmation · 18 s</div>
+									<div class="s mono">0x4c1edf0f6b045b4f2971d086642328f38fe1ee0e1dcdfa12c192610f331f9a07 ↗</div>
+								</div>
+								<div class="act"></div>
+							</div>
+						</div>
+						<p class="small muted">Safe to close. This stays tracked in Activity.</p>
+						<details class="disc how">
+							<summary>Taking too long?</summary>
+							<p>The transaction can still confirm; sending again could report twice.</p>
+							<div class="row" style="margin-top: var(--s2)"><span class="btn sm">Keep tracking</span><span class="btn sm">Stop tracking</span></div>
+						</details>
+					</div>
+				</div>
+
+				<div>
+					<div class="frame-cap"><span>4 · Confirmed</span><span class="mock-note">result shown in place</span></div>
+					<div class="card stack">
+						<div class="spread">
+							<h3>Report an outcome</h3>
+							<span class="badge ok">✓ Reported</span>
+						</div>
+						<div class="stack-sm">
+							<div class="spread small">
+								<span><b>Yes</b> <span class="badge acc">Leading</span></span
+								><span class="num">620.00 REP staked · yours 620.00</span>
+							</div>
+							<div class="bar" style="height: 14px"><i style="width: 62%; background: var(--text)"></i></div>
+						</div>
+						<div class="steps compact">
+							<div class="step done">
+								<span class="mk">✓</span>
+								<div><div class="t">Approve REP</div></div>
+								<div class="act"><span class="btn sm done">Approved</span></div>
+							</div>
+							<div class="step done">
+								<span class="mk">✓</span>
+								<div>
+									<div class="t">Report Yes · 500.00 REP</div>
+									<div class="s">Confirmed 14:02 · <span class="mono">0x4c1edf0f6b045b4f2971d086642328f38fe1ee0e1dcdfa12c192610f331f9a07 ↗</span></div>
+								</div>
+								<div class="act"><span class="btn sm done">Reported</span></div>
+							</div>
+						</div>
+						<div class="notice ok">You're leading on Yes. Check back before Jan 12, 14:00 UTC.</div>
+						<p class="mock-note">Design note: the dialog closes itself. A toast confirms, plus “Saved to your Watchlist” the first time.</p>
+					</div>
+				</div>
+
+				<div>
+					<div class="frame-cap"><span>5a · Canceled in wallet</span><span class="mock-note">neutral</span></div>
+					<div class="card stack-sm">
+						<div class="steps compact">
+							<div class="step now">
+								<span class="mk">2</span>
+								<div>
+									<div class="t">Report Yes · 500.00 REP</div>
+									<div class="s">Canceled in your wallet. Nothing was sent.</div>
+								</div>
+								<div class="act"><span class="btn sm primary">Report Yes</span></div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div>
+					<div class="frame-cap"><span>5b · Reverted</span><span class="mock-note">failed on chain</span></div>
+					<div class="card stack-sm">
+						<div class="notice bad spread">
+							<span><b>Report failed.</b> Reason: “Window ends too soon.” Gas was spent; no REP moved.</span><span class="mono small">0x77d0729dd98d6b011281e7ffb8ddc0152a5125537ad9b13d3fefdad3dc3011ab ↗</span>
+						</div>
+						<div class="steps compact">
+							<div class="step">
+								<span class="mk">2</span>
+								<div><div class="t">Report Yes · 500.00 REP</div></div>
+								<div class="act"><span class="btn sm disabled">Report Yes</span><span class="why">Window ends too soon.</span></div>
+							</div>
+						</div>
+						<p class="mock-note">Design note: the reason is the contract's own text. With none: “The network returned no reason.”</p>
+					</div>
+				</div>
+
+				<div>
+					<div class="frame-cap"><span>5c · Changed since review</span><span class="mock-note">caught before sending</span></div>
+					<div class="dialog stack-sm">
+						<div class="dlg-head"><h2>Report Yes · 500.00 REP</h2></div>
+						<div class="notice warn">
+							<span><b>Changed since you reviewed.</b> This report would now bring a second outcome to 225 000 REP and end reporting undecided.</span>
+						</div>
+						<div class="row" style="justify-content: flex-end"><span class="btn">Review again</span></div>
+					</div>
+				</div>
+
+				<div>
+					<div class="frame-cap"><span>3b · Sped up in wallet</span><span class="mock-note">still pending, new hash</span></div>
+					<div class="card stack-sm">
+						<div class="steps compact">
+							<div class="step now">
+								<span class="mk"><span class="spinner" style="width: 0.9rem; height: 0.9rem; border-color: rgba(255, 255, 255, 0.4); border-top-color: #fff"></span></span>
+								<div>
+									<div class="t">Reporting Yes · 500.00 REP…</div>
+									<div class="s">Sped up in your wallet. New hash <span class="mono">0x91fa5616ab26c4299076c141589736fd399278356cd610c731974630bce1c3d0 ↗</span></div>
+								</div>
+								<div class="act"><span class="btn sm disabled">Reporting…</span></div>
+							</div>
+						</div>
+						<p class="hint">Speed up or cancel in your wallet. Don't send it again here.</p>
+					</div>
+				</div>
+
+				<div>
+					<div class="frame-cap"><span>5d · Replaced</span><span class="mock-note">another transaction took its place</span></div>
+					<div class="card stack-sm">
+						<div class="steps compact">
+							<div class="step">
+								<span class="mk">2</span>
+								<div>
+									<div class="t">Report Yes · 500.00 REP</div>
+									<div class="s">Replaced in your wallet. This report did not happen. <a>See Activity</a></div>
+								</div>
+								<div class="act"><span class="btn sm">Report Yes</span></div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div>
+					<div class="frame-cap"><span>5e · No longer tracked</span><span class="mock-note">tracking window passed</span></div>
+					<div class="card stack-sm">
+						<div class="steps compact">
+							<div class="step">
+								<span class="mk">?</span>
+								<div>
+									<div class="t">Report Yes · 500.00 REP</div>
+									<div class="s">No longer tracked. Check it before reporting again: <span class="mono">0x4c1edf0f6b045b4f2971d086642328f38fe1ee0e1dcdfa12c192610f331f9a07 ↗</span></div>
+								</div>
+								<div class="act"><span class="btn sm">Check transaction ↗</span><span class="btn sm">Report again</span></div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+	</body>
+</html>

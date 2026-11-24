@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Reporting states</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="questions">
+		<div class="page">
+			<div class="crumbs">
+				<span class="crumb-full"
+					><a>Watchlist</a> › <a>Security pool <span class="mono">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</span></a> › <a>Questions</a> › <span aria-current="page">Question</span></span
+				><a class="crumb-short" aria-label="Back to questions in security pool 0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766">‹ Security pool <span class="mono">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</span> › Questions</a>
+			</div>
+			<div class="route-head">
+				<div>
+					<div class="row">
+						<span class="badge ok">Resolved · Yes</span><span class="muted small">Binary · question ID <span class="mono">0x2c41dde8a2d47b25c6e13d32b7e7bec49940985283baef013540728e4fb81da4</span></span>
+					</div>
+					<h1 style="margin-top: 0.5rem; display: flex; gap: 0.6rem; align-items: center"><button class="fav lg on" aria-pressed="true" aria-label="Saved: Will a spot ETH ETF see net inflows above $1B in December? in security pool 0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766" title="Remove from saved">★</button>Will a spot ETH ETF see net inflows above $1B in December?</h1>
+				</div>
+				<a class="btn">Open security pool</a>
+			</div>
+			<div class="view-tabs">
+				<a>Shares <span class="badge acc">Redeem</span></a>
+				<a class="on">Reporting <span class="badge acc">Claim</span></a>
+				<a>Details</a>
+			</div>
+
+			<div class="next" style="margin-bottom: var(--s4)">
+				<div>
+					<div class="eyebrow">Resolved as Yes</div>
+					<h3>Claim 689.40 REP from your Yes deposits</h3>
+					<p>2.00 Yes shares can also be redeemed on <a>Shares</a>.</p>
+				</div>
+			</div>
+
+			<div class="stack">
+				<div class="card">
+					<div class="card-head">
+						<div><h2>Claim your REP</h2></div>
+					</div>
+					<table>
+						<thead>
+							<tr>
+								<th></th>
+								<th>Deposit</th>
+								<th class="r">Deposited</th>
+								<th class="r">You receive</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr class="sel">
+								<td style="width: 2rem"><input type="checkbox" checked aria-label="Deposit #3" /></td>
+								<td>
+									<b>#3 · Yes</b>
+									<div class="q-meta">Jan 3</div>
+								</td>
+								<td class="r num">120.00 REP</td>
+								<td class="r num" style="color: var(--success)">134.40 REP</td>
+							</tr>
+							<tr class="sel">
+								<td><input type="checkbox" checked aria-label="Deposit #5" /></td>
+								<td>
+									<b>#5 · Yes</b>
+									<div class="q-meta">Jan 6</div>
+								</td>
+								<td class="r num">500.00 REP</td>
+								<td class="r num" style="color: var(--success)">555.00 REP</td>
+							</tr>
+							<tr>
+								<td></td>
+								<td>
+									<b>#4 · No</b>
+									<div class="q-meta">Jan 5</div>
+								</td>
+								<td class="r num">40.00 REP</td>
+								<td class="r num muted">
+									0.00 REP
+									<div class="q-meta">Lost, no action needed</div>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+					<div class="spread" style="margin-top: var(--s4)">
+						<span></span>
+						<span class="btn primary">Claim 689.40 REP</span>
+					</div>
+					<div class="p mock-note" style="margin-top: var(--s3)">Design note: the button amount follows the checkboxes. Losing deposits are listed only when saved on this device. Deposits are made from your wallet; totals, deposits and claims are per wallet address.</div>
+				</div>
+
+				<div class="card stack-sm">
+					<h3>Other banner states</h3>
+					<p class="mock-note">Design note: the banner text in each state.</p>
+					<div class="steps" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0 var(--s5)">
+						<div class="step info">
+							<span class="mk">1</span>
+							<div>
+								<div class="t">Reporting open, no reports</div>
+								<div class="s">“No reports yet. The first report needs at least 1.00 REP.”</div>
+							</div>
+						</div>
+						<div class="step info">
+							<span class="mk">=</span>
+							<div>
+								<div class="t">Tied</div>
+								<div class="s">“If still tied at Jan 9, 14:00 UTC, no side wins.” <a>How ties resolve</a></div>
+							</div>
+						</div>
+						<div class="step info">
+							<span class="mk">0</span>
+							<div>
+								<div class="t">No REP staked on any outcome</div>
+								<div class="s">“If it stays that way, the outcome is Invalid.”</div>
+							</div>
+						</div>
+						<div class="step info">
+							<span class="mk">…</span>
+							<div>
+								<div class="t">Pending finalization</div>
+								<div class="s">“Reporting ended. Refresh to see the outcome.”</div>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="card stack-sm">
+					<p class="mock-note">Design note: report form while reporting is open, when the amount would bring a second outcome to 225 000 REP (here Yes 224 000.00, No 225 000.00). The last step changes to this; otherwise the form never mentions forking.</p>
+					<label class="check"><input type="checkbox" /> This brings Yes to 225 000 REP, equal to No. Reporting then ends undecided and the universe can fork. This cannot be undone.</label>
+					<div class="stack-sm"><span class="btn sm disabled" style="align-self: flex-start">Report Yes · 1 000.00 REP</span><span class="why">Tick the box to continue.</span></div>
+				</div>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+	</body>
+</html>

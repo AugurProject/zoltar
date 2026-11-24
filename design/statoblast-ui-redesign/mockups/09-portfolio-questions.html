@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Security pool questions</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="portfolios" data-ptab="questions">
+		<div class="page">
+			<div class="portfolio-head"></div>
+
+			<div class="main-side" style="grid-template-columns: minmax(0, 1fr) 460px">
+				<div class="stack">
+					<div class="card flush">
+						<div class="card-head">
+							<div>
+								<h2>Your saved questions</h2>
+								<p>Showing the 3 you saved, of 14 registered here.</p>
+							</div>
+						</div>
+						<div style="padding: 0 var(--s5) var(--s4)">
+							<div class="open-grid find">
+								<div class="field">
+									<label>Find or register by question ID</label>
+									<div class="input one-line"><span class="ph">0x… or decimal</span></div>
+								</div>
+								<div><span class="btn">Find</span></div>
+							</div>
+						</div>
+						<table class="stackable">
+							<thead>
+								<tr>
+									<th class="star"><span class="sr">Saved</span></th>
+									<th>Question</th>
+									<th>Stage</th>
+									<th class="r">Your shares</th>
+									<th></th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr class="sel">
+									<td class="star"><button class="fav on" aria-pressed="true" aria-label="Saved: Will this resolve? (security pool question 1)">★</button></td>
+									<td>
+										<a class="q-title">Will this resolve? (security pool question 1)</a>
+										<div class="q-meta"><span class="mono">0x5afb2df10de1c08de002abfc0143fb65d213d00a6af599e05ebe91271aa275e1</span> · reporting opens Mar 1</div>
+									</td>
+									<td><span class="badge acc">Trading</span></td>
+									<td class="r num nowrap">1.00 sets <span class="muted">WETH</span></td>
+									<td class="r"><span class="btn sm">Mint…</span></td>
+								</tr>
+								<tr>
+									<td class="star"><button class="fav on" aria-pressed="true" aria-label="Saved: Will a spot ETH ETF see net inflows above $1B in December?">★</button></td>
+									<td>
+										<a class="q-title">Will a spot ETH ETF see net inflows above $1B in December?</a>
+										<div class="q-meta"><span class="mono">0x2c41dde8a2d47b25c6e13d32b7e7bec49940985283baef013540728e4fb81da4</span> · reporting ends Jan 9, 14:00 UTC</div>
+									</td>
+									<td><span class="badge warn">Response window</span></td>
+									<td class="r num nowrap">2.00 sets <span class="muted">WETH</span></td>
+									<td class="r small muted">Minting closed</td>
+								</tr>
+								<tr>
+									<td class="star"><button class="fav on" aria-pressed="true" aria-label="Saved: Will the Fed cut rates at the January 2026 FOMC meeting?">★</button></td>
+									<td>
+										<a class="q-title">Will the Fed cut rates at the January 2026 FOMC meeting?</a>
+										<div class="q-meta"><span class="mono">0x77b050f63567e58a847aa9d2454157a0c61d7f37386034d5a8c62750f60f193b</span></div>
+									</td>
+									<td><span class="badge ok">Resolved · No</span></td>
+									<td class="r num">5.00 No</td>
+									<td class="r"><span class="btn sm">Redeem…</span></td>
+								</tr>
+							</tbody>
+						</table>
+						<div class="table-foot"><span class="small muted">Minting closes when a question's reporting opens.</span></div>
+					</div>
+					<p class="mock-note">Design note: there is no separate “Register a question” form. Find by ID shows the question and, if it isn't registered here, a Register button (09c). Security pools with a fixed question list show the approved list instead (09b).</p>
+				</div>
+
+				<aside class="drawer sticky">
+					<div class="spread" style="margin-bottom: var(--s3)">
+						<h2>Mint complete sets</h2>
+						<span class="btn sm link" aria-label="Close">✕</span>
+					</div>
+					<div class="p small" style="color: var(--text-2); margin-bottom: var(--s4)">Shares go to your connected wallet.</div>
+					<div class="mint-form" data-question="1"></div>
+				</aside>
+			</div>
+		</div>
+		<style>
+			.drawer .grid-3,
+			.drawer .grid-2 {
+				grid-template-columns: minmax(0, 1fr);
+			}
+		</style>
+		<script src="shell.js"></script>
+		<script src="portfolio-head.js"></script>
+		<script src="mint-form.js"></script>
+	</body>
+</html>

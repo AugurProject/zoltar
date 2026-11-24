@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Fixed question list</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="portfolios" data-ptab="questions" data-admission="fixed">
+		<div class="page">
+			<div class="portfolio-head"></div>
+
+			<div class="main-side">
+				<div class="card flush">
+					<div class="card-head">
+						<div>
+							<h2>Approved questions</h2>
+							<p>Only these 3 questions can ever be registered in this security pool.</p>
+						</div>
+					</div>
+					<table class="stackable">
+						<thead>
+							<tr>
+								<th>Question</th>
+								<th></th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>
+									<b>Will the Fed cut rates at the January 2026 FOMC meeting?</b>
+									<div class="q-meta mono">0x77b050f63567e58a847aa9d2454157a0c61d7f37386034d5a8c62750f60f193b</div>
+								</td>
+								<td class="r"><span class="btn sm done">Registered</span></td>
+							</tr>
+							<tr>
+								<td>
+									<b>Will a spot ETH ETF see net inflows above $1B in December?</b>
+									<div class="q-meta mono">0x2c41dde8a2d47b25c6e13d32b7e7bec49940985283baef013540728e4fb81da4</div>
+								</td>
+								<td class="r"><span class="btn sm">Register question</span></td>
+							</tr>
+							<tr>
+								<td>
+									<b>Who will win the 2026 World Cup final?</b>
+									<div class="q-meta mono">0x91d2932f4f5f984b99d807ab41fd8886072e35d826d1fb535904746961a77307</div>
+								</td>
+								<td class="r"><span class="btn sm">Register question</span></td>
+							</tr>
+						</tbody>
+					</table>
+					<div class="table-foot"><span class="small muted">Registering moves no funds.</span></div>
+				</div>
+				<aside class="card stack-sm">
+					<h3>Custom rules</h3>
+					<div class="notice warn"><b>This security pool has custom rules for which questions can be registered.</b> The app can't check them, so registering and minting are unavailable here. Withdrawals and fork recovery still work.</div>
+					<p class="mock-note">Design note: shown in place of the list; Register and Mint are disabled with this reason. Security pools that accept any question use Find by ID (09, 09c). Page controls appear only when the list is longer than one page.</p>
+				</aside>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+		<script src="portfolio-head.js"></script>
+	</body>
+</html>

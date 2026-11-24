@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Universe menu</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="watchlist" data-umenu="open" data-parent-rep="1">
+		<div class="page">
+			<div class="route-head">
+				<div>
+					<h1>Watchlist</h1>
+				</div>
+			</div>
+			<div class="notice warn spread" style="margin-bottom: var(--s4); align-items: center">
+				<span
+					><b><span class="nowrap">1 250.00 REP</span> is still in Augur v2</b>, which forked. Migrate it to use it here. No deadline.</span
+				><span class="row"><a class="btn sm" href="15-universes.html">Migrate REP…</a><a class="small">Hide</a></span>
+			</div>
+			<div class="p mock-note" style="margin: calc(-1 * var(--s2)) 0 var(--s4)">Design note: hiding the notice keeps the “!” on the universe button.</div>
+			<div class="card" style="margin-bottom: var(--s4)">
+				<div class="open-grid">
+					<div class="field">
+						<label>Open a security pool or question</label>
+						<div class="input one-line"><span class="ph">Security pool address or link</span></div>
+					</div>
+					<div class="field">
+						<label>Question ID <span class="muted" style="font-weight: 400">(optional)</span></label>
+						<div class="input one-line"><span class="ph">Search saved security pools</span></div>
+					</div>
+					<div><span class="btn">Open</span></div>
+				</div>
+
+				<details class="disc" style="margin-top: var(--s3)">
+					<summary>View positions of another address</summary>
+					<div class="field" style="margin-top: var(--s2); max-width: 560px">
+						<label>Address</label>
+						<div class="input">0x7a3f375917679e170d85356b88194849e4ea91c2<span class="unit">Your wallet</span></div>
+						<span class="hint">Read-only.</span>
+					</div>
+				</details>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+	</body>
+</html>

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Universes</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="universes" data-forked="1">
+		<div class="page">
+			<div class="crumbs"><a>← Back</a></div>
+			<div class="route-head">
+				<div>
+					<h1>Universes &amp; REP migration</h1>
+					<p class="sub">Migrating burns your REP here and gives you the same amount in every child universe you pick.</p>
+				</div>
+			</div>
+
+			<div class="main-side wide">
+				<div class="stack">
+					<div class="card">
+						<div class="card-head">
+							<h2>Augur v2 › Yes</h2>
+							<div class="row"><span class="badge acc">You are here</span><span class="badge bad">Forked</span></div>
+						</div>
+						<div class="metrics">
+							<div class="metric"><span class="k">Universe ID</span><span class="v">4</span></div>
+							<div class="metric"><span class="k">Parent universe</span><span class="v" style="font-family: var(--sans)">Augur v2 (#0)</span></div>
+							<div class="metric" style="grid-column: span 2"><span class="k">Fork question</span><span class="v" style="font-family: var(--sans); font-size: 0.9rem">Will Starship complete an orbital refuelling test in 2026?</span></div>
+						</div>
+					</div>
+					<div class="card flush">
+						<div class="card-head"><h2>Child universes</h2></div>
+						<table class="stackable">
+							<thead>
+								<tr>
+									<th>Outcome</th>
+									<th>Child universe</th>
+									<th class="r">You hold there</th>
+									<th></th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td><b>Yes</b></td>
+									<td class="num">#12</td>
+									<td class="r num">0.00 REP</td>
+									<td class="r"><span class="btn sm">Switch to #12</span></td>
+								</tr>
+								<tr>
+									<td><b>No</b></td>
+									<td class="num">#13</td>
+									<td class="r num">0.00 REP</td>
+									<td class="r"><span class="btn sm">Switch to #13</span></td>
+								</tr>
+								<tr>
+									<td><b>Invalid</b></td>
+									<td class="muted">Not created yet</td>
+									<td class="r num">—</td>
+									<td class="r"><span class="btn sm">Create child universe</span></td>
+								</tr>
+							</tbody>
+						</table>
+						<div class="table-foot"><a class="small">Show child-universe REP tokens in your wallet</a><span class="mock-note">Design note: scalar forks add an outcome picker above.</span></div>
+					</div>
+				</div>
+
+				<aside class="card stack sticky">
+					<h2>Migrate REP</h2>
+					<div class="field">
+						<span class="label">Migrate into</span>
+						<label class="check"><input type="checkbox" /> <span>Yes (#12)</span></label>
+						<label class="check"><input type="checkbox" checked /> <span>No (#13)</span></label>
+						<label class="check"
+							><input type="checkbox" /> <span>Invalid <span class="muted">(not created yet; migrating creates it and costs more gas)</span></span></label
+						>
+					</div>
+					<div class="field">
+						<label>Amount to migrate</label>
+						<div class="input focus">2 310.00<span class="unit">REP</span></div>
+						<div class="presets"><span>Use all 2 310.00 REP</span></div>
+					</div>
+					<div class="diff"><span>REP here, in Augur v2 › Yes</span><span class="before">2 310.00</span><span class="arrow">→</span><span class="after">0.00</span> <span>REP in No (#13)</span><span class="before">0.00</span><span class="arrow">→</span><span class="after">2 310.00</span></div>
+					<p class="small muted">You can add more child universes later without burning more REP. No deadline.</p>
+					<div class="steps compact">
+						<div class="step now">
+							<span class="mk">1</span>
+							<div>
+								<div class="t">Approve REP</div>
+								<div class="s">2 310.00 REP needed · <a>Adjust amount</a></div>
+							</div>
+							<div class="act"><span class="btn sm primary">Approve REP</span></div>
+						</div>
+						<div class="step locked">
+							<span class="mk"></span>
+							<div>
+								<div><div class="t">Migrate 2 310.00 REP to No</div></div>
+								<div class="body">
+									<label class="check"
+										><input type="checkbox" /><span>Burn 2 310.00 REP in this universe. This is <b>irreversible</b>.</span></label
+									>
+								</div>
+							</div>
+							<div class="act"><span class="btn sm disabled">Migrate REP</span><span class="why">Approve REP first.</span></div>
+						</div>
+					</div>
+					<p class="mock-note">Design note: REP already burned in an earlier migration shows as a row “Already burned, usable for more child universes” and is used before wallet REP. Picking more than 7 not-yet-created child universes shows an error.</p>
+				</aside>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+	</body>
+</html>

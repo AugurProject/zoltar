@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Watchlist after fork</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="watchlist" data-forked="1">
+		<div class="page">
+			<div class="route-head">
+				<div>
+					<h1>Watchlist</h1>
+				</div>
+			</div>
+
+			<div class="card" style="margin-bottom: var(--s4)">
+				<div class="open-grid">
+					<div class="field">
+						<label>Open a security pool or question</label>
+						<div class="input one-line"><span class="ph">Security pool address or link</span></div>
+					</div>
+					<div class="field">
+						<label>Question ID <span class="muted" style="font-weight: 400">(optional)</span></label>
+						<div class="input one-line"><span class="ph">Search saved security pools</span></div>
+					</div>
+					<div><span class="btn">Open</span></div>
+				</div>
+
+				<details class="disc" style="margin-top: var(--s3)">
+					<summary>View positions of another address</summary>
+					<div class="field" style="margin-top: var(--s2); max-width: 560px">
+						<label>Address</label>
+						<div class="input">0x7a3f375917679e170d85356b88194849e4ea91c2<span class="unit">Your wallet</span></div>
+						<span class="hint">Read-only.</span>
+					</div>
+				</details>
+			</div>
+
+			<div class="card flush" style="margin-bottom: var(--s4)">
+				<div class="card-head">
+					<div><h2>★ Saved questions</h2></div>
+					<span class="badge mute">Frozen</span>
+				</div>
+				<table class="stackable">
+					<thead>
+						<tr>
+							<th class="star"><span class="sr">Saved</span></th>
+							<th>Question</th>
+							<th>Security pool</th>
+							<th>After the fork</th>
+							<th class="r">Your shares</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td class="star"><button class="fav on" aria-pressed="true" aria-label="Saved: Will Starship complete an orbital refuelling test in 2026? in security pool 0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766">★</button></td>
+							<td>
+								<a class="q-title">Will Starship complete an orbital refuelling test in 2026?</a>
+								<div class="q-meta">Caused the fork: two outcomes reached 225 000 REP</div>
+							</td>
+							<td><a class="mono small addr-1">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</a></td>
+							<td>
+								<span class="badge bad">Fork question</span>
+								<div class="q-meta">Each child universe resolves it to its own answer</div>
+							</td>
+							<td class="r num nowrap">3.00 Yes</td>
+							<td class="r"><span class="btn sm">Open</span></td>
+						</tr>
+						<tr>
+							<td class="star"><button class="fav on" aria-pressed="true" aria-label="Saved: Will this resolve? (security pool question 1) in security pool 0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766">★</button></td>
+							<td>
+								<a class="q-title">Will this resolve? (security pool question 1)</a>
+								<div class="q-meta">Was trading</div>
+							</td>
+							<td><a class="mono small addr-1">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</a></td>
+							<td><div class="q-meta">Migrate your shares to a child universe</div></td>
+							<td class="r num nowrap">1.00 sets <span class="muted">WETH</span></td>
+							<td class="r"><span class="btn sm">Open</span></td>
+						</tr>
+						<tr>
+							<td class="star"><button class="fav on" aria-pressed="true" aria-label="Saved: Will BTC close October 2025 above $120,000? in security pool 0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766">★</button></td>
+							<td>
+								<a class="q-title">Will BTC close October 2025 above $120,000?</a>
+								<div class="q-meta">Was in response window</div>
+							</td>
+							<td><a class="mono small addr-1">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</a></td>
+							<td>
+								<div class="q-meta">Migrate your shares to a child universe</div>
+								<div class="q-meta">REP deposits carry over</div>
+							</td>
+							<td class="r num nowrap">2.00 sets <span class="muted">WETH</span></td>
+							<td class="r"><span class="btn sm">Open</span></td>
+						</tr>
+					</tbody>
+				</table>
+				<div class="table-foot"><span class="small muted">Migrate shares on each question's Shares tab.</span><span class="small muted">3 of 3</span></div>
+			</div>
+
+			<div class="card flush" style="margin-bottom: var(--s4)">
+				<div class="card-head">
+					<div><h2>★ Saved security pools</h2></div>
+					<span class="badge mute">Frozen</span>
+				</div>
+				<table class="stackable">
+					<thead>
+						<tr>
+							<th class="star"><span class="sr">Saved</span></th>
+							<th>Security pool</th>
+							<th>After the fork</th>
+							<th>Your position</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td class="star"><button class="fav on" aria-pressed="true" aria-label="Saved: security pool 0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766">★</button></td>
+							<td>
+								<a class="q-title mono">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</a>
+								<div class="q-meta">WETH · any question</div>
+							</td>
+							<td>
+								<span class="badge bad">Choose a child universe</span>
+								<div class="q-meta">By Jan 18, 14:00 UTC (55 days left). If you don't choose, your 5 000.00 pledged REP goes to claimants in every child universe and your commitment ends.</div>
+							</td>
+							<td class="small">
+								<b class="num">5 000.00 REP pledged</b>
+								<div class="num">10.00 WETH commitment</div>
+							</td>
+							<td class="r"><span class="btn sm">Fork &amp; recovery</span></td>
+						</tr>
+						<tr>
+							<td class="star"><button class="fav on" aria-pressed="true" aria-label="Saved: security pool 0x1b44f8bd575f9c2346ca3887790dff199fe507c9">★</button></td>
+							<td>
+								<a class="q-title mono">0x1b44f8bd575f9c2346ca3887790dff199fe507c9</a>
+								<div class="q-meta">USDC · fixed question list</div>
+							</td>
+							<td>
+								<span class="badge ok">Moving to No</span>
+								<div class="q-meta">Migration opens Jan 18</div>
+							</td>
+							<td class="small">
+								<b class="num">1 200.00 REP pledged</b>
+								<div class="num">2 000 USDC commitment</div>
+							</td>
+							<td class="r"><span class="btn sm">Open</span></td>
+						</tr>
+					</tbody>
+				</table>
+				<div class="table-foot">
+					<span class="mock-note">Design note: shown on Nov 24.</span><span class="row small"><a>Export watchlist</a><a>Import watchlist</a></span>
+				</div>
+			</div>
+			<div class="card flush">
+				<div class="card-head">
+					<div><h2>Recently opened</h2></div>
+					<a class="small">Clear history</a>
+				</div>
+				<table class="stackable">
+					<thead>
+						<tr>
+							<th class="star"><span class="sr">Saved</span></th>
+							<th><span class="sr">Question or security pool</span></th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td class="star"><button class="fav" aria-pressed="false" aria-label="Save: Who will win the 2026 World Cup final? in security pool 0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766">☆</button></td>
+							<td data-label="Question">
+								<a class="q-title">Who will win the 2026 World Cup final?</a>
+								<div class="q-meta">Security pool <span class="mono">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</span>, opened 2h ago</div>
+							</td>
+							<td class="r"><span class="btn sm">Open</span></td>
+						</tr>
+						<tr>
+							<td class="star"><button class="fav" aria-pressed="false" aria-label="Save: security pool 0x44e04275f4bdec9bdbb27b6405017042e93f19bd">☆</button></td>
+							<td data-label="Security pool">
+								<a class="q-title mono">0x44e04275f4bdec9bdbb27b6405017042e93f19bd</a>
+								<div class="q-meta">Security pool, WETH, opened 3d ago</div>
+							</td>
+							<td class="r"><span class="btn sm">Open</span></td>
+						</tr>
+					</tbody>
+				</table>
+				<div class="table-foot"><span class="small muted">Last 20 opened</span></div>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+	</body>
+</html>

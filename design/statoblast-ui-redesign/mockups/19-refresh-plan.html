@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Refresh plan</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="questions">
+		<div class="page">
+			<div class="route-head">
+				<div>
+					<p class="section-label">Data plan · for design and engineering review · no contract changes</p>
+					<h1 style="margin-top: 0.4rem">What is read, and when</h1>
+					<p class="sub">Nothing is listed globally. You reach a question or security pool by link or address, or a question by ID inside its security pool; starring keeps it live. Everything else is read only while you look at it.</p>
+				</div>
+			</div>
+
+			<div class="card flush" style="margin-bottom: var(--s4)">
+				<div class="card-head">
+					<div><h2>Refresh rules</h2></div>
+				</div>
+				<table class="stackable">
+					<thead>
+						<tr>
+							<th>What</th>
+							<th>When it is read</th>
+							<th>Cost</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><b>The page you're on</b></td>
+							<td>Every new block</td>
+							<td>≈ 60 sub-calls in the live multicall</td>
+						</tr>
+						<tr>
+							<td><b>★ Saved items</b></td>
+							<td>Every block, up to 25; beyond 25, 10 rotate per block and show “as of …”</td>
+							<td>3–5 sub-calls each, same multicall</td>
+						</tr>
+						<tr>
+							<td><b>Recently opened</b> (last 20)</td>
+							<td>Not refreshed; shows what it was when you last opened it</td>
+							<td>0</td>
+						</tr>
+						<tr>
+							<td><b>All questions, security pools, reports</b></td>
+							<td>Never listed: anyone can create them</td>
+							<td>0</td>
+						</tr>
+						<tr>
+							<td><b>Hidden tab</b></td>
+							<td>Paused</td>
+							<td>0</td>
+						</tr>
+					</tbody>
+				</table>
+				<div class="table-foot"><span class="small muted">Saved items and history are saved per app and network on this device (store limit 500).</span></div>
+			</div>
+
+			<div class="card" style="margin-bottom: var(--s4)">
+				<div class="card-head" style="margin-bottom: var(--s3)">
+					<div>
+						<h2>Decided trade-off · no browsing</h2>
+						<p>No screen lists questions or security pools that anyone can create, including a security pool's registered questions. There is no Questions tab: a question exists only inside a security pool, with its own shares and reporting there, so every question is reached as (security pool, question ID) through a link, the Trading app, the Watchlist (including a question-ID search across saved security pools), or lookup by ID inside one security pool. Whatever people save stays live. Spam can't reach the screen, at the cost of not browsing what a security pool backs.</p>
+					</div>
+					<span class="badge acc">Product decision</span>
+				</div>
+			</div>
+
+			<div class="card" style="margin-bottom: var(--s4)">
+				<div class="card-head" style="margin-bottom: var(--s3)">
+					<div>
+						<h2>Entry check</h2>
+						<p>Every ID, address, link, saved and history entry is checked before it joins a read batch, without calling the address itself. One hostile target would otherwise fail the whole multicall.</p>
+					</div>
+				</div>
+				<dl class="kv" style="grid-template-columns: auto 1fr; max-width: 860px">
+					<dt>Security pool</dt>
+					<dd style="white-space: normal; text-align: left"><code>isSecurityPool(address)</code> on the factory (SecurityPoolFactory.sol:62)</dd>
+					<dt>Question link</dt>
+					<dd style="white-space: normal; text-align: left">Names a security pool and a question ID: the security pool passes the check above, then <code>getQuestionLedger(questionId, universeId)</code> on it (SecurityPool.sol:231) finds the question. Question ledger addresses are never typed; they appear only in a question's Details</dd>
+					<dt>Question ID</dt>
+					<dd style="white-space: normal; text-align: left">Never searched app-wide: the same question can sit in any number of security pools. Inside one security pool (Find by question ID): one <code>getQuestionLedger(questionId, universeId)</code> read, “Not registered here” otherwise. On the Watchlist: the same read in each saved security pool only (≤ 25, allowFailure), plus one Zoltar read for the title; anything else needs a link or security pool address</dd>
+					<dt>Fails</dt>
+					<dd style="white-space: normal; text-align: left">“Not a Statoblast question / security pool”; never read, offered for removal</dd>
+					<dt>Order</dt>
+					<dd style="white-space: normal; text-align: left">The check runs in the first multicall and the target's reads in the second; results are cached for the session, so the ceiling holds on first open</dd>
+					<dt>Bytecode</dt>
+					<dd style="white-space: normal; text-align: left">Factory-registered contracts are canonical code (:179), so saved items and history skip bytecode checks; the open page verifies fully, at most one security pool per refresh, cached per session</dd>
+				</dl>
+			</div>
+
+			<div class="card flush" style="margin-bottom: var(--s4)">
+				<div class="card-head">
+					<div>
+						<h2>Fixes to today's loaders</h2>
+						<p>Measured in the browser simulation by counting the app's JSON-RPC requests.</p>
+					</div>
+				</div>
+				<table class="stackable">
+					<thead>
+						<tr>
+							<th>Today</th>
+							<th>Change</th>
+							<th class="r">Per refresh</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>
+								<b>Security pool page</b> reloads everything each block, including 19 bytecode checks
+								<div class="q-meta">Measured: 126 first load, 130 per block</div>
+							</td>
+							<td>
+								Cache verified modules per session; read live state in one block-pinned multicall
+								<div class="q-meta">Measured replay: 115 live reads in 1 request, 1.86 M gas</div>
+							</td>
+							<td class="r num">
+								130 → ≈ 3
+								<div class="q-meta">estimate</div>
+							</td>
+						</tr>
+						<tr>
+							<td><b>Questions list</b> reads every registered question ledger (questionLedgers.ts:109–119)</td>
+							<td>Removed: saved items, history and lookup only</td>
+							<td class="r num">grows → 0</td>
+						</tr>
+						<tr>
+							<td><b>Your deposits</b>: pages every deposit in the game (reporting.ts:74–100)</td>
+							<td>Saved at deposit time; search (below) only when the game's total for you is larger than what's located</td>
+							<td class="r num">0 usually · ≤ 2 pages</td>
+						</tr>
+						<tr>
+							<td><b>Inherited claims</b>: pages every carry leaf of the parent and every consumed index of the child (reportingCarryState.ts:60–77, 150–178)</td>
+							<td>Parent leaves: incremental by saved cursor; the parent is frozen, so it finishes once. Consumed state: no list paging; each of your found claims is checked individually every refresh</td>
+							<td class="r num">≤ 2 pages + 1 per claim</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
+			<div class="card" style="margin-bottom: var(--s4)">
+				<div class="card-head" style="margin-bottom: var(--s3)">
+					<div>
+						<h2>Locating your deposits · contract state only</h2>
+						<p>The app never reads event logs. Claiming needs each deposit's position (<code>withdrawFromEscalationGame(outcome, depositIndexes[])</code>); everything else comes from single reads.</p>
+					</div>
+					<span class="badge acc">No logs</span>
+				</div>
+				<ol class="small" style="margin: 0; padding-left: 1.2rem; color: var(--text-2); display: flex; flex-direction: column; gap: 0.35rem">
+					<li><b>Per wallet:</b> deposits are made from your wallet. Totals, saved positions, searches and claims are per wallet address.</li>
+					<li><b>Your total per side, no search:</b> <code>getLocalUnresolvedPrincipalByVaultAndOutcome(you, outcome)</code> ×3. All zero → nothing to locate. Shown on Reporting while the game runs. Retired (losing) sides read 0 after settlement, so losing deposits are shown only when saved and are never searched; they return no REP and need no action.</li>
+					<li><b>Saved when you deposit:</b> after the transaction confirms, read <code>getDepositsByOutcomeLength</code> at the receipt's block and at its parent block. The entries between them are exactly that block's deposits (<code>getDepositsByOutcome</code>); every one whose depositor is you is yours. Saved per chain, game, outcome and depositor (about 3 reads, once).</li>
+					<li><b>Carried by Watchlist export/import</b> to another device.</li>
+					<li><b>Search only when totals differ</b> (new device, another app, cleared storage): page <code>getDepositsByOutcome(outcome, start, 30)</code>, 2 pages per refresh, cursor saved, stop the moment located deposits add up to your total. Only for the open question; may start while the game runs. A deposit number can be entered and checked with one read; reaching the end unmatched shows “Search again”. Screen 04d.</li>
+					<li><b>Inherited claims:</b> read your REP in the frozen parent game first; zero → nothing more. Otherwise proofs need every parent entry, so the parent list is read in full once and kept (04c).</li>
+					<li>Located deposits are re-read each refresh; amounts drop to 0 once claimed. Cursors advance only to a block a few behind head, so a reorg can't skip a deposit.</li>
+				</ol>
+			</div>
+
+			<div class="card flush" style="margin-bottom: var(--s4)">
+				<div class="card-head">
+					<div>
+						<h2>Reads per row</h2>
+						<p>Design targets, to be re-measured in a populated scenario.</p>
+					</div>
+				</div>
+				<table class="stackable">
+					<thead>
+						<tr>
+							<th>Row</th>
+							<th>Reads</th>
+							<th class="r">Sub-calls</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Saved question</td>
+							<td class="mono small">question ledger state · question outcome · unresolved principal per outcome (if a game exists) · one balanceOf per outcome (3 for binary; a categorical question counts as one saved item per 5 outcomes toward the 25 live)</td>
+							<td class="r num">2 + 2 × outcomes</td>
+						</tr>
+						<tr>
+							<td>Saved security pool</td>
+							<td class="mono small">ownerAccount (incl. fees, target) · isPriceValid · capacity totals</td>
+							<td class="r num">3</td>
+						</tr>
+						<tr>
+							<td>Open question, reporting</td>
+							<td class="mono small">getOutcomeState · previewLeadingDepositOnOutcome (allowFailure) · unresolved principal ×3 · deadline · deposit lengths ×3</td>
+							<td class="r num">≈ 10</td>
+						</tr>
+						<tr>
+							<td>Open security pool page</td>
+							<td class="mono small">everything the page shows, live part only</td>
+							<td class="r num">≈ 60</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
+			<div class="grid-2" style="margin-bottom: var(--s4)">
+				<div class="card">
+					<h2 style="margin-bottom: var(--s3)">Request budget</h2>
+					<table class="stackable">
+						<thead>
+							<tr>
+								<th>Open security pool page + 25 saved items</th>
+								<th class="r">Today</th>
+								<th class="r">Planned (estimate)</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>Per new block</td>
+								<td class="r num">≥ 130 (page only)</td>
+								<td class="r num"><b>≈ 3–5</b></td>
+							</tr>
+							<tr>
+								<td>Live sub-calls</td>
+								<td class="r">—</td>
+								<td class="r num">≈ 60 + 25 × (2 + outcomes); ≤ 185 for binary (≈ 3 M gas)</td>
+							</tr>
+							<tr>
+								<td>Ceiling per refresh</td>
+								<td class="r">none</td>
+								<td class="r num">1 block + 2 multicalls + ≤ 2 deposit pages + ≤ 1 verification (20)</td>
+							</tr>
+						</tbody>
+					</table>
+					<div class="p hint" style="margin-top: var(--s3)">Gas extrapolated from the measured average (≈ 16 k per sub-call). Re-measure in a populated scenario with deposits, a queue and a fork.</div>
+				</div>
+				<div class="card">
+					<h2 style="margin-bottom: var(--s3)">If someone tries to overload it</h2>
+					<table class="stackable">
+						<thead>
+							<tr>
+								<th>Attack</th>
+								<th>Effect</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>Deploy thousands of questions or security pools</td>
+								<td>None: nothing is listed globally</td>
+							</tr>
+							<tr>
+								<td>Register spam into an open security pool</td>
+								<td>None: only saved items and lookup by ID</td>
+							</tr>
+							<tr>
+								<td>Share a link to a fake question</td>
+								<td>Rejected by the entry check before any read</td>
+							</tr>
+							<tr>
+								<td>Flood a starred game with deposits</td>
+								<td>Each deposit is at least the start bond and a side caps at the threshold; only matters for a search on a new device: more refreshes, never more per refresh; saved positions need no search</td>
+							</tr>
+							<tr>
+								<td>You star many items</td>
+								<td>Your own choice: 25 live, the rest rotate “as of …”</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</div>
+
+			<div class="card">
+				<h2 style="margin-bottom: var(--s3)">Reuses what exists</h2>
+				<dl class="kv" style="grid-template-columns: auto 1fr; max-width: 860px">
+					<dt>Saved-items store</dt>
+					<dd style="white-space: normal; text-align: left">localEntityStore.ts: app “statoblast”, kinds “question” and “pool” (security pools), per network</dd>
+					<dt>Star button</dt>
+					<dd style="white-space: normal; text-align: left">FavoriteToggle.tsx: a button with aria-pressed; relabel to “Saved: {name} in security pool {address}”</dd>
+					<dt>Pattern to follow</dt>
+					<dd style="white-space: normal; text-align: left">Trading's live discovery follows saved items only (LiveTrading.tsx:156–163)</dd>
+				</dl>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+	</body>
+</html>

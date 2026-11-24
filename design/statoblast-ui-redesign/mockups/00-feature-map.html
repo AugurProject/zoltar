@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Feature map</title>
+		<link rel="stylesheet" href="mock.css" />
+		<style>
+			td:first-child {
+				font-weight: 600;
+				width: 22%;
+			}
+			td:nth-child(2) {
+				width: 38%;
+				color: var(--text-2);
+			}
+			td {
+				padding: 0.5rem 0.75rem;
+				font-size: 0.85rem;
+			}
+			h2 {
+				margin: var(--s5) 0 var(--s2);
+			}
+		</style>
+	</head>
+	<body data-tab="none">
+		<div class="page" style="max-width: 1200px">
+			<h1>Feature parity map</h1>
+			<div class="p muted" style="margin-top: 0.4rem">Every feature in the current Statoblast UI and where it lives in the redesign. Screen numbers refer to the mockup screenshots.</div>
+
+			<h2>App shell</h2>
+			<div class="card flush">
+				<table class="stackable">
+					<thead>
+						<tr>
+							<th>Feature</th>
+							<th>Current location</th>
+							<th>New location</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Genesis universe choice (Yes / No)</td>
+							<td>Full-page gate before the app loads</td>
+							<td>Same gate, outcome list with per-outcome open buttons (01)</td>
+						</tr>
+						<tr>
+							<td>Primary tabs, Deploy tab when incomplete</td>
+							<td>Header</td>
+							<td>Watchlist · Price reports (the Questions tab is gone: questions live inside security pools); bottom bar on mobile (all)</td>
+						</tr>
+						<tr>
+							<td>Universe switcher, REP price, wallet, Activity, Settings, simulation bar</td>
+							<td>Header</td>
+							<td>Unchanged; Activity and Settings stay as icon buttons on mobile (all)</td>
+						</tr>
+						<tr>
+							<td>Transaction review modal, status notices, not-found page</td>
+							<td>Shared shell</td>
+							<td>Unchanged</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
+			<h2>Questions</h2>
+			<div class="card flush">
+				<table class="stackable">
+					<thead>
+						<tr>
+							<th>Feature</th>
+							<th>Current location</th>
+							<th>New location</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Question list, unavailable-question warnings, empty/loading</td>
+							<td>Questions › Browse</td>
+							<td><b>Questions tab removed</b>: a question only exists inside a security pool. Watchlist › Saved questions + recently opened (02), forked (02b), empty (02c), question-ID search across saved security pools (02d); Find by question ID inside a security pool (09, 09c)</td>
+						</tr>
+						<tr>
+							<td>Universes directory</td>
+							<td>Questions › Universes tab</td>
+							<td>Header universe menu (02e, 02f) → Universes &amp; REP migration page (15)</td>
+						</tr>
+						<tr>
+							<td>Migrate REP</td>
+							<td>Questions › Migrate REP tab</td>
+							<td>Universe menu “Migrate REP…”, with unmigrated parent REP flagged on the chip (02e, 02f) → same page: outcome selection, amount, migration balance, approval, migrate (15)</td>
+						</tr>
+						<tr>
+							<td>Holdings, redeemable sets</td>
+							<td>Question › Shares</td>
+							<td>Question › Shares tab (03)</td>
+						</tr>
+						<tr>
+							<td>Mint / redeem complete sets, migrate forked shares, redeem resolved shares</td>
+							<td>Question › Shares buttons</td>
+							<td>Four persistent share launchers; shared mint form (03); redeem, migrate and redeem-resolved forms (03b)</td>
+						</tr>
+						<tr>
+							<td>Escalation stage, balances, progress to fork, amount to hold lead</td>
+							<td>Question › Reporting</td>
+							<td>Stage stepper + REP staked per outcome on the Reporting tab (04)</td>
+						</tr>
+						<tr>
+							<td>Report outcome (side, amount, presets, wallet REP, approve, fork confirmation)</td>
+							<td>Question › Reporting</td>
+							<td>Reporting tab › Report an outcome, paid from wallet REP; report that reaches the fork threshold (04b design note)</td>
+						</tr>
+						<tr>
+							<td>Leading/behind/tie status, deadline, .ics reminder, deadline-moved notice</td>
+							<td>Question › Reporting</td>
+							<td>“Next step” banner + side panel (04)</td>
+						</tr>
+						<tr>
+							<td>Settle deposits (claim / clear)</td>
+							<td>Question › Reporting</td>
+							<td>Claim REP: winning deposits are selected and claimed in one transaction; losing deposits need no action; link to Inherited claims (04b). Deposits are located from contract state: saved at deposit time, carried by Watchlist export, searched only when totals differ (04d)</td>
+						</tr>
+						<tr>
+							<td>Trigger universe fork, open fork workflow</td>
+							<td>Question › Reporting</td>
+							<td>Fork step (04e): shown only after two outcomes reach 225 000 REP and reporting ends undecided; REP approval, then Trigger. Question pages have no side panel.</td>
+						</tr>
+						<tr>
+							<td>Escalation explainer</td>
+							<td>Question › Reporting</td>
+							<td>Reporting side panel (04)</td>
+						</tr>
+						<tr>
+							<td>Inherited reporter claims (settle)</td>
+							<td>Question, below reporting</td>
+							<td>Question › Inherited claims tab: one Claim per winning deposit, or all in one transaction (04c)</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
+			<h2>Security pools</h2>
+			<div class="card flush">
+				<table class="stackable">
+					<thead>
+						<tr>
+							<th>Feature</th>
+							<th>Current location</th>
+							<th>New location</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Open security pool by address / owner / universe</td>
+							<td>Security pools › Open a security pool fields</td>
+							<td>Watchlist › Open (02); owner = “Viewing as”; universe = header universe menu</td>
+						</tr>
+						<tr>
+							<td>Security pools in this universe</td>
+							<td>Disclosure</td>
+							<td><b>Removed on purpose</b>: anyone can deploy security pools, so a full list is easy to flood. Watchlist: saved security pools and recently opened (02); no app-shipped suggestions either</td>
+						</tr>
+						<tr>
+							<td>Deploy security pool (collateral, oracle stake, origin, multiplier, priority fee, admission, horizon, fees, commitment, vesting)</td>
+							<td>“Deploy security pool” disclosure</td>
+							<td>4-section deploy page with summary; fixed question list; origin universe ID; multiplier in % (06)</td>
+						</tr>
+						<tr>
+							<td>Deploy admission, deploy security pool, 4 setup stages</td>
+							<td>Disclosure + setup card</td>
+							<td>Sections 3–4 with one button per transaction; progress saved on the device (06b)</td>
+						</tr>
+						<tr>
+							<td>Shared backing metrics, price status</td>
+							<td>Shared backing card</td>
+							<td>Overview › Shared backing (07)</td>
+						</tr>
+						<tr>
+							<td>Your capital metrics, position, health, liquidation boundary</td>
+							<td>Your capital / Your commitment position</td>
+							<td>Overview gauge with liquidation boundary, backing requirement and target marks (07); Capital account panel (08)</td>
+						</tr>
+						<tr>
+							<td>Deposit REP (+ approval)</td>
+							<td>Deposit REP card</td>
+							<td>Capital › Deposit REP section (08)</td>
+						</tr>
+						<tr>
+							<td>Health target, add REP while saving, authorize commitment, use target capacity, funded report ID</td>
+							<td>Authorize commitment card</td>
+							<td>Capital › Health target &amp; commitment section (08)</td>
+						</tr>
+						<tr>
+							<td>Request retirement, size to target, release retirement</td>
+							<td>Commitment position card</td>
+							<td>Capital › Reduce commitment section, including the in-queue state (08)</td>
+						</tr>
+						<tr>
+							<td>Withdraw REP</td>
+							<td>Withdraw REP card</td>
+							<td>Capital › Withdraw REP section (08)</td>
+						</tr>
+						<tr>
+							<td>Claim earnings</td>
+							<td>Your earnings card</td>
+							<td>Capital › Earnings section only; Overview links to it (07, 08)</td>
+						</tr>
+						<tr>
+							<td>“Register a question…” button on the Questions page</td>
+							<td>Questions header</td>
+							<td>Security pool › Questions › Register a question; also from Find by question ID “Not registered here” (09, 09c)</td>
+						</tr>
+						<tr>
+							<td>Register question, admission terms</td>
+							<td>Register question card</td>
+							<td>Security pool › Questions; fixed-list approved IDs and custom-policy warning (09, 09b)</td>
+						</tr>
+						<tr>
+							<td>Mint security pool complete sets (question, find by ID, charge, min sets, approve)</td>
+							<td>Mint card</td>
+							<td>Security pool › Questions › mint drawer using the shared mint form (09)</td>
+						</tr>
+						<tr>
+							<td>Shared REP price report (prepare, propose, stake, wrap, approvals, request, settle, recover, return funding, report ID, base-fee ceiling)</td>
+							<td>“Shared REP price” disclosure</td>
+							<td>Security pool › REP price tab; the same component serves the branch REP price step (10, 12b)</td>
+						</tr>
+						<tr>
+							<td>Liquidation takeover / cure with consent limits</td>
+							<td>Liquidation takeover card</td>
+							<td>Security pool › Liquidations: checked list or ID lookup, growing takeover reward, your limits start empty (11)</td>
+						</tr>
+						<tr>
+							<td>Fork choices: deadlines, prepare branch, commit choice, start migration, activate, open child account</td>
+							<td>Fork choices card</td>
+							<td>Fork &amp; recovery: branch picker, then 7 steps with persistent buttons (12)</td>
+						</tr>
+						<tr>
+							<td>Branch price report</td>
+							<td>Fork choices card</td>
+							<td>Fork step 4 with the shared price component and status: prepare, wrap, approve, request, settle, recover, return (12b, 13)</td>
+						</tr>
+						<tr>
+							<td>Branch collateral repair auction, bids, refunds</td>
+							<td>Fork choices card</td>
+							<td>Fork step 5 + bid rows with refund withdrawal and auction vault controls (13)</td>
+						</tr>
+						<tr>
+							<td>Claim recovery, trader source cash recovery, transfer rights</td>
+							<td>Fork choices card</td>
+							<td>Fork &amp; recovery › Recovery for share holders with question picker (12)</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
+			<h2>New in the redesign</h2>
+			<div class="card flush">
+				<table class="stackable">
+					<thead>
+						<tr>
+							<th>Feature</th>
+							<th>Purpose</th>
+							<th>Location</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Saved (★) and recently opened</td>
+							<td>No global lists: open by security pool address or link, or by question ID among saved security pools (registry-checked); starred items stay live and transactions save automatically; export/import; un-starring a held position asks first (18); history is a snapshot</td>
+							<td>Watchlist (02, 02b, 02c empty, 02d ID search), page headers, security pool Questions tab (09), Price reports (14); plan (19)</td>
+						</tr>
+						<tr>
+							<td>Transaction lifecycle</td>
+							<td>Review, wallet, pending, confirmed in place, canceled, reverted, changed since review, replaced</td>
+							<td>Every transaction button (17)</td>
+						</tr>
+						<tr>
+							<td>Wallet, loading, empty, error, stale states</td>
+							<td>Consistent states on every route; data stays readable</td>
+							<td>Every route (18)</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
+			<h2>Price reports and deployment</h2>
+			<div class="card flush">
+				<table class="stackable">
+					<thead>
+						<tr>
+							<th>Feature</th>
+							<th>Current location</th>
+							<th>New location</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Open report by ID, status, price, settle countdown, settle</td>
+							<td>Price reports page</td>
+							<td>Latest report of each saved security pool + ID lookup + detail panel (14)</td>
+						</tr>
+						<tr>
+							<td>Contract deployment</td>
+							<td>Deploy tab</td>
+							<td>Unchanged (not mocked)</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+	</body>
+</html>

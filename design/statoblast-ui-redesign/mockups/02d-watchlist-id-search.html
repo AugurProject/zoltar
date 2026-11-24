@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Question ID search</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="watchlist">
+		<div class="page">
+			<div class="route-head">
+				<div>
+					<h1>Watchlist</h1>
+				</div>
+			</div>
+			<div class="card" style="margin-bottom: var(--s4)">
+				<div class="open-grid">
+					<div class="field">
+						<label>Open a security pool or question</label>
+						<div class="input one-line"><span class="ph">Security pool address or link</span></div>
+					</div>
+					<div class="field">
+						<label>Question ID <span class="muted" style="font-weight: 400">(optional)</span></label>
+						<div class="input one-line focus"><span class="mono">0x2c41dde8a2d47b25c6e13d32b7e7bec49940985283baef013540728e4fb81da4</span></div>
+					</div>
+					<div><span class="btn">Open</span></div>
+				</div>
+
+				<details class="disc" style="margin-top: var(--s3)">
+					<summary>View positions of another address</summary>
+					<div class="field" style="margin-top: var(--s2); max-width: 560px">
+						<label>Address</label>
+						<div class="input">0x7a3f375917679e170d85356b88194849e4ea91c2<span class="unit">Your wallet</span></div>
+						<span class="hint">Read-only.</span>
+					</div>
+				</details>
+			</div>
+			<div class="card flush" style="margin-bottom: var(--s4)">
+				<div class="card-head">
+					<div>
+						<p class="section-label">Question ID <span class="mono">0x2c41dde8a2d47b25c6e13d32b7e7bec49940985283baef013540728e4fb81da4</span></p>
+						<h2 style="margin-top: 0.3rem">Will a spot ETH ETF see net inflows above $1B in December?</h2>
+						<p>Binary. Found in 2 of your saved security pools.</p>
+					</div>
+				</div>
+				<table class="stackable">
+					<thead>
+						<tr>
+							<th class="star"><span class="sr">Saved</span></th>
+							<th>Security pool</th>
+							<th>Stage</th>
+							<th class="r">Your shares</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td class="star"><button class="fav on" aria-pressed="true" aria-label="Saved: this question in security pool 0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766">★</button></td>
+							<td>
+								<a class="mono small">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</a>
+								<div class="q-meta">WETH · any question</div>
+							</td>
+							<td>
+								<span class="badge warn">Response window</span>
+								<div class="q-meta">Ends Jan 9, 14:00 UTC</div>
+							</td>
+							<td class="r num nowrap">2.00 sets <span class="muted">WETH</span></td>
+							<td class="r"><span class="btn sm">Open</span></td>
+						</tr>
+						<tr>
+							<td class="star"><button class="fav on" aria-pressed="true" aria-label="Saved: this question in security pool 0x1b44f8bd575f9c2346ca3887790dff199fe507c9">★</button></td>
+							<td>
+								<a class="mono small">0x1b44f8bd575f9c2346ca3887790dff199fe507c9</a>
+								<div class="q-meta">USDC · fixed question list</div>
+							</td>
+							<td>
+								<span class="badge acc">Trading</span>
+								<div class="q-meta">Reporting not open yet</div>
+							</td>
+							<td class="r num nowrap">500.00 sets <span class="muted">USDC</span></td>
+							<td class="r"><span class="btn sm">Open</span></td>
+						</tr>
+					</tbody>
+				</table>
+				<div class="table-foot"><span class="small muted">To open it in another security pool, paste that pool's address above.</span></div>
+			</div>
+			<div class="card">
+				<div class="card-head" style="margin-bottom: var(--s2)">
+					<div>
+						<h2>Other results</h2>
+						<p class="mock-note">Design note: the three other states of this search, shown together. Each quoted line is the message under the Question ID field.</p>
+					</div>
+				</div>
+				<div class="stack" style="gap: var(--s3)">
+					<div class="spread">
+						<span
+							><b>Not in a saved security pool</b>
+							<div class="small muted">“This question isn't in any of your saved security pools. Add the security pool's address to open it there.” <span class="mock-note">Design note: the title still shows; Open is disabled.</span></div></span
+						>
+					</div>
+					<div class="spread">
+						<span
+							><b>Unknown ID</b>
+							<div class="small muted">“No question with this ID.”</div></span
+						>
+					</div>
+					<div class="spread">
+						<span
+							><b>Invalid ID</b>
+							<div class="small muted">“Enter a question ID: 0x… or a number.”</div></span
+						>
+					</div>
+				</div>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+	</body>
+</html>

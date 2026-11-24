@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Deploy security pool</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="portfolios">
+		<div class="page">
+			<div class="crumbs"><a>Watchlist</a> › <span aria-current="page">Deploy a security pool</span></div>
+			<div class="route-head">
+				<div>
+					<h1>Deploy a security pool</h1>
+					<p class="sub">Nothing here can be changed after deployment.</p>
+				</div>
+			</div>
+
+			<div class="card" style="margin-bottom: var(--s4)">
+				<div class="stepper">
+					<div class="st done"><span class="t">1. Collateral &amp; REP price</span><span class="s">WETH collateral</span></div>
+					<div class="st now"><span class="t">2. Questions</span><span class="s">Editing</span></div>
+					<div class="st"><span class="t">3. Fees &amp; limits</span><span class="s">Defaults</span></div>
+					<div class="st"><span class="t">4. Deploy &amp; set up</span><span class="s">6 transactions</span></div>
+				</div>
+			</div>
+
+			<div class="main-side wide">
+				<div class="card stack">
+					<h2>2. Questions</h2>
+					<div class="field">
+						<span class="label">Which questions can be registered</span>
+						<div class="segmented"><span>Any question</span><span class="on">Fixed question list</span></div>
+					</div>
+					<div class="field">
+						<label>Approved question IDs</label>
+						<div class="input" style="min-height: 5rem; align-items: flex-start">0x2c41dde8a2d47b25c6e13d32b7e7bec49940985283baef013540728e4fb81da4, 0x77b050f63567e58a847aa9d2454157a0c61d7f37386034d5a8c62750f60f193b,<br />0x91d2932f4f5f984b99d807ab41fd8886072e35d826d1fb535904746961a77307</div>
+						<span class="hint"><span class="ok-inline">✓</span> 3 valid IDs</span>
+					</div>
+					<p class="notice warn"><b>Permanent after deployment.</b></p>
+					<div class="field">
+						<label>Latest question end</label>
+						<div class="input">365<span class="unit">days</span></div>
+						<span class="hint">A question must end within this many days of being registered.</span>
+					</div>
+					<div class="spread"><span class="btn">← Back</span><span class="btn primary">Continue to fees &amp; limits</span></div>
+					<hr class="divider" style="margin: 0" />
+					<details class="disc">
+						<summary>Edit 1. Collateral &amp; REP price</summary>
+						<div class="grid-2" style="margin-top: var(--s3)">
+							<div class="field">
+								<label>Collateral</label>
+								<div class="segmented"><span class="on">WETH</span><span>USDC</span></div>
+							</div>
+							<div class="field">
+								<label>Universe</label>
+								<div class="input" style="font-family: var(--sans)">Augur v2 › Yes (#4)</div>
+							</div>
+							<div class="field">
+								<label>Minimum price-report stake</label>
+								<div class="input">0.10<span class="unit">WETH</span></div>
+							</div>
+							<div class="field">
+								<label>Price-report priority fee</label>
+								<div class="input">1<span class="unit">gwei</span></div>
+							</div>
+						</div>
+					</details>
+				</div>
+				<aside class="card stack-sm sticky">
+					<h3>Summary</h3>
+					<dl class="kv">
+						<dt>Collateral</dt>
+						<dd>WETH</dd>
+						<dt>Universe</dt>
+						<dd>Augur v2 › Yes (#4)</dd>
+						<dt>Min price-report stake</dt>
+						<dd>0.10 WETH</dd>
+						<dt>Questions</dt>
+						<dd>Fixed list of 3</dd>
+						<dt>Security multiplier</dt>
+						<dd>200%</dd>
+						<dt>Purchase fee</dt>
+						<dd>1% (min 0.001 WETH)</dd>
+						<dt>Holding fee</dt>
+						<dd>10%/yr</dd>
+						<dt>Min commitment</dt>
+						<dd>1.00 WETH</dd>
+					</dl>
+					<hr class="divider" />
+					<p class="section-label">Step 4: 6 transactions</p>
+				</aside>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+	</body>
+</html>

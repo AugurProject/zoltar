@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Watchlist</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="watchlist">
+		<div class="page">
+			<div class="route-head">
+				<div>
+					<h1>Watchlist</h1>
+				</div>
+			</div>
+			<div class="card" style="margin-bottom: var(--s4)">
+				<div class="open-grid">
+					<div class="field">
+						<label>Open a security pool or question</label>
+						<div class="input one-line"><span class="ph">Security pool address or link</span></div>
+					</div>
+					<div class="field">
+						<label>Question ID <span class="muted" style="font-weight: 400">(optional)</span></label>
+						<div class="input one-line"><span class="ph">Search saved security pools</span></div>
+					</div>
+					<div><span class="btn">Open</span></div>
+				</div>
+
+				<details class="disc" style="margin-top: var(--s3)">
+					<summary>View positions of another address</summary>
+					<div class="field" style="margin-top: var(--s2); max-width: 560px">
+						<label>Address</label>
+						<div class="input">0x7a3f375917679e170d85356b88194849e4ea91c2<span class="unit">Your wallet</span></div>
+						<span class="hint">Read-only.</span>
+					</div>
+				</details>
+			</div>
+			<div class="card flush" style="margin-bottom: var(--s4)">
+				<div class="card-head">
+					<div>
+						<h2>★ Saved questions</h2>
+						<p>Saved on this device. Positions in questions you haven't saved don't appear here.</p>
+					</div>
+					<span class="fresh" title="Updating live"><span class="live"></span>Live</span>
+				</div>
+				<table class="stackable">
+					<thead>
+						<tr>
+							<th class="star"><span class="sr">Saved</span></th>
+							<th>Question</th>
+							<th>Security pool</th>
+							<th>Stage</th>
+							<th class="r">Your shares</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td class="star"><button class="fav on" aria-pressed="true" aria-label="Saved: Will a spot ETH ETF see net inflows above $1B in December? in security pool 0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766">★</button></td>
+							<td>
+								<a class="q-title">Will a spot ETH ETF see net inflows above $1B in December?</a>
+								<div class="q-meta">Also saved in another security pool</div>
+							</td>
+							<td><a class="mono small addr-1">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</a></td>
+							<td>
+								<span class="badge warn">Response window</span>
+								<div class="q-meta">Ends Jan 9, 14:00 UTC (in 2d 13h)</div>
+							</td>
+							<td class="r num nowrap">2.00 sets <span class="muted">WETH</span></td>
+							<td class="r"><span class="btn sm">Open</span></td>
+						</tr>
+						<tr>
+							<td class="star"><button class="fav on" aria-pressed="true" aria-label="Saved: Will a spot ETH ETF see net inflows above $1B in December? in security pool 0x1b44f8bd575f9c2346ca3887790dff199fe507c9">★</button></td>
+							<td>
+								<a class="q-title">Will a spot ETH ETF see net inflows above $1B in December?</a>
+								<div class="q-meta">Also saved in another security pool</div>
+							</td>
+							<td><a class="mono small addr-1">0x1b44f8bd575f9c2346ca3887790dff199fe507c9</a></td>
+							<td>
+								<span class="badge acc">Trading</span>
+								<div class="q-meta">Reporting not open yet</div>
+							</td>
+							<td class="r num nowrap">500.00 sets <span class="muted">USDC</span></td>
+							<td class="r"><span class="btn sm">Open</span></td>
+						</tr>
+						<tr>
+							<td class="star"><button class="fav on" aria-pressed="true" aria-label="Saved: Will this resolve? (security pool question 1) in security pool 0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766">★</button></td>
+							<td>
+								<a class="q-title">Will this resolve? (security pool question 1)</a>
+								<div class="q-meta">test</div>
+							</td>
+							<td><a class="mono small addr-1">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</a></td>
+							<td>
+								<span class="badge acc">Trading</span>
+								<div class="q-meta">Reporting opens Mar 1 (in 53 days)</div>
+							</td>
+							<td class="r num nowrap">1.00 sets <span class="muted">WETH</span></td>
+							<td class="r"><span class="btn sm">Open</span></td>
+						</tr>
+						<tr>
+							<td class="star"><button class="fav on" aria-pressed="true" aria-label="Saved: Will the Fed cut rates at the January 2026 FOMC meeting? in security pool 0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766">★</button></td>
+							<td>
+								<a class="q-title">Will the Fed cut rates at the January 2026 FOMC meeting?</a>
+								<div class="q-meta">economics</div>
+							</td>
+							<td><a class="mono small addr-1">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</a></td>
+							<td>
+								<span class="badge ok">Resolved as No</span>
+								<div class="q-meta">Your shares are redeemable</div>
+								<div class="q-meta"><a style="color: var(--warning)">80.00 REP staked in deposits not found on this device. Locate them</a></div>
+							</td>
+							<td class="r num nowrap">5.00 No</td>
+							<td class="r"><span class="btn sm">Open</span></td>
+						</tr>
+					</tbody>
+				</table>
+				<div class="table-foot"><span class="small muted">A set is one share of each outcome.</span><span class="small muted">4 of 4</span></div>
+			</div>
+			<div class="card flush" style="margin-bottom: var(--s4)">
+				<div class="card-head">
+					<div><h2>★ Saved security pools</h2></div>
+					<div class="row">
+						<span class="fresh" title="Updating live"><span class="live"></span>Live</span><span class="btn sm">Deploy a security pool…</span>
+					</div>
+				</div>
+				<table class="stackable">
+					<thead>
+						<tr>
+							<th class="star"><span class="sr">Saved</span></th>
+							<th>Security pool</th>
+							<th>Status</th>
+							<th>Capacity in use</th>
+							<th>Your position</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td class="star"><button class="fav on" aria-pressed="true" aria-label="Saved: security pool 0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766">★</button></td>
+							<td>
+								<a class="q-title mono">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</a>
+								<div class="q-meta">WETH · any question · holding fee 10%/yr · purchase fee 1%</div>
+							</td>
+							<td><span class="badge ok">REP price current</span></td>
+							<td style="width: 200px">
+								<div class="bar"><i style="width: 10%"></i></div>
+								<div class="q-meta num">1.00 of 10.00 WETH</div>
+							</td>
+							<td class="small">
+								<b class="num">5 000.00 REP pledged</b>
+								<div class="num">10.00 WETH commitment</div>
+								<div class="q-meta">Health 209%. Earned 0.42 WETH + 12.00 REP.</div>
+							</td>
+							<td class="r"><span class="btn sm">Open</span></td>
+						</tr>
+						<tr>
+							<td class="star"><button class="fav on" aria-pressed="true" aria-label="Saved: security pool 0x1b44f8bd575f9c2346ca3887790dff199fe507c9">★</button></td>
+							<td>
+								<a class="q-title mono">0x1b44f8bd575f9c2346ca3887790dff199fe507c9</a>
+								<div class="q-meta">USDC · fixed question list · holding fee 8%/yr · purchase fee 1%</div>
+							</td>
+							<td><span class="badge warn">REP price expires in 2h</span></td>
+							<td>
+								<div class="bar warn"><i style="width: 88%"></i></div>
+								<div class="q-meta num">88 000 of 100 000 USDC</div>
+							</td>
+							<td class="small">
+								<b class="num">1 200.00 REP pledged</b>
+								<div class="num">2 000 USDC commitment</div>
+								<div class="q-meta">Above health target</div>
+							</td>
+							<td class="r"><span class="btn sm">Open</span></td>
+						</tr>
+					</tbody>
+				</table>
+				<div class="table-foot">
+					<div class="notice warn" style="padding: 0.35rem 0.7rem">1 saved item couldn't load: <span class="mono">0x41c20f45969027916390ec8bb016101eaa1caa10</span> isn't a Statoblast security pool. <a>Remove</a></div>
+				</div>
+				<div class="table-foot">
+					<span class="mock-note">Design note: the export file includes the deposits located on this device; the export dialog says so. Only the first 25 saved items update live; past 25, each remaining row shows “Updated 3h ago”.</span><span class="row small"><a>Export watchlist</a><a>Import watchlist</a></span>
+				</div>
+			</div>
+			<div class="card flush">
+				<div class="card-head">
+					<div><h2>Recently opened</h2></div>
+					<a class="small">Clear history</a>
+				</div>
+				<table class="stackable">
+					<thead>
+						<tr>
+							<th class="star"><span class="sr">Saved</span></th>
+							<th><span class="sr">Question or security pool</span></th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td class="star"><button class="fav" aria-pressed="false" aria-label="Save: Who will win the 2026 World Cup final? in security pool 0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766">☆</button></td>
+							<td data-label="Question">
+								<a class="q-title">Who will win the 2026 World Cup final?</a>
+								<div class="q-meta">Security pool <span class="mono">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</span>, opened 2h ago</div>
+							</td>
+							<td class="r"><span class="btn sm">Open</span></td>
+						</tr>
+						<tr>
+							<td class="star"><button class="fav" aria-pressed="false" aria-label="Save: security pool 0x44e04275f4bdec9bdbb27b6405017042e93f19bd">☆</button></td>
+							<td data-label="Security pool">
+								<a class="q-title mono">0x44e04275f4bdec9bdbb27b6405017042e93f19bd</a>
+								<div class="q-meta">Security pool, WETH, opened 3d ago</div>
+							</td>
+							<td class="r"><span class="btn sm">Open</span></td>
+						</tr>
+					</tbody>
+				</table>
+				<div class="table-foot"><span class="small muted">Last 20 opened</span></div>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+	</body>
+</html>

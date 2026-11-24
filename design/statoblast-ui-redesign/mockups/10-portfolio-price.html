@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Security pool price</title>
+		<link rel="stylesheet" href="mock.css" />
+		<style>
+			.dtl .band {
+				position: absolute;
+				top: 2.45rem;
+				height: 4px;
+				background: color-mix(in srgb, var(--accent) 35%, transparent);
+			}
+		</style>
+	</head>
+	<body data-tab="portfolios" data-ptab="price">
+		<div class="page">
+			<div class="portfolio-head"></div>
+
+			<div class="card" style="margin-bottom: var(--s4)">
+				<div class="card-head">
+					<div>
+						<h2>REP price</h2>
+						<p>Values pledged REP against WETH commitments. It never decides question outcomes.</p>
+					</div>
+					<span class="badge ok">Current · valid until 00:26 UTC</span>
+				</div>
+				<div class="grid-2" style="align-items: center">
+					<div class="metric"><span class="k">Accepted REP price</span><span class="v big">220.00</span><span class="d">REP per WETH · report #41 · ±8%</span></div>
+					<div class="dtl" role="img" aria-label="Accepted REP price 220.00 REP per WETH, plus or minus 8%. Liquidations use 203.70. Health uses 239.13.">
+						<div class="track"></div>
+						<div class="band" style="left: 16.7%; width: 68.2%"></div>
+						<span class="pin warn" style="left: 16.7%"></span><span class="lbl top start" style="left: 0">Liquidations use<b>203.70</b></span> <span class="pin acc" style="left: 48%"></span><span class="lbl bot" style="left: 48%"><b>220.00</b>Accepted</span> <span class="pin" style="left: 84.9%"></span><span class="lbl top end" style="left: 100%">Health uses<b>239.13</b></span>
+					</div>
+				</div>
+			</div>
+
+			<div class="main-side wide">
+				<div class="card">
+					<div class="card-head">
+						<div><h2>Report a new REP price</h2></div>
+					</div>
+					<div class="price-report"></div>
+				</div>
+
+				<aside class="card stack sticky">
+					<div class="spread">
+						<h2>Report #42</h2>
+						<span class="badge ok">Ready to settle</span>
+					</div>
+					<div class="stepper" role="img" aria-label="Report #42: reported, dispute window ended 00:06 UTC, ready to settle, funds not yet returned.">
+						<div class="st done"><span class="t">Reported</span><span class="s">00:01 UTC</span></div>
+						<div class="st done"><span class="t">Dispute window</span><span class="s">Ended 00:06</span></div>
+						<div class="st now"><span class="t">Settle</span><span class="s">Now</span></div>
+						<div class="st"><span class="t">Funds returned</span><span class="s">To the funder</span></div>
+					</div>
+					<dl class="kv">
+						<dt>Funder</dt>
+						<dd>0x7a3f375917679e170d85356b88194849e4ea91c2</dd>
+					</dl>
+					<div class="steps compact">
+						<div class="step now">
+							<span class="mk">1</span>
+							<div>
+								<div class="t">Settle report #42</div>
+								<div class="s">Anyone can settle. Earns the 0.0010 ETH bounty.</div>
+							</div>
+							<div class="act"><span class="btn sm primary">Settle report</span></div>
+						</div>
+						<div class="step">
+							<span class="mk">2</span>
+							<div><div class="t">Return funds</div></div>
+							<div class="act"><span class="btn sm disabled">Return funds</span><span class="why">Settle the report first.</span></div>
+						</div>
+					</div>
+					<details class="disc how">
+						<summary>Older reports and exceptions</summary>
+						<div class="stack-sm" style="margin-top: var(--s2)">
+							<div class="field">
+								<label class="small">Report ID</label>
+								<div class="input"><span class="ph">Latest (#42)</span></div>
+								<span class="hint">Enter an older ID to return its funds.</span>
+							</div>
+							<div class="field">
+								<label class="small">Send one token to another address <span class="muted" style="font-weight: 400">(optional)</span></label>
+								<div class="input"><span class="ph">0x…</span></div>
+							</div>
+							<div class="btn-row"><span class="btn sm disabled">Return WETH only</span><span class="btn sm disabled">Return REP only</span></div>
+							<p class="small muted">If a report settles without setting a price, recover it first, then return its funds.</p>
+							<div class="btn-row"><span class="btn sm disabled">Recover report</span></div>
+						</div>
+					</details>
+				</aside>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+		<script src="portfolio-head.js"></script>
+		<script src="price-report.js"></script>
+	</body>
+</html>

@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Share forms</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="questions">
+		<div class="page">
+			<div class="crumbs">
+				<span class="crumb-full"
+					><a>Watchlist</a> › <a>Security pool <span class="mono">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</span></a> › <a>Questions</a> › <span aria-current="page">Question</span></span
+				><a class="crumb-short" aria-label="Back to questions in security pool 0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766">‹ Security pool <span class="mono">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</span> › Questions</a>
+			</div>
+			<div class="route-head">
+				<div>
+					<h1>Share action forms</h1>
+					<div class="p mock-note" style="margin-top: 0.5rem">Design note: the three other forms of the “Share actions” control on the Shares tab, shown together. They belong to different states: trading, after a fork, after resolution.</div>
+				</div>
+			</div>
+
+			<div class="grid-3" style="align-items: start">
+				<div class="card stack narrow">
+					<h2>Redeem complete sets</h2>
+					<div class="field">
+						<label>Complete sets to redeem</label>
+						<div class="input focus">1.00<span class="unit">max 1.00</span></div>
+					</div>
+					<div class="ruled">
+						<dl class="kv">
+							<dt>Collateral</dt>
+							<dd>1.0000 WETH</dd>
+							<dt>Holding fee (est.)</dt>
+							<dd>−0.0010 WETH</dd>
+							<dt>You receive (est.)</dt>
+							<dd>0.9990 WETH</dd>
+						</dl>
+					</div>
+					<div class="steps compact">
+						<div class="step now">
+							<span class="mk">1</span>
+							<div><div class="t">Redeem 1.00 complete set</div></div>
+							<div class="act"><span class="btn sm primary">Redeem</span></div>
+						</div>
+					</div>
+				</div>
+
+				<div class="card stack narrow">
+					<h2>Migrate shares</h2>
+					<div class="field">
+						<span class="label">Shares to migrate</span>
+						<div class="segmented"><span class="on">Yes 1.00</span><span>No 1.00</span><span>Invalid 1.00</span></div>
+					</div>
+					<div class="field">
+						<span class="label">Into child universes</span>
+						<div class="radio-list">
+							<div class="opt">
+								<input type="checkbox" checked />
+								<div>
+									<div class="name">Yes <span class="muted small">#12</span></div>
+								</div>
+								<span class="badge ok">Ready</span>
+							</div>
+							<div class="opt">
+								<input type="checkbox" checked />
+								<div>
+									<div class="name">No <span class="muted small">#13</span></div>
+								</div>
+								<span class="badge ok">Ready</span>
+							</div>
+							<div class="opt">
+								<input type="checkbox" disabled />
+								<div>
+									<div class="name">Invalid <span class="muted small">#14</span></div>
+									<div class="meta">Not created yet. This security pool must first be activated there; anyone can do that under <a>Fork &amp; recovery</a>, earliest Jan 25.</div>
+								</div>
+							</div>
+						</div>
+						<div class="row small"><a>Select all</a><a>Clear</a></div>
+					</div>
+					<div class="notice warn"><b>Irreversible.</b> You get 1.00 Yes in each selected child universe. Your 1.00 Yes here stays locked. You can migrate to other child universes later.</div>
+					<div class="steps compact">
+						<div class="step now">
+							<span class="mk">1</span>
+							<div><div class="t">Migrate 1.00 Yes to 2 child universes</div></div>
+							<div class="act"><span class="btn sm primary">Migrate shares</span></div>
+						</div>
+					</div>
+				</div>
+
+				<div class="card stack narrow">
+					<div class="spread">
+						<h2>Redeem winning shares</h2>
+						<span class="badge ok">Resolved as No</span>
+					</div>
+					<div class="ruled">
+						<dl class="kv">
+							<dt>Winning No shares</dt>
+							<dd>5.00</dd>
+							<dt>Holding fee (est.)</dt>
+							<dd>−0.0050 WETH</dd>
+							<dt>You receive (est.)</dt>
+							<dd>4.9950 WETH</dd>
+						</dl>
+					</div>
+					<div class="steps compact">
+						<div class="step now">
+							<span class="mk">1</span>
+							<div><div class="t">Redeem 5.00 No shares</div></div>
+							<div class="act"><span class="btn sm primary">Redeem</span></div>
+						</div>
+					</div>
+					<p class="mock-note">Design note: a “REP you also receive” row appears in both redeem forms only when the amount is above 0.</p>
+				</div>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+	</body>
+</html>

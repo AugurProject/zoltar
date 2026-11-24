@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Find by question ID</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="portfolios" data-ptab="questions">
+		<div class="page">
+			<div class="portfolio-head"></div>
+
+			<div class="p mock-note" style="margin-bottom: var(--s3)">Design note: the three results of Find by ID.</div>
+
+			<div class="card flush" style="margin-bottom: var(--s4)">
+				<div class="card-head">
+					<div><h2>Registered here</h2></div>
+				</div>
+				<div style="padding: 0 var(--s5) var(--s4)">
+					<div class="open-grid find">
+						<div class="field">
+							<label>Find or register by question ID</label>
+							<div class="input one-line focus"><span class="mono">0x91d2932f4f5f984b99d807ab41fd8886072e35d826d1fb535904746961a77307</span></div>
+						</div>
+						<div><span class="btn">Find</span></div>
+					</div>
+				</div>
+				<table class="stackable">
+					<thead>
+						<tr>
+							<th class="star"><span class="sr">Saved</span></th>
+							<th>Question</th>
+							<th>Stage</th>
+							<th class="r">Your shares</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr class="sel">
+							<td class="star"><button class="fav" aria-pressed="false" aria-label="Save: Who will win the 2026 World Cup final? in security pool 0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766">☆</button></td>
+							<td>
+								<a class="q-title">Who will win the 2026 World Cup final?</a>
+								<div class="q-meta">Categorical · 8 outcomes · reporting opens Jul 19</div>
+							</td>
+							<td><span class="badge acc">Trading</span></td>
+							<td class="r num muted">—</td>
+							<td class="r">
+								<div class="row" style="justify-content: flex-end"><span class="btn sm">Mint…</span><span class="btn sm">Open</span></div>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+				<div class="table-foot"><span class="small muted">Minting also adds it to your Watchlist.</span></div>
+			</div>
+
+			<div class="grid-2" style="align-items: start">
+				<div class="card">
+					<div class="card-head" style="margin-bottom: var(--s3)">
+						<div>
+							<h2>Not registered here</h2>
+							<p>This question exists but isn't registered in this security pool.</p>
+						</div>
+					</div>
+					<div class="stack-sm" style="margin-bottom: var(--s3)"><b>Will the ECB cut rates in March 2026?</b><span class="small muted mono" style="overflow-wrap: anywhere">0x3e8a51c0d0f6a0b1e5b8a3f6c2d4e7f9a1b3c5d7e9f1a3b5c7d9e1f3a5b7c9d1</span></div>
+					<div class="row"><span class="btn sm primary">Register question</span><span class="why">Moves no funds. The question is added to your Watchlist.</span></div>
+					<div class="p mock-note" style="margin-top: var(--s3)">Design note: in a security pool with a fixed question list the button is disabled with “Not on this security pool's approved list.”</div>
+				</div>
+				<div class="card">
+					<div class="card-head" style="margin-bottom: var(--s3)">
+						<div><h2>Not found</h2></div>
+					</div>
+					<div class="stack" style="gap: var(--s3)">
+						<div class="notice warn">Enter a question ID: 0x… or a decimal number.</div>
+						<div class="notice warn">No question has this ID.</div>
+						<p class="mock-note">Design note: two separate errors, for malformed input and for an unknown ID. No Register button is shown.</p>
+					</div>
+				</div>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+		<script src="portfolio-head.js"></script>
+	</body>
+</html>

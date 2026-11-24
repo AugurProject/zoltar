@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Question shares</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="questions">
+		<div class="page">
+			<div class="crumbs">
+				<span class="crumb-full"
+					><a>Watchlist</a> › <a>Security pool <span class="mono">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</span></a> › <a>Questions</a> › <span aria-current="page">Question</span></span
+				><a class="crumb-short" aria-label="Back to questions in security pool 0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766">‹ Security pool <span class="mono">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</span> › Questions</a>
+			</div>
+			<div class="route-head">
+				<div>
+					<div class="row">
+						<span class="badge acc">Trading</span><span class="muted small">Binary · question ID <span class="mono">0x5afb2df10de1c08de002abfc0143fb65d213d00a6af599e05ebe91271aa275e1</span></span>
+					</div>
+					<h1 style="margin-top: 0.5rem; display: flex; gap: 0.6rem; align-items: center"><button class="fav lg on" aria-pressed="true" aria-label="Saved: Will this resolve? (security pool question 1) in security pool 0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766" title="Remove from saved">★</button>Will this resolve? (security pool question 1)</h1>
+				</div>
+				<span class="btn">Open security pool</span>
+			</div>
+
+			<div class="card" style="margin-bottom: var(--s4)">
+				<div class="stepper">
+					<div class="st now"><span class="t">Trading</span><span class="s">Now</span></div>
+					<div class="st"><span class="t">Reporting opens</span><span class="s">Mar 1 (in 53 days)</span></div>
+					<div class="st"><span class="t">Response window</span><span class="s">Starts with the first report</span></div>
+					<div class="st-split">
+						<div class="st"><span class="t">Resolved</span><span class="s">Redeem winning shares</span></div>
+						<div class="st alt"><span class="t">or Fork</span><span class="s">Instead, if 2 outcomes reach 225 000 REP</span></div>
+					</div>
+				</div>
+			</div>
+
+			<div class="p mock-note" style="margin: calc(-1 * var(--s2)) 0 var(--s4)">Design note: an inherited question in a child universe before its branch is activated shows a “Paused until this branch is activated” badge on this stepper, and its deadlines read “starts at activation”. The “Inherited claims” tab appears only when the question has inherited claims.</div>
+			<div class="view-tabs">
+				<a class="on">Shares</a>
+				<a>Reporting <span class="badge mute">Opens Mar 1</span></a>
+				<a>Details</a>
+			</div>
+
+			<div>
+				<div class="stack">
+					<div class="card facts">
+						<div>
+							<span class="k">Reporting opens</span><span class="v">Mar 1 <a class="small">Add to calendar</a></span>
+						</div>
+						<div><span class="k">Capacity free</span><span class="v num">9.00 of 10.00 WETH</span></div>
+						<div>
+							<span class="k">REP price</span><span class="v"><span class="badge ok">Current</span></span>
+						</div>
+						<div><span class="k">Holding fee</span><span class="v num">10%/yr</span></div>
+						<div><span class="k">Purchase fee</span><span class="v num">1% (min 0.001 WETH)</span></div>
+					</div>
+					<div class="card">
+						<h2 style="margin-bottom: var(--s3)">Your holdings</h2>
+						<div class="grid-4">
+							<div class="metric"><span class="k">Complete sets</span><span class="v big">1.00</span><span class="d">Redeem now for about 0.9990 WETH</span></div>
+							<div class="metric"><span class="k">Yes shares</span><span class="v big">1.00</span><span class="d">Pays 1.0000 WETH if Yes wins</span></div>
+							<div class="metric"><span class="k">No shares</span><span class="v big">1.00</span><span class="d">Pays 1.0000 WETH if No wins</span></div>
+							<div class="metric"><span class="k">Invalid shares</span><span class="v big">1.00</span><span class="d">Pays 1.0000 WETH if Invalid wins</span></div>
+						</div>
+						<div class="p small muted" style="margin-top: var(--s3)">Only one outcome wins.</div>
+						<details class="disc how">
+							<summary>How shares work</summary>
+							<p>Mint a set with collateral; redeem it for collateral minus holding fees. After resolution only winning shares pay. <a>How reporting works</a></p>
+						</details>
+					</div>
+
+					<div class="card">
+						<h2 style="margin-bottom: var(--s3)">Share actions</h2>
+						<div class="segmented" role="tablist" aria-label="Share actions"><span class="on" role="tab" aria-selected="true">Mint sets</span><span role="tab" aria-selected="false">Redeem sets</span><span class="off" role="tab" aria-selected="false" aria-disabled="true">Migrate shares</span><span class="off" role="tab" aria-selected="false" aria-disabled="true">Redeem winning shares</span></div>
+						<div class="p why" style="margin: var(--s2) 0 var(--s5)">Migrate shares: after a fork only. Redeem winning shares: after resolution.</div>
+						<h3 style="margin-bottom: var(--s3)">Mint complete sets</h3>
+						<div class="mint-form"></div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+		<script src="mint-form.js"></script>
+	</body>
+</html>

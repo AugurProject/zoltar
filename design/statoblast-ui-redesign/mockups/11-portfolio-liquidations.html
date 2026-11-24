@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Security pool liquidations</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="portfolios" data-ptab="liquidations">
+		<div class="page">
+			<div class="portfolio-head"></div>
+
+			<div class="card flush" style="margin-bottom: var(--s4)">
+				<div class="card-head" style="align-items: center">
+					<div>
+						<h2>Positions below liquidation</h2>
+						<p>Take over an under-backed commitment: you earn its fees and a takeover reward.</p>
+					</div>
+					<div class="row">
+						<div class="input" style="width: 180px"><span class="ph">Position ID</span></div>
+						<span class="btn sm">Open position</span>
+					</div>
+				</div>
+				<table class="stackable">
+					<thead>
+						<tr>
+							<th>Position</th>
+							<th>Owner</th>
+							<th class="r">Pledged REP</th>
+							<th class="r">Commitment</th>
+							<th>Health</th>
+							<th>Liquidation started</th>
+							<th>Action</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr class="sel">
+							<td class="num"><b>#7</b></td>
+							<td class="mono small">0x33d0b4abaf4d175fadec0069d6b24e8495051fa2</td>
+							<td class="r num">746.00</td>
+							<td class="r num">4.00 WETH</td>
+							<td class="num" style="min-width: 8rem">
+								<span style="color: var(--danger); font-weight: 600">78%</span>
+								<div class="segbar-wrap" style="margin-top: 0.3rem" role="img" aria-label="Health 78%, liquidation below 85%">
+									<div class="bar bad"><i style="width: 65%"></i></div>
+									<span class="mark" style="left: 70.8%; background: var(--text); top: -3px; height: 14px"></span>
+								</div>
+								<div class="q-meta">Liquidation below 85%</div>
+							</td>
+							<td>
+								23:58 UTC
+								<div class="q-meta">15 min ago</div>
+							</td>
+							<td>Take over</td>
+							<td class="r"><span class="small muted">Selected</span></td>
+						</tr>
+					</tbody>
+				</table>
+				<div class="table-foot"><span class="small muted">Checked positions #1–#12 at block 24 118 402</span><span class="btn sm link">↻ Rescan</span></div>
+			</div>
+
+			<div class="main-side">
+				<div class="card stack">
+					<div class="card-head" style="margin: 0">
+						<div>
+							<h2>Take over position #7</h2>
+							<p><span class="badge warn">Takeover only</span> The security pool has too little free capacity to cure it.</p>
+						</div>
+					</div>
+					<div>
+						<div class="spread small"><span>The takeover reward and the amount you can take grow for one hour</span></div>
+						<div class="dtl" role="img" aria-label="Liquidation started 23:58 UTC. Now, 00:13: takeover reward at least 186.50 REP, up to 3.00 WETH can be taken over. From 00:58: reward is all 746.00 REP, up to 4.00 WETH.">
+							<div class="track"></div>
+							<div class="fill" style="width: 25%"></div>
+							<span class="pin mute" style="left: 0"></span><span class="lbl top start" style="left: 0">Started<b>23:58</b></span> <span class="pin acc" style="left: 25%"></span><span class="lbl top" style="left: 25%">Now<b>00:13</b></span>
+							<span class="lbl bot start" style="left: 0"><b>≥ 186.50 REP</b>reward now, up to 3.00 WETH</span>
+							<span class="pin mute" style="left: 100%"></span><span class="lbl top end" style="left: 100%">Full reward<b>00:58</b></span>
+							<span class="lbl bot end" style="left: 100%"><b>746.00 REP</b>all pledged REP, up to 4.00 WETH</span>
+						</div>
+					</div>
+					<div class="grid-2">
+						<div class="field">
+							<label>Commitment to take over</label>
+							<div class="input focus">3.00<span class="unit">WETH</span></div>
+							<span class="hint">Max 3.00 WETH now</span>
+						</div>
+					</div>
+					<div class="stack-sm">
+						<span class="label" style="font-weight: 600; font-size: 0.85rem">Your limits</span>
+						<p class="hint">Required. The takeover is cancelled if it would exceed any of these.</p>
+						<div class="grid-3">
+							<div class="field">
+								<label class="small">Most of your own REP to add</label>
+								<div class="input"><span class="ph">0.00</span><span class="unit">REP</span></div>
+							</div>
+							<div class="field">
+								<label class="small">Most pledged REP you'll end with</label>
+								<div class="input"><span class="ph">5 746.00</span><span class="unit">REP</span></div>
+							</div>
+							<div class="field">
+								<label class="small">Most commitment you'll end with</label>
+								<div class="input"><span class="ph">13.00</span><span class="unit">WETH</span></div>
+							</div>
+						</div>
+						<div class="presets"><span>Fill suggested limits (room for the full reward)</span></div>
+					</div>
+					<div class="steps compact">
+						<div class="step now">
+							<span class="mk">→</span>
+							<div>
+								<div class="t">Take over 3.00 WETH from position #7</div>
+								<div class="s">Less may be taken over if a cure or the owner's reduction lands first.</div>
+							</div>
+							<div class="act"><span class="btn sm disabled">Take over position</span><span class="why">Enter all three limits.</span></div>
+						</div>
+					</div>
+				</div>
+				<aside class="card stack-sm sticky">
+					<h3>Your position after takeover</h3>
+					<div class="diff"><span>Commitment</span><span class="before">10.00</span><span class="arrow">→</span><span class="after">13.00 WETH</span> <span>Pledged REP</span><span class="before">5 000.00</span><span class="arrow">→</span><span class="after">≥ 5 186.50</span> <span>REP needed for 120% health</span><span class="before">2 869.56</span><span class="arrow">→</span><span class="after">3 730.43</span> <span>Health</span><span class="before">209%</span><span class="arrow">→</span><span class="after">≥ 167%</span></div>
+					<p class="small muted">✓ No deposit needed.</p>
+					<p class="mock-note">Design note: Take over is disabled with “Different queue rounds: release your queued reduction first.” when your queued reduction and this position's are in different queue rounds, and, for an in-between amount, with “Take over all 3.00 WETH, or at most N WETH.” (N computed, so the position stays below liquidation). No fresh REP price is needed. When a cure is possible, a second action “Cure position” appears beside Take over, with the sub-line “Anyone can send this. The security pool's free capacity removes the unbacked commitment; nobody earns a reward and the owner keeps their REP.”</p>
+				</aside>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+		<script src="portfolio-head.js"></script>
+	</body>
+</html>

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Deploy security pool send</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="portfolios">
+		<div class="page">
+			<div class="crumbs"><a>Watchlist</a> › <span aria-current="page">Deploy a security pool</span></div>
+			<div class="route-head">
+				<div>
+					<h1>Deploy a security pool</h1>
+					<p class="sub">Nothing here can be changed after deployment.</p>
+				</div>
+			</div>
+
+			<div class="card" style="margin-bottom: var(--s4)">
+				<div class="stepper">
+					<div class="st done"><span class="t">1. Collateral &amp; REP price</span><span class="s">WETH collateral</span></div>
+					<div class="st done"><span class="t">2. Questions</span><span class="s">Fixed list of 3</span></div>
+					<div class="st done"><span class="t">3. Fees &amp; limits</span><span class="s">Reviewed</span></div>
+					<div class="st now"><span class="t">4. Deploy &amp; set up</span><span class="s">Transaction 3 of 6</span></div>
+				</div>
+			</div>
+
+			<div class="grid-2" style="align-items: start">
+				<div class="card stack">
+					<div class="spread">
+						<h2>3. Fees &amp; limits</h2>
+						<span class="badge mute">Locked</span>
+					</div>
+					<dl class="kv">
+						<dt>Purchase fee</dt>
+						<dd>1% (min 0.001 WETH)</dd>
+						<dt>Holding fee</dt>
+						<dd>10%/yr</dd>
+						<dt>Minimum outcome rate</dt>
+						<dd>0.5%</dd>
+						<dt>Min commitment</dt>
+						<dd>1.00 WETH</dd>
+						<dt>Reward vesting</dt>
+						<dd>7 days</dd>
+						<dt>Security multiplier</dt>
+						<dd>200%</dd>
+					</dl>
+					<p class="mock-note">Design note: the editable Fees &amp; limits form carries the field hints (minimum outcome rate: holding fees never reduce collateral below this per share; security multiplier: REP value required per unit of committed collateral, minimum 105%).</p>
+					<p class="hint">Locked: the first transaction is sent.</p>
+					<p class="mock-note">Design note: while step 3 is being edited these are inputs (purchase fee % and its minimum in WETH are two fields).</p>
+				</div>
+
+				<div class="card stack">
+					<h2>4. Deploy &amp; set up</h2>
+					<p class="small">Saved on this device; resume here or by pasting the security pool address. Usable after all 6.</p>
+					<div class="steps compact">
+						<div class="step done">
+							<span class="mk">✓</span>
+							<div>
+								<div class="t">Deploy question rules</div>
+								<div class="s mono">0x3e919f8e608dd1663a61e17cc3ee68da4e6ec0d2</div>
+							</div>
+							<div class="act"><span class="btn sm done">Deployed</span></div>
+						</div>
+						<div class="step done">
+							<span class="mk">✓</span>
+							<div>
+								<div class="t">Deploy security pool</div>
+								<div class="s mono">0x7e01722b4f64a588510b0e7b0432dfba5889aa3b</div>
+							</div>
+							<div class="act"><span class="btn sm done">Deployed</span></div>
+						</div>
+						<div class="step now">
+							<span class="mk">3</span>
+							<div><div class="t">Set up claims &amp; redemption</div></div>
+							<div class="act"><span class="btn sm primary">Set up claims &amp; redemption</span></div>
+						</div>
+						<div class="step locked">
+							<span class="mk"></span>
+							<div><div class="t">Set up reporting &amp; forks</div></div>
+							<div class="act"><span class="btn sm disabled">Set up reporting &amp; forks</span><span class="sr">Set up claims and redemption first.</span></div>
+						</div>
+						<div class="step locked">
+							<span class="mk"></span>
+							<div><div class="t">Set up capital</div></div>
+							<div class="act"><span class="btn sm disabled">Set up capital</span><span class="sr">Set up reporting and forks first.</span></div>
+						</div>
+						<div class="step locked">
+							<span class="mk"></span>
+							<div>
+								<div class="t">Activate security pool</div>
+								<div class="s">Then saved to your Watchlist</div>
+							</div>
+							<div class="act"><span class="btn sm disabled">Activate security pool</span><span class="sr">Set up capital first.</span></div>
+						</div>
+					</div>
+					<p class="mock-note">Design note: steps 3–5 were “Prepare settlement / reporting &amp; forks / capital ledger”. Open question: confirm “claims &amp; redemption” describes what the settlement transaction sets up.</p>
+				</div>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+	</body>
+</html>

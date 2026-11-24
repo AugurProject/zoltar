@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Fork step</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="questions">
+		<div class="page">
+			<div class="crumbs">
+				<span class="crumb-full"
+					><a>Watchlist</a> › <a>Security pool <span class="mono">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</span></a> › <a>Questions</a> › <span aria-current="page">Question</span></span
+				><a class="crumb-short" aria-label="Back to questions in security pool 0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766">‹ Security pool <span class="mono">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</span> › Questions</a>
+			</div>
+			<div class="route-head">
+				<div>
+					<div class="row">
+						<span class="badge bad">Undecided · fork step</span><span class="muted small">Binary · question ID <span class="mono">0x71e0c4b9a2f35d8e6c1b07a94d3f28e5b6c9a0d17e42f3b85c6d09a1e7f4b230</span></span>
+					</div>
+					<h1 style="margin-top: 0.5rem; display: flex; gap: 0.6rem; align-items: center"><button class="fav lg on" aria-pressed="true" aria-label="Saved: Will Starship complete an orbital refuelling test in 2026? in security pool 0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766" title="Remove from saved">★</button>Will Starship complete an orbital refuelling test in 2026?</h1>
+				</div>
+				<a class="btn">Open security pool</a>
+			</div>
+			<div class="p mock-note" style="margin-bottom: var(--s3)">Design note: shown Nov 24, 09:00 UTC, before anyone triggers the fork. Only in this state does the question page show a fork action, and anyone can trigger it; before it, the fork appears only as the last, dashed step of the stepper.</div>
+
+			<div class="card" style="margin-bottom: var(--s4)">
+				<div class="stepper">
+					<div class="st done"><span class="t">Trading ended</span><span class="s">Oct 12</span></div>
+					<div class="st done"><span class="t">Reporting opened</span><span class="s">Oct 14</span></div>
+					<div class="st done bad"><span class="t">Ended undecided</span><span class="s">Nov 24, 08:40 UTC</span></div>
+					<div class="st now"><span class="t">Fork</span><span class="s">Waiting for a trigger</span></div>
+				</div>
+			</div>
+
+			<div class="view-tabs">
+				<a>Shares</a>
+				<a class="on">Reporting <span class="badge bad">Fork</span></a>
+				<a>Details</a>
+			</div>
+
+			<div class="stack">
+				<div class="card">
+					<div class="card-head" style="margin-bottom: var(--s3)">
+						<h2>REP staked per outcome</h2>
+						<span class="small muted num">Fork at 225 000 REP per outcome</span>
+					</div>
+					<div class="stack">
+						<div class="stack-sm">
+							<div class="spread small"><b>Yes</b><span class="num">225 000.00 REP</span></div>
+							<div class="bar bad" style="height: 14px"><i style="width: 100%"></i></div>
+						</div>
+						<div class="stack-sm">
+							<div class="spread small"><b>No</b><span class="num">225 000.00 REP</span></div>
+							<div class="bar bad" style="height: 14px"><i style="width: 100%"></i></div>
+						</div>
+						<div class="stack-sm">
+							<div class="spread small"><b>Invalid</b><span class="num">0.00 REP</span></div>
+							<div class="bar" style="height: 14px"><i style="width: 0"></i></div>
+						</div>
+					</div>
+				</div>
+
+				<div class="card stack-sm" style="border-color: var(--danger-b)">
+					<div class="card-head"><h2>Fork the universe</h2></div>
+					<div class="grid-2" style="gap: var(--s5); align-items: start">
+						<div class="stack-sm">
+							<div class="notice bad stack-sm">
+								<p><b>A fork cannot be undone.</b> This universe freezes; everything moves to child universes Yes, No and Invalid.</p>
+								<p><b>Triggering costs you 12.40 REP</b>, not returned. (REP supply grew since reporting started.)</p>
+							</div>
+							<p class="mock-note">Open question: what a reporter sees for their own deposits between “ended undecided” and the fork.</p>
+						</div>
+						<div class="stack-sm">
+							<div class="field">
+								<label class="small">REP approval amount</label>
+								<div class="input one-line">13.40<span class="unit">REP</span></div>
+								<span class="hint">12.40 + 1 REP spare. Approved: 0.00 REP.</span>
+							</div>
+							<div class="steps compact">
+								<div class="step now">
+									<span class="mk">1</span>
+									<div><div class="t">Approve 13.40 REP</div></div>
+									<div class="act"><span class="btn sm primary">Approve REP</span></div>
+								</div>
+								<div class="step locked">
+									<span class="mk"></span>
+									<div>
+										<div class="t">Trigger universe fork</div>
+										<div class="s">Anyone can send this; needed once</div>
+									</div>
+									<div class="act"><span class="btn sm disabled" aria-describedby="f1">Trigger fork</span><span class="sr" id="f1">Approve REP first.</span></div>
+								</div>
+							</div>
+						</div>
+					</div>
+					<p class="mock-note">Design note: with no shortfall, the cost line, approval field and Approve step are all hidden; Trigger is the only step. With enough REP approved, only the Approve step is hidden. While loading, Trigger shows “Checking…”. After the fork, the fork banner and the security pool's Fork tab take over.</p>
+				</div>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+	</body>
+</html>

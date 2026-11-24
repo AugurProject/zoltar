@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Security pool capital</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="portfolios" data-ptab="capital">
+		<div class="page">
+			<div class="portfolio-head"></div>
+
+			<div style="display: grid; grid-template-columns: 200px minmax(0, 1fr) 300px; gap: var(--s5); align-items: start" class="capital-grid">
+				<nav class="anchor-nav sticky">
+					<a>Deposit REP</a>
+					<a class="on">Health target &amp; commitment <small>120%</small></a>
+					<a>Reduce commitment <small>ready</small></a>
+					<a>Withdraw REP <small>≈&nbsp;2&nbsp;130</small></a>
+					<a>Earnings <small>0.42&nbsp;WETH</small></a>
+				</nav>
+
+				<div class="stack">
+					<section class="card">
+						<h2>Deposit REP</h2>
+						<div class="p small" style="margin-top: var(--s1)">Deposited REP backs nothing and earns nothing until you set a commitment.</div>
+						<div class="grid-2" style="margin-top: var(--s3)">
+							<div class="field">
+								<label>REP amount</label>
+								<div class="input"><span class="ph">0.00</span><span class="unit">REP · wallet 2 310.00</span></div>
+								<span class="hint">Enter an amount to continue.</span>
+							</div>
+						</div>
+						<div class="steps compact" style="margin-top: var(--s4)">
+							<div class="step">
+								<span class="mk">1</span>
+								<div>
+									<div class="t">Approve REP</div>
+									<div class="s">0.00 REP approved. <a>Adjust</a></div>
+								</div>
+								<div class="act"><span class="btn sm disabled">Approve REP</span></div>
+							</div>
+							<div class="step">
+								<span class="mk">2</span>
+								<div><div class="t">Deposit REP</div></div>
+								<div class="act"><span class="btn sm disabled">Deposit REP</span></div>
+							</div>
+						</div>
+					</section>
+
+					<section class="card">
+						<h2>Health target &amp; commitment</h2>
+						<div class="p notice warn" style="margin-top: var(--s3)"><b>Below 85% health anyone can take over your commitment,</b> and within an hour up to all your pledged REP goes to them as a liquidation penalty. Add REP or reduce commitment to stay above.</div>
+						<details class="disc how">
+							<summary>How the target works</summary>
+							<p>A higher target keeps more REP pledged per WETH of commitment, so less is withdrawable. Liquidation stays at 85% health. The minimum target is 100%.</p>
+						</details>
+						<div class="grid-2" style="gap: var(--s5); margin-top: var(--s3)">
+							<div class="stack">
+								<div class="field">
+									<label>Health target</label>
+									<div class="input focus">150<span class="unit">% · now 120%</span></div>
+								</div>
+								<div class="field">
+									<label>Commitment</label>
+									<div class="input">10.00<span class="unit">WETH · min 1.00</span></div>
+									<div class="presets"><span>Current 10.00</span><span>Max 13.94</span></div>
+									<span class="hint">Can't be changed while your reduction is in queue.</span>
+								</div>
+								<div class="field">
+									<label>Also add REP <span class="muted" style="font-weight: 400">(optional)</span></label>
+									<div class="input"><span class="ph">0.00</span><span class="unit">REP</span></div>
+								</div>
+								<details class="disc how">
+									<summary>Use an older funded price report</summary>
+									<div class="field" style="margin-top: var(--s2)">
+										<div class="input"><span class="ph">Report ID</span></div>
+										<span class="hint">Only if the current price report doesn't cover this much commitment.</span>
+									</div>
+								</details>
+							</div>
+							<div class="ruled">
+								<div class="p section-label" style="margin-bottom: var(--s2)">Preview</div>
+								<div class="diff"><span>Health target</span><span class="before">120%</span><span class="arrow">→</span><span class="after">150%</span> <span>REP needed for target</span><span class="before">≈ 2 869.56</span><span class="arrow">→</span><span class="after">≈ 3 586.95</span> <span>Withdrawable REP</span><span class="before">≈ 2 130.44</span><span class="arrow">→</span><span class="after">≈ 1 413.05</span> <span>Max commitment</span><span class="before">17.42</span><span class="arrow">→</span><span class="after">13.94 WETH</span></div>
+							</div>
+						</div>
+						<div class="steps compact" style="margin-top: var(--s4)">
+							<div class="step now">
+								<span class="mk">1</span>
+								<div><div class="t">Save health target 150%</div></div>
+								<div class="act"><span class="btn sm primary">Save health target 150%</span></div>
+							</div>
+						</div>
+						<div class="p mock-note" style="margin-top: var(--s3)">Design note: only the steps that apply are listed. With extra REP entered: “Approve REP”, then “Deposit REP and save target”. With a changed commitment: a further step “Set commitment” (was “Authorize commitment”).</div>
+					</section>
+
+					<section class="card">
+						<div class="spread">
+							<h2>Reduce commitment</h2>
+							<span class="badge ok">Ready to release</span>
+						</div>
+						<div class="p small" style="margin-top: var(--s1)">Paid from free capacity in queue order, in full. <b>A queued request can't be changed.</b></div>
+						<div style="margin-top: var(--s3)" role="img" aria-label="Queue: 2.10 WETH of earlier requests, then your 4.00 WETH reduction; 9.00 WETH is free now, enough for both">
+							<div class="spread small"><span>Your commitment</span><span class="num">10.00 → 6.00 WETH</span></div>
+							<div class="segbar-wrap" style="padding-bottom: 1.2rem; margin-top: 0.3rem">
+								<div class="segbar"><i style="width: 34.4%; background: var(--b-strong)"></i><i style="width: 65.6%; background: var(--accent)"></i></div>
+								<span class="mark" style="left: calc(100% - 2px)"></span><span class="mark-lbl" style="left: 100%; transform: translateX(-100%)">9.00 WETH free now, covers all 6.10</span>
+							</div>
+							<div class="seglegend">
+								<span><i style="background: var(--b-strong)"></i>Ahead of you <b>2.10 WETH</b></span
+								><span><i style="background: var(--accent)"></i>Your reduction <b>4.00 WETH</b></span>
+							</div>
+						</div>
+						<div class="steps compact" style="margin-top: var(--s3)">
+							<div class="step now">
+								<span class="mk">1</span>
+								<div><div class="t">Release reduction</div></div>
+								<div class="act"><span class="btn sm primary">Release reduction (keep 6.00 WETH)</span></div>
+							</div>
+						</div>
+						<div class="p mock-note" style="margin-top: var(--s3)">Design note: with nothing in queue this card has one field, “Commitment to keep”, and a “Request reduction” button. While free capacity is too low the button is disabled with “Waiting for free capacity”. After a failed release it reads “Retry release”: it retries the same 4.00 WETH.</div>
+					</section>
+
+					<section class="card">
+						<h2>Withdraw REP</h2>
+
+						<div class="grid-2" style="margin-top: var(--s3)">
+							<div class="field">
+								<label>REP amount</label>
+								<div class="input"><span class="ph">0.00</span><span class="unit">REP · max ≈ 2 130.44</span></div>
+							</div>
+						</div>
+						<div class="row" style="margin-top: var(--s3)"><span class="btn sm disabled">Withdraw REP</span><span class="why">Enter an amount.</span></div>
+					</section>
+
+					<section class="card">
+						<div class="spread">
+							<h2>Earnings</h2>
+							<span class="badge ok">Claimable now</span>
+						</div>
+						<div class="metrics" style="margin: var(--s3) 0 var(--s4)">
+							<div class="metric"><span class="k">WETH vested</span><span class="v">0.42 WETH</span></div>
+							<div class="metric"><span class="k">REP vested</span><span class="v">12.00 REP</span></div>
+						</div>
+						<span class="btn sm primary">Claim 0.42 WETH and 12.00 REP</span>
+						<div class="p hint" style="margin-top: var(--s2)">More vests over 7 days.</div>
+					</section>
+				</div>
+
+				<aside class="stack sticky">
+					<div class="card stack-sm">
+						<div class="spread">
+							<h3>Your position <span class="muted" style="font-weight: 400">#1</span></h3>
+							<span class="badge ok">Reduction ready</span>
+						</div>
+						<dl class="kv">
+							<dt>Pledged REP</dt>
+							<dd>5 000.00 REP</dd>
+							<dt>Commitment</dt>
+							<dd>10.00 WETH</dd>
+							<dt>Health</dt>
+							<dd>209%</dd>
+							<dt>Health target</dt>
+							<dd>120%</dd>
+							<dt>Withdrawable</dt>
+							<dd>≈ 2 130.44 REP</dd>
+						</dl>
+					</div>
+					<p class="mock-note">Design note: a “Warnings” card appears here only when one applies (below target, below liquidation). None applies to this position.</p>
+				</aside>
+			</div>
+		</div>
+		<style>
+			@media (max-width: 1180px) {
+				.capital-grid {
+					grid-template-columns: minmax(0, 1fr) 280px !important;
+				}
+				.capital-grid > .anchor-nav {
+					grid-column: 1 / -1;
+					position: static;
+				}
+			}
+			@media (max-width: 900px) {
+				.capital-grid {
+					grid-template-columns: minmax(0, 1fr) !important;
+				}
+			}
+		</style>
+		<script src="shell.js"></script>
+		<script src="portfolio-head.js"></script>
+	</body>
+</html>

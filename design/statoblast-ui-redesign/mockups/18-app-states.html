@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>App states</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="portfolios">
+		<div class="page">
+			<div class="route-head">
+				<div>
+					<p class="section-label">Pattern · every route</p>
+					<h1 style="margin-top: 0.4rem">Wallet, loading, empty and error states</h1>
+					<p class="mock-note">Design note: same on every route. Data stays readable; each blocked action says why.</p>
+				</div>
+			</div>
+
+			<div class="frame-grid">
+				<div>
+					<div class="frame-cap"><span>No wallet connected</span><span class="mock-note">header shows “Connect wallet”</span></div>
+					<div class="card stack-sm">
+						<div class="spread"><b class="mono">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</b><span class="chip">Connect wallet</span></div>
+						<dl class="kv">
+							<dt>Total pledged REP</dt>
+							<dd>12 480.00</dd>
+							<dt>Capacity in use</dt>
+							<dd>1.00 of 10.00 WETH</dd>
+							<dt>Your position</dt>
+							<dd class="muted">Connect to see</dd>
+						</dl>
+						<div class="steps compact">
+							<div class="step">
+								<span class="mk">1</span>
+								<div><div class="t">Deposit REP</div></div>
+								<div class="act"><span class="btn sm primary">Connect wallet</span><span class="why">Connect to deposit.</span></div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div>
+					<div class="frame-cap"><span>Wrong network</span><span class="mock-note">wallet on Sepolia</span></div>
+					<div class="card stack-sm">
+						<div class="spread">
+							<b class="mono">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</b><span class="chip"><span class="dot" style="background: var(--warning)"></span><span class="mono">0x7a3f375917679e170d85356b88194849e4ea91c2</span> · Sepolia</span>
+						</div>
+						<div class="notice warn spread"><span>Your wallet is on Sepolia. This app uses Ethereum.</span><span class="btn sm primary">Switch to Ethereum</span></div>
+						<dl class="kv">
+							<dt>Your position</dt>
+							<dd>5 000.00 REP pledged, 10.00 WETH commitment</dd>
+						</dl>
+						<div class="steps compact">
+							<div class="step">
+								<span class="mk">1</span>
+								<div><div class="t">Claim earnings</div></div>
+								<div class="act"><span class="btn sm disabled">Claim earnings</span><span class="why">Switch to Ethereum first.</span></div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div>
+					<div class="frame-cap"><span>Viewing another owner</span><span class="mock-note">read-only</span></div>
+					<div class="card stack-sm">
+						<div class="spread">
+							<b class="mono">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</b><span class="chip">Position of <b class="mono">0x33d0b4abaf4d175fadec0069d6b24e8495051fa2</b> ▾</span>
+						</div>
+						<div class="notice spread"><span>Another owner's position, read-only</span><a class="small">Back to my position</a></div>
+						<dl class="kv">
+							<dt>Their position</dt>
+							<dd>746.00 REP pledged, 4.00 WETH commitment</dd>
+							<dt>Health</dt>
+							<dd style="color: var(--danger)">78% · Below liquidation</dd>
+							<dt>Liquidation penalty</dt>
+							<dd>≥ 186.50 REP now, all 746.00 by 00:58 UTC</dd>
+						</dl>
+						<div class="steps compact">
+							<div class="step">
+								<span class="mk">1</span>
+								<div><div class="t">Withdraw REP</div></div>
+								<div class="act"><span class="btn sm disabled">Withdraw REP</span><span class="why">Connect this owner's wallet.</span></div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div>
+					<div class="frame-cap"><span>Loading</span><span class="mock-note">skeleton keeps the layout</span></div>
+					<div class="card stack" aria-busy="true">
+						<div class="spread">
+							<div class="skel" style="width: 40%; height: 1.2rem"></div>
+							<div class="skel" style="width: 22%"></div>
+						</div>
+						<div class="skel" style="height: 12px; border-radius: 999px"></div>
+						<div class="grid-3">
+							<div class="stack-sm">
+								<div class="skel" style="width: 70%"></div>
+								<div class="skel"></div>
+							</div>
+							<div class="stack-sm">
+								<div class="skel" style="width: 70%"></div>
+								<div class="skel"></div>
+							</div>
+							<div class="stack-sm">
+								<div class="skel" style="width: 70%"></div>
+								<div class="skel"></div>
+							</div>
+						</div>
+						<div class="steps compact">
+							<div class="step">
+								<span class="mk">1</span>
+								<div><div class="t">Claim earnings</div></div>
+								<div class="act"><span class="btn sm disabled">Claim earnings</span><span class="why">Loading…</span></div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div>
+					<div class="frame-cap"><span>Removing a saved item you still hold</span><span class="mock-note">empty Watchlist: screen 02c</span></div>
+					<div class="card stack-sm">
+						<b>Remove from your Watchlist?</b>
+						<span class="small">You hold <b class="num">2.00 complete sets</b> of “Will a spot ETH ETF see net inflows above $1B in December?” in <span class="mono">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</span>. Your shares are not affected, but finding them again needs the question link or the security pool address.</span>
+						<div class="row" style="margin-top: var(--s2)"><span class="btn sm">Keep it</span><span class="btn sm">Remove anyway</span></div>
+					</div>
+				</div>
+
+				<div>
+					<div class="frame-cap"><span>Read endpoint unavailable</span><span class="mock-note">data can't load</span></div>
+					<div class="card">
+						<div class="big-state">
+							<span class="ico" style="color: var(--danger)">!</span><b>Can't reach the Ethereum node</b><span class="small muted">Retrying automatically.</span>
+							<div class="row"><span class="btn sm">Retry now</span><a class="small">Change RPC in Settings</a></div>
+						</div>
+					</div>
+				</div>
+
+				<div>
+					<div class="frame-cap"><span>Stale data</span><span class="mock-note">chip only when behind</span></div>
+					<div class="card stack-sm">
+						<div class="spread"><b class="mono">0x952288743ABbD4D1BC93f7aCADB4f7B8121A2766</b><span class="chip" style="border-color: var(--warning-b); color: var(--warning)">Block 24 118 402 · 3 min behind</span></div>
+						<div class="notice warn"><b>Data is 3 min old.</b> Actions are paused until it catches up. <a>Change RPC in Settings</a></div>
+						<dl class="kv">
+							<dt>Your position</dt>
+							<dd>5 000.00 REP pledged, 10.00 WETH commitment</dd>
+							<dt>REP price valid until</dt>
+							<dd>00:26 UTC</dd>
+						</dl>
+						<div class="steps compact">
+							<div class="step">
+								<span class="mk">1</span>
+								<div><div class="t">Claim earnings</div></div>
+								<div class="act"><span class="btn sm disabled">Claim earnings</span><span class="why">Paused: data is 3 min old.</span></div>
+							</div>
+						</div>
+						<p class="mock-note">Design note: new. Data stays visible; only actions are paused.</p>
+					</div>
+				</div>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+	</body>
+</html>

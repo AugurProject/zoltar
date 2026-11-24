@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Watchlist empty</title>
+		<link rel="stylesheet" href="mock.css" />
+	</head>
+	<body data-tab="watchlist">
+		<div class="page">
+			<div class="route-head">
+				<div>
+					<h1>Watchlist</h1>
+				</div>
+			</div>
+			<div class="card" style="margin-bottom: var(--s4)">
+				<div class="open-grid">
+					<div class="field">
+						<label>Open a security pool or question</label>
+						<div class="input one-line"><span class="ph">Security pool address or link</span></div>
+					</div>
+					<div class="field">
+						<label>Question ID <span class="muted" style="font-weight: 400">(optional)</span></label>
+						<div class="input one-line"><span class="ph">Search saved security pools</span></div>
+					</div>
+					<div><span class="btn">Open</span></div>
+				</div>
+
+				<details class="disc" style="margin-top: var(--s3)">
+					<summary>View positions of another address</summary>
+					<div class="field" style="margin-top: var(--s2); max-width: 560px">
+						<label>Address</label>
+						<div class="input">0x7a3f375917679e170d85356b88194849e4ea91c2<span class="unit">Your wallet</span></div>
+						<span class="hint">Read-only.</span>
+					</div>
+				</details>
+			</div>
+			<div class="card" style="margin-bottom: var(--s4)">
+				<div class="card-head" style="margin-bottom: var(--s3)">
+					<div>
+						<h2>Nothing saved yet</h2>
+						<p>Stored on this device. There is no global list.</p>
+					</div>
+				</div>
+				<div class="grid-3">
+					<div class="stack-sm"><b>★ Star it</b><span class="small muted">Any question or security pool you open.</span></div>
+					<div class="stack-sm"><b>Use it</b><span class="small muted">Saved automatically when you mint, report or provide REP.</span></div>
+					<div class="stack-sm">
+						<b>Bring your list</b><span class="small muted">Exported from another device.</span><span><span class="btn sm">Import watchlist…</span></span>
+					</div>
+				</div>
+			</div>
+			<div class="card">
+				<div class="spread" style="align-items: center"><span class="small muted">Provide REP to back questions in your own security pool.</span><span class="btn">Deploy a security pool…</span></div>
+			</div>
+		</div>
+		<script src="shell.js"></script>
+	</body>
+</html>
