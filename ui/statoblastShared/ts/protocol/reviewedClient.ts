@@ -1,7 +1,8 @@
+import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { getTransactionReviewSignal } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
-import { getAddress, encodeFunctionData, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, encodeFunctionData, maxUint256, parseTransaction, recoverTransactionAddress } from '@zoltar/core-shared/evm/ethereum'
 import { formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { TransactionPlanStep, TransactionRequestPreview, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -70,7 +71,7 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 	return details
 }
 
-export function createReviewedClient(client: WriteClient, validate: () => Promise<void> = async () => undefined, signal = getTransactionReviewSignal(), registerBeforeSubmit?: (assertActive: () => void) => void): WriteClient {
+export function createReviewedClient(client: WriteClient, validate: () => Promise<void> = async () => undefined, signal = getTransactionReviewSignal(), registerBeforeSubmit?: (assertActive: () => void) => void, alwaysReview = false): WriteClient {
 	let controller = createTransactionStepController(signal, false)
 	const environment = createActiveEnvironmentGuard()
 	// The injected backend can await wallet validation after our final review checks.
@@ -79,7 +80,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 		if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 		controller.assertActive()
 	})
-	const requiresReview = () => (plan?.length ?? 0) > 1 || (plan?.some(step => step.requireReview) ?? false)
+	const requiresReview = () => alwaysReview || (plan?.length ?? 0) > 1 || (plan?.some(step => step.requireReview) ?? false)
 	let preview: TransactionRequestPreview | undefined
 	let plan: readonly TransactionPlanStep[] | undefined
 	let stepIndex = 0
@@ -90,7 +91,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 		if (!initialized) {
 			if (plan === undefined) throw new Error('Missing transaction plan.')
 			// Multi-transaction actions expose a separate control for every write, including the first funding step.
-			controller = createTransactionStepController(signal, plan.length > 1 || plan.some(step => step.requireReview))
+			controller = createTransactionStepController(signal, requiresReview())
 			controller.setPlan(
 				await Promise.all(
 					plan.map(step =>
@@ -106,7 +107,18 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 		}
 	}
 
-	const send = async (fallback: TransactionRequestPreview, execute: (approvalArgs?: readonly [ReturnType<typeof getAddress>, bigint], gas?: bigint) => Promise<`0x${string}`>, requestedGas?: bigint) => {
+	const checkTransaction = async (transaction: TransactionRequestPreview, step: TransactionPlanStep, gas: bigint | undefined, raw = false) => {
+		await validate()
+		await step.validateBeforeSubmit?.()
+		controller.assertActive()
+		if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
+		if (!raw) return await client.call({ account: client.account, to: transaction.contractAddress ?? transaction.to, data: transaction.data, value: transaction.value, gas })
+		if (transaction.data === undefined) throw new Error('The signed deployment is missing.')
+		const signed = parseTransaction(transaction.data)
+		const signer = await recoverTransactionAddress({ serializedTransaction: transaction.data })
+		return await client.call({ account: signer, to: signed.to ?? undefined, data: signed.data, value: signed.value, gas: signed.gas })
+	}
+	const send = async (fallback: TransactionRequestPreview, execute: (approvalArgs?: readonly [ReturnType<typeof getAddress>, bigint], gas?: bigint) => Promise<`0x${string}`>, requestedGas?: bigint, raw = false) => {
 		const prepared = preview
 		let transaction = prepared ?? fallback
 		let gas = requestedGas
@@ -122,6 +134,10 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			if (expected === undefined || expected.functionName !== transaction.functionName || (expected.value ?? 0n) !== (transaction.value ?? 0n) || (expected.contractAddress ?? expected.to) !== (transaction.contractAddress ?? transaction.to))
 				throw new Error('The transaction plan changed. No further transactions were sent. Review the action again.')
 			if (transaction.functionName === 'approve' && (expected.args?.[0] !== transaction.args?.[0] || expected.args?.[1] !== transaction.args?.[1])) throw new Error('The approval amount changed. Review the action again.')
+			const check = (candidate: TransactionRequestPreview) => withTimeout(checkTransaction(candidate, expected, gas, raw), 15_000, 'Transaction check timed out. Try again.')
+			const alreadyReviewedFunding = selectedFunding !== undefined
+			const checked = !alwaysReview || alreadyReviewedFunding ? undefined : await check(transaction)
+			const checkedAt = performance.now()
 			let selectedAmount = selectedFunding?.amount
 			if (selectedFunding === undefined) {
 				selectedAmount = requiresReview() ? await controller.review(stepIndex) : controller.startWithoutReview(stepIndex)
@@ -168,7 +184,11 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			if (expected.tokenFunding !== undefined) await validate()
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			controller.assertActive()
-			await expected.validateBeforeSubmit?.()
+			if (alwaysReview && (approvalArgs !== undefined || alreadyReviewedFunding)) await check(transaction)
+			else if (alwaysReview && performance.now() - checkedAt > 30_000) {
+				const fresh = await check(transaction)
+				if (fresh.data !== checked?.data) throw new Error('Changed since you reviewed. Review the action again.')
+			} else if (expected.validateBeforeSubmit !== undefined) await withTimeout(expected.validateBeforeSubmit(), 15_000, 'Transaction check timed out. Try again.')
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			controller.assertActive()
 			client.onTransactionPrepared?.(transaction)
@@ -215,7 +235,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 				async (approvalArgs, gas) => await client.sendTransaction({ ...parameters, ...(gas === undefined ? {} : { gas }), ...(approvalArgs === undefined ? {} : { data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs }) }) }),
 				parameters.gas,
 			),
-		sendRawTransaction: async parameters => await send({ account: undefined, args: undefined, chainName: client.chain.name, functionName: 'Deploy contract', data: parameters.serializedTransaction, value: undefined }, async () => await client.sendRawTransaction(parameters)),
+		sendRawTransaction: async parameters => await send({ account: undefined, args: undefined, chainName: client.chain.name, functionName: 'Deploy contract', data: parameters.serializedTransaction, value: undefined }, async () => await client.sendRawTransaction(parameters), undefined, true),
 		writeContract: async parameters =>
 			await send(
 				{

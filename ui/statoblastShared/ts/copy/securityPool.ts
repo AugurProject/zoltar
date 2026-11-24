@@ -35,12 +35,11 @@ export const mintAmount = 'Collateral'
 export const minimumShares = 'Minimum complete sets'
 export const openQuestionShares = 'Open question shares'
 
-export const maximumPurchaseFee = 'Maximum purchase charge'
+export const maximumPurchaseFee = 'Maximum purchase fee'
 export const maximumPurchaseFeeHint = 'Charged on every purchase, including reused backing. Only the actual fee is transferred.'
-export const estimatedPurchaseFee = 'Purchase charge (fee + premium)'
+export const estimatedPurchaseFee = 'Purchase fee'
 export const registeredQuestions = 'Question'
 export const findQuestionById = 'Find by question ID'
-export const retryQuestionList = 'Retry loading questions'
 export const retryQuestionDetails = 'Retry question details'
 export const formatStaleQuestionDetails = (reason: string) => `Showing the last loaded question details. ${reason}`
 export const reviewQuestionDetails = 'Wait for question details before purchasing.'
@@ -95,57 +94,12 @@ export const loadingQuestion = 'Loading question…'
 
 export const questionUnavailable = 'Question unavailable'
 
-export const selectRegisteredQuestion = 'Select a registered question from its security pool.'
-
-export const securityPoolQuestions = 'Security pool questions'
-
-export const securityPoolQuestionsDescription = 'Each question has separate outcome shares and reporting. Its security pool provides the backing.'
-
-export const loadingQuestions = 'Loading questions…'
-
-export const noRegisteredQuestions = 'No registered questions'
-
-export const registerQuestionsHint = 'Create a security pool and register its questions.'
-
 export const securityMultiplier = 'Security multiplier (%)'
 
 export const securityMultiplierHint = 'Minimum backing policy for this security pool. Vault owners can choose a higher health setting.'
 
 export const oraclePriorityFee = 'Oracle priority fee (nanoETH/gas)'
 
-export const openSecurityPools = 'Open security pools'
-
-export const questionColumn = 'Question'
-
-export const securityPoolColumn = 'Security pool'
-
-export const securityPoolsInUniverse = 'Security pools in this universe'
-
-export const loadingSecurityPools = 'Loading security pools…'
-
-export const securityPoolsError = 'Unable to load security pools.'
-
-export const noSecurityPoolsInUniverse = 'No security pools in this universe yet.'
-
-export const noSecurityPoolsHint = 'Enter a security pool address to open it.'
-
 export const ownerNeeded = 'Connect a wallet or enter an owner address to load this security pool.'
 
 export const ownerAddressNeeded = 'Enter an owner address to load this security pool.'
-
-export const formatRegisteredQuestions = (count: number) => {
-	if (count === 0) return 'No registered questions'
-	return count === 1 ? '1 registered question' : `${count} registered questions`
-}
-
-export const openSecurityPool = 'Open'
-
-export const securityPoolSelected = 'Selected'
-
-export const formatOpenSecurityPoolLabel = (securityPool: string) => `Open security pool ${securityPool}`
-
-export const formatSelectedSecurityPoolLabel = (securityPool: string) => `Security pool ${securityPool} is selected`
-
-export const outcomeColumn = 'Outcome'
-
-export const manageBackingAndRecovery = 'Manage security pool backing and fork recovery'

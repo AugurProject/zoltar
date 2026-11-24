@@ -1,5 +1,6 @@
+import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { collateralPresentation } from './collateral.js'
-import { encodeFunctionData, getAddress, parseAbi, parseAbiItem, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, getAddress, parseAbi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
 	buildSecurityPoolDeploymentRequest,
 	buildSecurityPoolPrepareNextRequest,
@@ -122,6 +123,7 @@ export async function loadSecurityPoolSetup(client: ReadClient, securityPool: Ad
 	const [block, chainId] = await Promise.all([client.getBlock(), client.getChainId()])
 	if (block.number === undefined || block.hash === undefined) throw new Error('Security pool setup requires a mined block.')
 	const blockNumber = block.number
+	await requireCanonicalSecurityPool(client, securityPool, blockNumber)
 	verifyRuntimeCode(await client.getCode({ address: securityPool, blockNumber }), getSecurityPoolRuntimeCode(), securityPoolArtifact.evm.deployedBytecode.immutableReferences, 'securityPool')
 	const [stageValue, factoryValue, zoltarValue, originValue, auctionDeployerValue] = await Promise.all([
 		client.readContract({ address: securityPool, abi: linksAbi, functionName: 'setupStage', blockNumber }),
@@ -129,7 +131,6 @@ export async function loadSecurityPoolSetup(client: ReadClient, securityPool: Ad
 		client.readContract({ address: securityPool, abi: linksAbi, functionName: 'zoltar', blockNumber }),
 		client.readContract({ address: securityPool, abi: linksAbi, functionName: 'originUniverseId', blockNumber }),
 		client.readContract({ address: securityPool, abi: linksAbi, functionName: 'repairAuctionDeployer', blockNumber }),
-		requireCanonicalSecurityPool(client, securityPool, blockNumber),
 	])
 	const infrastructure = getInfraContractAddresses()
 	if (getAddress(requireAddressValue(factoryValue, 'security pool factory')) !== getAddress(infrastructure.securityPoolFactory) || getAddress(requireAddressValue(zoltarValue, 'security pool protocol')) !== getAddress(infrastructure.zoltar)) throw new Error('Security pool uses unrecognized protocol contracts.')
@@ -153,9 +154,13 @@ export async function isUniverseForked(client: Pick<ReadClient, 'readContract'>,
 }
 
 /** Authenticate the actual custody tree before offering approvals or transactions. */
-export async function loadSecurityPoolAccount(client: ReadClient, securityPool: Address, owner: Address, universeId: bigint, questionStart = 0n, admissionStart = 0n) {
-	const snapshot = await loadSecurityPoolCapitalSnapshot({ client: securityPoolReadClient(client), securityPool, owner, universeId })
-	const blockNumber = snapshot.blockNumber
+export async function loadSecurityPoolAccount(client: ReadClient, securityPool: Address, owner: Address, universeId: bigint, questionStart = 0n, admissionStart = 0n, includeQuestions = true) {
+	const anchor = await client.getBlock()
+	const blockNumber = anchor.number
+	if (blockNumber === undefined || anchor.hash === undefined) throw new Error('Security pool account requires a mined block.')
+	await requireCanonicalSecurityPool(client, securityPool, blockNumber)
+	const snapshot = await loadSecurityPoolCapitalSnapshot({ client: securityPoolReadClient(client), securityPool, owner, universeId, blockNumber })
+	if (snapshot.blockHash !== anchor.hash) throw new Error('Chain changed while reading the security pool. Refresh and try again.')
 	verifyRuntimeCode(await client.getCode({ address: securityPool, blockNumber }), getSecurityPoolRuntimeCode(), securityPoolArtifact.evm.deployedBytecode.immutableReferences, 'securityPool')
 	const [factory, zoltar, originUniverseId, admissionAddress, settlement, reporters, quoteHelper, forkController, feeStreamsValue, lifecycleValue, services, capitalServicesValue, capitalForkValue, questionCount, auctionDelegateValue, auctionDeployerValue] = await Promise.all([
 		client.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'factory', blockNumber }),
@@ -174,7 +179,6 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 		client.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'questionCount', blockNumber }),
 		client.readContract({ address: snapshot.capitalLedger, abi: linksAbi, functionName: 'repairAuctionDelegate', blockNumber }),
 		client.readContract({ address: securityPool, abi: linksAbi, functionName: 'repairAuctionDeployer', blockNumber }),
-		requireCanonicalSecurityPool(client, securityPool, blockNumber),
 	])
 	const feeStreams = requireAddressValue(feeStreamsValue, 'fee streams')
 	const lifecycle = requireAddressValue(lifecycleValue, 'capital lifecycle delegate')
@@ -199,7 +203,7 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 		client.readContract({ address: collateralToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [fundingOwner, services], blockNumber }),
 	])
 	const [questions, admission, walletAttoRep, allowanceAttoRep, walletAttoEth, bookValue, premiumValue] = await Promise.all([
-		client.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'getQuestions', args: [start, 64n], blockNumber }),
+		includeQuestions ? client.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'getQuestions', args: [start, 64n], blockNumber }) : [],
 		loadSecurityPoolAdmission(client, admissionAddress, originUniverseId, blockNumber, admissionStart),
 		client.readContract({ address: snapshot.repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [fundingOwner], blockNumber }),
 		client.readContract({ address: snapshot.repToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [fundingOwner, depositSpender], blockNumber }),
@@ -236,10 +240,17 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 	const [block, chainId] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
 	if (block.hash !== snapshot.blockHash || chainId !== snapshot.chainId) throw new Error('Chain changed while reading the security pool. Refresh and try again.')
 	// The credited amounts stand in when the preview fails: the account stays usable and claiming still pays the full amount.
-	const claimableEarnings = await loadSecurityPoolClaimableEarnings(snapshot, async (contracts, block) => await readRequiredMulticall(client, contracts, block)).catch(() => undefined)
+	const [claimableEarnings, liquidationDuration] = await Promise.all([
+		loadSecurityPoolClaimableEarnings(snapshot, async (contracts, block) => await readRequiredMulticall(client, contracts, block)).catch(() => undefined),
+		client
+			.readContract({ address: snapshot.commitmentIndex, abi: indexArtifact.abi, functionName: 'LIQUIDATION_AUCTION_DURATION', blockNumber })
+			.then(value => requireBigintValue(value, 'liquidation duration'))
+			.catch(() => undefined),
+	])
 	return {
 		...snapshot,
 		...(claimableEarnings === undefined ? {} : { claimableEarnings }),
+		...(liquidationDuration === undefined ? {} : { liquidationDuration }),
 		collateralToken,
 		collateral,
 		walletCollateral,
@@ -278,11 +289,28 @@ export async function sendSecurityPoolTransaction(client: WriteClient, request: 
 		await validate()
 		await captured.validateBeforeSubmit?.()
 	}
-	await validateCaptured()
 	const gas = captured.gas === undefined ? {} : { gas: captured.gas }
-	await client.call({ account: client.account, to: captured.to, data: captured.data, value: captured.value, ...gas })
+	const simulate = () => client.call({ account: client.account, to: captured.to, data: captured.data, value: captured.value, ...gas })
+	await withTimeout(
+		(async () => {
+			await validateCaptured()
+			await simulate()
+		})(),
+		15_000,
+		'Transaction check timed out. Try again.',
+	)
+	const checkedAt = performance.now()
 	const review = { functionName: title, contractAddress: captured.to, data: captured.data, value: captured.value, reviewTitle: title, reviewDescription: captured.reviewDescription, ...gas }
-	client.onTransactionPlan?.([{ ...review, requireReview: true, validateBeforeSubmit: validateCaptured }])
+	client.onTransactionPlan?.([
+		{
+			...review,
+			requireReview: true,
+			validateBeforeSubmit: async () => {
+				await validateCaptured()
+				if (performance.now() - checkedAt > 30_000) await simulate()
+			},
+		},
+	])
 	client.onTransactionPrepared?.({ ...review, args: undefined, chainName: client.chain.name, account: client.account })
 	const hash = await client.sendTransaction({ to: captured.to, data: captured.data, value: captured.value, ...gas })
 	const result = await waitForSubmittedTransactionReceipt(client, hash)
@@ -299,24 +327,4 @@ export function securityPoolReadClient(client: ReadClient): SecurityPoolReadClie
 			return { number: block.number, hash: block.hash, timestamp: block.timestamp, baseFeePerGas: block.baseFeePerGas }
 		},
 	}
-}
-
-const principalDepositedEvent = parseAbiItem('event PrincipalDeposited(address indexed payer,address indexed owner,uint256 amountAttoRep)')
-/** Discovery is restricted to the browser-local simulation and authenticated again on load. */
-export async function discoverSimulationSecurityPool(client: ReadClient, backend: 'simulation' | 'injected', owner: Address): Promise<Address | undefined> {
-	if (backend !== 'simulation') return undefined
-	const logs = await client.getLogs({ event: principalDepositedEvent, args: { owner }, fromBlock: 0n })
-	for (const log of [...logs].reverse()) {
-		try {
-			const securityPoolValue = await client.readContract({ address: log.address, abi: linksAbi, functionName: 'securityPool' })
-			const securityPool = requireAddressValue(securityPoolValue, 'discovered security pool')
-			if (securityPool !== zeroAddress) {
-				verifyRuntimeCode(await client.getCode({ address: securityPool }), getSecurityPoolRuntimeCode(), securityPoolArtifact.evm.deployedBytecode.immutableReferences, 'securityPool')
-				return getAddress(securityPool)
-			}
-		} catch (failure) {
-			console.warn('Skipped an unverified simulation security pool candidate.', failure)
-		}
-	}
-	return undefined
 }

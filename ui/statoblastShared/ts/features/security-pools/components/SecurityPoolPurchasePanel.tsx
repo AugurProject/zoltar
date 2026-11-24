@@ -78,7 +78,7 @@ export function SecurityPoolPurchasePanel({ model, purchase, actions }: { model:
 						{copy.retryQuestionDetails}
 					</button>
 				) : undefined}
-				{purchase.position === undefined || purchase.position.pool === zeroAddress ? undefined : <a href={buildQuestionPoolHref(purchase.position.pool)}>{copy.openQuestionShares}</a>}
+				{snapshot === undefined || purchase.position === undefined || purchase.position.pool === zeroAddress || details.selectedId === undefined ? undefined : <a href={buildQuestionPoolHref(snapshot.securityPool, details.selectedId, snapshot.universeId)}>{copy.openQuestionShares}</a>}
 				<MetricGrid>
 					<SecurityPoolInput label={collateralCopy.amount(copy.mintAmount, snapshot?.collateral.symbol ?? collateralCopy.token)} value={purchase.mintAmount} onChange={purchase.setMintAmount} disabled={actions.busy !== undefined} numeric />
 					<SecurityPoolInput label={collateralCopy.amount(copy.maximumPurchaseFee, snapshot?.collateral.symbol ?? collateralCopy.token)} hint={copy.maximumPurchaseFeeHint} value={purchase.maximumFee} onChange={purchase.setMaximumFee} disabled={actions.busy !== undefined} numeric />

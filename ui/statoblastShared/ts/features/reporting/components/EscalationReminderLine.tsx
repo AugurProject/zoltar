@@ -2,7 +2,7 @@ import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { useEffect, useState } from 'preact/hooks'
 import type { ActiveReportingDetails } from '../../../types/contracts.js'
 import * as copy from '../../../copy/reporting.js'
-import { buildEscalationReminder } from '../lib/escalationReminder.js'
+import { buildEscalationReminder, downloadStatoblastCalendarEvent } from '../lib/escalationReminder.js'
 import { formatReportingDeadline, getViewerStatusSentence } from '../lib/reportingViewerStatus.js'
 import { isPoolQuestionFinalized } from '../lib/reportingDomain.js'
 
@@ -22,12 +22,7 @@ export function EscalationReminderLine({ details }: { details: ActiveReportingDe
 	const deadline = formatReportingDeadline(details.escalationEndTime, details.currentTime)
 	const download = () => {
 		const calendar = buildEscalationReminder({ questionLedgerAddress: details.questionLedgerAddress, escalationEndTime: details.escalationEndTime, generatedAt: BigInt(Math.floor(Date.now() / 1000)), questionTitle: details.marketDetails.title, status: getViewerStatusSentence(details), pageUrl: location.href })
-		const url = URL.createObjectURL(new Blob([calendar], { type: 'text/calendar;charset=utf-8' }))
-		const link = document.createElement('a')
-		link.href = url
-		link.download = 'statoblast-escalation.ics'
-		link.click()
-		setTimeout(() => URL.revokeObjectURL(url), 1000)
+		downloadStatoblastCalendarEvent(calendar, 'statoblast-escalation.ics')
 	}
 	return (
 		<>

@@ -115,7 +115,7 @@ export function SecurityPoolRepairAuction(parameters: SecurityPoolAuctionParamet
 						<UserMessage detail={bidStatus} />
 						<MetricGrid>
 							<MetricField label={copy.vault}>
-								<AddressValue address={bid.vault} />
+								<AddressValue longAbbreviation address={bid.vault} />
 							</MetricField>
 							<MetricField label={copy.requestedLots}>{bid.lots.toString()}</MetricField>
 							<MetricField label={copy.filledLots}>{bid.fill?.filledLots.toString()}</MetricField>

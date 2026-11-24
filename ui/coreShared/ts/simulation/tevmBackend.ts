@@ -1,5 +1,6 @@
 import { withTimeout } from '../lib/promise.js'
-import { clearSessionLocalEntities } from '../lib/localEntityStore.js'
+import { clearSessionLocalEntities, localEntityScopeForNetwork, setEntityFavorite } from '../lib/localEntityStore.js'
+import { formatQuestionIdHex } from '../lib/questionId.js'
 import { createPublicClient, createWalletClient, custom, publicActions, type Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ChainBackend, WriteClient } from '../wallet/chainBackend.js'
 import { normalizeAccount } from '../wallet/chainBackend.js'
@@ -236,6 +237,14 @@ export async function createSimulationBackend(
 			type: 'rpc',
 		})
 
+	const seedWatchlist = () => {
+		const pool = currentState?.seededSecurityPool
+		if (appId !== 'statoblast' || pool === undefined) return
+		setEntityFavorite(localEntityScopeForNetwork(profile, 'statoblast', 'pool'), pool.address, true)
+		const questions = localEntityScopeForNetwork(profile, 'statoblast', 'question')
+		for (const id of pool.questionIds) setEntityFavorite(questions, `${pool.address}:${formatQuestionIdHex(id)}`, true)
+	}
+
 	const applyState = (nextState: SimulationWorkerState) => {
 		const previousSelectedAccount = currentState?.selectedAccount
 		currentState = nextState
@@ -367,7 +376,9 @@ export async function createSimulationBackend(
 					bootstrapProgress: 0,
 					isBootstrapping: true,
 				})
-				bootstrapPromise = resolveScenarioSnapshot().then(parameters => callWorker('bootstrap', parameters))
+				bootstrapPromise = resolveScenarioSnapshot()
+					.then(parameters => callWorker('bootstrap', parameters))
+					.then(seedWatchlist)
 			}
 			return await bootstrapPromise
 		},
@@ -465,9 +476,13 @@ export async function createSimulationBackend(
 			bootstrapWarning = undefined
 			await callWorker('reset', undefined)
 			clearSessionLocalEntities()
+			seedWatchlist()
 		},
 		selectAccount: async address => {
 			await callWorker('selectAccount', { address })
+		},
+		get seededSecurityPool() {
+			return requireState().seededSecurityPool
 		},
 		get selectedAccount() {
 			return requireState().selectedAccount

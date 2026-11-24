@@ -1,3 +1,4 @@
+import type { SeededSecurityPool } from '@zoltar/ui-core-shared/simulation/savedStates.js'
 import { createSimulationEngine } from '@zoltar/ui-core-shared/simulation/tevmEngine.js'
 import { setRuntimeNetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { getDeploymentSteps } from '@zoltar/ui-statoblast-shared/protocol/deployment.js'
@@ -6,25 +7,36 @@ import { applyStatoblastScenario } from '@zoltar/ui-statoblast-shared/simulation
 import { forkSeededSecurityPool } from '@zoltar/ui-statoblast-shared/simulation/securityPoolScenarioFork.js'
 import { createCompleteSetInQuestionLedger, loadShareMigrationTargets, loadTradingDetails, migrateSharesFromUniverse, redeemCompleteSetInQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
-import { discoverSimulationSecurityPool, securityPoolReadClient } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
+import { securityPoolReadClient } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
 import { loadSecurityPoolForkSnapshot, quoteSecurityPoolAuctionRefundClaim } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { loadSecurityPoolBranchAuction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolRepairAuction.js'
 import { expect, test } from 'bun:test'
-import { createPublicClient, custom } from '@zoltar/core-shared/evm/ethereum'
+import { createPublicClient, custom, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { simulationSetupTimeoutMs } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
-import { loadAllQuestionLedgers } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
+import { loadStatoblastQuestion } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
 
 test(
 	'forked security pool simulation retains parent shares and prepares a child question',
 	async () => {
+		let childLedger: Address | undefined
 		const engine = await createSimulationEngine({
 			dependencies: {
 				applyScenario: async parameters => {
 					setRuntimeNetworkProfile(parameters.profile)
-					await applyStatoblastScenario({ ...parameters, scenario: 'security-pool' })
-					const [pool] = await loadAllQuestionLedgers(parameters.createReadClient())
-					if (pool === undefined) throw new Error('Missing seeded security pool question')
+					let seed: SeededSecurityPool | undefined
+					await applyStatoblastScenario({
+						...parameters,
+						scenario: 'security-pool',
+						onSeededSecurityPool: value => {
+							seed = value
+							parameters.onSeededSecurityPool?.(value)
+						},
+					})
+					if (seed === undefined) throw new Error('Missing seeded security pool')
+					const questionId = seed.questionIds[0]
+					if (questionId === undefined) throw new Error('Missing seeded question')
+					const { question: pool } = await loadStatoblastQuestion(parameters.createReadClient(), seed.address, questionId, 0n, false)
 					const owner = parameters.accounts[0]
 					if (owner === undefined) throw new Error('Missing security pool owner')
 					const writer = parameters.createWriteClient(owner)
@@ -50,9 +62,9 @@ test(
 					expect(targetsAfter.find(target => target.outcomeIndex === 1n)?.migratedAttoShares.noAttoShares).toBe(redeemed.shareBalances?.noAttoShares)
 					const remaining = await loadTradingDetails(parameters.createReadClient(), pool.questionLedgerAddress, owner)
 					expect(remaining.shareBalances?.noAttoShares).toBe(redeemed.shareBalances?.noAttoShares)
-					const child = (await loadAllQuestionLedgers(parameters.createReadClient())).find(candidate => candidate.universeId !== 0n)
-					if (child === undefined) throw new Error('Missing migrated child question')
-					const childDetails = await loadTradingDetails(parameters.createReadClient(), child.questionLedgerAddress, owner)
+					childLedger = targetsAfter.find(target => target.outcomeIndex === 1n)?.canonicalPool
+					if (childLedger === undefined) throw new Error('Missing migrated child question')
+					const childDetails = await loadTradingDetails(parameters.createReadClient(), childLedger, owner)
 					expect(childDetails.shareBalances?.noAttoShares).toBe(redeemed.shareBalances?.noAttoShares)
 					await expect(migrateSharesFromUniverse(writer, pool.questionLedgerAddress, 'no', [1n])).rejects.toThrow()
 					return true
@@ -66,10 +78,12 @@ test(
 			await engine.bootstrap()
 			setRuntimeNetworkProfile(engine.getProfile())
 			const client = createPublicClient({ transport: custom({ request: request => engine.request(request) }) })
-			const pools = await loadAllQuestionLedgers(client)
-			expect(pools.some(pool => pool.universeId === 0n && pool.universeHasForked)).toBe(true)
-			expect(pools.some(pool => pool.universeId !== 0n)).toBe(true)
-			const parent = pools.find(pool => pool.universeId === 0n)
+			const seed = engine.getState().seededSecurityPool
+			const questionId = seed?.questionIds[0]
+			if (seed === undefined || questionId === undefined) throw new Error('Missing parent question')
+			const { question: parent } = await loadStatoblastQuestion(client, seed.address, questionId, 0n, false)
+			expect(parent.universeHasForked).toBe(true)
+			expect(childLedger).toBeDefined()
 			const [owner] = await engine.getAccounts()
 			if (parent === undefined || owner === undefined) throw new Error('Missing parent market or wallet')
 			const details = await loadTradingDetails(client, parent.questionLedgerAddress, owner)
@@ -100,7 +114,7 @@ test(
 			const client = createPublicClient({ transport: custom({ request: request => engine.request(request) }) })
 			const [owner] = await engine.getAccounts()
 			if (owner === undefined) throw new Error('Missing auction owner')
-			const securityPool = await discoverSimulationSecurityPool(client, 'simulation', owner)
+			const securityPool = engine.getState().seededSecurityPool?.address
 			if (securityPool === undefined) throw new Error('Missing auction security pool')
 			const fork = await loadSecurityPoolForkSnapshot({ client: securityPoolReadClient(client), securityPool, owner, universeId: 0n, outcomeIndex: 1n })
 			if (fork.branch === undefined) throw new Error('Missing auction branch')

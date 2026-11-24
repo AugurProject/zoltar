@@ -1,61 +1,16 @@
-import { createRegistryIndex, readIncrementalRegistry, type RegistryIndex } from '@zoltar/ui-core-shared/lib/incrementalRegistry.js'
-import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool, statoblast_QuestionLedger_QuestionLedger, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../contractArtifact.js'
-
-import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { errorChain } from '@zoltar/core-shared/errors/errorChain'
-import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
-import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { readOptionalMulticall, readRequiredMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { ListedQuestionLedger } from '../types/contracts.js'
-
-import { requireQuestionLedgerDeploymentTupleArray, type QuestionLedgerDeploymentTuple } from './helpers.js'
-import { requireAddressValue, requireArrayValue } from './decoders.js'
-import { readOptionalMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
-import { getInfraContractAddresses } from './deploymentHelpers.js'
-
+import { statoblast_QuestionLedger_QuestionLedger, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
+import { checkStatoblastEntries } from './statoblastEntries.js'
 import { loadQuestionLedgerDetails } from './questionLedgerSnapshot.js'
 
-const securityPoolFactoryAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
-const securityPoolAbi = statoblast_SecurityPool_SecurityPool.abi
-async function loadQuestionLedgerDeployments(client: ReadClient, startIndex: bigint, count: bigint, blockNumber?: bigint) {
-	if (count === 0n) return [] as readonly QuestionLedgerDeploymentTuple[]
-	return requireQuestionLedgerDeploymentTupleArray(
-		await client.readContract({
-			address: getInfraContractAddresses().securityPoolFactory,
-			abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-			functionName: 'questionLedgerDeploymentsRange',
-			args: [startIndex, count],
-			blockNumber,
-		}),
-		'question ledger deployments range',
-	)
-}
-
-export type UnavailableQuestionLedger = { address: Address; universeId: bigint; questionId: bigint; reason: string }
-
-async function loadListedQuestionLedgers(client: ReadClient, deployments: readonly QuestionLedgerDeploymentTuple[], blockNumber: bigint) {
-	const pools: ListedQuestionLedger[] = []
-	const unavailable: UnavailableQuestionLedger[] = []
-	// Each pool has its own request boundary. Bounded batches prevent a growing
-	// registry from issuing every pool's fee checkpoint at once.
-	for (let start = 0; start < deployments.length; start += 4) {
-		const results = await Promise.allSettled(deployments.slice(start, start + 4).map(deployment => loadQuestionLedgerDetails(client, deployment, blockNumber)))
-		for (const [offset, result] of results.entries()) {
-			const deployment = deployments[start + offset]
-			if (deployment === undefined) throw new Error('Question deployment is missing')
-			if (result.status === 'fulfilled') pools.push(result.value)
-			else unavailable.push({ address: deployment.questionLedger, universeId: deployment.universeId, questionId: deployment.questionId, reason: getErrorMessage(result.reason, 'Question unavailable.') })
-		}
-	}
-	return { pools, unavailable }
-}
-
-type DeploymentRegistryAnchor = Readonly<{ blockHash: `0x${string}`; blockNumber: bigint }>
+type DeploymentRegistryAnchor = Readonly<{ blockHash: `0x${string}`; blockNumber: bigint; timestamp: bigint }>
 
 async function loadDeploymentRegistryAnchor(client: ReadClient): Promise<DeploymentRegistryAnchor> {
 	const block = await client.getBlock()
 	if (block.hash === undefined || block.number === undefined) throw new Error('Question ledger deployment head is missing its canonical identity')
-	return { blockHash: block.hash, blockNumber: block.number }
+	return { blockHash: block.hash, blockNumber: block.number, timestamp: block.timestamp }
 }
 
 async function requireDeploymentRegistryAnchor(client: ReadClient, anchor: DeploymentRegistryAnchor, changedMessage = 'Question ledger deployments changed during discovery') {
@@ -63,178 +18,52 @@ async function requireDeploymentRegistryAnchor(client: ReadClient, anchor: Deplo
 	if (block.hash?.toLowerCase() !== anchor.blockHash.toLowerCase()) throw new Error(changedMessage)
 }
 
-function isCanonicalAnchor(client: ReadClient) {
-	return async (candidate: DeploymentRegistryAnchor) => {
-		const block = await client.getBlock({ blockNumber: candidate.blockNumber })
-		return block.hash?.toLowerCase() === candidate.blockHash.toLowerCase()
+export async function loadStatoblastQuestion(client: ReadClient, pool: Address, questionId: bigint, universeId: bigint, useSessionCache = true, includeSharesFacts = false) {
+	const anchor = await loadDeploymentRegistryAnchor(client)
+	const [checked] = await checkStatoblastEntries(client, [{ pool, questionId, universeId }], anchor.blockNumber, useSessionCache)
+	if (checked?.status === 'failed') throw checked.error
+	if (checked?.status === 'unregistered-question') throw new Error('Question not registered')
+	if (checked?.status === 'unprepared-question') throw new Error('Question pool unavailable')
+	if (checked?.status !== 'question') throw new Error('This is not a Statoblast security pool.')
+	const [question, sharesFacts] = await Promise.all([loadCheckedQuestionLedger(client, checked.ledger, universeId, anchor.blockNumber), includeSharesFacts ? readSharesFacts(client, checked.pool, universeId, anchor.blockNumber).catch(() => undefined) : undefined])
+	await requireDeploymentRegistryAnchor(client, anchor, 'Question changed during refresh.')
+	return { question, sharesFacts, block: { number: anchor.blockNumber, timestamp: anchor.timestamp } }
+}
+
+async function readSharesFacts(client: ReadClient, pool: Address, universeId: bigint, blockNumber: bigint) {
+	const contract = { abi: statoblast_SecurityPool_SecurityPool.abi, address: pool }
+	const [collateral, capacity, annual, purchase, minimum] = await readOptionalMulticall(
+		client,
+		[
+			{ ...contract, functionName: 'collateralToken' },
+			{ ...contract, functionName: 'availableMintCapacity', args: [universeId] },
+			{ ...contract, functionName: 'annualFeeBps' },
+			{ ...contract, functionName: 'purchaseFeeBps' },
+			{ ...contract, functionName: 'minimumPurchaseFeeAttoEth' },
+		],
+		blockNumber,
+	)
+	return {
+		collateral: collateral.status === 'success' ? collateral.result : undefined,
+		capacity: capacity.status === 'success' ? capacity.result : undefined,
+		annualFeeBps: annual.status === 'success' ? annual.result : undefined,
+		purchaseFeeBps: purchase.status === 'success' ? purchase.result : undefined,
+		minimumPurchaseFee: minimum.status === 'success' ? minimum.result : undefined,
 	}
 }
 
-async function loadDeploymentRegistry(client: ReadClient, anchor: DeploymentRegistryAnchor, index: RegistryIndex<QuestionLedgerDeploymentTuple> = createRegistryIndex()): Promise<readonly QuestionLedgerDeploymentTuple[]> {
-	const factory = getInfraContractAddresses().securityPoolFactory
-	return await readIncrementalRegistry({
-		index,
-		key: factory.toLowerCase(),
-		anchor,
-		loadCount: async () => await client.readContract({ address: factory, abi: securityPoolFactoryAbi, functionName: 'questionLedgerDeploymentCount', args: [], blockNumber: anchor.blockNumber }),
-		loadRange: async (start, count) => await loadQuestionLedgerDeployments(client, start, count, anchor.blockNumber),
-		isCanonical: isCanonicalAnchor(client),
-	})
-}
-
-async function loadSecurityPoolRegistry(client: ReadClient, anchor: DeploymentRegistryAnchor): Promise<readonly Address[]> {
-	const factory = getInfraContractAddresses().securityPoolFactory
-	return await readIncrementalRegistry({
-		index: createRegistryIndex<Address>(),
-		key: `${factory.toLowerCase()}:securityPools`,
-		anchor,
-		loadCount: async () => await client.readContract({ address: factory, abi: securityPoolFactoryAbi, functionName: 'securityPoolCount', args: [], blockNumber: anchor.blockNumber }),
-		loadRange: async (start, count) =>
-			requireArrayValue(await client.readContract({ address: factory, abi: securityPoolFactoryAbi, functionName: 'securityPoolsRange', args: [start, count], blockNumber: anchor.blockNumber }), 'registered security pools').map(securityPool => requireAddressValue(securityPool, 'registered security pool')),
-		isCanonical: isCanonicalAnchor(client),
-	})
-}
-
-function applyChildForkActivityHints(pools: ListedQuestionLedger[]) {
-	return pools.map(pool => {
-		if (pool.hasForkActivity) return pool
-		if (!pools.some(candidate => sameAddress(candidate.parent, pool.questionLedgerAddress))) return pool
-		return {
-			...pool,
-			hasForkActivity: true,
-		}
-	})
-}
-
-export async function loadQuestionLedgerListing(client: ReadClient) {
-	const anchor = await loadDeploymentRegistryAnchor(client)
-	const deployments = await loadDeploymentRegistry(client, anchor)
-	const { pools, unavailable } = await loadListedQuestionLedgers(client, deployments, anchor.blockNumber)
-	await requireDeploymentRegistryAnchor(client, anchor)
-	return { pools: applyChildForkActivityHints(pools), unavailable }
-}
-
-export async function loadAllQuestionLedgers(client: ReadClient): Promise<ListedQuestionLedger[]> {
-	return (await loadQuestionLedgerListing(client)).pools
-}
-
-/** Resolves one factory-authenticated question without depending on the question list. */
-export async function loadSelectedQuestionLedger(client: ReadClient, questionLedger: Address): Promise<ListedQuestionLedger> {
-	const anchor = await loadDeploymentRegistryAnchor(client)
-	const blockNumber = anchor.blockNumber
-	const factory = getInfraContractAddresses().securityPoolFactory
-	const pool = { abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedger, blockNumber }
-	const [originId, universeId] = await Promise.all([client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'getQuestionLedgerOriginId', args: [questionLedger], blockNumber }), client.readContract({ ...pool, functionName: 'universeId' })])
-	const registered = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'getQuestionLedger', args: [originId, universeId], blockNumber })
-	if (!sameAddress(registered, questionLedger)) throw new Error('This question is not registered with the configured factory.')
-	const [manager, parent, questionId, multiplier] = await Promise.all([
-		client.readContract({ ...pool, functionName: 'openOraclePriceCoordinator' }),
-		client.readContract({ ...pool, functionName: 'parent' }),
-		client.readContract({ ...pool, functionName: 'questionId' }),
-		client.readContract({ ...pool, functionName: 'statoblastSecurityMultiplierBps' }),
-	])
+async function loadCheckedQuestionLedger(client: ReadClient, questionLedger: Address, universeId: bigint, blockNumber: bigint) {
+	const pool = { abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedger }
+	const [manager, parent, questionId, multiplier] = await readRequiredMulticall(
+		client,
+		[
+			{ ...pool, functionName: 'openOraclePriceCoordinator' },
+			{ ...pool, functionName: 'parent' },
+			{ ...pool, functionName: 'questionId' },
+			{ ...pool, functionName: 'statoblastSecurityMultiplierBps' },
+		],
+		blockNumber,
+	)
 	const priorityFee = await client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: getAddress(manager), functionName: 'initialReportPriorityFeeAttoEthPerGas', blockNumber })
-	const details = await loadQuestionLedgerDetails(client, { questionLedger, openOraclePriceCoordinator: getAddress(manager), parent: getAddress(parent), universeId, questionId, statoblastSecurityMultiplierBps: multiplier, initialReportPriorityFeeAttoEthPerGas: priorityFee }, blockNumber)
-	await requireDeploymentRegistryAnchor(client, anchor)
-	return details
-}
-
-export type RegisteredSecurityPool = { securityPool: Address; questionCount: number }
-
-type ListingRead = { status: 'success'; result: unknown } | { status: 'failure' }
-// Listing reads go out in registry-sized pages, at most this many requests at once, as registry pages do; a growing
-// registry then never outgrows the request size a provider accepts.
-const LISTING_PAGE_SIZE = 100
-const LISTING_READ_CONCURRENCY = 4
-
-function securityPoolListingCalls(securityPool: Address, universeId: bigint) {
-	return [
-		{ address: securityPool, abi: securityPoolAbi, functionName: 'capitalLedger', args: [universeId] },
-		{ address: securityPool, abi: securityPoolAbi, functionName: 'questionCount', args: [] },
-	]
-}
-
-/** A row for an address that answers as a security pool with a ledger in this universe, or `undefined` for anything else. */
-function securityPoolListing(securityPool: Address, ledger: ListingRead | undefined, questions: ListingRead | undefined): RegisteredSecurityPool | undefined {
-	if (ledger?.status !== 'success' || questions?.status !== 'success') return undefined
-	if (typeof ledger.result !== 'string' || sameAddress(ledger.result, zeroAddress) || typeof questions.result !== 'bigint') return undefined
-	return { securityPool, questionCount: Number(questions.result) }
-}
-
-/** The error and its causes, plus a node error that a wallet wraps as JSON-RPC `data` (MetaMask's "Internal JSON-RPC error."). */
-function* reportedErrors(error: unknown) {
-	for (const current of errorChain(error)) {
-		yield current
-		if ('data' in current && typeof current.data === 'object' && current.data !== null) yield* errorChain(current.data)
-	}
-}
-
-/**
- * The node ran the calls and they failed: a revert or exhausted gas. A request that got no answer, such as an HTTP error,
- * a timeout or a lost connection, is not one, and neither is empty return data: Multicall3 always returns encoded
- * results or reverts, so empty data means the node or the deployment is at fault, not a registered contract.
- */
-function isExecutionFailure(error: unknown) {
-	return [...reportedErrors(error)].some(current => {
-		if (current instanceof Error && current.name === 'ContractFunctionRevertedError') return true
-		// An HTTP status arrives in the same field as a JSON-RPC error code, but then the node never ran the calls.
-		if (!('code' in current) || typeof current.code !== 'number' || (current.code >= 100 && current.code < 600)) return false
-		if (!('message' in current) || typeof current.message !== 'string') return false
-		// Nodes word these differently, such as "out of gas" and "EVM error OutOfGas".
-		const message = current.message.toLowerCase().replaceAll(/[\s_-]/g, '')
-		return message.includes('revert') || message.includes('outofgas') || message.includes('gasrequiredexceeds') || message.includes('invalidopcode')
-	})
-}
-
-/**
- * Security pools that open in this universe, most recently registered first. The factory registers a security pool when its
- * setup configures its price feed, so a security pool still in setup can only be opened by its address. The factory
- * accepts registration only from security pools it deployed. Listings also verify the capital ledger for this universe;
- * a security pool keeps one ledger per universe it can open in.
- */
-export async function loadRegisteredSecurityPools(client: ReadClient, universeId: bigint): Promise<RegisteredSecurityPool[]> {
-	const anchor = await loadDeploymentRegistryAnchor(client)
-	const securityPools = await loadSecurityPoolRegistry(client, anchor)
-	const listings = new Map<Address, RegisteredSecurityPool>()
-	// Every request ends with this call. A call starved of gas takes almost all that is left with it, so when this one
-	// succeeds, no call before it was starved and each failed address failed on its own.
-	const gasWitness = { address: getInfraContractAddresses().securityPoolFactory, abi: securityPoolFactoryAbi, functionName: 'securityPoolCount', args: [] }
-	let reading = 0
-	const queued: (() => void)[] = []
-	const read = async (addresses: readonly Address[]): Promise<readonly ListingRead[] | undefined> => {
-		while (reading >= LISTING_READ_CONCURRENCY) await new Promise<void>(resolve => queued.push(resolve))
-		reading += 1
-		try {
-			return await readOptionalMulticall(client, [...addresses.flatMap(securityPool => securityPoolListingCalls(securityPool, universeId)), gasWitness], anchor.blockNumber)
-		} catch (error) {
-			// Only a failure the node reports for the calls is put down to a registered contract; anything else fails the list.
-			if (!isExecutionFailure(error)) throw error
-			return undefined
-		} finally {
-			reading -= 1
-			queued.shift()?.()
-		}
-	}
-	// Each set of addresses is read in one batched request at the anchor block. Any contract can register, and a request's
-	// calls share its gas, so one contract can fail the whole request or starve the calls after it.
-	const settle = async (addresses: readonly Address[]): Promise<void> => {
-		const reads = await read(addresses)
-		const answered = addresses.map((_, index) => reads?.[2 * index]?.status === 'success' && reads[2 * index + 1]?.status === 'success')
-		for (const [index, securityPool] of addresses.entries()) {
-			const listing = answered[index] ? securityPoolListing(securityPool, reads?.[2 * index], reads?.[2 * index + 1]) : undefined
-			if (listing !== undefined) listings.set(securityPool, listing)
-		}
-		if (reads?.[2 * addresses.length]?.status === 'success') return
-		// Otherwise a call that failed before a later success still had gas, so its address failed on its own and is
-		// skipped. The calls after the last success may have been starved by an earlier contract, so they are read again.
-		const unanswered = addresses.slice(answered.lastIndexOf(true) + 1)
-		if (unanswered.length === 0 || addresses.length === 1) return
-		if (unanswered.length < addresses.length) return await settle(unanswered)
-		// A set that got no answer at all is split, so every round makes progress and one contract costs a few requests.
-		const middle = Math.ceil(addresses.length / 2)
-		await Promise.all([settle(addresses.slice(0, middle)), settle(addresses.slice(middle))])
-	}
-	await Promise.all(Array.from({ length: Math.ceil(securityPools.length / LISTING_PAGE_SIZE) }, (_, page) => settle(securityPools.slice(page * LISTING_PAGE_SIZE, (page + 1) * LISTING_PAGE_SIZE))))
-	await requireDeploymentRegistryAnchor(client, anchor, 'Security pools changed during discovery')
-	return securityPools.flatMap(securityPool => listings.get(securityPool) ?? []).reverse()
+	return await loadQuestionLedgerDetails(client, { questionLedger, openOraclePriceCoordinator: getAddress(manager), parent: getAddress(parent), universeId, questionId, statoblastSecurityMultiplierBps: multiplier, initialReportPriorityFeeAttoEthPerGas: priorityFee }, blockNumber)
 }

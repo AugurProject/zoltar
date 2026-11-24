@@ -16,6 +16,7 @@ type UseProtocolAppShellParameters = {
 	/** Re-reads the environment from the current location; the shell passes a commit guard while a transaction may be in flight. */
 	initializeEnvironment: (options?: InitializeEnvironmentOptions) => Promise<unknown>
 	isDeploymentRoute: boolean
+	autoRefreshChainClock?: boolean
 	onchainStateDependencies: UseOnchainStateDependencies
 	/** Runs whenever the environment is replaced, either by the wallet network coordinator or by an explicit refresh. */
 	onEnvironmentCommitted?: () => void
@@ -29,9 +30,10 @@ type OverviewWalletProps = Pick<
 >
 
 /** The application shell Zoltar and Statoblast share on the protocol on-chain runtime: environment runtime, deployment flow, merged notices, and the header wallet controls. Trading keeps its own wallet session and composes the shared header panel directly. */
-export function useProtocolAppShell({ deploymentRoute = {}, initializeEnvironment, isDeploymentRoute, onchainStateDependencies, onEnvironmentCommitted, onRefresh }: UseProtocolAppShellParameters) {
+export function useProtocolAppShell({ deploymentRoute = {}, initializeEnvironment, isDeploymentRoute, autoRefreshChainClock = true, onchainStateDependencies, onEnvironmentCommitted, onRefresh }: UseProtocolAppShellParameters) {
 	const runtime = useProtocolOnchainRuntime({
 		enableChainClock: !isDeploymentRoute,
+		autoRefreshChainClock,
 		onchainStateDependencies,
 		replaceEnvironment: async canCommit => {
 			let commitAllowed = false

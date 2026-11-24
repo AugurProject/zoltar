@@ -2,17 +2,15 @@ import type { AccountState, TradingFormState } from '../types/app.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ListedQuestionLedger, TradingActionResult, TradingDetails } from '../types/contracts.js'
 import type { QuestionLedgerStateModel } from './question-ledgers/lib/questionLedgerState.js'
-import type { UiRepPriceSource } from './question-ledgers/lib/repPriceSource.js'
+import type { RepPriceSource } from '@zoltar/ui-core-shared/lib/repPriceSource.js'
 
 export type * from '@zoltar/ui-core-shared/types/components.js'
 
 type RepPerEthPriceProps = {
 	repPerEthPrice: bigint | undefined
-	repPerEthSource: UiRepPriceSource | undefined
+	repPerEthSource: (RepPriceSource | 'open-oracle') | undefined
 	repPerEthSourceUrl: string | undefined
 }
-
-export type QuestionLedgersView = 'browse' | 'operate' | 'universes' | 'migrate'
 
 type TradingRouteContentProps = {
 	accountState: AccountState
@@ -34,6 +32,7 @@ type TradingRouteContentProps = {
 } & RepPerEthPriceProps
 
 export type TradingSectionProps = TradingRouteContentProps & {
+	requestedSharesAction?: 'mint' | 'redeem' | undefined
 	embedInCard?: boolean
 	poolState?: QuestionLedgerStateModel | undefined
 	showQuestionLedgerAddressInput?: boolean

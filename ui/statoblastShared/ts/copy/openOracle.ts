@@ -202,10 +202,6 @@ export const priceExpiredDuringReview = 'Price expired while reviewing. Review s
 export const priceSettlementUnconfirmed = 'Report settled; price acceptance unconfirmed'
 export const priceSettlementUnconfirmedDetail = 'The security pool did not confirm accepting this price. Check the security pool oracle before using it.'
 
-export const priceReports = 'Price reports'
-export const reportStatus = 'Report status'
-export const selectPriceReport = 'Select a price report'
-export const priceReportNotFound = 'Price report not found'
 export const reportAlreadySettled = 'This report is already settled.'
 export const reportMissingInitialReport = 'This report is invalid because its initial report is missing.'
 

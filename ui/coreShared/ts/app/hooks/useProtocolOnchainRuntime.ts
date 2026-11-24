@@ -4,12 +4,25 @@ import { buildProtocolHookConfigs, useProtocolAppRuntime } from './useProtocolAp
 
 type CommitGuard = () => boolean
 
-export function useProtocolOnchainRuntime({ enableChainClock, onEnvironmentCommitted, onchainStateDependencies, replaceEnvironment }: { enableChainClock: boolean; onEnvironmentCommitted?(): void; onchainStateDependencies: UseOnchainStateDependencies; replaceEnvironment(canCommit: CommitGuard): Promise<boolean> }) {
+export function useProtocolOnchainRuntime({
+	enableChainClock,
+	autoRefreshChainClock = true,
+	onEnvironmentCommitted,
+	onchainStateDependencies,
+	replaceEnvironment,
+}: {
+	enableChainClock: boolean
+	autoRefreshChainClock?: boolean
+	onEnvironmentCommitted?(): void
+	onchainStateDependencies: UseOnchainStateDependencies
+	replaceEnvironment(canCommit: CommitGuard): Promise<boolean>
+}) {
 	const runtime = useProtocolAppRuntime({ replaceEnvironment, ...(onEnvironmentCommitted === undefined ? {} : { onEnvironmentCommitted }) })
 	const onchain = useOnchainState(
 		{
 			activeEnvironmentNonce: runtime.activeEnvironmentNonce,
 			enableChainClock,
+			autoRefreshChainClock,
 			...(runtime.followSupportedWalletNetwork ? { onSupportedNetworkChange: () => void runtime.supportedNetworkChangeCoordinator.handleSupportedNetworkChange() } : {}),
 		},
 		onchainStateDependencies,

@@ -15,7 +15,7 @@ import { getSecurityPoolPriceWarning } from '../lib/priceWarning.js'
 import * as copy from '../../../copy/securityPoolPrice.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
-export function SecurityPoolPriceReport(parameters: SecurityPoolPriceParameters) {
+export function SecurityPoolPriceReport({ returnFundsOnly = false, ...parameters }: SecurityPoolPriceParameters & { returnFundsOnly?: boolean }) {
 	const model = useSecurityPoolPrice(parameters)
 	const scoped = copy.scopes[parameters.scope]
 	// Only a branch has a preparation window and a feed to prepare; the account's universe already shows its price expiry.
@@ -56,83 +56,87 @@ export function SecurityPoolPriceReport(parameters: SecurityPoolPriceParameters)
 					</MetricField>
 				) : undefined}
 			</MetricGrid>
-			{branch ? <SecurityPoolButton model={parameters.actions} action={model.actionId('prepare')} label={copy.prepare} pendingLabel={copy.preparing} reason={model.prepareReason} onClick={model.prepare} /> : undefined}
-			<MetricGrid>
-				<div className='initial-price-input'>
-					<SecurityPoolInput label={copy.price} value={model.priceInput} onChange={model.setPrice} disabled={disabled} numeric describedBy={priceWarning === undefined ? undefined : priceWarningId} />
-					<div aria-live='polite' className='field-error-live-region'>
-						{priceWarning === undefined ? undefined : <UserMessage id={priceWarningId} placement='field' tone='warning' detail={priceWarning} />}
-					</div>
-				</div>
-				<SecurityPoolInput label={collateralCopy.reportStake(model.collateral.symbol)} hint={copy.wethHint} value={model.wethInput} onChange={model.setWeth} disabled={disabled} numeric />
-				<MetricField label={collateralCopy.minimumReportStake(model.collateral.symbol)} loading={model.loading}>
-					<CurrencyValue value={model.minimumWethAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
-				</MetricField>
-				<MetricField label={scoped.requiredRep}>
-					<CurrencyValue value={model.funding?.rep} suffix={common.rep} />
-				</MetricField>
-				<MetricField label={copy.currentExposure} loading={model.loading}>
-					<CurrencyValue value={observation?.currentExposureAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
-				</MetricField>
-				<MetricField label={copy.reportCoverage}>
-					<CurrencyValue value={model.funding?.coveredExposureAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
-				</MetricField>
-				<MetricField label={copy.growthHeadroom}>
-					<CurrencyValue value={model.funding?.growthHeadroomAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
-				</MetricField>
-				<MetricField label={copy.bounty} loading={model.loading}>
-					<CurrencyValue value={observation?.bounty} suffix={common.eth} />
-				</MetricField>
-				<MetricField label={collateralCopy.walletBalance(model.collateral.symbol)} loading={model.loading}>
-					<CurrencyValue value={observation?.wethBalanceAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
-				</MetricField>
-				<MetricField label={scoped.walletRep} loading={model.loading}>
-					<CurrencyValue value={observation?.repBalanceAttoRep} suffix={common.rep} />
-				</MetricField>
-				{model.collateral.symbol === collateralCopy.weth ? (
-					<MetricField label={copy.wrapAmount}>
-						<CurrencyValue value={model.funding?.wrap} suffix={common.eth} />
-					</MetricField>
-				) : undefined}
-			</MetricGrid>
-			{model.collateral.symbol === collateralCopy.weth ? <SecurityPoolButton model={parameters.actions} action={model.actionId('wrap')} label={copy.wrap} pendingLabel={copy.wrapping} reason={model.wrapReason} onClick={model.wrap} /> : undefined}
-			<TokenApprovalControl
-				actionLabel={scoped.request}
-				allowanceError={model.fundingReadError}
-				allowanceLoading={model.loading}
-				approvedAmount={observation?.wethAllowanceAttoEth}
-				disabled={disabled}
-				guardMessage={model.fundingReason}
-				onApprove={amount => {
-					if (amount !== undefined) void model.approve('weth', amount)
-				}}
-				pending={parameters.actions.busy === model.actionId('approveWeth')}
-				pendingLabel={common.formatApprovingToken(model.collateral.symbol)}
-				requiredAmount={model.funding?.weth}
-				resetKey={`${model.draftKey}:${model.priceInput}:${model.wethInput}:weth`}
-				tokenSymbol={model.collateral.symbol}
-				tokenUnits={model.collateral.decimals}
-			/>
-			<TokenApprovalControl
-				actionLabel={scoped.request}
-				allowanceError={model.fundingReadError}
-				allowanceLoading={model.loading}
-				approvedAmount={observation?.repAllowanceAttoRep}
-				disabled={disabled}
-				guardMessage={model.fundingReason}
-				onApprove={amount => {
-					if (amount !== undefined) void model.approve('rep', amount)
-				}}
-				pending={parameters.actions.busy === model.actionId('approveRep')}
-				pendingLabel={common.approvingRep}
-				requiredAmount={model.funding?.rep}
-				resetKey={`${model.draftKey}:${model.priceInput}:${model.wethInput}:rep`}
-				tokenSymbol={common.rep}
-				tokenUnits={18}
-			/>
-			<UserMessage tone='warning' detail={scoped.requestWarning} />
-			<UserMessage detail={copy.coverageWarning} />
-			<SecurityPoolButton model={parameters.actions} action={model.actionId('request')} label={scoped.request} pendingLabel={scoped.requesting} reason={model.requestReason} onClick={model.request} />
+			{!returnFundsOnly && (
+				<>
+					{branch ? <SecurityPoolButton model={parameters.actions} action={model.actionId('prepare')} label={copy.prepare} pendingLabel={copy.preparing} reason={model.prepareReason} onClick={model.prepare} /> : undefined}
+					<MetricGrid>
+						<div className='initial-price-input'>
+							<SecurityPoolInput label={copy.price} value={model.priceInput} onChange={model.setPrice} disabled={disabled} numeric describedBy={priceWarning === undefined ? undefined : priceWarningId} />
+							<div aria-live='polite' className='field-error-live-region'>
+								{priceWarning === undefined ? undefined : <UserMessage id={priceWarningId} placement='field' tone='warning' detail={priceWarning} />}
+							</div>
+						</div>
+						<SecurityPoolInput label={collateralCopy.reportStake(model.collateral.symbol)} hint={copy.wethHint} value={model.wethInput} onChange={model.setWeth} disabled={disabled} numeric />
+						<MetricField label={collateralCopy.minimumReportStake(model.collateral.symbol)} loading={model.loading}>
+							<CurrencyValue value={model.minimumWethAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
+						</MetricField>
+						<MetricField label={scoped.requiredRep}>
+							<CurrencyValue value={model.funding?.rep} suffix={common.rep} />
+						</MetricField>
+						<MetricField label={copy.currentExposure} loading={model.loading}>
+							<CurrencyValue value={observation?.currentExposureAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
+						</MetricField>
+						<MetricField label={copy.reportCoverage}>
+							<CurrencyValue value={model.funding?.coveredExposureAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
+						</MetricField>
+						<MetricField label={copy.growthHeadroom}>
+							<CurrencyValue value={model.funding?.growthHeadroomAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
+						</MetricField>
+						<MetricField label={copy.bounty} loading={model.loading}>
+							<CurrencyValue value={observation?.bounty} suffix={common.eth} />
+						</MetricField>
+						<MetricField label={collateralCopy.walletBalance(model.collateral.symbol)} loading={model.loading}>
+							<CurrencyValue value={observation?.wethBalanceAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
+						</MetricField>
+						<MetricField label={scoped.walletRep} loading={model.loading}>
+							<CurrencyValue value={observation?.repBalanceAttoRep} suffix={common.rep} />
+						</MetricField>
+						{model.collateral.symbol === collateralCopy.weth ? (
+							<MetricField label={copy.wrapAmount}>
+								<CurrencyValue value={model.funding?.wrap} suffix={common.eth} />
+							</MetricField>
+						) : undefined}
+					</MetricGrid>
+					{model.collateral.symbol === collateralCopy.weth ? <SecurityPoolButton model={parameters.actions} action={model.actionId('wrap')} label={copy.wrap} pendingLabel={copy.wrapping} reason={model.wrapReason} onClick={model.wrap} /> : undefined}
+					<TokenApprovalControl
+						actionLabel={scoped.request}
+						allowanceError={model.fundingReadError}
+						allowanceLoading={model.loading}
+						approvedAmount={observation?.wethAllowanceAttoEth}
+						disabled={disabled}
+						guardMessage={model.fundingReason}
+						onApprove={amount => {
+							if (amount !== undefined) void model.approve('weth', amount)
+						}}
+						pending={parameters.actions.busy === model.actionId('approveWeth')}
+						pendingLabel={common.formatApprovingToken(model.collateral.symbol)}
+						requiredAmount={model.funding?.weth}
+						resetKey={`${model.draftKey}:${model.priceInput}:${model.wethInput}:weth`}
+						tokenSymbol={model.collateral.symbol}
+						tokenUnits={model.collateral.decimals}
+					/>
+					<TokenApprovalControl
+						actionLabel={scoped.request}
+						allowanceError={model.fundingReadError}
+						allowanceLoading={model.loading}
+						approvedAmount={observation?.repAllowanceAttoRep}
+						disabled={disabled}
+						guardMessage={model.fundingReason}
+						onApprove={amount => {
+							if (amount !== undefined) void model.approve('rep', amount)
+						}}
+						pending={parameters.actions.busy === model.actionId('approveRep')}
+						pendingLabel={common.approvingRep}
+						requiredAmount={model.funding?.rep}
+						resetKey={`${model.draftKey}:${model.priceInput}:${model.wethInput}:rep`}
+						tokenSymbol={common.rep}
+						tokenUnits={18}
+					/>
+					<UserMessage tone='warning' detail={scoped.requestWarning} />
+					<UserMessage detail={copy.coverageWarning} />
+					<SecurityPoolButton model={parameters.actions} action={model.actionId('request')} label={scoped.request} pendingLabel={scoped.requesting} reason={model.requestReason} onClick={model.request} />
+				</>
+			)}
 			<SecurityPoolInput label={copy.reportId} hint={copy.reportHint} value={model.reportInput} onChange={model.setReportId} disabled={disabled} />
 			<MetricGrid>
 				<MetricField label={copy.reportState}>{reportStatus}</MetricField>
@@ -150,7 +154,7 @@ export function SecurityPoolPriceReport(parameters: SecurityPoolPriceParameters)
 					</>
 				)}
 				<MetricField label={copy.sponsor}>
-					<AddressValue address={report?.sponsor} />
+					<AddressValue longAbbreviation address={report?.sponsor} />
 				</MetricField>
 				<MetricField label={collateralCopy.released(model.collateral.symbol)}>
 					<CurrencyValue value={report?.wethCredit} suffix={model.collateral.symbol} units={model.collateral.decimals} />

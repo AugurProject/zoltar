@@ -36,7 +36,7 @@ export function createTradingSuccessPresentation(result: TradingActionResult) {
 		...(detail === undefined ? {} : { detail }),
 		hash: result.hash,
 		rows: [
-			{ identityKey: 'security-pool', label: transactionCopy.questionLedger, value: <AddressValue address={result.questionLedgerAddress} /> },
+			{ identityKey: 'security-pool', label: transactionCopy.questionLedger, value: <AddressValue longAbbreviation address={result.questionLedgerAddress} /> },
 			...(result.shareOutcome === undefined ? [] : [{ identityKey: 'outcome', label: transactionCopy.shareOutcome, value: getReportingOutcomeLabel(result.shareOutcome) }]),
 			...(result.targetOutcomeIndexes === undefined ? [] : [{ label: transactionCopy.targetOutcomeIndexes, value: result.targetOutcomeIndexes.join(', ') }]),
 		],

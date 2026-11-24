@@ -14,42 +14,20 @@ async function mount() {
 	lifecycle.trackRendered(hook)
 	return hook
 }
-/** Opens the bare security pools route with automatic discovery waiting on the returned log request. */
-function installPendingDiscovery() {
+test('the bare simulation route opens the seeded security pool without querying logs', async () => {
 	window.history.replaceState({}, '', '#/security-pools')
 	const source = capitalClient()
-	const logs = createDeferred<never[]>()
-	const client = source.client.extend(() => ({ getLogs: () => logs.promise }))
-	installActiveEnvironmentForTesting({ ...source.backend, id: 'simulation', createReadClient: () => client })
-	return logs
-}
-test.each(['empty', 'failed'])('automatic security pool discovery exposes its pending state and a truthful %s result', async result => {
-	const logs = installPendingDiscovery()
+	let logRequests = 0
+	const client = source.client.extend(() => ({
+		getLogs: async () => {
+			logRequests++
+			return []
+		},
+	}))
+	installActiveEnvironmentForTesting({ ...source.backend, id: 'simulation', seededSecurityPool: { address: securityPool, questionIds: [] }, createReadClient: () => client })
 	const hook = await mount()
-	try {
-		expect(hook.state().discovering).toBe(true)
-		expect(hook.state().loading).toBe(false)
-		await act(() => (result === 'empty' ? logs.resolve([]) : logs.reject(new Error('Discovery unavailable.'))))
-		await waitFor(() => expect(hook.state().discovering).toBe(false))
-		expect(hook.state().managerInput).toBe('')
-		expect(hook.state().snapshot).toBeUndefined()
-		expect(hook.state().error).toBe(result === 'failed' ? 'Unable to discover the security pool. Reason: Discovery unavailable.' : undefined)
-	} finally {
-		logs.resolve([])
-	}
-})
-test('disabling the security pool clears discovery status and ignores a late discovery failure', async () => {
-	const logs = installPendingDiscovery()
-	const hook = await mount()
-	try {
-		expect(hook.state().discovering).toBe(true)
-		await hook.setProps({ enabled: false })
-		expect(hook.state().discovering).toBe(false)
-		await act(() => logs.reject(new Error('Late discovery failure.')))
-		expect(hook.state().error).toBeUndefined()
-	} finally {
-		logs.resolve([])
-	}
+	await waitFor(() => expect(hook.state().snapshot?.securityPool).toBe(securityPool))
+	expect(logRequests).toBe(0)
 })
 test('a wallet switch updates an automatic owner and preserves an explicit selection', async () => {
 	window.history.replaceState({}, '', '#/security-pools')
@@ -255,7 +233,7 @@ test('same-context authentication preserves presentation only and replaces it wi
 	expect(hook.state().presentationSnapshot?.positions).toEqual([])
 })
 
-test.each(['failure', 'incomplete setup'])('a resolved %s clears retained presentation', async result => {
+test.each(['failure', 'incomplete setup'])('retained presentation distinguishes a %s from verified account data', async result => {
 	const source = capitalClient()
 	let fail = false
 	const client = source.client.extend(() => ({
@@ -274,9 +252,13 @@ test.each(['failure', 'incomplete setup'])('a resolved %s clears retained presen
 	await hook.setProps({ enabled: true })
 	await waitFor(() => expect(hook.state().loading).toBe(false))
 	expect(hook.state().snapshot).toBeUndefined()
-	expect(hook.state().presentationSnapshot).toBeUndefined()
-	if (result === 'failure') expect(hook.state().error).toContain('Account read failed.')
-	else expect(hook.state().setup?.stage).toBe(1)
+	if (result === 'failure') {
+		expect(hook.state().error).toContain('Account read failed.')
+		expect(hook.state().presentationSnapshot).toBeDefined()
+	} else {
+		expect(hook.state().setup?.stage).toBe(1)
+		expect(hook.state().presentationSnapshot).toBeUndefined()
+	}
 })
 
 test.each(['securityPool', 'owner', 'universe', 'environment', 'backend replacement', 'backend reinstall', 'bootstrap reset'])('changing %s clears retained presentation immediately', async change => {

@@ -269,7 +269,7 @@ describe('ReportingSection', () => {
 				createProps({
 					currentTimestamp: 1000n - remaining,
 					reportingDetails: createReportingDetails({ currentTime: 1000n - remaining, escalationEndTime: 1000n, viewerWalletRepAllowanceAttoRep: rep(10n), viewerWalletRepBalanceAttoRep: rep(10n) }),
-					reportingForm: createReportingForm({ selectedOutcome: 'yes', reportAmount: '5', contributionFunding: 'wallet' }),
+					reportingForm: createReportingForm({ selectedOutcome: 'yes', reportAmount: '5' }),
 				}),
 			),
 		)
@@ -287,7 +287,7 @@ describe('ReportingSection', () => {
 				createProps({
 					currentTimestamp: 1000n - remaining,
 					reportingDetails: createReportingDetails({ currentTime: 1000n - remaining, escalationEndTime: 1000n, viewerWalletRepAllowanceAttoRep: 0n, viewerWalletRepBalanceAttoRep: rep(10n) }),
-					reportingForm: createReportingForm({ selectedOutcome: 'yes', reportAmount: '5', contributionFunding: 'wallet' }),
+					reportingForm: createReportingForm({ selectedOutcome: 'yes', reportAmount: '5' }),
 				}),
 			),
 		)
@@ -353,8 +353,8 @@ describe('ReportingSection', () => {
 	}
 
 	test('keeps wallet approval visible and disabled when its allowance is sufficient', async () => {
-		const details = createReportingDetails({ contributionFunding: 'wallet', viewerWalletRepAllowanceAttoRep: rep(100n), viewerWalletRepBalanceAttoRep: rep(100n) })
-		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details, reportingForm: createReportingForm({ contributionFunding: 'wallet', reportAmount: '10', selectedOutcome: 'yes' }) })))
+		const details = createReportingDetails({ viewerWalletRepAllowanceAttoRep: rep(100n), viewerWalletRepBalanceAttoRep: rep(100n) })
+		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details, reportingForm: createReportingForm({ reportAmount: '10', selectedOutcome: 'yes' }) })))
 		cleanupRenderedComponent = rendered.cleanup
 		expectTransactionButtonDisabled(document.body, 'Approval satisfied')
 		expect(document.body.textContent).toContain('After this report, check back before')
@@ -472,9 +472,9 @@ describe('ReportingSection', () => {
 			// No can never lead Yes at the threshold, so the minimum preset is not a "Min to lead".
 			expect(queries.queryByRole('button', { name: /^Min to lead/ })).toBeNull()
 			expect(queries.getByRole('button', { name: 'Fill side & trigger fork (8.00 REP)' })).not.toBeNull()
-			const maxReward = requireButton(queries.getByRole('button', { name: /^Max reward/ }))
+			const maxReward = requireButton(queries.getByRole('button', { name: /^Full bonus share/ }))
 			expect(maxReward.disabled).toBe(true)
-			expect(maxReward.title).toBe('Max reward is unavailable because matching the other side would trigger the universe fork.')
+			expect(maxReward.title).toBe('Full bonus share is unavailable because matching the other side would trigger the universe fork.')
 		})
 
 		test('a fork-triggering amount needs an explicit confirmation and names the fork on the action', async () => {
@@ -510,7 +510,6 @@ describe('ReportingSection', () => {
 
 		test('wallet-funded fork reports group amounts like the warning and ask for both the confirmation and the approval', async () => {
 			const details = createDynamicReportingDetails({
-				contributionFunding: 'wallet',
 				nonDecisionThresholdAttoRep: rep(225_000n),
 				sides: [
 					{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
@@ -521,7 +520,7 @@ describe('ReportingSection', () => {
 				viewerWalletRepAllowanceAttoRep: 0n,
 				viewerWalletRepBalanceAttoRep: rep(300_000n),
 			})
-			const rendered = await renderIntoDocument(<ReportingSectionHarness initialProps={{ reportingDetails: details, reportingForm: createReportingForm({ contributionFunding: 'wallet', reportAmount: '', selectedOutcome: 'no' }) }} />)
+			const rendered = await renderIntoDocument(<ReportingSectionHarness initialProps={{ reportingDetails: details, reportingForm: createReportingForm({ reportAmount: '', selectedOutcome: 'no' }) }} />)
 			cleanupRenderedComponent = rendered.cleanup
 			const queries = within(document.body)
 			await act(() => {
@@ -578,7 +577,7 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Active' })).toBeNull()
 		expect(document.body.querySelector('[aria-current=step]')?.textContent).toBe('Response window')
 		expect(documentQueries.getByRole('button', { name: /^(Min to lead|Minimum report)/ })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: /^Max reward/ })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: /^Full bonus share/ })).not.toBeNull()
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
 		expect((documentQueries.getByRole('radio', { name: /^Yes/ }) as HTMLButtonElement).textContent?.includes('Selected')).toBe(true)
 		expect(document.body.textContent?.includes('Your positions')).toBe(true)
@@ -643,7 +642,7 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByText('Opens In')).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Escalation metrics' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Report outcome' })).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Settle escalation deposits' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Claim reporting deposits' })).toBeNull()
 		expect(document.body.textContent?.includes(getReportingLockedUntilMessage(100n, 50n))).toBe(true)
 	})
 
@@ -922,7 +921,6 @@ describe('ReportingSection', () => {
 						approvalCalls += 1
 					},
 					reportingDetails: (status === 'active' ? createReportingDetails : createNotStartedReportingDetails)({
-						contributionFunding: 'wallet',
 						viewerWalletRepAllowanceAttoRep: 0n,
 						viewerWalletRepBalanceAttoRep: rep(10n),
 					}),
@@ -952,7 +950,7 @@ describe('ReportingSection', () => {
 	})
 
 	test('states the missing report amount, and a lock still takes priority over it', async () => {
-		const details = createReportingDetails({ contributionFunding: 'wallet', viewerWalletRepAllowanceAttoRep: 0n, viewerWalletRepBalanceAttoRep: rep(10n) })
+		const details = createReportingDetails({ viewerWalletRepAllowanceAttoRep: 0n, viewerWalletRepBalanceAttoRep: rep(10n) })
 		const form = createReportingForm({ reportAmount: '', selectedOutcome: 'yes' })
 		const missing = await renderIntoDocument(<ReportingSectionHarness initialProps={{ reportingDetails: details, reportingForm: form }} />)
 		expect(document.body.querySelector('.reporting-shared-action-region')?.textContent).toContain('Enter a report amount.')
@@ -970,7 +968,7 @@ describe('ReportingSection', () => {
 		const rendered = await renderIntoDocument(
 			<ReportingSectionHarness
 				initialProps={{
-					reportingDetails: createReportingDetails({ contributionFunding: 'wallet', viewerWalletRepAllowanceAttoRep: 0n, viewerWalletRepBalanceAttoRep: rep(10n) }),
+					reportingDetails: createReportingDetails({ viewerWalletRepAllowanceAttoRep: 0n, viewerWalletRepBalanceAttoRep: rep(10n) }),
 					reportingForm: createReportingForm({ reportAmount: '5', selectedOutcome: 'yes' }),
 				}}
 			/>,
@@ -999,7 +997,7 @@ describe('ReportingSection', () => {
 					onApproveReportingRep: amount => {
 						approvedAmounts.push(amount)
 					},
-					reportingDetails: createReportingDetails({ contributionFunding: 'wallet', viewerWalletRepAllowanceAttoRep: 0n, viewerWalletRepBalanceAttoRep: rep(10n) }),
+					reportingDetails: createReportingDetails({ viewerWalletRepAllowanceAttoRep: 0n, viewerWalletRepBalanceAttoRep: rep(10n) }),
 					reportingForm: createReportingForm({ reportAmount: '5', selectedOutcome: 'yes' }),
 				}}
 			/>,
@@ -1021,7 +1019,6 @@ describe('ReportingSection', () => {
 			<ReportingSectionHarness
 				initialProps={{
 					reportingDetails: createReportingDetails({
-						contributionFunding: 'wallet',
 						viewerWalletRepAllowanceAttoRep: rep(10n),
 						viewerWalletRepBalanceAttoRep: rep(10n),
 					}),
@@ -1430,7 +1427,7 @@ describe('ReportingSection', () => {
 		expect((documentQueries.getByRole('textbox', { name: /^Report amount/ }) as HTMLInputElement).disabled).toBe(true)
 		expect((documentQueries.getByRole('button', { name: 'Max' }) as HTMLButtonElement).disabled).toBe(true)
 		expect(requireButton(documentQueries.getByRole('button', { name: /^(Min to lead|Minimum report)/ })).disabled).toBe(true)
-		expect(requireButton(documentQueries.getByRole('button', { name: /^Max reward/ })).disabled).toBe(true)
+		expect(requireButton(documentQueries.getByRole('button', { name: /^Full bonus share/ })).disabled).toBe(true)
 		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'))
 	})
 
@@ -1828,7 +1825,7 @@ describe('ReportingSection', () => {
 		if (!(amountInput instanceof HTMLInputElement)) throw new Error('Contribution input is unavailable')
 		expect(amountInput.value).toBe('1.100000000000000001')
 		await act(() => {
-			fireEvent.click(queries.getByRole('button', { name: 'Max reward (1.65 REP)' }))
+			fireEvent.click(queries.getByRole('button', { name: 'Full bonus share (1.65 REP)' }))
 		})
 		expect(amountInput.value).toBe('1.65')
 	})
@@ -1838,7 +1835,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Max reward (7.00 REP)' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Full bonus share (7.00 REP)' }))
 		})
 
 		const amountInput = within(document.body).getByRole('textbox', { name: /^Report amount/ })
@@ -1939,7 +1936,7 @@ describe('ReportingSection', () => {
 		expect((amountInput as HTMLInputElement).value).toBe('3')
 	})
 
-	test('disables Max reward before the escalation game exists', async () => {
+	test('disables Full bonus share before the escalation game exists', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -1953,10 +1950,10 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const maxProfitButton = requireButton(within(document.body).getByRole('button', { name: /^Max reward/ }))
+		const maxProfitButton = requireButton(within(document.body).getByRole('button', { name: /^Full bonus share/ }))
 		expect(maxProfitButton.disabled).toBe(true)
-		expect(maxProfitButton.title).toBe('Max reward becomes available after the escalation game starts.')
-		expect(document.body.textContent?.includes('Max reward becomes available after the escalation game starts.')).toBe(true)
+		expect(maxProfitButton.title).toBe('Full bonus share becomes available after the escalation game starts.')
+		expect(document.body.textContent?.includes('Full bonus share becomes available after the escalation game starts.')).toBe(true)
 	})
 
 	test('disables pre-start report submission when the contribution would exceed the remaining selected-side threshold capacity', async () => {
@@ -2293,7 +2290,7 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(requireButton(documentQueries.getByRole('button', { name: /^(Min to lead|Minimum report)/ })).disabled).toBe(true)
-		expect(requireButton(documentQueries.getByRole('button', { name: /^Max reward/ })).disabled).toBe(true)
+		expect(requireButton(documentQueries.getByRole('button', { name: /^Full bonus share/ })).disabled).toBe(true)
 		expect(document.body.textContent?.includes('Load reporting details before using presets.')).toBe(false)
 	})
 
@@ -2322,7 +2319,7 @@ describe('ReportingSection', () => {
 		const documentQueries = within(document.body)
 		const blocker = documentQueries.getByText('The selected side has no remaining capacity.')
 		const minimumButton = requireButton(documentQueries.getByRole('button', { name: /^(Min to lead|Minimum report)/ }))
-		const maxProfitButton = requireButton(documentQueries.getByRole('button', { name: /^Max reward/ }))
+		const maxProfitButton = requireButton(documentQueries.getByRole('button', { name: /^Full bonus share/ }))
 		expect(minimumButton.disabled).toBe(true)
 		expect(maxProfitButton.disabled).toBe(true)
 		expect(blocker.id).not.toBe('')
@@ -2531,7 +2528,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: /^Max reward/ }))
+			fireEvent.click(within(document.body).getByRole('button', { name: /^Full bonus share/ }))
 		})
 
 		const amountInput = within(document.body).getByRole('textbox', { name: /^Report amount/ })
@@ -2585,10 +2582,10 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const maxProfitButton = requireButton(within(document.body).getByRole('button', { name: /^Max reward/ }))
+		const maxProfitButton = requireButton(within(document.body).getByRole('button', { name: /^Full bonus share/ }))
 		expect(maxProfitButton.disabled).toBe(true)
-		expect(maxProfitButton.title).toBe('Max reward is unavailable because the reward window is already filled on the selected side.')
-		expect(document.body.textContent?.includes('Max reward is unavailable because the reward window is already filled on the selected side.')).toBe(true)
+		expect(maxProfitButton.title).toBe('Full bonus share is unavailable because the reward window is already filled on the selected side.')
+		expect(document.body.textContent?.includes('Full bonus share is unavailable because the reward window is already filled on the selected side.')).toBe(true)
 	})
 
 	test('lets users select an outcome side from the outcome cards and updates the report button label', async () => {
@@ -2901,8 +2898,8 @@ describe('ReportingSection', () => {
 					<ReportingSection
 						{...createProps({
 							accountState: createAccountState({ chainId: '0x1' }),
-							reportingDetails: createReportingDetails({ contributionFunding: 'wallet', viewerWalletRepAllowanceAttoRep: 0n, viewerWalletRepBalanceAttoRep: rep(10n) }),
-							reportingForm: createReportingForm({ contributionFunding: 'wallet', reportAmount: '5', selectedOutcome: 'yes' }),
+							reportingDetails: createReportingDetails({ viewerWalletRepAllowanceAttoRep: 0n, viewerWalletRepBalanceAttoRep: rep(10n) }),
+							reportingForm: createReportingForm({ reportAmount: '5', selectedOutcome: 'yes' }),
 						})}
 					/>
 				</WalletActionsProvider>,
@@ -2921,8 +2918,8 @@ describe('ReportingSection', () => {
 			const accountState = signal<AccountState>(createAccountState({ address: undefined }))
 			const walletActions = { isConnectingWallet: false, isManagingWallet: false, onConnect: () => undefined, onSwitchNetwork: () => undefined }
 			const props = createProps({
-				reportingDetails: createReportingDetails({ contributionFunding: 'vault' }),
-				reportingForm: createReportingForm({ contributionFunding: 'vault', reportAmount: '5', selectedOutcome: 'yes' }),
+				reportingDetails: createReportingDetails({}),
+				reportingForm: createReportingForm({ reportAmount: '5', selectedOutcome: 'yes' }),
 			})
 			const Harness = () => (
 				<WalletActionsProvider walletActions={walletActions}>

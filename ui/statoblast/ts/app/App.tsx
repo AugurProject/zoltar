@@ -1,45 +1,85 @@
-import type { QuestionLedgersView } from '@zoltar/ui-statoblast-shared/features/types.js'
-import { resolveRepPrice } from '@zoltar/ui-statoblast-shared/features/question-ledgers/lib/uiPriceOracle.js'
+import * as pageCopy from '@zoltar/ui-statoblast-shared/copy/statoblastShell.js'
+import type { RegisterStatoblastPageRefresh } from '@zoltar/ui-statoblast-shared/features/useStatoblastPageRefresh.js'
+import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
+import { createActiveEnvironmentGuard, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { localEntityScopeForNetwork, setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
+import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
+import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
+import { getBrowserStorage } from '@zoltar/ui-core-shared/lib/browserStorage.js'
+import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
-import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import { RepPriceRefreshContext } from '@zoltar/ui-statoblast-shared/features/question-ledgers/components/RepPriceStatusLabel.js'
+import { hasInvalidUniverseQueryParam, readUniverseQueryParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
+import { getCurrentRouteHash, getRouteHashSearch, getTopLevelRouteSearch, parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
+import { useUrlSearchState } from '@zoltar/ui-core-shared/app/hooks/useUrlSearchState.js'
 import { TransactionStepsModal } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
 import { UniverseNamesProvider } from '@zoltar/ui-core-shared/components/UniverseNames.js'
-import { UniverseSwitcher } from '@zoltar/ui-core-shared/components/UniverseSwitcher.js'
+import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
 import { AppStatusNotices } from '@zoltar/ui-core-shared/app/components/AppStatusNotices.js'
 import { ProtocolAppFrame } from '@zoltar/ui-core-shared/app/components/ProtocolAppFrame.js'
-import { AppRouteContent } from './components/AppRouteContent.js'
 import { OverviewPanels } from '@zoltar/ui-core-shared/app/components/OverviewPanels.js'
-import { useOpenOracleRouteSync } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleRouteSync.js'
-import { useMissingDeploymentRedirect } from '@zoltar/ui-core-shared/app/hooks/useMissingDeploymentRedirect.js'
 import { useProtocolAppShell } from '@zoltar/ui-zoltar-shared/features/appShell/hooks/useProtocolAppShell.js'
-import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
 import { useMarketCreation } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useMarketCreation.js'
 import { useRepPrices } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useRepPrices.js'
-import { useStatoblastUrlState } from './hooks/useStatoblastUrlState.js'
+import { getStatoblastDeploymentSections } from '@zoltar/ui-statoblast-shared/features/deployment/deploymentSections.js'
+import { parseStatoblastPage, statoblastPageHref } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { initializeStatoblastActiveEnvironment } from './activeEnvironment.js'
 import { applicationTitle, formatAppDocumentTitle, getAppPageTitle } from './lib/appPageTitle.js'
-import { buildRouteHref, getTopLevelRouteSearch, parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
-import { resolveEnumValue } from '@zoltar/ui-core-shared/forms/viewState.js'
+import { getStatoblastUniversePresentation } from './lib/overviewUniverse.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
-import { STATOBLAST_ROUTES, type StatoblastRoute } from '@zoltar/ui-statoblast-shared/types/app.js'
-import { statoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
-import { getStatoblastDeploymentSections } from '@zoltar/ui-statoblast-shared/features/deployment/deploymentSections.js'
-import { getInvalidStatoblastRouteState, isInvalidStatoblastRouteState } from './lib/routeValidation.js'
-import { getHeaderRepPerEthPrice } from './lib/headerRepPrice.js'
-import { getRouteSecondaryNavigation, getStatoblastRouteTabs, getTransactionRouteKey } from './lib/appNavigation.js'
-import { getStatoblastOverviewUniverse, getStatoblastUniversePresentation } from './lib/overviewUniverse.js'
-import { useOpenOracleRoute } from './hooks/useOpenOracleRoute.js'
+import { AppRouteContent } from './components/AppRouteContent.js'
+import { StatoblastUniverseMenu } from './components/StatoblastUniverseMenu.js'
+
+const autoRefreshKey = 'zoltar-ui:statoblast:auto-refresh'
+
+function readPreference(key: string) {
+	try {
+		return getBrowserStorage('localStorage')?.getItem(key) ?? undefined
+	} catch (error) {
+		if (!(error instanceof DOMException)) throw error
+		return undefined
+	}
+}
+
+function savePreference(key: string, value: string) {
+	try {
+		getBrowserStorage('localStorage')?.setItem(key, value)
+	} catch (error) {
+		if (!(error instanceof DOMException)) throw error
+	}
+}
+
+function readPage(search: string, routeHash: string) {
+	const pageSearch = window.location.search
+	const malformedUniverse = hasInvalidUniverseQueryParam(search) || hasInvalidUniverseQueryParam(pageSearch)
+	const parsed = parseStatoblastPage(`${routeHash}${search}`)
+	let page = parsed
+	if (malformedUniverse) page = { kind: 'not-found' }
+	else if (parsed.kind === 'choose-universe') page = { kind: 'watchlist' }
+	return { page, activeUniverseId: readUniverseQueryParam(search) ?? readUniverseQueryParam(pageSearch) ?? 0n }
+}
 
 export function App() {
-	const urlState = useStatoblastUrlState()
-	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, questionLedgerAddress, setActiveUniverseId, setOpenOracleReport, setQuestionLedgersView } = urlState
-	const { navigate, route } = useHashRoute()
-	const resolvedRoute = resolveEnumValue<StatoblastRoute>(route, 'not-found', STATOBLAST_ROUTES)
+	const {
+		state: { page, activeUniverseId },
+		navigate,
+	} = useUrlSearchState(readPage)
+	const [autoRefresh, setAutoRefresh] = useState(() => readPreference(autoRefreshKey) === 'on')
+	const [universeMenuOpen, setUniverseMenuOpen] = useState(false)
+	const [committedBranch, setCommittedBranch] = useState<string>()
+	const [refreshingPage, setRefreshingPage] = useState(false)
+	const [lastRefreshedAt, setLastRefreshedAt] = useState<number>()
+	const pageRefreshInFlight = useRef(false)
+	const currentPageRefresh = useRef(new Set<() => Promise<unknown>>())
+	const registerPageRefresh = useCallback<RegisterStatoblastPageRefresh>(refresh => {
+		currentPageRefresh.current.add(refresh)
+		return () => {
+			currentPageRefresh.current.delete(refresh)
+		}
+	}, [])
 	const repPrices = useRepPrices()
-	const { repPerEthFailure, repPerEthSource, repPerEthSourceUrl, repUsdcFailure, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, isRefreshingRepPrices, refreshRepPrices } = repPrices
 	const {
 		accountState,
 		activeEnvironmentNonce,
@@ -57,8 +97,8 @@ export function App() {
 		retryReadBackend,
 		refreshActiveEnvironment,
 		refreshSimulationView,
+		refreshCurrentBlock,
 		routeContentBlocked,
-		showDeployTab,
 		simulationController,
 		transactionTray,
 		walletBootstrapComplete,
@@ -66,71 +106,108 @@ export function App() {
 		walletScopedHookConfig,
 	} = useProtocolAppShell({
 		deploymentRoute: {
-			deploymentCompleteHref: buildRouteHref(statoblastRouting.getHash('pools'), getTopLevelRouteSearch('pools')),
-			deploymentCompleteLabel: commonCopy.browsePools,
+			deploymentCompleteHref: statoblastPageHref({ kind: 'watchlist' }),
+			deploymentCompleteLabel: pageCopy.openWatchlist,
 			getSections: getStatoblastDeploymentSections,
 		},
 		initializeEnvironment: options => initializeStatoblastActiveEnvironment(window.location, options),
-		isDeploymentRoute: route === 'deploy',
+		isDeploymentRoute: false,
+		autoRefreshChainClock: autoRefresh,
 		onchainStateDependencies,
-		onRefresh: refreshRepPrices,
+		onRefresh: repPrices.refreshRepPrices,
 	})
-	const { transactionState } = transactionTray
-	const includeRelatedUniverses = route === 'pools' && urlState.questionLedgersView === 'migrate'
-	const marketCreation = useMarketCreation({
+	const includeRelatedUniverses = universeMenuOpen || page.kind === 'migrate-rep' || (page.kind === 'pool' && page.tab === 'fork')
+	const operations = useMarketCreation({
 		...walletScopedHookConfig,
 		activeUniverseId,
-		autoLoadInitialData: walletBootstrapComplete && canReadOnchainData,
+		autoLoadInitialData: walletBootstrapComplete && canReadOnchainData && page.kind !== 'choose-universe',
 		includeRelatedUniverses,
 		deploymentStatuses,
 		environmentRefreshKey: activeEnvironmentNonce,
 	})
-	const { zoltarUniverse, zoltarUniverseError } = marketCreation
-	const { loadOracleReport, openOracleRouteContentProps, setOpenOracleReportId } = useOpenOracleRoute({
-		accountState,
-		canReadOnchainData,
-		route,
-		setOpenOracleReport,
-		urlOpenOracleReportId,
-		walletScopedHookConfig,
-	})
-	const activeQuestionLedgersView = resolveEnumValue<QuestionLedgersView>(urlState.questionLedgersView, questionLedgerAddress === '' ? 'browse' : 'operate', ['browse', 'operate', 'universes', 'migrate'])
-	const overviewProps = {
-		...overviewWalletProps,
-		activeUniverseId,
-		...getStatoblastOverviewUniverse({ ...marketCreation, migrationActive: route === 'pools' && activeQuestionLedgersView === 'migrate' }),
-		onGoToGenesisUniverse: () => setActiveUniverseId(0n),
-		repPrices: {
-			isLoading: isLoadingRepPrices,
-			isRefreshing: isRefreshingRepPrices,
-			onRefresh: refreshRepPrices,
-			...getHeaderRepPerEthPrice({ currentTimestamp, hasSelectedPool: false, repPerEthFailure, repPerEthSource, repPerEthSourceUrl, repPrice: resolveRepPrice({ now: currentTimestamp, setting: 'uniswap', uniswapPrice: repPrices.repPerEthPrice }) }),
-			repUsdcFailure,
-			repUsdcPrice,
-			repUsdcSource,
-			repUsdcSourceUrl,
+	const profile = getActiveNetworkProfile()
+	const transactionEnvironment = createActiveEnvironmentGuard()
+	const saveTouchedItem = {
+		...walletScopedHookConfig,
+		refreshState: async () => {
+			await refreshWalletStateOnly(walletScopedHookConfig.refreshState)
+			invalidateAppData()
 		},
-		universeControl: <UniverseSwitcher activeUniverseId={activeUniverseId} browseHref={buildRouteHref('#/pools/universes', getTopLevelRouteSearch('pools'))} universe={zoltarUniverse} />,
-		universePresentation: getStatoblastUniversePresentation({ canReadOnchainData, ...marketCreation }),
-		showWethBalance: true,
+		onTransactionPresented: (presentation: Parameters<typeof walletScopedHookConfig.onTransactionPresented>[0]) => {
+			if (presentation.tone === 'success' && transactionEnvironment.isCurrent()) {
+				if (page.kind === 'pool') setEntityFavorite(localEntityScopeForNetwork(profile, 'statoblast', 'pool'), page.pool, true)
+				if (page.kind === 'question') setEntityFavorite(localEntityScopeForNetwork(profile, 'statoblast', 'question'), `${page.pool}:${formatQuestionIdHex(page.questionId)}`, true)
+			}
+			walletScopedHookConfig.onTransactionPresented(presentation)
+		},
 	}
-	const invalidRouteState = getInvalidStatoblastRouteState({
-		pageSearch: window.location.search,
-		resolvedRoute,
-		search: parseRouteHash(window.location.hash).search,
-	})
-	const activeRoute = isInvalidStatoblastRouteState(invalidRouteState) ? 'not-found' : resolvedRoute
-	const tabNavigationProps = {
-		// A page that does not exist belongs to no section, so no tab is marked current.
-		route: activeRoute,
-		tabs: getStatoblastRouteTabs({ applicationDeploymentMissing, route, showDeployTab }),
-		onRouteChange: navigate,
+	const { zoltarUniverse, zoltarUniverseError } = operations
+	const enabled = canReadOnchainData && walletBootstrapComplete
+	const selectedUniverse = zoltarUniverse?.universeId === activeUniverseId ? zoltarUniverse : undefined
+	const watchlistHref = statoblastPageHref({ kind: 'watchlist' })
+	const forked = selectedUniverse?.hasForked === true
+	const refreshPage = async () => {
+		if (pageRefreshInFlight.current || !enabled) return
+		pageRefreshInFlight.current = true
+		setRefreshingPage(true)
+		try {
+			if (currentPageRefresh.current.size > 0) await Promise.all([...currentPageRefresh.current].map(refresh => refresh()))
+			else {
+				await refreshCurrentBlock()
+				if (page.kind === 'migrate-rep') await operations.loadZoltarUniverse({ clearCurrentState: false })
+			}
+			setLastRefreshedAt(Date.now())
+		} finally {
+			pageRefreshInFlight.current = false
+			setRefreshingPage(false)
+		}
 	}
-	const pageTitle = getAppPageTitle({ activeQuestionLedgersView, route: activeRoute })
-	useOpenOracleRouteSync({ activeEnvironmentNonce, environmentReady: canReadOnchainData, isOpenOracleRoute: activeRoute === 'open-oracle', loadOracleReport, reportId: urlOpenOracleReportId, setOpenOracleFormReportId: setOpenOracleReportId })
-	useMissingDeploymentRedirect({ isDeploymentRoute: route === 'deploy', missing: applicationDeploymentMissing, navigateToDeployment: () => navigate('deploy') })
-	const secondaryNavigation = getRouteSecondaryNavigation({ activeQuestionLedgersView, route: activeRoute, setQuestionLedgersView })
-	const transactionRouteKey = getTransactionRouteKey({ activeQuestionLedgersView, route })
+	const refreshVisiblePage = useRef(refreshPage)
+	refreshVisiblePage.current = refreshPage
+	useEffect(() => {
+		const refreshWhenVisible = () => {
+			if (!document.hidden) void refreshVisiblePage.current()
+		}
+		document.addEventListener('visibilitychange', refreshWhenVisible)
+		return () => document.removeEventListener('visibilitychange', refreshWhenVisible)
+	}, [])
+	useEffect(() => {
+		if (currentBlockNumber !== undefined) setLastRefreshedAt(Date.now())
+	}, [currentBlockNumber])
+	const setUniverse = (universeId: bigint) => navigate(getCurrentRouteHash(), writeUniverseQueryParam(getRouteHashSearch(), universeId))
+	useEffect(() => {
+		const hash = getCurrentRouteHash()
+		if (hash === '#/' || hash === '') navigate('#/watchlist', getTopLevelRouteSearch('watchlist'), 'replace')
+	}, [navigate])
+	const autoRefreshToggle = (className: string) => (
+		<label className={className}>
+			<input
+				type='checkbox'
+				checked={autoRefresh}
+				onChange={event => {
+					const checked = event.currentTarget.checked
+					setAutoRefresh(checked)
+					savePreference(autoRefreshKey, checked ? 'on' : 'off')
+				}}
+			/>
+			{pageCopy.autoRefresh}
+		</label>
+	)
+	const overview = getStatoblastUniversePresentation({ canReadOnchainData, ...operations })
+	const branchScope = page.kind === 'pool' ? `${page.pool}:${activeUniverseId}` : undefined
+	const branchAlreadyCommitted = branchScope !== undefined && branchScope === committedBranch
+	const forkAction = page.kind === 'pool' ? statoblastPageHref({ ...page, tab: 'fork' }) : statoblastPageHref({ kind: 'migrate-rep' })
+	const forkActionLabel = page.kind === 'pool' ? pageCopy.chooseBranchAction : pageCopy.migrateRepAction
+	const repToEth = repPrices.repPerEthPrice
+	const repPrice = repToEth === undefined || repToEth === 0n ? undefined : formatUnits(10n ** 36n / repToEth, 18)
+	const routeKey = parseRouteHash(window.location.hash).routeHash
+	const oracleApp = new URL('../openoracle/#/open-oracle', window.location.href)
+	if (window.location.port === '12347') {
+		oracleApp.port = '4143'
+		oracleApp.pathname = '/'
+	}
+	oracleApp.hash = `#/open-oracle${getTopLevelRouteSearch('watchlist')}`
+	const title = applicationDeploymentMissing && page.kind !== 'choose-universe' ? pageCopy.deployContracts : getAppPageTitle(page)
 
 	return (
 		<UniverseNamesProvider includeRelatedUniverses={includeRelatedUniverses} universe={zoltarUniverse}>
@@ -141,61 +218,101 @@ export function App() {
 				currentTimestamp={currentTimestamp}
 				header={
 					<AppHeaderShell
-						renderOverview={({ navigation, settingsMenu }) => <OverviewPanels {...overviewProps} applicationTitle={applicationTitle} navigation={navigation} settingsMenu={settingsMenu} />}
+						renderOverview={({ settingsMenu }) => (
+							<OverviewPanels
+								{...overviewWalletProps}
+								applicationTitle={applicationTitle}
+								brandHref={watchlistHref}
+								settingsMenu={settingsMenu}
+								activeUniverseId={page.kind === 'choose-universe' ? undefined : activeUniverseId}
+								universePresentation={overview}
+								universeRepBalanceAttoRep={operations.zoltarForkRepBalanceAttoRep}
+								isLoadingUniverseRepBalance={operations.loadingZoltarForkAccess}
+								onGoToGenesisUniverse={() => setUniverse(0n)}
+								showWethBalance
+								universeControl={
+									<div className='statoblast-header-controls'>
+										{repPrice !== undefined && (
+											<span className='statoblast-rep-chip'>
+												{pageCopy.repLead}
+												{Number(repPrice).toLocaleString('en-US', { maximumSignificantDigits: 3 })}
+												{pageCopy.ethTail}
+											</span>
+										)}
+										<button className='secondary statoblast-refresh' type='button' aria-label={pageCopy.refresh} disabled={!enabled || refreshingPage} onClick={() => void refreshPage()}>
+											↻
+											<span className='statoblast-refresh-status'>
+												{refreshingPage ? pageCopy.refreshing : <UpdatedAgo updatedAt={lastRefreshedAt} />}
+												<span className='statoblast-auto-state'>
+													{pageCopy.autoLead}
+													{autoRefresh ? pageCopy.on : pageCopy.off}
+												</span>
+											</span>
+										</button>
+										{autoRefreshToggle('statoblast-auto-desktop')}
+										<StatoblastUniverseMenu activeUniverse={activeUniverseId} environmentKey={activeEnvironmentNonce} universe={selectedUniverse} wallet={walletScopedAccountAddress} onSelect={setUniverse} onOpenChange={setUniverseMenuOpen} />
+									</div>
+								}
+							/>
+						)}
 						simulationController={simulationController}
-						secondaryNavigation={secondaryNavigation}
-						tabNavigation={tabNavigationProps}
 						onEnvironmentChanged={refreshActiveEnvironment}
 						onRefresh={refreshSimulationView}
+						settingsContent={autoRefreshToggle('statoblast-auto-mobile')}
 					/>
 				}
-				heading={<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={pageTitle} />}
+				heading={<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={title} />}
 				notices={
-					<AppStatusNotices
-						errorMessages={errorMessages}
-						isDeploymentRoute={activeRoute === 'deploy'}
-						onRetryReadBackend={() => void retryReadBackend()}
-						readBackendMessage={readBackendMessage}
-						readBackendStatus={readBackendStatus}
-						simulationBootstrapError={environmentBootstrapError}
-						showApplicationDeploymentWarning={applicationDeploymentMissing}
-						zoltarUniverseError={zoltarUniverseError}
-					/>
+					<>
+						<AppStatusNotices
+							errorMessages={errorMessages}
+							isDeploymentRoute={applicationDeploymentMissing}
+							onRetryReadBackend={() => void retryReadBackend()}
+							readBackendMessage={readBackendMessage}
+							readBackendStatus={readBackendStatus}
+							simulationBootstrapError={environmentBootstrapError}
+							showApplicationDeploymentWarning={false}
+							zoltarUniverseError={zoltarUniverseError}
+						/>
+						{forked && (
+							<div className='statoblast-fork-banner'>
+								<strong>{pageCopy.universeForked}</strong>
+								{page.kind !== 'migrate-rep' && !branchAlreadyCommitted && !(page.kind === 'pool' && page.tab === 'fork') && <a href={forkAction}>{forkActionLabel}</a>}
+							</div>
+						)}
+					</>
 				}
-				routeContentDisabled={routeContentBlocked}
-				transactionRouteKey={transactionRouteKey}
-				transactionState={transactionState.value}
+				routeContentDisabled={routeContentBlocked && !applicationDeploymentMissing && page.kind !== 'choose-universe' && page.kind !== 'not-found'}
+				transactionRouteKey={routeKey}
+				transactionState={transactionTray.transactionState.value}
 				walletActions={overviewWalletProps}
 			>
-				<RepPriceRefreshContext.Provider value={{ onRefresh: refreshRepPrices, busy: isLoadingRepPrices || isRefreshingRepPrices }}>
-					<AppRouteContent
-						deploy={deployRouteContentProps}
-						openOracle={openOracleRouteContentProps}
-						securityPools={{ parameters: walletScopedHookConfig, walletConnected: accountState.address !== undefined, enabled: canReadOnchainData && walletBootstrapComplete, environmentKey: activeEnvironmentNonce, activeUniverseId }}
-						readBackendMessage={readBackendMessage}
-						route={activeRoute}
-						questions={{
-							accountState,
-							parameters: walletScopedHookConfig,
-							deploymentStatuses,
-							enabled: canReadOnchainData && walletBootstrapComplete,
-							environmentKey: activeEnvironmentNonce,
-							universeId: activeUniverseId,
-							currentTimestamp,
-							selectedAddress: questionLedgerAddress,
-							onSelect: urlState.openQuestionLedgerInUniverse,
-						}}
-						questionView={activeQuestionLedgersView}
-						universeDirectory={{ activeUniverseId, zoltarUniverse, universeMissing: marketCreation.zoltarUniverseMissing, universeError: marketCreation.zoltarUniverseError, onRetryUniverse: () => void marketCreation.loadZoltarUniverse(), onMigrateRep: () => setQuestionLedgersView('migrate') }}
-						migration={{
-							accountState,
-							activeUniverseId,
-							operations: marketCreation,
-							universeState: resolveLoadableValueState({ isLoading: marketCreation.loadingZoltarUniverse, isMissing: marketCreation.zoltarUniverseMissing, value: zoltarUniverse }),
-							universeBrowserHref: buildRouteHref('#/pools/universes', getTopLevelRouteSearch('pools')),
-						}}
-					/>
-				</RepPriceRefreshContext.Provider>
+				<AppRouteContent
+					page={page}
+					registerPageRefresh={registerPageRefresh}
+					contractsMissing={applicationDeploymentMissing}
+					deploy={deployRouteContentProps}
+					securityPools={{
+						cacheReads: true,
+						parameters: saveTouchedItem,
+						walletConnected: accountState.address !== undefined,
+						enabled,
+						environmentKey: activeEnvironmentNonce,
+						activeUniverseId,
+						binaryFork: zoltarUniverse?.forkQuestionDetails?.marketType === 'binary',
+						onSelectUniverse: setUniverse,
+						onBranchCommitted: committed => setCommittedBranch(committed ? branchScope : undefined),
+						openOracleHref: oracleApp.href,
+					}}
+					readBackendMessage={readBackendMessage}
+					questions={{ accountState, parameters: saveTouchedItem, deploymentStatuses, enabled, environmentKey: activeEnvironmentNonce, universeId: activeUniverseId, currentTimestamp }}
+					migration={{
+						accountState,
+						activeUniverseId,
+						operations,
+						universeState: resolveLoadableValueState({ isLoading: operations.loadingZoltarUniverse, isMissing: operations.zoltarUniverseMissing, value: zoltarUniverse }),
+					}}
+				/>
 				<TransactionStepsModal contextKey={`${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}`} />
 			</ProtocolAppFrame>
 		</UniverseNamesProvider>

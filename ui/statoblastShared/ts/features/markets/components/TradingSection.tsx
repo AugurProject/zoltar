@@ -3,7 +3,7 @@ import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApp
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as tradingCopy from '../../../copy/trading.js'
-import { useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { ActionLauncherCard } from '@zoltar/ui-core-shared/components/ActionLauncherCard.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -70,6 +70,7 @@ export function TradingSection({
 	poolState,
 	tradingDetails,
 	selectedPool,
+	requestedSharesAction,
 	tradingActiveAction,
 	tradingError,
 	tradingForm,
@@ -81,6 +82,7 @@ export function TradingSection({
 	const collateralDecimals = collateralFunding?.collateral?.decimals ?? 18
 	const collateralSymbol = collateralFunding?.collateral?.symbol ?? collateralCopy.fallback
 	const [activeModal, setActiveModal] = useState<TradingActionModal>(undefined)
+	const handledSharesAction = useRef<string>()
 	const currentTimestamp = useChainTimestamp()
 	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
 	const hasSelectedPool = selectedPool !== undefined
@@ -261,7 +263,7 @@ export function TradingSection({
 			? []
 			: [
 					{ label: commonCopy.question, value: selectedPool.marketDetails.title },
-					{ identityKey: 'security-pool', label: commonCopy.questionLedgerAddress, value: <AddressValue address={selectedPool.questionLedgerAddress} /> },
+					{ identityKey: 'security-pool', label: commonCopy.questionLedgerAddress, value: <AddressValue longAbbreviation address={selectedPool.questionLedgerAddress} /> },
 					{ identityKey: 'outcome', label: commonCopy.outcome, value: outcome },
 				]
 	const toggleTargetOutcomeIndex = (outcomeIndex: bigint) => {
@@ -312,13 +314,24 @@ export function TradingSection({
 		title: label,
 		...(blocker === undefined ? { onAction: () => setActiveModal(modal) } : { blocker }),
 	})
-	// Minting can never resume once the question has finalized, so its launcher is left out rather than shown disabled; every other action can still apply later and stays with its reason.
 	const tradingLaunchers: ReadinessAction[] = [
-		...(winningOutcome !== undefined ? [] : [shareActionLauncher({ blocker: mintLauncherBlocker, description: tradingCopy.completeSetMintDescription, key: 'mint-complete-sets', label: tradingCopy.mintCompleteSets, modal: 'mint' })]),
+		shareActionLauncher({ blocker: mintLauncherBlocker, description: tradingCopy.completeSetMintDescription, key: 'mint-complete-sets', label: tradingCopy.mintCompleteSets, modal: 'mint' }),
 		shareActionLauncher({ blocker: effectiveRedeemCompleteSetsLauncherBlocker, description: tradingCopy.completeSetBurnDescription, key: 'redeem-complete-sets', label: tradingCopy.redeemCompleteSets, modal: 'redeem-complete-sets' }),
 		shareActionLauncher({ blocker: effectiveMigrateSharesLauncherBlocker, description: tradingCopy.shareMigrationDescription, key: 'migrate-shares', label: tradingCopy.migrateForkedShares, modal: 'migrate-shares' }),
 		shareActionLauncher({ blocker: effectiveRedeemSharesLauncherBlocker, description: tradingCopy.resolvedShareRedemptionDescription, key: 'redeem-shares', label: tradingCopy.redeemResolvedShares, modal: 'redeem-shares' }),
 	]
+	useEffect(() => {
+		if (requestedSharesAction === undefined) {
+			handledSharesAction.current = undefined
+			return
+		}
+		if (!isOnActiveAppChain || accountState.address === undefined || tradingDetails === undefined || loadingTradingDetails || loadingTradingForkUniverse || selectedPool === undefined) return
+		const key = `${selectedPool.questionLedgerAddress}:${requestedSharesAction}`
+		if (handledSharesAction.current === key) return
+		handledSharesAction.current = key
+		if (requestedSharesAction === 'mint' && mintLauncherBlocker === undefined) setActiveModal('mint')
+		if (requestedSharesAction === 'redeem' && effectiveRedeemSharesLauncherBlocker === undefined) setActiveModal('redeem-shares')
+	}, [requestedSharesAction, accountState.address, isOnActiveAppChain, selectedPool?.questionLedgerAddress, tradingDetails, loadingTradingDetails, loadingTradingForkUniverse, mintLauncherBlocker, effectiveRedeemSharesLauncherBlocker])
 	const sections = (
 		<>
 			{!showQuestionLedgerAddressInput ? undefined : (

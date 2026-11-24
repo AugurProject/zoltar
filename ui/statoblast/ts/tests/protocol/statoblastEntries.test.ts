@@ -1,0 +1,61 @@
+import { expect, test } from 'bun:test'
+import { createPublicClient, custom, encodeAbiParameters, encodeFunctionData, parseAbi, parseAbiParameters, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { checkStatoblastEntries } from '@zoltar/ui-statoblast-shared/protocol/statoblastEntries.js'
+import { getInfraContractAddresses } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
+
+const pool: Address = '0x0000000000000000000000000000000000000011'
+const foreign: Address = '0x2222222222222222222222222222222222222222'
+const ledger: Address = '0x0000000000000000000000000000000000000033'
+const block = 42n
+const multicallResult = parseAbiParameters('(bool success,bytes returnData)[]')
+const errorAbi = parseAbi(['function Error(string reason)'])
+
+function revert(reason: string): Hex {
+	return encodeFunctionData({ abi: errorAbi, functionName: 'Error', args: [reason] })
+}
+
+test('entry checks authenticate pools before resolving questions and isolate the three question states', async () => {
+	const factory = getInfraContractAddresses().securityPoolFactory.toLowerCase().slice(2)
+	const batches: string[] = []
+	const client = createPublicClient({
+		transport: custom({
+			request: async ({ method, params }) => {
+				expect(method).toBe('eth_call')
+				if (!Array.isArray(params)) throw new Error('Missing multicall parameters.')
+				const [call, tag] = params
+				expect(tag).toBe('0x2a')
+				if (typeof call?.data !== 'string') throw new Error('Missing multicall payload.')
+				batches.push(call.data.toLowerCase())
+				return batches.length === 1
+					? encodeAbiParameters(multicallResult, [
+							[
+								{ success: true, returnData: encodeAbiParameters(parseAbiParameters('bool'), [true]) },
+								{ success: true, returnData: encodeAbiParameters(parseAbiParameters('bool'), [false]) },
+							],
+						])
+					: encodeAbiParameters(multicallResult, [
+							[
+								{ success: true, returnData: encodeAbiParameters(parseAbiParameters('address'), [ledger]) },
+								{ success: false, returnData: revert('Question not registered') },
+								{ success: false, returnData: revert('Question pool unavailable') },
+							],
+						])
+			},
+		}),
+	})
+	const result = await checkStatoblastEntries(
+		client,
+		[
+			{ pool, questionId: 1n, universeId: 0n },
+			{ pool, questionId: 2n, universeId: 0n },
+			{ pool, questionId: 3n, universeId: 0n },
+			{ pool: foreign, questionId: 4n, universeId: 0n },
+			{ pool: 'invalid', universeId: 0n },
+		],
+		block,
+	)
+	expect(result).toEqual([{ status: 'question', pool, ledger }, { status: 'unregistered-question' }, { status: 'unprepared-question' }, { status: 'invalid-pool' }, { status: 'invalid-pool' }])
+	expect(batches).toHaveLength(2)
+	expect(batches[0]).toContain(factory)
+	expect(batches[1]).not.toContain(foreign.slice(2))
+})

@@ -1,3 +1,4 @@
+import { invalidateStatoblastEntries } from '../../../protocol/statoblastEntries.js'
 import { securityPoolCollateral, type CollateralSymbol } from '../../../protocol/collateral.js'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { useSignal } from '@preact/signals'
@@ -111,6 +112,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 				},
 				copy.failure,
 				async result => {
+					if (action === 'registerSecurityPoolQuestion' || action.startsWith('prepareSecurityPool')) invalidateStatoblastEntries()
 					await onConfirmed?.(result)
 					await model.refresh()
 					feedback.value = copy.confirmed

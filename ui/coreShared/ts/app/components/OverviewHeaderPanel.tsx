@@ -4,6 +4,7 @@ import { MainnetDisabledNotice } from './MainnetDisabledNotice.js'
 
 type OverviewHeaderPanelProps = {
 	applicationTitle: string
+	brandHref?: string | undefined
 	/** Environment badges beside the brand: active network and wrong wallet network. */
 	badges?: ComponentChildren
 	/** Universe and account controls on the top bar's right side; balances live in the account popover. */
@@ -31,10 +32,24 @@ export function ApplicationBrand({ applicationTitle }: { applicationTitle: strin
  * account controls, and settings on one row, followed by any notices. Applications supply the slot contents so
  * the bar geometry and breakpoints behave the same everywhere.
  */
-export function OverviewHeaderPanel({ applicationTitle, badges, controls, footer, navigation, notices, settingsMenu }: OverviewHeaderPanelProps) {
+export function OverviewHeaderPanel({ applicationTitle, brandHref, badges, controls, footer, navigation, notices, settingsMenu }: OverviewHeaderPanelProps) {
 	return (
 		<>
-			<HeaderToolbar brand={<ApplicationBrand applicationTitle={applicationTitle} />} badges={badges} controls={controls} navigation={navigation} settings={settingsMenu} />
+			<HeaderToolbar
+				brand={
+					brandHref === undefined ? (
+						<ApplicationBrand applicationTitle={applicationTitle} />
+					) : (
+						<a href={brandHref} className='statoblast-brand-link'>
+							<ApplicationBrand applicationTitle={applicationTitle} />
+						</a>
+					)
+				}
+				badges={badges}
+				controls={controls}
+				navigation={navigation}
+				settings={settingsMenu}
+			/>
 			<MainnetDisabledNotice />
 			{notices}
 			{footer}

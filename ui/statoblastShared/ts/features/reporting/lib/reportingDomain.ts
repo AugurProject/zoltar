@@ -193,7 +193,7 @@ function getMaxProfitContribution(details: ActiveReportingDetails, selectedOutco
 	if (minContribution.amountAttoRep === undefined)
 		return {
 			amountAttoRep: undefined,
-			reason: minContribution.reason ?? 'Max reward is unavailable.',
+			reason: minContribution.reason ?? 'Full bonus share is unavailable.',
 		}
 	const { largestOtherBalance, selectedSide } = getSelectedAndOtherSides(details, selectedOutcome)
 	if (selectedSide === undefined) return { amountAttoRep: undefined, reason: reportingCopy.selectedSideIsUnavailable }
@@ -212,7 +212,7 @@ function getMaxProfitContribution(details: ActiveReportingDetails, selectedOutco
 	if (selectedSide.balance + effectiveAmount < targetFinalBalance)
 		return {
 			amountAttoRep: undefined,
-			reason: 'Max reward is unavailable because the selected side cannot fill the reward window within its remaining capacity.',
+			reason: 'Full bonus share is unavailable because the selected side cannot fill the reward window within its remaining capacity.',
 		}
 	return { amountAttoRep, reason: undefined }
 }

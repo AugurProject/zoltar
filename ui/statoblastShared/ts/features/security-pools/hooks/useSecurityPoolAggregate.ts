@@ -214,6 +214,8 @@ export function useSecurityPoolAggregate(
 		},
 		healthReason,
 		commitmentAmount: displayedCommitment,
+		commitmentAttoEth,
+		healthBps,
 		setCommitmentAmount: (value: string) => {
 			commitmentAmount.value = value
 		},

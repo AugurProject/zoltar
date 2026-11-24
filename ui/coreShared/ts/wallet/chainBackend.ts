@@ -111,6 +111,7 @@ export type ChainBackend = {
 	isBootstrapping?: boolean
 	profile: NetworkProfile
 	requestAccounts(): Promise<readonly Address[]>
+	seededSecurityPool?: import('../simulation/savedStates.js').SeededSecurityPool | undefined
 	requestAccountSelection?: () => Promise<readonly Address[]>
 	setReadBackendBlock?: (block: { number: bigint | undefined; timestamp: bigint | undefined }) => void
 	setReadTransportMode?: (mode: ReadTransportMode) => void

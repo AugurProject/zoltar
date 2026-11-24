@@ -26,9 +26,9 @@ export const leadHoldingCapital = 'Amount needed to hold the lead'
 export const loadingPoolHeldVaultRepBacking = 'Loading pool-held vault REP backing…'
 export const loadingWalletRepBalance = 'Loading wallet REP balance…'
 export const loadingReportingDetails = 'Loading reporting details…'
-export const maxProfitPrestartReason = 'Max reward becomes available after the escalation game starts.'
-export const maxProfitForkReason = 'Max reward is unavailable because matching the other side would trigger the universe fork.'
-export const maxProfitWindowFilledReason = 'Max reward is unavailable because the reward window is already filled on the selected side.'
+export const maxProfitPrestartReason = 'Full bonus share becomes available after the escalation game starts.'
+export const maxProfitForkReason = 'Full bonus share is unavailable because matching the other side would trigger the universe fork.'
+export const maxProfitWindowFilledReason = 'Full bonus share is unavailable because the reward window is already filled on the selected side.'
 export const selectedSideLeadsReason = 'Selected side already leads.'
 export const loadingEscalation = 'Loading escalation…'
 export const refreshReporting = 'Refresh reporting'
@@ -38,12 +38,11 @@ export const poolHeldVaultRepBackingEmpty = 'No pool-held vault REP backing is a
 export const walletRepBalanceEmpty = 'No wallet REP is available for reporting.'
 export const reportOnSelectedSide = 'Report on selected side'
 export const currentEscalationDisputeStakeLead = 'Based on the current escalation state, this action would move '
-const acceptedAmountTail = ' from pool-held backing into dispute-staked REP instead of the full entered amount.'
 const acceptedWalletAmountTail = ' from wallet REP into dispute-staked REP instead of the full entered amount.'
 const acceptedTieAmountTail = ', 1 attoREP less than entered, because a report cannot tie the leading outcome.'
-export function formatAcceptedAmountTail(trimmedByTie: boolean, usesWalletFunding: boolean) {
+export function formatAcceptedAmountTail(trimmedByTie: boolean) {
 	if (trimmedByTie) return acceptedTieAmountTail
-	return usesWalletFunding ? acceptedWalletAmountTail : acceptedAmountTail
+	return acceptedWalletAmountTail
 }
 export const openForkAndMigration = 'Open fork choices and recovery'
 export const managePoolPrice = 'Manage security pool price'
@@ -67,7 +66,7 @@ export const worthAfterFinalizationPendingFinalization = 'Worth after finalizati
 export const presetOutcomeSelectionRequired = 'Select an outcome side before using presets.'
 export const selectedSideIsUnavailable = 'Selected side is unavailable.'
 export const selectedSide = 'Selected side'
-export const formatSettleSelectedDepositsLabel = (sideLabel: string) => `Settle selected ${sideLabel} deposits`
+export const formatSettleSelectedDepositsLabel = (sideLabel: string) => `Claim selected ${sideLabel} deposits`
 export const formatSettlingDepositsPendingLabel = (sideLabel: string) => `Settling ${sideLabel} deposits…`
 export const minimumFirstReport = 'Minimum report'
 export const totalSideDisputeStakedRep = 'All reporters'
@@ -92,10 +91,9 @@ export const bindingCapitalHelp = 'The second-largest side balance; exceed it to
 const minimumPresetLabels = { fork: 'Fill side & trigger fork', lead: 'Min to lead', start: 'Minimum report' } as const
 /** The minimum preset fills the minimum first report before the game starts, the smallest lead afterwards, or, when no lead is possible, the amount that triggers the fork. */
 export const minimumPreset = <Amount>(kind: keyof typeof minimumPresetLabels, amount?: Amount): CopyParts<Amount> => (amount === undefined ? [minimumPresetLabels[kind]] : [minimumPresetLabels[kind], ' (', amount, ')'])
-export const rewardPreset = <Amount>(amount?: Amount): CopyParts<Amount> => (amount === undefined ? ['Max reward'] : ['Max reward (', amount, ')'])
+export const rewardPreset = <Amount>(amount?: Amount): CopyParts<Amount> => (amount === undefined ? ['Full bonus share'] : ['Full bonus share (', amount, ')'])
 export const reportAmountPlaceholder = '0'
 export const reportAmountLabel = (outcome: string, amount: string) => `Report ${outcome} · ${amount} REP`
-export const paidFromVault = 'Paid from: security pool vault REP (no approval needed)'
 export const paidFromWallet = 'Paid from: wallet REP'
 export const availableBalance = (amount: string) => `Available: ${amount} REP.`
 export const yourPositions = 'Your positions'
@@ -155,8 +153,6 @@ export const forkViewerStake = <Amount>(side: string, stake: Amount): CopyParts<
 export const updateReminder = 'Update your reminder (.ics)'
 export const zeroBalanceStatusDetail = 'If all balances stay at zero, the timeout outcome is Invalid.'
 export const noVaultRepSelectWallet = 'No REP is available in your security pool vault. Select Wallet REP to report.'
-
-export const loadingVaultFunding = 'Loading vault funding requirements…'
 
 export const depositTriggersFork = 'This report reaches the non-decision threshold: the game ends and a universe fork can be triggered.'
 export const forkTriggerWarningTitle = 'This report triggers a universe fork'

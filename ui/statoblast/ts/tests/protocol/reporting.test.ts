@@ -377,30 +377,9 @@ describe('reporting protocol client', () => {
 		client.getCode = async () => preparedGameCode
 		client.getBlock = async () => createBlockWithTimestamp(questionEndTime)
 		client.onTransactionPrepared = preview => previews.push(preview)
-		await reportOutcomeInQuestionLedger(client, questionLedgerAddress, 'yes', 7n, 7n, 'wallet', false, true)
+		await reportOutcomeInQuestionLedger(client, questionLedgerAddress, 'yes', 7n, 7n, false, true)
 		expect(previews[0]?.functionName).toBe('depositWalletRepToEscalationGameWithLead')
 		expect(previews[0]?.args).toEqual([1, 7n])
-	})
-
-	test.each([zeroAddress, escalationGameAddress])('rejects removed vault funding for an ordinary game (%s)', async gameAddress => {
-		const client = asWriteClient(
-			createMockWriteClient(
-				() => undefined,
-				async request => {
-					if (request.functionName === 'universeId') return 9n
-					if (request.functionName === 'escalationGame') return gameAddress
-					if (request.functionName === 'getEscalationGameEndDate') return 1000n
-					if (request.functionName === 'settlementForkThresholdAttoRep') return 0n
-					if (request.functionName === 'forkContinuation') return false
-					throw new Error(`Unexpected read: ${request.functionName}`)
-				},
-			),
-		)
-		const previews: TransactionRequestPreview[] = []
-		client.getBlock = async () => createBlockWithTimestamp(1n)
-		client.onTransactionPrepared = preview => previews.push(preview)
-		await expect(reportOutcomeInQuestionLedger(client, questionLedgerAddress, 'yes', 7n, 7n, 'vault')).rejects.toThrow('Reports use wallet REP')
-		expect(previews).toEqual([])
 	})
 
 	test('reportOutcomeInQuestionLedger routes active ordinary-game wallet contributions through the pool to game escrow', async () => {
@@ -457,7 +436,7 @@ describe('reporting protocol client', () => {
 		const writeClient = asWriteClient(client)
 		writeClient.getBlock = async () => createBlockWithTimestamp(1n)
 		writeClient.onTransactionPrepared = preview => previews.push(preview)
-		await reportOutcomeInQuestionLedger(writeClient, questionLedgerAddress, 'no', 6n, 6n, 'wallet', true)
+		await reportOutcomeInQuestionLedger(writeClient, questionLedgerAddress, 'no', 6n, 6n, true)
 		expect(previews[0]?.reviewTitle).toBe('Report No & trigger fork · 0.000000000000000006\u00a0REP')
 		expect(previews[0]?.reviewDescription).toBe('Fills No to the non-decision threshold while another side is already there. Escalation ends without a decision, deposits lock, and the question can only resolve through a universe fork. This can’t be undone.')
 	})
@@ -518,17 +497,22 @@ describe('reporting protocol client', () => {
 		const poolHeldVaultRepBackingAttoRep = 70n
 		const escrowedRep = 30n
 		const client = testDouble<Parameters<typeof loadReportingDetails>[0]>({
-			getBlock: async () => createBlockWithTimestamp(88n),
+			getBlock: async () => ({ ...createBlockWithTimestamp(88n), number: 1n }),
 			getCode: async () => '0x1234' as Hex,
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
 				if (functionName === 'questions') return [questionTuple, 10n]
+				if (functionName === 'getLocalUnresolvedPrincipalByVaultAndOutcome') {
+					const outcome = request.contracts[0]?.args?.[1]
+					return [outcome === 1 ? 30n : 0n]
+				}
 				if (functionName === 'startBondAttoRep') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 150n, 3n, 0n, false]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'securityPoolOf') return vaultAddress
 				if (request.functionName === 'startBondAttoRep') return 7n
 				if (request.functionName === 'nonDecisionThresholdAttoRep') return 50n
 				if (request.functionName === 'activationTime') return 12n
@@ -572,13 +556,13 @@ describe('reporting protocol client', () => {
 		const details = await loadReportingDetails(client, questionLedgerAddress, viewerAddress)
 
 		if (details.status !== 'active') throw new Error('Expected active reporting details')
-		expect(details.contributionFunding).toBe('wallet')
 		expect('viewerVaultDisputeStakedAttoRep' in details).toBe(false)
 		expect('viewerPoolHeldVaultRepBackingAttoRep' in details).toBe(false)
 		expect(details.viewerEscalationMigrationEntitlement).toBeUndefined()
 		const yesSide = details.sides.find(side => side.key === 'yes')
 		if (yesSide === undefined) throw new Error('Expected yes side')
-		expect(yesSide.deposits).toHaveLength(1)
+		expect(yesSide.localPrincipalAttoRep).toBe(30n)
+		expect(yesSide.deposits).toHaveLength(0)
 		expect(yesSide.userDeposits).toEqual(yesSide.deposits)
 	})
 
@@ -586,17 +570,22 @@ describe('reporting protocol client', () => {
 		const viewerAddress = getAddress('0x00000000000000000000000000000000000000ef')
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const client = testDouble<Parameters<typeof loadReportingDetails>[0]>({
-			getBlock: async () => createBlockWithTimestamp(88n),
+			getBlock: async () => ({ ...createBlockWithTimestamp(88n), number: 1n }),
 			getCode: async () => '0x1234' as Hex,
 			multicall: createMulticallStub(async request => {
 				const firstContract = request.contracts[0]
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
 				if (functionName === 'questions') return [questionTuple, 10n]
+				if (functionName === 'getLocalUnresolvedPrincipalByVaultAndOutcome') {
+					const outcome = request.contracts[0]?.args?.[1]
+					return [outcome === 1 ? 30n : 0n]
+				}
 				if (functionName === 'startBondAttoRep') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 150n, 3n, 123n, false]
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'securityPoolOf') return vaultAddress
 				if (request.functionName === 'startBondAttoRep') return 7n
 				if (request.functionName === 'nonDecisionThresholdAttoRep') return 50n
 				if (request.functionName === 'activationTime') return 12n
@@ -647,7 +636,8 @@ describe('reporting protocol client', () => {
 		expect(details.parentWithdrawalEnabled).toBe(false)
 		const yesSide = details.sides.find((side: EscalationSide) => side.key === 'yes')
 		if (yesSide === undefined) throw new Error('Expected yes side')
-		expect(yesSide.userDeposits).toHaveLength(1)
+		expect(yesSide.localPrincipalAttoRep).toBe(30n)
+		expect(yesSide.userDeposits).toHaveLength(0)
 		expect(yesSide.importedUserDeposits).toEqual([])
 	})
 
@@ -716,6 +706,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'securityPoolOf') return vaultAddress
 				if (request.functionName === 'startBondAttoRep') return 7n
 				if (request.functionName === 'nonDecisionThresholdAttoRep') return 50n
 				if (request.functionName === 'activationTime') return 12n
@@ -795,7 +786,6 @@ describe('reporting protocol client', () => {
 		const details = await loadReportingDetails(client, questionLedgerAddress, vaultAddress)
 
 		expect(details.status).toBe('not-started')
-		expect(details.contributionFunding).toBe('wallet')
 		expect('viewerVaultExists' in details).toBe(false)
 		expect(details.viewerWalletRepBalanceAttoRep).toBe(100n)
 		expect(details.viewerWalletRepAllowanceAttoRep).toBe(0n)
@@ -888,39 +878,13 @@ describe('reporting protocol client', () => {
 		expect(details.parentWithdrawalEnabled).toBe(false)
 	})
 
-	test('loadReportingDetails continues paging deposits past settled entries on a full page', async () => {
-		const depositor = getAddress('0x00000000000000000000000000000000000000e5')
-		const readCalls: bigint[] = []
-		const firstPage = Array.from({ length: 30 }, (_, index) => ({
-			amountAttoRep: index === 29 ? 0n : BigInt(index + 1),
-			cumulativeAmountAttoRep: BigInt(index + 1),
-			depositor,
-		}))
-		const secondPage = [{ amountAttoRep: 31n, cumulativeAmountAttoRep: 31n, depositor }]
-		const client = createActiveReportingClient((outcomeIndex, startIndex) => {
-			if (outcomeIndex !== 1) return []
-			readCalls.push(startIndex)
-			if (startIndex === 0n) return firstPage
-			if (startIndex === 30n) return secondPage
-			throw new Error(`Unexpected start index: ${startIndex.toString()}`)
+	test('loadReportingDetails never searches deposits during a page read', async () => {
+		const client = createActiveReportingClient(() => {
+			throw new Error('Deposit pages belong to the foreground search.')
 		})
-
 		const details = await loadReportingDetails(client, questionLedgerAddress, undefined)
 		if (details.status !== 'active') throw new Error('Expected active reporting details')
-		const deposits = details.sides.find(side => side.key === 'yes')?.deposits
-		if (deposits === undefined) throw new Error('Expected yes side deposits')
-
-		expect(readCalls).toEqual([0n, 30n])
-		expect(deposits).toHaveLength(30)
-		expect(deposits.some(deposit => deposit.amountAttoRep === 0n)).toBe(false)
-		expect(deposits[28]?.depositIndex).toBe(28n)
-		expect(deposits[29]?.depositIndex).toBe(30n)
-	})
-
-	test('loadReportingDetails rejects malformed deposit pages instead of dropping entries', async () => {
-		const client = createActiveReportingClient(() => [{ amountAttoRep: 1n, cumulativeAmountAttoRep: 1n, depositor: 'not-an-address' }])
-
-		await expect(loadReportingDetails(client, questionLedgerAddress, undefined)).rejects.toThrow('Unexpected escalation deposit page response')
+		expect(details.sides.every(side => side.deposits.length === 0)).toBe(true)
 	})
 
 	test('buildForkCarriedEscalationProofs rejects malformed historical carry nodes instead of dropping entries', async () => {

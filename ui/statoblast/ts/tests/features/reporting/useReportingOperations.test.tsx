@@ -364,11 +364,9 @@ describe('useReportingOperations', () => {
 		const questionLedgerAddress = getAddress('0x00000000000000000000000000000000000000d2')
 		const walletFundingDetails = createReportingDetails(questionLedgerAddress, {
 			forkContinuation,
-			contributionFunding: 'wallet',
 			viewerWalletRepAllowanceAttoRep: 10n * ATTO_REP,
 			viewerWalletRepBalanceAttoRep: 10n * ATTO_REP,
 		})
-		let submittedFunding: 'wallet' | 'vault' | undefined
 		let submittedRequireLead: boolean | undefined
 		let submittedMaximumAttoRep: bigint | undefined
 		let submittedReviewAttoRep: bigint | undefined
@@ -376,8 +374,7 @@ describe('useReportingOperations', () => {
 		const reportOutcomeInQuestionLedger = mock(async (...args: Parameters<UseReportingOperationsDependencies['reportOutcomeInQuestionLedger']>) => {
 			submittedMaximumAttoRep = args[4]
 			submittedReviewAttoRep = args[5]
-			submittedFunding = args[6]
-			submittedRequireLead = args[8]
+			submittedRequireLead = args[7]
 			return {
 				action: 'reportOutcome' as const,
 				hash: '0x00000000000000000000000000000000000000000000000000000000000000a1' as const,
@@ -390,7 +387,6 @@ describe('useReportingOperations', () => {
 		const { state, setForm } = await renderOperations(createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInQuestionLedger }))
 
 		await setForm({
-			contributionFunding: 'wallet',
 			reportAmount: '5',
 			questionLedgerAddress,
 			selectedOutcome: 'yes',
@@ -400,7 +396,6 @@ describe('useReportingOperations', () => {
 		})
 
 		expect(reportOutcomeInQuestionLedger).toHaveBeenCalledTimes(1)
-		expect(submittedFunding).toBe('wallet')
 		expect(submittedRequireLead).toBe(true)
 		// The typed 5 REP exceeds the remaining threshold room, so the previewed accepted amount is smaller.
 		expect(submittedReviewAttoRep ?? 0n).toBeLessThan(5n * ATTO_REP)
@@ -416,7 +411,6 @@ describe('useReportingOperations', () => {
 		const questionLedgerAddress = getAddress('0x00000000000000000000000000000000000000d4')
 		const bond = 1n * ATTO_REP
 		const tiedDetails = createReportingDetails(questionLedgerAddress, {
-			contributionFunding: 'wallet',
 			nonDecisionThresholdAttoRep: 275_000n * ATTO_REP,
 			sides: [side('invalid', 0n), side('yes', bond), side('no', 0n)],
 			activationTime: 10_000n,
@@ -429,11 +423,11 @@ describe('useReportingOperations', () => {
 		const reportOutcomeInQuestionLedger = mock(async (...args: Parameters<UseReportingOperationsDependencies['reportOutcomeInQuestionLedger']>) => {
 			submittedMaximumAttoRep = args[4]
 			submittedReviewAttoRep = args[5]
-			submittedRequireLead = args[8]
+			submittedRequireLead = args[7]
 			return { action: 'reportOutcome' as const, hash: '0x00000000000000000000000000000000000000000000000000000000000000a4' as const, outcome: 'no' as const, questionLedgerAddress, universeId: 1n }
 		})
 		const { state, setForm } = await renderOperations(createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInQuestionLedger }))
-		await setForm({ contributionFunding: 'wallet', reportAmount: '1', questionLedgerAddress, selectedOutcome: 'no' })
+		await setForm({ reportAmount: '1', questionLedgerAddress, selectedOutcome: 'no' })
 		await act(async () => {
 			await state().onReportOutcome()
 		})
@@ -453,11 +447,11 @@ describe('useReportingOperations', () => {
 		const loadReportingDetails = mock(async () => (loadReportingDetails.mock.calls.length === 1 ? displayedDetails : latestDetails))
 		let submittedTriggersFork: boolean | undefined
 		const reportOutcomeInQuestionLedger = mock(async (...args: Parameters<UseReportingOperationsDependencies['reportOutcomeInQuestionLedger']>) => {
-			submittedTriggersFork = args[7]
+			submittedTriggersFork = args[6]
 			return { action: 'reportOutcome' as const, hash: '0x00000000000000000000000000000000000000000000000000000000000000a2' as const, outcome: 'yes' as const, questionLedgerAddress, universeId: 1n }
 		})
 		const { state, setForm } = await renderOperations(createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInQuestionLedger }))
-		await setForm({ contributionFunding: 'wallet', reportAmount: '0.000000000000000018', questionLedgerAddress, selectedOutcome: 'yes' })
+		await setForm({ reportAmount: '0.000000000000000018', questionLedgerAddress, selectedOutcome: 'yes' })
 		await act(async () => {
 			await state().loadReporting()
 		})
@@ -479,7 +473,6 @@ describe('useReportingOperations', () => {
 	test.each([undefined, 8n * ATTO_REP])('onApproveReportingRep approves the chosen amount, or the accepted contribution by default, for an active ordinary game (%s)', async chosenAmount => {
 		const questionLedgerAddress = getAddress('0x00000000000000000000000000000000000000d3')
 		const walletFundingDetails = createReportingDetails(questionLedgerAddress, {
-			contributionFunding: 'wallet',
 			nonDecisionThresholdAttoRep: 20n * ATTO_REP,
 			sides: [side('invalid', 1n * ATTO_REP), side('yes', 5n * ATTO_REP), side('no', 8n * ATTO_REP)],
 			viewerWalletRepAllowanceAttoRep: 0n,
@@ -508,7 +501,7 @@ describe('useReportingOperations', () => {
 
 	test('onApproveReportingRep rejects an amount that does not raise the allowance', async () => {
 		const questionLedgerAddress = getAddress('0x00000000000000000000000000000000000000d4')
-		const details = createReportingDetails(questionLedgerAddress, { contributionFunding: 'wallet', nonDecisionThresholdAttoRep: 20n * ATTO_REP, viewerWalletRepAllowanceAttoRep: 3n * ATTO_REP, viewerWalletRepBalanceAttoRep: 10n * ATTO_REP })
+		const details = createReportingDetails(questionLedgerAddress, { nonDecisionThresholdAttoRep: 20n * ATTO_REP, viewerWalletRepAllowanceAttoRep: 3n * ATTO_REP, viewerWalletRepBalanceAttoRep: 10n * ATTO_REP })
 		const approveReportingRep = mock(async () => {
 			throw new Error('Must not approve')
 		})

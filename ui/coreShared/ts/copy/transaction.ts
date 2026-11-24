@@ -33,9 +33,9 @@ export const completeSetBurnSuccessDetail = 'Matching shares were burned and col
 export const parentPoolSharesMigratedDetail = 'Child universe shares were created from your selected parent-universe shares.'
 export const shareOutcome = 'Share outcome'
 export const targetOutcomeIndexes = 'Target outcome indexes'
-export const reportingContributionSuccessDetail = 'Your selected REP was committed to the chosen escalation side.'
+export const reportingContributionSuccessDetail = 'Your report staked REP on the selected outcome.'
 export const reportingRepApprovalSuccessDetail = 'The approved REP can now be transferred from your wallet for this report.'
-export const escalationDepositsSettledDetail = 'Selected escalation deposits were settled against the current finalized outcome.'
+export const escalationDepositsSettledDetail = 'The selected deposits were claimed.'
 const priceRequested = 'Price requested'
 export const transactionStatus = 'Transaction status'
 export const transactionDetails = 'Transaction details'
@@ -55,8 +55,8 @@ export const walletRep = 'Wallet REP'
 export const reportingAction = (outcome: string, amount: string) => `Report ${outcome} · ${amount}\u00a0REP`
 export const settleReportNumber = (id: string) => `Settle report #${id}`
 
-export const settleEscalationDeposits = 'Settle escalation deposits'
-export const escalationDepositsSettled = 'Escalation deposits settled'
+export const settleEscalationDeposits = 'Claim reporting deposits'
+export const escalationDepositsSettled = 'Reporting deposits claimed'
 
 const reportOutcomeReviewDescription = 'Stakes REP on the selected outcome. If that outcome loses, this REP is lost.'
 export const reviewedActions: Record<string, { title: string; completedTitle: string; description?: string }> = {
@@ -71,7 +71,7 @@ export const reviewedActions: Record<string, { title: string; completedTitle: st
 	depositWalletRepToEscalationGameWithLead: { title: 'Report outcome', completedTitle: 'Outcome reported', description: reportOutcomeReviewDescription },
 	prepareEscalationGame: { title: 'Prepare reporting', completedTitle: 'Reporting prepared', description: 'Set up reporting for this question. This does not start the reporting clock.' },
 	depositWalletRepToEscalationGame: { title: 'Report outcome', completedTitle: 'Outcome reported', description: reportOutcomeReviewDescription },
-	withdrawFromEscalationGame: { title: settleEscalationDeposits, completedTitle: escalationDepositsSettled, description: 'Settle the selected deposits after resolution.' },
+	withdrawFromEscalationGame: { title: settleEscalationDeposits, completedTitle: escalationDepositsSettled, description: 'Claim the selected deposits after resolution.' },
 	settle: { title: 'Settle report', completedTitle: 'Report settled', description: 'Settle the completed oracle report.' },
 	dispute: { title: 'Dispute report', completedTitle: 'Report disputed', description: 'Fund the counter-report and swap against the current report.' },
 	withdrawTo: { title: 'Withdraw oracle balance', completedTitle: 'Oracle balance withdrawn', description: 'Withdraw your available oracle balance to the recipient.' },

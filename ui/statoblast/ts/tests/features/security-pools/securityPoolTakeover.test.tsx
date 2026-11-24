@@ -245,7 +245,7 @@ test('a disabled reason both actions share renders once and describes both butto
 })
 
 test.each([
-	['cohort', 'Your position and the target have different retirement cohorts.'],
+	['cohort', 'Your position and the target have different commitment reduction queues.'],
 	['consent', 'Your idle REP exceeds the maximum own REP you consented to pledge.'],
 	['collateral', 'Deposit more REP before taking over this commitment.'],
 	['principal', 'Your resulting principal exceeds the maximum total principal.'],

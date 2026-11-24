@@ -345,6 +345,7 @@ async function applyCoreScenario({ accounts, createWriteClient, getDeploymentSte
 }
 
 export type BootstrapScenarioApplyParameters = {
+	onSeededSecurityPool?: ((pool: import('./savedStates.js').SeededSecurityPool) => void) | undefined
 	accounts: readonly Address[]
 	createReadClient: () => ReadClient
 	createWriteClient: (accountAddress: Address) => WriteClient
@@ -362,6 +363,7 @@ export async function bootstrapSimulationChain({
 	getDeploymentSteps,
 	memoryClient,
 	onProgress,
+	onSeededSecurityPool,
 	primaryAccount,
 	profile,
 	scenario,
@@ -369,6 +371,7 @@ export async function bootstrapSimulationChain({
 }: {
 	accounts: readonly Address[]
 	applyScenario?: (parameters: BootstrapScenarioApplyParameters) => Promise<boolean>
+	onSeededSecurityPool?: BootstrapScenarioApplyParameters['onSeededSecurityPool']
 	createReadClient: () => ReadClient
 	createWriteClient: (accountAddress: Address) => WriteClient
 	getDeploymentSteps: (profile: NetworkProfile) => readonly DeploymentStep[]
@@ -405,6 +408,7 @@ export async function bootstrapSimulationChain({
 					createWriteClient,
 					memoryClient,
 					onProgress,
+					onSeededSecurityPool,
 					profile,
 					scenario,
 				})

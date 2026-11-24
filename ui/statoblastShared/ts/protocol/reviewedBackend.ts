@@ -1,7 +1,7 @@
 import type { ChainBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { createReviewedClient } from './reviewedClient.js'
 
-export function withTransactionReviews<T extends ChainBackend>(backend: T): T {
+export function withTransactionReviews<T extends ChainBackend>(backend: T, alwaysReview = false): T {
 	// Keep live backend getters for simulation status, balances, and counters.
 	const createWriteClient = backend.createWriteClient.bind(backend)
 	backend.createWriteClient = (account, callbacks) => {
@@ -24,6 +24,7 @@ export function withTransactionReviews<T extends ChainBackend>(backend: T): T {
 			assertActive => {
 				assertReviewActive = assertActive
 			},
+			alwaysReview,
 		)
 	}
 	return backend

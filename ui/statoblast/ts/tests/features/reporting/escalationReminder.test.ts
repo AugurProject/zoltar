@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { buildEscalationReminder } from '@zoltar/ui-statoblast-shared/features/reporting/lib/escalationReminder.js'
+import { buildEscalationReminder, buildStatoblastCalendarEvent } from '@zoltar/ui-statoblast-shared/features/reporting/lib/escalationReminder.js'
 
 const input = {
 	questionLedgerAddress: '0x123',
@@ -11,6 +11,13 @@ const input = {
 }
 
 describe('escalation calendar reminder', () => {
+	test('a reporting-opening reminder starts exactly at the opening time and has its own identity', () => {
+		const startsAt = input.escalationEndTime
+		const calendar = buildStatoblastCalendarEvent({ id: `0x123-opens-${startsAt}`, generatedAt: input.generatedAt, startsAt, title: 'Reporting opens', description: input.pageUrl })
+		expect(calendar).toContain('DTSTART:20260104T001800Z\r\n')
+		expect(calendar).toContain('DTEND:20260104T003300Z\r\n')
+		expect(calendar).toContain('UID:0x123-opens-1767485880@statoblast\r\n')
+	})
 	test('uses UTC, starts one hour before the deadline, lasts 15 minutes and alarms 15 minutes earlier', () => {
 		const calendar = buildEscalationReminder(input)
 		expect(calendar).toContain('DTSTART:20260103T231800Z\r\n')

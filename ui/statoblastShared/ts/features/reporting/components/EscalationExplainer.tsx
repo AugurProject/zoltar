@@ -3,7 +3,6 @@ import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { ReportingDetails } from '../../../types/contracts.js'
 import * as copy from '../../../copy/reporting.js'
 import * as glossaryCopy from '../../../copy/glossary.js'
-import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
 import { escalationExplanationHref } from '../lib/reportingViewerStatus.js'
 
 export function EscalationExplainer({ details }: { details: ReportingDetails }) {
@@ -15,9 +14,9 @@ export function EscalationExplainer({ details }: { details: ReportingDetails }) 
 				<li>{copy.explainerResolution}</li>
 				<li>
 					{copy.explainerForkLead}
-					<GlossaryTerm id='non-decision-threshold'>{glossaryCopy.nonDecisionThresholdTerm.toLowerCase()}</GlossaryTerm>
+					{glossaryCopy.nonDecisionThresholdTerm.toLowerCase()}
 					{copy.formatExplainerForkThresholdSeparator(formatCurrencyBalance(details.nonDecisionThresholdAttoRep))}
-					<GlossaryTerm id='universe-fork'>{glossaryCopy.universeForkTerm.toLowerCase()}</GlossaryTerm>
+					{glossaryCopy.universeForkTerm.toLowerCase()}
 					{copy.explainerForkTail}
 				</li>
 				<li>

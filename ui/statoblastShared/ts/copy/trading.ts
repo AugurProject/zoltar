@@ -42,7 +42,7 @@ export const mintCapacityEmpty = 'No mint capacity remaining.'
 export const formatNoSharesAvailableToMigrateReason = (outcomeLabel: string) => `You hold no ${outcomeLabel} shares to migrate.`
 export const completeSetBurnDescription = 'Burn matching Yes, No, and Invalid shares to recover collateral from the current question.'
 export const redeemingCompleteSets = 'Redeeming complete sets…'
-export const redeemResolvedShares = 'Redeem resolved shares'
+export const redeemResolvedShares = 'Redeem winning shares'
 export const resolvedShareRedemptionDescription = 'Redeem final winning shares after the selected question fully resolves.'
 export const redeemingShares = 'Redeeming shares…'
 export const completeSetBalanceLimitDetail = 'Limited by your smallest Yes, No, or Invalid balance.'

@@ -48,6 +48,7 @@ export type OverviewPanelsProps = {
 	/** Primary navigation for the top bar, supplied by `AppHeaderShell`. */
 	navigation?: ComponentChildren
 	applicationTitle: string
+	brandHref?: string | undefined
 	/** Omit universe context for applications, such as the oracle console, that operate independently of universes. */
 	activeUniverseId: bigint | undefined
 	accountState: AccountState
@@ -177,6 +178,7 @@ export function OverviewPanels({
 	settingsMenu,
 	navigation,
 	applicationTitle,
+	brandHref,
 	activeUniverseId,
 	accountState,
 	hasInjectedWallet = true,
@@ -257,6 +259,7 @@ export function OverviewPanels({
 	return (
 		<OverviewHeaderPanel
 			applicationTitle={applicationTitle}
+			brandHref={brandHref}
 			settingsMenu={settingsMenu}
 			navigation={navigation}
 			badges={

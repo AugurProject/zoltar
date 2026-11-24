@@ -471,7 +471,7 @@ void describe('TradingSection', () => {
 		expect(documentQueries.getByRole('button', { name: 'Mint complete sets' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Redeem complete sets' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Migrate forked shares' })).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Redeem resolved shares' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Redeem winning shares' })).toBeNull()
 	})
 
 	void test('does not render a local latest trading action card when a result exists', async () => {
@@ -935,9 +935,9 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const redeemSharesButton = documentQueries.getByRole('button', { name: 'Redeem resolved shares' }) as HTMLButtonElement
+		const redeemSharesButton = documentQueries.getByRole('button', { name: 'Redeem winning shares' }) as HTMLButtonElement
 		expect(redeemSharesButton.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Redeem resolved shares').reason).toBe('Wait for the selected question to resolve before redeeming shares.')
+		expect(getTransactionButtonState(document.body, 'Redeem winning shares').reason).toBe('Wait for the selected question to resolve before redeeming shares.')
 	})
 
 	test('keeps finalized parent winning-share redemption available after an unrelated fork', async () => {
@@ -945,15 +945,15 @@ void describe('TradingSection', () => {
 		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ questionOutcome: 'yes', universeHasForked: true, hasForkActivity: true }), onRedeemShares: redeem })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		const queries = within(document.body)
-		const redeemButton = queries.getByRole('button', { name: 'Redeem resolved shares' })
+		const redeemButton = queries.getByRole('button', { name: 'Redeem winning shares' })
 		if (!(redeemButton instanceof HTMLButtonElement)) throw new Error('Missing redemption button')
 		expect(redeemButton.disabled).toBe(false)
 		await act(() => {
 			fireEvent.click(redeemButton)
 		})
-		const dialog = queries.getByRole('dialog', { name: 'Redeem resolved shares' })
+		const dialog = queries.getByRole('dialog', { name: 'Redeem winning shares' })
 		await act(() => {
-			fireEvent.click(within(dialog).getByRole('button', { name: 'Redeem resolved shares' }))
+			fireEvent.click(within(dialog).getByRole('button', { name: 'Redeem winning shares' }))
 		})
 		expect(redeem).toHaveBeenCalledTimes(1)
 		const migrate = queries.getByRole('button', { name: 'Migrate forked shares' })
@@ -975,11 +975,11 @@ void describe('TradingSection', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Redeem resolved shares' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Redeem winning shares' }))
 		})
 
 		expect(redeem).not.toHaveBeenCalled()
-		const dialog = documentQueries.getByRole('dialog', { name: 'Redeem resolved shares' })
+		const dialog = documentQueries.getByRole('dialog', { name: 'Redeem winning shares' })
 		const modalQueries = within(dialog)
 		const sharesMetric = modalQueries.getByText('Winning Yes shares').parentElement
 		const payoutMetric = modalQueries.getByText('Expected collateral payout').parentElement
@@ -990,7 +990,7 @@ void describe('TradingSection', () => {
 		expect(getExactValueTitles(payoutMetric, '4.5')).toHaveLength(1)
 		expect(getExactValueTitles(repMetric, '6 REP')).toHaveLength(1)
 		await act(() => {
-			fireEvent.click(modalQueries.getByRole('button', { name: 'Redeem resolved shares' }))
+			fireEvent.click(modalQueries.getByRole('button', { name: 'Redeem winning shares' }))
 		})
 		expect(redeem).toHaveBeenCalledTimes(1)
 	})
@@ -1006,9 +1006,9 @@ void describe('TradingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const launcher = within(document.body).getByRole('button', { name: 'Redeem resolved shares' }) as HTMLButtonElement
+		const launcher = within(document.body).getByRole('button', { name: 'Redeem winning shares' }) as HTMLButtonElement
 		expect(launcher.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Redeem resolved shares').reason).toBe('You hold no winning No shares to redeem.')
+		expect(getTransactionButtonState(document.body, 'Redeem winning shares').reason).toBe('You hold no winning No shares to redeem.')
 	})
 
 	void test('explains that an escalation game pauses minting instead of reporting missing capacity', async () => {
@@ -1077,7 +1077,7 @@ void describe('TradingSection', () => {
 		expect(getExactValueTitles(repMetric, '4 REP')).toHaveLength(1)
 	})
 
-	void test('leaves minting out once the selected market has finalized, since it can never apply again', async () => {
+	void test('keeps minting visible with a reason after the question finalizes', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
@@ -1087,10 +1087,8 @@ void describe('TradingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const documentQueries = within(document.body)
-		expect(documentQueries.queryByRole('button', { name: 'Mint complete sets' })).toBeNull()
-		// Every other share action can still apply, so each stays in place with its reason when blocked.
-		expect(Array.from(document.querySelectorAll('.vault-action-launcher-grid .action-launcher-card button')).map(button => button.textContent)).toEqual(['Redeem complete sets', 'Migrate forked shares', 'Redeem resolved shares'])
+		expect(getTransactionButtonState(document.body, 'Mint complete sets')).toMatchObject({ disabled: true, reason: 'This action is unavailable in the current question state.' })
+		expect(Array.from(document.querySelectorAll('.vault-action-launcher-grid .action-launcher-card button')).map(button => button.textContent)).toEqual(['Mint complete sets', 'Redeem complete sets', 'Migrate forked shares', 'Redeem winning shares'])
 	})
 
 	void test('replaces empty holdings with one line once balances load as zero', async () => {

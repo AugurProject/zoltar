@@ -15,7 +15,6 @@ import type { OpenOracleActionResult, OpenOracleReportDetails } from '@zoltar/ui
 import { ChainBlockNumberContext, ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import { OpenOracleSection } from '../../../features/open-oracle/components/OpenOracleSection.js'
-import { PriceRequestStatusSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/PriceRequestStatusSection.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/formDefaults.js'
 import { deriveOpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracleDispute.js'
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
@@ -1400,7 +1399,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.getByRole('button', { name: 'Settle report' })).not.toBeNull()
 	})
 
-	test('keeps both report surfaces on the same chain clock and live settlement countdown', async () => {
+	test('uses the chain clock for the live settlement countdown', async () => {
 		const reportProps = createOpenOracleSectionProps({
 			activeView: 'selected-report',
 			openOracleForm: { ...getDefaultOpenOracleFormState(), reportId: '7' },
@@ -1409,16 +1408,13 @@ describe('OpenOracleSection route create view', () => {
 		})
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={100n}>
-				<section aria-label='Statoblast report'>
-					<PriceRequestStatusSection {...reportProps} />
-				</section>
 				<section aria-label='OpenOracle report'>
 					<OpenOracleSection {...reportProps} />
 				</section>
 			</ChainTimestampContext.Provider>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
-		const surfaces = ['Statoblast report', 'OpenOracle report'].map(name => within(document.body).getByRole('region', { name }))
+		const surfaces = ['OpenOracle report'].map(name => within(document.body).getByRole('region', { name }))
 		for (const surface of surfaces) {
 			expect(within(surface).getByText('Can settle in 2s')).not.toBeNull()
 			expect(within(surface).getByText('Dispute window closing')).not.toBeNull()

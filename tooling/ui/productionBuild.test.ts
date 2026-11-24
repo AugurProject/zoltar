@@ -3,15 +3,14 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import * as process from 'node:process'
-import { bytesToHex, decodeFunctionResult, encodeFunctionData, getAddress, hexToBytes, zeroAddress, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { bytesToHex, decodeFunctionResult, encodeFunctionData, getAddress, hexToBytes, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { createSimulationProfile } from '../../ui/coreShared/ts/wallet/networkProfile.js'
 import { getInfraContractAddresses } from '../../ui/statoblastShared/ts/protocol/deploymentHelpers.js'
 import { getDeploymentSteps } from '../../ui/statoblastShared/ts/protocol/deployment.js'
-import { statoblast_openOracle_OpenOracle_OpenOracle, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../../ui/statoblastShared/ts/contractArtifact.js'
+import { statoblast_openOracle_OpenOracle_OpenOracle } from '../../ui/statoblastShared/ts/contractArtifact.js'
 import { shareTokenAbi } from '../../ui/trading/ts/protocol/authorization.js'
 import { tradingContracts } from '../../ui/trading/ts/generated/contractArtifact.js'
 import * as securityPoolCopy from '../../ui/statoblastShared/ts/copy/securityPool.js'
-import * as collateralCopy from '../../ui/statoblastShared/ts/copy/collateral.js'
 import * as capitalCopy from '../../ui/statoblastShared/ts/copy/securityPoolCapital.js'
 import { UI_APP_IDS, featureStylesheets, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, type UiAppId } from './appPaths.mts'
 import { launchChromium, writeViewportScreenshot } from './chromiumDevTools.mts'
@@ -115,7 +114,7 @@ for (const appId of UI_APP_IDS) {
 	const expectedTitles: Record<UiAppId, string> = { openoracle: 'OpenOracle', statoblast: 'Augur Statoblast', trading: 'Statoblast Trading', zoltar: 'Zoltar' }
 	const expectedTitle = expectedTitles[appId]
 	const otherTitles = ['Zoltar', 'Augur Statoblast', 'Statoblast Trading'].filter(title => title !== expectedTitle)
-	const expectedRoutes: Record<UiAppId, string> = { openoracle: '#/open-oracle', statoblast: '#/pools', trading: '#/markets', zoltar: '#/zoltar' }
+	const expectedRoutes: Record<UiAppId, string> = { openoracle: '#/open-oracle', statoblast: '#/watchlist', trading: '#/markets', zoltar: '#/zoltar' }
 	const expectedRoute = expectedRoutes[appId]
 
 	test(`${appId} production includes the same stylesheets as development`, async () => {
@@ -340,7 +339,21 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 		await send('Runtime.enable')
 		await send('Page.enable')
 		await send('Page.addScriptToEvaluateOnNewDocument', {
-			source: `(() => { const NativeWorker = window.Worker; window.__zoltarProductionWorkers = []; window.Worker = class TrackedProductionWorker extends NativeWorker { constructor(...args) { super(...args); window.__zoltarProductionWorkers.push(this) } } })()`,
+			source: `(() => {
+				const NativeWorker = window.Worker;
+				window.__zoltarProductionWorkers = [];
+				window.__statoblastRpcMethods = [];
+				window.Worker = class TrackedProductionWorker extends NativeWorker {
+					constructor(...args) {
+						super(...args);
+						window.__zoltarProductionWorkers.push(this);
+					}
+					postMessage(message, ...options) {
+						if (message?.type === 'rpc') window.__statoblastRpcMethods.push(message.method);
+						return super.postMessage(message, ...options);
+					}
+				}
+			})()`,
 		})
 		await resize(viewport)
 		await navigation.navigate(pageUrl)
@@ -384,6 +397,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			},
 		}
 		await interact?.(driver)
+		if (new URL(pageUrl).pathname.startsWith('/statoblast/')) expect(await evaluate('window.__statoblastRpcMethods.filter(method => method === "eth_getLogs").length')).toBe(0)
 		return readEvaluationString(
 			await send('Runtime.evaluate', {
 				expression: `JSON.stringify({ body: document.body?.innerText ?? '', height: innerHeight, html: document.documentElement?.outerHTML ?? '', width: innerWidth })`,
@@ -442,7 +456,7 @@ const productionBrowserScenarios = [
 	},
 	{
 		appId: 'statoblast',
-		hash: '#/deploy?simulate=1&genesis=yes&simScenario=baseline',
+		hash: '#/watchlist?simulate=1&genesis=yes&simScenario=baseline',
 		expected: 'Deploy contracts',
 		workflow: false,
 		name: 'statoblast baseline deployment',
@@ -450,16 +464,24 @@ const productionBrowserScenarios = [
 	},
 	{
 		appId: 'statoblast',
-		hash: '#/pools?simulate=1&genesis=yes&simScenario=security-pool',
-		expected: 'Security pool questions',
+		hash: '#/watchlist?simulate=1&genesis=yes&simScenario=deployed',
+		expected: 'Watchlist',
+		workflow: false,
+		name: 'statoblast deployed protocol',
+		viewport: { height: 900, width: 1440 },
+	},
+	{
+		appId: 'statoblast',
+		hash: '#/watchlist?simulate=1&genesis=yes&simScenario=security-pool',
+		expected: 'Saved questions',
 		workflow: false,
 		name: 'statoblast seeded pool at narrow width',
 		viewport: { height: 844, width: 390 },
 	},
 	{
 		appId: 'statoblast',
-		hash: '#/pools?simulate=1&genesis=no&simScenario=security-pool',
-		expected: 'Security pool questions',
+		hash: '#/watchlist?simulate=1&genesis=no&simScenario=security-pool',
+		expected: 'Saved questions',
 		workflow: false,
 		name: 'statoblast No genesis seeded pool',
 		viewport: { height: 900, width: 1440 },
@@ -474,8 +496,8 @@ const productionBrowserScenarios = [
 	},
 	{
 		appId: 'statoblast',
-		hash: '#/security-pools?simulate=1&genesis=yes&simScenario=portfolio-auction',
-		expected: 'Fork choices and recovery',
+		hash: '#/watchlist?simulate=1&genesis=yes&simScenario=portfolio-auction',
+		expected: 'Saved questions',
 		workflow: true,
 		name: 'statoblast fork and auction',
 		viewport: { height: 900, width: 1440 },
@@ -504,67 +526,40 @@ for (const scenario of productionBrowserScenarios) {
 	else productionBrowserTest(`production bundle boots the ${scenario.name} scenario in Chromium`, run)
 }
 
+async function openSavedStatoblastItem(driver: ProductionBrowserDriver, kind: 'pool' | 'question') {
+	await driver.waitForBodyText(kind === 'pool' ? 'Saved security pools' : 'Saved questions')
+	for (let attempt = 0; attempt < 800; attempt += 1) {
+		const href = await driver.evaluate(`[...document.querySelectorAll('a')].find(link => link.textContent.trim() === 'Open' && link.hash.startsWith('#/pool/') && link.hash.includes('/question/') === ${kind === 'question'})?.href`)
+		if (typeof href === 'string') {
+			await driver.navigate(href)
+			return
+		}
+		await Bun.sleep(50)
+	}
+	throw new Error(`No saved ${kind} link appeared`)
+}
+
 test(
-	'production bundle boots the authenticated Statoblast security pool and seeded question balances in Chromium',
+	'Statoblast seeded Capital loads account data and stays within the manual refresh and idle request budgets',
 	async () => {
 		if (server === undefined) throw new Error('Production test server did not start')
 		const baseUrl = server.url.toString().replace(/\/$/, '')
 		await loadProductionDocumentInChromium(
-			`${baseUrl}/statoblast/#/security-pools?simulate=1&genesis=yes&simScenario=securitypoolx2`,
+			`${baseUrl}/statoblast/#/watchlist?simulate=1&genesis=yes&simScenario=securitypoolx2`,
 			{ height: 900, width: 1440 },
 			async driver => {
-				// Worker bootstrap can finish before main-thread discovery authenticates the ledger.
-				const body = await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
-				expect(body).toContain('Browser simulation')
-				expect(body).not.toContain('Could not load the security pool snapshot')
-				expect(body).toContain(capitalCopy.prepareProgress(4))
-				await driver.waitForButtonEnabled(capitalCopy.claim)
-				const seededPools = await createWorkflowActions(driver).loadSeededPools()
-				const questionIds = seededPools
-					.filter(pool => pool.universeId === 0n && pool.parent === zeroAddress)
-					.slice(0, 2)
-					.map(pool => String(pool.questionId))
-				expect(questionIds).toHaveLength(2)
-				expect(
-					await driver.evaluate(`(() => {
-			const input = text => [...document.querySelectorAll('label')].find(label => label.textContent?.trim() === text)?.control?.value;
-			const section = title => [...document.querySelectorAll('section')].find(node => node.querySelector('h3')?.textContent === title);
-			const capital = section(${JSON.stringify(capitalCopy.title)});
-			const backing = section(${JSON.stringify(capitalCopy.poolTitle)});
-			const positions = section(${JSON.stringify(capitalCopy.positions)});
-			const amounts = (scope, label) => [...scope.querySelectorAll('.metric-label')].filter(node => node.textContent === label).map(node => node.parentElement.querySelector('.currency-value')?.getAttribute('title')?.replace(/\\s/g, ''));
-			const questions = [...section(${JSON.stringify(securityPoolCopy.mint)}).querySelectorAll('select option')].filter(option => option.value !== '').map(option => String(BigInt(option.value)));
-			const manager = input(${JSON.stringify(securityPoolCopy.manager)});
-			return {
-				managerLoaded: /^0x[0-9a-f]{40}$/i.test(manager) && manager.toLowerCase() !== ${JSON.stringify(zeroAddress)},
-				owner: input(${JSON.stringify(securityPoolCopy.owner)})?.toLowerCase(),
-				withdrawableRep: amounts(capital, ${JSON.stringify(capitalCopy.withdrawableRep)}),
-				principalRep: amounts(capital, ${JSON.stringify(capitalCopy.principalRep)}),
-				commitment: amounts(capital, ${JSON.stringify(capitalCopy.commitment)}),
-				poolPledgedRep: amounts(backing, ${JSON.stringify(capitalCopy.totalPledged)}),
-				positionPledgedRep: amounts(positions, ${JSON.stringify(capitalCopy.positionPledged)}),
-				healthyCommitment: amounts(backing, ${JSON.stringify(capitalCopy.healthyCommitment)}),
-				health: capital.textContent.includes('120%'),
-				positions: positions.querySelectorAll('.workflow-subsection').length,
-				feeMetrics: section(${JSON.stringify(capitalCopy.earnings)}).textContent.includes(${JSON.stringify(capitalCopy.ethEarnings)}) && section(${JSON.stringify(capitalCopy.earnings)}).textContent.includes(${JSON.stringify(capitalCopy.repEarnings)}),
-				questions: questions.toSorted()
-			};
-		})()`),
-				).toEqual({
-					managerLoaded: true,
-					owner: '0x00000000000000000000000000000000000000a1',
-					// The seeded 3 REP/WETH price, 5% oracle band and 2× multiplier retain 75.789473684210526336 REP at the saved 120% target.
-					withdrawableRep: ['4924.210526315789473664REP'],
-					principalRep: ['5000REP'],
-					commitment: ['10WETH'],
-					poolPledgedRep: ['5000REP'],
-					positionPledgedRep: ['5000REP'],
-					healthyCommitment: ['10WETH'],
-					health: true,
-					positions: 1,
-					feeMetrics: true,
-					questions: questionIds.toSorted(),
-				})
+				await openSavedStatoblastItem(driver, 'pool')
+				await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
+				expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5000REP')
+				expect(await securityPoolMetric(driver, capitalCopy.commitment)).toBe('10WETH')
+				await Bun.sleep(500)
+				await driver.evaluate('window.__statoblastRpcMethods.length = 0')
+				await driver.clickButton('Refresh')
+				await Bun.sleep(1500)
+				const methods = await driver.evaluate('window.__statoblastRpcMethods.slice()')
+				expect(Array.isArray(methods) && methods.length > 0 && methods.length <= 4).toBe(true)
+				await Bun.sleep(13_000)
+				expect(await driver.evaluate('window.__statoblastRpcMethods.slice()')).toEqual(methods)
 			},
 			SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS - PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS,
 		)
@@ -578,6 +573,15 @@ for (const appId of ['zoltar', 'statoblast', 'trading'] as const) {
 		const baseUrl = server.url.toString().replace(/\/$/, '')
 		await loadProductionDocumentInChromium(`${baseUrl}/${appId}/?simulate=1&simScenario=baseline`, { height: 844, width: 390 }, async driver => {
 			const body = await driver.waitForBodyText(AUGUR_GENESIS_FORK_QUESTION.title)
+			if (appId === 'statoblast') {
+				expect(body).toContain('Choose a universe')
+				expect(body).toContain('View question on Etherscan')
+				expect(await driver.evaluate('window.__zoltarProductionWorkers.length')).toBe(0)
+				await driver.clickButton('Open No universe')
+				await driver.waitForBodyText('Browser simulation')
+				expect(await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.genesisOutcome')).toBe('no')
+				return
+			}
 			expect(body).toContain('Choose the truthful universe')
 			expect(body).toContain('If the rocket explodes on the launch pad while attempting to launch on a launch day, then this market will resolve as No.')
 			expect(body).toContain('2026-04-08 00:00:00 UTC')
@@ -613,22 +617,7 @@ function createWorkflowActions(driver: ProductionBrowserDriver) {
 		}
 		throw new Error(`Transaction review did not finish: ${String(await driver.evaluate('document.body.innerText'))}`)
 	}
-	// Read fixture addresses from the seeded chain, then use the same address-entry flow as a user.
-	const loadSeededPools = async () => {
-		await driver.waitForReady()
-		const genesisRepTokenAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.genesisRepTokenAddress')
-		const wethAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.wethAddress')
-		if (typeof genesisRepTokenAddress !== 'string' || typeof wethAddress !== 'string') throw new Error('Simulation network profile was not available')
-		const profile = createSimulationProfile({ genesisOutcome: 'yes', genesisRepTokenAddress: getAddress(genesisRepTokenAddress), wethAddress: getAddress(wethAddress) })
-		const { securityPoolFactory } = getInfraContractAddresses(profile)
-		const abi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
-		const readFixtureContract = (data: Hex) => readBrowserContract(driver, securityPoolFactory, data)
-		const count = decodeFunctionResult({ abi, functionName: 'questionLedgerDeploymentCount', data: await readFixtureContract(encodeFunctionData({ abi, functionName: 'questionLedgerDeploymentCount' })) })
-		expect(count > 0n && count <= 10n).toBe(true)
-		const pools = decodeFunctionResult({ abi, functionName: 'questionLedgerDeploymentsRange', data: await readFixtureContract(encodeFunctionData({ abi, functionName: 'questionLedgerDeploymentsRange', args: [0n, count] })) })
-		return pools
-	}
-	return { completeTransactionReview, loadSeededPools }
+	return { completeTransactionReview }
 }
 
 function productionInteractionTest(scenario: ProductionWorkflowScenario, route: string, viewport: { height: number; width: number }, interact: (driver: ProductionBrowserDriver) => Promise<void>) {
@@ -648,7 +637,8 @@ async function securityPoolMetric(driver: ProductionBrowserDriver, label: string
 	return driver.evaluate(`(() => { const field = [...document.querySelectorAll('.metric-label')].find(node => node.textContent === ${JSON.stringify(label)}); return field?.parentElement.querySelector('.currency-value')?.getAttribute('title')?.replace(/\\s/g, '') })()`)
 }
 
-productionInteractionTest('capital-recovery', '#/security-pools?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 844, width: 390 }, async driver => {
+productionInteractionTest('capital-recovery', '#/watchlist?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 844, width: 390 }, async driver => {
+	await openSavedStatoblastItem(driver, 'pool')
 	await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
 	const before = await securityPoolMetric(driver, capitalCopy.principalRep)
 	expect(before).toBe('5000REP')
@@ -673,28 +663,20 @@ productionInteractionTest('capital-recovery', '#/security-pools?simulate=1&genes
 	expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5001REP')
 })
 
-productionInteractionTest('portfolio-purchase', '#/security-pools?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 900, width: 1440 }, async driver => {
-	await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
-	const selected = await driver.evaluate(
-		`(() => { const label = [...document.querySelectorAll('label')].find(node => node.textContent === ${JSON.stringify(securityPoolCopy.registeredQuestions)}); const select = label?.control; if (!(select instanceof HTMLSelectElement)) return false; const option = [...select.options].find(option => option.value !== ''); if (!option) return false; select.value = option.value; select.dispatchEvent(new Event('change', { bubbles: true })); return true })()`,
-	)
-	expect(selected).toBe(true)
-	await driver.setInputByLabel(collateralCopy.amount(securityPoolCopy.mintAmount, collateralCopy.weth), '0.01')
-	await driver.setInputByLabel(collateralCopy.amount(securityPoolCopy.maximumPurchaseFee, collateralCopy.weth), '0.1')
-	await driver.setInputByLabel(securityPoolCopy.minimumShares, '0')
-	await driver.waitForButtonEnabled(securityPoolCopy.mint)
-	await driver.clickButton(securityPoolCopy.mint)
-	await createWorkflowActions(driver).completeTransactionReview(undefined, securityPoolCopy.confirmed)
-	await driver.waitForBodyText(securityPoolCopy.confirmed)
-	expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5000REP')
-	expect(await securityPoolMetric(driver, capitalCopy.demand)).toContain('WETH')
-	expect(await securityPoolMetric(driver, capitalCopy.demand)).not.toBe('0WETH')
+productionInteractionTest('portfolio-purchase', '#/watchlist?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 900, width: 1440 }, async driver => {
+	await openSavedStatoblastItem(driver, 'question')
+	await driver.waitForButtonEnabled('Mint complete sets')
+	await driver.clickButton('Mint complete sets')
+	await driver.setInputByLabel('Collateral amount', '0.01')
+	await driver.waitForButtonEnabled('Mint complete sets', 1)
+	await driver.clickButton('Mint complete sets', 1)
+	await createWorkflowActions(driver).completeTransactionReview()
+	await driver.waitForBodyText('1.01 sets')
 })
 
-productionInteractionTest('deployment', '#/deploy?simulate=1&genesis=yes&simScenario=baseline', { height: 900, width: 1440 }, async driver => {
-	await driver.evaluate('document.body.focus()')
-	await driver.pressTab()
-	expect(await driver.evaluate('document.activeElement?.textContent?.trim()')).toBe('Skip to main content')
+productionInteractionTest('deployment', '#/watchlist?simulate=1&genesis=yes&simScenario=baseline', { height: 900, width: 1440 }, async driver => {
+	await driver.clickButton('Skip to main content')
+	expect(await driver.evaluate('document.activeElement?.closest("main") !== null')).toBe(true)
 	await driver.waitForButtonEnabled('Deploy next contract')
 	const genesisRepTokenAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.genesisRepTokenAddress')
 	const wethAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.wethAddress')
@@ -702,7 +684,10 @@ productionInteractionTest('deployment', '#/deploy?simulate=1&genesis=yes&simScen
 	const steps = getDeploymentSteps(createSimulationProfile({ genesisOutcome: 'yes', genesisRepTokenAddress: getAddress(genesisRepTokenAddress), wethAddress: getAddress(wethAddress) }))
 	await driver.waitForBodyText(`0 / ${steps.length}`)
 	await driver.clickButton('Deploy next contract')
-	expect(await driver.waitForBodyText(`1 / ${steps.length}`)).toContain('Proxy Deployer')
+	await createWorkflowActions(driver).completeTransactionReview()
+	const next = steps[1]
+	if (next === undefined) throw new Error('Expected a second deployment step.')
+	expect(await driver.waitForBodyText(`1 / ${steps.length}`)).toContain(next.label)
 })
 
 async function readBrowserContract(driver: ProductionBrowserDriver, address: string, data: Hex) {

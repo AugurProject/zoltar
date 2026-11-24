@@ -25,7 +25,8 @@ function setup(replacementReason?: ReplacementReason) {
 		account,
 		chain: MAINNET_NETWORK_PROFILE.chain,
 		transport: custom({
-			request: async () => {
+			request: async ({ method }) => {
+				if (method === 'eth_call') return '0x'
 				throw new Error('Unexpected RPC')
 			},
 		}),
@@ -197,7 +198,7 @@ for (const [functionName, title, args] of [
 	['depositWalletRepToEscalationGameWithLead', 'Report No · 2\u00a0REP', [2n, 2n * 10n ** 18n]],
 	['depositRepOnOutcome', 'Report No · 2\u00a0REP', [2n, 2n * 10n ** 18n]],
 	['settle', 'Settle report #7', [7n]],
-	['withdrawFromEscalationGame', 'Settle escalation deposits', []],
+	['withdrawFromEscalationGame', 'Claim reporting deposits', []],
 	['report', 'Create oracle report', []],
 	['withdrawTo', 'Withdraw oracle balance', []],
 ] satisfies Array<[string, string, bigint[]]>) {

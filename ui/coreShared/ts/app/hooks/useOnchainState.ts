@@ -23,6 +23,7 @@ import { useReadBackendRecovery, useWalletBalanceRefresh } from './onchainStateR
 export type UseOnchainStateOptions = {
 	activeEnvironmentNonce?: number
 	enableChainClock?: boolean
+	autoRefreshChainClock?: boolean
 	onSupportedNetworkChange?: (chainId: string) => void
 }
 
@@ -33,7 +34,7 @@ export type UseOnchainStateDependencies = {
 	loadErc20Balance: (readClient: ReadClient, tokenAddress: Address, accountAddress: Address) => Promise<bigint>
 }
 
-export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock = true, onSupportedNetworkChange }: UseOnchainStateOptions = {}, dependencies: UseOnchainStateDependencies) {
+export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock = true, autoRefreshChainClock = true, onSupportedNetworkChange }: UseOnchainStateOptions = {}, dependencies: UseOnchainStateDependencies) {
 	const accountState = useSignal<AccountState>({
 		address: undefined,
 		chainId: undefined,
@@ -77,7 +78,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		readBackendStatus.value = { ...getReadBackendStatus(backend), issue: issue ?? (readBackendMessage.value === undefined ? undefined : readBackendStatus.value.issue) }
 	}
 	const isReadBackendReady = () => readBackendValidated.value && readBackendMessage.value === undefined
-	const chainClock = useOnchainClock({ activeEnvironmentNonce, enableChainClock, environmentReady: environmentReady.value, readBackendMessage: readBackendMessage.value, readBackendValidated: readBackendValidated.value, isReadBackendReady, updateReadBackendStatus })
+	const chainClock = useOnchainClock({ activeEnvironmentNonce, enableChainClock, autoRefreshChainClock, environmentReady: environmentReady.value, readBackendMessage: readBackendMessage.value, readBackendValidated: readBackendValidated.value, isReadBackendReady, updateReadBackendStatus })
 	const { clearChainClock, refreshChainClock } = chainClock
 	const setDeploymentStatuses = (update: (current: DeploymentStatus[]) => DeploymentStatus[]) => {
 		const updated = update(deploymentStatuses.value)
@@ -403,7 +404,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 				environmentBootstrapProgress.value = backend.bootstrapProgress
 				environmentReady.value = backend.isBootstrapped ?? true
 			})
-			if (enableChainClock && isReadBackendReady()) void refreshChainClock(backend)
+			if (enableChainClock && autoRefreshChainClock && isReadBackendReady()) void refreshChainClock(backend)
 		})
 		const handleWalletChange = () => {
 			void refreshState()
@@ -431,7 +432,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 			unsubscribeAccounts()
 			unsubscribeState?.()
 		}
-	}, [activeEnvironmentNonce, enableChainClock, walletMissing])
+	}, [activeEnvironmentNonce, enableChainClock, autoRefreshChainClock, walletMissing])
 
 	useWalletBalanceRefresh({ accountState, activeEnvironmentNonce, balanceErrors: { eth: ethBalanceAttoEthError, weth: wethBalanceAttoEthError }, balanceReadGeneration: balanceReadGenerationRef, dependencies, walletStateLoad })
 	useReadBackendRecovery({
@@ -475,6 +476,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		connectWallet,
 		dismissWalletActionMessage,
 		refreshState,
+		refreshCurrentBlock: () => refreshChainClock(getActiveBackend()),
 		/** Validates the read RPC again now, for a notice's retry action. */
 		retryReadBackend: () => refreshState(),
 		setDeploymentStatuses,

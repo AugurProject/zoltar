@@ -1,5 +1,4 @@
 import { getReportingSubmissionTimingGuard } from '../../../protocol/reportingTiming.js'
-import { getReportingContributionFunding, getReportingWalletDepositAmount } from '../../../lib/reportingFunding.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
@@ -42,7 +41,6 @@ export type UseReportingOperationsDependencies = {
 		outcome: Parameters<typeof reportOutcomeInQuestionLedger>[2],
 		amount: bigint,
 		reviewAmount?: bigint,
-		contributionFunding?: 'vault' | 'wallet',
 		triggersFork?: boolean,
 		requireLead?: boolean,
 	) => ReturnType<typeof reportOutcomeInQuestionLedger>
@@ -59,8 +57,7 @@ export type UseReportingOperationsDependencies = {
 const defaultUseReportingOperationsDependencies: UseReportingOperationsDependencies = {
 	approveReportingRep: async (accountAddress, callbacks, questionLedgerAddress, outcome, amount) => await approveReportingRep(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, outcome, amount),
 	loadReportingDetails: async (questionLedgerAddress, accountAddress) => await loadReportingDetails(createConnectedReadClient(), questionLedgerAddress, accountAddress),
-	reportOutcomeInQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress, outcome, amount, reviewAmount, contributionFunding, triggersFork, requireLead) =>
-		await reportOutcomeInQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, outcome, amount, reviewAmount, contributionFunding, triggersFork, requireLead),
+	reportOutcomeInQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress, outcome, amount, reviewAmount, triggersFork, requireLead) => await reportOutcomeInQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, outcome, amount, reviewAmount, triggersFork, requireLead),
 	withdrawEscalationFromQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress, outcome, depositIndexes, claimAmount) => await withdrawEscalationFromQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, outcome, depositIndexes, claimAmount),
 }
 
@@ -260,11 +257,10 @@ export function useReportingOperations(
 		}
 	}
 
-	const loadReportingContributionPreflight = async (walletAddress: Address, questionLedgerAddress: Address, currentForm: ReportingFormState, isCurrentSelection: () => boolean, displayedDetails: ReportingDetails | undefined) => {
+	const loadReportingContributionPreflight = async (walletAddress: Address, questionLedgerAddress: Address, currentForm: ReportingFormState, isCurrentSelection: () => boolean) => {
 		const selectedOutcome = requireSelectedOutcome(currentForm.selectedOutcome)
 		const reportAmount = parseRepAmountInput(currentForm.reportAmount, 'Report amount')
 		if (reportAmount <= 0n) throw new Error('Invalid report amount.')
-		const displayedFunding = displayedDetails === undefined ? undefined : getReportingContributionFunding(displayedDetails, currentForm.contributionFunding)
 		const latestDetails = await dependencies.loadReportingDetails(questionLedgerAddress, walletAddress)
 		if (!isCurrentSelection()) return undefined
 		if (latestDetails.reportingBlockedReason !== undefined) throw new Error(latestDetails.reportingBlockedReason)
@@ -278,11 +274,10 @@ export function useReportingOperations(
 			if (remainingSelectedOutcomeCapacity === 0n) throw new Error(reportingCopy.selectedSideCapacityEmpty)
 			throw new Error(`Only ${formatCurrencyBalanceWithUnit(remainingSelectedOutcomeCapacity, 'REP')} remains before the selected side reaches the non-decision threshold.`)
 		}
-		const contributionFunding = displayedFunding ?? getReportingContributionFunding(latestDetails, currentForm.contributionFunding)
 		const walletRepBalanceAttoRep = latestDetails.viewerWalletRepBalanceAttoRep ?? 0n
 		if (contributionPreview.actualDepositAmount > walletRepBalanceAttoRep) throw new Error(`Insufficient wallet REP. Add ${formatAdditionalCurrencyBalance(contributionPreview.actualDepositAmount - walletRepBalanceAttoRep, 'REP')} before reporting.`)
 		if (!isCurrentSelection()) return undefined
-		return { actualDepositAmount: contributionPreview.actualDepositAmount, walletDepositAmount: getReportingWalletDepositAmount(latestDetails, contributionPreview.actualDepositAmount), contributionFunding, latestDetails, reportAmount, selectedOutcome }
+		return { actualDepositAmount: contributionPreview.actualDepositAmount, latestDetails, reportAmount, selectedOutcome }
 	}
 
 	/** Approves the amount chosen in the approval control, or exactly this report's wallet deposit by default. */
@@ -290,13 +285,11 @@ export function useReportingOperations(
 		await runReportingAction(
 			'approveReportingRep',
 			async (walletAddress, questionLedgerAddress, currentForm, isCurrentSelection, context) => {
-				const preflight = await loadReportingContributionPreflight(walletAddress, questionLedgerAddress, currentForm, isCurrentSelection, reportingDetails.value)
+				const preflight = await loadReportingContributionPreflight(walletAddress, questionLedgerAddress, currentForm, isCurrentSelection)
 				if (preflight === undefined) return undefined
-				if (preflight.walletDepositAmount === undefined) throw new Error(reportingCopy.loadingVaultFunding)
-				if (preflight.contributionFunding !== 'wallet') throw new Error('This report uses vault backing and does not require wallet REP approval.')
-				const approvalAmountAttoRep = amountAttoRep ?? preflight.walletDepositAmount
+				const approvalAmountAttoRep = amountAttoRep ?? preflight.actualDepositAmount
 				const allowanceAttoRep = preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n
-				if (allowanceAttoRep >= approvalAmountAttoRep) throw new Error(allowanceAttoRep >= preflight.walletDepositAmount ? 'This question already has enough REP allowance for this report.' : commonCopy.formatApprovalNotIncreasedReason(formatCurrencyBalanceWithUnit(allowanceAttoRep, 'REP')))
+				if (allowanceAttoRep >= approvalAmountAttoRep) throw new Error(allowanceAttoRep >= preflight.actualDepositAmount ? 'This question already has enough REP allowance for this report.' : commonCopy.formatApprovalNotIncreasedReason(formatCurrencyBalanceWithUnit(allowanceAttoRep, 'REP')))
 				return { ...(await dependencies.approveReportingRep(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, questionLedgerAddress, preflight.selectedOutcome, approvalAmountAttoRep)), amountAttoRep: approvalAmountAttoRep }
 			},
 			'Failed to approve REP for reporting',
@@ -307,7 +300,7 @@ export function useReportingOperations(
 		await runReportingAction(
 			'reportOutcome',
 			async (walletAddress, questionLedgerAddress, currentForm, isCurrentSelection, context) => {
-				const preflight = await loadReportingContributionPreflight(walletAddress, questionLedgerAddress, currentForm, isCurrentSelection, displayedDetails)
+				const preflight = await loadReportingContributionPreflight(walletAddress, questionLedgerAddress, currentForm, isCurrentSelection)
 				if (preflight === undefined) return undefined
 				// The user confirmed the fork warning only if the displayed report already triggered the fork.
 				const triggersFork = reportingContributionTriggersFork(preflight.latestDetails, preflight.selectedOutcome, preflight.reportAmount)
@@ -315,7 +308,7 @@ export function useReportingOperations(
 					reportingDetails.value = preflight.latestDetails
 					throw new Error(reportingCopy.forkTriggerChangedSinceReview)
 				}
-				if (preflight.contributionFunding === 'wallet' && (preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n) < (preflight.walletDepositAmount ?? preflight.actualDepositAmount)) {
+				if ((preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n) < preflight.actualDepositAmount) {
 					throw new Error(reportingCopy.reportingRepApprovalRequired)
 				}
 				// Wallet deposits transferFrom the accepted amount against an approval sized to the preview, so cap the maximum at that previewed amount.
@@ -323,7 +316,6 @@ export function useReportingOperations(
 				// is submitted as the start bond the user offered; the pool still transfers only the previewed accepted amount.
 				const minimumOfferAttoRep = preflight.reportAmount < preflight.latestDetails.startBondAttoRep ? preflight.reportAmount : preflight.latestDetails.startBondAttoRep
 				const walletMaximumAttoRep = preflight.actualDepositAmount > minimumOfferAttoRep ? preflight.actualDepositAmount : minimumOfferAttoRep
-				const maximumDepositAttoRep = preflight.contributionFunding === 'wallet' ? walletMaximumAttoRep : preflight.reportAmount
 				const latestDetails = preflight.latestDetails
 				let requireLead = true
 				if (latestDetails.status === 'active') {
@@ -333,17 +325,7 @@ export function useReportingOperations(
 					requireLead = triggersFork || latestDetails.sides.every(side => side.key === preflight.selectedOutcome || resultingBalance > side.balance)
 				}
 				return {
-					...(await dependencies.reportOutcomeInQuestionLedger(
-						walletAddress,
-						{ onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal },
-						questionLedgerAddress,
-						preflight.selectedOutcome,
-						maximumDepositAttoRep,
-						preflight.actualDepositAmount,
-						preflight.contributionFunding,
-						triggersFork,
-						requireLead,
-					)),
+					...(await dependencies.reportOutcomeInQuestionLedger(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, questionLedgerAddress, preflight.selectedOutcome, walletMaximumAttoRep, preflight.actualDepositAmount, triggersFork, requireLead)),
 					amountAttoRep: preflight.actualDepositAmount,
 				}
 			},

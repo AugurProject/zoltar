@@ -46,7 +46,7 @@ export function createReportingSuccessPresentation(result: ReportingActionResult
 		detail,
 		hash: result.hash,
 		rows: [
-			{ label: transactionCopy.questionLedger, value: <AddressValue address={result.questionLedgerAddress} /> },
+			{ label: transactionCopy.questionLedger, value: <AddressValue longAbbreviation address={result.questionLedgerAddress} /> },
 			{ label: commonCopy.outcome, value: getReportingOutcomeLabel(result.outcome) },
 		],
 		title,
@@ -73,7 +73,7 @@ function getOpenOracleTransactionRows(context: OpenOracleTransactionContext | un
 	return [
 		...(context.reportId === undefined || context.reportId.trim() === '' ? [] : [{ label: openOracleCopy.reportId, value: context.reportId }]),
 		...(context.tokenPair === undefined || context.tokenPair.trim() === '' ? [] : [{ label: openOracleCopy.tokenPair, value: context.tokenPair }]),
-		...(context.openOracleAddress === undefined ? [] : [{ label: openOracleCopy.oracleAddress, value: <AddressValue address={context.openOracleAddress} /> }]),
+		...(context.openOracleAddress === undefined ? [] : [{ label: openOracleCopy.oracleAddress, value: <AddressValue longAbbreviation address={context.openOracleAddress} /> }]),
 	]
 }
 

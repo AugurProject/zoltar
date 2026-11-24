@@ -8,7 +8,6 @@ import { advanceSimulationTime, getSimulationChainTimestamp } from '@zoltar/ui-c
 import { createRangeProgressReporter, requireQaAccount } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import { statoblast_SecurityPool_SecurityPool as securityPoolArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact } from '../contractArtifact.js'
 import { createMarket } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
-import { loadAllQuestionLedgers } from '../protocol/questionLedgers.js'
 import { securityPoolAddressFromCreationReceipt, securityPoolContractRequest, securityPoolCreationRequest, securityPoolReadClient, sendSecurityPoolTransaction } from '../protocol/securityPool.js'
 import { settleSeededOracleReport, settleOracleReportIfNeeded, type ScenarioSeedParameters } from './statoblastScenarioSeeding.js'
 import { securityPoolAdmissionCreationRequest } from '../protocol/securityPoolAdmission.js'
@@ -34,8 +33,7 @@ export async function seedSecurityPoolScenario({ accounts, createReadClient, cre
 		})
 		pools.push({ questionId: market.questionId })
 	}
-	const initial = pools[0]
-	if (initial === undefined) throw new Error('A simulation security pool needs a question')
+	if (pools.length === 0) throw new Error('A simulation security pool needs a question')
 	const admission = await sendSecurityPoolTransaction(client, securityPoolAdmissionCreationRequest(owner, 'open', 0n, []), 'Deploy admission policy')
 	const policy = admission.receipt.contractAddress
 	if (policy === null || policy === undefined) throw new Error('Expected deployed admission policy')
@@ -72,9 +70,6 @@ export async function seedSecurityPoolScenario({ accounts, createReadClient, cre
 	await reportStep('Funded owner principal')
 	// One settlement refreshes every question in the security pool universe.
 	await advanceSimulationTime(memoryClient, 301n)
-	const questionPool = await readClient.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'getQuestionLedger', args: [BigInt(initial.questionId), 0n] })
-	const managerAddress = (await loadAllQuestionLedgers(readClient)).find(pool => pool.questionLedgerAddress.toLowerCase() === questionPool.toLowerCase())?.managerAddress
-	if (managerAddress === undefined) throw new Error('Expected namespaced security pool question ledger')
 	await reportStep('Preparing shared security pool oracle')
 	const commitment = 10n * collateralUnit
 	const feed = await readClient.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'priceFeed', args: [0n] })
@@ -104,5 +99,5 @@ export async function seedSecurityPoolScenario({ accounts, createReadClient, cre
 		await reportStep(`Minted shared security pool question ${index + 1} of ${pools.length}`)
 	}
 	await reportStep('Shared security pool scenario is ready')
-	return { securityPool, capitalLedger, managerAddress, questionIds: pools.map(pool => BigInt(pool.questionId), collateralUnit) }
+	return { securityPool, capitalLedger, questionIds: pools.map(pool => BigInt(pool.questionId), collateralUnit) }
 }

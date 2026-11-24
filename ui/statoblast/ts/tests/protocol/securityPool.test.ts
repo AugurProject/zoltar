@@ -46,8 +46,17 @@ test('genuine runtime code the canonical factory did not deploy fails setup and 
 	// Runtime code and getters match a real security pool; only the factory record separates it from one built with other module deployers.
 	const fixture = capitalClient()
 	fixture.setRead('isSecurityPool', false)
-	await expect(loadSecurityPoolSetup(fixture.client, securityPool, owner)).rejects.toThrow('not deployed by the canonical factory')
-	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('not deployed by the canonical factory')
+	const codeTargets: string[] = []
+	const client = fixture.client.extend(() => ({
+		getCode: async (request: Parameters<typeof fixture.client.getCode>[0]) => {
+			codeTargets.push(request.address)
+			return await fixture.client.getCode(request)
+		},
+	}))
+	await expect(loadSecurityPoolSetup(client, securityPool, owner)).rejects.toThrow('not deployed by the canonical factory')
+	await expect(loadSecurityPoolAccount(client, securityPool, owner, 0n)).rejects.toThrow('not deployed by the canonical factory')
+	expect(codeTargets).toEqual([])
+	expect(fixture.reads.map(read => read.name)).toEqual(['isSecurityPool', 'isSecurityPool'])
 	expect(fixture.reads.filter(read => read.name === 'isSecurityPool').map(read => [read.args, read.blockNumber])).toEqual([
 		[[securityPool], 10n],
 		[[securityPool], 10n],

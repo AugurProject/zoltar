@@ -32,7 +32,7 @@ test('personal capital shows exact principal and keeps distinct approval, deposi
 	const labels = Array.from(view.container.querySelectorAll('button')).map(button => button.textContent ?? '')
 	expect(labels.some(label => label.includes('Approve'))).toBe(true)
 	expect(labels.some(label => label.includes('Deposit REP'))).toBe(true)
-	expect(labels.some(label => label.includes('Request retirement'))).toBe(true)
+	expect(labels.some(label => label.includes(copy.retire))).toBe(true)
 	expect(labels.some(label => label.includes('Claim earnings'))).toBe(true)
 	expect(text).not.toContain('Claim each question')
 	expect(text).not.toContain('Execution reserve')
@@ -126,7 +126,7 @@ test('a pending position exposes re-submission without unlocking its saved targe
 	const snapshot = { ...base, positions: base.positions.map(position => ({ ...position, batch: 1n, remainingCommitment: 5n * unit })) }
 	const view = await renderIntoDocument(<Harness snapshot={snapshot} />)
 	lifecycle.trackRendered(view)
-	const button = [...view.container.querySelectorAll('button')].find(button => button.textContent === 'Re-submit retirement request')
+	const button = [...view.container.querySelectorAll('button')].find(button => button.textContent === copy.resubmitRetirement)
 	expect(button?.disabled).toBe(false)
 	expect(view.container.textContent).not.toContain(copy.remainingCommitmentHint)
 })

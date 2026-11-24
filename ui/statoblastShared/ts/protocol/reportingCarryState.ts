@@ -12,6 +12,7 @@ import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { claimStateChanged } from './claimActionState.js'
 import { withClaimReadContext } from './claimReadContext.js'
 import { CONTRACT_PAGE_SIZE } from './pagination.js'
+import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 
 const EMPTY_CARRY_LEAF_HASH = ('0x' + '00'.repeat(32)) as Hex
 
@@ -259,25 +260,46 @@ function authenticateCarrySnapshot(parentHistoricalLeaves: readonly HistoricalCa
 	return { orderedEntries, orderedLeaves, leafHashes, snapshotRoot }
 }
 
-async function loadParentSnapshot(client: Pick<ReadClient, 'readContract'>, childEscalationGameAddress: Address, parentQuestionLedgerAddress: Address, outcome: ReportingOutcomeKey, depositor: Address): Promise<ImportedEscalationDeposit[]> {
+type FrozenParentSnapshot = {
+	leaves: CarryLeafViewStruct[]
+	history: HistoricalCarrySnapshotEntry[]
+	consumed: bigint[]
+}
+const frozenParentSnapshots = new WeakMap<ReturnType<typeof getActiveBackend>, Map<string, FrozenParentSnapshot>>()
+
+async function loadParentSnapshot(client: Pick<ReadClient, 'readContract'>, childEscalationGameAddress: Address, parentQuestionLedgerAddress: Address, outcome: ReportingOutcomeKey, depositor: Address): Promise<{ claims: ImportedEscalationDeposit[]; cache?: () => void }> {
 	const parentEscalationGameAddress = await client.readContract({
 		abi: statoblast_QuestionLedger_QuestionLedger.abi,
 		address: parentQuestionLedgerAddress,
 		functionName: 'escalationGame',
 		args: [],
 	})
-	if (parentEscalationGameAddress === zeroAddress) return []
-	const [{ orderedLeaves: parentSnapshotLeaves }, inheritedConsumedParentDepositIndexes, localConsumedParentDepositIndexes, historicalLeaves, childOutcomeState] = await Promise.all([
-		loadRecursiveCarrySnapshot(client, parentEscalationGameAddress, outcome),
-		loadRecursiveProofConsumedCarriedDepositIndexes(client, parentEscalationGameAddress, outcome),
-		loadProofConsumedCarriedDepositIndexes(client, childEscalationGameAddress, outcome),
-		loadRecursiveHistoricalCarryLeaves(client, parentEscalationGameAddress, outcome),
-		readEscalationOutcomeState(client, childEscalationGameAddress, outcome),
+	if (parentEscalationGameAddress === zeroAddress) return { claims: [] }
+	const [parentIsContinuation, principal] = await Promise.all([
+		readForkContinuation(client, parentEscalationGameAddress),
+		client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: parentEscalationGameAddress, functionName: 'getLocalUnresolvedPrincipalByVaultAndOutcome', args: [depositor, getReportingOutcomeValue(outcome)] }),
 	])
-	const { orderedEntries, snapshotRoot } = authenticateCarrySnapshot(historicalLeaves, childOutcomeState)
-	const consumedParentDepositIndexes = [...inheritedConsumedParentDepositIndexes, ...localConsumedParentDepositIndexes]
+	if (!parentIsContinuation && principal === 0n) return { claims: [] }
+	const childOutcomeState = await readEscalationOutcomeState(client, childEscalationGameAddress, outcome)
+	const cacheKey = `${parentEscalationGameAddress}:${outcome}:${childOutcomeState.snapshotCarryRoot}:${childOutcomeState.snapshotLeafCount}`
+	const backend = getActiveBackend()
+	const parentCache = frozenParentSnapshots.get(backend) ?? new Map<string, FrozenParentSnapshot>()
+	frozenParentSnapshots.set(backend, parentCache)
+	let parent = parentCache.get(cacheKey)
+	if (parent === undefined) {
+		const [{ orderedLeaves: leaves }, history, consumed] = await Promise.all([
+			loadRecursiveCarrySnapshot(client, parentEscalationGameAddress, outcome),
+			loadRecursiveHistoricalCarryLeaves(client, parentEscalationGameAddress, outcome),
+			loadRecursiveProofConsumedCarriedDepositIndexes(client, parentEscalationGameAddress, outcome),
+		])
+		parent = { leaves, history, consumed }
+	}
+	const { orderedEntries, snapshotRoot } = authenticateCarrySnapshot(parent.history, childOutcomeState)
+	const localConsumedParentDepositIndexes = await loadProofConsumedCarriedDepositIndexes(client, childEscalationGameAddress, outcome)
+	const parentSnapshotLeaves = parent.leaves
+	const consumedParentDepositIndexes = [...parent.consumed, ...localConsumedParentDepositIndexes]
 	const consumedParentDepositIndexSet = new Set(consumedParentDepositIndexes.map(value => value.toString()))
-	return await Promise.all(
+	const claims = await Promise.all(
 		parentSnapshotLeaves
 			.filter(leaf => sameAddress(leaf.depositor, depositor) && !consumedParentDepositIndexSet.has(leaf.parentDepositIndex.toString()))
 			.map(async leaf => {
@@ -297,9 +319,13 @@ async function loadParentSnapshot(client: Pick<ReadClient, 'readContract'>, chil
 				return { amountAttoRep: leaf.amountAttoRep, cumulativeAmountAttoRep: leaf.cumulativeAmountAttoRep, depositor: leaf.depositor, parentDepositIndex: leaf.parentDepositIndex, claimIdentity }
 			}),
 	)
+	const snapshot = parent
+	return { claims, cache: () => parentCache.set(cacheKey, snapshot) }
 }
 export async function loadForkCarriedEscalationDepositsFromParentSnapshot(client: Parameters<typeof withClaimReadContext>[0], childEscalationGameAddress: Address, parentQuestionLedgerAddress: Address, outcome: ReportingOutcomeKey, depositor: Address): Promise<ImportedEscalationDeposit[]> {
-	return await withClaimReadContext(client, context => loadParentSnapshot(context, childEscalationGameAddress, parentQuestionLedgerAddress, outcome, depositor))
+	const result = await withClaimReadContext(client, context => loadParentSnapshot(context, childEscalationGameAddress, parentQuestionLedgerAddress, outcome, depositor))
+	result.cache?.()
+	return result.claims
 }
 
 export async function buildForkCarriedEscalationProofs(client: ReadClient, questionLedgerAddress: Address, outcome: ReportingOutcomeKey, parentDepositIndexes: readonly bigint[]): Promise<CarriedDepositProof[]> {

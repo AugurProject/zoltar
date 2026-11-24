@@ -25,7 +25,7 @@ import { advanceSimulationTime, advanceNextSimulationBlock } from './clock.js'
 import { exportSimulationSnapshot, restoreSimulationSnapshot } from './simulationSnapshotState.js'
 import { createSimulationChain, type SimulationTransactionParameters } from './simulationChain.js'
 import type { SimulationScenario } from './scenarios.js'
-import { getSimulationSource, type SavedSimulationStateEnvelopeV1, type SimulationInitialization } from './savedStates.js'
+import { getSimulationSource, type SavedSimulationStateEnvelopeV1, type SeededSecurityPool, type SimulationInitialization } from './savedStates.js'
 import { getBundledSimulationSnapshotKey } from './scenarioSnapshots.js'
 import { createSimulationProvider, type SimulationProviderRequest } from './simulationProvider.js'
 import type { SimulationBootstrapParameters, SimulationWorkerState } from './tevmWorkerProtocol.js'
@@ -67,6 +67,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 	let repPerUsdcPrice = DEFAULT_SIMULATION_USDC_PER_REP_PRICE
 	/** The prepared state a scenario bootstrap restored, so a reset restores it again instead of seeding. */
 	let scenarioSnapshot: SavedSimulationStateEnvelopeV1 | undefined
+	let seededSecurityPool: SeededSecurityPool | undefined
 	let selectedAccount = primaryAccount
 	const simulationSource = getSimulationSource(initialization)
 	let transactionCountSinceReset = 0n
@@ -127,6 +128,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 		await initializeSimulationAccounts(restored)
 		await restoreSimulationSnapshot(restored, envelope.state, () => initializeSimulationAccounts(restored))
 		chain = restored
+		seededSecurityPool = envelope.state.seededSecurityPool
 		queryDelayMilliseconds = clampDelayMilliseconds(envelope.state.queryDelayMilliseconds)
 		repPerEthPrice = envelope.state.repPerEthPrice
 		repPerUsdcPrice = envelope.state.repPerUsdcPrice
@@ -319,7 +321,11 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 			waitsForSeeding: false,
 		})
 	const bootstrapBuiltInScenario = async (scenario: SimulationScenario) => {
+		seededSecurityPool = undefined
 		await bootstrapSimulationChain({
+			onSeededSecurityPool: pool => {
+				seededSecurityPool = pool
+			},
 			accounts: QA_ACCOUNTS,
 			...(dependencies.applyScenario === undefined ? {} : { applyScenario: dependencies.applyScenario }),
 			createReadClient: createBootstrapReadClient,
@@ -399,6 +405,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 		queryDelayMilliseconds,
 		repPerEthPrice,
 		repPerUsdcPrice,
+		seededSecurityPool,
 		selectedAccount,
 		transactionCountSinceReset,
 		transactionDelayMilliseconds,
@@ -421,6 +428,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 				queryDelayMilliseconds,
 				repPerEthPrice,
 				repPerUsdcPrice,
+				seededSecurityPool,
 				selectedAccount,
 				transactionCountSinceReset,
 				transactionDelayMilliseconds,

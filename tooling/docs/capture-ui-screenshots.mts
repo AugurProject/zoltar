@@ -104,17 +104,18 @@ async function runStep(session: DevToolsSession, step: UiScreenshotStep, specId:
 			typeof step.value === 'string'
 				? step.value
 				: await session.evaluate(`(async () => {
-			const [{ getActiveBackend }, { loadAllQuestionLedgers }] = await Promise.all([
+			const [{ getActiveBackend }, { loadStatoblastQuestion }] = await Promise.all([
 				import('@zoltar/ui-core-shared/lib/activeEnvironment.js'),
 				import('@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'),
 			])
 			const backend = getActiveBackend()
 			if (backend.id !== 'simulation') throw new Error('Screenshot requires simulation')
 			await backend.waitUntilReady?.()
-			const pools = await loadAllQuestionLedgers(backend.createReadClient())
-			const pool = pools[0]
-			if (pools.length !== 1 || pool === undefined) throw new Error('Expected one seeded security pool, found ' + pools.length)
-			return pool.questionLedgerAddress
+			const seed = backend.seededSecurityPool
+			const questionId = seed?.questionIds[0]
+			if (seed === undefined || questionId === undefined || seed.questionIds.length !== 1) throw new Error('Expected one seeded Statoblast question')
+			const { question } = await loadStatoblastQuestion(backend.createReadClient(), seed.address, questionId, 0n)
+			return question.questionLedgerAddress
 		})()`)
 		if (typeof value !== 'string') throw new Error(`${context}: fill value did not resolve to text`)
 		if (typeof step.value !== 'string') simulationQuestionLedgerAddress = value

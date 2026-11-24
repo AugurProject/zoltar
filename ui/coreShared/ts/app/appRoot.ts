@@ -17,6 +17,7 @@ type MountAppOptions = {
 	initialize?: () => Promise<unknown>
 	/** Independent applications can boot without choosing a Zoltar genesis deployment. */
 	requireGenesisSelection?: boolean
+	renderGenesisEntry?: (onSelect: (outcome: GenesisOutcome) => Promise<void>) => ComponentChildren
 	root?: () => ComponentChildren
 	target?: Element
 }
@@ -65,16 +66,11 @@ export async function mountApp(options: MountAppOptions) {
 	applyThemePreference(readThemePreference())
 	if (options.requireGenesisSelection !== false && genesisOutcome === undefined) {
 		if (startupPlaceholder !== target) startupPlaceholder?.remove()
-		render(
-			createElement(GenesisUniverseEntry, {
-				applicationTitle: options.applicationTitle,
-				onSelect: async outcome => {
-					window.history.replaceState({}, '', getGenesisUniverseHref(outcome))
-					await mountApp(options)
-				},
-			}),
-			target,
-		)
+		const onSelect = async (outcome: GenesisOutcome) => {
+			window.history.replaceState({}, '', getGenesisUniverseHref(outcome))
+			await mountApp(options)
+		}
+		render(options.renderGenesisEntry?.(onSelect) ?? createElement(GenesisUniverseEntry, { applicationTitle: options.applicationTitle, onSelect }), target)
 		return
 	}
 	try {

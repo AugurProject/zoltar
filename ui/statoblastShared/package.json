@@ -65,25 +65,13 @@
 			"bun": "./ts/features/markets/lib/trading.ts",
 			"default": "./js/features/markets/lib/trading.js"
 		},
-		"./features/question-ledgers/components/RepPriceStatusLabel.js": {
-			"bun": "./ts/features/question-ledgers/components/RepPriceStatusLabel.tsx",
-			"default": "./js/features/question-ledgers/components/RepPriceStatusLabel.js"
-		},
 		"./features/question-ledgers/lib/priorityFee.js": {
 			"bun": "./ts/features/question-ledgers/lib/priorityFee.ts",
 			"default": "./js/features/question-ledgers/lib/priorityFee.js"
 		},
-		"./features/question-ledgers/lib/repPriceSource.js": {
-			"bun": "./ts/features/question-ledgers/lib/repPriceSource.tsx",
-			"default": "./js/features/question-ledgers/lib/repPriceSource.js"
-		},
 		"./features/question-ledgers/lib/questionLedgerState.js": {
 			"bun": "./ts/features/question-ledgers/lib/questionLedgerState.ts",
 			"default": "./js/features/question-ledgers/lib/questionLedgerState.js"
-		},
-		"./features/question-ledgers/lib/uiPriceOracle.js": {
-			"bun": "./ts/features/question-ledgers/lib/uiPriceOracle.ts",
-			"default": "./js/features/question-ledgers/lib/uiPriceOracle.js"
 		},
 		"./features/transactionPresentations.js": {
 			"bun": "./ts/features/transactionPresentations.tsx",
@@ -269,10 +257,6 @@
 			"bun": "./ts/protocol/fundingTransactions.ts",
 			"default": "./js/protocol/fundingTransactions.js"
 		},
-		"./features/question-ledgers/components/UniversePoolDirectorySection.js": {
-			"bun": "./ts/features/question-ledgers/components/UniversePoolDirectorySection.tsx",
-			"default": "./js/features/question-ledgers/components/UniversePoolDirectorySection.js"
-		},
 		"./protocol/reviewedClient.js": {
 			"bun": "./ts/protocol/reviewedClient.ts",
 			"default": "./js/protocol/reviewedClient.js"
@@ -292,10 +276,6 @@
 		"./features/reporting/lib/reportingViewerStatus.js": {
 			"bun": "./ts/features/reporting/lib/reportingViewerStatus.ts",
 			"default": "./js/features/reporting/lib/reportingViewerStatus.js"
-		},
-		"./lib/statoblastLocation.js": {
-			"bun": "./ts/lib/statoblastLocation.ts",
-			"default": "./js/lib/statoblastLocation.js"
 		},
 		"./features/question-ledgers/lib/poolLifecycle.js": {
 			"bun": "./ts/features/question-ledgers/lib/poolLifecycle.ts",
@@ -381,10 +361,6 @@
 			"bun": "./ts/protocol/securityPoolAdmission.ts",
 			"default": "./js/protocol/securityPoolAdmission.js"
 		},
-		"./features/open-oracle/components/PriceRequestStatusSection.js": {
-			"bun": "./ts/features/open-oracle/components/PriceRequestStatusSection.tsx",
-			"default": "./js/features/open-oracle/components/PriceRequestStatusSection.js"
-		},
 		"./features/open-oracle/hooks/useOpenOracleSettlementTime.js": {
 			"bun": "./ts/features/open-oracle/hooks/useOpenOracleSettlementTime.ts",
 			"default": "./js/features/open-oracle/hooks/useOpenOracleSettlementTime.js"
@@ -460,6 +436,54 @@
 		"./copy/securityPoolSharedFork.js": {
 			"bun": "./ts/copy/securityPoolSharedFork.ts",
 			"default": "./js/copy/securityPoolSharedFork.js"
+		},
+		"./copy/questionPage.js": {
+			"bun": "./ts/copy/questionPage.ts",
+			"default": "./js/copy/questionPage.js"
+		},
+		"./copy/securityPoolPage.js": {
+			"bun": "./ts/copy/securityPoolPage.ts",
+			"default": "./js/copy/securityPoolPage.js"
+		},
+		"./copy/statoblastShell.js": {
+			"bun": "./ts/copy/statoblastShell.ts",
+			"default": "./js/copy/statoblastShell.js"
+		},
+		"./copy/watchlist.js": {
+			"bun": "./ts/copy/watchlist.ts",
+			"default": "./js/copy/watchlist.js"
+		},
+		"./features/reporting/components/LocateReportingDeposits.js": {
+			"bun": "./ts/features/reporting/components/LocateReportingDeposits.tsx",
+			"default": "./js/features/reporting/components/LocateReportingDeposits.js"
+		},
+		"./features/useStatoblastPageRefresh.js": {
+			"bun": "./ts/features/useStatoblastPageRefresh.ts",
+			"default": "./js/features/useStatoblastPageRefresh.js"
+		},
+		"./protocol/reportingDepositSearch.js": {
+			"bun": "./ts/protocol/reportingDepositSearch.ts",
+			"default": "./js/protocol/reportingDepositSearch.js"
+		},
+		"./protocol/reportingDeposits.js": {
+			"bun": "./ts/protocol/reportingDeposits.ts",
+			"default": "./js/protocol/reportingDeposits.js"
+		},
+		"./protocol/statoblastEntries.js": {
+			"bun": "./ts/protocol/statoblastEntries.ts",
+			"default": "./js/protocol/statoblastEntries.js"
+		},
+		"./protocol/statoblastPageCache.js": {
+			"bun": "./ts/protocol/statoblastPageCache.ts",
+			"default": "./js/protocol/statoblastPageCache.js"
+		},
+		"./protocol/watchlistRows.js": {
+			"bun": "./ts/protocol/watchlistRows.ts",
+			"default": "./js/protocol/watchlistRows.js"
+		},
+		"./protocol/watchlistTransfer.js": {
+			"bun": "./ts/protocol/watchlistTransfer.ts",
+			"default": "./js/protocol/watchlistTransfer.js"
 		}
 	},
 	"version": "1.0.0"

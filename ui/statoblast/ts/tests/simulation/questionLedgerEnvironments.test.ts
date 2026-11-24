@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { loadAllQuestionLedgers } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
+import { loadStatoblastQuestion } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
 import { createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 
 const abi = parseAbi(['function securityPoolCustody() view returns (address)', 'function totals() view returns (uint256 rep,uint256 commitment,uint256 healthy)'])
@@ -15,7 +15,9 @@ for (const [scenario, count] of [
 			const backend = await createBootstrappedSimulationBackendWithRetry(scenario, 1, 'statoblast')
 			try {
 				const client = backend.createReadClient()
-				const pools = await loadAllQuestionLedgers(client)
+				const seed = backend.seededSecurityPool
+				if (seed === undefined) throw new Error('Missing seeded security pool')
+				const pools = await Promise.all(seed.questionIds.map(async id => (await loadStatoblastQuestion(client, seed.address, id, 0n)).question))
 				expect(pools).toHaveLength(count)
 				const capitals = await Promise.all(pools.map(pool => client.readContract({ address: pool.questionLedgerAddress, abi, functionName: 'securityPoolCustody' })))
 				expect(new Set(capitals).size).toBe(1)

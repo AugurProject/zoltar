@@ -160,4 +160,5 @@ export async function seedSecurityPoolAuctionScenario(parameters: ScenarioSeedPa
 	const excluded = final.auction?.bids.find(bid => bid.minimumAttoRepPerLot === 50n * minimum)
 	if (excluded === undefined || excluded.earlyRefundAttoEth === 0n) throw new Error('Expected the expensive owner bid to be refundable before closing')
 	await reportStep('Seeded portfolio-auction scenario is ready')
+	return seeded
 }
