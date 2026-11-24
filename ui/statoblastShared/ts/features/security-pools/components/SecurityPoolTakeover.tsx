@@ -5,7 +5,7 @@ import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
 import { requiredSecurityPoolCollateral } from '../lib/capital.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import { useSignal } from '@preact/signals'
-import { useEffect, useId, useRef, useState } from 'preact/hooks'
+import { useEffect, useId, useMemo, useRef, useState } from 'preact/hooks'
 import { buildSecurityPoolCapitalCureRequest, buildSecurityPoolCapitalTakeOverWithBoundsRequest, securityPoolTakeoverSource, securityPoolTakeoverFill, securityPoolTakeoverTransfer } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
@@ -20,11 +20,12 @@ import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import * as copy from '../../../copy/securityPoolTakeover.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
-import { useLiquidationTarget, type LiquidationTarget, type TakeoverSnapshot } from '../hooks/useLiquidationTarget.js'
+import { liquidationHealth, readKnownLiquidationTargets, useLiquidationTarget, type LiquidationTarget, type TakeoverSnapshot } from '../hooks/useLiquidationTarget.js'
 import { useStatoblastRefreshError } from '../../useStatoblastPageRefresh.js'
 import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { tryAgain } from '../../../copy/securityPoolPage.js'
+import { LiquidationPositionsTable, type LiquidationPositionRow } from './LiquidationPositionsTable.js'
 
 export function SecurityPoolTakeover({
 	model,
@@ -57,16 +58,28 @@ export function SecurityPoolTakeover({
 	const displayedSnapshot = target.displaySnapshot
 	const fresh = target.fresh
 	const refreshError = useStatoblastRefreshError(target.error, target.displayedAt)
-	const [knownPositions, setKnownPositions] = useState<string[]>([])
-	const walletPosition = wallet !== undefined && pool?.owner.toLowerCase() === wallet.toLowerCase() && pool.ownerAccount.positionId !== 0n ? pool.ownerAccount.positionId.toString() : undefined
-	const selectablePositions = walletPosition === undefined || knownPositions.includes(walletPosition) ? knownPositions : [walletPosition, ...knownPositions]
 	const ledgerKey = pool === undefined ? undefined : `zoltar-ui:positions:${pool.chainId}:${pool.capitalLedger}`
+	const [known, setKnown] = useState<{ ledgerKey: string; positions: string[] }>()
+	const walletPosition = wallet !== undefined && pool?.owner.toLowerCase() === wallet.toLowerCase() && pool.ownerAccount.positionId !== 0n ? pool.ownerAccount.positionId.toString() : undefined
+	const selectablePositions = useMemo(() => {
+		const positions = known?.ledgerKey === ledgerKey ? (known?.positions ?? []) : []
+		return walletPosition === undefined || positions.includes(walletPosition) ? positions : [walletPosition, ...positions]
+	}, [known, ledgerKey, walletPosition])
+	const savedTargets = useMemo(() => (redesigned && pool !== undefined && selectablePositions.length > 0 ? readKnownLiquidationTargets(pool, selectablePositions) : undefined), [redesigned, pool, selectablePositions, fresh])
+	const positionRows: LiquidationPositionRow[] = selectablePositions.map(knownId => {
+		if (id?.toString() === knownId && preview !== undefined) return { id: knownId, position: preview.position, started: preview.started, health: target.health }
+		const position = pool?.positions.find(candidate => candidate.id.toString() === knownId)
+		if (position !== undefined && pool !== undefined) return { id: knownId, position, started: position.liquidationStarted, health: liquidationHealth(pool, position) }
+		const saved = savedTargets?.get(knownId)
+		return { id: knownId, position: saved?.value.target.position, started: saved?.value.target.started, health: saved?.value.health, savedAt: saved?.savedAt }
+	})
 	const [elapsedSinceRead, setElapsedSinceRead] = useState(0n)
 	const visible = usePageVisible()
 	useEffect(() => {
 		if (!redesigned || ledgerKey === undefined) return
 		try {
-			setKnownPositions((getBrowserStorage('localStorage')?.getItem(ledgerKey) ?? '').split(',').filter(value => securityPoolUnsignedId(value, 96) !== undefined))
+			const positions = (getBrowserStorage('localStorage')?.getItem(ledgerKey) ?? '').split(',').filter(value => /^\d{1,29}$/.test(value) && securityPoolUnsignedId(value, 96) !== undefined && BigInt(value) > 0n)
+			setKnown({ ledgerKey, positions: [...new Set(positions.map(value => BigInt(value).toString()))].slice(0, 50) })
 		} catch (error) {
 			if (!(error instanceof DOMException)) throw error
 		}
@@ -83,15 +96,16 @@ export function SecurityPoolTakeover({
 	useEffect(() => {
 		if (!redesigned || ledgerKey === undefined || id === undefined || fresh === undefined || fresh.position.commitment === 0n) return
 		const selected = id.toString()
-		setKnownPositions(previous => {
-			if (previous.includes(selected)) return previous
-			const updated = [selected, ...previous].slice(0, 50)
+		setKnown(previous => {
+			const positions = previous?.ledgerKey === ledgerKey ? previous.positions : []
+			if (positions.includes(selected)) return previous
+			const updated = [selected, ...positions].slice(0, 50)
 			try {
 				getBrowserStorage('localStorage')?.setItem(ledgerKey, updated.join(','))
 			} catch (error) {
 				if (!(error instanceof DOMException)) throw error
 			}
-			return updated
+			return { ledgerKey, positions: updated }
 		})
 	}, [ledgerKey, redesigned, id, fresh])
 	useEffect(() => {
@@ -198,126 +212,118 @@ export function SecurityPoolTakeover({
 			disabled={actions.busy !== undefined}
 		/>
 	)
+	const openPosition = (position: string) => {
+		positionInput.value = position
+		openedPosition.value = BigInt(position)
+	}
 	return (
-		<SectionBlock title={copy.title} description={redesigned ? undefined : copy.description}>
-			{redesigned && selectablePositions.length > 0 && (
-				<label className='field'>
-					<span>{copy.knownPositions}</span>
-					<select
-						value={id === undefined ? '' : id.toString()}
-						disabled={actions.busy !== undefined}
-						onChange={event => {
-							positionInput.value = event.currentTarget.value
-							openedPosition.value = securityPoolUnsignedId(positionInput.value, 96)
+		<>
+			{redesigned && (
+				<SectionBlock title={copy.knownPositions}>
+					<form
+						onSubmit={event => {
+							event.preventDefault()
+							if (!canOpenPosition || actions.busy !== undefined) return
+							if (openedPosition.value === draftPosition) target.retry()
+							else openedPosition.value = draftPosition
 						}}
 					>
-						<option value=''>{copy.chooseKnownPosition}</option>
-						{selectablePositions.map(known => (
-							<option key={known} value={known}>
-								{copy.formatPosition(known)}
-							</option>
-						))}
-					</select>
-				</label>
+						{positionField}
+						<div className='actions'>
+							<button type='submit' className='secondary' disabled={!canOpenPosition || actions.busy !== undefined} aria-describedby={canOpenPosition ? undefined : openReasonId}>
+								{copy.openPosition}
+							</button>
+						</div>
+						{!canOpenPosition && <InlineHint id={openReasonId} message={copy.enterTarget} />}
+					</form>
+					{target.displayedAt !== undefined && <UpdatedAgo updatedAt={target.displayedAt} refreshing={target.loading} />}
+					<RetryableNotice message={refreshError} retryLabel={tryAgain} onRetry={target.retry} />
+					<LiquidationPositionsTable rows={positionRows} selected={id} collateral={pool?.collateral ?? { symbol: collateralCopy.fallback, decimals: 0 }} disabled={actions.busy !== undefined} onOpen={openPosition} />
+				</SectionBlock>
 			)}
-			{redesigned ? (
-				<form
-					onSubmit={event => {
-						event.preventDefault()
-						if (!canOpenPosition || actions.busy !== undefined) return
-						if (openedPosition.value === draftPosition) target.retry()
-						else openedPosition.value = draftPosition
-					}}
-				>
-					{positionField}
-					<div className='actions'>
-						<button type='submit' className='secondary' disabled={!canOpenPosition || actions.busy !== undefined} aria-describedby={canOpenPosition ? undefined : openReasonId}>
-							{copy.openPosition}
-						</button>
+			<SectionBlock title={copy.title} description={redesigned ? undefined : copy.description}>
+				{!redesigned && positionField}
+				{redesigned && distressed && preview !== undefined && (
+					<div className='statoblast-liquidation-reward'>
+						<strong>{copy.takeoverReward}</strong>
+						<progress aria-label={copy.takeoverReward} max={1} value={rewardProgress} />
+						<MetricGrid>
+							<MetricField label={copy.rewardNow}>
+								<CurrencyValue value={displayedSource?.healthy !== true && timeBasedReward !== undefined && timeBasedReward >= 0n ? timeBasedReward : displayedSource?.maximumTakeoverReward} suffix={common.rep} />
+							</MetricField>
+							<MetricField label={copy.rewardMax}>
+								<CurrencyValue value={preview.position.rep} suffix={common.rep} />
+							</MetricField>
+							<MetricField label={copy.takeoverNow}>{displayCollateral(displayedSource?.maximumTakeoverCommitment)}</MetricField>
+							<MetricField label={copy.takeoverLater}>{displayCollateral(laterTakeover?.maximumTakeoverCommitment)}</MetricField>
+						</MetricGrid>
 					</div>
-					{!canOpenPosition && <InlineHint id={openReasonId} message={copy.enterTarget} />}
-				</form>
-			) : (
-				positionField
-			)}
-			{redesigned && target.displayedAt !== undefined && <UpdatedAgo updatedAt={target.displayedAt} refreshing={target.loading} />}
-			{redesigned && <RetryableNotice message={refreshError} retryLabel={tryAgain} onRetry={target.retry} />}
-			{redesigned && distressed && preview !== undefined && (
-				<div className='statoblast-liquidation-reward'>
-					<strong>{copy.takeoverReward}</strong>
-					<progress aria-label={copy.takeoverReward} max={1} value={rewardProgress} />
-					<MetricGrid>
-						<MetricField label={copy.rewardNow}>
-							<CurrencyValue value={displayedSource?.healthy !== true && timeBasedReward !== undefined && timeBasedReward >= 0n ? timeBasedReward : displayedSource?.maximumTakeoverReward} suffix={common.rep} />
-						</MetricField>
-						<MetricField label={copy.rewardMax}>
-							<CurrencyValue value={preview.position.rep} suffix={common.rep} />
-						</MetricField>
-						<MetricField label={copy.takeoverNow}>{displayCollateral(displayedSource?.maximumTakeoverCommitment)}</MetricField>
-						<MetricField label={copy.takeoverLater}>{displayCollateral(laterTakeover?.maximumTakeoverCommitment)}</MetricField>
-					</MetricGrid>
-				</div>
-			)}
-			<MetricGrid>
-				<MetricField label={copy.targetRep}>
-					<CurrencyValue value={preview?.position.rep} suffix={common.rep} />
-				</MetricField>
-				<MetricField label={copy.targetCommitment}>
-					<CurrencyValue value={preview?.position.commitment} suffix={pool?.collateral.symbol ?? collateralCopy.fallback} units={pool?.collateral.decimals ?? 0} />
-				</MetricField>
-				<MetricField label={copy.repairLimit}>
-					<CurrencyValue value={displayedSource?.maximumTakeoverCommitment} suffix={pool?.collateral.symbol ?? collateralCopy.fallback} units={pool?.collateral.decimals ?? 0} />
-				</MetricField>
-				<MetricField label={copy.takeoverReward}>
-					<CurrencyValue value={displayedSource?.maximumTakeoverReward} suffix={copy.takeoverRewardUnit} />
-				</MetricField>
-				<MetricField label={copy.started}>
-					<TimestampValue timestamp={preview?.started} relative={false} zeroText={copy.notStarted} />
-				</MetricField>
-			</MetricGrid>
-			<div className='form-grid'>
-				{[
-					{ label: copy.commitment, input: commitmentInput },
-					{ label: copy.maximumOwnRep, input: ownInput },
-					{ label: copy.maximumPrincipal, input: principalInput },
-					{ label: copy.maximumCommitment, input: totalCommitmentInput },
-				].map(field => (
-					<SecurityPoolInput
-						key={field.label}
-						label={field.label}
-						value={field.input.value}
-						onChange={value => {
-							field.input.value = value
-						}}
-						disabled={actions.busy !== undefined}
-						numeric
-					/>
-				))}
-			</div>
-			{redesigned && distressed && (
-				<button type='button' className='secondary' disabled={source === undefined || actions.busy !== undefined} onClick={applySuggestedBound}>
-					{copy.suggestLimit}
-				</button>
-			)}
-			{redesigned && fill !== undefined && (
+				)}
 				<MetricGrid>
-					<MetricField label={copy.previewPledged}>
-						<CurrencyValue value={pledgedBefore} suffix={common.rep} /> → <CurrencyValue value={pledgedBefore + fill.takeoverReward} suffix={common.rep} />
+					{!redesigned && (
+						<>
+							<MetricField label={copy.targetRep}>
+								<CurrencyValue value={preview?.position.rep} suffix={common.rep} />
+							</MetricField>
+							<MetricField label={copy.targetCommitment}>{displayCollateral(preview?.position.commitment)}</MetricField>
+						</>
+					)}
+					<MetricField label={copy.repairLimit}>
+						<CurrencyValue value={displayedSource?.maximumTakeoverCommitment} suffix={pool?.collateral.symbol ?? collateralCopy.fallback} units={pool?.collateral.decimals ?? 0} />
 					</MetricField>
-					<MetricField label={copy.previewCommitment}>
-						{displayCollateral(commitmentBefore)} → {displayCollateral(commitmentBefore + fill.commitment)}
+					<MetricField label={copy.takeoverReward}>
+						<CurrencyValue value={displayedSource?.maximumTakeoverReward} suffix={copy.takeoverRewardUnit} />
 					</MetricField>
+					{!redesigned && (
+						<MetricField label={copy.started}>
+							<TimestampValue timestamp={preview?.started} relative={false} zeroText={copy.notStarted} />
+						</MetricField>
+					)}
 				</MetricGrid>
-			)}
-			<div className='actions'>
-				<SecurityPoolButton model={actions} action='takeOverSecurityPoolPosition' label={copy.takeOver} pendingLabel={copy.takingOver} reason={reason} sharedReasonId={reasonId} onClick={takeOver} />
-				<SecurityPoolButton model={actions} action='cureSecurityPoolPosition' label={copy.cure} pendingLabel={copy.curing} reason={cureReason} sharedReasonId={reasonId} onClick={cure} />
-			</div>
-			{sharedReason === undefined || reasonShownInForm ? undefined : (
-				<div className='tx-action-feedback shared-action-reason'>
-					<InlineHint id={sharedReasonId} message={sharedReason} />
+				<div className='form-grid'>
+					{[
+						{ label: copy.commitment, input: commitmentInput },
+						{ label: copy.maximumOwnRep, input: ownInput },
+						{ label: copy.maximumPrincipal, input: principalInput },
+						{ label: copy.maximumCommitment, input: totalCommitmentInput },
+					].map(field => (
+						<SecurityPoolInput
+							key={field.label}
+							label={field.label}
+							value={field.input.value}
+							onChange={value => {
+								field.input.value = value
+							}}
+							disabled={actions.busy !== undefined}
+							numeric
+						/>
+					))}
 				</div>
-			)}
-		</SectionBlock>
+				{redesigned && distressed && (
+					<button type='button' className='secondary' disabled={source === undefined || actions.busy !== undefined} onClick={applySuggestedBound}>
+						{copy.suggestLimit}
+					</button>
+				)}
+				{redesigned && fill !== undefined && (
+					<MetricGrid>
+						<MetricField label={copy.previewPledged}>
+							<CurrencyValue value={pledgedBefore} suffix={common.rep} /> → <CurrencyValue value={pledgedBefore + fill.takeoverReward} suffix={common.rep} />
+						</MetricField>
+						<MetricField label={copy.previewCommitment}>
+							{displayCollateral(commitmentBefore)} → {displayCollateral(commitmentBefore + fill.commitment)}
+						</MetricField>
+					</MetricGrid>
+				)}
+				<div className='actions'>
+					<SecurityPoolButton model={actions} action='takeOverSecurityPoolPosition' label={copy.takeOver} pendingLabel={copy.takingOver} reason={reason} sharedReasonId={reasonId} onClick={takeOver} />
+					<SecurityPoolButton model={actions} action='cureSecurityPoolPosition' label={copy.cure} pendingLabel={copy.curing} reason={cureReason} sharedReasonId={reasonId} onClick={cure} />
+				</div>
+				{sharedReason === undefined || reasonShownInForm ? undefined : (
+					<div className='tx-action-feedback shared-action-reason'>
+						<InlineHint id={sharedReasonId} message={sharedReason} />
+					</div>
+				)}
+			</SectionBlock>
+		</>
 	)
 }

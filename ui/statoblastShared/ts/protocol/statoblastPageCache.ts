@@ -74,7 +74,8 @@ function pageStorage(profile: NetworkProfile) {
 /** Display data shares the same eviction and network boundaries as the Capital read cache. */
 export function statoblastDisplayCache<T>(profile: NetworkProfile, identity: { universeId: bigint; owner: Address | undefined; page: string }, decode: (value: unknown) => T | undefined) {
 	const storage = pageStorage(profile)
-	const key = `display:${identity.universeId}:${identity.owner?.toLowerCase() ?? ''}:${identity.page}`
+	const pageKey = (page: string) => `display:${identity.universeId}:${identity.owner?.toLowerCase() ?? ''}:${page}`
+	const key = pageKey(identity.page)
 	return {
 		read() {
 			const page = storage.read().find(item => item.key === key)
@@ -83,6 +84,18 @@ export function statoblastDisplayCache<T>(profile: NetworkProfile, identity: { u
 			if (value === undefined) return undefined
 			storage.write({ ...page, accessed: Date.now() })
 			return { value, savedAt: page.updated, timestamp: BigInt(page.timestamp) }
+		},
+		/** Read only explicitly requested display pages, without changing their eviction order. */
+		readMany(pages: readonly string[]) {
+			const keys = new Map(pages.map(page => [pageKey(page), page]))
+			const result = new Map<string, { value: T; savedAt: number }>()
+			for (const saved of storage.read()) {
+				const page = keys.get(saved.key)
+				if (page === undefined) continue
+				const value = decode(saved.display)
+				if (value !== undefined) result.set(page, { value, savedAt: saved.updated })
+			}
+			return result
 		},
 		write(value: T, block: { number: bigint; timestamp: bigint }) {
 			const now = Date.now()

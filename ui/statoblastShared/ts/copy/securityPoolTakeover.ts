@@ -45,8 +45,18 @@ export const takeoverReward = 'Takeover reward'
 export const takeoverRewardUnit = 'REP from the provider'
 
 export const knownPositions = 'Positions known on this device'
-export const chooseKnownPosition = 'Choose a position'
+export const positionColumn = 'Position'
+export const ownerColumn = 'Owner'
+export const pledgedColumn = 'Pledged REP'
+export const commitmentColumn = 'Commitment'
+export const healthColumn = 'Health'
+export const actionColumn = 'Action'
+export const healthUnavailable = 'Unavailable'
+export const belowLiquidation = 'Below liquidation'
+export const openRow = 'Open'
 export const formatPosition = (id: string) => `Position #${id}`
+export const formatOpenPosition = (id: string) => `Open position #${id}`
+export const formatHealth = (percent: string) => `${percent}%`
 export const rewardNow = 'Reward now'
 export const rewardMax = 'Maximum reward'
 export const takeoverNow = 'Max takeover now'

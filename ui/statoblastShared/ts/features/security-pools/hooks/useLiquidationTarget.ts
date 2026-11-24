@@ -46,6 +46,20 @@ async function loadTarget(snapshot: TakeoverSnapshot, id: bigint) {
 }
 
 export type LiquidationTarget = Awaited<ReturnType<typeof loadTarget>>
+export type LiquidationHealth = { bps: bigint; threshold: bigint; belowLiquidation: boolean }
+
+export function liquidationHealth(pool: TakeoverSnapshot, position: Pick<LiquidationTarget['position'], 'commitment' | 'maxHealthyPrice'>): LiquidationHealth | undefined {
+	if (position.commitment === 0n || pool.conservativePrice <= 0n || pool.liquidationPrice <= 0n) return undefined
+	return {
+		bps: (position.maxHealthyPrice * 10_000n) / pool.conservativePrice,
+		threshold: (pool.liquidationPrice * 10_000n) / pool.conservativePrice,
+		belowLiquidation: position.maxHealthyPrice < pool.liquidationPrice,
+	}
+}
+
+function liquidationTargetPage(pool: TakeoverSnapshot, id: string) {
+	return `liquidation:${pool.capitalLedger.toLowerCase()}:${id}`
+}
 
 function decodeTarget(value: unknown) {
 	return decodeStoredValue(value, read => {
@@ -53,6 +67,10 @@ function decodeTarget(value: unknown) {
 		const position = target.record('position')
 		return {
 			blockHash: read.string('blockHash'),
+			health: read.optional('health', key => {
+				const health = read.record(key)
+				return { bps: health.bigint('bps'), threshold: health.bigint('threshold'), belowLiquidation: health.boolean('belowLiquidation') }
+			}),
 			target: {
 				position: {
 					owner: position.address('owner'),
@@ -74,15 +92,22 @@ function decodeTarget(value: unknown) {
 	})
 }
 
+export function readKnownLiquidationTargets(pool: TakeoverSnapshot, ids: readonly string[]) {
+	const pages = ids.map(id => liquidationTargetPage(pool, id))
+	const cache = statoblastDisplayCache(getActiveBackend().profile, { universeId: pool.universeId, owner: pool.owner, page: '' }, decodeTarget)
+	const saved = cache.readMany(pages)
+	return new Map(ids.map(id => [id, saved.get(liquidationTargetPage(pool, id))]))
+}
+
 export function useLiquidationTarget(snapshot: TakeoverSnapshot | undefined, presentationSnapshot: TakeoverSnapshot | undefined, id: bigint | undefined, saveForDisplay: boolean) {
 	const backend = getActiveBackend()
 	const pool = snapshot ?? presentationSnapshot
-	const page = pool === undefined || id === undefined || id === 0n ? undefined : `liquidation:${pool.capitalLedger.toLowerCase()}:${id}`
+	const page = pool === undefined || id === undefined || id === 0n ? undefined : liquidationTargetPage(pool, id.toString())
 	const identity = page === undefined || pool === undefined ? undefined : `${backend.id}:${backend.profile.genesisRepTokenAddress}:${pool.chainId}:${pool.universeId}:${pool.owner.toLowerCase()}:${page}`
 	const [attempt, setAttempt] = useState(0)
 	const requestKey = snapshot === undefined || identity === undefined ? undefined : `${identity}:${snapshot.blockHash}:${attempt}`
 	const cache = pool === undefined || page === undefined || !saveForDisplay ? undefined : statoblastDisplayCache(backend.profile, { universeId: pool.universeId, owner: pool.owner, page }, decodeTarget)
-	const [saved, setSaved] = useState<{ identity: string; target: LiquidationTarget; blockHash: string; savedAt: number }>()
+	const [saved, setSaved] = useState<{ identity: string; target: LiquidationTarget; blockHash: string; savedAt: number; health: LiquidationHealth | undefined }>()
 	const [observed, setObserved] = useState<{ identity: string; snapshot: TakeoverSnapshot; target: LiquidationTarget; savedAt: number }>()
 	const [result, setResult] = useState<{ key: string; value?: LiquidationTarget; error?: string }>()
 	useEffect(() => {
@@ -99,7 +124,7 @@ export function useLiquidationTarget(snapshot: TakeoverSnapshot | undefined, pre
 				if (!current || !environment.isCurrent()) return
 				setResult({ key: requestKey, value })
 				setObserved({ identity, target: value, snapshot, savedAt: Date.now() })
-				cache?.write({ target: value, blockHash: snapshot.blockHash }, { number: snapshot.blockNumber, timestamp: snapshot.timestamp })
+				cache?.write({ target: value, blockHash: snapshot.blockHash, health: liquidationHealth(snapshot, value.position) }, { number: snapshot.blockNumber, timestamp: snapshot.timestamp })
 			})
 			.catch(error => {
 				if (current && environment.isCurrent()) setResult({ key: requestKey, error: getErrorDetail(error, copy.unavailable) ?? copy.unavailable })
@@ -112,11 +137,14 @@ export function useLiquidationTarget(snapshot: TakeoverSnapshot | undefined, pre
 	const lastObserved = observed?.identity === identity ? observed : undefined
 	const lastSaved = saved?.identity === identity ? saved : undefined
 	const fallback = saveForDisplay ? (lastObserved ?? lastSaved) : undefined
+	const target = loaded?.value ?? fallback?.target
+	const displaySnapshot = loaded?.value !== undefined ? snapshot : (lastObserved?.snapshot ?? (pool?.blockHash === lastSaved?.blockHash ? pool : undefined))
 	return {
 		fresh: loaded?.value,
-		target: loaded?.value ?? fallback?.target,
+		target,
+		health: target !== undefined && displaySnapshot !== undefined ? liquidationHealth(displaySnapshot, target.position) : lastSaved?.health,
 		displayedAt: lastObserved?.savedAt ?? lastSaved?.savedAt,
-		displaySnapshot: loaded?.value !== undefined ? snapshot : (lastObserved?.snapshot ?? (pool?.blockHash === lastSaved?.blockHash ? pool : undefined)),
+		displaySnapshot,
 		loading: identity !== undefined && loaded === undefined,
 		error: loaded?.error,
 		retry: () => setAttempt(previous => previous + 1),

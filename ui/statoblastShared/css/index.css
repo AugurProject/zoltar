@@ -5422,3 +5422,92 @@ span.rep-price-status.stale,
 	margin-inline-start: var(--space-2);
 	color: var(--success);
 }
+
+.statoblast-liquidation-positions {
+	container-type: inline-size;
+}
+
+.statoblast-liquidation-table {
+	width: 100%;
+	table-layout: fixed;
+	border-collapse: collapse;
+	text-align: start;
+}
+
+.statoblast-liquidation-table th,
+.statoblast-liquidation-table td {
+	padding: var(--space-2);
+	border-block-end: 1px solid var(--divider-strong);
+	text-align: start;
+	vertical-align: middle;
+	overflow-wrap: anywhere;
+}
+
+.statoblast-liquidation-table thead th:nth-child(2) {
+	width: 25%;
+}
+
+.statoblast-liquidation-table thead th:nth-child(5),
+.statoblast-liquidation-table thead th:nth-child(6) {
+	width: 15%;
+}
+
+.statoblast-liquidation-table tr[data-selected] {
+	background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.statoblast-liquidation-health {
+	display: grid;
+	gap: var(--space-1);
+}
+
+.statoblast-liquidation-health meter {
+	width: 100%;
+	max-width: 10rem;
+}
+
+@container (width < 60rem) {
+	.statoblast-liquidation-table,
+	.statoblast-liquidation-table tbody {
+		display: block;
+	}
+
+	.statoblast-liquidation-table thead {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+	}
+
+	.statoblast-liquidation-table tbody tr {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		padding: var(--space-2);
+		border-block-end: 1px solid var(--divider-strong);
+	}
+
+	.statoblast-liquidation-table tbody th,
+	.statoblast-liquidation-table td {
+		padding: var(--space-1);
+		border: 0;
+		min-width: 0;
+	}
+
+	.statoblast-liquidation-table td:nth-child(2) {
+		grid-column: 1 / -1;
+		grid-row: 2;
+	}
+
+	.statoblast-liquidation-table td:last-child {
+		grid-row: 1;
+		grid-column: 2;
+		justify-self: end;
+	}
+
+	.statoblast-liquidation-table td[data-label]::before {
+		content: attr(data-label) / "";
+		display: block;
+		font-size: var(--font-caption);
+	}
+}
