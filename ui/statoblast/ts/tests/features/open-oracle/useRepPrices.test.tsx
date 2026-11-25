@@ -38,9 +38,11 @@ function createSimulationController(): SimulationController {
 		exportState: async name =>
 			serializeSavedSimulationStateEnvelope({
 				baseScenario: 'baseline',
+				genesisOutcome: 'yes',
 				name,
 				savedAt: '2026-06-02T12:34:56.000Z',
 				state: {
+					blocks: [],
 					blockCountSinceReset: 0n,
 					currentTimestamp: 0n,
 					queryDelayMilliseconds: 0,

@@ -95,7 +95,7 @@ test('requires PostgreSQL integration for augurScan behavior and safe full runs'
 	expect(classifyCiChange(['augurScan/src/ARCHITECTURE.md']).augurScanIntegration).toBe(false)
 	expect(classifyCiChange(['shared/README.md']).augurScanIntegration).toBe(false)
 	expect(classifyCiChange(['augurScan/src/database.ts']).augurScanIntegration).toBe(true)
-	expect(classifyCiChange(['augurScan/migrations/002.sql']).augurScanIntegration).toBe(true)
+	expect(classifyCiChange(['augurScan/src/schema-policy.ts']).augurScanIntegration).toBe(true)
 	expect(classifyCiChange(['augurScan/config/abis.json']).augurScanIntegration).toBe(true)
 	expect(classifyCiChange(['augurScan/config/manifests/mainnet.json']).augurScanIntegration).toBe(true)
 	expect(classifyCiChange(['shared/core/ts/evm/ethereum.ts']).augurScanIntegration).toBe(true)

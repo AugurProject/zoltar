@@ -48,8 +48,8 @@ export type SeededSecurityPool = { address: Address; questionIds: bigint[] }
 
 type SimulationSnapshotV1 = {
 	seededSecurityPool?: SeededSecurityPool | undefined
-	/** Mined blocks with receipts, oldest first; states saved before this field existed restore without their history. */
-	blocks?: SerializedSimulationBlock[] | undefined
+	/** Mined blocks with receipts, oldest first. */
+	blocks: SerializedSimulationBlock[]
 	blockCountSinceReset: bigint
 	currentTimestamp: bigint
 	queryDelayMilliseconds: number
@@ -63,7 +63,7 @@ type SimulationSnapshotV1 = {
 
 export type SavedSimulationStateEnvelopeV1 = {
 	baseScenario: SimulationScenario
-	genesisOutcome?: GenesisOutcome
+	genesisOutcome: GenesisOutcome
 	name: string
 	savedAt: string
 	state: SimulationSnapshotV1
@@ -206,7 +206,7 @@ function isNonNegativeBigInt(value: unknown) {
 
 function assertSavedStateEnvelope(value: unknown): asserts value is SavedSimulationStateEnvelopeV1 {
 	if (!isPlainRecord(value)) throw new SavedSimulationStateError('Saved simulation state must be a JSON object')
-	if (value['genesisOutcome'] !== undefined && (typeof value['genesisOutcome'] !== 'string' || parseGenesisOutcome(value['genesisOutcome']) === undefined)) throw new SavedSimulationStateError('Saved simulation state has an invalid genesis universe')
+	if (typeof value['genesisOutcome'] !== 'string' || parseGenesisOutcome(value['genesisOutcome']) === undefined) throw new SavedSimulationStateError('Saved simulation state has an invalid genesis universe')
 	if (value['version'] !== SAVED_SIMULATION_STATE_VERSION) throw new SavedSimulationStateError(`Unsupported saved simulation state version: ${String(value['version'])}`)
 	if (typeof value['name'] !== 'string' || normalizeSavedStateName(value['name']) === '') throw new SavedSimulationStateError('Saved simulation state is missing a name')
 	if (typeof value['savedAt'] !== 'string' || value['savedAt'].trim() === '') throw new SavedSimulationStateError('Saved simulation state is missing a savedAt timestamp')
@@ -225,7 +225,7 @@ function assertSavedStateEnvelope(value: unknown): asserts value is SavedSimulat
 	if (!isNonNegativeBigInt(state['repPerEthPrice']) || state['repPerEthPrice'] === 0n) throw new SavedSimulationStateError('Saved simulation state is missing a valid REP per ETH price')
 	if (!isNonNegativeBigInt(state['repPerUsdcPrice']) || state['repPerUsdcPrice'] === 0n) throw new SavedSimulationStateError('Saved simulation state is missing a valid USDC per REP price')
 	if (!isPlainRecord(state['snapshot'])) throw new SavedSimulationStateError('Saved simulation state is missing a valid TEVM snapshot')
-	if (state['blocks'] !== undefined && (!Array.isArray(state['blocks']) || !state['blocks'].every(isSerializedSimulationBlock))) throw new SavedSimulationStateError('Saved simulation state has invalid block history')
+	if (!Array.isArray(state['blocks']) || !state['blocks'].every(isSerializedSimulationBlock)) throw new SavedSimulationStateError('Saved simulation state has invalid block history')
 }
 
 function assertSavedStateRecord(value: unknown): asserts value is SavedSimulationStateStorageRecord {
@@ -256,7 +256,7 @@ function parseSavedStateStorageRecords(serialized: string | null): SavedSimulati
 		try {
 			assertSavedStateRecord(item)
 			const envelope = parseSavedSimulationStateEnvelope(item.serialized)
-			validRecords.push(toSavedSimulationStateRecord(item, envelope.genesisOutcome ?? 'yes'))
+			validRecords.push(toSavedSimulationStateRecord(item, envelope.genesisOutcome))
 		} catch (error) {
 			if (!(error instanceof SavedSimulationStateError)) throw error
 			droppedRecordCount += 1
@@ -429,7 +429,7 @@ export function persistSavedSimulationState(serialized: string, storage?: Storag
 			savedAt: envelope.savedAt,
 			serialized: normalizedSerialized,
 		},
-		envelope.genesisOutcome ?? 'yes',
+		envelope.genesisOutcome,
 	)
 	replaceSavedStateStorageRecords(snapshot, [...currentRecords, nextRecord], storageReference)
 	return nextRecord

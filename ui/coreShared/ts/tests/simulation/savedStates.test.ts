@@ -7,13 +7,14 @@ import { installDomEnvironment } from '../testUtils/domEnvironment.js'
 import { parseSavedSimulationStateEnvelope } from './savedStateStorage.js'
 import type { GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
 
-function createSerializedSavedState({ genesisOutcome, name, savedAt }: { genesisOutcome?: GenesisOutcome; name: string; savedAt: string }) {
+function createSerializedSavedState({ genesisOutcome = 'yes', name, savedAt }: { genesisOutcome?: GenesisOutcome; name: string; savedAt: string }) {
 	return serializeSavedSimulationStateEnvelope({
 		baseScenario: 'baseline',
-		...(genesisOutcome === undefined ? {} : { genesisOutcome }),
+		genesisOutcome,
 		name,
 		savedAt,
 		state: {
+			blocks: [],
 			blockCountSinceReset: 1n,
 			currentTimestamp: 2n,
 			queryDelayMilliseconds: 0,
@@ -32,6 +33,14 @@ function createSerializedSavedState({ genesisOutcome, name, savedAt }: { genesis
 
 describe('saved simulation states', () => {
 	const listSavedSimulationStateRecordIds = () => getSavedSimulationStateStorageSummary().records.map(record => record.id)
+
+	test('rejects saves without current genesis metadata or block history', () => {
+		const envelope = parseSavedSimulationStateEnvelope(createSerializedSavedState({ name: 'Current', savedAt: '2026-06-02T12:34:56.000Z' }))
+		const { genesisOutcome: _genesisOutcome, ...withoutGenesis } = envelope
+		const { blocks: _blocks, ...withoutBlocks } = envelope.state
+		expect(() => Reflect.apply(serializeSavedSimulationStateEnvelope, undefined, [withoutGenesis])).toThrow('invalid genesis universe')
+		expect(() => Reflect.apply(serializeSavedSimulationStateEnvelope, undefined, [{ ...envelope, state: withoutBlocks }])).toThrow('invalid block history')
+	})
 
 	test('reports unavailable storage without throwing', () => {
 		const unavailableStorage: Storage = {
@@ -92,6 +101,7 @@ describe('saved simulation states', () => {
 			parseSavedSimulationStateEnvelope(
 				JSON.stringify({
 					baseScenario: 'baseline',
+					genesisOutcome: 'yes',
 					name: 'Bad state',
 					savedAt: '2026-06-02T12:34:56.000Z',
 					state: {},
@@ -106,6 +116,7 @@ describe('saved simulation states', () => {
 			parseSavedSimulationStateEnvelope(
 				JSON.stringify({
 					baseScenario: 'baseline',
+					genesisOutcome: 'yes',
 					name: 'Bad state',
 					savedAt: 'not-a-date',
 					state: {
@@ -169,19 +180,16 @@ describe('saved simulation states', () => {
 			return JSON.parse(backupValue)
 		}
 
-		test('exposes the parsed genesis root in summaries and treats absent genesis as Yes', () => {
+		test('exposes the parsed genesis root in summaries', () => {
 			const yes = persistSavedSimulationState(createSerializedSavedState({ genesisOutcome: 'yes', name: 'Yes baseline', savedAt: '2026-06-02T12:34:56.000Z' }))
 			const no = persistSavedSimulationState(createSerializedSavedState({ genesisOutcome: 'no', name: 'No baseline', savedAt: '2026-06-02T12:35:56.000Z' }))
-			const legacyYes = persistSavedSimulationState(createSerializedSavedState({ name: 'Older Yes baseline', savedAt: '2026-06-02T12:36:56.000Z' }))
 
 			expect(yes.genesisOutcome).toBe('yes')
 			expect(no.genesisOutcome).toBe('no')
-			expect(legacyYes.genesisOutcome).toBe('yes')
 			const records = getSavedSimulationStateStorageSummary().records
-			expect(records).toHaveLength(3)
+			expect(records).toHaveLength(2)
 			expect(records.map(record => [record.id, record.genesisOutcome])).toEqual(
 				expect.arrayContaining([
-					[legacyYes.id, 'yes'],
 					[no.id, 'no'],
 					[yes.id, 'yes'],
 				]),

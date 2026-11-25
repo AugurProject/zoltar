@@ -198,10 +198,6 @@ export function parseProtocolIndexReference(value: unknown): ProtocolIndexRefere
 	}
 }
 
-export function isReference(value: unknown) {
-	return typeof value === 'object' && value !== null && !Array.isArray(value) && (value as Record<string, unknown>)['kind'] === 'protocol-index-sidecar'
-}
-
 export function safeCount(value: string, label: string) {
 	if (value.length > 16) throw new Error(`${label} exceeds the runtime's safe iterable range`)
 	const count = BigInt(value)

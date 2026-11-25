@@ -254,15 +254,14 @@ export function parseRetirementState(value: unknown, signerAddress: Address | un
 		}
 	})
 	const rawOverride = retirement['profileReplacementOverride'] === undefined ? undefined : record(retirement['profileReplacementOverride'], 'retirement.profileReplacementOverride')
-	const legacyOverride = rawOverride !== undefined && !('completionBlockHash' in rawOverride)
 	if (rawOverride !== undefined) {
-		exactKeys(rawOverride, legacyOverride ? ['acceptedAt', 'reason', 'targetProfileId'] : ['acceptedAt', 'completionBlockHash', 'completionBlockNumber', 'reason', 'recipient', 'sourceProfileId', 'targetProfileId'], [], 'retirement.profileReplacementOverride')
+		exactKeys(rawOverride, ['acceptedAt', 'completionBlockHash', 'completionBlockNumber', 'reason', 'recipient', 'sourceProfileId', 'targetProfileId'], [], 'retirement.profileReplacementOverride')
 	}
 	const completionEvidence = retirement['completionEvidence'] === undefined ? undefined : parseCompletionEvidence(retirement['completionEvidence'])
 	const recipient = retirement['recipient'] === undefined ? undefined : getAddress(String(retirement['recipient']))
 	if (recipient !== undefined) assertSafeRetirementRecipient(recipient, signerAddress)
 	let profileReplacementOverride: RetirementProfileReplacementOverride | undefined
-	if (rawOverride !== undefined && !legacyOverride) {
+	if (rawOverride !== undefined) {
 		const completionBlockHash = rawOverride['completionBlockHash']
 		if (typeof completionBlockHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(completionBlockHash)) throw new Error('retirement.profileReplacementOverride.completionBlockHash is invalid')
 		const acceptedAt = timestamp(rawOverride['acceptedAt'], 'retirement.profileReplacementOverride.acceptedAt')

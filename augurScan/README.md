@@ -112,7 +112,7 @@ docker stop augurscan-test-postgres
 | --- | --- |
 | `bun run check` | Metadata build, import-boundary check, restricted-import check, metadata check, and Biome. |
 | `bun run format`, `bun run format:check` | Biome formatting. |
-| `bun run schema:init` | Initializes or migrates the schema in the `POSTGRES_URL` database and exits. |
+| `bun run schema:init` | Initializes an empty `POSTGRES_URL` database or validates the current schema, then exits. Historical schemas are rejected. |
 | `bun run qa:serve` | Builds the demo browser bundle and serves it against fixture data on port `3001` (or `PORT`), without a database. |
 | `bun run build:demo` | Builds only that demo bundle. |
 | `bun run metadata:snapshot` | Writes the generated scanner metadata from the already compiled contract artifacts. `metadata:build` compiles the contracts first and then runs it. |

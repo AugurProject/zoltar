@@ -63,9 +63,10 @@ function createSavedStateEnvelope() {
 	if (selectedAccount === undefined) throw new Error('Expected a valid simulation account')
 	return {
 		baseScenario: 'baseline',
+		genesisOutcome: 'yes' as const,
 		name: 'Saved',
 		savedAt: '2026-11-02T00:00:00.000Z',
-		state: { blockCountSinceReset: 1n, currentTimestamp: 2n, queryDelayMilliseconds: 0, repPerEthPrice: 1n, repPerUsdcPrice: 1n, selectedAccount, snapshot: {}, transactionCountSinceReset: 0n, transactionDelayMilliseconds: 0 },
+		state: { blocks: [], blockCountSinceReset: 1n, currentTimestamp: 2n, queryDelayMilliseconds: 0, repPerEthPrice: 1n, repPerUsdcPrice: 1n, selectedAccount, snapshot: {}, transactionCountSinceReset: 0n, transactionDelayMilliseconds: 0 },
 		version: 1 as const,
 	}
 }

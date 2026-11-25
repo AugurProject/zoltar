@@ -117,7 +117,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 		})
 	}
 	const restoreSavedStateEnvelope = async (envelope: SavedSimulationStateEnvelopeV1, progressLabel: string) => {
-		if ((envelope.genesisOutcome ?? 'yes') !== genesisOutcome) throw new Error('The saved state belongs to another genesis universe.')
+		if (envelope.genesisOutcome !== genesisOutcome) throw new Error('The saved state belongs to another genesis universe.')
 		bootstrapError = undefined
 		bootstrapLabel = progressLabel
 		bootstrapProgress = 0

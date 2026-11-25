@@ -423,9 +423,11 @@ void describe('active environment', () => {
 		const record = persistSavedSimulationState(
 			serializeSavedSimulationStateEnvelope({
 				baseScenario: 'baseline',
+				genesisOutcome: 'yes',
 				name: 'Saved baseline',
 				savedAt: '2026-06-02T12:34:56.000Z',
 				state: {
+					blocks: [],
 					blockCountSinceReset: 1n,
 					currentTimestamp: 2n,
 					queryDelayMilliseconds: 0,
@@ -472,6 +474,7 @@ void describe('active environment', () => {
 			JSON.stringify([
 				{
 					baseScenario: 'baseline',
+					genesisOutcome: 'yes',
 					id: 'broken-state',
 					name: 'Broken state',
 					savedAt: '2026-06-02T12:34:56.000Z',
