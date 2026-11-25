@@ -18,10 +18,7 @@ type AppChromeSlots = {
 
 type AppHeaderShellProps = {
 	mainElementId?: string
-	header?: ComponentChildren
-	renderHeader?: (simulationBanner: ComponentChildren, settingsMenu: ComponentChildren) => ComponentChildren
-	overview?: ComponentChildren
-	renderOverview?: (chrome: AppChromeSlots) => ComponentChildren
+	renderOverview: (chrome: AppChromeSlots) => ComponentChildren
 	simulationController: SimulationController | undefined
 	/** Secondary views of the current primary route. Rendered only while the current route is one of the primary tabs. */
 	secondaryNavigation?: SecondaryNavigation | undefined
@@ -38,7 +35,7 @@ type AppHeaderShellProps = {
 	settingsContent?: ComponentChildren
 }
 
-export function AppHeaderShell({ mainElementId = 'app-content', header, renderHeader, overview, renderOverview, simulationController, secondaryNavigation, tabNavigation, onEnvironmentChanged = async () => undefined, onRefresh, settingsContent }: AppHeaderShellProps) {
+export function AppHeaderShell({ mainElementId = 'app-content', renderOverview, simulationController, secondaryNavigation, tabNavigation, onEnvironmentChanged = async () => undefined, onRefresh, settingsContent }: AppHeaderShellProps) {
 	const focusAppContent = () => {
 		const appContent = document.getElementById(mainElementId)
 		if (!(appContent instanceof HTMLElement)) return
@@ -78,37 +75,18 @@ export function AppHeaderShell({ mainElementId = 'app-content', header, renderHe
 		return <TabNavigation route={tabNavigation.route} tabs={tabNavigation.tabs} onRouteChange={tabNavigation.onRouteChange} {...(tabNavigation.moreTabs === undefined ? {} : { moreTabs: tabNavigation.moreTabs })} />
 	})()
 	const routeViews = activeSecondaryNavigation === undefined || promoteSecondaryNavigation ? undefined : <RouteSubNavigation ariaLabel={activeSecondaryNavigation.ariaLabel} value={activeSecondaryNavigation.value} onChange={activeSecondaryNavigation.onChange} options={activeSecondaryNavigation.options} />
-	const shellHeader = header ?? (
-		<>
-			<div className='app-chrome'>
-				{renderOverview === undefined ? (
-					<div className='header-toolbar'>
-						{overview}
-						{navigation === undefined ? undefined : <div className='header-toolbar-navigation'>{navigation}</div>}
-						<div className='header-toolbar-settings'>{settingsMenu}</div>
-					</div>
-				) : (
-					renderOverview({ navigation, settingsMenu })
-				)}
-				<TabNavigationUnavailableReasons tabs={allTabs} />
-			</div>
-			{routeViews}
-		</>
-	)
 
 	return (
 		<>
 			<button className='skip-link' type='button' onClick={focusAppContent}>
 				{appCopy.skipToMainContent}
 			</button>
-			{renderHeader === undefined ? (
-				<>
-					{simulationBanner}
-					{shellHeader}
-				</>
-			) : (
-				renderHeader(simulationBanner, settingsMenu)
-			)}
+			{simulationBanner}
+			<div className='app-chrome'>
+				{renderOverview({ navigation, settingsMenu })}
+				<TabNavigationUnavailableReasons tabs={allTabs} />
+			</div>
+			{routeViews}
 		</>
 	)
 }

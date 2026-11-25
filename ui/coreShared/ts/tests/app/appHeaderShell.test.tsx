@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { HeaderToolbar } from '../../components/HeaderToolbar.js'
 import { AppHeaderShell } from '../../app/components/AppHeaderShell.js'
 import { ProtocolAppFrame } from '../../app/components/ProtocolAppFrame.js'
 import { mountApp } from '../../app/appRoot.js'
@@ -70,7 +71,7 @@ describe('AppHeaderShell', () => {
 		const overview = <div>Overview</div>
 		const tabNavigation = { onRouteChange: () => undefined, route: 'zoltar', tabs: [{ hash: '#/zoltar', label: 'Zoltar', route: 'zoltar' }] }
 		const onRefresh = mock(async () => undefined)
-		const withoutSimulation = await renderIntoDocument(<AppHeaderShell overview={overview} simulationController={undefined} tabNavigation={tabNavigation} onRefresh={onRefresh} />)
+		const withoutSimulation = await renderIntoDocument(<AppHeaderShell renderOverview={({ navigation, settingsMenu }) => <HeaderToolbar brand='App' controls={overview} navigation={navigation} settings={settingsMenu} />} simulationController={undefined} tabNavigation={tabNavigation} onRefresh={onRefresh} />)
 
 		try {
 			const skipLink = within(withoutSimulation.container).getByRole('button', { name: 'Skip to main content' })
@@ -81,7 +82,9 @@ describe('AppHeaderShell', () => {
 		}
 
 		const beforeHash = domEnvironment.window.location.hash
-		const withSimulation = await renderIntoDocument(<AppHeaderShell overview={overview} simulationController={createSimulationController()} tabNavigation={tabNavigation} onRefresh={onRefresh} />)
+		const withSimulation = await renderIntoDocument(
+			<AppHeaderShell renderOverview={({ navigation, settingsMenu }) => <HeaderToolbar brand='App' controls={overview} navigation={navigation} settings={settingsMenu} />} simulationController={createSimulationController()} tabNavigation={tabNavigation} onRefresh={onRefresh} />,
+		)
 
 		try {
 			const skipLink = within(withSimulation.container).getByRole('button', { name: 'Skip to main content' })
@@ -109,7 +112,15 @@ describe('AppHeaderShell', () => {
 			['deploy', true],
 			['not-found', false],
 		] as const) {
-			const rendered = await renderIntoDocument(<AppHeaderShell overview={<div>Overview</div>} secondaryNavigation={secondaryNavigation} simulationController={undefined} tabNavigation={{ onRouteChange: () => undefined, route, tabs }} onRefresh={async () => undefined} />)
+			const rendered = await renderIntoDocument(
+				<AppHeaderShell
+					renderOverview={({ navigation, settingsMenu }) => <HeaderToolbar brand='App' controls={<div>Overview</div>} navigation={navigation} settings={settingsMenu} />}
+					secondaryNavigation={secondaryNavigation}
+					simulationController={undefined}
+					tabNavigation={{ onRouteChange: () => undefined, route, tabs }}
+					onRefresh={async () => undefined}
+				/>,
+			)
 			try {
 				expect(within(rendered.container).queryByRole('navigation', { name: 'Zoltar views' }) !== null).toBe(expectSecondary)
 			} finally {
@@ -133,7 +144,7 @@ describe('AppHeaderShell', () => {
 		}
 		const singleTab = await renderIntoDocument(
 			<AppHeaderShell
-				overview={<div>Overview</div>}
+				renderOverview={({ navigation, settingsMenu }) => <HeaderToolbar brand='App' controls={<div>Overview</div>} navigation={navigation} settings={settingsMenu} />}
 				secondaryNavigation={secondaryNavigation}
 				simulationController={undefined}
 				tabNavigation={{ onRouteChange: () => undefined, route: 'zoltar', showProtocolGuide: false, tabs: [{ hash: '#/zoltar', label: 'Zoltar', route: 'zoltar' }] }}
@@ -158,7 +169,7 @@ describe('AppHeaderShell', () => {
 		const secondaryNavigation = { ariaLabel: 'Question ledgers views', onChange: () => undefined, options: [{ href: '#/security-pools', label: 'Browse questions', value: 'browse' }], value: 'browse' }
 		const withGuide = await renderIntoDocument(
 			<AppHeaderShell
-				overview={<div>Overview</div>}
+				renderOverview={({ navigation, settingsMenu }) => <HeaderToolbar brand='App' controls={<div>Overview</div>} navigation={navigation} settings={settingsMenu} />}
 				secondaryNavigation={secondaryNavigation}
 				simulationController={undefined}
 				tabNavigation={{
@@ -191,12 +202,12 @@ describe('AppHeaderShell', () => {
 		}
 	})
 
-	test('supports an injected application header and custom main-content target', async () => {
+	test('supports a custom main-content target', async () => {
 		const domEnvironment = installDomEnvironment('http://localhost/#/markets')
 		const appContent = document.createElement('main')
 		appContent.id = 'main-content'
 		document.body.appendChild(appContent)
-		const rendered = await renderIntoDocument(<AppHeaderShell mainElementId='main-content' renderHeader={simulationBanner => <header>{simulationBanner}Trading navigation</header>} simulationController={undefined} onRefresh={async () => undefined} />)
+		const rendered = await renderIntoDocument(<AppHeaderShell mainElementId='main-content' renderOverview={() => <header>Trading navigation</header>} simulationController={undefined} onRefresh={async () => undefined} />)
 
 		try {
 			expect(rendered.container.textContent).toContain('Trading navigation')
@@ -211,7 +222,7 @@ describe('AppHeaderShell', () => {
 
 	test('moves focus into settings and restores it when Escape closes the dialog', async () => {
 		const domEnvironment = installDomEnvironment('http://localhost/#/markets')
-		const rendered = await renderIntoDocument(<AppHeaderShell overview={<div>Overview</div>} simulationController={undefined} onRefresh={async () => undefined} />)
+		const rendered = await renderIntoDocument(<AppHeaderShell renderOverview={({ navigation, settingsMenu }) => <HeaderToolbar brand='App' controls={<div>Overview</div>} navigation={navigation} settings={settingsMenu} />} simulationController={undefined} onRefresh={async () => undefined} />)
 		try {
 			const settingsButton = within(rendered.container).getByRole('button', { name: 'Settings' })
 			fireEvent.click(settingsButton)

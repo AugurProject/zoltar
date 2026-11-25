@@ -36,7 +36,7 @@ jobs:
           bun run ui:build:prod:current
       - name: Read canonical UI artifact metadata
         id: projects
-        run: bun ./tooling/repo/query-projects.mts --github-output
+        run: bun ./tooling/repo/query-projects.mts --github-output --cache-profile=paths
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: domain-production-ui
@@ -59,7 +59,7 @@ jobs:
           name: domain-production-ui
           path: ui
       - name: Run production browser smoke tier
-        run: bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts tooling/ui/productionBuild.test.ts && bun run test:browser:smoke
+        run: bun run test:browser:smoke
         env:
           ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: "1"
 

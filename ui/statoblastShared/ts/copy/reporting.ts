@@ -31,7 +31,6 @@ export const maxProfitForkReason = 'Max reward is unavailable because matching t
 export const maxProfitWindowFilledReason = 'Max reward is unavailable because the reward window is already filled on the selected side.'
 export const selectedSideLeadsReason = 'Selected side already leads.'
 export const loadingEscalation = 'Loading escalation…'
-export const refreshReporting = 'Refresh reporting'
 export const retryReporting = 'Retry reporting'
 export const selectedSideCapacityEmpty = 'The selected side has no remaining capacity.'
 export const poolHeldVaultRepBackingEmpty = 'No pool-held vault REP backing is available for reporting.'
