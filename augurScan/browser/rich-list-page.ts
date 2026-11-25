@@ -44,7 +44,9 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 	$('#richlist-shell').hidden = !showCards
 	$('#rich-view-toggle').textContent = showCards ? 'Show table' : 'Show details'
 	const tableState = captureViewState($('#richlist-table'))
-	const rowsState = captureViewState($('#richlist-rows'))
+	const focusedDisclosure = document.activeElement instanceof HTMLElement ? document.activeElement.closest<HTMLDetailsElement>('#richlist-rows details[data-detail-key]') : undefined
+	const focusedKey = focusedDisclosure?.dataset['detailKey']
+	const rowsState = captureViewState(focusedDisclosure ?? $('#richlist-rows'))
 	renderRichListTable($('#richlist-table'), richListItems, {
 		chainId: selectedChainId(),
 		sort: $('#rich-sort').value,
@@ -58,7 +60,6 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 	const rows = $('#richlist-rows')
 	const isInitialRender = rows.childElementCount === 0
 	const openDetailKeys = new Set([...rows.querySelectorAll<HTMLElement>('details[open][data-detail-key]')].map(details => details.dataset['detailKey']))
-	const focusedDetailKey = document.activeElement instanceof HTMLElement ? document.activeElement.closest<HTMLElement>('details[data-detail-key]')?.dataset['detailKey'] : undefined
 	rows.replaceChildren()
 	for (const item of richListItems) {
 		const itemKey = `${item.chain_id}:${item.address}`
@@ -83,7 +84,7 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 		transactions.addEventListener('click', () => openAccountTransactions(item))
 		const positions = element('div', 'rich-count')
 		const capitalPositions = Array.isArray(item.capital_positions) ? item.capital_positions : []
-		positions.append(richFieldLabel('Protocol involvement'), element('strong', '', counted(item.pool_count, 'pool')), element('span', '', counted(capitalPositions.length, 'capital position')))
+		positions.append(richFieldLabel('Protocol involvement'), element('strong', '', counted(item.pool_count, 'pool')), element('span', '', counted(item.capital_position_count ?? capitalPositions.length, 'capital position')))
 		const rep = element('div', 'rich-rep')
 		rep.append(richFieldLabel('REP tokens'))
 		if (repTokens.length === 0) rep.append(element('strong', '', 'REP pending'))
@@ -101,6 +102,7 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 			tokenLine.append(element('strong', '', exactUnit(token.balance, tokenDecimals(token.decimals), token.symbol ?? 'REP')), tokenIdentity)
 			rep.append(tokenLine)
 		}
+		if (item.rep_balances_truncated) rep.append(element('span', '', `Showing ${number(repTokens.length)} of ${number(item.sampled_rep_token_count)} sampled REP tokens`))
 		if (!repComplete) rep.append(element('span', '', `${number(item.sampled_rep_token_count)} of ${number(item.rep_token_count)} REP tokens sampled`))
 		main.append(identity, rep, wallet, transactions, positions)
 		article.append(main)
@@ -128,17 +130,15 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 			card.append(element('strong', '', presentation.title), element('span', '', presentation.summary), link)
 			involvementGrid.append(card)
 		}
+		if ((item.capital_position_count ?? 0) > capitalPositions.length) involvementGrid.append(element('span', 'data-note', `Showing the first ${number(capitalPositions.length)} capital positions.`))
 		if (poolAssociations.length < Number(item.pool_count)) involvementGrid.append(element('span', 'data-note', 'Showing the first 100 associations.'))
 		involvement.append(involvementGrid)
 		if (Number(item.pool_count) > 0 || capitalPositions.length > 0) article.append(involvement)
 		rows.append(article)
 	}
 	restoreViewState($('#richlist-table'), { focus: tableState.focus, openDetails: new Set() })
-	restoreViewState(rows, { focus: rowsState.focus, openDetails: new Set() })
-	if (focusedDetailKey) {
-		const focusedDetails = [...rows.querySelectorAll<HTMLElement>('details[data-detail-key]')].find(details => details.dataset['detailKey'] === focusedDetailKey)
-		focusedDetails?.querySelector<HTMLElement>('summary')?.focus({ preventScroll: true })
-	}
+	const focusContainer = [...rows.querySelectorAll<HTMLDetailsElement>('details[data-detail-key]')].find(details => details.dataset['detailKey'] === focusedKey)
+	restoreViewState(focusContainer ?? rows, { focus: rowsState.focus, openDetails: new Set() })
 	rows.setAttribute('aria-busy', 'false')
 	const paginationEnded = richListItems.length < richListTotal && !richListContinuationAvailable(richListItems.length, richListTotal)
 	$('#richlist-summary').textContent = `${number(richListItems.length)} of ${number(richListTotal)} known addresses${paginationEnded ? ` · the list ends here; only the top ${number(richListItems.length)} can be shown` : ''}`

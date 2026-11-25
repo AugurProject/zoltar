@@ -261,3 +261,10 @@ catalogTest(
 	},
 	{ attempts: 150, timeout: 25_000 },
 )
+
+catalogTest('final partial history page keeps focus on the coverage notice', 'tab=pools&stateHistoryMore=1&fromBlock=1', desktopViewport, async ({ waitFor, evaluate }) => {
+	await waitFor("document.querySelector('.state-history-more') !== null")
+	await evaluate("document.querySelector('.state-history-more').click()")
+	await waitFor("document.activeElement?.classList.contains('state-history-complete')")
+	expect(await evaluate('document.activeElement?.textContent')).toContain('Requested range is partially indexed')
+})
