@@ -330,6 +330,7 @@ postgresTest(
 			await expectUniqueEscalationCollections(context)
 			await expectManifestResetRetention(context)
 		} finally {
+			await database.sql.unsafe('TRUNCATE TABLE networks CASCADE')
 			await database.close()
 		}
 	},
