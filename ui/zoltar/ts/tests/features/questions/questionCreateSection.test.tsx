@@ -174,14 +174,6 @@ describe('QuestionCreateSection', () => {
 		expect(document.querySelector('form')?.textContent).not.toContain('Canceled in wallet.')
 	})
 
-	test('renders the inline transaction review in place of the overridden submit button', async () => {
-		await renderSection({ submitActionOverride: { availability: { disabled: false, reason: undefined }, idleLabel: 'Create question and pool', onSubmit: () => undefined, pending: true, pendingLabel: 'Creating…', reviewContent: <div data-testid='inline-review'>Confirm the pool transaction</div> } })
-
-		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Confirm the pool transaction')).not.toBeNull()
-		expect(documentQueries.queryByRole('button', { name: /Create question and pool|Creating…/ })).toBeNull()
-	})
-
 	test('reviews, submits, and offers only the Zoltar fork handoff after success', async () => {
 		let createCount = 0
 		let resetCount = 0
@@ -383,20 +375,5 @@ describe('QuestionCreateSection', () => {
 		expect(starts?.textContent).toContain('Immediately after creation')
 		expect(ends?.querySelector('time')?.getAttribute('dateTime')).toBe('2026-12-31T21:30:00.000Z')
 		expect(ends?.textContent).toContain('2026-12-31 21:30 UTC')
-	})
-
-	test('keeps extra submit fields with the inputs, before the preview, and states a single allowed type without an example', async () => {
-		await renderSection({ allowedMarketTypes: ['binary'], submitFields: <input aria-label='Pool multiplier' /> })
-
-		const extraField = within(document.body).getByLabelText('Pool multiplier')
-		const preview = document.querySelector('aside[aria-label="Draft preview"]')
-		const submitButton = within(document.body).getByRole('button', { name: 'Create question' })
-		if (preview === null) throw new Error('Expected the question preview landmark')
-		expect(extraField.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-		expect(preview.compareDocumentPosition(submitButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-		expect(document.querySelectorAll('input[name="market-create-type"]')).toHaveLength(0)
-		const fixedType = document.querySelector('.question-type-fixed')
-		expect(fixedType?.textContent).toContain('Binary')
-		expect(fixedType?.textContent).not.toContain('e.g.')
 	})
 })

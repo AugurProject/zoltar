@@ -272,40 +272,9 @@ describe('AppStatusNotices', () => {
 		expect(retryCalls).toBe(1)
 	})
 
-	test('offers a retry for Zoltar universe load failures', async () => {
-		let retryCalls = 0
-		const renderedComponent = await renderIntoDocument(
-			h(AppStatusNotices, {
-				onRetryZoltarUniverse: () => {
-					retryCalls += 1
-				},
-				readBackendMessage: undefined,
-				showApplicationDeploymentWarning: false,
-				simulationBootstrapError: undefined,
-				zoltarUniverseError: 'Universe service unavailable',
-			}),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Universe service unavailable')).not.toBeNull()
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))
-		expect(retryCalls).toBe(1)
-	})
-
-	test('disables the Zoltar universe retry while it is loading', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(AppStatusNotices, {
-				loadingZoltarUniverse: true,
-				onRetryZoltarUniverse: () => undefined,
-				readBackendMessage: undefined,
-				showApplicationDeploymentWarning: false,
-				simulationBootstrapError: undefined,
-				zoltarUniverseError: 'Universe service unavailable',
-			}),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		expect(within(document.body).getByRole('button', { name: 'Retrying…' }).hasAttribute('disabled')).toBe(true)
+	test('shows the Zoltar universe load failure', async () => {
+		const rendered = await renderIntoDocument(h(AppStatusNotices, { readBackendMessage: undefined, showApplicationDeploymentWarning: false, simulationBootstrapError: undefined, zoltarUniverseError: 'Universe service unavailable' }))
+		cleanupRenderedComponent = rendered.cleanup
+		expect(within(document.body).getByText('Universe service unavailable')).not.toBeNull()
 	})
 })

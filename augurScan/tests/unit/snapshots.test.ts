@@ -40,7 +40,7 @@ for (const [entityType, contractKind] of [
 			const values = outputValues[functionName] ?? [1n]
 			return decodeFunctionResult({ abi, functionName, data: encodeAbiParameters(method.outputs, values) })
 		}
-		const snapshot = await sampleEntityStateWithRead({ entityType, entityIdentity: vault, address: vault, poolAddress: pool, coordinatorAddress: coordinator }, read)
+		const snapshot = await sampleEntityStateWithRead({ entityType, entityIdentity: vault, address: vault, coordinatorAddress: coordinator }, read)
 		expect(mismatches).toEqual([])
 		expect(snapshot.readStatus).toBe('success')
 	})

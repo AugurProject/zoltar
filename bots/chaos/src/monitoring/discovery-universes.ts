@@ -25,7 +25,6 @@ export async function discoverUniverses({ context, blockNumber, limits, topology
 		topology.universeChildren = {}
 		mutation.changed = true
 	}
-	const forkBurnDivisor = await client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, blockNumber, functionName: 'forkBurnDivisor' })
 	const migrationProgressByUniverse = new Map<string, MigrationRepSplitProgressSnapshot[]>()
 	for (const progress of context.indexedMigrationRepSplits ?? []) {
 		const routes = migrationProgressByUniverse.get(progress.universeId) ?? []
@@ -39,18 +38,15 @@ export async function discoverUniverses({ context, blockNumber, limits, topology
 		queuedIds.delete(universeId.toString())
 		if (seen.has(universeId.toString())) continue
 		seen.add(universeId.toString())
-		const [raw, threshold, nonDecisionThreshold, migration, universeTheoreticalSupply, earliestForkTime] = await drainConcurrent([
+		const [raw, threshold, nonDecisionThreshold, migration, earliestForkTime] = await drainConcurrent([
 			client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'universes' }),
 			client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'getForkThresholdAttoRep' }),
 			client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'getNonDecisionThresholdAttoRep' }),
 			wallet === undefined ? Promise.resolve(0n) : client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [wallet, universeId], blockNumber, functionName: 'getMigrationRepBalanceAttoRep' }),
-			client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'getUniverseTheoreticalSupplyAttoRep' }),
 			client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'getEarliestForkTime' }),
 		])
 		const [forkTime, forkQuestionId, forkingOutcomeIndex, reputationToken, parentUniverseId] = raw
 		if (reputationToken === zeroAddress) throw new Error(`Universe ${universeId.toString()} has no REP token`)
-		const supplyBasedDeposit = universeTheoreticalSupply / 10_000_000n
-		const initialEscalationDeposit = supplyBasedDeposit < 10n ** 18n ? 10n ** 18n : supplyBasedDeposit
 		const cachedChildren = topology.universeChildren[universeId.toString()]
 		const outcomes = (cachedChildren?.outcomeIndexes ?? []).map(outcome => BigInt(outcome))
 		const childIds = (cachedChildren?.childUniverseIds ?? []).map(childId => BigInt(childId))
@@ -101,12 +97,10 @@ export async function discoverUniverses({ context, blockNumber, limits, topology
 		}
 		const snapshot: UniverseSnapshot = {
 			earliestForkTime: earliestForkTime.toString(),
-			forkBurnDivisor: forkBurnDivisor.toString(),
 			forkQuestionId: forkQuestionId.toString(),
 			forkThresholdAttoRep: threshold.toString(),
 			forkTime: forkTime.toString(),
 			id: universeId.toString(),
-			initialEscalationDepositAttoRep: initialEscalationDeposit.toString(),
 			knownChildOutcomes: outcomes.map(outcome => outcome.toString()),
 			migrationBalance: migration.toString(),
 			migrationRepSplitProgressByOutcome: Object.fromEntries((migrationProgressByUniverse.get(universeId.toString()) ?? []).map(progress => [progress.outcomeIndex, progress.childMigrationRepAmountAttoRep])),

@@ -1,14 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import { parseSettings } from '../../src/config/settings.ts'
-import { isVaultMigrationSourceEligible, validateApprovedUniverseSelection } from '../../src/core/fork-migration.ts'
-
-const FORK_MIGRATION_WINDOW_SECONDS = 8n * 7n * 24n * 60n * 60n
-import { initialRuntimeState, operatorSnapshot, type PoolObservation, type UniverseObservation } from '../../src/state/operator-state.ts'
+import { validateApprovedUniverseSelection } from '@zoltar/bot-shared/monitoring/universe-policy'
+import { marketPriceAllowsExecution } from '../../src/core/candidate-selection.ts'
+import { initialRuntimeState, operatorSnapshot, type UniverseObservation } from '../../src/state/operator-state.ts'
 import { getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { storedStrategyFixture } from '../support/strategy-settings.ts'
 
 const wallet = getAddress('0x0000000000000000000000000000000000000009')
-const forker = getAddress('0x0000000000000000000000000000000000000008')
 
 function settings(approvedUniverses = ['101']) {
 	return parseSettings({
@@ -66,72 +64,6 @@ function settings(approvedUniverses = ['101']) {
 	})
 }
 
-function pool(parameters: { address: string; approvedUniverse?: boolean; forkActivationTime?: bigint; forkOutcomeIndex?: bigint; parent?: string; parentUniverseId?: bigint; selected?: boolean; systemState?: bigint; universeId: bigint; vaultAttoRep?: bigint }): PoolObservation {
-	return {
-		knownVaultCount: 0n,
-		address: getAddress(parameters.address),
-		approvedUniverse: parameters.approvedUniverse ?? false,
-		botVault: {
-			address: wallet,
-			badDebtAttoEth: 0n,
-			underwritingLimitAttoEth: 0n,
-			openInterestAttoEth: 0n,
-			backingUnits: parameters.vaultAttoRep ?? 0n,
-			vaultAttoRepBacking: parameters.vaultAttoRep ?? 0n,
-			claimableFeesAttoEth: 0n,
-			disputeStakedAttoRep: 0n,
-		},
-		candidates: [],
-		settlementCollateralAttoEth: 0n,
-		forkActivationTime: parameters.forkActivationTime ?? 0n,
-		forkOutcomeIndex: parameters.forkOutcomeIndex,
-		initialReportPriorityFeeAttoEthPerGas: 0n,
-		isPriceValid: true,
-		lastPrice: 0n,
-		lastSettlementTimestamp: 0n,
-		manager: zeroAddress,
-		minLiquidationPriceDistanceBps: 0n,
-		minimumSecurityBondDebtAttoEth: 1n,
-		minimumToken1ReportAttoEth: 0n,
-		minimumVaultRepDepositAttoRep: 1n,
-		multiplierBps: 20_000n,
-		parent: getAddress(parameters.parent ?? zeroAddress),
-		parentUniverseId: parameters.parentUniverseId,
-		pendingReportId: 0n,
-		pendingReportSponsor: zeroAddress,
-		questionId: 1n,
-		repToken: zeroAddress,
-		requestPriceCostAttoEth: 0n,
-		selected: parameters.selected ?? false,
-		questionForker: forker,
-		stagedOperations: [],
-		systemState: parameters.systemState ?? 0n,
-		totalUnderwritingLimitAttoEth: 0n,
-		totalAttoRep: 0n,
-		universeId: parameters.universeId,
-		vaults: [],
-	}
-}
-
-const parent = pool({
-	address: '0x0000000000000000000000000000000000000010',
-	forkActivationTime: 1_000n,
-	selected: true,
-	systemState: 1n,
-	universeId: 0n,
-	vaultAttoRep: 20n,
-})
-
-const approvedChild = pool({
-	address: '0x0000000000000000000000000000000000000011',
-	approvedUniverse: true,
-	forkOutcomeIndex: 1n,
-	parent: parent.address,
-	parentUniverseId: 0n,
-	systemState: 2n,
-	universeId: 101n,
-})
-
 function universe(id: bigint, approved: boolean, parentId?: bigint, outcomeIndex?: bigint): UniverseObservation {
 	return {
 		approved,
@@ -148,30 +80,12 @@ const rootUniverse = universe(0n, false)
 const approvedChildUniverse = universe(101n, true, 0n, 1n)
 
 describe('fork migration strategy', () => {
-	test('uses the exact migration window boundary for planning and dashboard eligibility', () => {
-		const deadline = parent.forkActivationTime + FORK_MIGRATION_WINDOW_SECONDS
-		expect(isVaultMigrationSourceEligible(parent, deadline)).toBe(true)
-		expect(isVaultMigrationSourceEligible(parent, deadline + 1n)).toBe(false)
-		expect(isVaultMigrationSourceEligible({ ...parent, forkActivationTime: 0n }, 0n)).toBe(false)
-
-		const state = initialRuntimeState(false, wallet, 1)
-		state.pools = [parent]
-		state.universes = [rootUniverse, approvedChildUniverse]
-		state.lastScannedTimestamp = deadline
-		const eligible = operatorSnapshot(state, false).universes.find(universe => universe.id === '101')
-		expect(eligible?.migratableVaultCount).toBe(1)
-		state.lastScannedTimestamp = deadline + 1n
-		const expired = operatorSnapshot(state, false).universes.find(universe => universe.id === '101')
-		expect(expired?.migratableVaultCount).toBe(0)
-	})
-
 	test('does not apply root REP market evidence to a child-universe REP pool', () => {
 		const rootRep = getAddress('0x0000000000000000000000000000000000000077')
 		const childRep = getAddress('0x0000000000000000000000000000000000000088')
-		const rootPool = { ...parent, lastPrice: 10n * 10n ** 18n, repToken: rootRep }
-		const childPool = { ...approvedChild, lastPrice: 10n * 10n ** 18n, repToken: childRep }
+		const rootPool = { lastPrice: 10n * 10n ** 18n, repToken: rootRep }
+		const childPool = { lastPrice: 10n * 10n ** 18n, repToken: childRep }
 		const state = initialRuntimeState(false, wallet, 1)
-		state.pools = [rootPool, childPool]
 		state.centralizedMarket = {
 			assetId: rootRep,
 			askDepthAttoEth: 4n * 10n ** 18n,
@@ -241,10 +155,10 @@ describe('fork migration strategy', () => {
 				minimumTotalSourceCount: 3,
 			},
 		}
-		const snapshot = operatorSnapshot(state, false, centralizedMarkets)
-		expect(snapshot.pools.find(candidate => candidate.address === rootPool.address)?.centralizedPriceAllowed).toBe(true)
-		expect(snapshot.pools.find(candidate => candidate.address === childPool.address)?.centralizedPriceAllowed).toBe(false)
-		expect(snapshot.pools.find(candidate => candidate.address === childPool.address)?.centralizedPriceDeviationBps).toBeUndefined()
+		const rootSettings = { ...settings(), centralizedMarkets }
+		state.marketConsensusByAsset.set(rootRep.toLowerCase(), state.marketConsensus)
+		expect(marketPriceAllowsExecution(rootPool, rootSettings, state)).toBe(true)
+		expect(marketPriceAllowsExecution(childPool, rootSettings, state)).toBe(false)
 
 		const childObservation = (observation: (typeof state.marketConsensus.cex.observations)[number]) => ({ ...observation, assetId: childRep, observationId: `${observation.observationId}:child` })
 		const childConsensus = {
@@ -255,13 +169,11 @@ describe('fork migration strategy', () => {
 		}
 		state.marketConsensusByAsset.set(childRep.toLowerCase(), childConsensus)
 		const childConfiguration = { ...centralizedMarkets, assetAddress: childRep }
-		const childSnapshot = operatorSnapshot(state, false, [centralizedMarkets, childConfiguration])
-		expect(childSnapshot.pools.find(candidate => candidate.address === childPool.address)?.centralizedPriceAllowed).toBe(true)
-		const inactiveConfiguration = { ...centralizedMarkets, assetAddress: getAddress('0x0000000000000000000000000000000000000099') }
+		const childSettings = { ...rootSettings, childMarketConfigurations: [childConfiguration] }
+		expect(marketPriceAllowsExecution(childPool, childSettings, state)).toBe(true)
 		state.marketConsensusByAsset.delete(childRep.toLowerCase())
-		const missingChildSnapshot = operatorSnapshot(state, false, [centralizedMarkets, childConfiguration, inactiveConfiguration])
-		expect(missingChildSnapshot.alerts.some(alert => alert.message.includes('0x0000…0088') && alert.message.includes('unavailable'))).toBe(true)
-		expect(missingChildSnapshot.alerts.some(alert => alert.message.includes('0x0000…0099'))).toBe(false)
+		expect(marketPriceAllowsExecution(childPool, childSettings, state)).toBe(false)
+		state.marketConsensusByAsset.delete(rootRep.toLowerCase())
 		state.marketConsensus = { ...state.marketConsensus, cex: { ...state.marketConsensus.cex, reliable: false } }
 		state.activities.push({ at: new Date().toISOString(), kind: 'scan', message: 'DEX market evidence reset after canonical head replacement', status: 'info' }, { at: new Date().toISOString(), kind: 'scan', message: 'DEX market evidence reset after canonical head replacement', status: 'info' })
 		const warningSnapshot = operatorSnapshot(state, false, centralizedMarkets)

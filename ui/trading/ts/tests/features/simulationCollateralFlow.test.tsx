@@ -6,7 +6,7 @@ import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/do
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
+import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs, simulationWaitOptions, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { discoverLiveUniverseMarketPage, loadLiveBalances, simulateEntry, submitFreshEntry, simulateExit, submitFreshExit, type LiveMarket } from '../../protocol/live.js'
 import { LiveLiquidityControls } from '../../features/LiveLiquidityControls.js'
 import { LivePositionControls } from '../../features/LivePositionControls.js'
@@ -165,7 +165,7 @@ describe('USDC on-chain UI funding flows', () => {
 			await waitFor(() => expect(buttonByLabel('Buy Yes').disabled).toBe(false), { timeout: 10_000, interval: 50 })
 			const beforeBuy = await balance()
 			await act(() => buttonByLabel('Buy Yes').click())
-			await waitFor(() => expect(bought).toBe(true), { timeout: 10_000, interval: 50 })
+			await waitFor(() => expect(bought).toBe(true), simulationWaitOptions)
 			expect(requests.at(-1)).toMatchObject({ functionName: 'enterPositionWithCollateral' })
 			expect(await balance()).toBeLessThan(beforeBuy)
 			rendered.cleanup()
@@ -223,13 +223,10 @@ describe('USDC on-chain UI funding flows', () => {
 			await act(() => approvalButton().click())
 			await waitFor(() => expect(buttonByLabel('Create market and add liquidity').disabled).toBe(false), { timeout: 10_000, interval: 50 })
 			await act(() => buttonByLabel('Create market and add liquidity').click())
-			await waitFor(
-				async () => {
-					const current = await discoverLiveUniverseMarketPage(read, configuration, 0n)
-					expect(current.markets.find(candidate => candidate.pool === empty.pool)?.pair).toBeDefined()
-				},
-				{ timeout: 10_000, interval: 50 },
-			)
+			await waitFor(async () => {
+				const current = await discoverLiveUniverseMarketPage(read, configuration, 0n)
+				expect(current.markets.find(candidate => candidate.pool === empty.pool)?.pair).toBeDefined()
+			}, simulationWaitOptions)
 			expect(requests.at(-1)).toMatchObject({ functionName: 'createPairAndInitializeWithCollateral' })
 		} finally {
 			rendered?.cleanup()

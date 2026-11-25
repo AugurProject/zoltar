@@ -101,7 +101,7 @@ async function buildStandardJsonInputs(): Promise<StandardJsonInputs> {
 			}),
 		},
 		openOracle: {
-			compilerVersion: toExplorerCompilerVersion((await compileModule.loadOpenOracleCompiler()).version()),
+			compilerVersion: toExplorerCompilerVersion(compileModule.loadOpenOracleCompiler().version()),
 			inputJson: JSON.stringify({
 				language: 'Solidity',
 				settings: compileModule.openOracleCompilerSettings,

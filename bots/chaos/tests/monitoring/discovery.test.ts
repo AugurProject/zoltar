@@ -50,11 +50,11 @@ test('discovers a fully prepared security pool with no admitted questions', asyn
 	expect(capital.map(item => item.securityPool)).toEqual([address(90)])
 })
 
-test('derives the universe initial escalation deposit from the Zoltar universe supply that genesis burns reduce', async () => {
+test('discovers the fork schedule without reading unused universe supply', async () => {
 	const fake = fakeClient(10n, hash(99), { earliestForkTime: 123n, tokenTheoreticalSupplyAttoRep: 30_000_000n * 10n ** 18n, universeTheoreticalSupplyAttoRep: 20_000_000n * 10n ** 18n })
 	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
 	expect(snapshot.universes[0]?.earliestForkTime).toBe('123')
-	expect(snapshot.universes.find(universe => universe.id === '0')?.initialEscalationDepositAttoRep).toBe((2n * 10n ** 18n).toString())
+	expect(fake.contractReads.some(read => read.functionName === 'getUniverseTheoreticalSupplyAttoRep')).toBe(false)
 })
 
 test('monitors inventory for a known execution address without requiring a signer', async () => {
@@ -92,7 +92,7 @@ for (const shared of [false, true])
 	for (const ready of [false, true])
 		test(`discovers canonical child preparation at the pinned block (${shared}, ${ready})`, async () => {
 			const fake = fakeClient(10n, hash(10), { childPreparation: { shared, ready } })
-			const preparation = await discoverChildPoolPreparations(fake.client, address(4), address(2), address(50), 0n, ['1'], 10n)
+			const preparation = await discoverChildPoolPreparations(fake.client, address(4), address(2), address(50), 0n, shared ? address(90) : zeroAddress, 7n, ['1'], 10n)
 			expect(preparation['1']).toEqual({
 				securityPool: shared ? address(90) : zeroAddress,
 				branchReady: !shared || ready,
@@ -103,10 +103,8 @@ for (const shared of [false, true])
 				game: zeroAddress,
 				historyOutcomesInitialized: 0,
 				historyReady: ready,
-				feedRequired: false,
-				dependenciesRequired: false,
 			})
-			expect(fake.contractReads.some(read => read.functionName === 'sharedPriceFeeds')).toBe(shared)
+			expect(fake.contractReads.some(read => read.functionName === 'sharedPriceFeeds')).toBe(false)
 		})
 
 test('keyless pool discovery keeps auctions and vault topology without execution-account reads', async () => {
@@ -1222,7 +1220,7 @@ describe('anchored ecosystem discovery', () => {
 		expect(next.contractReads.filter(read => read.functionName === 'questionCreatedTimestamp')).toHaveLength(1)
 		expect(next.contractReads.filter(read => read.functionName === 'getOutcomeLabels')).toHaveLength(1)
 		expect(next.contractReads.filter(read => read.functionName === 'getQuestions').map(read => read.args)).toEqual([[3n, 1n]])
-		expect(next.contractReads.filter(read => read.functionName === 'forkBurnDivisor')).toHaveLength(1)
+		expect(next.contractReads.filter(read => read.functionName === 'forkBurnDivisor')).toHaveLength(0)
 		expect(next.contractReads.filter(read => read.functionName === 'getDeployedChildUniverses' && read.args?.[0] === 0n).map(read => read.args)).toEqual([[0n, 3n, 7n]])
 		expect(nextCheckpoint?.anchor).toEqual({ blockHash: hash(11), blockNumber: '11' })
 		expect(extendedChanged).toBe(true)

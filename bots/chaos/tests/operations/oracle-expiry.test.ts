@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { eligibleOperationPlans } from '../support/operation-plans.ts'
 import { planningOptionsFixture, snapshotFixture } from './fixture.ts'
 
@@ -20,43 +20,25 @@ function configureOpenQuestion(snapshot: ReturnType<typeof snapshotFixture>) {
 
 const mintingDefinitionIds = ['statoblast.complete-set.create', 'trading.liquidity.add-eth', 'trading.position.enter']
 
-function expectMintingPlansIgnoreOracleHorizon(snapshot: ReturnType<typeof snapshotFixture>) {
+function expectMintingPlansUseQuestionDeadline(snapshot: ReturnType<typeof snapshotFixture>) {
 	const pool = snapshot.pools[0]
 	const question = snapshot.questions[0]
 	if (pool === undefined || question === undefined) throw new Error('Pool fixture missing')
 	pool.escalationGame = '0x0000000000000000000000000000000000000000'
-	const oracleExpiry = BigInt(pool.lastOracleSettlementTimestamp) + 300n
+	const laterThanOracleHorizon = BigInt(snapshot.anchor.timestamp) + 300n
 	const questionLastSecond = BigInt(question.endTime) - 1n
 	for (const definitionId of mintingDefinitionIds) {
 		const candidate = plan(snapshot, definitionId)
 		expect(candidate, definitionId).toBeDefined()
 		const deadline = candidate?.deadlineTimestamp
 		if (deadline === undefined) throw new Error(`${definitionId} must keep its question-end deadline`)
-		expect(BigInt(deadline) > oracleExpiry, definitionId).toBe(true)
+		expect(BigInt(deadline) > laterThanOracleHorizon, definitionId).toBe(true)
 		expect(BigInt(deadline) <= questionLastSecond, definitionId).toBe(true)
 	}
 }
 
-describe('oracle-price expiry planning', () => {
-	test('does not bind complete-set minting or minting router plans to the oracle horizon', () => {
-		const snapshot = snapshotFixture()
-		const pool = snapshot.pools[0]
-		if (pool === undefined) throw new Error('Pool fixture missing')
-		configureOpenQuestion(snapshot)
-		pool.lastOracleSettlementTimestamp = (BigInt(snapshot.anchor.timestamp) - 100n).toString()
-		expectMintingPlansIgnoreOracleHorizon(snapshot)
-	})
-
-	test('keeps complete-set minting and minting router plans available when the oracle price is near expiry or invalid', () => {
-		const snapshot = snapshotFixture()
-		const pool = snapshot.pools[0]
-		if (pool === undefined) throw new Error('Pool fixture missing')
-		configureOpenQuestion(snapshot)
-		pool.lastOracleSettlementTimestamp = (BigInt(snapshot.anchor.timestamp) - 240n).toString()
-		expectMintingPlansIgnoreOracleHorizon(snapshot)
-
-		pool.lastOracleSettlementTimestamp = '0'
-		pool.oraclePriceValid = false
-		expectMintingPlansIgnoreOracleHorizon(snapshot)
-	})
+test('keeps the question-end deadline for complete-set minting and minting router plans', () => {
+	const snapshot = snapshotFixture()
+	configureOpenQuestion(snapshot)
+	expectMintingPlansUseQuestionDeadline(snapshot)
 })

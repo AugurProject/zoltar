@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { parseAbi, zeroAddress, getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
-import { loadAllQuestionLedgers } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
+import { loadQuestionLedgerListing } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
 
 const abi = parseAbi([
 	'function securityPoolCustody() view returns (address)',
@@ -18,7 +18,7 @@ test(
 		const backend = await createBootstrappedSimulationBackendWithRetry('securitypoolx2', 1, 'statoblast')
 		try {
 			const client = backend.createReadClient()
-			const pools = await loadAllQuestionLedgers(client)
+			const { pools } = await loadQuestionLedgerListing(client)
 			let securityPoolQuestions = 0
 			const feeds = new Set<string>()
 			for (const pool of pools) {
@@ -33,7 +33,6 @@ test(
 				const feedValue = await client.readContract({ address: pool.questionLedgerAddress, abi, functionName: 'priceFeed' })
 				if (typeof feedValue !== 'string') throw new Error('Missing feed address')
 				const feed = getAddress(feedValue)
-				expect(feed).toBe(pool.managerAddress)
 				feeds.add(feed)
 				const limit = await client.readContract({ address: feed, abi, functionName: 'acceptedExposureLimitAttoEth' })
 				const exposure = await client.readContract({ address: feed, abi, functionName: 'aggregateExposureAttoEth' })

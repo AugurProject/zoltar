@@ -26,7 +26,6 @@ function requestPriceSnapshot(projectedSettlementCollateralAttoEth?: bigint) {
 	const pool = snapshot.pools[0]
 	if (pool === undefined) throw new Error('Pool fixture missing')
 	snapshot.anchor.baseFeePerGas = '1'
-	pool.oraclePriceValid = false
 	pool.oracleRequestFunding = { ...simpleCoordinatorFunding }
 	pool.minimumToken1ReportAttoEth = '6'
 	pool.requestPriceCostAttoEth = '784107'
@@ -88,7 +87,6 @@ describe('oracle request funding bounds', () => {
 
 	test('renews a fresh shared security pool price without allowing duplicate pending reports', () => {
 		const { pool, snapshot } = requestPriceSnapshot()
-		pool.oraclePriceValid = true
 		expect(requestPricePlan(snapshot)).toBeDefined()
 		pool.pendingReportId = '1'
 		pool.reportEscrows = { '1': address(81) }

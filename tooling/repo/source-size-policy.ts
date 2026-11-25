@@ -36,7 +36,7 @@ export const testSourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Split by behavior area into sibling test files that share a fixture module.', [
 		['augurScan/tests/replay/indexer-lifecycle.test.ts', 3434],
 		['bots/chaos/tests/execution/transaction-executor.test.ts', 1847],
-		['bots/chaos/tests/monitoring/discovery.test.ts', 1657],
+		['bots/chaos/tests/monitoring/discovery.test.ts', 1655],
 		['bots/chaos/tests/runtime/dashboard-controller.test.ts', 1665],
 		['bots/liquidator/tests/dashboard/dashboard-refresh.test.ts', 2088],
 		['bots/open-oracle-arbitrager/tests/dashboard/dashboard-refresh.test.ts', 1576],
@@ -45,6 +45,6 @@ export const testSourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['ui/coreShared/ts/tests/app/useOnchainState.integration.test.tsx', 2160],
 		['ui/openoracle/ts/tests/features/open-oracle/openOracleRouteSection.test.tsx', 1881],
 		['ui/statoblast/ts/tests/features/open-oracle/useOpenOracleOperations.test.tsx', 2371],
-		['ui/statoblast/ts/tests/features/reporting/reportingSection.test.tsx', 3021],
+		['ui/statoblast/ts/tests/features/reporting/reportingSection.test.tsx', 3018],
 	]),
 ])

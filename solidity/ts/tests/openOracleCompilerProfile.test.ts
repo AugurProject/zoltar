@@ -17,7 +17,7 @@ describe('OpenOracle compiler profile', () => {
 	})
 
 	test('preserves the upstream compiler, optimizer, EVM target, and exact pragma', async () => {
-		const compiler = await loadOpenOracleCompiler()
+		const compiler = loadOpenOracleCompiler()
 		const sources = createOpenOracleCompilerSources(
 			new Map([
 				['contracts/statoblast/openOracle/OpenOracle.sol', 'pragma solidity 0.8.28; contract OpenOracle {}'],

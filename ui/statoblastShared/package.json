@@ -61,25 +61,13 @@
 			"bun": "./ts/features/markets/lib/trading.ts",
 			"default": "./js/features/markets/lib/trading.js"
 		},
-		"./features/question-ledgers/components/RepPriceStatusLabel.js": {
-			"bun": "./ts/features/question-ledgers/components/RepPriceStatusLabel.tsx",
-			"default": "./js/features/question-ledgers/components/RepPriceStatusLabel.js"
-		},
 		"./features/question-ledgers/lib/priorityFee.js": {
 			"bun": "./ts/features/question-ledgers/lib/priorityFee.ts",
 			"default": "./js/features/question-ledgers/lib/priorityFee.js"
 		},
-		"./features/question-ledgers/lib/repPriceSource.js": {
-			"bun": "./ts/features/question-ledgers/lib/repPriceSource.tsx",
-			"default": "./js/features/question-ledgers/lib/repPriceSource.js"
-		},
 		"./features/question-ledgers/lib/questionLedgerState.js": {
 			"bun": "./ts/features/question-ledgers/lib/questionLedgerState.ts",
 			"default": "./js/features/question-ledgers/lib/questionLedgerState.js"
-		},
-		"./features/question-ledgers/lib/uiPriceOracle.js": {
-			"bun": "./ts/features/question-ledgers/lib/uiPriceOracle.ts",
-			"default": "./js/features/question-ledgers/lib/uiPriceOracle.js"
 		},
 		"./features/transactionPresentations.js": {
 			"bun": "./ts/features/transactionPresentations.tsx",

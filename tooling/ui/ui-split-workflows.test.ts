@@ -288,7 +288,9 @@ ${command}`,
 		expect(workflow['name']).toBe('Production Browser Workflow')
 		const steps = Object.values(workflowJobs(workflow)).flatMap(workflowSteps)
 		const smoke = steps.find(step => typeof step['run'] === 'string' && step['run'].includes('bun run test:browser:smoke'))
-		expect(smoke?.['run']).toContain('tooling/ui/productionBuild.test.ts')
+		expect(smoke?.['run']).toBe('bun run test:browser:smoke')
+		const packageJson = JSON.parse(await readFile(rootPackagePath, 'utf8')) as { scripts?: Record<string, string> }
+		expect(packageJson.scripts?.['test:browser:smoke']?.match(/tooling\/ui\/productionBuild\.test\.ts/g)).toHaveLength(1)
 		expect(steps.some(step => step['run'] === 'bun run test:browser:workflow')).toBe(true)
 		const ciWorkflow = await readWorkflow(ciWorkflowPath)
 		const ciJobs = workflowJobs(ciWorkflow)

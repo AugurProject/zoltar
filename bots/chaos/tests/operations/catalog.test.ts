@@ -993,7 +993,6 @@ describe('chaos operation catalog', () => {
 		const snapshot = snapshotFixture()
 		const pool = snapshot.pools[0]
 		if (pool === undefined) throw new Error('Pool fixture missing')
-		pool.oraclePriceValid = false
 		const requestOptions = { ...permissiveOptions, maxEthSpendAttoEth: (5n * 10n ** 16n).toString(), maxRepSpendAttoRep: (5n * 10n ** 16n).toString() }
 		const plan = eligibleOperationPlans(snapshot, requestOptions).find(candidate => candidate.definitionId === 'statoblast.oracle.request-price')
 		if (plan === undefined) throw new Error('Prepared request-price plan missing')
@@ -1040,7 +1039,7 @@ describe('chaos operation catalog', () => {
 		expect(eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'trading.shares.migrate')).toBeDefined()
 
 		universe.forkTime = '0'
-		universe.nonDecisionThresholdAttoRep = universe.initialEscalationDepositAttoRep
+		universe.nonDecisionThresholdAttoRep = (10n ** 18n).toString()
 		expect(eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'statoblast.pool.deploy')).toBeUndefined()
 	})
 
