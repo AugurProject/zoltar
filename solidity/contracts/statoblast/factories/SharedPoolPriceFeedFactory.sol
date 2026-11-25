@@ -35,7 +35,7 @@ contract SharedPoolPriceFeedDeploymentWorker {
 
 contract SharedPoolPriceFeedFactory {
 	SharedPoolPriceFeedDeploymentWorker private immutable sharedPoolPriceFeedDeploymentWorker;
-	/// @dev Coordinator deployers own independent security pool namespaces.
+	/// @dev Root factories own independent security pool namespaces.
 	mapping(address => mapping(address => SharedPoolPriceFeed)) public sharedPriceFeedImplementations;
 	IWeth9 public immutable weth;
 	uint256 public immutable targetPriceErrorForDispute;

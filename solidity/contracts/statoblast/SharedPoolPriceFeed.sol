@@ -244,8 +244,6 @@ contract SharedPoolPriceFeed {
 			REQUEST_BOUNTY_OFFSET_ATTO_ETH;
 	}
 
-	/// @notice A registered coordinator authenticates the sponsor and forwards the report's exact token funding.
-
 	/// @notice Fund a shared observation without first deploying a child question.
 	/// The caller approves this feed for the configured collateral and the branch's REP; only that caller
 	/// receives the candidate's returned funding. No pool collateral funds reports.

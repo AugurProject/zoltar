@@ -88,24 +88,22 @@ test('authenticates latest and retained candidate escrows at the same discovery 
 	await expect(discoverPoolPriceFeed(fake.client, address(21), 10n, funding, 1n, 9n)).rejects.toThrow('pending report has no authenticated escrow')
 })
 
-for (const shared of [true])
-	for (const ready of [false, true])
-		test(`discovers canonical child preparation at the pinned block (${shared}, ${ready})`, async () => {
-			const fake = fakeClient(10n, hash(10), { childPreparation: { shared, ready } })
-			const preparation = await discoverChildPoolPreparations(fake.client, address(4), address(2), address(50), 0n, ['1'], 10n)
-			expect(preparation['1']).toEqual({
-				securityPool: shared ? address(90) : zeroAddress,
-				branchReady: !shared || ready,
-				sourcePool: address(50),
-				sourceGame: zeroAddress,
-				childUniverseId: '88',
-				childPool: ready ? address(93) : zeroAddress,
-				game: zeroAddress,
-				historyOutcomesInitialized: 0,
-				historyReady: ready,
-			})
-			expect(fake.contractReads.some(read => read.functionName === 'sharedPriceFeeds')).toBe(false)
-		})
+test.each([false, true])('discovers canonical child preparation at the pinned block (ready: %s)', async ready => {
+	const fake = fakeClient(10n, hash(10), { childPreparation: { ready } })
+	const preparation = await discoverChildPoolPreparations(fake.client, address(4), address(2), address(50), 0n, ['1'], 10n)
+	expect(preparation['1']).toEqual({
+		securityPool: address(90),
+		branchReady: ready,
+		sourcePool: address(50),
+		sourceGame: zeroAddress,
+		childUniverseId: '88',
+		childPool: ready ? address(93) : zeroAddress,
+		game: zeroAddress,
+		historyOutcomesInitialized: 0,
+		historyReady: ready,
+	})
+	expect(fake.contractReads.some(read => read.functionName === 'sharedPriceFeeds')).toBe(false)
+})
 
 test('keyless pool discovery keeps auctions and vault topology without execution-account reads', async () => {
 	const fake = refundBackfillClient(25n)
@@ -264,7 +262,7 @@ function topologyIdentity(): ImmutableTopologyIdentity {
 }
 
 interface GraphOverrides {
-	childPreparation?: { shared: boolean; ready: boolean }
+	childPreparation?: { ready: boolean }
 	chainId?: number
 	missingContract?: Address
 	missingContracts?: readonly Address[]
@@ -396,8 +394,6 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					return address(21)
 				case 'getQuestionLedgerOriginId':
 					return hash(90)
-				case 'getChildQuestionLedgerCoordinator':
-					return graph.childPreparation?.ready ? address(91) : zeroAddress
 				case 'clocks':
 					return [0n, 0n, true, graph.childPreparation?.ready ?? false]
 				case 'getForkTime':
@@ -410,8 +406,6 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					return 0n
 				case 'getQuestionLedger':
 					return graph.childPreparation?.ready ? address(93) : zeroAddress
-				case 'sharedPriceFeeds':
-					return graph.childPreparation?.ready ? address(94) : zeroAddress
 				case 'getMigrationRepBalanceAttoRep':
 					return 0n
 				case 'getDeployedChildUniverses': {
@@ -705,8 +699,6 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 					return address(3)
 				case 'sharedPriceFeed':
 					return coordinator
-				case 'questionLedger':
-					return pool
 				case 'openOracle':
 					return address(6)
 				case 'services':

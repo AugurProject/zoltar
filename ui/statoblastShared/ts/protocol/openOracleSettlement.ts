@@ -19,17 +19,6 @@ const reportEscrowAbi = [
 	{ type: 'function', name: 'feed', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 	{ type: 'function', name: 'reportId', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
 	{
-		type: 'function',
-		name: 'reportCandidates',
-		stateMutability: 'view',
-		inputs: [{ name: 'reportId', type: 'uint256' }],
-		outputs: [
-			{ name: 'escrow', type: 'address' },
-			{ name: 'sponsor', type: 'address' },
-			{ name: 'maxSettlementBaseFee', type: 'uint256' },
-		],
-	},
-	{
 		type: 'event',
 		name: 'ReportCompleted',
 		anonymous: false,
@@ -54,7 +43,7 @@ export async function loadCoordinatorPriceValidUntilTimestamp(client: Pick<ReadC
 			{ address: game.callbackContract, abi: reportEscrowAbi, functionName: 'reportId' },
 		])
 		if (feed.status !== 'success' || feed.result === zeroAddress || escrowReport.status !== 'success' || escrowReport.result !== reportId) return undefined
-		const [candidate] = await readOptionalMulticall(client, [{ address: feed.result, abi: reportEscrowAbi, functionName: 'reportCandidates', args: [reportId] }])
+		const [candidate] = await readOptionalMulticall(client, [{ address: feed.result, abi, functionName: 'reportCandidates', args: [reportId] }])
 		if (candidate.status !== 'success' || !sameAddress(candidate.result[0], game.callbackContract)) return undefined
 		const [factory, securityPool, universe, weth, rep] = await readOptionalMulticall(client, [
 			{ address: feed.result, abi: sharedFeedLinkAbi, functionName: 'securityPoolFactory' },

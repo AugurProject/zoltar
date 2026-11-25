@@ -3,7 +3,7 @@ import { getErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hasOpenOracleFlag, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { loadSecurityPoolPriceSnapshot, type SecurityPoolPriceSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import { statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
+import { statoblast_openOracle_OpenOracle_OpenOracle, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed } from '../contractArtifact.js'
 import { requireAddressValue, requireBigintValue, requireIntegerLikeValue, requireObjectValue, requireTupleValue } from './decoders.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { getOpenOracleSettleGasLimit } from './openOracle.js'
@@ -11,8 +11,6 @@ import { loadOpenOracleStoredState } from './openOracleState.js'
 import { securityPoolReadClient, type SecurityPoolTransaction } from './securityPool.js'
 
 const abi = parseAbi([
-	'function reportCandidates(uint256 id) view returns (address escrow,address sponsor,address coordinator,uint256 maxSettlementBaseFee)',
-	'function reportOutcome(uint256 id) view returns (uint8)',
 	'function feed() view returns (address)',
 	'function reportId() view returns (uint256)',
 	'function sponsor() view returns (address)',
@@ -35,11 +33,12 @@ export async function loadSecurityPoolPriceReport(client: ReadClient, snapshot: 
 	const observation = snapshot.observation
 	if (observation === undefined || reportId <= 0n || reportId >= 1n << 256n) throw new Error('Enter a valid report ID for this price feed.')
 	const blockNumber = snapshot.blockNumber
-	const [candidate, outcome] = await Promise.all([client.readContract({ abi, address: snapshot.feed, functionName: 'reportCandidates', args: [reportId], blockNumber }), client.readContract({ abi, address: snapshot.feed, functionName: 'reportOutcome', args: [reportId], blockNumber })])
-	const tuple = requireTupleValue(candidate, 4, 'report candidate')
+	const feedAbi = statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi
+	const [candidate, outcome] = await Promise.all([client.readContract({ abi: feedAbi, address: snapshot.feed, functionName: 'reportCandidates', args: [reportId], blockNumber }), client.readContract({ abi: feedAbi, address: snapshot.feed, functionName: 'reportOutcome', args: [reportId], blockNumber })])
+	const tuple = requireTupleValue(candidate, 3, 'report candidate')
 	const escrow = requireAddressValue(tuple[0], 'report escrow')
 	const sponsor = requireAddressValue(tuple[1], 'report sponsor')
-	const maxSettlementBaseFee = requireBigintValue(tuple[3], 'report settlement base-fee ceiling')
+	const maxSettlementBaseFee = requireBigintValue(tuple[2], 'report settlement base-fee ceiling')
 	if (escrow === zeroAddress) throw new Error('This report does not belong to this price feed.')
 	const pinned: Pick<ReadClient, 'readContract'> = { readContract: parameters => client.readContract({ ...parameters, blockNumber }) }
 	const [escrowFeed, escrowId, escrowSponsor, escrowOracle, state, wethCredit, repCredit] = await Promise.all([
