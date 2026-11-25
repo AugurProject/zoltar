@@ -1,3 +1,4 @@
+import { TransactionLookupNotFoundError } from '@zoltar/core-shared/evm/ethereum'
 import type { Hex, TransactionReceipt } from '../ethereum.ts'
 import { availableSettledValues, settledQuorumValue } from '../monitoring/read-quorum.ts'
 import type { RpcQuorumRequirement } from '../monitoring/rpc-quorum-policy.ts'
@@ -11,6 +12,7 @@ type TransactionReceiptReader = {
  * wrapper that only preserves the message, such as `Transaction receipt with hash ... could not be found`.
  */
 export function isReceiptNotFound(error: unknown) {
+	if (error instanceof TransactionLookupNotFoundError) return error.kind === 'receipt'
 	if (!(error instanceof Error)) return false
 	if (error.name === 'TransactionReceiptNotFoundError') return true
 	const message = error.message.toLowerCase()
