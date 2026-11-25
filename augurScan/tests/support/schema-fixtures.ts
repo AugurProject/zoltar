@@ -1,9 +1,14 @@
 import type { ScannerDatabase } from '../../src/database.ts'
 import { POOL_SNAPSHOTS_BEFORE_SCHEMA_7, TABLES_REMOVED_IN_SCHEMA_7 } from '../../src/schema-removed-tables.ts'
 
+export const rewindTransactionStatusToV10 = async (database: ScannerDatabase) => {
+	await database.sql.unsafe("ALTER TABLE public.transactions DROP CONSTRAINT transactions_selection_status, ADD CONSTRAINT transactions_successful_log_evidence CHECK (status = 'success')")
+}
+
 // Model the physical v7 layout without losing pool or price rows: the constant pool deployment columns and
 // the coordinator seed price shape that migration 008 removed.
 export const rewindStaleContractValuesToV7 = async (database: ScannerDatabase): Promise<void> => {
+	await rewindTransactionStatusToV10(database)
 	await database.sql.unsafe(
 		'ALTER TABLE public.pool_snapshots DROP CONSTRAINT IF EXISTS pool_snapshots_reason_check, DROP CONSTRAINT IF EXISTS pool_snapshots_portfolio_time_check, ALTER COLUMN last_settlement_portfolio_time TYPE timestamp with time zone USING to_timestamp(last_settlement_portfolio_time::double precision)',
 	)

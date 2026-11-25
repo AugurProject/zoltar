@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    networks: [database]
     command: ["postgres", "-c", "max_wal_size=${POSTGRES_MAX_WAL_SIZE:-8GB}"]
     restart: unless-stopped
     environment:
@@ -21,6 +22,7 @@ services:
       context: ..
       dockerfile: augurScan/Dockerfile
     restart: unless-stopped
+    networks: [default, database]
     depends_on:
       postgres:
         condition: service_healthy
@@ -28,6 +30,7 @@ services:
       POSTGRES_URL: ${POSTGRES_URL:-postgres://augurscan:${POSTGRES_PASSWORD:-augurscan-local}@postgres:5432/augurscan}
       PORT: 3000
       DISABLE_INDEXER: 1
+      GENESIS_OUTCOME: ${GENESIS_OUTCOME:-yes}
       NETWORKS: ${NETWORKS:-mainnet,sepolia}
       POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-12000}
       API_RATE_LIMIT_PER_MINUTE: ${API_RATE_LIMIT_PER_MINUTE:-600}
@@ -49,12 +52,14 @@ services:
     healthcheck:
       disable: true
     restart: unless-stopped
+    networks: [default, database]
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       POSTGRES_URL: ${POSTGRES_URL:-postgres://augurscan:${POSTGRES_PASSWORD:-augurscan-local}@postgres:5432/augurscan}
       DISABLE_INDEXER: ${DISABLE_INDEXER:-0}
+      GENESIS_OUTCOME: ${GENESIS_OUTCOME:-yes}
       NETWORKS: ${NETWORKS:-mainnet,sepolia}
       MAINNET_RPC_URL: ${MAINNET_RPC_URL:-https://mainnet.gateway.tenderly.co}
       MAINNET_START_BLOCK: ${MAINNET_START_BLOCK:-0}
@@ -70,8 +75,14 @@ services:
       SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS: ${SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS:-}
       POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-12000}
       LOG_SCAN_RANGE_SIZE: ${LOG_SCAN_RANGE_SIZE:-100000}
+      CLAIM_MAX_READS: ${CLAIM_MAX_READS:-1024}
+      CLAIM_MAX_GENERATIONS: ${CLAIM_MAX_GENERATIONS:-32}
+      CLAIM_MAX_LEAVES: ${CLAIM_MAX_LEAVES:-256}
       # Passed through only when set, so an unset value keeps the per-network default.
       SCAN_BLOCK_TIME_MS:
+      SCAN_DIRECT_CALLS: ${SCAN_DIRECT_CALLS:-0}
+      MAINNET_OPEN_ORACLE_EXECUTORS: ${MAINNET_OPEN_ORACLE_EXECUTORS:-}
+      SEPOLIA_OPEN_ORACLE_EXECUTORS: ${SEPOLIA_OPEN_ORACLE_EXECUTORS:-}
       TRACE_SELECTED_TRANSACTIONS: ${TRACE_SELECTED_TRANSACTIONS:-0}
       RPC_LOG_PATH: /var/log/augurscan/rpc.jsonl
     volumes:
@@ -83,6 +94,7 @@ volumes:
   augurscan-logs:
 
 networks:
+  database: {}
   default:
     name: zoltar
     external: true

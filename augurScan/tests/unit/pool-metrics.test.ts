@@ -88,3 +88,36 @@ for (const supply of [0n, 1n]) {
 		expect(snapshot.readResult?.['averageValueAttoEthPerShare']).toBe(supply === 0n ? '0' : String(10n ** 18n))
 	})
 }
+
+test('samples source-owned frozen book cash and the authoritative winning outcome for settlement', async () => {
+	const pool = getAddress('0x1111111111111111111111111111111111111111')
+	const sample = (frozen: bigint, source: bigint, clock: bigint) =>
+		sampleEntityStateWithRead({ entityType: 'pool', entityIdentity: pool, address: pool }, async (_address, abi, name) => {
+			expect(abi.some(item => item.type === 'function' && item.name === name)).toBe(true)
+			if (['securityPoolFactory', 'securityPoolOf', 'collateralToken', 'questionForker', 'settlement', 'ledger'].includes(name)) return pool
+			const values: Record<string, unknown> = {
+				symbol: 'USDC',
+				decimals: 6n,
+				systemState: 0n,
+				awaitingForkContinuation: false,
+				isEscalationResolved: true,
+				shareTokenSupplyAttoShares: 100n,
+				settlementCollateralAttoEth: 47n,
+				attoSharesToAttoEth: 43n,
+				statoblastSecurityMultiplierBps: 25000n,
+				getQuestionOutcome: 2n,
+				universeId: 0n,
+				questionId: 4n,
+				bookIds: 1n,
+				scaledQuestion: [{ units: 52n, outcomeSupplyAttoShares: 100n, finalAfter: 7n }, frozen],
+				frozenBooks: [500n, 600n, source, 0n],
+				securityPoolTime: clock,
+				books: [0n, 0n, 0n, 0n, 0n, 0n, 0n, false, 0n, 0n, 0n, false, 5n, 0n, 0n, 0n],
+			}
+			return values[name]
+		})
+	expect((await sample(3n, 1n, 8n)).readResult?.['settlementClaim']).toEqual({ outcome: '2', supply: '100', questionUnits: '52', bookUnits: '600', bookCash: '500' })
+	expect((await sample(3n, 2n, 8n)).readResult?.['settlementClaim']).toBeUndefined()
+	expect((await sample(0n, 0n, 8n)).readResult?.['settlementClaim']).toEqual({ outcome: '2', supply: '100', questionUnits: '52', bookUnits: '52', bookCash: '43' })
+	expect((await sample(0n, 0n, 7n)).readResult?.['settlementClaim']).toBeUndefined()
+})

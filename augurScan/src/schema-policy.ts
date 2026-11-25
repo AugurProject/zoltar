@@ -1,4 +1,5 @@
-export const CURRENT_SCHEMA_VERSION = '10'
+export const CURRENT_SCHEMA_VERSION = '11'
+export const ACCOUNTING_CLOCK_SCHEMA_VERSION = '10'
 export const BOUNDED_READ_SCHEMA_VERSION = '9'
 export const STALE_CONTRACT_VALUES_SCHEMA_VERSION = '8'
 const SUPPORTED_POSTGRES_VERSION = '17.11'
@@ -35,6 +36,7 @@ export type SupportedSchemaVersion =
 	| typeof CURRENT_CONTRACT_EVENTS_SCHEMA_VERSION
 	| typeof STALE_CONTRACT_VALUES_SCHEMA_VERSION
 	| typeof BOUNDED_READ_SCHEMA_VERSION
+	| typeof ACCOUNTING_CLOCK_SCHEMA_VERSION
 
 type SchemaMigration = { readonly version: SupportedSchemaVersion; readonly file: string; readonly description: string }
 
@@ -48,7 +50,8 @@ const SCHEMA_MIGRATIONS: readonly SchemaMigration[] = [
 	{ version: CURRENT_CONTRACT_EVENTS_SCHEMA_VERSION, file: '007-current-contract-events.sql', description: 'Storage for events the current contracts emit' },
 	{ version: STALE_CONTRACT_VALUES_SCHEMA_VERSION, file: '008-stale-contract-values.sql', description: 'Removal of values no current contract supplies' },
 	{ version: BOUNDED_READ_SCHEMA_VERSION, file: '009-bounded-read-indexes.sql', description: 'Selective address and report reads' },
-	{ version: CURRENT_SCHEMA_VERSION, file: '010-accounting-clock-and-reasons.sql', description: 'Exact security pool accounting clock and current reason enum' },
+	{ version: ACCOUNTING_CLOCK_SCHEMA_VERSION, file: '010-accounting-clock-and-reasons.sql', description: 'Exact security pool accounting clock and current reason enum' },
+	{ version: CURRENT_SCHEMA_VERSION, file: '011-direct-call-evidence.sql', description: 'Reverted direct protocol call evidence' },
 ]
 
 /** Migrations that upgrade a database at `startingVersion` to the current schema, in application order. */
@@ -70,8 +73,12 @@ export const runSchemaTransaction = async <T>(begin: () => Promise<unknown>, com
 	}
 }
 
-export const schemaInitializationAction = (markerVersion: string | undefined, publicObjects: readonly string[]): 'initialize' | 'migrate-from-1' | 'migrate-from-2' | 'migrate-from-3' | 'migrate-from-4' | 'migrate-from-5' | 'migrate-from-6' | 'migrate-from-7' | 'migrate-from-8' | 'migrate-from-9' | 'current' => {
+export const schemaInitializationAction = (
+	markerVersion: string | undefined,
+	publicObjects: readonly string[],
+): 'initialize' | 'migrate-from-1' | 'migrate-from-2' | 'migrate-from-3' | 'migrate-from-4' | 'migrate-from-5' | 'migrate-from-6' | 'migrate-from-7' | 'migrate-from-8' | 'migrate-from-9' | 'migrate-from-10' | 'current' => {
 	if (markerVersion === CURRENT_SCHEMA_VERSION) return 'current'
+	if (markerVersion === ACCOUNTING_CLOCK_SCHEMA_VERSION) return 'migrate-from-10'
 	if (markerVersion === BOUNDED_READ_SCHEMA_VERSION) return 'migrate-from-9'
 	if (markerVersion === STALE_CONTRACT_VALUES_SCHEMA_VERSION) return 'migrate-from-8'
 	if (markerVersion === CURRENT_CONTRACT_EVENTS_SCHEMA_VERSION) return 'migrate-from-7'

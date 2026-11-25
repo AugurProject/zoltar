@@ -30,6 +30,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('system', 'token-authorization', ['AuthorizationUsed', 'AuthorizationCanceled']),
 	...definitions('system', 'weth', ['Deposit', 'Withdrawal']),
 	...definitions('report', 'open-oracle-report', ['ReportSubmitted', 'ReportDisputed', 'ReportSettled'], ['reportId']),
+	...definitions('oracle', 'arbitrage-executor', ['HedgeAndDisputeExecuted', 'LifecycleExecuted', 'ReplacementCreditWithdrawn']),
 	...definitions('oracle', 'price-coordinator', ['PendingReportRecovered', 'PriceReportDeferred', 'PriceReportRejected', 'PriceReported', 'PriceRequested', 'InternalApproval']),
 	...definitions('oracle', 'price-feed', ['ExposureCheckpoint', 'ReportFundingAssigned', 'ReportOperationAttempted']),
 	...definitions('escalation', 'escalation', [
@@ -94,6 +95,7 @@ const listedTaxonomyContractKinds: readonly SystemContractKind[] = [
 	'escalationGame',
 	'escalationGameDepositDelegate',
 	'openOracle',
+	'openOracleArbitrageExecutor',
 	'reputationToken',
 	'questionLedger',
 	'securityPoolCapitalRepairAuctionDelegate',

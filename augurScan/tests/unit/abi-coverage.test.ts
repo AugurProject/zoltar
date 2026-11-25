@@ -64,7 +64,7 @@ test('rejects unmapped deployment IDs instead of silently dropping them', async 
 	const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'augurscan-deployment-coverage-'))
 	try {
 		await mkdir(path.join(fixtureRoot, 'docs'))
-		for (const network of ['mainnet', 'sepolia']) {
+		for (const network of ['mainnet', 'sepolia', 'mainnet-no', 'sepolia-no']) {
 			const deployment = await Bun.file(path.join(root, '../docs', `${network}-deployment-addresses.json`)).json()
 			deployment.deploymentSteps.push({ id: 'futureFactory', label: 'New factory', address: '0x1111111111111111111111111111111111111111' })
 			await Bun.write(path.join(fixtureRoot, 'docs', `${network}-deployment-addresses.json`), JSON.stringify(deployment))
@@ -90,4 +90,11 @@ test('rejects metadata inputs for a different or unspecified genesis root', asyn
 	} finally {
 		await rm(fixtureRoot, { recursive: true, force: true })
 	}
+})
+
+test('loads all three arbitrage executor events from its compiled ABI', () => {
+	const events = abiForKind('openOracleArbitrageExecutor')
+		?.filter(item => item.type === 'event')
+		.map(item => item.name)
+	expect(events).toEqual(expect.arrayContaining(['HedgeAndDisputeExecuted', 'LifecycleExecuted', 'ReplacementCreditWithdrawn']))
 })
