@@ -39,12 +39,13 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 		return { chainId, asOf: operations.asOf, data: detail }
 	}
 	if (domain === 'reports') {
+		const acceptedCandidate = context.pageUrl.searchParams.get('acceptedCandidate') === '1'
 		const report = operations.data.reports.find(item => item.open_oracle_address.toLowerCase() === identity[0]?.toLowerCase() && item.report_id === identity[1])
 		const current = {
 			...evidence('ReportDisputed', report?.report_data ?? {}),
 			round_number: '2',
 			report_data: report?.report_data ?? {},
-			lifecycle: report?.lifecycle ?? { state: 'Awaiting indexed evidence', clock: 'timestamp' },
+			lifecycle: acceptedCandidate ? { state: 'Settled', clock: 'timestamp' } : (report?.lifecycle ?? { state: 'Awaiting indexed evidence', clock: 'timestamp' }),
 			comparison: {
 				state: 'compared',
 				previousRoundNumber: '1',
@@ -85,6 +86,14 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 					hasMore: context.pageUrl.searchParams.get('decisionMore') === '1',
 					...(context.pageUrl.searchParams.get('decisionMore') === '1' ? { nextCursor: 'demo-decision-older' } : {}),
 				}
+		const acceptedDecisions = {
+			items: [
+				{ ...coordinatorDecision, event_name: 'PriceCandidateAccepted', arguments: { reportId: identity[1], candidatePrice: '300', canonicalPrice: '200', observationTimestamp: '1767225660', canonicalUpdated: false } },
+				{ ...coordinatorDecision, event_name: 'PriceReported', arguments: { reportId: identity[1], price: '200', lastSettlementTimestamp: '1767225660' } },
+			],
+			limit: 100,
+			hasMore: false,
+		}
 		return {
 			chainId,
 			asOf: operations.asOf,
@@ -92,12 +101,12 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 				identity: { openOracleAddress: identity[0], reportId: identity[1] },
 				current,
 				rounds: evidencePage(current),
-				coordinatorDecisions,
+				coordinatorDecisions: acceptedCandidate ? acceptedDecisions : coordinatorDecisions,
 			},
 		}
 	}
 	if (domain === 'escalations') {
-		const event = evidence('DepositOnOutcome', {
+		const event = evidence('LocalDepositAppended', {
 			depositor: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
 			outcome: '1',
 			amountAttoRep: '1250000000000000000000',

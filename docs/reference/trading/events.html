@@ -13,7 +13,7 @@
 			<header>
 				<p class="kicker">Reference</p>
 				<h1>Trading events</h1>
-				<p>The factory and pair emit every reserve and LP state change. Parameters prefixed with <code>indexed</code> are log topics.</p>
+				<p>The factory logs pair creation, and each pair logs reserve updates from its own operations and changes in LP ownership. Parameters prefixed with <code>indexed</code> are log topics.</p>
 			</header>
 			<section id="factory">
 				<h2>Factory</h2>
@@ -26,7 +26,7 @@
 					<li><code>LiquidityAdded(indexed provider, indexed recipient, yesAmount, noAmount, liquidity)</code> records proportional reserve use.</li>
 					<li><code>LiquidityRemoved(indexed provider, indexed recipient, yesAmount, noAmount, liquidity)</code> records raw-share output.</li>
 					<li><code>Swap(indexed sender, indexed recipient, yesForNo, exactOutput, amountIn, amountOut, feeAmount, resultingYesReserve, resultingNoReserve)</code> provides authoritative direction, mode, amounts, fee, and resulting state.</li>
-					<li><code>Sync(yesReserve, noReserve)</code> records current Yes and No balances after a pair mutation or a call to <code>sync()</code>.</li>
+					<li><code>Sync(yesReserve, noReserve)</code> records current Yes and No balances after a pair mutation or a call to <code>sync()</code>. Direct share transfers can change the live reserves between <code>Sync</code> events. To reconstruct those changes, apply the canonical Yes and No token amounts from the share token’s <code>TransferSingle</code> and <code>TransferBatch</code> events involving the pair.</li>
 					<li><code>PredeploymentSharesQuarantined(invalidAmount, yesAmount, noAmount)</code> records canonical shares removed from a counterfactual pair address during construction. The destination is the factory's immutable <code>predeploymentShareSink</code>.</li>
 					<li>Standard ERC-20 <code>Transfer</code> and <code>Approval</code> events describe LP ownership and allowances.</li>
 				</ul>

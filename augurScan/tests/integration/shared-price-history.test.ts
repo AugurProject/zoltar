@@ -40,6 +40,8 @@ test.skipIf(postgresUrl === undefined)('member ledgers share canonical feed hist
 				[4, feed, 'PriceReported', { reportId: '1', price: '100' }, true],
 				[5, feed, 'ExposureCheckpoint', { questionLedger: poolA, aggregateExposureAttoEth: 200n.toString() }, true],
 				[6, standaloneFeed, 'PriceReported', { reportId: '2', price: '200' }, true],
+				[7, feed, 'PriceCandidateAccepted', { reportId: '1', candidatePrice: '100', canonicalPrice: '100', observationTimestamp: '100', canonicalUpdated: true }, true],
+				[8, feed, 'PriceCandidateAccepted', { reportId: '3', candidatePrice: '250', canonicalPrice: '100', observationTimestamp: '100', canonicalUpdated: false }, true],
 			] as const) {
 				await connection`INSERT INTO logs (chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, topics, data, event_name, arguments, decode_status, summary, canonical)
 					VALUES (${chainId}, ${blockHash}, ${blockHash}, 10, 0, ${index}, ${emitter}, '[]', '0x', ${name}, (${JSON.stringify(args)}::text)::jsonb, 'decoded', ${name}, ${canonical})`
@@ -69,6 +71,10 @@ test.skipIf(postgresUrl === undefined)('member ledgers share canonical feed hist
 				expect(history.repEthPrices[0]).toMatchObject({ coordinator_address: feed, rep_per_eth_1e18: '100' })
 				expect(history.openOracleHistory.filter((row: { event_name: string }) => row.event_name === 'PriceReported')).toHaveLength(1)
 				expect(history.openOracleHistory.filter((row: { event_name: string }) => row.event_name === 'ExposureCheckpoint')).toHaveLength(1)
+				expect(history.openOracleHistory.filter((row: { event_name: string }) => row.event_name === 'PriceCandidateAccepted')).toEqual([
+					expect.objectContaining({ arguments: expect.objectContaining({ candidatePrice: '250', canonicalPrice: '100', canonicalUpdated: false }) }),
+					expect.objectContaining({ arguments: expect.objectContaining({ candidatePrice: '100', canonicalPrice: '100', canonicalUpdated: true }) }),
+				])
 			}
 			expect(historyA.events).toHaveLength(1)
 			expect(historyA.events[0]).toMatchObject({ pool_address: poolA, state: { resultingSettlementCollateralAttoEth: 11n.toString() } })

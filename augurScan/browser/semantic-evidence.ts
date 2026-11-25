@@ -1,10 +1,10 @@
 import { collateralUnit, type CollateralUnit } from '../src/collateral.ts'
 import { annualFeeText } from './pool-metrics.ts'
-import { exactNumber, exactUnit, percentFromBps, utcDateTime } from './format.ts'
+import { collateralPriceDecimals, exactNumber, exactUnit, percentFromBps, utcDateTime } from './format.ts'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 const outcomes = ['INVALID', 'YES', 'NO', 'None']
-const capitalPriceKeys: ReadonlySet<string> = new Set(['acceptedPrice', 'conservativePrice', 'liquidationPrice', 'ownerConservativePrice', 'maxHealthyPrice'])
+const capitalPriceKeys: ReadonlySet<string> = new Set(['canonicalPrice', 'candidatePrice', 'acceptedPrice', 'conservativePrice', 'liquidationPrice', 'ownerConservativePrice', 'maxHealthyPrice'])
 const MAX_UINT256 = 2n ** 256n - 1n
 const label = (key: string): string => {
 	const words = key
@@ -13,6 +13,11 @@ const label = (key: string): string => {
 		.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
 		.replaceAll('_', ' ')
 	return `${words.charAt(0).toUpperCase()}${words.slice(1)}`
+}
+
+const priceText = (text: string, collateral: CollateralUnit | undefined, showRawUnit = false): string => {
+	if (collateral === undefined || (collateral.symbol === 'collateral units' && collateral.decimals === 0)) return `${exactNumber(text)}${showRawUnit ? ' raw price units' : ''}`
+	return exactUnit(text, collateralPriceDecimals(collateral.decimals), `REP/${collateral.symbol}`)
 }
 
 const valueText = (key: string, value: unknown, nativeSymbol: string, collateral?: CollateralUnit): string => {
@@ -26,15 +31,15 @@ const valueText = (key: string, value: unknown, nativeSymbol: string, collateral
 	const text = String(value)
 	if (/^(questionResolution|finalQuestionResolution)$/.test(key)) return outcomes[Number(text)] ?? `Unknown outcome (${text})`
 	if (/^-?\d+$/.test(text)) {
-		if (/^(activationTime|endTimestamp|nonDecisionTimestamp|priceValidUntil|lastSettlementTimestamp|opensAt|closesAt)$/.test(key) && BigInt(text) >= 0n && BigInt(text) <= 8_640_000_000_000n) return utcDateTime(Number(text) * 1000)
+		if (/^(activationTime|endTimestamp|nonDecisionTimestamp|observationTimestamp|priceValidUntil|lastSettlementTimestamp|opensAt|closesAt)$/.test(key) && BigInt(text) >= 0n && BigInt(text) <= 8_640_000_000_000n) return utcDateTime(Number(text) * 1000)
 		// The ledger reports zero until an adverse price observation starts a position's take-over clock.
 		if (key === 'liquidationStartedAt') return text === '0' ? 'Not started' : utcDateTime(Number(text) * 1000)
-		// Capital-ledger prices are attoREP per whole collateral token scaled by 1e18; a position without commitment has no price limit.
+		// Capital-ledger prices are attoREP per atomic unit of collateral scaled by 1e18; a position without commitment has no price limit.
 		if (capitalPriceKeys.has(key)) {
 			if (BigInt(text) === MAX_UINT256) return 'No limit'
-			return collateral === undefined ? exactNumber(text) : exactUnit(text, Math.max(0, 36 - collateral.decimals), `REP/${collateral.symbol}`)
+			return priceText(text, collateral, key === 'candidatePrice' || key === 'canonicalPrice')
 		}
-		if ((key === 'repPerEth1e18' || key === 'lastPrice') && collateral !== undefined) return exactUnit(text, Math.max(0, 36 - collateral.decimals), `REP/${collateral.symbol}`)
+		if (key === 'repPerEth1e18' || key === 'lastPrice') return priceText(text, collateral)
 		const unitKey = key.replaceAll('_', '')
 		if (/attoRep/i.test(unitKey)) return exactUnit(text, 18, 'REP')
 		if (/attoEthPerGas/i.test(unitKey)) return exactUnit(text, 18, `${nativeSymbol}/gas`)
@@ -71,7 +76,10 @@ export const semanticSummary = (record: Readonly<Record<string, unknown>>, nativ
 					last_settlement_security_pool_time: record['last_settlement_portfolio_time'],
 				}
 	const data = record['event_data'] ?? record['summary_data'] ?? record['arguments'] ?? record['read_result'] ?? accounting
-	const displayData = record['entity_type'] === 'price-coordinator' && isPlainRecord(data) ? Object.fromEntries(Object.entries(data).map(([key, value]) => [key === 'price' ? 'repPerEth1e18' : key, value])) : data
+	const priceReported = (record['event_name'] ?? record['semantic_event_kind']) === 'PriceReported'
+	const priceFeed = record['entity_type'] === 'price-coordinator' || record['entity_type'] === 'price-feed'
+	const priceKey = priceReported ? 'canonicalPrice' : 'repPerEth1e18'
+	const displayData = (priceReported || priceFeed) && isPlainRecord(data) ? Object.fromEntries(Object.entries(data).map(([key, value]) => [key === 'price' ? priceKey : key, value])) : data
 	return isPlainRecord(displayData)
 		? semanticFields(displayData, nativeSymbol, collateral)
 				.map(([name, value]) => `${name}: ${value}`)
@@ -79,8 +87,14 @@ export const semanticSummary = (record: Readonly<Record<string, unknown>>, nativ
 		: 'Payload unavailable'
 }
 
+export const priceDecisionSummary = (record: Readonly<Record<string, unknown>>, nativeSymbol: string, collateral?: CollateralUnit): string | undefined => {
+	const name = record['event_name']
+	if ((name !== 'PriceCandidateAccepted' && name !== 'PriceReported') || !isPlainRecord(record['arguments'])) return undefined
+	return semanticSummary(record, nativeSymbol, collateral)
+}
+
 /** Timeline entities whose attoETH-named amounts are in an auction's or security pool's collateral token, never the chain's native currency. */
-const collateralDenominatedEntityTypes: ReadonlySet<string> = new Set(['price-coordinator', 'pool', 'security-pool-settlement', 'security-pool-auction', 'auction', 'vault', 'capital-position', 'security-pool', 'security-pool-services', 'settlement-book'])
+const collateralDenominatedEntityTypes: ReadonlySet<string> = new Set(['price-coordinator', 'price-feed', 'pool', 'security-pool-settlement', 'security-pool-auction', 'auction', 'vault', 'capital-position', 'security-pool', 'security-pool-services', 'settlement-book'])
 
 /** A timeline entry's payload; collateral amounts use the entry's sampled `collateral` token, or raw collateral units without one. */
 export const timelineTransitionSummary = (record: Readonly<Record<string, unknown>>, nativeSymbol: string): string => semanticSummary(record, nativeSymbol, collateralDenominatedEntityTypes.has(String(record['entity_type'])) ? collateralUnit(record) : undefined)

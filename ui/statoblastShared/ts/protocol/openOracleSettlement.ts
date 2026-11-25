@@ -29,16 +29,6 @@ const reportEscrowAbi = [
 			{ name: 'maxSettlementBaseFee', type: 'uint256' },
 		],
 	},
-	{
-		type: 'event',
-		name: 'ReportCompleted',
-		anonymous: false,
-		inputs: [
-			{ name: 'reportId', type: 'uint256', indexed: true },
-			{ name: 'priceFeed', type: 'address', indexed: true },
-			{ name: 'outcome', type: 'uint8', indexed: false },
-		],
-	},
 ] as const
 
 // Generic OpenOracle reports have no pool freshness rule. Verify both sides of the callback/pool association.
@@ -84,15 +74,13 @@ export async function loadCoordinatorPriceValidUntilTimestamp(client: Pick<ReadC
 }
 
 /**
- * True only when `callbackContract` is the escrow that a shared price feed registered in the
- * configured SecurityPoolFactory opened for this report on this OpenOracle. That escrow's code
- * is known and returns no data, so settlement needs no return-data allowance for it. Any read
- * that fails or disagrees leaves the callback untrusted.
+ * Resolves the registered shared price feed that opened this escrow for this report on this OpenOracle.
+ * The authenticated escrow returns no data, so settlement needs no return-data allowance for it.
  */
-export async function isFeedAuthenticatedReportEscrow(client: Pick<ReadClient, 'multicall'>, openOracleAddress: Address, callbackContract: Address, reportId: bigint) {
-	if (callbackContract === zeroAddress) return false
+export async function getAuthenticatedReportEscrowFeed(client: Pick<ReadClient, 'multicall'>, openOracleAddress: Address, callbackContract: Address, reportId: bigint) {
+	if (callbackContract === zeroAddress) return undefined
 	const feed = (await readOptionalMulticall(client, [{ address: callbackContract, abi: reportEscrowAbi, functionName: 'feed' }])).at(0)
-	if (feed?.status !== 'success' || feed.result === zeroAddress) return false
+	if (feed?.status !== 'success' || feed.result === zeroAddress) return undefined
 	const feedAbi = statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi
 	const [candidate, factory, securityPool, universe, feedOracle] = await readOptionalMulticall(client, [
 		{ address: feed.result, abi: feedAbi, functionName: 'reportCandidates', args: [reportId] },
@@ -112,33 +100,31 @@ export async function isFeedAuthenticatedReportEscrow(client: Pick<ReadClient, '
 		feedOracle?.status !== 'success' ||
 		!sameAddress(feedOracle.result, openOracleAddress)
 	)
-		return false
+		return undefined
 	const registeredFeed = (await readOptionalMulticall(client, [{ address: factory.result, abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, functionName: 'sharedPriceFeeds', args: [securityPool.result, universe.result] }])).at(0)
-	return registeredFeed?.status === 'success' && sameAddress(registeredFeed.result, feed.result)
+	return registeredFeed?.status === 'success' && sameAddress(registeredFeed.result, feed.result) ? feed.result : undefined
 }
 
-export function getOpenOraclePriceSettlement(receipt: Partial<Pick<TransactionReceipt, 'logs'>>, callbackContract: Address, reportId: bigint): OpenOraclePriceSettlement | undefined {
-	if (callbackContract === zeroAddress) return undefined
-	let priceSource = callbackContract
-	for (const log of receipt.logs ?? []) {
-		if (!sameAddress(log.address, callbackContract)) continue
-		try {
-			const event = decodeEventLog({ abi: reportEscrowAbi, data: log.data, topics: log.topics })
-			if (event.eventName === 'ReportCompleted' && event.args.reportId === reportId) priceSource = event.args.priceFeed
-		} catch (error) {
-			if (!isIgnorableLogDecodeError(error)) throw error
-		}
-	}
+export async function isFeedAuthenticatedReportEscrow(client: Pick<ReadClient, 'multicall'>, openOracleAddress: Address, callbackContract: Address, reportId: bigint) {
+	return (await getAuthenticatedReportEscrowFeed(client, openOracleAddress, callbackContract, reportId)) !== undefined
+}
+
+export function getOpenOraclePriceSettlement(receipt: Partial<Pick<TransactionReceipt, 'logs'>>, priceSource: Address, reportId: bigint): OpenOraclePriceSettlement | undefined {
+	let canonicalPriceReported = false
 	for (const log of receipt.logs ?? []) {
 		if (!sameAddress(log.address, priceSource)) continue
 		try {
 			const decoded = decodeEventLog({ abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, data: log.data, topics: log.topics })
 			if (decoded.eventName === 'PriceReportRejected' && decoded.args.reportId === reportId) return { status: 'rejected', reason: decoded.args.reason }
 			if (decoded.eventName === 'PriceReportDeferred' && decoded.args.reportId === reportId) return { status: 'deferred', maxSettlementBaseFee: decoded.args.maxSettlementBaseFee }
-			if (decoded.eventName === 'PriceReported' && decoded.args.reportId === reportId) return { status: 'accepted' }
+			if (decoded.eventName === 'PriceCandidateAccepted' && decoded.args.reportId === reportId) {
+				const { candidatePrice, canonicalPrice, observationTimestamp, canonicalUpdated } = decoded.args
+				return { status: 'accepted', candidate: { candidatePrice, canonicalPrice, observationTimestamp, canonicalUpdated } }
+			}
+			if (decoded.eventName === 'PriceReported' && decoded.args.reportId === reportId) canonicalPriceReported = true
 		} catch (error) {
 			if (!isIgnorableLogDecodeError(error)) throw error
 		}
 	}
-	return undefined
+	return canonicalPriceReported ? { status: 'accepted' } : undefined
 }

@@ -954,7 +954,7 @@ CREATE UNIQUE INDEX amm_markets_canonical_pair ON public.amm_markets USING btree
 -- Name: amm_markets_canonical_pool; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX amm_markets_canonical_pool ON public.amm_markets USING btree (chain_id, pool_address) WHERE canonical;
+CREATE INDEX amm_markets_canonical_pool ON public.amm_markets USING btree (chain_id, pool_address) WHERE canonical;
 
 
 --

@@ -1,4 +1,4 @@
-import { allocatedWinningPayout, ordinaryWinningPayout } from './claim-payout.ts'
+import { allocatedWinningPayout, claimPayoutDestination, ordinaryWinningPayout } from './claim-payout.ts'
 import { buildCarryMerkleMountainRangeProof, createSparseNullifier, hashCarryLeaf, type CarryLeaf } from '@zoltar/core-shared/evm/carryProof'
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
@@ -207,5 +207,5 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 			})
 		}
 	}
-	return { status: 'available', positions, truncated, reads, basis: 'Authenticated leaf allocations and verified carry/nullifier commitments. Each proof is independent at this block; refresh after any claim. Payouts credit the depositor claim bundle, not a wallet transfer quote.' }
+	return { status: 'available', positions, truncated, reads, basis: `Authenticated leaf allocations and verified carry/nullifier commitments. Each proof is independent at this block; refresh after any claim. ${claimPayoutDestination}` }
 }

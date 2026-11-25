@@ -70,10 +70,13 @@ const settlementClaim = (value: unknown): SettledTradingClaim | undefined => {
 	return { outcome, supply, questionUnits, bookUnits, bookCash }
 }
 
-const holdingsValuation = (holdings: TradingHoldings, exitOpen: boolean, market: TradingMarketState, claim: SettledTradingClaim | undefined) => {
+const holdingsValuation = (holdings: TradingHoldings, exitOpen: boolean, redeemCompleteSets: boolean, market: TradingMarketState, claim: SettledTradingClaim | undefined) => {
 	if (Object.values(holdings).every(balance => balance === 0n)) return { valueAttoEth: 0n, completeSetsRedeemed: 0n, insuredExitSets: 0n, unvalued: holdings }
 	if (exitOpen) return tradingHoldingsValue(holdings, market)
-	return claim === undefined ? undefined : settledTradingHoldingsValue(holdings, market, claim)
+	if (claim !== undefined) return settledTradingHoldingsValue(holdings, market, claim)
+	if (!redeemCompleteSets) return undefined
+	const completeSetValue = tradingHoldingsValue(holdings, market, { allowInsuredExit: false })
+	return completeSetValue !== undefined && completeSetValue.completeSetsRedeemed > 0n ? completeSetValue : undefined
 }
 
 const missingValuationReason = (holdings: TradingHoldings) => (Object.values(holdings).some(balance => balance < 0n) ? 'Indexed transfer history is incomplete for this account' : 'No indexed complete-set exchange rate for this pool')
@@ -84,11 +87,16 @@ export const accountTradingPnl = async (sql: SQL, query: { readonly chainId: num
 		const holdings = { invalidShares: requiredBigint(row['invalid_atto_shares']), yesShares: requiredBigint(row['yes_atto_shares']), noShares: requiredBigint(row['no_atto_shares']), lpTokens: requiredBigint(row['lp_tokens']) }
 		const yesReserve = optionalBigint(row['yes_reserve'])
 		const noReserve = optionalBigint(row['no_reserve'])
-		const collateral = optionalBigint(row['settlement_collateral_atto_eth'])
-		const supply = optionalBigint(row['share_supply_atto_shares'])
+		const sampledBlock = requiredBigint(row['pool_read_block'])
+		const currentAccountingRead = sampledBlock >= requiredBigint(row['settlement_collateral_block']) && sampledBlock >= requiredBigint(row['share_supply_block'])
+		const sampledCollateral = optionalBigint(row['sampled_redemption_atto_eth'])
+		const sampledSupply = optionalBigint(row['sampled_share_supply'])
+		const useSampledRate = currentAccountingRead && sampledCollateral !== undefined && sampledCollateral >= 0n && sampledSupply !== undefined && sampledSupply > 0n
+		const collateral = useSampledRate ? sampledCollateral : optionalBigint(row['settlement_collateral_atto_eth'])
+		const supply = useSampledRate ? sampledSupply : optionalBigint(row['share_supply_atto_shares'])
 		const questionEndTime = optionalBigint(row['question_end_time'])
 		const systemState = newerEvidence(row['pool_system_state'], row['pool_read_block'], row['system_state_event'], row['system_state_event_block'])
-		const exit = tradingExitAvailability({
+		const lifecycle = {
 			asOfTimestamp: requiredBigint(query.asOfTimestamp),
 			...(questionEndTime === undefined ? {} : { questionEndTime }),
 			...(systemState === undefined ? {} : { systemState }),
@@ -96,18 +104,26 @@ export const accountTradingPnl = async (sql: SQL, query: { readonly chainId: num
 			resolved: row['pool_escalation_resolved'] === 'true' || (typeof row['final_question_resolution'] === 'string' && row['final_question_resolution'] !== NO_OUTCOME),
 			universeForked: row['universe_forked'] === true,
 			settlementObserved: row['settlement_observed'] === true,
-		})
+		}
+		const exit = tradingExitAvailability(lifecycle)
+		const redeemCompleteSets = questionEndTime !== undefined && lifecycle.asOfTimestamp >= questionEndTime && systemState === '0' && !lifecycle.awaitingForkContinuation && !lifecycle.resolved && !lifecycle.settlementObserved && !lifecycle.universeForked
 		const marketState = {
-			...(yesReserve === undefined || noReserve === undefined ? {} : { reserves: { yes: yesReserve, no: noReserve } }),
+			...(yesReserve === undefined || yesReserve < 0n || noReserve === undefined || noReserve < 0n ? {} : { reserves: { yes: yesReserve, no: noReserve } }),
 			feeBps: requiredBigint(row['fee_bps']),
 			lpTotalSupply: requiredBigint(row['lp_total_supply']),
 			...(collateral === undefined || supply === undefined ? {} : { completeSetRate: { settlementCollateralAttoEth: collateral, shareSupplyAttoShares: supply } }),
 		}
-		// A later accounting event invalidates the sampled claim's pricing inputs.
-		const sampledBlock = requiredBigint(row['pool_read_block'])
-		const claim = systemState === '0' && row['universe_forked'] !== true && sampledBlock >= requiredBigint(row['settlement_collateral_block']) && sampledBlock >= requiredBigint(row['share_supply_block']) ? settlementClaim(row['settlement_claim']) : undefined
-		const valuation = holdingsValuation(holdings, exit.open, marketState, claim)
-		const unknownBasis = row['unknown_transfer_basis'] === true || Object.values(holdings).some(balance => balance < 0n)
+		// A parent claim can remain payable after a fork. Require a tagged read at or after the fork in that case.
+		const claim = systemState === '0' && currentAccountingRead && sampledBlock >= requiredBigint(row['universe_fork_block']) ? settlementClaim(row['settlement_claim']) : undefined
+		const multipleLpPositions = typeof row['lp_pair_count'] === 'number' && row['lp_pair_count'] > 1
+		const incompleteLp = row['incomplete_lp'] === true
+		const valuation = multipleLpPositions ? undefined : holdingsValuation(holdings, exit.open, redeemCompleteSets, marketState, claim)
+		let unavailableReason = exit.open ? missingValuationReason(holdings) : exit.reason
+		if (incompleteLp) unavailableReason = 'Indexed transfer history is incomplete for this account'
+		else if (multipleLpPositions) unavailableReason = 'LP tokens are held across multiple pairs'
+		const completeSetMethod = !exit.open && redeemCompleteSets && (valuation?.completeSetsRedeemed ?? 0n) > 0n ? { method: 'complete-set-redemption' } : {}
+		const valuationMethod = !exit.open && claim !== undefined ? { method: 'winning-share-settlement', settlement_block: row['pool_read_block'], winning_outcome: claim.outcome } : completeSetMethod
+		const unknownBasis = row['unknown_transfer_basis'] === true || incompleteLp || Object.values(holdings).some(balance => balance < 0n)
 		const pnl = tradingProfitAndLoss(requiredBigint(row['cost_basis_atto_eth']), requiredBigint(row['proceeds_atto_eth']), holdings, valuation?.valueAttoEth)
 		return {
 			market_address: row['pair_address'],
@@ -118,7 +134,9 @@ export const accountTradingPnl = async (sql: SQL, query: { readonly chainId: num
 			invalid_atto_shares: row['invalid_atto_shares'],
 			yes_atto_shares: row['yes_atto_shares'],
 			no_atto_shares: row['no_atto_shares'],
-			lp_tokens: row['lp_tokens'],
+			lp_tokens: multipleLpPositions || incompleteLp ? null : row['lp_tokens'],
+			observed_lp_delta: multipleLpPositions ? undefined : holdings.lpTokens.toString(),
+			lp_token_positions: multipleLpPositions ? row['lp_token_positions'] : undefined,
 			known_cost_atto_eth: pnl.costBasisAttoEth.toString(),
 			cost_basis_status: unknownBasis ? 'unknown' : 'indexed',
 			cost_basis_atto_eth: unknownBasis ? undefined : pnl.costBasisAttoEth.toString(),
@@ -130,10 +148,10 @@ export const accountTradingPnl = async (sql: SQL, query: { readonly chainId: num
 			open: pnl.open,
 			valuation:
 				valuation === undefined
-					? { status: 'unavailable', reason: exit.open ? missingValuationReason(holdings) : exit.reason }
+					? { status: 'unavailable', reason: unavailableReason }
 					: {
 							status: 'available',
-							...(!exit.open && claim !== undefined ? { method: 'winning-share-settlement', settlement_block: row['pool_read_block'], winning_outcome: claim.outcome } : {}),
+							...valuationMethod,
 							partial: Object.values(valuation.unvalued).some(balance => balance > 0n),
 							complete_sets_redeemed_atto_shares: valuation.completeSetsRedeemed.toString(),
 							insured_exit_sets_atto_shares: valuation.insuredExitSets.toString(),
@@ -142,8 +160,8 @@ export const accountTradingPnl = async (sql: SQL, query: { readonly chainId: num
 							unvalued_no_atto_shares: valuation.unvalued.noShares.toString(),
 							unvalued_lp_tokens: valuation.unvalued.lpTokens.toString(),
 							reserve_block: row['reserve_block'] ?? undefined,
-							settlement_collateral_block: row['settlement_collateral_block'] ?? undefined,
-							share_supply_block: row['share_supply_block'] ?? undefined,
+							settlement_collateral_block: (useSampledRate ? row['pool_read_block'] : row['settlement_collateral_block']) ?? undefined,
+							share_supply_block: (useSampledRate ? row['pool_read_block'] : row['share_supply_block']) ?? undefined,
 						},
 		}
 	})

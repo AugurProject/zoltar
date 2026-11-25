@@ -3,7 +3,11 @@ import type { SQL } from 'bun'
 // Recovery burns are emitted by the coordinator during the child's branch-start transaction.
 export function forkBurns(sql: SQL, snapshotBlock: string) {
 	return sql`(
-		SELECT COALESCE(sum((burn.event_data->>'amountAttoRep')::numeric), 0)::text
+		SELECT (
+			-- The fork root records the threshold paid and the credit the forker keeps.
+			COALESCE((root.event_data->>'forkThresholdAttoRep')::numeric - (root.event_data->>'migrationRepBalanceAttoRep')::numeric, 0)
+			+ COALESCE(sum((burn.event_data->>'amountAttoRep')::numeric), 0)
+		)::text
 		FROM fork_migration_events burn
 		WHERE burn.chain_id = root.chain_id AND burn.canonical AND burn.event_name = 'RepBurned'
 			AND burn.block_number BETWEEN root.block_number AND ${snapshotBlock}

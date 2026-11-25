@@ -395,6 +395,38 @@ describe('openOracle protocol client', () => {
 		})
 	}
 
+	const verifiedSettlementFeed = (preimage: OpenOracleStatePreimage, feedAddress: Address, registered = true) =>
+		createMulticallStub(async request =>
+			request.contracts.map(contract => {
+				switch (getContractFunctionName(contract)) {
+					case 'feed':
+						return success(feedAddress)
+					case 'reportId':
+						return success(7n)
+					case 'reportCandidates':
+						return success([preimage.game.callbackContract, initialReporter, 0n])
+					case 'securityPoolFactory':
+						return success(getInfraContractAddresses().securityPoolFactory)
+					case 'securityPool':
+						return success(alternateQuestionLedgerAddress)
+					case 'universeId':
+						return success(0n)
+					case 'openOracle':
+						return success(getOpenOracleAddress())
+					case 'collateralToken':
+						return success(preimage.game.token1)
+					case 'reputationToken':
+						return success(preimage.game.token2)
+					case 'priceValidityWindowSeconds':
+						return success(3600n)
+					case 'sharedPriceFeeds':
+						return success(registered ? feedAddress : zeroAddress)
+					default:
+						return failure()
+				}
+			}),
+		)
+
 	const settlementOutcomes = {
 		accepted: { eventName: 'PriceReported', data: encodeAbiParameters(parseAbiParameters('uint256,uint256'), [123n, 11n]), expected: { status: 'accepted' } },
 		rejected: { eventName: 'PriceReportRejected', data: encodeAbiParameters(parseAbiParameters('string,uint256,uint256,uint256,uint256'), ['Report uneconomic', 0n, 0n, 0n, 0n]), expected: { status: 'rejected', reason: 'Report uneconomic' } },
@@ -408,7 +440,7 @@ describe('openOracle protocol client', () => {
 			const { data, eventName } = settlementOutcomes[status]
 			const log = { address: vaultAddress, data, topics: encodedLogTopics({ abi, eventName, args: { reportId: 7n } }) }
 			const logs = [{ ...log, address: token1Address }, { ...log, topics: encodedLogTopics({ abi, eventName, args: { reportId: 8n } }) }, { ...log, topics: [] }, log]
-			const client = { ...createMockWriteClient(() => {}), waitForTransactionReceipt: async () => ({ status: 'success' as const, logs }) }
+			const client = { ...createMockWriteClient(() => {}), multicall: verifiedSettlementFeed(preimage, vaultAddress), waitForTransactionReceipt: async () => ({ status: 'success' as const, logs }) }
 			const result = await settleOracleReport(client, getOpenOracleAddress(), 7n, preimage)
 			expect(result.priceSettlement).toEqual(settlementOutcomes[status].expected)
 		})
@@ -427,8 +459,31 @@ describe('openOracle protocol client', () => {
 				data: accepted ? encodeAbiParameters(parseAbiParameters('uint256,uint256'), [123n, 11n]) : encodeAbiParameters(parseAbiParameters('string,uint256,uint256,uint256,uint256'), ['Report stale', 0n, 0n, 0n, 0n]),
 				topics: encodedLogTopics({ abi: feedAbi, eventName, args: { reportId: 7n } }),
 			}
-			const client = { ...createMockWriteClient(() => {}), waitForTransactionReceipt: async () => ({ status: 'success' as const, logs: [result, completed] }) }
+			const client = { ...createMockWriteClient(() => {}), multicall: verifiedSettlementFeed(preimage, alternateQuestionLedgerAddress), waitForTransactionReceipt: async () => ({ status: 'success' as const, logs: [result, completed] }) }
 			expect((await settleOracleReport(client, getOpenOracleAddress(), 7n, preimage)).priceSettlement).toEqual(accepted ? { status: 'accepted' } : { status: 'rejected', reason: 'Report stale' })
+		})
+	}
+
+	for (const registered of [true, false]) {
+		test(`settlement requires the registered feed for candidate and canonical receipt evidence: ${registered}`, async () => {
+			const preimage = createOpenOraclePreimage(7n)
+			preimage.game.callbackContract = vaultAddress
+			const feedAddress = alternateQuestionLedgerAddress
+			const abi = parseAbi([
+				'event PriceReported(uint256 indexed reportId, uint256 price, uint256 lastSettlementTimestamp)',
+				'event PriceCandidateAccepted(uint256 indexed reportId, uint256 candidatePrice, uint256 canonicalPrice, uint256 observationTimestamp, bool canonicalUpdated)',
+				'event ReportCompleted(uint256 indexed reportId, address indexed priceFeed, uint8 outcome)',
+			])
+			const makeCandidateLog = (address: Address, reportId: bigint, amount: bigint) => ({
+				address,
+				data: encodeAbiParameters(parseAbiParameters('uint256,uint256,uint256,bool'), [amount, 100n, 11n, false]),
+				topics: encodedLogTopics({ abi, eventName: 'PriceCandidateAccepted', args: { reportId } }),
+			})
+			const reported = { address: feedAddress, data: encodeAbiParameters(parseAbiParameters('uint256,uint256'), [100n, 11n]), topics: encodedLogTopics({ abi, eventName: 'PriceReported', args: { reportId: 7n } }) }
+			const completed = { address: vaultAddress, data: encodeAbiParameters(parseAbiParameters('uint8'), [1]), topics: encodedLogTopics({ abi, eventName: 'ReportCompleted', args: { reportId: 7n, priceFeed: feedAddress } }) }
+			const logs = [makeCandidateLog(token1Address, 7n, 900n), makeCandidateLog(feedAddress, 8n, 800n), reported, makeCandidateLog(feedAddress, 7n, 200n), completed]
+			const client = { ...createMockWriteClient(() => {}), multicall: verifiedSettlementFeed(preimage, feedAddress, registered), waitForTransactionReceipt: async () => ({ status: 'success' as const, logs }) }
+			expect((await settleOracleReport(client, getOpenOracleAddress(), 7n, preimage)).priceSettlement).toEqual(registered ? { status: 'accepted', candidate: { candidatePrice: 200n, canonicalPrice: 100n, observationTimestamp: 11n, canonicalUpdated: false } } : undefined)
 		})
 	}
 
@@ -443,6 +498,7 @@ describe('openOracle protocol client', () => {
 		}
 		const client = {
 			...createMockWriteClient(() => {}),
+			multicall: verifiedSettlementFeed(preimage, vaultAddress),
 			waitForTransactionReceipt: async () => ({ status: 'success' as const, logs: [rejection] }),
 		}
 		const result = await settleOracleReport(client, getOpenOracleAddress(), 7n, preimage)

@@ -6,12 +6,12 @@ import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-co
 import { withFakeClock } from '@zoltar/ui-core-shared/tests/testUtils/fakeClock.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import type { TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
+import type { GlobalTransactionPresentation, TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
 import type { OpenOracleReportDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { useOpenOracleOperations, type UseOpenOracleOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleOperations.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
-import { h, render, type ComponentChildren } from 'preact'
+import { h, isValidElement, render } from 'preact'
 import { act } from 'preact/test-utils'
 
 type UseOpenOracleOperationsState = ReturnType<typeof useOpenOracleOperations>
@@ -271,12 +271,16 @@ describe('useOpenOracleOperations', () => {
 		expect(settleOracleReport).toHaveBeenCalledTimes(1)
 	})
 
-	test('uses the canonical report scope and success title when settlement starts with leading zeros', async () => {
-		const report = createOpenOracleReportDetails({ reportId: 7n, currentReporter: WALLET_ADDRESS, currentTime: 11n, reportTimestamp: 1n, settlementTime: 10n })
-		const settleOracleReport = mock(async () => ({ action: 'settle' as const, hash: STATE_HASH }))
+	test('uses the canonical report scope and displays receipt prices in the loaded report token units', async () => {
+		const report = createOpenOracleReportDetails({ reportId: 7n, currentReporter: WALLET_ADDRESS, currentTime: 11n, reportTimestamp: 1n, settlementTime: 10n, token1Decimals: 6, token1Symbol: 'USDC', token2Decimals: 18, token2Symbol: 'REP' })
+		const settleOracleReport = mock(async () => ({
+			action: 'settle' as const,
+			hash: STATE_HASH,
+			priceSettlement: { status: 'accepted' as const, candidate: { candidatePrice: 3n * 10n ** 30n, canonicalPrice: 2n * 10n ** 30n, observationTimestamp: 11n, canonicalUpdated: false } },
+		}))
 		const dependencies = createOpenOracleOperationsDependencies({ loadOpenOracleReportDetails: async () => report, settleOracleReport })
 		const onTransactionRequested = mock((_intent: TransactionIntent) => undefined)
-		let successTitle: ComponentChildren
+		let receipt: GlobalTransactionPresentation | undefined
 		let state: UseOpenOracleOperationsState | undefined
 		const Harness = createHarness(
 			dependencies,
@@ -287,7 +291,7 @@ describe('useOpenOracleOperations', () => {
 			{
 				onTransactionRequested,
 				onTransactionPresented: presentation => {
-					successTitle = presentation.title
+					receipt = presentation
 				},
 			},
 		)
@@ -303,7 +307,11 @@ describe('useOpenOracleOperations', () => {
 		expect(settleOracleReport).toHaveBeenCalledTimes(1)
 		expect(onTransactionRequested).toHaveBeenCalledTimes(1)
 		expect(onTransactionRequested).toHaveBeenCalledWith(expect.objectContaining({ scope: ['open-oracle-report:7'] }))
-		expect(successTitle).toBe('Report #7 settled')
+		expect(receipt?.title).toBe('Report #7 settled')
+		expect(receipt?.rows?.slice(-2).map(({ label, value }) => [label, isValidElement(value) ? value.props.children : value])).toEqual([
+			['Candidate price', '3 REP per USDC'],
+			['Canonical price', '2 REP per USDC'],
+		])
 	})
 
 	test('distinguishes unsubmitted, missing, and failed report lookups', async () => {

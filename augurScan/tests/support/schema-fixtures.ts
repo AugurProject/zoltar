@@ -1,7 +1,13 @@
 import type { ScannerDatabase } from '../../src/database.ts'
 import { POOL_SNAPSHOTS_BEFORE_SCHEMA_7, TABLES_REMOVED_IN_SCHEMA_7 } from '../../src/schema-removed-tables.ts'
 
+export const rewindMarketIndexToV11 = async (database: ScannerDatabase) => {
+	await database.sql.unsafe('DROP INDEX public.amm_markets_canonical_pool')
+	await database.sql.unsafe('CREATE UNIQUE INDEX amm_markets_canonical_pool ON public.amm_markets USING btree (chain_id, pool_address) WHERE canonical')
+}
+
 export const rewindTransactionStatusToV10 = async (database: ScannerDatabase) => {
+	await rewindMarketIndexToV11(database)
 	await database.sql.unsafe("ALTER TABLE public.transactions DROP CONSTRAINT transactions_selection_status, ADD CONSTRAINT transactions_successful_log_evidence CHECK (status = 'success')")
 }
 

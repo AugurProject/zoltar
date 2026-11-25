@@ -502,3 +502,8 @@ test('question accounting preserves the security pool clock as an exact integer 
 		lastSettlementSecurityPoolTime: atomic(clock),
 	})
 })
+
+test('attributes internal balance approvals to the OpenOracle contract', () => {
+	expect(projectionsFrom(log('InternalApproval', { owner: vault, spender: pool, token: vault, amount: '1' }, pool, 'openOracle'))).toContainEqual(expect.objectContaining({ type: 'domainEvent', domain: 'oracle', entityType: 'open-oracle', entityIdentity: pool.toLowerCase() }))
+	expect(projectionsFrom(log('PriceRequested', { reportId: '1' }, pool, 'sharedPoolPriceFeed'))).toContainEqual(expect.objectContaining({ type: 'domainEvent', domain: 'oracle', entityType: 'price-feed' }))
+})

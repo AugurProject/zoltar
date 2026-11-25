@@ -3,7 +3,7 @@ import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 const BPS_DENOMINATOR = 10_000n
 
 export const TRADING_PNL_BASIS =
-	'Known cost includes collateral and purchase fees from indexed funding. Router exits credit the payout recipient recorded by the router. An incoming share or LP transfer with unobserved cost makes cost basis and profit unavailable. Open markets use indexed reserves and the complete-set exchange rate. Holdings that an exit cannot convert are excluded from this lower bound. Resolved markets with a tagged final outcome and settlement book value winning shares in collateral base units. Recovery REP is a separate asset. Realized profit uses cost recovery while holdings remain open.'
+	'Each position groups flows and outcome shares by question ledger. Known cost includes collateral and purchase fees from indexed funding. Router exits credit the payout recipient recorded by the router. An incoming share or LP transfer with unobserved cost makes cost basis and profit unavailable. Open markets use indexed reserves and the latest complete-set exchange rate. After trading closes, unresolved operational markets value redeemable complete sets. Holdings that an exit cannot convert are excluded from this lower bound. Resolved markets with a tagged final outcome and settlement book value winning shares in collateral base units. Recovery REP is a separate asset. Multi-pair LP holdings do not have a combined valuation. Realized profit uses cost recovery while holdings remain open.'
 
 export type TradingHoldings = {
 	readonly invalidShares: bigint
@@ -13,7 +13,7 @@ export type TradingHoldings = {
 }
 
 export type TradingMarketState = {
-	/** Latest indexed reserve synchronization; absent before the pair is initialized. */
+	/** Latest indexed reserves from Sync and subsequent share transfers; absent before the pair is initialized. */
 	readonly reserves?: { readonly yes: bigint; readonly no: bigint }
 	readonly feeBps: bigint
 	readonly lpTotalSupply: bigint
@@ -82,7 +82,7 @@ const minimum = (...values: readonly bigint[]): bigint => values.reduce((smalles
  * remaining INVALID plus one long outcome are sold through the router's insured exit. Shares that cannot reach ETH that
  * way (for example YES and NO without INVALID) are reported as unvalued rather than priced.
  */
-export const tradingHoldingsValue = (holdings: TradingHoldings, market: TradingMarketState): TradingHoldingsValue | undefined => {
+export const tradingHoldingsValue = (holdings: TradingHoldings, market: TradingMarketState, { allowInsuredExit = true } = {}): TradingHoldingsValue | undefined => {
 	const rate = market.completeSetRate
 	if (rate === undefined || rate.shareSupplyAttoShares <= 0n) return undefined
 	// A negative reconstructed balance means indexed history starts after the account acquired shares.
@@ -105,7 +105,7 @@ export const tradingHoldingsValue = (holdings: TradingHoldings, market: TradingM
 	yes -= completeSets
 	no -= completeSets
 	let insuredExitSets = 0n
-	if (invalid > 0n && reserves !== undefined && yes > 0n !== no > 0n) {
+	if (allowInsuredExit && invalid > 0n && reserves !== undefined && yes > 0n !== no > 0n) {
 		const longYes = yes > 0n
 		const longShares = longYes ? yes : no
 		insuredExitSets = largestInsuredExit(longYes, longShares, invalid, reserves, market.feeBps)

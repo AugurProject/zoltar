@@ -115,3 +115,8 @@
 		overflow: visible;
 	}
 }
+
+/* Keep exact settled prices readable beside the other receipt details. */
+.global-transaction-dialog .global-transaction-notice-row:has(.open-oracle-receipt-price) {
+	grid-column: 1 / -1;
+}

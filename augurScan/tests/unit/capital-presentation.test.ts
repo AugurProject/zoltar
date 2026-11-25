@@ -17,7 +17,7 @@ test('summarizes a position with REP principal and commitment in the ledger coll
 		['Commitment', '50 USDC'],
 		['Health factor', '95%'],
 		['Withdrawable', '0 REP'],
-		['Unclaimed earnings', '1.5 USDC · 2 REP'],
+		['Credited fees awaiting claim', '1.5 USDC · 2 REP'],
 	])
 	// Without collateral metadata the commitment stays in explicit base units instead of borrowing ETH decimals.
 	expect(capitalPositionSummary({ principalAttoRep: '0', commitmentAttoEth: '7' })).toBe('0 REP principal · 7 collateral units commitment · no health factor')
@@ -28,6 +28,7 @@ test('summarizes a position with REP principal and commitment in the ledger coll
 test('summarizes a ledger and says whether its price is fresh', () => {
 	const state = { pledgedAttoRep: (1_470n * 10n ** 18n).toString(), commitmentAttoEth: '150000000', healthyCommitmentAttoEth: '100000000', acceptedPrice: (200n * 10n ** 30n).toString(), priceValid: false, collateral: usdc }
 	expect(capitalLedgerSummary(state, 4)).toBe('1,470 REP pledged · 150 USDC committed · 100 USDC healthy · 200 REP/USDC · price expired · 4 owners')
+	expect(capitalLedgerSummary({ ...state, acceptedPrice: '1', collateral: { symbol: 'TKN', decimals: 38 } }, 4)).toContain('100 REP/TKN')
 	expect(capitalLedgerSummary({ ...state, priceValid: true }, '1')).toBe('1,470 REP pledged · 150 USDC committed · 100 USDC healthy · 200 REP/USDC · price fresh · 1 owner')
 })
 
@@ -74,19 +75,20 @@ test('summarizes cash fee economics and question stream status', () => {
 		burned_atto_rep: '0',
 	}
 	expect(feeEconomicsSummary(universe)).toEqual({
-		rates: '2% annual holding fee · 0.3% base purchase fee · 700 USDC vesting to owners',
-		flows: '1,250 USDC holding fees accrued · 960 USDC purchase charges, 900 USDC to owners · 1,100 USDC and 12 REP claimed · 25 USDC and 0 REP burned unassigned',
+		rates: '2% annual holding fee · 0.3% base purchase fee · 700 USDC unreleased owner fees',
+		flows: '1,250 USDC holding fees accrued · 960 USDC purchase charges, 900 USDC to owners · 1,100 USDC and 12 REP claimed · 25 USDC and 0 REP burned by the capital ledger',
 	})
+	expect(feeEconomicsSummary({ ...universe, fees: { ...universe.fees, vestingOutstandingAttoEth: '0' } }).rates).toContain('0 USDC unreleased owner fees')
 	// Without a fee read the rates are not guessed; the event totals remain.
 	expect(feeEconomicsSummary({ ...universe, fees: undefined, fee_read_error: 'execution reverted' }).rates).toBe('Rates unavailable')
 	// Totals that have no source are stated as unavailable, never as zero.
-	expect(feeEconomicsSummary({ ...universe, accrued_atto_eth: null, earnings_funded_atto_eth: undefined }).flows).toBe('Unavailable holding fees accrued · 960 USDC purchase charges, Unavailable to owners · 1,100 USDC and 12 REP claimed · 25 USDC and 0 REP burned unassigned')
+	expect(feeEconomicsSummary({ ...universe, accrued_atto_eth: null, earnings_funded_atto_eth: undefined }).flows).toBe('Unavailable holding fees accrued · 960 USDC purchase charges, Unavailable to owners · 1,100 USDC and 12 REP claimed · 25 USDC and 0 REP burned by the capital ledger')
 	const stream = { collateral: usdc, rate_claim_units_per_second: '203', rate_claim_units_per_year: '6401808000', end_timestamp: '1893456000' }
-	expect(questionFeeStreamSummary(stream, 1_800_000_000n)).toBe('Active fee stream · ends 2030-01-01 00:00:00 UTC')
+	expect(questionFeeStreamSummary({ ...stream, book_fees_enabled: false }, 1_800_000_000n)).toBe('Scheduled fee stream · ends 2030-01-01 00:00:00 UTC')
 	// At or after its end the stream no longer accrues, although its last rate is non-zero.
 	expect(questionFeeStreamSummary(stream, 1_893_456_000n)).toBe('Ended 2030-01-01 00:00:00 UTC')
-	expect(questionFeeStreamSummary(stream, undefined)).toBe('Active fee stream · ends 2030-01-01 00:00:00 UTC')
-	expect(questionFeeStreamSummary({ rate_claim_units_per_second: '1' }, undefined)).toBe('Active fee stream')
+	expect(questionFeeStreamSummary(stream, undefined)).toBe('Scheduled fee stream · ends 2030-01-01 00:00:00 UTC')
+	expect(questionFeeStreamSummary({ rate_claim_units_per_second: '1' }, undefined)).toBe('Scheduled fee stream')
 	expect(questionFeeStreamSummary({}, undefined)).toBe('Fee stream unavailable')
 	expect(questionFeeStreamSummary({ collateral: usdc, rate_claim_units_per_second: '0', rate_claim_units_per_year: '0', end_timestamp: '0' }, 1n)).toBe('No fee stream')
 })
@@ -94,7 +96,7 @@ test('summarizes cash fee economics and question stream status', () => {
 test('question streams do not invent cash rates from indexed claim units', () => {
 	// A book can have ten raw collateral units per claim unit. The event alone lacks that index.
 	const stream = { collateral: usdc, claim_unit_scale: '1000000000', rate_claim_units_per_second: '1000000000000', rate_claim_units_per_year: '31536000000000000000', end_timestamp: '1893456000' }
-	expect(questionFeeStreamSummary(stream, 1_800_000_000n)).toBe('Active fee stream · ends 2030-01-01 00:00:00 UTC')
+	expect(questionFeeStreamSummary(stream, 1_800_000_000n)).toBe('Scheduled fee stream · ends 2030-01-01 00:00:00 UTC')
 })
 
 test('capital position routes parse, canonicalize and keep their snapshot block', () => {

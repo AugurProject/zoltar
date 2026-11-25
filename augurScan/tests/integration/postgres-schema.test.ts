@@ -1,10 +1,11 @@
 import { expect } from 'bun:test'
 import { handleApi } from '../../src/api.ts'
-import { canonicalTablePolicies, ScannerDatabase } from '../../src/database.ts'
+import { canonicalTablePolicies, type IndexerLease, ScannerDatabase } from '../../src/database.ts'
+import { poolStateHistory } from '../../src/repositories/state-history.ts'
 import { initializeSchema } from '../../src/schema.ts'
 import { CURRENT_SCHEMA_VERSION, UNSUPPORTED_SCHEMA_MESSAGE } from '../../src/schema-policy.ts'
-import { rewindTransactionStatusToV10, rewindAccountingStorageToV6, rewindAuctionNamingToV5, rewindStaleContractValuesToV7 } from '../support/schema-fixtures.ts'
-import { address, blockHash, chainId, discoveredAddress, expectBehaviorChangingSchemaObjectsRejected, inverseUniswapPairAddress, pairAddress, postgresTest, rediscoveredAddress, requirePostgresUrl, wethAddress } from '../support/postgres-fixtures.ts'
+import { rewindMarketIndexToV11, rewindTransactionStatusToV10, rewindAccountingStorageToV6, rewindAuctionNamingToV5, rewindStaleContractValuesToV7 } from '../support/schema-fixtures.ts'
+import { address, blockHash, chainId, decodedLog, discoveredAddress, evidenceTransaction, expectBehaviorChangingSchemaObjectsRejected, indexedBlock, inverseUniswapPairAddress, pairAddress, postgresTest, rediscoveredAddress, requirePostgresUrl, wethAddress } from '../support/postgres-fixtures.ts'
 
 const v1ForkLogs = [
 	{ block: 100n, parentUniverseId: '10', childUniverseId: '11', canonical: true },
@@ -187,7 +188,7 @@ const expectMigratedTimelineEvidence = async (database: ScannerDatabase, migrati
 	const migratedMarker = await database.sql`SELECT schema_version FROM augurscan_schema WHERE singleton`
 	expect(migratedMarker).toEqual([{ schema_version: CURRENT_SCHEMA_VERSION }])
 	const appliedMigrations = await database.sql`SELECT schema_version FROM augurscan_schema_migrations ORDER BY schema_version::integer`
-	expect(appliedMigrations).toEqual([{ schema_version: '2' }, { schema_version: '3' }, { schema_version: '4' }, { schema_version: '5' }, { schema_version: '6' }, { schema_version: '7' }, { schema_version: '8' }, { schema_version: '9' }, { schema_version: '10' }, { schema_version: '11' }])
+	expect(appliedMigrations).toEqual([{ schema_version: '2' }, { schema_version: '3' }, { schema_version: '4' }, { schema_version: '5' }, { schema_version: '6' }, { schema_version: '7' }, { schema_version: '8' }, { schema_version: '9' }, { schema_version: '10' }, { schema_version: '11' }, { schema_version: '12' }])
 	const migratedTimeline = await database.sql`
 		SELECT entity_identity, source_event, canonical FROM protocol_timeline_entries
 		WHERE chain_id = ${migrationChainId} ORDER BY block_number
@@ -536,7 +537,7 @@ postgresTest('removes v7 seed prices and constant pool columns while keeping acc
 				(${migrationChainId}, ${hash}, ${txHash}, 2, 1, ${coordinator}, 'PriceReported', 42, 19, to_timestamp(2000), true)
 		`
 		await database.sql`UPDATE augurscan_schema SET schema_version = '7' WHERE singleton`
-		await database.sql`DELETE FROM augurscan_schema_migrations WHERE schema_version IN ('8', '9', '10', '11')`
+		await database.sql`DELETE FROM augurscan_schema_migrations WHERE schema_version::integer > 7`
 		await initializeSchema(database.sql)
 		expect(await database.sql`SELECT schema_version FROM augurscan_schema WHERE singleton`).toEqual([{ schema_version: CURRENT_SCHEMA_VERSION }])
 		expect(await database.sql`SELECT description FROM augurscan_schema_migrations WHERE schema_version = '8'`).toEqual([{ description: 'Removal of values no current contract supplies' }])
@@ -582,6 +583,64 @@ postgresTest('stores reverted direct calls while rejecting reverted log-selected
 			await expect(transaction.savepoint(async () => await insert('protocol-log'))).rejects.toThrow('transactions_selection_status')
 		})
 	} finally {
+		await database.close()
+	}
+})
+
+postgresTest('an upgraded scanner indexes distinct factory pairs for one question ledger', async () => {
+	const database = new ScannerDatabase(requirePostgresUrl())
+	const marketChainId = chainId + 120 + process.pid
+	let lease: IndexerLease | undefined
+	try {
+		await initializeSchema(database.sql)
+		await rewindMarketIndexToV11(database)
+		await database.sql`UPDATE augurscan_schema SET schema_version = '11' WHERE singleton`
+		await database.sql`DELETE FROM augurscan_schema_migrations WHERE schema_version::integer > 11`
+		const ledger = discoveredAddress.toLowerCase()
+		await database.seedNetwork({
+			id: 'multiple-factories',
+			name: 'Multiple factories',
+			chainId: marketChainId,
+			rpcUrls: ['http://127.0.0.1:8545'],
+			startBlock: 1n,
+			explorerBaseUrl: 'https://example.invalid',
+			nativeSymbol: 'ETH',
+			confirmationDepth: 0n,
+			contracts: [
+				[address, 'First factory', 'ammFactory'],
+				[rediscoveredAddress, 'Second factory', 'ammFactory'],
+			],
+		})
+		lease = await database.tryAcquireIndexerLock(marketChainId)
+		if (lease === undefined) throw new Error('Multiple factories fixture did not acquire its lock')
+		const parent = blockHash('multiple-factories-parent')
+		const pairBlock = (name: string, factory: typeof address, pair: typeof pairAddress, parentHash: typeof parent, feeBps: string) => {
+			const base = indexedBlock(name, parentHash)
+			const txHash = blockHash(`${name}-transaction`)
+			const logs = [
+				{ ...decodedLog(base.hash, 0, factory, 'PairCreated', { pair: pair.toLowerCase(), questionLedger: ledger, shareToken: wethAddress.toLowerCase(), universeId: '10', feeBps }), contractKind: 'ammFactory' as const },
+				{ ...decodedLog(base.hash, 1, pair, 'Sync', { yesReserve: '100', noReserve: '50' }), contractKind: 'ammPair' as const },
+			].map(log => ({ ...log, blockNumber: base.number, transactionHash: txHash }))
+			return { ...base, transactions: [evidenceTransaction(txHash, base.hash, { status: 'unknown', summary: 'Unspecified calldata' })], logs }
+		}
+		const first = pairBlock('multiple-factories-one', address, pairAddress, parent, '30')
+		const second = pairBlock('multiple-factories-two', rediscoveredAddress, inverseUniswapPairAddress, first.hash, '5')
+		await database.storeBlock(marketChainId, first, lease)
+		await initializeSchema(database.sql)
+		await database.storeBlock(marketChainId, second, lease)
+		expect(await database.checkpoint(marketChainId, lease)).toEqual({ number: 2n, hash: second.hash })
+		const markets = [pairAddress.toLowerCase(), inverseUniswapPairAddress.toLowerCase()]
+		expect(await database.sql`SELECT pair_address FROM amm_markets WHERE chain_id = ${marketChainId} AND pool_address = ${ledger} ORDER BY block_number`).toEqual(markets.map(pair_address => ({ pair_address })))
+		for (const [index, market] of markets.entries()) {
+			const history = await poolStateHistory(database.sql, ledger, { chainId: marketChainId, fromBlock: '1', toBlock: String(index + 1), queryLimit: 10, offset: 0 })
+			expect(history.markets).toEqual([expect.objectContaining({ pair_address: market })])
+			expect(history.ammPrices).toEqual([expect.objectContaining({ pair_address: market })])
+		}
+		const duplicate = pairBlock('multiple-factories-duplicate', rediscoveredAddress, pairAddress, second.hash, '30')
+		await expect(database.storeBlock(marketChainId, { ...duplicate, number: 3n, logs: duplicate.logs.map(log => ({ ...log, blockNumber: 3n })) }, lease)).rejects.toThrow('amm_markets_canonical_pair')
+	} finally {
+		await lease?.release()
+		await database.sql.unsafe('TRUNCATE TABLE networks CASCADE')
 		await database.close()
 	}
 })

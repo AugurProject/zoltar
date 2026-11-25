@@ -38,7 +38,9 @@ test('derives OpenOracle boundaries with the report clock selected by flags', ()
 })
 
 test('keeps settlement and unavailable evidence explicit', () => {
-	expect(reportLifecycle({ eventName: 'ReportSettled', indexedBlock: '1', indexedTimestamp: '1' })).toEqual({ state: 'Settled', clock: 'block' })
+	expect(reportLifecycle({ eventName: 'ReportSettled', indexedBlock: '1', indexedTimestamp: '1' })).toEqual({ state: 'Settled' })
+	expect(reportLifecycle({ eventName: 'ReportSettled', flags: '1', indexedBlock: '1', indexedTimestamp: '1' })).toEqual({ state: 'Settled', clock: 'timestamp' })
+	expect(reportLifecycle({ eventName: 'ReportSettled', flags: '0', indexedBlock: '1', indexedTimestamp: '1' })).toEqual({ state: 'Settled', clock: 'block' })
 	expect(reportLifecycle({ eventName: 'ReportSubmitted', indexedBlock: '1', indexedTimestamp: '1' }).state).toBe('Awaiting indexed evidence')
 })
 
@@ -84,6 +86,10 @@ test('derives auction lifecycle at exact boundaries', () => {
 	expect(auctionLifecycle({ started: true, finalized: false, opensAt: '10', closesAt: '20', indexedTimestamp: '19', bidCount: 0, settlementCount: 0 })).toBe('Open')
 	expect(auctionLifecycle({ started: true, finalized: false, opensAt: '10', closesAt: '20', indexedTimestamp: '9', bidCount: 0, settlementCount: 0 })).toBe('Scheduled')
 	expect(auctionLifecycle({ started: true, finalized: true, indexedTimestamp: '20', bidCount: 2, settlementCount: 1 })).toBe('Bid settlements outstanding')
+})
+
+test('an auction with incomplete start evidence has an unavailable bidding window', () => {
+	for (const bidCount of [0, 1]) expect(auctionLifecycle({ started: false, finalized: false, indexedTimestamp: '20', bidCount, settlementCount: 0 })).toBe('Awaiting indexed evidence')
 })
 
 test('an auction finalized without opening is fully settled', () => {
