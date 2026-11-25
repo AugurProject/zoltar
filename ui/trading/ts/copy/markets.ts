@@ -30,7 +30,6 @@ export const marketsCopy = {
 	/** Replaces the price on a resolved market, whose shares now pay out by outcome instead of trading. */
 	finalOutcome: 'Final outcome',
 	liquidity,
-	liquidityUnavailable: 'Unavailable',
 	closes: 'Closes',
 	ended: 'Ended',
 	closesIn: (duration: CoarseDuration) => `in ${durationText(duration)}`,

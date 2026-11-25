@@ -94,7 +94,6 @@ type CustomNetworkSettings = {
 
 type OperatorNetworkSettings = PresetNetworkSettings | CustomNetworkSettings
 
-/** Version 2 renamed `runtime.lifecyclePollMilliseconds` to `runtime.pollMilliseconds`, the main loop key every bot shares. */
 const SETTINGS_VERSION = 2
 
 export type OperatorSettings = {
@@ -302,23 +301,10 @@ function parseDeploymentPin(value: unknown, network: OperatorSettings['network']
 	return deployment
 }
 
-/**
- * Upgrades an older saved document to the current shape, so files and dashboard-saved settings written by an earlier
- * release keep loading. Version 1 named the main loop interval `runtime.lifecyclePollMilliseconds`.
- */
-function migrateSettingsDocument(root: Record<string, unknown>): Record<string, unknown> {
-	if (root['version'] === SETTINGS_VERSION) return root
-	if (root['version'] !== 1) throw new Error('operator settings version must be 1 or 2')
-	const runtime = root['runtime']
-	if (typeof runtime !== 'object' || runtime === null || Array.isArray(runtime) || !('lifecyclePollMilliseconds' in runtime) || 'pollMilliseconds' in runtime) return { ...root, version: SETTINGS_VERSION }
-	const { lifecyclePollMilliseconds, ...rest } = runtime
-	return { ...root, runtime: { ...rest, pollMilliseconds: lifecyclePollMilliseconds }, version: SETTINGS_VERSION }
-}
-
 export function parseSettings(value: unknown, preservedPrivateKey?: Hex): OperatorSettings {
-	const root = migrateSettingsDocument(requiredRecord(value, 'operator settings'))
-	// Accept the obsolete field so existing saved configurations can migrate; never use its addresses.
-	assertExactKeys(root, ['connectivity', ...('deployment' in root ? ['deployment'] : []), ...('deploymentPin' in root ? ['deploymentPin'] : []), 'discovery', 'network', 'networkConfigured', 'paused', 'privateKey', 'runtime', 'scheduler', 'strategy', 'submission', 'version'], [], 'operator settings')
+	const root = requiredRecord(value, 'operator settings')
+	if (root['version'] !== SETTINGS_VERSION) throw new Error('operator settings version must be 2')
+	assertExactKeys(root, ['connectivity', ...('deploymentPin' in root ? ['deploymentPin'] : []), 'discovery', 'network', 'networkConfigured', 'paused', 'privateKey', 'runtime', 'scheduler', 'strategy', 'submission', 'version'], [], 'operator settings')
 	const networkConfigured = boolean(root['networkConfigured'], 'networkConfigured')
 	const connectivity = root['connectivity'] === null ? undefined : parseQuorumConnectivitySettings(root['connectivity'])
 	if (networkConfigured !== (connectivity !== undefined)) throw new Error(networkConfigured ? 'A configured network requires connectivity' : 'An unconfigured network cannot retain connectivity')

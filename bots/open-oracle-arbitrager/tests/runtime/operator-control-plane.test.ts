@@ -8,7 +8,6 @@ import { loadConfiguration } from '#config/configuration'
 import { loadOperatorSettings, parseOperatorSettings, saveOperatorSettings } from '#config/settings-store'
 import type { ExecutionLockManager } from '#execution/execution-locks'
 import type { OperatorSnapshotFixedState, OperatorState } from '#state/operator-state'
-import type { DeploymentSettings } from '#config/deployment-settings'
 import type { ExclusiveProcessLock } from '#state/position-store'
 import example from '../../config/operator.example.json'
 import { startOperatorControlPlane } from '../../src/runtime/operator-control-plane.ts'
@@ -88,7 +87,7 @@ async function startControlPlane(parameters: { deploymentRecovery?: DeploymentRe
 	const config = await loadConfiguration(settingsFile)
 	config.privateKey = parameters.privateKey
 	const state = operatorState()
-	const fixedState: OperatorSnapshotFixedState & { deployment: DeploymentSettings } = {
+	const fixedState: OperatorSnapshotFixedState = {
 		deployment: config.operatorSettings.deployment,
 		execute: false,
 		executor: undefined,

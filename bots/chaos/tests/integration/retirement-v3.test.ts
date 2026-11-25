@@ -467,7 +467,7 @@ describe('Drain & Retire on a local chain', () => {
 		await owner.writeContract({ abi: tokenAbi, address: token0, args: [spender, 55n], functionName: 'approve' })
 		const snapshot = snapshotFixture()
 		snapshot.wallet.address = owner.account.address
-		snapshot.wallet.tokens = [{ address: token0, allowances: { [spender]: '55' }, balance: '0', openOracleCredit: '0', symbol: 'MOCK' }]
+		snapshot.wallet.tokens = [{ address: token0, allowances: { [spender]: '55' }, balance: '0', openOracleInternalAllowanceToSelf: '0', openOracleCredit: '0', symbol: 'MOCK' }]
 		const revoke = buildAllowanceRevocationPlan(snapshot, 3)
 		if (revoke === undefined) throw new Error('Allowance revocation was not planned')
 		for (const step of revoke.steps) await owner.waitForTransactionReceipt({ hash: await owner.sendTransaction({ data: step.data, to: step.to }) })

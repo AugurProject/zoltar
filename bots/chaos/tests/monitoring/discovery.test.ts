@@ -131,7 +131,6 @@ test('canonical scans publish inventory only for a successfully scanned executio
 			...example,
 			privateKey: account.privateKey ?? null,
 			connectivity: { publicRpcUrls: ['http://127.0.0.1:1'], quorumRpcUrls: [], readRpcUrl: 'http://127.0.0.1:1', rpcQuorum: 1 },
-			deployment: snapshotFixture().deployments,
 			network: { chainId: 31337, name: 'local', explorerUrl: 'http://127.0.0.1', kind: 'custom', maximumBlockIntervalSeconds: 12 },
 			networkConfigured: true,
 			runtime: { ...example.runtime, protocolStartBlock: '0', stateFile: await temporaryStatePath() },

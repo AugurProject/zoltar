@@ -1,3 +1,4 @@
+import { validateDeploymentSettings } from '#config/deployment-settings'
 import { operatorSnapshot, type OperatorSnapshot, type OperatorState } from '#state/operator-state'
 import type { PositionRecord } from '#state/position-store'
 import { emptySettlementSnapshot } from '#state/settlement-store'
@@ -110,7 +111,6 @@ const openPosition = {
 	closedAt: undefined,
 	direction: 'sell-rep',
 	entryTransactionHash: hash,
-	entryTransactionHashes: [hash],
 	gasExpenditures: [{ costEth: '0.0034', includedAt: sampledAt(1), transactionHash: hash }],
 	historyOutbox: undefined,
 	hedgeAmountToken: '38',
@@ -122,8 +122,6 @@ const openPosition = {
 	lifecycleTokenDecimals: undefined,
 	lifecycleTransactionHashes: [],
 	lifecycleUpdatedAt: undefined,
-	lifecycleWalletTokenBefore: undefined,
-	lifecycleWalletWethBefore: undefined,
 	lockedToken: '38',
 	lockedWeth: '0.151',
 	manualReconciliation: undefined,
@@ -145,7 +143,6 @@ const closedPosition = {
 	closedAt: sampledAt(60),
 	direction: 'sell-rep',
 	entryTransactionHash: closedPositionHash,
-	entryTransactionHashes: [closedPositionHash],
 	gasExpenditures: [
 		{ costEth: '0.0011', includedAt: sampledAt(74), transactionHash: closedPositionHash },
 		{ costEth: '0.0008', includedAt: sampledAt(60), transactionHash: transactionHash('closed-lifecycle-documentation-fixture') },
@@ -161,8 +158,6 @@ const closedPosition = {
 	lifecycleTokenDecimals: undefined,
 	lifecycleTransactionHashes: [],
 	lifecycleUpdatedAt: sampledAt(60),
-	lifecycleWalletTokenBefore: undefined,
-	lifecycleWalletWethBefore: undefined,
 	lockedToken: '42',
 	lockedWeth: '0.164',
 	manualReconciliation: undefined,
@@ -268,7 +263,7 @@ const positionDerivedSnapshot = operatorSnapshot(
 	{ maxSpotTwapTicks: 120n, minimumProfitBps: 100n, minimumProfitAttoWeth: 10n ** 16n, minimumRemainingBlocks: 3n, minimumRemainingSeconds: 36n, twapSeconds: 1_800 },
 	{ minimumBundleRelaySuccesses: 1, mode: 'private', relayUrls: ['https://relay.flashbots.net/'] },
 	{ publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://read.example/' },
-	{ execute: true, executor, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle, queuedSigner: undefined, savedWallet: wallet, wallet },
+	{ deployment: validateDeploymentSettings({ uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: false }), networkConfigured: true, execute: true, executor, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle, queuedSigner: undefined, savedWallet: wallet, wallet },
 	{ lifecycleGasReserveAttoWeth: 10n ** 16n, maxConcurrentPositions: 2, maxDailyGasSpendAttoWeth: 5n * 10n ** 16n, maxPositionNotionalAttoWeth: 5n * 10n ** 18n, maxTotalLockedAttoWeth: 10n * 10n ** 18n },
 )
 
@@ -314,7 +309,6 @@ export const snapshot = {
 			centralizedPriceDeviationBps: '86',
 			decision: 'selected' as const,
 			direction: 'sell-rep' as const,
-			estimatedNetProfitEth: '0.0158',
 			estimatedNetProfitWeth: '0.0158',
 			executablePriceRepPerEth: '10.284',
 			hasRequiredInventory: true,
@@ -333,7 +327,6 @@ export const snapshot = {
 			centralizedPriceDeviationBps: undefined,
 			decision: 'unprofitable' as const,
 			direction: 'buy-rep' as const,
-			estimatedNetProfitEth: '-0.0012',
 			estimatedNetProfitWeth: '-0.0012',
 			executablePriceRepPerEth: '9.845',
 			hasRequiredInventory: true,
@@ -375,7 +368,6 @@ export const snapshot = {
 	tokenAddresses: [rep, repYes, repNo],
 	tokenMarkets,
 	totalActualGasCostEth: '0.0034',
-	totalEstimatedNetProfitEth: '0.0463',
 	totalEstimatedNetProfitWeth: '0.0463',
 	totalHedgedProfitBeforeGasEth: positionDerivedSnapshot.totalHedgedProfitBeforeGasEth,
 	totalOpenHedgedNetProfitEth: positionDerivedSnapshot.totalOpenHedgedNetProfitEth,

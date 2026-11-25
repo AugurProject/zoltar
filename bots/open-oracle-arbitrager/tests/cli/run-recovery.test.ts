@@ -455,11 +455,6 @@ describe('entry crash recovery', () => {
 		expect(recovered.gasExpenditures).toEqual([])
 	})
 
-	test('does not auto-expire a legacy multi-transaction entry with independently live signatures', async () => {
-		const position = pendingEntryPosition({ entryTransactionHashes: [`0x${'22'.repeat(32)}` as Hex, transactionHash] })
-		await expect(expireEntryWithQuorum(missingReceiptClients(), recoveryConfiguration, position, 112n, '2026-07-24T00:02:00.000Z')).rejects.toThrow('Only an atomic entry')
-	})
-
 	test('releases a reverted atomic private entry after accounting for its gas', async () => {
 		const position = pendingEntryPosition()
 		const recovered = await recoverPendingEntryWithQuorum(receiptClients(), recoveryConfiguration, position, 18)
