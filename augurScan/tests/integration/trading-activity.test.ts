@@ -417,12 +417,12 @@ test.skipIf(url === undefined)('derives market ETH volume, activity, and account
 			{ block: 2, tx: 26, logIndex: 282, emitter: shareToken, name: 'TransferSingle', data: single(pair, router, 2, 2) },
 			{ block: 2, tx: 26, logIndex: 283, emitter: pair, name: 'Swap', data: swap(router, true, true, 2, 2) },
 			{ block: 2, tx: 26, logIndex: 284, emitter: shareToken, name: 'TransferBatch', data: batch(router, zero, [0, 1, 2], [2, 2, 2]) },
-			{ block: 2, tx: 26, logIndex: 285, emitter: pool, name: 'CompleteSetRedeemed', data: { redeemer: router, completeSetsBurnedAttoShares: '2', settlementCollateralRedeemedAttoEth: '2' } },
+			{ block: 2, tx: 26, logIndex: 285, emitter: pool, name: 'CompleteSetRedeemed', data: { redeemer: router, completeSetsBurnedAttoShares: String(2n), settlementCollateralRedeemedAttoEth: String(2n) } },
 			{ block: 2, tx: 26, logIndex: 286, emitter: shareToken, name: 'TransferSingle', data: single(router, historySender, 1, 1) },
 			{ block: 2, tx: 26, logIndex: 287, emitter: router, name: 'PositionExitedByTransfer', data: { pair, completeSetShares: '2', payoutRecipient: directBuyer } },
 			{ block: 2, tx: 26, logIndex: 290, emitter: shareToken, name: 'TransferBatch', data: batch(historyRecipient, router, [0, 1, 2], [3, 3, 3]) },
 			{ block: 2, tx: 26, logIndex: 291, emitter: shareToken, name: 'TransferBatch', data: batch(router, zero, [0, 1, 2], [3, 3, 3]) },
-			{ block: 2, tx: 26, logIndex: 292, emitter: pool, name: 'CompleteSetRedeemed', data: { redeemer: router, completeSetsBurnedAttoShares: '3', settlementCollateralRedeemedAttoEth: '3' } },
+			{ block: 2, tx: 26, logIndex: 292, emitter: pool, name: 'CompleteSetRedeemed', data: { redeemer: router, completeSetsBurnedAttoShares: String(3n), settlementCollateralRedeemedAttoEth: String(3n) } },
 			{ block: 2, tx: 26, logIndex: 293, emitter: router, name: 'CompleteSetRedeemedByTransfer', data: { questionLedger: pool, completeSetShares: '3', payoutRecipient: directBuyer } },
 		])
 		const redemptionResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading/${chainId}/${pair}`), connection)
