@@ -1,0 +1,33 @@
+name: Formal proofs
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - formal/**
+      - .github/workflows/formal.yml
+      - docs/reference/security-model.html
+      - docs/reference/invariants.html
+      - docs/reference/trading/invariants.html
+      - solidity/contracts/trading/TwoWayConstantProductMath.sol
+      - solidity/contracts/statoblast/openOracle/openzeppelin/contracts/utils/**
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install pinned Lean distribution
+        working-directory: ${{ runner.temp }}
+        run: |
+          version=$(sed 's|^leanprover/lean4:v||' "$GITHUB_WORKSPACE/formal/lean-toolchain")
+          archive="lean-${version}-linux.tar.zst"
+          curl --fail --location --retry 3 --output "$archive" "https://github.com/leanprover/lean4/releases/download/v${version}/${archive}"
+          echo "6fe3ce97a58f44e2b3567d455b994eacec5bfe9ae7774f2a573444480ba813fe  $archive" | sha256sum --check
+          tar --zstd -xf "$archive"
+          echo "$RUNNER_TEMP/lean-${version}-linux/bin" >> "$GITHUB_PATH"
+      - name: Check axiom registry, ledger, source pins and proofs
+        run: python3 formal/verify.py

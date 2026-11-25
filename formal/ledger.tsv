@@ -1,0 +1,141 @@
+id	source	claim	status	axioms	theorem
+UNI-01	docs/reference/invariants.html#uni-01	One fork per universe	open	-	-
+UNI-02	docs/reference/invariants.html#uni-02	Valid fork questions	open	-	-
+UNI-03	docs/reference/invariants.html#uni-03	Fork threshold burn and credit	open	-	-
+UNI-04	docs/reference/invariants.html#uni-04	Deterministic child universe IDs	open	-	-
+UNI-05	docs/reference/invariants.html#uni-05	Well-formed child outcomes	open	-	-
+UNI-06	docs/reference/invariants.html#uni-06	Per-child migration mint limit	open	-	-
+UNI-07	docs/reference/invariants.html#uni-07	Branch-specific child REP	open	-	-
+UNI-08	docs/reference/invariants.html#uni-08	Child theoretical supply snapshot	open	-	-
+UNI-09	docs/reference/invariants.html#uni-09	Child REP supply coherence	open	-	-
+QST-01	docs/reference/invariants.html#qst-01	Question registry and classifier coherence	open	-	-
+AUTHORITY	docs/reference/invariants.html#authority	Security pool identity and question admission	open	-	-
+POOL-ACCOUNTING	docs/reference/invariants.html#pool-accounting	Separate capital, settlement and reporter custody	open	-	-
+CAPITAL-HEALTH	docs/reference/invariants.html#capital-health	Owner commitments and loss isolation	open	-	-
+CAPITAL-EXIT	docs/reference/invariants.html#capital-exit	Retirement and withdrawal accounting	open	-	-
+SHARE-SETTLEMENT	docs/reference/invariants.html#share-settlement	Question shares and backing floor	open	-	-
+ESCALATION	docs/reference/invariants.html#escalation	Reporter liabilities and historical proofs	open	-	-
+FORKS	docs/reference/invariants.html#forks	Shared fork choices and lazy questions	open	-	-
+AUCTIONS	docs/reference/invariants.html#auctions	Uniform branch auction and automatic owners	open	-	-
+AUCTION-REFUNDS	docs/reference/invariants.html#auction-refunds	Bid and refund ownership	open	-	-
+ORACLE	docs/reference/invariants.html#oracle	Shared price acceptance and exposure	open	-	-
+LIFECYCLE	docs/reference/invariants.html#lifecycle	Bounded work and explicit recovery	open	-	-
+EXTERNAL-CALLS	docs/reference/invariants.html#external-calls	Authority before external effects	open	-	-
+INV-01	docs/reference/invariants.html#inv-01	Healthy price boundary	open	-	-
+INV-02	docs/reference/invariants.html#inv-02	REP grid per lot	open	-	-
+INV-09	docs/reference/invariants.html#inv-09	Retained commitment	open	-	-
+INV-10	docs/reference/invariants.html#inv-10	Distress age after materialization	open	-	-
+INV-03	docs/reference/invariants.html#inv-03	Maximum removable fee units	open	-	-
+INV-04	docs/reference/invariants.html#inv-04	Minimum required cash	open	-	-
+INV-05	docs/reference/invariants.html#inv-05	Incumbent value on issuance	open	-	-
+INV-06	docs/reference/invariants.html#inv-06	Immediate unit redemption	open	-	-
+INV-07	docs/reference/invariants.html#inv-07	Remaining backing after redemption	open	-	-
+INV-08	docs/reference/invariants.html#inv-08	Checkpoint frequency	open	-	-
+INV-46	docs/reference/invariants.html#inv-46	Funding target through runoff	open	-	-
+INV-47	docs/reference/invariants.html#inv-47	New shares and recovery REP	open	-	-
+INV-50	docs/reference/invariants.html#inv-50	Base purchase fee	open	-	-
+INV-59	docs/reference/invariants.html#inv-59	Deferred service cash	open	-	-
+INV-60	docs/reference/invariants.html#inv-60	Recovery REP through subsequent forks	open	-	-
+INV-11	docs/reference/invariants.html#inv-11	Cash follows chosen commitment	open	-	-
+INV-12	docs/reference/invariants.html#inv-12	Rounding across fully chosen branches	open	-	-
+INV-13	docs/reference/invariants.html#inv-13	Partial recovery across questions	open	-	-
+INV-14	docs/reference/invariants.html#inv-14	Transferable recovery rights	open	-	-
+INV-15	docs/reference/invariants.html#inv-15	Branch clock conversion	open	-	-
+INV-16	docs/reference/invariants.html#inv-16	First inherited fixing	open	-	-
+INV-17	docs/reference/invariants.html#inv-17	Prepaid reporting horizon	open	-	-
+INV-49	docs/reference/invariants.html#inv-49	Fork admission shortfall	open	-	-
+INV-18	docs/reference/invariants.html#inv-18	Longest fundable prefix	open	-	-
+INV-19	docs/reference/invariants.html#inv-19	Gross and net proceeds	open	-	-
+INV-20	docs/reference/invariants.html#inv-20	Closing observation	open	-	-
+INV-21	docs/reference/invariants.html#inv-21	Winner cursor	open	-	-
+INV-22	docs/reference/invariants.html#inv-22	Ownership through detachment	open	-	-
+INV-51	docs/reference/invariants.html#inv-51	Auction tree height and weights	open	-	-
+INV-54	docs/reference/invariants.html#inv-54	Exact early refund eligibility	open	-	-
+INV-61	docs/reference/invariants.html#inv-61	Order of materialization	open	-	-
+INV-23	docs/reference/invariants.html#inv-23	Median and provisional outcome	open	-	-
+INV-24	docs/reference/invariants.html#inv-24	Last open curve second	open	-	-
+INV-25	docs/reference/invariants.html#inv-25	Partitioned ordinary payouts	open	-	-
+INV-26	docs/reference/invariants.html#inv-26	Carry proof geometry	open	-	-
+INV-27	docs/reference/invariants.html#inv-27	Outward price bounds	open	-	-
+INV-28	docs/reference/invariants.html#inv-28	Canonical observation updates	open	-	-
+INV-29	docs/reference/invariants.html#inv-29	Deferred report recovery	open	-	-
+INV-30	docs/reference/invariants.html#inv-30	Growth-proof withdrawal floor	open	-	-
+INV-31	docs/reference/invariants.html#inv-31	Sponsor operation order	open	-	-
+INV-48	docs/reference/invariants.html#inv-48	Two-asset report funding	open	-	-
+INV-58	docs/reference/invariants.html#inv-58	Escrow delivery rights	open	-	-
+INV-39	docs/reference/invariants.html#inv-39	Unused child mint capacity	open	-	-
+INV-40	docs/reference/invariants.html#inv-40	Threshold steps	open	-	-
+INV-41	docs/reference/invariants.html#inv-41	Adjacent historical checkpoints	open	-	-
+INV-42	docs/reference/invariants.html#inv-42	Order of maturity updates	open	-	-
+INV-43	docs/reference/invariants.html#inv-43	Creation bytecode round trip	open	-	-
+INV-44	docs/reference/invariants.html#inv-44	Deployment mask	open	-	-
+INV-45	docs/reference/invariants.html#inv-45	Scalar label uniqueness	open	-	-
+INV-52	docs/reference/invariants.html#inv-52	Frozen history allocation	open	-	-
+INV-53	docs/reference/invariants.html#inv-53	Canonical event replay	open	-	-
+INV-57	docs/reference/invariants.html#inv-57	Authorization namespaces	open	-	-
+EVIDENCE-REGISTRY	docs/reference/invariants.html#test-evidence	Registry	open	-	-
+EVIDENCE-ANSWERS	docs/reference/invariants.html#test-evidence	Answers	open	-	-
+EVIDENCE-FORK-FINALITY-AND-ELIGIBILITY	docs/reference/invariants.html#test-evidence	Fork finality and eligibility	open	-	-
+EVIDENCE-FORK-ACCOUNTING	docs/reference/invariants.html#test-evidence	Fork accounting	open	-	-
+EVIDENCE-CHILD-IDENTITY	docs/reference/invariants.html#test-evidence	Child identity	open	-	-
+EVIDENCE-MIGRATION-AND-SUPPLY	docs/reference/invariants.html#test-evidence	Migration and supply	open	-	-
+EVIDENCE-CANONICAL-IDENTITY	docs/reference/invariants.html#test-evidence	Canonical identity	open	-	-
+EVIDENCE-HOST-ISOLATION	docs/reference/invariants.html#test-evidence	Host isolation	open	-	-
+EVIDENCE-SPENDING-AUTHORITY	docs/reference/invariants.html#test-evidence	Spending authority	open	-	-
+EVIDENCE-ATOMICITY	docs/reference/invariants.html#test-evidence	Atomicity	open	-	-
+EVIDENCE-CUSTODY-DOMAINS	docs/reference/invariants.html#test-evidence	Custody domains	open	-	-
+EVIDENCE-OWNER-TOTALS	docs/reference/invariants.html#test-evidence	Owner totals	open	-	-
+EVIDENCE-HEALTH	docs/reference/invariants.html#test-evidence	Health	open	-	-
+EVIDENCE-SHARED-CAPACITY	docs/reference/invariants.html#test-evidence	Shared capacity	open	-	-
+EVIDENCE-RETIREMENT	docs/reference/invariants.html#test-evidence	Retirement	open	-	-
+EVIDENCE-LOSS-ISOLATION	docs/reference/invariants.html#test-evidence	Loss isolation	open	-	-
+EVIDENCE-FEES	docs/reference/invariants.html#test-evidence	Fees	open	-	-
+EVIDENCE-DONATIONS	docs/reference/invariants.html#test-evidence	Donations	open	-	-
+EVIDENCE-IDENTITY-AND-SUPPLY	docs/reference/invariants.html#test-evidence	Identity and supply	open	-	-
+EVIDENCE-CASH-AND-DEMAND	docs/reference/invariants.html#test-evidence	Cash and demand	open	-	-
+EVIDENCE-BACKING-FLOOR	docs/reference/invariants.html#test-evidence	Backing floor	open	-	-
+EVIDENCE-SETTLEMENT-FINALITY	docs/reference/invariants.html#test-evidence	Settlement finality	open	-	-
+EVIDENCE-ROUNDING	docs/reference/invariants.html#test-evidence	Rounding	open	-	-
+EVIDENCE-RECOVERY-RIGHTS	docs/reference/invariants.html#test-evidence	Recovery rights	open	-	-
+EVIDENCE-DEPOSITS-AND-LIABILITIES	docs/reference/invariants.html#test-evidence	Deposits and liabilities	open	-	-
+EVIDENCE-OUTCOME-FINALITY	docs/reference/invariants.html#test-evidence	Outcome finality	open	-	-
+EVIDENCE-HISTORICAL-PROOFS	docs/reference/invariants.html#test-evidence	Historical proofs	open	-	-
+EVIDENCE-CLAIM-PARTITIONING	docs/reference/invariants.html#test-evidence	Claim partitioning	open	-	-
+EVIDENCE-CHOICE-AND-CLOCKS	docs/reference/invariants.html#test-evidence	Choice and clocks	open	-	-
+EVIDENCE-FROZEN-SNAPSHOTS	docs/reference/invariants.html#test-evidence	Frozen snapshots	open	-	-
+EVIDENCE-LAZY-MATERIALIZATION	docs/reference/invariants.html#test-evidence	Lazy materialization	open	-	-
+EVIDENCE-INVENTORY	docs/reference/invariants.html#test-evidence	Inventory	open	-	-
+EVIDENCE-CLEARING	docs/reference/invariants.html#test-evidence	Clearing	open	-	-
+EVIDENCE-CLOSING	docs/reference/invariants.html#test-evidence	Closing	open	-	-
+EVIDENCE-REFUNDS-AND-PROGRESS	docs/reference/invariants.html#test-evidence	Refunds and progress	open	-	-
+EVIDENCE-REPORT-IDENTITY-AND-UNITS	docs/reference/invariants.html#test-evidence	Report identity and units	open	-	-
+EVIDENCE-ACCEPTANCE-AND-REPRICING	docs/reference/invariants.html#test-evidence	Acceptance and repricing	open	-	-
+EVIDENCE-EXPIRY	docs/reference/invariants.html#test-evidence	Expiry	open	-	-
+EVIDENCE-CANDIDATE-INDEPENDENCE	docs/reference/invariants.html#test-evidence	Candidate independence	open	-	-
+EVIDENCE-REFERENCE-MODELS	docs/reference/invariants.html#test-evidence	Reference models	open	-	-
+EVIDENCE-NUMERIC-BOUNDARIES	docs/reference/invariants.html#test-evidence	Numeric boundaries	open	-	-
+EVIDENCE-COLLATERAL-MOVEMENT	docs/reference/invariants.html#test-evidence	Collateral movement	open	-	-
+EVIDENCE-SEEDER	docs/reference/invariants.html#test-evidence	Seeder	open	-	-
+EVIDENCE-BOUNDED-AND-CONDITIONAL-PROGRESS	docs/reference/invariants.html#test-evidence	Bounded and conditional progress	open	-	-
+INV-32	docs/reference/trading/invariants.html#invariant-32	Least sufficient input	proved-model	none	Inv32.minimumGrossInput
+INV-33	docs/reference/trading/invariants.html#invariant-33	Splitting a trade	open	-	-
+INV-34	docs/reference/trading/invariants.html#invariant-34	Immediate reverse trade	open	-	-
+INV-35	docs/reference/trading/invariants.html#invariant-35	Directional price symmetry	open	-	-
+INV-36	docs/reference/trading/invariants.html#invariant-36	Initial price rounding	open	-	-
+INV-37	docs/reference/trading/invariants.html#invariant-37	Backing per LP token	open	-	-
+INV-38	docs/reference/trading/invariants.html#invariant-38	Permanently locked liquidity	open	-	-
+INV-55	docs/reference/trading/invariants.html#invariant-55	Directional entry	open	-	-
+INV-56	docs/reference/trading/invariants.html#invariant-56	Directional exit	open	-	-
+INV-62	docs/reference/trading/invariants.html#invariant-62	Predeployment shares and initial supply	open	-	-
+TRADING-PAIR-CUSTODY-1	docs/reference/trading/invariants.html#pair-custody	Yes and No reserves are the current ShareToken balances. Donations immediately increase reserves and accrue to existing LPs.	open	-	-
+TRADING-PAIR-CUSTODY-2	docs/reference/trading/invariants.html#pair-custody	The pair's Invalid balance is exactly zero.	open	-	-
+TRADING-PAIR-CUSTODY-3	docs/reference/trading/invariants.html#pair-custody	Transferring LP tokens moves the liquidity claim between holders and preserves total LP supply and pair reserves.	open	-	-
+TRADING-PAIR-CUSTODY-4	docs/reference/trading/invariants.html#pair-custody	An LP withdrawal cannot claim more Yes or No shares than the pair owns. Withdrawal amounts are proportional to current balances and the liquidity burned.	open	-	-
+TRADING-ROUTER-CUSTODY	docs/reference/trading/invariants.html#router-custody	Every successful router operation ends with the same Invalid, Yes, and No balances with which that operation began. This deliberately preserves any pre-existing balances while preventing the operation from accumulating new share residue.	open	-	-
+TRADING-SWAPS-1	docs/reference/trading/invariants.html#swaps	For every successful exact-input or exact-output swap, k_after ≥ k_before, where k is the Yes balance multiplied by the No balance.	open	-	-
+TRADING-SWAPS-2	docs/reference/trading/invariants.html#swaps	For unchanged reserves, an exact-input swap delivers the quoted output and reverts when the requested minimum exceeds that quote.	open	-	-
+TRADING-SWAPS-3	docs/reference/trading/invariants.html#swaps	An exact-output swap delivers exactly the requested output amount.	open	-	-
+TRADING-SWAPS-4	docs/reference/trading/invariants.html#swaps	An exact-output swap never charges more than the caller's maxAmountIn.	open	-	-
+TRADING-LIFECYCLE-1	docs/reference/trading/invariants.html#lifecycle	Once the question has ended, the question has resolved, or the universe has forked, initialization, liquidity addition, and both swap forms revert permanently.	open	-	-
+TRADING-LIFECYCLE-2	docs/reference/trading/invariants.html#lifecycle	While fork continuation is pending or the question ledger is not operational, the same operations also revert for as long as that state lasts.	open	-	-
+TRADING-LIFECYCLE-3	docs/reference/trading/invariants.html#lifecycle	Proportional liquidity removal has no lifecycle guard.	open	-	-
