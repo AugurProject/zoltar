@@ -32,9 +32,11 @@ test('the approved question page verifies only its visible IDs and offers a chec
 						return { status: 'success', result: true }
 					case 'getQuestionLedger':
 						readIds.push(id)
-						return id === 8n && !registered ? { status: 'failure', error: new Error('Multicall contract call failed: execution reverted: Question not registered') } : { status: 'success', result: token }
+						return (id === 8n && !registered) || id === 11n ? { status: 'failure', error: new Error('Multicall contract call failed: execution reverted: Question not registered') } : { status: 'success', result: token }
+					case 'maximumQuestionHorizonSeconds':
+						return { status: 'success', result: 86_400n }
 					case 'questions':
-						return { status: 'success', result: [id === 8n ? 'Can this be registered?' : 'Already registered', '', 1n, 1000n, 0n, 0n, 0n, ''] }
+						return { status: 'success', result: [id === 8n ? 'Can this be registered?' : 'Another approved question', '', 1n, id === 11n ? 100_000n : 1000n, 0n, 0n, 0n, ''] }
 					case 'getOutcomeLabels':
 						return { status: 'success', result: ['Yes', 'No'] }
 					default:
@@ -54,15 +56,16 @@ test('the approved question page verifies only its visible IDs and offers a chec
 			registered = true
 		},
 	})
-	const admission = { address: token, mode: 'fixed' as const, questionStart: 0n, questionCount: 70n, questions: [8n, 9n] }
+	const admission = { address: token, mode: 'fixed' as const, questionStart: 0n, questionCount: 70n, questions: [8n, 9n, 11n] }
 	const view = lifecycle.trackRendered(
 		await renderIntoDocument(<SecurityPoolQuestionsPanel pool={securityPool} owner={owner} universeId={0n} enabled environmentKey={0} actions={actions} admission={admission} onPreviousApprovedPage={() => undefined} onNextApprovedPage={() => undefined} registerPageRefresh={undefined} />),
 	)
 	const approved = [...view.container.querySelectorAll('section')].find(section => section.querySelector('h3')?.textContent === 'Approved questions')
 	const row = () => [...(approved?.querySelectorAll('tbody tr') ?? [])].find(row => row.textContent?.includes('Can this be registered?'))
 	await waitFor(() => expect(row()?.querySelector('button.tx-action-button')?.textContent).toBe('Register question'))
-	expect(approved?.textContent).toContain('Already registered')
-	expect(readIds).toEqual([8n, 9n])
+	expect(approved?.textContent).toContain('Registered')
+	expect(approved?.textContent).toContain('ends after the security pool’s 1-day question horizon')
+	expect(readIds).toEqual([8n, 9n, 11n])
 	await act(() => row()?.querySelector<HTMLButtonElement>('button.tx-action-button')?.click())
 	await waitFor(() => expect(row()?.textContent).toContain('Registered'))
 	expect(sent).toEqual([8n])

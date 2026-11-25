@@ -37,7 +37,8 @@ test.each(['ready', 'insufficient-spare', 'retry'] as const)('redesigned reducti
 	expect(text).not.toContain(copy.position(1n))
 	expect(text).not.toContain(copy.liquidationHealth)
 	expect(text.includes('covers all')).toBe(coversAll)
-	const label = state === 'retry' ? copy.retryRelease : state === 'ready' ? 'Release reduction (keep 6 WETH)' : copy.waitingForFreeCapacity
+	const labels = { retry: copy.retryRelease, ready: 'Release reduction (keep 6 WETH)', 'insufficient-spare': copy.waitingForFreeCapacity }
+	const label = labels[state]
 	const button = [...(reduction?.querySelectorAll('button') ?? [])].find(button => button.textContent?.replaceAll('\u00a0', ' ') === label)
 	expect(button?.disabled).toBe(!coversAll)
 })

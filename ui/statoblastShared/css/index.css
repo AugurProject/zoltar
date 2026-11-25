@@ -2751,6 +2751,15 @@ span.rep-price-status.stale,
 		grid-row: 1;
 	}
 
+	.statoblast-approved-questions tbody tr {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.statoblast-watchlist-table.statoblast-approved-questions td {
+		grid-column: 1;
+		grid-row: auto;
+	}
+
 	.statoblast-watchlist-table td[data-label]::before {
 		content: attr(data-label);
 		display: block;
@@ -2927,6 +2936,13 @@ span.rep-price-status.stale,
 	gap: var(--space-3);
 }
 
+.statoblast-capital-presets {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: start;
+	gap: var(--space-2);
+}
+
 .statoblast-capital-actions {
 	margin: 0;
 	padding-inline-start: var(--space-5);
@@ -2940,6 +2956,12 @@ span.rep-price-status.stale,
 @media (max-width: 40rem) {
 	.statoblast-capital-plan {
 		grid-template-columns: minmax(0, 1fr);
+	}
+	.statoblast-capital-actions {
+		padding-inline-start: var(--space-2);
+	}
+	.statoblast-capital-actions > li {
+		padding-inline: 0;
 	}
 }
 

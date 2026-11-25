@@ -93,7 +93,9 @@ export function SecurityPoolPriceReport({
 		if (report.outcome === 2n) reportStatus = copy.states.rejected
 	}
 	const expiresAt = observation === undefined || observation.lastSettlementTimestamp === 0n ? priceBand?.validUntil : observation.lastSettlementTimestamp + observation.validitySeconds
-	const priceStatus = priceWindowChecking ? priceWindowEndedChecking : expiresAt === undefined || now === undefined || now >= expiresAt ? copy.priceDue : copy.priceCurrent
+	const priceIsCurrent = expiresAt !== undefined && now !== undefined && now < expiresAt
+	const confirmedPriceStatus = priceIsCurrent ? copy.priceCurrent : copy.priceDue
+	const priceStatus = priceWindowChecking ? priceWindowEndedChecking : confirmedPriceStatus
 	const reportHeading = report === undefined ? copy.currentReport : copy.reportHeading(report.reportId)
 	const settlementReady = reportStatus === copy.states.settle
 	const disputeIdentity = redesigned && reportStatus === copy.states.pending && report !== undefined ? `${model.draftKey}:${report.reportId}:${report.eligibleAt}` : undefined
@@ -148,12 +150,11 @@ export function SecurityPoolPriceReport({
 		</div>
 	)
 	const minimumStake = model.minimumWethAttoEth ?? observation?.minimumWethAttoEth
-	const stakeHint =
-		minimumStake === undefined
-			? copy.wethHint
-			: model.funding !== undefined && model.wethInput.trim() === ''
-				? copy.suggestedStake(formatRoundedCurrencyBalance(minimumStake, model.collateral.decimals, 4, 'up'), formatRoundedCurrencyBalance(model.funding.weth, model.collateral.decimals, 4, 'up'), model.collateral.symbol)
-				: copy.minimumStake(formatRoundedCurrencyBalance(minimumStake, model.collateral.decimals, 4, 'up'), model.collateral.symbol)
+	let stakeHint = copy.wethHint
+	if (minimumStake !== undefined) {
+		const minimum = formatRoundedCurrencyBalance(minimumStake, model.collateral.decimals, 4, 'up')
+		stakeHint = model.funding !== undefined && model.wethInput.trim() === '' ? copy.suggestedStake(minimum, formatRoundedCurrencyBalance(model.funding.weth, model.collateral.decimals, 4, 'up'), model.collateral.symbol) : copy.minimumStake(minimum, model.collateral.symbol)
+	}
 	const stakeField = <SecurityPoolInput label={collateralCopy.reportStake(model.collateral.symbol)} hint={redesigned ? stakeHint : copy.wethHint} value={model.wethInput} onChange={model.setWeth} disabled={disabled} numeric />
 	const wethApproval = (
 		<TokenApprovalControl

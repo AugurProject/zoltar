@@ -127,8 +127,10 @@ function DeploymentActions({ actions, setupStage, setupVerificationPending, prog
 				{capitalCopy.prepareStages.map((label, index) => {
 					const action = 'prepareSecurityPool' + (index + 1)
 					const done = setupStage !== undefined && setupStage > index
-					const reason = done ? pageCopy.deployComplete : actions.deploymentPool === undefined ? copy.setupPoolRequired : actions.preparationReason(index + 1)
-					const detail = index === capitalCopy.prepareStages.length - 1 ? (done ? pageCopy.deployReady : pageCopy.deploySaveToWatchlist) : pageCopy.sharedSetupStep
+					const pendingReason = actions.deploymentPool === undefined ? copy.setupPoolRequired : actions.preparationReason(index + 1)
+					const reason = done ? pageCopy.deployComplete : pendingReason
+					const activationDetail = done ? pageCopy.deployReady : pageCopy.deploySaveToWatchlist
+					const detail = index === capitalCopy.prepareStages.length - 1 ? activationDetail : pageCopy.sharedSetupStep
 					return (
 						<DeploymentTransaction key={label} label={label} index={index + deployActions.length} done={done} current={reason === undefined || actions.busy === action} detail={detail}>
 							<SecurityPoolButton model={actions} action={action} label={label} pendingLabel={capitalCopy.preparing} reason={reason} sharedReasonId={sharedSetupReason === undefined || done ? undefined : setupReasonId} onClick={() => actions.prepare(index + 1)} />
@@ -167,11 +169,15 @@ export function SecurityPoolDeploymentForm({ actions }: { actions: SecurityPoolA
 	)
 }
 
+function deploymentQuestionsLabel({ admissionMode, fixedQuestionCount }: SecurityPoolActions) {
+	if (admissionMode === 'open') return copy.admissionOpen
+	return fixedQuestionCount === undefined ? copy.admissionFixed : pageCopy.deployQuestionListCount(fixedQuestionCount)
+}
+
 function DeploymentSummary({ actions, economicsOnly = false }: { actions: SecurityPoolActions; economicsOnly?: boolean }) {
 	const { collateral, economicsDraft } = actions
 	const universeId = securityPoolUnsignedId(actions.originInput, 248)
 	const universeName = useUniverseName(universeId ?? 0n)
-	const questions = actions.admissionMode === 'open' ? copy.admissionOpen : actions.fixedQuestionCount === undefined ? copy.admissionFixed : pageCopy.deployQuestionListCount(actions.fixedQuestionCount)
 	const amount = (value: string) => (value === '' ? undefined : `${value} ${collateral.symbol}`)
 	const minimumOutcomeRate = securityPoolAmountOrUndefined(economicsDraft.minimumOutcomeRate)
 	const purchaseFee = economicsDraft.purchaseFeePercent && economicsDraft.minimumPurchaseFee ? pageCopy.deploySummaryPurchaseFee(economicsDraft.purchaseFeePercent, economicsDraft.minimumPurchaseFee, collateral.symbol) : undefined
@@ -210,7 +216,7 @@ function DeploymentSummary({ actions, economicsOnly = false }: { actions: Securi
 					</div>
 					<div>
 						<dt>{pageCopy.deployQuestionsSection}</dt>
-						<dd>{questions}</dd>
+						<dd>{deploymentQuestionsLabel(actions)}</dd>
 					</div>
 				</>
 			)}
@@ -229,11 +235,14 @@ export function SecurityPoolDeployment({ actions, model }: { actions: SecurityPo
 	const activeStep = selectedStep ?? (actions.deploymentLocked ? 3 : 0)
 	const currentDeployment = actions.deploymentPool !== undefined && actions.deploymentPool === model.managerInput
 	const verifiedSetupStage = model.setup?.securityPool === actions.deploymentPool ? model.setup?.stage : undefined
-	const setupStage = verifiedSetupStage ?? (actions.deploymentActivated ? 4 : currentDeployment ? model.savedSetupStage : undefined)
+	const cachedSetupStage = currentDeployment ? model.savedSetupStage : undefined
+	const savedSetupStage = actions.deploymentActivated ? 4 : cachedSetupStage
+	const setupStage = verifiedSetupStage ?? savedSetupStage
 	const completedCount = Number(actions.admissionAddress !== undefined) + Number(actions.deploymentPool !== undefined) + (setupStage ?? 0)
-	const transactionProgress = completedCount === 0 && activeStep < 3 ? pageCopy.deployTransactionCount : completedCount === 6 ? pageCopy.deployAllTransactionsDone : pageCopy.deployTransactionProgress(completedCount)
-	const questionList = actions.admissionMode === 'open' ? copy.admissionOpen : actions.fixedQuestionCount === undefined ? copy.admissionFixed : pageCopy.deployQuestionListCount(actions.fixedQuestionCount)
-	const progressLabels = [actions.collateral.symbol, questionList, activeStep > 2 ? pageCopy.deployReviewed : pageCopy.deployDefaults, transactionProgress]
+	let transactionProgress = pageCopy.deployTransactionProgress(completedCount)
+	if (completedCount === 0 && activeStep < 3) transactionProgress = pageCopy.deployTransactionCount
+	if (completedCount === 6) transactionProgress = pageCopy.deployAllTransactionsDone
+	const progressLabels = [actions.collateral.symbol, deploymentQuestionsLabel(actions), activeStep > 2 ? pageCopy.deployReviewed : pageCopy.deployDefaults, transactionProgress]
 	const showTransactions = actions.deploymentLocked || activeStep === 3
 	const showLockedEconomics = actions.deploymentLocked && activeStep >= 2
 	const leftStep = activeStep === 3 ? 2 : activeStep

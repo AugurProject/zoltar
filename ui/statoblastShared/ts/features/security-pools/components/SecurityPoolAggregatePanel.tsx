@@ -4,7 +4,7 @@ import * as pageCopy from '../../../copy/securityPoolPage.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useId, useState } from 'preact/hooks'
-import { formatCurrencyBalanceWithUnit, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalanceWithUnit, formatDuration, formatRoundedCurrencyBalance, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
@@ -89,6 +89,8 @@ export function SecurityPoolAggregatePanel({
 	const target = Number(snapshot?.ownerAccount.targetHealthFactorBps || 10_000n) / 100
 	const gaugeMax = Math.max(200, target)
 	const liquidation = snapshot === undefined || snapshot.conservativePrice === 0n ? undefined : Number((snapshot.liquidationPrice * 10_000n) / snapshot.conservativePrice) / 100
+	const liquidationDuration = snapshot?.liquidationDuration === undefined ? undefined : formatDuration(snapshot.liquidationDuration)
+	const liquidationNotice = liquidation === undefined || liquidationDuration === undefined ? copy.liquidationHint(liquidationDuration) : copy.takeoverThresholdNotice(liquidation.toLocaleString('en-US', { maximumFractionDigits: 2 }), liquidationDuration)
 	const priceCurrent = snapshot?.priceValid === true && !priceDeadlineChecking
 	const disabled = priceDeadlineChecking || actions.busy !== undefined || fieldsLoading || model.showingPreviousSnapshot
 	const disabledReason = actions.busy !== undefined ? copy.actionPending : copy.readUnavailable
@@ -103,8 +105,8 @@ export function SecurityPoolAggregatePanel({
 	if (snapshot !== undefined && snapshot.forkTime > 0n) status = copy.forked
 	const sections = [
 		{ id: 'deposit', label: copy.deposit, value: rep(snapshot?.ownerPrincipalAttoRep) },
-		{ id: 'commitment', label: pageCopy.commitmentSection, value: collateral(snapshot?.ownerCommitmentAttoEth) },
-		{ id: 'reduce', label: pageCopy.reduceCommitment, value: currentPosition?.batch ? collateral(currentPosition.remainingCommitment) : undefined },
+		{ id: 'commitment', label: pageCopy.commitmentSection, value: `${target}%` },
+		{ id: 'reduce', label: pageCopy.reduceCommitment, value: queued ? collateral(currentPosition.remainingCommitment) : undefined },
 		{ id: 'withdraw', label: copy.withdraw, value: rep(snapshot?.withdrawableAttoRep) },
 		{ id: 'earnings', label: copy.earnings, value: collateral(snapshot?.claimableEarnings?.attoEth ?? snapshot?.accruedFeesAttoEth) },
 	]
@@ -124,13 +126,15 @@ export function SecurityPoolAggregatePanel({
 	const previewRows = [
 		{ label: copy.savedHealth, before: `${target}%`, after: previewTarget === undefined ? undefined : `${formatUnits(previewTarget, 2)}%` },
 		{ label: copy.commitment, before: collateral(snapshot?.ownerCommitmentAttoEth), after: collateral(previewCommitment) },
-		{ label: copy.requiredCollateral, before: rep(currentRep), after: rep(previewRep) },
-		{ label: copy.estimatedWithdrawal, before: rep(snapshot?.withdrawableAttoRep), after: rep(estimatedWithdrawal) },
-		{ label: copy.targetCapacity, before: collateral(currentMaximum), after: collateral(previewMaximum) },
+		{ label: copy.previewBacking, before: rep(currentRep), after: rep(previewRep) },
+		{ label: copy.withdrawableRep, before: rep(snapshot?.withdrawableAttoRep), after: rep(estimatedWithdrawal) },
+		{ label: copy.previewMaximum, before: collateral(currentMaximum), after: collateral(previewMaximum) },
 	]
 	const depositApproval = (
 		<TokenApprovalControl
 			actionLabel={copy.deposit}
+			compact={redesigned}
+			customAmountDisclosureLabel={redesigned ? copy.adjustApproval : undefined}
 			allowanceError={redesigned && snapshot !== undefined ? undefined : model.readError}
 			allowanceLoading={redesigned ? fieldsLoading : model.loading}
 			approvedAmount={snapshot?.allowanceAttoRep}
@@ -153,6 +157,8 @@ export function SecurityPoolAggregatePanel({
 	const healthApproval = (
 		<TokenApprovalControl
 			actionLabel={copy.depositHealth}
+			compact={redesigned}
+			customAmountDisclosureLabel={redesigned ? copy.adjustApproval : undefined}
 			allowanceError={redesigned && snapshot !== undefined ? undefined : model.readError}
 			allowanceLoading={redesigned ? fieldsLoading : model.loading}
 			approvedAmount={snapshot?.allowanceAttoRep}
@@ -274,7 +280,7 @@ export function SecurityPoolAggregatePanel({
 			{redesigned ? (
 				<SectionBlock headingId={`${capitalId}-commitment`} title={pageCopy.commitmentSection}>
 					{staleNotice}
-					<UserMessage tone='warning' detail={copy.liquidationHint(snapshot?.liquidationDuration === undefined ? undefined : formatDuration(snapshot.liquidationDuration))} />
+					<UserMessage tone='warning' detail={liquidationNotice} />
 					<details>
 						<summary>{copy.howTargetWorks}</summary>
 						<UserMessage detail={copy.healthHint} />
@@ -284,7 +290,7 @@ export function SecurityPoolAggregatePanel({
 							<SecurityPoolInput label={copy.health} value={model.healthPercent} onChange={model.setHealthPercent} disabled={disabled} numeric />
 							<SecurityPoolInput label={copy.commitment} hint={queued ? copy.queuedCommitmentLock : undefined} value={model.commitmentAmount} onChange={model.setCommitmentAmount} disabled={disabled || queued} numeric />
 							{snapshot !== undefined && (
-								<div className='actions'>
+								<div className='statoblast-capital-presets'>
 									<button type='button' className='secondary' disabled={disabled || queued} onClick={() => model.setCommitmentAmount(formatUnits(snapshot.ownerCommitmentAttoEth, snapshot.collateral.decimals))}>
 										{copy.currentCommitmentPreset}
 									</button>
@@ -392,18 +398,24 @@ export function SecurityPoolAggregatePanel({
 							return (
 								<div key={key}>
 									<SecurityPoolInput label={copy.remainingCommitment} value={model.remainingCommitmentAmount} onChange={model.setRemainingCommitmentAmount} disabled={disabled} numeric />
-									<SecurityPoolButton model={actions} action={`retireSecurityPool-${position.id}`} label={copy.retire} pendingLabel={copy.retiring} reason={reasons.retire} onClick={() => model.retire(position.id)} />
+									<SecurityPoolButton model={actions} action={`retireSecurityPool-${position.id}`} label={copy.requestReduction} pendingLabel={copy.retiring} reason={reasons.retire} onClick={() => model.retire(position.id)} />
 								</div>
 							)
 						}
 						const keep = formatCurrencyBalanceWithUnit(position.remainingCommitment, snapshot.collateral.symbol, snapshot.collateral.decimals)
+						const waitingReasonId = model.serveReason === copy.waitingForFreeCapacity ? `${capitalId}-${key}-waiting` : undefined
 						let releaseLabel = copy.releaseKeeping(keep)
 						if (model.serveReason === copy.waitingForFreeCapacity) releaseLabel = copy.waitingForFreeCapacity
 						else if (actions.lastFailedAction === 'serveSecurityPoolRetirement') releaseLabel = copy.retryRelease
 						return (
 							<div key={key}>
 								<SecurityPoolRetirementPreview snapshot={snapshot} position={position} redesigned />
-								<SecurityPoolButton model={actions} action='serveSecurityPoolRetirement' label={releaseLabel} pendingLabel={copy.serving} reason={model.serveReason} onClick={model.serve} />
+								{waitingReasonId !== undefined && (
+									<span className='visually-hidden' id={waitingReasonId}>
+										{copy.waitingForFreeCapacity}
+									</span>
+								)}
+								<SecurityPoolButton model={actions} action='serveSecurityPoolRetirement' label={releaseLabel} pendingLabel={copy.serving} reason={model.serveReason} sharedReasonId={actions.busy === undefined ? waitingReasonId : undefined} onClick={model.serve} />
 							</div>
 						)
 					}
@@ -466,7 +478,7 @@ export function SecurityPoolAggregatePanel({
 					value={model.withdrawalAmount}
 					onChange={model.setWithdrawalAmount}
 					disabled={disabled}
-					hint={redesigned && snapshot !== undefined ? copy.maximumWithdrawalHint(formatCurrencyBalanceWithUnit(snapshot.withdrawableAttoRep, common.rep)) : undefined}
+					hint={redesigned && snapshot !== undefined ? copy.maximumWithdrawalHint(formatValueWithUnit(formatRoundedCurrencyBalance(snapshot.withdrawableAttoRep, 18, 2, 'down'), common.rep)) : undefined}
 					action={
 						redesigned &&
 						snapshot !== undefined && (

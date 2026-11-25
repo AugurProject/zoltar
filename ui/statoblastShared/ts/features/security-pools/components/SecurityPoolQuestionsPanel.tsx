@@ -20,6 +20,7 @@ import { useFavorites } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { createActiveEnvironmentGuard, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
+import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { designQuestionId, statoblastPageHref } from '../../../lib/routing.js'
 import { checkStatoblastEntries } from '../../../protocol/statoblastEntries.js'
 import { decodeWatchlistRows, loadWatchlistRows, parseWatchlistEntity, type WatchlistRow } from '../../../protocol/watchlistRows.js'
@@ -120,12 +121,12 @@ export function SecurityPoolQuestionsPanel({
 	useBlockRefresh(() => void refreshRows(), enabled && saved.length > 0)
 	useStatoblastPageRefresh(registerPageRefresh, refreshRows)
 	const details = savedDetails?.scope === readScope ? savedDetails : undefined
-	const [result, setResult] = useState<{ status: string; id: bigint; mint: boolean }>()
+	const [result, setResult] = useState<{ scope: string; status: string; id: bigint; mint: boolean }>()
 	const [error, setError] = useState<string>()
 	const [checking, setChecking] = useState(false)
 	const id = designQuestionId(actions.questionInput.trim())
 	const findId = useId()
-	const selected = result?.id === id ? result : undefined
+	const selected = result?.scope === readScope && result.id === id ? result : undefined
 	const find = async () => {
 		if (id === undefined || checking) return
 		setError(undefined)
@@ -143,9 +144,9 @@ export function SecurityPoolQuestionsPanel({
 			if (entry.status === 'question' || entry.status === 'unregistered-question') {
 				const market = await loadMarketDetails(client, id)
 				if (!market.exists) status = 'not-a-question'
-				mint = market.exists && market.endTime > block.timestamp && !forked
+				mint = market.exists && market.endTime > block.timestamp && !forked && admission?.mode !== 'custom'
 			}
-			if (guard.isCurrent()) setResult({ status, id, mint })
+			if (guard.isCurrent()) setResult({ scope: readScope, status, id, mint })
 		} catch (failure) {
 			setError(failure instanceof Error ? failure.message : pageCopy.couldNotFindQuestion)
 		} finally {
@@ -246,7 +247,7 @@ export function SecurityPoolQuestionsPanel({
 								const holdings = outcome === 'none' ? completeSets : shares?.[`${outcome}AttoShares`]
 								const page = { kind: 'question', pool, questionId: entry.questionId, tab: 'shares' } as const
 								let sharesAction: 'mint' | 'redeem' | undefined
-								if (trading) sharesAction = 'mint'
+								if (trading && admission?.mode !== 'custom') sharesAction = 'mint'
 								if (outcome !== 'none' && (holdings ?? 0n) > 0n) sharesAction = 'redeem'
 								const time = trading ? question?.marketDetails.endTime : row?.escalationEnd
 								return (
@@ -255,7 +256,9 @@ export function SecurityPoolQuestionsPanel({
 											<FavoriteToggle app='statoblast' id={entry.id} kind='question' entityLabel={title} confirmUnfavorite={() => !hasPosition || window.confirm(watchlistCopy.unstarPositionConfirmation)} />
 										</td>
 										<td role='cell'>
-											<a href={statoblastPageHref(page, universeId)}>{title}</a>
+											<a href={statoblastPageHref(page, universeId)} {...(title === questionId ? { title: questionId } : {})}>
+												{title === questionId ? abbreviateAddress(questionId) : title}
+											</a>
 											{title !== questionId && (
 												<small>
 													<IdentifierValue value={questionId} abbreviated />

@@ -30,6 +30,24 @@ test('the REP price workflow keeps recovery available outside older reports and 
 	expect(view.container.querySelectorAll('.statoblast-price-actions > li')).toHaveLength(7)
 	expect(button(copy.refresh)).toBeUndefined()
 })
+
+test('a forked pool keeps an older report ID entered before the first authenticated read', async () => {
+	const fixture = priceFixture()
+	fixture.set(priceFeed, 'universeId', 0n)
+	fixture.values['pendingReportId'] = 0n
+	const actions: SecurityPoolPriceParameters['actions'] = { scope: unscopedTransaction, busy: undefined, ownerReason: undefined, runSecurityPoolAction: async () => undefined }
+	const report = (ready: boolean) => <SecurityPoolPriceReport redesigned returnFundsOnly scope='universe' target={ready ? accountPriceTarget(capitalSnapshot()) : undefined} actions={actions} bidder={owner} />
+	const view = lifecycle.trackRendered(await renderIntoDocument(report(false)))
+	const field = [...view.container.querySelectorAll('input')].find(input => input.labels?.[0]?.textContent === copy.reportId)
+	if (field === undefined) throw new Error('Missing report ID field')
+	await act(() => {
+		field.value = '9'
+		field.dispatchEvent(new Event('input', { bubbles: true }))
+	})
+	await act(() => render(report(true), view.container))
+	await waitFor(() => expect(view.container.textContent).toContain('Report #9'))
+	expect(field.value).toBe('9')
+})
 test('branch report keeps preparation, wrap, editable approvals and recovery controls visible in fixed order', async () => {
 	const fixture = priceFixture()
 	const fork = await fixture.fork()

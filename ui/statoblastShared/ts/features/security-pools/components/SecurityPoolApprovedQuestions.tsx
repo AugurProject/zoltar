@@ -1,4 +1,4 @@
-import { type Address } from '@zoltar/core-shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
@@ -16,6 +16,7 @@ import * as copy from '../../../copy/securityPoolPage.js'
 import * as poolCopy from '../../../copy/securityPool.js'
 import { statoblastPageHref } from '../../../lib/routing.js'
 import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
+import { statoblast_SecurityPool_SecurityPool as securityPoolArtifact } from '../../../contractArtifact.js'
 import { checkStatoblastEntries } from '../../../protocol/statoblastEntries.js'
 import type { SecurityPoolAccountSnapshot } from '../../../protocol/securityPool.js'
 import { useStatoblastPageRefresh, type RegisterStatoblastPageRefresh } from '../../useStatoblastPageRefresh.js'
@@ -48,16 +49,22 @@ async function readApprovedQuestions(pool: Address, universeId: bigint, ids: rea
 		block.number,
 		true,
 	)
+	if (!entries.some(entry => entry.status === 'question' || entry.status === 'unregistered-question' || entry.status === 'unprepared-question')) throw new Error(copy.couldNotVerifyQuestion)
 	const { zoltarQuestionData: address } = getZoltarContractAddresses()
 	const abi = ZoltarQuestionData_ZoltarQuestionData.abi
-	const details = await readOptionalMulticall(
+	const [poolHorizon, ...details] = await readOptionalMulticall(
 		client,
-		ids.flatMap(id => [
-			{ address, abi, functionName: 'questions', args: [id] },
-			{ address, abi, functionName: 'getOutcomeLabels', args: [id, 0n, 3n] },
-		]),
+		[
+			{ address: pool, abi: securityPoolArtifact.abi, functionName: 'maximumQuestionHorizonSeconds' },
+			...ids.flatMap(id => [
+				{ address, abi, functionName: 'questions', args: [id] },
+				{ address, abi, functionName: 'getOutcomeLabels', args: [id, 0n, 3n] },
+			]),
+		],
 		block.number,
 	)
+	if (poolHorizon?.status !== 'success' || typeof poolHorizon.result !== 'bigint') throw new Error(copy.couldNotVerifyQuestion)
+	const horizon = poolHorizon.result
 	return ids.map((id, index) => {
 		const status = entries[index]?.status
 		const question = details[2 * index]
@@ -71,6 +78,7 @@ async function readApprovedQuestions(pool: Address, universeId: bigint, ids: rea
 		if (reason === undefined && !registered) {
 			if (typeof endTime !== 'bigint' || endTime === 0n) reason = copy.notAQuestion
 			else if (endTime <= block.timestamp) reason = copy.questionEnded
+			else if (endTime - block.timestamp > horizon) reason = poolCopy.formatQuestionHorizonReason(horizon)
 			else if (labels.result.length !== 2 || labels.result[0] !== 'Yes' || labels.result[1] !== 'No') reason = poolCopy.questionOutcomeRegistrationRequired
 		}
 		return { id, title, registered, prepared: status === 'question', reason }
@@ -117,7 +125,7 @@ export function SecurityPoolApprovedQuestions({ pool, universeId, admission, act
 	return (
 		<SectionBlock title={copy.approvedQuestionsTitle} description={copy.approvedQuestionsHere(admission.questionCount)}>
 			<RetryableNotice message={error} retryLabel={copy.tryAgain} onRetry={() => void reload()} disabled={pending} />
-			<table className='statoblast-watchlist-table' role='table'>
+			<table className='statoblast-watchlist-table statoblast-approved-questions' role='table'>
 				<thead>
 					<tr>
 						<th scope='col'>{copy.question}</th>
@@ -129,11 +137,17 @@ export function SecurityPoolApprovedQuestions({ pool, universeId, admission, act
 						const row = currentRows[index]
 						const questionId = formatQuestionIdHex(id)
 						const href = statoblastPageHref({ kind: 'question', pool, questionId: id, tab: 'shares' }, universeId)
+						let restriction: string | undefined
+						if (forked) restriction = copy.universeForked
+						else if (row === undefined) restriction = pending ? copy.checking : copy.couldNotVerifyQuestion
+						else restriction = row.reason ?? actions.approvedRegistrationReason(id)
 						return (
 							<tr key={questionId} role='row'>
 								<td role='cell'>
 									{row?.title !== undefined && (row.prepared ? <a href={href}>{row.title}</a> : <strong>{row.title}</strong>)}
-									<IdentifierValue value={questionId} abbreviated />
+									<small>
+										<IdentifierValue value={questionId} abbreviated />
+									</small>
 								</td>
 								<td role='cell'>
 									{row?.registered === true ? (
@@ -144,7 +158,7 @@ export function SecurityPoolApprovedQuestions({ pool, universeId, admission, act
 											action='registerSecurityPoolQuestion'
 											label={copy.registerQuestion}
 											pendingLabel={copy.registeringQuestion}
-											reason={forked ? copy.universeForked : row === undefined ? (pending ? copy.checking : copy.couldNotVerifyQuestion) : (row.reason ?? actions.approvedRegistrationReason(id))}
+											reason={restriction}
 											onClick={async () => {
 												await actions.register(id)
 												await reload()

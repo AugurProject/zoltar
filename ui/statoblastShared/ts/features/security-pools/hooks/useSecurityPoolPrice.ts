@@ -88,11 +88,14 @@ export function useSecurityPoolPrice({ scope, target, displayTarget = target, bi
 	const shownTarget = target ?? displayTarget
 	const sponsor = bidder ?? shownTarget?.owner
 	const identity = shownTarget === undefined ? undefined : `${shownTarget.securityPool}:${sponsor}:${shownTarget.universeId}`
-	const previous = useRef<{ backend: typeof backend; identity: string }>()
+	const previous = useRef<{ backend: typeof backend; identity: string | undefined }>()
 	const loadedReference = useRef<{ backend: typeof backend; identity: string; price: bigint | undefined; collateralToken: Address | undefined; latestReport: bigint | undefined }>()
 	useEffect(() => {
-		if (previous.current?.backend === backend && (identity === undefined || previous.current.identity === identity)) return
-		previous.current = identity === undefined ? undefined : { backend, identity }
+		const last = previous.current
+		if (last?.backend === backend && (identity === undefined || last.identity === identity)) return
+		previous.current = { backend, identity }
+		// The first verified read fills the route's identity without replacing a draft entered while it loaded.
+		if (last?.backend === backend && last.identity === undefined) return
 		priceInput.value = ''
 		wethInput.value = ''
 		reportInput.value = ''
@@ -209,7 +212,8 @@ export function useSecurityPoolPrice({ scope, target, displayTarget = target, bi
 	const feeReason = (selected: SecurityPoolPriceReport | undefined) => (selected?.recoveryBaseFeeBlocked === true ? copy.waitForBaseFee : undefined)
 	const settleReason = selectedReportReason ?? (report?.state.settled ? copy.alreadySettled : undefined) ?? (snapshot !== undefined && report !== undefined && snapshot.timestamp < report.eligibleAt ? copy.waitForSettlement : undefined)
 	const recoverReason = selectedReportReason ?? (!report?.state.settled ? copy.notSettled : undefined) ?? (report?.outcome !== 0n ? copy.callbackComplete : undefined) ?? feeReason(report)
-	const withdrawReason = selectedReportReason ?? (report?.wethCredit === 0n && report.repCredit === 0n ? (report.state.settled ? copy.noFunding : copy.notSettled) : undefined)
+	const noCreditReason = report?.state.settled ? copy.noFunding : copy.notSettled
+	const withdrawReason = selectedReportReason ?? (report?.wethCredit === 0n && report.repCredit === 0n ? noCreditReason : undefined)
 	const canRedirectFunding = snapshot !== undefined && report !== undefined && getAddress(snapshot.owner) === getAddress(report.sponsor)
 	const recipientSelection = recipientInput.value
 	const recipientValue = recipientSelection !== undefined && recipientSelection.reportId === reportId ? recipientSelection.value : ''
@@ -218,7 +222,7 @@ export function useSecurityPoolPrice({ scope, target, displayTarget = target, bi
 	const recipient = recipientDraft === '' ? report?.sponsor : parsedRecipient
 	const recipientError = recipientDraft !== '' && (recipient === undefined || recipient === zeroAddress || recipient === report?.escrow) ? copy.invalidWithdrawalRecipient : undefined
 	const credit = (selected: SecurityPoolPriceReport | undefined, token: 'collateral' | 'rep') => (token === 'collateral' ? selected?.wethCredit : selected?.repCredit)
-	const tokenWithdrawReason = (token: 'collateral' | 'rep') => selectedReportReason ?? recipientError ?? (credit(report, token) === 0n ? (report?.state.settled ? copy.noFunding : copy.notSettled) : undefined)
+	const tokenWithdrawReason = (token: 'collateral' | 'rep') => selectedReportReason ?? recipientError ?? (credit(report, token) === 0n ? noCreditReason : undefined)
 
 	const run = (action: string, label: string, reason: string | undefined, build: (selected: SecurityPoolPriceSnapshot) => SecurityPoolTransaction, check: (latest: SecurityPoolPriceSnapshot) => Promise<void> = async () => undefined, captureReport = false) =>
 		actions.runSecurityPoolAction(

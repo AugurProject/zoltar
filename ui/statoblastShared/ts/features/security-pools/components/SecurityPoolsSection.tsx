@@ -100,9 +100,8 @@ export function SecurityPoolsSection({
 
 	return (
 		<div className='security-pool-flow'>
-			{deploying ? (
-				<SecurityPoolDeployment actions={actions} model={model} />
-			) : page === undefined ? (
+			{deploying && <SecurityPoolDeployment actions={actions} model={model} />}
+			{!deploying && page === undefined && (
 				<>
 					<RouteHeader title={pageCopy.securityPool} actions={<UpdatedAgo updatedAt={model.displayedAt} refreshing={model.loading} />} />
 					<SectionBlock title={copy.setup}>
@@ -117,9 +116,8 @@ export function SecurityPoolsSection({
 						</details>
 					</SectionBlock>
 				</>
-			) : (
-				<StatoblastPoolHead page={page} model={model} wallet={parameters.accountAddress} priceChecking={priceDeadline.status !== undefined} fundsRemain={(fundedPriceReports?.length ?? 0) > 0} />
 			)}
+			{!deploying && page !== undefined && <StatoblastPoolHead page={page} model={model} wallet={parameters.accountAddress} priceChecking={priceDeadline.status !== undefined} fundsRemain={(fundedPriceReports?.length ?? 0) > 0} />}
 			{!deploying && (page === undefined || (model.setup?.stage !== undefined && model.setup.stage < 4)) && (
 				<SectionBlock title={capitalCopy.prepareTitle} description={shownSetupStage === 4 ? undefined : capitalCopy.prepareHint}>
 					<UserMessage tone={shownSetupStage === 4 ? 'success' : 'neutral'} detail={shownSetupStage === undefined ? capitalCopy.prepareProgressUnknown : capitalCopy.prepareProgress(shownSetupStage)} />

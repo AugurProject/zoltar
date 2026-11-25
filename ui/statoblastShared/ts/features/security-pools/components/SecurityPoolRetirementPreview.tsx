@@ -3,7 +3,8 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
-import { formatCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
+import { formatRoundedCurrencyBalance, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as copy from '../../../copy/securityPoolCapital.js'
 
 export function SecurityPoolRetirementPreview({ snapshot, position, redesigned = false }: { snapshot: SecurityPoolAccountSnapshot; position: SecurityPoolAccountSnapshot['positions'][number]; redesigned?: boolean }) {
@@ -20,9 +21,9 @@ export function SecurityPoolRetirementPreview({ snapshot, position, redesigned =
 	else if (preview !== undefined) reason = copy.retirementPreviewStatus[preview.status]
 	if (redesigned) {
 		const { decimals, symbol } = snapshot.collateral
+		const free = preview?.spareCommitment ?? 0n
 		return (
 			<>
-				<UserMessage tone={current && preview?.status === 'ready' ? 'neutral' : 'warning'} detail={reason} />
 				<div className='statoblast-queue-totals'>
 					<span>{copy.queueCommitment}</span>
 					<strong>
@@ -35,7 +36,7 @@ export function SecurityPoolRetirementPreview({ snapshot, position, redesigned =
 							<div style={{ inlineSize: `${percentage(preview.queuedAheadCommitment)}%` }} />
 							<span style={{ insetInlineStart: `min(calc(100% - 2px), ${percentage(preview.spareCommitment)}%)` }} />
 						</div>
-						<p className='detail statoblast-queue-marker-label'>{copy.queueFreeNow(formatCurrencyBalanceWithUnit(preview.spareCommitment, symbol, decimals), preview.spareCommitment >= total ? formatCurrencyBalance(total, decimals) : undefined)}</p>
+						<p className='detail statoblast-queue-marker-label'>{copy.queueFreeNow(formatValueWithUnit(formatRoundedCurrencyBalance(free, decimals), symbol), free >= total ? formatRoundedCurrencyBalance(total, decimals) : undefined)}</p>
 						<div className='statoblast-queue-totals'>
 							<span>
 								{copy.queueAhead} <strong>{value(preview.queuedAheadCommitment)}</strong>
@@ -46,6 +47,8 @@ export function SecurityPoolRetirementPreview({ snapshot, position, redesigned =
 						</div>
 					</>
 				)}
+				{current && preview?.status === 'ready' && <Badge tone='ok'>{copy.readyToRelease}</Badge>}
+				{(!current || preview?.status !== 'ready') && reason !== copy.waitingForFreeCapacity && <UserMessage tone='warning' detail={reason} />}
 			</>
 		)
 	}

@@ -150,17 +150,22 @@ export const depositLiquidating = 'This position is liquidating. REP top-ups are
 export const resubmitRetirement = 'Resubmit the reduction request'
 export const resubmittingRetirement = 'Resubmitting the reduction…'
 export const preview = 'Preview'
+export const adjustApproval = 'Adjust approval amount'
+export const previewBacking = 'REP needed for target'
+export const previewMaximum = 'Max commitment'
 export const previewBefore = 'Current'
 export const previewAfter = 'After changes'
-export const estimatedWithdrawal = 'Estimated withdrawable REP'
 export const queueHint = "Reductions release in full, in queue order. A queued reduction can't be changed."
 export const queueCommitment = 'Your commitment'
 export const queueAhead = 'Ahead of you'
 export const queueYourReduction = 'Your reduction'
+export const requestReduction = 'Request reduction'
+export const readyToRelease = 'Ready to release'
 export const queueFreeNow = (amount: string, total: string | undefined) => (total === undefined ? `${amount} free now` : `${amount} free now, covers all ${total}`)
 export const releaseKeeping = (amount: string) => `Release reduction (keep ${amount})`
 export const walletBalanceHint = (amount: string) => `${amount} in your wallet`
 export const maximumWithdrawalHint = (amount: string) => `${amount} available to withdraw`
+export const takeoverThresholdNotice = (threshold: string, duration: string) => `Below ${threshold}% health, anyone can take over your commitment. The takeover reward can reach all your pledged REP within ${duration}.`
 
 export const releaseReduction = 'Release reduction'
 export const completedReductionCommitment = 'Commitment when reduction completes'
