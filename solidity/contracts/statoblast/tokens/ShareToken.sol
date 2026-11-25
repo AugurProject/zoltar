@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { DecimalStrings } from '../../DecimalStrings.sol';
 import { UniverseIds } from '../../UniverseIds.sol';
 
 import { Constants } from '../../Constants.sol';
@@ -55,30 +56,11 @@ contract ShareToken is ERC1155, IShareToken {
 
 	constructor(address owner, Zoltar _zoltar, uint256 questionId) {
 		zoltar = _zoltar;
-		string memory questionIdString = uintToString(questionId);
+		string memory questionIdString = DecimalStrings.toString(questionId);
 		name = string.concat('Shares-', questionIdString);
 		symbol = string.concat('SHARE-', questionIdString);
 		authorized[owner] = true;
 		emit AuthorizationUpdated(owner, msg.sender, true);
-	}
-
-	function uintToString(uint256 value) internal pure returns (string memory) {
-		if (value == 0) return '0';
-
-		uint256 digits = 0;
-		uint256 temp = value;
-		while (temp != 0) {
-			digits++;
-			temp /= 10;
-		}
-
-		bytes memory buffer = new bytes(digits);
-		while (value != 0) {
-			digits--;
-			buffer[digits] = bytes1(uint8(48 + (value % 10)));
-			value /= 10;
-		}
-		return string(buffer);
 	}
 
 	function authorize(IQuestionLedger _questionLedgerCandidate) external {

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { DecimalStrings } from '../../DecimalStrings.sol';
+
 import { DeploymentStatusOracle } from '../../DeploymentStatusOracle.sol';
 import { IERC20 } from '../../IERC20.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
@@ -179,6 +181,6 @@ contract CoverageHelpersHarness {
 	}
 
 	function uintToString(uint256 value) external pure returns (string memory) {
-		return ScalarOutcomes.uintToString(value);
+		return DecimalStrings.toString(value);
 	}
 }
