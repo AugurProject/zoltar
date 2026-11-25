@@ -9,7 +9,7 @@ import type { TransactionPlanStep, TransactionRequestPreview, WriteClient } from
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getErrorMessage, isRecoverableContractReadError, transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { getPreparedTransactionTechnicalRows, humanizeTransactionAction } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
+import { getPreparedTransactionTechnicalRows, humanizeTransactionAction } from '@zoltar/ui-core-shared/transactions/transactionPreviewRows.js'
 import { createTransactionStepController, type TransactionStepDetails } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { createTransactionFailure, createTransactionFailureError } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
 import { changedSinceReview, missingTokenSpender } from '../copy/app.js'
