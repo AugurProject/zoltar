@@ -240,6 +240,12 @@ test('ancestry reconstruction accepts 32 games including the sampled game and re
 	}
 	expect((await sampleClaimPositions(game(31), read, state)).status).toBe('available')
 	await expect(sampleClaimPositions(game(32), read, state)).rejects.toThrow('32-generation limit')
+	expect((await sampleClaimPositions(game(32), read, state, { maxReads: 1024, maxGenerations: 33, maxLeaves: 256 })).status).toBe('available')
+	await expect(sampleClaimPositions(game(0), read, state, { maxReads: 1, maxGenerations: 33, maxLeaves: 256 })).rejects.toThrow('1-read budget')
+})
+
+test('rejects inherited snapshots larger than the operator leaf budget', async () => {
+	await expect(sampleClaimPositions(child, fixtureRead(), state, { maxReads: 1024, maxGenerations: 32, maxLeaves: 1 })).rejects.toThrow('1-leaf limit')
 })
 
 test('authenticated claims need no ancestor preparation', async () => {

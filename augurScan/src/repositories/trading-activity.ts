@@ -23,9 +23,12 @@ const tradingLegs = (sql: SQL, filter: TradingLegFilter) => {
 		WITH account_transactions AS (
 			SELECT log.block_hash, log.tx_hash FROM logs log
 			WHERE ${account}::text IS NOT NULL AND log.chain_id = ${chainId} AND log.canonical AND log.block_number <= ${asOfBlock}
-				AND log.event_name IN ('TransferSingle', 'TransferBatch', 'CompleteSetCreated', 'CompleteSetsFunded', 'CompleteSetRedeemed', 'SharesRedeemed')
+				AND log.event_name IN ('TransferSingle', 'TransferBatch', 'CompleteSetCreated', 'CompleteSetsFunded', 'CompleteSetRedeemed', 'SharesRedeemed', 'PositionExitedByTransfer', 'CompleteSetRedeemedByTransfer')
 				AND (lower(log.arguments->>'from') = ${account} OR lower(log.arguments->>'to') = ${account}
-					OR lower(log.arguments->>'creator') = ${account} OR lower(log.arguments->>'redeemer') = ${account} OR lower(log.arguments->>'recipient') = ${account})
+					OR lower(log.arguments->>'payoutRecipient') = ${account} OR lower(log.arguments->>'creator') = ${account} OR lower(log.arguments->>'redeemer') = ${account} OR lower(log.arguments->>'recipient') = ${account})
+			UNION
+			SELECT tx.block_hash, tx.hash FROM transactions tx
+			WHERE ${account}::text IS NOT NULL AND tx.chain_id = ${chainId} AND tx.canonical AND tx.block_number <= ${asOfBlock} AND tx.from_address = ${account}
 			UNION
 			SELECT event.block_hash, event.tx_hash FROM amm_trade_events event
 			WHERE ${account}::text IS NOT NULL AND event.chain_id = ${chainId} AND event.canonical AND event.block_number <= ${asOfBlock}
@@ -38,7 +41,10 @@ const tradingLegs = (sql: SQL, filter: TradingLegFilter) => {
 			ORDER BY market.pair_address, market.block_number DESC, market.log_index DESC
 		), pool_events AS (
 			SELECT market.pair_address, market.share_token_address, market.universe_id, log.block_hash, log.tx_hash, log.block_number, log.log_index,
-				EXTRACT(EPOCH FROM block.timestamp)::bigint AS timestamp_seconds, log.event_name,
+				EXTRACT(EPOCH FROM block.timestamp)::bigint AS timestamp_seconds, log.event_name, payout.recipient AS payout_recipient, funding.mint_log_index,
+				CASE WHEN (tx.to_address = funding.emitter_address AND action.function_name IN ('createCompleteSet', 'createCompleteSetWithRecoveryRep'))
+					OR (router.address = lower(funding.arguments->>'recipient') AND action.function_name IN ('enterPosition', 'enterPositionWithCollateral', 'initializeWithEth', 'initializeWithCollateral',
+						'createPairAndInitializeWithEth', 'createPairAndInitializeWithCollateral', 'addLiquidityWithEth', 'addLiquidityWithCollateral')) THEN tx.from_address END AS payer,
 				lower(COALESCE(funding.arguments->>'recipient', log.arguments->>'creator', log.arguments->>'redeemer')) AS actor,
 				(CASE log.event_name WHEN 'CompleteSetCreated' THEN log.arguments->>'settlementCollateralProvidedAttoEth' ELSE log.arguments->>'settlementCollateralRedeemedAttoEth' END)::numeric
 					+ COALESCE((funding.arguments->>'purchaseFeeAttoEth')::numeric, 0) AS eth,
@@ -50,25 +56,50 @@ const tradingLegs = (sql: SQL, filter: TradingLegFilter) => {
 			JOIN blocks block ON block.chain_id = log.chain_id AND block.hash = log.block_hash AND block.canonical
 			LEFT JOIN pools pool ON pool.chain_id = log.chain_id AND pool.pool_address = market.pool_address AND pool.canonical
 			LEFT JOIN LATERAL (
-				SELECT funded.arguments
+				SELECT funded.arguments, funded.emitter_address, delivery.log_index AS mint_log_index
 				FROM logs funded
 				JOIN contracts security_pool ON security_pool.chain_id = funded.chain_id AND security_pool.address = funded.emitter_address
 					AND security_pool.canonical AND security_pool.kind = 'securityPool'
+				JOIN logs delivery ON delivery.chain_id = funded.chain_id AND delivery.block_hash = funded.block_hash AND delivery.tx_hash = funded.tx_hash
+					AND delivery.canonical AND delivery.emitter_address = market.share_token_address AND delivery.event_name = 'TransferBatch'
+					AND delivery.log_index > log.log_index AND delivery.log_index < funded.log_index
+					AND lower(delivery.arguments->>'operator') = log.emitter_address AND lower(delivery.arguments->>'from') = '0x0000000000000000000000000000000000000000'
+					AND lower(delivery.arguments->>'to') = lower(funded.arguments->>'recipient')
+					AND delivery.arguments->'ids' = jsonb_build_array((market.universe_id * 256)::text, (market.universe_id * 256 + 1)::text, (market.universe_id * 256 + 2)::text)
+					AND delivery.arguments->'values' = jsonb_build_array(funded.arguments->>'shares', funded.arguments->>'shares', funded.arguments->>'shares')
 				WHERE funded.chain_id = log.chain_id AND funded.block_hash = log.block_hash AND funded.tx_hash = log.tx_hash
 					AND funded.canonical AND funded.event_name = 'CompleteSetsFunded' AND funded.log_index > log.log_index
 					AND funded.arguments->>'questionId' = pool.question_id::text AND funded.arguments->>'universeId' = market.universe_id::text
 					AND funded.arguments->>'shares' = log.arguments->>'completeSetsMintedAttoShares'
 					AND funded.arguments->>'cashAttoEth' = log.arguments->>'settlementCollateralProvidedAttoEth'
-					AND EXISTS (
-						SELECT 1 FROM logs delivery
-						WHERE delivery.chain_id = log.chain_id AND delivery.block_hash = log.block_hash AND delivery.tx_hash = log.tx_hash
-							AND delivery.canonical AND delivery.emitter_address = market.share_token_address AND delivery.event_name = 'TransferBatch'
-							AND delivery.log_index > log.log_index AND delivery.log_index < funded.log_index
-							AND lower(delivery.arguments->>'from') = lower(log.arguments->>'creator')
-							AND lower(delivery.arguments->>'to') = lower(funded.arguments->>'recipient')
+					AND NOT EXISTS (
+						SELECT 1 FROM logs other WHERE other.chain_id = log.chain_id AND other.block_hash = log.block_hash AND other.tx_hash = log.tx_hash
+							AND other.canonical AND other.emitter_address = log.emitter_address AND other.event_name = 'CompleteSetCreated'
+							AND other.log_index BETWEEN log.log_index + 1 AND funded.log_index
 					)
 				ORDER BY funded.log_index LIMIT 1
 			) funding ON log.event_name = 'CompleteSetCreated'
+			LEFT JOIN transactions tx ON tx.chain_id = log.chain_id AND tx.block_hash = log.block_hash AND tx.hash = log.tx_hash AND tx.canonical
+			LEFT JOIN actions action ON action.chain_id = tx.chain_id AND action.block_hash = tx.block_hash AND action.tx_hash = tx.hash
+				AND action.contract_address = tx.to_address AND action.decode_status = 'decoded'
+			LEFT JOIN contracts router ON router.chain_id = tx.chain_id AND router.address = tx.to_address AND router.kind = 'ammRouter' AND router.canonical
+			LEFT JOIN LATERAL (
+				SELECT lower(exit.arguments->>'payoutRecipient') AS recipient
+				FROM logs exit
+				JOIN contracts router ON router.chain_id = exit.chain_id AND router.address = exit.emitter_address
+					AND router.canonical AND router.kind = 'ammRouter'
+				WHERE exit.chain_id = log.chain_id AND exit.block_hash = log.block_hash AND exit.tx_hash = log.tx_hash
+					AND exit.canonical AND exit.log_index > log.log_index AND exit.emitter_address = lower(log.arguments->>'redeemer')
+					AND exit.arguments->>'completeSetShares' = log.arguments->>'completeSetsBurnedAttoShares'
+					AND ((exit.event_name = 'PositionExitedByTransfer' AND lower(exit.arguments->>'pair') = market.pair_address)
+						OR (exit.event_name = 'CompleteSetRedeemedByTransfer' AND lower(exit.arguments->>'questionLedger') = market.pool_address))
+					AND NOT EXISTS (
+						SELECT 1 FROM logs other WHERE other.chain_id = log.chain_id AND other.block_hash = log.block_hash AND other.tx_hash = log.tx_hash
+							AND other.canonical AND other.emitter_address = market.pool_address AND other.event_name = 'CompleteSetRedeemed'
+							AND lower(other.arguments->>'redeemer') = exit.emitter_address AND other.log_index BETWEEN log.log_index + 1 AND exit.log_index
+					)
+				ORDER BY exit.log_index LIMIT 1
+			) payout ON log.event_name = 'CompleteSetRedeemed'
 		), pair_events AS (
 			SELECT market.pair_address, event.block_hash, event.tx_hash, event.block_number, event.log_index,
 				EXTRACT(EPOCH FROM block.timestamp)::bigint AS timestamp_seconds, event.event_name, event.event_data,
@@ -138,7 +169,7 @@ const tradingLegs = (sql: SQL, filter: TradingLegFilter) => {
 				WHEN holder THEN actor
 				WHEN event_name = 'CompleteSetCreated' THEN COALESCE(forwarded_to, actor)
 				ELSE COALESCE(received_from, actor)
-			END AS account,
+			END AS account, payout_recipient, CASE WHEN event_name = 'CompleteSetCreated' THEN payer ELSE COALESCE(received_from, actor) END AS input_owner, mint_log_index, actor AS pool_actor,
 			CASE
 				WHEN companion_name IN ('LiquidityInitialized', 'LiquidityAdded') THEN (companion_data->>'liquidity')::numeric
 				WHEN companion_name = 'Swap' AND event_name = 'CompleteSetCreated' THEN sets + (companion_data->>'amountOut')::numeric
@@ -153,7 +184,7 @@ const tradingLegs = (sql: SQL, filter: TradingLegFilter) => {
 		SELECT pair_event.pair_address, pair_event.block_hash, pair_event.tx_hash, pair_event.block_number, pair_event.log_index, pair_event.timestamp_seconds,
 			CASE pair_event.event_name WHEN 'Swap' THEN 'swap' WHEN 'LiquidityRemoved' THEN 'remove-liquidity' ELSE 'add-liquidity' END AS kind,
 			CASE WHEN pair_event.event_name <> 'Swap' THEN NULL WHEN pair_event.event_data->>'yesForNo' = 'true' THEN 'NO' ELSE 'YES' END AS side,
-			pair_event.recipient AS account,
+			pair_event.recipient AS account, NULL::text AS payout_recipient, pair_event.caller AS input_owner, NULL::integer AS mint_log_index, NULL::text AS pool_actor,
 			(CASE WHEN pair_event.event_name = 'Swap' THEN pair_event.event_data->>'amountOut' ELSE pair_event.event_data->>'liquidity' END)::numeric AS shares,
 			NULL::numeric AS eth_in, NULL::numeric AS eth_out, NULL::integer AS companion_log_index
 		FROM pair_events pair_event
@@ -177,7 +208,7 @@ export type TradingActivityQuery = {
 export const tradingActivityRows = async (sql: SQL, query: TradingActivityQuery) => {
 	const { cursorBlock, cursorLog, cursorTx, queryLimit } = query
 	return await sql`
-		SELECT leg.block_hash, leg.tx_hash, leg.block_number::text, leg.log_index, leg.timestamp_seconds::text, leg.kind, leg.side, leg.account,
+		SELECT leg.block_hash, leg.tx_hash, leg.block_number::text, leg.log_index, leg.timestamp_seconds::text, leg.kind, leg.side, leg.account, leg.payout_recipient, CASE WHEN leg.eth_in > 0 THEN leg.input_owner END AS payer_address,
 			leg.shares::text, leg.eth_in::text AS eth_in_atto_eth, leg.eth_out::text AS eth_out_atto_eth, network.explorer_base_url,
 			(SELECT state.read_result->'collateral' FROM entity_state_snapshots state
 			 JOIN amm_markets market ON market.chain_id = state.chain_id AND market.pool_address = state.entity_identity AND market.canonical
@@ -210,12 +241,24 @@ export const tradingVolumeRows = async (sql: SQL, query: TradingLegFilter & { re
 // Per-market ETH flows attributed to one account plus the evidence needed to value what it still holds.
 export const accountTradingRows = async (sql: SQL, query: { readonly chainId: number; readonly asOfBlock: string; readonly account: string }) => {
 	const { chainId, asOfBlock, account } = query
+	// A pair emits its Swap or liquidity event after transferring output. In a batched transaction only
+	// the next pair operation can explain this particular receipt, including an LP mint.
+	const matchingPairOperation = sql`COALESCE(leg.companion_log_index, leg.log_index) = (
+		SELECT event.log_index FROM amm_trade_events event
+		WHERE event.chain_id = ${chainId} AND event.market_address = position.pair_address AND event.canonical
+			AND event.block_hash = incoming.block_hash AND event.tx_hash = incoming.tx_hash AND event.log_index > incoming.log_index
+			AND event.event_name IN ('Swap', 'LiquidityAdded', 'LiquidityInitialized', 'LiquidityRemoved')
+		ORDER BY event.log_index LIMIT 1
+	)`
+
 	return await sql`
-		WITH flows AS (
-			SELECT leg.pair_address, sum(COALESCE(leg.eth_in, 0)) AS eth_in, sum(COALESCE(leg.eth_out, 0)) AS eth_out, count(*)::integer AS action_count,
+		WITH account_legs AS (
+			${tradingLegs(sql, { chainId, asOfBlock, account })}
+		), flows AS (
+			SELECT leg.pair_address, sum(CASE WHEN leg.input_owner = ${account} THEN COALESCE(leg.eth_in, 0) ELSE 0 END) AS eth_in, sum(CASE WHEN COALESCE(leg.payout_recipient, leg.account) = ${account} THEN COALESCE(leg.eth_out, 0) ELSE 0 END) AS eth_out, count(*)::integer AS action_count,
 				max(leg.block_number) AS last_block
-			FROM (${tradingLegs(sql, { chainId, asOfBlock, account })}) leg
-			WHERE leg.account = ${account}
+			FROM account_legs leg
+			WHERE leg.account = ${account} OR leg.payout_recipient = ${account} OR (leg.eth_in > 0 AND leg.input_owner = ${account})
 			GROUP BY leg.pair_address
 		), markets AS (
 			SELECT DISTINCT ON (market.pair_address) market.pair_address, market.pool_address, market.share_token_address, market.universe_id, market.fee_bps
@@ -223,7 +266,7 @@ export const accountTradingRows = async (sql: SQL, query: { readonly chainId: nu
 			WHERE market.chain_id = ${chainId} AND market.canonical AND market.block_number <= ${asOfBlock}
 			ORDER BY market.pair_address, market.block_number DESC, market.log_index DESC
 		), share_moves AS (
-			SELECT transfer.emitter_address AS token, trunc(item.id::numeric / 256) AS universe_id, mod(item.id::numeric, 256) AS outcome,
+			SELECT transfer.block_hash, transfer.tx_hash, transfer.log_index, lower(transfer.arguments->>'from') AS sender, transfer.emitter_address AS token, trunc(item.id::numeric / 256) AS universe_id, mod(item.id::numeric, 256) AS outcome,
 				CASE WHEN lower(transfer.arguments->>'to') = ${account} THEN item.amount::numeric ELSE -item.amount::numeric END AS delta
 			FROM logs transfer
 			JOIN blocks block ON block.chain_id = transfer.chain_id AND block.hash = transfer.block_hash AND block.canonical
@@ -244,7 +287,7 @@ export const accountTradingRows = async (sql: SQL, query: { readonly chainId: nu
 				COALESCE(sum(delta) FILTER (WHERE outcome = 2), 0) AS no
 			FROM share_moves GROUP BY token, universe_id
 		), lp_moves AS (
-			SELECT event.market_address, lower(event.event_data->>'from') AS sender, lower(event.event_data->>'to') AS receiver, (event.event_data->>'value')::numeric AS amount
+			SELECT event.market_address, event.block_hash, event.tx_hash, event.log_index, lower(event.event_data->>'from') AS sender, lower(event.event_data->>'to') AS receiver, (event.event_data->>'value')::numeric AS amount
 			FROM amm_trade_events event
 			WHERE event.chain_id = ${chainId} AND event.canonical AND event.block_number <= ${asOfBlock} AND event.event_name = 'Transfer'
 				AND event.event_data ? 'from' AND event.event_data ? 'to' AND event.event_data ? 'value'
@@ -261,6 +304,25 @@ export const accountTradingRows = async (sql: SQL, query: { readonly chainId: nu
 			WHERE flows.pair_address IS NOT NULL OR COALESCE(share.invalid, 0) <> 0 OR COALESCE(share.yes, 0) <> 0 OR COALESCE(share.no, 0) <> 0 OR COALESCE(lp.balance, 0) <> 0
 		)
 		SELECT position.pair_address, position.pool_address, question.title AS question_title, position.fee_bps::text,
+			(EXISTS (
+				SELECT 1 FROM share_moves incoming WHERE incoming.token = position.share_token_address AND incoming.universe_id = position.universe_id
+					AND incoming.delta > 0
+					AND NOT EXISTS (
+						SELECT 1 FROM account_legs leg WHERE leg.account = ${account} AND leg.input_owner = ${account} AND leg.pair_address = position.pair_address
+							AND leg.block_hash = incoming.block_hash AND leg.tx_hash = incoming.tx_hash AND (
+								incoming.log_index = leg.mint_log_index OR (incoming.sender = position.pair_address AND ${matchingPairOperation}) OR (incoming.sender = leg.pool_actor AND EXISTS (
+									SELECT 1 FROM contracts sender WHERE sender.chain_id = ${chainId} AND sender.address = incoming.sender AND sender.canonical
+										AND sender.kind = 'ammRouter'
+								))
+							)
+					)
+			) OR EXISTS (SELECT 1 FROM lp_moves incoming WHERE incoming.market_address = position.pair_address AND incoming.amount > 0
+				AND incoming.receiver = ${account} AND incoming.sender <> ${account} AND (
+					incoming.sender <> '0x0000000000000000000000000000000000000000' OR NOT EXISTS (
+						SELECT 1 FROM account_legs leg WHERE leg.account = ${account} AND leg.input_owner = ${account} AND leg.kind = 'add-liquidity'
+							AND leg.pair_address = position.pair_address AND leg.tx_hash = incoming.tx_hash AND leg.block_hash = incoming.block_hash AND ${matchingPairOperation}
+					)))) AS unknown_transfer_basis,
+			lifecycle.read_result->'settlementClaim' AS settlement_claim,
 			position.eth_in::text AS cost_basis_atto_eth, position.eth_out::text AS proceeds_atto_eth, position.action_count,
 			position.invalid::text AS invalid_atto_shares, position.yes::text AS yes_atto_shares, position.no::text AS no_atto_shares,
 			position.lp_balance::text AS lp_tokens,

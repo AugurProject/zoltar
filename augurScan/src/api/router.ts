@@ -9,6 +9,7 @@ import { eventEntityDetailResponse, forkDetailResponse, reportDetailResponse } f
 import { historicalExport } from './exports.ts'
 import { integrityCatalogResponse } from './integrity.ts'
 import { listLogs, logDetail, provenanceHistory, reorganizationHistory } from './logs.ts'
+import { openOracleCustodyResponse } from './open-oracle-custody.ts'
 import { domainCatalogResponse, operationsResponse } from './operations.ts'
 import { addressSecurityPoolResponse, richList } from './security-pool.ts'
 import { riskDetailResponse } from './risk.ts'
@@ -70,6 +71,7 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 		if (url.pathname === '/api/v1/state/catalog') return await stateCatalog(sql, url)
 		if (url.pathname.startsWith('/api/v1/state/')) return await stateHistory(sql, url.pathname.slice('/api/v1/state/'.length).split('/'), url)
 		if (url.pathname === '/api/v1/richlist') return await richList(sql, url)
+		if (url.pathname === '/api/v1/address-open-oracle-custody') return await openOracleCustodyResponse(sql, url)
 		if (url.pathname === '/api/v1/address-identity') return await addressIdentity(sql, url)
 		if (url.pathname === '/api/v1/address-transactions') return await addressTransactions(sql, url)
 		if (url.pathname === '/api/v1/address-interactions') return await addressInteractions(sql, url)

@@ -83,17 +83,13 @@ const signedEth = (value: unknown, asset: ReturnType<typeof collateralUnit>): st
 export const tradingPnlSummary = (item: JsonRecord, _nativeSymbol: string): string => {
 	const asset = collateralUnit(item)
 	const valuation = isPlainRecord(item['valuation']) ? item['valuation'] : {}
-	const exitValue = `${exactUnit(text(item['holdings_value_atto_eth']) ?? '0', asset.decimals, asset.symbol)} exit value${valuation['partial'] === true ? ' (partial, some shares unvalued)' : ''}`
+	const exitValue = `${exactUnit(text(item['holdings_value_atto_eth']) ?? '0', asset.decimals, asset.symbol)} ${valuation['method'] === 'winning-share-settlement' ? 'settlement value' : 'exit value'}${valuation['partial'] === true ? ' (partial, some shares unvalued)' : ''}`
 	const reason = String(valuation['reason'] ?? 'no valuation')
 	const holdings = valuation['status'] === 'available' ? exitValue : `holdings value unavailable (${reason.charAt(0).toLowerCase()}${reason.slice(1)})`
-	return [
-		`${exactUnit(text(item['cost_basis_atto_eth']) ?? '0', asset.decimals, asset.symbol)} paid in`,
-		`${exactUnit(text(item['proceeds_atto_eth']) ?? '0', asset.decimals, asset.symbol)} received`,
-		holdings,
-		`realized ${signedEth(item['realized_pnl_atto_eth'], asset)}`,
-		`unrealized ${signedEth(item['unrealized_pnl_atto_eth'], asset)}`,
-		`net ${signedEth(item['net_pnl_atto_eth'], asset)}`,
-	].join(' · ')
+	const unknownBasis = item['cost_basis_status'] === 'unknown'
+	const paidIn = exactUnit(text(item[unknownBasis ? 'known_cost_atto_eth' : 'cost_basis_atto_eth']) ?? '0', asset.decimals, asset.symbol)
+	const profit = unknownBasis ? ['Profit unavailable'] : [`realized ${signedEth(item['realized_pnl_atto_eth'], asset)}`, `unrealized ${signedEth(item['unrealized_pnl_atto_eth'], asset)}`, `net ${signedEth(item['net_pnl_atto_eth'], asset)}`]
+	return [unknownBasis ? `Unknown cost basis (${paidIn} indexed payments)` : `${paidIn} paid in`, `${exactUnit(text(item['proceeds_atto_eth']) ?? '0', asset.decimals, asset.symbol)} received`, holdings, ...profit].join(' · ')
 }
 
 /** One share-token position: outcome shares in the collateral token's precision, raw units when its metadata is unsampled. */

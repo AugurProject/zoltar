@@ -1,27 +1,17 @@
+import dependencyAbis from '../../config/dependency-abis.json'
 import { runtimeConfig } from '../config.ts'
 import type { ContractDeploymentObservation } from '../database.ts'
-import type { Address, Hash, Log } from '../ethereum.ts'
+import { toEventSelector, type Address, type Hash, type Log } from '../ethereum.ts'
 import { ChainContinuityError, isPrunedHistoricalStateError, isSplittableLogRangeError, queryCanonicalLogRange, requireLogPosition } from '../indexer-runtime.ts'
 import { unixSecondsToDate } from '../time.ts'
 import type { ContractMetadata } from '../types.ts'
 import { uniswapDiscoveryTopics } from '../uniswap.ts'
-import {
-	chunks,
-	type DeploymentAwareLogPlan,
-	type LogScanInput,
-	mapLimit,
-	planDeploymentAwareLogScan as planDeploymentAwareLogScanFromRpc,
-	queryAdaptiveLogRange,
-	type RpcBlockHeader,
-	rpcLogQueryGroups,
-	uniswapV2PairCreatedEvent,
-	uniswapV3PoolCreatedEvent,
-	uniswapV4InitializeEvent,
-	uniswapV4PoolIds,
-	uniswapV4SwapEvent,
-} from './planning.ts'
+import { chunks, type DeploymentAwareLogPlan, type LogScanInput, mapLimit, planDeploymentAwareLogScan as planDeploymentAwareLogScanFromRpc, queryAdaptiveLogRange, type RpcBlockHeader, rpcLogQueryGroups, uniswapV2PairCreatedEvent, uniswapV3PoolCreatedEvent, uniswapV4PoolIds } from './planning.ts'
 import { getBlockHeader, type HistoricalStateContext, historicalCodeUnavailable, rememberHistoricalCodeUnavailable, discoverStateStartBlock, rpcFailureReason } from './network-provider.ts'
 import type { NetworkIndexerState, ProviderState } from './network-state.ts'
+
+// Each pool-scoped event in the pinned PoolManager ABI has its PoolId in topic 1.
+const poolManagerEventTopics = dependencyAbis.uniswapV4PoolManager.filter(entry => entry.type === 'event' && entry.inputs?.[0]?.internalType === 'PoolId' && 'indexed' in entry.inputs[0] && entry.inputs[0].indexed).map(toEventSelector)
 
 async function queryLogs(providers: ProviderState, toBlock: bigint, inputs: readonly LogScanInput[], contracts: ReadonlyMap<string, ContractMetadata>): Promise<readonly Log[]> {
 	const filteredKinds = new Set(['uniswapV2Factory', 'uniswapV3Factory', 'uniswapV4PoolManager'])
@@ -36,11 +26,10 @@ async function queryLogs(providers: ProviderState, toBlock: bigint, inputs: read
 	const v3Pages = await mapLimit(v3Queries, 3, ({ input, token0, token1 }) => providers.logClient.getLogs({ address: input.address, event: uniswapV3PoolCreatedEvent, args: { token0, token1 }, fromBlock: input.fromBlock, toBlock }))
 	const poolIdGroups = chunks(uniswapV4PoolIds(contracts), 256)
 	const v4Queries = inputsOfKind('uniswapV4PoolManager').flatMap(input => poolIdGroups.map(ids => ({ input, ids })))
-	const initializePages = await mapLimit(v4Queries, 3, ({ input, ids }) => providers.logClient.getLogs({ address: input.address, event: uniswapV4InitializeEvent, args: { id: ids }, fromBlock: input.fromBlock, toBlock }))
-	const swapPages = await mapLimit(v4Queries, 3, ({ input, ids }) => providers.logClient.getLogs({ address: input.address, event: uniswapV4SwapEvent, args: { id: ids }, fromBlock: input.fromBlock, toBlock }))
+	const v4Pages = await mapLimit(v4Queries, 3, ({ input, ids }) => providers.logClient.getLogs({ address: input.address, topics: [poolManagerEventTopics, ids], fromBlock: input.fromBlock, toBlock }))
 	const reputationTokens = new Set([...contracts.values()].filter(contract => contract.kind === 'reputationToken').map(contract => contract.address.slice(2).toLowerCase()))
 	const unique = new Map<string, Log>()
-	for (const log of [...ordinaryPages.flat(), ...v2Pages.flat(), ...v3Pages.flat(), ...initializePages.flat(), ...swapPages.flat()]) {
+	for (const log of [...ordinaryPages.flat(), ...v2Pages.flat(), ...v3Pages.flat(), ...v4Pages.flat()]) {
 		const position = requireLogPosition(log)
 		const input = inputs.find(({ address }) => address.toLowerCase() === log.address.toLowerCase())
 		if (input === undefined || position.blockNumber < input.fromBlock || position.blockNumber > toBlock) throw new ChainContinuityError(`RPC returned a log outside its requested deployment-aware range through ${toBlock}`)
@@ -99,7 +88,8 @@ export async function getNextLogSegment(
 	state: HistoricalStateContext,
 	fromBlock: bigint,
 	maximumToBlock: bigint,
-	contracts: readonly ContractMetadata[],
+	logSources: readonly ContractMetadata[],
+	contracts: ReadonlyMap<string, ContractMetadata>,
 ): Promise<{
 	readonly toBlock: bigint
 	readonly logs: readonly Log[]
@@ -108,7 +98,7 @@ export async function getNextLogSegment(
 	readonly scanInputs: readonly LogScanInput[]
 	readonly deploymentObservations: readonly ContractDeploymentObservation[]
 }> {
-	if (contracts.length === 0) {
+	if (logSources.length === 0) {
 		const maximum = fromBlock + BigInt(runtimeConfig.logScanRangeSize - 1)
 		return { toBlock: maximum < maximumToBlock ? maximum : maximumToBlock, logs: [], scanInputs: [], deploymentObservations: [] }
 	}
@@ -122,7 +112,6 @@ export async function getNextLogSegment(
 		async (rangeStart, rangeEnd) => {
 			let plan: DeploymentAwareLogPlan | undefined
 			let rangeEndHeader: RpcBlockHeader | undefined
-			const contractMap = new Map(contracts.map(contract => [contract.address.toLowerCase(), contract]))
 			const range = await queryCanonicalLogRange(
 				rangeEnd,
 				async () => {
@@ -130,8 +119,8 @@ export async function getNextLogSegment(
 					return rangeEndHeader.hash
 				},
 				async () => {
-					plan = await planDeploymentAwareLogScan(state, contracts, rangeStart, rangeEnd)
-					return await queryLogs(state.providers, rangeEnd, plan.inputs, contractMap)
+					plan = await planDeploymentAwareLogScan(state, logSources, rangeStart, rangeEnd)
+					return await queryLogs(state.providers, rangeEnd, plan.inputs, contracts)
 				},
 			)
 			endBlockHash = range.endBlockHash
