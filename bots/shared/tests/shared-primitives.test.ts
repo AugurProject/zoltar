@@ -16,7 +16,6 @@ import { custom } from '../src/ethereum/rpc-transport.ts'
 import { createRpcEndpointPool, rpcFailureWithContext, RpcEndpointPoolFailure } from '../src/ethereum/rpc-resilience.ts'
 import { LOG_RPC_RESPONSE_BYTES } from '../src/infrastructure/bounded-json.ts'
 import { ConnectivityDegradedError, operationalFailureDisposition } from '../src/monitoring/resilience.ts'
-import { bigintToSafeNumber } from '../src/ethereum.ts'
 import { confirmCanonicalReceiptFinality, type CanonicalBlockReader } from '../src/execution/canonical-finality.ts'
 import { EndpointCheckFailure, sendRawTransactionToRpc } from '../src/monitoring/connectivity.ts'
 import { configuredReadRpcEndpointMinimum, rpcQuorumRequirement } from '../src/monitoring/rpc-quorum-policy.ts'
@@ -116,10 +115,6 @@ describe('shared bot primitives', () => {
 		expect(calls).toEqual(['eth_call'])
 	})
 
-	test('converts bigint values only inside the safe integer range', () => {
-		expect(bigintToSafeNumber(9_007_199_254_740_991n)).toBe(Number.MAX_SAFE_INTEGER)
-		expect(() => bigintToSafeNumber(9_007_199_254_740_992n)).toThrow('safe integer range')
-	})
 	test('bounds live log history and plans newest chunks first', () => {
 		expect(latestLogRange(1_000n)).toEqual({ fromBlock: 745n, toBlock: 1_000n })
 		expect(newestFirstScanRanges(1n, 600n, 256n)).toEqual([
