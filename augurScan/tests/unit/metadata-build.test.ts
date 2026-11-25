@@ -55,7 +55,12 @@ test('builds scanner metadata from source with verified compiler caches and vend
 			await cp(path.join(repositoryRoot, relative), destination, { recursive: true })
 		}
 		for (const directory of ['node_modules', 'solidity/node_modules', 'shared/core/node_modules']) await symlink(path.join(repositoryRoot, directory), path.join(workspace, directory), 'dir')
-		const build = Bun.spawn([process.execPath, 'run', 'build'], { cwd: path.join(workspace, 'augurScan'), stdout: 'pipe', stderr: 'pipe' })
+		const build = Bun.spawn([process.execPath, 'run', 'build'], {
+			cwd: path.join(workspace, 'augurScan'),
+			env: { ...process.env, GITHUB_WORKSPACE: repositoryRoot, ZOLTAR_AUGUR_SCAN_METADATA_CURRENT: '1' },
+			stdout: 'pipe',
+			stderr: 'pipe',
+		})
 		const [status, stdout, stderr] = await Promise.all([build.exited, new Response(build.stdout).text(), new Response(build.stderr).text()])
 		expect(status, `${stdout}\n${stderr}`).toBe(0)
 		for (const output of ['abis.json', 'system-contracts.generated.ts', 'dependency-abis.json', 'manifests/mainnet.json', 'manifests/sepolia.json', 'manifests/mainnet-no.json', 'manifests/sepolia-no.json']) expect(await Bun.file(path.join(workspace, 'augurScan/config', output)).exists(), output).toBe(true)
