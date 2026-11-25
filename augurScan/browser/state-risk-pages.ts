@@ -3,8 +3,9 @@ import { collateralUnit } from '../src/collateral.ts'
 import { protocolIdHex } from './identifier-format.ts'
 import type { EntityHistory, PoolRecord, StateEntity, StateTab } from './browser-types.ts'
 import { uniswapLiquidityChartModel, uniswapPriceChartModel, uniswapPriceProvenance } from './chart-values.ts'
-import { exactUnit, percentFromBps } from './format.ts'
+import { collateralPriceDecimals, exactUnit, percentFromBps } from './format.ts'
 import type { createOperationsComponents } from './operations-components.ts'
+import { priceDecisionSummary } from './semantic-evidence.ts'
 import type { createStateComponents } from './state-components.ts'
 
 type OperationsComponents = ReturnType<typeof createOperationsComponents>
@@ -53,7 +54,14 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 	fragment.append(
 		operationsPanel(
 			'OpenOracle coordinator state and history',
-			openOracleHistory.map(observation => operationRow(String(observation['event_name'] ?? 'Coordinator transition'), String(observation['summary'] ?? 'Canonical OpenOracle coordinator evidence'), String(observation['coordinator_address'] ?? poolItem.coordinator_address), observation['block_number'])),
+			openOracleHistory.map(observation =>
+				operationRow(
+					String(observation['event_name'] ?? 'Coordinator transition'),
+					priceDecisionSummary(observation, deps.nativeSymbol(poolItem.chain_id), poolCollateral) ?? String(observation['summary'] ?? 'Canonical OpenOracle coordinator evidence'),
+					String(observation['coordinator_address'] ?? poolItem.coordinator_address),
+					observation['block_number'],
+				),
+			),
 			'No OpenOracle coordinator state transitions match this view.',
 		),
 	)
@@ -63,7 +71,7 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 		metricCard('Share-token supply', poolItem.share_token_supply_atto_shares == null ? 'No checkpoint' : exactUnit(poolItem.share_token_supply_atto_shares, poolCollateral.decimals, 'shares')),
 		metricCard('Conditional YES', latestAmmPrice === undefined ? 'No AMM price' : exactUnit(latestAmmPrice.conditional_yes_bps, 2, '%')),
 		metricCard('Conditional NO', latestAmmPrice === undefined ? 'No AMM price' : exactUnit(latestAmmPrice.conditional_no_bps, 2, '%')),
-		metricCard(`REP / ${poolNativeSymbol}`, latestRepEthPrice === undefined ? 'No coordinator price' : exactUnit(latestRepEthPrice.rep_per_eth_1e18, Math.max(0, 36 - poolCollateral.decimals), `REP/${poolNativeSymbol}`)),
+		metricCard(`REP / ${poolNativeSymbol}`, latestRepEthPrice === undefined ? 'No coordinator price' : exactUnit(latestRepEthPrice.rep_per_eth_1e18, collateralPriceDecimals(poolCollateral.decimals), `REP/${poolNativeSymbol}`)),
 		metricCard('Latest Uniswap spot', latestUniswapPrice === undefined ? 'No Uniswap price' : exactUnit(latestUniswapPrice.rep_per_eth_1e18, 18, `REP/${latestUniswapPrice.quote_symbol}`), latestUniswapPrice === undefined ? undefined : uniswapPriceProvenance(latestUniswapPrice)),
 		metricCard('AMM market', history.market === undefined ? 'Unavailable' : `${number(ammPrices.length)} observations`),
 	)
@@ -116,10 +124,10 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 					key: 'rep_per_eth_1e18',
 					label: `REP per ${poolNativeSymbol}`,
 					unit: `REP/${poolNativeSymbol}`,
-					decimals: Math.max(0, 36 - poolCollateral.decimals),
+					decimals: collateralPriceDecimals(poolCollateral.decimals),
 				},
 			],
-			'Each point is a settlement the coordinator accepted (PriceReported).',
+			'Each point shows the feed’s canonical price after a report was accepted. Reports for the same observation time can leave the price unchanged.',
 			{ emptyMessage: 'No collateral / REP coordinator price observations match this view.' },
 		),
 	)

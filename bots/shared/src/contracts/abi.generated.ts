@@ -1003,6 +1003,18 @@ export const sharedPoolPriceFeedAbi = [
 	},
 	{
 		type: 'event',
+		name: 'PriceCandidateAccepted',
+		anonymous: false,
+		inputs: [
+			{ name: 'reportId', type: 'uint256', internalType: 'uint256', indexed: true },
+			{ name: 'candidatePrice', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'canonicalPrice', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'observationTimestamp', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'canonicalUpdated', type: 'bool', internalType: 'bool', indexed: false },
+		],
+	},
+	{
+		type: 'event',
 		name: 'PriceReportDeferred',
 		anonymous: false,
 		inputs: [

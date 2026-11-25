@@ -1,6 +1,6 @@
 import { expect } from 'bun:test'
 import { withBrowserPage } from '../../../tooling/ui/browserSmoke.mts'
-import { browserTest, desktopViewport, origin, qaViewports } from './browser-test.ts'
+import { browserTest, desktopViewport, origin, qaViewports, writeScreenshot } from './browser-test.ts'
 
 for (const viewport of qaViewports)
 	browserTest(
@@ -29,6 +29,30 @@ for (const viewport of qaViewports)
 				expect(decisions).toContain('Escrow settled the report; the feed rejected its price')
 				expect(decisions).toContain('PriceReportRejected')
 				expect(await evaluate(`document.documentElement.scrollWidth <= document.documentElement.clientWidth`)).toBe(true)
+			})
+		},
+		30_000,
+	)
+
+for (const viewport of qaViewports)
+	browserTest(
+		`report detail shows the candidate and canonical prices independently at ${viewport.width}x${viewport.height}`,
+		async () => {
+			await withBrowserPage(`${origin}/report/0x529dcac57677451cbfe766d88ccc133d082500df/1842?demo=1&chainId=1&tab=evidence&acceptedCandidate=1`, viewport, async session => {
+				const { evaluate, waitFor } = session
+				const row = (name: string) => `[...document.querySelectorAll('#operations-content .operations-row')].find(row => row.querySelector('strong')?.textContent === ${JSON.stringify(name)})`
+				await waitFor(`${row('PriceCandidateAccepted')}?.checkVisibility()`)
+				expect(await evaluate(`${row('PriceCandidateAccepted')}?.textContent`)).toContain('Candidate Price: 300 raw price units · Canonical Price: 200 raw price units · Observation Timestamp: 2026-01-01 00:01:00 UTC · Canonical Updated: No')
+				const canonical = await evaluate(`${row('PriceReported')}?.textContent`)
+				expect(canonical).toContain('Canonical Price: 200 raw price units')
+				expect(canonical).not.toContain('Candidate Price')
+				expect(await evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth')).toBe(true)
+				expect(session.issues).toEqual([])
+				const captureDir = process.env['AUGURSCAN_SCREENSHOT_DIR']
+				if (captureDir !== undefined) {
+					await evaluate(`${row('PriceCandidateAccepted')}?.closest('.operations-panel')?.scrollIntoView({ block: 'start' })`)
+					await writeScreenshot(session, `${captureDir}/ops-candidate-price-${viewport.width}x${viewport.height}.png`)
+				}
 			})
 		},
 		30_000,

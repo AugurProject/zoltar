@@ -190,13 +190,14 @@ export const expectTradingAndSecurityPoolPagination = async ({ database, operati
 	const selfTransferResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading/${operationsChainId}/${selfTransferMarket}`), database.sql)
 	if (selfTransferResponse === undefined) throw new Error('self-transfer trading endpoint did not return a response')
 	const selfTransfer = (await selfTransferResponse.json()) as {
-		data: { lpPositions: Array<{ address: string; received_liquidity: string; sent_liquidity: string; balance: string }> }
+		data: { lpPositions: Array<{ address: string; received_liquidity: string; sent_liquidity: string; balance: string; observed_balance_delta: string }> }
 	}
 	expect(selfTransfer.data.lpPositions).toContainEqual({
 		address: address.toLowerCase(),
 		received_liquidity: '1001',
 		sent_liquidity: '999',
 		balance: '2',
+		observed_balance_delta: '2',
 	})
 
 	const securityPoolResponse = await handleApi(new Request(`http://localhost/api/v1/state/address-security-pool?chainId=${operationsChainId}&address=${address.toLowerCase()}`), database.sql)

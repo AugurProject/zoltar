@@ -101,15 +101,25 @@ export const sharePositions = async (sql: SQL, chainId: number, snapshotBlock: s
 // Refunds are amounts of the auction's immutable collateral token, so the latest tagged auction read that sampled it names their units.
 export const pendingAuctionRefunds = async (sql: SQL, chainId: number, snapshotBlock: string, address: string, limit = 251, offset = 0) =>
 	await sql`
-		SELECT refunds.total, refunds.auction_address, refunds.pending_atto_eth, ${latestAuctionCollateral(sql, chainId, snapshotBlock, sql`refunds.auction_address`)} AS collateral
-		FROM (
-			SELECT count(*) OVER ()::integer AS total, auction_address, sum(CASE WHEN event_name = 'BidSettled' THEN (event_data->>'refundAttoEth')::numeric ELSE -(event_data->>'amountAttoEth')::numeric END)::text AS pending_atto_eth
+		WITH bidder_events AS (
+			SELECT auction_address, event_name, event_data, block_number, log_index
 			FROM collateral_repair_auction_events WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
 				AND event_name IN ('BidSettled', 'RefundWithdrawn') AND lower(event_data->>'bidder') = ${address}
-			GROUP BY auction_address
-			HAVING sum(CASE WHEN event_name = 'BidSettled' THEN (event_data->>'refundAttoEth')::numeric ELSE -(event_data->>'amountAttoEth')::numeric END) <> 0
-			ORDER BY auction_address LIMIT ${limit} OFFSET ${offset}
-		) refunds
+		), latest_withdrawal AS (
+			SELECT DISTINCT ON (auction_address) auction_address, block_number, log_index
+			FROM bidder_events WHERE event_name = 'RefundWithdrawn'
+			ORDER BY auction_address, block_number DESC, log_index DESC
+		), refunds AS (
+			SELECT count(*) OVER ()::integer AS total, credit.auction_address, sum((credit.event_data->>'refundAttoEth')::numeric)::text AS pending_atto_eth
+			FROM bidder_events credit LEFT JOIN latest_withdrawal withdrawal USING (auction_address)
+			WHERE credit.event_name = 'BidSettled' AND (
+				withdrawal.block_number IS NULL OR (credit.block_number, credit.log_index) > (withdrawal.block_number, withdrawal.log_index)
+			)
+			GROUP BY credit.auction_address HAVING sum((credit.event_data->>'refundAttoEth')::numeric) > 0
+			ORDER BY credit.auction_address LIMIT ${limit} OFFSET ${offset}
+		)
+		SELECT refunds.total, refunds.auction_address, refunds.pending_atto_eth, ${latestAuctionCollateral(sql, chainId, snapshotBlock, sql`refunds.auction_address`)} AS collateral
+		FROM refunds
 		ORDER BY refunds.auction_address
 	`
 

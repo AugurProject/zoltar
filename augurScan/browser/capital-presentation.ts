@@ -1,6 +1,6 @@
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 import { collateralUnit } from '../src/collateral.ts'
-import { exactNumber, exactUnit, percentFromBps, utcDateTime } from './format.ts'
+import { collateralPriceDecimals, exactNumber, exactUnit, percentFromBps, utcDateTime } from './format.ts'
 import { shortIdentifier } from './identifier-format.ts'
 
 // A capital position is one owner's principal and commitment in the capital ledger of one security pool universe.
@@ -48,7 +48,7 @@ export const capitalSummaryMetrics = (state: Readonly<Record<string, unknown>>):
 		['Commitment', amount(state['commitmentAttoEth'], collateral.decimals, collateral.symbol)],
 		['Health factor', capitalHealthText(state['healthFactorBps'])],
 		['Withdrawable', amount(state['withdrawableAttoRep'], 18, 'REP')],
-		['Unclaimed earnings', `${amount(state['unclaimedFeesAttoEth'], collateral.decimals, collateral.symbol)} · ${amount(state['unclaimedFeesAttoRep'], 18, 'REP')}`],
+		['Credited fees awaiting claim', `${amount(state['unclaimedFeesAttoEth'], collateral.decimals, collateral.symbol)} · ${amount(state['unclaimedFeesAttoRep'], 18, 'REP')}`],
 	]
 }
 
@@ -61,7 +61,7 @@ export const capitalLedgerSummary = (state: Readonly<Record<string, unknown>>, o
 		`${amount(state['pledgedAttoRep'], 18, 'REP')} pledged`,
 		`${amount(state['commitmentAttoEth'], collateral.decimals, collateral.symbol)} committed`,
 		`${amount(state['healthyCommitmentAttoEth'], collateral.decimals, collateral.symbol)} healthy`,
-		acceptedPrice === undefined || acceptedPrice === '0' ? 'No accepted price' : `${exactUnit(acceptedPrice, Math.max(0, 36 - collateral.decimals), `REP/${collateral.symbol}`)} · ${state['priceValid'] === true ? 'price fresh' : 'price expired'}`,
+		acceptedPrice === undefined || acceptedPrice === '0' ? 'No accepted price' : `${exactUnit(acceptedPrice, collateralPriceDecimals(collateral.decimals), `REP/${collateral.symbol}`)} · ${state['priceValid'] === true ? 'price fresh' : 'price expired'}`,
 		...(owners === undefined ? [] : [`${exactNumber(owners)} ${owners === '1' ? 'owner' : 'owners'}`]),
 	].join(' · ')
 }
@@ -131,7 +131,7 @@ export const liquidationSummary = (item: Readonly<Record<string, unknown>>, { un
 
 /**
  * One universe's fee economics in two lines: the configured rates with what has accrued and been funded, and
- * what owners claimed, what was burned unassigned, and what is still vesting. Collateral amounts use the
+ * what owners claimed, what the capital ledger burned, and what the fee stream has yet to release. Collateral amounts use the
  * ledger's collateral token.
  */
 export const feeEconomicsSummary = (item: Readonly<Record<string, unknown>>): { readonly rates: string; readonly flows: string } => {
@@ -140,8 +140,8 @@ export const feeEconomicsSummary = (item: Readonly<Record<string, unknown>>): { 
 	const fees = isPlainRecord(item['fees']) ? item['fees'] : undefined
 	const rate = (value: unknown) => (integer(value) === undefined ? 'unavailable' : percentFromBps(String(value)))
 	return {
-		rates: fees === undefined ? 'Rates unavailable' : `${rate(fees['annualFeeBps'])} annual holding fee · ${rate(fees['purchaseFeeBps'])} base purchase fee · ${cash(fees['vestingOutstandingAttoEth'])} vesting to owners`,
-		flows: `${cash(item['accrued_atto_eth'])} holding fees accrued · ${cash(item['purchase_fees_atto_eth'])} purchase charges, ${cash(item['earnings_funded_atto_eth'])} to owners · ${cash(item['claimed_atto_eth'])} and ${amount(item['claimed_atto_rep'], 18, 'REP')} claimed · ${cash(item['burned_atto_eth'])} and ${amount(item['burned_atto_rep'], 18, 'REP')} burned unassigned`,
+		rates: fees === undefined ? 'Rates unavailable' : `${rate(fees['annualFeeBps'])} annual holding fee · ${rate(fees['purchaseFeeBps'])} base purchase fee · ${cash(fees['vestingOutstandingAttoEth'])} unreleased owner fees`,
+		flows: `${cash(item['accrued_atto_eth'])} holding fees accrued · ${cash(item['purchase_fees_atto_eth'])} purchase charges, ${cash(item['earnings_funded_atto_eth'])} to owners · ${cash(item['claimed_atto_eth'])} and ${amount(item['claimed_atto_rep'], 18, 'REP')} claimed · ${cash(item['burned_atto_eth'])} and ${amount(item['burned_atto_rep'], 18, 'REP')} burned by the capital ledger`,
 	}
 }
 
@@ -151,7 +151,7 @@ export const questionFeeStreamSummary = (item: Readonly<Record<string, unknown>>
 	if (rate === undefined) return 'Fee stream unavailable'
 	if (rate === '0') return 'No fee stream'
 	const end = integer(item['end_timestamp'])
-	if (end === undefined) return 'Active fee stream'
+	if (end === undefined) return 'Scheduled fee stream'
 	const date = utcDateTime(Number(end) * 1000)
-	return asOfSeconds !== undefined && BigInt(end) <= asOfSeconds ? `Ended ${date}` : `Active fee stream · ends ${date}`
+	return asOfSeconds !== undefined && BigInt(end) <= asOfSeconds ? `Ended ${date}` : `Scheduled fee stream · ends ${date}`
 }

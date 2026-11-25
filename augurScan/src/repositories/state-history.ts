@@ -13,11 +13,18 @@ export const stateHistoryNetwork = async (sql: SQL, chainId: number) => await sq
 
 export const poolStateHistory = async (sql: SQL, address: string, query: StateHistoryQuery) => {
 	const { chainId, fromBlock, toBlock, queryLimit, offset } = query
+	// This pool-level view has one chart. Use the same market at the requested
+	// boundary for the market link and for every observation in that chart.
+	const selectedMarket = sql`
+		SELECT market.* FROM amm_markets market
+		WHERE market.chain_id = ${chainId} AND market.pool_address = ${address} AND market.canonical AND market.block_number <= ${toBlock}
+		ORDER BY market.block_number DESC, market.log_index DESC, market.pair_address LIMIT 1
+	`
 	const [snapshots, events, markets, ammPrices, repEthPrices, uniswapRepEthPrices, openOracleHistory] = await Promise.all([
 		sql`SELECT s.*, b.timestamp FROM pool_snapshots s JOIN blocks b ON b.chain_id = s.chain_id AND b.hash = s.block_hash WHERE s.chain_id = ${chainId} AND s.pool_address = ${address} AND s.canonical AND s.block_number BETWEEN ${fromBlock} AND ${toBlock} ORDER BY s.block_number DESC, s.log_index DESC, s.tx_hash DESC, s.block_hash DESC LIMIT ${queryLimit} OFFSET ${offset}`,
 		sql`SELECT e.*, b.timestamp FROM pool_state_events e JOIN blocks b ON b.chain_id = e.chain_id AND b.hash = e.block_hash WHERE e.chain_id = ${chainId} AND e.pool_address = ${address} AND e.canonical AND e.block_number BETWEEN ${fromBlock} AND ${toBlock} ORDER BY e.block_number DESC, e.log_index DESC, e.tx_hash DESC, e.block_hash DESC LIMIT ${queryLimit} OFFSET ${offset}`,
-		sql`SELECT market.chain_id::text AS chain_id, market.block_hash, market.tx_hash, market.log_index, market.block_number::text AS block_number, market.pair_address, market.pool_address, market.share_token_address, market.universe_id::text AS universe_id, market.fee_bps::text AS fee_bps, market.canonical, block.timestamp FROM amm_markets market JOIN blocks block ON block.chain_id = market.chain_id AND block.hash = market.block_hash WHERE market.chain_id = ${chainId} AND market.pool_address = ${address} AND market.canonical AND market.block_number <= ${toBlock} ORDER BY market.block_number DESC, market.log_index DESC LIMIT 1`,
-		sql`SELECT price.chain_id::text AS chain_id, price.block_hash, price.tx_hash, price.log_index, price.block_number::text AS block_number, price.pair_address, price.yes_reserve_atto_shares::text AS yes_reserve_atto_shares, price.no_reserve_atto_shares::text AS no_reserve_atto_shares, price.conditional_yes_bps::text AS conditional_yes_bps, price.conditional_no_bps::text AS conditional_no_bps, price.canonical, block.timestamp FROM amm_price_snapshots price JOIN blocks block ON block.chain_id = price.chain_id AND block.hash = price.block_hash JOIN amm_markets market ON market.chain_id = price.chain_id AND market.pair_address = price.pair_address AND market.canonical WHERE price.chain_id = ${chainId} AND market.pool_address = ${address} AND price.canonical AND price.block_number BETWEEN ${fromBlock} AND ${toBlock} ORDER BY price.block_number DESC, price.log_index DESC, price.tx_hash DESC, price.block_hash DESC, price.pair_address LIMIT ${queryLimit} OFFSET ${offset}`,
+		sql`SELECT market.chain_id::text AS chain_id, market.block_hash, market.tx_hash, market.log_index, market.block_number::text AS block_number, market.pair_address, market.pool_address, market.share_token_address, market.universe_id::text AS universe_id, market.fee_bps::text AS fee_bps, market.canonical, block.timestamp FROM (${selectedMarket}) market JOIN blocks block ON block.chain_id = market.chain_id AND block.hash = market.block_hash`,
+		sql`SELECT price.chain_id::text AS chain_id, price.block_hash, price.tx_hash, price.log_index, price.block_number::text AS block_number, price.pair_address, price.yes_reserve_atto_shares::text AS yes_reserve_atto_shares, price.no_reserve_atto_shares::text AS no_reserve_atto_shares, price.conditional_yes_bps::text AS conditional_yes_bps, price.conditional_no_bps::text AS conditional_no_bps, price.canonical, block.timestamp FROM amm_price_snapshots price JOIN blocks block ON block.chain_id = price.chain_id AND block.hash = price.block_hash JOIN (${selectedMarket}) market ON market.chain_id = price.chain_id AND market.pair_address = price.pair_address WHERE price.canonical AND price.block_number BETWEEN ${fromBlock} AND ${toBlock} ORDER BY price.block_number DESC, price.log_index DESC, price.tx_hash DESC, price.block_hash DESC, price.pair_address LIMIT ${queryLimit} OFFSET ${offset}`,
 		sql`SELECT price.chain_id::text AS chain_id, price.block_hash, price.tx_hash, price.log_index,
 			price.block_number::text AS block_number, price.coordinator_address, price.event_name,
 			price.report_id::text AS report_id, price.rep_per_eth_1e18::text AS rep_per_eth_1e18,
@@ -102,7 +109,7 @@ export const poolStateHistory = async (sql: SQL, address: string, query: StateHi
 			WHERE pool.chain_id = ${chainId} AND pool.pool_address = ${address} AND pool.canonical AND log.canonical
 				AND log.block_number BETWEEN ${fromBlock} AND ${toBlock}
 				AND log.event_name IN (
-					'PriceRequested', 'PriceReportDeferred', 'PriceReportRejected', 'PriceReported', 'PendingReportRecovered',
+					'PriceRequested', 'PriceReportDeferred', 'PriceReportRejected', 'PriceReported', 'PriceCandidateAccepted', 'PendingReportRecovered',
 					'ReportFundingAssigned', 'ReportOperationAttempted', 'ExposureCheckpoint'
 				)
 			ORDER BY log.block_number DESC, log.transaction_index DESC, log.log_index DESC, log.tx_hash DESC, log.block_hash DESC

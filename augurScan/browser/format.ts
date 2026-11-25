@@ -18,13 +18,20 @@ export const percentFromBps = (value: string | number | bigint | null | undefine
 export const utcDateTime = (value: string | number | Date | null | undefined): string => {
 	if (value === null || value === undefined || value === '') return '—'
 	const date = new Date(value)
-	return Number.isNaN(date.getTime()) ? '—' : `${date.toISOString().slice(0, 10)} ${date.toISOString().slice(11, 19)} UTC`
+	if (Number.isNaN(date.getTime())) return '—'
+	const year = date.getUTCFullYear()
+	const displayYear = year < 0 ? `-${String(-year).padStart(4, '0')}` : String(year).padStart(4, '0')
+	return `${displayYear}${date.toISOString().slice(-20, -5).replace('T', ' ')} UTC`
 }
 
 const scaledAmount = (value: string | number | bigint | null | undefined, decimals: number): { readonly sign: string; readonly whole: string; readonly fraction: string } | undefined => {
 	if (value === null || value === undefined) return undefined
 	// Atomic token amounts are whole numbers; anything else ('null', '1.5', '1e+21') cannot be scaled exactly.
 	if (!/^-?\d+$/.test(String(value))) return undefined
+	if (decimals < 0) {
+		const whole = (BigInt(value) * 10n ** BigInt(-decimals)).toString()
+		return { sign: whole.startsWith('-') ? '-' : '', whole: whole.replace('-', ''), fraction: '' }
+	}
 	const digits = String(value)
 		.replace('-', '')
 		.padStart(decimals + 1, '0')
@@ -57,3 +64,6 @@ export const tokenDecimals = (value: string | number | null | undefined): number
 	const decimals = Number(value)
 	return Number.isInteger(decimals) && decimals >= 0 && decimals <= 255 ? decimals : 18
 }
+
+/** Decimal scale of a feed price in REP per whole collateral token. */
+export const collateralPriceDecimals = (tokenDecimals: number): number => 36 - tokenDecimals

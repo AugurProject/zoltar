@@ -179,7 +179,12 @@ export const staleSettlementWarning = 'Settlement will clear this report, but th
 export const staleSettledReportWarning = 'Request a new price.'
 export const expiredReportPrice = 'This report’s price has expired.'
 export const reportPriceRejected = 'Report settled; price rejected'
-export const poolPriceAccepted = 'Security pool accepted this price.'
+export const poolPriceAccepted = 'Security pool accepted the report.'
+export const candidatePrice = 'Candidate price'
+export const canonicalPrice = 'Canonical price'
+export const rawPriceUnits = 'raw price units'
+export const poolPriceObservationUpdated = 'Report accepted. The feed updated its canonical observation.'
+export const poolPriceObservationRetained = 'Report accepted. The feed kept its canonical observation.'
 
 export function formatPriceSettlementRejection(reason: string) {
 	if (reason === 'Security pool reporting window closed') return 'Reporting is closed in this security pool universe. Check its fork and branch status.'

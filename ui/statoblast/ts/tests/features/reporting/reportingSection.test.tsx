@@ -2733,9 +2733,9 @@ describe('ReportingSection', () => {
 	}
 	test('keeps deadline guidance visible once the calendar alarm time has passed', async () => {
 		const details = createReportingDetails({ currentTime: 150n, escalationEndTime: 1950n })
-		await renderReportingSection({ reportingDetails: details })
-		expect(document.body.textContent).toContain('Check back before')
-		expect(within(document.body).queryByRole('button', { name: 'Add reminder (.ics)' })).toBeNull()
+		const { container } = await renderReportingSection({ reportingDetails: details })
+		expect(container.textContent).toContain('Check back before')
+		expect(within(container).queryByRole('button', { name: 'Add reminder (.ics)' })).toBeNull()
 	})
 
 	test('writes the calendar reminder status with rounded REP amounts', () => {

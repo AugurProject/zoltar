@@ -1,6 +1,6 @@
 import { callTraceRows } from '../../browser/call-trace.ts'
 import { expect, test } from 'bun:test'
-import { semanticFields, semanticSummary, timelineEntityPath, timelineTransitionSummary } from '../../browser/semantic-evidence.ts'
+import { priceDecisionSummary, semanticFields, semanticSummary, timelineEntityPath, timelineTransitionSummary } from '../../browser/semantic-evidence.ts'
 import { getAddress, keccak256 } from '../../src/ethereum.ts'
 import { projectionsFrom } from '../../src/projections.ts'
 
@@ -100,7 +100,7 @@ test('formats the entity type emitted by the production price projection', () =>
 		decoded: { status: 'decoded', name: 'PriceReported', summary: 'Price reported', arguments: { reportId: '7', price: (2n * 10n ** 30n).toString(), lastSettlementTimestamp: '1750000000' } },
 	}).find(item => item.type === 'domainEvent')
 	if (projection?.type !== 'domainEvent') throw new Error('Missing price report projection')
-	expect(timelineTransitionSummary({ entity_type: projection.entityType, summary_data: projection.data, collateral: { symbol: 'USDC', decimals: 6 } }, 'ETH')).toContain('Price: 2 REP/USDC')
+	expect(timelineTransitionSummary({ entity_type: projection.entityType, semantic_event_kind: projection.semanticEventKind, summary_data: projection.data, collateral: { symbol: 'USDC', decimals: 6 } }, 'ETH')).toContain('Canonical Price: 2 REP/USDC')
 })
 
 test.each(['PriceReportRejected', 'PendingReportRecovered'])('%s retains shared-feed price and collateral units', event => {
@@ -120,4 +120,40 @@ test('delegate calls distinguish inherited value from a transfer', () => {
 	const rows = callTraceRows({ type: 'CALL', value: '0xde0b6b3a7640000', calls: [{ type: 'DELEGATECALL', value: '0xde0b6b3a7640000', calls: [{ type: 'CALL', value: '0x1' }] }] }, 'ETH')
 	expect(rows[1]).toContain('inherited value 1 ETH')
 	expect(rows[2]).toEndWith('0.000000000000000001 ETH')
+})
+
+test('shared price feed exposure and price use the pool collateral', () => {
+	const event = { entity_type: 'price-feed', event_data: { aggregateExposureAttoEth: '1000000', price: (2n * 10n ** 30n).toString() } }
+	expect(timelineTransitionSummary({ ...event, collateral: { symbol: 'USDC', decimals: 6 } }, 'ETH')).toBe('Aggregate Exposure: 1 USDC · Price: 2 REP/USDC')
+	expect(timelineTransitionSummary({ ...event, event_data: { aggregateExposureAttoEth: '1000000' } }, 'ETH')).toBe('Aggregate Exposure: 1,000,000 collateral units')
+	expect(timelineTransitionSummary({ ...event, event_data: { price: '200', pendingReportMaxSettlementBaseFeeAttoEthPerGas: '1000000000' } }, 'ETH')).toBe('Price: 200 · Pending Report Max Settlement Base Fee Per Gas: 0.000000001 ETH/gas')
+})
+
+test('formats raw price exactly when collateral has 36 or more decimals', () => {
+	for (const [decimals, price] of [
+		[36, '1 REP/TKN'],
+		[38, '100 REP/TKN'],
+	] as const) {
+		expect(semanticFields({ acceptedPrice: '1', repPerEth1e18: '1' }, 'ETH', { symbol: 'TKN', decimals })).toEqual([
+			['Accepted Price', price],
+			['Price', price],
+		])
+	}
+})
+
+test('accepted report evidence labels the feed price as canonical', () => {
+	const report = { entity_type: 'price-feed', semantic_event_kind: 'PriceReported', summary_data: { reportId: '2', price: (2n * 10n ** 30n).toString() } }
+	expect(timelineTransitionSummary({ ...report, collateral: { symbol: 'USDC', decimals: 6 } }, 'ETH')).toBe('Report Id: 2 · Canonical Price: 2 REP/USDC')
+	expect(priceDecisionSummary({ event_name: 'PriceReported', arguments: { reportId: '2', price: '200' } }, 'ETH')).toBe('Report Id: 2 · Canonical Price: 200 raw price units')
+	expect(priceDecisionSummary({ event_name: 'PriceReported', summary: 'Legacy undecoded price evidence' }, 'ETH')).toBeUndefined()
+})
+
+test('accepted candidate evidence identifies its own price and the unchanged canonical price', () => {
+	const report = {
+		entity_type: 'price-feed',
+		semantic_event_kind: 'PriceCandidateAccepted',
+		summary_data: { reportId: '8', candidatePrice: (3n * 10n ** 30n).toString(), canonicalPrice: (2n * 10n ** 30n).toString(), observationTimestamp: '1767225660', canonicalUpdated: false },
+	}
+	const collateral = { symbol: 'USDC', decimals: 6 }
+	expect(timelineTransitionSummary({ ...report, collateral }, 'ETH')).toBe('Report Id: 8 · Candidate Price: 3 REP/USDC · Canonical Price: 2 REP/USDC · Observation Timestamp: 2026-01-01 00:01:00 UTC · Canonical Updated: No')
 })

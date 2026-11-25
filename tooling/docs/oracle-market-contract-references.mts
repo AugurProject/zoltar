@@ -1,7 +1,7 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const oracleMarketContractReferences: ContractReference[] = [
 	{
-		compiledAbiFingerprint: 'cd6ecfbc235b66aeb09403dc74ee3934407b3e627d548308d925926a82dcb802',
+		compiledAbiFingerprint: '8301ec3a120867d885afecc9b55a38dbab9cf678ff248f9263ad0f7794fe86a6',
 		name: 'SharedPoolPriceFeed',
 		purpose: 'Canonical REP/collateral reporting and price source for every question in one security pool and universe.',
 		readAbiFingerprint: 'bc1d44d6d200cd829c7b91de21f3412e030748acfc485b1219dbcc270da1bf8d',
@@ -99,9 +99,9 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			{
 				call: '`settleReport(reportId, amount1, amount2)`',
 				caller: 'The registered report escrow only',
-				effect: 'Validates report economics, freshness, base-fee ceiling and exposure before acceptance and sponsor operations.',
+				effect: 'Validates report economics, freshness, base-fee ceiling and exposure. An acceptance records the candidate and canonical prices before sponsor operations use the canonical price.',
 				preconditions: 'Known pending candidate; authenticated escrow callback.',
-				signals: '`PriceReported`, `PriceReportRejected`, `PriceReportDeferred`, `ReportOperationAttempted`',
+				signals: '`PriceCandidateAccepted`, `PriceReported`, `PriceReportRejected`, `PriceReportDeferred`, `ReportOperationAttempted`',
 				declarations: [{ name: 'settleReport' }],
 			},
 			{
