@@ -72,8 +72,8 @@ export const timelineEntityTypeLabel = (value: JsonValue | undefined): string =>
 			return 'OpenOracle'
 		case 'open-oracle-report':
 			return 'OpenOracle report'
-		case 'price-coordinator':
-			return 'Price coordinator'
+		case 'price-feed':
+			return 'Price feed'
 		case 'escalation':
 			return 'Escalation game'
 		case 'auction':

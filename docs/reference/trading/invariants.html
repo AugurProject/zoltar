@@ -20,6 +20,7 @@
 				<ul>
 					<li>Yes and No reserves are the current ShareToken balances. Donations immediately increase reserves and accrue to existing LPs.</li>
 					<li>The pair's Invalid balance is exactly zero.</li>
+					<li>Transferring LP tokens moves the liquidity claim between holders and preserves total LP supply and pair reserves.</li>
 					<li>An LP withdrawal cannot claim more Yes or No shares than the pair owns. Withdrawal amounts are proportional to current balances and the liquidity burned.</li>
 				</ul>
 			</section>
@@ -31,6 +32,7 @@
 				<h2>Swaps</h2>
 				<ul>
 					<li>For every successful exact-input or exact-output swap, <code>k_after ≥ k_before</code>, where <code>k</code> is the Yes balance multiplied by the No balance.</li>
+					<li>For unchanged reserves, an exact-input swap delivers the quoted output and reverts when the requested minimum exceeds that quote.</li>
 					<li>An exact-output swap delivers exactly the requested output amount.</li>
 					<li>An exact-output swap never charges more than the caller's <code>maxAmountIn</code>.</li>
 				</ul>
@@ -43,6 +45,84 @@
 					<li>While <a href="../glossary.html#fork-continuation">fork continuation</a> is pending or the question ledger is not operational, the same operations also revert for as long as that state lasts.</li>
 					<li>Proportional liquidity removal has no lifecycle guard.</li>
 				</ul>
+			</section>
+			<section id="swap-and-price-arithmetic">
+				<h2>Swap and price arithmetic</h2>
+				<dl>
+					<dt>Comparison conditions</dt>
+					<dd>Use effective reserves and a fixed fee. Sequential swap comparisons assume no intervening trades, liquidity changes or donations.</dd>
+					<dt id="invariant-32">Least sufficient input</dt>
+					<dd>
+						The exact-output input quote is the least gross input whose exact-input quote meets or exceeds the target. One raw unit less yields less than the target or rounds below the minimum valid output. For reserves 1 and 4 with zero fees, a target of 1 costs 1, and that input buys 2 under exact-input rules. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/trading/tradingArithmetic.test.ts"><code>tradingArithmetic.test.ts</code></a
+						>.
+					</dd>
+					<dt id="invariant-33">Splitting a trade</dt>
+					<dd>
+						Splitting a same-direction exact-input trade into two successful swaps cannot increase total output relative to a single trade with the same gross input. Each leg uses the updated reserves, including fees retained on the first leg. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/trading/tradingArithmetic.test.ts"><code>tradingArithmetic.test.ts</code></a
+						>.
+					</dd>
+					<dt id="invariant-34">Immediate reverse trade</dt>
+					<dd>
+						Sending all output from a successful exact-input swap straight back through the same pair yields at most the original input. Equality can occur in fee-free, exactly divisible examples. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditTradingMathFuzz.test.ts"><code>auditTradingMathFuzz.test.ts</code></a
+						>.
+					</dd>
+					<dt id="invariant-35">Directional price symmetry</dt>
+					<dd>
+						For the two directional spot prices rounded down in basis points, their sum is either 9,999 or 10,000. It is exactly 10,000 iff the unrounded basis-point price is integral. Multiplying both reserves by the same positive integer leaves both displayed prices unchanged if the scaled reserves fit. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/trading/tradingArithmetic.test.ts"><code>tradingArithmetic.test.ts</code></a
+						>.
+					</dd>
+					<dt id="invariant-36">Initial price rounding</dt>
+					<dd>
+						On a successful initializer quote, reflecting the requested probability around 5,000 basis points exchanges the Yes and No amounts exactly. The resulting displayed Yes price rounds to the requested side of 50%, at or below the request for a request below 50%, and at or above it for a request above 50%. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/trading/tradingArithmetic.test.ts"><code>tradingArithmetic.test.ts</code></a
+						>.
+					</dd>
+				</dl>
+			</section>
+			<section id="liquidity-and-position-accounting">
+				<h2>Liquidity and position accounting</h2>
+				<dl>
+					<dt id="invariant-37">Backing per LP token</dt>
+					<dd>
+						Let <code>Y,N</code> be effective reserves and <code>S</code> outstanding LP tokens. Across successful swaps, liquidity additions, removals and ordinary donations to an initialized pair, <code>Y_after × N_after × S_before² ≥ Y_before × N_before × S_after²</code>. For a liquidity addition or removal, each reserve per outstanding LP token is individually nondecreasing. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditTradingMathFuzz.test.ts"><code>auditTradingMathFuzz.test.ts</code></a
+						>.
+					</dd>
+					<dt id="invariant-38">Permanently locked liquidity</dt>
+					<dd>
+						Once a pair initializes, at least 1,000 LP units remain at the lock address under the protocol’s ordinary transfer assumptions. Returning all circulating liquidity cannot reset initialization or permit a second initial-price selection. Additional LP tokens sent to the lock can increase its balance. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/trading/pairRouter.integration.test.ts"><code>pairRouter.integration.test.ts</code></a
+						>.
+					</dd>
+					<dt id="invariant-55">Directional entry</dt>
+					<dd>
+						A successful router entry that mints <code>m</code> complete sets sends the recipient <code>m</code> Invalid insurance shares and <code>m + swapOut</code> shares of the chosen direction. It sells exactly <code>m</code> opposite shares. Here <code>m</code> is the observed mint, which can differ from the cash amount. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/trading/realCore.integration.test.ts"><code>realCore.integration.test.ts</code></a
+						>.
+					</dd>
+					<dt id="invariant-56">Directional exit</dt>
+					<dd>
+						To exit <code>m</code> complete sets by transfer, the router consumes <code>m</code> Invalid shares and exactly <code>m + quoteExactOutput(m)</code> long shares at the unchanged pre-swap reserves. Supplied long shares above that amount go to the designated refund recipient. Minimum cash and REP outputs apply independently to what redemption actually produces. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/trading/realCore.integration.test.ts"><code>realCore.integration.test.ts</code></a> and <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/trading/pairRouter.integration.test.ts"><code>pairRouter.integration.test.ts</code></a
+						>.
+					</dd>
+					<dt id="invariant-62">Predeployment shares and initial supply</dt>
+					<dd>
+						Canonical Invalid, Yes and No shares sent to the predicted pair before deployment move to the share sink during construction. They buy no LP supply. At initialization the scale is exactly the smaller of the two supplied reserves. The designated LP recipient receives that scale less 1,000 locked LP units. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/trading/pairRouter.integration.test.ts"><code>pairRouter.integration.test.ts</code></a
+						>.
+					</dd>
+				</dl>
+			</section>
+			<section id="test-evidence">
+				<h2>Executable evidence</h2>
+				<dl>
+					<dt>Pair and router</dt>
+					<dd>
+						Stateful swaps compare effective reserve products, outcome balances and router residue. Separate cases check exact-output bounds, proportional removal, counterfactual donations, temporary inactivity and permanent closure. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/trading/pairRouter.integration.test.ts"><code>pairRouter.integration.test.ts</code></a
+						>.
+					</dd>
+					<dt>Arithmetic and collateral</dt>
+					<dd>
+						Integer-model checks exercise trading math across generated inputs. Router collateral checks verify that calls leave no wrapped collateral or services allowance. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditTradingMathFuzz.test.ts"><code>auditTradingMathFuzz.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/audit4TradingRouterCollateralResidue.test.ts"><code>audit4TradingRouterCollateralResidue.test.ts</code></a
+						>.
+					</dd>
+				</dl>
 			</section>
 		</main>
 		<script src="../../assets/js/responsiveDocs.js"></script>

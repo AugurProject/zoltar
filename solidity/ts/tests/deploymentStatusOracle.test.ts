@@ -1,5 +1,5 @@
-import type { Hex } from '@zoltar/core-shared/evm/ethereum'
-import { test, beforeEach, describe } from 'bun:test'
+import { encodeDeployData, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { expect, test, beforeEach, describe } from 'bun:test'
 import type { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient } from '../testSupport/simulator/utils/clients'
@@ -7,7 +7,8 @@ import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { setupTestAccounts, ensureProxyDeployerDeployed } from '../testSupport/simulator/utils/utilities'
 import { ensureDeploymentStatusOracleDeployed, ensureInfraDeployed, getDeploymentStepAddresses, getInfraContractAddresses, loadDeploymentStatusOracleMask } from '../testSupport/simulator/utils/contracts/deployStatoblast'
-import { statoblast_Multicall3_Multicall3, statoblast_SecurityPoolUtils_SecurityPoolUtils, statoblast_openOracle_OpenOracle_OpenOracle } from '../types/contractArtifact'
+import { deployContract } from '../testSupport/deployContract'
+import { DeploymentStatusOracle_DeploymentStatusOracle as oracle, statoblast_Multicall3_Multicall3, statoblast_SecurityPoolUtils_SecurityPoolUtils, statoblast_openOracle_OpenOracle_OpenOracle } from '../types/contractArtifact'
 import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import { PROXY_DEPLOYER_ADDRESS } from '../testSupport/simulator/utils/constants'
 
@@ -41,6 +42,15 @@ describe('Deployment Status Oracle Test Suite', () => {
 		strictEqualTypeSafe(deploymentMask, 1n, 'only the proxy deployer should be deployed at bootstrap')
 	})
 
+	test('deployment mask matches code presence at every index including duplicate addresses and bit 255', async () => {
+		const deployed = addressString(PROXY_DEPLOYER_ADDRESS)
+		for (const size of [0, 7, 256]) {
+			const addresses = Array.from({ length: size }, (_, index) => (index % 7 === 0 || index === size - 1 ? deployed : client.account.address))
+			const address = await deployContract(client, encodeDeployData({ abi: oracle.abi, bytecode: `0x${oracle.evm.bytecode.object}`, args: [addresses] }))
+			const expected = addresses.reduce((bits, candidate, index) => (candidate === deployed ? bits | (1n << BigInt(index)) : bits), 0n)
+			expect(await client.readContract({ abi: oracle.abi, address, functionName: 'getDeploymentMask' })).toBe(expected)
+		}
+	})
 	test('reports a mixed deployment mask after a subset of infra contracts is deployed', async () => {
 		await ensureDeploymentStatusOracleDeployed(client)
 

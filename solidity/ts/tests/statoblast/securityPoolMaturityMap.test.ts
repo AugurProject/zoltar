@@ -120,4 +120,16 @@ describe('Statoblast maturity index', () => {
 		expect(await prefix(26n, 1)).toEqual([11n, 21n])
 		expect(await prefix(26n, maximumTime)).toEqual([35n, 69n])
 	})
+	test('permuting maturity deltas preserves point balances and every prefix', async () => {
+		await add(0n, 5, maximumWeight, 2n)
+		await add(1n, 7, 3n, maximumWeight)
+		await add(2n, 5, 2n, 1n)
+		await add(0n, 5, 2n, 1n)
+		await add(4n, 7, 3n, maximumWeight)
+		await add(5n, 5, maximumWeight, 2n)
+		for (const cutoff of [0, 4, 5, 6, 7, 8, maximumTime]) {
+			expect(await get(3n, cutoff)).toEqual(await get(6n, cutoff))
+			expect(await prefix(3n, cutoff)).toEqual(await prefix(6n, cutoff))
+		}
+	})
 })

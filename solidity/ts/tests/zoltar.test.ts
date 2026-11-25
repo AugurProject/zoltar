@@ -1,4 +1,4 @@
-import { test, beforeEach, describe } from 'bun:test'
+import { test, beforeEach, describe, expect } from 'bun:test'
 import { formatStorageSlot } from '../testSupport/storage'
 import type { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
@@ -1178,5 +1178,28 @@ describe('Contract Test Suite', () => {
 		// Try to migrate with a malformed outcome index (5 is > 4 outcomes)
 		const malformedOutcomeIndex = 5n
 		await assert.rejects(splitMigrationRep(client, GENESIS_UNIVERSE, balance, [malformedOutcomeIndex]), /Malformed outcome index for the fork migration question/)
+	})
+	test('fork and nondecision thresholds have exact supply steps with independent one-less witnesses', async () => {
+		const d = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'forkThresholdDivisor' })
+		const last = 2n ** 67n - 1n
+		for (const s of new Set([0n, 1n, d - 1n, d, d + 1n, 2n * d - 1n, 2n * d, 2n * d + 1n, 5n * d - 1n, 5n * d, 5n * d + 1n, last])) {
+			await overrideGenesisTheoreticalSupply(mockWindow, client, addressString(GENESIS_REPUTATION_TOKEN), s)
+			expect(await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getUniverseTheoreticalSupplyAttoRep', args: [0n] })).toBe(s)
+			const fork = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getForkThresholdAttoRep', args: [0n] }),
+				threshold = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getNonDecisionThresholdAttoRep', args: [0n] })
+			expect(fork).toBe((s + d - 1n) / d)
+			expect(threshold).toBe((s + 2n * d - 1n) / (2n * d))
+			for (const [bound, div, fn] of [
+				[fork, d, 'getForkThresholdAttoRep'],
+				[threshold, 2n * d, 'getNonDecisionThresholdAttoRep'],
+			] as const) {
+				if (s === 0n) continue
+				const delta = ((s - 1n) % div) + 1n
+				for (const reduction of [delta - 1n, delta]) {
+					await overrideGenesisTheoreticalSupply(mockWindow, client, addressString(GENESIS_REPUTATION_TOKEN), s - reduction)
+					expect(await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: fn, args: [0n] })).toBe(reduction === delta ? bound - 1n : bound)
+				}
+			}
+		}
 	})
 })

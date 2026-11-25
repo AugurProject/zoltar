@@ -7,6 +7,7 @@ const outcomes = ['INVALID', 'YES', 'NO', 'None']
 const capitalPriceKeys: ReadonlySet<string> = new Set(['canonicalPrice', 'candidatePrice', 'acceptedPrice', 'conservativePrice', 'liquidationPrice', 'ownerConservativePrice', 'maxHealthyPrice'])
 const MAX_UINT256 = 2n ** 256n - 1n
 const label = (key: string): string => {
+	if (key === 'repPerEth1e18') return 'Price'
 	const words = key
 		.replace(/Bps$/i, '')
 		.replace(/Atto(?:Rep|Eth|Shares)|_atto_(?:rep|eth|shares)/gi, '')
