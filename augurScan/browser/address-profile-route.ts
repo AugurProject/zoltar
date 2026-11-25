@@ -1,15 +1,15 @@
 import type { AccountTransaction, LoadOptions, NetworkRecord, RichListRecord } from './browser-types.ts'
 import type { CanonicalState } from './canonical-state.ts'
 import type { RefreshGate } from './live-refresh.ts'
-import { decodeOperationsResponseValue, operationRecords, type OperationsResponse } from './api-validation.ts'
+import { decodeOperationsResponseValue, type OperationsResponse } from './api-validation.ts'
 import { decodeItemsPage, decodeValue, isAccountTransaction, isAddressIdentity, isRichListRecord } from './api-decoding.ts'
 import { mergeUniqueRecords } from './canonical-pagination.ts'
 import { isCurrentCanonicalGeneration, isCurrentContextRequest } from './live-refresh.ts'
 import { refreshPresentation } from './refresh-presentation.ts'
-import { SECURITY_POOL_KIND_LABELS, securityPoolItems, securityPoolItemKey, securityPoolPage } from './security-pool-helpers.ts'
+import { type SecurityPoolKind, mapSecurityPoolKinds, SECURITY_POOL_KIND_LABELS, securityPoolItems, securityPoolItemKey, securityPoolPage } from './security-pool-helpers.ts'
 
 interface AddressProfileRouteDeps {
-	renderAddressProfile: (item: RichListRecord, transactions: AccountTransaction[], interactions: AccountTransaction[], options?: { live?: boolean; securityPoolFocusKind?: 'forks' | 'lp' | 'reports' | undefined }) => void
+	renderAddressProfile: (item: RichListRecord, transactions: AccountTransaction[], interactions: AccountTransaction[], options?: { live?: boolean; securityPoolFocusKind?: SecurityPoolKind | undefined }) => void
 	lookup: {
 		(selector: '#address-back'): HTMLAnchorElement
 		(selector: string): HTMLElement
@@ -37,23 +37,15 @@ export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 	let currentAddressProfile: RichListRecord | undefined
 	let renderedProfileKey: string | undefined
 	let renderedProfileSignature: string | undefined
-	let currentAddressSecurityPoolDepths: { readonly chainId: string; readonly address: string; readonly forks: number; readonly lp: number; readonly reports: number } | undefined
+	let currentAddressSecurityPoolDepths: { readonly chainId: string; readonly address: string; readonly depths: Readonly<Record<SecurityPoolKind, number>> } | undefined
 	const decodeOperationsResponse = decodeOperationsResponseValue
-	const loadAddressSecurityPoolSnapshot = async (address: string, targets: Readonly<Record<'forks' | 'lp' | 'reports', number>>): Promise<OperationsResponse> => {
+	const loadAddressSecurityPoolSnapshot = async (address: string, targets: Readonly<Record<SecurityPoolKind, number>>): Promise<OperationsResponse> => {
 		const initialQuery = new URLSearchParams({ chainId: requiredChainId(), address, limit: '100' })
 		const first = decodeOperationsResponse(await api(`/api/v1/state/address-security-pool?${initialQuery.toString()}`))
 		const snapshotIdentity = `${first.chainId}:${String(first.asOf['blockNumber'] ?? '')}:${String(first.asOf['blockHash'] ?? '')}`
-		const collections = {
-			forks: securityPoolItems(first.data, 'forks'),
-			lp: securityPoolItems(first.data, 'lp'),
-			reports: securityPoolItems(first.data, 'reports'),
-		}
-		const pages = {
-			forks: securityPoolPage(first.data, 'forks'),
-			lp: securityPoolPage(first.data, 'lp'),
-			reports: securityPoolPage(first.data, 'reports'),
-		}
-		for (const kind of ['lp', 'forks', 'reports'] as const) {
+		const collections = mapSecurityPoolKinds(kind => securityPoolItems(first.data, kind))
+		const pages = mapSecurityPoolKinds(kind => securityPoolPage(first.data, kind))
+		for (const kind of ['lp', 'forks', 'reports', 'refunds', 'positions'] as const) {
 			while (collections[kind].length < targets[kind] && pages[kind]['hasMore'] === true && typeof pages[kind]['nextCursor'] === 'string') {
 				const query = new URLSearchParams({ chainId: requiredChainId(), address, limit: '100' })
 				query.set(SECURITY_POOL_KIND_LABELS[kind].cursorParameter, pages[kind]['nextCursor'])
@@ -68,6 +60,8 @@ export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 			...first,
 			data: {
 				...first.data,
+				pending_refunds: collections.refunds,
+				escalation_positions: collections.positions,
 				lp_positions: collections.lp,
 				fork_participation: collections.forks,
 				report_participation: collections.reports,
@@ -104,12 +98,8 @@ export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 		if (presentation.loadingState) content.querySelector<HTMLElement>('.address-refresh-error')?.remove()
 		if (!hadProfile) content.replaceChildren(element('p', 'detail-status', 'Loading address activity…'), element('div', 'loading-line'))
 		try {
-			const retainedSecurityPoolDepths = currentAddressSecurityPoolDepths?.chainId === requiredChainId() && currentAddressSecurityPoolDepths.address === address ? currentAddressSecurityPoolDepths : { chainId: requiredChainId(), address, forks: 0, lp: 0, reports: 0 }
-			const securityPoolTargets = {
-				forks: securityPoolTarget?.kind === 'forks' ? securityPoolTarget.count : retainedSecurityPoolDepths.forks,
-				lp: securityPoolTarget?.kind === 'lp' ? securityPoolTarget.count : retainedSecurityPoolDepths.lp,
-				reports: securityPoolTarget?.kind === 'reports' ? securityPoolTarget.count : retainedSecurityPoolDepths.reports,
-			}
+			const retained = currentAddressSecurityPoolDepths?.chainId === requiredChainId() && currentAddressSecurityPoolDepths.address === address ? currentAddressSecurityPoolDepths.depths : undefined
+			const securityPoolTargets = mapSecurityPoolKinds(kind => (securityPoolTarget?.kind === kind ? securityPoolTarget.count : (retained?.[kind] ?? 0)))
 			const [securityPool, identity, transactions, interactions] = await Promise.all([
 				loadAddressSecurityPoolSnapshot(address, securityPoolTargets),
 				api(`/api/v1/address-identity?chainId=${encodeURIComponent(requiredChainId())}&address=${encodeURIComponent(address)}`).then(value => decodeValue(value, isAddressIdentity, 'Address identity')),
@@ -152,9 +142,7 @@ export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 			currentAddressSecurityPoolDepths = {
 				chainId: requiredChainId(),
 				address,
-				forks: operationRecords(securityPool.data['fork_participation']).length,
-				lp: operationRecords(securityPool.data['lp_positions']).length,
-				reports: operationRecords(securityPool.data['report_participation']).length,
+				depths: mapSecurityPoolKinds(kind => securityPoolItems(securityPool.data, kind).length),
 			}
 			return true
 		} catch (error) {

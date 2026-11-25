@@ -2,6 +2,7 @@ import { allocatedWinningPayout, ordinaryWinningPayout } from './claim-payout.ts
 import { buildCarryMerkleMountainRangeProof, createSparseNullifier, hashCarryLeaf, type CarryLeaf } from '@zoltar/core-shared/evm/carryProof'
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
+import { runtimeConfig } from './config.ts'
 import { abiForKind } from './abi-catalog.ts'
 import { type AbiValue, type Address, type Hex, getAddress, zeroAddress } from './ethereum.ts'
 import type { StateRead } from './snapshots.ts'
@@ -39,14 +40,14 @@ type Game = { pool: Address; parentPool: Address; source: Address; forker: Addre
 
 // All calls inherit the sampler's one canonical block tag. The budget fails
 // closed instead of returning a valid-looking proof from a truncated tree.
-export const sampleClaimPositions = async (gameAddress: Address, read: StateRead, state: Readonly<Record<string, unknown>>) => {
+export const sampleClaimPositions = async (gameAddress: Address, read: StateRead, state: Readonly<Record<string, unknown>>, limits = runtimeConfig.claimReconstruction) => {
 	const cache = new Map<string, Promise<unknown>>()
 	let reads = 0
 	const call = (target: Address, kind: SystemContractKind, name: string, args: readonly AbiValue[] = []) => {
 		const key = `${target.toLowerCase()}:${name}:${args.map(String).join(':')}`
 		const cached = cache.get(key)
 		if (cached !== undefined) return cached
-		if (++reads > 1024) throw new Error('Claim reconstruction exceeds the 1024-read budget')
+		if (++reads > limits.maxReads) throw new Error(`Claim reconstruction exceeds the ${limits.maxReads}-read budget`)
 		const abi = abiForKind(kind)
 		if (abi === undefined) throw new Error(`Missing claim ABI ${kind}`)
 		const pending = read(target, abi, name, args)
@@ -83,7 +84,7 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 		const visited = new Set<bigint>()
 		const leaves: Leaf[] = []
 		while (nodeId !== 0n) {
-			if (visited.has(nodeId) || leaves.length >= 256) throw new Error('Carry node cycle or 256-leaf limit exceeded')
+			if (visited.has(nodeId) || leaves.length >= limits.maxLeaves) throw new Error(`Carry node cycle or ${limits.maxLeaves}-leaf limit exceeded`)
 			visited.add(nodeId)
 			const node = array(await call(game, 'escalationGame', 'nodes', [nodeId]))
 			if (uint(node[2]) !== BigInt(outcome)) throw new Error('Carry node outcome mismatch')
@@ -97,7 +98,7 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 	}
 	const histories = new Map<string, Promise<{ leaves: Leaf[]; consumed: bigint[] }>>()
 	const history = (game: Address, outcome: number, ancestors: readonly Address[] = []): Promise<{ leaves: Leaf[]; consumed: bigint[] }> => {
-		if (ancestors.includes(game) || ancestors.length >= 32) throw new Error('Carry ancestry cycle or 32-generation limit exceeded')
+		if (ancestors.includes(game) || ancestors.length >= limits.maxGenerations) throw new Error(`Carry ancestry cycle or ${limits.maxGenerations}-generation limit exceeded`)
 		const key = `${game}:${outcome}`
 		const cached = histories.get(key)
 		if (cached !== undefined) return cached
@@ -105,7 +106,7 @@ export const sampleClaimPositions = async (gameAddress: Address, read: StateRead
 			const ctx = await context(game)
 			const view = await outcomeState(game, outcome)
 			const count = uint(view['snapshotLeafCount'])
-			if (count > 256n) throw new Error('Carry snapshot exceeds the 256-leaf limit')
+			if (count > BigInt(limits.maxLeaves)) throw new Error(`Carry snapshot exceeds the ${limits.maxLeaves}-leaf limit`)
 			const parent = ctx.source === zeroAddress ? { leaves: [], consumed: [] } : await history(ctx.source, outcome, [...ancestors, game])
 			const inherited = parent.leaves.slice(0, Number(count))
 			if (BigInt(inherited.length) !== count) throw new Error('Inherited carry snapshot is incomplete')

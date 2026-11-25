@@ -232,7 +232,7 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 		state.progress.indexingStartReported = true
 	}
 	const batchStart = nextBlock
-	const maximumBatchEnd = nextBlock + BigInt(runtimeConfig.logScanRangeSize - 1)
+	const maximumBatchEnd = nextBlock + BigInt((state.scanDirectCalls ? Math.min(100, runtimeConfig.logScanRangeSize) : runtimeConfig.logScanRangeSize) - 1)
 	const batchEnd = maximumBatchEnd < observedHead ? maximumBatchEnd : observedHead
 	// Heartbeats describe durable progress, never the end of a merely planned or fetched range.
 	scanReport.update({
@@ -259,7 +259,7 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 		readonly deploymentObservations: readonly ContractDeploymentObservation[]
 	}
 	try {
-		segment = await operations.getNextLogSegment(state, nextBlock, batchEnd, initialContracts)
+		segment = await operations.getNextLogSegment(state, nextBlock, batchEnd, initialContracts, contracts)
 		if (segment.endBlockHash !== undefined && segment.endBlockHeader?.hash !== segment.endBlockHash) throw new ChainContinuityError(`Canonical chain changed after querying logs through block ${segment.toBlock}`)
 	} catch (error) {
 		if (error instanceof ChainContinuityError) {
@@ -297,7 +297,8 @@ async function pollWithReport(state: NetworkIndexerState, operations: PollOperat
 		return await pending
 	}
 	const sampleBlocks = await state.database.retainedEntitySampleBlocks(state.network.chainId, batchStart, end, requireLease(state))
-	let pendingBlocks = [...new Set([...logsByBlock.keys(), ...sampleBlocks, end])].sort(compareBigint)
+	const directCallBlocks = state.scanDirectCalls ? Array.from({ length: Number(end - batchStart + 1n) }, (_, index) => batchStart + BigInt(index)) : []
+	let pendingBlocks = [...new Set([...directCallBlocks, ...logsByBlock.keys(), ...sampleBlocks, end])].sort(compareBigint)
 	let pendingBlockIndex = 0
 	let processedBlockCount = 0
 	let committedLogs = 0
