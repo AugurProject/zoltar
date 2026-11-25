@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createPublicClient, createWalletClient, getAddress, parseTransaction, privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, createWalletClient, getAddress, http, parseTransaction, privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import type { OperatorSettings } from '../../src/config/settings.ts'
 import { recoverPendingTransactions } from '../../src/execution/recovery.ts'
 import { TransactionAwaitingRecovery, executeOperationPlan } from '../../src/execution/transaction-executor.ts'
@@ -181,6 +181,21 @@ async function executeCanonicalOperation(context: ReturnType<typeof runtimeConte
 }
 
 describe('real ecosystem workflows through the production chaos runtime', () => {
+	test('pending gas estimates and mined blocks use the same advancing fixture clock', async () => {
+		const current = requiredFixture()
+		await current.restoreBaseline()
+		const client = createPublicClient({ transport: http(current.node.rpcUrl) })
+		for (let block = 0; block < 3; block += 1) {
+			const latest = await client.getBlock()
+			const pending = await current.node.anvilWindowEthereum.requestRaw({ method: 'eth_getBlockByNumber', params: ['pending', false] })
+			if (typeof pending !== 'object' || pending === null || !('timestamp' in pending) || typeof pending.timestamp !== 'string') throw new Error('Pending fixture block has no timestamp')
+			const pendingTimestamp = BigInt(pending.timestamp)
+			expect(pendingTimestamp).toBe(latest.timestamp + 1n)
+			await current.node.anvilWindowEthereum.requestRaw({ method: 'evm_mine', params: [] })
+			expect((await client.getBlock()).timestamp).toBe(pendingTimestamp)
+		}
+	})
+
 	test('confirms direct shared-feed report funding through the production receipt validator', async () => {
 		const current = requiredFixture()
 		await current.restoreBaseline()
