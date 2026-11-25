@@ -4,7 +4,6 @@ import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { parsePositionCollateral, type PositionCollateral } from '#state/position-collateral'
 import { formatDecimalAmount, hash32, parseDecimalAmount, parseSignedDecimalAmount, record as validateRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { parseExecutionIntentFields, parseExecutionRecord, type ExecutionIntent, type ExecutionRecord } from '#state/execution-record'
-import { normalizeJournalPosition } from '#state/position-journal-format'
 
 /** The position journal writer's filesystem; tests substitute one to observe the durable write order. */
 export type PositionJournalFilesystem = RevisionedFileFilesystem
@@ -537,7 +536,7 @@ export async function loadPositionJournalState(path: string, expectedChainId: nu
 	const root = validateRecord(parsed, 'Position journal value', 'Invalid position journal root')
 	if (root['version'] !== 4 || !Array.isArray(root['positions'])) throw new Error('Invalid position journal schema')
 	if (root['chainId'] !== expectedChainId) throw new Error(`Position journal belongs to chain ${String(root['chainId'])}, expected chain ${expectedChainId.toString()}`)
-	const positions = root['positions'].map(value => parsePosition(normalizeJournalPosition(value)))
+	const positions = root['positions'].map(value => parsePosition(validateRecord(value, 'Position journal value', 'Position journal record must be an object')))
 	const ids = new Set<string>()
 	for (const position of positions) {
 		const key = positionJournalKey(position)
