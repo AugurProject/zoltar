@@ -184,6 +184,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 			uint256 takeoverReward,
 			uint256 debit
 		) = commitmentIndex.takeover(id, repairAuctionCohort.positionId, receiverOwner, commitment, minimumCommitmentAttoEth, demandAttoEth, liquidationPrice, conservativePrice, securityMultiplierBps);
+		require(takeoverReward >= minimumTakeoverReward, 'Takeover reward below minimum');
 		if (cured.removed != 0) {
 			owners[cured.owner].account.freeAttoRep += cured.freedRep;
 			totalFreeAttoRep += cured.freedRep;
@@ -191,7 +192,6 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 		}
 		if (cured.settled) return 0;
 		commitment = repaired;
-		require(takeoverReward >= minimumTakeoverReward, 'Takeover reward below minimum');
 		ICapitalPriceExposure feed = ICapitalPriceExposure(ICapitalLedgerAccounting(host.securityPool()).priceFeed(host.universeId()));
 		require(source.rep <= feed.acceptedRepExposureLimitAttoRep(), 'Accepted report REP exposure exceeded');
 		_settleOwner(receiverOwner);

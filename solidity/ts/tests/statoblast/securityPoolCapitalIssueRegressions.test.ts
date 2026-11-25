@@ -28,6 +28,15 @@ describe('capital issue regressions', () => {
 			expect((await f.position(id)).rep).toBe(105n * E)
 			expect((await f.owner(2)).positionId).toBe(0n)
 		})
+	test('a positive minimum reward rejects an unpaid cure atomically', async () => {
+		const id = await setup()
+		await f.price(2n * E)
+		await f.getAnvilWindowEthereum().advanceTime(3601n)
+		const before = await f.position(id)
+		await expect(writeContractAndWait(f.client(2), () => f.client(2).writeContract({ ...f.capital, functionName: 'takeOver', args: [id, 100n * E, 1n, 0n] }))).rejects.toThrow('Takeover reward below minimum')
+		expect(await f.position(id)).toEqual(before)
+		expect((await f.owner(2)).positionId).toBe(0n)
+	})
 	test('#1254 a minimum position cannot release backed REP through a cure', async () => {
 		const id = await setup(true)
 		await f.price((12n * E) / 10n)
