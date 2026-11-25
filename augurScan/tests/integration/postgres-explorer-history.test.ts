@@ -80,6 +80,8 @@ postgresTest('entity detail continuations reject a conflicting historical block'
 postgresTest('state history refuses a range that starts beyond the indexed head', async () => {
 	await withExplorerTables(['universe_events'], async connection => {
 		const path = `/api/v1/state/universes/${chainId}/0`
+		await connection`UPDATE networks SET start_block = 2 WHERE chain_id = ${chainId}`
+		expect((await request(connection, `${path}?toBlock=1`)).status).toBe(400)
 		const beyond = await request(connection, `${path}?fromBlock=7`)
 		expect(beyond.status).toBe(400)
 		expect(await beyond.json()).toMatchObject({ error: 'fromBlock must not exceed the indexed head' })

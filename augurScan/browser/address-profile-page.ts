@@ -72,7 +72,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		['Sent transactions', number(item.transaction_count)],
 		['Observed interactions', number(item.interaction_count)],
 		['Pools', number(item.pool_count)],
-		['Capital positions', number(item.capital_positions?.length ?? 0)],
+		['Capital positions', number(item.capital_position_count ?? item.capital_positions?.length ?? 0)],
 	]) {
 		const card = element('div', 'state-stat')
 		card.append(element('span', '', label), element('strong', '', value))
@@ -125,6 +125,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		card.append(element('strong', '', presentation.title), element('span', '', presentation.summary), link)
 		involvementGrid.append(card)
 	}
+	if ((item.capital_position_count ?? 0) > (item.capital_positions?.length ?? 0)) involvementGrid.append(element('p', 'data-note', `Showing the first ${number(item.capital_positions?.length)} capital positions.`))
 	if (involvementGrid.childElementCount === 0) involvementGrid.append(element('p', 'data-note', 'No pool or capital involvement matches this view.'))
 	involvement.append(involvementGrid)
 	setLiveRecord(involvement, 'involvement', { pools: item.pool_associations, capital: item.capital_positions })

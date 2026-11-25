@@ -297,6 +297,7 @@ export const isRichListRecordValue = (value: unknown): boolean =>
 	(value['weth_token_count'] === undefined || isStringOrNumber(value['weth_token_count'])) &&
 	(value['oldest_balance_block'] === undefined || isNullableString(value['oldest_balance_block'])) &&
 	(value['last_balance_refresh'] === undefined || isNullableString(value['last_balance_refresh'])) &&
+	(value['capital_position_count'] === undefined || (typeof value['capital_position_count'] === 'number' && Number.isSafeInteger(value['capital_position_count']) && value['capital_position_count'] >= 0)) &&
 	(value['rep_balances_truncated'] === undefined || typeof value['rep_balances_truncated'] === 'boolean') &&
 	(value['weth_balances_truncated'] === undefined || typeof value['weth_balances_truncated'] === 'boolean') &&
 	Array.isArray(value['rep_balances']) &&

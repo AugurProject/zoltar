@@ -153,6 +153,7 @@ export interface RichListRecord {
 	weth_balances_truncated?: boolean
 	pool_associations: Array<{ address: string; label: string | null; questionTitle: string | null }>
 	// The latest tagged read of each capital position the address owns, one per universe ledger.
+	capital_position_count?: number
 	capital_positions?: Array<{
 		ledgerAddress: string
 		securityPool: string | null
