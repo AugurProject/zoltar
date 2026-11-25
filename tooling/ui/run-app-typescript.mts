@@ -7,7 +7,7 @@ const TYPESCRIPT_CLI_PATH = fileURLToPath(new URL('../../node_modules/typescript
 const EXPLICIT_HEAP_LIMIT_PATTERN = /^--max[-_]old[-_]space[-_]size=([+]?[0-9]+)$/
 const UI_TYPESCRIPT_PROJECTS = taskProjects('typecheck')
 	.filter(project => project.path.startsWith('ui/'))
-	.map(project => `${project.path}/tsconfig.json`)
+	.map(project => `${project.path}/tsconfig.typecheck.json`)
 
 type NodeOptionToken = {
 	readonly isValid: boolean
@@ -104,7 +104,7 @@ export const getApplicationTypeScriptEnvironment = (environment: NodeJS.ProcessE
 	return childEnvironment
 }
 
-export const getApplicationTypeScriptCommand = (nodeExecutablePath: string, typescriptCliPath: string, existingNodeOptions: string | undefined, projectPath = UI_TYPESCRIPT_PROJECTS[0] ?? 'ui/coreShared/tsconfig.json') => [
+export const getApplicationTypeScriptCommand = (nodeExecutablePath: string, typescriptCliPath: string, existingNodeOptions: string | undefined, projectPath = UI_TYPESCRIPT_PROJECTS[0] ?? 'ui/coreShared/tsconfig.typecheck.json') => [
 	nodeExecutablePath,
 	getApplicationTypeScriptHeapOption(existingNodeOptions),
 	typescriptCliPath,
