@@ -4,6 +4,7 @@ import type { ScannerContext } from './app-context.ts'
 import { element, lookup } from './app-dom.ts'
 import type { OperationsViews } from './app-operations-views.ts'
 import { applyLiveChanges, counted, exactTimestamp, liveSnapshot, renderRetryStatus, richListError, setLiveRecord, yesNoCheckpoint } from './app-presentation.ts'
+import type { SecurityPoolKind } from './security-pool-helpers.ts'
 import { renderAddressProfilePage } from './address-profile-page.ts'
 import { createAddressProfileRoute } from './address-profile-route.ts'
 import { createContractsRoute } from './contracts-route.ts'
@@ -77,7 +78,7 @@ export const createEntityViews = (context: ScannerContext, { evidence, operation
 		retryCanonicalViewOr,
 	})
 
-	const renderAddressProfile = (item: RichListRecord, transactions: AccountTransaction[], interactions: AccountTransaction[], options: { live?: boolean; securityPoolFocusKind?: 'forks' | 'lp' | 'reports' | undefined } = {}) =>
+	const renderAddressProfile = (item: RichListRecord, transactions: AccountTransaction[], interactions: AccountTransaction[], options: { live?: boolean; securityPoolFocusKind?: SecurityPoolKind | undefined } = {}) =>
 		renderAddressProfilePage(
 			{
 				lookup,

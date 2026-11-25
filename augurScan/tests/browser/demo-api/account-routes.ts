@@ -15,10 +15,13 @@ export async function demoAddressSecurityPoolRoute(env: DemoEnvironment, path: s
 	const item = demoRichList.find(candidate => candidate.chain_id === chainId && candidate.address.toLowerCase() === address)
 	const operations = demoOperations(env, chainId)
 	const more = context.pageUrl.searchParams.get('securityPoolMore') === '1'
+	const claimsTruncated = context.pageUrl.searchParams.get('claimsMore') === '1'
 	const lpCursor = request.searchParams.get('lpCursor')
 	const forkCursor = request.searchParams.get('forkCursor')
 	const reportCursor = request.searchParams.get('reportCursor')
-	const continuationRequested = lpCursor !== null || forkCursor !== null || reportCursor !== null
+	const refundCursor = request.searchParams.get('refundCursor')
+	const positionCursor = request.searchParams.get('positionCursor')
+	const continuationRequested = [lpCursor, forkCursor, reportCursor, refundCursor, positionCursor].some(cursor => cursor !== null)
 	if (continuationRequested && context.pageUrl.searchParams.get('securityPoolAppendDelay') === '1') await new Promise(resolve => setTimeout(resolve, 2_500))
 	if (continuationRequested && context.pageUrl.searchParams.get('securityPoolAppendError') === '1' && !counters.securityPoolAppendErrorConsumed) {
 		counters.securityPoolAppendErrorConsumed = true
@@ -69,10 +72,22 @@ export async function demoAddressSecurityPoolRoute(env: DemoEnvironment, path: s
 				truncated: false,
 				basis: 'Canonical indexed transfers',
 			},
-			pending_refunds: [{ auction_address: demoAddress('8'), pending_atto_eth: '100001', collateral: { address: demoAddress('c0'), symbol: 'USDC', decimals: 6 } }],
-			auction_claims: [
-				{ type: 'BidSettled', entity: demoAddress('8'), data: { bidId: '1', bidder: address ?? demoAddress('1'), filledLots: '0', refundAttoEth: String(100001n) }, blockNumber: operations.asOf.blockNumber, provenance: 'historical interaction', collateral: { address: demoAddress('c0'), symbol: 'USDC', decimals: 6 } },
-			],
+			pending_refunds: [{ auction_address: refundCursor === null ? demoAddress('8') : demoAddress('b8'), pending_atto_eth: refundCursor === null ? '100001' : '200002', collateral: { address: demoAddress('c0'), symbol: 'USDC', decimals: 6 } }],
+			...(claimsTruncated
+				? {
+						escalation_claims_truncated: true,
+						escalation_claims: Array.from({ length: 100 }, (_, index) => ({ type: 'CarryDepositConsumed', entity: demoAddress('7'), data: { depositor: address ?? demoAddress('1'), depositIndex: String(index) }, blockNumber: operations.asOf.blockNumber })),
+					}
+				: {}),
+			auction_claims_truncated: claimsTruncated,
+			auction_claims: Array.from({ length: claimsTruncated ? 100 : 1 }, (_, index) => ({
+				type: 'BidSettled',
+				entity: demoAddress('8'),
+				data: { bidId: String(index + 1), bidder: address ?? demoAddress('1'), filledLots: '0', refundAttoEth: String(100001n) },
+				blockNumber: operations.asOf.blockNumber,
+				provenance: 'historical interaction',
+				collateral: { address: demoAddress('c0'), symbol: 'USDC', decimals: 6 },
+			})),
 			escalation_payouts: {
 				items: claimState === 'unavailable' ? [] : [{ game_address: demoAddress('7'), snapshot_block: operations.asOf.blockNumber, snapshot_block_hash: demoHash, position: claimPosition }],
 				unavailable_games: claimState === 'unavailable' ? '1' : '0',
@@ -80,12 +95,14 @@ export async function demoAddressSecurityPoolRoute(env: DemoEnvironment, path: s
 				sampled_games: '1',
 				truncated: false,
 			},
-			escalation_positions: [{ game_address: demoAddress('7'), deposit_index: '4', principal_atto_rep: '2000000000000000000', final_resolution: '1', outcome: '1', resolution_block: operations.asOf.blockNumber }],
+			escalation_positions: [{ game_address: demoAddress('7'), deposit_index: '4', principal_atto_rep: '2000000000000000000', final_resolution: '1', outcome: positionCursor === null ? '1' : '0', resolution_block: operations.asOf.blockNumber }],
 			lp_positions: lpPositions,
 			trading_pnl: demoTradingPnl(demoAddress('fa')),
 			fork_participation: forkParticipation,
 			report_participation: reportParticipation,
 			securityPoolPagination: {
+				refunds: { total: more ? 2 : 1, limit: 100, offset: refundCursor === null ? 0 : 1, hasMore: more && refundCursor === null, ...(more && refundCursor === null ? { nextCursor: 'demo-refund-older' } : {}) },
+				positions: { total: more ? 2 : 1, limit: 100, offset: positionCursor === null ? 0 : 1, hasMore: more && positionCursor === null, ...(more && positionCursor === null ? { nextCursor: 'demo-position-older' } : {}) },
 				lp: {
 					total: more ? 2 : 1,
 					limit: 100,

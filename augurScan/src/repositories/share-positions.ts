@@ -99,23 +99,23 @@ export const sharePositions = async (sql: SQL, chainId: number, snapshotBlock: s
 
 // BidSettled credits a bidder's refund; RefundWithdrawn pays out the bidder's whole outstanding credit.
 // Refunds are amounts of the auction's immutable collateral token, so the latest tagged auction read that sampled it names their units.
-export const pendingAuctionRefunds = async (sql: SQL, chainId: number, snapshotBlock: string, address: string) =>
+export const pendingAuctionRefunds = async (sql: SQL, chainId: number, snapshotBlock: string, address: string, limit = 251, offset = 0) =>
 	await sql`
-		SELECT refunds.auction_address, refunds.pending_atto_eth, ${latestAuctionCollateral(sql, chainId, snapshotBlock, sql`refunds.auction_address`)} AS collateral
+		SELECT refunds.total, refunds.auction_address, refunds.pending_atto_eth, ${latestAuctionCollateral(sql, chainId, snapshotBlock, sql`refunds.auction_address`)} AS collateral
 		FROM (
-			SELECT auction_address, sum(CASE WHEN event_name = 'BidSettled' THEN (event_data->>'refundAttoEth')::numeric ELSE -(event_data->>'amountAttoEth')::numeric END)::text AS pending_atto_eth
+			SELECT count(*) OVER ()::integer AS total, auction_address, sum(CASE WHEN event_name = 'BidSettled' THEN (event_data->>'refundAttoEth')::numeric ELSE -(event_data->>'amountAttoEth')::numeric END)::text AS pending_atto_eth
 			FROM collateral_repair_auction_events WHERE chain_id = ${chainId} AND canonical AND block_number <= ${snapshotBlock}
 				AND event_name IN ('BidSettled', 'RefundWithdrawn') AND lower(event_data->>'bidder') = ${address}
 			GROUP BY auction_address
 			HAVING sum(CASE WHEN event_name = 'BidSettled' THEN (event_data->>'refundAttoEth')::numeric ELSE -(event_data->>'amountAttoEth')::numeric END) <> 0
-			ORDER BY auction_address LIMIT 251
+			ORDER BY auction_address LIMIT ${limit} OFFSET ${offset}
 		) refunds
 		ORDER BY refunds.auction_address
 	`
 
-export const escalationPositions = async (sql: SQL, chainId: number, snapshotBlock: string, address: string) =>
+export const escalationPositions = async (sql: SQL, chainId: number, snapshotBlock: string, address: string, limit = 251, offset = 0) =>
 	await sql`
-		SELECT deposit.game_address, deposit.event_data->>'outcome' AS outcome,
+		SELECT count(*) OVER ()::integer AS total, deposit.game_address, deposit.event_data->>'outcome' AS outcome,
 			deposit.event_data->>'parentDepositIndex' AS deposit_index, deposit.event_data->>'amountAttoRep' AS principal_atto_rep,
 			consumed.event_data->>'reason' AS consumption_reason, consumed.block_number::text AS consumed_block,
 			snapshot.read_result->>'finalQuestionResolution' AS final_resolution,
@@ -139,7 +139,7 @@ export const escalationPositions = async (sql: SQL, chainId: number, snapshotBlo
 			ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) snapshot ON true
 		WHERE deposit.chain_id = ${chainId} AND deposit.canonical AND deposit.block_number <= ${snapshotBlock}
 			AND deposit.event_name = 'LocalDepositAppended' AND lower(deposit.event_data->>'depositor') = ${address}
-		ORDER BY deposit.game_address, deposit.block_number DESC, deposit.log_index DESC LIMIT 251
+		ORDER BY deposit.game_address, deposit.block_number DESC, deposit.log_index DESC LIMIT ${limit} OFFSET ${offset}
 	`
 
 export const escalationPayouts = async (sql: SQL, chainId: number, snapshotBlock: string, address: string) => {

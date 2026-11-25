@@ -1,3 +1,4 @@
+import type { SecurityPoolKind } from './security-pool-helpers.ts'
 import type { UniswapPriceObservation } from './chart-values.ts'
 
 export interface AmmPriceHistoryRecord {
@@ -173,7 +174,9 @@ export interface RichListRecord {
 	escalation_positions?: JsonRecord[]
 	escalation_payouts?: JsonRecord
 	pending_refunds?: JsonRecord[]
+	escalation_claims_truncated?: boolean
 	escalation_claims?: JsonRecord[]
+	auction_claims_truncated?: boolean
 	auction_claims?: JsonRecord[]
 	lp_positions?: JsonRecord[]
 	trading_pnl?: JsonRecord
@@ -457,7 +460,7 @@ export interface LoadOptions {
 	replaceDepth?: number | undefined
 	contextVersion?: number
 	retainVisibleDepth?: boolean
-	securityPoolTarget?: { readonly kind: 'forks' | 'lp' | 'reports'; readonly count: number }
+	securityPoolTarget?: { readonly kind: SecurityPoolKind; readonly count: number }
 }
 
 export interface DetailOptions {
@@ -513,6 +516,6 @@ export interface DetailContextSnapshot extends ActivityDetailFocusSnapshot {
 	scrollTop: number
 }
 
-export type SecurityPoolData = JsonRecord | Pick<RichListRecord, 'lp_positions' | 'fork_participation' | 'report_participation' | 'securityPoolPagination'>
+export type SecurityPoolData = JsonRecord | Pick<RichListRecord, 'lp_positions' | 'fork_participation' | 'report_participation' | 'pending_refunds' | 'escalation_positions' | 'securityPoolPagination'>
 
 export type OperationsRoutePosition = { readonly scrollY: number; readonly focusedIndex?: number }

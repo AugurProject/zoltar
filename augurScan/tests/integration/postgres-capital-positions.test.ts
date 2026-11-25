@@ -238,6 +238,19 @@ test.skipIf(url === undefined)('capital positions rank by health, attribute liqu
 			expect.objectContaining({ type: 'BidSettled', entity: auction, collateral: auctionCollateralToken }),
 			expect.objectContaining({ type: 'BidSettled', entity: keylessAuction, collateral: keylessAuctionToken }),
 		])
+		expect(rich[0]).toMatchObject({ auction_claims_truncated: false, escalation_claims_truncated: false })
+		await connection`INSERT INTO escalation_game_events (chain_id, block_number, block_hash, tx_hash, log_index, game_address, event_name, event_data, canonical)
+			SELECT ${chainId}, 3, ${blockHash(3)}, ${blockHash(1_003)}, i, ${ledger}, 'CarryDepositConsumed', ${JSON.stringify({ depositor: lower(alice) })}::text::jsonb, true FROM generate_series(10, 109) i`
+		const readClaims = async () => (await richListRows(connection, { chainId, address: lower(alice), snapshotBlock: '3', limit: 1, offset: 0, sort: 'transactions' }))[0]
+		expect(await readClaims()).toMatchObject({ escalation_claims_truncated: false })
+		await connection`INSERT INTO escalation_game_events (chain_id, block_number, block_hash, tx_hash, log_index, game_address, event_name, event_data, canonical)
+			VALUES (${chainId}, 3, ${blockHash(3)}, ${blockHash(1_003)}, 110, ${ledger}, 'CarryDepositConsumed', ${JSON.stringify({ depositor: lower(alice) })}::text::jsonb, true)`
+		await connection`INSERT INTO collateral_repair_auction_events (chain_id, block_number, block_hash, tx_hash, log_index, auction_address, event_name, event_data, canonical)
+			SELECT ${chainId}, 3, ${blockHash(3)}, ${blockHash(1_003)}, i, ${auction}, 'BidSettled', ${JSON.stringify({ bidder: lower(alice) })}::text::jsonb, true FROM generate_series(20, 120) i`
+		const cappedClaims = await readClaims()
+		expect(cappedClaims).toMatchObject({ escalation_claims_truncated: true, auction_claims_truncated: true })
+		expect(cappedClaims?.['escalation_claims']).toHaveLength(100)
+		expect(cappedClaims?.['auction_claims']).toHaveLength(100)
 		expect(rich[0]?.['capital_positions']).toEqual([
 			{
 				ledgerAddress: lower(ledger),

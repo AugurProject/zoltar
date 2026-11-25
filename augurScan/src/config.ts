@@ -96,7 +96,13 @@ const integerSetting = (environment: RuntimeEnvironment, name: string, fallback:
 
 const parseManifest = async (filename: string): Promise<readonly ManifestContract[]> => parseManifestValue(await Bun.file(path.join(configRoot, 'manifests', filename)).json(), filename)
 
-export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
+export const configuredGenesisOutcome = () => {
+	const outcome = process.env['GENESIS_OUTCOME']?.trim() || 'yes'
+	if (outcome !== 'yes' && outcome !== 'no') throw new Error('GENESIS_OUTCOME must be yes or no')
+	return outcome
+}
+
+export const loadNetworks = async (outcome = configuredGenesisOutcome()): Promise<readonly NetworkConfig[]> => {
 	const definitions = parseNetworkFiles(await Bun.file(path.join(configRoot, 'networks.json')).json())
 	const enabled = new Set((process.env['NETWORKS'] || definitions.map(({ id }) => id).join(',')).split(',').map((value: string) => value.trim()))
 	const configuredIds = new Set(definitions.map(({ id }) => id))
@@ -117,7 +123,8 @@ export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 				}
 				const startBlock = BigInt(process.env[definition.startBlockEnv] ?? '0')
 				if (startBlock < 0n) throw new Error(`${definition.startBlockEnv} must not be negative`)
-				const contracts = [...(await parseManifest(definition.manifest))]
+				const manifest = outcome === 'yes' ? definition.manifest : `${path.parse(definition.manifest).name}-no.json`
+				const contracts = [...(await parseManifest(manifest))]
 				for (const [, label, , deploymentBlock] of contracts) {
 					if (deploymentBlock !== undefined && deploymentBlock < startBlock) throw new Error(`${definition.manifest} deployment block for ${label} must not precede ${definition.startBlockEnv}`)
 				}
@@ -126,6 +133,17 @@ export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 					if (!isAddress(ammFactoryAddress)) throw new Error(`${definition.ammFactoryAddressEnv} must be a complete 20-byte EVM address`)
 					const normalized = getAddress(ammFactoryAddress)
 					if (!contracts.some(([address]) => address.toLowerCase() === normalized.toLowerCase())) contracts.push([normalized, 'Augur AMM Factory', 'ammFactory'])
+				}
+				const executorSetting = `${definition.id.toUpperCase()}_OPEN_ORACLE_EXECUTORS`
+				for (const value of (process.env[executorSetting] ?? '')
+					.split(',')
+					.map(entry => entry.trim())
+					.filter(Boolean)) {
+					if (!isAddress(value)) throw new Error(`${executorSetting} must contain complete 20-byte EVM addresses`)
+					const address = getAddress(value)
+					const existing = contracts.find(([candidate]) => candidate.toLowerCase() === address.toLowerCase())
+					if (existing !== undefined && existing[2] !== 'openOracleArbitrageExecutor') throw new Error(`${executorSetting} conflicts with ${existing[1]}`)
+					if (existing === undefined) contracts.push([address, 'OpenOracle arbitrage executor', 'openOracleArbitrageExecutor'])
 				}
 				// Uniswap V3 and V4 defaults come from the registry shared with the UIs, bots, and deployer.
 				const uniswapDeployment = getUniswapNetworkDeployment(definition.chainId)
@@ -148,7 +166,7 @@ export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 				if (explorerBaseUrl === undefined) throw new Error(`networks.json network ${definition.id} uses chain ${definition.chainId.toString()}, which has no shared block explorer`)
 				return {
 					id: definition.id,
-					name: definition.name,
+					name: outcome === 'no' ? `${definition.name} (No genesis)` : definition.name,
 					chainId: definition.chainId,
 					rpcUrls,
 					startBlock,
@@ -164,11 +182,17 @@ export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 }
 
 const parseRuntimeConfig = (environment: RuntimeEnvironment) => ({
+	claimReconstruction: {
+		maxReads: integerSetting(environment, 'CLAIM_MAX_READS', 1024, { maximum: 16_384 }),
+		maxGenerations: integerSetting(environment, 'CLAIM_MAX_GENERATIONS', 32, { maximum: 128 }),
+		maxLeaves: integerSetting(environment, 'CLAIM_MAX_LEAVES', 256, { maximum: 2048 }),
+	},
 	port: integerSetting(environment, 'PORT', 3000, { maximum: MAX_TCP_PORT }),
 	pollIntervalMs: integerSetting(environment, 'POLL_INTERVAL_MS', 12_000),
 	logScanRangeSize: integerSetting(environment, 'LOG_SCAN_RANGE_SIZE', 100_000),
 	postgresUrl: environment['POSTGRES_URL'] ?? 'postgres://augurscan:augurscan@localhost:5432/augurscan',
 	rpcLogPath: resolveRpcLogPath(environment['RPC_LOG_PATH']),
+	scanDirectCalls: environment['SCAN_DIRECT_CALLS'] === '1',
 	traceSelectedTransactions: environment['TRACE_SELECTED_TRANSACTIONS'] === '1',
 	disableIndexer: environment['DISABLE_INDEXER'] === '1',
 	apiRateLimitPerMinute: integerSetting(environment, 'API_RATE_LIMIT_PER_MINUTE', 600, { allowZero: true }),

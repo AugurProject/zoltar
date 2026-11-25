@@ -164,7 +164,7 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 				) ORDER BY event.block_number DESC, event.log_index DESC)
 				FROM (SELECT * FROM escalation_game_events evidence WHERE evidence.chain_id = page.chain_id
 					AND evidence.canonical ${throughSnapshot('evidence.block_number')} AND lower(evidence.event_data->>'depositor') = page.address
-					ORDER BY evidence.block_number DESC, evidence.log_index DESC LIMIT 100) event
+					ORDER BY evidence.block_number DESC, evidence.log_index DESC LIMIT 101) event
 			), '[]'::jsonb) AS escalation_claims,
 				COALESCE((SELECT jsonb_agg(jsonb_build_object(
 					'type', event.event_name, 'entity', event.auction_address, 'data', event.event_data,
@@ -183,7 +183,7 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 					WHERE refund.chain_id = page.chain_id AND refund.canonical ${throughSnapshot('refund.block_number')}
 						AND lower(refund.arguments->>'recipient') = page.address AND refund.event_name = 'RefundWithdrawn'
 						AND lower(evidence.event_data->>'bidder') IS DISTINCT FROM page.address
-					) matched ORDER BY matched.block_number DESC, matched.log_index DESC LIMIT 100) event
+					) matched ORDER BY matched.block_number DESC, matched.log_index DESC LIMIT 101) event
 			), '[]'::jsonb) AS auction_claims,
 				-- The latest tagged read of each capital position the address owns: one per universe ledger.
 				capital.items AS capital_positions, capital.total AS capital_position_count
@@ -212,6 +212,12 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 	)
 	return rows.map((row: Record<string, unknown>) => {
 		const { largest_rep_units: _sortValue, ...publicRow } = row
+		for (const field of ['auction_claims', 'escalation_claims']) {
+			const claims = publicRow[field]
+			if (!Array.isArray(claims)) continue
+			publicRow[`${field}_truncated`] = claims.length > 100
+			if (claims.length > 100) publicRow[field] = claims.slice(0, 100)
+		}
 		return publicRow
 	})
 }

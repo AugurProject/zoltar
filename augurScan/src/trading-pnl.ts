@@ -3,7 +3,7 @@ import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 const BPS_DENOMINATOR = 10_000n
 
 export const TRADING_PNL_BASIS =
-	'Cost basis includes collateral paid for complete sets minted for this account, directly or through the trading router, plus purchase fees recorded in the funding event; proceeds are the collateral returned when this account’s shares were redeemed, exited through the router, or settled. This calculation attributes router actions using funding, pool and share events; it does not use the indexed router events to resolve a differing payout recipient. Shares received by plain transfer carry no cost basis. While the market still trades, holdings are valued at the collateral an exit would return at the latest indexed reserves and complete-set exchange rate, and fee accrual after that pool event is not reflected; shares that such an exit cannot convert count as zero, so a partial valuation is a lower bound. After trading closes, holdings are not valued. Realized profit follows cost recovery: it counts only after proceeds exceed the collateral paid in, unless the position is closed.'
+	'Known cost includes collateral and purchase fees from indexed funding. Router exits credit the payout recipient recorded by the router. An incoming share or LP transfer with unobserved cost makes cost basis and profit unavailable. Open markets use indexed reserves and the complete-set exchange rate. Holdings that an exit cannot convert are excluded from this lower bound. Resolved markets with a tagged final outcome and settlement book value winning shares in collateral base units. Recovery REP is a separate asset. Realized profit uses cost recovery while holdings remain open.'
 
 export type TradingHoldings = {
 	readonly invalidShares: bigint
@@ -123,6 +123,31 @@ export const tradingHoldingsValue = (holdings: TradingHoldings, market: TradingM
 		insuredExitSets,
 		unvalued: { invalidShares: invalid, yesShares: yes, noShares: no, lpTokens },
 	}
+}
+
+export type SettledTradingClaim = {
+	readonly outcome: '0' | '1' | '2'
+	readonly supply: bigint
+	readonly questionUnits: bigint
+	readonly bookUnits: bigint
+	readonly bookCash: bigint
+}
+
+/** Apply the same two floors as SettlementMath.unitsForRedeemedShares and cashForUnits on a final cash reservation. */
+export const settledTradingHoldingsValue = (holdings: TradingHoldings, market: TradingMarketState, claim: SettledTradingClaim): TradingHoldingsValue | undefined => {
+	if (Object.values(holdings).some(balance => balance < 0n)) return undefined
+	const winning = { '0': holdings.invalidShares, '1': holdings.yesShares, '2': holdings.noShares }[claim.outcome]
+	let lpTokens = holdings.lpTokens
+	let lpWinning = 0n
+	if (lpTokens > 0n && claim.outcome === '0') lpTokens = 0n
+	if (lpTokens > 0n && market.reserves !== undefined && market.lpTotalSupply >= lpTokens) {
+		lpWinning = ((claim.outcome === '1' ? market.reserves.yes : market.reserves.no) * lpTokens) / market.lpTotalSupply
+		lpTokens = 0n
+	}
+	const burned = winning + lpWinning
+	if (burned > claim.supply || claim.questionUnits > claim.bookUnits) return undefined
+	const units = burned === 0n ? 0n : (claim.questionUnits * burned) / claim.supply
+	return { valueAttoEth: units === 0n ? 0n : (claim.bookCash * units) / claim.bookUnits, completeSetsRedeemed: 0n, insuredExitSets: 0n, unvalued: { invalidShares: 0n, yesShares: 0n, noShares: 0n, lpTokens } }
 }
 
 export type TradingProfitAndLoss = {
