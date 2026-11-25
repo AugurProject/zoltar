@@ -56,7 +56,7 @@ export const domainCatalogResponse = async (sql: SQL, url: URL, domain: 'reports
 		})
 	}
 	const cursor = protocolCursorForRequest(url, chainId, `${domain}-catalog`, 'catalog')
-	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])
+	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }], postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
 	const page = detailPage(url, chainId, `${domain}-catalog`, 'catalog', asOf, cursor)
 	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
 	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
