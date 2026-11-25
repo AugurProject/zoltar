@@ -140,7 +140,6 @@ function snapshot(): EcosystemSnapshot {
 				forkThresholdAttoRep: 1n.toString(),
 				forkTime: '0',
 				id: '0',
-				initialEscalationDepositAttoRep: (10n ** 18n).toString(),
 				knownChildOutcomes: [],
 				migrationBalance: '0',
 				migrationRepSplitProgressByOutcome: {},

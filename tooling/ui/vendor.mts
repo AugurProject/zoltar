@@ -1,11 +1,12 @@
 import * as path from 'node:path'
 import { promises as fs } from 'node:fs'
 import { getUiAppContractProject, getUiAppPaths, parseUiAppIdFromProcess } from './appPaths.mts'
-import { normalizeBundlerPath, resolveBundlerSpecifierPath } from './bundlerPaths.mts'
+import { resolveBundlerSpecifierPath } from './bundlerPaths.mts'
+import { copyProjectArtifacts } from './projectArtifacts.mts'
+
 type FileType = 'file' | 'directory'
 type VendorBuildSteps = {
 	readonly clearVendorOutput: () => Promise<void>
-	readonly bundleTevm: () => Promise<void>
 	readonly vendorDependencies: () => Promise<void>
 	readonly vendorFonts: () => Promise<void>
 	readonly copyProjectArtifacts: () => Promise<void>
@@ -29,7 +30,6 @@ async function recursiveDirectoryCopy(source: string, destination: string, inclu
 		}
 	}
 }
-import { copyProjectArtifacts } from './projectArtifacts.mts'
 
 function getVendorOutputPath() {
 	return path.join(getUiAppPaths(parseUiAppIdFromProcess('vendor build')).appRoot, 'vendor')
@@ -40,17 +40,13 @@ const dependencyPaths: Dependency[] = [
 	{ packageName: 'preact', mainEntrypointFile: 'preact.module.js' },
 	{ packageName: 'preact/jsx-runtime', mainEntrypointFile: 'jsxRuntime.module.js' },
 	{ packageName: 'preact/hooks', mainEntrypointFile: 'hooks.module.js' },
-	{ packageName: 'preact/compat', mainEntrypointFile: 'compat.module.js' },
 	{ packageName: '@preact/signals', mainEntrypointFile: 'signals.module.js' },
 	{ packageName: '@preact/signals-core', mainEntrypointFile: 'signals-core.module.js' },
-	{ packageName: 'abitype', mainEntrypointFile: 'exports/index.js' },
 	{ packageName: '@noble/hashes', mainEntrypointFile: 'index.js' },
 	{ packageName: '@noble/curves', mainEntrypointFile: 'index.js' },
 	{ packageName: '@scure/base', mainEntrypointFile: 'index.js' },
-	{ packageName: 'isows', mainEntrypointFile: 'native.js' },
 	{ packageName: 'micro-eth-signer', mainEntrypointFile: 'index.js' },
 	{ packageName: 'micro-packed', mainEntrypointFile: 'index.js' },
-	{ packageName: 'ox', mainEntrypointFile: 'index.js' },
 ]
 
 async function vendorDependencies(vendorOutputPath = getVendorOutputPath()) {
@@ -111,43 +107,9 @@ async function rewriteSourceMapSourcePath(packageName: string, sourcePath: strin
 	await fs.writeFile(destinationPath, JSON.stringify(fileContents))
 }
 
-type BuildResult = {
-	readonly success: boolean
-	readonly logs: readonly { readonly message: string }[]
-}
-
-export function assertSuccessfulBuilds(results: readonly BuildResult[], label: string) {
-	const failures = results.filter(result => !result.success)
-	if (failures.length === 0) return
-	const messages = failures.flatMap(result => result.logs.map(log => log.message))
-	throw new Error(`${label} failed${messages.length === 0 ? '' : `:\n${messages.join('\n')}`}`)
-}
-
-async function bundleTevm(vendorOutputPath = getVendorOutputPath()) {
-	const tevmOutRoot = path.join(vendorOutputPath, 'tevm')
-	const results = await Promise.all([
-		Bun.build({
-			entrypoints: [resolveBundlerSpecifierPath('@tevm/memory-client')],
-			naming: { entry: 'index.js' },
-			outdir: tevmOutRoot,
-			target: 'browser',
-			sourcemap: 'linked',
-		}),
-		Bun.build({
-			entrypoints: [resolveBundlerSpecifierPath('@tevm/common')],
-			naming: { entry: 'index.js' },
-			outdir: normalizeBundlerPath(path.join(tevmOutRoot, 'common')),
-			target: 'browser',
-			sourcemap: 'linked',
-		}),
-	])
-	assertSuccessfulBuilds(results, 'TEVM vendor bundle')
-}
-
 function createDefaultVendorBuildSteps(): VendorBuildSteps {
 	return {
 		clearVendorOutput,
-		bundleTevm,
 		vendorDependencies,
 		vendorFonts,
 		copyProjectArtifacts: async () => {
@@ -158,28 +120,27 @@ function createDefaultVendorBuildSteps(): VendorBuildSteps {
 	}
 }
 
-export async function vendor(steps: VendorBuildSteps = createDefaultVendorBuildSteps()) {
+export async function vendor(steps: VendorBuildSteps = createDefaultVendorBuildSteps(), artifactsAreCurrent = false) {
 	await steps.clearVendorOutput()
-	await steps.bundleTevm()
 	await steps.vendorDependencies()
 	await steps.vendorFonts()
-	await steps.copyProjectArtifacts()
+	if (!artifactsAreCurrent) await steps.copyProjectArtifacts()
 }
 
 export async function clearVendorOutput(vendorOutputPath = getVendorOutputPath()) {
 	await fs.rm(vendorOutputPath, { recursive: true, force: true })
 }
 
-/** The vendor CLI takes only the app ID (or UI_APP); artifacts follow the app, so any extra argument is an obsolete or mistyped option. */
+/** Builds that already projected artifacts can reuse them. Standalone vendoring projects them for its app. */
 export function assertVendorCommandArguments(args: readonly string[]) {
-	if (args.length > 1) throw new Error(`The vendor build accepts only an app ID; unexpected argument(s): ${args.slice(1).join(' ')}`)
+	if (args.length > 2 || (args.length === 2 && args[1] !== '--artifacts-current')) throw new Error(`Unexpected vendor build argument(s): ${args.slice(1).join(' ')}`)
 	const [first] = args
 	if (first?.startsWith('-') === true) throw new Error(`The vendor build accepts only an app ID; unexpected option: ${first}`)
 }
 
 if (import.meta.main) {
 	assertVendorCommandArguments(process.argv.slice(2))
-	vendor().catch(error => {
+	vendor(undefined, process.argv[3] === '--artifacts-current').catch(error => {
 		console.error(error)
 		process.exit(1)
 	})

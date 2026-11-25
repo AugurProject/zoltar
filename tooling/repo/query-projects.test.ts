@@ -15,6 +15,15 @@ test('query exposes registry-owned cache and artifact inputs', async () => {
 	expect(query.generatedCacheKey).toHaveLength(64)
 })
 
+test('CI cache profiles retain artifact paths and return only the requested keys', async () => {
+	const [paths, dependencies, contracts] = await Promise.all([projectQuery('paths'), projectQuery('dependencies'), projectQuery('contracts')])
+	expect(paths).toMatchObject({ dependencyCacheKey: '', generatedCacheKey: '', contractCacheKey: '' })
+	expect(dependencies).toMatchObject({ generatedCacheKey: '', contractCacheKey: '', generatedCachePaths: paths.generatedCachePaths })
+	expect(dependencies.dependencyCacheKey).toHaveLength(64)
+	expect(contracts).toMatchObject({ dependencyCacheKey: dependencies.dependencyCacheKey, generatedCacheKey: '', componentArtifactOutputs: paths.componentArtifactOutputs })
+	expect(contracts.contractCacheKey).toHaveLength(64)
+})
+
 test('transferred build inputs preserve shared freshness so consumers do not rebuild them', async () => {
 	const query = await projectQuery()
 	expect(query.componentArtifactOutputs).toContain('shared/.freshness-hash')

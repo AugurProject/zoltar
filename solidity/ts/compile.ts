@@ -83,14 +83,12 @@ const ContractData = funtypes.ReadonlyPartial({
 	evm: funtypes.ReadonlyPartial({
 		bytecode: funtypes.ReadonlyPartial({
 			object: funtypes.String,
-			opcodes: funtypes.String,
 			sourceMap: funtypes.String,
 			immutableReferences: funtypes.Unknown,
 			linkReferences: funtypes.Unknown,
 		}),
 		deployedBytecode: funtypes.ReadonlyPartial({
 			object: funtypes.String,
-			opcodes: funtypes.String,
 			sourceMap: funtypes.String,
 			immutableReferences: funtypes.Unknown,
 			linkReferences: funtypes.Unknown,
@@ -128,20 +126,7 @@ export const mainCompilerSettings = {
 	},
 	outputSelection: {
 		'*': {
-			'*': [
-				'abi',
-				'evm.bytecode.object',
-				'evm.bytecode.opcodes',
-				'evm.bytecode.sourceMap',
-				'evm.bytecode.immutableReferences',
-				'evm.bytecode.linkReferences',
-				'evm.deployedBytecode.object',
-				'evm.deployedBytecode.opcodes',
-				'evm.deployedBytecode.sourceMap',
-				'evm.deployedBytecode.immutableReferences',
-				'evm.deployedBytecode.linkReferences',
-				'storageLayout',
-			],
+			'*': ['abi', 'evm.bytecode.object', 'evm.bytecode.sourceMap', 'evm.bytecode.immutableReferences', 'evm.bytecode.linkReferences', 'evm.deployedBytecode.object', 'evm.deployedBytecode.sourceMap', 'evm.deployedBytecode.immutableReferences', 'evm.deployedBytecode.linkReferences', 'storageLayout'],
 		},
 	},
 }
@@ -160,8 +145,6 @@ type SolcCompiler = {
 	compile(input: string): string
 	version(): string
 }
-
-let openOracleCompilerPromise: Promise<SolcCompiler> | undefined
 
 class CompilationError extends Error {
 	errors: string[]
@@ -220,12 +203,8 @@ export function getMainCompilerVersion(): string {
 	return getCompilerVersion(solc)
 }
 
-export async function loadOpenOracleCompiler(): Promise<SolcCompiler> {
-	if (openOracleCompilerPromise) return openOracleCompilerPromise
-
-	openOracleCompilerPromise = Promise.resolve(openOracleSolc)
-
-	return openOracleCompilerPromise
+export function loadOpenOracleCompiler(): SolcCompiler {
+	return openOracleSolc
 }
 
 async function computeContractHash(sourceFiles: Map<string, string>, openOracleCompiler: SolcCompiler): Promise<string> {
@@ -537,7 +516,7 @@ const compileContracts = async () => {
 
 	const sources = await loadContractSources(selectedProject)
 
-	const openOracleCompiler = await loadOpenOracleCompiler()
+	const openOracleCompiler = loadOpenOracleCompiler()
 	const currentContractHash = await computeContractHash(sources, openOracleCompiler)
 	const cache = await loadHashCache()
 	let needsRecompilation = !(cache.hash === currentContractHash && (await exists(ARTIFACTS_JSON)))
@@ -556,7 +535,14 @@ const compileContracts = async () => {
 
 	if (needsRecompilation) {
 		console.log('Changes detected or first run. Compiling Solidity contracts...')
-		const mainResult = compileSourceMap('main contracts', solc, createMainCompilerSources(sources), mainCompilerSettings)
+		const mainSources = createMainCompilerSources(sources)
+		const mainSettings = sources.has(OPEN_ORACLE_LOCAL_PATH)
+			? {
+					...mainCompilerSettings,
+					outputSelection: Object.fromEntries([...mainSources.keys()].filter(sourcePath => !isTemporaryCompilerSourcePath(sourcePath) && !isReplacedLocalOracleSourcePath(sourcePath)).map(sourcePath => [sourcePath, mainCompilerSettings.outputSelection['*']])),
+				}
+			: mainCompilerSettings
+		const mainResult = compileSourceMap('main contracts', solc, mainSources, mainSettings)
 		const mergedResult = sources.has(OPEN_ORACLE_LOCAL_PATH) ? CompileResult.parse(mergeCompileResults(mainResult, compileSourceMap('OpenOracle', openOracleCompiler, createOpenOracleCompilerSources(sources), openOracleCompilerSettings), openOracleCompiler)) : mainResult
 
 		if (!(await exists(ARTIFACTS_DIR))) await fs.mkdir(ARTIFACTS_DIR, { recursive: true })

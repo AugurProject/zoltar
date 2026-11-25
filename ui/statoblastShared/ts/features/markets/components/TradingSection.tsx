@@ -11,7 +11,6 @@ import { EnumDropdown } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
-import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
@@ -58,7 +57,6 @@ import type { TradingSectionProps } from '../../types.js'
 type TradingActionModal = 'mint' | 'redeem-complete-sets' | 'migrate-shares' | 'redeem-shares' | undefined
 export function TradingSection({
 	accountState,
-	embedInCard = false,
 	loadingTradingForkUniverse,
 	loadingTradingDetails,
 	collateralFunding,
@@ -75,8 +73,6 @@ export function TradingSection({
 	tradingForm,
 	tradingForkUniverse,
 	tradingResult,
-	showHeader = true,
-	showQuestionLedgerAddressInput = true,
 }: TradingSectionProps) {
 	const collateralDecimals = collateralFunding?.collateral?.decimals ?? 18
 	const collateralSymbol = collateralFunding?.collateral?.symbol ?? collateralCopy.fallback
@@ -321,15 +317,6 @@ export function TradingSection({
 	]
 	const sections = (
 		<>
-			{!showQuestionLedgerAddressInput ? undefined : (
-				<SectionBlock density='compact' variant='embedded'>
-					<label className='field'>
-						<span>{commonCopy.questionLedgerAddress}</span>
-						<FormInput value={tradingForm.questionLedgerAddress} onInput={event => onTradingFormChange({ questionLedgerAddress: event.currentTarget.value })} placeholder={commonCopy.hexValuePlaceholder} />
-					</label>
-				</SectionBlock>
-			)}
-
 			{/* Holdings first, then one row of share actions with their buttons aligned across the cards. */}
 			<div className={selectedPool === undefined ? 'trading-workspace-layout is-single' : 'trading-workspace-layout'}>
 				{selectedPool === undefined ? undefined : (
@@ -531,10 +518,5 @@ export function TradingSection({
 			</OperationModal>
 		</>
 	)
-	if (embedInCard) return sections
-	return (
-		<RouteWorkflowPanel showHeader={showHeader} title={tradingCopy.shares}>
-			{sections}
-		</RouteWorkflowPanel>
-	)
+	return <RouteWorkflowPanel title={tradingCopy.shares}>{sections}</RouteWorkflowPanel>
 }
