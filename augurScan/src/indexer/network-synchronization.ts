@@ -109,13 +109,16 @@ export async function reconcileManifestBackfill(state: NetworkIndexerState): Pro
 	console.info(`[${state.network.id}] manifest history gap detected; rewound to ${ancestor < 0n ? 'before the configured start block' : `block #${ancestor}`} to replay from block #${replayStart}`)
 }
 
-async function reconcileReorg(state: NetworkIndexerState): Promise<void> {
+async function reconcileReorg(state: NetworkIndexerState, observedHead?: bigint): Promise<void> {
 	const checkpoint = await state.database.checkpoint(state.network.chainId, requireLease(state))
 	if (checkpoint === undefined) return
-	const remote = await getBlockHeader(state.providers, checkpoint.number)
-	if (remote.hash === checkpoint.hash) return
+	const head = observedHead ?? (await state.providers.client.getBlockNumber())
+	const shared = checkpoint.number <= head ? checkpoint : await state.database.canonicalCheckpointAtOrBefore(state.network.chainId, head, requireLease(state))
+	if (shared === undefined) return
+	const remote = await getBlockHeader(state.providers, shared.number)
+	if (remote.hash === shared.hash) return
 	const ancestor = await findSparseCanonicalAncestor(
-		checkpoint.number - 1n,
+		shared.number - 1n,
 		blockNumber => state.database.canonicalCheckpointAtOrBefore(state.network.chainId, blockNumber, requireLease(state)),
 		async blockNumber => (await getBlockHeader(state.providers, blockNumber)).hash,
 		state.signal,
@@ -193,7 +196,6 @@ export async function poll(state: NetworkIndexerState, operations: PollOperation
 	const scanReport = startScanReport({
 		network: state.network,
 		blockTimeMs: scanBlockTimeMs(state.network.chainId, runtimeConfig.scanBlockTimeMsOverride),
-		readHead: () => state.providers.client.getBlockNumber(),
 		heartbeatIntervalMs: 30_000,
 	})
 	try {
@@ -209,19 +211,19 @@ export async function poll(state: NetworkIndexerState, operations: PollOperation
 async function pollWithReport(state: NetworkIndexerState, operations: PollOperations, scanReport: ReturnType<typeof startScanReport>): Promise<boolean> {
 	await assertLease(state)
 	await state.database.recordIndexerOwnership(state.network.chainId, state.network.id, 'owned', requireLease(state).backendPid, state.provenance?.indexerRunId, requireLease(state).connection)
-	await operations.reconcileReorg(state)
 	const observedHead = await state.providers.client.getBlockNumber()
+	await operations.reconcileReorg(state, observedHead)
 	scanReport.update({ observedHead })
 	if (!state.stateBoundary.discovered && observedHead >= state.network.startBlock) await discoverStateStartBlock(state, observedHead)
 	const checkpoint = await state.database.checkpoint(state.network.chainId, requireLease(state))
 	const nextBlock = checkpoint === undefined ? state.network.startBlock : checkpoint.number + 1n
 	if (nextBlock > observedHead) {
-		if (checkpoint !== undefined) await operations.refreshStateSamples(state, checkpoint.number, checkpoint.hash)
+		if (checkpoint !== undefined && checkpoint.number <= observedHead) await operations.refreshStateSamples(state, checkpoint.number, checkpoint.hash)
 		await assertLease(state)
 		await state.database.updateObservedHead(state.network.chainId, observedHead, 'live', requireLease(state))
 		if (checkpoint === undefined) reportWaitingForStart(state, observedHead)
-		scanReport.update({ block: checkpoint?.number, status: checkpoint === undefined ? 'waiting' : 'live', details: { blocksScanned: 0, logsAdded: 0 } })
-		if (checkpoint !== undefined) await operations.refreshContractDeployment(state, checkpoint.number)
+		scanReport.update({ block: checkpoint?.number, status: 'waiting', details: { blocksScanned: 0, logsAdded: 0 } })
+		if (checkpoint !== undefined && checkpoint.number <= observedHead) await operations.refreshContractDeployment(state, checkpoint.number)
 		return true
 	}
 

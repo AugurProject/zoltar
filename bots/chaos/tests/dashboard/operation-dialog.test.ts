@@ -67,6 +67,7 @@ test(
 				if (historyFixture)
 					return {
 						...fixture.state,
+						execute: fixture.configuration.settings.runtime.execute,
 						workflows: [
 							{
 								id: 'seed-current',
@@ -97,7 +98,7 @@ test(
 							{ id: 'failed', label: 'Initialize REP/WETH pool', status: 'failed', createdAt: '2026-09-17T16:29:00Z', updatedAt: '2026-09-17T16:29:10Z', steps: [{ label: 'Initialize REP/WETH pool', status: 'failed' }] },
 						],
 					}
-				return fixture.state
+				return { ...fixture.state, execute: fixture.configuration.settings.runtime.execute }
 			},
 			getConfiguration: () => ({ hasSigner: true, revision: fixture.configuration.revision, settings: serializedSettings(fixture.configuration.settings, true), wallet: fixture.state.wallet }),
 			setOperation: async value => {

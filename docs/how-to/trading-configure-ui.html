@@ -33,7 +33,7 @@
 			</section>
 			<section id="network">
 				<h2>Select a network and RPC</h2>
-				<p>Open <strong>Settings</strong> in the header. Choose the <strong>RPC network</strong>, and optionally enter a <strong>Fallback RPC URL</strong> and select <strong>Save RPC</strong>. A custom RPC must use HTTPS, or HTTP on a loopback address, and must serve the selected chain. It is used only until a wallet is connected on the selected chain; after that, the wallet's own RPC serves reads and transactions.</p>
+				<p>Open <strong>Settings</strong> in the header. Choose the <strong>RPC network</strong>, and optionally enter a <strong>Fallback RPC URL</strong> and select <strong>Save RPC</strong>. A custom RPC must use HTTPS, or HTTP on a loopback address, and must serve the selected chain. Trading uses this endpoint for deployment checks even when a wallet is connected. Once connected on the selected chain, the wallet serves ordinary market reads and submits transactions.</p>
 				<p>The UI then checks the RPC chain and the core contracts, and derives the Trading factory and router addresses for that network. If either is not deployed, the deployment screen opens; <a href="./trading-deploy-contracts.html">Deploy the Trading contracts</a> covers it. The configuration works when the <strong>Markets</strong> tab opens. The <a href="../reference/trading/configuration.html#client">configuration reference</a> describes what the client derives and checks.</p>
 			</section>
 		</main>

@@ -75,18 +75,16 @@ function reservesFor(side: Side, { yesReserve, noReserve }: Reserves, direction:
 /** Impact of the pool moving against the trade, measured against the pre-trade mid price and excluding the pool fee. */
 function buyImpactBps(side: Side, quote: EnterPositionQuote, market: Reserves) {
 	const { reserveIn, reserveOut } = reservesFor(side, market, 'entry')
-	const netInput = quote.oppositeSharesSwapped - quote.feeAmount
-	const idealTotal = quote.completeSetShares + (netInput * reserveOut) / reserveIn
-	if (idealTotal === 0n) return 0n
-	return ((idealTotal - quote.totalLongShares) * BPS) / idealTotal
+	// The continuous curve isolates price movement from integer rounding in the executable quote.
+	const feeFactor = BPS - market.feeBps
+	const scaledInput = quote.completeSetShares * feeFactor
+	return (BPS * feeFactor * reserveOut * scaledInput) / ((BPS * reserveIn + feeFactor * reserveOut) * (BPS * reserveIn + scaledInput))
 }
 
 function sellImpactBps(side: Side, quote: ExitPositionQuote, market: Reserves) {
 	const { reserveIn, reserveOut } = reservesFor(side, market, 'exit')
-	const idealTotal = quote.completeSetShares + (quote.completeSetShares * reserveIn) / reserveOut
-	const actualTotal = quote.totalLongShares - quote.feeAmount
-	if (actualTotal === 0n || actualTotal <= idealTotal) return 0n
-	return ((actualTotal - idealTotal) * BPS) / actualTotal
+	const output = quote.completeSetShares
+	return (BPS * output * reserveIn) / (reserveOut * (reserveOut - output + reserveIn))
 }
 
 type EstimateResult = Readonly<{ estimate: TradeEstimate | undefined; problem: string | undefined }>
@@ -199,19 +197,22 @@ export function maximumInsuredSellEstimate(market: LiveMarket, side: Side, balan
 const LIMIT_DIGITS = 6
 
 /** A share or ETH amount trimmed to eight decimals for the amount field; amounts below that step stay exact. */
-export function roundDownShortcut(value: bigint, decimals = 18) {
+function roundDownShortcut(value: bigint, decimals = 18) {
 	const step = 10n ** BigInt(Math.max(0, decimals - 8))
 	return value < step ? value : value - (value % step)
 }
 
 /** The 25%, 50%, and Max shortcuts for a sell, as share amounts. Like the buy shortcuts they divide what can be sold now, so none fills a sale the ticket would refuse. */
-function sellShortcuts(sellable: bigint | undefined, market: LiveMarket) {
+function sellShortcuts(sellable: bigint | undefined, market: LiveMarket, side: Side, slippageBps: bigint) {
 	if (sellable === undefined || sellable === 0n) return []
 	return [
 		{ label: ticketCopy.quarter, value: roundDownShortcut(sellable / 4n, collateralAsset(market).decimals) },
 		{ label: ticketCopy.half, value: roundDownShortcut(sellable / 2n, collateralAsset(market).decimals) },
-		{ label: ticketCopy.max, value: roundDownShortcut(sellable, collateralAsset(market).decimals) },
-	].filter(shortcut => shortcut.value > 0n)
+		{ label: ticketCopy.max, value: sellable },
+	].filter(shortcut => {
+		const { estimate } = estimateSell(market, side, shortcut.value, slippageBps, sellable)
+		return estimate !== undefined && estimate.impactBps <= PRICE_IMPACT_BLOCKED_BPS
+	})
 }
 
 /**
@@ -247,7 +248,10 @@ function buyShortcuts(market: LiveMarket, side: Side, walletEthAttoEth: bigint |
 		{ label: ticketCopy.quarter, value: roundDownShortcut(buyable / 4n, collateralAsset(market).decimals) },
 		{ label: ticketCopy.half, value: roundDownShortcut(buyable / 2n, collateralAsset(market).decimals) },
 		{ label: ticketCopy.max, value: roundDownShortcut(buyable, collateralAsset(market).decimals) },
-	].filter(shortcut => shortcut.value > 0n)
+	].filter(shortcut => {
+		const { estimate } = estimateBuy(market, side, shortcut.value, slippageBps)
+		return estimate !== undefined && estimate.impactBps <= PRICE_IMPACT_BLOCKED_BPS
+	})
 }
 
 function largestBudgetWithinMintingCapacity(market: LiveMarket, budget: bigint) {
@@ -276,19 +280,27 @@ function insufficientEthReason(payAttoEth: bigint, walletEthAttoEth: bigint) {
  * A buy mints complete sets, which the question ledger refuses past its remaining capacity. The reason states the largest
  * buy that is accepted: the capacity, or the price-impact limit when buying the whole capacity would itself be refused.
  */
+function limitDigits(value: bigint, market: LiveMarket) {
+	const decimals = collateralAsset(market).decimals
+	return value > 0n && value < 10n ** BigInt(Math.max(0, decimals - LIMIT_DIGITS)) ? decimals : LIMIT_DIGITS
+}
+
 function mintingCapacityReason(payAttoEth: bigint, market: LiveMarket, side: Side, slippageBps: bigint) {
 	const capacity = market.availableMintingCapacityAttoEth
 	if ((estimateBudgetMint(market, payAttoEth) ?? payAttoEth) <= capacity) return undefined
 	if (capacity === 0n) return ticketCopy.mintingCapacityExhaustedReason
 	const capacityBudget = largestBudgetWithinMintingCapacity(market, payAttoEth)
 	const largest = largestTradableBuy(market, side, capacityBudget, slippageBps)
-	if (largest < capacityBudget) return ticketCopy.formatPriceImpactBlockedReason(formatCollateralAmount(largest, market, LIMIT_DIGITS, 'down'))
-	return ticketCopy.formatMintingCapacityReason(formatTrimmedUnits(capacityBudget, collateralAsset(market).decimals, LIMIT_DIGITS), collateralAsset(market).symbol)
+	if (largest < capacityBudget) return ticketCopy.formatPriceImpactBlockedReason(formatCollateralAmount(largest, market, limitDigits(largest, market), 'down'))
+	return ticketCopy.formatMintingCapacityReason(formatTrimmedUnits(capacityBudget, collateralAsset(market).decimals, limitDigits(capacityBudget, market)), collateralAsset(market).symbol)
 }
 
 /** A refused price impact names the largest amount of the same trade the pool takes within the limit. */
 function priceImpactBlockedReason(estimate: TradeEstimate, market: LiveMarket, settings: TradeSettings, balances: LiveBalances | undefined) {
-	if (estimate.kind === 'entry') return ticketCopy.formatPriceImpactBlockedReason(formatCollateralAmount(largestTradableBuy(market, estimate.side, estimate.payAttoEth, settings.slippageBps), market, LIMIT_DIGITS, 'down'))
+	if (estimate.kind === 'entry') {
+		const largest = largestTradableBuy(market, estimate.side, estimate.payAttoEth, settings.slippageBps)
+		return ticketCopy.formatPriceImpactBlockedReason(formatCollateralAmount(largest, market, limitDigits(largest, market), 'down'))
+	}
 	const longBalance = estimate.side === 'YES' ? balances?.yes : balances?.no
 	const largest = largestTradableSell(market, estimate.side, settings.slippageBps, longBalance, balances?.invalid)
 	return ticketCopy.formatPriceImpactBlockedReason(formatOutcomeQuantity(largest, estimate.side, LIMIT_DIGITS, 'down', market))
@@ -320,8 +332,10 @@ export function buyReturn(estimate: BuyEstimate, market: LiveMarket) {
  */
 export function poolFeeAttoEth(estimate: TradeEstimate, market: LiveMarket) {
 	const feeOutcomeIsYes = estimate.kind === 'entry' ? estimate.side === 'NO' : estimate.side === 'YES'
-	const feeOutcomeBps = feeOutcomeIsYes ? estimate.quote.conditionalYesBpsBefore : BPS - estimate.quote.conditionalYesBpsBefore
-	return attoSharesToCollateralAttoEth((estimate.quote.feeAmount * feeOutcomeBps) / BPS, market)
+	const total = market.yesReserve + market.noReserve
+	if (total === 0n) return 0n
+	const weight = feeOutcomeIsYes ? market.noReserve : market.yesReserve
+	return attoSharesToCollateralAttoEth((estimate.quote.feeAmount * weight) / total, market)
 }
 
 /** The wallet's holding of the traded outcome once the trade settles; undefined while balances are unknown or below the sale. */
@@ -334,6 +348,7 @@ export function holdingAfterTrade(estimate: TradeEstimate, balances: LiveBalance
 
 /** What the trade ticket holds for one market between renders. */
 export type TicketInputs = Readonly<{
+	amountUnit?: string | undefined
 	mode: TradeMode
 	side: Side
 	amount: string
@@ -387,7 +402,7 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 	const parsed = parseTradeAmount(mode, inputs.amount, market)
 	const longBalance = side === 'YES' ? balances?.yes : balances?.no
 	let estimated: EstimateResult = { estimate: undefined, problem: undefined }
-	if (parsed.value !== undefined) estimated = mode === 'entry' ? estimateBuy(market, side, parsed.value, settings.slippageBps) : estimateSell(market, side, parsed.value, settings.slippageBps, longBalance)
+	if (!inputs.marketClosed && parsed.value !== undefined) estimated = mode === 'entry' ? estimateBuy(market, side, parsed.value, settings.slippageBps) : estimateSell(market, side, parsed.value, settings.slippageBps, longBalance)
 	const { estimate, problem } = estimated
 	const sellable = mode === 'exit' ? sellableShares(market, side, balances, settings.slippageBps) : undefined
 	const impactTier = estimate === undefined ? undefined : priceImpactTier(estimate.impactBps)
@@ -437,7 +452,7 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 		impactAcknowledged,
 		shortfall,
 		sellable,
-		shortcuts: mode === 'exit' ? sellShortcuts(sellable, market) : buyShortcuts(market, side, inputs.walletEthAttoEth, settings.slippageBps),
+		shortcuts: mode === 'exit' ? sellShortcuts(sellable, market, side, settings.slippageBps) : buyShortcuts(market, side, inputs.walletEthAttoEth, settings.slippageBps),
 		// Connecting comes first: without a wallet the ticket still prices the trade, and the button offers to connect.
 		primaryStep,
 		availability: actionAvailability.reason !== undefined && loadingReasons.includes(actionAvailability.reason) ? { ...actionAvailability, loading: true } : actionAvailability,

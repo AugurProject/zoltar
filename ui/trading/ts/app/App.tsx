@@ -75,7 +75,8 @@ function failedDeploymentStatus(error: unknown): LiveDeploymentStatus {
 
 function readTradingUrlState(search: string) {
 	// An empty `universe=` counts as present, so it is rewritten like any other malformed value.
-	return { universeId: readUniverseQueryParam(search), present: new URLSearchParams(search).has('universe') }
+	const effectiveSearch = new URLSearchParams(search).has('universe') ? search : window.location.search
+	return { universeId: readUniverseQueryParam(effectiveSearch), present: new URLSearchParams(effectiveSearch).has('universe') }
 }
 
 async function resolveCanonicalLiveDeployment(coreDeployments: readonly CoreDeployment[], createPublicClient: (configuration: DeploymentConfiguration) => PublicClient = createTradingPublicClient) {

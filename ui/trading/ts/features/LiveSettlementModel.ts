@@ -33,6 +33,7 @@ export function settlementInputBlocker(operation: SettlementOperation, unavailab
 	if (unavailableReason !== undefined) return unavailableReason
 	if (operation === 'redeem-complete-set') {
 		if (parsedAmountAttoShares === undefined || parsedAmountAttoShares <= 0n) return availabilityCopy.amountReason(parsedAmountAttoShares)
+		if (parsedAmountAttoShares > completeSetsAttoShares && (rate.settlementRecoveryAttoRep ?? 0n) > 0n) return settlementCopy.formatSetQuantityLimit(formatCompleteSetQuantity(completeSetsAttoShares, rate.collateral?.decimals ?? 18, 'down', rate))
 		if (parsedAmountAttoShares > completeSetsAttoShares) return settlementCopy.formatCompleteSetLimit(formatCollateralEth(completeSetsAttoShares, rate, 'down'), formatCompleteSetQuantity(completeSetsAttoShares, 4, 'down', rate))
 		if (attoSharesToCollateralAttoEth(parsedAmountAttoShares, rate) === 0n && attoSharesToRecoveryAttoRep(parsedAmountAttoShares, rate) === 0n) return settlementCopy.completeSetAmountTooSmall
 	}

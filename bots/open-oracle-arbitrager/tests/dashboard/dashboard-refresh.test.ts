@@ -1,7 +1,8 @@
 import { parseSettlementSettings, settlementSettings, settlementSnapshot } from '#state/settlement-store'
 import { canonicalExecutorIdentity } from '#execution/executor-identity'
 import { afterEach, expect, test } from 'bun:test'
-import { Browser, type BrowserWindow, type Element } from 'happy-dom'
+import { Browser, type BrowserWindow } from 'happy-dom'
+import { acceptOperatorDialog, element } from '../support/dashboard-elements.ts'
 import { join } from 'node:path'
 import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
@@ -16,23 +17,6 @@ import { operatorStateFixture } from '../support/operator-state.ts'
 const servers: ReturnType<typeof startDashboardServer>[] = []
 const browsers: Browser[] = []
 const address = '0x0000000000000000000000000000000000000001' as Address
-
-async function acceptOperatorDialog(window: BrowserWindow, phrase?: string) {
-	let dialog: Element | null = null
-	for (let attempt = 0; attempt < 100 && dialog === null; attempt++) {
-		dialog = window.document.querySelector('.operator-confirm-dialog')
-		if (dialog === null) await Bun.sleep(10)
-	}
-	if (dialog === null) throw new Error('Expected operator confirmation dialog')
-	if (phrase !== undefined) {
-		const input = element(window, 'operator-confirm-phrase', window.HTMLInputElement)
-		input.value = phrase
-		input.dispatchEvent(new window.Event('input', { bubbles: true }))
-	}
-	const confirm = element(window, 'operator-confirm-submit', window.HTMLButtonElement)
-	for (let attempt = 0; attempt < 100 && confirm.disabled; attempt++) await Bun.sleep(10)
-	confirm.click()
-}
 
 afterEach(async () => {
 	for (const server of servers.splice(0)) server.stop(true)
@@ -298,7 +282,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	mainnetSelect.dispatchEvent(new window.Event('change'))
 	await acceptOperatorDialog(window)
 	for (let attempt = 0; attempt < 100 && !element(window, 'connectivity-status', window.HTMLElement).textContent.includes('did not reconnect in time'); attempt++) await Bun.sleep(20)
-	expect(element(window, 'connectivity-status', window.HTMLElement).textContent).toBe('The profile was saved, but the dashboard did not reconnect in time. Retry the profile load when the dashboard is available.')
+	expect(element(window, 'connectivity-status', window.HTMLElement).textContent).toBe('The dashboard did not reconnect in time. Retry to load the active chain profile and its saved settings.')
 	const profileRetry = element(window, 'profile-switch-retry-button', window.HTMLButtonElement)
 	expect(profileRetry.hidden).toBe(false)
 	expect(profileRetry.disabled).toBe(false)
@@ -316,6 +300,19 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	expect(element(window, 'pause-button', window.HTMLButtonElement).disabled).toBe(false)
 	const profitInput = window.document.querySelector('[name="minimumProfitBps"]')
 	if (!(profitInput instanceof window.HTMLInputElement)) throw new Error('Missing minimum profit input')
+	expect(profitInput.value).toBe('333')
+
+	// A switch that never took effect must also recover: state and configuration still report mainnet.
+	networkSelect.value = 'sepolia'
+	networkSelect.dispatchEvent(new window.Event('change'))
+	await acceptOperatorDialog(window)
+	for (let attempt = 0; attempt < 100 && profileRetry.hidden; attempt++) await Bun.sleep(20)
+	expect(profileRetry.hidden).toBe(false)
+	profileRetry.click()
+	for (let attempt = 0; attempt < 200 && !profileRetry.hidden; attempt++) await Bun.sleep(10)
+	expect(profileRetry.hidden).toBe(true)
+	expect(networkSelect.value).toBe('mainnet')
+	expect(element(window, 'strategy-fieldset', window.HTMLFieldSetElement).disabled).toBe(false)
 	expect(profitInput.value).toBe('333')
 
 	page.evaluate(await (await fetch(new URL('/header-notices.js', server.url))).text())
@@ -360,12 +357,6 @@ function stubIntervals(window: BrowserWindow) {
 		if (refresh === undefined) throw new Error('Dashboard did not register its refresh interval')
 		refresh()
 	}
-}
-
-function element<T extends Element>(window: BrowserWindow, id: string, elementConstructor: { new (): T }): T {
-	const found = window.document.getElementById(id)
-	if (!(found instanceof elementConstructor)) throw new Error(`Missing dashboard element ${id}`)
-	return found
 }
 
 async function mountDashboard(server: ReturnType<typeof startDashboardServer>, path: string) {

@@ -122,6 +122,7 @@ export function SecurityPoolQuestionsPanel({
 	useBlockRefresh(() => void refreshRows(), enabled && saved.length > 0)
 	useStatoblastPageRefresh(registerPageRefresh, refreshRows)
 	const details = savedDetails?.scope === readScope ? savedDetails : undefined
+	const showSkeleton = rowsLoading && details === undefined && saved.length > 0
 	const [result, setResult] = useState<{ scope: string; status: string; id: bigint; mint: boolean; readAt: number }>()
 	const [error, setError] = useState<string>()
 	const [checking, setChecking] = useState(false)
@@ -221,11 +222,9 @@ export function SecurityPoolQuestionsPanel({
 				)}
 				{selected?.status === 'invalid-pool' && <p>{pageCopy.invalidPool}</p>}
 				<RetryableNotice message={rowsError} retryLabel={pageCopy.tryAgain} onRetry={() => void refreshRows()} disabled={rowsLoading} />
-				{saved.length === 0 ? (
-					<p>{pageCopy.emptySavedQuestionsDetail}</p>
-				) : rowsLoading && details === undefined ? (
-					<SkeletonList label={pageCopy.checking} rows={Math.min(3, saved.length)} />
-				) : (
+				{saved.length === 0 && <p>{pageCopy.emptySavedQuestionsDetail}</p>}
+				{showSkeleton && <SkeletonList label={pageCopy.checking} rows={Math.min(3, saved.length)} />}
+				{saved.length > 0 && !showSkeleton && (
 					<table className='statoblast-watchlist-table' role='table'>
 						<thead>
 							<tr>
@@ -241,7 +240,7 @@ export function SecurityPoolQuestionsPanel({
 								const row = details?.rows.find(candidate => candidate.entity.id === entry.id)
 								const question = row?.question
 								const questionId = formatQuestionIdHex(entry.questionId)
-								const title = favoriteQuestions.entries.find(candidate => candidate.id === entry.id)?.label || question?.marketDetails.title || questionId
+								const title = question?.marketDetails.title || questionId
 								const shares = row?.shares
 								const hasPosition = (row?.reportingPrincipal ?? 0n) > 0n || (shares !== undefined && Object.values(shares).some(amount => amount > 0n))
 								const outcome = question?.questionOutcome ?? 'none'

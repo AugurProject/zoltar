@@ -287,8 +287,10 @@ test.each([undefined, owner] as const)('a forked pool on Capital checks other fu
 							throw new Error('RPC unavailable')
 						}
 						return first === foreignEscrow ? olderCredit : 1n
-					case 'storedGame':
-						return getOpenOracleGameTuple({ ...fixture.game, settlementTimestamp: 1100n, callbackContract: first === 11n ? foreignEscrow : first === 8n ? olderEscrow : priceEscrow })
+					case 'storedGame': {
+						const callbackContract = first === 8n ? olderEscrow : priceEscrow
+						return getOpenOracleGameTuple({ ...fixture.game, settlementTimestamp: 1100n, callbackContract: first === 11n ? foreignEscrow : callbackContract })
+					}
 					default:
 						throw new Error(`Unexpected multicall ${name}`)
 				}

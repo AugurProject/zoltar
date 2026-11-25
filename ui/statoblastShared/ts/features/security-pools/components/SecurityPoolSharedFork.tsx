@@ -59,9 +59,7 @@ export function SecurityPoolSharedFork({
 	const model = useSecurityPoolSharedFork(parameters)
 	const state = model.state
 	const livePool = parameters.snapshot
-	const verifiedFork = state ?? (livePool === undefined
-		? undefined
-		: { controller: livePool.forkController, universeId: livePool.universeId, blockNumber: livePool.blockNumber, blockHash: livePool.blockHash, branch: undefined })
+	const verifiedFork = state ?? (livePool === undefined ? undefined : { controller: livePool.forkController, universeId: livePool.universeId, blockNumber: livePool.blockNumber, blockHash: livePool.blockHash, branch: undefined })
 	const display = model.displayedState
 	const refreshError = useStatoblastRefreshError(model.forkError, redesigned ? model.displayedAt : undefined)
 	const actionDataNotice = useOldActionDataNotice(redesigned ? model.displayedAt : undefined)

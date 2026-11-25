@@ -204,11 +204,12 @@ export function statoblastPageCache(profile: NetworkProfile, identity: { pool: A
 				})
 				if (reusable.length > 0) {
 					const responses = await withTimeout(client.readContract({ abi: aggregateAbi, address: multicall, functionName: 'aggregate3', args: [reusable.map(item => item.call)], blockNumber: block }), 15_000, poolReadTimeout)
-					if (responses.length !== reusable.length) throw new Error(poolBatchResponseInvalid)
-					const results = responses.flatMap((response, index) => {
+					if (!Array.isArray(responses) || responses.length !== reusable.length) throw new Error(poolBatchResponseInvalid)
+					const results = responses.flatMap((response: unknown, index) => {
 						const entry = reusable[index]
-						if (entry === undefined || !response.success) return []
-						const result = response.returnData
+						if (entry === undefined || !isStoredRecord(response) || typeof response['success'] !== 'boolean' || typeof response['returnData'] !== 'string' || !isHex(response['returnData'])) throw new Error(poolBatchResponseInvalid)
+						if (!response['success']) return []
+						const result = response['returnData']
 						return [{ read: entry.read, value: entry.balance ? toHex(BigInt(result)) : result }]
 					})
 					for (const result of results) record(result.read, result.value)
@@ -216,7 +217,8 @@ export function statoblastPageCache(profile: NetworkProfile, identity: { pool: A
 				for (const entry of plan.reads) {
 					if (entry.request.method === 'eth_getCode') record(replaceBlock(entry.request, block), entry.response)
 				}
-			} catch {
+			} catch (error) {
+				if (!isCurrent()) throw error
 				if (livePlan === plan) livePlan = undefined
 				// The normal read below verifies fresh runtime codes and rebuilds the plan.
 			}

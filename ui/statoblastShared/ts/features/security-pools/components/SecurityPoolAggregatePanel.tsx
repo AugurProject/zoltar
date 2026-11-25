@@ -287,7 +287,7 @@ export function SecurityPoolAggregatePanel({ model, actions, priceDeadlineChecki
 					else if (actions.lastFailedAction === 'serveSecurityPoolRetirement') releaseLabel = copy.retryRelease
 					return (
 						<div key={key}>
-							<SecurityPoolRetirementPreview snapshot={snapshot} position={position} redesigned />
+							<SecurityPoolRetirementPreview snapshot={snapshot} position={position} />
 							{waitingReasonId !== undefined && (
 								<span className='visually-hidden' id={waitingReasonId}>
 									{copy.waitingForFreeCapacity}

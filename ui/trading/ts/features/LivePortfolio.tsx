@@ -1,3 +1,5 @@
+import { hasSubmissionWindow } from '@zoltar/ui-core-shared/transactions/submissionTiming.js'
+import { hasPortfolioBalance } from './portfolioModel.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import * as availabilityCopy from '../copy/availability.js'
@@ -70,7 +72,7 @@ function PortfolioPositionDetails({ market, balances, settings, nowSeconds }: { 
 	let coveredSets = balances.invalid
 	if (yesClaim < coveredSets) coveredSets = yesClaim
 	if (noClaim < coveredSets) coveredSets = noClaim
-	const canExit = market.loadError === undefined && market.pair !== undefined && market.lpTotalSupply > 0n && marketAcceptsNewRisk(market, nowSeconds)
+	const canExit = market.loadError === undefined && market.pair !== undefined && market.lpTotalSupply > 0n && marketAcceptsNewRisk(market, nowSeconds) && hasSubmissionWindow(nowSeconds, market.endTime)
 	const maximumYesExit = canExit ? (maximumInsuredSellEstimate(market, 'YES', balances, settings.slippageBps)?.quote.completeSetShares ?? 0n) : 0n
 	const maximumNoExit = canExit ? (maximumInsuredSellEstimate(market, 'NO', balances, settings.slippageBps)?.quote.completeSetShares ?? 0n) : 0n
 	return (
@@ -109,10 +111,6 @@ function renderPortfolioStatus(entry: PortfolioBalanceEntry) {
 	if (entry.market.universeForkTime !== 0n) return <Badge tone='warning'>{blockerCopy.universeForked}</Badge>
 	if (entry.market.systemState !== 0) return <Badge tone='warning'>{blockerCopy.poolInactive}</Badge>
 	return undefined
-}
-
-function hasPortfolioBalance(balances: LiveBalances) {
-	return balances.yes > 0n || balances.no > 0n || balances.invalid > 0n || balances.lp > 0n
 }
 
 type PortfolioWalletAction = Readonly<{ label: ComponentChildren; disabled: boolean; onClick(): void }>

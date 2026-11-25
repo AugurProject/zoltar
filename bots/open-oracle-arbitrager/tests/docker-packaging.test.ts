@@ -38,7 +38,7 @@ describe('Docker packaging', () => {
 			port: 4173,
 			runtimeChecks: [],
 		})
-		expect(service.environment).toEqual({ ZOLTAR_BOT_COMPOSE_UI_PORT: '4173', ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: 'true', ZOLTAR_BOT_SIGNER_LOCK_ROOT: '.state/process-locks', ZOLTAR_BOT_VERIFIED_MARKETS: '${ZOLTAR_BOT_VERIFIED_MARKETS-}' })
+		expect(service.environment).toEqual({ ZOLTAR_BOT_COMPOSE_UI_PORT: '4173', ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: 'true', ZOLTAR_BOT_SIGNER_LOCK_ROOT: '.state/process-locks', ZOLTAR_BOT_RPC_QUORUM: '${ZOLTAR_BOT_RPC_QUORUM-1}', ZOLTAR_BOT_VERIFIED_MARKETS: '${ZOLTAR_BOT_VERIFIED_MARKETS-}' })
 		expect(service.volumes).toEqual(expect.arrayContaining(['signer-locks:/app/bots/open-oracle-arbitrager/.state/process-locks']))
 		const compose: unknown = Bun.YAML.parse(await readFile(join(botDirectory, 'compose.yaml'), 'utf8'))
 		expect(compose).toMatchObject({ volumes: { 'signer-locks': { name: 'zoltar-bot-signer-locks', external: true } } })

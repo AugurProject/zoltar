@@ -92,6 +92,7 @@ export function useZoltarMigration({
 			zoltarMigrationFeedback.value = createPendingActionFeedback('splitMigrationRep', transactionCopy.migratingRep)
 			zoltarMigrationResult.value = undefined
 			const submittedForm = zoltarMigrationForm.value
+			let ownResult: ZoltarMigrationActionResult | undefined
 			let outcomeLabels = submittedForm.outcomeIndexes.map(outcomeIndex => getMigrationOutcomeTextForIndex(zoltarUniverse?.childUniverses, outcomeIndex))
 
 			try {
@@ -116,6 +117,7 @@ export function useZoltarMigration({
 				outcomeLabels = outcomeIndexes.map(outcomeIndex => getMigrationOutcomeTextForIndex(universe.childUniverses, outcomeIndex))
 				const result = await migrateInternalRepInZoltar(createWalletWriteClient(accountAddress, { onTransactionPrepared, onTransactionSubmitted }), universe.universeId, amount, outcomeIndexes, preparationAttoRep)
 				if (!environmentGuard.isCurrent()) return
+				ownResult = result
 				zoltarMigrationResult.value = result
 				zoltarMigrationFeedback.value = createSuccessActionFeedback(result.action, transactionCopy.repMigrated, result.hash)
 				// Clear the amount so the wizard returns to the amount step with refreshed balances instead of re-offering the same migration.
@@ -146,7 +148,8 @@ export function useZoltarMigration({
 			} catch (error) {
 				if (!environmentGuard.isCurrent()) return
 				const message = formatRefreshErrorMessage(error, 'REP migrated, but the page could not be refreshed.')
-				const latestResult = zoltarMigrationResult.value
+				if (ownResult === undefined || zoltarMigrationResult.value !== ownResult) return
+				const latestResult = ownResult
 				zoltarMigrationFeedback.value = createWarningActionFeedback(latestResult?.action ?? 'splitMigrationRep', transactionCopy.repMigrated, message, latestResult?.hash)
 				if (latestResult !== undefined) onTransactionPresented(createZoltarMigrationWarningPresentation(latestResult, outcomeLabels, message))
 			}

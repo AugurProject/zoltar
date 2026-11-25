@@ -22,6 +22,9 @@ const failures = assets.flatMap(asset => {
 	if (typeof asset !== 'object' || asset === null) return ['Invalid asset result']
 	const sources = Reflect.get(asset, 'sources')
 	if (!Array.isArray(sources)) return ['Asset result has no sources']
-	return sources.flatMap(source => (typeof source === 'object' && source !== null && Reflect.get(source, 'status') === 'failed' ? [String(Reflect.get(source, 'id'))] : []))
+	return sources.flatMap(source => {
+		if (typeof source !== 'object' || source === null) return ['Invalid source result']
+		return Reflect.get(source, 'status') === 'observed' ? [] : [String(Reflect.get(source, 'id') ?? 'Unknown source')]
+	})
 })
 if (failures.length > 0) throw new Error(`Market source smoke test failed for: ${failures.join(', ')}`)

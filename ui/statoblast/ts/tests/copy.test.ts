@@ -81,7 +81,9 @@ test('shared Statoblast errors and decoding labels follow the redesign glossary'
 	])
 	expect(
 		checkCopy(directory, files, node => {
-			const expression = ts.isTemplateSpan(node.parent) ? node.parent.parent : ts.isTemplateExpression(node.parent) ? node.parent : node
+			let expression: ts.Node = node
+			if (ts.isTemplateSpan(node.parent)) expression = node.parent.parent
+			else if (ts.isTemplateExpression(node.parent)) expression = node.parent
 			const parent = expression.parent
 			if (ts.isNewExpression(parent)) return parent.expression.getText() === 'Error' && parent.arguments?.[0] === expression
 			if (!ts.isCallExpression(parent)) return false

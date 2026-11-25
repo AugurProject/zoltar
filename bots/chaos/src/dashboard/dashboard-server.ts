@@ -1,5 +1,5 @@
 import { isRecoveryWorkflowStatus } from './recovery-status.ts'
-import { publicChaosState, publicChaosConfiguration, publicRpcHealth, publicSubmissionHealth, publicSubmissionHealthMaximumAgeSeconds } from './public-state.ts'
+import { hasFreshCanonicalScan, publicChaosState, publicChaosConfiguration, publicRpcHealth, publicSubmissionHealth, publicSubmissionHealthMaximumAgeSeconds } from './public-state.ts'
 export { publicChaosState, publicChaosConfiguration } from './public-state.ts'
 import type { ChaosDashboardController } from './dashboard-controller-contract.ts'
 import { logDashboardFailure, publicDashboardError } from '@zoltar/bot-shared/dashboard/public-error'
@@ -76,7 +76,7 @@ export function publicChaosReadiness(stateValue: unknown, configurationValue: un
 	const maximumScanAgeSeconds = publicSubmissionHealthMaximumAgeSeconds(configurationValue)
 	const scanAgeSeconds = lastScanAt === undefined ? undefined : Math.max(0, Math.floor((nowMilliseconds - Date.parse(lastScanAt)) / 1_000))
 	const topology = record(state['topology'])
-	const scanReady = lastScanAt !== undefined && scanAgeSeconds !== undefined && scanAgeSeconds <= maximumScanAgeSeconds && topology?.['complete'] === true
+	const scanReady = hasFreshCanonicalScan(lastScanAt, maximumScanAgeSeconds, nowMilliseconds) && topology?.['complete'] === true
 	const pendingCount = Array.isArray(state['pendingTransactions']) ? state['pendingTransactions'].length : 0
 	const activeWorkflows = Array.isArray(state['workflows'])
 		? state['workflows'].filter(candidate => {
@@ -96,7 +96,8 @@ export function publicChaosReadiness(stateValue: unknown, configurationValue: un
 	const automaticRetryObligationCount = obligations.filter(candidate => candidate['status'] === 'deferred' && typeof candidate['notBefore'] === 'string').length
 	const lifecyclePresenceBlocked = record(state['lifecyclePresenceBlocker']) !== undefined
 	const recoveryReady = pendingCount === 0 && activeWorkflows === 0 && failedObligationCount === 0 && blockedObligationCount === 0 && pendingObligationCount === 0 && automaticRetryObligationCount === 0 && !lifecyclePresenceBlocked
-	const inventoryReady = !execute || inventoryReadyForLiveExecution(state, settings)
+	const retirementStatus = record(state['retirement'])?.['status']
+	const inventoryReady = !execute || (typeof retirementStatus === 'string' && retirementStatus !== 'inactive') || inventoryReadyForLiveExecution(state, settings)
 	const rpcHealth = publicRpcHealth(state['rpcEndpointHealth'], configurationValue)
 	const rpcReady = !configured || rpcHealth['chainReady'] === true
 	const submissionHealth = publicSubmissionHealth(state['rpcEndpointHealth'], configurationValue, nowMilliseconds, maximumScanAgeSeconds)
@@ -259,9 +260,9 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 				const handler = mutationRoutes(controller).get(url.pathname)
 				if (handler !== undefined) {
 					return await enqueueMutation(async () => {
-						if (configurationCommitIndeterminate) return indeterminateConfigurationFailure()
 						try {
 							const value = await boundedDashboardJson(request)
+							if (configurationCommitIndeterminate && !(url.pathname === '/api/operation' && record(value)?.['action'] === 'status')) return indeterminateConfigurationFailure()
 							const result = await handler(value)
 							return json(url.pathname === '/api/operation' ? result : { saved: true })
 						} catch (error) {

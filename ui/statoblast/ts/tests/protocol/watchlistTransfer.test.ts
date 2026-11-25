@@ -135,10 +135,18 @@ test.each(['expired', 'historical read failed'] as const)('watchlist retries fro
 			getBlock: async request => ({ ...createBlockWithTimestamp(11n), number: request?.blockNumber ?? 2n, hash }),
 			multicall: createMulticallStub(({ blockNumber, contracts }) => {
 				if (blockNumber === 1n) throw new Error('Historical state unavailable')
-				return contracts.map(call => ({
-					status: 'success',
-					result: call.functionName === 'isSecurityPool' ? true : call.functionName === 'annualFeeBps' ? 20n : call.functionName === 'universes' ? [0n, 0n] : '0x0000000000000000000000000000000000000000',
-				}))
+				return contracts.map(({ functionName }) => {
+					switch (functionName) {
+						case 'isSecurityPool':
+							return { status: 'success', result: true }
+						case 'annualFeeBps':
+							return { status: 'success', result: 20n }
+						case 'universes':
+							return { status: 'success', result: [0n, 0n] }
+						default:
+							return { status: 'success', result: '0x0000000000000000000000000000000000000000' }
+					}
+				})
 			}),
 		})
 		const entries = condition === 'expired' ? [entry] : [entry, entry]

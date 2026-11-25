@@ -61,7 +61,23 @@ export function useZoltarUniverse(
 	currentZoltarContextRef.current = { activeUniverseId, environmentRefreshKey, zoltarDeployed, includeRelatedUniverses }
 
 	const { reset: resetChildDeployment, ...childDeployment } = useChildUniverseDeployment(
-		{ accountAddress, activeUniverseId, universe: zoltarUniverse.value, ensureZoltarUniverse: () => ensureZoltarUniverse(), refreshZoltarUniverse: () => refreshZoltarUniverse(), onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted },
+		{
+			accountAddress,
+			activeUniverseId,
+			universe: zoltarUniverse.value,
+			ensureZoltarUniverse: () => ensureZoltarUniverse(),
+			refreshZoltarUniverse: async () => {
+				const refreshed = await refreshZoltarUniverse()
+				if (refreshed === undefined && zoltarUniverseError.value !== undefined) throw new Error(zoltarUniverseError.value)
+				return refreshed
+			},
+			onTransactionFailed,
+			onTransactionFinished,
+			onTransactionPresented,
+			onTransactionPrepared,
+			onTransactionRequested,
+			onTransactionSubmitted,
+		},
 		dependencies,
 	)
 
@@ -113,6 +129,10 @@ export function useZoltarUniverse(
 			onSuccess: universe => {
 				if (!isCurrentZoltarContext(universeLoadContext) || scalarOutcomeIndexes.current !== requestedScalarOutcomeIndexes) return
 				if (universe === undefined) {
+					universeCommitVersionRef.current += 1
+					zoltarUniverse.value = undefined
+					zoltarUniverseLoadedId.value = undefined
+					if (universeQueryKey !== undefined) zoltarUniverseQueries.set(universeQueryKey, undefined)
 					zoltarUniverseResolvedId.value = requestedUniverseId
 					zoltarUniverseMissing.value = requestedUniverseId !== 0n
 					return
@@ -160,7 +180,14 @@ export function useZoltarUniverse(
 							}),
 					)
 					.then(universe => {
-						if (universe === undefined || !isMounted.current || !isCurrentZoltarContext(universeContext) || universeLoad.isLoading.peek() || universeCommitVersionRef.current !== commitVersion) return
+						if (!isMounted.current || !isCurrentZoltarContext(universeContext) || universeLoad.isLoading.peek() || universeCommitVersionRef.current !== commitVersion) return
+						if (universe === undefined) {
+							zoltarUniverseMissing.value = activeUniverseId !== 0n
+							zoltarUniverse.value = undefined
+							zoltarUniverseResolvedId.value = activeUniverseId
+							return
+						}
+						zoltarUniverseMissing.value = false
 						if (!isSameQueryData(universe, zoltarUniverse.value)) zoltarUniverse.value = universe
 					}),
 			)

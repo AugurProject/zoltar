@@ -70,11 +70,14 @@ export function deploymentProgressStore(profile: NetworkProfile, owner: Address 
 			}
 		},
 		write: (progress: DeploymentProgress | undefined) => {
+			if (storage === undefined) return false
 			try {
-				if (progress === undefined) storage?.removeItem(key)
-				else storage?.setItem(key, JSON.stringify(progress))
+				if (progress === undefined) storage.removeItem(key)
+				else storage.setItem(key, JSON.stringify(progress))
+				return true
 			} catch (error) {
 				if (!(error instanceof DOMException)) throw error
+				return false
 			}
 		},
 	}

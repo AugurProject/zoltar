@@ -17,7 +17,7 @@ import { getProtocolPageOffset, hasTimestampAndNumber } from '@zoltar/ui-zoltar-
 import { type WriteContractClient, writeContractAndWait, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { getOpenOracleAddress } from './deploymentHelpers.js'
 import { loadOpenOracleStoredState, isOpenOracleStateUnavailable } from './openOracleState.js'
-import { getOpenOraclePriceSettlement, isFeedAuthenticatedReportEscrow, loadCoordinatorPriceValidUntilTimestamp } from './openOracleSettlement.js'
+import { getAuthenticatedReportEscrowFeed, getOpenOraclePriceSettlement, isFeedAuthenticatedReportEscrow, loadCoordinatorPriceValidUntilTimestamp } from './openOracleSettlement.js'
 import * as openOracleCopy from '../copy/openOracle.js'
 import { requireBigintValue } from './decoders.js'
 import { requireOpenOracleDisputeSubmissionWindow } from './openOracleDisputeTiming.js'
@@ -465,14 +465,13 @@ export async function settleOracleReport<TReceipt extends Pick<TransactionReceip
 	const reviewedBlock = coordinatorPriceValidUntilTimestamp === undefined ? undefined : await client.getBlock?.()
 	const reviewedPriceExpired = coordinatorPriceValidUntilTimestamp !== undefined && reviewedBlock !== undefined && reviewedBlock.timestamp >= coordinatorPriceValidUntilTimestamp
 	const reviewedStateHash = hashOpenOracleStatePreimage(resolvedPreimage)
-	// Without a multicall-capable client the callback stays untrusted, which only raises the budget or refuses.
-	const trustedCallback = client.multicall === undefined ? false : await isFeedAuthenticatedReportEscrow({ multicall: client.multicall }, openOracleAddress, resolvedPreimage.game.callbackContract, reportId)
+	const priceFeed = client.multicall === undefined ? undefined : await getAuthenticatedReportEscrowFeed({ multicall: client.multicall }, openOracleAddress, resolvedPreimage.game.callbackContract, reportId)
 	const callParams = {
 		address: openOracleAddress,
 		abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'settle',
 		...(reviewedPriceExpired ? { reviewDescription: openOracleCopy.staleSettlementWarning } : {}),
-		gas: getOpenOracleSettleGasLimit(resolvedPreimage.game, trustedCallback),
+		gas: getOpenOracleSettleGasLimit(resolvedPreimage.game, priceFeed !== undefined),
 		args: [reportId, getOpenOracleGameTuple(resolvedPreimage.game), getOpenOracleHelperTuple(resolvedPreimage.helper)],
 	}
 	client.onTransactionPlan?.([
@@ -493,7 +492,7 @@ export async function settleOracleReport<TReceipt extends Pick<TransactionReceip
 		},
 	])
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
-	const priceSettlement = getOpenOraclePriceSettlement(receipt, resolvedPreimage.game.callbackContract, reportId) ?? (coordinatorPriceValidUntilTimestamp === undefined ? undefined : { status: 'unconfirmed' as const })
+	const priceSettlement = priceFeed === undefined ? undefined : (getOpenOraclePriceSettlement(receipt, priceFeed, reportId) ?? { status: 'unconfirmed' as const })
 	return {
 		action: 'settle',
 		hash,

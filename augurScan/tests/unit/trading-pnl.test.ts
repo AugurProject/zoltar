@@ -93,3 +93,14 @@ describe('trading exit availability', () => {
 		expect(tradingExitAvailability({ ...open, awaitingForkContinuation: true, resolved: true })).toEqual({ open: false, reason: 'Trading has closed because the pool is not operational' })
 	})
 })
+
+test('values complete sets after trading closes while leaving directional holdings pending', () => {
+	const market = { reserves: { yes: 1_000n, no: 1_000n }, feeBps: 30n, lpTotalSupply: 100n, completeSetRate: rate }
+	expect(tradingHoldingsValue(holdings(10n, 10n, 2n), market, { allowInsuredExit: false })).toEqual({
+		valueAttoEth: 4n,
+		completeSetsRedeemed: 2n,
+		insuredExitSets: 0n,
+		unvalued: holdings(8n, 8n, 0n),
+	})
+	expect(tradingHoldingsValue(holdings(10n, 10n, 2n), market)?.insuredExitSets).toBeGreaterThan(0n)
+})

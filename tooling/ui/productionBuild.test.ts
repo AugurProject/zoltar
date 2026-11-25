@@ -638,7 +638,7 @@ test(
 				expect(await driver.evaluate('document.querySelector(".statoblast-question-loading") === null')).toBe(true)
 				const coldMethods = await driver.evaluate('window.__statoblastRpcMethods.slice()')
 				expect(coldMethods).toContain('eth_call')
-				expect(coldMethods).toEqual(await driver.evaluate('window.__delayedRpcMethods.slice()'))
+				expect(await driver.evaluate('JSON.stringify(window.__statoblastRpcMethods) === JSON.stringify(window.__delayedRpcMethods)')).toBe(true)
 
 				await driver.navigate(`?rpcDelay=10000${watchlist}`)
 				await driver.waitForBodyText('Saved security pools')
@@ -650,7 +650,7 @@ test(
 				await driver.waitForExpression('window.__delayedRpcMethods.includes("eth_getBlockByNumber")')
 				await driver.waitForButtonEnabled('Refresh', 0, 120_000)
 				expect(await driver.evaluate('document.body.innerText')).not.toContain('Couldn’t refresh')
-				expect(await driver.evaluate('window.__statoblastRpcMethods.slice()')).toEqual(await driver.evaluate('window.__delayedRpcMethods.slice()'))
+				expect(await driver.evaluate('JSON.stringify(window.__statoblastRpcMethods) === JSON.stringify(window.__delayedRpcMethods)')).toBe(true)
 
 				await driver.navigate(coldQuestion.href)
 				await driver.waitForButtonEnabled('Redeem sets', 0, 180_000)
@@ -667,7 +667,7 @@ test(
 				await driver.waitForBodyText('0.99 sets', 240_000)
 				const delayed = await driver.evaluate('window.__delayedRpcMethods.slice()')
 				expect(delayed).toContain('eth_sendTransaction')
-				expect(await driver.evaluate('window.__statoblastRpcMethods.slice()')).toEqual(delayed)
+				expect(await driver.evaluate('JSON.stringify(window.__statoblastRpcMethods) === JSON.stringify(window.__delayedRpcMethods)')).toBe(true)
 			},
 			SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS - PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS,
 		)
@@ -845,6 +845,8 @@ productionInteractionTest('capital-recovery', '#/watchlist?simulate=1&genesis=ye
 	await driver.waitForButtonEnabled('Approve 1\u00a0REP')
 	await driver.clickButton('Approve 1\u00a0REP')
 	await createWorkflowActions(driver).completeTransactionReview(undefined, securityPoolCopy.confirmed)
+	await driver.waitForExpression('Array.from(document.querySelectorAll("[role=dialog]")).some(dialog => dialog.innerText.includes("Confirmed"))')
+	await driver.pressEscape()
 	await driver.waitForButtonEnabled(capitalCopy.deposit)
 	await driver.clickButton(capitalCopy.deposit)
 	const failureInjected = await driver.evaluate(
@@ -860,6 +862,7 @@ productionInteractionTest('capital-recovery', '#/watchlist?simulate=1&genesis=ye
 	await driver.waitForButtonEnabled('Continue in wallet')
 	await createWorkflowActions(driver).completeTransactionReview(undefined, securityPoolCopy.confirmed)
 	await driver.waitForBodyText(securityPoolCopy.confirmed)
+	await driver.waitForExpression('Array.from(document.querySelectorAll("[role=dialog]")).some(dialog => dialog.innerText.includes("Confirmed"))')
 	expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5001REP')
 })
 

@@ -129,9 +129,9 @@ test('a pending retirement locks the commitment: no cancel, no new request and n
 	const { hook } = await setup(retiring)
 	expect(Object.keys(hook.state().positionReasons(1n))).toEqual(['retire'])
 	expect('cancelRetirement' in hook.state()).toBe(false)
-	expect(hook.state().positionReasons(1n).retire).toBe('A reduction is already in queue.')
+	expect(hook.state().positionReasons(1n).retire).toBe('A commitment reduction is already in queue.')
 	await act(() => hook.state().setCommitmentAmount('11'))
-	expect(hook.state().authorizeReason).toBe('Your commitment is locked until the reduction is released.')
+	expect(hook.state().authorizeReason).toBe('This commitment is locked until its reduction clears.')
 })
 test('commitment starts from funded target capacity and lowering a target never sends authorization', async () => {
 	const { hook, requests } = await setup()
@@ -497,7 +497,7 @@ test('re-submits the saved pending target while keeping other retirement values 
 	const pending = { ...snapshot, positions: snapshot.positions.map(position => ({ ...position, batch: 1n, remainingCommitment: 5n * unit })) }
 	const { hook, requests } = await setup(pending)
 	expect(hook.state().positionReasons(1n, 5n * unit).retire).toBeUndefined()
-	expect(hook.state().positionReasons(1n, 4n * unit).retire).toBe('A reduction is already in queue.')
+	expect(hook.state().positionReasons(1n, 4n * unit).retire).toBe('A commitment reduction is already in queue.')
 	await act(async () => {
 		await hook.state().retire(1n, 5n * unit)
 	})

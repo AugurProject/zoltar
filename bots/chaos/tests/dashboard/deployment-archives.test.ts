@@ -24,7 +24,7 @@ browserTest(
 			getConfiguration: () => ({ hasSigner: true, revision: 'config', settings: { network: { chainId: 11155111, name: 'sepolia' }, paused, runtime: { execute: false }, strategy: {} }, wallet }),
 			getState: () => {
 				if (failState) throw new Error('Intentional bot state read failure')
-				return { activities: [], evaluations: [], inventory: { rep: [] }, obligations: [], paused, pendingTransactions: [], profileId, wallet, workflows: [], retirement: { status: active === 'current' ? 'inactive' : 'blocked', recipient: wallet, blockers: [], positions: [] } }
+				return { execute: false, activities: [], evaluations: [], inventory: { rep: [] }, obligations: [], paused, pendingTransactions: [], profileId, wallet, workflows: [], retirement: { status: active === 'current' ? 'inactive' : 'blocked', recipient: wallet, blockers: [], positions: [] } }
 			},
 			getDeploymentArchives: async () => {
 				readStarted = true

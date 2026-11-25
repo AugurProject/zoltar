@@ -1,3 +1,4 @@
+import { CONFIGURATION_REQUEST_TIMEOUT_MS } from '@zoltar/bot-shared/dashboard/polling'
 import { element, shorten } from '@zoltar/bot-shared/dashboard/dom'
 import { confirmOperatorAction } from '@zoltar/bot-shared/dashboard/confirmation'
 import { formIsDirty, formIsSubmitting, markFormClean, refreshAllFormButtons, setFormSubmitting, trackForm } from '@zoltar/bot-shared/dashboard/form-state'
@@ -11,7 +12,7 @@ type GoLiveFormsContext = {
 	actionStatus: (target: HTMLElement, message: string, failed?: boolean) => void
 	configuration: () => Configuration | undefined
 	populateConfiguration: (configuration: Configuration) => void
-	put: (path: string, value: unknown) => Promise<unknown>
+	put: (path: string, value: unknown, timeoutMilliseconds?: number) => Promise<unknown>
 	refresh: () => Promise<void>
 	/** Reloads the configuration document; resolves false when the bot could not be reached. */
 	reloadConfiguration: () => Promise<boolean>
@@ -78,7 +79,7 @@ export function registerGoLiveForms({ actionStatus, configuration, populateConfi
 		setFormSubmitting('execution-form', true)
 		actionStatus(executionStatus, execute ? 'Arming live execution…' : 'Saving dry-run mode…')
 		try {
-			const next = decodeConfiguration(await put('/api/execution', { execute }))
+			const next = decodeConfiguration(await put('/api/execution', { execute }, CONFIGURATION_REQUEST_TIMEOUT_MS))
 			populateConfiguration(next)
 			load(next, 'execution-form')
 			await refresh()

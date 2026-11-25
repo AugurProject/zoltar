@@ -31,8 +31,9 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('system', 'weth', ['Deposit', 'Withdrawal']),
 	...definitions('report', 'open-oracle-report', ['ReportSubmitted', 'ReportDisputed', 'ReportSettled'], ['reportId']),
 	...definitions('oracle', 'arbitrage-executor', ['HedgeAndDisputeExecuted', 'LifecycleExecuted', 'ReplacementCreditWithdrawn']),
-	...definitions('oracle', 'price-coordinator', ['PendingReportRecovered', 'PriceReportDeferred', 'PriceReportRejected', 'PriceReported', 'PriceRequested', 'InternalApproval']),
-	...definitions('oracle', 'price-feed', ['ExposureCheckpoint', 'ReportFundingAssigned', 'ReportOperationAttempted']),
+	...definitions('oracle', 'price-coordinator', ['PendingReportRecovered', 'PriceReportDeferred', 'PriceReportRejected', 'PriceReported', 'PriceRequested']),
+	...definitions('oracle', 'open-oracle', ['InternalApproval']),
+	...definitions('oracle', 'price-feed', ['ExposureCheckpoint', 'PriceCandidateAccepted', 'ReportFundingAssigned', 'ReportOperationAttempted']),
 	...definitions('escalation', 'escalation', [
 		'CarryDepositConsumed',
 		'ClaimDeposit',
@@ -144,6 +145,7 @@ const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined
 	// The custody contract identifies repairs by universe; its book identifies them by book ID.
 	const definition = eventDomains[eventName]
 	if (definition === undefined) return undefined
+	if (eventName === 'PriceCandidateAccepted' && log.contractKind !== 'sharedPoolPriceFeed') return undefined
 	if (eventName === 'ApprovalForAll' && log.contractKind !== 'shareToken') return undefined
 	if ((eventName === 'Deposit' || eventName === 'Withdrawal') && log.contractKind !== 'weth') return undefined
 	if (eventName === 'PairCreated' && log.contractKind !== 'ammFactory') return undefined

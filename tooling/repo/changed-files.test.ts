@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { execFileSync } from 'node:child_process'
+import { runGit } from './git.mts'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -76,7 +76,7 @@ test('test planning treats a final baseline-path deletion as deleted', () => {
 
 test('test planning resolves committed, staged, unstaged, and untracked paths against the merge base', async () => {
 	const repositoryRoot = await mkdtemp(join(tmpdir(), 'changed-files-final-state-'))
-	const git = (args: string[]) => execFileSync('git', args, { cwd: repositoryRoot, encoding: 'utf8' }).trim()
+	const git = (args: string[]) => runGit(args, { cwd: repositoryRoot })
 	try {
 		git(['init'])
 		git(['config', 'user.email', 'tests@example.com'])
@@ -100,11 +100,13 @@ test('test planning resolves committed, staged, unstaged, and untracked paths ag
 		git(['mv', 'rename.test.ts', 'renamed.test.ts'])
 		git(['rm', 'deleted.test.ts'])
 		await writeFile(join(repositoryRoot, 'modified.test.ts'), 'unstaged change\n')
+		await writeFile(join(repositoryRoot, ' leading.test.ts'), 'untracked with leading whitespace\n')
 		await writeFile(join(repositoryRoot, 'untracked.test.ts'), 'untracked\n')
 
-		expect(getChangedFiles(git)).toEqual(['committed.test.ts', 'deleted.test.ts', 'modified.test.ts', 'rename.test.ts', 'renamed.test.ts', 'untracked.test.ts'])
+		expect(getChangedFiles(git)).toEqual([' leading.test.ts', 'committed.test.ts', 'deleted.test.ts', 'modified.test.ts', 'rename.test.ts', 'renamed.test.ts', 'untracked.test.ts'])
 
 		expect(getChangedFileEntries(git)).toEqual([
+			{ path: ' leading.test.ts', status: 'added' },
 			{ path: 'committed.test.ts', status: 'modified' },
 			{ path: 'deleted.test.ts', status: 'deleted' },
 			{ path: 'modified.test.ts', status: 'modified' },

@@ -25,7 +25,7 @@ export function getOutcomeSides(reportingDetails: ReportingDetails | undefined) 
 			key: side.key,
 			label: side.label,
 			userDeposits: side.userDeposits,
-			userStake: side.localPrincipalAttoRep ?? side.userDeposits.reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n),
+			userStake: (side.localPrincipalAttoRep ?? side.userDeposits.reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n)) + side.importedUserDeposits.reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n),
 		}))
 	if (reportingDetails?.status === 'not-started')
 		return REPORTING_OUTCOME_DROPDOWN_OPTIONS.map<EscalationSideDisplay>(option => ({

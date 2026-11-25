@@ -118,7 +118,7 @@ function state(
 		activities: [],
 		operatorCapable: true,
 		alerts,
-		configurationRevision: options.configurationRevision,
+		configurationRevision: options.configurationRevision ?? 'fixture-revision',
 		deploymentCheckedBlock: options.deploymentCheckedBlock,
 		deploymentMissingName: options.deploymentMissingName,
 		error,
@@ -1263,7 +1263,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		await page.waitUntilComplete()
 		await Bun.sleep(1)
 		expect(page.pauseRequests.length).toBeGreaterThan(0)
-		expect(page.pauseRequests).toEqual(page.pauseRequests.map(() => ({ paused: false })))
+		expect(page.pauseRequests).toEqual(page.pauseRequests.map(() => ({ paused: false, revision: 'fixture-revision' })))
 	})
 })
 

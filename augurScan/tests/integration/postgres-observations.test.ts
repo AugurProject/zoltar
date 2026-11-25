@@ -105,6 +105,10 @@ const storeInitialObservationAttempts = async ({ database, observationChainId, e
 			initialRun,
 		)
 		await database.storeRichListBalances(observationChainId, 1n, evidenceHash, [{ owner: address, assetAddress: discoveredAddress, assetKind: 'rep', balance: 88n }], initialLease, replayRun)
+		const targets = await database.richListBalanceTargets(observationChainId, 10, initialLease, evidenceHash)
+		expect(targets.addresses.map(owner => owner.toLowerCase())).toContain(address.toLowerCase())
+		expect(targets.completed?.has(`${address.toLowerCase()}:${discoveredAddress.toLowerCase()}`)).toBe(true)
+		expect(targets.completed?.has(`${address.toLowerCase()}:${zeroAddress}`)).toBe(false)
 	} finally {
 		await initialLease.release()
 	}

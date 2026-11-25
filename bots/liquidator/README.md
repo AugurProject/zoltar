@@ -76,6 +76,8 @@ To operate on Sepolia, choose Sepolia in the dashboard's **Chain** selector and 
 
 The dashboard's Settings page is grouped into setup steps with a jump bar: **1 · Connect** (chain and RPCs), **2 · Markets** (approved universes, market configuration), **3 · Liquidation policy** (strategy and automation), and **4 · Go live** (execution signer, submission, execution mode). Each form's save button unlocks only after an edit differs from the loaded values and its panel shows an **Unsaved changes** badge until it is saved. Saving one panel keeps unsaved edits in the others.
 
+Startup verifies every configured quorum endpoint before the first scan. An unavailable endpoint keeps the process in connectivity-degraded mode until startup verification succeeds. Subsequent scans use the configured quorum threshold.
+
 Keep live execution off until the factory, WETH, signer, selected security pools, RPC endpoints, gas limits, and REP limits have been reviewed. The **Execution mode** panel under Go live lists every prerequisite the bot enforces (execution signer, chain and RPC endpoints, independent quorum RPCs, canonical contracts, delivery) plus advisory rows for approved universes, supported security pools, and market evidence, and keeps the live switch locked until the required rows hold. Enabling it pauses the bot and reserves the signer for this process; resume through the readiness check to start signing. A memory-only signer arms live mode in the running process alone: the saved file keeps paused dry-run mode so a restart cannot execute without its key. `runtime.execute` in the operator file remains the startup mode.
 
 Submission and signer:
@@ -223,7 +225,7 @@ The operator file must use `version: 2`. Deployment addresses come from the sele
 
 ## Explicit security pool instructions
 
-Set `securityPoolInstructions` in the operator configuration while paused, then restart or reload that configuration. Each instruction needs a unique `id`, the security pool address, and the source `universeId`. All amounts and IDs below are decimal integer strings; REP amounts use 18 decimals. Auction collateral fields named `maximumValueAttoEth` and refunds use the security pool collateral token’s base units (18 decimals for WETH, 6 for USDC). Instructions run only in execution mode for selected security pools and approved universes. Configure them when their on-chain prerequisites are ready; failed preflight or authentication follows the normal operator error handling.
+Set `securityPoolInstructions` in the operator configuration while paused, then restart the bot to load the file. Each instruction needs a unique `id`, the security pool address, and the source `universeId`. All amounts and IDs below are decimal integer strings; REP amounts use 18 decimals. Auction collateral fields named `maximumValueAttoEth` and refunds use the security pool collateral token’s base units (18 decimals for WETH, 6 for USDC). Instructions run only in execution mode for selected security pools and approved universes. Configure them when their on-chain prerequisites are ready; failed preflight or authentication follows the normal operator error handling.
 
 ```json
 {

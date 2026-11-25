@@ -104,7 +104,6 @@ export const mountSearch = (api: (path: string) => Promise<unknown>, chainId: ()
 	})
 	const dismiss = () => {
 		clearTimer()
-		if (results.hidden) return
 		generation++
 		hide()
 	}

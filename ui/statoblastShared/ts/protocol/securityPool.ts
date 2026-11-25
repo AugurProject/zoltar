@@ -117,7 +117,7 @@ export async function verifyCapitalLedgerClone(client: ReadClient, securityPool:
  * The canonical factory deploys every security pool from its pinned creation code and module deployers and records it.
  * Runtime code alone proves nothing about the constructor arguments, so this record is what authenticates the modules.
  */
-export async function requireCanonicalSecurityPool(client: Pick<ReadClient, 'readContract'>, securityPool: Address, blockNumber?: bigint, readUnverifiedCode?: ReadClient['getCode']) {
+async function requireCanonicalSecurityPool(client: Pick<ReadClient, 'readContract'>, securityPool: Address, blockNumber?: bigint, readUnverifiedCode?: ReadClient['getCode']) {
 	const recorded = await client.readContract({ address: getInfraContractAddresses().securityPoolFactory, abi: linksAbi, functionName: 'isSecurityPool', args: [securityPool], ...(blockNumber === undefined ? {} : { blockNumber }) })
 	if (recorded === true) return
 	if (readUnverifiedCode === undefined) throw new Error('Security pool was not deployed by the canonical factory.')

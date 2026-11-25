@@ -82,7 +82,8 @@ export async function loadStatoblastQuestion(client: ReadClient, pool: Address, 
 	if (checkpoint.anchor === undefined) return await read(false)
 	try {
 		return await read(true)
-	} catch {
+	} catch (error) {
+		if (error instanceof DOMException && error.name === 'AbortError') throw error
 		resetCheckpoint()
 		return await read(false)
 	}

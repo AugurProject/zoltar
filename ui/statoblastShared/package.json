@@ -309,10 +309,6 @@
 			"bun": "./ts/features/security-pools/hooks/useSecurityPoolActions.ts",
 			"default": "./js/features/security-pools/hooks/useSecurityPoolActions.js"
 		},
-		"./features/security-pools/hooks/useSecurityPoolPurchase.js": {
-			"bun": "./ts/features/security-pools/hooks/useSecurityPoolPurchase.ts",
-			"default": "./js/features/security-pools/hooks/useSecurityPoolPurchase.js"
-		},
 		"./features/security-pools/hooks/useSecurityPoolAggregate.js": {
 			"bun": "./ts/features/security-pools/hooks/useSecurityPoolAggregate.ts",
 			"default": "./js/features/security-pools/hooks/useSecurityPoolAggregate.js"
@@ -432,10 +428,6 @@
 		"./features/security-pools/components/SecurityPoolTakeover.js": {
 			"bun": "./ts/features/security-pools/components/SecurityPoolTakeover.tsx",
 			"default": "./js/features/security-pools/components/SecurityPoolTakeover.js"
-		},
-		"./features/security-pools/hooks/useSecurityPoolQuestionDetails.js": {
-			"bun": "./ts/features/security-pools/hooks/useSecurityPoolQuestionDetails.ts",
-			"default": "./js/features/security-pools/hooks/useSecurityPoolQuestionDetails.js"
 		},
 		"./features/security-pools/components/SecurityPoolSharedFork.js": {
 			"bun": "./ts/features/security-pools/components/SecurityPoolSharedFork.tsx",

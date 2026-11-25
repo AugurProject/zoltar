@@ -23,6 +23,7 @@ const kinds: Readonly<Record<string, string>> = {
 	[zoltar]: 'zoltar',
 	[streams]: 'securityPoolCapitalFeeStreams',
 	[settlement]: 'securityPoolSettlement',
+	[other]: 'securityPoolRepairAuction',
 	[book]: 'securityPoolSettlementBook',
 }
 
@@ -228,15 +229,38 @@ test('a capital owner snapshot reads principal, commitment and the health of the
 	})
 })
 
-test('take-over eligibility needs an adverse observation, a fresh price and an open universe', async () => {
+test('take-over eligibility persists after price expiry once an adverse observation starts the clock', async () => {
 	const sample = async (overrides: Outputs) => (await sampleEntityStateWithRead({ entityType: 'capital-owner', entityIdentity: 'position', address: ledger, ownerAddress: owner }, reader(overrides))).readResult
 	expect(await sample({ liquidationStarted: [0] })).toMatchObject({ belowLiquidationPrice: true, takeoverPreconditionsMet: false })
-	expect(await sample({ isPriceValid: [false] })).toMatchObject({ belowLiquidationPrice: true, takeoverPreconditionsMet: false })
+	expect(await sample({ isPriceValid: [false] })).toMatchObject({ belowLiquidationPrice: true, takeoverPreconditionsMet: true })
+	expect(await sample({ isPriceValid: [false], liquidationStarted: [0] })).toMatchObject({ belowLiquidationPrice: true, takeoverPreconditionsMet: false })
+	expect(await sample({ importing: [true] })).toMatchObject({ belowLiquidationPrice: true, takeoverPreconditionsMet: false })
 	expect(await sample({ frozen: [true] })).toMatchObject({ belowLiquidationPrice: true, takeoverPreconditionsMet: false })
 	// Zoltar forked the universe but the coordinator has not frozen the ledger yet: `_requireOpen` already rejects a take-over.
 	expect(await sample({ getForkTime: [1_700_000_500n] })).toMatchObject({ universeForked: true, frozen: false, belowLiquidationPrice: true, takeoverPreconditionsMet: false })
 	const healthy = { owner, batch: 0n, rep: 500n, commitment: 10n, maxHealthyPrice: 191n * 10n ** 18n, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 0n }
 	expect(await sample({ accountOf: () => [healthy] })).toMatchObject({ belowLiquidationPrice: false, takeoverPreconditionsMet: false })
+})
+
+test('a winning bid vault keeps its individual credited earnings and liquidation start across materialization', async () => {
+	const sample = async (overrides: Outputs) => (await sampleEntityStateWithRead({ entityType: 'capital-owner', entityIdentity: 'position', address: ledger, ownerAddress: owner }, reader(overrides))).readResult
+	const auction = {
+		repairAuctionCohort: [other, 9n, 4n, 125n, 5n],
+		bidIdForVault: (args: readonly unknown[]) => [args[0] === owner ? 2n : 0n],
+		ownerCollateral: [500n, 10n, 0n],
+	}
+	const before = await sample({
+		...auction,
+		ownerAccount: [{ freeAttoRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, targetHealthFactorBps: 12_000n, positionId: 0n }],
+		repairAuctionPosition: (args: readonly unknown[]) => {
+			expect(args).toEqual([2n])
+			return [{ vault: owner, positionId: 0n, principal: 500n, commitment: 10n, targetHealthFactorBps: 12_000n, liquidationStarted: 1_700_000_000, materialized: false, earnedAttoEth: 5n, earnedAttoRep: 8n }]
+		},
+	})
+	const after = await sample(auction)
+	const retained = { liquidationStartedAt: '1700000000', unclaimedFeesAttoEth: '5', unclaimedFeesAttoRep: '8' }
+	expect(before).toMatchObject({ ...retained, positionId: '0' })
+	expect(after).toMatchObject({ ...retained, positionId: '7' })
 })
 
 test('an owner without a position or a price has principal but no health factor', async () => {

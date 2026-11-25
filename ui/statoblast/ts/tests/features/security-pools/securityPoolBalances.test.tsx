@@ -34,8 +34,8 @@ test.each(['ready', 'insufficient-spare', 'retry'] as const)('redesigned reducti
 	lifecycle.trackRendered(view)
 	const reduction = view.container.querySelector('section:has([id$="-reduce"])')
 	const text = reduction?.textContent ?? ''
-	expect(text).not.toContain(copy.position(1n))
-	expect(text).not.toContain(copy.liquidationHealth)
+	expect(text).not.toContain('Position 1')
+	expect(text).not.toContain('Liquidation threshold')
 	expect(text.includes('covers all')).toBe(coversAll)
 	const labels = { retry: copy.retryRelease, ready: 'Release reduction (keep 6 WETH)', 'insufficient-spare': copy.waitingForFreeCapacity }
 	const label = labels[state]
@@ -187,5 +187,4 @@ test('a pending reduction keeps the saved amount locked', async () => {
 	const queue = view.container.querySelector('section:has([id$="-reduce"])')
 	expect(queue?.textContent?.replaceAll('\u00a0', ' ')).toContain('5 WETH')
 	expect(queue?.querySelector('input')).toBeNull()
-	expect(queue?.textContent).not.toContain(copy.remainingCommitmentHint)
 })

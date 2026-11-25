@@ -354,7 +354,13 @@ test('a page with an unavailable confirmed count preserves the saved search curs
 		createReadClient: () =>
 			testDouble({
 				getBlock: async ({ blockNumber = 10n } = {}) => ({ ...createBlockWithTimestamp(20n), hash, number: blockNumber }),
-				multicall: createMulticallStub(({ contracts, blockNumber }) => contracts.map(call => (call.functionName === 'getDepositsByOutcomeLength' ? (blockNumber === 7n ? { status: 'failure', error: new Error('Unavailable count') } : { status: 'success', result: 30n }) : { status: 'success', result: [] }))),
+				multicall: createMulticallStub(({ contracts, blockNumber }) =>
+					contracts.map(call => {
+						if (call.functionName !== 'getDepositsByOutcomeLength') return { status: 'success', result: [] }
+						if (blockNumber === 7n) return { status: 'failure', error: new Error('Unavailable count') }
+						return { status: 'success', result: 30n }
+					}),
+				),
 			}),
 	})
 	const view = lifecycle.trackRendered(await renderIntoDocument(<LocateReportingDeposits details={details} wallet={account} refresh={callbacks.refreshState} openOnEntry />))

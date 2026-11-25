@@ -408,6 +408,7 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 								let open = entityLink(entity, entity.pool)
 								if (frozen && row?.forkBranchReady && row.forkChildUniverse !== undefined) open = entityLink(entity, entity.pool, undefined, row.forkChildUniverse)
 								else if (frozen) open = entityLink(entity, entity.pool, { kind: 'pool', pool: entity.pool, tab: 'fork' }, universe, row?.forkChoiceRecorded ? pageCopy.open : pageCopy.forkRecovery)
+								const placeholder = row === undefined && loading ? <span className='skeleton-line' aria-hidden='true' /> : '—'
 								const used = getVisualRatio({ value: row?.demand, maxValue: row?.capacity })
 								return (
 									<tr role='row' key={entity.id}>
@@ -445,11 +446,7 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 										{!frozen && (
 											<td role='cell' data-label='Capacity in use'>
 												{row?.demand === undefined || row.capacity === undefined ? (
-													row === undefined && loading ? (
-														<span className='skeleton-line' aria-hidden='true' />
-													) : (
-														'—'
-													)
+													placeholder
 												) : (
 													<>
 														{used === undefined ? undefined : <meter max={1} value={used} aria-label={pageCopy.capacityInUse} />}
@@ -464,11 +461,7 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 										)}
 										<td role='cell' data-label='Your position'>
 											{row?.pledged === undefined ? (
-												row === undefined && loading ? (
-													<span className='skeleton-line' aria-hidden='true' />
-												) : (
-													'—'
-												)
+												placeholder
 											) : (
 												<>
 													<CurrencyValue value={row.pledged} suffix={pageCopy.rep} />

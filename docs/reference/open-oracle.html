@@ -217,6 +217,8 @@
 
 				<p>These checks establish only that the final collateral position meets the configured stake and exposure floors and that the callback data is structurally acceptable. They do not prove that the accepted price is externally correct, that an independent corrector exists, or that a correcting transaction will obtain inclusion.</p>
 
+				<p>The shared feed emits <code>PriceCandidateAccepted</code> with the candidate price, the resulting canonical price, the observation timestamp and whether the canonical observation changed. Equal-time acceptance leaves the existing canonical observation in place. Sponsor operations still use the canonical price when checking their signed price bounds. <code>PriceReported</code> carries the resulting canonical price for each acceptance.</p>
+
 				<h3>Rejected-price cleanup</h3>
 
 				<p>A rejected candidate leaves the accepted price unchanged. Economic insufficiency or an older observation does not discard signed operations when a separately accepted canonical price is still fresh. Those operations use the canonical price, original expiry and price bounds; rejection never grants report-based growth authority. Other rejection reasons do not attempt operations. Capital transactions retain their own state checks.</p>

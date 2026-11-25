@@ -1,4 +1,5 @@
 export const eventSourceByName: Record<string, string> = {
+	PriceCandidateAccepted: 'solidity/contracts/statoblast/SharedPoolPriceFeed.sol',
 	PriceReported: 'solidity/contracts/statoblast/SharedPoolPriceFeed.sol',
 	PriceReportRejected: 'solidity/contracts/statoblast/SharedPoolPriceFeed.sol',
 	PriceReportDeferred: 'solidity/contracts/statoblast/SharedPoolPriceFeed.sol',

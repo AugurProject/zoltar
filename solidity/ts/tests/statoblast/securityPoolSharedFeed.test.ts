@@ -1,6 +1,6 @@
 import { loadSecurityPoolPriceSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { describe, expect, test } from 'bun:test'
-import { decodeEventLog, getAddress, zeroAddress, encodeFunctionData, isHex, createPublicClient, custom, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, parseAbiItem, toEventSelector, getAddress, zeroAddress, encodeFunctionData, isHex, createPublicClient, custom, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import {
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
@@ -21,6 +21,8 @@ import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/
 import { fundCoordinatorInitialReport, getOpenOracleReportMeta, getOpenOracleReportStatus, getPendingReportId, getRequestPriceCostAttoEth, loadOpenOracleEventState, openOracleSettle, openOracleSettleWithGasPrice, requestPriceWithValue, wrapWeth } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { unit, useSecurityPoolFixture } from './securityPoolFixture'
+
+const priceCandidateAccepted = parseAbiItem('event PriceCandidateAccepted(uint256 indexed reportId, uint256 candidatePrice, uint256 canonicalPrice, uint256 observationTimestamp, bool canonicalUpdated)')
 
 describe('Statoblast: central capital shared price feed', () => {
 	const fixture = useSecurityPoolFixture()
@@ -123,8 +125,16 @@ describe('Statoblast: central capital shared price feed', () => {
 		for (const hash of hashes) expect((await owner.getTransactionReceipt({ hash })).status).toBe('success')
 		const second = await owner.readContract({ ...target, functionName: 'pendingReportId' })
 		await fixture.base.mockWindow.advanceTime(481n)
-		await openOracleSettle(owner, reverse ? second : second - 1n)
+		const first = reverse ? second : second - 1n
+		const firstSettlement = await openOracleSettle(owner, first)
 		const firstPrice = await owner.readContract({ ...target, functionName: 'lastPrice' })
+		const observationTimestamp = await owner.readContract({ ...target, functionName: 'lastSettlementTimestamp' })
+		const acceptedCandidate = async (hash: Hash) => {
+			const receipt = await owner.getTransactionReceipt({ hash })
+			const log = receipt.logs.find(log => getAddress(log.address) === getAddress(target.address) && log.topics[0] === toEventSelector(priceCandidateAccepted))
+			return log === undefined ? undefined : decodeEventLog({ abi: [priceCandidateAccepted], data: log.data, topics: log.topics }).args
+		}
+		expect(await acceptedCandidate(firstSettlement)).toEqual({ reportId: first, candidatePrice: firstPrice, canonicalPrice: firstPrice, observationTimestamp, canonicalUpdated: true })
 		const epoch = await owner.readContract({ ...target, functionName: 'acceptedEpoch' })
 		const limits = await owner.readContract({ ...target, functionName: 'acceptedRepExposureLimitAttoRep' })
 		const later = reverse ? second - 1n : second
@@ -140,6 +150,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		const receipt = await owner.getTransactionReceipt({ hash: completion })
 		const events = receipt.logs.filter(log => log.address.toLowerCase() === target.address.toLowerCase()).map(log => decodeEventLog({ abi: feedArtifact.abi, data: log.data, topics: log.topics }))
 		expect(events.some(event => event.eventName === 'PriceReported' && event.args.reportId === later && event.args.price === firstPrice)).toBe(true)
+		expect(await acceptedCandidate(completion)).toEqual({ reportId: later, candidatePrice: reverse ? unit : 2n * unit, canonicalPrice: firstPrice, observationTimestamp, canonicalUpdated: false })
 		expect(await owner.readContract({ ...target, functionName: 'lastPrice' })).toBe(firstPrice)
 		expect(await owner.readContract({ ...target, functionName: 'acceptedEpoch' })).toBe(epoch)
 		expect(await owner.readContract({ ...target, functionName: 'acceptedRepExposureLimitAttoRep' })).toBe(limits)

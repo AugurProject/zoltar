@@ -102,7 +102,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 	const sharesCheckedAt = sharesRead?.scope === cacheScope ? sharesRead.at : undefined
 	const dataAge = entry.tab === 'shares' ? (sharesFallback?.savedAt ?? sharesCheckedAt) : (reportFallback?.checkedAt ?? reportCheckedAt)
 	const headingAge = selected !== undefined ? snapshot?.observedAt : cached?.savedAt
-	const displayedAt = headingAge === undefined ? dataAge : dataAge === undefined ? headingAge : Math.min(dataAge, headingAge)
+	const displayedAt = headingAge !== undefined && dataAge !== undefined ? Math.min(dataAge, headingAge) : (headingAge ?? dataAge)
 	const refreshError = useStatoblastRefreshError(loadError, displayedAt)
 	const readQuestion = () => {
 		if (!enabled || document.hidden) return Promise.resolve()

@@ -116,11 +116,11 @@ async function scanAndAct(runtime: LiquidatorRuntime, deps: LiquidatorDeps, scan
 	if (rootUniverse === undefined) throw new Error('Universe scan did not return the root REP asset')
 	if (await collectMarketEvidence(runtime, deps, scannedBlock, rootUniverse.repToken)) return true
 	validateApprovedUniverseSelection(state.universes, runtime.settings.approvedUniverses)
-	state.lastScanAt = new Date().toISOString()
 	if (state.wallet !== undefined) {
 		state.walletAttoEth = await runtime.client.getBalance({ address: state.wallet })
 	}
 	state.status = runningStatus(state.paused, runtime.settings.runtime.execute)
+	state.lastScanAt = new Date().toISOString()
 	markScanCompleted()
 	if (shutdown.isRequested()) {
 		await saveDurableState(runtime.settings.runtime.stateFile, state)
@@ -193,6 +193,7 @@ export async function runPollCycle(runtime: LiquidatorRuntime, deps: LiquidatorD
 	if (deps.configurationMutationGate.isActive()) return false
 	if (!runtime.settings.networkConfigured) return unscannablePollResult(runtime.settings.runtime.once, 'unconfigured')
 	const scanReport = createLiquidatorScanReport(runtime.settings.network, () => runtime.client.getBlockNumber(), deps.blockTimeOverrideMs)
+	const previousSuccessfulScan = state.lastScanAt
 	let scanCompleted = false
 	state.scanning = true
 	state.error = undefined
@@ -203,6 +204,7 @@ export async function runPollCycle(runtime: LiquidatorRuntime, deps: LiquidatorD
 	} catch (error) {
 		const settled = await settleInterruptedCycle(runtime, deps, error)
 		if (settled !== undefined) return settled
+		state.lastScanAt = previousSuccessfulScan
 		scanReport.update({ status: 'failed' })
 		scanCompleted = false
 		await recordCycleFailure(runtime, deps, error)

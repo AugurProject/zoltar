@@ -1,3 +1,4 @@
+import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
 import { sendJson } from './dashboard-requests.ts'
 import { decodeUniverseLookup } from './api-validation.ts'
 import type { PublicOperatorSnapshot } from '#state/operator-state'
@@ -63,7 +64,7 @@ export function createMarketPanels(state: DashboardState, elements: DashboardEle
 				refreshFormButton('tokens-form')
 			},
 			savedMessage: '',
-			lookupUniverse: async id => decodeUniverseLookup(await sendJson('/api/universe-lookup', 'POST', { universeId: id })).universes,
+			lookupUniverse: async id => decodeUniverseLookup(await requestWithTimeout(signal => sendJson('/api/universe-lookup', 'POST', { universeId: id }, signal), 15_000, 'Universe lookup timed out.')).universes,
 		})
 		universeExplorer.update({ universes: snapshot.universes ?? [], approved: state.approvedUniverseIds, network: snapshot.network, disabled: elements.tokensFieldset.disabled })
 

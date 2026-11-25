@@ -67,11 +67,6 @@ export function capitalAuthorizationReason(snapshot: SecurityPoolCapitalSnapshot
 	return undefined
 }
 
-export function capitalPositionPhase(batch: bigint, currentBatch: bigint) {
-	if (batch === 0n) return 'active'
-	return batch === currentBatch ? 'current' : 'next'
-}
-
 export function capitalWithdrawalReason(snapshot: SecurityPoolCapitalSnapshot, amount: bigint | undefined) {
 	if (amount === undefined || amount === 0n) return capital.positiveAmountRequired
 	if (amount <= snapshot.withdrawableAttoRep) return undefined

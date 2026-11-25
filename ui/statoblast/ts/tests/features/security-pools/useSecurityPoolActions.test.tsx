@@ -10,7 +10,7 @@ import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { localEntityScopeForNetwork, readFavoriteEntries } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { useSecurityPoolActions } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolActions.js'
-import { decodeFunctionData, encodeAbiParameters, encodeFunctionData, parseAbi, parseAbiItem, parseAbiParameters, toEventSelector, type Address, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { decodeFunctionData, encodeAbiParameters, encodeFunctionData, parseAbi, parseAbiItem, parseAbiParameters, toEventSelector, TransactionLookupNotFoundError, type Address, type Hash, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { getInfraContractAddresses } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { renderHookWithProps } from '../../support/renderHook.js'
 import { auctionCapitalSnapshot, capitalSnapshot, owner, securityPool, token, capital } from './capitalFixture.js'
@@ -50,6 +50,7 @@ const deployedPoolLog = () => ({ address: factory(), data: '0x' as const, topics
 async function renderWithDeploymentWallet(source: ReturnType<typeof capitalClient>, deploying = false, delays: { wallet?: Promise<void>; receipt?: Promise<void>; confirmed?: () => boolean } = {}) {
 	// The factory creates the security pool, so the receipt carries no contract address for it: only the factory's event names it.
 	const requests: { to?: Address | null | undefined; data?: Hex | undefined }[] = []
+	const receiptHashes: Hash[] = []
 	const loaded: string[] = []
 	const receipt = () => (requests.length === 1 ? { from: owner, to: undefined, status: 'success' as const, contractAddress: token, logs: [] } : { from: owner, to: factory(), status: 'success' as const, contractAddress: undefined, logs: [deployedPoolLog()] })
 	const writer = asWriteClient({
@@ -63,8 +64,9 @@ async function renderWithDeploymentWallet(source: ReturnType<typeof capitalClien
 		...source.backend,
 		createReadClient: () =>
 			source.client.extend(() => ({
-				getTransactionReceipt: async () => {
-					if (delays.confirmed?.() !== true) throw new Error('Receipt not yet available')
+				getTransactionReceipt: async ({ hash }) => {
+					receiptHashes.push(hash)
+					if (delays.confirmed?.() !== true) throw new TransactionLookupNotFoundError('receipt', hash)
 					return { ...receipt(), transactionHash: mockTransactionHash, blockHash: mockTransactionHash, blockNumber: 1n, cumulativeGasUsed: 1n, gasUsed: 1n, transactionIndex: 0n } satisfies TransactionReceipt
 				},
 			})),
@@ -92,7 +94,7 @@ async function renderWithDeploymentWallet(source: ReturnType<typeof capitalClien
 		},
 	})
 	lifecycle.trackRendered(hook)
-	return { hook, requests, loaded }
+	return { hook, requests, loaded, receiptHashes }
 }
 test('creation uses an explicit admission transaction before deployment and invalidates changed policies', async () => {
 	const source = capitalClient()
@@ -194,11 +196,28 @@ test('the deployment wizard keeps a wallet-dispatched rules deployment locked on
 	}
 })
 
+test('an explicit wallet rejection unlocks the rules deployment again', async () => {
+	const wallet = createDeferred<void>()
+	const { hook, requests } = await renderWithDeploymentWallet(capitalClient(), true, { wallet: wallet.promise })
+	let sending: Promise<void> | undefined
+	await act(() => {
+		sending = hook.state().deployAdmission()
+	})
+	await waitFor(() => expect(hook.state().deploymentLocked).toBe(true))
+	await act(async () => {
+		wallet.reject(Object.assign(new Error('User rejected request'), { code: 4001 }))
+		await sending
+	})
+	expect(hook.state().deploymentLocked).toBe(false)
+	expect(hook.state().admissionDeployReason).toBeUndefined()
+	expect(requests).toHaveLength(1)
+})
+
 for (const step of ['rules', 'pool'] as const) {
 	test(`the deployment wizard verifies the pending ${step} receipt on reload before unlocking the next step`, async () => {
 		const receipt = createDeferred<void>()
 		let confirmed = false
-		const { hook, requests } = await renderWithDeploymentWallet(capitalClient(), true, { ...(step === 'pool' ? { wallet: Promise.resolve() } : {}), receipt: receipt.promise, confirmed: () => confirmed })
+		const { hook, requests, receiptHashes } = await renderWithDeploymentWallet(capitalClient(), true, { ...(step === 'pool' ? { wallet: Promise.resolve() } : {}), receipt: receipt.promise, confirmed: () => confirmed })
 		let sending: Promise<void> | undefined
 		try {
 			if (step === 'pool') await act(() => hook.state().deployAdmission())
@@ -215,6 +234,7 @@ for (const step of ['rules', 'pool'] as const) {
 			confirmed = true
 			const restored = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolActionsWrapper, { model: model(), deploying: true }))
 			await waitFor(() => expect(step === 'rules' ? restored.state().admissionAddress : restored.state().deploymentPool).toBe(step === 'rules' ? token : securityPool))
+			expect(new Set(receiptHashes)).toEqual(new Set([mockTransactionHash]))
 			expect(requests).toHaveLength(transactionCount)
 		} finally {
 			receipt.resolve()
@@ -232,6 +252,23 @@ test('starting a new deployment unlocks a discarded rules-only draft', async () 
 	expect(hook.state().deploymentLocked).toBe(false)
 	expect(hook.state().admissionAddress).toBeUndefined()
 	expect(hook.state().horizonDays).toBe('30')
+})
+
+test('a prior fork closes setup and allows a new deployment', async () => {
+	const { hook } = await renderWithDeploymentWallet(capitalClient(), true)
+	await act(() => hook.state().deployAdmission())
+	await act(() => hook.state().deploy())
+	const snapshot = capitalSnapshot()
+	const closed = {
+		...model(),
+		setup: { securityPool, owner, stage: 2, originUniverseId: 0n, originForkTime: 1n, chainId: 1, blockNumber: snapshot.blockNumber, blockHash: snapshot.blockHash, timestamp: snapshot.timestamp },
+	}
+	await hook.setProps({ model: closed })
+	expect(hook.state().preparationReason(3)).toContain('Setup is closed')
+	expect(hook.state().canStartNewDeployment).toBe(true)
+	await act(() => hook.state().startNewDeployment())
+	expect(hook.state().deploymentLocked).toBe(false)
+	expect(hook.state().deploymentPool).toBeUndefined()
 })
 
 function useSecurityPoolActionsWrapper(props: { model: ReturnType<typeof model>; parameters?: Parameters<typeof useSecurityPoolActions>[1]; deploying?: boolean }) {

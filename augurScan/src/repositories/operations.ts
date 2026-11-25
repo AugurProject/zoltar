@@ -14,7 +14,7 @@ export const operationsAsOf = async (sql: SQL, chainId: number, atBlock?: string
 					EXTRACT(EPOCH FROM indexed_timestamp)::bigint::text AS "blockTimestamp",
 					indexed_block::text AS "indexedHead", '0'::text AS "historyDepthBlocks",
 					observed_block::text AS "observedHead",
-					GREATEST(COALESCE(observed_block, indexed_block, 0) - COALESCE(indexed_block, observed_block, 0), 0)::text AS "lagBlocks",
+					GREATEST(observed_block - COALESCE(indexed_block, start_block - 1), 0)::text AS "lagBlocks",
 					COALESCE((SELECT max(reorganization.id) FROM chain_reorganizations reorganization
 						WHERE reorganization.chain_id = network.chain_id), 0)::text AS "invalidationId",
 					COALESCE(network.applied_abi_source_hash, 'unavailable') AS "abiSourceHash",

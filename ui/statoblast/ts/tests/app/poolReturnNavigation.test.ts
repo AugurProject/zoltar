@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { buildQuestionPoolHref, installStatoblastRouting, parseStatoblastPage, statoblastPageHref } from '@zoltar/ui-statoblast-shared/lib/routing.js'
+import { installStatoblastRouting, parseStatoblastPage, statoblastPageHref } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { resetRoutingForTesting } from '@zoltar/ui-core-shared/navigation/routing.js'
 
 const pool = getAddress('0x1111111111111111111111111111111111111111')
@@ -10,7 +10,7 @@ installDomTestLifecycle({ afterTest: resetRoutingForTesting })
 test('pool and question links preserve the network, universe, and simulation settings', () => {
 	installStatoblastRouting()
 	window.history.replaceState({}, '', `#/pool/${pool}/questions?simulate=1&genesis=yes&simScenario=securitypoolx2&universe=7`)
-	const href = buildQuestionPoolHref(pool, 4n)
+	const href = statoblastPageHref({ kind: 'question', pool, questionId: 4n, tab: 'shares' })
 	expect(href).toBe(`#/pool/${pool}/question/0x4/shares?simulate=1&genesis=yes&simScenario=securitypoolx2&universe=7`)
 	const page = parseStatoblastPage(href)
 	if (page.kind !== 'question') throw new Error('Expected question link.')

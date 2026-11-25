@@ -126,7 +126,7 @@ function timestamp(value: unknown, label: string) {
 	return new Date(value).toISOString()
 }
 
-function parsePolicies(value: unknown): RetirementPolicies {
+export function parseRetirementPolicies(value: unknown): RetirementPolicies {
 	const policies = record(value, 'retirement.policies')
 	exactKeys(policies, ['exitAfterCompletion', 'exitUnmatchedShares', 'maximumExitLossBps', 'migrateExistingClaims', 'sweepAssets', 'unwrapWeth'], [], 'retirement.policies')
 	const policy = (key: 'exitAfterCompletion' | 'exitUnmatchedShares' | 'migrateExistingClaims' | 'sweepAssets' | 'unwrapWeth') => {
@@ -309,7 +309,7 @@ export function parseRetirementState(value: unknown, signerAddress: Address | un
 		...(retirement['requestedAt'] === undefined ? {} : { requestedAt: timestamp(retirement['requestedAt'], 'retirement.requestedAt') }),
 		status: status as RetirementStatus,
 		...(retirement['updatedAt'] === undefined ? {} : { updatedAt: timestamp(retirement['updatedAt'], 'retirement.updatedAt') }),
-		policies: parsePolicies(retirement['policies']),
+		policies: parseRetirementPolicies(retirement['policies']),
 	}
 }
 

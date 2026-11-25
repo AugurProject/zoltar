@@ -1,4 +1,5 @@
 import type { SQL } from 'bun'
+import { claimPayoutDestination } from '../claim-payout.ts'
 import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import { auctionDemandCurve, reportLifecycle, reportLifecycleEventName, reportRoundChanges } from '../operations.ts'
 import { auctionCollateral } from '../repositories/auction-collateral.ts'
@@ -177,6 +178,17 @@ export const reportDetailResponse = async (sql: SQL, parts: readonly string[], u
 	})
 }
 
+const escalationSnapshot = (snapshot: Record<string, unknown> | undefined) => {
+	if (snapshot === undefined) return undefined
+	const readResult = jsonRecord(snapshot['read_result'])
+	const claimEvidence = jsonRecord(readResult['claimEvidence'])
+	const basis = claimEvidence['basis']
+	if (typeof basis !== 'string') return snapshot
+	// Tagged reads can survive reprojection. Correct the derived sentence while preserving the recorded proof and amounts.
+	const corrected = basis.replace('Payouts credit the depositor claim bundle, not a wallet transfer quote.', claimPayoutDestination)
+	return corrected === basis ? snapshot : { ...snapshot, read_result: { ...readResult, claimEvidence: { ...claimEvidence, basis: corrected } } }
+}
+
 export const eventEntityDetailResponse = async (sql: SQL, parts: readonly string[], url: URL, domain: 'auction' | 'escalation'): Promise<Response> => {
 	const chainId = routeInteger(parts[0])
 	const address = parts[1]?.toLowerCase()
@@ -196,7 +208,7 @@ export const eventEntityDetailResponse = async (sql: SQL, parts: readonly string
 	const snapshot = await latestEntitySnapshot(sql, chainId, domain, address, snapshotBlock)
 	const result: Record<string, unknown> = {
 		identity: address,
-		snapshot,
+		snapshot: domain === 'escalation' ? escalationSnapshot(snapshot) : snapshot,
 		snapshotAvailability: snapshot === undefined ? 'unavailable' : snapshot['read_status'],
 		events: paged(rows, page.limit, row => protocolCursorFor(chainId, domain, address, asOf, row)),
 	}

@@ -23,7 +23,7 @@ describe('escalation calendar reminder', () => {
 		expect(calendar).toContain('DTSTART:20260103T231800Z\r\n')
 		expect(calendar).toContain('DTEND:20260103T233300Z\r\n')
 		expect(calendar).toContain('DTSTAMP:20260101T000000Z\r\n')
-		expect(calendar).toContain('UID:0x123-1767485880@statoblast\r\n')
+		expect(calendar).toContain('UID:0x123@statoblast\r\n')
 		expect(calendar).toContain('SUMMARY:Check reporting: Will Yes win?\r\n')
 		expect(calendar).toContain('BEGIN:VALARM\r\nTRIGGER:-PT15M\r\nACTION:DISPLAY\r\n')
 		expect(calendar).toEndWith('END:VEVENT\r\nEND:VCALENDAR\r\n')

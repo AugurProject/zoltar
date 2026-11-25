@@ -22,7 +22,7 @@
 				<h2 id="interactions">State-changing interactions</h2>
 				<p>The <a href="../contracts.html#table-columns">contract index</a> defines the columns.</p>
 				<!-- Validated read ABI fingerprint: bc1d44d6d200cd829c7b91de21f3412e030748acfc485b1219dbcc270da1bf8d -->
-				<!-- Validated complete compiled ABI fingerprint: cd6ecfbc235b66aeb09403dc74ee3934407b3e627d548308d925926a82dcb802 -->
+				<!-- Validated complete compiled ABI fingerprint: 8301ec3a120867d885afecc9b55a38dbab9cf678ff248f9263ad0f7794fe86a6 -->
 				<table>
 					<thead>
 						<tr>
@@ -66,8 +66,8 @@
 							<td><code>settleReport(reportId, amount1, amount2)</code><wbr /></td>
 							<td>The registered report escrow only</td>
 							<td>Known pending candidate; authenticated escrow callback.</td>
-							<td>Validates report economics, freshness, base-fee ceiling and exposure before acceptance and sponsor operations.</td>
-							<td><code>PriceReported</code>, <code>PriceReportRejected</code>, <code>PriceReportDeferred</code>, <code>ReportOperationAttempted</code></td>
+							<td>Validates report economics, freshness, base-fee ceiling and exposure. An acceptance records the candidate and canonical prices before sponsor operations use the canonical price.</td>
+							<td><code>PriceCandidateAccepted</code>, <code>PriceReported</code>, <code>PriceReportRejected</code>, <code>PriceReportDeferred</code>, <code>ReportOperationAttempted</code></td>
 						</tr>
 						<tr>
 							<td><code>recoverReport(reportId)</code></td>

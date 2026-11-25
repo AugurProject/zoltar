@@ -19,7 +19,7 @@ export type ReportLifecycleInput = {
 
 export type LifecycleState = {
 	readonly state: string
-	readonly clock: ReportClock
+	readonly clock?: ReportClock
 	readonly disputeBoundary?: string
 	readonly settlementBoundary?: string
 	readonly nextTransition?: string
@@ -81,15 +81,18 @@ export const reportRoundChanges = (rows: readonly ReportRoundEvidence[]): readon
 	return rounds.map((row, index) => {
 		const previous = rounds[index + 1]
 		const currentData = plainRecord(row['report_data'])
+		const comparisonState = previous === undefined ? 'initial' : 'compared'
+		const missingBaseline = previous === undefined && row['event_name'] !== 'ReportSubmitted'
 		const previousData = previous === undefined ? {} : plainRecord(previous['report_data'])
 		return {
 			...row,
 			report_data: currentData,
 			comparison: {
-				state: previous === undefined ? 'initial' : 'compared',
+				state: missingBaseline ? 'unavailable' : comparisonState,
 				previousRoundNumber: previous?.['round_number'],
+				...(typeof previous?.['observed_round_number'] === 'string' ? { previousObservedRoundNumber: previous['observed_round_number'] } : {}),
 				previousBlockNumber: previous?.['block_number'],
-				changes: reportFieldChanges(previousData, currentData),
+				changes: missingBaseline ? [] : reportFieldChanges(previousData, currentData),
 			},
 		}
 	})
@@ -107,7 +110,8 @@ export const reportLifecycleEventName = (eventName: unknown): ReportLifecycleInp
 }
 
 export const reportLifecycle = (input: ReportLifecycleInput): LifecycleState => {
-	const flags = nonNegative(input.flags) ?? 0n
+	const flags = nonNegative(input.flags)
+	if (flags === undefined) return { state: input.eventName === 'ReportSettled' ? 'Settled' : 'Awaiting indexed evidence' }
 	const clock: ReportClock = (flags & 1n) === 1n ? 'timestamp' : 'block'
 	if (input.eventName === 'ReportSettled') return { state: 'Settled', clock }
 	const reportTimestamp = nonNegative(input.reportTimestamp)
@@ -161,7 +165,7 @@ export const auctionStartedWindow = (eventData: Readonly<Record<string, unknown>
 
 export const auctionLifecycle = (input: AuctionLifecycleInput): string => {
 	if (input.finalized) return input.settlementCount < input.bidCount ? 'Bid settlements outstanding' : 'Fully settled'
-	if (!input.started) return 'Scheduled'
+	if (!input.started) return 'Awaiting indexed evidence'
 	const current = nonNegative(input.indexedTimestamp)
 	const start = nonNegative(input.opensAt)
 	const end = nonNegative(input.closesAt)
@@ -367,8 +371,8 @@ type CapitalPositionRisk = {
 
 /**
  * Classifies one tagged `capital-owner` read. The protocol facts are the ledger's own: a position is under
- * its liquidation price when `maxHealthyPrice < liquidationPrice`, and a take-over additionally needs a fresh
- * price, an open universe and an adverse observation. The warning band is the scanner's, not the protocol's.
+ * its liquidation price when `maxHealthyPrice < liquidationPrice`, and a take-over additionally needs an open
+ * universe and an adverse observation. The warning band is the scanner's, not the protocol's.
  */
 export const capitalPositionRisk = (state: Readonly<Record<string, unknown>>): CapitalPositionRisk => {
 	const unsigned = (key: string): bigint | undefined => {
@@ -385,12 +389,12 @@ export const capitalPositionRisk = (state: Readonly<Record<string, unknown>>): C
 		return {
 			protocolState: 'takeover-preconditions-met',
 			scannerSeverity: 'critical',
-			scannerReason: 'Pledged REP is below the requirement at the liquidation price and an adverse price observation has started the take-over clock. The ledger cures the position first and rejects the take-over while spare commitment covers the deficit',
+			scannerReason: `Pledged REP is below the requirement at the liquidation price and an adverse price observation has started the take-over clock. The ledger cures the position first and rejects the take-over while spare commitment covers the deficit.${stalePrice}`,
 		}
 	// A cohort holds the unmaterialized winning bids of an auction; the ledger takes it over one materialized bid at a time.
 	if (state['belowLiquidationPrice'] === true && state['repairAuctionCohort'] === true)
 		return { protocolState: 'under-collateralized', scannerSeverity: 'critical', scannerReason: `The auction cohort's pledged REP is below the requirement at the liquidation price; it is taken over per bid, once a bid is materialized.${stalePrice}` }
-	if (state['belowLiquidationPrice'] === true) return { protocolState: 'under-collateralized', scannerSeverity: 'critical', scannerReason: `Pledged REP is below the requirement at the liquidation price; a take-over additionally needs a fresh price and an adverse observation.${stalePrice}` }
+	if (state['belowLiquidationPrice'] === true) return { protocolState: 'under-collateralized', scannerSeverity: 'critical', scannerReason: `Pledged REP is below the requirement at the liquidation price; a take-over additionally needs an adverse observation that starts the clock.${stalePrice}` }
 	const health = unsigned('healthFactorBps')
 	// An owner whose commitment is still an unmaterialized auction bid has no index position to compare with the liquidation price.
 	if (health !== undefined && health < 10_000n) return { protocolState: 'under-collateralized', scannerSeverity: 'critical', scannerReason: `Pledged REP is below the requirement at the liquidation price.${stalePrice}` }

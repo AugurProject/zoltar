@@ -7,6 +7,8 @@ import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-vali
 export type GoLiveSnapshot = {
 	execute?: boolean | undefined
 	inventory: { eth?: string | number | undefined; rep: { balance?: string | number | undefined; token?: string | undefined; universeId?: string | undefined }[] }
+	scanFresh?: boolean | undefined
+	retirement?: { status?: string | undefined } | undefined
 	lastScannedBlock?: string | number | undefined
 	network?: string | undefined
 	obligations: readonly unknown[]
@@ -109,7 +111,7 @@ function readinessRows(snapshot: GoLiveSnapshot, configuration: GoLiveConfigurat
 	const paused = snapshot.paused === true && configuration.paused === true
 	const wallet = configuration.wallet ?? snapshot.wallet
 	const signer = configuration.hasSigner === true
-	const scanComplete = snapshot.topology.complete === true && snapshot.lastScannedBlock !== undefined
+	const scanComplete = snapshot.scanFresh === true && snapshot.topology.complete === true && snapshot.lastScannedBlock !== undefined
 	let rpcDetail = 'Save the RPC endpoints under Connect'
 	if (configuration.networkConfigured === true) rpcDetail = snapshot.rpcHealth.chainReady === true ? `Ready for ${snapshot.network ?? 'the configured chain'}` : 'Read quorum is not healthy yet'
 	let signerDetail = 'Set one under Transaction signer'
@@ -122,7 +124,7 @@ function readinessRows(snapshot: GoLiveSnapshot, configuration: GoLiveConfigurat
 		quorumRpcRow(configuration.connectivity?.quorumRpcUrls.length ?? 0, configuration.rpcQuorum),
 		reservePolicyRow(configuration),
 		{ detail: scanComplete ? `Complete at block ${String(snapshot.lastScannedBlock)}` : 'Waiting for a complete canonical scan', label: 'Canonical scan', ready: scanComplete },
-		inventoryRow(snapshot, configuration),
+		snapshot.retirement?.status !== undefined && snapshot.retirement.status !== 'inactive' ? { detail: 'Retirement checks funding for each recovery operation', label: 'Inventory', ready: true } : inventoryRow(snapshot, configuration),
 		deliveryRow(snapshot),
 		{ advisory: true, detail: recovery === 0 ? 'Clear' : `${recovery.toString()} item${recovery === 1 ? '' : 's'} · resolve before resuming`, label: 'Recovery work', ready: recovery === 0 },
 	]

@@ -26,14 +26,31 @@ export const reportDetailData = async (
 	},
 ) => {
 	const { chainId, openOracleAddress, reportId, rounds, decisions, snapshotBlock } = query
+	// An untracked protocol counter stays at zero. Count canonical rounds older than the page once
+	// so the observed ordinals stay stable across continuations of the same snapshot.
 	const rows = await sql`
-		SELECT event.*, block.timestamp AS block_timestamp FROM open_oracle_report_events event
-		JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash AND block.canonical
-		WHERE event.chain_id = ${chainId} AND event.open_oracle_address = ${openOracleAddress}
-			AND event.report_id = ${reportId} AND event.canonical AND event.block_number <= ${snapshotBlock}
-			AND event.event_name IN ('ReportSubmitted', 'ReportDisputed')
-			AND (event.block_number, event.log_index, event.tx_hash) < (${rounds.block}::bigint, ${rounds.log}::integer, ${rounds.tx})
-		ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT ${rounds.limit}
+		WITH page AS MATERIALIZED (
+			SELECT event.*, block.timestamp AS block_timestamp FROM open_oracle_report_events event
+			JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash AND block.canonical
+			WHERE event.chain_id = ${chainId} AND event.open_oracle_address = ${openOracleAddress}
+				AND event.report_id = ${reportId} AND event.canonical AND event.block_number <= ${snapshotBlock}
+				AND event.event_name IN ('ReportSubmitted', 'ReportDisputed')
+				AND (event.block_number, event.log_index, event.tx_hash) < (${rounds.block}::bigint, ${rounds.log}::integer, ${rounds.tx})
+			ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT ${rounds.limit}
+		)
+		SELECT page.*,
+			CASE WHEN page.round_number = 0 AND
+				(CASE WHEN page.report_data->>'flags' ~ '^[0-9]{1,3}$' THEN ((page.report_data->>'flags')::integer & 2) = 0 ELSE true END)
+			THEN (
+				row_number() OVER (ORDER BY page.block_number, page.log_index, page.tx_hash) +
+				(SELECT count(*) FROM open_oracle_report_events older
+					JOIN blocks block ON block.chain_id = older.chain_id AND block.hash = older.block_hash AND block.canonical
+					WHERE older.chain_id = ${chainId} AND older.open_oracle_address = ${openOracleAddress}
+						AND older.report_id = ${reportId} AND older.canonical AND older.event_name IN ('ReportSubmitted', 'ReportDisputed')
+						AND (older.block_number, older.log_index, older.tx_hash) <
+							(SELECT block_number, log_index, tx_hash FROM page ORDER BY block_number, log_index, tx_hash LIMIT 1))
+			)::text END AS observed_round_number
+		FROM page ORDER BY page.block_number DESC, page.log_index DESC, page.tx_hash DESC
 	`
 	const currentRows = await sql`
 		SELECT event.*, block.timestamp AS block_timestamp FROM open_oracle_report_events event
@@ -67,9 +84,13 @@ export const reportDetailData = async (
 			log.event_name, log.arguments, log.summary, block.timestamp AS block_timestamp
 		FROM logs log JOIN blocks block ON block.chain_id = log.chain_id AND block.hash = log.block_hash AND block.canonical
 		JOIN coordinators coordinator ON (coordinator.emitter_address = log.emitter_address
-				AND log.event_name IN ('PriceRequested', 'PriceReportDeferred', 'PriceReportRejected', 'PriceReported', 'PendingReportRecovered', 'ReportFundingAssigned'))
+				AND log.event_name IN ('PriceRequested', 'PriceReportDeferred', 'PriceReportRejected', 'PriceReported', 'PriceCandidateAccepted', 'PendingReportRecovered', 'ReportFundingAssigned'))
 			OR (log.event_name = 'ReportCompleted' AND lower(log.arguments->>'priceFeed') = coordinator.emitter_address)
 		WHERE log.chain_id = ${chainId} AND log.canonical AND log.block_number <= ${snapshotBlock} AND log.arguments->>'reportId' = ${reportId}
+			AND (log.event_name <> 'PriceCandidateAccepted' OR EXISTS (
+				SELECT 1 FROM contracts feed WHERE feed.chain_id = log.chain_id AND feed.address = log.emitter_address
+					AND feed.kind = 'sharedPoolPriceFeed' AND feed.canonical
+			))
 			AND (log.block_number, log.log_index, log.tx_hash) < (${decisions.block}::bigint, ${decisions.log}::integer, ${decisions.tx})
 		ORDER BY log.block_number DESC, log.log_index DESC, log.tx_hash DESC LIMIT ${decisions.limit}
 	`

@@ -336,7 +336,7 @@ export function createRetirementDashboard(options: RetirementDashboardOptions) {
 				)
 					return
 				residualConfirmation.value = phrase
-				await options.put({ action: 'accept-residuals', confirmation: residualConfirmation.value, reason, targetProfileId })
+				await options.put({ action: 'accept-residuals', confirmation: residualConfirmation.value, evidence, reason, targetProfileId })
 				actionStatus.textContent = 'Residual deployment replacement acceptance saved.'
 				await options.refresh()
 			} catch (error) {

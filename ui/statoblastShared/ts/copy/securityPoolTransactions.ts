@@ -15,7 +15,10 @@ export const deployment = {
 	reportStakeRequired: (decimals: number) => `Enter a positive minimum report stake with up to ${decimals} decimal places.`,
 	poolAddressUnavailable: 'Security pool deployment address unavailable.',
 	receiptPending: 'Waiting for the deployment receipt.',
+	receiptCheckFailed: 'Could not check the deployment receipt. Try again.',
 	walletSendUncertain: 'The wallet hasn’t returned a transaction hash. Check the activity in your wallet.',
+	progressUnavailable: 'Could not save deployment progress on this device.',
+	rulesChanged: 'The saved question rules changed. Reopen this page before deploying.',
 	setupClosed: 'The origin universe has forked. Setup is closed.',
 	stageComplete: 'This setup stage is complete.',
 	previousStageRequired: 'Complete the previous setup stage first.',
@@ -91,23 +94,6 @@ export const fork = {
 	prepareReview: 'Create this branch’s REP token and shared capital contracts when needed.',
 	startReview: 'Move shared REP to this branch and set up its recapitalization auction.',
 	activateReview: 'Activate this branch’s collateral and REP claims and the positions that chose it.',
-}
-
-export const purchase = {
-	quoteFailed: 'Unable to quote this purchase.',
-	closed: 'Purchases are closed in this universe.',
-	detailsRequired: 'Enter a question, positive purchase amount and minimum shares.',
-	loadingQuote: 'Loading the purchase quote.',
-	mintingClosed: 'Question minting has closed.',
-	insufficientBacking: 'Insufficient backing after queued reductions.',
-	feeBelowQuote: 'Set a maximum fee that covers the quote.',
-	minimumSharesAboveQuote: 'Minimum shares exceed the current quote.',
-	approveCollateral: 'Approve purchase collateral',
-	approveRecoveryRep: 'Approve recovery REP',
-	recoveryFundingUnavailable: 'Recovery REP funding is unavailable.',
-	buyCompleteSets: 'Buy complete sets',
-	quoteUnavailable: 'Purchase quote unavailable.',
-	prerequisitesChanged: 'Purchase prerequisites changed. Refresh and review again.',
 }
 
 export const invalidPoolUniverse = 'Enter a valid universe ID.'

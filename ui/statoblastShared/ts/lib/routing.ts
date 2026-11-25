@@ -92,8 +92,3 @@ export function statoblastPageHref(page: Parameters<typeof statoblastPageHash>[0
 	}
 	return buildRouteHref(statoblastPageHash(page), search)
 }
-
-export function buildQuestionPoolHref(pool: string, questionId?: bigint, universeId?: bigint) {
-	if (!isAddress(pool) || questionId === undefined) return statoblastPageHref({ kind: 'watchlist' }, universeId)
-	return statoblastPageHref({ kind: 'question', pool: getAddress(pool), questionId, tab: 'shares' }, universeId)
-}

@@ -70,7 +70,9 @@ export function formatCompleteSetQuantity(amountAttoShares: bigint, maximumFract
 export function formatCollateralEth(amountAttoShares: bigint, rate: ShareValueRate, rounding: ShareValueRounding = 'nearest') {
 	const eth = `${formatCollateralValue(amountAttoShares, rate, rounding === 'down' ? 4 : 2, rounding)} ${collateralAsset(rate).symbol}`
 	const rep = attoSharesToRecoveryAttoRep(amountAttoShares, rate)
-	return rep === 0n ? eth : `${eth} + ${formatTrimmedUnits(rep, 18, 4)} REP`
+	if (rep === 0n) return eth
+	const formattedRep = formatTrimmedUnits(rep, 18, 4)
+	return `${eth} + ${formattedRep === '0' ? '<0.0001' : formattedRep} REP`
 }
 
 /** Average price paid per ETH of long-share payout, in basis points. */

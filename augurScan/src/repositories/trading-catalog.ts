@@ -64,7 +64,7 @@ export const tradingCatalogRows = async (sql: SQL, query: { readonly chainId: nu
 							AND transfer.canonical AND transfer.event_name = 'Transfer' AND transfer.block_number <= ${asOfBlock}
 					) movement
 					WHERE movement.address NOT IN ('0x0000000000000000000000000000000000000000', '0x0000000000000000000000000000000000000001')
-					GROUP BY movement.address HAVING sum(movement.delta) <> 0
+					GROUP BY movement.address HAVING sum(movement.delta) > 0
 				) holder) AS lp_holder_count,
 				COALESCE(sum((event.event_data->>'feeAmount')::numeric) FILTER (WHERE event.event_name = 'Swap'), 0) AS fees_atto_shares
 			FROM amm_trade_events event

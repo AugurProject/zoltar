@@ -4,7 +4,7 @@ import { quoteEnterPosition } from '@zoltar/trading-shared/trading/positions'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { getDecimalSeparatorError } from '@zoltar/ui-core-shared/forms/decimal.js'
-import { authoritativeQuoteMoved, buyReturn, holdingAfterTrade, poolFeeAttoEth, roundDownShortcut, ticketInputsAfterSelection, tradeTicketModel, type TicketInputs, type TradeTicketInputs } from '../../features/live/tradeTicketModel.js'
+import { authoritativeQuoteMoved, buyReturn, holdingAfterTrade, poolFeeAttoEth, ticketInputsAfterSelection, tradeTicketModel, type TicketInputs, type TradeTicketInputs } from '../../features/live/tradeTicketModel.js'
 import { shareBalanceScope, type LiveBalances } from '../../protocol/live.js'
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 import { MINIMUM_SLIPPAGE_BPS, minimumAfterSlippage } from '../../protocol/tradeQuote.js'
@@ -188,12 +188,11 @@ describe('trade ticket inputs', () => {
 		expect(shortcuts.map(shortcut => shortcut.label)).toEqual([ticketCopy.quarter, ticketCopy.half, ticketCopy.max])
 		if (sellable === undefined) throw new Error('Expected a sellable amount')
 		// The percentages divide what can be sold now, like Max, so none fills a sale the INVALID balance cannot insure.
-		expect(shortcuts[0]?.value).toBe(roundDownShortcut(sellable / 4n))
-		expect(shortcuts[1]?.value).toBe(roundDownShortcut(sellable / 2n))
+		expect(shortcuts[0]?.value).toBe((sellable / 4n / 10n ** 10n) * 10n ** 10n)
+		expect(shortcuts[1]?.value).toBe((sellable / 2n / 10n ** 10n) * 10n ** 10n)
 		for (const shortcut of shortcuts) expect(ticketModelFor(market, 'exit', formatCurrencyInputBalance(shortcut.value, 18), balances).shortfall).toBeUndefined()
 		// INVALID (2 shares) bounds the complete sets, so Max is well below the 10-share holding.
-		// Max is trimmed to eight decimals so the field shows a readable amount that can still be sold in full.
-		expect(shortcuts[2]?.value).toBe(sellable === undefined ? undefined : sellable - (sellable % 10n ** 10n))
+		expect(shortcuts[2]?.value).toBe(sellable)
 		expect(sellable).toBeGreaterThan(2n * shares)
 		expect(sellable).toBeLessThan(5n * shares)
 		expect(ticketModelFor(market, 'exit', '', { ...balances, yes: 0n }).shortcuts).toEqual([])
@@ -412,4 +411,17 @@ test('#1445: a REP-only recovery sale is not refused as too small when it pays n
 	const sell = tradeTicketModel({ ...ready, market: repOnly, mode: 'exit', amount: '2' })
 	expect(sell.estimateProblem).toBeUndefined()
 	expect(sell.estimate?.kind === 'exit' ? sell.estimate.receiveAttoRep : undefined).toBeGreaterThan(0n)
+})
+
+test('small-unit sale impact retains the fractional spot cost', () => {
+	const pool = { ...market, yesReserve: 1_001n, noReserve: 1_002n }
+	const quote = ticketEstimateFor(pool, 'exit', '0.000000000000000004')
+	expect(quote.impactBps).toBe(4n)
+})
+
+test('an exhausted pool has no buy estimate or purchase shortcuts', () => {
+	const pool = { ...market, settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: eth }
+	const ticket = tradeTicketModel({ ...ready, market: pool })
+	expect(ticket.estimate).toBeUndefined()
+	expect(ticket.shortcuts).toEqual([])
 })

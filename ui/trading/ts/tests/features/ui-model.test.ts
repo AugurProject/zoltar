@@ -473,11 +473,11 @@ describe('standalone trading UI model', () => {
 		expect(ticketCopy.formatTradingEndedDetail('redeem-winning-shares')).toBe('Trading has ended for this market. Use Settlement to redeem.')
 		expect(ticketCopy.formatTradingEndedDetail('migrate-shares')).toContain('migrate your shares to a child universe')
 		expect(ticketCopy.formatTradingEndedDetail('unavailable')).not.toContain('Use Settlement')
-		expect(liquidityCopy.formatRemovalGuidance(undefined)).toContain('sell them on the Trade tab')
-		expect(liquidityCopy.formatRemovalGuidance('redeem-complete-sets')).toContain('hold them until the question resolves')
-		expect(liquidityCopy.formatRemovalGuidance('redeem-winning-shares')).not.toContain('until the question resolves')
-		expect(liquidityCopy.formatRemovalGuidance('migrate-shares')).toContain('migrate them to a child universe')
-		expect(liquidityCopy.formatRemovalGuidance('unavailable')).not.toContain('Settlement tab')
+		expect(liquidityCopy.formatRemovalGuidance(undefined, 3)).toContain('If you hold matching Invalid shares, you can sell insured shares on the Trade tab')
+		expect(liquidityCopy.formatRemovalGuidance('redeem-complete-sets', 3)).toContain('hold them until the question resolves')
+		expect(liquidityCopy.formatRemovalGuidance('redeem-winning-shares', 1)).not.toContain('until the question resolves')
+		expect(liquidityCopy.formatRemovalGuidance('migrate-shares', 3)).toContain('migrate them to a child universe')
+		expect(liquidityCopy.formatRemovalGuidance('unavailable', 3)).not.toContain('Settlement tab')
 	})
 
 	test('names the specific lifecycle or balance reason a settlement action is unavailable', () => {

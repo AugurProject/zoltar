@@ -256,8 +256,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 	const directory = import.meta.dir
 	const projectDirectory = join(directory, '..', '..')
 	const documentationDirectory = join(projectDirectory, 'docs')
-	const browserFormatSource = Bun.file(join(directory, 'dashboard-format.ts'))
-	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
+	const browserFormatSource = join(directory, 'dashboard-format.ts')
 	const server = startBotDashboardServer({
 		directory,
 		exposure: { password: controller.password, publicAuthority: controller.publicAuthority },
@@ -311,8 +310,10 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				return new Response(Bun.file(join(documentationDirectory, 'assets', 'dashboard-markets.png')), { headers: securityHeaders('image/png') })
 			}
 			if (request.method === 'GET' && url.pathname === '/dashboard-format.js') {
-				const source = await browserFormatSource.text()
-				return new Response(transpiler.transformSync(source), {
+				const bundle = await Bun.build({ entrypoints: [browserFormatSource], target: 'browser' })
+				const script = bundle.outputs[0]
+				if (!bundle.success || script === undefined) throw new Error('Dashboard formatter build failed')
+				return new Response(script, {
 					headers: securityHeaders('text/javascript; charset=utf-8'),
 				})
 			}

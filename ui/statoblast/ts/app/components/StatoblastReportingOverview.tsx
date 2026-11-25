@@ -38,7 +38,7 @@ export function reportingOverview(details: ReportingDetails, checkedAt: number):
 			? ['yes', 'no', 'invalid'].flatMap(outcome => {
 					const side = details.sides.find(candidate => candidate.key === outcome)
 					if (side === undefined) return []
-					const yours = side.localPrincipalAttoRep ?? side.userDeposits.reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n)
+					const yours = (side.localPrincipalAttoRep ?? side.userDeposits.reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n)) + side.importedUserDeposits.reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n)
 					const minimum = migrationRequired ? undefined : getReportingMinimumOutcomeChangeContribution(details, side.key).amountAttoRep
 					const preview = yours > 0n && minimum !== undefined ? previewReportingDeadline(details, side.key, minimum) : undefined
 					const moreToLead = preview?.reachesNonDecision === false ? minimum : undefined
@@ -188,7 +188,7 @@ export function StatoblastReportingOverview({
 	}
 	const addReminder = (target: ListedQuestionLedger, deadline: bigint) => {
 		const title = view.active ? copy.reportReminder(target.marketDetails.title) : copy.reportingOpensReminder(target.marketDetails.title)
-		const calendar = buildStatoblastCalendarEvent({ id: `${target.questionLedgerAddress}-${deadline}`, generatedAt: BigInt(Math.floor(Date.now() / 1000)), startsAt: deadline, title, description: location.href })
+		const calendar = buildStatoblastCalendarEvent({ id: `${target.questionLedgerAddress.toLowerCase()}-${view.active ? 'deadline' : 'opens'}`, generatedAt: BigInt(Math.floor(Date.now() / 1000)), startsAt: deadline, title, description: location.href })
 		downloadStatoblastCalendarEvent(calendar, 'statoblast-reporting.ics')
 	}
 	const canRemind = question !== undefined && !question.universeHasForked && !view.resolved && !forkClosesReporting && futureDeadline !== undefined && now !== undefined

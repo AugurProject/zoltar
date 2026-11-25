@@ -30,6 +30,7 @@ export function finalizeScan(runtime: OperatorRuntime, context: OperatorContext,
 	runtime.cursor = withFinalityAnchor(completedCursor, completed.finalityAnchor.number, completed.finalityAnchor.hash)
 	pruneSettledReports(runtime, blockNumber)
 	scanReport.update({ status: state.paused ? 'paused' : 'live', details: { activeReports: state.activeReportCount, opportunities: completed.completedScan.evaluated, skipped: completed.completedScan.skipped } })
+	state.lastPollAt = new Date().toISOString()
 	reportCompletedScan(state, blockNumber, completed.completedScan, scan.nextError)
 	return completeSuccessfulPoll(state, scan.nextError, config.once)
 }

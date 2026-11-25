@@ -5,7 +5,7 @@ import { securityPoolCollateral, type CollateralSymbol } from '../../../protocol
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { signal, useSignal } from '@preact/signals'
 import { useEffect, useMemo, useRef } from 'preact/hooks'
-import { getAddress, parseUnits, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, parseUnits, TransactionLookupNotFoundError, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { createTransactionScope, mergeTransactionScopes } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
@@ -54,8 +54,9 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		return { store, restored, current: signal(restored) }
 	}, [backend, wallet, deploying])
 	const progress = journal.current.value
-	const saveProgress = (next: typeof progress) => {
-		journal.store.write(next)
+	const saveProgress = (next: typeof progress, requireStorage = false) => {
+		const saved = journal.store.write(next)
+		if (!saved && requireStorage) throw new Error(deploymentCopy.progressUnavailable)
 		journal.current.value = next
 	}
 	const originEdited = useRef(false)
@@ -122,9 +123,9 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 			current = false
 		}
 	}, [backend, checkDeploymentOrigin, originForkKey])
-	const settleDeployment = (id: string, receipt?: TransactionReceipt) => {
+	const settleDeployment = (id: string, receipt?: TransactionReceipt): Address | undefined => {
 		const latest = journal.store.read() ?? journal.current.value
-		if (latest?.pending?.id !== id) return
+		if (latest?.pending?.id !== id) return undefined
 		if (receipt?.status === 'success') {
 			if (latest.pending.step === 'pool') {
 				const pool = securityPoolAddressFromCreationReceipt(receipt)
@@ -134,22 +135,27 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 			const rules = receipt.contractAddress
 			if (rules === null || rules === undefined) throw new Error(copy.admissionAddressMissing)
 			saveProgress({ ...latest, rules, pending: undefined })
-			return
+			return undefined
 		}
 		saveProgress(latest.rules === undefined ? undefined : { ...latest, pending: undefined })
+		return undefined
 	}
 	const refreshDeploymentReceipt = async () => {
 		if (checkingDeploymentReceipt.value || busy.value !== undefined || wallet === undefined) return
 		const latest = journal.store.read()
 		journal.current.value = latest
-		if (latest?.pending?.hash === undefined) return
+		if (latest?.pending?.hash === undefined) {
+			if (latest?.pool !== undefined && latest.pool !== model.managerInput) await model.load(latest.pool, wallet, latest.draft.originInput)
+			return
+		}
 		checkingDeploymentReceipt.value = true
+		error.value = undefined
 		try {
 			const receipt = await createReviewReadClient().getTransactionReceipt({ hash: latest.pending.hash })
 			const pool = settleDeployment(latest.pending.id, receipt)
 			if (pool !== undefined) await model.load(pool, wallet, latest.draft.originInput)
-		} catch {
-			// An absent receipt or failed RPC cannot establish that a prior deployment failed.
+		} catch (failure) {
+			if (!(failure instanceof TransactionLookupNotFoundError) || failure.kind !== 'receipt') error.value = getErrorMessage(failure, deploymentCopy.receiptCheckFailed)
 		} finally {
 			checkingDeploymentReceipt.value = false
 		}
@@ -205,12 +211,15 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 						...commonCallbacks,
 						assertBeforeSubmit: () => {
 							context.assertActive()
-							const latest = journal.store.read() ?? journal.current.value
+							const latest = journal.store.read()
 							if (latest?.pending !== undefined) throw new Error(deploymentCopy.receiptPending)
 							if (deploymentStep === 'rules' && latest?.rules !== undefined) throw new Error(copy.admissionDeployed)
-							if (deploymentStep === 'pool' && latest?.pool !== undefined) throw new Error(copy.poolAlreadyDeployed)
+							if (deploymentStep === 'pool') {
+								if (latest?.pool !== undefined) throw new Error(copy.poolAlreadyDeployed)
+								if (latest?.rules !== progress?.rules) throw new Error(deploymentCopy.rulesChanged)
+							}
 							// The wallet provides the hash after the send. Lock the step before the wallet receives the transaction.
-							saveProgress({ ...latest, draft, pending: { id, step: deploymentStep } })
+							saveProgress({ ...latest, draft, pending: { id, step: deploymentStep } }, true)
 						},
 						onTransactionSubmitted: (hash, status, replacedHash) => {
 							const latest = journal.store.read() ?? journal.current.value
@@ -290,7 +299,8 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 	const previousAdmission = deployedAdmission.value
 	const liveAdmission = previousAdmission?.key === admissionKey && previousAdmission.backend === backend ? previousAdmission : undefined
 	const admission = progress?.rules !== undefined && origin !== undefined ? { address: progress.rules, universeId: origin.universeId } : liveAdmission
-	const pendingDeploymentReason = progress?.pending === undefined ? undefined : progress.pending.hash === undefined ? deploymentCopy.walletSendUncertain : deploymentCopy.receiptPending
+	let pendingDeploymentReason: string | undefined
+	if (progress?.pending !== undefined) pendingDeploymentReason = progress.pending.hash === undefined ? deploymentCopy.walletSendUncertain : deploymentCopy.receiptPending
 	const canStartNewDeployment = progress !== undefined && progress.pending === undefined && (progress.activated === true || progress.pool === undefined || originForked || (verifiedSetup?.originForkTime ?? 0n) !== 0n)
 	const deploymentStatus = (savedPool === undefined ? undefined : copy.poolAlreadyDeployed) ?? (admission === undefined ? copy.deployAdmissionFirst : undefined)
 	const questionId = securityPoolUnsignedId(questionInput.value)
@@ -344,9 +354,16 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		canStartNewDeployment,
 		startNewDeployment: () => {
 			if (!canStartNewDeployment || busy.value !== undefined || (journal.store.read() ?? journal.current.value)?.pending !== undefined) return false
+			if (!journal.store.write(undefined)) {
+				error.value = deploymentCopy.progressUnavailable
+				return false
+			}
 			originEdited.current = false
 			draftInput.value = initialDeploymentDraft(model.universeInput)
-			saveProgress(undefined)
+			journal.current.value = undefined
+			error.value = undefined
+			lastFailedAction.value = undefined
+			feedback.value = undefined
 			return true
 		},
 		setMultiplierInput: (multiplierInput: string) => updateDraft({ multiplierInput }),

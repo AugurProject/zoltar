@@ -10,6 +10,7 @@ postgresTest('search prioritizes a known pool ahead of generic address results a
 	const connection = await sql.reserve()
 	try {
 		await connection`CREATE TEMP TABLE networks (chain_id integer)`
+		await connection`CREATE TEMP TABLE open_oracle_report_events (chain_id integer, open_oracle_address text, report_id numeric, canonical boolean)`
 		await connection`CREATE TEMP TABLE pools (chain_id integer, pool_address text, question_id numeric, canonical boolean)`
 		await connection`CREATE TEMP TABLE questions (chain_id integer, question_id numeric, title text, created_timestamp integer, canonical boolean)`
 		await connection`INSERT INTO networks VALUES (1), (2)`
@@ -44,6 +45,7 @@ postgresTest('unfiltered search leaves out a retained network that is no longer 
 	const connection = await sql.reserve()
 	try {
 		await connection`CREATE TEMP TABLE networks (chain_id integer)`
+		await connection`CREATE TEMP TABLE open_oracle_report_events (chain_id integer, open_oracle_address text, report_id numeric, canonical boolean)`
 		await connection`CREATE TEMP TABLE pools (chain_id integer, pool_address text, question_id numeric, canonical boolean)`
 		await connection`CREATE TEMP TABLE questions (chain_id integer, question_id numeric, title text, created_timestamp integer, canonical boolean)`
 		await connection`INSERT INTO networks VALUES (1), (2)`

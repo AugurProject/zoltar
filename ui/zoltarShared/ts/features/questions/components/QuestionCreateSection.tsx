@@ -30,7 +30,7 @@ import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadO
 import type { ExistingQuestionCheck } from '../hooks/useExistingQuestionCheck.js'
 import { getForkQuestionTimingReason } from '../lib/questionForkHandoff.js'
 import { formatQuestionTimeZoneLabel, getBrowserTimeZone } from '../lib/questionTimeZone.js'
-import { tryParseTimestampInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
+import { formatLocalDateTimeInput, tryParseTimestampInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 
 type MarketFormFieldName = keyof ReturnType<typeof validateMarketForm>['fieldErrors']
 type QuestionCreateSectionProps = {
@@ -256,7 +256,7 @@ export function QuestionCreateSection({
 										invalid={startTimeError !== undefined}
 										error={timingRelationshipError === undefined ? startTimeError : undefined}
 										type='datetime-local'
-										value={questionForm.startTime}
+										value={/^\d+$/.test(questionForm.startTime) ? formatLocalDateTimeInput(BigInt(questionForm.startTime)) : questionForm.startTime}
 										onBlur={() => markFieldTouched('startTime')}
 										onInput={event => onQuestionFormChange({ startTime: event.currentTarget.value })}
 									/>
@@ -269,7 +269,7 @@ export function QuestionCreateSection({
 										invalid={endTimeError !== undefined}
 										error={timingRelationshipError === undefined ? endTimeError : undefined}
 										type='datetime-local'
-										value={questionForm.endTime}
+										value={/^\d+$/.test(questionForm.endTime) ? formatLocalDateTimeInput(BigInt(questionForm.endTime)) : questionForm.endTime}
 										required
 										onBlur={() => markFieldTouched('endTime')}
 										onInput={event => onQuestionFormChange({ endTime: event.currentTarget.value })}

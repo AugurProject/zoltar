@@ -1,6 +1,7 @@
 import type { UseOnchainStateDependencies } from '@zoltar/ui-core-shared/app/hooks/useOnchainState.js'
 import { useProtocolOnchainRuntime } from '@zoltar/ui-core-shared/app/hooks/useProtocolOnchainRuntime.js'
-import { getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { useEffect, useRef } from 'preact/hooks'
+import { getActiveSimulationController, simulationLocationKey } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { useDeploymentFlow } from '../../deployment/hooks/useDeploymentFlow.js'
 import { buildDeploymentRouteContentProps } from '../../deployment/lib/deploymentRoute.js'
@@ -74,12 +75,23 @@ export function useProtocolAppShell({ deploymentRoute = {}, initializeEnvironmen
 		invalidateAppData()
 		onRefresh?.()
 	}
+	const locationKey = useRef(simulationLocationKey())
 	const refreshActiveEnvironment = async () => {
+		locationKey.current = simulationLocationKey()
 		await initializeEnvironment()
 		setActiveEnvironmentNonce(currentNonce => currentNonce + 1)
 		onEnvironmentCommitted?.()
 		await refreshSimulationView()
 	}
+	useEffect(() => {
+		// Banner navigation stages its location and starts the refresh synchronously.
+		// On browser traversal no caller does so, and a full reload also cancels pending reads.
+		const onTraversal = (event: PopStateEvent) => {
+			if (event.isTrusted && simulationLocationKey() !== locationKey.current) window.location.reload()
+		}
+		window.addEventListener('popstate', onTraversal)
+		return () => window.removeEventListener('popstate', onTraversal)
+	}, [])
 	const errorMessages = [deploymentFlow.errorMessage, ...onchainErrorMessages.filter(message => message !== deploymentStatusError), chainClockError].filter((message): message is string => message !== undefined)
 	const applicationDeploymentMissing = canReadOnchainData && applicationDeploymentComplete === false
 	const showDeployTab = shouldShowDeploymentTab({ applicationDeploymentMissing, deploymentStatusError, deploymentStatuses, hasLoadedDeploymentStatuses })
