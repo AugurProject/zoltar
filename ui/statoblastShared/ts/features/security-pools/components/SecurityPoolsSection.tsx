@@ -79,7 +79,8 @@ export function SecurityPoolsSection({
 	const reportPriceReadStatus = useCallback<ReportStatoblastReadStatus>((readAt, progress) => onReadStatus?.(readAt ?? model.displayedAt, progress), [model.displayedAt, onReadStatus])
 	const wrongNetwork = walletConnected && parameters.accountAddress === undefined ? getWrongNetworkReason() : undefined
 	const actions = useSecurityPoolActions(model, parameters, deploying, wrongNetwork)
-	useStatoblastPageRefresh(registerPageRefresh, deploying && actions.pendingDeployment !== undefined ? actions.refreshDeploymentReceipt : model.refresh)
+	const refreshPage = deploying ? actions.refreshDeploymentProgress : model.refresh
+	useStatoblastPageRefresh(registerPageRefresh, refreshPage)
 	const openChildPosition = (pool: Address, universeId: bigint, owner: Address | undefined) => {
 		const { routeHash, search } = parseRouteHash(statoblastPageHref({ kind: 'pool', pool, tab: 'capital' }, universeId))
 		const query = new URLSearchParams(search)
@@ -140,7 +141,7 @@ export function SecurityPoolsSection({
 					tone='error'
 					announcement='polite'
 					actions={
-						<button className='secondary' type='button' onClick={() => void model.refresh()}>
+						<button className='secondary' type='button' onClick={() => void refreshPage()}>
 							{pageCopy.tryAgain}
 						</button>
 					}

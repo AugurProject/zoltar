@@ -1,7 +1,7 @@
 import type { WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
-import { expect, test } from 'bun:test'
+import { expect, mock, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -260,8 +260,15 @@ for (const step of ['rules', 'pool'] as const) {
 			expect(step === 'rules' ? waiting.state().admissionDeployReason : waiting.state().deployReason).toBeDefined()
 			await act(() => waiting.cleanup())
 			confirmed = true
-			const restored = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolActionsWrapper, { model: model(), deploying: true }))
+			const load = mock(async (_pool?: string) => undefined)
+			const restored = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolActionsWrapper, { model: { ...model(), load }, deploying: true }))
 			await waitFor(() => expect(step === 'rules' ? restored.state().admissionAddress : restored.state().deploymentPool).toBe(step === 'rules' ? token : securityPool))
+			if (step === 'pool') {
+				expect(restored.state().preparationReason(1)).toBe('Try again to verify the saved setup progress.')
+				await act(() => restored.state().refreshDeploymentProgress())
+				expect(load).toHaveBeenCalledTimes(2)
+				expect(load.mock.calls[1]?.[0]).toBe(securityPool)
+			}
 			expect(new Set(receiptHashes)).toEqual(new Set([mockTransactionHash]))
 			expect(requests).toHaveLength(transactionCount)
 		} finally {

@@ -140,12 +140,13 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		saveProgress(latest.rules === undefined ? undefined : { ...latest, pending: undefined })
 		return undefined
 	}
-	const refreshDeploymentReceipt = async () => {
+	const refreshDeploymentProgress = async () => {
 		if (checkingDeploymentReceipt.value || busy.value !== undefined || wallet === undefined) return
 		const latest = journal.store.read()
 		journal.current.value = latest
 		if (latest?.pending?.hash === undefined) {
-			if (latest?.pool !== undefined && latest.pool !== model.managerInput) await model.load(latest.pool, wallet, latest.draft.originInput)
+			if (latest?.pool !== undefined && (latest.pool !== model.managerInput || model.setup?.securityPool !== latest.pool)) await model.load(latest.pool, wallet, latest.draft.originInput)
+			else await model.refresh()
 			return
 		}
 		checkingDeploymentReceipt.value = true
@@ -161,7 +162,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		}
 	}
 	useEffect(() => {
-		if (journal.restored?.pending !== undefined) void refreshDeploymentReceipt()
+		if (journal.restored?.pending !== undefined) void refreshDeploymentProgress()
 	}, [journal])
 	const run = async (action: string, label: string, build: () => Promise<SecurityPoolTransaction> | SecurityPoolTransaction, validate: () => Promise<void> = async () => undefined, onConfirmed?: (result: Awaited<ReturnType<typeof sendSecurityPoolTransaction>>) => Promise<void>, deploymentStep?: 'rules' | 'pool') => {
 		if (busy.value !== undefined) return
@@ -358,7 +359,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		deploymentActivated: progress?.activated === true,
 		pendingDeployment: progress?.pending,
 		checkingDeploymentReceipt: checkingDeploymentReceipt.value,
-		refreshDeploymentReceipt,
+		refreshDeploymentProgress,
 		canStartNewDeployment,
 		startNewDeployment: () => {
 			if (!canStartNewDeployment || busy.value !== undefined || (journal.store.read() ?? journal.current.value)?.pending !== undefined) return false
@@ -471,7 +472,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 			if (walletReason !== undefined) return walletReason
 			const setup = verifiedSetup
 			if (setup === undefined) {
-				if (model.savedSetupStage === undefined) return copy.setupPoolRequired
+				if (model.savedSetupStage === undefined && savedPool === undefined) return copy.setupPoolRequired
 				return model.loading ? copy.checkingSetupProgress : copy.retrySavedSetup
 			}
 			if (model.loading) return copy.checkingSetupProgress

@@ -270,7 +270,7 @@ export function SecurityPoolDeployment({ actions, model }: { actions: SecurityPo
 						{actions.creationError === undefined ? undefined : <UserMessage tone='error' detail={actions.creationError} />}
 						<DeploymentActions actions={actions} setupStage={setupStage} setupVerificationPending={verifiedSetupStage === undefined && setupStage !== undefined && setupStage < 4} />
 						{actions.pendingDeployment !== undefined && actions.busy === undefined && (
-							<button type='button' className='secondary' disabled={actions.checkingDeploymentReceipt} onClick={() => void actions.refreshDeploymentReceipt()}>
+							<button type='button' className='secondary' disabled={actions.checkingDeploymentReceipt} onClick={() => void actions.refreshDeploymentProgress()}>
 								{actions.checkingDeploymentReceipt ? pageCopy.deployCheckingReceipt : pageCopy.deployCheckReceipt}
 							</button>
 						)}
