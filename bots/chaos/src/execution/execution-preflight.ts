@@ -160,7 +160,7 @@ async function agreedSimulationAndGas(environment: ExecutionEnvironment, step: O
 		value: toHex(value),
 	}
 	await agreedExactCall(environment, `${step.label} exact simulation`, rpcTransaction, anchor)
-	return await agreedMaximumGasEstimate(environment, `${step.label} gas estimate`, rpcTransaction, anchor)
+	return await agreedMaximumGasEstimate(environment, `${step.label} gas estimate`, rpcTransaction, anchor, { includePending: true })
 }
 
 function executionRevert(error: unknown) {
