@@ -77,7 +77,7 @@ export const renderCandleContent = (candles: readonly JsonRecord[], operationRow
 		const disclosure = document.createElement('details')
 		disclosure.className = 'chart-data-disclosure'
 		const disclosureLabel = document.createElement('summary')
-		disclosureLabel.textContent = 'View exact candle data'
+		disclosureLabel.textContent = 'View candle prices (four decimal places)'
 		disclosure.append(disclosureLabel)
 		for (const row of plotRows) {
 			disclosure.append(operationRow(utcDateTime(row.start), `O ${row.exactOpen} · H ${row.exactHigh} · L ${row.exactLow} · C ${row.exactClose}`, `${row.observations} observations`, undefined))

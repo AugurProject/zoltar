@@ -53,7 +53,7 @@ export type LiveWorkflowContext = Readonly<{
 	onKnownReceipt(): void
 	executeWithCurrentWalletContext<T>(account: Address, networkFailure: string, accountFailure: string, action: () => Promise<T>): Promise<T>
 	createGuardedWalletWrite(account: Address, networkFailure: string, accountFailure: string): GuardedWalletWrite
-	onWorkflowLockChange(locked: boolean): void
+	onWorkflowLockChange(locked: boolean, market?: string): void
 }>
 
 /** Props the liquidity and settlement panels take on top of their controller context. */

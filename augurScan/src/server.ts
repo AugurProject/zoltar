@@ -62,7 +62,7 @@ const unixSeconds = (value: unknown): number => {
 }
 
 const prometheusNetworkMetrics = async (): Promise<readonly string[]> => {
-	const rows = await healthDatabase.read(async sql => await sql`SELECT chain_id, indexed_block, observed_block, last_success_at, consecutive_failures FROM networks ORDER BY chain_id`, 3_000)
+	const rows = await healthDatabase.read(async sql => await sql`SELECT chain_id, indexed_block, observed_block, start_block, last_success_at, consecutive_failures FROM networks ORDER BY chain_id`, 3_000)
 	const lines = [
 		'# HELP augurscan_indexer_lag_blocks Observed chain head minus the durable indexed checkpoint.',
 		'# TYPE augurscan_indexer_lag_blocks gauge',
@@ -74,9 +74,9 @@ const prometheusNetworkMetrics = async (): Promise<readonly string[]> => {
 	for (const row of rows) {
 		const chain = String(row['chain_id'])
 		const observed = BigInt(String(row['observed_block'] ?? 0))
-		const indexed = BigInt(String(row['indexed_block'] ?? 0))
+		const indexed = row['indexed_block'] == null ? BigInt(String(row['start_block'] ?? 0)) - 1n : BigInt(String(row['indexed_block']))
 		const lastSuccess = unixSeconds(row['last_success_at'])
-		lines.push(`augurscan_indexer_lag_blocks{chain_id="${chain}"} ${(observed > indexed ? observed - indexed : 0n).toString()}`)
+		lines.push(`augurscan_indexer_lag_blocks{chain_id="${chain}"} ${(row['observed_block'] != null && observed > indexed ? observed - indexed : 0n).toString()}`)
 		lines.push(`augurscan_indexer_last_success_unixtime_seconds{chain_id="${chain}"} ${lastSuccess}`)
 		lines.push(`augurscan_indexer_consecutive_failures{chain_id="${chain}"} ${Number(row['consecutive_failures'] ?? 0)}`)
 	}
@@ -115,6 +115,7 @@ const server = Bun.serve({
 		}
 		if (url.pathname === '/health/indexers') return respond(await healthRoutes.indexers())
 		if (url.pathname === '/api/v1/stream') {
+			if (request.method !== 'GET') return respond(Response.json({ error: 'Read-only API' }, { status: 405, headers: { ...securityHeaders, allow: 'GET' } }))
 			const header = request.headers.get('last-event-id')
 			const parsedEventId = header !== null && /^\d+$/.test(header) ? Number(header) : undefined
 			const lastEventId = parsedEventId !== undefined && Number.isSafeInteger(parsedEventId) ? parsedEventId : undefined
@@ -126,7 +127,7 @@ const server = Bun.serve({
 			return respond(
 				await apiRequest(async () => {
 					try {
-						const response = await apiDatabase.read(sql => handleApi(request, sql, freshnessThresholdMs, enabledChainIds), API_TRANSACTION_TIMEOUT_MS)
+						const response = await apiDatabase.read(sql => handleApi(request, sql, freshnessThresholdMs, enabledChainIds, networks), API_TRANSACTION_TIMEOUT_MS)
 						if (response !== undefined) {
 							for (const [name, value] of Object.entries(securityHeaders)) response.headers.set(name, String(value))
 							return response

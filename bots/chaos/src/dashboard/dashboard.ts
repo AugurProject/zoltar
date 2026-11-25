@@ -87,6 +87,7 @@ const settingsView = createDashboardSettingsView({
 })
 
 const controller = createDashboardRefresh({
+	renderOpenResumeChecklist: () => renderOpenResumeChecklist(),
 	state,
 	elements,
 	latches,
@@ -114,7 +115,7 @@ for (const filter of [elements.catalogFilter, elements.catalogClassificationFilt
 		if (state.snapshot !== undefined) catalogView.renderCatalog(state.snapshot.operationEvaluations)
 	})
 }
-registerPauseControls({ state, elements, put, refresh, reconcileUnknownMutation, renderHeader: healthView.renderHeader })
+const renderOpenResumeChecklist = registerPauseControls({ state, elements, put, refresh, reconcileUnknownMutation, renderHeader: healthView.renderHeader })
 const syncWorkflowSubmit = registerRecoveryForms({ state, elements, contexts: recoveryContexts, put, refresh, reconcileUnknownMutation, requestRecoveryContextRefresh })
 const completeConfigurationForm = registerCompleteConfigurationForm(state, reconcileUnknownMutation)
 registerSettingsForms({ state, elements, settingsDraft, put, refresh, reconcileUnknownMutation, renderConfiguration: settingsView.renderConfiguration })

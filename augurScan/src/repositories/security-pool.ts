@@ -52,20 +52,6 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 			 ORDER BY state.block_number DESC LIMIT 1) snapshot ON true
 			WHERE snapshot.asset_kind='native' OR EXISTS (SELECT 1 FROM ${contractTable} token
 			 WHERE token.chain_id=snapshot.chain_id AND token.address=snapshot.asset_address AND token.canonical AND token.kind IN ('reputationToken','weth'))
-		), balance_summary AS (
-			SELECT chain_id, address,
-				COALESCE(sum(balance) FILTER (WHERE asset_kind = 'weth'), 0) AS weth_balance,
-				COALESCE(max(balance) FILTER (WHERE asset_kind = 'native'), 0) AS native_balance,
-				count(*) FILTER (WHERE asset_kind = 'rep') AS sampled_rep_token_count,
-				count(*) FILTER (WHERE asset_kind = 'weth') AS sampled_weth_token_count,
-				count(*) FILTER (WHERE asset_kind = 'native') AS sampled_native_count,
-				min(block_number) AS oldest_balance_block, max(observed_at) AS last_balance_refresh
-			FROM latest_balances GROUP BY chain_id, address
-		), asset_summary AS (
-			SELECT chain_id,
-				count(*) FILTER (WHERE kind = 'reputationToken') AS rep_token_count,
-				count(*) FILTER (WHERE kind = 'weth') AS weth_token_count
-			FROM ${contractTable} WHERE canonical GROUP BY chain_id
 		), latest_token_metadata AS (
 		 SELECT metadata.chain_id,metadata.address,metadata.name,metadata.symbol,metadata.decimals
 		 FROM (SELECT DISTINCT chain_id,asset_address FROM latest_balances WHERE asset_kind IN ('rep','weth')) token
@@ -76,15 +62,29 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 		   AND ${snapshotParameter === undefined ? 'metadata.canonical' : 'true'} ${throughSnapshot('observed_block.number')}
 		   AND metadata.read_block <= ${snapshotParameter ?? 'observed_network.indexed_block'}
 		  ORDER BY metadata.read_block DESC LIMIT 1) metadata ON true
+		), balance_summary AS (
+			SELECT latest_balances.chain_id, latest_balances.address,
+				COALESCE(trunc(sum(balance * power(10::numeric, 18 - COALESCE(metadata.decimals, 18))) FILTER (WHERE asset_kind = 'weth')), 0) AS weth_balance,
+				COALESCE(max(balance) FILTER (WHERE asset_kind = 'native'), 0) AS native_balance,
+				count(*) FILTER (WHERE asset_kind = 'rep') AS sampled_rep_token_count,
+				count(*) FILTER (WHERE asset_kind = 'weth') AS sampled_weth_token_count,
+				count(*) FILTER (WHERE asset_kind = 'native') AS sampled_native_count,
+				min(block_number) AS oldest_balance_block, max(observed_at) AS last_balance_refresh
+			FROM latest_balances LEFT JOIN latest_token_metadata metadata ON metadata.chain_id = latest_balances.chain_id AND metadata.address = latest_balances.asset_address GROUP BY latest_balances.chain_id, latest_balances.address
+		), asset_summary AS (
+			SELECT chain_id,
+				count(*) FILTER (WHERE kind = 'reputationToken') AS rep_token_count,
+				count(*) FILTER (WHERE kind = 'weth') AS weth_token_count
+			FROM ${contractTable} WHERE canonical GROUP BY chain_id
 		), largest_rep AS (
 			SELECT DISTINCT ON (rep.chain_id, rep.address)
 				rep.chain_id, rep.address, rep.asset_address AS token_address, rep.balance,
 				COALESCE(metadata.decimals, 18) AS decimals, COALESCE(metadata.symbol, 'REP') AS symbol,
-				rep.balance / power(10::numeric, COALESCE(metadata.decimals, 18)) AS units
+				rep.balance * power(10::numeric, 255 - COALESCE(metadata.decimals, 18)) AS units
 			FROM latest_balances rep
 			LEFT JOIN latest_token_metadata metadata ON metadata.chain_id = rep.chain_id AND metadata.address = rep.asset_address
 			WHERE rep.asset_kind = 'rep'
-			ORDER BY rep.chain_id, rep.address, rep.balance / power(10::numeric, COALESCE(metadata.decimals, 18)) DESC, rep.asset_address
+			ORDER BY rep.chain_id, rep.address, rep.balance * power(10::numeric, 255 - COALESCE(metadata.decimals, 18)) DESC, rep.asset_address
 		), ranked AS (
 			SELECT activity.*, n.id AS network_id, n.explorer_base_url, c.label, c.kind,
 				COALESCE(balance.weth_balance, 0) AS weth_balance,

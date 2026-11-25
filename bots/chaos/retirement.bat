@@ -2,6 +2,9 @@
 setlocal
 set "chaos_exit_code=0"
 set "chaos_pushed=0"
+if not "%~2"=="" exit /b 2
+set "chaos_archive_id=%~1"
+if defined chaos_archive_id powershell -NoProfile -Command "if ($env:chaos_archive_id -cnotmatch '^[0-9a-f]{64}$') { exit 2 }" || exit /b 2
 pushd "%~dp0" || goto failed
 set "chaos_pushed=1"
 docker network inspect zoltar >nul 2>&1 || docker network create zoltar || goto failed

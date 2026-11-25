@@ -15,6 +15,7 @@ type DashboardRefreshContext = {
 	elements: DashboardElements
 	latches: MutationLatches
 	renderSnapshot: (value: Snapshot) => void
+	renderOpenResumeChecklist: () => void
 	renderHeader: (value: Snapshot) => void
 	renderHealth: (value: Snapshot) => void
 	renderUnavailableRpcHealth: (previousResultIsStale: boolean) => void
@@ -103,12 +104,23 @@ export function createDashboardRefresh(context: DashboardRefreshContext) {
 		let stateAvailable = false
 		let configurationAvailable = false
 		try {
-			const [stateResult, configurationResult] = await Promise.allSettled([requestJson('/api/state', STATE_REQUEST_TIMEOUT_MS), requestJson('/api/configuration', CONFIGURATION_REQUEST_TIMEOUT_MS)])
+			const [stateResult, configurationResult] = await Promise.allSettled([
+				requestJson('/api/state', STATE_REQUEST_TIMEOUT_MS).then(value => {
+					const snapshot = parseSnapshot(value)
+					if (snapshot.execute === undefined || snapshot.paused === undefined) throw new Error('Dashboard state is missing the execution mode or pause state.')
+					return snapshot
+				}),
+				requestJson('/api/configuration', CONFIGURATION_REQUEST_TIMEOUT_MS).then(value => {
+					const configuration = parseConfiguration(value)
+					if (configuration.execute === undefined || configuration.paused === undefined) throw new Error('Dashboard configuration is missing the execution mode or pause state.')
+					return configuration
+				}),
+			])
 			// Transaction explorer links come from the configuration, so it must be current before the state renders.
-			const parsedConfiguration = configurationResult.status === 'fulfilled' ? parseConfiguration(configurationResult.value) : undefined
+			const parsedConfiguration = configurationResult.status === 'fulfilled' ? configurationResult.value : undefined
 			if (parsedConfiguration !== undefined) state.configuration = parsedConfiguration
 			if (stateResult.status === 'fulfilled') {
-				const snapshot = parseSnapshot(stateResult.value)
+				const snapshot = stateResult.value
 				state.snapshot = snapshot
 				state.snapshotStale = false
 				context.renderSnapshot(snapshot)
@@ -134,6 +146,7 @@ export function createDashboardRefresh(context: DashboardRefreshContext) {
 				elements.configurationStatus.className = 'notice error'
 			}
 			state.selectionControlsAvailable = stateAvailable && configurationAvailable
+			context.renderOpenResumeChecklist()
 			if (stateAvailable && configurationAvailable) {
 				resolveMutationReconciliations()
 			}

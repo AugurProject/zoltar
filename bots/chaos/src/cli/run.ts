@@ -25,17 +25,20 @@ export function parseRunCommand(args: readonly string[]): RunCommand {
 	const confirmationIndex = args.indexOf('--confirm')
 	const confirmation = confirmationIndex === -1 ? undefined : args[confirmationIndex + 1]
 	if (confirmation === undefined) throw new Error('Retirement mutations require --confirm followed by the exact confirmation text')
-	if (args[0] === '--cancel-drain') return { confirmation, kind: 'cancel-drain' }
+	if (args[0] === '--cancel-drain') {
+		if (args.length !== 3 || confirmationIndex !== 1) throw new Error('Expected --cancel-drain --confirm TEXT')
+		return { confirmation, kind: 'cancel-drain' }
+	}
 	if (args[0] === '--accept-residuals') {
 		const targetProfileId = args[1]
 		const reasonIndex = args.indexOf('--reason')
 		const reason = reasonIndex === -1 ? undefined : args[reasonIndex + 1]
-		if (targetProfileId === undefined || reason === undefined) throw new Error('--accept-residuals requires a target profile followed by --reason and the operator rationale')
+		if (args.length !== 6 || !((reasonIndex === 2 && confirmationIndex === 4) || (reasonIndex === 4 && confirmationIndex === 2)) || targetProfileId === undefined || reason === undefined) throw new Error('--accept-residuals requires a target profile followed by --reason and the operator rationale')
 		return { confirmation, kind: 'accept-residuals', reason, targetProfileId }
 	}
 	if (args[0] === '--register-v3-position') {
 		const json = args[1]
-		if (json === undefined) throw new Error('--register-v3-position requires a JSON position record')
+		if (args.length !== 4 || confirmationIndex !== 2 || json === undefined) throw new Error('Expected --register-v3-position JSON --confirm TEXT')
 		return { confirmation, json, kind: 'register-v3-position' }
 	}
 	if (args[0] !== '--drain' || args[1] === undefined) throw new Error('Supported commands are --drain, --cancel-drain, --accept-residuals, --register-v3-position, and --retirement-status')

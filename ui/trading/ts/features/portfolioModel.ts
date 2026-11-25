@@ -1,3 +1,4 @@
+import { hasSubmissionWindow } from '@zoltar/ui-core-shared/transactions/submissionTiming.js'
 import { collateralAsset, tokenFunded, type TradingCollateral, type CollateralMarket } from '../protocol/collateral.js'
 import { quoteExactOutput } from '@zoltar/trading-shared/trading/math'
 import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'
@@ -104,7 +105,7 @@ function exitPosition(market: Pick<LiveMarket, 'yesReserve' | 'noReserve' | 'lpT
 		if (exitedSets > 0n) longUsed = exitedSets + (longOutcome === 'YES' ? quoteExactOutput(yesReserve, noReserve, exitedSets, market.feeBps) : quoteExactOutput(noReserve, yesReserve, exitedSets, market.feeBps)).amountIn
 	}
 	const leftover = [remainingInvalid - exitedSets, remainingYes - (longOutcome === 'YES' ? longUsed : 0n), remainingNo - (longOutcome === 'NO' ? longUsed : 0n)]
-	return { sets: completeSets + exitedSets, leftover }
+	return { completeSets, exitedSets, leftover }
 }
 
 function hasPendingShares(leftover: readonly bigint[], market: Pick<LiveMarket, 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares' | 'settlementRecoveryAttoRep' | 'collateral'>) {
@@ -138,7 +139,7 @@ function rowState(entry: PortfolioBalanceEntry, nowSeconds: bigint): PortfolioRo
 	if (market.systemState !== 0) return 'settlement-required'
 	if (market.questionOutcome !== 3) return 'resolved'
 	if (market.universeForkTime !== 0n) return 'settlement-required'
-	return marketAcceptsNewRisk(market, nowSeconds) ? 'open' : 'closed'
+	return marketAcceptsNewRisk(market, nowSeconds) && hasSubmissionWindow(nowSeconds, market.endTime) ? 'open' : 'closed'
 }
 
 function baseRowValuation(entry: PortfolioBalanceEntry, state: PortfolioRowState): PortfolioValuation {
@@ -156,7 +157,8 @@ function baseRowValuation(entry: PortfolioBalanceEntry, state: PortfolioRowState
 		return { kind: 'complete-sets', ...recovery(completeSets), attoEth: attoSharesToCollateralAttoEth(completeSets, market), pendingResolution: hasPendingShares([remainingInvalid, remainingYes, remainingNo], market) }
 	}
 	const exit = exitPosition(market, balances)
-	return { kind: 'exit', ...recovery(exit.sets), attoEth: attoSharesToCollateralAttoEth(exit.sets, market), pendingResolution: hasPendingShares(exit.leftover, market) }
+	const attoRep = attoSharesToRecoveryAttoRep(exit.completeSets, market) + attoSharesToRecoveryAttoRep(exit.exitedSets, market)
+	return { kind: 'exit', ...(attoRep === 0n ? {} : { attoRep }), attoEth: attoSharesToCollateralAttoEth(exit.completeSets, market) + attoSharesToCollateralAttoEth(exit.exitedSets, market), pendingResolution: hasPendingShares(exit.leftover, market) }
 }
 
 function portfolioRow(entry: PortfolioBalanceEntry, nowSeconds: bigint): PortfolioRow {
@@ -168,16 +170,15 @@ function portfolioRow(entry: PortfolioBalanceEntry, nowSeconds: bigint): Portfol
 	const availability = settlementAvailability(market, balances)
 	const pairTradable = market.pair !== undefined && market.yesReserve > 0n && market.noReserve > 0n
 	// Exits pair a long share with INVALID insurance, so a bare YES or NO holding has nothing the ticket can sell.
-	const holdsInsuredLong = (balances.yes > 0n || balances.no > 0n) && balances.invalid > 0n
-	const canSell = state === 'open' && pairTradable && holdsInsuredLong
-	// While trading is open, exits replace redemption; the settlement workspace opens once the market closes.
-	const canRedeem = state !== 'open' && (availability.canRedeemWinningShares || availability.canRedeemCompleteSets)
+	const sellableSets = state === 'open' && pairTradable && balances.invalid > 0n ? maximumInsuredExit({ ...market, longOutcome: sellSide, longBalance: sellSide === 'YES' ? balances.yes : balances.no, invalidBalance: balances.invalid }) : 0n
+	const canSell = attoSharesToCollateralAttoEth(sellableSets, market) > 0n || attoSharesToRecoveryAttoRep(sellableSets, market) > 0n
+	const canRedeem = availability.canRedeemWinningShares || availability.canRedeemCompleteSets
 	const item = (kind: PortfolioActionKind, action: PortfolioAction, deadline: bigint | undefined = undefined): PortfolioActionItem => ({ kind, action, pool: market.pool, deadline, sellSide })
 	// Dust stays redeemable and withdrawable from the row, but rounding remainders never keep a position in "Needs attention".
 	const redemptionNeedsAttention = canRedeem && ((availability.canRedeemWinningShares && !isDust(availability.winningBalance, market)) || (availability.canRedeemCompleteSets && !isDust(availability.completeSets, market)))
-	const liquidityNeedsAttention = holdsLiquidity(market, balances.lp)
+	const liquidityNeedsAttention = state === 'resolved' ? !isDust(winningAttoShares(market, { yes: 0n, no: 0n, invalid: 0n, lp: balances.lp }), market) : holdsLiquidity(market, balances.lp)
 	const actionItems: PortfolioActionItem[] = []
-	if (redemptionNeedsAttention) actionItems.push(item('redeem', 'redeem'))
+	if (state !== 'open' && redemptionNeedsAttention) actionItems.push(item('redeem', 'redeem'))
 	// A balance migrated into a child universe stays locked in the wallet; once every held share has a migration it no longer needs attention.
 	if (state === 'settlement-required' && availability.canMigrateShares && !forkMigrationSettled(balances)) actionItems.push(item('settle', 'settle'))
 	if (state !== 'open' && liquidityNeedsAttention) actionItems.push(item('withdraw-liquidity', 'withdraw-liquidity'))
@@ -208,8 +209,9 @@ export function portfolioOverview(entries: readonly PortfolioBalanceEntry[], now
 	let unvaluedCount = 0
 	let pendingResolutionCount = 0
 	for (const row of rows) {
-		if (row.valuation.kind === 'unavailable') unvaluedCount += 1
-		else {
+		if (row.valuation.kind === 'unavailable') {
+			if (row.entry.balances !== undefined && hasPortfolioBalance(row.entry.balances)) unvaluedCount += 1
+		} else {
 			const asset = collateralAsset(row.entry.market)
 			const key = asset.native ? 'native' : asset.token.toLowerCase()
 			const current = totals.get(key)
@@ -224,5 +226,18 @@ export function portfolioOverview(entries: readonly PortfolioBalanceEntry[], now
 		.map(row => ({ pool: row.entry.market.pool, title: row.entry.market.title, deadline: soonestDeadline(row.actionItems), items: row.actionItems }))
 		.sort(compareActionGroups)
 	const recoveryRepCount = rows.filter(row => row.valuation.kind !== 'unavailable' && (row.valuation.attoRep ?? 0n) > 0n).length
-	return { ...(rows.some(row => tokenFunded(row.entry.market)) ? { totalsByAsset: [...totals.values()] } : {}), ...(recoveryRepCount === 0 ? {} : { recoveryRepCount }), rows, positionCount: rows.length, totalValueAttoEth, unvaluedCount, pendingResolutionCount, actionGroups }
+	return {
+		...(rows.some(row => tokenFunded(row.entry.market)) ? { totalsByAsset: [...totals.values()] } : {}),
+		...(recoveryRepCount === 0 ? {} : { recoveryRepCount }),
+		rows,
+		positionCount: entries.filter(entry => entry.balances !== undefined && hasPortfolioBalance(entry.balances)).length,
+		totalValueAttoEth,
+		unvaluedCount,
+		pendingResolutionCount,
+		actionGroups,
+	}
+}
+
+export function hasPortfolioBalance(balances: LiveBalances) {
+	return balances.yes > 0n || balances.no > 0n || balances.invalid > 0n || balances.lp > 0n
 }

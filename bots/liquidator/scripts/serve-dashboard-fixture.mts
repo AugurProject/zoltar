@@ -148,7 +148,7 @@ const monitoredPools = () => [
 ]
 
 const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT'] ?? '4183'), {
-	getPoolCatalog: async (page, address, scope) => {
+	getPoolCatalog: async (page, address) => {
 		await Bun.sleep(500)
 		const monitored = monitoredPools().map(pool => ({
 			...pool,
@@ -167,7 +167,7 @@ const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT']
 				...(index === 3 ? {} : { deploymentDate: '1789387200', questionDates: { startTime: '1789473600', endTime: '1792065600' }, metrics: { systemState: '0', securityPool: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sharedCommittedRep: '125000.123456789', sharedCommitmentEth: '650' } }),
 			}
 		})
-		const pools = scope === 'monitored' ? monitored : [...monitored, ...unmonitored]
+		const pools = [...monitored, ...unmonitored]
 		const matches = pools.filter(pool => address === undefined || pool.address.toLowerCase() === address.toLowerCase())
 		return { chainId: network?.chainId ?? 1, snapshotTimestamp: String(Math.floor(Date.now() / 1000) - 12), page, total: String(matches.length), pageCount: String(Math.ceil(matches.length / 12)), pools: matches.slice(page * 12, (page + 1) * 12) }
 	},

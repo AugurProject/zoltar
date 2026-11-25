@@ -63,6 +63,7 @@ export function useOpenOracleSelectedReport({
 		await openOracleWithdrawableBalanceLoad.run({
 			isCurrent: () => isCurrent() && isSelectedReportCurrent(currentReportIdInput),
 			onStart: () => {
+				openOracleWithdrawableBalances.value = undefined
 				openOracleWithdrawableBalancesError.value = undefined
 			},
 			load: async () => await loadOpenOracleWithdrawableBalances(getOpenOracleAddress(), holder, details.token1, details.token2),

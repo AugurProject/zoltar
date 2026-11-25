@@ -175,10 +175,13 @@ test('report detail distinguishes observed untracked rounds and their comparison
 		const rows = routeView.detailEvidenceRowsFor('report', [
 			{ event_name: 'ReportDisputed', round_number: '0', observed_round_number: '3', comparison: { state: 'compared', previousRoundNumber: '0', previousObservedRoundNumber: '2' } },
 			{ event_name: 'ReportSubmitted', round_number: '1', observed_round_number: null, comparison: { state: 'initial' } },
+			{ event_name: 'ReportDisputed', round_number: '4', comparison: { state: 'unavailable' } },
 		])
 		expect(rows[0]?.textContent).toContain('ReportDisputed · observed round 3')
 		expect(rows[0]?.textContent).toContain('Changes from observed round 2')
 		expect(rows[1]?.textContent).toContain('ReportSubmitted · round 1')
+		expect(rows[2]?.textContent).toContain('Previous round unavailable')
+		expect(rows[2]?.textContent).not.toContain('No report fields changed.')
 	})
 })
 

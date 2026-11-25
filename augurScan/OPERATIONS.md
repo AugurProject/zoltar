@@ -33,7 +33,7 @@ Every setting is an environment variable. The Compose column names the service t
 | `SCAN_BLOCK_TIME_MS` | `12000` on Mainnet and Sepolia | `indexer` | Block interval, in milliseconds, that the indexer's scan status log uses to report a scan as lagging. |
 | `RPC_LOG_PATH` | `augurScan/logs/rpc.jsonl` | `indexer`, fixed to `/var/log/augurscan/rpc.jsonl` in the `augurscan-logs` volume | Rotating JSONL log of RPC exchanges. |
 | `POSTGRES_URL` | `postgres://augurscan:augurscan@localhost:5432/augurscan`; in Compose, the bundled `postgres` service | `app`, `indexer` | Connects directly to PostgreSQL or through a session-mode pooler. |
-| `POSTGRES_PASSWORD` | `augurscan-local` | `postgres`, and the default `POSTGRES_URL` | Password of the bundled database. Compose only. |
+| `POSTGRES_PASSWORD` | `augurscan-local` | `postgres`, and the default `POSTGRES_URL` | Raw password of the bundled database. If it contains URL-reserved characters, also set `POSTGRES_URL` with a percent-encoded password. For example, a literal `#` in the password becomes `%23` in the URL. Compose only. |
 | `POSTGRES_MAX_WAL_SIZE` | `8GB` | `postgres` | Soft `max_wal_size` budget of the bundled database during backfill; leave disk headroom above it. Apply a change with `docker compose up -d postgres`. Compose only. |
 | `PORT` | `3000` | `app`, fixed to `3000` | TCP port (1–65535) the web app listens on. The image health check probes the same port. |
 | `AUGURSCAN_PORT` | `3000` | host port of `app` | Host port that Compose publishes. Compose only. |

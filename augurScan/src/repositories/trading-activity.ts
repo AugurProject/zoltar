@@ -50,7 +50,7 @@ const tradingLegs = (sql: SQL, filter: TradingLegFilter) => {
 			FROM markets ORDER BY pool_address, block_number, log_index, pair_address
 		), pool_events AS (
 			SELECT market.pair_address AS standalone_pair_address, market.pool_address, market.share_token_address, market.universe_id, log.block_hash, log.tx_hash, log.block_number, log.log_index,
-				EXTRACT(EPOCH FROM block.timestamp)::bigint AS timestamp_seconds, log.event_name, payout.recipient AS payout_recipient, payout.pair_address AS payout_pair_address, payout.event_name AS payout_event_name, funding.mint_log_index,
+				EXTRACT(EPOCH FROM block.timestamp)::bigint AS timestamp_seconds, log.event_name, payout.recipient AS payout_recipient, payout.pair_address AS payout_pair_address, payout.event_name AS payout_event_name, payout.log_index AS payout_log_index, funding.mint_log_index,
 				recovery.amount AS recovery_rep, previous.log_index AS previous_pool_log_index, following.log_index AS next_pool_log_index,
 				COALESCE(router.address = lower(funding.arguments->>'recipient') AND action.function_name IN ('enterPosition', 'initializeWithEth', 'createPairAndInitializeWithEth', 'addLiquidityWithEth'), false)
 					OR (funding.mint_log_index IS NOT NULL AND EXISTS (
@@ -94,14 +94,14 @@ const tradingLegs = (sql: SQL, filter: TradingLegFilter) => {
 					AND other.emitter_address = log.emitter_address AND other.canonical AND other.log_index < log.log_index
 					AND other.event_name IN ('CompleteSetCreated', 'CompleteSetRedeemed', 'SharesRedeemed')
 				ORDER BY other.log_index DESC LIMIT 1
-			) previous ON log.event_name = 'CompleteSetRedeemed'
+			) previous ON true
 			LEFT JOIN LATERAL (
 				SELECT other.log_index FROM logs other
 				WHERE other.chain_id = log.chain_id AND other.block_hash = log.block_hash AND other.tx_hash = log.tx_hash
 					AND other.emitter_address = log.emitter_address AND other.canonical AND other.log_index > log.log_index
 					AND other.event_name IN ('CompleteSetCreated', 'CompleteSetRedeemed', 'SharesRedeemed')
 				ORDER BY other.log_index LIMIT 1
-			) following ON log.event_name = 'CompleteSetCreated'
+			) following ON true
 			LEFT JOIN LATERAL (
 				SELECT funded.arguments, funded.emitter_address, delivery.log_index AS mint_log_index
 				FROM logs funded
@@ -198,7 +198,7 @@ const tradingLegs = (sql: SQL, filter: TradingLegFilter) => {
 							AND (pool_event.previous_pool_log_index IS NULL OR pair_event.log_index > pool_event.previous_pool_log_index)
 							AND pair_event.event_name = 'Swap' AND pair_event.event_data->>'exactOutput' = 'true')
 					)
-				ORDER BY abs(pair_event.log_index - pool_event.log_index) LIMIT 1
+				ORDER BY abs(pair_event.log_index - pool_event.log_index), pair_event.log_index LIMIT 1
 			) companion ON pool_event.event_name <> 'SharesRedeemed'
 			LEFT JOIN LATERAL (
 				WITH moves AS (
@@ -214,9 +214,11 @@ const tradingLegs = (sql: SQL, filter: TradingLegFilter) => {
 					WHERE transfer.chain_id = ${chainId} AND transfer.block_hash = pool_event.block_hash AND transfer.tx_hash = pool_event.tx_hash
 						AND transfer.emitter_address = pool_event.share_token_address AND transfer.canonical
 						AND transfer.event_name IN ('TransferSingle', 'TransferBatch')
-						AND (pool_event.event_name <> 'CompleteSetCreated' OR (
-							transfer.log_index > pool_event.log_index AND (pool_event.next_pool_log_index IS NULL OR transfer.log_index < pool_event.next_pool_log_index)
-						))
+						AND (pool_event.previous_pool_log_index IS NULL OR transfer.log_index > pool_event.previous_pool_log_index)
+						AND (pool_event.next_pool_log_index IS NULL OR transfer.log_index < pool_event.next_pool_log_index)
+						-- Exits may refund shares after the ledger redemption, before the router records the payout.
+						AND CASE WHEN pool_event.event_name = 'CompleteSetCreated' THEN transfer.log_index > pool_event.log_index
+							ELSE pool_event.payout_log_index IS NULL OR transfer.log_index <= pool_event.payout_log_index END
 				), market_moves AS (
 					SELECT * FROM moves WHERE trunc(id / 256) = pool_event.universe_id AND sender <> receiver
 				)

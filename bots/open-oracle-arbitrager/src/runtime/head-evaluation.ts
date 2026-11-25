@@ -89,7 +89,6 @@ export async function evaluatePinnedHead(runtime: OperatorRuntime, context: Oper
 		[...runtime.reports.values()].filter(report => !report.settled).map(report => report.latest.game),
 		config.network.weth,
 	)
-	state.lastPollAt = new Date().toISOString()
 	state.opportunities = opportunities
 	const disputeOutcome = await runDisputeStage(runtime, context, scan, candidates, block, reconciledSettlements)
 	if (disputeOutcome === 'shutdown') {

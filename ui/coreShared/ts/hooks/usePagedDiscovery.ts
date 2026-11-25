@@ -94,6 +94,7 @@ export function usePagedDiscovery<TItem>({ contextKey, loadPage, onPage, pageSiz
 	})()
 	const hasMore = currentScan.totalCount === undefined || scannedItemCount < currentScan.totalCount
 	return {
+		updateTotalCount: (totalCount: bigint) => setScan(current => (current.contextKey !== contextKey || current.totalCount === undefined || current.totalCount === totalCount ? current : { ...current, totalCount })),
 		discoverNext: () => requestPage(hasMore ? currentScan.scannedPageCount : 0),
 		hasMore,
 		hasScanned: currentScan.totalCount !== undefined,

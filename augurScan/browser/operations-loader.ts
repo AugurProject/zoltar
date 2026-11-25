@@ -76,7 +76,12 @@ export const createOperationsLoader = (deps: OperationsLoaderDeps) => {
 					const retainedActivityCount = detailRoute?.kind === 'trading' && operationsState.detailState?.chainId === requiredChainId() && operationsState.detailState.routeKey === operationsDetailRouteKey(detailRoute) ? operationsState.detailState.activityItems.length : 0
 					const loadResponse = async () => {
 						if (detailRoute !== undefined) return await loadOperationsDetail(detailRoute, detailTargetCount ?? retainedDetailCount, historyTargetOffset ?? retainedRiskHistoryOffset, decisionTargetCount ?? retainedDecisionCount, activityTargetCount ?? retainedActivityCount)
-						if (catalogSection === undefined) return decodeOperationsResponse(await api(`/api/v1/operations?chainId=${encodeURIComponent(requiredChainId())}`))
+						if (catalogSection === undefined) {
+							const params = new URLSearchParams({ chainId: requiredChainId() })
+							const atBlock = new URL(location.href).searchParams.get('atBlock')
+							if (atBlock !== null) params.set('atBlock', atBlock)
+							return decodeOperationsResponse(await api(`/api/v1/operations?${params}`))
+						}
 						if (catalogSection === 'risk') return await loadOperationsRiskCatalog(riskPoolTargetCount ?? retainedRiskPoolCount)
 						return await loadOperationsCatalog(catalogSection, catalogTargetCount ?? retainedCatalogCount)
 					}

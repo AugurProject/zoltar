@@ -42,6 +42,7 @@ const valueText = (key: string, value: unknown, nativeSymbol: string, collateral
 		}
 		if (key === 'repPerEth1e18' || key === 'lastPrice') return priceText(text, collateral)
 		const unitKey = key.replaceAll('_', '')
+		if (unitKey.toLowerCase() === 'rateattoethpersecond') return exactUnit(text, 9, 'claim units/s')
 		if (/attoRep/i.test(unitKey)) return exactUnit(text, 18, 'REP')
 		if (/attoEthPerGas/i.test(unitKey)) return exactUnit(text, 18, `${nativeSymbol}/gas`)
 		if (/attoEth/i.test(unitKey) || key === 'wad') return collateral === undefined ? exactUnit(text, 18, nativeSymbol) : exactUnit(text, collateral.decimals, collateral.symbol)
@@ -102,7 +103,7 @@ export const timelineTransitionSummary = (record: Readonly<Record<string, unknow
 
 export const timelineEntityPath = (record: Readonly<Record<string, unknown>>): string | undefined => {
 	const identity = String(record['entity_identity'] ?? '')
-	if (identity === '') return undefined
+	if (record['canonical'] === false || identity === '') return undefined
 	const segment = encodeURIComponent(identity)
 	switch (record['entity_type']) {
 		case 'pool':

@@ -64,7 +64,7 @@ export function useWalletSessionController({
 	const walletContextRevision = useRef(0)
 	const subscriptionCleanup = useRef<(() => void) | undefined>()
 	const contextChangeHandler = useRef<(provider: InjectedEthereum, eventName: WalletContextChangeEvent, allowDisconnectedRefresh: boolean) => void>(() => undefined)
-	const connectHandler = useRef<() => void>(() => undefined)
+	const connectHandler = useRef<(restoreExisting: boolean) => void>(() => undefined)
 	const mounted = useRef(true)
 	const renderContextKey = `${route}\u0000${selectedUniverseId ?? ''}\u0000${configuration?.chainId.toString() ?? ''}\u0000${configuration?.router ?? ''}`
 	const renderContextKeyRef = useRef(renderContextKey)
@@ -180,7 +180,7 @@ export function useWalletSessionController({
 		const requireCurrent = () => {
 			if (!mounted.current || !requestIsCurrent() || getActiveInjectedProvider() !== provider) return false
 			if (renderContextKeyRef.current !== expectedContext) {
-				connectHandler.current()
+				connectHandler.current(restoreExisting)
 				return false
 			}
 			return true
@@ -228,7 +228,7 @@ export function useWalletSessionController({
 		await refresh(configuration)
 	}
 
-	async function connect() {
+	async function connectAccount(restoreExisting: boolean) {
 		if (transaction.anyWorkflowLocked()) return
 		if (session.accountRef.current !== undefined || session.walletClient !== undefined) invalidateIdentity('Reconnecting wallet…')
 		const request = connectionRequests.begin()
@@ -239,13 +239,14 @@ export function useWalletSessionController({
 				dispatch({ type: 'chainObserved', chainId: undefined })
 				throw new Error(deploymentCopy.walletNotFound)
 			}
-			await establish(provider, expectedContext, () => connectionRequests.isCurrent(request))
+			await establish(provider, expectedContext, () => connectionRequests.isCurrent(request), undefined, restoreExisting)
 		} catch (error) {
 			if (!connectionRequests.isCurrent(request) || renderContextKeyRef.current !== expectedContext) return
 			invalidateIdentity(publicErrorMessage(error, deploymentCopy.walletConnectionFailed))
 		}
 	}
-	connectHandler.current = () => void connect()
+	connectHandler.current = restoreExisting => void connectAccount(restoreExisting)
+	const connect = () => connectAccount(false)
 
 	useEffect(() => {
 		if (configuration === undefined || session.accountRef.current !== undefined) return
@@ -279,7 +280,7 @@ export function useWalletSessionController({
 		const request = connectionRequests.begin()
 		const expectedContext = renderContextKey
 		try {
-			await establish(provider, expectedContext, () => connectionRequests.isCurrent(request), eventName)
+			await establish(provider, expectedContext, () => connectionRequests.isCurrent(request), eventName, true)
 		} catch (error) {
 			if (!connectionRequests.isCurrent(request) || renderContextKeyRef.current !== expectedContext) return
 			invalidateIdentity(`${label}: ${publicErrorMessage(error, 'wallet refresh failed')}`)

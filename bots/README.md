@@ -53,7 +53,7 @@ Operator settings live in each bot's JSON file. The main operator processes use 
 | `ZOLTAR_BOT_DASHBOARD_PASSWORD` | liquidator, arbitrager | unset | HTTP Basic password for a network-bound dashboard. Chaos ignores it. |
 | `ZOLTAR_BOT_DASHBOARD_PUBLIC_AUTHORITY` | liquidator, arbitrager | unset | Host and port that browsers use to reach a network-bound dashboard. Chaos ignores it. |
 
-The shipped Compose services set `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED` and `ZOLTAR_BOT_SIGNER_LOCK_ROOT`. The chaos and liquidator services also pass `ZOLTAR_BOT_RPC_QUORUM` through from the host; the arbitrager service does not, although native arbitrager startup uses the same environment fallback when its operator file has no saved requirement. None of them forwards `SCAN_BLOCK_TIME_MS`; add it to the service's `environment` to use it in a container.
+The shipped Compose services set `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED` and `ZOLTAR_BOT_SIGNER_LOCK_ROOT`. All three services pass `ZOLTAR_BOT_RPC_QUORUM` through from the host for operator files without a saved quorum. None of them forwards `SCAN_BLOCK_TIME_MS`; add it to the service's `environment` to use it in a container.
 
 ## Signer lock
 

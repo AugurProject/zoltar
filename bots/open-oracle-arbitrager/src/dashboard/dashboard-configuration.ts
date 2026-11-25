@@ -96,9 +96,12 @@ export function createConfigurationLoader({ state, elements, controls, refresh }
 		if (state.latestSnapshot !== undefined) renderSettingsInsights(state.latestSnapshot)
 	}
 
+	let viewRequest = 0
+
 	async function loadCompleteConfiguration() {
 		if (state.configurationLoading) return
 		const requestEpoch = state.profileRequestEpoch
+		viewRequest++
 		state.configurationLoading = true
 		state.configurationLoaded = false
 		state.configurationLoadError = undefined
@@ -139,15 +142,16 @@ export function createConfigurationLoader({ state, elements, controls, refresh }
 	async function refreshConfigurationView() {
 		if (state.configurationLoading || !state.configurationLoaded || state.pendingNetworkProfile !== undefined) return
 		const requestEpoch = state.profileRequestEpoch
+		const request = ++viewRequest
 		// Looked up before the request so a response that outlives the page writes to a detached element instead of failing.
 		const status = element('configuration-status')
 		try {
 			const envelope = await requestWithTimeout(signal => api('/api/configuration', { signal }), CONFIGURATION_REQUEST_TIMEOUT_MS, 'Configuration request timed out.')
-			if (requestEpoch !== state.profileRequestEpoch || state.configurationLoading || !isConfigurationEnvelope(envelope)) return
+			if (request !== viewRequest || requestEpoch !== state.profileRequestEpoch || state.configurationLoading || !isConfigurationEnvelope(envelope)) return
 			elements.configurationJson.value = prettyJson(envelope.configuration)
 			status.textContent = ''
 		} catch (error) {
-			if (requestEpoch === state.profileRequestEpoch) status.textContent = `This view may be out of date: ${errorMessage(error)} Use Reload configuration to retry.`
+			if (request === viewRequest && requestEpoch === state.profileRequestEpoch) status.textContent = `This view may be out of date: ${errorMessage(error)} Use Reload configuration to retry.`
 		}
 	}
 
@@ -176,7 +180,7 @@ export function createConfigurationLoader({ state, elements, controls, refresh }
 			},
 			() => {
 				state.profileSwitchTimedOut = true
-				setText('connectivity-status', 'The profile was saved, but the dashboard did not reconnect in time. Retry the profile load when the dashboard is available.')
+				setText('connectivity-status', 'The dashboard did not reconnect in time. Retry to load the active chain profile and its saved settings.')
 				controls.updateConfigurationControls()
 			},
 		)

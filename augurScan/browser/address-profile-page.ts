@@ -103,6 +103,8 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		balanceGrid.append(card)
 	}
 	balances.append(balanceGrid)
+	if (item.rep_balances_truncated) balances.append(element('p', '', 'Showing the first 100 sampled REP tokens.'))
+	if (item.weth_balances_truncated) balances.append(element('p', '', 'Showing the first 100 sampled wrapped native tokens.'))
 	setLiveRecord(balances, 'balances', {
 		native: item.native_balance_detail,
 		weth: item.weth_balances,

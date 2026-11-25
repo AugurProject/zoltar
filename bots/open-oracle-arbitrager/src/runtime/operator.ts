@@ -48,6 +48,7 @@ async function scanConfiguredNetwork(runtime: OperatorRuntime, context: Operator
 	await retryHistoryOutboxes(runtime, context, scan)
 	const discovery = await discoverReports(runtime, context, scan, block)
 	if (discovery.kind === 'head-unchanged') {
+		state.lastPollAt = new Date().toISOString()
 		scanReport.update({ status: 'waiting' })
 		state.blockNumber = block.number.toString()
 		state.blockTimestamp = block.timestamp.toString()
@@ -79,7 +80,7 @@ async function pollOnce(runtime: OperatorRuntime, context: OperatorContext, cons
 	try {
 		state.rpcEndpointHealth = runtime.readPool.snapshot()
 		const executionActivationPending = await applyScanBoundaryUpdates(runtime, context)
-		if (!config.networkConfigured) return completeUnconfiguredPoll(state)
+		if (!config.networkConfigured) return completeUnconfiguredPoll(state, config.once)
 		scanReport = startScanReport({
 			network: { chainId: config.network.chain.id, name: config.network.name },
 			blockTimeMs: context.scanBlockTimeOverride ?? scanBlockTimeMs(config.network.chain.id),

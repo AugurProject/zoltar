@@ -117,7 +117,7 @@ for (const mode of ['committed', 'empty', 'failed', 'reorg', 'wide', 'partial-fa
 			if (mode === 'committed' || mode === 'empty' || mode === 'wide' || mode === 'heartbeat') {
 				expect(lines[0]).toContain(`logsAdded=${block.logs.length * (largeRange ? 250 : 1)}`)
 				expect(lines[0]).toContain(`blocksScanned=${largeRange ? 250 : 1}`)
-				expect(lines[0]).toContain(`status=${mode === 'wide' ? 'backfilling' : 'lagging'} lagging=true reason=behind-head blocksBehind=${largeRange ? 199_741 : 2}`)
+				expect(lines[0]).toContain(largeRange ? 'status=backfilling lagging=true reason=behind-head blocksBehind=199741' : 'status=live lagging=false blocksBehind=0')
 			} else if (mode === 'partial-failure' || mode === 'partial-reorg' || mode === 'block-failure') {
 				expect(storedRanges).toEqual([[10n, 109n, 100]])
 				expect(lines[0]).toContain('logsAdded=200')

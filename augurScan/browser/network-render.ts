@@ -1,3 +1,4 @@
+import { setNetworkDisplaySettings } from './network-freshness.ts'
 import type { CanonicalRecovery, NetworkRecord } from './browser-types.ts'
 import { canReuseNetworkStatusPresentation, indexerHeadFreshness, indexerHeadFreshnessTransitionDelay, indexerLagLabel, indexerProgressEstimate, showIndexerSyncDetails } from './network-freshness.ts'
 
@@ -55,6 +56,7 @@ export const createNetworkRenderer = (deps: NetworkRendererDeps) => {
 			} else if (previous && previous.indexed_hash !== network.indexed_hash) invalidateAddressIdentityCache(network.chain_id, true)
 		}
 		state.latestNetworks = networks
+		setNetworkDisplaySettings(networks)
 		const selectedNetwork = networks.find(item => String(item.chain_id) === selectedChainId())
 		const currentTime = Date.now() + getClockOffset()
 		const selectedHeadFreshness = selectedNetwork === undefined ? undefined : indexerHeadFreshness(selectedNetwork, currentTime)
@@ -73,6 +75,8 @@ export const createNetworkRenderer = (deps: NetworkRendererDeps) => {
 			previouslySelectedNetwork !== undefined &&
 			selectedNetwork !== undefined &&
 			selectedHeadFreshness !== undefined &&
+			!selectedHeadFreshness.stale &&
+			!selectedNetwork.next_retry_at &&
 			canReuseNetworkStatusPresentation(previouslySelectedNetwork, selectedNetwork, renderedNetworkCard?.dataset['liveKey'], renderedNetworkCard?.dataset['headFreshness'], String(selectedNetwork.chain_id), selectedHeadFreshness.stale ? 'stale' : 'current')
 		) {
 			networkCards.setAttribute('aria-busy', 'false')

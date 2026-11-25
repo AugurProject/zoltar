@@ -15,7 +15,7 @@ export function runGit(args: readonly string[], options: RunGitOptions = {}): st
 	const result = spawnSync('git', args, { cwd: options.cwd, encoding: 'utf8', maxBuffer: gitOutputLimitBytes })
 	if (result.error !== undefined) throw result.error
 	if (result.status !== 0) throw new Error(`git ${args.join(' ')} failed${result.stderr.trim() === '' ? '' : `: ${result.stderr.trim()}`}`)
-	return options.trim === false ? result.stdout : result.stdout.trim()
+	return (options.trim ?? !args.includes('-z')) ? result.stdout.trim() : result.stdout
 }
 
 type ListRepositoryFilesOptions = {

@@ -164,7 +164,7 @@ Durable commit, reorg, and status notifications with seven-day `Last-Event-ID` r
 
 ### Operations overview
 
-The Operations overview returns at most 250 report summaries, 250 escalation summaries, 250 auction summaries, 250 pools, every capital ledger (at most 250), the 100 capital positions most at risk, the latest 25 liquidation-feed entries, the fee economics of every universe, 100 fork-root summaries, 30 recent semantic changes, and the latest coordinator price. It supplies exact snapshot totals for reports, escalations, auctions, pools, and markets, plus a current all-time `reorganizations` total; it does not supply an exact fork-root total. Dedicated catalogs expose continuation controls, and the dedicated fork catalog supplies its exact root total. Every Operations `asOf` envelope includes the selected `blockNumber`, `indexedHead`, `observedHead`, `historyDepthBlocks`, and `lagBlocks`. For an `atBlock` response, `historyDepthBlocks` is the distance from the fixed historical block to the current indexed head, while `lagBlocks` is its distance to the observed provider head; `historical` is true and live refreshes do not advance the selected evidence boundary.
+The Operations overview returns at most 250 report summaries, 250 escalation summaries, 250 auction summaries, 250 pools, up to 250 capital ledgers, the 100 capital positions most at risk, the latest 25 liquidation-feed entries, fee economics aggregated from up to 250 ledgers ordered by address, 100 fork-root summaries, 30 recent semantic changes, and the latest coordinator price. It supplies exact snapshot totals for reports, escalations, auctions, pools, and markets, plus a current all-time `reorganizations` total; it does not supply an exact fork-root total. Dedicated catalogs expose continuation controls, and the dedicated fork catalog supplies its exact root total. Every Operations `asOf` envelope includes the selected `blockNumber`, `indexedHead`, `observedHead`, `historyDepthBlocks`, and `lagBlocks`. For an `atBlock` response, `historyDepthBlocks` is the distance from the fixed historical block to the current indexed head, while `lagBlocks` is its distance to the observed provider head; `historical` is true and live refreshes do not advance the selected evidence boundary.
 
 The overview has no continuation field. Use dedicated catalogs to page beyond its limits.
 
@@ -308,6 +308,8 @@ Integrity includes `decodeCoverage` for the selected chain and snapshot: observe
 | Auction-detail demand curve | Path identity and chain | `demandCurve` sums `BidSubmitted.lots` per `minimumAttoRepPerLot` level in fill order (lowest limit first) and returns at most the first 1,000 levels with `lots` and `cumulativeLots`; `amountAttoEth` and `cumulativeDemandAttoEth` multiply by `RepairAuctionStarted.lotAttoEth` and are present only once that event is indexed. `demandCurveTruncated` signals omitted levels, but there is no continuation | Indexed-block response |
 | Trading-detail analytics | Path identity and chain | `lpPositions` contains at most the 250 largest nonzero balances with no total, truncation flag, or continuation. TWAP/candles calculate from at most 10,000 Sync candidates drawn from the last seven days and an optional earlier opening observation; `observationLimit`, `observationsTruncated`, and `observationRange` expose that bound, but there is no observation continuation | Indexed-block response |
 
+The log list reports each row’s current depth-confirmation status in `finalized` and the live indexed confirmation boundary in `current_confirmation_boundary`. The pagination snapshot pins the log history. Confirmation status can advance between requests for that snapshot.
+
 
 ## Evidence and export
 
@@ -383,7 +385,7 @@ The pair is treated as still trading while all of these hold:
 - the question end time is indexed and in the future;
 - there is no `UniverseForked` for the universe;
 - there is no `SharesRedeemed`;
-- the newer of the latest pool state event and tagged pool read is operational and not awaiting fork continuation;
+- when available, the newer of the latest pool state event and tagged pool read indicates an operational pool with no pending fork continuation (missing pool state permits an inferred open valuation);
 - neither the tagged pool read nor the pool's sampled escalation game reports a resolution.
 
 Limits of the reconstruction:

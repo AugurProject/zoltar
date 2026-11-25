@@ -18,6 +18,8 @@ function fundingFor(token: Address, symbol: string, overrides: Partial<ReturnTyp
 		reason: undefined,
 		error: undefined,
 		readError: undefined,
+		receiptWarning: undefined,
+		transactionHash: undefined,
 		retry: () => undefined,
 		pending: false,
 		approve: async () => undefined,

@@ -120,6 +120,45 @@ describe('live market refresh', () => {
 		url: `http://localhost/?demo=0#/market/${pool}`,
 	})
 
+	test('a metadata refresh cannot reinterpret the typed number in new collateral units', async () => {
+		let decimals = 0
+		const rendered = await renderDiscoveryController(
+			{
+				...offlineControllerServices,
+				discoverAddressedMarket: async () => discoveryPage([{ ...market, collateral: { decimals, token: shareToken, symbol: decimals === 0 ? 'Collateral base units' : 'USDC', native: false } }]),
+			},
+			`market/${pool}`,
+		)
+		cleanupRendered = rendered.cleanup
+		await waitForDom(() => rendered.state().discovery.selected?.collateral?.decimals === 0, 'base unit fallback')
+		await act(() => rendered.state().position.setAmount('100'))
+		expect(rendered.state().position.amount).toBe('100')
+		decimals = 6
+		await act(async () => {
+			await rendered.state().discovery.refresh()
+		})
+		await waitForDom(() => rendered.state().discovery.selected?.collateral?.decimals === 6, 'token precision')
+		expect(rendered.state().position.amount).toBe('')
+	})
+
+	test('a panel awaiting a receipt locks only its market while wallet actions stay locked', async () => {
+		const rendered = await renderDiscoveryController(
+			{
+				...offlineControllerServices,
+				discoverAddressedMarket: async (_client, _config, address) => discoveryPage([{ ...market, pool: address }]),
+			},
+			`market/${pool}`,
+		)
+		cleanupRendered = rendered.cleanup
+		await act(() => rendered.state().workflow.updateLiquidityWorkflowLock(true, pool.toLowerCase()))
+		expect(rendered.state().workflow.marketWorkflowLocked).toBe(true)
+		await rendered.navigate(`market/${shareToken}`)
+		expect(rendered.state().workflow.marketWorkflowLocked).toBe(false)
+		expect(rendered.state().workflow.workflowLocked).toBe(true)
+		await act(() => rendered.state().workflow.updateLiquidityWorkflowLock(false, pool.toLowerCase()))
+		expect(rendered.state().workflow.workflowLocked).toBe(false)
+	})
+
 	test('an empty saved portfolio checks only the saved list, including manual refreshes', async () => {
 		const snapshots: Array<readonly { pool: Address }[]> = []
 		const rendered = await renderDiscoveryController({
@@ -1027,9 +1066,9 @@ describe('live market refresh', () => {
 			document.querySelector<HTMLButtonElement>('.enum-dropdown-trigger')?.click()
 		})
 		await act(() => {
-			;[...document.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(option => option.textContent === 'Liquidity')?.click()
+			;[...document.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(option => option.textContent === 'Liquidity (collateral units)')?.click()
 		})
-		expect(document.querySelector('.enum-dropdown-trigger')?.textContent).toBe('Liquidity')
+		expect(document.querySelector('.enum-dropdown-trigger')?.textContent).toBe('Liquidity (collateral units)')
 		await act(() => {
 			render(view('create-market'), rendered.container)
 		})

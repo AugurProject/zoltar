@@ -81,16 +81,18 @@ export const reportRoundChanges = (rows: readonly ReportRoundEvidence[]): readon
 	return rounds.map((row, index) => {
 		const previous = rounds[index + 1]
 		const currentData = plainRecord(row['report_data'])
+		const comparisonState = previous === undefined ? 'initial' : 'compared'
+		const missingBaseline = previous === undefined && row['event_name'] !== 'ReportSubmitted'
 		const previousData = previous === undefined ? {} : plainRecord(previous['report_data'])
 		return {
 			...row,
 			report_data: currentData,
 			comparison: {
-				state: previous === undefined ? 'initial' : 'compared',
+				state: missingBaseline ? 'unavailable' : comparisonState,
 				previousRoundNumber: previous?.['round_number'],
 				...(typeof previous?.['observed_round_number'] === 'string' ? { previousObservedRoundNumber: previous['observed_round_number'] } : {}),
 				previousBlockNumber: previous?.['block_number'],
-				changes: reportFieldChanges(previousData, currentData),
+				changes: missingBaseline ? [] : reportFieldChanges(previousData, currentData),
 			},
 		}
 	})

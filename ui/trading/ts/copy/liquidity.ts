@@ -19,9 +19,10 @@ export const additionGuidance = 'Your collateral mints equal Yes, No, and Invali
 const removalLead = 'Removing liquidity returns Yes and No shares to your wallet, not collateral.'
 
 /** Removal pays out shares, not ETH, so the guidance names the next step that turns them into ETH. `path` is undefined while the market still trades. */
-export function formatRemovalGuidance(path: MarketSettlementPath | undefined) {
-	if (path === undefined) return `${removalLead} Next, sell them on the Trade tab, or hold them until the question resolves.`
+export function formatRemovalGuidance(path: MarketSettlementPath | undefined, questionOutcome: number) {
+	if (path === undefined) return `${removalLead} If you hold matching Invalid shares, you can sell insured shares on the Trade tab. You can also hold them until resolution.`
 	if (path === 'redeem-complete-sets') return `${removalLead} Next, redeem them with matching Invalid shares as complete sets on the Settlement tab, or hold them until the question resolves.`
+	if (path === 'redeem-winning-shares' && questionOutcome === 0) return `${removalLead} Neither Yes nor No pays out after an Invalid resolution.`
 	if (path === 'redeem-winning-shares') return `${removalLead} Next, redeem the winning shares on the Settlement tab.`
 	if (path === 'migrate-shares') return `${removalLead} Next, migrate them to a child universe on the Settlement tab.`
 	return `${removalLead} They cannot be redeemed until the question is operational.`

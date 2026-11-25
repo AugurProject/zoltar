@@ -89,7 +89,7 @@ test('search, status filter, and sort live in the hash query, so Back and refres
 	try {
 		expect(rendered.container.querySelector<HTMLInputElement>('input[type="search"]')?.value).toBe('paris')
 		expect(rendered.container.querySelector('.market-list-filters button[aria-pressed="true"]')?.textContent).toBe('Open')
-		expect(rendered.container.querySelector('.enum-dropdown-trigger')?.textContent).toBe('Liquidity')
+		expect(rendered.container.querySelector('.enum-dropdown-trigger')?.textContent).toBe('Liquidity (collateral units)')
 		expect(cardTitles(rendered.container)).toEqual(['Will it rain in Paris?'])
 		const historyLength = window.history.length
 		await typeSearch(rendered.container, 'bridge')

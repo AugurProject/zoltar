@@ -3,7 +3,7 @@
 import { ExecutionSignerLockHeldError, signerLockConflictMessage } from '@zoltar/bot-shared/execution/process-lock'
 import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
-import { privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { acquireBotProcessLocks, runBotMain } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { createHash, randomUUID } from 'node:crypto'
 import { lstat } from 'node:fs/promises'
@@ -16,7 +16,7 @@ import { CHAOS_PROCESS_LOCK_OPTIONS } from '../core/process-lock-options.ts'
 import { deploymentArchiveIds, loadVerifiedDeploymentArchive } from '../runtime/deployment-archives.ts'
 import { retirementReplacementTargetId, RetirementCompletionPendingError, verifyRetirementCompletionFinality } from '../runtime/deployment-profile.ts'
 import { loadDurableState, saveDurableState } from '../state/operator-state.ts'
-import { isPristineBootstrapState } from '../state/pristine.ts'
+import { isPristineBootstrapState, isUnoperatedSignerlessState } from '../state/pristine.ts'
 import { assertSafeRetirementRecipient, DEFAULT_RETIREMENT_POLICIES, requestRetirement } from '../state/retirement.ts'
 
 type PreparationOptions = {
@@ -90,23 +90,6 @@ export async function listDeploymentArchives(path?: string) {
 				return { error: errorMessage(error), id, status: 'unverified' }
 			}
 		}),
-	)
-}
-
-function isUnoperatedSignerlessState(state: Awaited<ReturnType<typeof loadDurableState>>) {
-	return (
-		state.signerAddress === undefined &&
-		(state.protocolIndex === undefined || state.protocolIndex.wallet.toLowerCase() === zeroAddress) &&
-		state.activities.every(activity => activity.hash === undefined && activity.type !== 'transaction' && activity.type !== 'recovery' && activity.type !== 'wallet' && (activity.type !== 'operation' || activity.status === 'dry-run' || activity.status === 'skipped')) &&
-		state.pendingTransactions.length === 0 &&
-		state.includedTransactions.length === 0 &&
-		state.rollbackQueue.length === 0 &&
-		state.workflows.length === 0 &&
-		state.obligations.length === 0 &&
-		state.obligationTombstones.length === 0 &&
-		state.retirement.status === 'inactive' &&
-		state.retirement.positions.length === 0 &&
-		!state.safetyPaused
 	)
 }
 

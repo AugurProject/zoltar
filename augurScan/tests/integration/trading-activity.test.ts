@@ -407,6 +407,24 @@ test.skipIf(url === undefined)('derives market ETH volume, activity, and account
 			}),
 		])
 		expect(groupedLp[0]).not.toHaveProperty('holdings_value_atto_eth')
+
+		for (const [owner, shares, logIndex] of [
+			[historySender, 2, 280],
+			[historyRecipient, 3, 290],
+		] as const) {
+			await insertLogs([
+				{ block: 2, tx: 26, logIndex, emitter: shareToken, name: 'TransferBatch', data: batch(owner, router, [0, 1, 2], [shares, shares, shares]) },
+				{ block: 2, tx: 26, logIndex: logIndex + 1, emitter: shareToken, name: 'TransferBatch', data: batch(router, zero, [0, 1, 2], [shares, shares, shares]) },
+				{ block: 2, tx: 26, logIndex: logIndex + 2, emitter: pool, name: 'CompleteSetRedeemed', data: { redeemer: router, completeSetsBurnedAttoShares: String(shares), settlementCollateralRedeemedAttoEth: String(shares) } },
+				{ block: 2, tx: 26, logIndex: logIndex + 3, emitter: router, name: 'CompleteSetRedeemedByTransfer', data: { questionLedger: pool, completeSetShares: String(shares), payoutRecipient } },
+			])
+		}
+		const redemptionResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading/${chainId}/${pair}`), connection)
+		const redemptions = (await redemptionResponse?.json()) as typeof batched
+		expect(redemptions.data.activity.items.filter(item => item['tx_hash'] === hash(26)).map(item => [item['kind'], item['account'], item['payout_recipient']])).toEqual([
+			['redeem-complete-sets', historyRecipient, payoutRecipient],
+			['redeem-complete-sets', historySender, payoutRecipient],
+		])
 	} finally {
 		connection.release()
 		await sql.close()

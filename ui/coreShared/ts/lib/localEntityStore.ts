@@ -276,9 +276,9 @@ export function createDownloadedEntityStore<T>(decode: (data: unknown) => T | un
 		cache.set(key, entries)
 		return entries
 	}
-	const write = (scope: LocalEntityScope, next: DownloadedEntry<T>[]) => {
+	const write = (scope: LocalEntityScope, next: DownloadedEntry<T>[], visible = next) => {
 		const key = getDownloadedStorageKey(scope)
-		cache.set(key, next)
+		cache.set(key, visible)
 		if (!writeStorageItem(scope, key, next)) writeStorageItem(scope, key, next.slice(0, Math.max(1, Math.floor(next.length / 2))))
 		notifyListeners()
 	}
@@ -291,7 +291,12 @@ export function createDownloadedEntityStore<T>(decode: (data: unknown) => T | un
 		const current = read(scope)
 		const pruned = pruneRegistryEntries(current, page)
 		if (items.length === 0 && pruned.length === current.length) return
-		write(scope, items.length === 0 ? pruned : upsert(scope, pruned, items, now))
+		const saved = upsert(scope, pruned, items, now)
+		// A full cache of favorites may exclude the page the user has just requested.
+		const savedIds = new Set(saved.map(entry => entry.id))
+		const missing = items.filter(item => !savedIds.has(normalizeEntityId(item.id)))
+		const pageOverflow = upsertDownloadedEntries([], missing, now, new Set(), missing.length)
+		write(scope, saved, [...pageOverflow, ...saved])
 	}
 	return { read, record, recordRegistryPage }
 }

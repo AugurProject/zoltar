@@ -218,6 +218,7 @@ test('restores the authenticated pending signer after restarting with a differen
 				return current
 			},
 			runMutation: mutation => mutation(),
+			settingsRevision: () => 'reviewed-policy',
 			settings: () => current,
 			state,
 		})

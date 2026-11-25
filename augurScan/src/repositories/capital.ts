@@ -69,28 +69,29 @@ export const capitalPositionRows = async (sql: SQL, filter: CapitalPositionFilte
 	const { chainId, snapshotBlock, ledger, owner, limit, offset } = filter
 	return await sql`
 		WITH ${knownOwners(sql, chainId, snapshotBlock)}, identities AS (
-			-- One position is named exactly; the latest-read seek below decides whether it exists.
-			SELECT ${`${ledger ?? ''}:${owner ?? ''}`}::text AS entity_identity WHERE ${ledger !== undefined && owner !== undefined}
-			UNION ALL
-			SELECT known.ledger_address || ':' || known.owner_address FROM owners known
-			WHERE NOT ${ledger !== undefined && owner !== undefined}
-				AND (${ledger ?? null}::text IS NULL OR known.ledger_address = ${ledger ?? null})
+			SELECT known.ledger_address || ':' || known.owner_address AS entity_identity FROM owners known
+            WHERE true
+                AND (${ledger ?? null}::text IS NULL OR known.ledger_address = ${ledger ?? null})
 				AND (${owner ?? null}::text IS NULL OR known.owner_address = ${owner ?? null})
 		), positions AS (
 			SELECT split_part(identity.entity_identity, ':', 1) AS ledger_address, split_part(identity.entity_identity, ':', 2) AS owner_address,
-				snapshot.block_number::text AS block_number, snapshot.block_hash, snapshot.block_timestamp, snapshot.read_status,
+				snapshot.block_number::text AS block_number, snapshot.block_hash, snapshot.block_timestamp, COALESCE(snapshot.read_status, 'unsampled') AS read_status,
 				snapshot.read_result, snapshot.read_failure_reason, snapshot.source_method, snapshot.observed_at,
 				snapshot.indexer_run_id::text AS indexer_run_id, snapshot.abi_source_hash, snapshot.application_source_hash, snapshot.projection_source_hash,
 				CASE WHEN snapshot.read_status = 'success' AND snapshot.read_result->>'healthFactorBps' ~ '^[0-9]+$' THEN (snapshot.read_result->>'healthFactorBps')::numeric END AS health_factor_bps
-			FROM identities identity JOIN LATERAL (
+			FROM identities identity LEFT JOIN LATERAL (
 				SELECT state.* FROM entity_state_snapshots state
 				JOIN blocks block ON block.chain_id = state.chain_id AND block.hash = state.block_hash AND block.canonical
 				WHERE state.chain_id = ${chainId} AND state.entity_type = 'capital-owner' AND state.entity_identity = identity.entity_identity
 					AND state.canonical AND state.block_number <= ${snapshotBlock}
 				ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1
 			) snapshot ON true
-		)
-		SELECT position.*, count(*) OVER ()::integer AS total FROM positions position
+            WHERE snapshot.read_status IS NOT NULL OR EXISTS (
+                SELECT 1 FROM contracts contract WHERE contract.chain_id = ${chainId} AND contract.canonical AND contract.kind = 'securityPoolCapitalLedger'
+                    AND contract.address = split_part(identity.entity_identity, ':', 1) AND ${contractExistedAt(sql, snapshotBlock)}
+            )
+        )
+        SELECT position.*, count(*) OVER ()::integer AS total FROM positions position
 		ORDER BY position.health_factor_bps ASC NULLS LAST, position.ledger_address, position.owner_address
 		LIMIT ${limit} OFFSET ${offset}
 	`

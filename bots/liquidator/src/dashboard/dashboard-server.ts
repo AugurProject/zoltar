@@ -15,7 +15,7 @@ import { settingsPageMarkup } from './settings-page.tsx'
 
 export type DashboardController = {
 	lookupUniverse?: (value: unknown) => unknown | Promise<unknown>
-	getPoolCatalog?: (page: number, address?: Address, scope?: 'all' | 'monitored') => Promise<PoolCatalogPage>
+	getPoolCatalog?: (page: number, address?: Address) => Promise<PoolCatalogPage>
 	getConfiguration: () => unknown | Promise<unknown>
 	getState: () => unknown | Promise<unknown>
 	hostname: '0.0.0.0' | '127.0.0.1'
@@ -215,7 +215,7 @@ function publicOperatorSnapshot(value: unknown) {
 	if (Array.isArray(source['pools'])) snapshot['pools'] = publicList(source['pools'], publicPool)
 	if (Array.isArray(source['marketSources'])) snapshot['marketSources'] = publicList(source['marketSources'], marketSource => publicFields(marketSource, ['assetId', 'id', 'kind', 'market', 'reason', 'status']))
 	if (Array.isArray(source['universes'])) {
-		snapshot['universes'] = publicList(source['universes'], universe => publicFields(universe, ['forkedPoolCount', 'forkQuestionId', 'id', 'migratableVaultCount', 'operationalPoolCount', 'outcomeIndex', 'parentId', 'poolCount', 'selectedPoolCount']))
+		snapshot['universes'] = publicList(source['universes'], universe => publicFields(universe, ['forkedPoolCount', 'forkQuestionId', 'id', 'migratableVaultCount', 'operationalPoolCount', 'outcomeIndex', 'parentId', 'poolCount', 'repToken', 'selectedPoolCount']))
 	}
 	return snapshot
 }
@@ -249,7 +249,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				const page = Number(url.searchParams.get('page') ?? '0')
 				if (!Number.isSafeInteger(page) || page < 0) return json({ error: 'Invalid pool page' }, 400)
 				const scope = url.searchParams.get('scope') ?? 'all'
-				if (scope !== 'all' && scope !== 'monitored') return json({ error: 'Invalid pool scope' }, 400)
+				if (scope !== 'all') return json({ error: 'Invalid pool scope' }, 400)
 				let address: Address | undefined
 				const rawAddress = url.searchParams.get('address')
 				if (rawAddress !== null) {
@@ -261,7 +261,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				}
 				if (!(await controller.isNetworkConfigured())) return json({ error: 'Configure the chain and RPC endpoints in Settings to browse pools.' }, 400)
 				try {
-					return json(await controller.getPoolCatalog(page, address, scope))
+					return json(await controller.getPoolCatalog(page, address))
 				} catch (error) {
 					return publicDashboardError('liquidator', error, 503, 'pool-catalog', 'Pool discovery failed. Check RPC connectivity and retry.')
 				}

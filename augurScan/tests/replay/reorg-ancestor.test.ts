@@ -77,3 +77,13 @@ test('stops an ancestor search when indexing is aborted', async () => {
 	await expect(search).rejects.toThrow()
 	expect(reads).toBe(3)
 })
+
+test('checks the oldest retained anchors after a probe falls below the stored history', async () => {
+	const { atOrBefore, hash } = storedChain(1005n)
+	const ancestor = await findSparseCanonicalAncestor(
+		1004n,
+		async number => (number < 1000n ? undefined : atOrBefore(number)),
+		async number => (number === 1000n ? hash(number) : hash(0n)),
+	)
+	expect(ancestor?.number).toBe(1000n)
+})

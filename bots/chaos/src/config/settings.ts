@@ -384,7 +384,7 @@ export async function loadSettings(path = resolve(process.env['ZOLTAR_CHAOS_CONF
 	try {
 		contents = await readOwnerFile(path, filesystem, 'Chaos-bot configuration')
 	} catch (error) {
-		if (isErrorCode(error, 'ENOENT')) throw new Error(`Missing chaos-bot configuration at ${path}. Create it with \`install -m 600 config/operator.example.json ${path}\` and edit it.`)
+		if (isErrorCode(error, 'ENOENT')) throw new Error(`Missing chaos-bot configuration at ${path}. Create the parent directory with owner-only permissions (0700), then create the file with \`install -m 600 config/operator.example.json ${path}\` and edit it.`)
 		throw error
 	}
 	const parsed = parseJsonDocument(contents, 'Chaos-bot configuration')

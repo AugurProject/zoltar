@@ -81,7 +81,10 @@ export const findSparseCanonicalAncestor = async (before: bigint, checkpointAtOr
 		if (mismatch.number === 0n) return undefined
 		const target = mismatch.number > step ? mismatch.number - step : 0n
 		const candidate = await checkpointAtOrBefore(target)
-		if (candidate === undefined) return undefined
+		if (candidate === undefined) {
+			low = target
+			break
+		}
 		if (await matches(candidate)) {
 			best = candidate
 			low = target
@@ -94,7 +97,7 @@ export const findSparseCanonicalAncestor = async (before: bigint, checkpointAtOr
 	while (high - low > 1n) {
 		const middle = (low + high) / 2n
 		const candidate = await checkpointAtOrBefore(middle)
-		if (candidate === undefined || candidate.number <= best.number) {
+		if (candidate === undefined || (best !== undefined && candidate.number <= best.number)) {
 			low = middle
 		} else if (await matches(candidate)) {
 			best = candidate

@@ -64,6 +64,10 @@ export function shouldFollowWalletNetwork(location: LocationLike = window.locati
 	return !shouldUseSimulationLocation(location) && !readLocationParams(location).has(NETWORK_QUERY_PARAM)
 }
 
+export function simulationLocationKey(location: LocationLike = window.location) {
+	return shouldUseSimulationLocation(location) ? JSON.stringify([getSimulationScenario(location), getSimulationStateId(location), getSimulationWalletMode(location)]) : ''
+}
+
 function getSimulationScenario(location: LocationLike): SimulationScenario {
 	const raw = readLocationParams(location).get('simScenario') ?? undefined
 	if (raw === undefined) return 'baseline'
@@ -74,7 +78,7 @@ function getSimulationWalletMode(location: LocationLike) {
 	return parseSimulationWalletMode(readLocationParams(location).get(SIMULATION_WALLET_QUERY_PARAM))
 }
 
-function getSimulationStateId(location: LocationLike) {
+export function getSimulationStateId(location: LocationLike) {
 	const params = readLocationParams(location)
 	const stateId = params.get('simState')
 	return stateId === null || stateId.trim() === '' ? undefined : stateId

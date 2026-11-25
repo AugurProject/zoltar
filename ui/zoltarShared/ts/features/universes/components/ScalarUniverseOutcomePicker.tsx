@@ -1,5 +1,5 @@
 import { describeUniverseReadError } from '../lib/universeReadError.js'
-import { useEffect, useId, useState } from 'preact/hooks'
+import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ScalarQuestionDetails } from '@zoltar/zoltar-shared/questions/scalarOutcome'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
@@ -27,8 +27,11 @@ export function ScalarUniverseOutcomePicker({ address, universeId, question, loa
 	const backend = getActiveBackend()
 	const [tickInput, setTickInput] = useState('0')
 	const [invalid, setInvalid] = useState(false)
+	const reading = useRef(false)
 	const [refresh, setRefresh] = useState(0)
-	useBlockRefresh(() => setRefresh(count => count + 1))
+	useBlockRefresh(() => {
+		if (!reading.current) setRefresh(count => count + 1)
+	})
 	const { outcomeIndex, label } = resolveScalarUniverseSelection(question, tickInput, invalid)
 	const [snapshot, setSnapshot] = useState<{ backend: typeof backend; loadOutcome: LoadScalarUniverseOutcome; outcomeIndex: bigint; outcome?: UniverseOutcome | undefined; error?: string }>()
 	const current = snapshot?.backend === backend && snapshot.loadOutcome === loadOutcome && snapshot.outcomeIndex === outcomeIndex ? snapshot : undefined
@@ -36,6 +39,7 @@ export function ScalarUniverseOutcomePicker({ address, universeId, question, loa
 	const loading = outcomeIndex !== undefined && current === undefined
 	useEffect(() => {
 		if (outcomeIndex === undefined) return
+		reading.current = true
 		let active = true
 		const guard = createActiveEnvironmentGuard()
 		const readSelection = async () => {
@@ -46,10 +50,13 @@ export function ScalarUniverseOutcomePicker({ address, universeId, question, loa
 			} catch (error) {
 				if (active && guard.isCurrent())
 					setSnapshot(previous => ({ backend, loadOutcome, outcomeIndex, outcome: previous?.backend === backend && previous.loadOutcome === loadOutcome && previous.outcomeIndex === outcomeIndex ? previous.outcome : undefined, error: describeUniverseReadError(error, copy.formatChildUniverseLoadError(label)) }))
+			} finally {
+				if (active) reading.current = false
 			}
 		}
 		const timer = setTimeout(() => void readSelection(), 150)
 		return () => {
+			reading.current = false
 			active = false
 			clearTimeout(timer)
 		}
@@ -58,7 +65,13 @@ export function ScalarUniverseOutcomePicker({ address, universeId, question, loa
 		<div className='form-grid'>
 			<UniverseScalarPicker question={question} tickInput={tickInput} invalid={invalid} onTickChange={setTickInput} onInvalidChange={setInvalid} />
 			{loading ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: copy.loadingChild, detailIsLoading: true }} /> : undefined}
-			<RetryableNotice message={current?.error} retryLabel={commonCopy.retry} onRetry={() => setRefresh(count => count + 1)} />
+			<RetryableNotice
+				message={current?.error}
+				retryLabel={commonCopy.retry}
+				onRetry={() => {
+					if (!reading.current) setRefresh(count => count + 1)
+				}}
+			/>
 			<div className='actions'>
 				{outcome === undefined ? undefined : (
 					<span id={statusId}>
