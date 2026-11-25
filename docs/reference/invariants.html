@@ -92,6 +92,10 @@
 								<td>A direct authorization, bound, or state check enforces the property locally.</td>
 							</tr>
 							<tr>
+								<td><strong>Tested property</strong></td>
+								<td>The cited regression suite checks this condition on concrete inputs or state transitions.</td>
+							</tr>
+							<tr>
 								<td><strong>Reviewed preservation</strong></td>
 								<td>Several contracts cooperate to preserve the property in reviewed flows and tests.</td>
 							</tr>
@@ -136,6 +140,7 @@
 
 			<section id="invariant-index">
 				<h2>Invariant index</h2>
+				<p>For pair and router properties, see <a href="./trading/invariants.html#pair-custody">Trading invariants</a>.</p>
 				<table>
 					<thead>
 						<tr>
@@ -321,6 +326,422 @@
 							<td>Authority before external effects</td>
 							<td>Safety</td>
 							<td>Reviewed preservation</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-01"><code>INV-01</code></a>
+							</td>
+							<td>Healthy price boundary</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-02"><code>INV-02</code></a>
+							</td>
+							<td>REP grid per lot</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-09"><code>INV-09</code></a>
+							</td>
+							<td>Retained commitment</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-10"><code>INV-10</code></a>
+							</td>
+							<td>Distress age after materialization</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-03"><code>INV-03</code></a>
+							</td>
+							<td>Maximum removable fee units</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-04"><code>INV-04</code></a>
+							</td>
+							<td>Minimum required cash</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-05"><code>INV-05</code></a>
+							</td>
+							<td>Incumbent value on issuance</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-06"><code>INV-06</code></a>
+							</td>
+							<td>Immediate unit redemption</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-07"><code>INV-07</code></a>
+							</td>
+							<td>Remaining backing after redemption</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-08"><code>INV-08</code></a>
+							</td>
+							<td>Checkpoint frequency</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-46"><code>INV-46</code></a>
+							</td>
+							<td>Funding target through runoff</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-47"><code>INV-47</code></a>
+							</td>
+							<td>New shares and recovery REP</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-50"><code>INV-50</code></a>
+							</td>
+							<td>Base purchase fee</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-59"><code>INV-59</code></a>
+							</td>
+							<td>Deferred service cash</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-60"><code>INV-60</code></a>
+							</td>
+							<td>Recovery REP through subsequent forks</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-11"><code>INV-11</code></a>
+							</td>
+							<td>Cash follows chosen commitment</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-12"><code>INV-12</code></a>
+							</td>
+							<td>Rounding across fully chosen branches</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-13"><code>INV-13</code></a>
+							</td>
+							<td>Partial recovery across questions</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-14"><code>INV-14</code></a>
+							</td>
+							<td>Transferable recovery rights</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-15"><code>INV-15</code></a>
+							</td>
+							<td>Branch clock conversion</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-16"><code>INV-16</code></a>
+							</td>
+							<td>First inherited fixing</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-17"><code>INV-17</code></a>
+							</td>
+							<td>Prepaid reporting horizon</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-49"><code>INV-49</code></a>
+							</td>
+							<td>Fork admission shortfall</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-18"><code>INV-18</code></a>
+							</td>
+							<td>Longest fundable prefix</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-19"><code>INV-19</code></a>
+							</td>
+							<td>Gross and net proceeds</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-20"><code>INV-20</code></a>
+							</td>
+							<td>Closing observation</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-21"><code>INV-21</code></a>
+							</td>
+							<td>Winner cursor</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-22"><code>INV-22</code></a>
+							</td>
+							<td>Ownership through detachment</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-51"><code>INV-51</code></a>
+							</td>
+							<td>Auction tree height and weights</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-54"><code>INV-54</code></a>
+							</td>
+							<td>Exact early refund eligibility</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-61"><code>INV-61</code></a>
+							</td>
+							<td>Order of materialization</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-23"><code>INV-23</code></a>
+							</td>
+							<td>Median and provisional outcome</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-24"><code>INV-24</code></a>
+							</td>
+							<td>Last open curve second</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-25"><code>INV-25</code></a>
+							</td>
+							<td>Partitioned ordinary payouts</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-26"><code>INV-26</code></a>
+							</td>
+							<td>Carry proof geometry</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-27"><code>INV-27</code></a>
+							</td>
+							<td>Outward price bounds</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-28"><code>INV-28</code></a>
+							</td>
+							<td>Canonical observation updates</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-29"><code>INV-29</code></a>
+							</td>
+							<td>Deferred report recovery</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-30"><code>INV-30</code></a>
+							</td>
+							<td>Growth-proof withdrawal floor</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-31"><code>INV-31</code></a>
+							</td>
+							<td>Sponsor operation order</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-48"><code>INV-48</code></a>
+							</td>
+							<td>Two-asset report funding</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-58"><code>INV-58</code></a>
+							</td>
+							<td>Escrow delivery rights</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-39"><code>INV-39</code></a>
+							</td>
+							<td>Unused child mint capacity</td>
+							<td>Conservation</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-40"><code>INV-40</code></a>
+							</td>
+							<td>Threshold steps</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-41"><code>INV-41</code></a>
+							</td>
+							<td>Adjacent historical checkpoints</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-42"><code>INV-42</code></a>
+							</td>
+							<td>Order of maturity updates</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-43"><code>INV-43</code></a>
+							</td>
+							<td>Creation bytecode round trip</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-44"><code>INV-44</code></a>
+							</td>
+							<td>Deployment mask</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-45"><code>INV-45</code></a>
+							</td>
+							<td>Scalar label uniqueness</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-52"><code>INV-52</code></a>
+							</td>
+							<td>Frozen history allocation</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-53"><code>INV-53</code></a>
+							</td>
+							<td>Canonical event replay</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-57"><code>INV-57</code></a>
+							</td>
+							<td>Authorization namespaces</td>
+							<td>Safety</td>
+							<td>Tested property</td>
 						</tr>
 					</tbody>
 				</table>
@@ -896,6 +1317,1532 @@
 						</div>
 					</details>
 				</div>
+			</section>
+			<section id="capital-health-and-retirement">
+				<h2>Capital health and retirement</h2>
+				<div class="invariant-list">
+					<details class="invariant-entry" id="inv-01">
+						<summary><code>INV-01</code><span class="invariant-title">Healthy price boundary</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">For positive commitment <code>K</code>, multiplier <code>M</code>, price <code>p</code> and target health <code>H ≥ 10,000</code>, backing <code>R</code> suffices exactly when <code>p ≤ maximumHealthyPrice(⌊R × 10,000 / H⌋, K, M)</code>. At the price immediately above the boundary the same backing is insufficient.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCommitmentIndex.test.ts"><code>securityPoolCommitmentIndex.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-02">
+						<summary><code>INV-02</code><span class="invariant-title">REP grid per lot</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Let the auction REP grid be <code>M / gcd(M, 10,000)</code>. For positive commitment per lot and grid-aligned REP per lot, the protocol-floor maximum healthy price is identical for one lot and any representable multiple. An owner’s voluntary health target can introduce a separate rounding step.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCommitmentIndex.test.ts"><code>securityPoolCommitmentIndex.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-09">
+						<summary><code>INV-09</code><span class="invariant-title">Retained commitment</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">A retirement request for part of an owner’s commitment removes only the requested reduction from eligibility for new purchases. The healthy retained part stays eligible. Completing a retirement cannot withdraw capital already needed to back live demand.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCommitmentIndex.test.ts"><code>securityPoolCommitmentIndex.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-10">
+						<summary><code>INV-10</code><span class="invariant-title">Distress age after materialization</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Splitting an auction position transfers its original adverse-observation history to the materialized lots. Ordinary new owners and imported positions have their own first applicable observation. A later return to the same price does not reconstruct the prior distress age.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolAuctionPositionSplit.test.ts"><code>securityPoolAuctionPositionSplit.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+				</div>
+			</section>
+			<section id="settlement-units-and-fees">
+				<h2>Settlement units and fees</h2>
+				<div class="invariant-list">
+					<details class="invariant-entry" id="inv-03">
+						<summary><code>INV-03</code><span class="invariant-title">Maximum removable fee units</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">For an already funded question with nonzero net cash and total book units, the fee budget is the largest unit removal that preserves its rounded minimum backing at the quoted book price. Removing the next unit breaks that floor when another unit exists and the required floor is positive. An underfunded question has zero fee budget.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/invariantMath.test.ts"><code>invariantMath.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-04">
+						<summary><code>INV-04</code><span class="invariant-title">Minimum required cash</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Required cash is the least raw amount <code>c</code> such that <code>(c × S − r) × d ≥ u × n</code>, where <code>S = 10⁹</code>, <code>r</code> is the carried fee remainder, <code>u</code> the units, and <code>n/d</code> the target ratio. Computing this without the carried remainder can change admission by one raw unit.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/invariantMath.test.ts"><code>invariantMath.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-05">
+						<summary><code>INV-05</code><span class="invariant-title">Incumbent value on issuance</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Minting units against a funded book weakly increases the incumbent net cash per unit. With pre-mint net scaled cash <code>N</code>, units <code>U</code>, deposit <code>C</code> in raw cash units, settlement scale <code>S = 10⁹</code>, and new units <code>a</code>, the exact rounding residual satisfies <code>0 ≤ C × S × U − a × N &lt; N</code>.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/invariantMath.test.ts"><code>invariantMath.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-06">
+						<summary><code>INV-06</code><span class="invariant-title">Immediate unit redemption</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Immediately redeeming exactly the new units from a successful funded-book mint returns either <code>C</code> or <code>C−1</code> raw units, holding fee remainder and book composition otherwise fixed. This bound applies to the two unit-conversion functions. A full user transaction can also pay fees or acquire other rights.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/invariantMath.test.ts"><code>invariantMath.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-07">
+						<summary><code>INV-07</code><span class="invariant-title">Remaining backing after redemption</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">A partial redemption can only increase or preserve net backing per unit for the remaining book. With <code>b&lt;U</code> burned, the amount paid is rounded down and the scaled rounding residue is strictly below <code>U × S</code> in the cross-multiplied comparison. The last burn returns all remaining raw cash.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/invariantMath.test.ts"><code>invariantMath.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-08">
+						<summary><code>INV-08</code><span class="invariant-title">Checkpoint frequency</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">With a fixed set of funded capital fee streams and fixed eligibility, subdividing a time interval into checkpoints gives exactly the same cumulative vested amount for each token. Fractional accrual survives intermediate checkpoints. At the last stream expiry all funded amounts have vested.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCapitalFeeStreams.test.ts"><code>securityPoolCapitalFeeStreams.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-46">
+						<summary><code>INV-46</code><span class="invariant-title">Funding target through runoff</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Forking an underfunded settlement book with live units preserves its funding target. Repeated partial or zero funding cannot lower the amount required for those same liabilities. A book with unchanged units is still in runoff at one raw unit below the target and is funded at equality.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolSettlementBook.test.ts"><code>securityPoolSettlementBook.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-47">
+						<summary><code>INV-47</code><span class="invariant-title">New shares and recovery REP</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">If a live question owns all book units and all associated recovery REP <code>R</code>, issuing <code>a</code> new shares against prior supply <code>s&gt;0</code> requires exactly <code>⌈R × a / s⌉</code> new REP. A genuinely new question with zero prior outcome supply has a zero recovery-REP quote.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolSettlementBook.test.ts"><code>securityPoolSettlementBook.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-50">
+						<summary><code>INV-50</code><span class="invariant-title">Base purchase fee</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Base purchase fees depend on the configured fee minimum, security multiplier, fee rate and purchase cash. Under unchanged configuration a temporary increase in idle healthy underwriting capacity cannot discount the base fee. Round the backing value up before charging the percentage. Prepaid resolution premium is a separate component.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolResolutionEconomics.test.ts"><code>securityPoolResolutionEconomics.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-59">
+						<summary><code>INV-59</code><span class="invariant-title">Deferred service cash</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Deferred service cash has an owner or a fixed burn destination. Claiming a capital ledger’s assigned cash cannot consume its neighbor’s allocation. Flushing a pending burn pays only the burn address. If delivery reverts, the pending amount remains claimable and can be flushed after delivery resumes.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCollateral.test.ts"><code>securityPoolCollateral.test.ts</code></a> and <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolPreparationPremium.test.ts"><code>securityPoolPreparationPremium.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-60">
+						<summary><code>INV-60</code><span class="invariant-title">Recovery REP through subsequent forks</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">For each recovery fork, the increment in newly surrendered REP belongs to the question units present at that fork. Subsequent holding fees cannot retroactively shrink that allocation. Inherited recovery REP retains its previous ownership through another fork, including after partial burns.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolSettlementRecoveryFees.test.ts"><code>securityPoolSettlementRecoveryFees.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+				</div>
+			</section>
+			<section id="fork-choices-and-recovery">
+				<h2>Fork choices and recovery</h2>
+				<div class="invariant-list">
+					<details class="invariant-entry" id="inv-11">
+						<summary><code>INV-11</code><span class="invariant-title">Cash follows chosen commitment</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">At a frozen source with cash <code>C</code> and commitment <code>K&gt;0</code>, a branch with chosen commitment <code>k</code> receives <code>⌊C × k / K⌋</code> before child funding adjustments. Grouping or reordering owners who make the same choices cannot change that amount.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolForkCoordinator.test.ts"><code>securityPoolForkCoordinator.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-12">
+						<summary><code>INV-12</code><span class="invariant-title">Rounding across fully chosen branches</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">If all source commitment chooses among <code>b&gt;0</code> nonempty branches, unassigned cash from rounding is between zero and <code>b−1</code> raw units. If any commitment remains unchosen, this bound no longer applies to the entire neutral cash balance.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolForkCoordinator.test.ts"><code>securityPoolForkCoordinator.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-13">
+						<summary><code>INV-13</code><span class="invariant-title">Partial recovery across questions</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">For eligible recovery questions at a fixed source snapshot, neutral cash <code>N</code>, total units <code>U&gt;0</code>, question units <code>uᵢ</code>, supply <code>sᵢ&gt;0</code> and cumulative recovered shares <code>xᵢ</code>, total cash paid from zero recovered shares equals <code>⌊N × Σ ⌊uᵢ × xᵢ / sᵢ⌋ / U⌋</code>. Splitting or reordering claims that end at the same vector leaves total payout unchanged. Individual claimants may receive different rounding units.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolResolutionPremiumBook.test.ts"><code>securityPoolResolutionPremiumBook.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-14">
+						<summary><code>INV-14</code><span class="invariant-title">Transferable recovery rights</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">In an eligible source, a holder’s recovery rights for each outcome equal source shares less previously detached rights, plus independently received credits. Forwarding credits spends them first. Consuming <code>x</code> complete sets reduces each of the three rights by exactly <code>x</code> and leaves child shares unchanged.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/shareTokenSecurityPoolRecovery.test.ts"><code>shareTokenSecurityPoolRecovery.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-15">
+						<summary><code>INV-15</code><span class="invariant-title">Branch clock conversion</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Logical and native time conversions are mutual inverses on the running segment at or after the anchors, within the timestamp domain. All native times in a preparation plateau map to the same logical instant. A claim involving elapsed reporting time must use the correct clock.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/fixedOutcomeEncoding.test.ts"><code>fixedOutcomeEncoding.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-16">
+						<summary><code>INV-16</code><span class="invariant-title">First inherited fixing</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">The first ancestor that fixes a question determines the inherited outcome on that branch. A later fork on the same question cannot overwrite it. A fixed Invalid outcome remains distinguishable from absence. Siblings can have distinct fixed outcomes.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/fixedOutcomeEncoding.test.ts"><code>fixedOutcomeEncoding.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-17">
+						<summary><code>INV-17</code><span class="invariant-title">Prepaid reporting horizon</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">The first schedule fixes a question’s prepaid reporting horizon. Timely disputes may redistribute future earnings only through that horizon. An early-finality refund becomes effective strictly after its boundary. A refunded inherited balance cannot be revived in a descendant.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolResolutionPremiumBook.test.ts"><code>securityPoolResolutionPremiumBook.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-49">
+						<summary><code>INV-49</code><span class="invariant-title">Fork admission shortfall</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Funding a reporting-triggered fork with question escrow <code>e&gt;0</code> and current threshold <code>T</code> pulls <code>max(0,T−e)</code> from the payer. This top-up issues no separate winning claim. The triggering question’s post-admission balance is <code>max(e,T)−⌊T/forkBurnDivisor⌋</code>. Unrelated question balances receive no admission debit.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/ownForkAdmissionShortfall.test.ts"><code>ownForkAdmissionShortfall.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+				</div>
+			</section>
+			<section id="auction-clearing-and-ownership">
+				<h2>Auction clearing and ownership</h2>
+				<div class="invariant-list">
+					<details class="invariant-entry" id="inv-18">
+						<summary><code>INV-18</code><span class="invariant-title">Longest fundable prefix</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Sort eligible lots by bid minimum, then submission ID. For inventory <code>I</code>, grid-aligned closing floor <code>F</code> and the minimum <code>pⱼ</code> on the jth lot, a prefix of length <code>j</code> is fundable exactly when <code>j × max(F,pⱼ) ≤ I</code> and it fits the raise limit. The result is the longest such prefix. Raising the floor alone cannot increase the fill.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditAuctionEngineFuzz.test.ts"><code>auditAuctionEngineFuzz.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-19">
+						<summary><code>INV-19</code><span class="invariant-title">Gross and net proceeds</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">The bid engine’s gross cash equals filled lots times lot size. In the repair adapter, cash delivered to the fork equals the lesser of gross cash and the original shortfall. The difference goes to the burn address. Engine gross, adapter net and burn must reconcile even with a one-unit shortfall.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolAuctionFeeLotSizing.test.ts"><code>securityPoolAuctionFeeLotSizing.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-20">
+						<summary><code>INV-20</code><span class="invariant-title">Closing observation</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Closing eligibility uses the close instant. The native cooldown places a reachable child fork after that instant. Such a fork cannot cancel an eligible auction if nobody has finalized it yet. A final-day observation can qualify even if its short ordinary price window has expired by the time finalization runs.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCollateralRepairAuction.test.ts"><code>securityPoolCollateralRepairAuction.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-21">
+						<summary><code>INV-21</code><span class="invariant-title">Winner cursor</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">From a frozen auction book, repeatedly requesting the next unmaterialized bid visits each remaining winner exactly once in price and time priority. Settlement or materialization between cursor calls can remove a winner from future results. Bid IDs themselves need not increase.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditAuctionEngineFuzz.test.ts"><code>auditAuctionEngineFuzz.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-22">
+						<summary><code>INV-22</code><span class="invariant-title">Ownership through detachment</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">A winner detached from the aggregate position owns its accrued fees through detachment. Further fees credited to the remaining winners cannot flow back to it. The two tokens’ budgets each reconcile to detached credits plus remaining credits.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolAuctionPositionSplit.test.ts"><code>securityPoolAuctionPositionSplit.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-51">
+						<summary><code>INV-51</code><span class="invariant-title">Auction tree height and weights</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Every auction bid tree node has stored height <code>1 + max(leftHeight,rightHeight)</code>, children differing by at most one level, and subtree lots equal to left lots plus its own plus right lots. Its traversal is ordered by minimum REP and then bid ID. The height of a valid tree of at most <code>2⁹⁶−1</code> bid IDs is at most 137, with a leaf at height one.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditAuctionEngineFuzz.test.ts"><code>auditAuctionEngineFuzz.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-54">
+						<summary><code>INV-54</code><span class="invariant-title">Exact early refund eligibility</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">For an existing unsettled bid in an open auction, immediate early-refund eligibility is equivalent to receiving zero lots if bidding stopped now and the engine closed at its original maximum raise with floor zero. Once this most favorable close cannot include the bid, extensions of bidding, a higher floor, or a smaller raise limit cannot restore it.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditAuctionEngineFuzz.test.ts"><code>auditAuctionEngineFuzz.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-61">
+						<summary><code>INV-61</code><span class="invariant-title">Order of materialization</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">If a fixed cash and REP award goes to the aggregate auction position before any further winner detaches, the <em>individual</em> amounts that belong to each winner are independent of detachment order. Each matches its pre-detachment preview. Later fee accrual changes the set of eligible owners and begins a new comparison.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditAuctionEngineFuzz.test.ts"><code>auditAuctionEngineFuzz.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+				</div>
+			</section>
+			<section id="reporting-and-price-observations">
+				<h2>Reporting and price observations</h2>
+				<div class="invariant-list">
+					<details class="invariant-entry" id="inv-23">
+						<summary><code>INV-23</code><span class="invariant-title">Median and provisional outcome</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">For three ordinary outcome balances, reaching the non-decision threshold is equivalent to the median reaching it. At current cost at or below the median, the provisional result is None. Above the median a strict leader wins, a top tie remains None, and an empty game at positive cost gives Invalid.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/escalationGame/reportingArithmetic.test.ts"><code>reportingArithmetic.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-24">
+						<summary><code>INV-24</code><span class="invariant-title">Last open curve second</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">On an ordinary increasing attrition curve with an interior median, the last open second <code>t</code> satisfies <code>cost(t) ≤ median &lt; cost(t+1)</code>. Changing the leader’s excess while preserving the median and all curve parameters cannot move that boundary. Fixed outcomes and endpoint cases have separate rules.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/escalationCurveCache.test.ts"><code>escalationCurveCache.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-25">
+						<summary><code>INV-25</code><span class="invariant-title">Partitioned ordinary payouts</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">For ordinary winning deposits, both REP paid and REP burned are differences on fixed cumulative curves. Partitioning a winning interval at the reward-window edge or a haircut rounding boundary preserves both totals exactly.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/escalationGame/reportingArithmetic.test.ts"><code>reportingArithmetic.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-26">
+						<summary><code>INV-26</code><span class="invariant-title">Carry proof geometry</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">For every supported carry leaf count, the mountains partition the leaf interval without overlap or gaps. The containing peak fixes a leaf’s offset and branch orientation. Its proof contains exactly <code>peakHeight + popcount(leafCount) − 1</code> sibling hashes.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/escalationGame/reportingArithmetic.test.ts"><code>reportingArithmetic.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-27">
+						<summary><code>INV-27</code><span class="invariant-title">Outward price bounds</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">With raw price <code>p</code>, percentage precision <code>D</code> and uncertainty <code>0 ≤ e &lt; D</code>, the liquidation bound is <code>⌊pD/(D+e)⌋</code> and the conservative bound is <code>⌈pD/(D−e)⌉</code>. Increasing only uncertainty weakly widens this interval. At zero uncertainty both equal <code>p</code>.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/invariantMath.test.ts"><code>invariantMath.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-28">
+						<summary><code>INV-28</code><span class="invariant-title">Canonical observation updates</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Canonical price, accepted epoch, observation timestamp and both funded exposure limits update together on a strictly newer accepted observation. An equal-time accepted report may authorize its sponsor’s operations but cannot overwrite that tuple or extend expiry. With different prices at the same timestamp, the first accepted observation matters.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolSharedFeed.test.ts"><code>securityPoolSharedFeed.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-29">
+						<summary><code>INV-29</code><span class="invariant-title">Deferred report recovery</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Recovery of a deferred report uses its original settlement time. Running recovery later cannot buy another validity window. An upstream settlement and a terminal local result are distinct states. Once terminal, the report cannot run the local batch a second time.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolSharedFeed.test.ts"><code>securityPoolSharedFeed.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-30">
+						<summary><code>INV-30</code><span class="invariant-title">Growth-proof withdrawal floor</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">A secondary accepted growth proof can constrain the sponsoring owner’s withdrawals during that accepted epoch. The owner’s minimum price reflects the higher applicable price. A later accepted epoch invalidates the earlier overlay.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolSharedFeed.test.ts"><code>securityPoolSharedFeed.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-31">
+						<summary><code>INV-31</code><span class="invariant-title">Sponsor operation order</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Ordinary failure of one budgeted sponsor operation leaves later eligible operations executable in declared order and under the sponsor’s identity. The caller who settles a report cannot gain the sponsor’s owner rights.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolReportOperations.test.ts"><code>securityPoolReportOperations.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-48">
+						<summary><code>INV-48</code><span class="invariant-title">Two-asset report funding</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">With the same price feed exposures, let <code>C</code> be its collateral-side minimum, <code>R</code> the REP-side minimum, <code>P&gt;0</code> the proposed price, and <code>S=10¹⁸</code>. The minimum report collateral <code>a</code> is the smallest integer with both <code>a ≥ C</code> and <code>a × P ≥ R × S</code>. Raising only <code>P</code> cannot increase <code>a</code>. The actual initial REP transfer rounds up separately.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCollateralRepairAuction.test.ts"><code>securityPoolCollateralRepairAuction.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-58">
+						<summary><code>INV-58</code><span class="invariant-title">Escrow delivery rights</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Anyone may deliver a released report token to its sponsor. Only the sponsor may redirect the delivery. When one report token cannot be delivered, independently withdrawing the other preserves both its recipient restriction and the unwithdrawn claim.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCollateral.test.ts"><code>securityPoolCollateral.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+				</div>
+			</section>
+			<section id="rep-history-and-deployment">
+				<h2>REP, history and deployment</h2>
+				<div class="invariant-list">
+					<details class="invariant-entry" id="inv-39">
+						<summary><code>INV-39</code><span class="invariant-title">Unused child mint capacity</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">For an initialized child REP token, current theoretical supply less current circulating supply equals initial theoretical supply less <em>all successful mints since initialization</em>. A child burn lowers both current supplies equally and never restores minting headroom. A transfer changes neither.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Conservation</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/reputationAuthorization.test.ts"><code>reputationAuthorization.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-40">
+						<summary><code>INV-40</code><span class="invariant-title">Threshold steps</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">For positive theoretical supply <code>S</code> and fork divisor <code>D</code>, the fork and non-decision thresholds are <code>⌈S/D⌉</code> and <code>⌈S/(2D)⌉</code>. For either divisor <code>d ∈ {D,2D}</code>, the least supply reduction that lowers the corresponding threshold is <code>1 + ((S−1) mod d)</code>. One less reduction leaves it unchanged.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/zoltar.test.ts"><code>zoltar.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-41">
+						<summary><code>INV-41</code><span class="invariant-title">Adjacent historical checkpoints</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">On a common ordered timestamp history, the persistent map’s floor identifies the greatest timestamp at or below a probe, and the frozen history’s ceiling identifies the least at or above it. At an exact key they select the same recorded item. Outside the applicable range the corresponding lookup returns its absence sentinel.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolSettlementBook.test.ts"><code>securityPoolSettlementBook.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-42">
+						<summary><code>INV-42</code><span class="invariant-title">Order of maturity updates</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Maturity index updates are additive per timestamp modulo 2²⁵⁶, independently for units and correction. Reordering identical deltas gives the same point and inclusive-prefix answers. An update followed by its additive inverse restores those answers, and old roots remain queryable. Root IDs may differ.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolMaturityMap.test.ts"><code>securityPoolMaturityMap.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-43">
+						<summary><code>INV-43</code><span class="invariant-title">Creation bytecode round trip</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Storing then loading any supported creation bytecode preserves every byte. The first carrier has a STOP byte and the first <code>⌊length/2⌋</code> bytes. The second has a STOP and the rest. A one-byte input therefore has a STOP-only first carrier.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/creationCodeStorage.test.ts"><code>creationCodeStorage.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-44">
+						<summary><code>INV-44</code><span class="invariant-title">Deployment mask</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Deployment-mask bit <code>i</code> equals runtime-code presence at the configured address in slot <code>i</code> at read time. Duplicate addresses have equal bits, unused high bits are zero, and bit 255 is valid. It says nothing about the identity of that runtime.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/deploymentStatusOracle.test.ts"><code>deploymentStatusOracle.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-45">
+						<summary><code>INV-45</code><span class="invariant-title">Scalar label uniqueness</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Within one scalar question, valid ticks have unique display labels even when successive ticks round to the same numerical display value. The underlying displayed numerical value is nondecreasing and both endpoints are exact. Compare numerical values separately from the disambiguating tick text.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/questionData.test.ts"><code>questionData.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-52">
+						<summary><code>INV-52</code><span class="invariant-title">Frozen history allocation</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Each accepted frozen-history append allocates exactly one new node. It may join the two leading equal-sized trees. Every prior head remains independently queryable, so branching history does not require copying earlier checkpoints.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolSettlementBook.test.ts"><code>securityPoolSettlementBook.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-53">
+						<summary><code>INV-53</code><span class="invariant-title">Canonical event replay</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Replaying the canonical log history reconstructs the corresponding published state for each deployment. Contract-local report, bid and game IDs require the emitter as part of their identity. Removing an orphaned branch and replaying the canonical replacement must yield the same result as replaying that canonical history from scratch.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/eventReplay/eventReplay.test.ts"><code>eventReplay.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-57">
+						<summary><code>INV-57</code><span class="invariant-title">Authorization namespaces</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">The ERC-3009 authorization key is local to the token and authorizer. Transfer, receive and cancellation consume that key. Its consumption leaves the ERC-2612 permit counter unchanged. Two holders may independently use the same bytes32 ID. The permit deadline is inclusive and both ends of the authorization time window are exclusive.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/reputationAuthorization.test.ts"><code>reputationAuthorization.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+				</div>
+			</section>
+			<section id="test-evidence">
+				<h2>Executable evidence</h2>
+				<p>Each suite exercises the stated property over concrete fixtures or generated sequences. Gas bounds apply to the measured operations and fixture sizes.</p>
+				<h3>Questions and universes</h3>
+				<dl>
+					<dt>Registry</dt>
+					<dd>
+						Creating a question appends its deterministic ID once and preserves earlier records and labels. Adjacent pages reconstruct the same registry slice. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/questionData.test.ts"><code>questionData.test.ts</code></a
+						>.
+					</dd>
+					<dt>Answers</dt>
+					<dd>
+						The malformed predicate agrees with the public answer name for categorical, scalar and reserved-bit cases. Invalid is a supported answer. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/questionData.test.ts"><code>questionData.test.ts</code></a
+						>.
+					</dd>
+					<dt>Fork finality and eligibility</dt>
+					<dd>
+						An initialized universe forks once on a registered, ended question. The end timestamp itself is eligible. An unrelated ledger question can continue in a child. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/zoltar.test.ts"><code>zoltar.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditE2ELazyAndMultiQuestion.test.ts"><code>auditE2ELazyAndMultiQuestion.test.ts</code></a
+						>.
+					</dd>
+					<dt>Fork accounting</dt>
+					<dd>
+						The threshold burn, initiator credit and common child supply snapshot reconcile using the rounding rules in UNI-03 and UNI-08. A positive theoretical supply produces a positive threshold. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/zoltar.test.ts"><code>zoltar.test.ts</code></a
+						>.
+					</dd>
+					<dt>Child identity</dt>
+					<dd>
+						Deployment, enumeration and migration agree on the child derived from the parent and outcome. Malformed answers cannot acquire children. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/zoltar.test.ts"><code>zoltar.test.ts</code></a
+						>.
+					</dd>
+					<dt>Migration and supply</dt>
+					<dd>
+						Cumulative minting is capped independently for each migrator and child. Summed holder balances equal actual child supply, bounded by the child snapshot. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/zoltar.test.ts"><code>zoltar.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditForkMigrationTwoGenerations.test.ts"><code>auditForkMigrationTwoGenerations.test.ts</code></a
+						>.
+					</dd>
+				</dl>
+				<h3>Deployment and authority</h3>
+				<dl>
+					<dt>Canonical identity</dt>
+					<dd>
+						Predicted and deployed contract addresses agree. Registration binds each question ledger to its canonical pool and immutable admission policy. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolModuleDeployment.test.ts"><code>securityPoolModuleDeployment.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditSecurityPoolAuthenticity.test.ts"><code>auditSecurityPoolAuthenticity.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolAdmission.test.ts"><code>securityPoolAdmission.test.ts</code></a
+						>.
+					</dd>
+					<dt>Host isolation</dt>
+					<dd>
+						A shared delegate acts on its authorized host. Direct callers and other pools cannot mutate that host’s accounting. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/privilegedAuthorization.test.ts"><code>privilegedAuthorization.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCapitalLifecycle.test.ts"><code>securityPoolCapitalLifecycle.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolModuleDeployment.test.ts"><code>securityPoolModuleDeployment.test.ts</code></a
+						>.
+					</dd>
+					<dt>Spending authority</dt>
+					<dd>
+						Share transfers require the owner or an approved operator. Signed REP authorizations bind their domain, fields, validity interval and nonce. Cancellation and prior use preclude replay. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/erc1155.test.ts"><code>erc1155.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/reputationAuthorization.test.ts"><code>reputationAuthorization.test.ts</code></a
+						>.
+					</dd>
+					<dt>Atomicity</dt>
+					<dd>
+						Failed delivery or insufficient capacity preserves the balances, supplies and accounting touched by the transaction. A receiver callback cannot exercise the same entitlement twice. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolDelivery.test.ts"><code>securityPoolDelivery.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolTransactionRollback.test.ts"><code>securityPoolTransactionRollback.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/trading/pairRouter.integration.test.ts"><code>pairRouter.integration.test.ts</code></a
+						>.
+					</dd>
+				</dl>
+				<h3>Capital and underwriting</h3>
+				<dl>
+					<dt>Custody domains</dt>
+					<dd>
+						Underwriting capital, reporter deposits and question cash have separate entitlements. Settling reporter claims cannot create provider collateral. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/escalationGameForkThreshold.test.ts"><code>escalationGameForkThreshold.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblastInvariant.test.ts"><code>statoblastInvariant.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditReporterLedgerFuzz.test.ts"><code>auditReporterLedgerFuzz.test.ts</code></a
+						>.
+					</dd>
+					<dt>Owner totals</dt>
+					<dd>
+						Owner principal and commitments reconcile to the capital ledger through deposits, takeovers and exits. Winning auction lots enter totals before the owner activates them. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditCapitalLedgerFuzz.test.ts"><code>auditCapitalLedgerFuzz.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCapitalAuction.test.ts"><code>securityPoolCapitalAuction.test.ts</code></a
+						>.
+					</dd>
+					<dt>Health</dt>
+					<dd>
+						Withdrawal and takeover limits use the owner’s full commitment, eligible principal and applicable price. Earned REP income remains separate from principal. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolHealthPolicy.test.ts"><code>securityPoolHealthPolicy.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCapitalTakeoverBounds.test.ts"><code>securityPoolCapitalTakeoverBounds.test.ts</code></a
+						>.
+					</dd>
+					<dt>Shared capacity</dt>
+					<dd>
+						Two questions cannot spend the same final unit of healthy capacity. A complete-set return releases that unit for a subsequent purchase on either question. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblastInvariant.test.ts"><code>statoblastInvariant.test.ts</code></a
+						>.
+					</dd>
+					<dt>Retirement</dt>
+					<dd>
+						Retired capacity stops supporting new purchases. Principal securing outstanding demand remains subject to retirement and withdrawal limits. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCapitalSetCommitment.test.ts"><code>securityPoolCapitalSetCommitment.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCapitalLifecycle.test.ts"><code>securityPoolCapitalLifecycle.test.ts</code></a
+						>.
+					</dd>
+					<dt>Loss isolation</dt>
+					<dd>
+						A takeover transfers only the target’s eligible principal and obligations, within the receiver’s consent. Other owners retain their entitlements. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditCapitalLedgerFuzz.test.ts"><code>auditCapitalLedgerFuzz.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCapitalTakeoverBounds.test.ts"><code>securityPoolCapitalTakeoverBounds.test.ts</code></a
+						>.
+					</dd>
+					<dt>Fees</dt>
+					<dd>
+						Funded streams reconcile to vested income and remaining amounts in each asset. Checkpoint frequency and same-second funding preserve entitlements across price changes and forks. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCapitalFeeStreams.test.ts"><code>securityPoolCapitalFeeStreams.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditForkFeeConservation.test.ts"><code>auditForkFeeConservation.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditChildPoolFeeEpoch.test.ts"><code>auditChildPoolFeeEpoch.test.ts</code></a
+						>.
+					</dd>
+					<dt>Donations</dt>
+					<dd>
+						Forced native currency cannot enlarge tracked question cash, purchasing capacity or provider principal. Trading pair donations follow the separate reserve rule in the <a href="./trading/invariants.html#pair-custody">trading catalog</a>. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblastInvariant.test.ts"><code>statoblastInvariant.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/trading/pairRouter.integration.test.ts"><code>pairRouter.integration.test.ts</code></a
+						>.
+					</dd>
+				</dl>
+				<h3>Question settlement and shares</h3>
+				<dl>
+					<dt>Identity and supply</dt>
+					<dd>
+						Share IDs round-trip within their token contract. In the zero-fee two-question model, each purchase or return changes all three outcome supplies equally and leaves the other question’s supply intact. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/erc1155.test.ts"><code>erc1155.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblastInvariant.test.ts"><code>statoblastInvariant.test.ts</code></a
+						>.
+					</dd>
+					<dt>Cash and demand</dt>
+					<dd>
+						Credited cash less authorized outflows equals tracked question cash. In the zero-fee fixture, aggregate demand and settlement collateral equal the sum across questions after every modeled operation. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblastInvariant.test.ts"><code>statoblastInvariant.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditSettlementCustodyFuzz.test.ts"><code>auditSettlementCustodyFuzz.test.ts</code></a
+						>.
+					</dd>
+					<dt>Backing floor</dt>
+					<dd>
+						Fees stop before consuming protected backing. Partial burns, replacement and finality preserve the rounded backing floor. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolSettlementBook.test.ts"><code>securityPoolSettlementBook.test.ts</code></a
+						>.
+					</dd>
+					<dt>Settlement finality</dt>
+					<dd>
+						Finalized question entitlements survive subsequent settlement activity and forks. Redeeming shares consumes the corresponding entitlement once. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolSettlementBook.test.ts"><code>securityPoolSettlementBook.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/ordinarySettlementRecovery.test.ts"><code>ordinarySettlementRecovery.test.ts</code></a
+						>.
+					</dd>
+					<dt>Rounding</dt>
+					<dd>
+						Partial redemptions remain within the settlement budget. The final eligible burn receives the residual, including a fractional cash or REP remainder. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolSettlementBook.test.ts"><code>securityPoolSettlementBook.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditSettlementRecoveryFuzz.test.ts"><code>auditSettlementRecoveryFuzz.test.ts</code></a
+						>.
+					</dd>
+					<dt>Recovery rights</dt>
+					<dd>
+						The source entitlement bounds migration to each branch. Transfers, partial forwarding and complete-set recovery preserve branch rights and consume the source recovery right once. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/shareTokenSecurityPoolRecovery.test.ts"><code>shareTokenSecurityPoolRecovery.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/forkMigrationRecovery.test.ts"><code>forkMigrationRecovery.test.ts</code></a
+						>.
+					</dd>
+				</dl>
+				<h3>Reporting and carry</h3>
+				<dl>
+					<dt>Deposits and liabilities</dt>
+					<dd>
+						Authenticated deposits retain their owner, outcome, principal and reward coordinates. Ordinary finality reserves winning claims and retires losing principal before individual payouts. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditReporterLedgerFuzz.test.ts"><code>auditReporterLedgerFuzz.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/escalationGame/localAccounting.test.ts"><code>localAccounting.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/audit4EscalationPayoutConservation.test.ts"><code>audit4EscalationPayoutConservation.test.ts</code></a
+						>.
+					</dd>
+					<dt>Outcome finality</dt>
+					<dd>
+						A fixed continuation outcome determines the payout even if the copied balance leader differs. A later fork cannot rewrite a finalized payout basis. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/fixedContinuationSecondFork.test.ts"><code>fixedContinuationSecondFork.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolContinuationFinality.test.ts"><code>securityPoolContinuationFinality.test.ts</code></a
+						>.
+					</dd>
+					<dt>Historical proofs</dt>
+					<dd>
+						Inherited claims authenticate membership in the frozen history and retain principal and reward coordinates through recursive forks. Consumed identities cannot be claimed again within the same branch. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/escalationGame/carriedProofPayouts.test.ts"><code>carriedProofPayouts.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/escalationGame/recursiveCarry.test.ts"><code>recursiveCarry.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditE2EContinuationMixedClaims.test.ts"><code>auditE2EContinuationMixedClaims.test.ts</code></a
+						>.
+					</dd>
+					<dt>Claim partitioning</dt>
+					<dd>
+						Paying two ordinary claims together or separately in reverse order leaves the same wallet, reporter escrow and underwriting balances. Recursive claims preserve principal in either claim order. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/escalationGameForkThreshold.test.ts"><code>escalationGameForkThreshold.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/escalationGame/recursiveCarry.test.ts"><code>recursiveCarry.test.ts</code></a
+						>.
+					</dd>
+				</dl>
+				<h3>Fork coordination</h3>
+				<dl>
+					<dt>Choice and clocks</dt>
+					<dd>
+						Each owner chooses one branch before the shared cutoff. Delayed materialization cannot extend native choice, auction or activation deadlines. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolForkCoordinator.test.ts"><code>securityPoolForkCoordinator.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/delayedForkCarry.test.ts"><code>delayedForkCarry.test.ts</code></a
+						>.
+					</dd>
+					<dt>Frozen snapshots</dt>
+					<dd>
+						Sibling and repeated forks preserve the recorded question state and isolate subsequent changes. A frozen parent history remains usable after a child forks again. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolSettlementSnapshot.test.ts"><code>securityPoolSettlementSnapshot.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolSettlementBook.test.ts"><code>securityPoolSettlementBook.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/claimCheckpointFreeze.test.ts"><code>claimCheckpointFreeze.test.ts</code></a
+						>.
+					</dd>
+					<dt>Lazy materialization</dt>
+					<dd>
+						A child materialized after its own fork retains the inherited outcome or clock. The fork question selects the branch while the ledger question determines its payouts. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditE2ELazyAndMultiQuestion.test.ts"><code>auditE2ELazyAndMultiQuestion.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/finalizedParentMaterialization.test.ts"><code>finalizedParentMaterialization.test.ts</code></a
+						>.
+					</dd>
+				</dl>
+				<h3>Repair auctions</h3>
+				<dl>
+					<dt>Inventory</dt>
+					<dd>
+						Only eligible unchosen provider REP funds auction inventory. Reporter escrow and REP already owed to recovery holders retain their respective beneficiaries. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolForkCoordinator.test.ts"><code>securityPoolForkCoordinator.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditE2EAuctionChildSecondFork.test.ts"><code>auditE2EAuctionChildSecondFork.test.ts</code></a
+						>.
+					</dd>
+					<dt>Clearing</dt>
+					<dd>
+						Filled lots respect eligible bids, available inventory and the common grid-rounded clearing price. The closing price determines each lot’s minimum backing. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditAuctionEngineFuzz.test.ts"><code>auditAuctionEngineFuzz.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditAuctionClosingPriceTick.test.ts"><code>auditAuctionClosingPriceTick.test.ts</code></a
+						>.
+					</dd>
+					<dt>Closing</dt>
+					<dd>
+						Funded winning principal and obligations enter aggregate accounting at close. Late activation preserves entitlement and cannot duplicate a winning position. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCapitalAuction.test.ts"><code>securityPoolCapitalAuction.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditE2EAuctionChildSecondFork.test.ts"><code>auditE2EAuctionChildSecondFork.test.ts</code></a
+						>.
+					</dd>
+					<dt>Refunds and progress</dt>
+					<dd>
+						An early-refundable bid stays a loser. Refunds remain attributable to the bidder and can be withdrawn independently. Winner activation and refund processing stay feasible as the tested bid book grows. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditAuctionEngineFuzz.test.ts"><code>auditAuctionEngineFuzz.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolAuctionGas.test.ts"><code>securityPoolAuctionGas.test.ts</code></a
+						>.
+					</dd>
+				</dl>
+				<h3>Price reports</h3>
+				<dl>
+					<dt>Report identity and units</dt>
+					<dd>
+						Only the bound feed and authorized adapter can apply a report. Token amounts and decimals determine quote units, including six-decimal collateral. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/priceOracleSecurity.test.ts"><code>priceOracleSecurity.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCollateral.test.ts"><code>securityPoolCollateral.test.ts</code></a
+						>.
+					</dd>
+					<dt>Acceptance and repricing</dt>
+					<dd>
+						Acceptance checks funded coverage, reporting window, freshness and exposure. Capital checkpoints accrued entitlements under the prior price before the new price takes effect. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolSharedFeed.test.ts"><code>securityPoolSharedFeed.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/audit4ReportExposureGrowth.test.ts"><code>audit4ReportExposureGrowth.test.ts</code></a
+						>.
+					</dd>
+					<dt>Expiry</dt>
+					<dd>
+						Disputed or rejected renewal cannot extend freshness. Delayed settlement cannot restart the validity clock. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolSharedFeed.test.ts"><code>securityPoolSharedFeed.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/priceOracleSecurity.test.ts"><code>priceOracleSecurity.test.ts</code></a
+						>.
+					</dd>
+					<dt>Candidate independence</dt>
+					<dd>
+						A pending candidate cannot prevent another funded candidate from succeeding. Sponsors retain separate escrow and refund entitlements. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolSharedFeed.test.ts"><code>securityPoolSharedFeed.test.ts</code></a
+						>.
+					</dd>
+				</dl>
+				<h3>Arithmetic, integrations and progress</h3>
+				<dl>
+					<dt>Reference models</dt>
+					<dd>
+						Commitment and maturity queries and settlement aggregates agree with independent expectations across updates. Frozen snapshots remain readable after later writes. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditCapitalIndexFuzz.test.ts"><code>auditCapitalIndexFuzz.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolMaturityMap.test.ts"><code>securityPoolMaturityMap.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditSettlementBookFuzz.test.ts"><code>auditSettlementBookFuzz.test.ts</code></a
+						>.
+					</dd>
+					<dt>Numeric boundaries</dt>
+					<dd>
+						Checked casts preserve representable inputs and reject overflow. Thresholds round up, fee remainders retain their funding, and trading quotes respect their integer bounds. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/protocolHardening.test.ts"><code>protocolHardening.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/zoltar.test.ts"><code>zoltar.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCapitalFeeStreams.test.ts"><code>securityPoolCapitalFeeStreams.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditTradingMathFuzz.test.ts"><code>auditTradingMathFuzz.test.ts</code></a
+						>.
+					</dd>
+					<dt>Collateral movement</dt>
+					<dd>
+						Token transfers must succeed to credit a payment. Refunds and claims reconcile in collateral units and forced native balances remain separate. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/safeErc20.test.ts"><code>safeErc20.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCollateral.test.ts"><code>securityPoolCollateral.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblastInvariant.test.ts"><code>statoblastInvariant.test.ts</code></a
+						>.
+					</dd>
+					<dt>Seeder</dt>
+					<dd>
+						A mint callback must come from the active pool. Exceeding either token maximum rolls back both payments. A subsequent valid seed preserves the seeder’s opening balances. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/genesisUniswapV3Seeder.test.ts"><code>genesisUniswapV3Seeder.test.ts</code></a
+						>.
+					</dd>
+					<dt>Bounded and conditional progress</dt>
+					<dd>
+						Capital, auction and lazy migration gas tests bound costs for the measured fixture sizes. Permissionless execution still depends on transaction inclusion, available proofs and any required external funding. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCapitalLedgerGas.test.ts"><code>securityPoolCapitalLedgerGas.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolAuctionGas.test.ts"><code>securityPoolAuctionGas.test.ts</code></a
+						>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/lazyShareMigrationGasBound.test.ts"><code>lazyShareMigrationGasBound.test.ts</code></a
+						>.
+					</dd>
+				</dl>
 			</section>
 		</main>
 

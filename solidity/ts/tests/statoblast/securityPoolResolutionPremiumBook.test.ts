@@ -187,4 +187,68 @@ describe('Statoblast: question-linked resolution premium expiry', () => {
 		expect((await totals(1n)).slice(0, 2)).toEqual([0n, 0n])
 		expect(await client.readContract({ ...target(), functionName: 'totalCash' })).toBe(0n)
 	})
+	test('aggregate recovery across questions depends only on cumulative recovered shares', async () => {
+		await fund(1n, 17n)
+		await fund(2n, 12n)
+		const write = (run: () => ReturnType<typeof client.writeContract>) => writeContractAndWait(client, run)
+		await write(() => client.writeContract({ ...target(), functionName: 'freeze', args: [0n] }))
+		await write(() => client.writeContract({ ...target(), functionName: 'choose', args: [0n, 1n, 3n, 8n] }))
+		const neutral = 29n - (29n * 3n) / 8n
+		const scale = 10n ** 9n
+		for (const [first, second] of [
+			[1n, 1n],
+			[8n, 5n],
+			[13n, 7n],
+		] as const) {
+			const expected = (neutral * ((17n * scale * first) / 13n + (12n * scale * second) / 7n)) / (29n * scale)
+			for (const history of [
+				[
+					[1n, first],
+					[2n, second],
+				],
+				[
+					[2n, second],
+					[1n, first],
+				],
+				[
+					[1n, first / 2n],
+					[2n, second],
+					[1n, first - first / 2n],
+				],
+			] as const) {
+				const snapshot = await node.getAnvilWindowEthereum().anvilSnapshot()
+				for (const [question, shares] of history) if (shares > 0n) await write(() => client.writeContract({ ...target(), functionName: 'recover', args: [0n, question, shares, question === 1n ? 13n : 7n] }))
+				expect(29n - (await client.readContract({ ...target(), functionName: 'totalCash' }))).toBe(expected)
+				await node.getAnvilWindowEthereum().anvilRevert(snapshot)
+			}
+		}
+	})
+
+	test.each([1n, 11n, 30n])('cumulative choices assign branch floors and leave bounded neutral dust for %s cash', async cash => {
+		await fund(1n, cash)
+		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'freeze', args: [0n] }))
+		for (const allocations of [
+			[
+				[1n, 1n],
+				[2n, 3n],
+				[1n, 2n],
+				[3n, 1n],
+			],
+			[
+				[3n, 1n],
+				[1n, 2n],
+				[2n, 3n],
+			],
+		] as const) {
+			const snapshot = await node.getAnvilWindowEthereum().anvilSnapshot()
+			for (const [child, cumulative] of allocations) await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'choose', args: [0n, child, cumulative, 6n] }))
+			const amounts = await Promise.all([1n, 2n, 3n].map(child => client.readContract({ ...target(), functionName: 'branchCash', args: [child] })))
+			expect(amounts).toEqual([(cash * 2n) / 6n, (cash * 3n) / 6n, cash / 6n])
+			const dust = cash - amounts.reduce((sum, piece) => sum + piece, 0n)
+			expect(dust).toBeLessThan(3n)
+			await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'recover', args: [0n, 1n, 1n, 1n] }))
+			expect(await client.readContract({ ...target(), functionName: 'totalCash' })).toBe(cash - dust)
+			await node.getAnvilWindowEthereum().anvilRevert(snapshot)
+		}
+	})
 })

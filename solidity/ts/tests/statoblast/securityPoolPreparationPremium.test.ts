@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { parseAbi } from '@zoltar/core-shared/evm/ethereum'
+import { type Address, parseAbi } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
 	statoblast_SecurityPoolSettlement_SecurityPoolSettlement as settlementArtifact,
@@ -138,10 +138,38 @@ describe('Statoblast: preparation premium ownership', () => {
 		const [cashAfterNextCheckpoint] = await context.owner.readContract({ ...premium, functionName: 'totals', args: [context.child] })
 		const totalEarned = cashBefore - cashAfterNextCheckpoint
 		expect((await context.owner.readContract({ ...capital, functionName: 'ownerAccount', args: [context.owner.account.address] })).feesAttoEth + (await context.fees())).toBe(feesBefore + totalEarned)
+		await expect(context.owner.writeContract({ ...services, functionName: 'withdrawCapitalCash' })).rejects.toThrow('No assigned capital cash')
 		expect(await context.owner.readContract({ ...services, functionName: 'pendingCapitalCash', args: [context.capital] })).toBe(pendingBefore + totalEarned)
 		expect(await context.owner.readContract({ ...services, functionName: 'pendingBurnCash', args: [context.child] })).toBe(burnBefore)
 	})
 
+	test('two credited capital ledgers withdraw their own exact allocations from shared service custody', async () => {
+		const { owner, mock, capital, services, finalize, checkpoint } = await prepare(300n)
+		await finalize()
+		await mock.advanceTime(500n)
+		await checkpoint()
+		const parent = fixture.capitalLedger
+		const target = { abi: servicesArtifact.abi, address: services }
+		const pending = (ledger: Address) => owner.readContract({ ...target, functionName: 'pendingCapitalCash', args: [ledger] })
+		const parentAmount = await pending(parent)
+		const childAmount = await pending(capital)
+		expect(parentAmount).toBeGreaterThan(0n)
+		expect(childAmount).toBeGreaterThan(0n)
+		expect(childAmount).not.toBe(parentAmount)
+		for (const [ledger, amount] of [
+			[parent, parentAmount],
+			[capital, childAmount],
+		] as const) {
+			const before = await collateralBalance(owner, fixture.securityPool, ledger)
+			await mock.impersonateAccount(ledger)
+			await mock.setBalance(ledger, unit)
+			const caller = createWriteClient(mock, BigInt(ledger))
+			await writeContractAndWait(caller, () => caller.writeContract({ ...target, functionName: 'withdrawCapitalCash' }))
+			expect((await collateralBalance(owner, fixture.securityPool, ledger)) - before).toBe(amount)
+			expect(await pending(ledger)).toBe(0n)
+			if (ledger === parent) expect(await pending(capital)).toBe(childAmount)
+		}
+	})
 	test('preparation checkpoints require the fork controller and cannot divert active earnings', async () => {
 		const context = await prepare(300n)
 		await expect(context.owner.writeContract({ abi: preparationAbi, address: context.services, functionName: 'checkpointPreparationPremium', args: [context.child] })).rejects.toThrow('Only service fork controller')

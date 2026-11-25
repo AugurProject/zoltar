@@ -79,7 +79,17 @@ describe('Escalation Game Fork Threshold Test', () => {
 
 		const repBefore = await capitalBalance()
 		const walletRepBefore = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+		const beforeClaims = await mockWindow.anvilSnapshot()
 		await withdrawFromEscalationGame(client, questionLedgerAddresses.questionLedger, QuestionOutcome.Yes, [0n, 1n])
+		const afterClaims = async () => ({
+			wallet: await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address),
+			reporterEscrow: await reporterBalance(),
+			providerCapital: await capitalBalance(),
+		})
+		const batched = await afterClaims()
+		await mockWindow.anvilRevert(beforeClaims)
+		for (const index of [1n, 0n]) await withdrawFromEscalationGame(client, questionLedgerAddresses.questionLedger, QuestionOutcome.Yes, [index])
+		assert.deepStrictEqual(await afterClaims(), batched, 'partitioning and reversing the claims must preserve payouts, reporter escrow and provider capital')
 		assert.deepStrictEqual(await capitalBalance(), repBefore, 'reporter settlement must not create underwriting collateral')
 		assert.strictEqual((await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)) - walletRepBefore, depositAmount / 5n, 'winning payout should be scaled by the lowered fork threshold after applying the single-sided winner payout schedule')
 	})

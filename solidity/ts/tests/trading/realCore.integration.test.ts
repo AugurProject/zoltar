@@ -132,8 +132,15 @@ describe('trading against authoritative Zoltar contracts', () => {
 		const shareTokenAbi = statoblast_tokens_ShareToken_ShareToken.abi
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 10n * unit, 5_000n, maxUint256, maxUint256, 0n, 0n, 1n, account, deadline], value: 10n * unit }))
 
+		const balances = () => Promise.all([shareBalance(account, 0n), shareBalance(account, 1n), shareBalance(account, 2n)] as const)
+		const beforeEntry = await balances()
+		const oppositeBefore = await shareBalance(pair, 2n)
 		const entry = await fixture.client.simulateContract({ abi: routerArtifact.abi, address: router, functionName: 'enterPosition', args: [pair, 2n * unit, 1, 1n, account, deadline], value: 2n * unit })
+		const minted = entry.result.completeSetShares
+		const [longBought] = await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'quoteExactInput', args: [false, minted] })
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'enterPosition', args: [pair, 2n * unit, 1, 1n, account, deadline], value: 2n * unit }))
+		expect(await balances()).toEqual([beforeEntry[0] + minted, beforeEntry[1] + minted + longBought, beforeEntry[2]])
+		expect((await shareBalance(pair, 2n)) - oppositeBefore).toBe(minted)
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: shareTokenAbi, address: shareTokenAddress, functionName: 'setApprovalForAll', args: [router, false] }))
 		expect(await fixture.client.readContract({ abi: shareTokenAbi, address: shareTokenAddress, functionName: 'isApprovedForAll', args: [account, router] })).toBe(false)
 
@@ -152,11 +159,16 @@ describe('trading against authoritative Zoltar contracts', () => {
 		const exactExitEth = await fixture.client.readContract({ abi: attoSharesToAttoEthAbi, address: native().questionLedger, functionName: 'attoSharesToAttoEth', args: [exitAmount] })
 		const acceptedMinimumEth = exactExitEth
 		expect(acceptedMinimumEth).toBeGreaterThan(0n)
-		const exitData = (minimumEth: bigint) => encodeReceiveRequest([3, 0, native().questionLedger, pair, 1, exitAmount, entry.result.totalLongShares, minimumEth, account, account, deadline, 0n])
+		const [longCost] = await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'quoteExactOutput', args: [true, exitAmount] })
+		const refundRecipient = addressString(TEST_ADDRESSES[2])
+		const refundBefore = await shareBalance(refundRecipient, 1n)
+		const exitData = (minimumEth: bigint) => encodeReceiveRequest([3, 0, native().questionLedger, pair, 1, exitAmount, entry.result.totalLongShares, minimumEth, account, refundRecipient, deadline, 0n])
 		const balancesBeforeSlippage = await Promise.all([shareBalance(account, 0n), shareBalance(account, 1n), shareBalance(account, 2n)])
 		await expect(fixture.client.writeContract({ abi: shareTokenAbi, address: shareTokenAddress, functionName: 'safeBatchTransferFrom', args: [account, router, [ids[0], ids[1]], [exitAmount, entry.result.totalLongShares], exitData(exactExitEth + 1n)] })).rejects.toThrow()
 		expect(await Promise.all([shareBalance(account, 0n), shareBalance(account, 1n), shareBalance(account, 2n)])).toEqual(balancesBeforeSlippage)
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: shareTokenAbi, address: shareTokenAddress, functionName: 'safeBatchTransferFrom', args: [account, router, [ids[0], ids[1]], [exitAmount, entry.result.totalLongShares], exitData(acceptedMinimumEth)] }))
+		expect((await shareBalance(refundRecipient, 1n)) - refundBefore).toBe(entry.result.totalLongShares - exitAmount - longCost)
+		expect(await balances()).toEqual([beforeEntry[0] + minted - exitAmount, beforeEntry[1] + minted + longBought - entry.result.totalLongShares, beforeEntry[2]])
 		for (const outcome of [0n, 1n, 2n] as const) expect(await shareBalance(router, outcome)).toBe(0n)
 
 		await securityPool.mint(unit, fixture.questionId, { sender: fixture.client })

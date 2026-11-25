@@ -3543,6 +3543,10 @@ body.paper-zoltar .footer-note {
 
 /* While the explorer sticks above the catalog, keep it to two rows: the controls, then the match count beside the actions. */
 @media screen and (min-width: 641px) {
+	body.invariants-catalog.docs-shell-page #test-evidence {
+		scroll-margin-top: calc(var(--docs-shell-header-height) + 9rem);
+	}
+
 	body.doc-openoracle.docs-shell-page .invariant-explorer {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
