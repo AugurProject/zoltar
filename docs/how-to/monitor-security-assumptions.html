@@ -33,7 +33,7 @@
 						<dt>Corrector</dt>
 						<dd>An account that disputes an incorrect OpenOracle report; see <a href="../reference/security-model.html#assumption-a17">A17</a>.</dd>
 						<dt>Callback-recovery candidate</dt>
-						<dd>A <a href="../reference/glossary.html#price-coordinator">price coordinator</a> whose pending report OpenOracle has already settled; see <a href="../reference/open-oracle.html#callback-rejection-and-recovery">settlement recovery</a>.</dd>
+						<dd>A report OpenOracle has settled but the shared feed has yet to process; see <a href="../reference/open-oracle.html#callback-rejection-and-recovery">settlement recovery</a>.</dd>
 					</dl>
 				</section>
 				<section id="assumption-monitoring">
@@ -137,8 +137,8 @@
 								<td>REP/collateral price correction — A17, A18, A19</td>
 								<td>
 									<ul>
-										<li>Pending report: coordinator <code>pendingReportId</code>, then OpenOracle <code>storedGame(reportId)</code></li>
-										<li>Report outcomes: <code>PriceRequested</code>, <code>PriceReported</code>, <code>PriceReportDeferred</code>, and <code>PriceReportRejected</code> events from the shared feed at coordinator <code>priceFeed()</code>, or augurScan <code>/operations/reports</code></li>
+										<li>Read <code>PriceRequested</code> events from the shared feed at <code>priceFeed()</code> starting at feed deployment. For each report ID, read the feed’s <code>reportOutcome(reportId)</code>. For a requested ID, 1 means accepted, 2 means rejected, and 0 needs follow-up.</li>
+										<li>For each unresolved ID, check OpenOracle <code>storedGame(reportId)</code> and follow <a href="../reference/open-oracle.html#callback-rejection-and-recovery">settlement recovery</a> if already settled. <code>pendingReportId</code> identifies only the latest candidate.</li>
 										<li>Independent correctors: whether any, such as an operator running the <a href="https://github.com/AugurProject/zoltar/blob/main/bots/open-oracle-arbitrager/README.md">OpenOracle arbitrager</a>, reports disputes profitable after fees, gas, and price impact</li>
 										<li>Creation-time floor: security pool <code>minimumReportCollateral</code> and the selected collateral token’s units and current ETH value</li>
 										<li>Correction economics: compare obtainable correction gains with OpenOracle fees, current ETH gas costs including approvals and recovery, price impact, and capital lockup under <a href="../reference/security-model.html#assumption-a18">A18</a>; do not compare the whole stake with gas alone</li>

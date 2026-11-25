@@ -50,8 +50,14 @@
 						</tr>
 					</tbody>
 				</table>
-				<h3 id="security-review-orientation">Reviewing an operational concern</h3>
-				<p>Find the external dependency in the <a href="#assumptions-participation">grouped assumptions</a> or follow <a href="../how-to/monitor-security-assumptions.html">Monitor security assumptions</a> for operational checks and stop conditions.</p>
+				<h3 id="security-review-orientation">Which assumptions support my claim?</h3>
+				<ul>
+					<li><strong>A wrong local outcome can be challenged in time.</strong> Check <a href="#assumption-a10">timely evidence</a>, <a href="#assumption-a04">REP for a competing deposit</a>, <a href="#assumption-a16">inclusion before the deadline</a>.</li>
+					<li><strong>A harmful oracle price can be corrected.</strong> Check <a href="#assumption-a17">a funded corrector</a>, <a href="#assumption-a18">an independent incentive</a>, <a href="#assumption-a19">a reliable reference market</a>, <a href="#assumption-a16">timely inclusion</a>.</li>
+					<li><strong>A truthful child can cover its collateral shortfall.</strong> Check <a href="#assumption-a07">retained backing value</a>, <a href="#assumption-a12">auction proceeds</a>. See <a href="#excluded-guarantee-eg02">EG02 on partial repair</a>.</li>
+					<li><strong>An eligible public settlement advances in time.</strong> Check <a href="#assumption-a06">an executor</a>, <a href="#assumption-a16">timely inclusion</a>.</li>
+				</ul>
+				<p>For the reads, deadlines, and stop conditions behind these decisions, see <a href="../how-to/monitor-security-assumptions.html">Monitor security assumptions</a>.</p>
 			</section>
 
 			<section class="assumption-group" id="assumptions-participation">
@@ -60,19 +66,19 @@
 				<ol class="assumption-grid">
 					<li id="assumption-a01" value="1">
 						<h3><span class="assumption-id">A01</span> Participants act on risk-adjusted economic incentives</h3>
-						<p>Enough participants prefer actions with greater expected value after gas, fees, delay, capital lockup, and risk. The model does not rely on altruistic defense.</p>
+						<p>The economic model assumes participants weigh expected gains against costs, delay, and risk when deciding whether to act.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> A nominally profitable liquidation, dispute, bid, migration, or fork defense may not happen when its risk-adjusted return is unattractive.</p>
 						<p class="assumption-links">Mechanics: <a href="../explanation/statoblast.html#participants-assets">economic roles</a>, <a href="../explanation/liquidations.html#rule">liquidation incentives</a>, <a href="../explanation/collateral-repair-auctions.html#security-pool-auctions">auction clearing</a>, and <a href="./open-oracle.html#security-guarantee">oracle incentives</a>.</p>
 					</li>
 					<li id="assumption-a02" value="2">
-						<h3><span class="assumption-id">A02</span> Required actions remain worth their operating costs</h3>
-						<p>For each time-sensitive action, transaction fees, opportunity cost, coordination cost, and capital lockup remain small enough relative to the value protected or earned.</p>
+						<h3><span class="assumption-id">A02</span> Privately motivated actions cover their costs</h3>
+						<p>When timely action depends on private incentives, at least one participant expects the value they earn or protect to exceed their transaction, coordination, and capital costs.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> An action can be technically executable but economically abandoned before its deadline.</p>
 						<p class="assumption-links">Mechanics: <a href="../explanation/collateral-repair-auctions.html#security-pool-auctions">Collateral Repair Auction lifecycle</a>, <a href="./open-oracle.html#parameters">oracle gas parameters</a>, and <a href="../explanation/escalation-game.html#lifecycle-first">Escalation Game lifecycle</a>.</p>
 					</li>
 					<li id="assumption-a03" value="3">
-						<h3><span class="assumption-id">A03</span> Each economic role has enough independent participants</h3>
-						<p>Trading, liquidation, escalation, migration, auction bidding, price correction, and settlement have enough non-colluding participants for the relevant action. Secondary-market trading is external to Statoblast.</p>
+						<h3><span class="assumption-id">A03</span> Price discovery and contests attract independent participants</h3>
+						<p>Competitive auction pricing depends on independent bidders, external trading prices depend on independent traders, and contesting a local outcome requires someone willing to fund an opposing outcome.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Thin or controlled participation can remove price discovery, competitive bidding, or an opposing outcome deposit.</p>
 						<p class="assumption-links">Mechanics: <a href="../explanation/statoblast.html#participants-assets">economic roles</a>, <a href="../explanation/zoltar.html#non-guarantees">fork coordination</a>, and <a href="../explanation/collateral-repair-auctions.html#security-pool-auctions">auction participation</a>.</p>
 					</li>
@@ -136,23 +142,13 @@
 					</li>
 					<li id="assumption-a08" value="8">
 						<h3><span class="assumption-id">A08</span> REP market capitalization approximates economic value</h3>
-						<p>At the stated valuation time and system scope, REP market capitalization is a sufficiently accurate observable proxy for the discounted cash flow participants expect from REP.</p>
+						<p>When an assessment uses market capitalization to estimate REP discounted cash flow for <a href="#assumption-a14">A14</a>, it assumes the estimate is accurate enough to preserve the comparison with open interest at the same time and scope.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Thin, manipulated, or speculative pricing can overstate the economic value securing open interest.</p>
 						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#accounting">REP economics</a> and <a href="../explanation/statoblast.html#fees-capacity-liquidations">economic backing claims</a>.</p>
 					</li>
 					<li id="assumption-a09" value="9">
 						<h3><span class="assumption-id">A09</span> Users value the universes they judge truthful</h3>
 						<p>Users prefer the universe or universes they judge truthful, so economic activity and durable asset value concentrate there. This assumption describes the durable allocation of value after users coordinate; <a href="#assumption-a07">A07</a> bounds backing value at the repair decision horizon.</p>
-						<div class="equation assumption-equation" id="eq-truthful-universe-value" role="region" aria-label="Truthful universe value assumption" tabindex="0">
-							<math display="block" aria-label="value of assets before the fork is approximately equal to value of assets in the truthful universe" data-source="valueBeforeFork ~= truthfulUniverseValue">
-								<mrow>
-									<msub><mi>Value</mi><mtext>before fork</mtext></msub>
-									<mo>≈</mo>
-									<msub><mi>Value</mi><mtext>truthful universe</mtext></msub>
-								</mrow>
-							</math>
-							<p class="equation-note">When several branches remain plausibly truthful, document the value split instead of assuming one winner.</p>
-						</div>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Coordination on a false branch, or durable fragmentation across branches, defeats the value-concentration security argument.</p>
 						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#non-guarantees">branch non-guarantees</a> and <a href="../explanation/statoblast.html#forks-migration">security pool fork migration</a>.</p>
 					</li>
@@ -169,8 +165,8 @@
 						<p class="assumption-links">Mechanics: <a href="../explanation/zoltar.html#accounting">REP splitting</a>, <a href="../explanation/statoblast.html#forks-migration">security pool fork migration</a>, and <a href="./operator-guardrails.html#share-migration">share migration guardrails</a>.</p>
 					</li>
 					<li id="assumption-a12" value="12">
-						<h3><span class="assumption-id">A12</span> Collateral Repair Auctions can convert supported child REP efficiently</h3>
-						<p>When repair is needed, competitive <a href="./glossary.html#collateral-repair-auction">Collateral Repair Auction</a> entry can convert supported <a href="./glossary.html#child-rep">child REP</a> into the selected collateral at an acceptably small discount and operating cost. This is a participation assumption, not a contract guarantee of revenue or full repair.</p>
+						<h3><span class="assumption-id">A12</span> Collateral Repair Auctions raise the collateral assumed in a repair estimate</h3>
+						<p>A full-repair estimate assumes bidders will pay enough collateral for the offered child REP to cover the child’s shortfall. For partial repair, state the amount of collateral the auction is expected to raise. Account for the discount and costs bidders face when estimating their bids.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> Weak or strategically withheld demand leaves the child operational with impaired collateral. A shared security pool auction sells only the REP priced by its funded lots and can leave much of the shortfall unrepaired. Ordinary surplus withdrawal and retirement remain available to winners, so selling the inventory does not guarantee permanent backing.</p>
 						<p class="assumption-links">Mechanics: <a href="../explanation/collateral-repair-auctions.html#security-pool-auctions">shared security pool auctions</a>, and <a href="../explanation/statoblast.html#forks-migration">repair accounting</a>.</p>
 					</li>
