@@ -4,7 +4,7 @@ import { auctionDemandCurve, reportLifecycle, reportLifecycleEventName, reportRo
 import { auctionCollateral } from '../repositories/auction-collateral.ts'
 import { auctionDetailData, eventEntityRows, forkDetailData, latestEntitySnapshot, reportDetailData } from '../repositories/entity-details.ts'
 import { ApiConflictError, ApiRequestError, hasCursorSnapshot, integer, isNonNegativeSafeInteger, isPostgresBigint, isPostgresInteger, json, jsonRecord, postgresBigint, routeInteger } from './shared.ts'
-import { operationsAsOfForContinuations, snapshotBoundaryMatches } from './snapshot.ts'
+import { cursorSnapshot, operationsAsOfForContinuations, snapshotMatches } from './snapshot.ts'
 
 export const snapshotBoundary = (asOf: Record<string, unknown>): readonly [string, string, string, string, string, string] => [
 	String(asOf['blockNumber']),
@@ -15,41 +15,28 @@ export const snapshotBoundary = (asOf: Record<string, unknown>): readonly [strin
 	String(asOf['projectionSourceHash']),
 ]
 
-export type ProtocolCursor = readonly [number, string, string, string, string, string, string, string, string, string, string, number]
+type ProtocolCursorParts = readonly [number, string, string, string, string, string, string, string, string, string, string, number]
 
-export type RiskCursor = readonly [number, 'pool', string, string, string, string, string, string, string]
-export const parseRiskCursor = (value: string | null, chainId: number): RiskCursor | undefined => {
+type RiskCursorParts = readonly [number, 'pool', string, string, string, string, string, string, string]
+export const parseRiskCursor = (value: string | null, chainId: number) => {
 	if (value === null) return undefined
-	const parts = parseCursor(
+	const cursor = parseCursor(
 		value,
-		(parts): RiskCursor => {
-			const [cursorChainId, kind, snapshotBlock, snapshotHash, invalidationId, abiSourceHash, applicationSourceHash, projectionSourceHash, poolAddress] = parts
-			if (
-				parts.length !== 9 ||
-				!isNonNegativeSafeInteger(cursorChainId) ||
-				kind !== 'pool' ||
-				!isPostgresBigint(snapshotBlock) ||
-				typeof snapshotHash !== 'string' ||
-				!/^0x[0-9a-f]{64}$/.test(snapshotHash) ||
-				!isPostgresBigint(invalidationId) ||
-				typeof abiSourceHash !== 'string' ||
-				typeof applicationSourceHash !== 'string' ||
-				typeof projectionSourceHash !== 'string' ||
-				typeof poolAddress !== 'string' ||
-				!/^0x[0-9a-f]{40}$/.test(poolAddress)
-			)
-				throw new Error('shape')
-			return [cursorChainId, kind, String(snapshotBlock), snapshotHash, String(invalidationId), abiSourceHash, applicationSourceHash, projectionSourceHash, poolAddress]
+		parts => {
+			const [cursorChainId, kind] = parts
+			const poolAddress = parts[8]
+			if (parts.length !== 9 || !isNonNegativeSafeInteger(cursorChainId) || kind !== 'pool' || !hasCursorSnapshot(parts, 2) || typeof poolAddress !== 'string' || !/^0x[0-9a-f]{40}$/.test(poolAddress)) throw new Error('shape')
+			return { chainId: cursorChainId, snapshot: cursorSnapshot(parts, 2), poolAddress }
 		},
 		error => new ApiRequestError('poolCursor is invalid', { cause: error }),
 	)
-	if (parts[0] !== chainId) throw new ApiRequestError('poolCursor does not match the requested collection')
-	return parts
+	if (cursor.chainId !== chainId) throw new ApiRequestError('poolCursor does not match the requested collection')
+	return cursor
 }
 
-export const riskCursorFor = (chainId: number, asOf: Record<string, unknown>, key: string): string => encodeOpaqueCursor([chainId, 'pool', ...snapshotBoundary(asOf), key] satisfies RiskCursor)
+export const riskCursorFor = (chainId: number, asOf: Record<string, unknown>, key: string): string => encodeOpaqueCursor([chainId, 'pool', ...snapshotBoundary(asOf), key] satisfies RiskCursorParts)
 
-const parseProtocolCursor = (value: string | null): ProtocolCursor | undefined => {
+const parseProtocolCursor = (value: string | null) => {
 	if (value === null) return undefined
 	return parseCursor(
 		value,
@@ -67,26 +54,27 @@ const parseProtocolCursor = (value: string | null): ProtocolCursor | undefined =
 				BigInt(parts[9]) > BigInt(String(parts[3]))
 			)
 				throw new Error('shape')
-			return parts as [number, string, string, string, string, string, string, string, string, string, string, number]
+			return { chainId: parts[0], domain: parts[1], identity: parts[2], snapshot: cursorSnapshot(parts, 3), position: { block: parts[9], tx: parts[10], log: parts[11] } }
 		},
 		error => new ApiRequestError('cursor is invalid', { cause: error }),
 	)
 }
 
-export const protocolCursorForRequest = (url: URL, chainId: number, domain: string, identity: string): ProtocolCursor | undefined => {
+export const protocolCursorForRequest = (url: URL, chainId: number, domain: string, identity: string) => {
 	const cursor = parseProtocolCursor(url.searchParams.get('cursor'))
-	if (cursor !== undefined && (cursor[0] !== chainId || cursor[1] !== domain || cursor[2] !== identity)) throw new ApiRequestError('cursor does not match the requested entity')
+	if (cursor !== undefined && (cursor.chainId !== chainId || cursor.domain !== domain || cursor.identity !== identity)) throw new ApiRequestError('cursor does not match the requested entity')
 	return cursor
 }
 
 export const protocolCursorFor = (chainId: number, domain: string, identity: string, asOf: Record<string, unknown>, row: Record<string, unknown>): string =>
-	encodeOpaqueCursor([chainId, domain, identity, ...snapshotBoundary(asOf), String(row['block_number']), String(row['tx_hash']), Number(row['log_index'])] satisfies ProtocolCursor)
+	encodeOpaqueCursor([chainId, domain, identity, ...snapshotBoundary(asOf), String(row['block_number']), String(row['tx_hash']), Number(row['log_index'])] satisfies ProtocolCursorParts)
 
 export const detailPage = (url: URL, chainId: number, domain: string, identity: string, asOf: Record<string, unknown>, cursor = protocolCursorForRequest(url, chainId, domain, identity)) => {
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
 	const limit = Math.min(Math.max(requestedLimit, 1), 250)
-	if (cursor !== undefined && !snapshotBoundaryMatches(cursor, 3, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
-	return { limit, queryLimit: limit + 1, cursor }
+	if (cursor !== undefined && !snapshotMatches(cursor.snapshot, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
+	const position = cursor?.position ?? { block: String(asOf['blockNumber']), tx: `0x${'f'.repeat(64)}`, log: 2_147_483_647 }
+	return { limit, queryLimit: limit + 1, cursor, position }
 }
 
 export type TimelineCatalogCursor = readonly [number, string, string, string, string, string, string, string, string, number, string, string, string, string, 'v2']
@@ -147,25 +135,19 @@ export const reportDetailResponse = async (sql: SQL, parts: readonly string[], u
 	const asOf = await operationsAsOfForContinuations(
 		sql,
 		chainId,
-		[cursor, decisionCursor].flatMap(item => (item === undefined ? [] : [{ parts: item, offset: 3 }])),
+		[cursor, decisionCursor].flatMap(item => (item === undefined ? [] : [item.snapshot])),
 		postgresBigint(url.searchParams.get('atBlock'), 'atBlock'),
 	)
 	const snapshotBlock = String(asOf['blockNumber'])
 	const page = detailPage(url, chainId, 'report', identity, asOf, cursor)
 	const decisionPage = detailPage(decisionUrl, chainId, 'report-decisions', identity, asOf, decisionCursor)
-	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
-	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
-	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
-	const decisionCursorBlock = decisionPage.cursor?.[9] ?? String(asOf['blockNumber'])
-	const decisionCursorTx = decisionPage.cursor?.[10] ?? `0x${'f'.repeat(64)}`
-	const decisionCursorLog = decisionPage.cursor?.[11] ?? 2_147_483_647
 	const { rows, current, round, coordinatorDecisions } = await reportDetailData(sql, {
 		chainId,
 		snapshotBlock,
 		openOracleAddress,
 		reportId,
-		rounds: { block: cursorBlock, log: cursorLog, tx: cursorTx, limit: page.queryLimit },
-		decisions: { block: decisionCursorBlock, log: decisionCursorLog, tx: decisionCursorTx, limit: decisionPage.queryLimit },
+		rounds: { ...page.position, limit: page.queryLimit },
+		decisions: { ...decisionPage.position, limit: decisionPage.queryLimit },
 	})
 	if (current === undefined && page.cursor === undefined) return json({ error: 'Report not found' }, 404)
 	const currentData = jsonRecord(current?.['report_data'])
@@ -200,18 +182,15 @@ export const eventEntityDetailResponse = async (sql: SQL, parts: readonly string
 	const address = parts[1]?.toLowerCase()
 	if (parts.length !== 2 || chainId === undefined || address === undefined || !/^0x[0-9a-f]{40}$/.test(address)) return json({ error: `Invalid ${domain} identifier` }, 400)
 	const cursor = protocolCursorForRequest(url, chainId, domain, address)
-	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }], postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
+	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [cursor.snapshot], postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
 	const snapshotBlock = String(asOf['blockNumber'])
 	const page = detailPage(url, chainId, domain, address, asOf, cursor)
-	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
-	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
-	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
 	const rows = await eventEntityRows(sql, {
 		chainId,
 		snapshotBlock,
 		address,
 		domain,
-		page: { block: cursorBlock, log: cursorLog, tx: cursorTx, limit: page.queryLimit },
+		page: { ...page.position, limit: page.queryLimit },
 	})
 	if (rows.length === 0 && page.cursor === undefined) return json({ error: `${domain === 'auction' ? 'Auction' : 'Escalation game'} not found` }, 404)
 	const snapshot = await latestEntitySnapshot(sql, chainId, domain, address, snapshotBlock)
@@ -243,17 +222,14 @@ export const forkDetailResponse = async (sql: SQL, parts: readonly string[], url
 	const identity = parts[1] === undefined ? undefined : decodeURIComponent(parts[1]).toLowerCase()
 	if (parts.length !== 2 || chainId === undefined || identity === undefined || identity.length === 0 || identity.length > 128) return json({ error: 'Invalid fork identifier' }, 400)
 	const cursor = protocolCursorForRequest(url, chainId, 'fork', identity)
-	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }], postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
+	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [cursor.snapshot], postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
 	const snapshotBlock = String(asOf['blockNumber'])
 	const page = detailPage(url, chainId, 'fork', identity, asOf, cursor)
-	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
-	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
-	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
 	const { rows, branches, summary } = await forkDetailData(sql, {
 		chainId,
 		snapshotBlock,
 		identity,
-		page: { block: cursorBlock, log: cursorLog, tx: cursorTx, limit: page.queryLimit },
+		page: { ...page.position, limit: page.queryLimit },
 	})
 	if (rows.length === 0 && page.cursor === undefined) return json({ error: 'Fork not found' }, 404)
 	return json({

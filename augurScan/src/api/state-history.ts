@@ -2,7 +2,7 @@ import type { SQL } from 'bun'
 import { operationsAsOf } from '../repositories/operations.ts'
 import { poolStateHistory, questionStateHistory, stateHistoryNetwork, universeStateHistory } from '../repositories/state-history.ts'
 import { ApiConflictError, ApiRequestError, integer, json, postgresBigint, routeInteger } from './shared.ts'
-import { snapshotBoundaryMatches } from './snapshot.ts'
+import { cursorSnapshot, snapshotMatches } from './snapshot.ts'
 import { offsetCursorFor, offsetPage, rejectRawSnapshotOffset } from './trading-catalog.ts'
 
 export const stateHistory = async (sql: SQL, parts: readonly string[], url: URL): Promise<Response> => {
@@ -36,7 +36,7 @@ export const stateHistory = async (sql: SQL, parts: readonly string[], url: URL)
 	const historyIdentity = JSON.stringify({ type, identity: parts.slice(2).map(part => part.toLowerCase()), fromBlock, toBlock, indexedFromBlock })
 	const page = offsetPage(url, chainId, 'state-history', historyIdentity)
 	if (page.identity !== historyIdentity) throw new ApiRequestError('cursor does not match filters')
-	if (page.cursor !== undefined && !snapshotBoundaryMatches(page.cursor, 3, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
+	if (page.cursor !== undefined && !snapshotMatches(cursorSnapshot(page.cursor, 3), asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
 	const offset = page.offset
 	const rangeCovered = indexedThroughBlock !== undefined && requestedToBlock !== undefined && BigInt(requestedFromBlock) <= BigInt(requestedToBlock) && BigInt(requestedFromBlock) >= BigInt(indexedFromBlock) && BigInt(requestedToBlock) <= BigInt(indexedThroughBlock)
 	const coverage = (truncated: boolean, series: Record<string, number>) => ({
