@@ -64,14 +64,14 @@ export const capitalDetailResponse = async (sql: SQL, parts: readonly string[], 
 	if (parts.length !== 3 || chainId === undefined || ledger === undefined || owner === undefined || !/^0x[0-9a-f]{40}$/.test(ledger) || !/^0x[0-9a-f]{40}$/.test(owner)) return json({ error: 'Invalid capital position identifier' }, 400)
 	const identity = `${ledger}:${owner}`
 	const cursor = protocolCursorForRequest(url, chainId, 'capital', identity)
-	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }], postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
+	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [cursor.snapshot], postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
 	const snapshotBlock = String(asOf['blockNumber'])
 	const page = detailPage(url, chainId, 'capital', identity, asOf, cursor)
 	const [positions, ledgers, history, events] = await Promise.all([
 		capitalPositionRows(sql, { chainId, snapshotBlock, ledger, owner, limit: 1, offset: 0 }),
 		capitalLedgerRows(sql, chainId, snapshotBlock, ledger),
 		capitalPositionHistoryRows(sql, { chainId, ledger, owner, snapshotBlock, limit: 251 }),
-		capitalOwnerEventRows(sql, { chainId, ledger, owner, snapshotBlock, page: { block: page.cursor?.[9] ?? snapshotBlock, log: page.cursor?.[11] ?? 2_147_483_647, tx: page.cursor?.[10] ?? `0x${'f'.repeat(64)}`, limit: page.queryLimit } }),
+		capitalOwnerEventRows(sql, { chainId, ledger, owner, snapshotBlock, page: { ...page.position, limit: page.queryLimit } }),
 	])
 	const ledgerRow = ledgers[0]
 	// An owner that a capital ledger's events name keeps its indexed history before its first balance sample.
@@ -97,9 +97,9 @@ export const liquidationCatalogResponse = async (sql: SQL, url: URL): Promise<Re
 	const owner = evmAddress(url.searchParams.get('owner'), 'owner')
 	const identity = JSON.stringify({ ledger, owner })
 	const cursor = protocolCursorForRequest(url, chainId, 'liquidations', identity)
-	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }], postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
+	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [cursor.snapshot], postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
 	const snapshotBlock = String(asOf['blockNumber'])
 	const page = detailPage(url, chainId, 'liquidations', identity, asOf, cursor)
-	const rows = await liquidationRows(sql, { chainId, snapshotBlock, ledger, owner, page: { block: page.cursor?.[9] ?? snapshotBlock, log: page.cursor?.[11] ?? 2_147_483_647, tx: page.cursor?.[10] ?? `0x${'f'.repeat(64)}`, limit: page.queryLimit } })
+	const rows = await liquidationRows(sql, { chainId, snapshotBlock, ledger, owner, page: { ...page.position, limit: page.queryLimit } })
 	return json({ chainId, asOf, filters: { ledger, owner }, data: paged(rows, page.limit, row => protocolCursorFor(chainId, 'liquidations', identity, asOf, row)) })
 }
