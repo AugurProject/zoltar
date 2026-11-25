@@ -314,29 +314,25 @@ const stateSnapshotTargetsFrom = async (sql: SQL, chainId: number, throughBlock:
 				SELECT DISTINCT ON (pool_address) pool_address, coordinator_address
 				FROM pools WHERE chain_id = ${chainId} AND canonical
 				ORDER BY pool_address, block_number DESC, log_index DESC
-			), pool_escalations AS (
-				SELECT DISTINCT ON (pool_address) pool_address, NULLIF(state->>'escalationGame', '0x0000000000000000000000000000000000000000') AS escalation_address
-				FROM pool_state_events WHERE chain_id = ${chainId} AND canonical AND event_name = 'EscalationGameSet'
-				ORDER BY pool_address, block_number DESC, log_index DESC
 			), candidates AS (
 				SELECT 'pool'::text AS entity_type, pool.pool_address AS entity_identity,
-					pool.pool_address AS address, NULL::text AS pool_address,
-					pool.coordinator_address, escalation.escalation_address,
+					pool.pool_address AS address,
+					pool.coordinator_address,
 					NULL::text AS owner_address, NULL::text AS position_id
-				FROM latest_pools pool LEFT JOIN pool_escalations escalation USING (pool_address)
+				FROM latest_pools pool
 				UNION ALL
-				SELECT 'escalation', game_address, game_address, NULL, NULL, game_address, NULL, NULL
+				SELECT 'escalation', game_address, game_address, NULL, NULL, NULL
 				FROM (SELECT DISTINCT game_address FROM escalation_game_events WHERE chain_id = ${chainId} AND canonical) game
 				UNION ALL
-				SELECT 'auction', auction_address, auction_address, NULL, NULL, NULL, NULL, NULL
+				SELECT 'auction', auction_address, auction_address, NULL, NULL, NULL
 				FROM (SELECT DISTINCT auction_address FROM collateral_repair_auction_events WHERE chain_id = ${chainId} AND canonical) auction
 				UNION ALL
-				SELECT 'capital-ledger', ledger.address, ledger.address, NULL, NULL, NULL, NULL, NULL
+				SELECT 'capital-ledger', ledger.address, ledger.address, NULL, NULL, NULL
 				FROM (SELECT address FROM contracts WHERE chain_id = ${chainId} AND canonical AND kind = 'securityPoolCapitalLedger') ledger
 				UNION ALL
 				-- Position ids are sequential, and a fork imports positions without any event. Every id up to the last one a ledger read
 				-- reported is read once for its owner; a position keeps its owner for life, so a successful read is never repeated.
-				SELECT 'capital-position', ledger.entity_identity || ':' || series.id::text, ledger.entity_identity, NULL, NULL, NULL, NULL, series.id::text
+				SELECT 'capital-position', ledger.entity_identity || ':' || series.id::text, ledger.entity_identity, NULL, NULL, series.id::text
 				FROM (
 					-- One seek per registered ledger for its latest successful read.
 					SELECT contract.address AS entity_identity, latest.last_position_id FROM contracts contract
@@ -356,7 +352,7 @@ const stateSnapshotTargetsFrom = async (sql: SQL, chainId: number, throughBlock:
 						AND resolved.entity_identity = ledger.entity_identity || ':' || series.id::text AND resolved.canonical AND resolved.read_status = 'success')
 				UNION ALL
 				-- An owner is known from a capital event that names it or from the read of one of its positions.
-				SELECT 'capital-owner', owner.identity, split_part(owner.identity, ':', 1), NULL, NULL, NULL, split_part(owner.identity, ':', 2), NULL
+				SELECT 'capital-owner', owner.identity, split_part(owner.identity, ':', 1), NULL, split_part(owner.identity, ':', 2), NULL
 				FROM (
 					SELECT entity_identity AS identity FROM protocol_timeline_entries
 					WHERE chain_id = ${chainId} AND canonical AND entity_type = 'vault'
@@ -379,7 +375,7 @@ const stateSnapshotTargetsFrom = async (sql: SQL, chainId: number, throughBlock:
 					ORDER BY snapshot.block_number DESC, snapshot.observed_at DESC LIMIT 1
 				) latest ON true
 			)
-			SELECT entity_type, entity_identity, address, pool_address, coordinator_address, escalation_address, owner_address, position_id
+			SELECT entity_type, entity_identity, address, coordinator_address, owner_address, position_id
 			FROM ranked WHERE latest_snapshot_block IS NULL OR latest_snapshot_block < ${throughBlock.toString()}
 			ORDER BY latest_snapshot_block NULLS FIRST, entity_type, entity_identity LIMIT ${limit}
 		`

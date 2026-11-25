@@ -510,13 +510,8 @@
 
 @media (max-width: 40rem) {
 	.metric-tile-grid[data-columns="4"],
-	.metric-tile-grid[data-columns="3"],
-	.workflow-summary-strip-steps {
+	.metric-tile-grid[data-columns="3"] {
 		grid-template-columns: minmax(0, 1fr);
-	}
-
-	.loaded-question-preview {
-		padding: 0.85rem;
 	}
 }
 

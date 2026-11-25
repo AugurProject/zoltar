@@ -4,7 +4,7 @@ import { parseRootMarketSettings } from '#config/canonical-deployment'
 import { updateSupportedSecurityPool } from '#config/pool-selection'
 import { parseStrategy, serializedSettings } from '#config/settings'
 import { switchSettingsNetworkProfile } from '#config/settings-store'
-import { validateApprovedUniverseSelection } from '#core/fork-migration'
+import { validateApprovedUniverseSelection } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { updateNetworkConnectivity } from '#core/network-connectivity'
 import { chainFor } from '#monitoring/operator-chain'
 import { clearMarketEvidenceForConfigurationChange, recordActivity } from '#state/operator-state'
@@ -36,7 +36,6 @@ export function setApprovedUniverses(runtime: LiquidatorRuntime, deps: Liquidato
 		validateApprovedUniverseSelection(discovered, approvedUniverses)
 		await persistSettings(runtime, deps, current => ({ ...current, approvedUniverses }))
 		for (const universe of state.universes) universe.approved = approvedUniverses.includes(universe.id)
-		for (const pool of state.pools) pool.approvedUniverse = approvedUniverses.includes(pool.universeId)
 		recordActivity(state, {
 			details: approvedUniverses.map(universe => universe.toString()).join(', '),
 			kind: 'configuration',

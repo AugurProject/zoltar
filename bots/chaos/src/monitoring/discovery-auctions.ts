@@ -13,7 +13,7 @@ export async function discoverAuctions(context: EcosystemDiscoveryContext, pools
 		const controller = getAddress(await client.readContract({ abi: abis.securityPoolAbi, address: pool.securityPool, functionName: 'forkController', blockNumber }))
 		const address = getAddress(await client.readContract({ abi: abis.securityPoolForkCoordinatorAbi, address: controller, functionName: 'repairAuctions', args: [BigInt(pool.universeId)], blockNumber }))
 		if (address === zeroAddress) continue
-		const [securityPool, authority, universeId, engineAddress, opened, finalized, closesAt, lotAttoEth, repGrid, minimumCollateral] = await Promise.all([
+		const [securityPool, authority, universeId, engineAddress, opened, finalized, closesAt, lotAttoEth, repGrid] = await Promise.all([
 			client.readContract({ abi: abis.securityPoolRepairAuctionAbi, address, functionName: 'securityPool', blockNumber }),
 			client.readContract({ abi: abis.securityPoolRepairAuctionAbi, address, functionName: 'forkAuthority', blockNumber }),
 			client.readContract({ abi: abis.securityPoolRepairAuctionAbi, address, functionName: 'universeId', blockNumber }),
@@ -23,7 +23,6 @@ export async function discoverAuctions(context: EcosystemDiscoveryContext, pools
 			client.readContract({ abi: abis.securityPoolRepairAuctionAbi, address, functionName: 'closesAt', blockNumber }),
 			client.readContract({ abi: abis.securityPoolRepairAuctionAbi, address, functionName: 'lotAttoEth', blockNumber }),
 			client.readContract({ abi: abis.securityPoolRepairAuctionAbi, address, functionName: 'repGrid', blockNumber }),
-			client.readContract({ abi: abis.securityPoolRepairAuctionAbi, address, functionName: 'minimumCollateralAttoRepPerLot', blockNumber }),
 		])
 		requireGraphEdge(getAddress(securityPool), pool.securityPool, 'Auction security pool binding')
 		requireGraphEdge(getAddress(authority), controller, 'Auction fork authority binding')
@@ -90,7 +89,6 @@ export async function discoverAuctions(context: EcosystemDiscoveryContext, pools
 			lotAttoEth: lotAttoEth.toString(),
 			repGrid: repGrid.toString(),
 			unroundedCollateralAttoRepPerLot: unroundedCollateral.toString(),
-			minimumCollateralAttoRepPerLot: minimumCollateral.toString(),
 			maximumBidAttoRepPerLot: maximumBid.toString(),
 			maximumAdmissibleBidAttoRepPerLot: admissibleBid.toString(),
 			pendingEthRefund: pendingRefund.toString(),

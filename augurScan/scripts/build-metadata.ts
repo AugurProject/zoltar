@@ -11,6 +11,8 @@ async function run(command: readonly string[], cwd: string): Promise<void> {
 }
 
 export async function buildMetadata(): Promise<void> {
+	// The component workflow builds metadata once on its checkout before running these commands.
+	if (process.env['ZOLTAR_AUGUR_SCAN_METADATA_CURRENT'] === '1') return
 	await verifyDependencyAbiFile(path.join(projectRoot, 'config/dependency-abis.json'))
 	await mkdir(path.join(repositoryRoot, 'solidity/ts/types'), { recursive: true })
 	await run(['ts/compile.ts'], path.join(repositoryRoot, 'solidity'))

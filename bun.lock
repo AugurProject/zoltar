@@ -45,11 +45,9 @@
       "name": "@zoltar/augur-scan",
       "version": "1.0.0",
       "dependencies": {
-        "@noble/hashes": "2.2.0",
         "@observablehq/plot": "0.6.17",
         "@zoltar/core-shared": "workspace:1.0.0",
         "@zoltar/statoblast-shared": "workspace:1.0.0",
-        "micro-eth-signer": "0.18.1",
       },
       "devDependencies": {
         "@biomejs/biome": "2.3.11",

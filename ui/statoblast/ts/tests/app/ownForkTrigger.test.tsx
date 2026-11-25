@@ -80,8 +80,6 @@ function Harness({ dependencies }: { dependencies: UseOwnForkTriggerDependencies
 			reportingError={undefined}
 			reportingForm={{ reportAmount: '', questionLedgerAddress: pool, selectedOutcome: undefined, selectedWithdrawDepositIndexesByOutcome: { invalid: [], no: [], yes: [] } }}
 			reportingResult={undefined}
-			showHeader={false}
-			showQuestionLedgerAddressInput={false}
 			triggerZoltarForkApproval={ownFork.approval}
 			triggerZoltarForkAvailability={ownFork.triggerForkAvailability}
 			triggerZoltarForkPending={ownFork.forkPending}
