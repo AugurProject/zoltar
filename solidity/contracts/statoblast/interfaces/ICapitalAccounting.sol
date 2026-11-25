@@ -17,6 +17,9 @@ interface ICapitalPriceExposure {
 
 interface ICapitalLedgerAccounting {
 	function priceFeed(uint248 universeId) external view returns (address);
+}
+
+interface ICapitalServiceAccounting {
 	/// @dev Deliver collateral-funded fees earned before this deadline, before any
 	/// change to eligibility. The accounting contract must not advance past it.
 	function checkpointCapitalFees(uint248 universeId, uint48 through) external;
