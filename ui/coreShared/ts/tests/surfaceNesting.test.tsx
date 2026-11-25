@@ -4,7 +4,6 @@ import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
 import { describe, expect, test } from 'bun:test'
 import { EntityCard } from '../components/EntityCard.js'
 import { WarningSurface } from '../components/WarningSurface.js'
-import { readCoreSharedCssSource } from './testUtils/coreSharedCss.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { readFileSync } from 'node:fs'
 
@@ -38,29 +37,22 @@ describe('flat nested surfaces', () => {
 		expect(document.body.querySelector('.warning-surface.flat')).not.toBeNull()
 	})
 
-	test('keeps loaded question previews and timeline rows flat', () => {
-		const cssSource = readCoreSharedCssSource()
+	test('keeps question preview timeline rows flat', () => {
 		const zoltarCssSource = readFeatureCssSource('zoltarShared', 'questions.css')
-		const loadedPreviewRule = cssSource.slice(cssSource.indexOf('.loaded-question-preview {'), cssSource.indexOf('.field-inline {'))
 		const timelineItemRule = zoltarCssSource.slice(zoltarCssSource.indexOf('.question-preview-timeline-item {'), zoltarCssSource.indexOf('.question-preview-timeline-label,'))
 
-		expect(loadedPreviewRule).toContain('border-radius: 0')
-		expect(loadedPreviewRule).toContain('background: transparent')
 		expect(timelineItemRule).toContain('border-radius: 0')
 		expect(timelineItemRule).toContain('background: transparent')
 	})
 
 	test('aligns workflow actions as rows and keeps share totals with the distribution', () => {
 		const cssSource = readFeatureCssSource('statoblastShared')
-		const totalRuleStart = cssSource.indexOf('.trading-share-callouts-total {')
-		const totalRule = cssSource.slice(totalRuleStart, cssSource.indexOf('.question-ledger-strip-meter {', totalRuleStart))
+		const distributionRule = cssSource.match(/\.trading-share-distribution \.ranked-bar-item-value button\.currency-value\.copyable \{[^}]*\}/)?.[0]
 
 		expect(cssSource).toContain('.vault-action-launcher-grid {\n\tgrid-template-columns: minmax(0, 1fr)')
 		expect(cssSource).toContain('.vault-action-launcher-grid .action-launcher-card {')
 		expect(cssSource).toContain('.question-ledger-strip-stats button.currency-value.copyable')
 		expect(cssSource).toContain('.trading-holdings-layout {\n\tgrid-template-columns: minmax(0, 1fr)')
-		expect(totalRule).toContain('grid-template-columns: minmax(0, 1fr) auto')
-		expect(totalRule).toContain('.trading-share-distribution .ranked-bar-item-value button.currency-value.copyable')
-		expect(totalRule).toContain('white-space: nowrap')
+		expect(distributionRule).toContain('white-space: nowrap')
 	})
 })

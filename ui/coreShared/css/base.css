@@ -883,14 +883,6 @@ button.quiet[aria-disabled="true"] {
 	outline-offset: 2px;
 }
 
-.form-validation-inline {
-	flex: 1 1 18rem;
-	margin: 0;
-	color: var(--danger);
-	font-size: var(--font-caption);
-	line-height: var(--line-height-body);
-}
-
 .spinner {
 	display: inline-block;
 	width: 0.9rem;
@@ -906,21 +898,6 @@ button.quiet[aria-disabled="true"] {
 .notice-progress {
 	display: grid;
 	gap: 0.55rem;
-}
-
-.notice-progress-track {
-	width: min(100%, 32rem);
-	height: 0.5rem;
-	overflow: hidden;
-	border-radius: var(--radius-pill);
-	background: color-mix(in srgb, var(--warning-border) 34%, var(--color-white) 66%);
-}
-
-.notice-progress-fill {
-	height: 100%;
-	border-radius: inherit;
-	background: linear-gradient(90deg, color-mix(in srgb, var(--warning) 74%, var(--color-white) 26%), color-mix(in srgb, var(--warning-border-strong) 84%, var(--color-white) 16%));
-	transition: width var(--transition-standard);
 }
 
 .loading-value {
@@ -1326,10 +1303,6 @@ button.wallet-asset-action-pending:disabled {
 	}
 }
 
-.overview-panel {
-	padding: 1rem 0 0.5rem;
-}
-
 .grid {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1711,10 +1684,6 @@ a.transaction-hash-link {
 	line-height: var(--line-height-tight);
 }
 
-.migration-amount-hint {
-	min-block-size: 2.9em;
-}
-
 .migration-outcome-list {
 	display: grid;
 	gap: 0.6rem 0;
@@ -1782,10 +1751,6 @@ a.transaction-hash-link {
 }
 
 @media (max-width: 40rem) {
-	.migration-amount-hint {
-		min-block-size: 2.9em;
-	}
-
 	.migration-outcome-list {
 		grid-template-columns: minmax(0, 1fr);
 	}
@@ -2417,87 +2382,11 @@ a.transaction-hash-link {
 	letter-spacing: -0.02em;
 }
 
-.market-header {
-	display: grid;
-	gap: 0.5rem;
-	align-items: end;
-	padding-bottom: 0.75rem;
-	border-bottom: 1px solid var(--border-default);
-}
-
 .market-grid {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr);
 	gap: 1rem;
 	margin-top: 1rem;
-}
-
-.market-linked-pools {
-	display: grid;
-	gap: 0.75rem;
-	margin-top: 1rem;
-	padding-top: 0.9rem;
-	border-top: 1px solid var(--border-default);
-}
-
-.market-linked-pools-header {
-	display: grid;
-	gap: 0.15rem;
-}
-
-.market-linked-pools-header > span,
-.market-linked-pool-summary > span {
-	color: var(--muted);
-	font-size: var(--font-caption);
-}
-
-.market-linked-pool-list {
-	display: grid;
-	gap: 0.65rem;
-}
-
-.market-linked-pool {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(12rem, 0.8fr) auto;
-	align-items: center;
-	gap: 1rem;
-	padding: 0.75rem 0;
-	border: 0;
-	border-bottom: 1px solid var(--divider-subtle);
-	border-radius: 0;
-	background: transparent;
-}
-
-.market-linked-pool:last-child {
-	border-bottom: 0;
-}
-
-.market-linked-pool-universe-warning {
-	grid-column: 1 / -1;
-}
-
-.market-linked-pool-summary {
-	display: flex;
-	align-items: center;
-	flex-wrap: wrap;
-	gap: 0.55rem 0.9rem;
-}
-
-.market-linked-pool-share-supply {
-	max-width: 9rem;
-}
-
-.market-linked-pool-participation {
-	display: grid;
-	gap: 0.2rem;
-	color: var(--muted);
-	font-size: var(--font-caption);
-	line-height: var(--line-height-body);
-}
-
-.market-linked-pool-participation strong {
-	color: var(--text);
-	font-size: var(--font-label);
 }
 
 .market-column {

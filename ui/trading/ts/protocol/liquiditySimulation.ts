@@ -1,10 +1,10 @@
 import { tokenFunded } from './collateral.js'
-import { loadBudgetMint } from './minting.js'
+import { loadBudgetMint, loadBudgetMintState } from './minting.js'
 import { submissionDeadline } from './submissionWindow.js'
 import { maxUint256, type Address, type WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { tradingContracts } from '../generated/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
-import { loadTransactionFeeMarket, liquidityHoldingFeeBlocker } from './holdingFees.js'
+import { liquidityHoldingFeeBlocker, projectTransactionFeeMarket } from './holdingFees.js'
 import type { LiveMarket } from './liveMarket.js'
 import { maximumAfterSlippage, requireTransactionSlippageBps, simulateWithDeadline, UI_SLIPPAGE_BPS, type TransactionExpiry } from './tradeQuote.js'
 
@@ -51,11 +51,12 @@ export async function simulateLiquidity(client: WalletClient, configuration: Dep
 			client,
 			expiry,
 			async (block, deadline) => {
-				mintAttoEth = await loadBudgetMint(client, market, amount, block.blockNumber)
+				const budgetMint = await loadBudgetMintState(client, market, amount, block.blockNumber)
+				mintAttoEth = budgetMint.cash
 				const simulation = tokenFunded(market)
 					? await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithCollateral', account, args: [pairAddress, mintAttoEth, maxUint256, maxUint256, 0n, account, deadline, amount], blockNumber: block.blockNumber })
 					: await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, mintAttoEth, maxUint256, maxUint256, 0n, account, deadline], value: amount, blockNumber: block.blockNumber })
-				const feeMarket = await loadTransactionFeeMarket(client, market, block.blockNumber, block.blockTimestamp)
+				const feeMarket = projectTransactionFeeMarket(market, budgetMint.central, block.blockTimestamp)
 				const feeBlocker = liquidityHoldingFeeBlocker(feeMarket, mintAttoEth, maximumAfterSlippage(simulation.result.yesUsed, slippageBps), maximumAfterSlippage(simulation.result.noUsed, slippageBps), deadline, simulation.result)
 				if (feeBlocker !== undefined) throw new Error(feeBlocker)
 				return simulation
