@@ -5,7 +5,6 @@ import type {
 	Account,
 	Address,
 	BlockTag,
-	BlockTransaction,
 	Chain,
 	ContractFunctionParameters,
 	ContractFunctionResult,
@@ -19,7 +18,6 @@ import type {
 	MulticallReturnType,
 	PublicClientActions,
 	PublicClientShape,
-	ReplacementReason,
 	RpcLog,
 	RpcLogForEvent,
 	SendTransactionParameters,
@@ -34,71 +32,15 @@ import { MULTICALL3_ABI, decodeEventLog, decodeFunctionOutput, encodeEventTopics
 
 import { bytesToHex as nobleBytesToHex } from '@noble/hashes/utils.js'
 
-import { isRateLimitError, requestTransportWithRateLimitRetries, retryRateLimited, runWithDeadline } from '../transport.js'
+import { requestTransportWithRateLimitRetries } from '../transport.js'
 
 import { getLogAddressFilter, logMatchesTopicFilter, normalizeBlock, normalizeLog, normalizeReceipt, normalizeTransaction, snapshotLogTopicFilter } from '../rpc.js'
 
 import { multicallFailureMessage } from '../../multicallFailure.js'
-
-function isBlockTransaction(value: unknown): value is BlockTransaction {
-	return typeof value === 'object' && value !== null && 'hash' in value && 'from' in value && 'nonce' in value
-}
-
-function isTransactionNotFoundError(error: unknown): error is Error {
-	return error instanceof Error && error.message.includes('could not be found')
-}
+import { waitForTransactionReceipt } from './receiptWatcher.js'
 
 export function isAlreadyKnownTransactionError(error: unknown) {
 	return error instanceof RpcError && error.message.toLowerCase().includes('already known')
-}
-
-function getReplacementReason(originalTransaction: BlockTransaction, replacementTransaction: BlockTransaction): ReplacementReason {
-	if (replacementTransaction.to?.toLowerCase() === originalTransaction.from.toLowerCase() && replacementTransaction.value === 0n && replacementTransaction.input === '0x') return 'cancelled'
-	if (replacementTransaction.to?.toLowerCase() === originalTransaction.to?.toLowerCase() && replacementTransaction.value === originalTransaction.value && replacementTransaction.input === originalTransaction.input) return 'repriced'
-	return 'replaced'
-}
-
-const REPLACEMENT_SCAN_BLOCK_DEPTH = 12n
-
-type ReplacementScanBlock = { number: bigint; hash: Hash }
-
-async function scanReplacementTransactions(blockReader: Pick<PublicClientActions, 'getBlock'>, originalTransaction: BlockTransaction, latestBlockNumber: bigint, previousHistory: readonly ReplacementScanBlock[]): Promise<{ history: ReplacementScanBlock[]; transaction?: BlockTransaction }> {
-	// Expire checkpoints outside the supported lookback before making any reads.
-	// A large head jump must not introduce a dependency on older RPC history.
-	const earliestBlock = latestBlockNumber > REPLACEMENT_SCAN_BLOCK_DEPTH ? latestBlockNumber - REPLACEMENT_SCAN_BLOCK_DEPTH : 0n
-	let history = previousHistory.filter(scanned => scanned.number >= earliestBlock)
-	// Validate even at an unchanged height. A linked tip authenticates its scanned
-	// ancestors; after a reorg, walk backwards to the newest retained common one.
-	while (history.length > 0) {
-		const tip = history.at(-1)
-		if (tip === undefined) break
-		if (tip.number <= latestBlockNumber && (await blockReader.getBlock({ blockNumber: tip.number })).hash === tip.hash) break
-		history.pop()
-	}
-
-	// Recovery beyond retained history deliberately restarts only the supported
-	// recent window. Older affected blocks are unknown, never marked as scanned.
-	const ancestor = history.at(-1)
-	const firstBlock = ancestor === undefined ? earliestBlock : ancestor.number + 1n
-	if (firstBlock > latestBlockNumber) return { history }
-
-	let transaction: BlockTransaction | undefined
-	for (let blockNumber = firstBlock; blockNumber <= latestBlockNumber; blockNumber += 1n) {
-		const block = await blockReader.getBlock({ blockNumber, includeTransactions: true })
-		if (block.hash === undefined) throw new Error('Replacement scan requires a block hash')
-		const previous = history.at(-1)
-		if (previous !== undefined && block.parentHash !== previous.hash) return { history: [] }
-		history.push({ number: blockNumber, hash: block.hash })
-		history = history.filter(scanned => scanned.number >= earliestBlock)
-		transaction = block.transactions.find((candidate): candidate is BlockTransaction => isBlockTransaction(candidate) && candidate.hash !== originalTransaction.hash && candidate.nonce === originalTransaction.nonce && candidate.from.toLowerCase() === originalTransaction.from.toLowerCase())
-		if (transaction !== undefined) break
-	}
-
-	// Do not commit a partial or mixed-chain scan, or report an orphan candidate.
-	// Parent linkage plus a final canonical tip read validates the entire batch.
-	const tip = history.at(-1)
-	if (tip === undefined || (await blockReader.getBlock({ blockNumber: tip.number })).hash !== tip.hash) return { history: [] }
-	return { history, ...(transaction === undefined ? {} : { transaction }) }
 }
 
 export function buildRpcTransactionRequest(parameters: SendTransactionParameters) {
@@ -402,129 +344,7 @@ export function buildPublicClientActions<TTransport extends Transport, TChain ex
 				result: decodeFunctionOutput(abiItem, data) as ContractFunctionResult<TAbi, TFunctionName>,
 			}
 		},
-		waitForTransactionReceipt: async parameters => {
-			const timeoutMilliseconds = parameters.timeout ?? 180_000
-			const pollingInterval = parameters.pollingInterval ?? 1_000
-			const startTime = Date.now()
-			const actions = buildPublicClientActions({ chain, transport: { ...transport, retryCount: 0 } })
-			let lastRateLimitError: Error | undefined
-			let lastRequestError: Error | undefined
-			let lastReceiptNotFoundError: Error | undefined
-			return await runWithDeadline({
-				getTimeoutError: () => lastRateLimitError ?? lastReceiptNotFoundError ?? lastRequestError ?? new Error(`Timed out while waiting for transaction receipt "${parameters.hash}".`),
-				operation: async runBeforeDeadline => {
-					const waitForNextPoll = async () => {
-						let pollingTimer: ReturnType<typeof setTimeout> | undefined
-						try {
-							await runBeforeDeadline(
-								async () =>
-									await new Promise(resolve => {
-										pollingTimer = setTimeout(resolve, pollingInterval)
-									}),
-							)
-						} finally {
-							if (pollingTimer !== undefined) clearTimeout(pollingTimer)
-						}
-					}
-					const retryReceiptRateLimited = async <TValue>(operation: () => Promise<TValue>) => {
-						lastRateLimitError = undefined
-						lastRequestError = undefined
-						return await runBeforeDeadline(
-							async () =>
-								await retryRateLimited(
-									async () => {
-										lastRateLimitError = undefined
-										lastRequestError = undefined
-										try {
-											const result = await operation()
-											lastRateLimitError = undefined
-											return result
-										} catch (error) {
-											if (error instanceof Error) {
-												lastRateLimitError = isRateLimitError(error) ? error : undefined
-												lastRequestError = error
-											}
-											throw error
-										}
-									},
-									{
-										retryDelay: transport.retryDelay,
-										startTime,
-										timeout: timeoutMilliseconds,
-									},
-								),
-						)
-					}
-					let originalTransaction = parameters.transaction
-					let replacementScanHistory: ReplacementScanBlock[] = []
-					if (parameters.onReplaced !== undefined && originalTransaction === undefined) {
-						try {
-							originalTransaction = await retryReceiptRateLimited(
-								async () =>
-									await actions.getTransaction({
-										hash: parameters.hash,
-									}),
-							)
-						} catch (error) {
-							if (!isTransactionNotFoundError(error)) throw error
-						}
-					}
-					while (true) {
-						try {
-							return await retryReceiptRateLimited(
-								async () =>
-									await actions.getTransactionReceipt({
-										hash: parameters.hash,
-									}),
-							)
-						} catch (error) {
-							if (!isTransactionNotFoundError(error)) throw error
-							lastReceiptNotFoundError = error
-							if (parameters.onReplaced !== undefined && originalTransaction === undefined) {
-								try {
-									originalTransaction = await retryReceiptRateLimited(
-										async () =>
-											await actions.getTransaction({
-												hash: parameters.hash,
-											}),
-									)
-								} catch (transactionError) {
-									if (!isTransactionNotFoundError(transactionError)) throw transactionError
-								}
-							}
-							if (originalTransaction !== undefined) {
-								const transactionToReplace = originalTransaction
-								const latestBlockNumber = await retryReceiptRateLimited(async () => await actions.getBlockNumber())
-								const replacementBlockReader: Pick<PublicClientActions, 'getBlock'> = {
-									getBlock: async parameters => await retryReceiptRateLimited(async () => await actions.getBlock(parameters)),
-								}
-								const scan = await scanReplacementTransactions(replacementBlockReader, transactionToReplace, latestBlockNumber, replacementScanHistory)
-								replacementScanHistory = scan.history
-								const replacementTransaction = scan.transaction
-								if (replacementTransaction !== undefined) {
-									const transactionReceipt = await retryReceiptRateLimited(
-										async () =>
-											await actions.getTransactionReceipt({
-												hash: replacementTransaction.hash,
-											}),
-									)
-									parameters.onReplaced?.({
-										reason: getReplacementReason(transactionToReplace, replacementTransaction),
-										replacedTransaction: transactionToReplace,
-										transaction: replacementTransaction,
-										transactionReceipt,
-									})
-									return transactionReceipt
-								}
-							}
-							if (Date.now() - startTime >= timeoutMilliseconds) throw error
-							await waitForNextPoll()
-						}
-					}
-				},
-				timeout: timeoutMilliseconds,
-			})
-		},
+		waitForTransactionReceipt: parameters => waitForTransactionReceipt(buildPublicClientActions({ chain, transport: { ...transport, retryCount: 0 } }), parameters, transport.retryDelay),
 	}
 }
 
