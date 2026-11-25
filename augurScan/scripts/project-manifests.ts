@@ -31,10 +31,10 @@ const deploymentEntries = (value: unknown, name: string): DeploymentFile['deploy
 		}
 	})
 }
-const deploymentFile = (value: unknown, source: string): DeploymentFile => {
+type GenesisOutcome = 'yes' | 'no'
+const deploymentFile = (value: unknown, source: string, outcome: GenesisOutcome): DeploymentFile => {
 	if (!isPlainRecord(value) || !isPlainRecord(value['network'])) throw new Error(`${source} has no network object`)
-	// Universe identities are scoped to a chain in the scanner, so each chain indexes one genesis deployment.
-	if (value['network']['genesisOutcome'] !== 'yes') throw new Error(`${source}.network.genesisOutcome must be yes for the scanner deployment`)
+	if (value['network']['genesisOutcome'] !== outcome) throw new Error(`${source}.network.genesisOutcome must be ${outcome}`)
 	return {
 		network: {
 			id: requiredString(value['network']['id'], `${source}.network.id`),
@@ -57,9 +57,16 @@ const serializeManifest = (contracts: readonly (readonly [string, string, string
 }
 const manifestEntry = (address: string, label: string, kind: string): [string, string, string] => [address, label, kind]
 
-async function projectManifest(projectRoot: string, networkId: keyof typeof usdcAddress, deploymentKinds: Readonly<Record<string, string>>): Promise<string> {
-	const deploymentPath = path.join(projectRoot, 'docs', `${networkId}-deployment-addresses.json`)
-	const deployment = deploymentFile(JSON.parse(await readFile(deploymentPath, 'utf8')), deploymentPath)
+const deploymentProfiles = [
+	{ id: 'mainnet', network: 'mainnet', outcome: 'yes' },
+	{ id: 'sepolia', network: 'sepolia', outcome: 'yes' },
+	{ id: 'mainnet-no', network: 'mainnet', outcome: 'no' },
+	{ id: 'sepolia-no', network: 'sepolia', outcome: 'no' },
+] as const
+
+async function projectManifest(projectRoot: string, { id, network: networkId, outcome }: (typeof deploymentProfiles)[number], deploymentKinds: Readonly<Record<string, string>>): Promise<string> {
+	const deploymentPath = path.join(projectRoot, 'docs', `${id}-deployment-addresses.json`)
+	const deployment = deploymentFile(JSON.parse(await readFile(deploymentPath, 'utf8')), deploymentPath, outcome)
 	if (deployment.network.id !== networkId) throw new Error(`${deploymentPath} describes ${deployment.network.id}, expected ${networkId}`)
 	const configured = [...deployment.deploymentSteps, ...deployment.derivedContracts].map(({ id, label, address }) => {
 		const kind = deploymentKinds[id]
@@ -96,22 +103,23 @@ async function projectManifest(projectRoot: string, networkId: keyof typeof usdc
 	return serializeManifest(current)
 }
 
-export async function projectManifests(projectRoot: string, deploymentKinds?: Readonly<Record<string, string>>): Promise<Readonly<Record<keyof typeof usdcAddress, string>>> {
+export async function projectManifests(projectRoot: string, deploymentKinds?: Readonly<Record<string, string>>): Promise<Readonly<Record<string, string>>> {
 	let kinds = deploymentKinds
 	if (kinds === undefined) {
 		const catalog: unknown = await Bun.file(new URL('../config/abis.json', import.meta.url)).json()
 		if (!isPlainRecord(catalog) || !isPlainRecord(catalog['contracts'])) throw new Error('ABI catalog has no contracts')
 		kinds = systemContractMappings(Object.keys(catalog['contracts']), await projectDeploymentIds(projectRoot)).deploymentKinds
 	}
-	const [mainnet, sepolia] = await Promise.all([projectManifest(projectRoot, 'mainnet', kinds), projectManifest(projectRoot, 'sepolia', kinds)])
-	return { mainnet, sepolia }
+	const manifests: Record<string, string> = {}
+	for (const profile of deploymentProfiles) manifests[profile.id] = await projectManifest(projectRoot, profile, kinds)
+	return manifests
 }
 
 export async function projectDeploymentIds(projectRoot: string): Promise<readonly string[]> {
 	const ids: string[] = []
-	for (const network of Object.keys(usdcAddress)) {
-		const source = path.join(projectRoot, 'docs', `${network}-deployment-addresses.json`)
-		const deployment = deploymentFile(JSON.parse(await readFile(source, 'utf8')), source)
+	for (const { id, outcome } of deploymentProfiles) {
+		const source = path.join(projectRoot, 'docs', `${id}-deployment-addresses.json`)
+		const deployment = deploymentFile(JSON.parse(await readFile(source, 'utf8')), source, outcome)
 		ids.push(...[...deployment.deploymentSteps, ...deployment.derivedContracts].map(({ id }) => id))
 	}
 	return [...new Set(ids)].sort()

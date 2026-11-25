@@ -37,6 +37,7 @@ type ProgressState = {
 
 export type NetworkIndexerState = {
 	network: NetworkConfig
+	readonly scanDirectCalls: boolean
 	readonly traceSelectedTransactions: boolean
 	readonly configuredStartBlock: bigint
 	readonly database: ScannerDatabase
@@ -70,6 +71,7 @@ export const createNetworkIndexer = (
 	signal: AbortSignal,
 	options: {
 		readonly provenance?: EvidenceProvenance
+		readonly scanDirectCalls?: boolean
 		readonly traceSelectedTransactions?: boolean
 	} = {},
 ): NetworkIndexerState => {
@@ -79,6 +81,7 @@ export const createNetworkIndexer = (
 	return {
 		network,
 		configuredStartBlock: network.startBlock,
+		scanDirectCalls: options.scanDirectCalls ?? runtimeConfig.scanDirectCalls,
 		traceSelectedTransactions: options.traceSelectedTransactions ?? runtimeConfig.traceSelectedTransactions,
 		database,
 		signal,

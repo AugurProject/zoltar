@@ -76,7 +76,8 @@ const identityGeneration = (columnDefinition: string): 'a' | 'd' | '' => {
 }
 
 export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVersion): SchemaLayout => {
-	const latestSchema = schema.replaceAll('\r\n', '\n')
+	const normalized = schema.replaceAll('\r\n', '\n')
+	const latestSchema = Number(version) < 11 ? normalized.replace(/transactions_selection_status CHECK [^\n]+/, "transactions_successful_log_evidence CHECK ((status = 'success'::text))") : normalized
 	const currentSchema =
 		Number(version) < 10 ? latestSchema.replace('last_settlement_portfolio_time numeric(78,0) NOT NULL', 'last_settlement_portfolio_time timestamp with time zone NOT NULL').replace(/ALTER TABLE ONLY public\.pool_snapshots\s+ADD CONSTRAINT pool_snapshots_(?:reason|portfolio_time)_check [\s\S]*?;\n/g, '') : latestSchema
 	// Older supported databases keep the constant pool columns and the seed price shape that migration 008 removed.
