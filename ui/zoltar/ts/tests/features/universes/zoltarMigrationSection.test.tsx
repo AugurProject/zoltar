@@ -118,6 +118,9 @@ describe('ZoltarMigrationSection', () => {
 		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, props))
 		cleanupRenderedComponent = rendered.cleanup
 		const queries = within(document.body)
+		const amount = queries.getByLabelText('Amount to migrate')
+		const max = queries.getByRole('button', { name: /^Use all .*REP$/ })
+		expect(amount.closest('.field-inline')?.contains(max)).toBe(false)
 		const approval = queries.getByRole('button', { name: /^Approve .*REP/ })
 		expect(approval.getAttribute('disabled')).not.toBeNull()
 		expect(document.body.textContent).toContain('no wallet REP needs approval')

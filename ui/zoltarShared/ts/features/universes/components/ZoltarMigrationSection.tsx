@@ -277,6 +277,11 @@ export function ZoltarMigrationSection({
 				// The step reason is shown once, next to Continue; the input only points at it.
 				const amountInvalid = amountStep?.status === 'blocked' || (amountStep?.reason === zoltarCopy.migrationAmountInvalid && zoltarMigrationForm.amount.trim() !== '')
 				const showBreakdown = amountStep?.status === 'complete'
+				const maximumShortcut = (
+					<button className={singleForm ? 'quiet' : 'quiet field-inline-action'} type='button' onClick={() => (maxAmount === undefined ? undefined : onZoltarMigrationFormChange({ amount: formatCurrencyInputBalance(maxAmount) }))} disabled={zoltarMigrationPending || maxAmount === undefined || maxAmount <= 0n}>
+						{maxAmount === undefined ? commonCopy.max : zoltarCopy.formatUseAllRep(formatCurrencyBalance(maxAmount))}
+					</button>
+				)
 				return (
 					<>
 						<div className='field'>
@@ -293,10 +298,9 @@ export function ZoltarMigrationSection({
 									value={zoltarMigrationForm.amount}
 									disabled={zoltarMigrationPending}
 								/>
-								<button className='quiet field-inline-action' type='button' onClick={() => (maxAmount === undefined ? undefined : onZoltarMigrationFormChange({ amount: formatCurrencyInputBalance(maxAmount) }))} disabled={zoltarMigrationPending || maxAmount === undefined || maxAmount <= 0n}>
-									{maxAmount === undefined ? commonCopy.max : zoltarCopy.formatUseAllRep(formatCurrencyBalance(maxAmount))}
-								</button>
+								{!singleForm && maximumShortcut}
 							</div>
+							{singleForm && <div className='actions'>{maximumShortcut}</div>}
 							{zoltarMigrationPreparedRepBalanceAttoRep === undefined || zoltarMigrationPreparedRepBalanceAttoRep === 0n ? undefined : <p className='detail'>{zoltarCopy.migrationBalanceExplainer}</p>}
 						</div>
 						{!singleForm && (
