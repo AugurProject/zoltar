@@ -179,19 +179,41 @@ def check(args, work):
         for i, name in enumerate(names):
             ns = f'SolidCore.Solidity.Target{index}_{i}'
             try:
-                target = lower_assembly(project(ast, name))
+                selected = project(ast, name)
+                root = next(
+                    node
+                    for node in selected['nodes']
+                    if node.get('nodeType') == 'ContractDefinition'
+                    and node['name'] == name
+                )
+                check_constructor = (
+                    root['contractKind'] == 'contract' and not root['abstract']
+                )
+                target = lower_assembly(selected)
                 with render_lock:
-                    code = importer.render_module(target, key, name, ns, True)
+                    code = importer.render_module(
+                        target,
+                        key,
+                        name,
+                        ns,
+                        True,
+                        analyzed_solc_028=compiler == args.oracle_solc,
+                    )
             except (Unsupported, importer.ImportError) as exc:
                 result.append((path, name, 'frontend rejected', str(exc)))
                 continue
             script = work / (ns + '.lean')
+            success = (
+                'if (contract.program.constructorFunctionFor? contract.decl).isSome then "PASS" else "FAIL constructor translation"'
+                if check_constructor
+                else '"PASS"'
+            )
             script.write_text(
                 'import SolidCore.Solidity.Checked\n'
                 + code
                 + f"""
-#eval match SolidCore.Solidity.TypeCheck.SourceUnit.checkedToCoreContract {ns}.importedSourceUnit {json.dumps(name)} with
-      | .ok _ => "PASS"
+#eval match SolidCore.Solidity.TypeCheck.CheckedInput.contract {ns}.importedSourceUnit {json.dumps(name)} with
+      | .ok {'contract' if check_constructor else '_'} => {success}
       | .error e => "FAIL " ++ reprStr e
 """
             )
@@ -214,7 +236,11 @@ def check(args, work):
             if p.returncode:
                 result.append((path, name, 'Lean error', msg))
             else:
-                value = json.loads(msg)
+                try:
+                    value = json.loads(msg.splitlines()[-1] if msg else '')
+                except json.JSONDecodeError:
+                    result.append((path, name, 'Lean output error', msg))
+                    continue
                 if value == 'PASS':
                     if args.models is not None:
                         output = args.models / path / (name + '.lean')

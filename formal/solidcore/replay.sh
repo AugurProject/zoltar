@@ -54,6 +54,14 @@ fi
   python3 prototypes/mul512/replay.py "$repo" --solc "$solc35" --anvil "$anvil"
   python3 prototypes/source/test_assembly.py "$solc35"
   python3 prototypes/source/muldiv.py "$repo" --solc "$solc35" --anvil "$anvil"
+  for probe in clone_bindings compaction creation storage_slots code_chunk byte_split code_load modexp_bytes invalid_halt calldata_word multicall scratch_call log4 guarded_delegate; do
+    python3 "prototypes/source/$probe.py" "$repo" --solc "$solc35" --anvil "$anvil"
+  done
+  for probe in oracle_words oracle_buffer oracle_packing mapping_scratch modexp_word; do
+    python3 "prototypes/source/$probe.py" "$repo" --solc "$solc35" --oracle-solc "$solc28" --anvil "$anvil"
+  done
+  python3 prototypes/source/discarded_bool.py --solc "$solc35" --anvil "$anvil"
+  python3 prototypes/source/maturity_map.py "$repo" --solc "$solc35" --anvil "$anvil" --forge "$forge"
   models=$(mktemp -d "$work/models-XXXXXX")
   echo "Writing checked Lean source modules to $models/contracts"
   python3 "$here/check_contracts.py" --models "$models/contracts" --solidcore "$sc" --solc "$solc35" --oracle-solc "$solc28" --forge "$forge" --jobs "${SOLIDCORE_JOBS:-3}" --report "$work/contracts.tsv"
