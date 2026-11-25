@@ -45,6 +45,7 @@ export const demoHistory = (env: DemoEnvironment, path: string) => {
 			page[key] = historyMore ? historyPageSlice(records, split, offset) : records
 		}
 		const series = Object.fromEntries(seriesKeys.map(key => [key, Array.isArray(page[key]) ? page[key].length : 0]))
+		const rangeCovered = BigInt(request.searchParams.get('fromBlock') ?? '23000000') >= 23000000n && BigInt(request.searchParams.get('toBlock') ?? '23514219') <= 23514219n
 		const truncated = historyMore && offset === 0
 		return {
 			...page,
@@ -60,8 +61,8 @@ export const demoHistory = (env: DemoEnvironment, path: string) => {
 				limit: 1000,
 				offset,
 				series,
-				complete: !truncated,
-				rangeCovered: true,
+				complete: !truncated && rangeCovered,
+				rangeCovered,
 				hasPreviousPages: offset > 0,
 				...(truncated ? { nextCursor: 'demo-state-history-older' } : {}),
 			},

@@ -238,6 +238,14 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 				twap7d: { state: 'Partial coverage', numerator: '97', denominator: '100', coverageSeconds: '518400', windowSeconds: '604800' },
 				candles: [
 					{
+						bucketStart: String(BigInt(operations.asOf.blockTimestamp) - 7200n),
+						open: { numerator: '1', denominator: '10000000000' },
+						high: { numerator: '1', denominator: '10000000000' },
+						low: { numerator: '1', denominator: '10000000000' },
+						close: { numerator: '1', denominator: '10000000000' },
+						observations: 1,
+					},
+					{
 						bucketStart: String(BigInt(operations.asOf.blockTimestamp) - 3600n),
 						open: { numerator: '1', denominator: '1' },
 						high: { numerator: '1', denominator: '1' },
