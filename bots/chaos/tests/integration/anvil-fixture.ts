@@ -296,6 +296,8 @@ export async function createChaosAnvilFixture(): Promise<ChaosAnvilFixture> {
 			address: infra.zoltarQuestionData,
 			functionName: 'getQuestionCount',
 		})
+		// Pending estimates must include the next block's fee checkpoints regardless of host timing.
+		await simulator.requestRaw({ method: 'anvil_setBlockTimestampInterval', params: [1] })
 		let baselineSnapshot = await simulator.anvilSnapshot()
 		return {
 			baselineQuestionCount,
