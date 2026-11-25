@@ -563,7 +563,7 @@ CREATE TABLE public.transactions (
     gas_used numeric(78,0),
     receipt jsonb NOT NULL,
     canonical boolean DEFAULT true NOT NULL,
-    CONSTRAINT transactions_successful_log_evidence CHECK ((status = 'success'::text))
+    CONSTRAINT transactions_selection_status CHECK (((status = 'success'::text) OR ((status = 'reverted'::text) AND (COALESCE((receipt ->> 'selectionSource'::text), ''::text) = 'protocol-call'::text))))
 );
 
 

@@ -47,7 +47,7 @@ export const richList = async (sql: SQL, url: URL): Promise<Response> => {
 	})
 }
 
-type SecurityPoolCollection = 'forks' | 'lp' | 'reports'
+type SecurityPoolCollection = 'forks' | 'lp' | 'reports' | 'refunds' | 'positions'
 type SecurityPoolCursor = readonly [number, string, SecurityPoolCollection, string, string, string, string, string, string, number, number]
 
 const parseSecurityPoolCursor = (value: string | null, chainId: number, address: string, kind: SecurityPoolCollection): { readonly total: number; readonly offset: number; readonly cursor?: SecurityPoolCursor } => {
@@ -59,7 +59,16 @@ const parseSecurityPoolCursor = (value: string | null, chainId: number, address:
 		},
 		error => new ApiRequestError(`${kind}Cursor is invalid`, { cause: error }),
 	)
-	if (parts.length !== 11 || !isNonNegativeSafeInteger(parts[0]) || typeof parts[1] !== 'string' || (parts[2] !== 'forks' && parts[2] !== 'lp' && parts[2] !== 'reports') || !hasCursorSnapshot(parts, 3) || !isNonNegativeSafeInteger(parts[9]) || !isNonNegativeSafeInteger(parts[10]) || parts[10] > parts[9])
+	if (
+		parts.length !== 11 ||
+		!isNonNegativeSafeInteger(parts[0]) ||
+		typeof parts[1] !== 'string' ||
+		(parts[2] !== 'forks' && parts[2] !== 'lp' && parts[2] !== 'reports' && parts[2] !== 'positions' && parts[2] !== 'refunds') ||
+		!hasCursorSnapshot(parts, 3) ||
+		!isNonNegativeSafeInteger(parts[9]) ||
+		!isNonNegativeSafeInteger(parts[10]) ||
+		parts[10] > parts[9]
+	)
 		throw new ApiRequestError(`${kind}Cursor is invalid`)
 	if (parts[0] !== chainId || parts[1] !== address || parts[2] !== kind) throw new ApiRequestError(`${kind}Cursor does not match the requested collection`)
 	return {
@@ -86,10 +95,12 @@ export const addressSecurityPoolResponse = async (sql: SQL, url: URL): Promise<R
 	const lpPage = parseSecurityPoolCursor(url.searchParams.get('lpCursor'), chainId, address, 'lp')
 	const forkPage = parseSecurityPoolCursor(url.searchParams.get('forkCursor'), chainId, address, 'forks')
 	const reportPage = parseSecurityPoolCursor(url.searchParams.get('reportCursor'), chainId, address, 'reports')
+	const refundPage = parseSecurityPoolCursor(url.searchParams.get('refundCursor'), chainId, address, 'refunds')
+	const positionPage = parseSecurityPoolCursor(url.searchParams.get('positionCursor'), chainId, address, 'positions')
 	const asOf = await operationsAsOfForContinuations(
 		sql,
 		chainId,
-		[lpPage.cursor, forkPage.cursor, reportPage.cursor].flatMap(cursor => (cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])),
+		[lpPage.cursor, forkPage.cursor, reportPage.cursor, refundPage.cursor, positionPage.cursor].flatMap(cursor => (cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])),
 	)
 	const snapshotBlock = String(asOf['blockNumber'])
 	const securityPoolRowsPromise = richListRows(sql, { chainId, address, snapshotBlock, limit: 1, offset: 0, sort: 'transactions' })
@@ -103,7 +114,7 @@ export const addressSecurityPoolResponse = async (sql: SQL, url: URL): Promise<R
 		reportOffset: reportPage.offset,
 	})
 	const items = (await securityPoolRowsPromise).filter((row: Record<string, unknown>) => row['address'] !== null)
-	const collection = (kind: SecurityPoolCollection, rows: readonly Record<string, unknown>[], page: { readonly total: number; readonly offset: number }, identityField: string) => {
+	const collection = (kind: SecurityPoolCollection, rows: readonly Record<string, unknown>[], page: { readonly total: number; readonly offset: number }, identityField: string, pageLimit = limit) => {
 		const total = Number(rows[0]?.['total'] ?? 0)
 		if (page.offset > 0 && page.total !== total) throw new ApiConflictError('Security pool history changed; restart pagination')
 		const collectionItems = rows.filter(row => row[identityField] !== null).map(row => Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'total')))
@@ -113,7 +124,7 @@ export const addressSecurityPoolResponse = async (sql: SQL, url: URL): Promise<R
 			items: collectionItems,
 			page: {
 				total,
-				limit,
+				limit: pageLimit,
 				offset: page.offset,
 				hasMore,
 				...(hasMore ? { nextCursor: securityPoolCursorFor(chainId, address, kind, asOf, total, nextOffset) } : {}),
@@ -123,7 +134,13 @@ export const addressSecurityPoolResponse = async (sql: SQL, url: URL): Promise<R
 	const lp = collection('lp', lpRows, lpPage, 'market_address')
 	const forks = collection('forks', forkRows, forkPage, 'universe_identity')
 	const reports = collection('reports', reportRows, reportPage, 'open_oracle_address')
-	const [refunds, positions, tradingPnl] = await Promise.all([pendingAuctionRefunds(sql, chainId, snapshotBlock, address), escalationPositions(sql, chainId, snapshotBlock, address), accountTradingPnl(sql, { chainId, asOfBlock: snapshotBlock, asOfTimestamp: String(asOf['blockTimestamp']), account: address })])
+	const [refunds, positions, tradingPnl] = await Promise.all([
+		pendingAuctionRefunds(sql, chainId, snapshotBlock, address, 250, refundPage.offset),
+		escalationPositions(sql, chainId, snapshotBlock, address, 250, positionPage.offset),
+		accountTradingPnl(sql, { chainId, asOfBlock: snapshotBlock, asOfTimestamp: String(asOf['blockTimestamp']), account: address }),
+	])
+	const refundCollection = collection('refunds', refunds, refundPage, 'auction_address', 250)
+	const positionCollection = collection('positions', positions, positionPage, 'game_address', 250)
 	const base = items[0]
 	// Omit unknown aggregate balances instead of turning absent historical reads into zero.
 	const balances =
@@ -145,17 +162,17 @@ export const addressSecurityPoolResponse = async (sql: SQL, url: URL): Promise<R
 			...jsonRecord(base),
 			...balances,
 			...(base === undefined ? { address, availability: 'Awaiting indexed evidence' } : {}),
-			escalation_positions: positions.slice(0, 250),
+			escalation_positions: positionCollection.items,
 			escalation_payouts: await escalationPayouts(sql, chainId, snapshotBlock, address),
-			escalation_positions_truncated: positions.length > 250,
+			escalation_positions_truncated: positionCollection.page.hasMore,
 			share_positions: await sharePositions(sql, chainId, snapshotBlock, { address }),
-			pending_refunds: refunds.slice(0, 250),
-			pending_refunds_truncated: refunds.length > 250,
+			pending_refunds: refundCollection.items,
+			pending_refunds_truncated: refundCollection.page.hasMore,
 			lp_positions: lp.items,
 			trading_pnl: tradingPnl,
 			fork_participation: forks.items,
 			report_participation: reports.items,
-			securityPoolPagination: { lp: lp.page, forks: forks.page, reports: reports.page },
+			securityPoolPagination: { lp: lp.page, forks: forks.page, reports: reports.page, refunds: refundCollection.page, positions: positionCollection.page },
 		},
 	})
 }

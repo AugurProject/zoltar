@@ -11,6 +11,20 @@ const noOverflow = `document.documentElement.scrollWidth <= document.documentEle
 for (const viewport of qaViewports) {
 	const size = `${viewport.width}x${viewport.height}`
 	browserTest(
+		`address profile identifies truncated claim interactions at ${size}`,
+		async () => {
+			await withBrowserPage(`${origin}/address/${bidder}?demo=1&chainId=1&claimsMore=1`, viewport, async ({ evaluate, waitFor }) => {
+				for (const kind of ['Auction', 'Escalation']) {
+					const section = panel(`${kind} interactions`)
+					await waitFor(`${section}?.querySelector('.operations-panel-scope')?.textContent === ${JSON.stringify(`Latest 100 ${kind.toLowerCase()} interactions shown.`)}`)
+					expect(await evaluate(`${section}.querySelector('.operations-list').childElementCount`)).toBe(100)
+				}
+				expect(await evaluate(noOverflow)).toBe(true)
+			})
+		},
+		120_000,
+	)
+	browserTest(
 		`auction snapshot and demand curve use the auction collateral token units at ${size}`,
 		async () => {
 			await withBrowserPage(`${origin}/operations/auction/${auction}?demo=1&chainId=1&tab=history`, viewport, async ({ evaluate, waitFor }) => {

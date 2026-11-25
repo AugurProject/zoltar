@@ -44,6 +44,7 @@ RUN bun run build:browser
 
 FROM workspace AS metadata-build
 RUN bun install --frozen-lockfile --filter @zoltar/augur-scan --filter @zoltar/contracts
+COPY bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts ./bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts
 COPY solidity/contracts ./solidity/contracts
 COPY solidity/ts/compile.ts ./solidity/ts/compile.ts
 COPY solidity/ts/contractProjects.ts ./solidity/ts/contractProjects.ts
@@ -53,6 +54,8 @@ COPY augurScan/config/dependency-abis.json ./augurScan/config/dependency-abis.js
 COPY augurScan/config/dependency-abi-sources.json ./augurScan/config/dependency-abi-sources.json
 COPY docs/mainnet-deployment-addresses.json ./docs/mainnet-deployment-addresses.json
 COPY docs/sepolia-deployment-addresses.json ./docs/sepolia-deployment-addresses.json
+COPY docs/mainnet-no-deployment-addresses.json ./docs/mainnet-no-deployment-addresses.json
+COPY docs/sepolia-no-deployment-addresses.json ./docs/sepolia-no-deployment-addresses.json
 RUN bun run --cwd augurScan metadata:build
 
 FROM oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a AS runtime
