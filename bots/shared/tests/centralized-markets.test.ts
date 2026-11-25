@@ -79,6 +79,7 @@ describe('centralized market observations', () => {
 				timestamp: 10_001,
 			}),
 			fetchTicker: async () => ({ ask: 2_010, bid: 1_990, last: 2_000, timestamp: 10_001 }),
+			settlesAsset: () => true,
 			loadMarkets: async () => ({}),
 		})
 		try {
@@ -302,11 +303,26 @@ describe('centralized market observations', () => {
 				last: 2_000,
 				timestamp: 10_000,
 			}),
+			settlesAsset: () => true,
 			loadMarkets: async () => ({}),
 		})
 		const estimate = await observeCentralizedMarkets(settings, REP_ASSET, 1, factory, 10_000)
 		expect(estimate?.priceRepPerEth).toBe(200n * 10n ** 18n)
 		expect(estimate?.reliable).toBe(true)
+	})
+
+	test('unverified tickers never reach the order book or consensus', async () => {
+		let requests = 0
+		const unexpected = async () => {
+			requests += 1
+			throw new Error('unexpected request')
+		}
+		const factory: CentralizedExchangeFactory = () => ({ settlesAsset: () => false, fetchOrderBook: unexpected, fetchTicker: unexpected, loadMarkets: unexpected })
+		const estimate = await observeCentralizedMarkets(settings, REP_ASSET, 1, factory)
+		expect(requests).toBe(0)
+		expect(estimate?.observations).toEqual([])
+		expect(estimate?.reliable).toBe(false)
+		expect(estimate?.reasons).toContain('alpha has no verified settlement mapping for this token and chain')
 	})
 
 	test('supports REP markets quoted directly in ETH', async () => {
@@ -327,6 +343,7 @@ describe('centralized market observations', () => {
 			fetchTicker: async () => {
 				throw new Error('Direct ETH quote must not request an ETH ticker')
 			},
+			settlesAsset: () => true,
 			loadMarkets: async () => ({}),
 		})
 		const estimate = await observeCentralizedMarkets(directSettings, REP_ASSET, 1, factory, 10_000)
@@ -342,6 +359,7 @@ describe('centralized market observations', () => {
 			fetchTicker: async () => {
 				throw new Error('Ticker should not be requested after the order book fails')
 			},
+			settlesAsset: () => true,
 			loadMarkets: async () => ({}),
 		})
 		const estimate = await observeCentralizedMarkets(settings, REP_ASSET, 1, factory, 10_000)
@@ -365,6 +383,7 @@ describe('centralized market observations', () => {
 				last: 2_000,
 				timestamp: 1,
 			}),
+			settlesAsset: () => true,
 			loadMarkets: async () => ({}),
 		})
 		const estimate = await observeCentralizedMarkets(settings, REP_ASSET, 1, factory, 100_000)
