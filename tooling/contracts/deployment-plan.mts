@@ -31,32 +31,32 @@ const EXPECTED_RUNTIME_CODE_HASHES: Readonly<Record<string, Hash>> = {
 const EXPECTED_TRADING_RUNTIME_CODE_HASHES: Readonly<Record<BootstrapDescendantHashProfile, Readonly<Record<GenesisOutcome, Readonly<Record<string, Hash>>>>>> = {
 	sepolia: {
 		yes: {
-			tradingFactory: '0x447862a0f6819c50418d7a7349e550d6d8d398f8c0fe3fb94818806ae616b6c4',
-			tradingRouter: '0x0e4ab534f189deedf9142773fb8c4e0acae94b7cffd41039fdbe8713741d6d99',
+			tradingFactory: '0xc3fa80618ab448f39b8d0206a142f0db6c084f705299b4e45a57e3a25aa81638',
+			tradingRouter: '0xc1312ec303d58d456fe7cbdd7fd0707bdb6b7b35d563d2ce412aa96dd75f0312',
 		},
 		no: {
-			tradingFactory: '0xef17cca7b404887c73b903e6bf31323beb1589ec6ac59c667ce106c14354ab1e',
-			tradingRouter: '0x4ec087e8fdbb29bf8ef884540621987c596f9fe560d1a76bc32c1d4bbe3afec7',
+			tradingFactory: '0x67ec5a6b79b1d1d87d54ec310589690d84ffebe53aff919df9986987bbdf4975',
+			tradingRouter: '0x1604015921c55ab97f7315725b68faee241d55a228f2dde8b1e09204f085c599',
 		},
 	},
 	deterministic: {
 		yes: {
-			tradingFactory: '0x34b0f78ad53aa2ee0e9adb8216364c43950d7484eb43d9ec076c767f2b886279',
-			tradingRouter: '0x143554cdf857e129bbe21696c94489fdad8abecbfe2815404647440b9982bc3f',
+			tradingFactory: '0xb8977ac2d1f5c4dd8443b65789d753d5eee8a2553e7a39d50a705281fb330fcf',
+			tradingRouter: '0x33e7f42f41b44fa0cf3eee88ea6388937ce5424c2e8e188617dcf249508a9a26',
 		},
 		no: {
-			tradingFactory: '0x51b90c4ff99aff6c548afdc37503189d3b6facb272b1c4642a4f55928378cd57',
-			tradingRouter: '0x9e47d7c1f44ea2b348c060fef44ea0b9b0ff3bd2cffd5ec53a7cfa72e96a4d57',
+			tradingFactory: '0x8863b26af36096b45d9f5ad82afb9338585cef90bd4b7be9a18d26a8cd0cb2ba',
+			tradingRouter: '0x2ecff76020c845e9d09cc63ccde4f411373f13a0a05b62e44e057310a652de47',
 		},
 	},
 	mainnet: {
 		yes: {
-			tradingFactory: '0x047b76a9b79ca0db8e3a9f2e0e349564764d1fea4b0aa9d7b6aff94203131a6a',
-			tradingRouter: '0xba48839c898e3faf985cd2363b4f2e5c8bbc92db7d37d59c8faa135be784fe9e',
+			tradingFactory: '0x9367bf9a0164130831f6ac4d8d0bb482eb63b5a87fa74e0ce355ff4a1cd0ba29',
+			tradingRouter: '0x69431244cb5ef01def43ca22ea3c9552e53a421225467dfd1cccfa0b48138c9f',
 		},
 		no: {
-			tradingFactory: '0xdef5b1335339dd1860918f70e19ab6c1ca846c62f40ca706bc3f34f07cf52d9b',
-			tradingRouter: '0x899f340ca9f7be7543f9f37779ecdd8eb06ea9cf77a7ebcd071a428a9f47f42b',
+			tradingFactory: '0x99132902f0380004adb2f9359221a61f86d69c844d3e140b1cfda9a7bab5d7cc',
+			tradingRouter: '0x3aeba80f594b592b6ae90336312da7da0daad4987f5ab2a2e5a249bb856ae618',
 		},
 	},
 }
@@ -65,11 +65,11 @@ const EXPECTED_TRADING_RUNTIME_CODE_HASHES: Readonly<Record<BootstrapDescendantH
 const DETERMINISTIC_WETH_DEPENDENT_RUNTIME_CODE_HASHES: Readonly<Record<GenesisOutcome, Readonly<Record<string, Hash>>>> = {
 	yes: {
 		sharedPoolPriceFeedFactory: '0x5447c878916af38c99390cabbdb37db658c3d3be25aa229382557c5d6144a052',
-		securityPoolFactory: '0x0f674c04450684dd835b4f4e8f0cc1833e3be2623011986a5fd1607f9a99cb5b',
+		securityPoolFactory: '0xecfdf86f4dba99ed4f97ee774a404365c2a33be7f9b83b5a2e013ea0fe476140',
 	},
 	no: {
 		sharedPoolPriceFeedFactory: '0x5447c878916af38c99390cabbdb37db658c3d3be25aa229382557c5d6144a052',
-		securityPoolFactory: '0x9d49dabc30a31f76af5533d8ad15eb281a89bb6775847e04d4c8b52d9ca9b3d8',
+		securityPoolFactory: '0x3b6289001bb54846c1fa2b5cb988a3d864c644ef4c80ebd674517af3b1567d21',
 	},
 }
 

@@ -6118,8 +6118,8 @@ export const securityPoolRuntimeIdentities = {
 		},
 	},
 	SecurityPoolCapitalLifecycleDelegate: {
-		runtimeCodeHash: '0x69bd3550122dd5d7741e13f2fbf0d78dd87b8e3c823eac783acdc829332665fc',
-		runtimeCodeLength: 18754,
+		runtimeCodeHash: '0x2449b85b21d951758a668d06a8fd7951a4d6b88f38be2ce572bfa7d577e3d9de',
+		runtimeCodeLength: 18755,
 		immutableReferences: {
 			'29855': [
 				{ length: 32, start: 676 },
