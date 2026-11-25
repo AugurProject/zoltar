@@ -2,12 +2,14 @@ import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import * as pageCopy from '../../../copy/securityPoolPage.js'
 import * as watchlistCopy from '../../../copy/watchlist.js'
 import type { SecurityPoolAccountSnapshot } from '../../../protocol/securityPool.js'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
-import { toHex, type Address } from '@zoltar/core-shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
+import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
@@ -18,7 +20,6 @@ import { useFavorites } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { createActiveEnvironmentGuard, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
-import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { designQuestionId, statoblastPageHref } from '../../../lib/routing.js'
 import { checkStatoblastEntries } from '../../../protocol/statoblastEntries.js'
 import { decodeWatchlistRows, loadWatchlistRows, parseWatchlistEntity, type WatchlistRow } from '../../../protocol/watchlistRows.js'
@@ -26,6 +27,7 @@ import { statoblastDisplayCache } from '../../../protocol/statoblastPageCache.js
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import { useStatoblastPageRefresh, type RegisterStatoblastPageRefresh } from '../../useStatoblastPageRefresh.js'
 import type { SecurityPoolActions } from './SecurityPoolControls.js'
+import { SecurityPoolApprovedQuestions } from './SecurityPoolApprovedQuestions.js'
 import { SecurityPoolButton } from './SecurityPoolControls.js'
 
 function savedQuestionStage(question: WatchlistRow['question'], loading: boolean, trading: boolean) {
@@ -46,6 +48,9 @@ export function SecurityPoolQuestionsPanel({
 	enabled,
 	environmentKey,
 	registerPageRefresh,
+	paging = false,
+	onPreviousApprovedPage,
+	onNextApprovedPage,
 }: {
 	pool: Address
 	universeId: bigint
@@ -56,6 +61,9 @@ export function SecurityPoolQuestionsPanel({
 	enabled: boolean
 	environmentKey: number
 	registerPageRefresh: RegisterStatoblastPageRefresh | undefined
+	paging?: boolean
+	onPreviousApprovedPage?: () => void
+	onNextApprovedPage?: () => void
 }) {
 	const favoriteQuestions = useFavorites('statoblast', 'question')
 	const saved = favoriteQuestions.entries.flatMap(({ id }) => {
@@ -116,28 +124,28 @@ export function SecurityPoolQuestionsPanel({
 	const [error, setError] = useState<string>()
 	const [checking, setChecking] = useState(false)
 	const id = designQuestionId(actions.questionInput.trim())
+	const findId = useId()
 	const selected = result?.id === id ? result : undefined
 	const find = async () => {
 		if (id === undefined || checking) return
 		setError(undefined)
 		setChecking(true)
 		try {
-			const client = createConnectedReadClient()
-			const { entry, mint } = await withTimeout(
-				(async () => {
-					const block = await client.getBlock()
-					if (block.number === undefined) throw new Error(pageCopy.questionLookupBlockUnavailable)
-					const [entry] = await checkStatoblastEntries(client, [{ pool, questionId: id, universeId }], block.number, true)
-					if (entry?.status !== 'question' && entry?.status !== 'unregistered-question') return { entry, mint: false }
-					const market = await loadMarketDetails(client, id)
-					return { entry: market.exists ? entry : { status: 'not-a-question' }, mint: market.exists && market.endTime > block.timestamp && !forked }
-				})(),
-				15_000,
-				pageCopy.questionLookupTimeout,
-			)
-			if (entry?.status === 'failed' && 'error' in entry) throw entry.error
+			const guard = createActiveEnvironmentGuard()
+			const client = withStatoblastRequestTimeout(createConnectedReadClient(), pageCopy.questionLookupTimeout)
+			const block = await client.getBlock()
+			if (block.number === undefined) throw new Error(pageCopy.questionLookupBlockUnavailable)
+			const [entry] = await checkStatoblastEntries(client, [{ pool, questionId: id, universeId }], block.number, true)
+			if (entry?.status === 'failed') throw entry.error
 			if (entry === undefined) throw new Error(pageCopy.couldNotVerifyQuestion)
-			setResult({ status: entry.status, id, mint })
+			let status: string = entry.status
+			let mint = false
+			if (entry.status === 'question' || entry.status === 'unregistered-question') {
+				const market = await loadMarketDetails(client, id)
+				if (!market.exists) status = 'not-a-question'
+				mint = market.exists && market.endTime > block.timestamp && !forked
+			}
+			if (guard.isCurrent()) setResult({ status, id, mint })
 		} catch (failure) {
 			setError(failure instanceof Error ? failure.message : pageCopy.couldNotFindQuestion)
 		} finally {
@@ -146,7 +154,68 @@ export function SecurityPoolQuestionsPanel({
 	}
 	return (
 		<>
-			<SectionBlock title={pageCopy.savedQuestions}>
+			<SectionBlock title={pageCopy.savedQuestions} description={saved.length > 0 ? pageCopy.savedQuestionsHere(saved.length) : undefined}>
+				<form
+					aria-label={pageCopy.findOrRegister}
+					onSubmit={event => {
+						event.preventDefault()
+						void find()
+					}}
+				>
+					<label htmlFor={findId}>{pageCopy.findOrRegister}</label>
+					<FormInput
+						id={findId}
+						aria-label={pageCopy.findOrRegister}
+						placeholder={pageCopy.questionIdPlaceholder}
+						value={actions.questionInput}
+						onInput={event => {
+							actions.setQuestionInput(event.currentTarget.value)
+							setError(undefined)
+						}}
+						error={error ?? (actions.questionInput.trim() !== '' && id === undefined ? pageCopy.questionIdFormat : undefined)}
+						action={
+							<button type='submit' disabled={id === undefined || checking}>
+								{checking ? pageCopy.checking : pageCopy.findQuestion}
+							</button>
+						}
+					/>
+				</form>
+				{selected?.status === 'not-a-question' && <p>{pageCopy.notAQuestion}</p>}
+				{selected?.status === 'question' && (
+					<p>
+						{pageCopy.registeredHereLead}
+						<a href={statoblastPageHref({ kind: 'question', pool, questionId: selected.id, tab: 'shares' }, universeId)}>{pageCopy.openShares}</a>
+						{selected.mint && (
+							<>
+								{' '}
+								· <a href={statoblastPageHref({ kind: 'question', pool, questionId: selected.id, tab: 'shares', sharesAction: 'mint' }, universeId)}>{pageCopy.mintShares}</a>
+							</>
+						)}
+					</p>
+				)}
+				{selected?.status === 'unprepared-question' && (
+					<p>
+						{pageCopy.unpreparedQuestionLead}
+						<a href={statoblastPageHref({ kind: 'pool', pool, tab: 'fork' }, universeId)}>{pageCopy.forkRecovery}</a>
+					</p>
+				)}
+				{selected?.status === 'unregistered-question' && (
+					<>
+						<p>{pageCopy.questionNotRegistered}</p>
+						<SecurityPoolButton
+							model={actions}
+							action='registerSecurityPoolQuestion'
+							label={pageCopy.registerQuestion}
+							pendingLabel={pageCopy.registeringQuestion}
+							reason={forked ? pageCopy.universeForked : actions.registerReason}
+							onClick={async () => {
+								await actions.register()
+								await find()
+							}}
+						/>
+					</>
+				)}
+				{selected?.status === 'invalid-pool' && <p>{pageCopy.invalidPool}</p>}
 				{rowsLoading && details === undefined && <LoadingText>{pageCopy.checking}</LoadingText>}
 				<RetryableNotice message={rowsError} retryLabel={pageCopy.tryAgain} onRetry={() => void refreshRows()} disabled={rowsLoading} />
 				{saved.length === 0 ? (
@@ -156,9 +225,9 @@ export function SecurityPoolQuestionsPanel({
 						<thead>
 							<tr>
 								<th />
-								<th scope='col'>{pageCopy.questionId}</th>
+								<th scope='col'>{pageCopy.question}</th>
 								<th scope='col'>{watchlistCopy.stage}</th>
-								<th scope='col'>{watchlistCopy.yourPosition}</th>
+								<th scope='col'>{watchlistCopy.yourShares}</th>
 								<th />
 							</tr>
 						</thead>
@@ -189,7 +258,7 @@ export function SecurityPoolQuestionsPanel({
 											<a href={statoblastPageHref(page, universeId)}>{title}</a>
 											{title !== questionId && (
 												<small>
-													<code>{questionId}</code>
+													<IdentifierValue value={questionId} abbreviated />
 												</small>
 											)}
 											{time !== undefined && time > 0n && (
@@ -202,7 +271,7 @@ export function SecurityPoolQuestionsPanel({
 										<td role='cell' data-label={watchlistCopy.stage}>
 											<Badge tone={outcome !== 'none' || trading ? 'ok' : 'muted'}>{savedQuestionStage(question, rowsLoading, trading)}</Badge>
 										</td>
-										<td role='cell' data-label={watchlistCopy.yourPosition}>
+										<td role='cell' data-label={watchlistCopy.yourShares}>
 											<CurrencyValue value={holdings} suffix={outcome === 'none' ? watchlistCopy.formatSets(row?.collateral ?? '') : getReportingOutcomeLabel(outcome)} units={row?.collateralDecimals ?? 18} />
 										</td>
 										<td role='cell'>
@@ -220,78 +289,16 @@ export function SecurityPoolQuestionsPanel({
 						</tbody>
 					</table>
 				)}
+				{saved.length > 0 && <p className='detail'>{pageCopy.mintingCloses}</p>}
 			</SectionBlock>
-			{admission?.mode === 'fixed' && (
-				<SectionBlock title={pageCopy.whichQuestionsCanBeRegistered} description={pageCopy.fixedQuestionList}>
-					<ul className='statoblast-watchlist-history'>
-						{admission.questions.map(questionId => (
-							<li key={questionId.toString()}>
-								<code>{toHex(questionId)}</code>
-							</li>
-						))}
-					</ul>
+			{admission?.mode === 'fixed' && onPreviousApprovedPage !== undefined && onNextApprovedPage !== undefined && (
+				<SecurityPoolApprovedQuestions pool={pool} universeId={universeId} admission={admission} actions={actions} forked={forked} enabled={enabled} environmentKey={environmentKey} paging={paging} onPreviousPage={onPreviousApprovedPage} onNextPage={onNextApprovedPage} registerPageRefresh={registerPageRefresh} />
+			)}
+			{admission?.mode === 'custom' && (
+				<SectionBlock title={pageCopy.customQuestionRules}>
+					<UserMessage tone='warning' detail={pageCopy.customQuestionRulesDetail} />
 				</SectionBlock>
 			)}
-			<SectionBlock title={pageCopy.findByQuestionId}>
-				<form
-					onSubmit={event => {
-						event.preventDefault()
-						void find()
-					}}
-				>
-					<FormInput
-						aria-label={pageCopy.questionId}
-						placeholder={pageCopy.questionId}
-						value={actions.questionInput}
-						onInput={event => {
-							actions.setQuestionInput(event.currentTarget.value)
-							setError(undefined)
-						}}
-						error={error ?? (actions.questionInput.trim() !== '' && id === undefined ? pageCopy.questionIdFormat : undefined)}
-						action={
-							<button type='submit' disabled={id === undefined || checking}>
-								{checking ? pageCopy.checking : pageCopy.findQuestion}
-							</button>
-						}
-					/>
-				</form>
-				{selected?.status === 'not-a-question' && <p>{pageCopy.notAQuestion}</p>}
-				{selected?.status === 'question' && (
-					<p>
-						{pageCopy.registeredHereLead}
-						<a href={statoblastPageHref({ kind: 'question', pool, questionId: selected.id, tab: 'shares' })}>{pageCopy.openShares}</a>
-						{selected.mint && (
-							<>
-								{' '}
-								· <a href={statoblastPageHref({ kind: 'question', pool, questionId: selected.id, tab: 'shares', sharesAction: 'mint' })}>{pageCopy.mintShares}</a>
-							</>
-						)}
-					</p>
-				)}
-				{selected?.status === 'unprepared-question' && (
-					<p>
-						{pageCopy.unpreparedQuestionLead}
-						<a href={statoblastPageHref({ kind: 'pool', pool, tab: 'fork' })}>{pageCopy.forkRecovery}</a>
-					</p>
-				)}
-				{selected?.status === 'unregistered-question' && (
-					<>
-						<p>{pageCopy.questionNotRegistered}</p>
-						<SecurityPoolButton
-							model={actions}
-							action='registerSecurityPoolQuestion'
-							label={pageCopy.registerQuestion}
-							pendingLabel={pageCopy.registeringQuestion}
-							reason={forked ? pageCopy.universeForked : actions.registerReason}
-							onClick={async () => {
-								await actions.register()
-								await find()
-							}}
-						/>
-					</>
-				)}
-				{selected?.status === 'invalid-pool' && <p>{pageCopy.invalidPool}</p>}
-			</SectionBlock>
 		</>
 	)
 }

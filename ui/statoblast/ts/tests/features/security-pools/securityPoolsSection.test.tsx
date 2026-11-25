@@ -76,6 +76,20 @@ const firstPosition = (container: Element) => {
 	return position
 }
 
+test('deploy and setup shows all six persistent transaction controls in the same workflow', async () => {
+	installStatoblastRouting()
+	window.history.replaceState({}, '', '#/deploy-pool')
+	capitalClient().install()
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolsSection deploying parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />))
+	const step = [...view.container.querySelectorAll('button')].find(button => button.textContent?.includes('Deploy and set up'))
+	if (step === undefined) throw new Error('Missing deployment step')
+	await act(() => step.click())
+	const workflow = view.container.querySelector('ol[aria-label="Deployment transactions"]')
+	const transactions = [...(workflow?.querySelectorAll('button.tx-action-button') ?? [])]
+	expect(transactions.map(button => button.textContent)).toEqual(['Prepare question rules', 'Deploy security pool', ...copy.prepareStages])
+	expect(transactions.map(button => button.hasAttribute('disabled'))).toEqual([false, true, true, true, true, true])
+})
+
 test('completed setup preserves the four transaction controls in their original order with completion reasons', async () => {
 	const source = capitalClient()
 	source.setSetupStage(2n)
@@ -258,7 +272,7 @@ test('a forked pool on Capital checks older known report credits and clears the 
 	installActiveEnvironmentForTesting({ ...fixture.backend, createReadClient: () => client })
 	const savedBlock = { number: 9n, timestamp: 1100n }
 	const oldPreview = securityPoolPriceReportCache(fixture.backend.profile, securityPool, 0n, owner, 8n)
-	oldPreview.write({ reportId: 8n, sponsor: owner, outcome: 1n, state: { settled: true }, eligibleAt: 1100n, baseFeePerGas: undefined, maxSettlementBaseFee: 1n, wethCredit: 19n, repCredit: 0n, collateralToken: priceWeth }, savedBlock)
+	oldPreview.write({ reportId: 8n, sponsor: owner, outcome: 1n, state: { settled: true }, reportedAt: undefined, eligibleAt: 1100n, bounty: undefined, baseFeePerGas: undefined, maxSettlementBaseFee: 1n, wethCredit: 19n, repCredit: 0n, collateralToken: priceWeth }, savedBlock)
 	for (const reportId of [8n, 9n, 11n]) rememberSecurityPoolPriceReport(fixture.backend.profile, securityPool, 0n, owner, reportId, savedBlock)
 	rememberSecurityPoolPriceReport(fixture.backend.profile, securityPool, 7n, owner, 12n, savedBlock)
 	expect(oldPreview.read()?.value.wethCredit).toBe(19n)
@@ -266,6 +280,7 @@ test('a forked pool on Capital checks older known report credits and clears the 
 	lifecycle.trackRendered(view)
 	const priceTab = () => [...view.container.querySelectorAll('a')].find(link => link.hash.includes('/price'))
 	await waitFor(() => expect(priceTab()?.textContent).toContain(returnFundsOnly))
+	expect([...view.container.querySelectorAll('.statoblast-pool-tab-select option')].map(option => option.textContent)).toEqual(['Capital · Limited', 'Questions · Minting closed', 'Return funds only', 'Fork & recovery · Action'])
 	expect(new Set(readReportIds)).toEqual(new Set([8n, 9n, 11n]))
 
 	failFundingRead = true

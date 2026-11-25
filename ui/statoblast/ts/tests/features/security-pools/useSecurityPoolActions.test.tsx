@@ -126,6 +126,22 @@ test('prepared question rules and locked deployment inputs survive remount for t
 	expect(deployed.state().originInput).toBe('0')
 })
 
+test('confirmed activation keeps the locked deployment available after remount', async () => {
+	const { hook } = await renderWithDeploymentWallet(capitalClient(), true)
+	await act(() => hook.state().deployAdmission())
+	await act(() => hook.state().deploy())
+	const snapshot = capitalSnapshot()
+	const ready = {
+		...model(),
+		setup: { securityPool, owner, stage: 4, originUniverseId: 0n, originForkTime: 0n, chainId: 1, blockNumber: snapshot.blockNumber, blockHash: snapshot.blockHash, timestamp: snapshot.timestamp },
+	}
+	await hook.setProps({ model: ready, deploying: true })
+	await act(() => hook.cleanup())
+	const restored = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolActionsWrapper, { model: ready, deploying: true }))
+	expect(restored.state().deploymentLocked).toBe(true)
+	expect(restored.state().admissionAddress).toBe(token)
+})
+
 function useSecurityPoolActionsWrapper(props: { model: ReturnType<typeof model>; parameters?: Parameters<typeof useSecurityPoolActions>[1]; deploying?: boolean }) {
 	return useSecurityPoolActions(props.model, props.parameters ?? parameters, props.deploying)
 }

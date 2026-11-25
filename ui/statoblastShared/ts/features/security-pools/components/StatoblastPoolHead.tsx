@@ -24,6 +24,12 @@ export function StatoblastPoolHead({ page, model, wallet, priceChecking, fundsRe
 	const currentPrice = snapshot?.priceValid === true && !priceChecking
 	const priceBadge = forked || snapshot === undefined ? undefined : <Badge tone={currentPrice ? 'ok' : 'warning'}>{currentPrice ? capitalCopy.priceValid : capitalCopy.priceStale}</Badge>
 	const labelForTab = (tab: PoolTab) => (forked && fundsRemain && tab === 'price' ? pageCopy.returnFundsOnly : pageCopy.poolTabLabels[tab])
+	const forkTabStatus = { capital: pageCopy.limitedCapital, questions: pageCopy.mintingClosed, fork: pageCopy.forkActionRequired, price: undefined, liquidations: undefined }
+	const mobileTabLabel = (tab: PoolTab) => {
+		const label = labelForTab(tab)
+		const status = forked ? forkTabStatus[tab] : undefined
+		return status === undefined ? label : pageCopy.poolTabWithStatus(label, status)
+	}
 	const hasSelectedOwner = isAddress(model.ownerInput) && model.ownerInput.toLowerCase() !== zeroAddress
 	const you = wallet !== undefined && wallet.toLowerCase() === model.ownerInput.toLowerCase()
 	const positionLabel = hasSelectedOwner ? pageCopy.positionOf : pageCopy.browsePosition
@@ -160,7 +166,7 @@ export function StatoblastPoolHead({ page, model, wallet, priceChecking, fundsRe
 				>
 					{tabs.map(tab => (
 						<option value={tab} key={tab}>
-							{labelForTab(tab)}
+							{mobileTabLabel(tab)}
 						</option>
 					))}
 				</select>

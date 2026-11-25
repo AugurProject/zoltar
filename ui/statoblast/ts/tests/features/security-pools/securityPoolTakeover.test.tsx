@@ -41,6 +41,35 @@ async function fill(field: HTMLInputElement | undefined, value: string) {
 	})
 }
 
+test('the liquidation timeline and position comparison reflect the selected takeover', async () => {
+	const base = capitalSnapshot({ timestamp: 10_000n, liquidationDuration: 3_600n, demandAttoEth: 20n * unit })
+	const snapshot = { ...base, ownerAccount: { ...base.ownerAccount, freeAttoRep: 2n * unit } }
+	const reader = installTakeoverReader(snapshot)
+	reader.setRead('liquidationStarted', 9_500n, capital)
+	reader.setRead('liquidationElapsed', 900n, capital)
+	const view = await renderIntoDocument(<SecurityPoolTakeover redesigned positionId={2n} model={{ snapshot }} wallet={snapshot.owner} actions={idleActions} />)
+	lifecycle.trackRendered(view)
+	await waitFor(() => expect(view.container.querySelector('.statoblast-liquidation-reward')?.textContent).toContain('Takeover reward'))
+	const timeline = view.container.querySelector('.statoblast-liquidation-reward')
+	expect(Array.from(timeline?.querySelectorAll('time') ?? [], time => time.dateTime)).toEqual(['1970-01-01T02:38:20.000Z', '1970-01-01T02:46:40.000Z', '1970-01-01T03:31:40.000Z'])
+	expect(timeline?.querySelector('progress')?.value).toBe(0.25)
+	const commitment = [...view.container.querySelectorAll('label')].find(label => label.textContent?.startsWith('Commitment to take over'))?.control
+	await fill(commitment instanceof HTMLInputElement ? commitment : undefined, '1')
+	const comparison = view.container.querySelector('.statoblast-liquidation-comparison')
+	expect(comparison?.textContent).toContain('REP needed for 120% health')
+	expect(comparison?.textContent).toContain('25.20 REP')
+	expect(comparison?.textContent).toContain('27.72 REP')
+	expect(comparison?.textContent).toContain('30.00 REP →')
+	expect(comparison?.textContent).toContain('Health')
+	expect(comparison?.textContent).toContain('142.85%')
+	expect(view.container.textContent).toContain('There is too little free capacity to cure this position.')
+	const suggested = [...view.container.querySelectorAll('button')].find(button => button.textContent === 'Use suggested REP limit')
+	if (suggested === undefined) throw new Error('Missing suggested REP limit')
+	await act(() => suggested.click())
+	const limit = [...view.container.querySelectorAll('label')].find(label => label.textContent?.startsWith('Most pledged REP'))?.control
+	expect(limit instanceof HTMLInputElement ? limit.value : undefined).toBe('47')
+})
+
 test('keeps a saved target readable while the pool is loading and makes no reads from saved addresses', async () => {
 	const snapshot = capitalSnapshot({ totalCommitmentAttoEth: 20n * unit, demandAttoEth: 10n * unit })
 	const reader = installTakeoverReader(snapshot)
@@ -177,7 +206,7 @@ test('#1570 a partial takeover that would leave the source between the two price
 	if (button === null) throw new Error('Missing takeover button')
 	const fields = Array.from(view.container.querySelectorAll('input'))
 	for (const [offset, value] of ['2', '2', '20', '200', '100'].entries()) await fill(fields[offset], value)
-	await waitFor(() => expect(view.container.textContent).toContain('Take over the full repair, or little enough that the position stays below the liquidation price.'))
+	await waitFor(() => expect(view.container.textContent).toContain('Take over the maximum, or a smaller amount that keeps the position below liquidation.'))
 	expect(button.disabled).toBe(true)
 	await fill(fields[1], '1')
 	await waitFor(() => expect(button.disabled).toBe(false))
@@ -280,8 +309,8 @@ test('a disabled reason both actions share renders once and describes both butto
 })
 
 test.each([
-	['cohort', 'Your position and the target have different commitment reduction queues.'],
-	['consent', 'Your idle REP exceeds the maximum own REP you consented to pledge.'],
+	['cohort', 'Different queue rounds. Release your queued reduction first.'],
+	['consent', 'Your unpledged REP exceeds the amount you agreed to add.'],
 	['collateral', 'Deposit more REP before taking over this commitment.'],
 	['principal', 'The resulting pledged REP exceeds your limit.'],
 	['commitment', 'Your resulting commitment exceeds the maximum total commitment.'],

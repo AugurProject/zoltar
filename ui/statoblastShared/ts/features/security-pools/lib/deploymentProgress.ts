@@ -18,7 +18,7 @@ export type DeploymentDraft = {
 	economicsDraft: SecurityPoolCreationDraft
 }
 
-type DeploymentProgress = { rules: Address; pool?: Address | undefined; draft: DeploymentDraft }
+type DeploymentProgress = { rules: Address; pool?: Address | undefined; activated?: boolean | undefined; draft: DeploymentDraft }
 
 export function deploymentProgressStore(profile: NetworkProfile, owner: Address | undefined) {
 	const { network, persistence } = localEntityScopeForNetwork(profile, 'statoblast', 'pool')
@@ -35,6 +35,7 @@ export function deploymentProgressStore(profile: NetworkProfile, owner: Address 
 					return {
 						rules: read.address('rules'),
 						pool: read.optional('pool', read.address),
+						activated: read.optional('activated', read.boolean),
 						draft: {
 							collateralSymbol: draft.oneOf('collateralSymbol', ['WETH', 'USDC']),
 							reportFloor: draft.string('reportFloor'),

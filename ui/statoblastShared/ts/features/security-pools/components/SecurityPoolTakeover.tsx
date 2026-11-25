@@ -2,6 +2,9 @@ import { getBrowserStorage } from '@zoltar/ui-core-shared/lib/browserStorage.js'
 import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { formatUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
+import { formatDuration, formatTimestamp, formatTimestampDateTime } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
+import { formatOldDataCheck } from '@zoltar/ui-core-shared/copy/transaction.js'
 import { requiredSecurityPoolCollateral } from '../lib/capital.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import { useSignal } from '@preact/signals'
@@ -25,7 +28,18 @@ import { useStatoblastRefreshError } from '../../useStatoblastPageRefresh.js'
 import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { tryAgain } from '../../../copy/securityPoolPage.js'
+import { followWithAutoRefresh } from '../../../copy/questionPage.js'
 import { LiquidationPositionsTable, type LiquidationPositionRow } from './LiquidationPositionsTable.js'
+
+function LiquidationTime({ timestamp }: { timestamp: bigint }) {
+	const dateTime = formatTimestampDateTime(timestamp)
+	if (dateTime === undefined) return undefined
+	return (
+		<time dateTime={dateTime} title={formatTimestamp(timestamp)}>
+			{dateTime.slice(11, 16)} UTC
+		</time>
+	)
+}
 
 export function SecurityPoolTakeover({
 	model,
@@ -33,8 +47,10 @@ export function SecurityPoolTakeover({
 	positionId,
 	wallet,
 	redesigned = false,
+	autoRefresh = false,
 }: {
 	redesigned?: boolean
+	autoRefresh?: boolean
 	positionId?: bigint | undefined
 	wallet?: Address | undefined
 	model: { snapshot: TakeoverSnapshot | undefined; presentationSnapshot?: TakeoverSnapshot | undefined }
@@ -48,6 +64,7 @@ export function SecurityPoolTakeover({
 	const totalCommitmentInput = useSignal('')
 	const sharedReasonId = useId()
 	const openReasonId = useId()
+	const cureReasonId = useId()
 	const snapshot = model.snapshot
 	const draftPosition = securityPoolUnsignedId(positionInput.value, 96)
 	const id = redesigned ? openedPosition.value : draftPosition
@@ -73,7 +90,9 @@ export function SecurityPoolTakeover({
 		const saved = savedTargets?.get(knownId)
 		return { id: knownId, position: saved?.value.target.position, started: saved?.value.target.started, health: saved?.value.health, savedAt: saved?.savedAt }
 	})
-	const [elapsedSinceRead, setElapsedSinceRead] = useState(0n)
+	const [clock, setClock] = useState(Date.now)
+	const readAge = target.displayedAt === undefined ? 0 : Math.max(0, clock - target.displayedAt)
+	const elapsedSinceRead = BigInt(Math.floor(readAge / 1000))
 	const visible = usePageVisible()
 	useEffect(() => {
 		if (!redesigned || ledgerKey === undefined) return
@@ -109,14 +128,15 @@ export function SecurityPoolTakeover({
 		})
 	}, [ledgerKey, redesigned, id, fresh])
 	useEffect(() => {
-		setElapsedSinceRead(0n)
-		if (!redesigned || !visible || fresh === undefined || fresh.started === 0n || target.displayedAt === undefined) return
-		const readAt = target.displayedAt
-		const timer = setInterval(() => setElapsedSinceRead(BigInt(Math.floor((Date.now() - readAt) / 1000))), 1000)
+		if (!redesigned || !visible || preview === undefined || preview.started === 0n || target.displayedAt === undefined) return
+		setClock(Date.now())
+		const timer = setInterval(() => setClock(Date.now()), 1000)
 		return () => clearInterval(timer)
-	}, [redesigned, fresh, target.displayedAt, visible])
+	}, [redesigned, preview, target.displayedAt, visible])
 	const displayedSource =
-		displayedSnapshot !== undefined && preview !== undefined && displayedSnapshot.liquidationPrice > 0n ? securityPoolTakeoverSource(displayedSnapshot, { ...preview.position, liquidationStarted: preview.started, liquidationPenaltyPaid: preview.penaltyPaid, liquidationElapsed: preview.elapsed }) : undefined
+		displayedSnapshot !== undefined && preview !== undefined && displayedSnapshot.conservativePrice > 0n && displayedSnapshot.liquidationPrice > 0n && displayedSnapshot.securityMultiplierBps > 0n
+			? securityPoolTakeoverSource(displayedSnapshot, { ...preview.position, liquidationStarted: preview.started, liquidationPenaltyPaid: preview.penaltyPaid, liquidationElapsed: preview.elapsed })
+			: undefined
 	const source = fresh === undefined ? undefined : displayedSource
 	const commitment = securityPoolAmountOrUndefined(commitmentInput.value, snapshot?.collateral.decimals ?? 18)
 	const maximumOwnRep = securityPoolAmountOrUndefined(ownInput.value)
@@ -184,18 +204,35 @@ export function SecurityPoolTakeover({
 	const duration = displayedSnapshot?.liquidationDuration
 	const liveElapsed = preview === undefined ? undefined : preview.elapsed + elapsedSinceRead
 	const rewardProgress = getVisualRatio({ value: liveElapsed, maxValue: duration })
-	const timeBasedReward = preview === undefined || rewardProgress === undefined || duration === undefined || liveElapsed === undefined ? undefined : ((preview.position.rep + preview.penaltyPaid) * (liveElapsed > duration ? duration : liveElapsed)) / duration - preview.penaltyPaid
+	const now = displayedSnapshot === undefined ? undefined : displayedSnapshot.timestamp + elapsedSinceRead
+	const fullRewardAt = displayedSnapshot === undefined || preview === undefined || duration === undefined || displayedSnapshot.timestamp < preview.elapsed ? undefined : displayedSnapshot.timestamp - preview.elapsed + duration
+	const liveTakeover =
+		displayedSnapshot === undefined || preview === undefined || displayedSource === undefined || liveElapsed === undefined || elapsedSinceRead === 0n
+			? displayedSource
+			: securityPoolTakeoverSource(displayedSnapshot, { ...preview.position, liquidationStarted: preview.started, liquidationPenaltyPaid: preview.penaltyPaid, liquidationElapsed: liveElapsed })
 	const laterTakeover =
 		displayedSnapshot === undefined || preview === undefined || displayedSource === undefined || duration === undefined ? undefined : securityPoolTakeoverSource(displayedSnapshot, { ...preview.position, liquidationStarted: preview.started, liquidationPenaltyPaid: preview.penaltyPaid, liquidationElapsed: duration })
 	const receiver = displayedSnapshot?.positions.find(position => position.id === displayedSnapshot.ownerAccount.positionId)
 	const fill = displayedSnapshot === undefined || displayedSource === undefined || commitment === undefined ? undefined : securityPoolTakeoverFill(displayedSource, commitment, displayedSnapshot.economics.minimumCommitmentAttoEth)
-	const pledgedBefore = (receiver?.rep ?? 0n) + (displayedSnapshot?.ownerAccount.freeAttoRep ?? 0n)
+	const pledgedBefore = receiver?.rep ?? 0n
+	const unpledged = displayedSnapshot?.ownerAccount.freeAttoRep ?? 0n
 	const commitmentBefore = receiver?.commitment ?? 0n
+	const pledgedAfter = fill === undefined ? undefined : pledgedBefore + unpledged + fill.takeoverReward
+	const commitmentAfter = fill === undefined ? undefined : commitmentBefore + fill.commitment
+	const repNeededBefore = displayedSnapshot === undefined ? undefined : requiredSecurityPoolCollateral(displayedSnapshot, commitmentBefore)
+	const repNeededAfter = displayedSnapshot === undefined || commitmentAfter === undefined ? undefined : requiredSecurityPoolCollateral(displayedSnapshot, commitmentAfter)
+	const healthAt = (rep: bigint | undefined, commitment: bigint | undefined) => {
+		if (displayedSnapshot === undefined || rep === undefined || commitment === undefined || commitment === 0n) return undefined
+		const backing = requiredSecurityPoolCollateral(displayedSnapshot, commitment, undefined, 10_000n)
+		return backing === 0n ? undefined : copy.formatHealth(formatUnits((rep * 10_000n) / backing, 2))
+	}
 	const applySuggestedBound = () => {
-		if (snapshot === undefined || source === undefined || duration === undefined) return
-		principalInput.value = formatUnits(pledgedBefore + source.rep, 18)
+		if (source === undefined) return
+		principalInput.value = formatUnits(pledgedBefore + unpledged + source.rep, 18)
 	}
 	const displayCollateral = (value: bigint | undefined) => <CurrencyValue value={value} suffix={pool?.collateral.symbol ?? collateralCopy.fallback} units={pool?.collateral.decimals ?? 0} />
+	const displayRep = (value: bigint | undefined) => <CurrencyValue value={value} suffix={common.rep} />
+	const formAge = readAge > 60_000 ? formatDuration(elapsedSinceRead) : undefined
 	// Both actions often rest disabled for one shared cause, such as a missing position ID; that reason renders once for the pair.
 	const sharedReason = actions.busy === undefined && reason !== undefined && reason === cureReason ? reason : undefined
 	const reasonShownInForm = redesigned && !canOpenPosition && sharedReason === copy.enterTarget
@@ -204,7 +241,7 @@ export function SecurityPoolTakeover({
 	const positionField = (
 		<SecurityPoolInput
 			label={copy.position}
-			hint={copy.hint}
+			hint={redesigned ? undefined : copy.hint}
 			value={positionInput.value}
 			onChange={value => {
 				positionInput.value = value
@@ -216,11 +253,147 @@ export function SecurityPoolTakeover({
 		positionInput.value = position
 		openedPosition.value = BigInt(position)
 	}
+	const showTakeoverOnly = redesigned && distressed && cureReason === copy.takeOverInstead
+	const commitmentField = (
+		<SecurityPoolInput
+			label={copy.commitment}
+			hint={pool?.collateral.symbol}
+			value={commitmentInput.value}
+			onChange={value => {
+				commitmentInput.value = value
+			}}
+			disabled={actions.busy !== undefined}
+			numeric
+		/>
+	)
+	const limitFields = (
+		<div className='form-grid'>
+			{!redesigned && commitmentField}
+			{[
+				{ label: copy.maximumOwnRep, input: ownInput, units: common.rep },
+				{ label: copy.maximumPrincipal, input: principalInput, units: common.rep },
+				{ label: copy.maximumCommitment, input: totalCommitmentInput, units: pool?.collateral.symbol },
+			].map(field => (
+				<SecurityPoolInput
+					key={field.label}
+					label={field.label}
+					hint={field.units}
+					value={field.input.value}
+					onChange={value => {
+						field.input.value = value
+					}}
+					disabled={actions.busy !== undefined}
+					numeric
+				/>
+			))}
+		</div>
+	)
+	const work = (
+		<SectionBlock title={redesigned && id !== undefined && id > 0n ? copy.formatTargetPosition(id.toString()) : copy.title} description={redesigned ? undefined : copy.description} badge={showTakeoverOnly ? <Badge tone='warning'>{copy.takeoverOnly}</Badge> : undefined}>
+			{!redesigned && positionField}
+			{showTakeoverOnly && <InlineHint id={cureReasonId} message={copy.takeOverInstead} />}
+			{redesigned && distressed && preview !== undefined && (
+				<div className='statoblast-liquidation-reward'>
+					<strong>{copy.takeoverReward}</strong>
+					{duration === undefined ? undefined : <p className='detail'>{copy.formatRewardGrowth(formatDuration(duration))}</p>}
+					<div className='statoblast-liquidation-timeline'>
+						<div>
+							<span>{copy.startedPoint}</span>
+							<LiquidationTime timestamp={preview.started} />
+						</div>
+						<div>
+							<span>{copy.nowPoint}</span>
+							{now === undefined ? undefined : <LiquidationTime timestamp={now} />}
+						</div>
+						<div>
+							<span>{copy.fullRewardPoint}</span>
+							{fullRewardAt === undefined ? undefined : <LiquidationTime timestamp={fullRewardAt} />}
+						</div>
+					</div>
+					{rewardProgress === undefined ? undefined : <progress aria-label={copy.takeoverReward} max={1} value={rewardProgress} />}
+					<dl className='statoblast-liquidation-reward-values'>
+						<div>
+							<dt>{copy.rewardNow}</dt>
+							<dd>{displayRep(liveTakeover?.maximumTakeoverReward)}</dd>
+							<dt>{copy.takeoverNow}</dt>
+							<dd>{displayCollateral(liveTakeover?.maximumTakeoverCommitment)}</dd>
+						</div>
+						<div>
+							<dt>{copy.rewardMax}</dt>
+							<dd>{displayRep(laterTakeover?.maximumTakeoverReward)}</dd>
+							<dt>{copy.takeoverLater}</dt>
+							<dd>{displayCollateral(laterTakeover?.maximumTakeoverCommitment)}</dd>
+						</div>
+					</dl>
+					{formAge === undefined ? undefined : <p className='detail'>{copy.formatDataAge(formAge)}</p>}
+					{!autoRefresh && <p className='detail'>{followWithAutoRefresh}</p>}
+				</div>
+			)}
+			{!redesigned && (
+				<MetricGrid>
+					<MetricField label={copy.targetRep}>{displayRep(preview?.position.rep)}</MetricField>
+					<MetricField label={copy.targetCommitment}>{displayCollateral(preview?.position.commitment)}</MetricField>
+					<MetricField label={copy.takeoverLimit}>{displayCollateral(displayedSource?.maximumTakeoverCommitment)}</MetricField>
+					<MetricField label={copy.takeoverReward}>{displayRep(displayedSource?.maximumTakeoverReward)}</MetricField>
+					<MetricField label={copy.started}>
+						<TimestampValue timestamp={preview?.started} relative={false} zeroText={copy.notStarted} />
+					</MetricField>
+				</MetricGrid>
+			)}
+			{redesigned && commitmentField}
+			{redesigned ? (
+				<fieldset className='statoblast-liquidation-limits'>
+					<legend>{copy.limits}</legend>
+					<p className='detail'>{copy.limitsHint}</p>
+					{limitFields}
+					<button type='button' className='secondary' disabled={!distressed || curable || source === undefined || source.maximumTakeoverCommitment === 0n || actions.busy !== undefined} onClick={applySuggestedBound}>
+						{copy.suggestLimit}
+					</button>
+				</fieldset>
+			) : (
+				limitFields
+			)}
+			{redesigned && distressed && <p className='detail'>{copy.fillHint}</p>}
+			{redesigned && formAge !== undefined && <p className='detail'>{formatOldDataCheck(formAge)}</p>}
+			<div className='actions'>
+				<SecurityPoolButton model={actions} action='takeOverSecurityPoolPosition' label={copy.takeOver} pendingLabel={copy.takingOver} reason={reason} sharedReasonId={reasonId} onClick={takeOver} />
+				<SecurityPoolButton model={actions} action='cureSecurityPoolPosition' label={copy.cure} pendingLabel={copy.curing} reason={cureReason} sharedReasonId={showTakeoverOnly ? cureReasonId : reasonId} onClick={cure} />
+			</div>
+			{sharedReason === undefined || reasonShownInForm ? undefined : (
+				<div className='tx-action-feedback shared-action-reason'>
+					<InlineHint id={sharedReasonId} message={sharedReason} />
+				</div>
+			)}
+		</SectionBlock>
+	)
+	const comparison = redesigned && distressed && displayedSnapshot !== undefined && displayedSnapshot.owner.toLowerCase() === wallet?.toLowerCase() && (
+		<aside className='statoblast-liquidation-comparison'>
+			<SectionBlock title={copy.afterTakeover}>
+				<dl>
+					{[
+						{ label: copy.commitmentColumn, before: displayCollateral(commitmentBefore), after: displayCollateral(commitmentAfter) },
+						{ label: copy.pledgedColumn, before: displayRep(pledgedBefore), after: displayRep(pledgedAfter) },
+						{ label: copy.formatRepNeeded(copy.formatHealth(formatUnits(displayedSnapshot.ownerAccount.targetHealthFactorBps || 10_000n, 2))), before: displayRep(repNeededBefore), after: displayRep(repNeededAfter) },
+						{ label: copy.healthColumn, before: healthAt(pledgedBefore, commitmentBefore) ?? copy.healthUnavailable, after: healthAt(pledgedAfter, commitmentAfter) ?? copy.healthUnavailable },
+					].map(({ label, before, after }) => (
+						<div key={label}>
+							<dt>{label}</dt>
+							<dd>
+								{before} → {after}
+							</dd>
+						</div>
+					))}
+				</dl>
+				{pledgedAfter !== undefined && repNeededAfter !== undefined && pledgedAfter >= repNeededAfter && <p className='detail'>{copy.noDepositNeeded}</p>}
+			</SectionBlock>
+		</aside>
+	)
 	return (
 		<>
 			{redesigned && (
-				<SectionBlock title={copy.knownPositions}>
+				<SectionBlock title={copy.knownPositions} description={copy.description}>
 					<form
+						className='statoblast-liquidation-lookup'
 						onSubmit={event => {
 							event.preventDefault()
 							if (!canOpenPosition || actions.busy !== undefined) return
@@ -239,91 +412,17 @@ export function SecurityPoolTakeover({
 					{target.displayedAt !== undefined && <UpdatedAgo updatedAt={target.displayedAt} refreshing={target.loading} />}
 					<RetryableNotice message={refreshError} retryLabel={tryAgain} onRetry={target.retry} />
 					<LiquidationPositionsTable rows={positionRows} selected={id} collateral={pool?.collateral ?? { symbol: collateralCopy.fallback, decimals: 0 }} disabled={actions.busy !== undefined} onOpen={openPosition} />
+					<p className='detail'>{copy.devicePositions}</p>
 				</SectionBlock>
 			)}
-			<SectionBlock title={copy.title} description={redesigned ? undefined : copy.description}>
-				{!redesigned && positionField}
-				{redesigned && distressed && preview !== undefined && (
-					<div className='statoblast-liquidation-reward'>
-						<strong>{copy.takeoverReward}</strong>
-						<progress aria-label={copy.takeoverReward} max={1} value={rewardProgress} />
-						<MetricGrid>
-							<MetricField label={copy.rewardNow}>
-								<CurrencyValue value={displayedSource?.healthy !== true && timeBasedReward !== undefined && timeBasedReward >= 0n ? timeBasedReward : displayedSource?.maximumTakeoverReward} suffix={common.rep} />
-							</MetricField>
-							<MetricField label={copy.rewardMax}>
-								<CurrencyValue value={preview.position.rep} suffix={common.rep} />
-							</MetricField>
-							<MetricField label={copy.takeoverNow}>{displayCollateral(displayedSource?.maximumTakeoverCommitment)}</MetricField>
-							<MetricField label={copy.takeoverLater}>{displayCollateral(laterTakeover?.maximumTakeoverCommitment)}</MetricField>
-						</MetricGrid>
-					</div>
-				)}
-				<MetricGrid>
-					{!redesigned && (
-						<>
-							<MetricField label={copy.targetRep}>
-								<CurrencyValue value={preview?.position.rep} suffix={common.rep} />
-							</MetricField>
-							<MetricField label={copy.targetCommitment}>{displayCollateral(preview?.position.commitment)}</MetricField>
-						</>
-					)}
-					<MetricField label={copy.repairLimit}>
-						<CurrencyValue value={displayedSource?.maximumTakeoverCommitment} suffix={pool?.collateral.symbol ?? collateralCopy.fallback} units={pool?.collateral.decimals ?? 0} />
-					</MetricField>
-					<MetricField label={copy.takeoverReward}>
-						<CurrencyValue value={displayedSource?.maximumTakeoverReward} suffix={copy.takeoverRewardUnit} />
-					</MetricField>
-					{!redesigned && (
-						<MetricField label={copy.started}>
-							<TimestampValue timestamp={preview?.started} relative={false} zeroText={copy.notStarted} />
-						</MetricField>
-					)}
-				</MetricGrid>
-				<div className='form-grid'>
-					{[
-						{ label: copy.commitment, input: commitmentInput },
-						{ label: copy.maximumOwnRep, input: ownInput },
-						{ label: copy.maximumPrincipal, input: principalInput },
-						{ label: copy.maximumCommitment, input: totalCommitmentInput },
-					].map(field => (
-						<SecurityPoolInput
-							key={field.label}
-							label={field.label}
-							value={field.input.value}
-							onChange={value => {
-								field.input.value = value
-							}}
-							disabled={actions.busy !== undefined}
-							numeric
-						/>
-					))}
+			{comparison ? (
+				<div className='statoblast-liquidation-workspace'>
+					{work}
+					{comparison}
 				</div>
-				{redesigned && distressed && (
-					<button type='button' className='secondary' disabled={source === undefined || actions.busy !== undefined} onClick={applySuggestedBound}>
-						{copy.suggestLimit}
-					</button>
-				)}
-				{redesigned && fill !== undefined && (
-					<MetricGrid>
-						<MetricField label={copy.previewPledged}>
-							<CurrencyValue value={pledgedBefore} suffix={common.rep} /> → <CurrencyValue value={pledgedBefore + fill.takeoverReward} suffix={common.rep} />
-						</MetricField>
-						<MetricField label={copy.previewCommitment}>
-							{displayCollateral(commitmentBefore)} → {displayCollateral(commitmentBefore + fill.commitment)}
-						</MetricField>
-					</MetricGrid>
-				)}
-				<div className='actions'>
-					<SecurityPoolButton model={actions} action='takeOverSecurityPoolPosition' label={copy.takeOver} pendingLabel={copy.takingOver} reason={reason} sharedReasonId={reasonId} onClick={takeOver} />
-					<SecurityPoolButton model={actions} action='cureSecurityPoolPosition' label={copy.cure} pendingLabel={copy.curing} reason={cureReason} sharedReasonId={reasonId} onClick={cure} />
-				</div>
-				{sharedReason === undefined || reasonShownInForm ? undefined : (
-					<div className='tx-action-feedback shared-action-reason'>
-						<InlineHint id={sharedReasonId} message={sharedReason} />
-					</div>
-				)}
-			</SectionBlock>
+			) : (
+				work
+			)}
 		</>
 	)
 }

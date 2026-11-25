@@ -3,6 +3,7 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
+import { formatCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as copy from '../../../copy/securityPoolCapital.js'
 
 export function SecurityPoolRetirementPreview({ snapshot, position, redesigned = false }: { snapshot: SecurityPoolAccountSnapshot; position: SecurityPoolAccountSnapshot['positions'][number]; redesigned?: boolean }) {
@@ -17,21 +18,41 @@ export function SecurityPoolRetirementPreview({ snapshot, position, redesigned =
 	if (closed) reason = copy.retirementPreviewClosed
 	else if (!snapshot.priceValid) reason = copy.retirementPreviewStale
 	else if (preview !== undefined) reason = copy.retirementPreviewStatus[preview.status]
+	if (redesigned) {
+		const { decimals, symbol } = snapshot.collateral
+		return (
+			<>
+				<UserMessage tone={current && preview?.status === 'ready' ? 'neutral' : 'warning'} detail={reason} />
+				<div className='statoblast-queue-totals'>
+					<span>{copy.queueCommitment}</span>
+					<strong>
+						{value(position.commitment)} <span>→</span> {value(position.remainingCommitment)}
+					</strong>
+				</div>
+				{current && preview !== undefined && total > 0n && (
+					<>
+						<div className='statoblast-retirement-queue' aria-hidden='true'>
+							<div style={{ inlineSize: `${percentage(preview.queuedAheadCommitment)}%` }} />
+							<span style={{ insetInlineStart: `min(calc(100% - 2px), ${percentage(preview.spareCommitment)}%)` }} />
+						</div>
+						<p className='detail statoblast-queue-marker-label'>{copy.queueFreeNow(formatCurrencyBalanceWithUnit(preview.spareCommitment, symbol, decimals), preview.spareCommitment >= total ? formatCurrencyBalance(total, decimals) : undefined)}</p>
+						<div className='statoblast-queue-totals'>
+							<span>
+								{copy.queueAhead} <strong>{value(preview.queuedAheadCommitment)}</strong>
+							</span>
+							<span>
+								{copy.queueYourReduction} <strong>{value(reduction)}</strong>
+							</span>
+						</div>
+					</>
+				)}
+			</>
+		)
+	}
 	return (
 		<>
 			<h4>{copy.retirementPreviewTitle}</h4>
 			<UserMessage tone={current && preview?.status === 'ready' ? 'neutral' : 'warning'} detail={reason} />
-			{redesigned && (
-				<div>
-					<strong>{copy.positionCommitment}</strong> {value(position.commitment)} <span aria-hidden='true'>→</span> {value(position.remainingCommitment)}
-					{current && preview !== undefined && total > 0n && (
-						<div className='statoblast-retirement-queue' aria-hidden='true'>
-							<div style={{ inlineSize: `${percentage(preview.queuedAheadCommitment)}%` }} />
-							<span title={copy.queueCapacity} style={{ insetInlineStart: `${Math.min(99, percentage(preview.spareCommitment))}%` }} />
-						</div>
-					)}
-				</div>
-			)}
 			<MetricGrid>
 				<MetricField label={copy.reductionFreeCapacity}>
 					<CurrencyValue value={current ? preview?.spareCommitment : undefined} suffix={snapshot.collateral.symbol} units={snapshot.collateral.decimals} />

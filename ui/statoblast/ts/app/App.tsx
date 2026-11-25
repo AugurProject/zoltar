@@ -310,6 +310,7 @@ export function App() {
 					deploy={deployRouteContentProps}
 					securityPools={{
 						cacheReads: true,
+						autoRefresh,
 						onReadStatus: reportReadStatus,
 						parameters: saveTouchedItem,
 						walletConnected: accountState.address !== undefined,

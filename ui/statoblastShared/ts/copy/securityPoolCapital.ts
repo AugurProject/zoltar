@@ -43,6 +43,14 @@ export const depositHealth = 'Deposit REP and save target'
 export const depositingHealth = 'Depositing and saving target…'
 export const healthDepositDetails = 'Add REP while saving the target'
 export const healthDepositAmount = 'REP to add'
+export const optionalHealthDeposit = 'Also add REP (optional)'
+export const olderPriceReport = 'Use an older funded price report'
+export const setCommitment = 'Set commitment'
+export const currentCommitmentPreset = 'Current'
+export const howTargetWorks = 'How the target works'
+export const queuedCommitmentLock = 'This commitment is locked until its reduction clears.'
+export const repToReachTarget = (amount: string) => `Add ${amount} to meet this target at your current commitment.`
+export const depositBeforeCommitment = 'Deposit the extra REP before setting your commitment.'
 export const healthDepositHint = 'One transaction adds REP and saves the target. Your commitment does not increase.'
 export const healthDepositReview = 'Your commitment stays the same. Raising the target for an active position requires enough REP, or both changes revert.'
 export const targetCapacity = 'Capacity at chosen target'
@@ -142,11 +150,17 @@ export const depositLiquidating = 'This position is liquidating. REP top-ups are
 export const resubmitRetirement = 'Resubmit the reduction request'
 export const resubmittingRetirement = 'Resubmitting the reduction…'
 export const preview = 'Preview'
-export const currentCommitment = 'Use current commitment'
 export const previewBefore = 'Current'
 export const previewAfter = 'After changes'
 export const estimatedWithdrawal = 'Estimated withdrawable REP'
-export const queueCapacity = 'Free-capacity marker'
+export const queueHint = "Reductions release in full, in queue order. A queued reduction can't be changed."
+export const queueCommitment = 'Your commitment'
+export const queueAhead = 'Ahead of you'
+export const queueYourReduction = 'Your reduction'
+export const queueFreeNow = (amount: string, total: string | undefined) => (total === undefined ? `${amount} free now` : `${amount} free now, covers all ${total}`)
+export const releaseKeeping = (amount: string) => `Release reduction (keep ${amount})`
+export const walletBalanceHint = (amount: string) => `${amount} in your wallet`
+export const maximumWithdrawalHint = (amount: string) => `${amount} available to withdraw`
 
 export const releaseReduction = 'Release reduction'
 export const completedReductionCommitment = 'Commitment when reduction completes'

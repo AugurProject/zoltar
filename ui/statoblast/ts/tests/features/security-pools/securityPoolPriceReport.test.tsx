@@ -13,6 +13,23 @@ import * as copy from '@zoltar/ui-statoblast-shared/copy/securityPoolPrice.js'
 import { capitalSnapshot, owner } from './capitalFixture.js'
 import { priceFeed, priceFixture, priceOracle } from './priceFixture.js'
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
+
+test('the REP price workflow keeps recovery available outside older reports and dates the active report timeline', async () => {
+	const fixture = priceFixture()
+	fixture.set(priceFeed, 'universeId', 0n)
+	fixture.values['pendingReportId'] = 9n
+	fixture.game.settlementTimestamp = 900n
+	const actions: SecurityPoolPriceParameters['actions'] = { scope: unscopedTransaction, busy: undefined, ownerReason: undefined, runSecurityPoolAction: async () => undefined }
+	const view = await renderIntoDocument(<SecurityPoolPriceReport redesigned scope='universe' target={accountPriceTarget(capitalSnapshot())} actions={actions} bidder={owner} />)
+	lifecycle.trackRendered(view)
+	const button = (name: string) => Array.from(view.container.querySelectorAll('button')).find(candidate => candidate.textContent === name)
+	await waitFor(() => expect(view.container.textContent).toContain('Report #9'))
+	expect(view.container.querySelectorAll('.statoblast-price-progress time')).toHaveLength(2)
+	expect(button(copy.recover)?.closest('details')).toBeNull()
+	expect(button(copy.recover)?.disabled).toBe(false)
+	expect(view.container.querySelectorAll('.statoblast-price-actions > li')).toHaveLength(7)
+	expect(button(copy.refresh)).toBeUndefined()
+})
 test('branch report keeps preparation, wrap, editable approvals and recovery controls visible in fixed order', async () => {
 	const fixture = priceFixture()
 	const fork = await fixture.fork()

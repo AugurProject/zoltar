@@ -29,6 +29,25 @@ const abi = parseAbi([
 	'function withdrawTokenFunding(address token,address recipient)',
 	'event PriceRequested(uint256 indexed reportId,uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas)',
 ])
+const priceReportedEvent = {
+	type: 'event',
+	name: 'PriceReported',
+	inputs: [
+		{ type: 'uint256', name: 'reportId', indexed: true },
+		{ type: 'uint256', name: 'price' },
+		{ type: 'uint256', name: 'lastSettlementTimestamp' },
+	],
+} as const
+const capitalPriceAcceptedEvent = {
+	type: 'event',
+	name: 'CapitalPriceAccepted',
+	inputs: [
+		{ type: 'uint256', name: 'price' },
+		{ type: 'uint48', name: 'validUntil' },
+	],
+} as const
+const priceReportedTopic = toEventSelector(priceReportedEvent)
+const capitalPriceAcceptedTopic = toEventSelector(capitalPriceAcceptedEvent)
 export async function loadSecurityPoolBranchPrice(client: ReadClient, securityPool: Address, owner: Address, universeId: bigint) {
 	const snapshot = await loadSecurityPoolPriceSnapshot({ client: { ...securityPoolReadClient(client), getBalance: parameters => client.getBalance(parameters) }, securityPool, owner, universeId })
 	const infrastructure = getInfraContractAddresses()
@@ -85,7 +104,21 @@ export async function loadSecurityPoolPriceReport(client: ReadClient, snapshot: 
 		const [finalBlock, finalChain] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
 		if (finalBlock.hash !== snapshot.blockHash || finalChain !== snapshot.chainId) throw new Error('Report state changed. Refresh and retry.')
 	}
-	return { reportId, escrow, sponsor, outcome: reportOutcome, state, eligibleAt: game.reportTimestamp + game.settlementTime, baseFeePerGas: block.baseFeePerGas, maxSettlementBaseFee, recoveryBaseFeeBlocked, wethCredit: releasedCredit(wethCredit), repCredit: releasedCredit(repCredit) }
+	return {
+		reportId,
+		escrow,
+		sponsor,
+		outcome: reportOutcome,
+		state,
+		reportedAt: state.latest.helper.blockTimestamp,
+		eligibleAt: game.reportTimestamp + game.settlementTime,
+		bounty: game.settlerRewardAttoEth,
+		baseFeePerGas: block.baseFeePerGas,
+		maxSettlementBaseFee,
+		recoveryBaseFeeBlocked,
+		wethCredit: releasedCredit(wethCredit),
+		repCredit: releasedCredit(repCredit),
+	}
 }
 function releasedCredit(value: unknown) {
 	const amount = requireBigintValue(value, 'report token credit')
@@ -188,7 +221,9 @@ export function securityPoolPriceReportCache(profile: NetworkProfile, pool: Addr
 			sponsor: read.address('sponsor'),
 			outcome: read.bigint('outcome'),
 			state: { settled: read.record('state').boolean('settled') },
+			reportedAt: read.optional('reportedAt', read.bigint),
 			eligibleAt: read.bigint('eligibleAt'),
+			bounty: read.optional('bounty', read.bigint),
 			baseFeePerGas: read.optional('baseFeePerGas', read.bigint),
 			maxSettlementBaseFee: read.bigint('maxSettlementBaseFee'),
 			wethCredit: read.bigint('wethCredit'),
@@ -228,4 +263,36 @@ export function submittedSecurityPoolPriceReport(receipt: Pick<TransactionReceip
 		if (decoded.eventName === 'PriceRequested') return requireBigintValue(Array.isArray(decoded.args) ? decoded.args[0] : Reflect.get(requireObjectValue(decoded.args, 'price report event'), 'reportId'), 'created report ID')
 	}
 	return undefined
+}
+
+/** Equal-time accepted candidates also emit PriceReported. Only a matching preceding ledger checkpoint proves canonical acceptance. */
+export function acceptedSecurityPoolPriceReport(receipt: Pick<TransactionReceipt, 'logs'>, feed: Address, capitalLedger: Address, validitySeconds: bigint) {
+	let checkpoint: { price: bigint; validUntil: bigint } | undefined
+	let accepted: { reportId: bigint; price: bigint; observedAt: bigint } | undefined
+	for (const log of receipt.logs) {
+		if (log.removed) continue
+		const address = getAddress(log.address)
+		if (address === getAddress(capitalLedger) && log.topics[0] === capitalPriceAcceptedTopic) {
+			const decoded = decodeEventLog({ abi: [capitalPriceAcceptedEvent] as const, data: log.data, topics: log.topics })
+			checkpoint = { price: decoded.args.price, validUntil: BigInt(decoded.args.validUntil) }
+		}
+		if (address === getAddress(feed) && log.topics[0] === priceReportedTopic) {
+			const decoded = decodeEventLog({ abi: [priceReportedEvent] as const, data: log.data, topics: log.topics })
+			const { reportId, price, lastSettlementTimestamp: observedAt } = decoded.args
+			if (checkpoint !== undefined && checkpoint.price === price && checkpoint.validUntil === observedAt + validitySeconds) accepted = { reportId, price, observedAt }
+			checkpoint = undefined
+		}
+	}
+	return accepted
+}
+
+export function acceptedSecurityPoolPriceCache(profile: NetworkProfile, pool: Address, universeId: bigint) {
+	return statoblastDisplayCache(profile, { universeId, owner: undefined, page: `accepted-price-report:${pool.toLowerCase()}` }, value =>
+		decodeStoredValue(value, read => ({
+			feed: read.address('feed'),
+			reportId: read.bigint('reportId'),
+			price: read.bigint('price'),
+			observedAt: read.bigint('observedAt'),
+		})),
+	)
 }

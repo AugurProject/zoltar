@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 import { render } from 'preact'
+import { act } from 'preact/test-utils'
 import { useLayoutEffect } from 'preact/hooks'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -11,10 +12,59 @@ import * as copy from '@zoltar/ui-statoblast-shared/copy/securityPoolCapital.js'
 import { capitalSnapshot, owner, unit } from './capitalFixture.js'
 import { formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 const lifecycle = installDomTestLifecycle()
-function Harness({ snapshot = capitalSnapshot() }: { snapshot?: ReturnType<typeof capitalSnapshot> }) {
-	const model = useSecurityPoolAggregate({ snapshot, loading: false, error: undefined, refresh: async () => undefined }, { ownerReason: undefined, runSecurityPoolAction: async () => undefined }, owner)
-	return <SecurityPoolAggregatePanel model={model} actions={{ scope: unscopedTransaction, busy: undefined }} />
+function Harness({ snapshot = capitalSnapshot(), redesigned, lastFailedAction }: { snapshot?: ReturnType<typeof capitalSnapshot>; redesigned?: boolean; lastFailedAction?: string }) {
+	const model = useSecurityPoolAggregate({ snapshot, loading: false, error: undefined, refresh: async () => undefined }, { ownerReason: undefined, runSecurityPoolAction: async () => undefined }, owner, redesigned)
+	return <SecurityPoolAggregatePanel model={model} redesigned={redesigned ?? false} actions={{ scope: unscopedTransaction, busy: undefined, ...(lastFailedAction === undefined ? {} : { lastFailedAction }) }} />
 }
+
+test.each(['ready', 'insufficient-spare', 'retry'] as const)('redesigned reduction shows the saved queue with %s action', async state => {
+	const base = capitalSnapshot()
+	const coversAll = state !== 'insufficient-spare'
+	const snapshot = {
+		...base,
+		positions: base.positions.map(position => ({
+			...position,
+			batch: 1n,
+			remainingCommitment: 6n * unit,
+			retirementPreview: { status: coversAll ? ('ready' as const) : ('insufficient-spare' as const), effectiveCurrentBatch: 1n, healthyCommitment: 20n * unit, spareCommitment: (coversAll ? 9n : 3n) * unit, queuedAheadCommitment: 2n * unit, commitmentReduction: 4n * unit, releasedRep: 0n },
+		})),
+	}
+	const failedAction = state === 'retry' ? { lastFailedAction: 'serveSecurityPoolRetirement' } : {}
+	const view = await renderIntoDocument(<Harness redesigned snapshot={snapshot} {...failedAction} />)
+	lifecycle.trackRendered(view)
+	const reduction = view.container.querySelector('section:has([id$="-reduce"])')
+	const text = reduction?.textContent ?? ''
+	expect(text).not.toContain(copy.position(1n))
+	expect(text).not.toContain(copy.liquidationHealth)
+	expect(text.includes('covers all')).toBe(coversAll)
+	const label = state === 'retry' ? copy.retryRelease : state === 'ready' ? 'Release reduction (keep 6 WETH)' : copy.waitingForFreeCapacity
+	const button = [...(reduction?.querySelectorAll('button') ?? [])].find(button => button.textContent?.replaceAll('\u00a0', ' ') === label)
+	expect(button?.disabled).toBe(!coversAll)
+})
+
+test('Capital starts with the saved target and commitment and lists only the planned actions', async () => {
+	const view = lifecycle.trackRendered(await renderIntoDocument(<Harness redesigned />))
+	const plan = view.container.querySelector('section:has([id$="-commitment"])')
+	const actions = () => [...(plan?.querySelectorAll('ol > li .tx-action-button') ?? [])].map(button => button.textContent)
+	const input = (text: string) => [...(plan?.querySelectorAll('input') ?? [])].find(field => field.labels?.[0]?.textContent === text)
+	const update = async (text: string, value: string) => {
+		const field = input(text)
+		if (field === undefined) throw new Error('Capital field missing')
+		await act(() => {
+			field.value = value
+			field.dispatchEvent(new Event('input', { bubbles: true }))
+		})
+	}
+	expect(input(copy.commitment)?.value).toBe('10')
+	expect(input(copy.optionalHealthDeposit)?.value).toBe('')
+	expect(actions()).toEqual([])
+	await update(copy.health, '130')
+	expect(actions()).toEqual([copy.saveHealth])
+	await update(copy.optionalHealthDeposit, '3')
+	await update(copy.commitment, '11')
+	expect(actions().slice(-2)).toEqual([copy.depositHealth, copy.setCommitment])
+	expect(plan?.querySelector('ol > li:last-child button')?.hasAttribute('disabled')).toBe(true)
+})
 test('personal capital shows exact principal and keeps distinct approval, deposit and retirement controls', async () => {
 	const view = await renderIntoDocument(<Harness />)
 	lifecycle.trackRendered(view)

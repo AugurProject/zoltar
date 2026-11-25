@@ -2,6 +2,8 @@ import { readUnavailable } from './securityPool.js'
 
 export const reportBaseFee = 'Block base fee'
 export const readTimeout = 'Price report read timed out. Try again.'
+export const requirementsReadFailed = 'Unable to load price requirements.'
+export const reportReadFailed = 'Unable to load the selected price report.'
 export const savedReport = 'Saved report details'
 export const reportBaseFeeCeiling = 'Report base-fee ceiling'
 export const reportBaseFeeUnit = 'nanoETH/gas'
@@ -102,6 +104,33 @@ export const pricePage = 'REP price'
 export const priceCurrent = 'Current'
 export const priceDue = 'Price due'
 export const reportNewPrice = 'Report a new REP price'
+export const acceptedPrice = 'Accepted REP price'
+export const priceUnits = (collateral: string) => `REP per ${collateral}`
+export const priceDraftLabel = (collateral: string) => `REP price (${priceUnits(collateral)})`
+export const referencePrice = (reference: string) => `Last accepted: ${reference}`
+export const branchReferencePrice = (reference: string) => `Last accepted in the parent: ${reference}`
+export const suggestedStake = (minimum: string, suggested: string, collateral: string) => `Minimum ${minimum} ${collateral} · suggested ${suggested} ${collateral}`
+export const minimumStake = (minimum: string, collateral: string) => `Minimum ${minimum} ${collateral}`
+export const wrapStep = 'Wrap ETH'
+export const approveStep = (symbol: string) => `Approve ${symbol}`
+export const adjustAmount = 'Adjust amount'
+export const preparedStep = 'Prepared'
+export const stepComplete = 'Completed'
+export const recoverStep = 'Recover'
+export const settleReportStep = (id: bigint) => `Settle report #${id}`
+export const settleEarns = <Amount>(amount: Amount) => ['Anyone can settle and earn ', amount, '.']
+export const now = 'Now'
+export const fundsRecipient = 'To the funder'
+export const howReportWorks = 'How a price report works'
+export const disputeTip = 'Disputers can trade against your quote. You may get back a different mix of tokens.'
+export const coverageTip = 'You fund a two-sided quote at your price. A report that covers less than the pool’s exposure is rejected.'
+export const coverLabel = 'This report covers'
+export const exposureNow = 'Exposure now'
+export const headroom = 'Headroom'
+export const bountyPaidByYou = 'Settle bounty, paid by you'
+export const deviationLabel = (percent: string) => `±${percent}%`
+export const latestReportHint = 'Enter an older ID to return its funds.'
+export const asOf = (age: string) => `as of ${age} ago`
 export const currentReport = 'Current report'
 export const reportHeading = (id: bigint) => `Report #${id}`
 export const reportedStep = 'Reported'

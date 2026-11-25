@@ -22,6 +22,20 @@ import { buildSecurityPoolAuctionVaultExecuteRequest } from '@zoltar/statoblast-
 import { authenticateSecurityPoolAuctionVault } from '../../../protocol/securityPoolRepairAuction.js'
 import { deploymentProgressStore, type DeploymentDraft } from '../lib/deploymentProgress.js'
 
+function initialDeploymentDraft(originInput: string): DeploymentDraft {
+	return {
+		collateralSymbol: 'WETH',
+		reportFloor: '0.01',
+		originInput,
+		multiplierInput: '200',
+		priorityFeeInput: (DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 9n).toString(),
+		horizonDays: '30',
+		admissionMode: 'open',
+		fixedQuestions: '',
+		economicsDraft: defaultSecurityPoolCreationDraft(),
+	}
+}
+
 export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>, parameters: WriteOperationsParameters, deploying = false) {
 	const backend = getActiveBackend()
 	const wallet = parameters.accountAddress
@@ -37,17 +51,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 	}
 	const originEdited = useRef(false)
 	const originForkState = useSignal<{ backend: ReturnType<typeof getActiveBackend>; key: string; forked: boolean } | undefined>(undefined)
-	const draftInput = useSignal<DeploymentDraft>({
-		collateralSymbol: 'WETH',
-		reportFloor: '0.01',
-		originInput: model.universeInput,
-		multiplierInput: '200',
-		priorityFeeInput: (DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 9n).toString(),
-		horizonDays: '30',
-		admissionMode: 'open',
-		fixedQuestions: '',
-		economicsDraft: defaultSecurityPoolCreationDraft(),
-	})
+	const draftInput = useSignal(initialDeploymentDraft(model.universeInput))
 	const draft = progress?.draft ?? draftInput.value
 	const updateDraft = (patch: Partial<DeploymentDraft>) => {
 		if (journal.current.value === undefined) draftInput.value = { ...draftInput.value, ...patch }
@@ -78,16 +82,20 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		if (!originEdited.current) updateDraft({ originInput: model.universeInput })
 	}, [model.universeInput])
 	const savedPool = progress?.pool
+	const verifiedSetup = savedPool !== undefined && model.setup?.securityPool !== savedPool ? undefined : model.setup
 	useEffect(() => {
 		const restored = journal.restored
 		if (restored?.pool === undefined || wallet === undefined) return
 		if (restored.pool.toLowerCase() === model.managerInput.toLowerCase() && wallet.toLowerCase() === model.ownerInput.toLowerCase() && restored.draft.originInput === model.universeInput) return
 		void model.load(restored.pool, wallet, restored.draft.originInput)
 	}, [journal, wallet])
-	const completedPool = model.setup?.stage === 4 ? model.setup.securityPool : undefined
+	const completedPool = verifiedSetup?.stage === 4 ? verifiedSetup.securityPool : undefined
 	useEffect(() => {
-		if (savedPool !== undefined && savedPool.toLowerCase() === completedPool?.toLowerCase()) saveProgress(undefined)
-	}, [savedPool, completedPool, journal])
+		const deployment = journal.current.value
+		if (deployment === undefined || deployment.activated || deployment.pool === undefined || deployment.pool.toLowerCase() !== completedPool?.toLowerCase()) return
+		setEntityFavorite(localEntityScopeForNetwork(backend.profile, 'statoblast', 'pool'), deployment.pool, true)
+		saveProgress({ ...deployment, activated: true })
+	}, [savedPool, completedPool, journal, backend])
 	const originForkKey = draft.originInput.trim()
 	useEffect(() => {
 		let current = true
@@ -158,7 +166,16 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		}
 	}
 	let creationError: string | undefined
-	let fixedQuestionIds: bigint[] = []
+	let fixedQuestionIds: bigint[] | undefined
+	let fixedQuestionError: string | undefined
+	if (draft.admissionMode === 'fixed') {
+		try {
+			fixedQuestionIds = parseFixedSecurityPoolQuestions(draft.fixedQuestions)
+		} catch (failure) {
+			fixedQuestionError = getErrorMessage(failure, copy.creationInvalid)
+		}
+	}
+	const approvedQuestions = fixedQuestionIds ?? []
 	let economics: ReturnType<typeof parseSecurityPoolCreationEconomics> | undefined
 	let horizon: bigint | undefined
 	let origin: import('@zoltar/statoblast-shared/statoblast/securityPool').SecurityPoolOriginConfig | undefined
@@ -174,7 +191,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		const minimumReportCollateral = securityPoolAmountOrUndefined(draft.reportFloor, collateral.decimals)
 		if (minimumReportCollateral === undefined || minimumReportCollateral === 0n) throw new Error(`Enter a positive report stake floor with up to ${collateral.decimals} decimal places.`)
 		origin = { collateralToken: collateral.address, minimumReportCollateral, universeId: originUniverse, securityMultiplierBps, reportPriorityFeeAttoEthPerGas }
-		if (draft.admissionMode === 'fixed') fixedQuestionIds = parseFixedSecurityPoolQuestions(draft.fixedQuestions)
+		if (fixedQuestionError !== undefined) throw new Error(fixedQuestionError)
 		economics = parseSecurityPoolCreationEconomics(draft.economicsDraft, collateral.decimals)
 		if (!/^\d+$/.test(draft.horizonDays)) throw new Error(copy.horizonInvalid)
 		horizon = BigInt(draft.horizonDays) * 86400n
@@ -190,7 +207,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		originForkState.value = { backend, key: originForkKey, forked: true }
 		throw new Error(copy.originForked)
 	}
-	const admissionKey = `${draft.originInput.trim().toLowerCase()}:${draft.admissionMode}:${fixedQuestionIds.join(',')}`
+	const admissionKey = `${draft.originInput.trim().toLowerCase()}:${draft.admissionMode}:${approvedQuestions.join(',')}`
 	const previousAdmission = deployedAdmission.value
 	const liveAdmission = previousAdmission?.key === admissionKey && previousAdmission.backend === backend ? previousAdmission : undefined
 	const admission = progress !== undefined && origin !== undefined ? { address: progress.rules, universeId: origin.universeId } : liveAdmission
@@ -219,13 +236,14 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		}
 	}, [registrationKey, admissionAllowed])
 	const admissionStatus = registration.value?.key === registrationKey ? registration.value.reason : copy.admissionChecking
-	const registerReason =
+	const registrationContextReason =
 		walletReason ??
 		(model.loading ? copy.loading : undefined) ??
 		(snapshot === undefined ? copy.enterSecurityPool : undefined) ??
 		(!admissionAllowed ? copy.unsupportedAdmission : undefined) ??
-		(snapshot !== undefined && (snapshot.forkTime > 0n || snapshot.universeId !== snapshot.originUniverseId) ? copy.registrationOriginRequired : undefined) ??
-		(questionId === undefined ? copy.registerDisabled : admissionStatus)
+		(snapshot !== undefined && (snapshot.forkTime > 0n || snapshot.universeId !== snapshot.originUniverseId) ? copy.registrationOriginRequired : undefined)
+	const registerReason = registrationContextReason ?? (questionId === undefined ? copy.registerDisabled : admissionStatus)
+	const approvedRegistrationReason = (id: bigint) => registrationContextReason ?? (snapshot?.admission.mode === 'fixed' && snapshot.admission.questions.includes(id) ? undefined : copy.unsupportedAdmission)
 	return {
 		runSecurityPoolAction: run,
 		busy: busy.value,
@@ -237,6 +255,14 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		...draft,
 		originForked,
 		deploymentLocked: progress !== undefined,
+		deploymentPool: savedPool,
+		deploymentActivated: progress?.activated === true,
+		startNewDeployment: () => {
+			if (journal.current.value?.activated !== true || busy.value !== undefined) return
+			originEdited.current = false
+			draftInput.value = initialDeploymentDraft(model.universeInput)
+			saveProgress(undefined)
+		},
 		setMultiplierInput: (multiplierInput: string) => updateDraft({ multiplierInput }),
 		setPriorityFeeInput: (priorityFeeInput: string) => updateDraft({ priorityFeeInput }),
 		setOriginInput: (originInput: string) => {
@@ -247,6 +273,8 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		setHorizonDays: (horizonDays: string) => updateDraft({ horizonDays }),
 		setAdmissionMode: (admissionMode: CuratedAdmissionMode) => updateDraft({ admissionMode }),
 		setFixedQuestions: (fixedQuestions: string) => updateDraft({ fixedQuestions }),
+		fixedQuestionCount: fixedQuestionIds?.length,
+		fixedQuestionError,
 		setCollateralSymbol: (collateralSymbol: CollateralSymbol) => {
 			if (draft.collateralSymbol === collateralSymbol) return
 			updateDraft({ collateralSymbol, reportFloor: '', economicsDraft: { ...draft.economicsDraft, minimumCommitment: '', minimumPurchaseFee: '' } })
@@ -269,7 +297,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 					if (journal.current.value !== undefined) throw new Error(copy.admissionDeployed)
 					const key = admissionKey
 					const mode = draft.admissionMode
-					const ids = [...fixedQuestionIds]
+					const ids = [...approvedQuestions]
 					if (origin === undefined) throw new Error(copy.enterOrigin)
 					const originUniverse = origin.universeId
 					captured = { key, universeId: originUniverse }
@@ -301,10 +329,10 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 						const verified = await loadSecurityPoolAdmission(client, chosen.address, chosen.universeId)
 						if (verified.mode !== mode) throw new Error(copy.unsupportedAdmission)
 						if (verified.mode === 'fixed') {
-							if (verified.questionCount !== BigInt(fixedQuestionIds.length) || verified.questions.length !== Math.min(64, fixedQuestionIds.length) || verified.questions.some((id, index) => id !== fixedQuestionIds[index])) throw new Error(copy.unsupportedAdmission)
-							for (let offset = verified.questions.length; offset < fixedQuestionIds.length; offset += 64) {
+							if (verified.questionCount !== BigInt(approvedQuestions.length) || verified.questions.length !== Math.min(64, approvedQuestions.length) || verified.questions.some((id, index) => id !== approvedQuestions[index])) throw new Error(copy.unsupportedAdmission)
+							for (let offset = verified.questions.length; offset < approvedQuestions.length; offset += 64) {
 								const page = await loadSecurityPoolAdmission(client, chosen.address, chosen.universeId, undefined, BigInt(offset))
-								const expected = fixedQuestionIds.slice(offset, offset + 64)
+								const expected = approvedQuestions.slice(offset, offset + 64)
 								if (page.mode !== 'fixed' || page.questions.length !== expected.length || page.questions.some((id, index) => id !== expected[index])) throw new Error(copy.unsupportedAdmission)
 							}
 						}
@@ -327,7 +355,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		setupStage: model.setup?.stage,
 		preparationReason: (stage: number) => {
 			if (walletReason !== undefined) return walletReason
-			const setup = model.setup
+			const setup = verifiedSetup
 			if (setup === undefined) {
 				if (model.savedSetupStage === undefined) return copy.setupPoolRequired
 				return model.loading ? copy.checkingSetupProgress : copy.retrySavedSetup
@@ -338,7 +366,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 			return setup.stage === stage - 1 ? undefined : 'Complete the previous setup stage first.'
 		},
 		prepare: (stage: number) => {
-			const selected = model.setup
+			const selected = verifiedSetup
 			return run(
 				`prepareSecurityPool${stage}`,
 				'Prepare security pool modules',
@@ -357,7 +385,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 				},
 				undefined,
 				async () => {
-					if (stage === 4 && selected !== undefined) setEntityFavorite(localEntityScopeForNetwork(backend.profile, 'statoblast', 'pool'), selected.securityPool, true)
+					if (savedPool === undefined && stage === 4 && selected !== undefined) setEntityFavorite(localEntityScopeForNetwork(backend.profile, 'statoblast', 'pool'), selected.securityPool, true)
 				},
 			)
 		},
@@ -366,11 +394,13 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 			questionInput.value = value
 		},
 		registerReason,
-		register: () =>
+		approvedRegistrationReason,
+		register: (approvedId?: bigint) =>
 			run('registerSecurityPoolQuestion', copy.addQuestion, () => {
-				if (registerReason !== undefined || snapshot === undefined || questionId === undefined || parameters.accountAddress === undefined) throw new Error(registerReason ?? copy.enterSecurityPool)
+				const id = approvedId ?? questionId
+				const reason = approvedId === undefined ? registerReason : approvedRegistrationReason(approvedId)
+				if (reason !== undefined || snapshot === undefined || id === undefined || parameters.accountAddress === undefined) throw new Error(reason ?? copy.enterSecurityPool)
 				const selected = snapshot
-				const id = questionId
 				return {
 					...securityPoolContractRequest(parameters.accountAddress, selected.securityPool, 'addQuestion', [id]),
 					reviewDescription: copy.formatRegisterQuestionReview(formatQuestionIdHex(id)),

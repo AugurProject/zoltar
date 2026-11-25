@@ -55,16 +55,16 @@ export function LiquidationPositionsTable({ rows, selected, collateral, disabled
 									{health === undefined ? (
 										copy.healthUnavailable
 									) : (
-										<div className='statoblast-liquidation-health'>
+										<div className='statoblast-liquidation-health' data-distressed={health.belowLiquidation || undefined}>
 											<strong>{copy.formatHealth(formatUnits(health.bps, 2))}</strong>
 											<meter aria-label={copy.healthColumn} aria-valuetext={copy.formatHealth(formatUnits(health.bps, 2))} min={0} max={Number(scale)} low={Number(health.threshold)} optimum={Number(scale)} value={Number(health.bps < scale ? health.bps : scale)} />
-											{health.belowLiquidation && <small>{copy.belowLiquidation}</small>}
+											<small>{copy.formatLiquidationThreshold(copy.formatHealth(formatUnits(health.threshold, 2)))}</small>
 										</div>
 									)}
 									{row.savedAt !== undefined && <UpdatedAgo updatedAt={row.savedAt} />}
 								</td>
 								<td role='cell' data-label={copy.started}>
-									<TimestampValue timestamp={row.started} relative={false} zeroText={copy.notStarted} />
+									<TimestampValue timestamp={row.started} relative='first' zeroText={copy.notStarted} />
 								</td>
 								<td role='cell'>
 									{selectedRow ? (

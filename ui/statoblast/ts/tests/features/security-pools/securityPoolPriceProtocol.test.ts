@@ -1,13 +1,13 @@
 import { afterEach, expect, spyOn, test } from 'bun:test'
 import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, parseAbi, parseAbiParameters, zeroHash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import { buildSecurityPoolPriceTokenWithdrawal, loadSecurityPoolBranchPrice, loadSecurityPoolPriceReport, submittedSecurityPoolPriceReport } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPrice.js'
+import { acceptedSecurityPoolPriceReport, buildSecurityPoolPriceTokenWithdrawal, loadSecurityPoolBranchPrice, loadSecurityPoolPriceReport, submittedSecurityPoolPriceReport } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPrice.js'
 import { sendSecurityPoolTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
 import { asWriteClient, createMockWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { priceFixture, priceFeed, priceEscrow, priceOracle, priceWeth } from './priceFixture.js'
-import { owner, securityPool, token, unit } from './capitalFixture.js'
+import { capital, owner, securityPool, token, unit } from './capitalFixture.js'
 
 afterEach(resetActiveEnvironmentForTesting)
 
@@ -58,6 +58,29 @@ test('receipt captures an indexed report ID while ignoring unrelated feed logs',
 	}
 	expect(submittedSecurityPoolPriceReport(receipt, priceFeed)).toBe(9n)
 	expect(submittedSecurityPoolPriceReport(receipt, token)).toBeUndefined()
+})
+
+test('an accepted report ID requires the verified ledger’s canonical price checkpoint in the same receipt', () => {
+	const abi = parseAbi(['event CapitalPriceAccepted(uint256 price,uint48 validUntil)', 'event PriceReported(uint256 indexed reportId,uint256 price,uint256 lastSettlementTimestamp)'])
+	const base = { blockHash: zeroHash, blockNumber: 10n, transactionHash: zeroHash, transactionIndex: 0n, logIndex: 0n, removed: false }
+	const checkpoint = {
+		...base,
+		address: capital,
+		topics: encodeEventTopics({ abi, eventName: 'CapitalPriceAccepted' }).filter(topic => topic !== null),
+		data: encodeAbiParameters(parseAbiParameters('uint256,uint48'), [unit, 1_700]),
+	}
+	const reported = {
+		...base,
+		address: priceFeed,
+		logIndex: 1n,
+		topics: encodeEventTopics({ abi, eventName: 'PriceReported', args: { reportId: 9n } }).filter(topic => topic !== null),
+		data: encodeAbiParameters(parseAbiParameters('uint256,uint256'), [unit, 1_100n]),
+	}
+	expect(acceptedSecurityPoolPriceReport({ logs: [checkpoint, reported] }, priceFeed, capital, 600n)).toEqual({ reportId: 9n, price: unit, observedAt: 1_100n })
+	expect(acceptedSecurityPoolPriceReport({ logs: [reported] }, priceFeed, capital, 600n)).toBeUndefined()
+	expect(acceptedSecurityPoolPriceReport({ logs: [{ ...checkpoint, address: token }, reported] }, priceFeed, capital, 600n)).toBeUndefined()
+	expect(acceptedSecurityPoolPriceReport({ logs: [checkpoint, reported] }, token, capital, 600n)).toBeUndefined()
+	expect(acceptedSecurityPoolPriceReport({ logs: [checkpoint, reported] }, priceFeed, capital, 599n)).toBeUndefined()
 })
 test('security pool sender preserves explicit callback gas for simulation, review and sending', async () => {
 	const observed: (bigint | undefined)[] = []

@@ -4748,6 +4748,46 @@ span.rep-price-status.stale,
 	background: var(--divider-strong);
 }
 
+.statoblast-queue-totals {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: var(--space-2) var(--space-4);
+}
+
+.statoblast-queue-marker-label {
+	text-align: end;
+}
+
+.statoblast-capital-plan {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	align-items: start;
+	gap: var(--space-4);
+}
+
+.statoblast-capital-plan > div,
+.statoblast-capital-actions {
+	display: grid;
+	gap: var(--space-3);
+}
+
+.statoblast-capital-actions {
+	margin: 0;
+	padding-inline-start: var(--space-5);
+}
+
+.statoblast-capital-actions > li {
+	padding: var(--space-2);
+	border-block-start: 1px solid var(--divider);
+}
+
+@media (max-width: 40rem) {
+	.statoblast-capital-plan {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
 @media (max-width: 64rem) {
 	.statoblast-capital-layout {
 		grid-template-columns: minmax(0, 1fr);
@@ -5422,6 +5462,89 @@ span.rep-price-status.stale,
 .statoblast-deploy-summary {
 	min-inline-size: 0;
 }
+.statoblast-deploy-layout > * {
+	min-inline-size: 0;
+}
+.statoblast-deploy-progress button {
+	display: grid;
+	align-content: start;
+	gap: var(--space-1);
+	block-size: 100%;
+}
+.statoblast-deploy-progress button span,
+.statoblast-deploy-transaction-summary > span {
+	font-size: var(--font-caption);
+}
+.statoblast-deploy-summary-fields {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+	gap: var(--space-2) var(--space-3);
+	align-items: baseline;
+	margin: 0;
+}
+.statoblast-deploy-summary-fields > div {
+	display: contents;
+}
+.statoblast-deploy-summary-fields dd {
+	margin: 0;
+	text-align: end;
+}
+.statoblast-deploy-summary-fields dd .copy-value-wrap {
+	display: block;
+}
+.statoblast-deploy-transactions {
+	display: grid;
+	gap: var(--space-2);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.statoblast-deploy-transaction {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	gap: var(--space-2) var(--space-3);
+	align-items: start;
+	padding: var(--space-2) 0;
+	border-block-end: 1px solid var(--divider-strong);
+}
+.statoblast-deploy-transaction[data-done="true"] .statoblast-deploy-transaction-mark {
+	color: var(--accent);
+}
+.statoblast-deploy-transaction[aria-current="step"] .statoblast-deploy-transaction-mark {
+	border-color: var(--accent);
+}
+.statoblast-deploy-transaction-mark {
+	display: grid;
+	place-items: center;
+	inline-size: var(--space-5);
+	block-size: var(--space-5);
+	border: 1px solid var(--divider-strong);
+	border-radius: var(--radius-circle);
+}
+.statoblast-deploy-transaction-summary {
+	display: grid;
+	gap: var(--space-1);
+	min-inline-size: 0;
+}
+.statoblast-deploy-transaction .tx-action {
+	grid-column: 2;
+	min-inline-size: 0;
+}
+.statoblast-deploy-navigation {
+	justify-content: space-between;
+}
+@media (min-width: 64rem) {
+	.statoblast-deploy-layout[data-transactions="true"] {
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		align-items: start;
+	}
+	.statoblast-deploy-transaction {
+		grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
+	}
+	.statoblast-deploy-transaction .tx-action {
+		grid-column: 3;
+	}
+}
 .statoblast-deploy-progress,
 .statoblast-price-progress {
 	display: grid;
@@ -5448,6 +5571,65 @@ span.rep-price-status.stale,
 .statoblast-deploy-progress li[data-done="true"] button,
 .statoblast-price-progress li[data-done="true"] {
 	border-block-start-color: var(--accent);
+}
+.statoblast-price-progress li[aria-current="step"] {
+	border-block-start-color: var(--success);
+}
+.statoblast-price-progress li > .detail {
+	display: block;
+	margin-block-start: var(--space-1);
+}
+.statoblast-price-actions {
+	display: grid;
+	gap: var(--space-2);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.statoblast-price-actions > li {
+	display: grid;
+	gap: var(--space-2);
+	min-inline-size: 0;
+	padding-block: var(--space-2);
+	border-block-start: 1px solid var(--divider-strong);
+}
+.statoblast-price-action-heading {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-2);
+}
+.statoblast-price-actions > li > p {
+	margin: 0;
+}
+.statoblast-price-coverage {
+	display: grid;
+	gap: var(--space-2);
+}
+.statoblast-price-bounty,
+.statoblast-price-coverage dl {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: var(--space-2);
+	margin: 0;
+}
+.statoblast-price-bounty dd,
+.statoblast-price-coverage dd {
+	margin: 0;
+}
+.statoblast-price-coverage-track {
+	display: flex;
+	block-size: var(--space-2);
+	overflow: hidden;
+	border-radius: var(--radius-control);
+	background: var(--success-soft);
+}
+.statoblast-price-coverage-track span {
+	background: var(--accent);
+}
+.statoblast-price-accepted-value {
+	display: grid;
+	gap: var(--space-1);
 }
 .statoblast-price-layout,
 .statoblast-price-summary {
@@ -5492,6 +5674,12 @@ span.rep-price-status.stale,
 .statoblast-price-band-track > i {
 	inline-size: 3px;
 }
+.statoblast-price-band-track > .statoblast-price-liquidation-pin {
+	background: var(--warning);
+}
+.statoblast-price-band-track > .statoblast-price-health-pin {
+	background: var(--text);
+}
 @media (max-width: 40rem) {
 	.statoblast-deploy-progress,
 	.statoblast-price-progress {
@@ -5508,6 +5696,13 @@ span.rep-price-status.stale,
 	}
 	.statoblast-price-summary:has(.statoblast-price-band) {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.statoblast-price-actions > li:has(> .tx-action) {
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	}
+	.statoblast-price-actions > li > .tx-action {
+		grid-column: 2;
+		grid-row: 1 / span 2;
 	}
 }
 
@@ -5659,6 +5854,88 @@ span.rep-price-status.stale,
 }
 .statoblast-liquidation-reward progress {
 	inline-size: 100%;
+	accent-color: var(--accent);
+}
+.statoblast-liquidation-workspace {
+	display: grid;
+	grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+	align-items: start;
+	gap: var(--space-3);
+}
+.statoblast-liquidation-lookup {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: end;
+	gap: var(--space-2);
+}
+.statoblast-liquidation-lookup .actions {
+	margin: 0;
+}
+.statoblast-liquidation-timeline,
+.statoblast-liquidation-reward-values {
+	display: grid;
+	gap: var(--space-2);
+	margin: 0;
+}
+.statoblast-liquidation-timeline {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.statoblast-liquidation-reward-values {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.statoblast-liquidation-timeline > div {
+	display: grid;
+	align-content: start;
+}
+.statoblast-liquidation-timeline > div:nth-child(2) {
+	text-align: center;
+}
+.statoblast-liquidation-timeline > div:last-child,
+.statoblast-liquidation-reward-values > div:last-child {
+	text-align: end;
+}
+.statoblast-liquidation-reward-values dt,
+.statoblast-liquidation-timeline span,
+.statoblast-liquidation-comparison dt {
+	color: var(--muted);
+}
+.statoblast-liquidation-comparison dd,
+.statoblast-liquidation-reward-values dd {
+	margin: 0;
+}
+.statoblast-liquidation-limits {
+	display: grid;
+	gap: var(--space-2);
+	min-inline-size: 0;
+	padding: 0;
+	margin: 0;
+	border: 0;
+}
+.statoblast-liquidation-limits legend {
+	padding: 0;
+	font-weight: 600;
+}
+.statoblast-liquidation-limits button {
+	justify-self: start;
+}
+.statoblast-liquidation-comparison dl {
+	display: grid;
+	gap: var(--space-2);
+	margin: 0;
+}
+.statoblast-liquidation-comparison dl > div {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: var(--space-1) var(--space-2);
+	border-block-end: 1px solid var(--divider-strong);
+	padding-block-end: var(--space-2);
+}
+@media (max-width: 64rem) {
+	.statoblast-liquidation-workspace {
+		grid-template-columns: minmax(0, 1fr);
+	}
 }
 
 .statoblast-fork-diagram {
@@ -5740,6 +6017,9 @@ span.rep-price-status.stale,
 .statoblast-liquidation-health {
 	display: grid;
 	gap: var(--space-1);
+}
+.statoblast-liquidation-health[data-distressed] strong {
+	color: var(--danger);
 }
 
 .statoblast-liquidation-health meter {
