@@ -103,9 +103,9 @@ export const mountSearch = (api: (path: string) => Promise<unknown>, chainId: ()
 		input.dataset['searchTimer'] = String(window.setTimeout(() => void search(), 250))
 	})
 	const dismiss = () => {
+		clearTimer()
 		if (results.hidden) return
 		generation++
-		clearTimer()
 		hide()
 	}
 	// The panel closes when attention leaves the search: a press elsewhere on the page or focus moving out by keyboard.
