@@ -221,7 +221,7 @@ export function oracleRequestPreparation(snapshot: EcosystemSnapshot, pool: Pool
 	}
 }
 
-export function exactWalletTokenDebitEvidence(snapshot: EcosystemSnapshot, token: `0x${string}`, expected: bigint): OperationEvidence {
+export function exactOracleFundingTransferEvidence(snapshot: EcosystemSnapshot, token: `0x${string}`, expected: bigint): OperationEvidence {
 	return {
 		abi: 'event Transfer(address indexed from, address indexed to, uint256 value)',
 		emitter: token,

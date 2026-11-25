@@ -147,8 +147,8 @@
 
 							<tr>
 								<td><code>SharedPoolPriceFeedFactory</code></td>
-								<td>The feed factory deploys one shared implementation per calling factory and security pool, then a clone bound to each universe and its REP token. Feed construction validates the positive priority fee, oracle challenge parameters, and report-capacity bounds.</td>
-								<td>Accept the feed only when it matches <code>SecurityPoolFactory.sharedPriceFeeds(securityPool, universeId)</code>. Every question in that security pool and universe references the same feed; fork children inherit its immutable oracle configuration.</td>
+								<td>The factory deploys a shared feed implementation per caller and security pool, then universe-bound clones. The canonical security pool factory supplies OpenOracle, the positive report priority fee, and the universe REP token. Feed construction validates the fee against report and escalation limits.</td>
+								<td>The canonical feed is recorded in <code>SecurityPoolFactory.sharedPriceFeeds(securityPool, universeId)</code> and referenced by each ledger in <code>DeployQuestionLedger</code>. Child feeds inherit the security pool’s immutable report configuration.</td>
 							</tr>
 							<tr>
 								<td><code>SharedPoolPriceFeedDeploymentWorker</code> and <code>QuestionLedgerDeploymentWorker</code></td>
@@ -162,8 +162,13 @@
 								<td>They are code-size deployment plumbing. The proxy deployer deploys one deterministic <code>QuestionLedgerOperationsDelegate</code>, and its address is passed into the <code>SecurityPoolFactory</code> constructor. The proxy deployer is the deterministic <code>CREATE2</code> deployment proxy that every canonical deployment goes through; it is not a Solidity source in this repository and appears in the deployment manifests as step <code>proxyDeployer</code>. The factory passes that address through its deployer and worker to every question ledger. Its deterministic address is published as <code>questionLedgerOperationsDelegate</code>. Question ledgers become canonical only when the factory emits <code>QuestionLedgerRegistered</code> and <code>DeployQuestionLedger</code>.</td>
 							</tr>
 							<tr>
+								<td><code>QuestionForker</code></td>
+								<td>Prepares and materializes child question ledgers directly against shared security-pool branch state.</td>
+								<td>It authenticates the source factory, descendant universe, and child lineage. Reporter and settlement ledgers retain migration custody.</td>
+							</tr>
+							<tr>
 								<td><code>EscalationGameDepositDelegate</code>, <code>QuestionLedgerSettlementDelegate</code>, and <code>QuestionLedgerOperationsDelegate</code></td>
-								<td>EscalationGame delegates share game storage and implement reporting deposits and authenticated historical claims. QuestionLedgerOperationsDelegate handles wallet reporting, continuation resumption, and redemption. The combined QuestionForker prepares child questions directly against shared branch state. These helpers execute in their recognized host context.</td>
+								<td>EscalationGame delegates share game storage and implement reporting deposits and authenticated historical claims. QuestionLedgerOperationsDelegate handles wallet reporting, continuation resumption, and redemption. These helpers execute in their recognized host context.</td>
 								<td>Accept resulting state and logs only when the recognized game or question ledger executes the matching wrapper through <code>delegatecall</code>. State changes and events then occur in that recognized contract's context. Canonical liquidation enters through the security pool capital ledger; continuation activation enters through <code>QuestionLedger.resumeForkedEscalationGame</code>.</td>
 							</tr>
 							<tr>

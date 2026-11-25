@@ -1,9 +1,9 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const questionForkerContractReference: ContractReference = {
-	compiledAbiFingerprint: '2fdc57485e723c172486df04eb7c7338c8eeb4c12e337897626461383d948078',
+	compiledAbiFingerprint: 'f4f40cac0a9e7d7f567cdcc23173f2ce8c03290100c4b02e94abbde95215023f',
 	name: 'QuestionForker',
 	purpose: 'Executes shared-security-pool question forks and lazy child question preparation.',
-	readAbiFingerprint: 'b0388985e5969ec691cc6174c3f6deb67b8426d52c250afffa733716cd4a2938',
+	readAbiFingerprint: '71d147b73a91ab01a9a48a22ba2e0ac710f5c7e6999e8c205853047aee0488a4',
 	readSurface:
 		'`zoltar` identifies the protocol root. `getQuestionOutcome` returns the fixed or finalized question outcome, or None while unresolved; the shared security pool clock protects pre-fork final claims. `getOwnForkAdmissionShortfall` returns the reporter ledger and the REP an own-question fork pulls from its caller.',
 	readDeclarations: [

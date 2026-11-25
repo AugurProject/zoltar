@@ -7,8 +7,8 @@ import { statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed } from '../../../../
 
 const PRICE_PRECISION = 10n ** 18n
 
-const handleOracleReporting = async (client: WriteClient, mockWindow: AnvilWindowEthereum, sharedPriceFeed: Address, forceRepEthPriceTo: bigint) => {
-	const pendingReportId = await getPendingReportId(client, sharedPriceFeed)
+const handleOracleReporting = async (client: WriteClient, mockWindow: AnvilWindowEthereum, priceFeed: Address, forceRepEthPriceTo: bigint) => {
+	const pendingReportId = await getPendingReportId(client, priceFeed)
 	if (pendingReportId === 0n) {
 		// operation already executed
 		return
@@ -24,7 +24,7 @@ const handleOracleReporting = async (client: WriteClient, mockWindow: AnvilWindo
 	assert.strictEqual(reportStatus.currentAmount1, expectedAmount1, 'pending report should preserve the coordinator-selected token1 amount')
 	assert.strictEqual(reportStatus.currentAmount2, expectedAmount2, 'pending report should already encode the forced price before settlement')
 	assert.notStrictEqual(reportStatus.currentReporter, zeroAddress, 'pending report should already have an initial reporter')
-	const reporter = (await client.readContract({ abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, address: sharedPriceFeed, functionName: 'reportCandidates', args: [pendingReportId] }))[0]
+	const reporter = (await client.readContract({ abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, address: priceFeed, functionName: 'reportCandidates', args: [pendingReportId] }))[0]
 	assert.strictEqual(reportStatus.currentReporter, reporter, 'pending report should use its isolated reporter')
 	assert.strictEqual(reportStatus.initialReporter, reporter, 'pending report should preserve its isolated reporter')
 	assert.ok(reportStatus.reportTimestamp > 0n, 'pending report should already have a report timestamp')
@@ -32,15 +32,15 @@ const handleOracleReporting = async (client: WriteClient, mockWindow: AnvilWindo
 	await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
 
 	await openOracleSettle(client, pendingReportId)
-	assert.strictEqual(await getLastPrice(client, sharedPriceFeed), expectedSettledPrice, 'settled coordinator price should match the encoded pending report price')
+	assert.strictEqual(await getLastPrice(client, priceFeed), expectedSettledPrice, 'settled coordinator price should match the encoded pending report price')
 }
 
-export const manipulatePriceOracle = async (client: WriteClient, mockWindow: AnvilWindowEthereum, sharedPriceFeed: Address, forceRepEthPriceTo: bigint = PRICE_PRECISION, requestedInitialAttoWeth = 0n) => {
-	if (await getIsPriceValid(client, sharedPriceFeed)) {
-		const target = { abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, address: sharedPriceFeed }
+export const manipulatePriceOracle = async (client: WriteClient, mockWindow: AnvilWindowEthereum, priceFeed: Address, forceRepEthPriceTo: bigint = PRICE_PRECISION, requestedInitialAttoWeth = 0n) => {
+	if (await getIsPriceValid(client, priceFeed)) {
+		const target = { abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, address: priceFeed }
 		await mockWindow.setTime((await client.readContract({ ...target, functionName: 'priceValidUntil' })) + 1n)
 	}
-	const costAttoEth = await getRequestPriceCostAttoEth(client, sharedPriceFeed)
-	await requestPriceWithValue(client, sharedPriceFeed, costAttoEth, forceRepEthPriceTo, requestedInitialAttoWeth)
-	await handleOracleReporting(client, mockWindow, sharedPriceFeed, forceRepEthPriceTo)
+	const costAttoEth = await getRequestPriceCostAttoEth(client, priceFeed)
+	await requestPriceWithValue(client, priceFeed, costAttoEth, forceRepEthPriceTo, requestedInitialAttoWeth)
+	await handleOracleReporting(client, mockWindow, priceFeed, forceRepEthPriceTo)
 }

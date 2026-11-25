@@ -17,7 +17,7 @@ import { discoverPoolPriceFeed } from '../../src/monitoring/discovery-price-feed
 import { discoverEcosystemSnapshot } from '../../src/monitoring/discovery.ts'
 import { DISCOVERY_RPC_CONCURRENCY, DISCOVERY_RPC_QUEUE_LIMIT, drainConcurrent, limitDiscoveryConcurrency, mapWithConcurrency, type ChaosReadClient } from '../../src/monitoring/discovery-client.ts'
 import { discoverDirectEscalationDepositQuotes, relevantTokenSpenders } from '../../src/monitoring/discovery-escalation.ts'
-import { assertCanonicalPairGraph, assertCanonicalPoolGraph, authenticatePoolProtocolBindings } from '../../src/monitoring/discovery-graph.ts'
+import { assertCanonicalPairGraph, assertCanonicalPoolGraph } from '../../src/monitoring/discovery-graph.ts'
 import { collectCountedPages } from '../../src/monitoring/discovery-registry.ts'
 import { discoverShareInventory, trustedIndexedReportsForDiscovery } from '../../src/monitoring/discovery-share-inventory.ts'
 import { canonicalLifecyclePresence } from '../../src/operations/catalog.ts'
@@ -88,22 +88,24 @@ test('authenticates latest and retained candidate escrows at the same discovery 
 	await expect(discoverPoolPriceFeed(fake.client, address(21), 10n, funding, 1n, 9n)).rejects.toThrow('pending report has no authenticated escrow')
 })
 
-test.each([false, true])('discovers canonical child preparation at the pinned block (ready: %s)', async ready => {
-	const fake = fakeClient(10n, hash(10), { childPreparation: { ready } })
-	const preparation = await discoverChildPoolPreparations(fake.client, address(4), address(2), address(50), 0n, address(90), 7n, ['1'], 10n)
-	expect(preparation['1']).toEqual({
-		securityPool: address(90),
-		branchReady: ready,
-		sourcePool: address(50),
-		sourceGame: zeroAddress,
-		childUniverseId: '88',
-		childPool: ready ? address(93) : zeroAddress,
-		game: zeroAddress,
-		historyOutcomesInitialized: 0,
-		historyReady: ready,
-	})
-	expect(fake.contractReads.some(read => read.functionName === 'sharedPriceFeeds')).toBe(false)
-})
+for (const shared of [false, true])
+	for (const ready of [false, true])
+		test(`discovers canonical child preparation at the pinned block (${shared}, ${ready})`, async () => {
+			const fake = fakeClient(10n, hash(10), { childPreparation: { shared, ready } })
+			const preparation = await discoverChildPoolPreparations(fake.client, address(4), address(2), address(50), 0n, shared ? address(90) : zeroAddress, 7n, ['1'], 10n)
+			expect(preparation['1']).toEqual({
+				securityPool: shared ? address(90) : zeroAddress,
+				branchReady: !shared || ready,
+				sourcePool: address(50),
+				sourceGame: zeroAddress,
+				childUniverseId: '88',
+				childPool: ready ? address(93) : zeroAddress,
+				game: zeroAddress,
+				historyOutcomesInitialized: 0,
+				historyReady: ready,
+			})
+			expect(fake.contractReads.some(read => read.functionName === 'sharedPriceFeeds')).toBe(false)
+		})
 
 test('keyless pool discovery keeps auctions and vault topology without execution-account reads', async () => {
 	const fake = refundBackfillClient(25n)
@@ -262,7 +264,7 @@ function topologyIdentity(): ImmutableTopologyIdentity {
 }
 
 interface GraphOverrides {
-	childPreparation?: { ready: boolean }
+	childPreparation?: { shared: boolean; ready: boolean }
 	chainId?: number
 	missingContract?: Address
 	missingContracts?: readonly Address[]
@@ -276,7 +278,7 @@ interface GraphOverrides {
 	outcomeLabelsByQuestion?: Readonly<Record<string, readonly string[]>>
 	poolDeployments?: readonly {
 		parent: Address
-		sharedPriceFeed: Address
+		priceFeed: Address
 		questionId: bigint
 		questionLedger: Address
 		shareToken: Address
@@ -389,11 +391,11 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 				case 'getChildUniverseId':
 					return 88n
 				case 'securityPoolOf':
-					return address(90)
-				case 'sharedPriceFeeds':
-					return address(21)
+					return graph.childPreparation?.shared ? address(90) : zeroAddress
 				case 'getQuestionLedgerOriginId':
 					return hash(90)
+				case 'getChildQuestionLedgerCoordinator':
+					return graph.childPreparation?.ready ? address(91) : zeroAddress
 				case 'clocks':
 					return [0n, 0n, true, graph.childPreparation?.ready ?? false]
 				case 'getForkTime':
@@ -406,6 +408,8 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					return 0n
 				case 'getQuestionLedger':
 					return graph.childPreparation?.ready ? address(93) : zeroAddress
+				case 'sharedPriceFeeds':
+					return graph.childPreparation?.ready ? address(94) : zeroAddress
 				case 'getMigrationRepBalanceAttoRep':
 					return 0n
 				case 'getDeployedChildUniverses': {
@@ -494,7 +498,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 		poolDeployments: [
 			{
 				parent: address(0),
-				sharedPriceFeed: coordinator,
+				priceFeed: coordinator,
 				questionId: 101n,
 				questionLedger: pool,
 				shareToken,
@@ -527,6 +531,8 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 					return 4n
 				case 'getRepToken':
 					return address(10)
+				case 'sharedPriceFeeds':
+					return coordinator
 				case 'securityPoolOf':
 					return address(90)
 				case 'getQuestionLedger':
@@ -652,15 +658,13 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 					return 100n
 				case 'lastPrice':
 					return 10n ** 18n
-				case 'priceFeed':
-					return coordinator
 				case 'aggregateExposureAttoEth':
 					expect(parameters.blockNumber).toBe(10n)
-					expect(parameters.address).toBe(coordinator)
+					expect(parameters.address).toBe(address(21))
 					return overrides.sharedExposure ?? 0n
 				case 'reportCandidates':
 					expect(parameters.blockNumber).toBe(10n)
-					expect(parameters.address).toBe(coordinator)
+					expect(parameters.address).toBe(address(21))
 					if (parameters.args?.[0] === 7n) return [address(87), address(1), 1n]
 					return [parameters.args?.[0] === 6n ? address(86) : zeroAddress, address(1), 1n]
 				case 'minimumToken2ReportAttoRep':
@@ -697,8 +701,10 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 					return address(5)
 				case 'questionData':
 					return address(3)
-				case 'sharedPriceFeed':
+				case 'priceFeed':
 					return coordinator
+				case 'questionLedger':
+					return pool
 				case 'openOracle':
 					return address(6)
 				case 'services':
@@ -730,41 +736,6 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 		},
 	})
 	return { client, contractReads, pool, collateralRepairAuction }
-}
-
-interface PoolBindingOverrides {
-	coordinatorOpenOracle?: Address
-	coordinatorRepToken?: Address
-	coordinatorWeth?: Address
-	poolOpenOracle?: Address
-	readFailure?: Error
-}
-
-function poolBindingClient(pool: Address, coordinator: Address, overrides: PoolBindingOverrides = {}) {
-	const reads: Array<{ address: Address; blockNumber?: bigint; functionName: string }> = []
-	const implementation = {
-		async readContract(parameters: { address: Address; blockNumber?: bigint; functionName: string }) {
-			reads.push(parameters)
-			if (overrides.readFailure !== undefined) throw overrides.readFailure
-			if (parameters.functionName === 'securityPoolFactory') return address(4)
-			if (parameters.functionName === 'securityPoolOf') return address(90)
-			if (parameters.functionName === 'universeId') return 6n
-			if (parameters.functionName === 'sharedPriceFeeds') return coordinator
-			if (parameters.functionName === 'openOracle' && parameters.address.toLowerCase() === pool.toLowerCase()) return overrides.poolOpenOracle ?? address(6)
-			if (parameters.functionName === 'openOracle' && parameters.address.toLowerCase() === coordinator.toLowerCase()) return overrides.coordinatorOpenOracle ?? address(6)
-			if (parameters.functionName === 'weth' && parameters.address.toLowerCase() === coordinator.toLowerCase()) return overrides.coordinatorWeth ?? address(7)
-			if (parameters.functionName === 'reputationToken' && parameters.address.toLowerCase() === coordinator.toLowerCase()) return overrides.coordinatorRepToken ?? address(24)
-			throw new Error(`Unexpected binding read ${parameters.address} ${parameters.functionName}`)
-		},
-	}
-	const client = new Proxy({} as ChaosReadClient, {
-		get(_target, property) {
-			const value = implementation[property as keyof typeof implementation]
-			if (value === undefined) throw new Error(`Unexpected client method ${String(property)}`)
-			return value
-		},
-	})
-	return { client, reads }
 }
 
 describe('anchored ecosystem discovery', () => {
@@ -1065,7 +1036,7 @@ describe('anchored ecosystem discovery', () => {
 		const questionIds = Array.from({ length: 11 }, (_, index) => BigInt(100 + index))
 		const poolDeployments = Array.from({ length: 11 }, (_, index) => ({
 			parent: address(0),
-			sharedPriceFeed: address(1_000 + index),
+			priceFeed: address(1_000 + index),
 			questionId: questionIds[index] ?? 0n,
 			questionLedger: address(2_000 + index),
 			shareToken: address(3_000 + index),
@@ -1573,75 +1544,6 @@ describe('anchored ecosystem discovery', () => {
 		}
 	})
 
-	test('authenticates every pool and coordinator oracle/token binding at the pinned block', async () => {
-		const pool = address(20)
-		const coordinator = address(21)
-		const binding = poolBindingClient(pool, coordinator)
-		await expect(
-			authenticatePoolProtocolBindings({
-				blockNumber: 55n,
-				canonicalRepToken: address(24),
-				client: binding.client,
-				configuredOpenOracle: address(6),
-				configuredWeth: address(7),
-				coordinator,
-				pool,
-			}),
-		).resolves.toBeUndefined()
-		expect(binding.reads.map(read => [read.address, read.functionName])).toEqual([
-			[pool, 'openOracle'],
-			[coordinator, 'openOracle'],
-			[coordinator, 'weth'],
-			[coordinator, 'reputationToken'],
-			[pool, 'securityPoolFactory'],
-			[address(4), 'securityPoolOf'],
-			[pool, 'universeId'],
-			[address(4), 'sharedPriceFeeds'],
-		])
-		expect(binding.reads.every(read => read.blockNumber === 55n)).toBe(true)
-	})
-
-	test('rejects mismatched pool and coordinator oracle/token bindings', async () => {
-		const pool = address(20)
-		const coordinator = address(21)
-		const cases: Array<{ expected: string; overrides: PoolBindingOverrides }> = [
-			{ expected: `Pool ${pool} OpenOracle edge`, overrides: { poolOpenOracle: address(99) } },
-			{ expected: `Coordinator ${coordinator} OpenOracle edge`, overrides: { coordinatorOpenOracle: address(99) } },
-			{ expected: `Coordinator ${coordinator} WETH edge`, overrides: { coordinatorWeth: address(99) } },
-			{ expected: `Coordinator ${coordinator} REP edge`, overrides: { coordinatorRepToken: address(99) } },
-		]
-		for (const candidate of cases) {
-			await expect(
-				authenticatePoolProtocolBindings({
-					blockNumber: 55n,
-					canonicalRepToken: address(24),
-					client: poolBindingClient(pool, coordinator, candidate.overrides).client,
-					configuredOpenOracle: address(6),
-					configuredWeth: address(7),
-					coordinator,
-					pool,
-				}),
-			).rejects.toThrow(candidate.expected)
-		}
-	})
-
-	test('propagates pool binding transport failures without accepting an unauthenticated graph', async () => {
-		const pool = address(20)
-		const coordinator = address(21)
-		const readFailure = new Error('RPC transport closed during immutable binding read')
-		await expect(
-			authenticatePoolProtocolBindings({
-				blockNumber: 55n,
-				canonicalRepToken: address(24),
-				client: poolBindingClient(pool, coordinator, { readFailure }).client,
-				configuredOpenOracle: address(6),
-				configuredWeth: address(7),
-				coordinator,
-				pool,
-			}),
-		).rejects.toThrow(readFailure.message)
-	})
-
 	test('rejects forged pool and pair edges before their assets can be approved', () => {
 		const pool = address(20)
 		const poolIdentity = {
@@ -1649,7 +1551,6 @@ describe('anchored ecosystem discovery', () => {
 			configuredForker: address(5),
 			configuredQuestionData: address(3),
 			configuredZoltar: address(2),
-			coordinatorPool: pool,
 			deploymentCoordinator: address(21),
 			deploymentQuestionId: '7',
 			deploymentShareToken: address(22),

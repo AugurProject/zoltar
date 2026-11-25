@@ -37,7 +37,7 @@ For an allowlisted collateral, the bot hedges REP against that collateral throug
 
 ## How the flow works
 
-Statoblast’s `SharedPoolPriceFeed` opens price candidates through isolated `SharedPoolReportEscrow` contracts. The bot finds these reports and compares their locked price with executable Uniswap quotes. If a hedge and dispute meet its [execution checks](./EXECUTION.md#before-each-dispute), it submits them in one transaction. It then settles and withdraws once eligible, or [recovers the position’s credits](./RECOVERY.md#durable-position-journal) if a later reporter replaces it.
+The bot finds reports from approved shared feeds and compares their locked price with executable Uniswap quotes. If a hedge and dispute meet its [execution checks](./EXECUTION.md#before-each-dispute), it submits them in one transaction. It then settles and withdraws once eligible, or [recovers the position’s credits](./RECOVERY.md#durable-position-journal) if a later reporter replaces it.
 
 The wallet approvals this flow needs are listed under [required ETH, WETH, and tokens](./EXECUTION.md#required-eth-weth-and-tokens). [Profit and history semantics](./EXECUTION.md#profit-and-history-semantics) explains the report lifecycle assumptions and economics.
 

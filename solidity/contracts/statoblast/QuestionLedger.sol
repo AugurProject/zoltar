@@ -50,7 +50,7 @@ contract QuestionLedger is QuestionLedgerStorage {
 	IQuestionLedger public immutable parent;
 	IShareToken public immutable shareToken;
 	ReputationToken public immutable repToken;
-	SharedPoolPriceFeed public immutable sharedPriceFeed;
+	SharedPoolPriceFeed public immutable priceFeed;
 	OpenOracle public immutable openOracle;
 	EscalationGameFactory public immutable escalationGameFactory;
 	ZoltarQuestionData public immutable questionData;
@@ -82,7 +82,7 @@ contract QuestionLedger is QuestionLedgerStorage {
 		_;
 	}
 
-	constructor(address _questionForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, SharedPoolPriceFeed _sharedPriceFeed, IShareToken _shareToken, OpenOracle _openOracle, IQuestionLedger _parent, Zoltar _zoltar, uint248 _universeId, uint256 _questionId, uint256 _statoblastSecurityMultiplierBps) {
+	constructor(address _questionForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, SharedPoolPriceFeed _priceFeed, IShareToken _shareToken, OpenOracle _openOracle, IQuestionLedger _parent, Zoltar _zoltar, uint248 _universeId, uint256 _questionId, uint256 _statoblastSecurityMultiplierBps) {
 		universeId = _universeId;
 		IQuestionLedgerDeploymentWorkerConfiguration worker = IQuestionLedgerDeploymentWorkerConfiguration(msg.sender);
 		securityPoolFactory = worker.factory();
@@ -97,7 +97,7 @@ contract QuestionLedger is QuestionLedgerStorage {
 		parent = _parent;
 		openOracle = _openOracle;
 		escalationGameFactory = _escalationGameFactory;
-		sharedPriceFeed = _sharedPriceFeed;
+		priceFeed = _priceFeed;
 		questionForker = _questionForker;
 		questionData = _questionData;
 		if (address(parent) == address(0x0)) {

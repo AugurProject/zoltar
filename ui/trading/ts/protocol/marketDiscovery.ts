@@ -62,7 +62,7 @@ async function loadCanonicalPoolDeployment(client: PublicClient, configuration: 
 	const [questionId, statoblastSecurityMultiplierBps, manager] = await Promise.all([
 		client.readContract({ abi: poolAbi, address: pool, functionName: 'questionId' }),
 		client.readContract({ abi: poolAbi, address: pool, functionName: 'statoblastSecurityMultiplierBps' }),
-		client.readContract({ abi: poolAbi, address: pool, functionName: 'sharedPriceFeed' }),
+		client.readContract({ abi: poolAbi, address: pool, functionName: 'priceFeed' }),
 	])
 	const initialReportPriorityFeeAttoEthPerGas = await client.readContract({ abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, address: getAddress(manager), functionName: 'initialReportPriorityFeeAttoEthPerGas' })
 	return { questionLedger: pool, shareToken: getAddress(shareToken), universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas }

@@ -351,7 +351,8 @@ describe('contract operation classification', () => {
 			}
 			if (directDelegateContracts.has(entry.contract)) expect(entry.classification, `${entry.contract}.${entry.method}`).toBe('excluded-dangerous')
 			if (orphanFactoryContracts.has(entry.contract)) {
-				expect(entry.classification, `${entry.contract}.${entry.method}`).toBe('excluded-dangerous')
+				const authenticatedFeedWiring = entry.contract === 'SharedPoolPriceFeedFactory' && ['deploySharedPoolPriceFeed', 'configureSharedPriceFeed', 'configureQuestionLedger'].includes(entry.method)
+				expect(entry.classification, `${entry.contract}.${entry.method}`).toBe(authenticatedFeedWiring ? 'role-restricted' : 'excluded-dangerous')
 			}
 		}
 	})

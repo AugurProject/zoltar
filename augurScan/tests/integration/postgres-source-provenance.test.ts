@@ -282,7 +282,7 @@ const resetForCombinedSourceChange = async ({ database, provenanceChainId, netwo
 	if (abiResetLease === undefined) throw new Error('ABI reset writer did not acquire its lock')
 	const combinedResetNetwork = {
 		...network,
-		contracts: [...network.contracts, [address, 'Combined reset fixture', 'sharedPoolPriceFeed']],
+		contracts: [...network.contracts, [address, 'Combined reset fixture', 'priceCoordinator']],
 	} satisfies NetworkConfig
 	try {
 		expect(

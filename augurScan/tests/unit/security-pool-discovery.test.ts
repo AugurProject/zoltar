@@ -99,14 +99,14 @@ test('a settled price report discovers the escrow that names the emitting feed',
 			expect(address).toBe(escrow)
 			return escrowFeed
 		}
-	expect(await discoverSecurityPoolEventDependencies(feedEmitter, funded, read([escrow, pool, 0n]))).toEqual([{ address: escrow, kind: 'sharedPoolReportEscrow', label: 'Shared Report Escrow' }])
-	await expect(discoverSecurityPoolEventDependencies(feedEmitter, funded, read([zeroAddress, pool, 0n]))).rejects.toThrow('escrow binding')
-	await expect(discoverSecurityPoolEventDependencies(feedEmitter, funded, read([escrow, pool, 0n], pool))).rejects.toThrow('escrow binding')
+	expect(await discoverSecurityPoolEventDependencies(feedEmitter, funded, read([escrow, pool, pool, 0n]))).toEqual([{ address: escrow, kind: 'sharedPoolReportEscrow', label: 'Shared Report Escrow' }])
+	await expect(discoverSecurityPoolEventDependencies(feedEmitter, funded, read([zeroAddress, pool, pool, 0n]))).rejects.toThrow('escrow binding')
+	await expect(discoverSecurityPoolEventDependencies(feedEmitter, funded, read([escrow, pool, pool, 0n], pool))).rejects.toThrow('escrow binding')
 	await expect(discoverSecurityPoolEventDependencies(feedEmitter, funded, read(escrow))).rejects.toThrow('invalid tuple')
 	await expect(discoverSecurityPoolEventDependencies(feedEmitter, { ...funded, arguments: {} }, read([escrow]))).rejects.toThrow('missing its report')
-	expect(await discoverSecurityPoolEventDependencies(feedEmitter, { ...funded, name: 'PriceReportRejected' }, read([escrow, pool, 0n]))).toEqual([{ address: escrow, kind: 'sharedPoolReportEscrow', label: 'Shared Report Escrow' }])
+	expect(await discoverSecurityPoolEventDependencies(feedEmitter, { ...funded, name: 'PriceReportRejected' }, read([escrow, pool, pool, 0n]))).toEqual([{ address: escrow, kind: 'sharedPoolReportEscrow', label: 'Shared Report Escrow' }])
 	// Only a registered shared price feed's decision triggers the read: a request has no completed escrow yet.
-	expect(await discoverSecurityPoolEventDependencies({ ...feedEmitter, kind: 'questionLedger' }, funded, read([escrow]))).toEqual([])
+	expect(await discoverSecurityPoolEventDependencies({ ...feedEmitter, kind: 'priceCoordinator' }, funded, read([escrow]))).toEqual([])
 	expect(await discoverSecurityPoolEventDependencies(feedEmitter, { ...funded, name: 'ReportFundingAssigned' }, read([escrow]))).toEqual([])
 })
 

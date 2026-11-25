@@ -64,7 +64,7 @@ export const reviewedActions: Record<string, { title: string; completedTitle: st
 	'Fund deterministic proxy deployer signer without surplus': { title: 'Fund proxy deployment', completedTitle: 'Proxy deployment funded', description: 'Provide ETH for deploying the shared proxy. Unused funding is returned in this transaction.' },
 	'Broadcast deterministic proxy deployer transaction': { title: 'Deploy shared proxy', completedTitle: 'Shared proxy deployed', description: 'Broadcast the signed proxy deployment. If the signer needs ETH, this attempt sends nothing; fund it and retry in the following steps.' },
 	deposit: { title: wrapEthIntoWeth, completedTitle: ethWrapped, description: 'Convert ETH into WETH held in your wallet to fund the oracle report.' },
-	requestSecurityPoolPrice: { title: 'Request new price', completedTitle: priceRequested, description: 'Fund and start an oracle price report using your approved REP and WETH.' },
+	requestPrice: { title: 'Request new price', completedTitle: priceRequested, description: 'Fund and start an oracle price report using your approved REP and WETH.' },
 	approve: { title: 'Approve token spending', completedTitle: 'Token spending approved', description: 'Authorize the listed spending limit; tokens stay in your wallet.' },
 	depositRepOnOutcome: { title: 'Report outcome', completedTitle: 'Outcome reported', description: reportOutcomeReviewDescription },
 	depositRepOnOutcomeWithLead: { title: 'Report outcome', completedTitle: 'Outcome reported', description: reportOutcomeReviewDescription },

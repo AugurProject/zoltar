@@ -166,6 +166,7 @@ describe('Statoblast: bounded fork initialization', () => {
 		expect(factoryEvents).toEqual([{ eventName: 'SharedPriceFeedRegistered', args: { securityPool: getAddress(fixture.securityPool), universeId: childUniverse, priceFeed: getAddress(createdFeed) } }])
 		await base.mockWindow.setTime(forkTime + 56n * DAY + 1n)
 		await checkGas(await writeContractAndWait(other(), () => other().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'startBranch', args: [base.genesisUniverse, BigInt(QuestionOutcome.No)], gas: transactionGasLimit })), 'shared branch migration')
+
 		const feed = await owner().readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'priceFeed', args: [childUniverse] })
 		const originFeed = await owner().readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'priceFeed', args: [base.genesisUniverse] })
 		const feedImplementation = await owner().readContract({ abi: oracleFactoryArtifact.abi, address: getInfraContractAddresses().sharedPoolPriceFeedFactory, functionName: 'sharedPriceFeedImplementations', args: [factory, fixture.securityPool] })
@@ -181,6 +182,8 @@ describe('Statoblast: bounded fork initialization', () => {
 			await expect(other().call({ to: address, value: 1n, gas: 23_300n })).rejects.toThrow()
 		}
 		await expect(other().simulateContract({ abi: feedArtifact.abi, address: feedImplementation, functionName: 'requestSecurityPoolPrice', args: [1n, 0n, 0n] })).rejects.toThrow('Universe module requires a clone')
+		expect(await owner().readContract({ abi: feedArtifact.abi, address: feed, functionName: 'universeId' })).toBe(childUniverse)
+		expect(await owner().readContract({ abi: feedArtifact.abi, address: feed, functionName: 'reputationToken' })).toBe(getRepTokenAddress(childUniverse))
 		await expect(other().simulateContract({ abi: forkerArtifact.abi, address: forker, functionName: 'prepareSecurityPoolQuestion', args: [parent, childUniverse] })).rejects.toThrow('Fork activation window still open')
 		await base.mockWindow.setTime(forkTime + 63n * DAY)
 		await checkGas(await writeContractAndWait(other(), () => other().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'finalizeBranch', args: [childUniverse] })), 'shared branch activation', 2_000_000n)

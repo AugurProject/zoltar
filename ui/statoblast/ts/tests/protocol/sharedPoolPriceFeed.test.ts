@@ -28,6 +28,7 @@ for (const mismatch of [undefined, 'feed', 'factory', 'collateralToken', 'rep', 
 					expect(request.args).toEqual([coordinator, 5n])
 					return { status: 'success', result: mismatch === 'feed' ? coordinator : feed }
 				}
+				if (request.functionName === 'questionLedger') return { status: 'failure', error: new Error('Not a question coordinator') }
 				throw new Error(`Unexpected read ${request.functionName}`)
 			}),
 		)

@@ -159,7 +159,7 @@ export const createDemoChainFixtures = () => {
 			explorer_base_url: network.explorer_base_url,
 			address,
 			label: index === 2 ? 'Price Coordinator' : null,
-			kind: index === 2 ? 'sharedPoolPriceFeed' : null,
+			kind: index === 2 ? 'priceCoordinator' : null,
 			largest_rep_token_address: requiredArrayItem(demoNetworks, 0, 'Mainnet demo network').chain_id === network.chain_id ? '0x221657776846890989a759ba2973e427dff5c9bb' : '0x754bc4ca2539560f1b48a9c3d2def5b9718f2c82',
 			largest_rep_balance: repBalance.toString(),
 			largest_rep_decimals: 18,

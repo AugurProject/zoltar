@@ -1,5 +1,5 @@
 import { sharedPoolPriceFeedAbi, questionLedgerAbi, securityPoolFactoryAbi } from '@zoltar/bot-shared/contracts/abi'
-import { type Address, getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { type Address, getAddress } from '@zoltar/bot-shared/ethereum'
 import { sameAddress } from '@zoltar/core-shared/evm/address'
 import type { CachedPoolDeployment } from './topology-schema.ts'
 import { type ChaosReadClient, drainConcurrent } from './discovery-client.ts'
@@ -28,10 +28,20 @@ export async function authenticatePoolProtocolBindings(authentication: PoolProto
 		client.readContract({ abi: sharedPoolPriceFeedAbi, address: coordinator, blockNumber, functionName: 'reputationToken' }),
 	])
 	const factory = await client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'securityPoolFactory' })
-	const securityPool = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, blockNumber, functionName: 'securityPoolOf', args: [pool] })
-	if (securityPool === zeroAddress) throw new Error(`Pool ${pool} has no canonical security pool`)
-	const canonicalFeed = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, blockNumber, functionName: 'sharedPriceFeeds', args: [securityPool, await client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'universeId' })] })
-	requireGraphEdge(getAddress(coordinator), getAddress(canonicalFeed), `Pool ${pool} canonical universe feed edge`)
+	const [securityPool, feedFactory, feedUniverse, poolUniverse] = await drainConcurrent([
+		client.readContract({ abi: securityPoolFactoryAbi, address: factory, blockNumber, functionName: 'securityPoolOf', args: [pool] }),
+		client.readContract({ abi: sharedPoolPriceFeedAbi, address: coordinator, blockNumber, functionName: 'securityPoolFactory' }),
+		client.readContract({ abi: sharedPoolPriceFeedAbi, address: coordinator, blockNumber, functionName: 'universeId' }),
+		client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'universeId' }),
+	])
+	requireGraphEdge(getAddress(feedFactory), getAddress(factory), 'Shared feed factory edge')
+	if (feedUniverse !== poolUniverse) throw new Error('Shared feed universe mismatch')
+	const [canonicalFeed, feedPool] = await drainConcurrent([
+		client.readContract({ abi: securityPoolFactoryAbi, address: factory, blockNumber, functionName: 'sharedPriceFeeds', args: [securityPool, poolUniverse] }),
+		client.readContract({ abi: sharedPoolPriceFeedAbi, address: coordinator, blockNumber, functionName: 'securityPool' }),
+	])
+	requireGraphEdge(getAddress(feedPool), getAddress(securityPool), 'Shared feed security pool edge')
+	requireGraphEdge(getAddress(canonicalFeed), coordinator, 'Canonical shared feed edge')
 	requireGraphEdge(getAddress(poolOpenOracle), configuredOpenOracle, `Pool ${pool} OpenOracle edge`)
 	requireGraphEdge(getAddress(coordinatorOpenOracle), configuredOpenOracle, `Coordinator ${coordinator} OpenOracle edge`)
 	requireGraphEdge(getAddress(coordinatorWeth), configuredWeth, `Coordinator ${coordinator} WETH edge`)
@@ -94,9 +104,9 @@ export function assertCanonicalPairGraph(identity: PairGraphIdentity) {
 	if (identity.pairUniverseId !== identity.poolUniverseId || identity.pairQuestionId !== identity.poolQuestionId) throw new Error(`Pair ${identity.pair} immutable question identity does not match pool ${identity.pool}`)
 }
 
-export function cachePoolDeployment(deployment: { parent: Address; sharedPriceFeed: Address; questionId: bigint; questionLedger: Address; shareToken: Address; universeId: bigint }): CachedPoolDeployment {
+export function cachePoolDeployment(deployment: { parent: Address; priceFeed: Address; questionId: bigint; questionLedger: Address; shareToken: Address; universeId: bigint }): CachedPoolDeployment {
 	return {
-		coordinator: getAddress(deployment.sharedPriceFeed),
+		coordinator: getAddress(deployment.priceFeed),
 		parent: getAddress(deployment.parent),
 		questionId: deployment.questionId.toString(),
 		questionLedger: getAddress(deployment.questionLedger),

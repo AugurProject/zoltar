@@ -39,14 +39,14 @@ const ERC20_APPROVE_ABI = [
 	},
 ] as const
 
-const getDefaultInitialReportPrice = async (client: ReadClient, sharedPriceFeed: Address) => {
-	const lastPrice = await getLastPrice(client, sharedPriceFeed)
+export const getDefaultInitialReportPrice = async (client: ReadClient, priceFeed: Address) => {
+	const lastPrice = await getLastPrice(client, priceFeed)
 	return lastPrice > 0n ? lastPrice : PRICE_PRECISION
 }
 
-export const fundCoordinatorInitialReport = async (client: WriteClient, sharedPriceFeed: Address, proposedRepPerEthPrice: bigint, requestedInitialAttoWeth = 0n) => {
-	const feed = sharedPriceFeed
-	const rawReputationTokenAddress = await client.readContract({ abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, address: feed, functionName: 'reputationToken' })
+export const fundCoordinatorInitialReport = async (client: WriteClient, priceFeed: Address, proposedRepPerEthPrice: bigint, requestedInitialAttoWeth = 0n) => {
+	const feed = priceFeed
+	const rawReputationTokenAddress = await client.readContract({ abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, functionName: 'reputationToken', address: priceFeed })
 	const minimumToken1ReportAttoEth = await client.readContract({
 		abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 		functionName: 'minimumToken1ReportAttoEthForPrice',
@@ -71,7 +71,7 @@ export const fundCoordinatorInitialReport = async (client: WriteClient, sharedPr
 			abi: ERC20_APPROVE_ABI,
 			functionName: 'approve',
 			address: WETH_ADDRESS,
-			args: [sharedPriceFeed, maximumInitialAttoWeth],
+			args: [priceFeed, maximumInitialAttoWeth],
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
@@ -80,27 +80,27 @@ export const fundCoordinatorInitialReport = async (client: WriteClient, sharedPr
 			abi: ERC20_APPROVE_ABI,
 			functionName: 'approve',
 			address: reputationTokenAddress,
-			args: [sharedPriceFeed, maximumAmount2],
+			args: [priceFeed, maximumAmount2],
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 	return { maximumAmount2, maximumInitialAttoWeth, minimumToken1ReportAttoEth, proposedRepPerEthPrice, requestedInitialAttoWeth }
 }
 
-export const requestPrice = async (client: WriteClient, sharedPriceFeed: Address) => {
-	const costAttoEth = await getRequestPriceCostAttoEth(client, sharedPriceFeed)
-	return await requestPriceWithValue(client, sharedPriceFeed, costAttoEth, await getDefaultInitialReportPrice(client, sharedPriceFeed))
+export const requestPrice = async (client: WriteClient, priceFeed: Address) => {
+	const costAttoEth = await getRequestPriceCostAttoEth(client, priceFeed)
+	return await requestPriceWithValue(client, priceFeed, costAttoEth, await getDefaultInitialReportPrice(client, priceFeed))
 }
 
-export const requestPriceWithValue = async (client: WriteClient, sharedPriceFeed: Address, value: bigint, proposedRepPerEthPrice?: bigint, requestedInitialAttoWeth = 0n, bountyAttoEth = value) => {
-	const resolvedInitialReportPrice = proposedRepPerEthPrice ?? (await getDefaultInitialReportPrice(client, sharedPriceFeed))
-	const { minimumToken1ReportAttoEth } = await fundCoordinatorInitialReport(client, sharedPriceFeed, resolvedInitialReportPrice, requestedInitialAttoWeth)
+export const requestPriceWithValue = async (client: WriteClient, priceFeed: Address, value: bigint, proposedRepPerEthPrice?: bigint, requestedInitialAttoWeth = 0n, bountyAttoEth = value) => {
+	const resolvedInitialReportPrice = proposedRepPerEthPrice ?? (await getDefaultInitialReportPrice(client, priceFeed))
+	const { minimumToken1ReportAttoEth } = await fundCoordinatorInitialReport(client, priceFeed, resolvedInitialReportPrice, requestedInitialAttoWeth)
 	const budget = requestedInitialAttoWeth > minimumToken1ReportAttoEth ? requestedInitialAttoWeth : minimumToken1ReportAttoEth
 	return await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 			functionName: 'requestSecurityPoolPrice',
-			address: sharedPriceFeed,
+			address: priceFeed,
 			args: [resolvedInitialReportPrice, budget, bountyAttoEth],
 			value,
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
@@ -108,38 +108,38 @@ export const requestPriceWithValue = async (client: WriteClient, sharedPriceFeed
 	)
 }
 
-export const recoverSettledPendingReport = async (client: WriteClient, sharedPriceFeed: Address) =>
+export const recoverSettledPendingReport = async (client: WriteClient, priceFeed: Address) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 			functionName: 'recoverSettledPendingReport',
-			address: sharedPriceFeed,
+			address: priceFeed,
 			args: [],
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 
-export const getPendingReportId = async (client: ReadClient, sharedPriceFeed: Address) =>
+export const getPendingReportId = async (client: ReadClient, priceFeed: Address) =>
 	await client.readContract({
 		abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 		functionName: 'pendingReportId',
-		address: sharedPriceFeed,
+		address: priceFeed,
 		args: [],
 	})
 
-export const getPendingReportMaxSettlementBaseFee = async (client: ReadClient, sharedPriceFeed: Address) =>
+export const getPendingReportMaxSettlementBaseFee = async (client: ReadClient, priceFeed: Address) =>
 	await client.readContract({
 		abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 		functionName: 'pendingReportMaxSettlementBaseFeeAttoEthPerGas',
-		address: sharedPriceFeed,
+		address: priceFeed,
 		args: [],
 	})
 
-export const getIsPriceValid = async (client: ReadClient, sharedPriceFeed: Address) =>
+export const getIsPriceValid = async (client: ReadClient, priceFeed: Address) =>
 	await client.readContract({
 		abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 		functionName: 'isPriceValid',
-		address: sharedPriceFeed,
+		address: priceFeed,
 		args: [],
 	})
 
@@ -261,11 +261,11 @@ export const openOracleSettleWithGasPrice = async (client: WriteClient, reportId
 	)
 }
 
-export const getRequestPriceCostAttoEth = async (client: ReadClient, sharedPriceFeed: Address) =>
+export const getRequestPriceCostAttoEth = async (client: ReadClient, priceFeed: Address) =>
 	await client.readContract({
 		abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 		functionName: 'getRequestPriceCostAttoEth',
-		address: sharedPriceFeed,
+		address: priceFeed,
 		args: [],
 	})
 
@@ -323,11 +323,11 @@ export const getOpenOracleReportMeta = async (client: ReadClient, reportId: bigi
 	}
 }
 
-export const getLastPrice = async (client: ReadClient, sharedPriceFeed: Address) =>
+export const getLastPrice = async (client: ReadClient, priceFeed: Address) =>
 	await client.readContract({
 		abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 		functionName: 'lastPrice',
-		address: sharedPriceFeed,
+		address: priceFeed,
 		args: [],
 	})
 

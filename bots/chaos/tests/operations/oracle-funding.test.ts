@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, encodeAbiParameters, keccak256 } from '@zoltar/bot-shared/ethereum'
 import { stepReceiptEvidenceDisposition } from '../../src/execution/receipt-validation.ts'
-import { exactWalletTokenDebitEvidence } from '../../src/operations/statoblast/planning.ts'
+import { exactOracleFundingTransferEvidence } from '../../src/operations/statoblast/planning.ts'
 import { sharedPoolPriceFeedAbi, genesisReputationTokenAbi } from '@zoltar/bot-shared/contracts/abi'
 import { assertOperationEthFunding } from '../../src/execution/safety.ts'
 import { assertAnchoredOracleRequestFunding, assertOracleRequestFundingEnvelope, oracleRequestFundingEnvelope } from '../../src/operations/oracle-request-funding.ts'
@@ -45,7 +45,7 @@ describe('oracle request funding bounds', () => {
 	test('verifies exact sponsor debits to an escrow and rejects another sender or amount', () => {
 		const { snapshot } = requestPriceSnapshot()
 		const token = snapshot.deployments.weth
-		const step = { evidence: [exactWalletTokenDebitEvidence(snapshot, token, 6n)], label: 'Fund report escrow' }
+		const step = { evidence: [exactOracleFundingTransferEvidence(snapshot, token, 6n)], label: 'Fund report escrow' }
 		const transfer = (from: `0x${string}`, value: bigint) => ({
 			address: token,
 			data: encodeAbiParameters([{ type: 'uint256' }], [value]),

@@ -209,7 +209,7 @@ contract TradingMockQuestionLedger {
 	function weth() external view returns (TradingMockWeth) {
 		return collateralToken;
 	}
-	function sharedPriceFeed() external view returns (address) {
+	function priceFeed() external view returns (address) {
 		return address(this);
 	}
 	uint256 public sharesPerEth;

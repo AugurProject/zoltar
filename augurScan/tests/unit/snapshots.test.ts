@@ -21,6 +21,7 @@ for (const [entityType, contractKind] of [
 			awaitingForkContinuation: [false],
 			isEscalationResolved: [false],
 			isPriceValid: [false],
+			priceFeed: [coordinator],
 			finalized: [false],
 		}
 		const read: StateRead = async (address, abi, functionName, args = []) => {
@@ -168,8 +169,9 @@ test('unavailable claim reconstruction preserves the tagged basic escalation sta
 })
 
 test('attributes a member ledger snapshot to its shared pool price feed', async () => {
+	const feed = getAddress('0x4444444444444444444444444444444444444444')
 	const read: StateRead = async (_address, _abi, name) => {
-		if (name === 'priceFeed' || name === 'questionLedger') throw new Error(`Shared feed has no ${name} getter`)
+		if (name === 'priceFeed') return feed
 		if (name === 'isPriceValid') return true
 		if (name === 'awaitingForkContinuation' || name === 'isEscalationResolved') return false
 		return 1n

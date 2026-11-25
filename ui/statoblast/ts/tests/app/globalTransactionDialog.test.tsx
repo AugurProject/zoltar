@@ -203,7 +203,7 @@ describe('GlobalTransactionDialog', () => {
 	})
 
 	test.each(['Rejected in wallet.', pricingCopy.poolOraclePriceExpiredError, 'Transaction reverted; checking details…'])('shows the failure reason before expanding details: %s', async detail => {
-		const rendered = await renderIntoDocument(<GlobalTransactionDialog transaction={{ dismissKey: `visible-failure-${detail}`, title: 'Price request failed', tone: 'error', detail, technicalRows: [{ label: 'Function', value: 'requestSecurityPoolPrice' }] }} />)
+		const rendered = await renderIntoDocument(<GlobalTransactionDialog transaction={{ dismissKey: `visible-failure-${detail}`, title: 'Price request failed', tone: 'error', detail, technicalRows: [{ label: 'Function', value: 'requestPrice' }] }} />)
 		trackRendered(rendered)
 		const panel = within(document.body).getByRole('region', { name: 'Transaction status' })
 		expect(within(panel).getByText(detail).closest('details')).toBeNull()
@@ -453,7 +453,7 @@ describe('GlobalTransactionDialog', () => {
 					hash: '0xprepared-price-request',
 					rows: [{ label: 'Question ledger address', value: '0xpool' }],
 					technicalRows: [
-						{ label: 'Function', value: 'requestSecurityPoolPrice' },
+						{ label: 'Function', value: 'requestPrice' },
 						{ label: 'Arguments', value: '0xpool, 1000000000000000000' },
 					],
 					title: 'Price Requested',

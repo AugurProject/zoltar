@@ -1,6 +1,6 @@
 import type { EcosystemSnapshot, OperationContinuationContext, OperationDefinition, OperationPlan, PlanningOptions, PoolSnapshot } from '../types.ts'
 
-import { approveCoordinatorToken, exactWalletTokenDebitEvidence, operationalPools, oracleRequestInventoryIsFunded, oracleRequestPreparation, type PreparedOracleRequest } from './planning.ts'
+import { approveCoordinatorToken, exactOracleFundingTransferEvidence, operationalPools, oracleRequestInventoryIsFunded, oracleRequestPreparation, type PreparedOracleRequest } from './planning.ts'
 
 import { ONE_TOKEN, allowance, amount, choose, eligible, encodeStep, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, mixSeed, optionAmount, planBase, tokenInventory } from '../planning.ts'
 
@@ -56,8 +56,8 @@ function oracleRequestSteps(snapshot: EcosystemSnapshot, coordinator: `0x${strin
 			evidence: [
 				eventEvidence(priceFeed, 'PriceRequested(uint256,uint256)'),
 				eventEvidence(priceFeed, 'ReportFundingAssigned(uint256,address)'),
-				exactWalletTokenDebitEvidence(snapshot, weth, initialWethAttoEth),
-				exactWalletTokenDebitEvidence(snapshot, repToken, initialRepAttoRep),
+				exactOracleFundingTransferEvidence(snapshot, weth, initialWethAttoEth),
+				exactOracleFundingTransferEvidence(snapshot, repToken, initialRepAttoRep),
 				...(allowance(tokenInventory(snapshot, weth), coordinator) <= initialWethAttoEth ? [erc20AllowanceEvidence(weth, snapshot.wallet.address, coordinator, 0n)] : []),
 				...(allowance(tokenInventory(snapshot, repToken), coordinator) <= initialRepAttoRep ? [erc20AllowanceEvidence(repToken, snapshot.wallet.address, coordinator, 0n)] : []),
 			],

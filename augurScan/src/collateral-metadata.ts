@@ -30,7 +30,7 @@ export const withCollateralIdentityCache =
 	}
 
 // Kind names are the ones `scripts/project-system-contracts.ts` generates: the AMM contracts are `ammFactory`, `ammPair` and `ammRouter`.
-export const usesCollateralUnits = (kind: string | undefined): boolean => /^(questionLedger|securityPool|sharedPool|sharedPoolPriceFeed|amm(Factory|Pair|Router)$)/u.test(kind ?? '')
+export const usesCollateralUnits = (kind: string | undefined): boolean => /^(questionLedger|securityPool|sharedPool|amm(Factory|Pair|Router)$)/u.test(kind ?? '')
 
 export async function readCollateralMetadata(token: Address, read: StateRead) {
 	const [symbol, units] = await Promise.all([read(token, abi, 'symbol'), read(token, abi, 'decimals')])

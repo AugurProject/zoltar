@@ -7,7 +7,8 @@ import { OpenOracle } from '../openOracle/OpenOracle.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { Create2Deployment } from './Create2Deployment.sol';
 import { SecurityPoolBoundClones } from '../SecurityPoolBoundClones.sol';
-import { SharedPoolPriceFeed, ISharedPoolPriceFeedConfiguration } from '../SharedPoolPriceFeed.sol';
+import { SharedPoolPriceFeed, ISharedPoolPriceFeedConfig } from '../SharedPoolPriceFeed.sol';
+import { SecurityPoolUtils } from '../SecurityPoolUtils.sol';
 
 contract SharedPoolPriceFeedDeploymentWorker {
 	address private immutable creationCodeFirstChunk;
@@ -17,8 +18,8 @@ contract SharedPoolPriceFeedDeploymentWorker {
 		(creationCodeFirstChunk, creationCodeSecondChunk) = CreationCodeStorage.store(type(SharedPoolPriceFeed).creationCode);
 	}
 
-	function deployImplementation(OpenOracle oracle, uint256 priorityFee, address configuration, address securityPoolFactory, address securityPool) external returns (SharedPoolPriceFeed) {
-		bytes memory initCode = abi.encodePacked(CreationCodeStorage.load(creationCodeFirstChunk, creationCodeSecondChunk), abi.encode(ISharedPoolPriceFeedConfiguration(configuration), oracle, priorityFee, securityPoolFactory, securityPool));
+	function deployImplementation(ISharedPoolPriceFeedConfig config, OpenOracle oracle, uint256 priorityFee, address securityPoolFactory, address securityPool) external returns (SharedPoolPriceFeed) {
+		bytes memory initCode = abi.encodePacked(CreationCodeStorage.load(creationCodeFirstChunk, creationCodeSecondChunk), abi.encode(config, oracle, priorityFee, securityPoolFactory, securityPool));
 		address deployed = Create2Deployment.deploy(initCode, keccak256(abi.encode(msg.sender, securityPoolFactory, securityPool)));
 		require(deployed != address(0), 'Shared feed implementation deployment failed');
 		return SharedPoolPriceFeed(deployed);
@@ -35,7 +36,7 @@ contract SharedPoolPriceFeedDeploymentWorker {
 
 contract SharedPoolPriceFeedFactory {
 	SharedPoolPriceFeedDeploymentWorker private immutable sharedPoolPriceFeedDeploymentWorker;
-	/// @dev Root factories own independent security pool namespaces.
+	/// @dev Feed deployers own independent security pool namespaces.
 	mapping(address => mapping(address => SharedPoolPriceFeed)) public sharedPriceFeedImplementations;
 	IWeth9 public immutable weth;
 	uint256 public immutable targetPriceErrorForDispute;
@@ -52,6 +53,12 @@ contract SharedPoolPriceFeedFactory {
 	constructor(IWeth9 _weth, uint256 _targetPriceErrorForDispute, uint48 _settlementTime, uint24 _disputeDelay, uint24 _protocolFee, uint24 _feePercentage, uint16 _multiplier, address _protocolFeeRecipient, uint256 _escalationHaltMultiplierBps, uint256 _maxSettlementBaseFeeMultiplierBps, uint256 _minLiquidationPriceDistanceBps, SharedPoolPriceFeedDeploymentWorker _sharedPoolPriceFeedDeploymentWorker) {
 		require(address(_sharedPoolPriceFeedDeploymentWorker).code.length != 0, 'Deployment workers missing');
 		sharedPoolPriceFeedDeploymentWorker = _sharedPoolPriceFeedDeploymentWorker;
+		require(_targetPriceErrorForDispute < 10_000_000, 'Target price error must be below one hundred percent');
+		OraclePriceMath.maximumPriorityFee(_targetPriceErrorForDispute, _protocolFee, _feePercentage, _escalationHaltMultiplierBps);
+		require(_settlementTime > _disputeDelay, 'Settlement time must exceed dispute delay');
+		require(_multiplier >= 100, 'Oracle dispute multiplier must be at least one hundred percent');
+		require(_maxSettlementBaseFeeMultiplierBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'Max settlement base fee multiplier must be at least one hundred percent');
+		require(_minLiquidationPriceDistanceBps <= SecurityPoolUtils.BPS_DENOMINATOR, 'Minimum liquidation price distance cannot exceed one hundred percent');
 		weth = _weth;
 		targetPriceErrorForDispute = _targetPriceErrorForDispute;
 		settlementTime = _settlementTime;
@@ -70,11 +77,10 @@ contract SharedPoolPriceFeedFactory {
 			OraclePriceMath.maximumPriorityFee(targetPriceErrorForDispute, protocolFee, feePercentage, escalationHaltMultiplierBps);
 	}
 
-	/// @notice Deploy the canonical feed implementation once per caller/pool, then bind a universe clone.
 	function deploySharedPoolPriceFeed(OpenOracle oracle, uint256 priorityFee, address securityPool, uint248 universeId, ReputationToken reputationToken, bytes32 salt) external returns (SharedPoolPriceFeed feed) {
 		SharedPoolPriceFeed implementation = sharedPriceFeedImplementations[msg.sender][securityPool];
 		if (address(implementation) == address(0)) {
-			implementation = sharedPoolPriceFeedDeploymentWorker.deployImplementation(oracle, priorityFee, address(this), msg.sender, securityPool);
+			implementation = sharedPoolPriceFeedDeploymentWorker.deployImplementation(ISharedPoolPriceFeedConfig(address(this)), oracle, priorityFee, msg.sender, securityPool);
 			sharedPriceFeedImplementations[msg.sender][securityPool] = implementation;
 		}
 		feed = sharedPoolPriceFeedDeploymentWorker.deployClone(implementation, universeId, reputationToken, keccak256(abi.encode(msg.sender, salt)));

@@ -432,7 +432,7 @@ describe('canonical scan policy', () => {
 
 	test('blocks an entire terminal private next-block plan under public submission policy', () => {
 		const executable: EvaluatedOperation = {
-			definition: { classification: 'selectable', contract: 'QuestionLedgerCoordinator', description: 'request', discoveryInputs: [], ecosystem: 'zoltar', id: 'request', label: 'Request', method: 'requestSecurityPoolPrice', risk: 'low' },
+			definition: { classification: 'selectable', contract: 'QuestionLedgerCoordinator', description: 'request', discoveryInputs: [], ecosystem: 'zoltar', id: 'request', label: 'Request', method: 'requestPrice', risk: 'low' },
 			eligibility: { blockers: [], eligible: true },
 			plan: {
 				classification: 'selectable',

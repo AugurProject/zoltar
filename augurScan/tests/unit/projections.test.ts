@@ -68,7 +68,7 @@ describe('state projections', () => {
 				parent: '0x0000000000000000000000000000000000000000',
 				universeId: '0',
 				questionId: '42',
-				sharedPriceFeed: vault,
+				priceFeed: vault,
 				shareToken: vault,
 				statoblastSecurityMultiplierBps: '15000',
 				initialReportPriorityFeeAttoEthPerGas: atomic(10_000_000_000n),
@@ -417,7 +417,7 @@ describe('state projections', () => {
 		expect(projectionsFrom(log('PendingReportRecovered', { reportId: '1' })).at(-1)).toMatchObject({
 			type: 'domainEvent',
 			domain: 'oracle',
-			entityType: 'price-feed',
+			entityType: 'price-coordinator',
 			entityIdentity: pool.toLowerCase(),
 		})
 		expect(projectionsFrom(log('GameStarted', { activationTime: '1' })).at(-1)).toMatchObject({

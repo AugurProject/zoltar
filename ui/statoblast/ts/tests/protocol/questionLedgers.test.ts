@@ -6,7 +6,7 @@ import { createMockLoaderClient, createMulticallStub } from '@zoltar/ui-core-sha
 import { centralSecurityPoolRead, owner, securityPool, capital, token } from '../features/security-pools/capitalFixture.js'
 
 const block = { hash: `0x${'11'.repeat(32)}`, number: 99n, timestamp: 1000n } as const
-const deployment = { questionLedger: owner, parent: zeroAddress, universeId: 42n, questionId: 7n, initialReportPriorityFeeAttoEthPerGas: 1n, sharedPriceFeed: token, statoblastSecurityMultiplierBps: 20000n }
+const deployment = { questionLedger: owner, parent: zeroAddress, universeId: 42n, questionId: 7n, initialReportPriorityFeeAttoEthPerGas: 1n, priceFeed: token, statoblastSecurityMultiplierBps: 20000n }
 function fixture({ forked = false, reporting = false, missingSecurityPool = false, reorg = false, brokenSecond = false, secondUniverse = deployment.universeId } = {}) {
 	const reads: string[] = []
 	let headReads = 0
@@ -29,7 +29,7 @@ function fixture({ forked = false, reporting = false, missingSecurityPool = fals
 					return owner
 				case 'universeId':
 					return deployment.universeId
-				case 'sharedPriceFeed':
+				case 'priceFeed':
 					return token
 				case 'parent':
 					return zeroAddress

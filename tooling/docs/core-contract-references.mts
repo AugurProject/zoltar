@@ -398,7 +398,7 @@ export const coreContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '15ad2aae7903ddc7203fb27067cf4c79409175a036fa3c75b321d20abff3c161',
+		compiledAbiFingerprint: 'df50e386d46580c7d08a2f108b0e26c2fc2f369b4da8e1eb64ab844c5bd35bec',
 		name: 'SecurityPoolFactory',
 		purpose: 'Deploys every security pool from pinned creation code and module deployers, and deploys and registers their question ledgers and shared price feeds. No standalone deployment entry point exists.',
 		readAbiFingerprint: 'd50a5cce841c9778e1262fb054b44a5e8b300a0e64076329eff4394989897109',
@@ -509,7 +509,7 @@ export const coreContractReferences: ContractReference[] = [
 				call: '`deploySecurityPoolQuestionLedger(universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)`',
 				caller: 'A security pool with a configured namespace, within its own caller-address namespace',
 				effect:
-					'Creates a separate origin ledger and share token in the caller namespace, binding it directly to the namespace/universe shared REP/collateral feed. Security pool admission calls this from the security pool contract, after its immutable admission policy allows the question; it then enforces the question horizon, with failure reverting deployment.',
+					'Creates a separate origin ledger and share token in the caller namespace, referencing the canonical namespace/universe shared REP/collateral feed. Security pool admission calls this from the security pool contract, after its immutable admission policy allows the question; it then enforces the question horizon, with failure reverting deployment.',
 				declarations: [
 					{
 						name: 'deploySecurityPoolQuestionLedger',
@@ -534,7 +534,7 @@ export const coreContractReferences: ContractReference[] = [
 			{
 				call: '`deployChildQuestionLedger(parent, shareToken, universeId, questionId, statoblastSecurityMultiplierBps)`',
 				caller: '`QuestionForker` only (`Only question forker`)',
-				effect: 'Creates and registers a canonical child question ledger with the parent share token and a direct reference to its canonical security pool branch feed.',
+				effect: 'Creates and registers a canonical child question ledger with the parent share token and its canonical security pool branch feed.',
 				declarations: [
 					{
 						name: 'deployChildQuestionLedger',

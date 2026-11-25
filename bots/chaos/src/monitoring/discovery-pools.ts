@@ -147,7 +147,7 @@ export async function discoverPools({
 			cachedDeployment ? Promise.resolve(deployments.questionForker) : client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'questionForker' }),
 			cachedDeployment ? Promise.resolve(deployments.zoltar) : client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'zoltar' }),
 			cachedDeployment ? Promise.resolve(deployments.questionData) : client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'questionData' }),
-			cachedDeployment ? Promise.resolve(coordinator) : client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'sharedPriceFeed' }),
+			cachedDeployment ? Promise.resolve(coordinator) : client.readContract({ abi: abis.questionLedgerAbi, address, blockNumber, functionName: 'priceFeed' }),
 			authenticatePoolProtocolBindings({
 				blockNumber,
 				canonicalRepToken: authenticatedUniverse.repToken,

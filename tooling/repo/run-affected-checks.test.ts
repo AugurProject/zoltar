@@ -51,7 +51,7 @@ for (const path of [
 	'docs/how-to/trading-deploy-contracts.html',
 	'docs/manifest.json',
 	'docs/assets/screenshots/fingerprints.json',
-	'docs/data/shared-pool-price-feed.json',
+	'docs/data/open-oracle-coordinator.json',
 	'shared/core/README.md',
 	'bots/liquidator/README.md',
 	'augurScan/src/ARCHITECTURE.md',

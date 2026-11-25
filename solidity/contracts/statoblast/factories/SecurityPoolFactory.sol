@@ -8,6 +8,7 @@ import { Zoltar } from '../../Zoltar.sol';
 import { ShareTokenFactory } from './ShareTokenFactory.sol';
 import { IShareToken } from '../interfaces/IShareToken.sol';
 import { SharedPoolPriceFeedFactory } from './SharedPoolPriceFeedFactory.sol';
+import { SharedPoolPriceFeed } from '../SharedPoolPriceFeed.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { EscalationGameFactory } from './EscalationGameFactory.sol';
 import { IQuestionForker } from '../interfaces/IQuestionForker.sol';
@@ -41,7 +42,11 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	mapping(bytes32 => QuestionLedgerRegistration) private questionLedgerRegistrations;
 	mapping(IQuestionLedger => QuestionLedgerMetadata) private questionLedgerMetadata;
 	mapping(address => mapping(uint248 => address)) public sharedPriceFeeds;
-	mapping(address => SharedPoolPriceFeed) private securityPoolConfigurations;
+	struct PriceConfiguration {
+		uint256 priorityFee;
+		ReputationToken originToken;
+	}
+	mapping(address => PriceConfiguration) private securityPoolConfigurations;
 	/// @notice Hash of the only security pool creation code this factory deploys.
 	bytes32 public immutable securityPoolCreationCodeHash;
 	// Module deployers every security pool uses for its origin and for each fork child.
@@ -60,7 +65,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	mapping(address => bool) public isSecurityPool;
 	mapping(address => uint256) private securityPoolCreationCount;
 
-	event DeployQuestionLedger(IQuestionLedger indexed questionLedger, SharedPoolPriceFeed sharedPriceFeed, IShareToken shareToken, IQuestionLedger indexed parent, uint248 indexed universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas);
+	event DeployQuestionLedger(IQuestionLedger indexed questionLedger, SharedPoolPriceFeed priceFeed, IShareToken shareToken, IQuestionLedger indexed parent, uint248 indexed universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas);
 	event QuestionLedgerRegistered(bytes32 indexed originId, bytes32 indexed poolId, uint248 indexed universeId, IQuestionLedger questionLedger);
 	event SecurityPoolRegistered(address indexed securityPool, uint248 indexed originUniverseId);
 	event SharedPriceFeedRegistered(address indexed securityPool, uint248 indexed universeId, address indexed priceFeed);
@@ -153,13 +158,13 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		require(sharedPriceFeeds[securityPool][universeId] != address(0), 'Prepare shared child price feed');
 		(bool hasInheritedForkOutcome, ) = ISecurityPoolNative(securityPool).inheritedFixedOutcome(universeId, questionId);
 		require(address(parent.shareToken()) == address(shareToken), 'Child share token mismatch');
-		uint256 initialReportPriorityFeeAttoEthPerGas = parent.sharedPriceFeed().initialReportPriorityFeeAttoEthPerGas();
+		uint256 initialReportPriorityFeeAttoEthPerGas = parent.priceFeed().initialReportPriorityFeeAttoEthPerGas();
 		_reserveQuestionLedger(originId, universeId);
-		SharedPoolPriceFeed sharedPriceFeed = SharedPoolPriceFeed(payable(sharedPriceFeeds[securityPool][universeId]));
-		questionLedger = deployQuestionLedger(shareToken, parent, sharedPriceFeed, universeId, questionId, statoblastSecurityMultiplierBps);
+		SharedPoolPriceFeed priceFeed = _getOrCreateSharedPriceFeed(securityPool, universeId);
+		questionLedger = deployQuestionLedger(shareToken, parent, priceFeed, universeId, questionId, statoblastSecurityMultiplierBps);
 		_registerQuestionLedger(originId, universeId, questionLedger, hasInheritedForkOutcome, securityPool);
-		_initializeQuestionLedger(questionLedger, securityPool);
-		_recordQuestionLedgerDeployment(QuestionLedgerDeployment({questionLedger: questionLedger, sharedPriceFeed: sharedPriceFeed, shareToken: shareToken, parent: parent, universeId: universeId, questionId: questionId, statoblastSecurityMultiplierBps: statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas: initialReportPriorityFeeAttoEthPerGas}));
+		questionLedger.setStartingParams();
+		_recordQuestionLedgerDeployment(QuestionLedgerDeployment({questionLedger: questionLedger, priceFeed: priceFeed, shareToken: shareToken, parent: parent, universeId: universeId, questionId: questionId, statoblastSecurityMultiplierBps: statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas: initialReportPriorityFeeAttoEthPerGas}));
 	}
 
 	/// @notice Maximum supported priority fee for a new oracle configuration.
@@ -200,7 +205,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 	function _deployOriginQuestionLedger(address securityPool, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) private returns (IQuestionLedger questionLedger) {
 		// The caller's security pool namespace prevents another creator from reserving its question identity.
-		require(address(securityPoolConfigurations[securityPool]) != address(0), 'Security pool configuration missing');
+		require(securityPoolConfigurations[securityPool].priorityFee != 0, 'Security pool configuration missing');
 		require(statoblastSecurityMultiplierBps >= SecurityPoolUtils.MINIMUM_SECURITY_MULTIPLIER_BPS, 'Multiplier must be at least 10500 BPS');
 
 		// Validate that the question exists
@@ -219,16 +224,17 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		require(zoltar.getNonDecisionThresholdAttoRep(universeId) > _getInitialEscalationDepositAttoRep(universeId), 'Escalation threshold too low');
 		bytes32 originId = getQuestionOriginId(securityPool, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas);
 		_reserveQuestionLedger(originId, universeId);
-		SharedPoolPriceFeed sharedPriceFeed = _getOrCreateSharedPriceFeed(securityPool, universeId);
+		require(initialReportPriorityFeeAttoEthPerGas == securityPoolConfigurations[securityPool].priorityFee, 'Security pool configuration mismatch');
+		SharedPoolPriceFeed priceFeed = _getOrCreateSharedPriceFeed(securityPool, universeId);
 
 		// Each origin lineage has its own share token, which is reused by all migrated children.
 		IShareToken shareToken = shareTokenFactory.deployShareToken(originId, questionId);
-		questionLedger = deployQuestionLedger(shareToken, IQuestionLedger(payable(address(0))), sharedPriceFeed, universeId, questionId, statoblastSecurityMultiplierBps);
+		questionLedger = deployQuestionLedger(shareToken, IQuestionLedger(payable(address(0))), priceFeed, universeId, questionId, statoblastSecurityMultiplierBps);
 
 		_registerQuestionLedger(originId, universeId, questionLedger, false, securityPool);
-		_initializeQuestionLedger(questionLedger, securityPool);
+		questionLedger.setStartingParams();
 		shareToken.authorize(questionLedger);
-		_recordQuestionLedgerDeployment(QuestionLedgerDeployment({questionLedger: questionLedger, sharedPriceFeed: sharedPriceFeed, shareToken: shareToken, parent: IQuestionLedger(payable(address(0))), universeId: universeId, questionId: questionId, statoblastSecurityMultiplierBps: statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas: initialReportPriorityFeeAttoEthPerGas}));
+		_recordQuestionLedgerDeployment(QuestionLedgerDeployment({questionLedger: questionLedger, priceFeed: priceFeed, shareToken: shareToken, parent: IQuestionLedger(payable(address(0))), universeId: universeId, questionId: questionId, statoblastSecurityMultiplierBps: statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas: initialReportPriorityFeeAttoEthPerGas}));
 	}
 
 	function _reserveQuestionLedger(bytes32 originId, uint248 universeId) private {
@@ -247,11 +253,11 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 	function _recordQuestionLedgerDeployment(QuestionLedgerDeployment memory deployment) private {
 		questionLedgerDeployments.push(deployment);
-		emit DeployQuestionLedger(deployment.questionLedger, deployment.sharedPriceFeed, deployment.shareToken, deployment.parent, deployment.universeId, deployment.questionId, deployment.statoblastSecurityMultiplierBps, deployment.initialReportPriorityFeeAttoEthPerGas);
+		emit DeployQuestionLedger(deployment.questionLedger, deployment.priceFeed, deployment.shareToken, deployment.parent, deployment.universeId, deployment.questionId, deployment.statoblastSecurityMultiplierBps, deployment.initialReportPriorityFeeAttoEthPerGas);
 	}
 
-	function deployQuestionLedger(IShareToken shareToken, IQuestionLedger parent, SharedPoolPriceFeed sharedPriceFeed, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps) private returns (IQuestionLedger questionLedger) {
-		questionLedger = questionLedgerDeployer.deploy(QuestionLedgerConfiguration({questionForker: address(questionForker), questionData: questionData, escalationGameFactory: escalationGameFactory, sharedPriceFeed: sharedPriceFeed, shareToken: shareToken, openOracle: openOracle, parent: parent, zoltar: zoltar, universeId: universeId, questionId: questionId, statoblastSecurityMultiplierBps: statoblastSecurityMultiplierBps}));
+	function deployQuestionLedger(IShareToken shareToken, IQuestionLedger parent, SharedPoolPriceFeed priceFeed, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps) private returns (IQuestionLedger questionLedger) {
+		questionLedger = questionLedgerDeployer.deploy(QuestionLedgerConfiguration({questionForker: address(questionForker), questionData: questionData, escalationGameFactory: escalationGameFactory, priceFeed: priceFeed, shareToken: shareToken, openOracle: openOracle, parent: parent, zoltar: zoltar, universeId: universeId, questionId: questionId, statoblastSecurityMultiplierBps: statoblastSecurityMultiplierBps}));
 	}
 
 	/// @notice Initialize a security pool's oracle configuration without a standalone question pool.
@@ -260,24 +266,22 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		require(isSecurityPool[msg.sender], 'Security pool is not canonical');
 		require(address(zoltar.getRepToken(universeId)) != address(0), 'Universe REP token missing');
 		require(zoltar.getForkTime(universeId) == 0, 'Origin universe forked');
-		SharedPoolPriceFeed feed = securityPoolConfigurations[msg.sender];
-		if (address(feed) == address(0)) {
-			feed = sharedPoolPriceFeedFactory.deploySharedPoolPriceFeed(openOracle, priorityFee, msg.sender, universeId, zoltar.getRepToken(universeId), keccak256(abi.encode(msg.sender, universeId)));
-			securityPoolConfigurations[msg.sender] = feed;
-			sharedPriceFeeds[msg.sender][universeId] = address(feed);
+		PriceConfiguration storage config = securityPoolConfigurations[msg.sender];
+		if (config.priorityFee == 0) {
+			require(priorityFee > 0 && priorityFee <= sharedPoolPriceFeedFactory.maximumReportPriorityFeeAttoEthPerGas(), 'Invalid report priority fee');
+			config.priorityFee = priorityFee;
+			config.originToken = zoltar.getRepToken(universeId);
 			securityPools.push(msg.sender);
 			emit SecurityPoolRegistered(msg.sender, universeId);
-			emit SharedPriceFeedRegistered(msg.sender, universeId, address(feed));
 		} else {
-			require(feed.initialReportPriorityFeeAttoEthPerGas() == priorityFee && address(feed.reputationToken()) == address(zoltar.getRepToken(universeId)), 'Security pool configuration mismatch');
+			require(config.priorityFee == priorityFee && address(config.originToken) == address(zoltar.getRepToken(universeId)), 'Security pool configuration mismatch');
 		}
-		return address(feed);
+		return address(_getOrCreateSharedPriceFeed(msg.sender, universeId));
 	}
 
 	/// @notice Initialize a known branch from the caller's immutable origin configuration.
 	function initializeSecurityPoolPriceFeedForUniverse(uint248 universeId) external returns (address) {
-		SharedPoolPriceFeed coordinator = securityPoolConfigurations[msg.sender];
-		require(address(coordinator) != address(0), 'Security pool configuration missing');
+		require(securityPoolConfigurations[msg.sender].priorityFee != 0, 'Security pool configuration missing');
 		ISecurityPoolNative(msg.sender).securityPoolTime(universeId);
 		require(address(zoltar.getRepToken(universeId)) != address(0), 'Branch REP is missing');
 		return address(_getOrCreateSharedPriceFeed(msg.sender, universeId));
@@ -309,15 +313,10 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	function _getOrCreateSharedPriceFeed(address securityPool, uint248 universeId) private returns (SharedPoolPriceFeed feed) {
 		feed = SharedPoolPriceFeed(payable(sharedPriceFeeds[securityPool][universeId]));
 		if (address(feed) == address(0)) {
-			feed = sharedPoolPriceFeedFactory.deploySharedPoolPriceFeed(openOracle, securityPoolConfigurations[securityPool].initialReportPriorityFeeAttoEthPerGas(), securityPool, universeId, zoltar.getRepToken(universeId), keccak256(abi.encode(securityPool, universeId)));
+			feed = sharedPoolPriceFeedFactory.deploySharedPoolPriceFeed(openOracle, securityPoolConfigurations[securityPool].priorityFee, securityPool, universeId, zoltar.getRepToken(universeId), keccak256(abi.encode(securityPool, universeId)));
 			sharedPriceFeeds[securityPool][universeId] = address(feed);
 			emit SharedPriceFeedRegistered(securityPool, universeId, address(feed));
 		}
-	}
-
-	function _initializeQuestionLedger(IQuestionLedger questionLedger, address securityPool) private {
-		require(address(questionLedger.sharedPriceFeed()) == sharedPriceFeeds[securityPool][questionLedger.universeId()], 'Question feed is not canonical');
-		questionLedger.setStartingParams();
 	}
 
 	function _getInitialEscalationDepositAttoRep(uint248 universeId) private view returns (uint256 initialDepositAttoRep) {

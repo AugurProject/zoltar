@@ -33,7 +33,7 @@ export const documentationConsumers: readonly DocumentationConsumer[] = [
 		// documentation-consumers.test.ts derives that page from docs/manifest.json and requires it to be listed here.
 		projectId: 'repository',
 		reason: 'a documentation page loaded by the documentation shell runtime test changed',
-		files: ['docs/documentation.html', 'docs/explanation/contract-architecture.html', 'docs/explanation/open-oracle.html', 'docs/explanation/system-overview.html', 'docs/reference/contracts.html', 'docs/reference/contracts/zoltarquestiondata.html'],
+		files: ['docs/documentation.html', 'docs/explanation/contract-architecture.html', 'docs/explanation/open-oracle.html', 'docs/explanation/system-overview.html', 'docs/reference/contracts.html', 'docs/reference/contracts/sharedpoolpricefeed.html'],
 		tests: ['tooling/docs/docs-shell-runtime.test.ts'],
 	},
 	{

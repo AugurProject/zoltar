@@ -54,7 +54,7 @@ describe('USDC on-chain UI funding flows', () => {
 			const market = initial.markets[0]
 			if (market?.collateral === undefined) throw new Error(`Missing token market: ${initial.markets[0]?.loadError}`)
 			expect(market.collateral).toMatchObject({ symbol: 'USDC', decimals: 6, native: false })
-			const coordinator = await read.readContract({ address: market.pool, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'sharedPriceFeed' })
+			const coordinator = await read.readContract({ address: market.pool, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'priceFeed' })
 			const acceptedPrice = await read.readContract({ address: coordinator, abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, functionName: 'lastPrice' })
 			expect(acceptedPrice).toBe(10n ** 36n / backend.repPerUsdcPrice)
 
@@ -223,13 +223,10 @@ describe('USDC on-chain UI funding flows', () => {
 			await act(() => approvalButton().click())
 			await waitFor(() => expect(buttonByLabel('Create market and add liquidity').disabled).toBe(false), { timeout: 10_000, interval: 50 })
 			await act(() => buttonByLabel('Create market and add liquidity').click())
-			await waitFor(
-				async () => {
-					const current = await discoverLiveUniverseMarketPage(read, configuration, 0n)
-					expect(current.markets.find(candidate => candidate.pool === empty.pool)?.pair).toBeDefined()
-				},
-				{ timeout: 10_000, interval: 50 },
-			)
+			await waitFor(async () => {
+				const current = await discoverLiveUniverseMarketPage(read, configuration, 0n)
+				expect(current.markets.find(candidate => candidate.pool === empty.pool)?.pair).toBeDefined()
+			}, simulationWaitOptions)
 			expect(requests.at(-1)).toMatchObject({ functionName: 'createPairAndInitializeWithCollateral' })
 		} finally {
 			rendered?.cleanup()

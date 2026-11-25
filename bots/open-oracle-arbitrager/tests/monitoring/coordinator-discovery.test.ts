@@ -19,7 +19,7 @@ const other = getAddress('0x0000000000000000000000000000000000000033')
 const hash: Hex = `0x${'ab'.repeat(32)}`
 const securityPool = getAddress('0x0000000000000000000000000000000000000066')
 const escrowFeedCall = encodeFunctionData({ abi: [{ type: 'function', name: 'feed', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] }], functionName: 'feed' })
-const entry = { questionLedger: pool, sharedPriceFeed: coordinator, shareToken: other, parent: other, universeId: 0n, questionId: 1n, statoblastSecurityMultiplierBps: 20_000n, initialReportPriorityFeeAttoEthPerGas: 1n }
+const entry = { questionLedger: pool, priceFeed: coordinator, shareToken: other, parent: other, universeId: 0n, questionId: 1n, statoblastSecurityMultiplierBps: 20_000n, initialReportPriorityFeeAttoEthPerGas: 1n }
 
 function reader(options: { sharedFeed?: boolean; missingEscrow?: boolean; wrongCoordinator?: boolean; missingCode?: boolean; wrongBlock?: boolean; unapproved?: boolean; shortPage?: boolean; unsafePolicy?: boolean; registryCount?: bigint; reorg?: boolean; wrongFeedBinding?: boolean } = {}) {
 	let blockReads = 0
@@ -43,7 +43,7 @@ function reader(options: { sharedFeed?: boolean; missingEscrow?: boolean; wrongC
 						? []
 						: Array.from({ length: Number(count) }, (_, index) => ({
 								...entry,
-								...(options.sharedFeed && index === 1 ? { questionLedger: secondPool, sharedPriceFeed: other } : {}),
+								...(options.sharedFeed && index === 1 ? { questionLedger: secondPool, priceFeed: other } : {}),
 								universeId: options.unapproved || (!options.sharedFeed && options.registryCount !== undefined && start + BigInt(index) < options.registryCount - 1n) ? 1n : 0n,
 							})),
 				])

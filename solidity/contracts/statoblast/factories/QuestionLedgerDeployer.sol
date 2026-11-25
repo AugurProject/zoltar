@@ -18,7 +18,7 @@ struct QuestionLedgerConfiguration {
 	address questionForker;
 	ZoltarQuestionData questionData;
 	EscalationGameFactory escalationGameFactory;
-	SharedPoolPriceFeed sharedPriceFeed;
+	SharedPoolPriceFeed priceFeed;
 	IShareToken shareToken;
 	OpenOracle openOracle;
 	IQuestionLedger parent;

@@ -13,7 +13,7 @@
 			<header>
 				<p class="kicker">Start here</p>
 				<h1>Contract architecture</h1>
-				<p>Users call <a href="../reference/glossary.html#question-ledger">question ledgers</a>, the Statoblast contracts that expose each market's shares and reporting. Each question belongs to a <a href="../reference/glossary.html#security-pool">security pool</a>, which holds cash in its central settlement engine. Question ledgers rely on Zoltar for <a href="../reference/glossary.html#universe">universes</a> and <a href="../reference/glossary.html#rep">REP</a>, on a <a href="../reference/glossary.html#price-coordinator">shared price feed</a> for REP prices in the security pool’s collateral token, and on the <a href="../reference/glossary.html#question-forker">QuestionForker</a> after a fork.</p>
+				<p>Users call <a href="../reference/glossary.html#question-ledger">question ledgers</a>, the Statoblast contracts that expose each market's shares and reporting. Each question belongs to a <a href="../reference/glossary.html#security-pool">security pool</a>, which holds cash in its central settlement engine. Question ledgers rely on Zoltar for <a href="../reference/glossary.html#universe">universes</a> and <a href="../reference/glossary.html#rep">REP</a>, on a <a href="../reference/glossary.html#shared-price-feed">shared price feed</a> for REP prices in the security pool’s collateral token, and on the <a href="../reference/glossary.html#question-forker">QuestionForker</a> after a fork.</p>
 				<p class="security-assumption-ref"><strong>Related reading:</strong> <a href="../reference/contracts.html">the generated transaction reference</a> for exact caller and prerequisite rules, <a href="../explanation/statoblast.html">How Statoblast works</a> for lifecycle context, and <a href="../reference/invariants.html">the invariant catalog</a> for cross-contract safety properties.</p>
 			</header>
 			<section id="product-layers">
@@ -40,7 +40,7 @@
 					<li>The capital ledger records each owner's REP principal, commitment, health target and earned income. Its commitment index supports bounded health and retirement operations.</li>
 					<li>The settlement engine and book track question demand, collateral, fee streams, minimum backing floors and recovery assets.</li>
 					<li>A <code>QuestionLedger</code> is a question adapter. Its <code>ShareToken</code> records outcome balances across that question's universe lineage; its <code>EscalationGame</code> resolves reports. Reporter REP has separate custody.</li>
-					<li>The shared OpenOracle feed accepts independently funded price candidates. Question ledgers reference that shared feed directly.</li>
+					<li>The shared OpenOracle feed accepts independently funded price candidates. Question ledgers read that shared evidence directly.</li>
 					<li>The security pool fork coordinator records branch choices and prepares shared branch accounting. The uniform auction sells freshly unchosen provider REP for security pool collateral when a branch needs repair.</li>
 				</ul>
 			</section>

@@ -19,6 +19,17 @@ const reportEscrowAbi = [
 	{ type: 'function', name: 'feed', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 	{ type: 'function', name: 'reportId', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
 	{
+		type: 'function',
+		name: 'reportCandidates',
+		stateMutability: 'view',
+		inputs: [{ name: 'reportId', type: 'uint256' }],
+		outputs: [
+			{ name: 'escrow', type: 'address' },
+			{ name: 'sponsor', type: 'address' },
+			{ name: 'maxSettlementBaseFee', type: 'uint256' },
+		],
+	},
+	{
 		type: 'event',
 		name: 'ReportCompleted',
 		anonymous: false,
@@ -34,43 +45,42 @@ const reportEscrowAbi = [
 export async function loadCoordinatorPriceValidUntilTimestamp(client: Pick<ReadClient, 'multicall'>, openOracleAddress: Address, game: OpenOracleStatePreimage['game'], _chainId?: number, reportId?: bigint) {
 	if (game.callbackContract === zeroAddress || !hasOpenOracleFlag(game, OPEN_ORACLE_FLAG_TIME_TYPE) || game.reportTimestamp === 0n) return undefined
 	const abi = statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi
-	const [oracle] = await readOptionalMulticall(client, [{ address: game.callbackContract, abi, functionName: 'openOracle' }])
-	if (oracle.status !== 'success' || !sameAddress(oracle.result, openOracleAddress)) return undefined
-	{
-		if (reportId === undefined) return undefined
-		const [feed, escrowReport] = await readOptionalMulticall(client, [
-			{ address: game.callbackContract, abi: reportEscrowAbi, functionName: 'feed' },
-			{ address: game.callbackContract, abi: reportEscrowAbi, functionName: 'reportId' },
-		])
-		if (feed.status !== 'success' || feed.result === zeroAddress || escrowReport.status !== 'success' || escrowReport.result !== reportId) return undefined
-		const [candidate] = await readOptionalMulticall(client, [{ address: feed.result, abi, functionName: 'reportCandidates', args: [reportId] }])
-		if (candidate.status !== 'success' || !sameAddress(candidate.result[0], game.callbackContract)) return undefined
-		const [factory, securityPool, universe, weth, rep] = await readOptionalMulticall(client, [
-			{ address: feed.result, abi: sharedFeedLinkAbi, functionName: 'securityPoolFactory' },
-			{ address: feed.result, abi: sharedFeedLinkAbi, functionName: 'securityPool' },
-			{ address: feed.result, abi: sharedFeedLinkAbi, functionName: 'universeId' },
-			{ address: feed.result, abi, functionName: 'collateralToken' },
-			{ address: feed.result, abi, functionName: 'reputationToken' },
-		])
-		if (
-			factory.status !== 'success' ||
-			!sameAddress(factory.result, getInfraContractAddresses().securityPoolFactory) ||
-			securityPool.status !== 'success' ||
-			securityPool.result === zeroAddress ||
-			universe.status !== 'success' ||
-			weth.status !== 'success' ||
-			!sameAddress(weth.result, game.token1) ||
-			rep.status !== 'success' ||
-			!sameAddress(rep.result, game.token2)
-		)
-			return undefined
-		const [registeredFeed, validity] = await readOptionalMulticall(client, [
-			{ address: factory.result, abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, functionName: 'sharedPriceFeeds', args: [securityPool.result, universe.result] },
-			{ address: feed.result, abi: sharedFeedLinkAbi, functionName: 'priceValidityWindowSeconds' },
-		])
-		if (registeredFeed.status !== 'success' || !sameAddress(registeredFeed.result, feed.result) || validity.status !== 'success') return undefined
-		return game.reportTimestamp + game.settlementTime + validity.result
-	}
+	if (reportId === undefined) return undefined
+	const [feed, escrowReport] = await readOptionalMulticall(client, [
+		{ address: game.callbackContract, abi: reportEscrowAbi, functionName: 'feed' },
+		{ address: game.callbackContract, abi: reportEscrowAbi, functionName: 'reportId' },
+	])
+	if (feed.status !== 'success' || feed.result === zeroAddress || escrowReport.status !== 'success' || escrowReport.result !== reportId) return undefined
+	const [candidate] = await readOptionalMulticall(client, [{ address: feed.result, abi: reportEscrowAbi, functionName: 'reportCandidates', args: [reportId] }])
+	if (candidate.status !== 'success' || !sameAddress(candidate.result[0], game.callbackContract)) return undefined
+	const [factory, securityPool, universe, weth, rep, oracle] = await readOptionalMulticall(client, [
+		{ address: feed.result, abi: sharedFeedLinkAbi, functionName: 'securityPoolFactory' },
+		{ address: feed.result, abi: sharedFeedLinkAbi, functionName: 'securityPool' },
+		{ address: feed.result, abi: sharedFeedLinkAbi, functionName: 'universeId' },
+		{ address: feed.result, abi, functionName: 'collateralToken' },
+		{ address: feed.result, abi, functionName: 'reputationToken' },
+		{ address: feed.result, abi, functionName: 'openOracle' },
+	])
+	if (
+		oracle.status !== 'success' ||
+		!sameAddress(oracle.result, openOracleAddress) ||
+		factory.status !== 'success' ||
+		!sameAddress(factory.result, getInfraContractAddresses().securityPoolFactory) ||
+		securityPool.status !== 'success' ||
+		securityPool.result === zeroAddress ||
+		universe.status !== 'success' ||
+		weth.status !== 'success' ||
+		!sameAddress(weth.result, game.token1) ||
+		rep.status !== 'success' ||
+		!sameAddress(rep.result, game.token2)
+	)
+		return undefined
+	const [registeredFeed, validity] = await readOptionalMulticall(client, [
+		{ address: factory.result, abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, functionName: 'sharedPriceFeeds', args: [securityPool.result, universe.result] },
+		{ address: feed.result, abi: sharedFeedLinkAbi, functionName: 'priceValidityWindowSeconds' },
+	])
+	if (registeredFeed.status !== 'success' || !sameAddress(registeredFeed.result, feed.result) || validity.status !== 'success') return undefined
+	return game.reportTimestamp + game.settlementTime + validity.result
 }
 
 /**

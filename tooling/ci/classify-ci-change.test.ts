@@ -16,7 +16,7 @@ const routingCases: readonly (readonly [readonly string[], readonly CiScope[]])[
 	// Documentation data read only by the documentation checks stays in the documentation scope.
 	[['docs/manifest.json'], ['docs']],
 	[['docs/assets/screenshots/fingerprints.json'], ['docs']],
-	[['docs/data/shared-pool-price-feed.json'], ['docs']],
+	[['docs/data/open-oracle-coordinator.json'], ['docs']],
 	[['augurScan/src/ARCHITECTURE.md'], ['docs']],
 	// Documentation that code or tests execute or read selects its consumers as well as the documentation checks.
 	[

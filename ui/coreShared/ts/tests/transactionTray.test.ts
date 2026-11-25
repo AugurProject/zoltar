@@ -278,7 +278,7 @@ describe('transactionTray', () => {
 		const approvalHash = '0xaaaa000000000000000000000000000000000000000000000000000000000000'
 		const requestHash = '0xbbbb000000000000000000000000000000000000000000000000000000000000'
 		const requested = markTransactionRequested(createInitialTransactionTrayState(), {
-			action: 'requestSecurityPoolPrice',
+			action: 'requestPrice',
 			rows: [{ label: 'Pool', value: '0x0000000000000000000000000000000000000001' }],
 			source: 'pool-oracle',
 			submittedTitle: 'Requesting New Price',
@@ -297,7 +297,7 @@ describe('transactionTray', () => {
 			args: [3n, 4n],
 			chainName: 'Ethereum',
 			contractAddress: '0x0000000000000000000000000000000000000001',
-			functionName: 'requestSecurityPoolPrice',
+			functionName: 'requestPrice',
 			value: 5n,
 		})
 		const requestSubmitted = markTransactionSubmitted(requestPrepared, requestHash)
@@ -314,10 +314,10 @@ describe('transactionTray', () => {
 		expect(approvalSubmitted.active?.hash).toBe(approvalHash)
 		expect(approvalSubmitted.active?.technicalRows?.some(row => row.label === 'Function' && row.value === 'approve')).toBe(true)
 		expect(requestPrepared.active?.hash).toBeUndefined()
-		expect(requestPrepared.active?.technicalRows?.some(row => row.label === 'Function' && row.value === 'requestSecurityPoolPrice')).toBe(true)
+		expect(requestPrepared.active?.technicalRows?.some(row => row.label === 'Function' && row.value === 'requestPrice')).toBe(true)
 		for (const state of [requestPrepared, requestSubmitted, requestFailed, requestSucceeded]) {
 			expect(state.active?.rows?.map(row => row.label)).toContain('Pool')
-			expect(state.active?.technicalRows?.some(row => row.label === 'Function' && row.value === 'requestSecurityPoolPrice')).toBe(true)
+			expect(state.active?.technicalRows?.some(row => row.label === 'Function' && row.value === 'requestPrice')).toBe(true)
 			expect(state.active?.technicalRows?.some(row => row.label === 'Function' && row.value === 'approve')).toBe(false)
 		}
 		expect(requestSubmitted.active?.hash).toBe(requestHash)

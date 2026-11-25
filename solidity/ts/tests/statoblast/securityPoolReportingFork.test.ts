@@ -111,7 +111,7 @@ describe('Statoblast: native fork reporter registration', () => {
 		const capital = { abi: capitalArtifact.abi, address: await owner.readContract({ ...securityPool(), functionName: 'capitalLedger', args: [child] }) }
 		const pool = { abi: poolArtifact.abi, address: childPool }
 		const game = await owner.readContract({ ...pool, functionName: 'escalationGame' })
-		const oracle = await owner.readContract({ ...pool, functionName: 'sharedPriceFeed' })
+		const oracle = await owner.readContract({ ...pool, functionName: 'priceFeed' })
 		const token = getRepTokenAddress(child)
 		await manipulatePriceOracle(owner, fixture.base.mockWindow, oracle, unit, 100n * unit)
 		await writeContractAndWait(reporter, () => reporter.writeContract({ ...capital, functionName: 'withdrawPrincipal', args: [100n * unit, reporter.account.address] }))

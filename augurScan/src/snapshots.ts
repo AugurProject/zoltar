@@ -147,11 +147,13 @@ const poolSnapshot = async (target: StateSnapshotTarget, read: StateRead): Promi
 	if (target.coordinatorAddress !== undefined) {
 		const coordinator = target.coordinatorAddress
 		const price = await Promise.all([read(coordinator, coordinatorAbi, 'lastPrice'), read(coordinator, coordinatorAbi, 'lastSettlementTimestamp'), read(coordinator, coordinatorAbi, 'isPriceValid')])
+		const feedAddress = coordinator
+		if (typeof feedAddress !== 'string') throw new Error('priceFeed returned an invalid address')
 		result['price'] = {
 			repPerEth1e18: exact(price[0], 'lastPrice'),
 			settlementTimestamp: exact(price[1], 'lastSettlementTimestamp'),
 			protocolValid: flag(price[2], 'isPriceValid'),
-			sourceContract: getAddress(coordinator).toLowerCase(),
+			sourceContract: getAddress(feedAddress).toLowerCase(),
 		}
 	}
 	return result

@@ -226,7 +226,7 @@ describe('event-only replay', () => {
 				logIndex: 8,
 				args: {
 					questionLedger: pool,
-					sharedPriceFeed: coordinator,
+					priceFeed: coordinator,
 					shareToken,
 					parent: zeroAddress,
 					universeId: 1n,
@@ -684,7 +684,7 @@ describe('event-only replay', () => {
 				logIndex: 0,
 				args: {
 					questionLedger: pool,
-					sharedPriceFeed: zeroAddress,
+					priceFeed: zeroAddress,
 					shareToken: zeroAddress,
 					parent,
 					universeId: 1n,
@@ -861,7 +861,7 @@ describe('event-only replay', () => {
 				logIndex: 4,
 				args: {
 					questionLedger: pool,
-					sharedPriceFeed: coordinator,
+					priceFeed: coordinator,
 					shareToken: repToken,
 					parent: zeroAddress,
 					universeId: 9n,
@@ -1053,7 +1053,7 @@ describe('event-only replay', () => {
 				getContractReplayLogs(factory, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, blockNumber, blockNumber),
 				getContractReplayLogs(addresses.questionLedger, statoblast_QuestionLedger_QuestionLedger.abi, blockNumber, blockNumber),
 				getContractReplayLogs(addresses.shareToken, statoblast_tokens_ShareToken_ShareToken.abi, blockNumber, blockNumber),
-				getContractReplayLogs(addresses.sharedPriceFeed, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, blockNumber, blockNumber),
+				getContractReplayLogs(addresses.priceFeed, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, blockNumber, blockNumber),
 			])
 		)
 			.flat()
@@ -1070,14 +1070,14 @@ describe('event-only replay', () => {
 		const replayed = replayZoltarEvents(replayLogs, new Set(), new Set([factory]))
 		if (replayed.poolDeployments.get(addresses.questionLedger)?.shareToken !== addresses.shareToken) throw new Error('origin deployment relationship mismatch')
 		const storedOriginPriorityFee = await client.readContract({
-			address: addresses.sharedPriceFeed,
+			address: addresses.priceFeed,
 			abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 			functionName: 'initialReportPriorityFeeAttoEthPerGas',
 			args: [],
 		})
 		strictEqualTypeSafe(replayed.poolDeployments.get(addresses.questionLedger)?.initialReportPriorityFeeAttoEthPerGas, storedOriginPriorityFee, 'origin priority fee replay mismatch')
 		if (replayed.authorizations.get(addresses.shareToken)?.get(addresses.questionLedger) !== true) throw new Error('origin pool authorization was not replayed')
-		if (replayed.poolDeployments.get(addresses.questionLedger)?.coordinator !== addresses.sharedPriceFeed) {
+		if (replayed.poolDeployments.get(addresses.questionLedger)?.coordinator !== addresses.priceFeed) {
 			throw new Error('origin canonical shared feed relationship was not replayed')
 		}
 	})
@@ -1218,7 +1218,7 @@ describe('event-only replay', () => {
 		const [storedStatoblastSecurityMultiplierBps, storedPriorityFee, storedSystemState, storedCarryRoots, storedCarrySnapshot] = await Promise.all([
 			client.readContract({ address: child.questionLedger, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'statoblastSecurityMultiplierBps', args: [] }),
 			client.readContract({
-				address: child.sharedPriceFeed,
+				address: child.priceFeed,
 				abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 				functionName: 'initialReportPriorityFeeAttoEthPerGas',
 				args: [],
@@ -1242,7 +1242,7 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(deployment.parent, questionLedgerAddresses.questionLedger, 'child parent replay mismatch')
 		strictEqualTypeSafe(deployment.universeId, childUniverseId, 'child universe replay mismatch')
 		strictEqualTypeSafe(deployment.questionId, fixture.questionId, 'child question replay mismatch')
-		strictEqualTypeSafe(deployment.coordinator, child.sharedPriceFeed, 'child coordinator replay mismatch')
+		strictEqualTypeSafe(deployment.coordinator, child.priceFeed, 'child coordinator replay mismatch')
 		strictEqualTypeSafe(deployment.shareToken, child.shareToken, 'child share token replay mismatch')
 		strictEqualTypeSafe(deployment.statoblastSecurityMultiplierBps, storedStatoblastSecurityMultiplierBps, 'child security multiplier replay mismatch')
 		strictEqualTypeSafe(deployment.initialReportPriorityFeeAttoEthPerGas, storedPriorityFee, 'child priority fee replay mismatch')

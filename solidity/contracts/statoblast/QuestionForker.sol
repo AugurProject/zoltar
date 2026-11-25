@@ -96,7 +96,7 @@ contract QuestionForker {
 	}
 
 	/// @dev The source share namespace may be a prepared pool without its own game.
-	function createChildUniverse(IQuestionLedger source, uint256 outcomeIndex) external returns (IQuestionLedger) {
+	function createChildUniverse(IQuestionLedger source, uint256 outcomeIndex) external {
 		uint248 targetUniverse = zoltar.getChildUniverseId(source.universeId(), outcomeIndex);
 		// Share migration must not depend on someone else having deployed the branch.
 		if (address(zoltar.getRepToken(targetUniverse)) == address(0))
@@ -113,9 +113,9 @@ contract QuestionForker {
 			if (
 				child.systemState() == SystemState.Operational ||
 				!_canActivateInForkedUniverse(authority, targetUniverse, source.questionId())
-			) return child;
+			) return;
 		}
-		return materializeSecurityPoolQuestion(source, targetUniverse);
+		materializeSecurityPoolQuestion(source, targetUniverse);
 	}
 
 	function _canActivateInForkedUniverse(ISecurityPoolNative securityPool, uint248 targetUniverse, uint256 questionId) private view returns (bool) {

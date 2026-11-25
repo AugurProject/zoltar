@@ -52,7 +52,7 @@ interface IQuestionLedger {
 	function shareToken() external view returns (IShareToken);
 	function repToken() external view returns (ReputationToken);
 	function securityPoolFactory() external view returns (ISecurityPoolFactory);
-	function sharedPriceFeed() external view returns (SharedPoolPriceFeed);
+	function priceFeed() external view returns (SharedPoolPriceFeed);
 	function openOracle() external view returns (OpenOracle);
 	function shareTokenSupplyAttoShares() external view returns (uint256);
 
@@ -94,7 +94,7 @@ interface ISecurityPoolFactory {
 
 	struct QuestionLedgerDeployment {
 		IQuestionLedger questionLedger;
-		SharedPoolPriceFeed sharedPriceFeed;
+		SharedPoolPriceFeed priceFeed;
 		IShareToken shareToken;
 		IQuestionLedger parent;
 		uint248 universeId;

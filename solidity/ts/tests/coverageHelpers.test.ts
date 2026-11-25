@@ -27,7 +27,6 @@ import {
 	ReputationToken_ReputationToken,
 	statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
 	statoblast_factories_EscalationGameFactory_EscalationGameFactory,
-	statoblast_factories_SharedPoolPriceFeedFactory_SharedPoolPriceFeedDeploymentWorker,
 	statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeployer,
 	statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
@@ -1645,16 +1644,6 @@ describe('Solidity bytecode coverage helpers', () => {
 			await assert.rejects(transact(unboundPool, data), /Reporter security pool required/)
 		}
 
-		const feedWorker = await deployContract(client, encodeDeployData({ abi: statoblast_factories_SharedPoolPriceFeedFactory_SharedPoolPriceFeedDeploymentWorker.abi, bytecode: `0x${statoblast_factories_SharedPoolPriceFeedFactory_SharedPoolPriceFeedDeploymentWorker.evm.bytecode.object}` }))
-		const deployFeedCloneData = encodeFunctionData({
-			abi: statoblast_factories_SharedPoolPriceFeedFactory_SharedPoolPriceFeedDeploymentWorker.abi,
-			functionName: 'deployClone',
-			args: [depositDelegateAddress, 0n, reputationTokenAddress, ZERO_BYTES32],
-		})
-		await transact(feedWorker, deployFeedCloneData)
-		// Reusing the same worker, bindings and salt must reject the existing CREATE2 address.
-		await assert.rejects(transact(feedWorker, deployFeedCloneData), /Shared price feed deployment failed/)
-
 		const fakeZoltar = await deployContract(
 			client,
 			encodeDeployData({
@@ -1675,7 +1664,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker.abi,
 				address: deploymentWorkerAddress,
 				functionName: 'deploy',
-				args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, sharedPriceFeed: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
+				args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, priceFeed: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
 			}),
 			/Only QuestionLedgerDeployer can use the deployment worker/,
 		)
@@ -1686,7 +1675,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					data: encodeFunctionData({
 						abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker.abi,
 						functionName: 'deploy',
-						args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, sharedPriceFeed: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
+						args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, priceFeed: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
 					}),
 					gas: 10_000_000n,
 				}),
@@ -1706,7 +1695,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeployer.abi,
 				address: questionLedgerDeployerAddress,
 				functionName: 'deploy',
-				args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, sharedPriceFeed: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
+				args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, priceFeed: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
 			}),
 			/Only SecurityPoolFactory can use the deployer/,
 		)
@@ -1717,7 +1706,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					data: encodeFunctionData({
 						abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeployer.abi,
 						functionName: 'deploy',
-						args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, sharedPriceFeed: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
+						args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, priceFeed: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
 					}),
 					gas: 10_000_000n,
 				}),

@@ -74,7 +74,7 @@ describe('Shared security pool child fee clock', () => {
 		await base.mockWindow.advanceTime(DAY)
 		await refresh()
 		expect(await cash()).toBe(frozenCash)
-		const oracle = await owner.readContract({ ...pool, functionName: 'sharedPriceFeed' })
+		const oracle = await owner.readContract({ ...pool, functionName: 'priceFeed' })
 		await manipulatePriceOracle(owner, base.mockWindow, oracle, unit, 100n * unit)
 		await refresh()
 		const liveCash = await cash()

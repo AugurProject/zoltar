@@ -65,7 +65,7 @@ test('only missing pool identity reads are classified as a missing question ledg
 		shareToken: getAddress(`0x${'34'.repeat(20)}`),
 		getQuestionLedger: pool,
 		canonicalQuestionLedgerByUniverse: pool,
-		sharedPriceFeed: getAddress(`0x${'56'.repeat(20)}`),
+		priceFeed: getAddress(`0x${'56'.repeat(20)}`),
 	}
 	const abi = [...statoblast_QuestionLedger_QuestionLedger.abi, ...statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, ...statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, ...shareTokenAbi]
 	for (const failedFunction of ['securityPoolFactory', 'getQuestionLedgerOriginId', 'getQuestionLedger', 'initialReportPriorityFeeAttoEthPerGas']) {

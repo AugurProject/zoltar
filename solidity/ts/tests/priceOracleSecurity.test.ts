@@ -13,6 +13,7 @@ import assert from '../testSupport/simulator/utils/assert'
 import { getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { approveToken, getERC20Balance, getETHBalance } from '../testSupport/simulator/utils/utilities'
 import {
+	getDefaultInitialReportPrice,
 	fundCoordinatorInitialReport,
 	getPendingReportId,
 	getRequestPriceCostAttoEth,
@@ -73,7 +74,7 @@ describe('Shared security pool oracle security regressions', () => {
 	beforeEach(async () => {
 		client = fixture.owner()
 		mockWindow = fixture.base.mockWindow
-		priceOracle = fixture.poolFor(fixture.base.questionId).sharedPriceFeed
+		priceOracle = fixture.poolFor(fixture.base.questionId).priceFeed
 		priceFeed = priceOracle
 	})
 	const setNextBlockBaseFee = async (baseFeeAttoEthPerGas: bigint) =>
@@ -510,7 +511,7 @@ describe('Shared security pool oracle security regressions', () => {
 			functionName: 'requestSecurityPoolPrice',
 			address: priceOracle,
 			args: [proposedRepPerEthPrice, requestMinimumWethReport, await getRequestPriceCostAttoEth(client, priceOracle)],
-			value: await getRequestPriceCostAttoEth(client, priceOracle),
+			value: (await getRequestPriceCostAttoEth(client, priceOracle)) + requestMinimumWethReport,
 			gasPrice: requestBaseFeeAttoEthPerGas,
 		})
 		await client.waitForTransactionReceipt({ hash: requestHash })
@@ -520,13 +521,27 @@ describe('Shared security pool oracle security regressions', () => {
 		assert.strictEqual(reportStatus.currentAmount2, expectedRepAmount, 'the coordinator should derive REP from the proposed price and request-block WETH amount')
 	})
 
-	test('direct feed requests reject excess Ether before consuming report funding', async () => {
-		const cost = await getRequestPriceCostAttoEth(client, priceOracle)
-		const { minimumToken1ReportAttoEth } = await fundCoordinatorInitialReport(client, priceOracle, 10n ** 18n)
-		const before = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
-		await assert.rejects(client.writeContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'requestSecurityPoolPrice', args: [10n ** 18n, minimumToken1ReportAttoEth, cost], value: cost + 1n }), /Incorrect oracle bounty/)
-		assert.strictEqual(await getPendingReportId(client, priceOracle), 0n)
-		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), before)
+	test('requestPrice should refund excess Ether when overpaid', async () => {
+		// Test that overpayment is refunded, not kept by contract
+		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
+		const overpayment = costAttoEth * 2n
+		const minimumWethReport = await client.readContract({
+			abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
+			functionName: 'minimumToken1ReportAttoEth',
+			address: priceOracle,
+			args: [],
+		})
+
+		await wrapWeth(client, minimumWethReport * 2n)
+		const initialBalance = await getETHBalance(client, client.account.address)
+		const initialWethAttoEth = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
+		// Call requestPrice with overpayment above the committed bounty
+		await requestPriceWithValue(client, priceOracle, overpayment, undefined, 0n, costAttoEth)
+
+		const finalBalance = await getETHBalance(client, client.account.address)
+
+		assert.strictEqual(initialBalance - finalBalance, costAttoEth, 'only the committed native bounty is retained; excess ETH is refunded')
+		assert.strictEqual(initialWethAttoEth - (await getERC20Balance(client, WETH_ADDRESS, client.account.address)), minimumWethReport, 'the report separately transfers its configured collateral stake')
 	})
 
 	test('Sepolia prices expire after one challenge period plus one hour of renewal slack', async () => {
@@ -719,7 +734,7 @@ describe('Shared security pool oracle security regressions', () => {
 				}),
 				costAttoEth + 1n,
 			),
-			/Incorrect oracle bounty/,
+			/Oracle feed failed to refund excess ETH bounty/,
 		)
 		assert.strictEqual(await getPendingReportId(client, priceOracle), 0n, 'failed direct refund must roll back the pending report')
 		assert.strictEqual(
@@ -814,14 +829,22 @@ describe('Shared security pool oracle security regressions', () => {
 		assert.strictEqual(report.protocolFee, BigInt(ORACLE_PROTOCOL_FEE))
 	})
 
+	test('exposure checkpoint rejects an unauthenticated caller without changing canonical exposure', async () => {
+		const target = { abi: feedArtifact.abi, address: priceFeed }
+		const before = await client.readContract({ ...target, functionName: 'aggregateExposureAttoEth' })
+		await assert.rejects(client.writeContract({ ...target, functionName: 'syncExposure' }), /Wrong exposure security pool/)
+		assert.strictEqual(await client.readContract({ ...target, functionName: 'aggregateExposureAttoEth' }), before)
+	})
+
 	test('funding, report widths, and forged callbacks fail atomically while concurrent candidates remain available', async () => {
+		const target = { abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, address: priceOracle }
 		const cost = await getRequestPriceCostAttoEth(client, priceOracle)
 		const direct = { abi: feedArtifact.abi, address: priceFeed }
 		const minimum = await client.readContract({ ...direct, functionName: 'minimumToken1ReportAttoEth' })
 		const nextId = () => client.readContract({ abi: statoblast_openOracle_OpenOracle_OpenOracle.abi, address: getInfraContractAddresses().openOracle, functionName: 'nextReportId' })
 		const beforeId = await nextId()
-		await assert.rejects(client.writeContract({ ...direct, functionName: 'requestSecurityPoolPrice', args: [1n, 0n, cost - 1n], value: cost - 1n }), /Oracle bounty too small/)
-		await assert.rejects(client.writeContract({ ...direct, functionName: 'requestSecurityPoolPrice', args: [1n, 0n, cost], value: cost - 1n }), /Incorrect oracle bounty/)
+		await assert.rejects(client.writeContract({ ...target, functionName: 'requestSecurityPoolPrice', args: [1n, 0n, cost - 1n], value: cost - 1n }), /Oracle bounty too small/)
+		await assert.rejects(client.writeContract({ ...target, functionName: 'requestSecurityPoolPrice', args: [1n, 0n, cost], value: cost - 1n }), /Not enough ETH for oracle bounty/)
 		await assert.rejects(client.writeContract({ ...direct, functionName: 'requestSecurityPoolPrice', args: [0n, 0n, cost], value: cost }), /Initial oracle price zero/)
 		await assert.rejects(recoverSettledPendingReport(client, priceOracle), /No report to recover/)
 		await assert.rejects(client.writeContract({ ...direct, functionName: 'requestSecurityPoolPrice', args: [1n, 1n << 128n, cost], value: cost }), /WETH report exceeds uint128/)
@@ -851,11 +874,29 @@ describe('Shared security pool oracle security regressions', () => {
 		assert.strictEqual(await getPendingReportId(client, priceOracle), 0n)
 		assert.strictEqual(await client.readContract({ abi: statoblast_openOracle_OpenOracle_OpenOracle.abi, address: getInfraContractAddresses().openOracle, functionName: 'nextReportId' }), nextId)
 	})
-	test('the direct feed retains exactly the sponsor’s larger committed bounty', async () => {
-		const bounty = (await getRequestPriceCostAttoEth(client, priceOracle)) + 5n * 10n ** 15n
-		await requestPriceWithValue(client, priceFeed, bounty)
-		const report = await getOpenOracleReportMeta(client, await getPendingReportId(client, priceFeed))
-		assert.strictEqual(report.settlerRewardAttoEth, bounty)
+	test('the coordinator retains the committed bounty and refunds only the ETH sent above it', async () => {
+		const proposedRepPerEthPrice = await getDefaultInitialReportPrice(client, priceOracle)
+		const { minimumToken1ReportAttoEth } = await fundCoordinatorInitialReport(client, priceOracle, proposedRepPerEthPrice)
+		const bountyAttoEth = (await getRequestPriceCostAttoEth(client, priceOracle)) + 5n * 10n ** 15n
+		const excessAttoEth = 7n * 10n ** 15n
+		const balanceBefore = await getETHBalance(client, client.account.address)
+
+		const requestHash = await client.writeContract({
+			abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
+			functionName: 'requestSecurityPoolPrice',
+			address: priceOracle,
+			args: [proposedRepPerEthPrice, minimumToken1ReportAttoEth, bountyAttoEth],
+			value: bountyAttoEth + excessAttoEth,
+		})
+		const requestReceipt = await client.waitForTransactionReceipt({ hash: requestHash })
+		assert.strictEqual(requestReceipt.status, 'success', 'an overfunded request should succeed')
+
+		const balanceAfter = await getETHBalance(client, client.account.address)
+		if (requestReceipt.effectiveGasPrice === undefined) throw new Error('request receipt is missing its effective gas price')
+		const gasAttoEth = requestReceipt.gasUsed * requestReceipt.effectiveGasPrice
+		assert.strictEqual(balanceBefore - balanceAfter, bountyAttoEth + gasAttoEth, 'the sponsor should pay exactly the committed bounty plus gas and receive the excess back')
+		const reportMeta = await getOpenOracleReportMeta(client, await getPendingReportId(client, priceOracle))
+		assert.strictEqual(reportMeta.settlerRewardAttoEth, bountyAttoEth, 'the retained bounty should fund the settler reward without the refunded excess')
 	})
 
 	test('direct capital commitments increase the report floor without a per-question synchronization', async () => {

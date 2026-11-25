@@ -9,6 +9,7 @@ import { SecurityPoolBoundClones } from './SecurityPoolBoundClones.sol';
 import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
 import { IReportOperations } from './interfaces/IReportOperations.sol';
 import { IWeth9 } from './interfaces/IWeth9.sol';
+import { IQuestionLedger, ISecurityPoolFactory } from './interfaces/IQuestionLedger.sol';
 import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { SharedPoolReportEscrow } from './SharedPoolReportEscrow.sol';
 import { ReputationToken } from '../ReputationToken.sol';
@@ -26,7 +27,7 @@ import {
 	IStoredOpenOracleGame
 } from './OraclePriceTypes.sol';
 
-interface ISharedPoolPriceFeedConfiguration {
+interface ISharedPoolPriceFeedConfig {
 	function weth() external view returns (IWeth9);
 	function targetPriceErrorForDispute() external view returns (uint256);
 	function settlementTime() external view returns (uint48);
@@ -37,7 +38,6 @@ interface ISharedPoolPriceFeedConfiguration {
 	function protocolFeeRecipient() external view returns (address);
 	function escalationHaltMultiplierBps() external view returns (uint256);
 	function maxSettlementBaseFeeMultiplierBps() external view returns (uint256);
-	function minLiquidationPriceDistanceBps() external view returns (uint256);
 }
 
 interface ISharedPoolSecurityPoolPriceCheckpoint {
@@ -88,7 +88,6 @@ contract SharedPoolPriceFeed {
 	address public immutable protocolFeeRecipient;
 	uint256 public immutable escalationHaltMultiplierBps;
 	uint256 public immutable maxSettlementBaseFeeMultiplierBps;
-	uint256 public immutable minLiquidationPriceDistanceBps;
 	uint256 public pendingReportId;
 	address public pendingReportSponsor;
 	uint256 public pendingReportMaxSettlementBaseFeeAttoEthPerGas;
@@ -129,7 +128,7 @@ contract SharedPoolPriceFeed {
 		return reports[reportId].outcome;
 	}
 
-	event ExposureCheckpoint(uint256 aggregateExposureAttoEth);
+	event ExposureCheckpoint(address indexed questionLedger, uint256 aggregateExposureAttoEth);
 	event PriceRequested(uint256 indexed reportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas);
 	event ReportFundingAssigned(uint256 indexed reportId, address indexed sponsor);
 	event PriceReported(uint256 indexed reportId, uint256 price, uint256 lastSettlementTimestamp);
@@ -139,12 +138,12 @@ contract SharedPoolPriceFeed {
 	event PriceReportDeferred(uint256 indexed reportId, uint256 baseFee, uint256 maxSettlementBaseFee);
 	event PendingReportRecovered(uint256 indexed reportId, uint256 settlementTimestamp, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp);
 
-	constructor(ISharedPoolPriceFeedConfiguration config, OpenOracle oracle, uint256 priorityFee, address _securityPoolFactory, address _securityPool) {
+	constructor(ISharedPoolPriceFeedConfig config, OpenOracle _openOracle, uint256 priorityFee, address _securityPoolFactory, address _securityPool) {
 		require(_securityPoolFactory != address(0), 'Security pool factory zero');
 		securityPoolFactory = _securityPoolFactory;
 		require(_securityPool != address(0), 'Security pool zero');
 		securityPool = _securityPool;
-		openOracle = oracle;
+		openOracle = _openOracle;
 		weth = config.weth();
 		collateralToken = ICollateralConfig(_securityPool).collateralToken();
 		minimumReportCollateral = ICollateralConfig(_securityPool).minimumReportCollateral();
@@ -159,13 +158,8 @@ contract SharedPoolPriceFeed {
 		protocolFeeRecipient = config.protocolFeeRecipient();
 		escalationHaltMultiplierBps = config.escalationHaltMultiplierBps();
 		maxSettlementBaseFeeMultiplierBps = config.maxSettlementBaseFeeMultiplierBps();
-		minLiquidationPriceDistanceBps = config.minLiquidationPriceDistanceBps();
 		require(priorityFee > 0, 'Initial priority fee zero');
 		require(priorityFee <= OraclePriceMath.maximumPriorityFee(targetPriceErrorForDispute, protocolFee, feePercentage, escalationHaltMultiplierBps), 'Initial report priority fee exceeds OpenOracle limits');
-		require(settlementTime > disputeDelay, 'Settlement time must exceed dispute delay');
-		require(multiplier >= 100, 'Oracle dispute multiplier must be at least one hundred percent');
-		require(maxSettlementBaseFeeMultiplierBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'Max settlement base fee multiplier must be at least one hundred percent');
-		require(minLiquidationPriceDistanceBps <= SecurityPoolUtils.BPS_DENOMINATOR, 'Minimum liquidation price distance cannot exceed one hundred percent');
 	}
 
 	function universeId() public view returns (uint248 universe) {
@@ -176,12 +170,19 @@ contract SharedPoolPriceFeed {
 		return ReputationToken(token);
 	}
 
-	/// @notice Publish changes to this canonical universe feed's aggregate exposure.
+	/// @notice Checkpoint only a canonical ledger bound to this pool, universe and feed.
 	function syncExposure() external {
-		uint256 exposure = aggregateExposureAttoEth();
-		if (exposure == checkpointedExposureAttoEth) return;
-		checkpointedExposureAttoEth = exposure;
-		emit ExposureCheckpoint(exposure);
+		IQuestionLedger ledger = IQuestionLedger(payable(msg.sender));
+		ISecurityPoolFactory factory = ISecurityPoolFactory(securityPoolFactory);
+		require(factory.securityPoolOf(ledger) == securityPool, 'Wrong exposure security pool');
+		require(address(ledger.securityPoolFactory()) == securityPoolFactory, 'Wrong security pool factory');
+		require(ledger.universeId() == universeId(), 'Wrong exposure universe');
+		require(address(ledger.repToken()) == address(reputationToken()), 'Wrong REP token');
+		require(address(ledger.priceFeed()) == address(this) && factory.sharedPriceFeeds(securityPool, universeId()) == address(this), 'Feed is not canonical');
+		uint256 exposureAttoEth = aggregateExposureAttoEth();
+		if (exposureAttoEth == checkpointedExposureAttoEth) return;
+		checkpointedExposureAttoEth = exposureAttoEth;
+		emit ExposureCheckpoint(msg.sender, exposureAttoEth);
 	}
 
 	function aggregateExposureAttoEth() public view returns (uint256) {
@@ -248,8 +249,8 @@ contract SharedPoolPriceFeed {
 	/// The caller approves this feed for the configured collateral and the branch's REP; only that caller
 	/// receives the candidate's returned funding. No pool collateral funds reports.
 	function requestSecurityPoolPrice(uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) external payable returns (uint256 reportId) {
-		return
-			_requestPrice(msg.sender, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth, getSettlementCallbackGasLimit());
+		reportId = _requestPrice(msg.sender, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth, getSettlementCallbackGasLimit());
+		_refundExcessBounty(bountyAttoEth);
 	}
 
 	/// @notice Anyone may settle, but these ordered operations retain the funding sponsor.
@@ -276,6 +277,15 @@ contract SharedPoolPriceFeed {
 		for (uint256 index = 0; index < batch.operations.length; index++)
 			stored.operations.push(batch.operations[index]);
 		sponsorOperationReport[msg.sender] = reportId;
+		_refundExcessBounty(bountyAttoEth);
+	}
+
+	/// @dev Complete candidate and operation storage before invoking a sponsor callback.
+	function _refundExcessBounty(uint256 bountyAttoEth) private {
+		uint256 excess = msg.value - bountyAttoEth;
+		if (excess == 0) return;
+		(bool sent, ) = payable(msg.sender).call{value: excess}('');
+		require(sent, 'Oracle feed failed to refund excess ETH bounty');
 	}
 
 	function _requestPrice(address sponsor, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth, uint32 callbackGasLimit) private returns (uint256 reportId) {
@@ -283,7 +293,7 @@ contract SharedPoolPriceFeed {
 		require(sponsor != address(0), 'Report sponsor zero');
 		require(proposedRepPerEthPrice > 0, 'Initial oracle price zero');
 		require(bountyAttoEth >= _minimumSettlementBounty(callbackGasLimit), 'Oracle bounty too small');
-		require(msg.value == bountyAttoEth, 'Incorrect oracle bounty');
+		require(msg.value >= bountyAttoEth, 'Not enough ETH for oracle bounty');
 		ReportFundingQuote memory quote = _quoteReportFunding(proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth);
 		pendingExposureLimitAttoEth = quote.exposureLimitAttoEth;
 		pendingReportMaxSettlementBaseFeeAttoEthPerGas = quote.maxSettlementBaseFeeAttoEthPerGas;

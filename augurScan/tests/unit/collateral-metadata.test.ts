@@ -57,13 +57,3 @@ test('unavailable or malformed metadata leaves amounts in raw units', async () =
 		}),
 	).toHaveProperty('readError')
 })
-
-test('shared feed collateral metadata is independent of any single question ledger', async () => {
-	const read: StateRead = async (_address, _abi, name) => {
-		if (name === 'collateralToken') return token
-		if (name === 'symbol') return 'USDC'
-		if (name === 'decimals') return 6n
-		throw new Error(`The shared feed has no ${name} getter`)
-	}
-	expect(await readContractCollateral(securityPool, 'sharedPoolPriceFeed', read)).toMatchObject({ unit: { symbol: 'USDC', decimals: 6 } })
-})

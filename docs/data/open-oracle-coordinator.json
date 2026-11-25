@@ -1,6 +1,6 @@
 {
-	"schemaVersion": 6,
-	"scope": "shared-universe-price-feed-public-ABI-and-event-index",
+	"schemaVersion": 5,
+	"scope": "shared-security-pool-price-feed-public-ABI-and-event-index",
 	"source": "solidity/contracts/statoblast/SharedPoolPriceFeed.sol",
 	"observablePredicates": {
 		"cache": ["fresh-price", "stale-price"],
@@ -10,13 +10,13 @@
 	"outcomes": [
 		{
 			"trigger": "requestSecurityPoolPrice",
-			"preconditions": ["sponsor funding and allowance cover the exact reviewed budget", "security pool reporting window open", "native value equals the committed bounty"],
-			"outcomes": ["isolated candidate escrow", "exact public bounty forwarded", "excess ETH rejected before funding moves"]
+			"preconditions": ["sponsor funding and allowance cover the exact reviewed budget", "security pool reporting window open"],
+			"outcomes": ["isolated candidate escrow", "exact public bounty forwarded", "excess ETH refunded"]
 		},
 		{
 			"trigger": "recoverSettledPendingReport",
 			"preconditions": ["latest candidate settled and unprocessed"],
-			"outcomes": ["settled candidate processed; a valid candidate may publish its price", "returned report funding remains separately withdrawable from its escrow"]
+			"outcomes": ["settled candidate processed and funding recovered; a valid candidate may publish its price"]
 		}
 	],
 	"functions": {
@@ -42,7 +42,6 @@
 		"lastSettlementTimestamp": "view",
 		"liquidationPrice": "view",
 		"maxSettlementBaseFeeMultiplierBps": "view",
-		"minLiquidationPriceDistanceBps": "view",
 		"minimumReportCollateral": "view",
 		"minimumToken1ReportAttoEth": "view",
 		"minimumToken1ReportAttoEthForPrice": "view",
@@ -101,7 +100,6 @@
 		"lastSettlementTimestamp": "lastSettlementTimestamp()",
 		"liquidationPrice": "liquidationPrice()",
 		"maxSettlementBaseFeeMultiplierBps": "maxSettlementBaseFeeMultiplierBps()",
-		"minLiquidationPriceDistanceBps": "minLiquidationPriceDistanceBps()",
 		"minimumReportCollateral": "minimumReportCollateral()",
 		"minimumToken1ReportAttoEth": "minimumToken1ReportAttoEth()",
 		"minimumToken1ReportAttoEthForPrice": "minimumToken1ReportAttoEthForPrice(uint256)",
@@ -139,7 +137,7 @@
 	},
 	"events": ["ExposureCheckpoint", "PendingReportRecovered", "PriceReportDeferred", "PriceReportRejected", "PriceReported", "PriceRequested", "ReportFundingAssigned", "ReportOperationAttempted"],
 	"eventDeclarations": {
-		"ExposureCheckpoint": "ExposureCheckpoint(uint256 aggregateExposureAttoEth)",
+		"ExposureCheckpoint": "ExposureCheckpoint(address indexed questionLedger, uint256 aggregateExposureAttoEth)",
 		"PendingReportRecovered": "PendingReportRecovered(uint256 indexed reportId, uint256 settlementTimestamp, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp)",
 		"PriceReportDeferred": "PriceReportDeferred(uint256 indexed reportId, uint256 baseFee, uint256 maxSettlementBaseFee)",
 		"PriceReportRejected": "PriceReportRejected(uint256 indexed reportId, string reason, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp)",

@@ -6,12 +6,7 @@ import { addressString } from '../testSupport/simulator/utils/bigint'
 import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { GENESIS_REPUTATION_TOKEN, WETH_ADDRESS } from '../testSupport/simulator/utils/constants'
 import { getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
-import {
-	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
-	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed,
-	statoblast_factories_SharedPoolPriceFeedFactory_SharedPoolPriceFeedDeploymentWorker as feedWorkerArtifact,
-	statoblast_factories_SharedPoolPriceFeedFactory_SharedPoolPriceFeedFactory as configArtifact,
-} from '../types/contractArtifact'
+import { statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact, statoblast_factories_SharedPoolPriceFeedFactory_SharedPoolPriceFeedFactory as configArtifact, statoblast_factories_SharedPoolPriceFeedFactory_SharedPoolPriceFeedDeploymentWorker as feedWorkerArtifact } from '../types/contractArtifact'
 import { useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 import {
 	DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS,
@@ -27,6 +22,15 @@ import {
 	ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
 } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 type OracleCoordinatorConstructorArgs = [Address, Address, Address, bigint, bigint, number, number, number, number, number, Address, bigint, bigint, bigint]
+
+async function deployConfiguredFeed(client: ReturnType<ReturnType<typeof useSecurityPoolFixture>['owner']>, args: OracleCoordinatorConstructorArgs, securityPool: Address) {
+	const worker = getInfraContractAddresses().sharedPoolPriceFeedDeploymentWorker
+	const config = await deployContract(client, encodeDeployData({ abi: configArtifact.abi, bytecode: `0x${configArtifact.evm.bytecode.object}`, args: [args[2], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11], args[12], args[13], worker] }))
+	const request = { abi: feedWorkerArtifact.abi, address: worker, functionName: 'deployImplementation', args: [config, args[0], args[3], getInfraContractAddresses().securityPoolFactory, securityPool] } as const
+	const { result } = await client.simulateContract(request)
+	await writeContractAndWait(client, () => client.writeContract(request))
+	return result
+}
 
 describe('Security pool oracle configuration guards', () => {
 	const fixture = useSecurityPoolFixture()
@@ -47,29 +51,16 @@ describe('Security pool oracle configuration guards', () => {
 		ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS,
 	]
 
-	async function encodeOracleCoordinatorDeployData(args: OracleCoordinatorConstructorArgs) {
-		const infrastructure = getInfraContractAddresses()
-		const configuration = await deployContract(
-			fixture.owner(),
-			encodeDeployData({
-				abi: configArtifact.abi,
-				bytecode: `0x${configArtifact.evm.bytecode.object}`,
-				args: [args[2], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11], args[12], args[13], infrastructure.sharedPoolPriceFeedDeploymentWorker],
-			}),
-		)
-		return encodeDeployData({ abi: feedArtifact.abi, bytecode: `0x${feedArtifact.evm.bytecode.object}`, args: [configuration, args[0], args[3], infrastructure.securityPoolFactory, fixture.securityPool] })
-	}
-
 	test('coordinator constructor rejects a priority fee that would exhaust OpenOracle report limits', async () => {
 		const client = fixture.owner()
 		const maximumArgs = getOracleCoordinatorConstructorArgs()
 		maximumArgs[3] = MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS
-		const maximumCoordinator = await deployContract(client, await encodeOracleCoordinatorDeployData(maximumArgs))
-		assert.strictEqual(await client.readContract({ abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, address: maximumCoordinator, functionName: 'initialReportPriorityFeeAttoEthPerGas' }), MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS)
+		const maximumCoordinator = await deployConfiguredFeed(client, maximumArgs, fixture.securityPool)
+		assert.strictEqual(await client.readContract({ abi: feedArtifact.abi, address: maximumCoordinator, functionName: 'initialReportPriorityFeeAttoEthPerGas' }), MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS)
 
 		const invalidArgs = getOracleCoordinatorConstructorArgs()
 		invalidArgs[3] = MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS + 1n
-		await assert.rejects(async () => await deployContract(client, await encodeOracleCoordinatorDeployData(invalidArgs)), /initial report priority fee exceeds openoracle limits/i)
+		await assert.rejects(async () => await deployConfiguredFeed(client, invalidArgs, fixture.securityPool), /initial report priority fee exceeds openoracle limits/i)
 	})
 
 	test('coordinator constructor rejects active timing and risk parameters that cannot produce safe reports', async () => {
@@ -84,13 +75,13 @@ describe('Security pool oracle configuration guards', () => {
 				change: args => {
 					args[4] = 10_000_000n
 				},
-				message: /Oracle uncertainty reaches one hundred percent/i,
+				message: /target price error must be below/i,
 			},
 			{
 				change: args => {
 					args[4] = 10_000_001n
 				},
-				message: /Oracle uncertainty reaches one hundred percent/i,
+				message: /target price error must be below/i,
 			},
 			{
 				change: args => {
@@ -139,12 +130,12 @@ describe('Security pool oracle configuration guards', () => {
 		for (const entry of cases) {
 			const args = getOracleCoordinatorConstructorArgs()
 			entry.change(args)
-			await assert.rejects(deployContract(fixture.owner(), await encodeOracleCoordinatorDeployData(args)), entry.message)
+			await assert.rejects(deployConfiguredFeed(fixture.owner(), args, fixture.securityPool), entry.message)
 		}
 		const minimumArgs = getOracleCoordinatorConstructorArgs()
 		minimumArgs[9] = 100
-		const coordinator = await deployContract(fixture.owner(), await encodeOracleCoordinatorDeployData(minimumArgs))
-		assert.strictEqual(await fixture.owner().readContract({ abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, address: coordinator, functionName: 'multiplier' }), 100n)
+		const coordinator = await deployConfiguredFeed(fixture.owner(), minimumArgs, fixture.securityPool)
+		assert.strictEqual(await fixture.owner().readContract({ abi: feedArtifact.abi, address: coordinator, functionName: 'multiplier' }), 100n)
 	})
 
 	test('shared feeds retain a positive collateral floor even with zero base fee (#595)', async () => {
@@ -155,8 +146,7 @@ describe('Security pool oracle configuration guards', () => {
 			const args = getOracleCoordinatorConstructorArgs()
 			args[3] = priority
 			args[4] = 1_000_000n
-			const coordinator = await deployContract(client, await encodeOracleCoordinatorDeployData(args))
-			const implementation = coordinator
+			const implementation = await deployConfiguredFeed(client, args, fixture.securityPool)
 			const cloneRequest = { ...worker, functionName: 'deployClone', args: [implementation, fixture.base.genesisUniverse, addressString(GENESIS_REPUTATION_TOKEN), zeroHash] } as const
 			const { result: feed } = await client.simulateContract(cloneRequest)
 			await writeContractAndWait(client, () => client.writeContract(cloneRequest))

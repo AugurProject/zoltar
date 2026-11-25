@@ -84,7 +84,7 @@ export function useSecurityPoolFixture(economicsOverrides: Partial<SecurityPoolE
 	}
 	const capitalFor = (namespace = securityPool) => owner().readContract({ abi: securityPoolArtifact.abi, address: namespace, functionName: 'capitalLedger', args: [base.genesisUniverse] })
 	const register = (questionId: bigint, namespace = securityPool, sender = other()) => writeContractAndWait(sender, () => sender.writeContract({ abi: securityPoolArtifact.abi, address: namespace, functionName: 'addQuestion', args: [questionId] }))
-	const refreshPrice = (questionId = base.questionId, price = unit, namespace = securityPool, requestedInitialAttoWeth = 100n * unit) => manipulatePriceOracle(owner(), base.mockWindow, poolFor(questionId, base.genesisUniverse, zeroAddress, namespace).sharedPriceFeed, price, requestedInitialAttoWeth)
+	const refreshPrice = (questionId = base.questionId, price = unit, namespace = securityPool, requestedInitialAttoWeth = 100n * unit) => manipulatePriceOracle(owner(), base.mockWindow, poolFor(questionId, base.genesisUniverse, zeroAddress, namespace).priceFeed, price, requestedInitialAttoWeth)
 	const deposit = async (amount = 1_000n * unit, sender = owner(), namespace = securityPool) => {
 		const capital = await capitalFor(namespace)
 		await approveToken(sender, getRepTokenAddress(base.genesisUniverse), capital)
