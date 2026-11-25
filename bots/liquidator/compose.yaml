@@ -9,6 +9,7 @@ services:
       dockerfile: bots/liquidator/Dockerfile
     image: zoltar-liquidator
     environment:
+      ZOLTAR_BOT_VERIFIED_MARKETS: ${ZOLTAR_BOT_VERIFIED_MARKETS-}
       ZOLTAR_BOT_COMPOSE_UI_PORT: "4183"
       # Keep this assertion paired with the host-loopback port mapping below.
       ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: "true"
