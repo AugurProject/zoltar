@@ -75,8 +75,12 @@ function resolveMintLimits(form: TradingFormState, funding: ReturnType<typeof us
 	const maximumFeeInput = form.mintMaximumFee?.trim() ?? ''
 	const minimumSharesInput = form.mintMinimumShares?.trim() ?? ''
 	const decimals = collateral?.decimals
-	const maximumFee = maximumFeeInput === '' ? mintQuote?.maximumFee : decimals === undefined ? undefined : parseCompleteSetAmountInput(maximumFeeInput, decimals)
-	const minimumShares = minimumSharesInput === '' ? mintQuote?.minimumShares : decimals === undefined ? undefined : parseCompleteSetAmountInput(minimumSharesInput, decimals)
+	const resolveLimit = (input: string, fallback: bigint | undefined) => {
+		if (input === '') return fallback
+		return decimals === undefined ? undefined : parseCompleteSetAmountInput(input, decimals)
+	}
+	const maximumFee = resolveLimit(maximumFeeInput, mintQuote?.maximumFee)
+	const minimumShares = resolveLimit(minimumSharesInput, mintQuote?.minimumShares)
 	let reason: string | undefined
 	if (decimals !== undefined && maximumFeeInput !== '' && (maximumFee === undefined || maximumFee < 0n || maximumFee > maxUint256)) reason = invalidMaximumMintFee
 	else if (decimals !== undefined && minimumSharesInput !== '' && (minimumShares === undefined || minimumShares < 0n || minimumShares > maxUint256)) reason = invalidMinimumMintShares

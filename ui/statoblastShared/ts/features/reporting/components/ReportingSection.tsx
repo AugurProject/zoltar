@@ -132,7 +132,8 @@ export function ReportingSection({
 	const withdrawEscalationEnabled = isWithdrawEscalationEnabled(reportingStageKey)
 	let reportLifecycleReason: string | undefined
 	if (reportingStageKey === 'forkTriggered') {
-		reportLifecycleReason = activeReportingDetails?.settlementState === 'migration-required' ? reportingCopy.forkMigrationRequiredDetail : forkAlreadyTriggered ? reportingCopy.forkAlreadyTriggeredReportReason : reportingCopy.forkTriggerInstruction
+		if (activeReportingDetails?.settlementState === 'migration-required') reportLifecycleReason = reportingCopy.forkMigrationRequiredDetail
+		else reportLifecycleReason = forkAlreadyTriggered ? reportingCopy.forkAlreadyTriggeredReportReason : reportingCopy.forkTriggerInstruction
 	} else if (reportingStageKey === 'timedOut') {
 		reportLifecycleReason = reportingCopy.refreshFinalizedOutcomeReason
 	} else if (reportingStageKey === 'resolved') {
@@ -143,7 +144,8 @@ export function ReportingSection({
 	const reportControlsLocked = !reportOutcomeEnabled || reportControlsLockedReason !== undefined
 	let settlementLifecycleReason: string | undefined
 	if (reportingStageKey === 'forkTriggered') {
-		settlementLifecycleReason = activeReportingDetails?.settlementState === 'migration-required' ? reportingCopy.forkMigrationRequiredDetail : forkAlreadyTriggered ? reportingCopy.forkAlreadyTriggeredSettlementReason : reportingCopy.forkRequiredSettlementReason
+		if (activeReportingDetails?.settlementState === 'migration-required') settlementLifecycleReason = reportingCopy.forkMigrationRequiredDetail
+		else settlementLifecycleReason = forkAlreadyTriggered ? reportingCopy.forkAlreadyTriggeredSettlementReason : reportingCopy.forkRequiredSettlementReason
 	} else if (reportingStageKey === 'timedOut') {
 		settlementLifecycleReason = reportingCopy.refreshFinalizedOutcomeReason
 	} else if (activeReportingDetails?.settlementState === 'migration-required') {

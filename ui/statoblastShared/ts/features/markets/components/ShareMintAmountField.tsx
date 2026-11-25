@@ -32,10 +32,12 @@ export function ShareMintAmountField({ funding, sharedBacking, hint, maximumMint
 		const amount = await findMaximum()
 		if (amount !== undefined && currentScope.current === scope) onChange(formatCurrencyInputBalance(amount, collateral.decimals))
 	}
+	const availableHint = sharedBacking ? funding?.maximumMintAmountError : hint
+	const find = collateral === undefined || findMaximum === undefined ? undefined : () => void resolveMaximum()
 	return (
 		<AmountField
-			hint={finding ? copy.checkingMintMaximum : sharedBacking ? funding?.maximumMintAmountError : hint}
-			fillMax={sharedBacking ? { amount: undefined, onFind: collateral === undefined || findMaximum === undefined ? undefined : () => void resolveMaximum(), pending: finding } : { amount: maximumMintAmount }}
+			hint={finding ? copy.checkingMintMaximum : availableHint}
+			fillMax={sharedBacking ? { amount: undefined, onFind: find, pending: finding } : { amount: maximumMintAmount }}
 			label={copy.mintCompleteSetsAmount}
 			onChange={onChange}
 			unit={collateral?.symbol ?? collateralCopy.fallback}

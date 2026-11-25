@@ -130,7 +130,8 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 			if (abort.signal.aborted || getActiveBackend() !== backend) return undefined
 			if (maximum === undefined) maximumError.value = { key: collateralKey, message: maximumMintAmountNotFunded }
 			return maximum
-		} catch {
+		} catch (error) {
+			if (error instanceof DOMException && error.name === 'AbortError') return undefined
 			if (!abort.signal.aborted && getActiveBackend() === backend) maximumError.value = { key: collateralKey, message: maximumMintAmountUnavailable }
 			return undefined
 		} finally {

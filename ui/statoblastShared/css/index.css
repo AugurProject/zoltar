@@ -2685,6 +2685,7 @@ span.rep-price-status.stale,
 
 .statoblast-watchlist-history {
 	display: grid;
+	container-type: inline-size;
 	padding: 0;
 	margin: 0;
 	list-style: none;
@@ -2727,6 +2728,16 @@ span.rep-price-status.stale,
 		display: flex;
 		width: fit-content;
 		max-width: 100%;
+	}
+}
+
+@container (max-width: 16rem) {
+	.statoblast-history-identity {
+		grid-column: 1 / -1;
+	}
+
+	.statoblast-history-identity > .address-copy-control {
+		font-size: var(--font-caption);
 	}
 }
 
