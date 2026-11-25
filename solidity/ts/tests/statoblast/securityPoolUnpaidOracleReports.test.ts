@@ -17,7 +17,7 @@ describe('Statoblast: oracle reports draw on no shared service budget', () => {
 		await fixture.prepare()
 		await fixture.mint(10n * unit)
 		const sponsor = fixture.other()
-		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		const coordinator = fixture.poolFor(fixture.base.questionId).sharedPriceFeed
 		await requestPriceWithValue(sponsor, coordinator, await getRequestPriceCostAttoEth(sponsor, coordinator), unit)
 		const reportId = await getPendingReportId(sponsor, coordinator)
 		const serviceBefore = await servicesCash()

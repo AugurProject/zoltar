@@ -35,7 +35,6 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		prepareSecurityPoolPriceFeed: ['external(IQuestionLedger,uint248)'],
 		deploySecurityPoolQuestionLedger: ['external(uint248,uint256,uint256,uint256)'],
 		prepareSecurityPoolChildPriceFeed: ['external(IQuestionLedger,uint256)'],
-		prepareChildQuestionLedgerCoordinator: ['external(IQuestionLedger,uint256)'],
 		deployChildQuestionLedger: ['external(IQuestionLedger,IShareToken,uint248,uint256,uint256)'],
 	},
 	'solidity/contracts/statoblast/QuestionLedger.sol': {
@@ -63,7 +62,7 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 	},
 	'solidity/contracts/statoblast/QuestionForker.sol': {
 		prepareSecurityPoolQuestion: ['external(IQuestionLedger,uint248)'],
-		materializeSecurityPoolQuestion: ['external(IQuestionLedger,uint248)'],
+		materializeSecurityPoolQuestion: ['public(IQuestionLedger,uint248)'],
 		initiateQuestionLedgerFork: ['external(IQuestionLedger)'],
 		forkZoltarWithOwnEscalationGame: ['external(IQuestionLedger)'],
 		createChildUniverse: ['external(IQuestionLedger,uint256)'],
@@ -85,13 +84,6 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 	},
 	'solidity/contracts/statoblast/EscalationGameCarry.sol': {
 		initializeForkCarryOutcome: ['external(address,bytes32,bytes32[64],uint256,uint256,uint256,bytes32)'],
-	},
-	'solidity/contracts/statoblast/OpenOraclePriceSource.sol': {
-		requestPrice: ['public(uint256,uint256,uint256)'],
-		recoverSettledPendingReport: ['public()'],
-		setSharedPriceFeed: ['external(SharedPoolPriceFeed)'],
-		syncExposure: ['external()'],
-		setQuestionLedger: ['public(IQuestionLedger)'],
 	},
 	'solidity/contracts/statoblast/tokens/ERC1155.sol': {
 		setApprovalForAll: ['external(address,bool)'],
@@ -122,7 +114,6 @@ export const interfaceEntrypointExclusionsBySource: Record<string, string[]> = {
 	'solidity/contracts/statoblast/QuestionLedger.sol': ['completePurchaseFunding'],
 }
 export const stateChangingAbiFingerprintBySource: Record<string, string> = {
-	'solidity/contracts/statoblast/OpenOraclePriceSource.sol': '395129796c5f6e2acb4e9290860a651010691f8f19e1f5dd75d07afcbb4e7298',
 	'solidity/contracts/Context.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/ERC20.sol': '6c4161bf27a2ed1bc2de94b58253a8ec4201e28d125571cb2124238753387a22',
 	'solidity/contracts/ReputationToken.sol': '30c2987453109942297ab8ee8256c53fc68cd5c22f9fd16e168cd6bbb12b8608',
@@ -134,17 +125,15 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/EscalationGameSettlement.sol': 'd74a5944d10743e0804ba120722aef4dba4361eb8942afcf140264f0cc2c1941',
 	'solidity/contracts/statoblast/EscalationGameState.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/QuestionLedger.sol': 'd5ee68293a6702fd7c319a15eb2eae627d384ae7bf178eb3fb9bf472021b4dd4',
-	'solidity/contracts/statoblast/QuestionForker.sol': '706506c8a6f3b9cab5022f10c037b1ed96e240b4b5f3b0a3100448ad3b586567',
-	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': '4d6009a01c640efcf0545d8f1a8342bbe4f677467d4383759e6a095af241a02b',
+	'solidity/contracts/statoblast/QuestionForker.sol': '306d5b535ab28ac15b7c5f14f2b266aba43117e23d6f180865a4584c855aca7e',
+	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': '24a5c8cc53cbe4c2c3a9ad75e52d462010f1f91f40172fd416a2d3573849aa18',
 	'solidity/contracts/statoblast/tokens/ERC1155.sol': '7bb87695bc3df8fa177c545209ed58d2e4571c19c869b5598bb0a829e764b218',
 	'solidity/contracts/statoblast/tokens/ShareToken.sol': 'e1eb94e04ee65aa3f3f1147cdf1be9a855e30e7ba5900e6f8e048107d92cc400',
 	'solidity/contracts/vendor/authorization/ERC20Authorization.sol': '6bfae34f9210ed80f176774eb2b5a3624060ce4be34825ca84949ddcfb8024d2',
 }
 export const readDeclarationExclusionsBySource: Record<string, string[]> = {
 	'solidity/contracts/statoblast/tokens/ShareToken.sol': ['forkController', 'forkSecurityPoolTime', 'isReady', 'settlement'],
-	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': ['storedGame', 'disputeHistory'],
 	'solidity/contracts/statoblast/QuestionLedger.sol': ['accountingModule', 'factory', 'operationsDelegate'],
 }
 export function assertCoordinatorDataFunctionInventory(coordinatorData: string, compiledContractArtifacts: unknown): void {
@@ -155,9 +144,9 @@ export function assertCoordinatorDataFunctionInventory(coordinatorData: string, 
 	assert.ok(isPlainRecord(compiledContractArtifacts))
 	const contracts = compiledContractArtifacts['contracts']
 	assert.ok(isPlainRecord(contracts))
-	const coordinatorSource = contracts['contracts/statoblast/OpenOraclePriceCoordinator.sol']
+	const coordinatorSource = contracts['contracts/statoblast/SharedPoolPriceFeed.sol']
 	assert.ok(isPlainRecord(coordinatorSource))
-	const coordinatorArtifact = coordinatorSource['OpenOraclePriceCoordinator']
+	const coordinatorArtifact = coordinatorSource['SharedPoolPriceFeed']
 	assert.ok(isPlainRecord(coordinatorArtifact))
 	const abi = coordinatorArtifact['abi']
 	assert.ok(Array.isArray(abi))

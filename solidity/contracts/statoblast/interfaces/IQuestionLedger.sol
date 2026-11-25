@@ -5,7 +5,7 @@ import { Zoltar } from '../../Zoltar.sol';
 import { OpenOracle } from '../openOracle/OpenOracle.sol';
 import { IShareToken } from './IShareToken.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
-import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
+import { SharedPoolPriceFeed } from '../SharedPoolPriceFeed.sol';
 import { EscalationGame } from '../EscalationGame.sol';
 import { CarriedDepositProof } from '../EscalationGameTypes.sol';
 import { ZoltarQuestionData } from '../../ZoltarQuestionData.sol';
@@ -52,7 +52,7 @@ interface IQuestionLedger {
 	function shareToken() external view returns (IShareToken);
 	function repToken() external view returns (ReputationToken);
 	function securityPoolFactory() external view returns (ISecurityPoolFactory);
-	function openOraclePriceCoordinator() external view returns (OpenOraclePriceCoordinator);
+	function sharedPriceFeed() external view returns (SharedPoolPriceFeed);
 	function openOracle() external view returns (OpenOracle);
 	function shareTokenSupplyAttoShares() external view returns (uint256);
 
@@ -94,7 +94,7 @@ interface ISecurityPoolFactory {
 
 	struct QuestionLedgerDeployment {
 		IQuestionLedger questionLedger;
-		OpenOraclePriceCoordinator openOraclePriceCoordinator;
+		SharedPoolPriceFeed sharedPriceFeed;
 		IShareToken shareToken;
 		IQuestionLedger parent;
 		uint248 universeId;
@@ -107,8 +107,6 @@ interface ISecurityPoolFactory {
 	function deploySecurityPoolQuestionLedger(uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external returns (IQuestionLedger questionLedger);
 	function getQuestionOriginId(address securityPool, uint248 originUniverseId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external pure returns (bytes32 originId);
 	function securityPoolOf(IQuestionLedger questionLedger) external view returns (address securityPool);
-	function prepareChildQuestionLedgerCoordinator(IQuestionLedger parent, uint256 outcomeIndex) external returns (OpenOraclePriceCoordinator coordinator);
-	function getChildQuestionLedgerCoordinator(IQuestionLedger parent, uint256 outcomeIndex) external view returns (OpenOraclePriceCoordinator coordinator);
 	function prepareSecurityPoolChildPriceFeed(IQuestionLedger parent, uint256 outcomeIndex) external returns (address);
 	function initializeSecurityPoolPriceFeed(uint248 universeId, uint256 priorityFee) external returns (address);
 	function initializeSecurityPoolPriceFeedForUniverse(uint248 universeId) external returns (address);

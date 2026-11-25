@@ -121,7 +121,7 @@ export interface PoolSnapshot {
 	repToken: Address
 	shareToken: Address
 	coordinator: Address
-	childPoolPreparations: Record<string, { securityPool: Address; branchReady: boolean; sourcePool: Address; sourceGame: Address; childUniverseId: string; childPool: Address; game: Address; historyOutcomesInitialized: number; historyReady: boolean; feedRequired: boolean; dependenciesRequired: boolean }>
+	childPoolPreparations: Record<string, { securityPool: Address; branchReady: boolean; sourcePool: Address; sourceGame: Address; childUniverseId: string; childPool: Address; game: Address; historyOutcomesInitialized: number; historyReady: boolean }>
 	/** Canonical price authority, shared by security pool questions and authenticating candidate escrows. */
 	priceFeed: Address
 	/** Creator and callback authenticated for each current or retained shared candidate. */

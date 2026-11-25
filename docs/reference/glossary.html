@@ -139,8 +139,8 @@
 				<dl>
 					<dt id="open-oracle">OpenOracle</dt>
 					<dd>An economically contestable price-reporting contract used by Statoblast for fresh REP-per-collateral-token prices, not market outcomes.</dd>
-					<dt id="price-coordinator">Price coordinator</dt>
-					<dd>A question-facing adapter to the security pool’s shared REP/collateral feed. It exposes current prices and requests funded OpenOracle reports; it does not queue vault operations.</dd>
+					<dt id="price-coordinator">Shared price feed</dt>
+					<dd>The canonical REP/collateral price feed shared by every question in one security pool and universe. It owns accepted prices, freshness, exposure bounds and independently funded report candidates. Each candidate has a separate escrow for its sponsor’s OpenOracle funding.</dd>
 				</dl>
 			</section>
 			<section id="trading">

@@ -1,4 +1,4 @@
-import { statoblast_QuestionLedger_QuestionLedger, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_QuestionLedger_QuestionLedger, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
@@ -54,8 +54,8 @@ describe('USDC on-chain UI funding flows', () => {
 			const market = initial.markets[0]
 			if (market?.collateral === undefined) throw new Error(`Missing token market: ${initial.markets[0]?.loadError}`)
 			expect(market.collateral).toMatchObject({ symbol: 'USDC', decimals: 6, native: false })
-			const coordinator = await read.readContract({ address: market.pool, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'openOraclePriceCoordinator' })
-			const acceptedPrice = await read.readContract({ address: coordinator, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'lastPrice' })
+			const coordinator = await read.readContract({ address: market.pool, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'sharedPriceFeed' })
+			const acceptedPrice = await read.readContract({ address: coordinator, abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, functionName: 'lastPrice' })
 			expect(acceptedPrice).toBe(10n ** 36n / backend.repPerUsdcPrice)
 
 			const token = market.collateral.token

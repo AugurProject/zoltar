@@ -116,14 +116,6 @@
 			"keywords": ["escalation", "dispute", "deposit", "non-decision"]
 		},
 		{
-			"path": "reference/contracts/openoraclepricecoordinator.html",
-			"title": "OpenOraclePriceCoordinator",
-			"summary": "Shared security pool price adapter reads, report requests, recovery, and exposure checkpoints.",
-			"section": "reference",
-			"topic": "Contracts",
-			"keywords": ["OpenOracle", "price", "coordinator", "shared feed"]
-		},
-		{
 			"path": "reference/contracts/sharetoken.html",
 			"title": "ShareToken",
 			"summary": "Read surface and the ERC-1155 transfer, migrate, authorize, and complete-set entrypoints.",

@@ -4,7 +4,7 @@ import { getProxyDeployerCreate2Address } from '@zoltar/core-shared/deployment/d
 type SecurityPoolFactoryAddressInputs = {
 	escalationGameFactory: Address
 	openOracle: Address
-	openOraclePriceCoordinatorFactory: Address
+	sharedPoolPriceFeedFactory: Address
 	questionForker: Address
 	questionLedgerOperationsDelegate: Address
 	questionLedgerEventEmitter: Address
@@ -27,12 +27,10 @@ type InfraContractAddressConfig = {
 	getEscalationGameFactoryByteCode: (depositDelegate: Address) => Hex
 	getSecurityPoolFactoryByteCode: (inputs: SecurityPoolFactoryAddressInputs) => Hex
 	getQuestionForkerByteCode: (zoltarAddress: Address) => Hex
-	getQuestionForkerDelegateByteCode: (zoltarAddress: Address) => Hex
 	getShareTokenFactoryByteCode: (zoltarAddress: Address) => Hex
 	multicall3Bytecode: Hex
 	openOracleBytecode: Hex
-	openOraclePriceCoordinatorFactoryBytecode: () => Hex
-	priceCoordinatorDeploymentWorkerBytecode: Hex
+	sharedPoolPriceFeedFactoryBytecode: () => Hex
 	sharedPoolPriceFeedDeploymentWorkerBytecode: Hex
 	proxyDeployerAddress: Address
 	questionLedgerOperationsDelegateBytecode: Hex
@@ -57,12 +55,10 @@ type InfraContractAddresses = {
 	escalationGameDepositDelegate: Address
 	multicall3: Address
 	openOracle: Address
-	openOraclePriceCoordinatorFactory: Address
-	priceCoordinatorDeploymentWorker: Address
+	sharedPoolPriceFeedFactory: Address
 	sharedPoolPriceFeedDeploymentWorker: Address
 	securityPoolFactory: Address
 	questionForker: Address
-	questionForkerDelegate: Address
 	questionLedgerOperationsDelegate: Address
 	questionLedgerEventEmitter: Address
 	securityPoolCapitalLedgerDeployer: Address
@@ -96,10 +92,8 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 			zoltarQuestionData: config.getZoltarQuestionDataAddress(),
 			zoltar: config.getZoltarAddress(),
 			shareTokenFactory: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getShareTokenFactoryByteCode(config.getZoltarAddress())),
-			priceCoordinatorDeploymentWorker: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.priceCoordinatorDeploymentWorkerBytecode),
 			sharedPoolPriceFeedDeploymentWorker: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.sharedPoolPriceFeedDeploymentWorkerBytecode),
-			openOraclePriceCoordinatorFactory: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.openOraclePriceCoordinatorFactoryBytecode()),
-			questionForkerDelegate: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getQuestionForkerDelegateByteCode(config.getZoltarAddress())),
+			sharedPoolPriceFeedFactory: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.sharedPoolPriceFeedFactoryBytecode()),
 			questionForker: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getQuestionForkerByteCode(config.getZoltarAddress())),
 			escalationGameDepositDelegate: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.escalationGameDepositDelegateBytecode),
 		}
@@ -123,7 +117,7 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 				config.getSecurityPoolFactoryByteCode({
 					escalationGameFactory,
 					openOracle: addresses.openOracle,
-					openOraclePriceCoordinatorFactory: addresses.openOraclePriceCoordinatorFactory,
+					sharedPoolPriceFeedFactory: addresses.sharedPoolPriceFeedFactory,
 					questionForker: addresses.questionForker,
 					questionLedgerOperationsDelegate,
 					questionLedgerEventEmitter,

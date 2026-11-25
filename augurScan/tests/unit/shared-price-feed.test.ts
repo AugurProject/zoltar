@@ -38,14 +38,14 @@ const log = (name: string, args: Record<string, unknown>): StoredLog => {
 	}
 }
 
-test('discovers the shared report contract from its authenticated coordinator binding', () => {
-	expect(discoveriesFrom({ name: 'SharedPriceFeedSet', arguments: { priceFeed: feed }, status: 'decoded', summary: 'Pool feed configured' })).toEqual([{ address: feed, kind: 'sharedPoolPriceFeed', label: 'Shared Pool Price Feed' }])
+test('discovers the shared report contract from its canonical security pool factory registration', () => {
+	expect(discoveriesFrom({ name: 'SharedPriceFeedRegistered', arguments: { securityPool: coordinator, universeId: 0n, priceFeed: feed }, status: 'decoded', summary: 'Pool feed configured' })).toEqual([{ address: feed, kind: 'sharedPoolPriceFeed', label: 'Shared Pool Price Feed' }])
 })
 
 test('projects shared funding, aggregate exposure, and price acceptance under the feed identity', () => {
 	for (const [name, args] of [
-		['ReportFundingAssigned', { reportId: 7n, coordinator, sponsor: coordinator }],
-		['ExposureCheckpoint', { coordinator, aggregateExposureAttoEth: 200n }],
+		['ReportFundingAssigned', { reportId: 7n, sponsor: coordinator }],
+		['ExposureCheckpoint', { aggregateExposureAttoEth: 200n }],
 		['PriceReportRejected', { reportId: 7n, reason: 'Report stale', pendingReportId: 8n, pendingReportMaxSettlementBaseFeeAttoEthPerGas: 1n, lastPrice: 2000000000000000000n, lastSettlementTimestamp: 1000n }],
 	] as const) {
 		expect(projectionsFrom(log(name, args))).toContainEqual(expect.objectContaining({ type: 'domainEvent', domain: 'oracle', entityType: 'price-feed', entityIdentity: feed.toLowerCase(), semanticEventKind: name }))

@@ -71,7 +71,7 @@ test('monitors inventory for a known execution address without requiring a signe
 test('discovers live shared exposure despite oversized fresh accepted capacity', async () => {
 	const fake = refundBackfillClient(0n, false, { sharedExposure: 10n })
 	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
-	expect(snapshot.pools[0]).toMatchObject({ priceFeed: address(80), oracleExposureAttoEth: 10n.toString(), settlementCollateralAttoEth: 0n.toString(), oracleRequestFunding: { settlementBountyMultiplierBps: '30000' } })
+	expect(snapshot.pools[0]).toMatchObject({ priceFeed: address(21), oracleExposureAttoEth: 10n.toString(), settlementCollateralAttoEth: 0n.toString(), oracleRequestFunding: { settlementBountyMultiplierBps: '30000' } })
 })
 
 test('authenticates latest and retained candidate escrows at the same discovery block', async () => {
@@ -88,7 +88,7 @@ test('authenticates latest and retained candidate escrows at the same discovery 
 	await expect(discoverPoolPriceFeed(fake.client, address(21), 10n, funding, 1n, 9n)).rejects.toThrow('pending report has no authenticated escrow')
 })
 
-for (const shared of [false, true])
+for (const shared of [true])
 	for (const ready of [false, true])
 		test(`discovers canonical child preparation at the pinned block (${shared}, ${ready})`, async () => {
 			const fake = fakeClient(10n, hash(10), { childPreparation: { shared, ready } })
@@ -103,10 +103,8 @@ for (const shared of [false, true])
 				game: zeroAddress,
 				historyOutcomesInitialized: 0,
 				historyReady: ready,
-				feedRequired: false,
-				dependenciesRequired: !shared && !ready,
 			})
-			expect(fake.contractReads.some(read => read.functionName === 'sharedPriceFeeds')).toBe(shared)
+			expect(fake.contractReads.some(read => read.functionName === 'sharedPriceFeeds')).toBe(false)
 		})
 
 test('keyless pool discovery keeps auctions and vault topology without execution-account reads', async () => {
@@ -280,7 +278,7 @@ interface GraphOverrides {
 	outcomeLabelsByQuestion?: Readonly<Record<string, readonly string[]>>
 	poolDeployments?: readonly {
 		parent: Address
-		openOraclePriceCoordinator: Address
+		sharedPriceFeed: Address
 		questionId: bigint
 		questionLedger: Address
 		shareToken: Address
@@ -393,7 +391,9 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 				case 'getChildUniverseId':
 					return 88n
 				case 'securityPoolOf':
-					return graph.childPreparation?.shared ? address(90) : zeroAddress
+					return address(90)
+				case 'sharedPriceFeeds':
+					return address(21)
 				case 'getQuestionLedgerOriginId':
 					return hash(90)
 				case 'getChildQuestionLedgerCoordinator':
@@ -500,7 +500,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 		poolDeployments: [
 			{
 				parent: address(0),
-				openOraclePriceCoordinator: coordinator,
+				sharedPriceFeed: coordinator,
 				questionId: 101n,
 				questionLedger: pool,
 				shareToken,
@@ -659,16 +659,16 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'lastPrice':
 					return 10n ** 18n
 				case 'priceFeed':
-					return address(80)
+					return coordinator
 				case 'aggregateExposureAttoEth':
 					expect(parameters.blockNumber).toBe(10n)
-					expect(parameters.address).toBe(address(80))
+					expect(parameters.address).toBe(coordinator)
 					return overrides.sharedExposure ?? 0n
 				case 'reportCandidates':
 					expect(parameters.blockNumber).toBe(10n)
-					expect(parameters.address).toBe(address(80))
-					if (parameters.args?.[0] === 7n) return [address(87), address(1), coordinator, 1n]
-					return [parameters.args?.[0] === 6n ? address(86) : zeroAddress, address(1), coordinator, 1n]
+					expect(parameters.address).toBe(coordinator)
+					if (parameters.args?.[0] === 7n) return [address(87), address(1), 1n]
+					return [parameters.args?.[0] === 6n ? address(86) : zeroAddress, address(1), 1n]
 				case 'minimumToken2ReportAttoRep':
 					return 0n
 				case 'minimumReportCollateral':
@@ -703,7 +703,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 					return address(5)
 				case 'questionData':
 					return address(3)
-				case 'openOraclePriceCoordinator':
+				case 'sharedPriceFeed':
 					return coordinator
 				case 'questionLedger':
 					return pool
@@ -754,6 +754,10 @@ function poolBindingClient(pool: Address, coordinator: Address, overrides: PoolB
 		async readContract(parameters: { address: Address; blockNumber?: bigint; functionName: string }) {
 			reads.push(parameters)
 			if (overrides.readFailure !== undefined) throw overrides.readFailure
+			if (parameters.functionName === 'securityPoolFactory') return address(4)
+			if (parameters.functionName === 'securityPoolOf') return address(90)
+			if (parameters.functionName === 'universeId') return 6n
+			if (parameters.functionName === 'sharedPriceFeeds') return coordinator
 			if (parameters.functionName === 'openOracle' && parameters.address.toLowerCase() === pool.toLowerCase()) return overrides.poolOpenOracle ?? address(6)
 			if (parameters.functionName === 'openOracle' && parameters.address.toLowerCase() === coordinator.toLowerCase()) return overrides.coordinatorOpenOracle ?? address(6)
 			if (parameters.functionName === 'weth' && parameters.address.toLowerCase() === coordinator.toLowerCase()) return overrides.coordinatorWeth ?? address(7)
@@ -1069,7 +1073,7 @@ describe('anchored ecosystem discovery', () => {
 		const questionIds = Array.from({ length: 11 }, (_, index) => BigInt(100 + index))
 		const poolDeployments = Array.from({ length: 11 }, (_, index) => ({
 			parent: address(0),
-			openOraclePriceCoordinator: address(1_000 + index),
+			sharedPriceFeed: address(1_000 + index),
 			questionId: questionIds[index] ?? 0n,
 			questionLedger: address(2_000 + index),
 			shareToken: address(3_000 + index),
@@ -1597,6 +1601,10 @@ describe('anchored ecosystem discovery', () => {
 			[coordinator, 'openOracle'],
 			[coordinator, 'weth'],
 			[coordinator, 'reputationToken'],
+			[pool, 'securityPoolFactory'],
+			[address(4), 'securityPoolOf'],
+			[pool, 'universeId'],
+			[address(4), 'sharedPriceFeeds'],
 		])
 		expect(binding.reads.every(read => read.blockNumber === 55n)).toBe(true)
 	})
@@ -1668,7 +1676,7 @@ describe('anchored ecosystem discovery', () => {
 			poolZoltar: address(2),
 			universeRepToken: address(24),
 		}
-		expect(() => assertCanonicalPoolGraph({ ...poolIdentity, coordinatorPool: address(99) })).toThrow('pool edge')
+		expect(() => assertCanonicalPoolGraph({ ...poolIdentity, poolCoordinator: address(99) })).toThrow('coordinator edge')
 		const pairIdentity = {
 			configuredFactory: address(8),
 			pair: address(25),

@@ -15,7 +15,7 @@ import {
 	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact,
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
-	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
+	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed,
 	statoblast_QuestionLedger_QuestionLedger,
 	statoblast_QuestionForker_QuestionForker,
 	statoblast_tokens_ShareToken_ShareToken,
@@ -202,7 +202,6 @@ describe('event-only replay', () => {
 				args: { account: pool, actor: factory, authorized: true },
 			}),
 			createReplayLog({ emitter: pool, logIndex: 1 }),
-			createReplayLog({ emitter: coordinator, logIndex: 2, eventName: 'QuestionLedgerSet', args: { questionLedger: pool } }),
 			createReplayLog({
 				emitter: shareToken,
 				eventName: 'TransferBatch',
@@ -227,7 +226,7 @@ describe('event-only replay', () => {
 				logIndex: 8,
 				args: {
 					questionLedger: pool,
-					openOraclePriceCoordinator: coordinator,
+					sharedPriceFeed: coordinator,
 					shareToken,
 					parent: zeroAddress,
 					universeId: 1n,
@@ -254,7 +253,7 @@ describe('event-only replay', () => {
 		if (replayed.escalationLifecycles.get(game)?.activationTime !== 10n) throw new Error('initial game lifecycle was not retained')
 		if (replayed.escalationLifecycles.has(unrecognizedGame)) throw new Error('unrecognized escalation-game emitter was accepted')
 		if (replayed.pools.get(pool)?.settlementCollateralAttoEth !== 1n) throw new Error('pool initialization checkpoint was not retained')
-		if (replayed.coordinators.get(coordinator)?.questionLedger !== pool) throw new Error('coordinator setup checkpoint was not retained')
+		if (replayed.poolDeployments.get(pool)?.coordinator !== coordinator) throw new Error('canonical shared feed relationship was not retained')
 		if (replayed.shareTokenBalances.get(shareToken)?.get(1n)?.get(holder) !== 7n) throw new Error('token 1 holder balance mismatch')
 		if (replayed.shareTokenBalances.get(shareToken)?.get(2n)?.get(receiver) !== 3n) throw new Error('token 2 receiver balance mismatch')
 		if (replayed.shareTokenSupplies.get(shareToken)?.get(1n) !== 9n) throw new Error('token 1 supply mismatch')
@@ -267,7 +266,6 @@ describe('event-only replay', () => {
 		const repToken = '0x3333333333333333333333333333333333333333'
 		const forker = '0x4444444444444444444444444444444444444444'
 		const coordinator = '0x5555555555555555555555555555555555555555'
-		const pool = '0x6666666666666666666666666666666666666666'
 		const logs = [
 			createReplayLog({
 				emitter: questionData,
@@ -319,7 +317,6 @@ describe('event-only replay', () => {
 					universeTheoreticalSupplyAttoRep: 90n,
 				},
 			}),
-			createReplayLog({ emitter: coordinator, eventName: 'QuestionLedgerSet', logIndex: 3, args: { questionLedger: pool } }),
 			createReplayLog({
 				emitter: coordinator,
 				eventName: 'PriceRequested',
@@ -687,7 +684,7 @@ describe('event-only replay', () => {
 				logIndex: 0,
 				args: {
 					questionLedger: pool,
-					openOraclePriceCoordinator: zeroAddress,
+					sharedPriceFeed: zeroAddress,
 					shareToken: zeroAddress,
 					parent,
 					universeId: 1n,
@@ -864,7 +861,7 @@ describe('event-only replay', () => {
 				logIndex: 4,
 				args: {
 					questionLedger: pool,
-					openOraclePriceCoordinator: coordinator,
+					sharedPriceFeed: coordinator,
 					shareToken: repToken,
 					parent: zeroAddress,
 					universeId: 9n,
@@ -1056,33 +1053,32 @@ describe('event-only replay', () => {
 				getContractReplayLogs(factory, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, blockNumber, blockNumber),
 				getContractReplayLogs(addresses.questionLedger, statoblast_QuestionLedger_QuestionLedger.abi, blockNumber, blockNumber),
 				getContractReplayLogs(addresses.shareToken, statoblast_tokens_ShareToken_ShareToken.abi, blockNumber, blockNumber),
-				getContractReplayLogs(addresses.openOraclePriceCoordinator, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, blockNumber, blockNumber),
+				getContractReplayLogs(addresses.sharedPriceFeed, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, blockNumber, blockNumber),
 			])
 		)
 			.flat()
 			.filter(log => log.transactionHash === deploymentHash)
 		const deploymentLog = replayLogs.find(log => log.eventName === 'DeployQuestionLedger')
 		const authorizationLog = replayLogs.find(log => log.eventName === 'AuthorizationUpdated')
-		const coordinatorCheckpointLog = replayLogs.find(log => log.eventName === 'QuestionLedgerSet')
-		if (deploymentLog === undefined || authorizationLog === undefined || coordinatorCheckpointLog === undefined) {
+		if (deploymentLog === undefined || authorizationLog === undefined) {
 			throw new Error('origin deployment receipt is missing replay relationships or setup events')
 		}
-		for (const setupLog of [authorizationLog, coordinatorCheckpointLog]) {
+		for (const setupLog of [authorizationLog]) {
 			if (setupLog.logIndex >= deploymentLog.logIndex) throw new Error('setup checkpoint did not precede relationship discovery')
 		}
 
 		const replayed = replayZoltarEvents(replayLogs, new Set(), new Set([factory]))
 		if (replayed.poolDeployments.get(addresses.questionLedger)?.shareToken !== addresses.shareToken) throw new Error('origin deployment relationship mismatch')
 		const storedOriginPriorityFee = await client.readContract({
-			address: addresses.openOraclePriceCoordinator,
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			address: addresses.sharedPriceFeed,
+			abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 			functionName: 'initialReportPriorityFeeAttoEthPerGas',
 			args: [],
 		})
 		strictEqualTypeSafe(replayed.poolDeployments.get(addresses.questionLedger)?.initialReportPriorityFeeAttoEthPerGas, storedOriginPriorityFee, 'origin priority fee replay mismatch')
 		if (replayed.authorizations.get(addresses.shareToken)?.get(addresses.questionLedger) !== true) throw new Error('origin pool authorization was not replayed')
-		if (replayed.coordinators.get(addresses.openOraclePriceCoordinator)?.questionLedger !== addresses.questionLedger) {
-			throw new Error('origin coordinator setup checkpoint was not replayed')
+		if (replayed.poolDeployments.get(addresses.questionLedger)?.coordinator !== addresses.sharedPriceFeed) {
+			throw new Error('origin canonical shared feed relationship was not replayed')
 		}
 	})
 
@@ -1222,8 +1218,8 @@ describe('event-only replay', () => {
 		const [storedStatoblastSecurityMultiplierBps, storedPriorityFee, storedSystemState, storedCarryRoots, storedCarrySnapshot] = await Promise.all([
 			client.readContract({ address: child.questionLedger, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'statoblastSecurityMultiplierBps', args: [] }),
 			client.readContract({
-				address: child.openOraclePriceCoordinator,
-				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				address: child.sharedPriceFeed,
+				abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 				functionName: 'initialReportPriorityFeeAttoEthPerGas',
 				args: [],
 			}),
@@ -1246,7 +1242,7 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(deployment.parent, questionLedgerAddresses.questionLedger, 'child parent replay mismatch')
 		strictEqualTypeSafe(deployment.universeId, childUniverseId, 'child universe replay mismatch')
 		strictEqualTypeSafe(deployment.questionId, fixture.questionId, 'child question replay mismatch')
-		strictEqualTypeSafe(deployment.coordinator, child.openOraclePriceCoordinator, 'child coordinator replay mismatch')
+		strictEqualTypeSafe(deployment.coordinator, child.sharedPriceFeed, 'child coordinator replay mismatch')
 		strictEqualTypeSafe(deployment.shareToken, child.shareToken, 'child share token replay mismatch')
 		strictEqualTypeSafe(deployment.statoblastSecurityMultiplierBps, storedStatoblastSecurityMultiplierBps, 'child security multiplier replay mismatch')
 		strictEqualTypeSafe(deployment.initialReportPriorityFeeAttoEthPerGas, storedPriorityFee, 'child priority fee replay mismatch')

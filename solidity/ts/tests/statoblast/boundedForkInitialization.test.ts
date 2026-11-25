@@ -17,7 +17,7 @@ import {
 	statoblast_QuestionForker_QuestionForker as forkerArtifact,
 	statoblast_EscalationGame_EscalationGame as gameArtifact,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
-	statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory as oracleFactoryArtifact,
+	statoblast_factories_SharedPoolPriceFeedFactory_SharedPoolPriceFeedFactory as oracleFactoryArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
 	statoblast_SecurityPoolCapitalFeeStreams_SecurityPoolCapitalFeeStreams as streamsArtifact,
@@ -166,11 +166,9 @@ describe('Statoblast: bounded fork initialization', () => {
 		expect(factoryEvents).toEqual([{ eventName: 'SharedPriceFeedRegistered', args: { securityPool: getAddress(fixture.securityPool), universeId: childUniverse, priceFeed: getAddress(createdFeed) } }])
 		await base.mockWindow.setTime(forkTime + 56n * DAY + 1n)
 		await checkGas(await writeContractAndWait(other(), () => other().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'startBranch', args: [base.genesisUniverse, BigInt(QuestionOutcome.No)], gas: transactionGasLimit })), 'shared branch migration')
-		await writeContractAndWait(other(), () => other().writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'prepareChildQuestionLedgerCoordinator', args: [parent, BigInt(QuestionOutcome.No)] }))
-		const childCoordinator = await owner().readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'getChildQuestionLedgerCoordinator', args: [parent, BigInt(QuestionOutcome.No)] })
 		const feed = await owner().readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'priceFeed', args: [childUniverse] })
 		const originFeed = await owner().readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'priceFeed', args: [base.genesisUniverse] })
-		const feedImplementation = await owner().readContract({ abi: oracleFactoryArtifact.abi, address: getInfraContractAddresses().openOraclePriceCoordinatorFactory, functionName: 'sharedPriceFeedImplementations', args: [factory, fixture.securityPool] })
+		const feedImplementation = await owner().readContract({ abi: oracleFactoryArtifact.abi, address: getInfraContractAddresses().sharedPoolPriceFeedFactory, functionName: 'sharedPriceFeedImplementations', args: [factory, fixture.securityPool] })
 		for (const [universe, address] of [
 			[base.genesisUniverse, originFeed],
 			[childUniverse, feed],
@@ -183,10 +181,6 @@ describe('Statoblast: bounded fork initialization', () => {
 			await expect(other().call({ to: address, value: 1n, gas: 23_300n })).rejects.toThrow()
 		}
 		await expect(other().simulateContract({ abi: feedArtifact.abi, address: feedImplementation, functionName: 'requestSecurityPoolPrice', args: [1n, 0n, 0n] })).rejects.toThrow('Universe module requires a clone')
-		const coordinatorCaller = createWriteClient(base.mockWindow, BigInt(childCoordinator))
-		// Coordinator registration requires the native child, whose preparation
-		// cannot bypass the shared fork activation window.
-		await expect(coordinatorCaller.simulateContract({ abi: feedArtifact.abi, address: feed, functionName: 'requestPrice', args: [other().account.address, 1n, 0n, 0n] })).rejects.toThrow('Unregistered coordinator')
 		await expect(other().simulateContract({ abi: forkerArtifact.abi, address: forker, functionName: 'prepareSecurityPoolQuestion', args: [parent, childUniverse] })).rejects.toThrow('Fork activation window still open')
 		await base.mockWindow.setTime(forkTime + 63n * DAY)
 		await checkGas(await writeContractAndWait(other(), () => other().writeContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'finalizeBranch', args: [childUniverse] })), 'shared branch activation', 2_000_000n)

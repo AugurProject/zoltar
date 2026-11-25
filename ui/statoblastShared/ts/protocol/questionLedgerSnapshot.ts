@@ -1,10 +1,5 @@
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import {
-	statoblast_EscalationGame_EscalationGame as gameArtifact,
-	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator as coordinatorArtifact,
-	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
-	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
-} from '../contractArtifact.js'
+import { statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as coordinatorArtifact, statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact } from '../contractArtifact.js'
 import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { QUESTION_LEDGER_QUESTION_OUTCOME_ABI } from './questionLedgerAbi.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -18,7 +13,7 @@ import { loadCentralSecurityPoolQuestion } from './securityPoolState.js'
 
 /** Question views read settlement and underwriting from their shared security pool at one block. */
 export async function loadQuestionLedgerDetails(client: ReadClient, deployment: QuestionLedgerDeploymentTuple, snapshotBlockNumber?: bigint): Promise<ListedQuestionLedger> {
-	const { questionLedger: questionLedgerAddress, universeId, openOraclePriceCoordinator: managerAddress } = deployment
+	const { questionLedger: questionLedgerAddress, universeId, sharedPriceFeed: managerAddress } = deployment
 	const blockNumber = snapshotBlockNumber ?? (await client.getBlock()).number
 	if (blockNumber === undefined) throw new Error('Question snapshot requires a mined block.')
 	const infrastructure = getInfraContractAddresses()

@@ -80,7 +80,7 @@ describe('Statoblast: lazy child outcome supply', () => {
 			expect(await owner().readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'shareTokenSupplyAttoShares' })).toBe(0n)
 			return
 		}
-		const oracle = await owner().readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'openOraclePriceCoordinator' })
+		const oracle = await owner().readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'sharedPriceFeed' })
 		await manipulatePriceOracle(owner(), base.mockWindow, oracle, unit, 100n * unit)
 		const newcomer = createWriteClient(base.mockWindow, TEST_ADDRESSES[2])
 		const collateral = await owner().readContract({ abi: securityPoolArtifact.abi, address: securityPool, functionName: 'collateralToken' })

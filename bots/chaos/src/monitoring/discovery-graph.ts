@@ -1,5 +1,5 @@
-import { openOraclePriceCoordinatorAbi, questionLedgerAbi } from '@zoltar/bot-shared/contracts/abi'
-import { type Address, getAddress } from '@zoltar/bot-shared/ethereum'
+import { sharedPoolPriceFeedAbi, questionLedgerAbi, securityPoolFactoryAbi } from '@zoltar/bot-shared/contracts/abi'
+import { type Address, getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { sameAddress } from '@zoltar/core-shared/evm/address'
 import type { CachedPoolDeployment } from './topology-schema.ts'
 import { type ChaosReadClient, drainConcurrent } from './discovery-client.ts'
@@ -23,10 +23,15 @@ export async function authenticatePoolProtocolBindings(authentication: PoolProto
 	const { blockNumber, canonicalRepToken, client, configuredOpenOracle, configuredWeth, coordinator, pool } = authentication
 	const [poolOpenOracle, coordinatorOpenOracle, coordinatorWeth, coordinatorRepToken] = await drainConcurrent([
 		client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'openOracle' }),
-		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'openOracle' }),
-		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'weth' }),
-		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'reputationToken' }),
+		client.readContract({ abi: sharedPoolPriceFeedAbi, address: coordinator, blockNumber, functionName: 'openOracle' }),
+		client.readContract({ abi: sharedPoolPriceFeedAbi, address: coordinator, blockNumber, functionName: 'weth' }),
+		client.readContract({ abi: sharedPoolPriceFeedAbi, address: coordinator, blockNumber, functionName: 'reputationToken' }),
 	])
+	const factory = await client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'securityPoolFactory' })
+	const securityPool = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, blockNumber, functionName: 'securityPoolOf', args: [pool] })
+	if (securityPool === zeroAddress) throw new Error(`Pool ${pool} has no canonical security pool`)
+	const canonicalFeed = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, blockNumber, functionName: 'sharedPriceFeeds', args: [securityPool, await client.readContract({ abi: questionLedgerAbi, address: pool, blockNumber, functionName: 'universeId' })] })
+	requireGraphEdge(getAddress(coordinator), getAddress(canonicalFeed), `Pool ${pool} canonical universe feed edge`)
 	requireGraphEdge(getAddress(poolOpenOracle), configuredOpenOracle, `Pool ${pool} OpenOracle edge`)
 	requireGraphEdge(getAddress(coordinatorOpenOracle), configuredOpenOracle, `Coordinator ${coordinator} OpenOracle edge`)
 	requireGraphEdge(getAddress(coordinatorWeth), configuredWeth, `Coordinator ${coordinator} WETH edge`)
@@ -45,7 +50,6 @@ interface PoolGraphIdentity {
 	configuredQuestionData: Address
 	poolCoordinator: Address
 	deploymentCoordinator: Address
-	coordinatorPool: Address
 	poolShareToken: Address
 	deploymentShareToken: Address
 	poolRepToken: Address
@@ -62,7 +66,6 @@ export function assertCanonicalPoolGraph(identity: PoolGraphIdentity) {
 	requireGraphEdge(identity.poolZoltar, identity.configuredZoltar, `Pool ${identity.pool} Zoltar edge`)
 	requireGraphEdge(identity.poolQuestionData, identity.configuredQuestionData, `Pool ${identity.pool} question-data edge`)
 	requireGraphEdge(identity.poolCoordinator, identity.deploymentCoordinator, `Pool ${identity.pool} coordinator edge`)
-	requireGraphEdge(identity.coordinatorPool, identity.pool, `Coordinator ${identity.deploymentCoordinator} pool edge`)
 	requireGraphEdge(identity.poolShareToken, identity.deploymentShareToken, `Pool ${identity.pool} share-token edge`)
 	requireGraphEdge(identity.poolRepToken, identity.universeRepToken, `Pool ${identity.pool} REP edge`)
 	if (identity.poolUniverseId !== identity.deploymentUniverseId || identity.poolQuestionId !== identity.deploymentQuestionId) {
@@ -91,9 +94,9 @@ export function assertCanonicalPairGraph(identity: PairGraphIdentity) {
 	if (identity.pairUniverseId !== identity.poolUniverseId || identity.pairQuestionId !== identity.poolQuestionId) throw new Error(`Pair ${identity.pair} immutable question identity does not match pool ${identity.pool}`)
 }
 
-export function cachePoolDeployment(deployment: { parent: Address; openOraclePriceCoordinator: Address; questionId: bigint; questionLedger: Address; shareToken: Address; universeId: bigint }): CachedPoolDeployment {
+export function cachePoolDeployment(deployment: { parent: Address; sharedPriceFeed: Address; questionId: bigint; questionLedger: Address; shareToken: Address; universeId: bigint }): CachedPoolDeployment {
 	return {
-		coordinator: getAddress(deployment.openOraclePriceCoordinator),
+		coordinator: getAddress(deployment.sharedPriceFeed),
 		parent: getAddress(deployment.parent),
 		questionId: deployment.questionId.toString(),
 		questionLedger: getAddress(deployment.questionLedger),

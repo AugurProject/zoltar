@@ -1,4 +1,4 @@
-import { encodeAbiParameters, getCreate2Address, getCreateAddress, keccak256, toHex, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { concatHex, encodeAbiParameters, getCreate2Address, getCreateAddress, keccak256, toHex, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { getCallerScopedSalt } from './callerScopedSalt'
 
@@ -6,8 +6,8 @@ type QuestionLedgerCoreAddresses = {
 	escalationGameFactory: Address
 	escalationGameProofVerifier: Address
 	openOracle: Address
-	openOraclePriceCoordinatorFactory: Address
-	priceCoordinatorDeploymentWorker: Address
+	sharedPoolPriceFeedDeploymentWorker: Address
+	sharedPoolPriceFeedFactory: Address
 	securityPoolFactory: Address
 	questionForker: Address
 	shareTokenFactory: Address
@@ -18,13 +18,13 @@ type QuestionLedgerCoreAddresses = {
 type QuestionLedgerAddressConfig = {
 	getEscalationGameInitCode: (questionLedger: Address, repToken: Address, proofVerifier: Address) => Hex
 	getInfraContracts: () => QuestionLedgerCoreAddresses
-	getOpenOraclePriceCoordinatorInitCode: (openOracle: Address, repToken: Address, initialReportPriorityFeeAttoEthPerGas: bigint) => Hex
+	getSharedPoolPriceFeedInitCode: (securityPool: Address, initialReportPriorityFeeAttoEthPerGas: bigint) => Hex
 	getRepTokenAddress: (universeId: bigint) => Address
 	getQuestionLedgerInitCode: (inputs: {
 		escalationGameFactory: Address
 		openOracle: Address
 		parent: Address
-		openOraclePriceCoordinator: Address
+		sharedPriceFeed: Address
 		questionId: bigint
 		statoblastSecurityMultiplierBps: bigint
 		securityPoolFactory: Address
@@ -35,10 +35,6 @@ type QuestionLedgerAddressConfig = {
 		zoltarQuestionData: Address
 	}) => Hex
 	getShareTokenInitCode: (securityPoolFactory: Address, zoltarAddress: Address, questionId: bigint) => Hex
-}
-
-function getQuestionLedgerSalt(parent: Address, universeId: bigint, questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeAttoEthPerGas: bigint) {
-	return keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint248' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [parent, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas]))
 }
 
 function getQuestionLedgerOriginId(originUniverseId: bigint, questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeAttoEthPerGas = DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) {
@@ -73,15 +69,17 @@ export function createQuestionLedgerAddressHelper(config: QuestionLedgerAddressC
 							[keccak256(toHex('Statoblast security pool origin')), securityPool, originUniverseId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas],
 						),
 					)
-		const questionLedgerSalt = securityPool !== zeroAddress && parent === zeroAddress ? originId : getQuestionLedgerSalt(parent, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)
-		const questionLedgerSaltWithMsgSender = getCallerScopedSalt(infraContracts.securityPoolFactory, questionLedgerSalt)
-
 		const repToken = config.getRepTokenAddress(universeId)
-		const openOraclePriceCoordinator = getCreate2Address({
-			bytecode: config.getOpenOraclePriceCoordinatorInitCode(infraContracts.openOracle, repToken, initialReportPriorityFeeAttoEthPerGas),
-			// The shared worker authenticates configuration to each deploying factory.
-			from: infraContracts.priceCoordinatorDeploymentWorker,
-			salt: getCallerScopedSalt(infraContracts.openOraclePriceCoordinatorFactory, questionLedgerSaltWithMsgSender),
+		const implementation = getCreate2Address({
+			bytecode: config.getSharedPoolPriceFeedInitCode(securityPool, initialReportPriorityFeeAttoEthPerGas),
+			from: infraContracts.sharedPoolPriceFeedDeploymentWorker,
+			salt: keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'address' }, { type: 'address' }], [infraContracts.sharedPoolPriceFeedFactory, infraContracts.securityPoolFactory, securityPool])),
+		})
+		const runtime = concatHex(['0x363d3d373d3d3d363d73', implementation, '0x5af43d82803e903d91602b57fd5bf3', concatHex([toHex(universeId, { size: 31 }), repToken])])
+		const sharedPriceFeed = getCreate2Address({
+			bytecode: concatHex(['0x3d61', toHex(96, { size: 2 }), '0x80600b3d3981f3', runtime]),
+			from: infraContracts.sharedPoolPriceFeedDeploymentWorker,
+			salt: getCallerScopedSalt(infraContracts.sharedPoolPriceFeedFactory, getCallerScopedSalt(infraContracts.securityPoolFactory, keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint248' }], [securityPool, universeId])))),
 		})
 		const shareToken = getCreate2Address({
 			bytecode: config.getShareTokenInitCode(infraContracts.securityPoolFactory, infraContracts.zoltar, questionId),
@@ -93,7 +91,7 @@ export function createQuestionLedgerAddressHelper(config: QuestionLedgerAddressC
 				escalationGameFactory: infraContracts.escalationGameFactory,
 				openOracle: infraContracts.openOracle,
 				parent,
-				openOraclePriceCoordinator,
+				sharedPriceFeed,
 				questionId,
 				statoblastSecurityMultiplierBps,
 				securityPoolFactory: infraContracts.securityPoolFactory,
@@ -114,7 +112,7 @@ export function createQuestionLedgerAddressHelper(config: QuestionLedgerAddressC
 
 		return {
 			escalationGame,
-			openOraclePriceCoordinator,
+			sharedPriceFeed,
 			questionLedger,
 			shareToken,
 		}

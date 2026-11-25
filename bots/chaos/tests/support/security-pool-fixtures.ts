@@ -29,7 +29,7 @@ export function auctionFixture(): AuctionSnapshot {
 }
 
 export function readyChildFixture(sourcePool: `0x${string}`, securityPool: `0x${string}`, childPool = address(91), childUniverseId = '91') {
-	return { securityPool, branchReady: true, sourcePool, sourceGame: address(0), childUniverseId, childPool, game: address(0), historyOutcomesInitialized: 0, historyReady: true, feedRequired: false, dependenciesRequired: false }
+	return { securityPool, branchReady: true, sourcePool, sourceGame: address(0), childUniverseId, childPool, game: address(0), historyOutcomesInitialized: 0, historyReady: true }
 }
 
 export function capitalFixture(snapshot: EcosystemSnapshot) {

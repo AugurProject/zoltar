@@ -5,11 +5,10 @@ export const discoveries: Readonly<Record<string, readonly Discovery[]>> = {
 	PairCreated: [{ argument: 'pair', kind: 'ammPair', label: 'Augur AMM Pair' }],
 	DeployQuestionLedger: [
 		{ argument: 'questionLedger', kind: 'questionLedger', label: 'Question Ledger' },
-		{ argument: 'openOraclePriceCoordinator', kind: 'priceCoordinator', label: 'Price Coordinator' },
+		{ argument: 'sharedPriceFeed', kind: 'sharedPoolPriceFeed', label: 'Shared Pool Price Feed' },
 		{ argument: 'shareToken', kind: 'shareToken', label: 'Share Token' },
 	],
 	DeployChild: [{ argument: 'childReputationToken', kind: 'reputationToken', label: 'Child REP' }],
-	SharedPriceFeedSet: [{ argument: 'priceFeed', kind: 'sharedPoolPriceFeed', label: 'Shared Pool Price Feed' }],
 	SharedPriceFeedRegistered: [{ argument: 'priceFeed', kind: 'sharedPoolPriceFeed', label: 'Shared Pool Price Feed' }],
 	EscalationGameSet: [{ argument: 'escalationGame', kind: 'escalationGame', label: 'Escalation Game' }],
 }

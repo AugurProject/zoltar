@@ -5,11 +5,11 @@ import { getOpenOracleGameTuple, getOpenOracleHelperTuple } from '@zoltar/open-o
 import {
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
 	statoblast_SharedPoolReportEscrow_SharedPoolReportEscrow as escrowArtifact,
-	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator as coordinatorArtifact,
+	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as coordinatorArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
-	statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory as oracleFactoryArtifact,
+	statoblast_factories_SharedPoolPriceFeedFactory_SharedPoolPriceFeedFactory as oracleFactoryArtifact,
 	statoblast_SecurityPoolSettlement_SecurityPoolSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
 	ReputationToken_ReputationToken as tokenArtifact,
@@ -25,6 +25,16 @@ import { unit, useSecurityPoolFixture } from './securityPoolFixture'
 describe('Statoblast: central capital shared price feed', () => {
 	const fixture = useSecurityPoolFixture()
 	const feed = () => fixture.owner().readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
+
+	test('questions bind directly to the same canonical universe feed without oracle adapters', async () => {
+		await fixture.prepare()
+		const canonical = await feed()
+		for (const question of [fixture.base.questionId, fixture.secondQuestionId]) {
+			const pool = fixture.poolFor(question)
+			expect(pool.sharedPriceFeed).toBe(getAddress(canonical))
+			expect(await fixture.owner().readContract({ abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory, functionName: 'sharedPriceFeeds', args: [fixture.securityPool, fixture.base.genesisUniverse] })).toBe(canonical)
+		}
+	})
 
 	test('#1252 the public settlement bounty covers its callback gas at the configured priority fee', async () => {
 		await fixture.prepare()
@@ -99,7 +109,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		const later = reverse ? second - 1n : second
 		let completion: Hash
 		if (recover) {
-			const [, , , ceiling] = await owner.readContract({ ...target, functionName: 'reportCandidates', args: [later] })
+			const [, , ceiling] = await owner.readContract({ ...target, functionName: 'reportCandidates', args: [later] })
 			await fixture.base.mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${(ceiling + 1n).toString(16)}`] })
 			await openOracleSettleWithGasPrice(owner, later, ceiling + 1n)
 			expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [later] })).toBe(0n)
@@ -120,10 +130,10 @@ describe('Statoblast: central capital shared price feed', () => {
 	test('a question coordinator respects the sponsor’s signed collateral budget (#1351)', async () => {
 		await fixture.prepare(1_000n * unit, 100n * unit)
 		const owner = fixture.owner()
-		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		const coordinator = fixture.poolFor(fixture.base.questionId).sharedPriceFeed
 		const { minimumToken1ReportAttoEth: minimum } = await fundCoordinatorInitialReport(owner, coordinator, unit)
 		const bounty = await getRequestPriceCostAttoEth(owner, coordinator)
-		const request = { abi: coordinatorArtifact.abi, address: coordinator, functionName: 'requestPrice', value: bounty } as const
+		const request = { abi: coordinatorArtifact.abi, address: coordinator, functionName: 'requestSecurityPoolPrice', value: bounty } as const
 		const pendingBefore = await getPendingReportId(owner, coordinator)
 
 		await expect(owner.simulateContract({ ...request, args: [unit, minimum - 1n, bounty] })).rejects.toThrow('Report funding below minimum')
@@ -138,8 +148,8 @@ describe('Statoblast: central capital shared price feed', () => {
 		await fixture.refreshPrice(fixture.base.questionId, unit, fixture.securityPool, 2n * unit)
 		await fixture.authorize(100n * unit)
 		const owner = fixture.owner()
-		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
-		const otherCoordinator = fixture.poolFor(fixture.secondQuestionId).openOraclePriceCoordinator
+		const coordinator = fixture.poolFor(fixture.base.questionId).sharedPriceFeed
+		const otherCoordinator = fixture.poolFor(fixture.secondQuestionId).sharedPriceFeed
 		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), unit)
 		const smallReport = await getPendingReportId(owner, coordinator)
 		await requestPriceWithValue(owner, otherCoordinator, await getRequestPriceCostAttoEth(owner, otherCoordinator), unit, 10n * unit)
@@ -156,7 +166,7 @@ describe('Statoblast: central capital shared price feed', () => {
 	test('returns direct report-token deposits to the sponsor after settlement (#1409)', async () => {
 		await fixture.prepare()
 		const owner = fixture.owner()
-		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		const coordinator = fixture.poolFor(fixture.base.questionId).sharedPriceFeed
 		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), unit)
 		const id = await getPendingReportId(owner, coordinator)
 		const [escrow] = await owner.readContract({ abi: feedArtifact.abi, address: await feed(), functionName: 'reportCandidates', args: [id] })
@@ -181,8 +191,8 @@ describe('Statoblast: central capital shared price feed', () => {
 		await fixture.prepare()
 		const owner = fixture.owner()
 		const other = fixture.other()
-		const firstCoordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
-		const secondCoordinator = fixture.poolFor(fixture.secondQuestionId).openOraclePriceCoordinator
+		const firstCoordinator = fixture.poolFor(fixture.base.questionId).sharedPriceFeed
+		const secondCoordinator = fixture.poolFor(fixture.secondQuestionId).sharedPriceFeed
 		const target = { abi: feedArtifact.abi, address: await feed() }
 		await requestPriceWithValue(owner, firstCoordinator, await getRequestPriceCostAttoEth(owner, firstCoordinator), 2n * unit)
 		const firstId = await getPendingReportId(owner, firstCoordinator)
@@ -218,8 +228,8 @@ describe('Statoblast: central capital shared price feed', () => {
 	test('a newer report funds pledged REP while the growth proof keeps its owner collateral floor', async () => {
 		await fixture.deposit(1_000n * unit)
 		const owner = fixture.owner()
-		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
-		const otherCoordinator = fixture.poolFor(fixture.secondQuestionId).openOraclePriceCoordinator
+		const coordinator = fixture.poolFor(fixture.base.questionId).sharedPriceFeed
+		const otherCoordinator = fixture.poolFor(fixture.secondQuestionId).sharedPriceFeed
 		const target = { abi: feedArtifact.abi, address: await feed() }
 		const capital = { abi: capitalArtifact.abi, address: fixture.capitalLedger }
 		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), 2n * unit, 100n * unit)
@@ -260,9 +270,9 @@ describe('Statoblast: central capital shared price feed', () => {
 		expect(await minimum()).toBeGreaterThan(firstMinimum)
 		// Every coordinator quotes the same current security pool exposure.
 		for (const question of [fixture.base.questionId, fixture.secondQuestionId]) {
-			const coordinator = fixture.poolFor(question).openOraclePriceCoordinator
+			const coordinator = fixture.poolFor(question).sharedPriceFeed
 			expect(await fixture.owner().readContract({ abi: coordinatorArtifact.abi, address: coordinator, functionName: 'minimumToken1ReportAttoEth' })).toBe(await minimum())
-			await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: feedArtifact.abi, address: shared, functionName: 'syncExposure', args: [coordinator] }))
+			await writeContractAndWait(fixture.other(), () => fixture.other().writeContract({ abi: feedArtifact.abi, address: shared, functionName: 'syncExposure' }))
 		}
 		expect(await exposure()).toBe(200n * unit)
 	})
@@ -274,7 +284,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		expect(await fixture.owner().readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'acceptedPrice' })).toBe(2n * unit)
 		const settled = await fixture.owner().readContract({ abi: feedArtifact.abi, address: shared, functionName: 'lastSettlementTimestamp' })
 		for (const question of [fixture.base.questionId, fixture.secondQuestionId]) {
-			const target = { abi: coordinatorArtifact.abi, address: fixture.poolFor(question).openOraclePriceCoordinator }
+			const target = { abi: coordinatorArtifact.abi, address: fixture.poolFor(question).sharedPriceFeed }
 			expect(await fixture.owner().readContract({ ...target, functionName: 'isPriceValid' })).toBe(true)
 			expect(await fixture.owner().readContract({ ...target, functionName: 'lastSettlementTimestamp' })).toBe(settled)
 		}
@@ -293,7 +303,7 @@ describe('Statoblast: central capital shared price feed', () => {
 			{ question: fixture.base.questionId, price: unit + 1n },
 			{ question: fixture.secondQuestionId, price: unit + 2n },
 		]) {
-			const coordinator = fixture.poolFor(question).openOraclePriceCoordinator
+			const coordinator = fixture.poolFor(question).sharedPriceFeed
 			await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), price)
 			const reportId = await getPendingReportId(owner, coordinator)
 			const meta = await getOpenOracleReportMeta(owner, reportId)
@@ -301,7 +311,7 @@ describe('Statoblast: central capital shared price feed', () => {
 			await fixture.base.mockWindow.advanceTime(meta.settlementTime + 1n)
 			expect((await owner.getBlock()).timestamp).toBeLessThan(previousExpiry)
 			for (const currentQuestion of [fixture.base.questionId, fixture.secondQuestionId]) {
-				expect(await owner.readContract({ abi: coordinatorArtifact.abi, address: fixture.poolFor(currentQuestion).openOraclePriceCoordinator, functionName: 'isPriceValid' })).toBe(true)
+				expect(await owner.readContract({ abi: coordinatorArtifact.abi, address: fixture.poolFor(currentQuestion).sharedPriceFeed, functionName: 'isPriceValid' })).toBe(true)
 			}
 			await openOracleSettle(owner, reportId)
 			expect(await owner.readContract({ abi: feedArtifact.abi, address: shared, functionName: 'lastPrice' })).toBe(price)
@@ -318,7 +328,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		const target = { abi: feedArtifact.abi, address: shared }
 		const capital = { abi: capitalArtifact.abi, address: fixture.capitalLedger }
 		const expiry = await owner.readContract({ ...capital, functionName: 'priceValidUntil' })
-		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		const coordinator = fixture.poolFor(fixture.base.questionId).sharedPriceFeed
 		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), unit + 1n)
 		const reportId = await getPendingReportId(owner, coordinator)
 		await expect(openOracleSettle(owner, reportId)).rejects.toThrow()
@@ -357,7 +367,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		await fixture.authorize(100n * unit)
 		await expect(fixture.authorize(200n * unit)).rejects.toThrow('Accepted report exposure exceeded')
 		const owner = fixture.owner()
-		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		const coordinator = fixture.poolFor(fixture.base.questionId).sharedPriceFeed
 		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), unit, 10n * unit)
 		const reportId = await getPendingReportId(owner, coordinator)
 		await expect(fixture.authorize(200n * unit)).rejects.toThrow('Accepted report exposure exceeded')
@@ -371,7 +381,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		await fixture.prepare(1_000n * unit, 100n * unit)
 		const owner = fixture.owner()
 		const target = { abi: feedArtifact.abi, address: await feed() }
-		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		const coordinator = fixture.poolFor(fixture.base.questionId).sharedPriceFeed
 		const minimum = 10n * unit
 		expect(await owner.readContract({ ...target, functionName: 'isPriceValid' })).toBe(true)
 		expect(await owner.readContract({ ...target, functionName: 'minimumToken1ReportAttoEth' })).toBe(unit + unit / 100n)
@@ -389,7 +399,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		await fixture.prepare(1_000n * unit, 100n * unit)
 		const owner = fixture.owner()
 		const target = { abi: feedArtifact.abi, address: await feed() }
-		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		const coordinator = fixture.poolFor(fixture.base.questionId).sharedPriceFeed
 		const coverage = await owner.readContract({ ...target, functionName: 'acceptedExposureLimitAttoEth' })
 		expect(await owner.readContract({ ...target, functionName: 'aggregateExposureAttoEth' })).toBeLessThan(coverage)
 		// The sponsor asks for nothing above the quoted minimum.
@@ -414,7 +424,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		const owner = fixture.owner()
 		const target = { abi: feedArtifact.abi, address: await feed() }
 		const capital = { abi: capitalArtifact.abi, address: fixture.capitalLedger }
-		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		const coordinator = fixture.poolFor(fixture.base.questionId).sharedPriceFeed
 		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), unit)
 		const reportId = await getPendingReportId(owner, coordinator)
 		await fixture.authorize(200n * unit)
@@ -434,7 +444,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		const shared = await feed()
 		const target = { abi: feedArtifact.abi, address: shared }
 		const acceptedAt = await owner.readContract({ ...target, functionName: 'lastSettlementTimestamp' })
-		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		const coordinator = fixture.poolFor(fixture.base.questionId).sharedPriceFeed
 		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), 2n * unit)
 		const reportId = await getPendingReportId(owner, coordinator)
 		const report = await getOpenOracleReportStatus(owner, reportId)
@@ -510,7 +520,7 @@ describe('Statoblast: central capital shared price feed', () => {
 		// The append-only schedule must preserve cheap shared recovery at this boundary.
 		const sparseExpiry = (1n << 24n) + 1n
 		await mock.setTime(sparseExpiry - 86_400n - 481n)
-		const coordinator = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
+		const coordinator = fixture.poolFor(fixture.base.questionId).sharedPriceFeed
 		await requestPriceWithValue(owner, coordinator, await getRequestPriceCostAttoEth(owner, coordinator), unit + 129n)
 		const reportId = await getPendingReportId(owner, coordinator)
 		const meta = await getOpenOracleReportMeta(owner, reportId)
@@ -542,9 +552,8 @@ describe('Statoblast: central capital shared price feed', () => {
 		const secondFeed = await fixture.owner().readContract({ abi: securityPoolArtifact.abi, address: second, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
 		expect(secondFeed).not.toBe(await feed())
 		expect(await fixture.owner().readContract({ abi: feedArtifact.abi, address: secondFeed, functionName: 'lastPrice' })).toBe(0n)
-		await expect(fixture.other().writeContract({ abi: feedArtifact.abi, address: await feed(), functionName: 'registerCoordinator', args: [fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator] })).rejects.toThrow('Only security pool factory')
 		const factory = { abi: factoryArtifact.abi, address: getInfraContractAddresses().securityPoolFactory }
-		const implementation = (securityPool: typeof second) => fixture.owner().readContract({ abi: oracleFactoryArtifact.abi, address: getInfraContractAddresses().openOraclePriceCoordinatorFactory, functionName: 'sharedPriceFeedImplementations', args: [factory.address, securityPool] })
+		const implementation = (securityPool: typeof second) => fixture.owner().readContract({ abi: oracleFactoryArtifact.abi, address: getInfraContractAddresses().sharedPoolPriceFeedFactory, functionName: 'sharedPriceFeedImplementations', args: [factory.address, securityPool] })
 		const [firstImplementation, secondImplementation] = await Promise.all([implementation(fixture.securityPool), implementation(second)])
 		expect(firstImplementation).not.toBe(zeroAddress)
 		expect(secondImplementation).not.toBe(firstImplementation)

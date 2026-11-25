@@ -1,9 +1,9 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const questionForkerContractReference: ContractReference = {
-	compiledAbiFingerprint: 'f4f40cac0a9e7d7f567cdcc23173f2ce8c03290100c4b02e94abbde95215023f',
+	compiledAbiFingerprint: '2fdc57485e723c172486df04eb7c7338c8eeb4c12e337897626461383d948078',
 	name: 'QuestionForker',
-	purpose: 'Routes shared-security-pool question forks and lazy child question preparation.',
-	readAbiFingerprint: '71d147b73a91ab01a9a48a22ba2e0ac710f5c7e6999e8c205853047aee0488a4',
+	purpose: 'Executes shared-security-pool question forks and lazy child question preparation.',
+	readAbiFingerprint: 'b0388985e5969ec691cc6174c3f6deb67b8426d52c250afffa733716cd4a2938',
 	readSurface:
 		'`zoltar` identifies the protocol root. `getQuestionOutcome` returns the fixed or finalized question outcome, or None while unresolved; the shared security pool clock protects pre-fork final claims. `getOwnForkAdmissionShortfall` returns the reporter ledger and the REP an own-question fork pulls from its caller.',
 	readDeclarations: [
@@ -21,7 +21,7 @@ export const questionForkerContractReference: ContractReference = {
 	],
 	interactionNotes: 'Owner capital and reporter custody migrate through the shared security pool coordinator. Child question ledgers and their fixed-size reporter snapshots are prepared lazily. No owner migrates a vault for each question.',
 	securityBoundaryHeading: 'Child-game trust boundary',
-	securityBoundary: 'The immutable delegate is validated against Zoltar at deployment. Security pool paths authenticate the source question through its factory namespace and central books before changing capital or installing claims. Caller-supplied module addresses are never used as delegate targets.',
+	securityBoundary: 'The forker binds Zoltar immutably at deployment. Security pool paths authenticate the source question through its factory namespace and central books before changing capital or installing claims. Fork preparation executes in the forker itself without delegate dispatch.',
 	sourcePath: 'solidity/contracts/statoblast/QuestionForker.sol',
 	interactions: [
 		{

@@ -467,7 +467,7 @@ for (const missing of ['balanceOf', 'allowance'] as const)
 		expect(transactionSteps.value?.steps[0]?.failure?.message).toContain('Funding requirements changed')
 	})
 
-for (const _operation of ['requestPrice', 'setVaultUnderwritingLimit', 'withdrawRep', 'liquidation'] as const) {
+for (const _operation of ['requestSecurityPoolPrice', 'setVaultUnderwritingLimit', 'withdrawRep', 'liquidation'] as const) {
 }
 
 for (const _change of ['minimum', 'fee', 'lower-minimum', 'sufficient-allowance'] as const)
@@ -541,7 +541,7 @@ for (const outcome of ['success', 'reverted'] as const) {
 			return 100001n
 		})
 		const reviewed = createReviewedClient({ ...client, sendTransaction, estimateGas, getGasPrice: async () => 2_540_635_026n })
-		reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'requestPrice', contractAddress: account, args: [1n, 0n], data: '0x1234', value: 2n })
+		reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'requestSecurityPoolPrice', contractAddress: account, args: [1n, 0n], data: '0x1234', value: 2n })
 		const result = reviewed.sendTransaction({ to: account, data: '0x1234', value: 2n }).catch(error => error)
 		await waitForStarted()
 		const value = await result
@@ -576,8 +576,8 @@ test.each([undefined, 90000n, 200000n])('submits a fee-aware buffered contract g
 	const reviewed = createReviewedClient({ ...client, writeContract, estimateGas, getGasPrice: async () => 2n })
 	const parameters = {
 		address: account,
-		abi: [{ type: 'function', name: 'requestPrice', stateMutability: 'payable', inputs: [{ name: 'price', type: 'uint256' }], outputs: [] }],
-		functionName: 'requestPrice',
+		abi: [{ type: 'function', name: 'requestSecurityPoolPrice', stateMutability: 'payable', inputs: [{ name: 'price', type: 'uint256' }], outputs: [] }],
+		functionName: 'requestSecurityPoolPrice',
 		args: [1n],
 		value: 2n,
 		gas,
@@ -627,7 +627,7 @@ test('canceling while the price request gas estimate is pending prevents submiss
 		undefined,
 		cancellation.signal,
 	)
-	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'requestPrice', contractAddress: account, args: [1n, 0n], data: '0x1234', value: 2n })
+	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'requestSecurityPoolPrice', contractAddress: account, args: [1n, 0n], data: '0x1234', value: 2n })
 	const result = reviewed.sendTransaction({ to: account, data: '0x1234', value: 2n }).catch(error => error)
 	await waitForStarted()
 	await estimating.promise
@@ -884,7 +884,7 @@ test('minting complete sets sends the transaction directly and tracks its receip
 			if (request.functionName === 'questionId') return 1n
 			if (request.functionName === 'getQuestionEndDate') return 1000n
 			if (request.functionName === 'universeId') return 0n
-			if (request.functionName === 'openOraclePriceCoordinator') return account
+			if (request.functionName === 'sharedPriceFeed') return account
 			if (request.functionName === 'lastSettlementTimestamp') return 1n
 			if (request.functionName === 'additionalMintCapacityAttoEth') return 10n ** 18n
 			throw new Error(`Unexpected read: ${request.functionName}`)

@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { discoverCoordinatorPolicies } from '#monitoring/coordinator-discovery'
 import { canonicalSecurityPoolFactory, networkConfiguration } from '#config/network'
 import { parseOperatorSettings } from '#config/settings-store'
-import { questionLedgerAbi, securityPoolFactoryAbi, openOraclePriceCoordinatorAbi, sharedPoolPriceFeedAbi } from '@zoltar/bot-shared/contracts/abi'
+import { questionLedgerAbi, securityPoolFactoryAbi, sharedPoolPriceFeedAbi } from '@zoltar/bot-shared/contracts/abi'
 import { createPublicClient, decodeFunctionData, encodeAbiParameters, encodeFunctionData, getAddress, type Hex } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import example from '../../config/operator.example.json'
@@ -19,7 +19,7 @@ const other = getAddress('0x0000000000000000000000000000000000000033')
 const hash: Hex = `0x${'ab'.repeat(32)}`
 const securityPool = getAddress('0x0000000000000000000000000000000000000066')
 const escrowFeedCall = encodeFunctionData({ abi: [{ type: 'function', name: 'feed', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] }], functionName: 'feed' })
-const entry = { questionLedger: pool, openOraclePriceCoordinator: coordinator, shareToken: other, parent: other, universeId: 0n, questionId: 1n, statoblastSecurityMultiplierBps: 20_000n, initialReportPriorityFeeAttoEthPerGas: 1n }
+const entry = { questionLedger: pool, sharedPriceFeed: coordinator, shareToken: other, parent: other, universeId: 0n, questionId: 1n, statoblastSecurityMultiplierBps: 20_000n, initialReportPriorityFeeAttoEthPerGas: 1n }
 
 function reader(options: { sharedFeed?: boolean; missingEscrow?: boolean; wrongCoordinator?: boolean; missingCode?: boolean; wrongBlock?: boolean; unapproved?: boolean; shortPage?: boolean; unsafePolicy?: boolean; registryCount?: bigint; reorg?: boolean; wrongFeedBinding?: boolean } = {}) {
 	let blockReads = 0
@@ -43,7 +43,7 @@ function reader(options: { sharedFeed?: boolean; missingEscrow?: boolean; wrongC
 						? []
 						: Array.from({ length: Number(count) }, (_, index) => ({
 								...entry,
-								...(options.sharedFeed && index === 1 ? { questionLedger: secondPool, openOraclePriceCoordinator: other } : {}),
+								...(options.sharedFeed && index === 1 ? { questionLedger: secondPool, sharedPriceFeed: other } : {}),
 								universeId: options.unapproved || (!options.sharedFeed && options.registryCount !== undefined && start + BigInt(index) < options.registryCount - 1n) ? 1n : 0n,
 							})),
 				])
@@ -54,7 +54,7 @@ function reader(options: { sharedFeed?: boolean; missingEscrow?: boolean; wrongC
 				return encodeAbiParameters([{ type: 'address' }], [options.wrongCoordinator || to.toLowerCase() === secondPool.toLowerCase() ? other : coordinator])
 			}
 			if (to.toLowerCase() !== coordinator.toLowerCase() && (!options.sharedFeed || (to.toLowerCase() !== feed.toLowerCase() && to.toLowerCase() !== other.toLowerCase()))) throw new Error('Untrusted coordinator queried')
-			const call = decodeFunctionData({ abi: [...openOraclePriceCoordinatorAbi, ...sharedPoolPriceFeedAbi], data })
+			const call = decodeFunctionData({ abi: [...sharedPoolPriceFeedAbi, ...sharedPoolPriceFeedAbi], data })
 			if (call.functionName === 'securityPool') return encodeAbiParameters([{ type: 'address' }], [securityPool])
 			if (call.functionName === 'universeId') return encodeAbiParameters([{ type: 'uint248' }], [options.unapproved ? 1n : 0n])
 			if (call.functionName === 'pendingReportId') return encodeAbiParameters([{ type: 'uint256' }], [7n])
@@ -63,9 +63,8 @@ function reader(options: { sharedFeed?: boolean; missingEscrow?: boolean; wrongC
 				if (fn === undefined || fn.type !== 'function') throw new Error('Missing candidate ABI')
 				const candidate = call.args[0] === 7n ? other : secondPool
 				const escrow = options.missingEscrow || call.args[0] === 9n ? '0x0000000000000000000000000000000000000000' : candidate
-				return encodeAbiParameters(fn.outputs, [escrow, other, coordinator, 1n, 1n, 1n])
+				return encodeAbiParameters(fn.outputs, [escrow, other, 1n])
 			}
-			if (call.functionName === 'priceFeed') return encodeAbiParameters([{ type: 'address' }], [options.sharedFeed ? feed : coordinator])
 			if (call.functionName === 'openOracle') return encodeAbiParameters([{ type: 'address' }], [settings.deployment.openOracle])
 			if (call.functionName === 'weth') return encodeAbiParameters([{ type: 'address' }], [network.weth])
 			if (call.functionName === 'reputationToken' || call.functionName === 'protocolFeeRecipient') return encodeAbiParameters([{ type: 'address' }], [network.rep])

@@ -314,7 +314,7 @@ describe('openOracle protocol client', () => {
 	})
 
 	for (const association of ['verified', 'different oracle', 'different coordinator', 'generic callback'] as const) {
-		test(`report freshness is attached only to a verified pool coordinator: ${association}`, async () => {
+		test(`question-shaped callbacks cannot authenticate shared-feed freshness: ${association}`, async () => {
 			const preimage = createOpenOraclePreimage()
 			preimage.game.callbackContract = vaultAddress
 			const client = createMockLoaderClient({
@@ -333,7 +333,7 @@ describe('openOracle protocol client', () => {
 									{ status: 'success', result: association === 'different oracle' ? token1Address : getOpenOracleAddress() },
 									{ status: 'success', result: alternateQuestionLedgerAddress },
 								]
-					if (first === 'openOraclePriceCoordinator') return [{ status: 'success', result: association === 'different coordinator' ? token1Address : vaultAddress }]
+					if (first === 'sharedPriceFeed') return [{ status: 'success', result: association === 'different coordinator' ? token1Address : vaultAddress }]
 					if (first === 'lastSettlementTimestamp')
 						return [
 							{ status: 'success', result: 11n },
@@ -344,8 +344,7 @@ describe('openOracle protocol client', () => {
 				},
 			})
 			const report = await loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)
-			if (association === 'verified') expect(report.coordinatorPriceValidUntilTimestamp).toBe(612n)
-			else expect(report.coordinatorPriceValidUntilTimestamp).toBeUndefined()
+			expect(report.coordinatorPriceValidUntilTimestamp).toBeUndefined()
 		})
 	}
 
@@ -372,7 +371,7 @@ describe('openOracle protocol client', () => {
 								{ status: 'success', result: 1n },
 							]
 						case 'reportCandidates':
-							return [{ status: 'success', result: [vaultAddress, initialReporter, alternateQuestionLedgerAddress, 0n] }]
+							return [{ status: 'success', result: [vaultAddress, initialReporter, 0n] }]
 						case 'securityPoolFactory':
 							return [
 								{ status: 'success', result: getInfraContractAddresses().securityPoolFactory },
@@ -596,21 +595,41 @@ for (const change of ['settlement preimage', 'settled report', 'withdraw balance
 				account: wallet.account,
 				chain: wallet.chain,
 				call: async () => ({ data: toHex(0n) }),
-				multicall: createMulticallStub(async request => {
-					const first = getContractFunctionName(request.contracts[0])
-					if (first === 'openOracle')
-						return [
-							{ status: 'success', result: getOpenOracleAddress() },
-							{ status: 'success', result: alternateQuestionLedgerAddress },
-						]
-					if (first === 'lastSettlementTimestamp')
-						return [
-							{ status: 'success', result: 11n },
-							{ status: 'success', result: 3611n },
-							{ status: 'success', result: zeroAddress },
-						]
-					return [{ status: 'success', result: vaultAddress }]
-				}),
+				multicall: createMulticallStub(async request =>
+					request.contracts.map(contract => {
+						const name = getContractFunctionName(contract)
+						const result = (() => {
+							switch (name) {
+								case 'openOracle':
+									return getOpenOracleAddress()
+								case 'feed':
+									return vaultAddress
+								case 'reportId':
+									return 1n
+								case 'reportCandidates':
+									return [vaultAddress, initialReporter, 0n]
+								case 'securityPoolFactory':
+									return getInfraContractAddresses().securityPoolFactory
+								case 'securityPool':
+									return alternateQuestionLedgerAddress
+								case 'universeId':
+									return 0n
+								case 'collateralToken':
+									return preimage.game.token1
+								case 'reputationToken':
+									return preimage.game.token2
+								case 'sharedPriceFeeds':
+									return vaultAddress
+								case 'priceValidityWindowSeconds':
+									return 3611n - preimage.game.reportTimestamp - preimage.game.settlementTime
+								default:
+									throw new Error(`Unexpected shared feed read ${name}`)
+							}
+						})()
+						return { status: 'success' as const, result }
+					}),
+				),
+
 				getBlock: async () => createBlockWithTimestamp(change === 'settlement stale unchanged' || (changed && change === 'settlement price expiry') ? 3611n : 1000n),
 				getBalance: async () => (changed && change === 'create ETH' ? 0n : 1000n),
 			},

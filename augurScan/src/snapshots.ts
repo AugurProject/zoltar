@@ -38,7 +38,7 @@ const snapshotAbi = (kind: SystemContractKind): Abi => {
 }
 
 const poolAbi = snapshotAbi('questionLedger')
-const coordinatorAbi = snapshotAbi('priceCoordinator')
+const coordinatorAbi = snapshotAbi('sharedPoolPriceFeed')
 const escalationAbi = snapshotAbi('escalationGame')
 const auctionAbi = snapshotAbi('securityPoolUniformPriceRepairAuction')
 
@@ -148,14 +148,12 @@ const poolSnapshot = async (target: StateSnapshotTarget, read: StateRead): Promi
 	}
 	if (target.coordinatorAddress !== undefined) {
 		const coordinator = target.coordinatorAddress
-		const price = await Promise.all([read(coordinator, coordinatorAbi, 'lastPrice'), read(coordinator, coordinatorAbi, 'lastSettlementTimestamp'), read(coordinator, coordinatorAbi, 'isPriceValid'), read(coordinator, coordinatorAbi, 'priceFeed')])
-		const feedAddress = price[3]
-		if (typeof feedAddress !== 'string') throw new Error('priceFeed returned an invalid address')
+		const price = await Promise.all([read(coordinator, coordinatorAbi, 'lastPrice'), read(coordinator, coordinatorAbi, 'lastSettlementTimestamp'), read(coordinator, coordinatorAbi, 'isPriceValid')])
 		result['price'] = {
 			repPerEth1e18: exact(price[0], 'lastPrice'),
 			settlementTimestamp: exact(price[1], 'lastSettlementTimestamp'),
 			protocolValid: flag(price[2], 'isPriceValid'),
-			sourceContract: getAddress(feedAddress).toLowerCase(),
+			sourceContract: getAddress(coordinator).toLowerCase(),
 		}
 	}
 	return result

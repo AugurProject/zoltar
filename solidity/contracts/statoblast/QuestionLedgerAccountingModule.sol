@@ -22,7 +22,7 @@ contract QuestionLedgerAccountingModule is QuestionLedgerAccountingDelegate {
 
 	function _emitAccountingCheckpoint(AccountingReason reason) internal override {
 		// Every capacity/collateral checkpoint also reconciles the shared report security budget.
-		IQuestionLedger(payable(address(this))).openOraclePriceCoordinator().syncExposure();
+		IQuestionLedger(payable(address(this))).sharedPriceFeed().syncExposure();
 		emit QuestionAccountingCheckpoint(reason, settlementCollateralAttoEth, shareTokenSupplyAttoShares, lastSettlementSecurityPoolTime);
 	}
 }

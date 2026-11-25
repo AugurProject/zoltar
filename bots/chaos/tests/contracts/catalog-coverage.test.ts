@@ -16,7 +16,6 @@ const chaosContractAbis = {
 	securityPoolCommitmentIndexAbi: contractAbis.securityPoolCommitmentIndexAbi,
 	securityPoolCapitalLedgerAbi: contractAbis.securityPoolCapitalLedgerAbi,
 	securityPoolAbi: contractAbis.securityPoolAbi,
-	openOraclePriceCoordinatorAbi: contractAbis.openOraclePriceCoordinatorAbi,
 	sharedPoolPriceFeedAbi: contractAbis.sharedPoolPriceFeedAbi,
 	erc1155Abi: contractAbis.erc1155Abi,
 	genesisReputationTokenAbi: contractAbis.genesisReputationTokenAbi,
@@ -37,7 +36,6 @@ const chaosContractAbis = {
 	zoltarAbi: contractAbis.zoltarAbi,
 }
 const {
-	openOraclePriceCoordinatorAbi,
 	sharedPoolPriceFeedAbi,
 	erc1155Abi,
 	genesisReputationTokenAbi,
@@ -71,7 +69,6 @@ const curatedAbiBindings = [
 	{ abi: genesisReputationTokenAbi, artifactSource: 'contracts/GenesisReputationToken.sol', contract: 'GenesisReputationToken' },
 	{ abi: securityPoolFactoryAbi, artifactSource: 'contracts/statoblast/factories/SecurityPoolFactory.sol', contract: 'SecurityPoolFactory' },
 	{ abi: questionLedgerAbi, artifactSource: 'contracts/statoblast/QuestionLedger.sol', contract: 'QuestionLedger' },
-	{ abi: openOraclePriceCoordinatorAbi, artifactSource: 'contracts/statoblast/OpenOraclePriceCoordinator.sol', contract: 'OpenOraclePriceCoordinator' },
 	{ abi: sharedPoolPriceFeedAbi, artifactSource: 'contracts/statoblast/SharedPoolPriceFeed.sol', contract: 'SharedPoolPriceFeed' },
 	{ abi: questionForkerAbi, artifactSource: 'contracts/statoblast/QuestionForker.sol', contract: 'QuestionForker' },
 	{
@@ -102,13 +99,10 @@ const expectedCanonicalManifest = [
 	'QuestionLedger:contracts/statoblast/QuestionLedger.sol:dynamic-endpoint',
 	'QuestionLedgerOperationsDelegate:contracts/statoblast/QuestionLedgerOperationsDelegate.sol:delegate-module',
 	'QuestionLedgerAccountingModule:contracts/statoblast/QuestionLedgerAccountingModule.sol:delegate-module',
-	'OpenOraclePriceCoordinator:contracts/statoblast/OpenOraclePriceCoordinator.sol:dynamic-endpoint',
 	'SharedPoolPriceFeed:contracts/statoblast/SharedPoolPriceFeed.sol:dynamic-endpoint',
 	'SharedPoolReportEscrow:contracts/statoblast/SharedPoolReportEscrow.sol:dynamic-endpoint',
-	'OpenOracleReportDelegate:contracts/statoblast/OpenOracleReportDelegate.sol:delegate-module',
-	'SharedPoolPriceFeedDeploymentWorker:contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol:static-endpoint',
-	'OpenOraclePriceCoordinatorFactory:contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol:static-endpoint',
-	'PriceCoordinatorDeploymentWorker:contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol:static-endpoint',
+	'SharedPoolPriceFeedDeploymentWorker:contracts/statoblast/factories/SharedPoolPriceFeedFactory.sol:static-endpoint',
+	'SharedPoolPriceFeedFactory:contracts/statoblast/factories/SharedPoolPriceFeedFactory.sol:static-endpoint',
 	'QuestionForker:contracts/statoblast/QuestionForker.sol:static-endpoint',
 	'EscalationGameFactory:contracts/statoblast/factories/EscalationGameFactory.sol:static-endpoint',
 	'EscalationGame:contracts/statoblast/EscalationGame.sol:dynamic-endpoint',
@@ -125,7 +119,6 @@ const expectedCanonicalManifest = [
 	'SecurityPoolCapitalLedger:contracts/statoblast/SecurityPoolCapitalLedger.sol:dynamic-endpoint',
 	'SecurityPoolCapitalLifecycleDelegate:contracts/statoblast/SecurityPoolCapitalLifecycleDelegate.sol:delegate-module',
 	'SecurityPoolCommitmentIndex:contracts/statoblast/SecurityPoolCommitmentIndex.sol:dynamic-endpoint',
-	'QuestionForkerDelegate:contracts/statoblast/QuestionForkerDelegate.sol:delegate-module',
 	'SecurityPool:contracts/statoblast/SecurityPool.sol:dynamic-endpoint',
 	'SecurityPoolRepairAuction:contracts/statoblast/SecurityPoolRepairAuction.sol:dynamic-endpoint',
 	'SecurityPoolRepairAuctionDeployer:contracts/statoblast/SecurityPoolRepairAuction.sol:deployment-helper',
@@ -351,15 +344,14 @@ describe('contract operation classification', () => {
 	test('keeps deployment helpers, direct delegates, orphan factories, and migration proxies out of random work', () => {
 		const helperContracts = new Set(CANONICAL_MUTATING_CONTRACT_MANIFEST.filter(entry => entry.exposure === 'deployment-helper' || entry.exposure === 'fallback-module').map(entry => entry.contract))
 		const directDelegateContracts = new Set(CANONICAL_MUTATING_CONTRACT_MANIFEST.filter(entry => entry.exposure === 'delegate-module').map(entry => entry.contract))
-		const orphanFactoryContracts = new Set(['EscalationGameFactory', 'OpenOraclePriceCoordinatorFactory', 'ShareTokenFactory', 'UniformPriceDualCapBatchAuctionFactory'])
+		const orphanFactoryContracts = new Set(['EscalationGameFactory', 'SharedPoolPriceFeedFactory', 'ShareTokenFactory', 'UniformPriceDualCapBatchAuctionFactory'])
 		for (const entry of MUTATING_CONTRACT_SURFACE) {
 			if (helperContracts.has(entry.contract)) {
 				expect(['role-restricted', 'excluded-dangerous']).toContain(entry.classification)
 			}
 			if (directDelegateContracts.has(entry.contract)) expect(entry.classification, `${entry.contract}.${entry.method}`).toBe('excluded-dangerous')
 			if (orphanFactoryContracts.has(entry.contract)) {
-				const authenticatedFeedWiring = entry.contract === 'OpenOraclePriceCoordinatorFactory' && ['deploySharedPoolPriceFeed', 'configureSharedPriceFeed', 'configureQuestionLedger'].includes(entry.method)
-				expect(entry.classification, `${entry.contract}.${entry.method}`).toBe(authenticatedFeedWiring ? 'role-restricted' : 'excluded-dangerous')
+				expect(entry.classification, `${entry.contract}.${entry.method}`).toBe('excluded-dangerous')
 			}
 		}
 	})

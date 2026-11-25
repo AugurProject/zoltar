@@ -4,10 +4,9 @@ import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { readOptionalMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
-import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_QuestionLedger_QuestionLedger, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../contractArtifact.js'
+import { statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../contractArtifact.js'
 import type { OpenOraclePriceSettlement } from '../types/contracts.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
-import { getOracleManagerPriceValidUntilTimestamp } from './oracleTiming.js'
 
 const sharedFeedLinkAbi = [
 	{ type: 'function', name: 'securityPoolFactory', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
@@ -27,7 +26,6 @@ const reportEscrowAbi = [
 		outputs: [
 			{ name: 'escrow', type: 'address' },
 			{ name: 'sponsor', type: 'address' },
-			{ name: 'coordinator', type: 'address' },
 			{ name: 'maxSettlementBaseFee', type: 'uint256' },
 		],
 	},
@@ -44,16 +42,12 @@ const reportEscrowAbi = [
 ] as const
 
 // Generic OpenOracle reports have no pool freshness rule. Verify both sides of the callback/pool association.
-export async function loadCoordinatorPriceValidUntilTimestamp(client: Pick<ReadClient, 'multicall'>, openOracleAddress: Address, game: OpenOracleStatePreimage['game'], chainId?: number, reportId?: bigint) {
+export async function loadCoordinatorPriceValidUntilTimestamp(client: Pick<ReadClient, 'multicall'>, openOracleAddress: Address, game: OpenOracleStatePreimage['game'], _chainId?: number, reportId?: bigint) {
 	if (game.callbackContract === zeroAddress || !hasOpenOracleFlag(game, OPEN_ORACLE_FLAG_TIME_TYPE) || game.reportTimestamp === 0n) return undefined
-	const abi = statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
-	const [oracle, pool] = await readOptionalMulticall(client, [
-		{ address: game.callbackContract, abi, functionName: 'openOracle' },
-		{ address: game.callbackContract, abi, functionName: 'questionLedger' },
-	])
+	const abi = statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi
+	const [oracle] = await readOptionalMulticall(client, [{ address: game.callbackContract, abi, functionName: 'openOracle' }])
 	if (oracle.status !== 'success' || !sameAddress(oracle.result, openOracleAddress)) return undefined
-	const questionLedger = pool.status === 'success' ? pool.result : zeroAddress
-	if (questionLedger === zeroAddress) {
+	{
 		if (reportId === undefined) return undefined
 		const [feed, escrowReport] = await readOptionalMulticall(client, [
 			{ address: game.callbackContract, abi: reportEscrowAbi, functionName: 'feed' },
@@ -88,20 +82,6 @@ export async function loadCoordinatorPriceValidUntilTimestamp(client: Pick<ReadC
 		if (registeredFeed.status !== 'success' || !sameAddress(registeredFeed.result, feed.result) || validity.status !== 'success') return undefined
 		return game.reportTimestamp + game.settlementTime + validity.result
 	}
-	const [coordinator] = await readOptionalMulticall(client, [{ address: questionLedger, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'openOraclePriceCoordinator' }])
-	if (coordinator.status !== 'success' || !sameAddress(coordinator.result, game.callbackContract)) return undefined
-	const priceTimestamp = game.reportTimestamp + game.settlementTime
-	const [acceptedTimestamp, expiry, sharedFeed] = await readOptionalMulticall(client, [
-		{ address: coordinator.result, abi, functionName: 'lastSettlementTimestamp' },
-		{ address: coordinator.result, abi, functionName: 'priceValidUntil' },
-		{ address: coordinator.result, abi, functionName: 'sharedPriceFeed' },
-	])
-	if (acceptedTimestamp.status === 'success' && acceptedTimestamp.result === priceTimestamp && expiry.status === 'success' && expiry.result > priceTimestamp) return expiry.result
-	if (sharedFeed.status === 'success' && sharedFeed.result !== zeroAddress) {
-		const [validity] = await readOptionalMulticall(client, [{ address: sharedFeed.result, abi: sharedFeedLinkAbi, functionName: 'priceValidityWindowSeconds' }])
-		if (validity.status === 'success' && validity.result > 0n) return priceTimestamp + validity.result
-	}
-	return getOracleManagerPriceValidUntilTimestamp(priceTimestamp, chainId)
 }
 
 /**

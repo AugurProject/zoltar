@@ -41,7 +41,7 @@ type StagedOracleQueuedResult = {
 export type OpenOraclePriceSettlement = { status: 'accepted' } | { status: 'unconfirmed' } | { status: 'deferred'; maxSettlementBaseFee: bigint } | { status: 'rejected'; reason: string }
 
 export type OpenOracleActionResult = ActionResult & {
-	action: 'approveToken1' | 'approveToken2' | 'createReportInstance' | 'dispute' | 'executeStagedOperation' | 'queueOperation' | 'requestPrice' | 'settle' | 'withdrawBalance' | 'wrapWeth'
+	action: 'approveToken1' | 'approveToken2' | 'createReportInstance' | 'dispute' | 'executeStagedOperation' | 'queueOperation' | 'requestSecurityPoolPrice' | 'settle' | 'withdrawBalance' | 'wrapWeth'
 	priceSettlement?: OpenOraclePriceSettlement | undefined
 	queuedOperation?: StagedOracleQueuedResult
 	/** The new report's ID, read from its successful create or pool-price request receipt. */

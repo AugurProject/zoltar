@@ -270,7 +270,7 @@ export async function createChaosAnvilFixture(): Promise<ChaosAnvilFixture> {
 		const poolAddresses = await deployTestSecurityPool(deployer, ORIGIN_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS)
 		const infra = getInfraContractAddresses()
 		const pool = poolAddresses.questionLedger
-		await manipulatePriceOracle(deployer, simulator, poolAddresses.openOraclePriceCoordinator, ONE_TOKEN, 100n * ONE_TOKEN)
+		await manipulatePriceOracle(deployer, simulator, poolAddresses.sharedPriceFeed, ONE_TOKEN, 100n * ONE_TOKEN)
 
 		const tradingFactory = await deploy(
 			deployer,

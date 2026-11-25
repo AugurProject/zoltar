@@ -145,7 +145,7 @@ const OPEN_ORACLE_ACTION_TITLES = {
 	dispute: { failure: 'Dispute failed', pending: 'Submitting dispute', success: 'Dispute submitted' },
 	executeStagedOperation: { failure: 'Staged operation failed', pending: 'Executing staged operation', success: 'Staged operation executed' },
 	queueOperation: { failure: 'Queue operation failed', pending: 'Queueing operation', success: 'Operation queued' },
-	requestPrice: { failure: 'Price request failed', pending: 'Requesting price', success: 'Price requested' },
+	requestSecurityPoolPrice: { failure: 'Price request failed', pending: 'Requesting price', success: 'Price requested' },
 	settle: { failure: 'Settlement failed', pending: openOracleCopy.settlingReportTitle, success: openOracleCopy.reportSettled },
 	withdrawBalance: { failure: 'Oracle balance withdrawal failed', pending: 'Withdrawing oracle balance', success: 'Oracle balance withdrawn' },
 	wrapWeth: { failure: 'ETH wrap failed', pending: 'Wrapping ETH to WETH', success: 'ETH wrapped to WETH' },

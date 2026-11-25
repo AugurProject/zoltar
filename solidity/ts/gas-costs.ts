@@ -81,7 +81,7 @@ try {
 	const capital = { abi: capitalArtifact.abi, address: await owner.readContract({ ...securityPool, functionName: 'capitalLedger', args: [0n] }) }
 	await approveToken(owner, getRepTokenAddress(0n), capital.address)
 	await measure('2. Shared underwriting and trading', 'Deposit shared REP principal', owner, () => owner.writeContract({ ...capital, functionName: 'depositFor', args: [owner.account.address, 1_000n * unit] }))
-	const coordinator = await owner.readContract({ ...pool, functionName: 'openOraclePriceCoordinator' })
+	const coordinator = await owner.readContract({ ...pool, functionName: 'sharedPriceFeed' })
 	await manipulatePriceOracle(owner, anvil, coordinator, unit, 100n * unit)
 	await measure('2. Shared underwriting and trading', 'Set owner commitment', owner, () => owner.writeContract({ ...capital, functionName: 'setCommitment', args: [200n * unit] }))
 	const quote = await trader.readContract({ ...securityPool, functionName: 'purchaseQuote', args: [0n, questionId, 100n * unit] })

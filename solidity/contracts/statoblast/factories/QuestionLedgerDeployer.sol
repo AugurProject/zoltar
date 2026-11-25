@@ -7,7 +7,7 @@ import { IQuestionLedger, ISecurityPoolFactory } from '../interfaces/IQuestionLe
 import { OpenOracle } from '../openOracle/OpenOracle.sol';
 import { Zoltar } from '../../Zoltar.sol';
 import { IShareToken } from '../interfaces/IShareToken.sol';
-import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
+import { SharedPoolPriceFeed } from '../SharedPoolPriceFeed.sol';
 import { EscalationGameFactory } from './EscalationGameFactory.sol';
 import { QuestionLedgerAccountingModule } from '../QuestionLedgerAccountingModule.sol';
 import { CreationCodeStorage } from '../CreationCodeStorage.sol';
@@ -18,7 +18,7 @@ struct QuestionLedgerConfiguration {
 	address questionForker;
 	ZoltarQuestionData questionData;
 	EscalationGameFactory escalationGameFactory;
-	OpenOraclePriceCoordinator openOraclePriceCoordinator;
+	SharedPoolPriceFeed sharedPriceFeed;
 	IShareToken shareToken;
 	OpenOracle openOracle;
 	IQuestionLedger parent;

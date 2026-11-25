@@ -132,7 +132,7 @@ describe('Safe ERC20 Operations', () => {
 					abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker.abi,
 					address: deploymentWorker,
 					functionName: 'deploy',
-					args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, openOraclePriceCoordinator: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
+					args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, sharedPriceFeed: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
 				}),
 			),
 			/Question ledger deployment failed/,

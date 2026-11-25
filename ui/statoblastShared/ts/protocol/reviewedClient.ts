@@ -14,7 +14,7 @@ import { createTransactionFailure, createTransactionFailureError } from '@zoltar
 async function describeTransaction(client: WriteClient, preview: TransactionRequestPreview & Pick<TransactionPlanStep, 'optional' | 'tokenFunding' | 'oracleOutcome' | 'approvalPurpose'>, requiredApprovalAmount?: bigint): Promise<TransactionStepDetails> {
 	const action = transactionCopy.reviewedActions[preview.functionName]
 	const details: TransactionStepDetails = {
-		proposedRepPerEthPrice: preview.functionName === 'requestPrice' && typeof preview.args?.[0] === 'bigint' ? preview.args[0] : undefined,
+		proposedRepPerEthPrice: preview.functionName === 'requestSecurityPoolPrice' && typeof preview.args?.[0] === 'bigint' ? preview.args[0] : undefined,
 		optional: preview.optional ?? false,
 		oracleOutcome: preview.oracleOutcome,
 		tokenFunding: await Promise.all(
@@ -145,7 +145,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			controller.assertActive()
 			await validate()
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
-			if (transaction.functionName === 'requestPrice') {
+			if (transaction.functionName === 'requestSecurityPoolPrice') {
 				const gasPrice = await client.getGasPrice()
 				const estimate = await client.estimateGas({ account: client.account, to: transaction.contractAddress, data: transaction.data, value: transaction.value, gasPrice: gasPrice > 0n ? gasPrice : 1n })
 				// Reserve execution headroom for refunds and nested calls when an RPC returns gas spent instead of the minimum successful limit.

@@ -18,7 +18,7 @@ import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs, simulationWaitOptions, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { createQuestionLedgerDeploymentIndex, discoverLiveUniverseMarketPage, loadLiveBalances, marketNewRiskBlocker } from '../../protocol/live.js'
-import { statoblast_QuestionLedger_QuestionLedger, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_QuestionLedger_QuestionLedger, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { shareTokenAbi } from '../../protocol/authorization.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { simulationDeploymentConfiguration } from '../support/simulationDeploymentConfiguration.js'
@@ -65,9 +65,9 @@ test('only missing pool identity reads are classified as a missing question ledg
 		shareToken: getAddress(`0x${'34'.repeat(20)}`),
 		getQuestionLedger: pool,
 		canonicalQuestionLedgerByUniverse: pool,
-		openOraclePriceCoordinator: getAddress(`0x${'56'.repeat(20)}`),
+		sharedPriceFeed: getAddress(`0x${'56'.repeat(20)}`),
 	}
-	const abi = [...statoblast_QuestionLedger_QuestionLedger.abi, ...statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, ...statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, ...shareTokenAbi]
+	const abi = [...statoblast_QuestionLedger_QuestionLedger.abi, ...statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, ...statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, ...shareTokenAbi]
 	for (const failedFunction of ['securityPoolFactory', 'getQuestionLedgerOriginId', 'getQuestionLedger', 'initialReportPriorityFeeAttoEthPerGas']) {
 		const client = createPublicClient({
 			transport: custom({

@@ -4,7 +4,7 @@ import { isObjectRecord, requireArrayOf } from '@zoltar/core-shared/validation/g
 export type QuestionLedgerDeploymentTuple = {
 	initialReportPriorityFeeAttoEthPerGas: bigint
 	parent: Address
-	openOraclePriceCoordinator: Address
+	sharedPriceFeed: Address
 	questionId: bigint
 	statoblastSecurityMultiplierBps: bigint
 	questionLedger: Address
@@ -16,7 +16,7 @@ function isQuestionLedgerDeploymentTuple(value: unknown): value is QuestionLedge
 		isObjectRecord(value) &&
 		typeof value['initialReportPriorityFeeAttoEthPerGas'] === 'bigint' &&
 		typeof value['parent'] === 'string' &&
-		typeof value['openOraclePriceCoordinator'] === 'string' &&
+		typeof value['sharedPriceFeed'] === 'string' &&
 		typeof value['questionId'] === 'bigint' &&
 		typeof value['statoblastSecurityMultiplierBps'] === 'bigint' &&
 		typeof value['questionLedger'] === 'string' &&
