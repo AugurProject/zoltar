@@ -6,13 +6,11 @@ This guide covers a Compose deployment whose working directory is `augurScan/`. 
 
 Use archival-capable JSON-RPC providers that can return runtime bytecode, block headers, transactions, and receipts throughout the configured history boundary. Each RPC environment variable accepts an ordered comma-separated provider pool. augurScan verifies a provider's chain before using it and resumes failed work from its durable checkpoint.
 
-At startup, augurScan probes historical state. When the provider reports pruned state, augurScan locates its earliest retrievable state block and skips token metadata, balance, snapshot, and deployment-code reads below that boundary. Repeated state-discovery failures produce one console warning per provider, while every failed RPC exchange remains in the rotating JSONL log.
-
-Tagged state reads cover question ledgers, escalation games, collateral repair auctions, capital ledgers, owner capital positions, and, once each, the owner of every capital position id. After each indexed head the indexer reads the 25 entities whose latest read is oldest, so the age of a capital position's health grows with the number of sampled entities; every read records the block it was taken at. A capital ledger read also carries its universe's fee state; a failed fee read is recorded as `feeReadError` beside the ledger's price and totals instead of failing the read.
-
-Log availability is discovered separately. If an `eth_getLogs` request reports pruned history, augurScan warns that it is locating the log boundary, finds the earliest retrievable log block on demand, and advances log coverage to that block. The state and log boundaries can differ. An archival provider remains necessary for evidence before either reported boundary.
+When a provider has pruned history, augurScan finds the earliest available block separately for logs and historical state. Use an archival provider if you need evidence before either boundary. The [state model](STATE_MODEL.md#completeness-and-absence) explains which evidence is missing when a provider cannot return it.
 
 `config/networks.json` selects each network's manifest. Manifest entries are `[address, label, kind]` or `[address, label, kind, deploymentBlock]`. A verified deployment block avoids historical bytecode discovery and gives later replay a deterministic boundary. Keep an old address in the manifest while it remains a valid activity source.
+
+To index both deployment families, run a separate Compose project for each genesis outcome. The default project indexes Yes. Start the No project from the same directory with `GENESIS_OUTCOME=no AUGURSCAN_PORT=3001 docker compose -p augurscan-no up -d --build`, then open <http://localhost:3001>. Project-scoped volumes and a private database network isolate the two bundled databases. With external PostgreSQL, set a different `POSTGRES_URL` for each project. Both explorers use the real chain IDs. The first process to open a database binds its genesis outcome, and databases created before this setting belong to Yes.
 
 ### Runtime settings
 
@@ -20,13 +18,17 @@ Every setting is an environment variable. The Compose column names the service t
 
 | Variable | Default | Compose service | Effect |
 | --- | --- | --- | --- |
+| `GENESIS_OUTCOME` | `yes` | `app`, `indexer` | Selects the Yes or No deployment manifests on all enabled networks. |
 | `NETWORKS` | every network in `config/networks.json` (`mainnet,sepolia`) | `app`, `indexer` | Comma-separated enabled networks. An unknown id stops startup. A disabled network's retained history stays in the database and is reachable by its chain id, but it leaves unfiltered search and `/health/indexers`. |
 | `MAINNET_RPC_URL`, `SEPOLIA_RPC_URL` | `https://mainnet.gateway.tenderly.co`, `https://sepolia.gateway.tenderly.co` | `indexer` | Ordered comma-separated HTTP(S) provider pool. |
 | `MAINNET_START_BLOCK`, `SEPOLIA_START_BLOCK` | `0` | `indexer` | Lower bound for deployment discovery. A manifest deployment block must not precede it. |
 | `MAINNET_AMM_FACTORY_ADDRESS`, `SEPOLIA_AMM_FACTORY_ADDRESS` | unset | `indexer` | Adds an Augur AMM factory as a tracked contract when the manifest does not already list that address. |
 | `MAINNET_UNISWAP_V2_FACTORY_ADDRESS`, `MAINNET_UNISWAP_V3_FACTORY_ADDRESS`, `MAINNET_UNISWAP_V4_POOL_MANAGER_ADDRESS`, and the matching `SEPOLIA_` variables | network default | `indexer` | Override the Uniswap activity sources. An unset or empty value selects the network default, and `none` disables that source. The V2 default comes from `config/networks.json`; the V3 and V4 defaults come from the shared Uniswap registry in `shared/core/ts/deployment/uniswapDeployments.ts`. |
 | `LOG_SCAN_RANGE_SIZE` | `100000` | `indexer` | Caps each inclusive `eth_getLogs` request, in blocks. |
-| `TRACE_SELECTED_TRANSACTIONS` | `0` | `indexer` | `1` enables optional `debug_traceTransaction` enrichment for log-selected transactions. It requires provider support for `callTracer` and adds RPC work. It does not index failed or eventless calls. Changing it affects subsequent ingestion and does not replay existing receipts. |
+| `CLAIM_MAX_READS`, `CLAIM_MAX_GENERATIONS`, `CLAIM_MAX_LEAVES` | `1024`, `32`, `256` | `indexer` | Positive integer budgets per claim reconstruction. The limits are 16,384 unique RPC reads, 128 games in an ancestry, and 2,048 local or inherited leaves per game/outcome. Raise the budget named by an unavailable claim record and restart the worker. Later samples use the new budget; earlier samples retain their evidence. |
+| `SCAN_DIRECT_CALLS` | `0` | `indexer` | `1` fetches full blocks to select direct transactions to tracked protocol addresses, including failed or eventless calls. This increases RPC work. An eventless call in the deployment block needs an earlier discovery transaction or log proving that the contract already existed. When the deployment block is unknown, the scanner checks code at the preceding block. |
+| `MAINNET_OPEN_ORACLE_EXECUTORS`, `SEPOLIA_OPEN_ORACLE_EXECUTORS` | unset | `indexer` | Comma-separated deployed OpenOracle arbitrage executor addresses to track. |
+| `TRACE_SELECTED_TRANSACTIONS` | `0` | `indexer` | `1` enables optional `debug_traceTransaction` enrichment for selected transactions. It requires provider support for `callTracer` and adds RPC work. Tracing alone does not select additional transactions. Changing it affects subsequent ingestion and does not replay existing receipts. |
 | `POLL_INTERVAL_MS` | `12000` | `app`, `indexer` | Indexer polling interval. The web app treats an indexer as stale after four intervals, or 45 seconds if that is longer. |
 | `SCAN_BLOCK_TIME_MS` | `12000` on Mainnet and Sepolia | `indexer` | Block interval, in milliseconds, that the indexer's scan status log uses to report a scan as lagging. |
 | `RPC_LOG_PATH` | `augurScan/logs/rpc.jsonl` | `indexer`, fixed to `/var/log/augurscan/rpc.jsonl` in the `augurscan-logs` volume | Rotating JSONL log of RPC exchanges. |
@@ -55,7 +57,13 @@ The writer lease is a PostgreSQL session advisory lock and is incompatible with 
 
 Bundled and external databases must use PostgreSQL 17.11. Compose pins the corresponding `postgres:17.11-alpine` image by digest. augurScan validates the server release before it initializes or verifies the current schema because its schema fingerprints are version-specific.
 
-Upgrading to event-first indexing changes the application source hash and triggers the existing source replay. Current views are rebuilt from log-selected activity; prior occurrences and interpretations remain retained for audit.
+### Recover historical coverage
+
+Before upgrading, take and verify the backup described below. Set the desired RPC endpoints, direct-call mode and any deployed arbitrage executor addresses before starting the new indexer. On an existing index, the changed application hash triggers a replay. The worker clears its scan cursors and queries RPC again from the stored network start block, including previously quiet ranges. With suitable archive data, this rediscovers Uniswap markets, security pools and setup events from that boundary. Prior occurrences and interpretations remain available for audit. Check the replay reason in **Operations → Integrity** and let the indexed block reach the observed head before assessing recovered history.
+
+A runtime-only change to `SCAN_DIRECT_CALLS` takes effect from the next unindexed block. For historical failed or eventless direct calls, enable it before the upgrade replay or start a fresh backfill with it enabled. Set `TRACE_SELECTED_TRANSACTIONS=1` before the same backfill if historical call trees are required; the RPC must supply the trace method. The executor addresses must cover the period under review.
+
+An archival endpoint later added to the provider pool can serve future requests, but a previously advanced network start block persists. To recover activity before that boundary, prepare a fresh database, set the network start at or before the required history, and make an archival endpoint the first provider. Keep the first database and its backup while the replacement catches up. For a bundled Yes deployment, start the independent backfill with `GENESIS_OUTCOME=yes SCAN_DIRECT_CALLS=1 AUGURSCAN_PORT=3002 docker compose -p augurscan-backfill up -d --build` using the archival RPC settings. For external PostgreSQL, point this project at a separate empty database. Verify the reported start block, indexed head, and known historical transactions before switching readers to the replacement.
 
 Changing a tracked manifest address, label, kind, or deployment boundary can replay the affected network. ABI changes cause an `abi-redecode`; application or projection changes cause a conservative `projection-rebuild`. A deployment earlier than the stored coverage boundary requires a new database rather than silently presenting partial history. Review [STATE_MODEL.md](STATE_MODEL.md) before a source or manifest upgrade.
 

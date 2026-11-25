@@ -177,3 +177,21 @@ for (const [name, value] of [
 		await expect(discoverSecurityPoolEventDependencies({ ...emitter, address: securityPool, kind: 'securityPool' }, { ...event, name: 'UniversePrepared', arguments: { universeId: 0n, capitalLedger: capital } }, reader({ [name]: value }))).rejects.toThrow('capital')
 	})
 }
+
+test('discovers a questionless pool and its components as each setup stage completes', async () => {
+	const poolEmitter = { ...emitter, address: securityPool, kind: 'securityPool' }
+	const deployed = { ...event, name: 'SecurityPoolDeployed', arguments: { securityPool } }
+	expect(await discoverSecurityPoolEventDependencies(emitter, deployed, reader())).toEqual([
+		{ address: securityPool, kind: 'securityPool', label: 'Security Pool' },
+		{ address: services, kind: 'securityPoolServices', label: 'Security Pool Services' },
+	])
+	const stage = (value: string) => ({ ...event, name: 'SetupAdvanced', arguments: { stage: value } })
+	expect(await discoverSecurityPoolEventDependencies(poolEmitter, stage('1'), reader())).toEqual([
+		{ address: settlement, kind: 'securityPoolSettlement', label: 'Security Pool Settlement' },
+		{ address: book, kind: 'securityPoolSettlementBook', label: 'Security Pool Settlement Book' },
+	])
+	expect(await discoverSecurityPoolEventDependencies(poolEmitter, stage('2'), reader())).toEqual([
+		{ address: controller, kind: 'securityPoolForkCoordinator', label: 'Security Pool Fork Coordinator' },
+		{ address: reporters, kind: 'securityPoolReporterLedger', label: 'Security Pool Reporter Ledger' },
+	])
+})

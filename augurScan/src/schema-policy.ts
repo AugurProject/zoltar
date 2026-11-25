@@ -1,4 +1,4 @@
-export const CURRENT_SCHEMA_VERSION = '10'
+export const CURRENT_SCHEMA_VERSION = '11'
 const SUPPORTED_POSTGRES_VERSION = '17.11'
 
 const UNSUPPORTED_POSTGRES_VERSION_MESSAGE = `Unsupported PostgreSQL server version. augurScan requires PostgreSQL ${SUPPORTED_POSTGRES_VERSION} because schema fingerprints are version-specific; the database was not modified.`

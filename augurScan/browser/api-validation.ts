@@ -17,18 +17,23 @@ const isNullableJsonRecord = (value: unknown): value is JsonRecord | null => val
 export const isJsonArray = (value: unknown): value is readonly JsonValue[] => Array.isArray(value) && value.every(isJsonValue)
 
 export type OperationsCatalogSection = 'auctions' | 'escalations' | 'forks' | 'integrity' | 'reports' | 'timeline' | 'trading'
+const operationsSnapshotFields = ['blockNumber', 'blockHash', 'invalidationId', 'abiSourceHash', 'applicationSourceHash', 'projectionSourceHash'] as const
+type OperationsSnapshot = JsonRecord & Readonly<Record<(typeof operationsSnapshotFields)[number], string>>
+
 export type OperationsResponse = {
 	readonly chainId: string | number
-	readonly asOf: JsonRecord
+	readonly asOf: OperationsSnapshot
 	readonly data: JsonRecord
 }
+
+export const operationsSnapshotIdentity = ({ chainId, asOf }: OperationsResponse): string => JSON.stringify([String(chainId), ...operationsSnapshotFields.map(field => asOf[field])])
 
 const isUnsignedIntegerString = (value: unknown): value is string => typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value)
 const isNonNegativeSafeInteger = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 const isHash = (value: unknown): value is string => typeof value === 'string' && /^0x[0-9a-f]{64}$/.test(value)
 const isAddress = (value: unknown): value is string => typeof value === 'string' && /^0x[0-9a-f]{40}$/i.test(value)
 
-const isOperationsAsOf = (value: unknown): value is JsonRecord =>
+const isOperationsAsOf = (value: unknown): value is OperationsSnapshot =>
 	isJsonRecord(value) &&
 	isUnsignedIntegerString(value['blockNumber']) &&
 	isHash(value['blockHash']) &&
@@ -313,6 +318,8 @@ export const isRichListRecordValue = (value: unknown): boolean =>
 	(value['pending_refunds'] === undefined || (Array.isArray(value['pending_refunds']) && value['pending_refunds'].every(isJsonRecord))) &&
 	(value['escalation_payouts'] === undefined || isJsonRecord(value['escalation_payouts'])) &&
 	(value['escalation_positions'] === undefined || (Array.isArray(value['escalation_positions']) && value['escalation_positions'].every(isJsonRecord))) &&
+	(value['auction_claims_truncated'] === undefined || typeof value['auction_claims_truncated'] === 'boolean') &&
+	(value['escalation_claims_truncated'] === undefined || typeof value['escalation_claims_truncated'] === 'boolean') &&
 	(value['escalation_claims'] === undefined || (Array.isArray(value['escalation_claims']) && value['escalation_claims'].every(isJsonRecord))) &&
 	(value['auction_claims'] === undefined || (Array.isArray(value['auction_claims']) && value['auction_claims'].every(isJsonRecord)))
 

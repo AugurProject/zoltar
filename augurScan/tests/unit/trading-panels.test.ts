@@ -42,6 +42,9 @@ test('summarizes profit and loss with signed results and unavailable valuations'
 	expect(tradingPnlSummary({ collateral: { symbol: 'SepoliaETH', decimals: 18 }, cost_basis_atto_eth: '0', proceeds_atto_eth: '0', holdings_value_atto_eth: '0', realized_pnl_atto_eth: '0', unrealized_pnl_atto_eth: '0', net_pnl_atto_eth: '0', valuation: { status: 'available', partial: true } }, 'SepoliaETH')).toContain(
 		'0 SepoliaETH exit value (partial, some shares unvalued)',
 	)
+	expect(tradingPnlSummary({ collateral: { symbol: 'USDC', decimals: 6 }, known_cost_atto_eth: '1500000', cost_basis_status: 'unknown', proceeds_atto_eth: '0', holdings_value_atto_eth: '2000000', valuation: { status: 'available', method: 'winning-share-settlement' } }, 'ETH')).toBe(
+		'Unknown cost basis (1.5 USDC indexed payments) · 0 USDC received · 2 USDC settlement value · Profit unavailable',
+	)
 	expect(tradingPnlHoldings({ open: false })).toBe('Closed position')
 	expect(tradingPnlHoldings({ collateral: { symbol: 'ETH', decimals: 18 }, open: true, invalid_atto_shares: '1000000000000000000', yes_atto_shares: '0', no_atto_shares: '0', lp_tokens: '0' })).toBe('Open · 1 INVALID · 0 YES · 0 NO · 0 LP tokens')
 })

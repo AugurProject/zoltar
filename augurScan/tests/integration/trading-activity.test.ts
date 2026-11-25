@@ -37,16 +37,14 @@ const swap = (sender: string, yesForNo: boolean, exactOutput: boolean, amountIn:
 
 // Router-funded liquidity, a router enter and exit, a direct share swap, and a settlement redemption.
 const poolAndShareLogs: readonly LogFixture[] = [
-	{ block: 1, tx: 1, logIndex: 0, emitter: shareToken, name: 'TransferBatch', data: batch(zero, services, [0, 1, 2], [100, 100, 100]) },
 	{ block: 1, tx: 1, logIndex: 1, emitter: pool, name: 'CompleteSetCreated', data: { creator: services, settlementCollateralProvidedAttoEth: String(100n), completeSetsMintedAttoShares: String(100n), resultingShareTokenSupplyAttoShares: String(100n), resultingSettlementCollateralAttoEth: String(100n) } },
-	{ block: 1, tx: 1, logIndex: 2, emitter: shareToken, name: 'TransferBatch', data: batch(services, router, [0, 1, 2], [100, 100, 100]) },
+	{ block: 1, tx: 1, logIndex: 2, emitter: shareToken, name: 'TransferBatch', data: { ...batch(zero, router, [0, 1, 2], [100, 100, 100]), operator: pool } },
 	{ block: 1, tx: 1, logIndex: 3, emitter: securityPool, name: 'CompleteSetsFunded', data: { universeId: '0', questionId: '42', recipient: router, cashAttoEth: String(100n), shares: '100', purchaseFeeAttoEth: String(5n) } },
 	{ block: 1, tx: 1, logIndex: 4, emitter: shareToken, name: 'TransferSingle', data: single(router, pair, 1, 100) },
 	{ block: 1, tx: 1, logIndex: 5, emitter: shareToken, name: 'TransferSingle', data: single(router, pair, 2, 100) },
 	{ block: 1, tx: 1, logIndex: 9, emitter: shareToken, name: 'TransferBatch', data: batch(router, liquidityProvider, [0, 1, 2], [100, 0, 0]) },
-	{ block: 1, tx: 2, logIndex: 10, emitter: shareToken, name: 'TransferBatch', data: batch(zero, services, [0, 1, 2], [10, 10, 10]) },
 	{ block: 1, tx: 2, logIndex: 11, emitter: pool, name: 'CompleteSetCreated', data: { creator: services, settlementCollateralProvidedAttoEth: String(10n), completeSetsMintedAttoShares: String(10n), resultingShareTokenSupplyAttoShares: String(110n), resultingSettlementCollateralAttoEth: String(110n) } },
-	{ block: 1, tx: 2, logIndex: 12, emitter: shareToken, name: 'TransferBatch', data: batch(services, router, [0, 1, 2], [10, 10, 10]) },
+	{ block: 1, tx: 2, logIndex: 12, emitter: shareToken, name: 'TransferBatch', data: { ...batch(zero, router, [0, 1, 2], [10, 10, 10]), operator: pool } },
 	{ block: 1, tx: 2, logIndex: 13, emitter: securityPool, name: 'CompleteSetsFunded', data: { universeId: '0', questionId: '42', recipient: router, cashAttoEth: String(10n), shares: '10', purchaseFeeAttoEth: String(3n) } },
 	{ block: 1, tx: 2, logIndex: 14, emitter: shareToken, name: 'TransferSingle', data: single(router, pair, 2, 10) },
 	{ block: 1, tx: 2, logIndex: 15, emitter: shareToken, name: 'TransferSingle', data: single(pair, router, 1, 6) },
@@ -58,9 +56,8 @@ const poolAndShareLogs: readonly LogFixture[] = [
 	{ block: 2, tx: 3, logIndex: 25, emitter: pool, name: 'CompleteSetRedeemed', data: { redeemer: router, completeSetsBurnedAttoShares: String(4n), settlementCollateralRedeemedAttoEth: String(4n), resultingShareTokenSupplyAttoShares: String(1000n), resultingSettlementCollateralAttoEth: String(1000n) } },
 	{ block: 2, tx: 3, logIndex: 26, emitter: shareToken, name: 'TransferSingle', data: single(router, trader, 1, 6) },
 	{ block: 1, tx: 6, logIndex: 50, emitter: shareToken, name: 'TransferSingle', data: single(zero, settler, 1, 2) },
-	{ block: 1, tx: 9, logIndex: 60, emitter: shareToken, name: 'TransferBatch', data: batch(zero, services, [0, 1, 2], [7, 7, 7]) },
 	{ block: 1, tx: 9, logIndex: 61, emitter: pool, name: 'CompleteSetCreated', data: { creator: services, settlementCollateralProvidedAttoEth: String(7n), completeSetsMintedAttoShares: String(7n), resultingShareTokenSupplyAttoShares: String(117n), resultingSettlementCollateralAttoEth: String(117n) } },
-	{ block: 1, tx: 9, logIndex: 62, emitter: shareToken, name: 'TransferBatch', data: batch(services, directBuyer, [0, 1, 2], [7, 7, 7]) },
+	{ block: 1, tx: 9, logIndex: 62, emitter: shareToken, name: 'TransferBatch', data: { ...batch(zero, directBuyer, [0, 1, 2], [7, 7, 7]), operator: pool } },
 	{ block: 1, tx: 9, logIndex: 63, emitter: securityPool, name: 'CompleteSetsFunded', data: { universeId: '0', questionId: '42', recipient: directBuyer, cashAttoEth: String(7n), shares: '7', purchaseFeeAttoEth: String(2n) } },
 ]
 
@@ -95,10 +92,20 @@ test.skipIf(url === undefined)('derives market ETH volume, activity, and account
 			VALUES (${chainId}, 'fixture', 'Fixture', 'https://example.invalid', 0, 3, ${blocks[2].hash}, to_timestamp(${now}), 3, 'live')
 		`
 		for (const block of blocks) await connection`INSERT INTO blocks (chain_id, number, hash, timestamp, canonical) VALUES (${chainId}, ${block.number}, ${block.hash}, to_timestamp(${block.timestamp}), true)`
-		await connection`INSERT INTO contracts (chain_id, address, kind, canonical) VALUES (${chainId}, ${shareToken}, 'shareToken', true), (${chainId}, ${securityPool}, 'securityPool', true)`
+		await connection`INSERT INTO contracts (chain_id, address, kind, canonical) VALUES (${chainId}, ${shareToken}, 'shareToken', true), (${chainId}, ${securityPool}, 'securityPool', true), (${chainId}, ${router}, 'ammRouter', true), (${chainId}, ${services}, 'securityPoolServices', true)`
 		await connection`INSERT INTO amm_markets (chain_id, block_hash, tx_hash, log_index, block_number, pair_address, pool_address, share_token_address, universe_id, fee_bps, canonical) VALUES (${chainId}, ${blocks[0].hash}, ${hash(1)}, 0, 1, ${pair}, ${pool}, ${shareToken}, 0, 30, true)`
 		await connection`INSERT INTO pools (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, question_id, canonical) VALUES (${chainId}, ${blocks[0].hash}, ${hash(1)}, 0, 1, ${pool}, 42, true)`
 		await connection`INSERT INTO questions (chain_id, block_hash, tx_hash, log_index, block_number, question_id, title, end_time, canonical) VALUES (${chainId}, ${blocks[0].hash}, ${hash(1)}, 0, 1, 42, 'Fixture question', ${now + 86_400}, true)`
+		const fundingTransaction = async (id: number, payer: string, to: string, functionName: string) => {
+			await connection`INSERT INTO transactions (chain_id, block_hash, hash, block_number, transaction_index, from_address, to_address, canonical, status)
+				VALUES (${chainId}, ${blocks[0].hash}, ${hash(id)}, 1, ${id}, ${payer}, ${to}, true, 'success')`
+			await connection`INSERT INTO actions (chain_id, block_hash, tx_hash, contract_address, function_name, decode_status)
+				VALUES (${chainId}, ${blocks[0].hash}, ${hash(id)}, ${to}, ${functionName}, 'decoded')`
+		}
+		await fundingTransaction(1, liquidityProvider, router, 'initializeWithEth')
+		await fundingTransaction(2, trader, router, 'enterPosition')
+		await fundingTransaction(9, directBuyer, securityPool, 'createCompleteSet')
+
 		const insertLogs = async (items: readonly LogFixture[]) => {
 			for (const item of items)
 				await connection`
@@ -193,13 +200,32 @@ test.skipIf(url === undefined)('derives market ETH volume, activity, and account
 		const lpSecurityPool = (await lpSecurityPoolResponse?.json()) as { data: { lp_positions: Record<string, unknown>[] } }
 		expect(lpSecurityPool.data.lp_positions).toEqual([expect.objectContaining({ market_address: pair, balance: '99', transfer_count: 1, pool_address: pool })])
 
-		expect((await securityPoolFor(settler)).items).toEqual([expect.objectContaining({ cost_basis_atto_eth: '0', proceeds_atto_eth: '2', yes_atto_shares: '0', realized_pnl_atto_eth: '2', open: false })])
+		expect((await securityPoolFor(settler)).items).toEqual([expect.objectContaining({ cost_basis_status: 'unknown', proceeds_atto_eth: '2', yes_atto_shares: '0', open: false })])
 		// After settlement the pair no longer trades, so the open position is not valued at stale reserves.
 		const closedTrader = (await securityPoolFor(trader)).items[0]
 		expect(closedTrader).toMatchObject({ realized_pnl_atto_eth: '0', open: true, valuation: { status: 'unavailable', reason: 'Trading has closed because the question resolved' } })
 		expect(closedTrader).not.toHaveProperty('holdings_value_atto_eth')
 		expect(closedTrader).not.toHaveProperty('net_pnl_atto_eth')
 		expect((await securityPoolFor(address('9'))).items).toEqual([])
+		const recipient = address('6')
+		await insertLogs([{ block: 2, tx: 10, logIndex: 75, emitter: shareToken, name: 'TransferSingle', data: single(directBuyer, recipient, 1, 2) }])
+		const transferPnl = (await securityPoolFor(recipient)).items[0]
+		expect(transferPnl).toMatchObject({ cost_basis_status: 'unknown', known_cost_atto_eth: '0', proceeds_atto_eth: '0' })
+		expect(transferPnl).not.toHaveProperty('cost_basis_atto_eth')
+		expect(transferPnl).not.toHaveProperty('realized_pnl_atto_eth')
+
+		const settledClaim = { outcome: '1', supply: '1000', questionUnits: '999', bookUnits: '1001', bookCash: '1000' }
+		await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, read_status, read_result, canonical, observed_at)
+			VALUES (${chainId}, 'pool', ${pool}, 3, ${blocks[2].hash}, 'success', ${JSON.stringify({ systemState: '0', escalationResolved: true, settlementClaim: settledClaim })}::text::jsonb, true, now())`
+		const settledPnl = (await securityPoolFor(trader)).items[0]
+		// Six winning shares burn five scaled units, worth four collateral base units after both floors.
+		expect(settledPnl).toMatchObject({ holdings_value_atto_eth: '4', valuation: { method: 'winning-share-settlement', settlement_block: '3' } })
+		expect((await securityPoolFor(recipient)).items[0]).toHaveProperty('holdings_value_atto_eth', '0')
+		expect((await securityPoolFor(recipient)).items[0]).not.toHaveProperty('net_pnl_atto_eth')
+		const payoutRecipient = address('9')
+		await insertLogs([{ block: 2, tx: 3, logIndex: 27, emitter: router, name: 'PositionExitedByTransfer', data: { pair, completeSetShares: '4', payoutRecipient } }])
+		expect((await securityPoolFor(payoutRecipient)).items[0]).toHaveProperty('proceeds_atto_eth', '4')
+		expect((await securityPoolFor(trader)).items[0]).toHaveProperty('proceeds_atto_eth', '0')
 		const collateral = { address: address('8'), symbol: 'USDC', decimals: 6 }
 		await connection`UPDATE entity_state_snapshots SET read_result = read_result || ${JSON.stringify({ collateral })}::text::jsonb WHERE chain_id = ${chainId} AND entity_type = 'pool' AND entity_identity = ${pool}`
 		const tokenDetail = await handleApi(new Request(`http://localhost/api/v1/state/trading/${chainId}/${pair}`), connection)
@@ -207,6 +233,35 @@ test.skipIf(url === undefined)('derives market ETH volume, activity, and account
 		expect((await securityPoolFor(trader)).items[0]).toHaveProperty('collateral', collateral)
 		const tokenCatalog = await handleApi(new Request(`http://localhost/api/v1/state/trading?chainId=${chainId}`), connection)
 		expect(await tokenCatalog?.json()).toMatchObject({ data: { items: [{ collateral }] } })
+		// A direct purchase can mint to somebody other than the person who paid the fee and collateral.
+		const sponsor = address('7')
+		await connection`UPDATE transactions SET from_address = ${sponsor} WHERE hash = ${hash(9)}`
+		expect((await securityPoolFor(sponsor)).items[0]).toMatchObject({ known_cost_atto_eth: '9' })
+		const sponsoredMarket = await handleApi(new Request(`http://localhost/api/v1/state/trading/${chainId}/${pair}`), connection)
+		expect(await sponsoredMarket?.json()).toMatchObject({ data: { activity: { items: expect.arrayContaining([expect.objectContaining({ account: directBuyer, payer_address: sponsor, eth_in_atto_eth: '9' })]) } } })
+		expect((await securityPoolFor(directBuyer)).items[0]).toMatchObject({ known_cost_atto_eth: '0', cost_basis_status: 'unknown' })
+		// Smart-wallet execution without a direct funding call supplies no independent payer evidence.
+		await connection`UPDATE transactions SET to_address = ${address('8')} WHERE hash = ${hash(9)}`
+		expect((await securityPoolFor(sponsor)).items).toEqual([])
+		expect((await securityPoolFor(directBuyer)).items[0]).toMatchObject({ known_cost_atto_eth: '0', cost_basis_status: 'unknown' })
+		// A swap can pay a different recipient; a share transfer from the pair does not prove acquisition cost.
+		await insertLogs([
+			{ block: 2, tx: 12, logIndex: 76, emitter: shareToken, name: 'TransferSingle', data: single(pair, sponsor, 2, 3) },
+			{ block: 2, tx: 12, logIndex: 77, emitter: pair, name: 'Swap', data: { ...swap(swapper, true, false, 4, 3), recipient: sponsor } },
+			{ block: 2, tx: 12, logIndex: 80, emitter: shareToken, name: 'TransferSingle', data: single(pair, sponsor, 1, 1) },
+			{ block: 2, tx: 12, logIndex: 81, emitter: pair, name: 'Swap', data: swap(sponsor, false, false, 2, 1) },
+		])
+		expect((await securityPoolFor(sponsor)).items[0]).toMatchObject({ no_atto_shares: '3', cost_basis_status: 'unknown' })
+		// A zero-address mint on migration cannot supply the original position's cost basis.
+		const migrant = address('8')
+		const childPair = address('6')
+		await connection`INSERT INTO amm_markets (chain_id, block_hash, tx_hash, log_index, block_number, pair_address, pool_address, share_token_address, universe_id, fee_bps, canonical)
+			VALUES (${chainId}, ${blocks[1].hash}, ${hash(11)}, 74, 2, ${childPair}, ${address('7')}, ${shareToken}, 1, 30, true)`
+		await insertLogs([
+			{ block: 2, tx: 13, logIndex: 78, emitter: shareToken, name: 'TransferSingle', data: { ...single(zero, migrant, 257, 3), operator: migrant } },
+			{ block: 2, tx: 13, logIndex: 79, emitter: shareToken, name: 'Migrate', data: { migrator: migrant, fromId: '1', toId: '257', amountAttoShares: String(3n) } },
+		])
+		expect((await securityPoolFor(migrant)).items[0]).toMatchObject({ yes_atto_shares: '3', cost_basis_status: 'unknown' })
 	} finally {
 		connection.release()
 		await sql.close()

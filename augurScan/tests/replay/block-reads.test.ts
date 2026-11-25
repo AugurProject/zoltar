@@ -123,3 +123,49 @@ test('quiet checkpoints perform no transaction, metadata, or trace enrichment re
 		await database.close()
 	}
 })
+
+test('direct-call coverage retains a reverted eventless call in a quiet block', async () => {
+	const database = new ScannerDatabase('postgres://unused')
+	const indexer = createNetworkIndexer({ id: 'test', name: 'Test', chainId: 31337, rpcUrls: ['http://unused.invalid'], startBlock: 10n, confirmationDepth: 0n, explorerBaseUrl: '', nativeSymbol: 'ETH', contracts: [] }, database, new AbortController().signal, { scanDirectCalls: true })
+	const address = getAddress('0x1000000000000000000000000000000000000001')
+	const hash = toHex(11n, { size: 32 })
+	const transaction = { blockHash: zeroHash, blockNumber: 10n, transactionIndex: 0n, hash, from: address, to: address, gas: 21_000n, nonce: 0n, value: 1n, input: '0x' as const }
+	const header = { hash: zeroHash, parentHash: zeroHash, timestamp: 1n }
+	const mocks = [
+		spyOn(indexer.providers.client, 'getBlock').mockResolvedValue({ ...header, number: 10n, transactions: [transaction] }),
+		spyOn(indexer.providers.client, 'getTransactionReceipt').mockResolvedValue({ ...transaction, transactionIndex: 0n, transactionHash: hash, cumulativeGasUsed: 21_000n, gasUsed: 21_000n, logs: [], status: 'reverted' }),
+	]
+	try {
+		const contracts = new Map([[address.toLowerCase(), { address, kind: 'openOracle', label: 'Oracle', provenance: 'manifest', deploymentBlock: 9n, deploymentBlockExact: true }]])
+		const result = await indexBlock(
+			indexer,
+			10n,
+			10n,
+			contracts,
+			new Map(),
+			undefined,
+			header,
+			[],
+			async () => [],
+			async () => header,
+		)
+		expect(result.block.transactions).toMatchObject([{ hash, status: 'reverted', receipt: { selectionSource: 'protocol-call' } }])
+		const future = new Map([[address.toLowerCase(), { address, kind: 'openOracle', label: 'Oracle', provenance: 'manifest', deploymentBlock: 11n, deploymentBlockExact: true }]])
+		const beforeDeployment = await indexBlock(
+			indexer,
+			10n,
+			10n,
+			future,
+			new Map(),
+			undefined,
+			header,
+			[],
+			async () => [],
+			async () => header,
+		)
+		expect(beforeDeployment.block.transactions).toHaveLength(0)
+	} finally {
+		for (const mock of mocks) mock.mockRestore()
+		await database.close()
+	}
+})

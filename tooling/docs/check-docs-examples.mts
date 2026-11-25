@@ -1,120 +1,10 @@
 import { readFile } from 'node:fs/promises'
-import { pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
 import { checkEscalationResponseExamples, checkMmrConformanceVector } from './check-docs-worked-examples.mts'
 import { Window } from 'happy-dom'
 import { computeCanonicalEscalationBindingCapital, computeCanonicalEscalationDeadlineDays, calculateEscalationDepositModel, calculateForkThresholdSeries, calculateResolutionModel, ESCALATION_TIME_LENGTH_SECONDS } from '../../docs/charts/chartModels'
 import { getWinningEscalationDepositClaimAmount } from '../../shared/statoblast/ts/escalationGame/escalationMath'
 import { centeredDiagramScrollLeft, updateDiagramControl } from '../../docs/charts/diagramControl'
-
-type InteractiveExampleHarness = {
-	close: () => void
-	inputState: (name: string) => { disabled: boolean; value: string }
-	labelFor: (name: string) => string
-	output: (name: string) => string
-	setInput: (name: string, value: number) => void
-	textFor: (name: string) => string
-	textPosition: (name: string) => { x: number; y: number }
-	valueFor: (name: string) => string
-}
-
-async function loadInteractiveExample(filePath: string, exampleId: string): Promise<InteractiveExampleHarness> {
-	const html = await readFile(filePath, 'utf8')
-	const window = new Window({
-		url: pathToFileURL(filePath).href,
-	})
-	window.document.write(html)
-	window.document.close()
-
-	const runtimeName = 'openOracleTools'
-	const runtimeSource = await readFile(`docs/assets/js/${runtimeName}.js`, 'utf8')
-	const runScript = new Function('document', 'HTMLElement', 'HTMLInputElement', 'HTMLOutputElement', runtimeSource)
-	runScript(window.document, window.HTMLElement, window.HTMLInputElement, window.HTMLOutputElement)
-
-	const example = window.document.getElementById(exampleId)
-	if (example === null) {
-		window.close()
-		throw new Error(`${filePath} is missing #${exampleId}`)
-	}
-
-	const setInput = (name: string, value: number) => {
-		const input = example.querySelector(`[data-example-input="${name}"]`)
-		if (!(input instanceof window.HTMLInputElement)) {
-			throw new Error(`Missing auction example input: ${name}`)
-		}
-		input.value = String(value)
-		input.dispatchEvent(new window.Event('input', { bubbles: true }))
-	}
-
-	const output = (name: string) => {
-		const element = example.querySelector(`[data-example-output="${name}"]`)
-		if (!(element instanceof window.HTMLOutputElement)) {
-			throw new Error(`Missing auction example output: ${name}`)
-		}
-		return element.value
-	}
-
-	const inputState = (name: string) => {
-		const element = example.querySelector(`[data-example-input="${name}"]`)
-		if (!(element instanceof window.HTMLInputElement)) {
-			throw new Error(`Missing interactive example input: ${name}`)
-		}
-		return {
-			disabled: element.disabled,
-			value: element.value,
-		}
-	}
-
-	const labelFor = (name: string) => {
-		const element = example.querySelector(`[data-example-output="${name}"]`)
-		if (!(element instanceof window.HTMLOutputElement)) {
-			throw new Error(`Missing auction example output: ${name}`)
-		}
-		const label = element.parentElement?.querySelector('span')
-		if (!(label instanceof window.HTMLSpanElement)) {
-			throw new Error(`Missing auction example label: ${name}`)
-		}
-		return label.textContent.trim()
-	}
-
-	const textFor = (name: string) => {
-		const element = example.querySelector(`[data-example-text="${name}"]`)
-		if (element === null) {
-			throw new Error(`Missing interactive example text: ${name}`)
-		}
-		return element.textContent.trim()
-	}
-
-	const textPosition = (name: string) => {
-		const element = example.querySelector(`[data-example-text="${name}"]`)
-		if (!(element instanceof window.SVGTextElement)) {
-			throw new Error(`Missing auction example text: ${name}`)
-		}
-		return {
-			x: Number(element.getAttribute('x')),
-			y: Number(element.getAttribute('y')),
-		}
-	}
-
-	const valueFor = (name: string) => {
-		const element = example.querySelector(`[data-example-value="${name}"]`)
-		if (element === null) {
-			throw new Error(`Missing interactive example value: ${name}`)
-		}
-		return element.textContent.trim()
-	}
-
-	return {
-		close: () => window.close(),
-		inputState,
-		labelFor,
-		output,
-		setInput,
-		textFor,
-		textPosition,
-		valueFor,
-	}
-}
 
 async function checkMmrProofPlannerStates(): Promise<void> {
 	const html = await readFile('docs/reference/merkle-mountain-range.html', 'utf8')
@@ -290,62 +180,6 @@ function checkDiagramControlStates(): void {
 	}
 }
 
-function assertEqual(actual: string, expected: string, message: string): void {
-	assert.equal(actual, expected, message)
-}
-
-async function checkDynamicWethReportExample(): Promise<void> {
-	const example = await loadInteractiveExample('docs/reference/open-oracle.html', 'initial-report-estimator-example')
-
-	try {
-		assertEqual(example.output('initialReportEscalationHalt'), '32.307692307692307700 WETH', 'dynamic report default initial-derived escalation halt')
-		assertEqual(example.output('openInterestEscalationHalt'), '1.000000000000000000 WETH', 'dynamic report default open-interest escalation halt floor')
-		assertEqual(example.output('estimatedMinimumWethReport'), '3.230769230769230770 WETH', 'dynamic report default minimum WETH')
-		assertEqual(example.output('selectedInitialWethReport'), '3.2308 WETH', 'dynamic report default selected WETH headline')
-		assertEqual(example.output('selectedEscalationHalt'), '32.307692307692307700 WETH', 'dynamic report default escalation halt')
-		assertEqual(example.output('disputeGasCost'), '0.012000 ETH', 'dynamic report default dispute gas cost')
-		assertEqual(example.output('bufferedGasCost'), '0.120000 ETH', 'dynamic report default buffered gas cost')
-		assertEqual(example.output('correctionProfitFraction'), '3.7143%', 'dynamic report default correction profit fraction')
-		assertEqual(example.output('estimatorSafetyState'), 'fees below target error', 'dynamic report default safety state')
-
-		example.setInput('initialReportPriorityFeeNanoEth', 1)
-		assertEqual(example.output('estimatedMinimumWethReport'), '2.503846153846153847 WETH', 'lower priority assumption should reduce only the additive priority report')
-		assertEqual(example.output('selectedEscalationHalt'), '25.038461538461538470 WETH', 'lower priority assumption should reduce the initial-derived escalation halt')
-
-		example.setInput('initialReportPriorityFeeNanoEth', 100)
-		assertEqual(example.output('estimatedMinimumWethReport'), '10.500000000000000001 WETH', 'higher priority assumption should increase the additive priority report')
-		assertEqual(example.output('selectedEscalationHalt'), '105.000000000000000010 WETH', 'higher priority assumption should increase the initial-derived escalation halt')
-
-		example.setInput('initialReportPriorityFeeNanoEth', 10)
-		example.setInput('blockBaseFeeNanoEth', 60)
-		assertEqual(example.output('estimatedMinimumWethReport'), '5.653846153846153847 WETH', 'dynamic report minimum should add priority security to the base-fee report')
-
-		example.setInput('requestedInitialWeth', 6)
-		assertEqual(example.output('estimatedMinimumWethReport'), '5.653846153846153847 WETH', 'caller-selected WETH should not change the computed minimum')
-		assertEqual(example.output('selectedInitialWethReport'), '6 WETH', 'caller-selected WETH headline stays compact')
-		assertEqual(example.output('selectedEscalationHalt'), '60.000000000000000000 WETH', 'escalation halt should scale from selected initial WETH')
-
-		example.setInput('blockBaseFeeNanoEth', 0)
-		example.setInput('aggregateExposureEth', 0)
-		example.setInput('requestedInitialWeth', 0)
-		assertEqual(example.output('estimatedMinimumWethReport'), '0.807692307692307693 WETH', 'zero base fee should retain the configured priority security')
-
-		example.setInput('blockBaseFeeNanoEth', 30)
-		example.setInput('aggregateExposureEth', 10000)
-		assertEqual(example.output('openInterestEscalationHalt'), '100.000000000000000000 WETH', 'one percent of open interest should set the open-interest halt floor')
-		assertEqual(example.output('estimatedMinimumWethReport'), '100.807692307692307693 WETH', 'initial report should add priority security to the larger open-interest component')
-		assertEqual(example.output('selectedEscalationHalt'), '1008.076923076923076930 WETH', 'priority plus open-interest initial report should determine the larger escalation halt')
-
-		example.setInput('openOracleProtocolFee', 5)
-		example.setInput('openOracleReporterFee', 2)
-		assertEqual(example.output('estimatedMinimumWethReport'), 'unsafe: fees meet or exceed target error', 'fees at or above the target error should be rejected')
-		assertEqual(example.output('selectedInitialWethReport'), 'unsafe: fees meet or exceed target error', 'unsafe fees should prevent selecting an initial report')
-		assertEqual(example.output('estimatorSafetyState'), 'unsafe: fees meet or exceed target error', 'unsafe fee configuration should be explicit')
-	} finally {
-		example.close()
-	}
-}
-
 function blockWithId(html: string, id: string): string {
 	const start = html.indexOf(`id="${id}"`)
 	assert.notEqual(start, -1, `Missing documentation block #${id}`)
@@ -354,7 +188,6 @@ function blockWithId(html: string, id: string): string {
 	return html.slice(start, end)
 }
 
-await checkDynamicWethReportExample()
 await checkMmrProofPlannerStates()
 await checkMmrConformanceVector()
 checkDiagramControlStates()

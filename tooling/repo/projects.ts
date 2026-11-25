@@ -68,7 +68,7 @@ const botAudit = dependencyAuditCommand
  */
 // Every app's vendor step writes the shared stylesheet's fonts beside ui/coreShared/css rather than into the app vendor directory.
 const sharedVendoredFontsDirectory = 'ui/coreShared/vendor/fonts'
-export const augurScanMetadataOutputs = ['augurScan/config/abis.json', 'augurScan/config/system-contracts.generated.ts', 'augurScan/config/manifests/mainnet.json', 'augurScan/config/manifests/sepolia.json']
+export const augurScanMetadataOutputs = ['augurScan/config/abis.json', 'augurScan/config/system-contracts.generated.ts', 'augurScan/config/manifests/mainnet.json', 'augurScan/config/manifests/sepolia.json', 'augurScan/config/manifests/mainnet-no.json', 'augurScan/config/manifests/sepolia-no.json']
 
 export const projects: readonly Project[] = [
 	{
@@ -356,14 +356,17 @@ export const projects: readonly Project[] = [
 			build: packageTask('augurScan', 'build', {
 				outputs: [...augurScanMetadataOutputs, 'augurScan/public/app.js'],
 				groups: ['generated'],
-				cacheInputs: [...packageInputs('augurScan'), 'augurScan/scripts/**', 'augurScan/config/dependency-abi-sources.json', 'augurScan/config/dependency-abis.json', 'augurScan/browser/**', 'augurScan/src/**', 'docs/*-deployment-addresses.json'],
+				cacheInputs: [...packageInputs('augurScan'), 'augurScan/scripts/**', 'augurScan/config/dependency-abi-sources.json', 'augurScan/config/dependency-abis.json', 'augurScan/browser/**', 'augurScan/src/**', 'docs/*-deployment-addresses.json', 'bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts'],
 			}),
 			test: packageTask('augurScan', 'test:ci', { groups: ['complete-validation'] }),
 			check: packageTask('augurScan', 'check', { covers: ['lint'], groups: ['complete-validation'] }),
 			lint: packageTask('augurScan', 'check'),
 			typecheck: packageTask('augurScan', 'typecheck'),
 			audit: packageAuditTask('augurScan'),
-			integration: { ...packageTask('augurScan', 'test:integration'), inputs: ['shared/**', 'augurScan/schema.sql', 'augurScan/config/**', 'augurScan/src/**', 'augurScan/tests/**', 'augurScan/scripts/**', 'augurScan/package.json', 'bun.lock', 'augurScan/tsconfig.json'] },
+			integration: {
+				...packageTask('augurScan', 'test:integration'),
+				inputs: ['shared/**', 'bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts', 'augurScan/schema.sql', 'augurScan/config/**', 'augurScan/src/**', 'augurScan/tests/**', 'augurScan/scripts/**', 'augurScan/package.json', 'bun.lock', 'augurScan/tsconfig.json'],
+			},
 		},
 		generatedDirectories: [],
 		generatedFiles: [...augurScanMetadataOutputs, 'augurScan/public/app.js'],

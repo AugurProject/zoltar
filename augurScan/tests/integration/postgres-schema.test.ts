@@ -102,3 +102,21 @@ postgresTest('rejects historical schema versions without modifying stored eviden
 		await database.close()
 	}
 })
+
+postgresTest('stores reverted direct calls while rejecting reverted log-selected evidence', async () => {
+	const database = new ScannerDatabase(requirePostgresUrl())
+	try {
+		await initializeSchema(database.sql)
+		await database.sql.begin(async transaction => {
+			await transaction`CREATE TEMP TABLE selected_transactions (LIKE transactions INCLUDING CONSTRAINTS) ON COMMIT DROP`
+			const insert = (selectionSource: string) => transaction`
+				INSERT INTO selected_transactions (chain_id, hash, block_hash, block_number, transaction_index, from_address, value, input, status, receipt, canonical)
+				VALUES (1, 'hash', 'block', 1, 0, 'sender', 0, '0x', 'reverted', ${JSON.stringify({ selectionSource })}::text::jsonb, true)
+			`
+			await insert('protocol-call')
+			await expect(transaction.savepoint(async () => await insert('protocol-log'))).rejects.toThrow('transactions_selection_status')
+		})
+	} finally {
+		await database.close()
+	}
+})

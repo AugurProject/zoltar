@@ -13,7 +13,7 @@ This page maps the repository for contributors. Protocol behavior is explained i
 | augurScan | A read-only explorer and PostgreSQL indexer for every layer. | none | `augurScan/` |
 | Bots | Permissionless operators: `liquidator`, `open-oracle-arbitrager`, and the testnet `chaos` exerciser, with common code in `bots/shared`. | `bots/open-oracle-arbitrager/contracts/`, `solidity/contracts/chaos/` | `bots/*` |
 
-Start with the [system overview](https://augurproject.github.io/zoltar/docs/explanation/system-overview.html), then [Zoltar](https://augurproject.github.io/zoltar/docs/explanation/zoltar.html), [Statoblast](https://augurproject.github.io/zoltar/docs/explanation/statoblast.html), [OpenOracle](https://augurproject.github.io/zoltar/docs/explanation/open-oracle.html), [Trading](https://augurproject.github.io/zoltar/docs/explanation/trading.html), and the [contract architecture](https://augurproject.github.io/zoltar/docs/explanation/contract-architecture.html).
+Start with the [system overview](https://augurproject.github.io/zoltar/docs/explanation/system-overview.html).
 
 ## Dependency graph
 
