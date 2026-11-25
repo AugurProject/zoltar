@@ -13,7 +13,7 @@ import { expect, test } from 'bun:test'
 import { createPublicClient, custom } from '@zoltar/core-shared/evm/ethereum'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { simulationSetupTimeoutMs } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
-import { loadAllQuestionLedgers } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
+import { loadQuestionLedgerListing } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
 
 test(
 	'forked security pool simulation retains parent shares and prepares a child question',
@@ -23,7 +23,9 @@ test(
 				applyScenario: async parameters => {
 					setRuntimeNetworkProfile(parameters.profile)
 					await applyStatoblastScenario({ ...parameters, scenario: 'security-pool' })
-					const [pool] = await loadAllQuestionLedgers(parameters.createReadClient())
+					const {
+						pools: [pool],
+					} = await loadQuestionLedgerListing(parameters.createReadClient())
 					if (pool === undefined) throw new Error('Missing seeded security pool question')
 					const owner = parameters.accounts[0]
 					if (owner === undefined) throw new Error('Missing security pool owner')
@@ -50,7 +52,7 @@ test(
 					expect(targetsAfter.find(target => target.outcomeIndex === 1n)?.migratedAttoShares.noAttoShares).toBe(redeemed.shareBalances?.noAttoShares)
 					const remaining = await loadTradingDetails(parameters.createReadClient(), pool.questionLedgerAddress, owner)
 					expect(remaining.shareBalances?.noAttoShares).toBe(redeemed.shareBalances?.noAttoShares)
-					const child = (await loadAllQuestionLedgers(parameters.createReadClient())).find(candidate => candidate.universeId !== 0n)
+					const child = (await loadQuestionLedgerListing(parameters.createReadClient())).pools.find(candidate => candidate.universeId !== 0n)
 					if (child === undefined) throw new Error('Missing migrated child question')
 					const childDetails = await loadTradingDetails(parameters.createReadClient(), child.questionLedgerAddress, owner)
 					expect(childDetails.shareBalances?.noAttoShares).toBe(redeemed.shareBalances?.noAttoShares)
@@ -66,7 +68,7 @@ test(
 			await engine.bootstrap()
 			setRuntimeNetworkProfile(engine.getProfile())
 			const client = createPublicClient({ transport: custom({ request: request => engine.request(request) }) })
-			const pools = await loadAllQuestionLedgers(client)
+			const { pools } = await loadQuestionLedgerListing(client)
 			expect(pools.some(pool => pool.universeId === 0n && pool.universeHasForked)).toBe(true)
 			expect(pools.some(pool => pool.universeId !== 0n)).toBe(true)
 			const parent = pools.find(pool => pool.universeId === 0n)

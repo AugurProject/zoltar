@@ -189,26 +189,6 @@ describe('OverviewPanels', () => {
 		expect(documentQueries.getByText('Direct REP/USDC pool unavailable')).not.toBeNull()
 	})
 
-	test('explains a missing REP per ETH price with the application-provided reason', async () => {
-		const documentQueries = await renderOverviewPanels({
-			accountState: connectedAccount,
-			repPrices: { isLoading: true, repPerEthUnavailableLabel: 'Open a security pool to see its oracle price' },
-		})
-		openAccountMenu()
-
-		expect(documentQueries.getByText('Open a security pool to see its oracle price').classList.contains('rep-price-failure')).toBe(true)
-	})
-
-	test('renders an application-provided REP per ETH source label', async () => {
-		const documentQueries = await renderOverviewPanels({
-			accountState: connectedAccount,
-			repPrices: { repPerEthPrice: 2n * 10n ** 18n, repPerEthSourceLabel: <span>Custom oracle</span> },
-		})
-		openAccountMenu()
-
-		expect(documentQueries.getByText('Custom oracle')).not.toBeNull()
-	})
-
 	test('shows a disabled spinner button while a wallet connection request is pending', async () => {
 		const documentQueries = await renderOverviewPanels({
 			isConnectingWallet: true,

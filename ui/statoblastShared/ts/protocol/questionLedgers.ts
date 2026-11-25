@@ -1,7 +1,7 @@
 import { createRegistryIndex, readIncrementalRegistry, type RegistryIndex } from '@zoltar/ui-core-shared/lib/incrementalRegistry.js'
-import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool, statoblast_QuestionLedger_QuestionLedger, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed } from '../contractArtifact.js'
+import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool, statoblast_QuestionLedger_QuestionLedger } from '../contractArtifact.js'
 
-import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { errorChain } from '@zoltar/core-shared/errors/errorChain'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
@@ -95,46 +95,35 @@ async function loadSecurityPoolRegistry(client: ReadClient, anchor: DeploymentRe
 	})
 }
 
-function applyChildForkActivityHints(pools: ListedQuestionLedger[]) {
-	return pools.map(pool => {
-		if (pool.hasForkActivity) return pool
-		if (!pools.some(candidate => sameAddress(candidate.parent, pool.questionLedgerAddress))) return pool
-		return {
-			...pool,
-			hasForkActivity: true,
-		}
-	})
-}
-
-export async function loadQuestionLedgerListing(client: ReadClient) {
+export async function loadQuestionLedgerListing(client: ReadClient, universeId?: bigint) {
 	const anchor = await loadDeploymentRegistryAnchor(client)
 	const deployments = await loadDeploymentRegistry(client, anchor)
-	const { pools, unavailable } = await loadListedQuestionLedgers(client, deployments, anchor.blockNumber)
+	const { pools, unavailable } = await loadListedQuestionLedgers(client, universeId === undefined ? deployments : deployments.filter(deployment => deployment.universeId === universeId), anchor.blockNumber)
 	await requireDeploymentRegistryAnchor(client, anchor)
-	return { pools: applyChildForkActivityHints(pools), unavailable }
+	return { pools, unavailable }
 }
 
-export async function loadAllQuestionLedgers(client: ReadClient): Promise<ListedQuestionLedger[]> {
-	return (await loadQuestionLedgerListing(client)).pools
-}
-
-/** Resolves one factory-authenticated question without depending on the question list. */
-export async function loadSelectedQuestionLedger(client: ReadClient, questionLedger: Address): Promise<ListedQuestionLedger> {
-	const anchor = await loadDeploymentRegistryAnchor(client)
-	const blockNumber = anchor.blockNumber
+async function loadRegisteredQuestionUniverse(client: ReadClient, questionLedger: Address, blockNumber: bigint) {
 	const factory = getInfraContractAddresses().securityPoolFactory
 	const pool = { abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedger, blockNumber }
 	const [originId, universeId] = await Promise.all([client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'getQuestionLedgerOriginId', args: [questionLedger], blockNumber }), client.readContract({ ...pool, functionName: 'universeId' })])
 	const registered = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'getQuestionLedger', args: [originId, universeId], blockNumber })
 	if (!sameAddress(registered, questionLedger)) throw new Error('This question is not registered with the configured factory.')
-	const [manager, parent, questionId, multiplier] = await Promise.all([
-		client.readContract({ ...pool, functionName: 'sharedPriceFeed' }),
-		client.readContract({ ...pool, functionName: 'parent' }),
-		client.readContract({ ...pool, functionName: 'questionId' }),
-		client.readContract({ ...pool, functionName: 'statoblastSecurityMultiplierBps' }),
-	])
-	const priorityFee = await client.readContract({ abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, address: getAddress(manager), functionName: 'initialReportPriorityFeeAttoEthPerGas', blockNumber })
-	const details = await loadQuestionLedgerDetails(client, { questionLedger, sharedPriceFeed: getAddress(manager), parent: getAddress(parent), universeId, questionId, statoblastSecurityMultiplierBps: multiplier, initialReportPriorityFeeAttoEthPerGas: priorityFee }, blockNumber)
+	return universeId
+}
+
+export async function requireRegisteredQuestionLedger(client: ReadClient, questionLedger: Address) {
+	const anchor = await loadDeploymentRegistryAnchor(client)
+	await loadRegisteredQuestionUniverse(client, questionLedger, anchor.blockNumber)
+	await requireDeploymentRegistryAnchor(client, anchor)
+}
+
+/** Resolves one factory-authenticated question without depending on the question list. */
+export async function loadSelectedQuestionLedger(client: ReadClient, questionLedger: Address): Promise<ListedQuestionLedger> {
+	const anchor = await loadDeploymentRegistryAnchor(client)
+	const universeId = await loadRegisteredQuestionUniverse(client, questionLedger, anchor.blockNumber)
+	const questionId = await client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedger, blockNumber: anchor.blockNumber, functionName: 'questionId' })
+	const details = await loadQuestionLedgerDetails(client, { questionLedger, universeId, questionId }, anchor.blockNumber)
 	await requireDeploymentRegistryAnchor(client, anchor)
 	return details
 }

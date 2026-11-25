@@ -126,19 +126,10 @@ export type ListedQuestionLedger = {
 		lastFeeCheckpointNativeTime: bigint
 	}
 	feeEligibleUnderwritingLimitAttoEth: bigint
-	hasForkActivity: boolean
-	hasForkContinuationEscalationGame: boolean
-	initialReportPriorityFeeAttoEthPerGas: bigint
-	lastOraclePrice: bigint | undefined
-	lastOracleSettlementTimestamp: bigint
-	oraclePriceValidUntilTimestamp?: bigint | undefined
-	managerAddress: Address
-	ordinaryEscalationGameStarted: boolean
+	hasEscalationGame: boolean
 	marketDetails: MarketDetails
-	parent: Address
 	questionOutcome: ReportingOutcomeKey | 'none'
 	questionId: string
-	statoblastSecurityMultiplierBps: bigint
 	questionLedgerAddress: Address
 	shareTokenSupplyAttoShares: bigint
 	systemState: QuestionLedgerSystemState

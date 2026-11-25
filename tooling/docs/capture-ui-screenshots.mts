@@ -104,14 +104,14 @@ async function runStep(session: DevToolsSession, step: UiScreenshotStep, specId:
 			typeof step.value === 'string'
 				? step.value
 				: await session.evaluate(`(async () => {
-			const [{ getActiveBackend }, { loadAllQuestionLedgers }] = await Promise.all([
+			const [{ getActiveBackend }, { loadQuestionLedgerListing }] = await Promise.all([
 				import('@zoltar/ui-core-shared/lib/activeEnvironment.js'),
 				import('@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'),
 			])
 			const backend = getActiveBackend()
 			if (backend.id !== 'simulation') throw new Error('Screenshot requires simulation')
 			await backend.waitUntilReady?.()
-			const pools = await loadAllQuestionLedgers(backend.createReadClient())
+			const { pools } = await loadQuestionLedgerListing(backend.createReadClient())
 			const pool = pools[0]
 			if (pools.length !== 1 || pool === undefined) throw new Error('Expected one seeded security pool, found ' + pools.length)
 			return pool.questionLedgerAddress

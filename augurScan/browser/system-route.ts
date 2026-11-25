@@ -167,11 +167,10 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 	const renderEntityList = async ({ refreshSelected = false, live = false, selectedHistory, detailGateReserved = false }: RenderEntityListOptions = {}): Promise<boolean> => {
 		const query = $('#entity-search').value.trim().toLowerCase()
 		if (systemRouteState.data === undefined) throw new Error('System state catalog is unavailable')
-		const catalogItems = stateItems(systemRouteState.data, systemRouteState.activeType)
-		const items = catalogItems
+		const items = stateItems(systemRouteState.data, systemRouteState.activeType)
 		$('#entity-list-title').textContent = `All ${systemRouteState.activeType}`
 		const total = systemRouteState.data.totals?.[systemRouteState.activeType] ?? items.length
-		const hasMore = systemRouteState.data.truncated?.[systemRouteState.activeType] === true && (query !== '' || catalogItems.length < total)
+		const hasMore = systemRouteState.data.truncated?.[systemRouteState.activeType] === true && (query !== '' || items.length < total)
 		let countLabel = number(items.length)
 		if (query) countLabel = `${countLabel} shown`
 		else if (hasMore) countLabel = `${countLabel} of ${number(total)}`
@@ -209,10 +208,10 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 			}
 			return true
 		}
-		if (systemRouteState.selectedKey !== undefined && !items.some(item => entityKey(systemRouteState.activeType, item) === systemRouteState.selectedKey)) {
+		if (systemRouteState.selectedKey !== undefined) {
 			$('#state-detail').setAttribute('aria-busy', 'false')
 			systemRouteState.renderedDetailKey = undefined
-			$('#state-detail').replaceChildren(element('div', 'state-error', catalogItems.some(item => entityKey(systemRouteState.activeType, item) === systemRouteState.selectedKey) ? 'The current filter hides this entity.' : 'Entity not found in this network.'))
+			$('#state-detail').replaceChildren(element('div', 'state-error', 'Entity not found in this network.'))
 			return true
 		}
 		if (location.pathname === '/system' && items[0] !== undefined) {

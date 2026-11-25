@@ -13,9 +13,7 @@ export type StateSnapshotTarget = {
 	readonly entityType: (typeof snapshotEntityTypes)[number]
 	readonly entityIdentity: string
 	readonly address: Address
-	readonly poolAddress?: Address | undefined
 	readonly coordinatorAddress?: Address | undefined
-	readonly escalationAddress?: Address | undefined
 	// A capital owner's identity is its ledger and its address; `address` is the ledger.
 	readonly ownerAddress?: Address | undefined
 	// A capital position's identity is its ledger and its id; `address` is the ledger.
@@ -296,9 +294,7 @@ export const normalizeSnapshotTarget = (row: Record<string, unknown>): StateSnap
 		entityType,
 		entityIdentity: String(row['entity_identity']),
 		address: getAddress(String(row['address'])),
-		...(optionalAddress('pool_address') === undefined ? {} : { poolAddress: optionalAddress('pool_address') }),
 		...(optionalAddress('coordinator_address') === undefined ? {} : { coordinatorAddress: optionalAddress('coordinator_address') }),
-		...(optionalAddress('escalation_address') === undefined ? {} : { escalationAddress: optionalAddress('escalation_address') }),
 		...(optionalAddress('owner_address') === undefined ? {} : { ownerAddress: optionalAddress('owner_address') }),
 		...(typeof positionId === 'string' ? { positionId: BigInt(positionId) } : {}),
 	}

@@ -19,7 +19,6 @@ export function auctionFixture(): AuctionSnapshot {
 		lotAttoEth: 1000n.toString(),
 		repGrid: '3',
 		unroundedCollateralAttoRepPerLot: 10n.toString(),
-		minimumCollateralAttoRepPerLot: 12n.toString(),
 		maximumBidAttoRepPerLot: 900n.toString(),
 		maximumAdmissibleBidAttoRepPerLot: 900n.toString(),
 		pendingEthRefund: '0',

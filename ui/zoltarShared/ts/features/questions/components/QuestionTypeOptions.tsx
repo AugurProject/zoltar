@@ -5,9 +5,9 @@ import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
 import type { MarketFormState } from '../../../types/app.js'
 
 type MarketType = MarketFormState['marketType']
+const marketTypes: readonly MarketType[] = ['binary', 'categorical', 'scalar']
 
 type QuestionTypeOptionsProps = {
-	allowedMarketTypes: readonly MarketType[]
 	disabled: boolean
 	onChange: (marketType: MarketType) => void
 	value: MarketType
@@ -27,41 +27,30 @@ function getQuestionTypeCopy(marketType: MarketType) {
 }
 
 /** `hidden` keeps the card text visual only when a radio already names and describes it by ID, so browse mode does not read it twice. */
-function QuestionTypeCopy({ hidden = false, marketType, showExample }: { hidden?: boolean; marketType: MarketType; showExample: boolean }) {
+function QuestionTypeCopy({ marketType }: { marketType: MarketType }) {
 	const { description, example } = getQuestionTypeCopy(marketType)
 	const optionId = `market-create-type-${marketType}`
 	return (
-		<span aria-hidden={hidden ? 'true' : undefined} className='question-type-option-copy'>
+		<span aria-hidden='true' className='question-type-option-copy'>
 			<strong id={`${optionId}-label`}>{getMarketTypeLabel(marketType)}</strong>
 			<span id={`${optionId}-description`}>{description}</span>
-			{showExample ? <em id={`${optionId}-example`}>{example}</em> : undefined}
+			<em id={`${optionId}-example`}>{example}</em>
 		</span>
 	)
 }
 
 /** Native radio group: arrow keys move the selection, and each card names its type, then describes it with an example. */
-export function QuestionTypeOptions({ allowedMarketTypes, disabled, onChange, value }: QuestionTypeOptionsProps) {
-	const [onlyType] = allowedMarketTypes
-	// A single permitted type is a fixed property of this form, so it is stated rather than offered as a choice.
-	if (onlyType !== undefined && allowedMarketTypes.length === 1)
-		return (
-			<div className='question-type-options'>
-				<span className='question-type-options-label'>{commonCopy.questionType}</span>
-				<div className='question-type-fixed'>
-					<QuestionTypeCopy marketType={onlyType} showExample={false} />
-				</div>
-			</div>
-		)
+export function QuestionTypeOptions({ disabled, onChange, value }: QuestionTypeOptionsProps) {
 	return (
 		<fieldset className='question-type-options' disabled={disabled}>
 			<legend>{commonCopy.questionType}</legend>
 			<div className='question-type-option-list'>
-				{allowedMarketTypes.map(marketType => {
+				{marketTypes.map(marketType => {
 					const optionId = `market-create-type-${marketType}`
 					return (
 						<label className='question-type-option' key={marketType}>
 							<input aria-describedby={`${optionId}-description ${optionId}-example`} aria-labelledby={`${optionId}-label`} checked={value === marketType} disabled={disabled} name='market-create-type' onChange={() => onChange(marketType)} type='radio' value={marketType} />
-							<QuestionTypeCopy hidden marketType={marketType} showExample />
+							<QuestionTypeCopy marketType={marketType} />
 						</label>
 					)
 				})}

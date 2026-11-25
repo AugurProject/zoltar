@@ -48,10 +48,11 @@ function securityPoolsHref(universeId: bigint, securityPoolAddress?: string) {
 
 /** Question-specific shares and reporting; backing, liquidation and auctions live in the security pool workspace. */
 export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploymentStatuses, enabled, environmentKey, universeId, currentTimestamp, selectedAddress, onSelect }: Props) {
-	const [snapshot, setSnapshot] = useState<{ environmentKey: number; address: string; questions: ListedQuestionLedger[]; unavailable: UnavailableQuestionLedger[] }>()
-	const currentSnapshot = snapshot?.environmentKey === environmentKey && snapshot.address === selectedAddress ? snapshot : undefined
+	const [snapshot, setSnapshot] = useState<{ environmentKey: number; address: string; universe: bigint | undefined; questions: ListedQuestionLedger[]; unavailable: UnavailableQuestionLedger[] }>()
+	const listingUniverse = selectedAddress === '' ? universeId : undefined
+	const currentSnapshot = snapshot?.environmentKey === environmentKey && snapshot.address === selectedAddress && snapshot.universe === listingUniverse ? snapshot : undefined
 	const questions = currentSnapshot?.questions ?? []
-	const unavailable = currentSnapshot?.unavailable.filter(question => question.universeId === universeId) ?? []
+	const unavailable = currentSnapshot?.unavailable ?? []
 	const [loading, setLoading] = useState(false)
 	const [loadError, setLoadError] = useState<string>()
 	const [refresh, setRefresh] = useState(0)
@@ -72,12 +73,12 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 		setLoading(true)
 		void (async () => {
 			const client = createConnectedReadClient()
-			if (selectedAddress === '') return await loadQuestionLedgerListing(client)
+			if (selectedAddress === '') return await loadQuestionLedgerListing(client, listingUniverse)
 			if (!isAddress(selectedAddress)) throw new Error('Enter a valid question address.')
 			return { pools: [await loadSelectedQuestionLedger(client, getAddress(selectedAddress))], unavailable: [] }
 		})()
 			.then(value => {
-				if (current) setSnapshot({ environmentKey, address: selectedAddress, questions: value.pools, unavailable: value.unavailable })
+				if (current) setSnapshot({ environmentKey, address: selectedAddress, universe: listingUniverse, questions: value.pools, unavailable: value.unavailable })
 			})
 			.catch(error => {
 				if (current) {
@@ -90,7 +91,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 		return () => {
 			current = false
 		}
-	}, [enabled, environmentKey, refresh, selectedAddress])
+	}, [enabled, environmentKey, refresh, selectedAddress, listingUniverse])
 	useEffect(() => {
 		if (selected === undefined) return
 		reporting.setReportingForm(form => ({ ...form, questionLedgerAddress: selected.questionLedgerAddress }))
@@ -127,7 +128,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 			/>
 		)
 	if (selected === undefined) {
-		const listedQuestions = questions.filter(question => question.universeId === universeId)
+		const listedQuestions = questions
 		return (
 			<div className='route-view-flow'>
 				<RouteHeader title={copy.securityPoolQuestions} description={copy.securityPoolQuestionsDescription} actions={<a href={securityPoolsHref(universeId)}>{copy.openSecurityPools}</a>} />
@@ -196,10 +197,6 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 				tradingForkUniverse={trading.tradingForkUniverse}
 				tradingForm={trading.tradingForm}
 				tradingResult={trading.tradingResult}
-				repPerEthPrice={selected.lastOraclePrice}
-				repPerEthSource={selected.lastOraclePrice === undefined ? undefined : 'open-oracle'}
-				repPerEthSourceUrl={undefined}
-				showQuestionLedgerAddressInput={false}
 			/>
 			<ReportingSection
 				accountState={accountState}
@@ -223,7 +220,6 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 				triggerZoltarForkApproval={ownFork.approval}
 				triggerZoltarForkAvailability={ownFork.triggerForkAvailability}
 				triggerZoltarForkPending={ownFork.forkPending}
-				showQuestionLedgerAddressInput={false}
 			/>
 			<InheritedReporterClaims parameters={parameters} accountState={accountState} details={reporting.reportingDetails} onRefresh={reporting.loadReporting} />
 		</div>

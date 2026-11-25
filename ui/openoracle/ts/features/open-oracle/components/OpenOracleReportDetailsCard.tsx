@@ -237,7 +237,6 @@ export function OpenOracleReportDetailsCard({
 		onApproveToken2,
 		onDisputeReport,
 		onOpenOracleFormChange,
-		onSettleReport,
 		onWrapDisputeWeth,
 		openOracleActiveAction,
 		openOracleForm,
@@ -423,7 +422,7 @@ export function OpenOracleReportDetailsCard({
 			</div>
 
 			<OperationModal closeOnSuccessKey={openOracleResult?.action === 'dispute' ? openOracleResult.hash : undefined} context={reportTransactionContext} isOpen={selectedReportModal === 'dispute'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.disputeAndSwap}>
-				{renderSelectedReportActionSection({ ...selectedReportActionProps, actionMode: 'dispute', onDisputeFieldRevealChange, revealedDisputeFields })}
+				{renderSelectedReportActionSection({ ...selectedReportActionProps, onDisputeFieldRevealChange, revealedDisputeFields })}
 			</OperationModal>
 		</>
 	)

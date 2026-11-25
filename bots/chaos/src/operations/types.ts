@@ -64,12 +64,10 @@ export interface UniverseSnapshot {
 	earliestForkTime: string
 	id: string
 	repToken: Address
-	forkBurnDivisor?: string
 	forkTime: string
 	forkQuestionId: string
 	forkThresholdAttoRep: CanonicalUintString
 	nonDecisionThresholdAttoRep: CanonicalUintString
-	initialEscalationDepositAttoRep: CanonicalUintString
 	parentUniverseId?: string
 	forkingOutcomeIndex?: string
 	migrationBalance: string
@@ -144,17 +142,11 @@ export interface PoolSnapshot {
 	projectedSettlementRecoveryAttoRep: CanonicalUintString
 	shareTokenSupplyAttoShares: CanonicalUintString
 	additionalMintCapacityAttoEth: CanonicalUintString
-	statoblastSecurityMultiplierBps: string
 	lastSettlementSecurityPoolTime: string
-	poolRepBalanceAttoRep: CanonicalUintString
 	escalationRepBalanceAttoRep: CanonicalUintString
 	escalationResidualSweepExpectedSuccess: boolean
-	oraclePriceValid: boolean
 	requestPriceCostAttoEth: CanonicalUintString
-	oracleSettlementTime: string
 	lastRepPerEthPrice: string
-	lastOracleSettlementTimestamp: string
-	oraclePriceValidUntilTimestamp: string
 	minimumToken1ReportAttoEth: CanonicalUintString
 	oracleRequestFunding: OracleRequestFundingSnapshot
 	pendingReportId: string
@@ -226,7 +218,6 @@ export interface AuctionSnapshot {
 	lotAttoEth: CanonicalUintString
 	repGrid: CanonicalUintString
 	unroundedCollateralAttoRepPerLot: CanonicalUintString
-	minimumCollateralAttoRepPerLot: CanonicalUintString
 	maximumBidAttoRepPerLot: CanonicalUintString
 	maximumAdmissibleBidAttoRepPerLot: CanonicalUintString
 	pendingEthRefund: string

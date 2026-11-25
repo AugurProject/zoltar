@@ -3,7 +3,7 @@ import type { SecurityPoolObservation, SecurityPoolScope } from '#monitoring/sec
 import type { Address, Hex, RpcEndpointHealth } from '@zoltar/bot-shared/ethereum'
 import type { CentralizedMarketEstimate } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import type { MarketConsensusEstimate, MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
-import type { Activity, PendingTransactionIntent, PoolObservation, UniverseObservation } from './operator-state.ts'
+import type { Activity, PendingTransactionIntent, UniverseObservation } from './operator-state.ts'
 
 export type RuntimeState = {
 	securityPoolFunding?: Record<string, SecurityPoolFunding> | undefined
@@ -29,7 +29,6 @@ export type RuntimeState = {
 	pendingTransactions: PendingTransactionIntent[]
 	securityPools: SecurityPoolObservation[]
 	securityPoolScopes: SecurityPoolScope[]
-	pools: PoolObservation[]
 	scanning: boolean
 	startedAt: string
 	status: 'connectivity-degraded' | 'dry-run' | 'error' | 'paused' | 'running' | 'starting'

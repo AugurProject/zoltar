@@ -1,13 +1,13 @@
 import { expect, test } from 'bun:test'
 import { getAddress, RpcError, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { loadAllQuestionLedgers, loadRegisteredSecurityPools, loadQuestionLedgerListing, loadSelectedQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
+import { loadRegisteredSecurityPools, loadQuestionLedgerListing, loadSelectedQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
 import { loadQuestionLedgerMintCapacity } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { createMockLoaderClient, createMulticallStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { centralSecurityPoolRead, owner, securityPool, capital, token } from '../features/security-pools/capitalFixture.js'
 
 const block = { hash: `0x${'11'.repeat(32)}`, number: 99n, timestamp: 1000n } as const
 const deployment = { questionLedger: owner, parent: zeroAddress, universeId: 42n, questionId: 7n, initialReportPriorityFeeAttoEthPerGas: 1n, sharedPriceFeed: token, statoblastSecurityMultiplierBps: 20000n }
-function fixture({ forked = false, reporting = false, missingSecurityPool = false, reorg = false, brokenSecond = false } = {}) {
+function fixture({ forked = false, reporting = false, missingSecurityPool = false, reorg = false, brokenSecond = false, secondUniverse = deployment.universeId } = {}) {
 	const reads: string[] = []
 	let headReads = 0
 	const client = createMockLoaderClient({
@@ -22,7 +22,7 @@ function fixture({ forked = false, reporting = false, missingSecurityPool = fals
 				case 'questionLedgerDeploymentCount':
 					return brokenSecond ? 2n : 1n
 				case 'questionLedgerDeploymentsRange':
-					return brokenSecond ? [deployment, { ...deployment, questionLedger: second }] : [deployment]
+					return brokenSecond ? [deployment, { ...deployment, questionLedger: second, universeId: secondUniverse }] : [deployment]
 				case 'getQuestionLedgerOriginId':
 					return `0x${'01'.repeat(32)}`
 				case 'getQuestionLedger':
@@ -86,12 +86,20 @@ function fixture({ forked = false, reporting = false, missingSecurityPool = fals
 }
 test.each([false, true])('discovers native security pool question snapshots (reporting: %s)', async reporting => {
 	const { client, reads } = fixture({ reporting })
-	const pools = await loadAllQuestionLedgers(client)
+	const { pools } = await loadQuestionLedgerListing(client)
 	expect(pools).toHaveLength(1)
 	expect(pools[0]).toMatchObject({ securityPoolAddress: securityPool, questionLedgerAddress: owner, settlementCollateralAttoEth: 60n, totalPoolHeldAttoRep: 300n, mintingCapacityAttoEth: reporting ? 0n : 80n })
 	expect(reads).not.toContain('getVaults')
 	expect(reads).not.toContain('securityVaults')
 })
+test('enriches only registered questions in the selected universe', async () => {
+	const { client, reads } = fixture({ brokenSecond: true, secondUniverse: 43n })
+	const listing = await loadQuestionLedgerListing(client, deployment.universeId)
+	expect(listing.pools.map(question => question.questionLedgerAddress)).toEqual([owner])
+	expect(listing.unavailable).toEqual([])
+	expect(reads.filter(name => name === 'securityPoolOf')).toHaveLength(1)
+})
+
 test('marks a question without security pool custody unavailable and still rejects direct loading', async () => {
 	const listing = await loadQuestionLedgerListing(fixture({ missingSecurityPool: true }).client)
 	expect(listing.pools).toEqual([])
@@ -99,12 +107,11 @@ test('marks a question without security pool custody unavailable and still rejec
 	await expect(loadSelectedQuestionLedger(fixture({ missingSecurityPool: true }).client, owner)).rejects.toThrow('Question has no security pool')
 })
 test('rejects a replaced discovery anchor after loading question snapshots', async () => {
-	await expect(loadAllQuestionLedgers(fixture({ reorg: true }).client)).rejects.toThrow('deployments changed')
+	await expect(loadQuestionLedgerListing(fixture({ reorg: true }).client)).rejects.toThrow('deployments changed')
 })
 test('reflects a forked universe without per-question vault scans', async () => {
-	const pools = await loadAllQuestionLedgers(fixture({ forked: true }).client)
+	const { pools } = await loadQuestionLedgerListing(fixture({ forked: true }).client)
 	expect(pools[0]?.universeHasForked).toBe(true)
-	expect(pools[0]?.hasForkActivity).toBe(true)
 })
 test.each([false, true])('mint capacity uses central fees and closes when reporting starts (%s)', async reporting => {
 	const capacity = await loadQuestionLedgerMintCapacity(fixture({ reporting }).client, owner)
@@ -303,7 +310,7 @@ test('a reorganization during the security pool reads is reported as such', asyn
 })
 
 test('#1469: a broken security pool question cannot hide a healthy question', async () => {
-	const pools = await loadAllQuestionLedgers(fixture({ brokenSecond: true }).client)
+	const { pools } = await loadQuestionLedgerListing(fixture({ brokenSecond: true }).client)
 	expect(pools).toHaveLength(1)
 	expect(pools[0]?.questionLedgerAddress).toBe(owner)
 })

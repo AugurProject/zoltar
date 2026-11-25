@@ -1,17 +1,20 @@
+import type { Address } from '@zoltar/bot-shared/ethereum'
 import { centralizedMarketConfigurationAllowsExecution, centralizedPriceAllowsExecution, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { discardDexMarketObservations, marketConsensusAllowsExecution, requireCanonicalDexEvidence, type MarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
 import type { OperatorSettings } from '#config/settings'
-import type { initialRuntimeState, PoolObservation } from '#state/operator-state'
+import type { initialRuntimeState } from '#state/operator-state'
+
+type PoolMarket = { repToken: Address; lastPrice: bigint }
 
 export function marketConfigurations(settings: OperatorSettings) {
 	return [settings.centralizedMarkets, ...settings.childMarketConfigurations]
 }
 
-function marketConfigurationForPool(pool: Pick<PoolObservation, 'repToken' | 'lastPrice'>, settings: OperatorSettings) {
+function marketConfigurationForPool(pool: PoolMarket, settings: OperatorSettings) {
 	return marketConfigurations(settings).find(configuration => configuration.assetAddress.toLowerCase() === pool.repToken.toLowerCase())
 }
 
-export function marketPriceAllowsExecution(pool: Pick<PoolObservation, 'repToken' | 'lastPrice'>, settings: OperatorSettings, state: ReturnType<typeof initialRuntimeState>, requireEvidence = false) {
+export function marketPriceAllowsExecution(pool: PoolMarket, settings: OperatorSettings, state: ReturnType<typeof initialRuntimeState>, requireEvidence = false) {
 	const selectedConfiguration = marketConfigurationForPool(pool, settings)
 	if (selectedConfiguration === undefined) return false
 	const configuration = requireEvidence ? { ...selectedConfiguration, requiredForExecution: true } : selectedConfiguration
@@ -33,7 +36,7 @@ export function marketPriceAllowsExecution(pool: Pick<PoolObservation, 'repToken
 }
 
 export async function canonicalMarketPriceAllowsExecution(
-	pool: Pick<PoolObservation, 'repToken' | 'lastPrice'>,
+	pool: PoolMarket,
 	settings: OperatorSettings,
 	state: ReturnType<typeof initialRuntimeState>,
 	readCanonicalHash: (blockNumber: bigint) => Promise<`0x${string}` | undefined>,

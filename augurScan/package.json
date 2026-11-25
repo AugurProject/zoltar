@@ -32,9 +32,7 @@
 		"build:demo": "bun scripts/build-browser.ts --demo"
 	},
 	"dependencies": {
-		"@noble/hashes": "2.2.0",
 		"@observablehq/plot": "0.6.17",
-		"micro-eth-signer": "0.18.1",
 		"@zoltar/core-shared": "workspace:1.0.0",
 		"@zoltar/statoblast-shared": "workspace:1.0.0"
 	},

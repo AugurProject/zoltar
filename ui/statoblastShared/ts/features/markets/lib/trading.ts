@@ -21,8 +21,8 @@ export const UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE = 'Minting is unavaila
 export const MINTING_PAUSED_DURING_DISPUTE_MESSAGE = tradingCopy.mintingPausedDuringDispute
 
 /** True once an ordinary or fork-continuation escalation game has started. The flags stay set after the game, so use `isMintingPausedByEscalation` to tell a paused operating pool from one that finalization or a fork closed. */
-export function hasEscalationGame(pool: { hasForkContinuationEscalationGame: boolean; ordinaryEscalationGameStarted: boolean }) {
-	return pool.ordinaryEscalationGameStarted || pool.hasForkContinuationEscalationGame
+export function hasEscalationGame(pool: { hasEscalationGame: boolean }) {
+	return pool.hasEscalationGame
 }
 
 export function hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined) {
@@ -31,7 +31,7 @@ export function hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth:
 }
 
 /** Use contract-reported backing capacity; unknown capacity or an escalation game keeps minting closed. */
-export function getPoolMintingCapacityAttoEth(pool: { mintingCapacityAttoEth?: bigint | undefined; hasForkContinuationEscalationGame: boolean; ordinaryEscalationGameStarted: boolean }) {
+export function getPoolMintingCapacityAttoEth(pool: { mintingCapacityAttoEth?: bigint | undefined; hasEscalationGame: boolean }) {
 	return hasEscalationGame(pool) ? 0n : (pool.mintingCapacityAttoEth ?? 0n)
 }
 
