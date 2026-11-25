@@ -45,7 +45,7 @@ Every setting is an environment variable. The Compose column names the service t
 | `LIVE_MAX_STREAM_LIFETIME_MS` | `1800000` | `app` | Age at which a live stream is closed and its slot released. The browser reconnects and replays missed events. |
 | `DISABLE_INDEXER` | unset | `indexer` (`0`); fixed to `1` on `app` | `1` starts the indexer process without indexing. See below. |
 
-`DISABLE_INDEXER` affects only the indexer process (`src/indexer-process.ts`). The web app (`src/server.ts`) never indexes, whatever the value. A process that runs without indexing still needs write access: it initializes or migrates the schema, records an indexer-disabled process run, and records the run's stop time. Expired live-stream events are pruned by the web app's scheduler, independently of `DISABLE_INDEXER`; a disabled worker alone does not perform retention.
+`DISABLE_INDEXER` affects only the indexer process (`src/indexer-process.ts`). The web app (`src/server.ts`) never indexes, whatever the value. A process that runs without indexing still needs write access: it initializes or validates the current schema, records an indexer-disabled process run, and records the run's stop time. Expired live-stream events are pruned by the web app's scheduler, independently of `DISABLE_INDEXER`; a disabled worker alone does not perform retention.
 
 The website and API do not require authentication. API requests share one per-client quota; non-API routes do not consume quota and remain available when it is exhausted.
 
@@ -55,7 +55,7 @@ A client is an IPv4 address or an IPv6 /64 network, and the live-stream per-clie
 
 The writer lease is a PostgreSQL session advisory lock and is incompatible with transaction-mode pooling. Do not expose PostgreSQL publicly, and do not rely on the process-local rate limiter as a distributed edge control. `GET /metrics` exposes bounded Prometheus request, limiter, indexer-lag, success, and failure metrics.
 
-Bundled and external databases must use PostgreSQL 17.11. Compose pins the corresponding `postgres:17.11-alpine` image by digest. augurScan validates the server release before it initializes, migrates, or verifies the schema because its schema fingerprints are version-specific.
+Bundled and external databases must use PostgreSQL 17.11. Compose pins the corresponding `postgres:17.11-alpine` image by digest. augurScan validates the server release before it initializes or verifies the current schema because its schema fingerprints are version-specific.
 
 ### Recover historical coverage
 
@@ -251,7 +251,7 @@ test "$AUGURSCAN_RESTORE_WRONG_OWNERS" = 0
 
 Any failed command stops this Bash session before upgrade or export. A failed `pg_restore --single-transaction` leaves no partially restored schema. Keep the verified restore database until every export has finished.
 
-A supported schema upgrade runs in one transaction under an advisory lock. Startup fingerprints the full public layout before accepting its schema marker and verifies the migrated layout before committing the new marker. If either check fails, restore a compatible backup or run the intervening supported release; do not delete evidence to force startup.
+Startup supports only the current schema. It initializes an empty database in one transaction under an advisory lock, or fingerprints the full public layout before accepting an existing current schema. Historical versions and altered layouts are rejected without modification. Use a fresh development database for the current schema; preserve any old database separately if its evidence is needed.
 
 ## Upgrade and check readiness
 
@@ -280,7 +280,7 @@ The `/api/v1/reorgs` view uses a chain- and generation-bound cursor. A new inval
 
 ## Export deterministic evidence
 
-Run exports against the restored database through an isolated app process without the dedicated indexer. This keeps the live service available and prevents the export boundary from changing because of chain indexing. This process still needs write access: it can migrate the restored schema, appends an `indexer_runs` provenance row, prunes expired `live_events`, and records its stop time. After any required migration, it does not index new chain evidence, so the restored evidence boundary remains fixed. Both database modes use the pinned app image that Compose built during the upgrade.
+Run exports against the restored database through an isolated app process without the dedicated indexer. This keeps the live service available and prevents the export boundary from changing because of chain indexing. This process still needs write access: it validates the current schema, appends an `indexer_runs` provenance row, prunes expired `live_events`, and records its stop time. Historical schemas are rejected. It does not index new chain evidence, so the restored evidence boundary remains fixed. Both database modes use the pinned app image that Compose built during the upgrade.
 
 The isolated container needs its own direct, container-reachable URL for the restored database. External mode already set `AUGURSCAN_RESTORE_URL` during restore preparation. In bundled mode, set it explicitly with the actual password that the `postgres` service reads from `.env`; percent-encode reserved URL characters. Do not rely on an unexported `POSTGRES_PASSWORD`, and do not use `localhost` to name a database outside the container.
 
@@ -346,4 +346,4 @@ docker compose stop indexer
 
 `docker compose down` preserves the named history volume. `docker compose down --volumes` deletes it; use that command only when the loss is intentional and a tested backup exists.
 
-Schema version 9 adds indexed address and protocol-count projections and the PostgreSQL `pg_trgm` extension in `pg_catalog` for timeline text search. The forward migration backfills projections from retained canonical evidence once; the database role must be allowed to install this trusted extension. Later blocks update the projections in the same transaction as their source evidence, and reorg/replay invalidation preserves snapshot boundaries.
+The current schema includes indexed address and protocol-count projections and the PostgreSQL `pg_trgm` extension in `pg_catalog` for timeline text search. The database role must be allowed to install this trusted extension during initialization. Blocks update the projections in the same transaction as their source evidence, and reorg/replay invalidation preserves snapshot boundaries.

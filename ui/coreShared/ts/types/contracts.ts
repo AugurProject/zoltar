@@ -4,7 +4,7 @@ import type { UniverseLineageStep } from '../lib/universeLineage.js'
 import type { WriteClient as ClientsWriteClient } from '../wallet/clients.js'
 export type { ReadClient, WriteClient } from '../wallet/clients.js'
 
-type ZoltarDeploymentStepId = 'proxyDeployer' | 'deploymentStatusOracle' | 'reputationToken' | 'multicall3' | 'openOracle' | 'zoltarQuestionData' | 'zoltar' | 'shareTokenFactory' | 'openOraclePriceCoordinatorFactory'
+type ZoltarDeploymentStepId = 'proxyDeployer' | 'deploymentStatusOracle' | 'reputationToken' | 'multicall3' | 'openOracle' | 'zoltarQuestionData' | 'zoltar' | 'shareTokenFactory' | 'sharedPoolPriceFeedFactory'
 
 export type DeploymentStepId =
 	| ZoltarDeploymentStepId

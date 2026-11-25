@@ -74,7 +74,7 @@ describe('Statoblast: shared price feed defers settlements above the report base
 			sponsor.writeContract({ abi: batchAbi, address, functionName: 'requestSecurityPoolPriceWithOperations', args: [unit, reportWeth, bounty, { gasLimit: 600_000, minimumPrice: unit, maximumPrice: unit, deadline: Number(timestamp + 5_000n), operations }], value: bounty, gasPrice: 2n * attoEthPerNanoEth }),
 		)
 		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
-		const [escrow, , , ceiling] = await sponsor.readContract({ ...feed, functionName: 'reportCandidates', args: [report] })
+		const [escrow, , ceiling] = await sponsor.readContract({ ...feed, functionName: 'reportCandidates', args: [report] })
 		expect(ceiling).toBe(33n * attoEthPerNanoEth)
 		return { sponsor, settler, feed, weth, escrow, report, ceiling }
 	}

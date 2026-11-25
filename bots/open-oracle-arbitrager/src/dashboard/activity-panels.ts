@@ -43,7 +43,7 @@ function opportunityRow(opportunity: OpportunitySnapshot, link: ExplorerLink) {
 			exactAmount(opportunity.executablePriceRepPerEth, 'REP / ETH'),
 			opportunityDecisionReason(opportunity),
 			opportunity.direction === 'buy-rep' ? `buy ${opportunity.tokenSymbol}` : `sell ${opportunity.tokenSymbol}`,
-			exactAmount(opportunity.estimatedNetProfitEth, 'ETH'),
+			exactAmount(opportunity.estimatedNetProfitWeth, 'ETH'),
 			exactAmount(opportunity.requiredWeth, opportunity.collateralSymbol ?? 'WETH'),
 			exactAmount(opportunity.requiredToken, opportunity.tokenSymbol),
 			`${opportunity.timeRemaining} ${opportunity.windowUnit}`,

@@ -74,24 +74,24 @@ describe('settlement settings', () => {
 })
 
 describe('settlement journal', () => {
-	test('normalizes legacy receipt timestamps while preserving append-only history and daily gas', async () => {
+	test('preserves current append-only history and daily gas', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-settlement-migration-'))
 		directories.push(directory)
 		const path = join(directory, 'journal')
 		const expected = record(1, { updatedAt: '2026-09-20T10:00:00.000Z' })
 		const { includedAt, ...fields } = expected
-		const legacyLine = JSON.stringify({ chainId: 1, record: { ...fields, minedAt: includedAt } })
-		await writeFile(path, `${legacyLine}\n`, { mode: 0o600 })
+		const currentLine = JSON.stringify({ chainId: 1, record: expected })
+		await writeFile(path, `${currentLine}\n`, { mode: 0o600 })
 		const loaded = await loadSettlementJournal(path, 1)
 		expect(loaded).toEqual([expected])
 		expect(settlementGasSpentAttoEthOnUtcDay(loaded, new Date('2026-09-19T12:00:00.000Z'))).toBe(4n * 10n ** 15n)
 		await appendSettlementRecord(path, expected, 1)
 		const lines = (await readFile(path, 'utf8')).trim().split('\n')
-		expect(lines[0]).toBe(legacyLine)
+		expect(lines[0]).toBe(currentLine)
 		expect(lines[1]).toContain('includedAt')
 		expect(lines[1]).not.toContain('minedAt')
 		expect(await loadSettlementJournal(path, 1)).toEqual(loaded)
-		for (const timestampFields of [{ includedAt, minedAt: includedAt }, { minedAt: 'invalid' }]) {
+		for (const timestampFields of [{ minedAt: includedAt }, { includedAt, minedAt: includedAt }, { minedAt: 'invalid' }]) {
 			await writeFile(path, `${JSON.stringify({ chainId: 1, record: { ...fields, ...timestampFields } })}\n`, { mode: 0o600 })
 			await expect(loadSettlementJournal(path, 1)).rejects.toThrow('Invalid settlement journal record')
 		}

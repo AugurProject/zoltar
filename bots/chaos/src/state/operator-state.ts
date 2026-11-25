@@ -14,7 +14,7 @@ import { parseActivity, parseLifecyclePresenceBlocker, parseScheduler } from './
 import { parseObligation, parseObligationTombstone, parseWorkflow } from './durable-workflow-parsers.ts'
 import { DURABLE_STATE_VERSION, initialDurableState, initialRuntimeState } from './initial-state.ts'
 import { parsePendingTransaction } from './pending-transaction-intent.ts'
-import { assertSafeRetirementRecipient, initialRetirementState, parseRetirementState, type DurableRetirementState } from './retirement.ts'
+import { assertSafeRetirementRecipient, parseRetirementState, type DurableRetirementState } from './retirement.ts'
 import type { PendingTransactionObservation } from './pending-transaction-observation.ts'
 import { serializedScheduler } from './state-serialization.ts'
 import { assertExactKeys, identifier, nonemptyString, requiredRecord } from './validators.ts'
@@ -303,10 +303,10 @@ async function loadDurableStateFile(path: string, expectedChainId: number, files
 	const value = parseJsonDocument(contents, 'Chaos-bot state')
 	const state = requiredRecord(value, 'chaos-bot state')
 	const storedVersion = state['version']
-	if (storedVersion !== 3 && storedVersion !== DURABLE_STATE_VERSION) throw new Error('Chaos-bot state version is unsupported')
+	if (storedVersion !== DURABLE_STATE_VERSION) throw new Error('Chaos-bot state version is unsupported')
 	assertExactKeys(
 		state,
-		['activities', 'chainId', 'lifecyclePresenceBlocker', 'obligationTombstones', 'obligations', 'pendingTransactions', 'profileId', 'protocolIndex', ...(storedVersion === 3 ? [] : ['retirement']), 'safetyPaused', 'scheduler', 'signerAddress', 'version', 'workflows'],
+		['activities', 'chainId', 'lifecyclePresenceBlocker', 'obligationTombstones', 'obligations', 'pendingTransactions', 'profileId', 'protocolIndex', 'retirement', 'safetyPaused', 'scheduler', 'signerAddress', 'version', 'workflows'],
 		['includedTransactions', 'rollbackQueue', 'uniswapV3Factory'],
 		'chaos-bot state',
 	)
@@ -393,7 +393,7 @@ async function loadDurableStateFile(path: string, expectedChainId: number, files
 		profileId: identifier(state['profileId'], 'profileId'),
 		uniswapV3Factory: state['uniswapV3Factory'] === undefined ? undefined : getAddress(nonemptyString(state['uniswapV3Factory'], 'chaos-bot state.uniswapV3Factory')),
 		protocolIndex,
-		retirement: storedVersion === 3 || state['retirement'] === undefined ? initialRetirementState() : parseRetirementState(state['retirement'], signerAddress),
+		retirement: parseRetirementState(state['retirement'], signerAddress),
 		safetyPaused: state['safetyPaused'],
 		scheduler: parseScheduler(state['scheduler']),
 		signerAddress,
@@ -411,7 +411,6 @@ function serializedDurableState(
 		DurableState,
 		'rollbackQueue' | 'includedTransactions' | 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'retirement' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'uniswapV3Factory' | 'workflows'
 	>,
-	persistedProtocolIndex: ChaosProtocolIndex | ProtocolIndexReference | null = state.protocolIndex ?? null,
 ) {
 	return {
 		activities: state.activities,
@@ -424,7 +423,7 @@ function serializedDurableState(
 		pendingTransactions: state.pendingTransactions.map(serializedTransactionIntent),
 		profileId: state.profileId,
 		...(state.uniswapV3Factory === undefined ? {} : { uniswapV3Factory: state.uniswapV3Factory }),
-		protocolIndex: persistedProtocolIndex,
+		protocolIndex: null,
 		retirement: state.retirement,
 		safetyPaused: state.safetyPaused,
 		scheduler: serializedScheduler(state.scheduler),
@@ -461,7 +460,7 @@ function snapshotDurableState(state: PersistableDurableState) {
 		signerAddress: state.signerAddress,
 		workflows: [...state.workflows],
 	}
-	const serializedState = structuredClone(serializedDurableState(snapshot, null))
+	const serializedState = structuredClone(serializedDurableState(snapshot))
 	return { protocolIndex, serializedState }
 }
 
