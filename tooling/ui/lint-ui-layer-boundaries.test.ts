@@ -142,3 +142,12 @@ test('checks the OpenOracle app runtime package dependencies', () => {
 	expect(sharedImportBoundaryViolation('ui/openoracle/ts/app/App.tsx', '@zoltar/open-oracle-shared/openOracle/openOracle')).toBeUndefined()
 	expect(sharedImportBoundaryViolation('ui/openoracle/ts/app/App.tsx', '@zoltar/trading-shared/trading/positions')).toContain('must not depend')
 })
+
+test('limits generic UI dependencies to shared core and explicitly consumed product APIs', () => {
+	const source = 'ui/coreShared/ts/navigation/urlParams.ts'
+	expect(sharedImportBoundaryViolation(source, '@zoltar/core-shared/evm/ethereum')).toBeUndefined()
+	expect(sharedImportBoundaryViolation(source, '@zoltar/zoltar-shared/deployment/genesisUniverses')).toBeUndefined()
+	expect(sharedImportBoundaryViolation(source, '@zoltar/zoltar-shared')).toContain('must not depend')
+	expect(sharedImportBoundaryViolation(source, '@zoltar/zoltar-shared/deployment/deploymentAddresses')).toContain('must not depend')
+	expect(sharedImportBoundaryViolation('ui/zoltarShared/ts/example.ts', '@zoltar/zoltar-shared/constants')).toBeUndefined()
+})

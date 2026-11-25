@@ -41,6 +41,14 @@ function collectWatchBuilds(appId: UiAppId) {
 }
 
 describe('UI build dependency direction', () => {
+	test('shared package dependencies precede their consumers in build order', () => {
+		const earlier = new Set<string>()
+		for (const entry of sharedPackages) {
+			for (const dependency of entry.dependencies) expect(earlier.has(dependency), `${entry.id} requires ${dependency} earlier in the shared package registry`).toBe(true)
+			earlier.add(entry.id)
+		}
+	})
+
 	test('the shared-build CLI compiles exactly the package closure for every application', async () => {
 		const fixtureRoot = fs.mkdtempSync(path.join(tmpdir(), 'app-shared-build-'))
 		const { repositoryRoot } = getUiCoreSharedPaths()
