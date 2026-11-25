@@ -181,6 +181,32 @@ async function executeCanonicalOperation(context: ReturnType<typeof runtimeConte
 }
 
 describe('real ecosystem workflows through the production chaos runtime', () => {
+	test('confirms direct shared-feed report funding through the production receipt validator', async () => {
+		const current = requiredFixture()
+		await current.restoreBaseline()
+		const proxy = current.createRpcProxy()
+		const relay = current.createPrivateRelay()
+		const stateFile = await temporaryStateFile()
+		try {
+			const settings = settingsFor(current, proxy, stateFile.path)
+			settings.strategy.selectableOperationAllowlist = [...settings.strategy.selectableOperationAllowlist, 'statoblast.oracle.request-price']
+			settings.strategy.maximumEthPerOperationAttoEth = ONE_TOKEN
+			settings.submission = { minimumBundleRelaySuccesses: 1, mode: 'private', relayUrls: [relay.relayUrl] }
+			const context = runtimeContext(settings)
+			const initial = await canonicalRescan(context)
+			const wrap = requiredPlan(evaluateOperationCatalog(initial.snapshot, { ...planningOptions(settings, SCAN_SEED), operationInputs: { amount: ONE_TOKEN.toString() } }), 'open-oracle.weth.wrap')
+			expect((await executeOperationPlan(context.environment, wrap)).status).toBe('completed')
+			const funded = await canonicalRescan(context, initial)
+			const requested = await executeCanonicalOperation(context, funded, 'statoblast.oracle.request-price')
+			expect(requested.workflow.steps.find(step => step.id === 'request-price')?.status).toBe('confirmed')
+			expect(requested.scan.snapshot.pools.some(pool => pool.pendingReportId !== '0')).toBeTrue()
+		} finally {
+			relay.dispose()
+			proxy.dispose()
+			await stateFile.dispose()
+		}
+	})
+
 	test('preflights canonical pool deployment before random selection or signing', async () => {
 		const current = requiredFixture()
 		await current.restoreBaseline()

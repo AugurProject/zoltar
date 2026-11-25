@@ -221,13 +221,13 @@ export function oracleRequestPreparation(snapshot: EcosystemSnapshot, pool: Pool
 	}
 }
 
-export function exactTokenTransferToCoordinatorEvidence(snapshot: EcosystemSnapshot, token: `0x${string}`, coordinator: `0x${string}`, expected: bigint): OperationEvidence {
+export function exactWalletTokenDebitEvidence(snapshot: EcosystemSnapshot, token: `0x${string}`, expected: bigint): OperationEvidence {
 	return {
 		abi: 'event Transfer(address indexed from, address indexed to, uint256 value)',
 		emitter: token,
 		equals: expected.toString(),
 		field: 'value',
-		indexed: { from: snapshot.wallet.address, to: coordinator },
+		indexed: { from: snapshot.wallet.address },
 		kind: 'decoded-event-field',
 		signature: 'Transfer(address,address,uint256)',
 		topic0: eventTopic('Transfer(address,address,uint256)'),
