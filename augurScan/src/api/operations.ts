@@ -18,16 +18,16 @@ export const operationsResponse = async (sql: SQL, url: URL): Promise<Response> 
 		capitalRiskOverview(sql, chainId, String(asOf['blockNumber'])),
 		feeEconomicsOverview(sql, chainId, String(asOf['blockNumber'])),
 		operationsOverviewSupplement(sql, chainId, String(asOf['blockNumber'])),
-		forkCatalogData(sql, chainId, String(asOf['blockNumber'])),
+		forkCatalogData(sql, { chainId, snapshotBlock: String(asOf['blockNumber']) }),
 	])
 	return json({ chainId, asOf, data: { reports, escalations, auctions, risk: { ...risk, ...capital, ...fees }, feeEconomics: fees.feeEconomics, ...supplement, forks } })
 }
 
-const catalogRows = async (sql: SQL, domain: 'reports' | 'escalations' | 'auctions' | 'forks', chainId: number, asOf: Record<string, unknown>, cursor: { block: string; log: number; tx: string }, queryLimit: number) => {
-	if (domain === 'reports') return await reportCatalogData(sql, chainId, asOf, cursor.block, cursor.tx, cursor.log, queryLimit)
-	if (domain === 'escalations') return await escalationCatalogData(sql, chainId, String(asOf['blockNumber']), cursor.block, cursor.tx, cursor.log, queryLimit)
-	if (domain === 'auctions') return await auctionCatalogData(sql, chainId, asOf, cursor.block, cursor.tx, cursor.log, queryLimit)
-	return await forkCatalogData(sql, chainId, cursor.block, cursor.tx, cursor.log, queryLimit, String(asOf['blockNumber']))
+const catalogRows = async (sql: SQL, domain: 'reports' | 'escalations' | 'auctions' | 'forks', chainId: number, asOf: Record<string, unknown>, position: { block: string; log: number; tx: string } | undefined, queryLimit: number) => {
+	if (domain === 'reports') return await reportCatalogData(sql, chainId, asOf, position?.block, position?.tx, position?.log, queryLimit)
+	if (domain === 'escalations') return await escalationCatalogData(sql, chainId, String(asOf['blockNumber']), position?.block, position?.tx, position?.log, queryLimit)
+	if (domain === 'auctions') return await auctionCatalogData(sql, chainId, asOf, position?.block, position?.tx, position?.log, queryLimit)
+	return await forkCatalogData(sql, { chainId, snapshotBlock: String(asOf['blockNumber']), position, limit: queryLimit })
 }
 
 export const domainCatalogResponse = async (sql: SQL, url: URL, domain: 'reports' | 'escalations' | 'auctions' | 'risk' | 'forks'): Promise<Response> => {
@@ -37,9 +37,9 @@ export const domainCatalogResponse = async (sql: SQL, url: URL, domain: 'reports
 		const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
 		const limit = Math.min(Math.max(requestedLimit, 1), 250)
 		const poolCursor = parseRiskCursor(url.searchParams.get('poolCursor'), chainId)
-		const asOf = await operationsAsOfForContinuations(sql, chainId, poolCursor === undefined ? [] : [{ parts: poolCursor, offset: 2 }], postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
+		const asOf = await operationsAsOfForContinuations(sql, chainId, poolCursor === undefined ? [] : [poolCursor.snapshot], postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
 		// The pool cursor pages pools only; the capital positions and liquidations are the bounded head of their own catalogs.
-		const [data, capital, fees] = await Promise.all([riskCatalogData(sql, chainId, { limit, poolAfter: poolCursor?.[8], snapshotBlock: String(asOf['blockNumber']) }), capitalRiskOverview(sql, chainId, String(asOf['blockNumber'])), feeEconomicsOverview(sql, chainId, String(asOf['blockNumber']))])
+		const [data, capital, fees] = await Promise.all([riskCatalogData(sql, chainId, { limit, poolAfter: poolCursor?.poolAddress, snapshotBlock: String(asOf['blockNumber']) }), capitalRiskOverview(sql, chainId, String(asOf['blockNumber'])), feeEconomicsOverview(sql, chainId, String(asOf['blockNumber']))])
 		const pagination = jsonRecord(data.pagination)
 		return json({
 			chainId,
@@ -56,12 +56,9 @@ export const domainCatalogResponse = async (sql: SQL, url: URL, domain: 'reports
 		})
 	}
 	const cursor = protocolCursorForRequest(url, chainId, `${domain}-catalog`, 'catalog')
-	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }], postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
+	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [cursor.snapshot], postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
 	const page = detailPage(url, chainId, `${domain}-catalog`, 'catalog', asOf, cursor)
-	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
-	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
-	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
-	const rows = await catalogRows(sql, domain, chainId, asOf, { block: cursorBlock, log: cursorLog, tx: cursorTx }, page.queryLimit)
+	const rows = await catalogRows(sql, domain, chainId, asOf, cursor?.position, page.queryLimit)
 	const pageData = paged(rows, page.limit, row => protocolCursorFor(chainId, `${domain}-catalog`, 'catalog', asOf, row))
 	return json({
 		chainId,
