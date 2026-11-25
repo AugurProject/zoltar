@@ -146,6 +146,7 @@ export type RichListBalance =
 	  })
 
 export type RichListBalanceTargets = {
+	readonly completed?: ReadonlySet<string>
 	readonly addresses: readonly Address[]
 	readonly assets: readonly RichListAsset[]
 }

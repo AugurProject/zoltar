@@ -1,3 +1,4 @@
+import { collateralAsset } from '../protocol/collateral.js'
 import * as workflowCopy from '../copy/workflows.js'
 import { useRef } from 'preact/hooks'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
@@ -52,7 +53,7 @@ export function useLiveTradingController({
 	// Only addressed routes work on a market; list routes show candidates until an address is opened.
 	const selected = routePool === undefined ? undefined : visibleMarkets.find(market => market.pool.toLowerCase() === routePool.toLowerCase())
 	// The trade workflow is keyed by the addressed market, so its inputs and state follow the route before discovery loads the market.
-	const transactionWorkflow = useTransactionWorkflow({ onWorkflowLockChange, account, chainId: configuration?.chainId, market: routePool, marketTitle: selected?.title, walletClient })
+	const transactionWorkflow = useTransactionWorkflow({ onWorkflowLockChange, account, chainId: configuration?.chainId, market: routePool, amountUnit: selected === undefined ? undefined : `${collateralAsset(selected).token}:${collateralAsset(selected).decimals}`, marketTitle: selected?.title, walletClient })
 	const { mode, side, amount, acknowledgedImpactBps, requoteNotice, resetUnlocked, state, positionHash, message, positionReceiptWarning, workflowLocked, marketWorkflowLocked, updateLiquidityWorkflowLock } = transactionWorkflow
 	const nowSeconds = useQuestionClock(configuration, services)
 	const listedMarkets = visibleMarkets.filter(market => (tradingListKindFor(route) === 'security-pools' ? market.pair === undefined && market.loadError === undefined && marketAcceptsNewRisk(market, nowSeconds) : market.pair !== undefined || market.loadError !== undefined))

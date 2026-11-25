@@ -2,7 +2,7 @@ import { readdir } from 'node:fs/promises'
 import { basename, dirname, resolve } from 'node:path'
 import { logDashboardFailure } from '@zoltar/bot-shared/dashboard/public-error'
 import { assertDurableDeploymentFactory, assertDurableStateFactories } from '../config/deployment-state.ts'
-import { isPristineBootstrapState } from '../state/pristine.ts'
+import { isPristineBootstrapState, isUnoperatedSignerlessState } from '../state/pristine.ts'
 import { executionProfileId } from '../config/execution-profile.ts'
 import { loadSettings } from '../config/settings.ts'
 import { loadDurableState } from '../state/operator-state.ts'
@@ -26,7 +26,7 @@ export async function loadVerifiedDeploymentArchive(path: string) {
 	const state = await loadDurableState(loaded.settings.runtime.stateFile, loaded.settings.network.chainId)
 	if (state.profileId !== executionProfileId(loaded.settings)) throw new Error('Deployment archive profile mismatch')
 	assertDurableStateFactories(loaded.settings, state)
-	if (!isPristineBootstrapState(state)) assertDurableDeploymentFactory(loaded.settings, state, loaded.settings.runtime.stateFile)
+	if (!isPristineBootstrapState(state) && !(state.uniswapV3Factory === undefined && isUnoperatedSignerlessState(state))) assertDurableDeploymentFactory(loaded.settings, state, loaded.settings.runtime.stateFile)
 	const configuredSigner = signerAddress(loaded.settings)
 	if (configuredSigner !== undefined && state.signerAddress !== undefined && configuredSigner.toLowerCase() !== state.signerAddress.toLowerCase()) throw new Error('Deployment archive signer mismatch')
 	return { loaded, state }

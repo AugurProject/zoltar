@@ -169,14 +169,17 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 			changeDetails.className = 'operations-round-changes'
 			const changeDetailsKey = evidenceDisclosureKey('changes', item)
 			if (changeDetailsKey !== undefined) changeDetails.dataset['detailKey'] = changeDetailsKey
-			changeDetails.append(element('summary', '', comparison['state'] === 'initial' ? `Initial values (${changes.length})` : `Changes from round ${String(comparison['previousRoundNumber'] ?? '—')} (${changes.length})`))
+			let comparisonLabel = `Changes from round ${String(comparison['previousRoundNumber'] ?? '—')} (${changes.length})`
+			if (comparison['state'] === 'initial') comparisonLabel = `Initial values (${changes.length})`
+			if (comparison['state'] === 'unavailable') comparisonLabel = 'Previous round unavailable'
+			changeDetails.append(element('summary', '', comparisonLabel))
 			const changeList = document.createElement('ul')
 			for (const change of changes) {
 				const before = change['before'] === undefined ? 'not set' : JSON.stringify(change['before'])
 				const after = change['after'] === undefined ? 'not set' : JSON.stringify(change['after'])
 				changeList.append(element('li', '', `${String(change['field'] ?? 'field')}: ${before ?? 'unavailable'} → ${after ?? 'unavailable'}`))
 			}
-			if (changes.length === 0) changeList.append(element('li', '', 'No report fields changed.'))
+			if (changes.length === 0 && comparison['state'] !== 'unavailable') changeList.append(element('li', '', 'No report fields changed.'))
 			changeDetails.append(changeList)
 			row.append(changeDetails)
 			row.append(rawEvidence(item))

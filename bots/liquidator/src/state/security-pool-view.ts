@@ -26,7 +26,7 @@ export function securityPoolViews(state: RuntimeState, settings: OperatorSetting
 	const totalPrincipal = totalManagedPrincipalAttoRep(state.securityPools)
 	return state.securityPools.map(securityPool => {
 		const snapshot = securityPool.snapshot
-		const marketAllowed = marketPriceAllowsExecution({ repToken: snapshot.repToken, lastPrice: snapshot.acceptedPrice }, settings, state)
+		const marketAllowed = marketPriceAllowsExecution({ repToken: snapshot.repToken, lastPrice: snapshot.acceptedPrice }, settings, state, !snapshot.priceValid || snapshot.timestamp >= snapshot.priceValidUntil)
 		return {
 			address: securityPool.selection.address,
 			universeId: securityPool.selection.universeId.toString(),

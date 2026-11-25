@@ -65,6 +65,7 @@ async function loadLiveQuestionLedgerSettings(client: PublicClient, pool: Addres
 	const projected = checkpoint(block.timestamp + 30n * 24n * 60n * 60n)
 	if (current === undefined || projected === undefined) throw new Error('Question ledger fee accounting unavailable')
 	return {
+		blockNumber,
 		questionData,
 		collateral,
 		mintFees,
@@ -212,10 +213,10 @@ export async function loadLiveMarket(client: PublicClient, configuration: Deploy
 	let tradingStatus: number | undefined
 	if (canonicalPair !== undefined) {
 		const [reserves, supply, pairFee, pairStatus] = await Promise.all([
-			client.readContract({ abi: pair.abi, address: canonicalPair, functionName: 'getEffectiveReserves' }),
-			client.readContract({ abi: pair.abi, address: canonicalPair, functionName: 'totalSupply' }),
-			client.readContract({ abi: pair.abi, address: canonicalPair, functionName: 'feeBps' }),
-			client.readContract({ abi: pair.abi, address: canonicalPair, functionName: 'tradingStatus' }),
+			client.readContract({ abi: pair.abi, address: canonicalPair, blockNumber: poolSettings.blockNumber, functionName: 'getEffectiveReserves' }),
+			client.readContract({ abi: pair.abi, address: canonicalPair, blockNumber: poolSettings.blockNumber, functionName: 'totalSupply' }),
+			client.readContract({ abi: pair.abi, address: canonicalPair, blockNumber: poolSettings.blockNumber, functionName: 'feeBps' }),
+			client.readContract({ abi: pair.abi, address: canonicalPair, blockNumber: poolSettings.blockNumber, functionName: 'tradingStatus' }),
 		])
 		yesReserve = reserves[0]
 		noReserve = reserves[1]

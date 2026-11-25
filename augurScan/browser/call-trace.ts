@@ -8,6 +8,7 @@ export const callTraceRows = (trace: unknown, nativeSymbol: string, depth = 0, a
 	const type = String(trace['type'] ?? 'CALL')
 	let amount = value
 	if (type.toUpperCase() === 'DELEGATECALL') amount = trace['value'] === undefined ? 'no value transfer' : `inherited value ${value} (no transfer)`
+	if (type.toUpperCase() === 'CALLCODE') amount = `call context ${value} (no transfer)`
 	const row = `${depth === 0 ? 'Transaction' : `Internal call (depth ${depth})`} · ${type} · ${String(trace['from'] ?? 'Unknown')} → ${String(trace['to'] ?? 'Creation')} · ${amount}${reverted ? ` · Reverted: ${String(trace['error'] ?? 'ancestor reverted')} (value not transferred)` : ''}`
 	return [row, ...(Array.isArray(trace['calls']) ? trace['calls'].flatMap(call => callTraceRows(call, nativeSymbol, depth + 1, reverted)) : [])]
 }

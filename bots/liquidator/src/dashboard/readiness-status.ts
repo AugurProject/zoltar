@@ -14,7 +14,7 @@ type Guidance = { pending: boolean; message: string; label?: string; title?: str
 
 export function readinessGuidance(snapshot: Readiness, hasDetailedBlockers: boolean): Guidance | undefined {
 	if (snapshot.operatorCapable !== false || hasDetailedBlockers) return undefined
-	if (snapshot.paused) return { pending: false, message: 'The bot is paused. Use Resume to continue scanning.' }
+	if (snapshot.paused) return { pending: false, message: 'The bot is paused. Scanning continues. Use Resume to enable configured execution.' }
 	if (snapshot.deploymentMissingName !== undefined && snapshot.deploymentCheckedBlock !== undefined)
 		return { pending: true, label: 'Not deployed', title: 'Waiting for deployment', message: `${snapshot.deploymentMissingName} is not deployed at block ${snapshot.deploymentCheckedBlock}. The bot rechecks automatically and will scan pools once the required contracts are deployed.` }
 	if (snapshot.scanning) return { pending: true, label: 'Scanning pools', title: 'Scan in progress', message: 'Status updates automatically when the scan completes.' }

@@ -43,7 +43,7 @@ export function buildEscalationReminder({ questionLedgerAddress, escalationEndTi
 			'VERSION:2.0',
 			'PRODID:-//Statoblast//Escalation reminder//EN',
 			'BEGIN:VEVENT',
-			`UID:${escapeCalendarText(`${questionLedgerAddress}-${escalationEndTime}@statoblast`)}`,
+			`UID:${escapeCalendarText(`${questionLedgerAddress.toLowerCase()}@statoblast`)}`,
 			`DTSTAMP:${calendarTimestamp(generatedAt)}`,
 			`DTSTART:${calendarTimestamp(escalationEndTime - 3600n)}`,
 			`DTEND:${calendarTimestamp(escalationEndTime - 2700n)}`,

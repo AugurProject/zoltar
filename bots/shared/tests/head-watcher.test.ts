@@ -7,6 +7,7 @@ function head(number: bigint, suffix = 'aa'): ObservedHead {
 
 function watcherHarness(initialBlockNumber: bigint | undefined) {
 	let blockNumber = initialBlockNumber
+	let suffix = 'aa'
 	let blockReads = 0
 	let numberReads = 0
 	const heads: { head: ObservedHead; previous: ObservedHead | undefined }[] = []
@@ -17,7 +18,7 @@ function watcherHarness(initialBlockNumber: bigint | undefined) {
 		onHead: (observed, previous) => heads.push({ head: observed, previous }),
 		readBlock: async number => {
 			blockReads += 1
-			return head(number)
+			return head(number, suffix)
 		},
 		readBlockNumber: async () => {
 			numberReads += 1
@@ -25,6 +26,9 @@ function watcherHarness(initialBlockNumber: bigint | undefined) {
 		},
 	})
 	return {
+		replace: () => {
+			suffix = 'bb'
+		},
 		advance: (next: bigint) => {
 			blockNumber = next
 		},
@@ -50,8 +54,11 @@ test('reports every new head once and wakes a waiter immediately', async () => {
 	])
 	// A waiter that already scanned the latest head keeps waiting until the timeout.
 	expect(await harness.watcher.waitForNewHead(head(11n), 20)).toBe('timeout')
-	// Unchanged heights cost one block-number read per tick and no block reads.
-	expect(harness.blockReads()).toBe(2)
+	const replaced = harness.watcher.waitForNewHead(head(11n), 1_000)
+	harness.replace()
+	expect(await replaced).toBe('head')
+	expect(harness.watcher.latest()?.hash).toBe(head(11n, 'bb').hash)
+	expect(harness.blockReads()).toBeGreaterThan(2)
 	expect(harness.numberReads()).toBeGreaterThan(2)
 	await harness.watcher.stop()
 })

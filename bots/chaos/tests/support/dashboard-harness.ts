@@ -22,6 +22,7 @@ export const inertDashboardControls = {
 
 export function state(overrides: Record<string, unknown>) {
 	return {
+		execute: false,
 		activities: [],
 		evaluations: [],
 		inventory: { rep: [] },

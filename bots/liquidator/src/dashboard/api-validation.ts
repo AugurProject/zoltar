@@ -107,6 +107,7 @@ export type Configuration = {
 	networkConfigured?: boolean | undefined
 	runtime: { execute: boolean }
 	/** Address of the key saved in the operator file, which live execution requires to match the active signer. */
+	effectiveRpcQuorum?: 1 | 2 | undefined
 	savedSigner?: string | undefined
 	selectedSecurityPools: { address: string; universeId: string }[]
 	strategy: Record<string, string | number | boolean>
@@ -189,6 +190,7 @@ const configuration = object<Configuration>({
 	network: optional(object<NonNullable<Configuration['network']>>({ chainId: numberValue, explorerUrl: stringValue, name: network })),
 	networkConfigured: optional(booleanValue),
 	runtime: object<Configuration['runtime']>({ execute: booleanValue }),
+	effectiveRpcQuorum: optional(oneOf(1, 2)),
 	savedSigner: optional(address),
 	selectedSecurityPools: array(object<{ address: string; universeId: string }>({ address: stringValue, universeId: stringValue })),
 	securityPoolPolicy: dictionary((value): value is string | number | boolean => stringValue(value) || numberValue(value) || booleanValue(value)),

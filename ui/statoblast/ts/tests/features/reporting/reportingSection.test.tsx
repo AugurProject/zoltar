@@ -258,6 +258,11 @@ function requireButton(element: HTMLElement) {
 }
 describe('ReportingSection', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
+	async function renderReportingSection(overrides: Parameters<typeof createProps>[0]) {
+		const rendered = await renderIntoDocument(h(ReportingSection, createProps(overrides)))
+		cleanupRenderedComponent = rendered.cleanup
+		return rendered
+	}
 
 	test.each([0n, 1n, 60n, 61n])('reserves report submission time without resolving early (%s)', async remaining => {
 		const rendered = await renderIntoDocument(
@@ -322,8 +327,7 @@ describe('ReportingSection', () => {
 		test(`shows no leader or winner prediction for tied balances at time ${currentTime}`, async () => {
 			const details = createReportingDetails({ currentTime, activationTime: 300n, escalationEndTime: 600n })
 			details.sides = details.sides.map(side => ({ ...side, balance: rep(8n) }))
-			const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details, currentTimestamp: details.currentTime })))
-			cleanupRenderedComponent = rendered.cleanup
+			await renderReportingSection({ reportingDetails: details, currentTimestamp: details.currentTime })
 			expect(document.querySelector('.escalation-phase')?.textContent).toContain('No side leads right now.')
 			expect(document.querySelector('.escalation-phase')?.textContent).not.toContain('wins.')
 			expect(within(document.body).queryByText('Leading')).toBeNull()
@@ -332,8 +336,7 @@ describe('ReportingSection', () => {
 	test('removes stale settlement guidance and fork progress after all deposits are cleared', async () => {
 		const details = createReportingDetails({ questionOutcome: 'no', parentWithdrawalEnabled: true, settlementState: 'resolved' })
 		details.sides = details.sides.map(side => ({ ...side, userDeposits: [], importedUserDeposits: [] }))
-		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details, currentTimestamp: details.currentTime })))
-		cleanupRenderedComponent = rendered.cleanup
+		await renderReportingSection({ reportingDetails: details, currentTimestamp: details.currentTime })
 		expect(document.body.textContent).not.toContain('Settle your deposits below.')
 		expect(document.body.textContent).not.toContain('Progress to fork')
 		expect(document.body.textContent).not.toContain('A fork requires two sides')
@@ -341,8 +344,7 @@ describe('ReportingSection', () => {
 	for (const end of [300n, 600n]) {
 		test(`marks the response window completed after resolution: end ${end}`, async () => {
 			const details = createReportingDetails({ currentTime: 700n, activationTime: 300n, escalationEndTime: end, questionOutcome: 'no', settlementState: 'resolved' })
-			const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details, currentTimestamp: details.currentTime })))
-			cleanupRenderedComponent = rendered.cleanup
+			await renderReportingSection({ reportingDetails: details, currentTimestamp: details.currentTime })
 			const activeStep = Array.from(document.querySelectorAll('.escalation-phase-steps li')).find(step => step.textContent?.includes('Response window'))
 			expect(activeStep?.classList.contains('completed')).toBe(true)
 			expect(activeStep?.textContent?.includes('✓')).toBe(true)
@@ -351,45 +353,39 @@ describe('ReportingSection', () => {
 
 	test('keeps wallet approval visible and disabled when its allowance is sufficient', async () => {
 		const details = createReportingDetails({ contributionFunding: 'wallet', viewerWalletRepAllowanceAttoRep: rep(100n), viewerWalletRepBalanceAttoRep: rep(100n) })
-		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details, reportingForm: createReportingForm({ contributionFunding: 'wallet', reportAmount: '10', selectedOutcome: 'yes' }) })))
-		cleanupRenderedComponent = rendered.cleanup
+		await renderReportingSection({ reportingDetails: details, reportingForm: createReportingForm({ contributionFunding: 'wallet', reportAmount: '10', selectedOutcome: 'yes' }) })
 		expectTransactionButtonDisabled(document.body, 'Approval satisfied')
 		expect(document.body.textContent).toContain('After this report, check back before')
 	})
 
 	test('unifies active positions into one flat status section', async () => {
-		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createReportingDetails() })))
-		cleanupRenderedComponent = rendered.cleanup
+		await renderReportingSection({ reportingDetails: createReportingDetails() })
 		expect(within(document.body).queryByRole('heading', { name: 'Your positions' })).not.toBeNull()
 		expect(document.body.textContent).not.toContain('Your status')
 		expect(document.querySelector('.reporting-settlement-section')).toBeNull()
 	})
 
 	test('describes the response deadline when low stakes end at activation', async () => {
-		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createReportingDetails({ currentTime: 150n, activationTime: 300n, escalationEndTime: 300n }) })))
-		cleanupRenderedComponent = rendered.cleanup
+		await renderReportingSection({ reportingDetails: createReportingDetails({ currentTime: 150n, activationTime: 300n, escalationEndTime: 300n }) })
 		expect(document.querySelector('.escalation-phase')?.textContent).toContain(`If no other side overtakes No by ${formatReportingDeadline(300n, 150n)}, No wins.`)
 		expect(document.querySelector('.escalation-phase')?.textContent).not.toContain('Game starts in')
 	})
 	test('shows only the resolved outcome when no REP is claimable', async () => {
 		const details = createReportingDetails({ questionOutcome: 'no', parentWithdrawalEnabled: true, settlementState: 'resolved' })
-		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
-		cleanupRenderedComponent = rendered.cleanup
+		await renderReportingSection({ reportingDetails: details })
 		expect(document.querySelector('.reporting-result.warning')?.textContent).toBe('Resolved as No.')
 	})
 	test('omits empty positions and duplicate outcome-selection hints', async () => {
 		const details = createReportingDetails()
 		details.sides = details.sides.map(side => ({ ...side, userDeposits: [] }))
-		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
-		cleanupRenderedComponent = rendered.cleanup
+		await renderReportingSection({ reportingDetails: details })
 		expect(within(document.body).queryByRole('heading', { name: 'Your positions' })).toBeNull()
 		expect(document.body.textContent?.match(/Select an outcome side/g)).toHaveLength(1)
 		expect(document.body.querySelector('.reporting-shared-action-region')?.textContent).toContain('Select an outcome side')
 		expect(Array.from(document.querySelectorAll('p.detail')).some(element => element.textContent === '')).toBe(false)
 	})
 	test('shows nonzero tiny fork progress and grouped amounts', async () => {
-		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createReportingDetails({ nonDecisionThresholdAttoRep: rep(225000n) }) })))
-		cleanupRenderedComponent = rendered.cleanup
+		await renderReportingSection({ reportingDetails: createReportingDetails({ nonDecisionThresholdAttoRep: rep(225000n) }) })
 		expect(document.body.textContent).toContain('second side at 5 / 225\u00a0000 REP (<0.01%)')
 	})
 	test('keeps active phase visible, scales bars to fork threshold and hides premature settlement', async () => {
@@ -404,8 +400,7 @@ describe('ReportingSection', () => {
 	})
 
 	test('does not present the chart fallback as a real threshold while reporting loads', async () => {
-		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: undefined, loadingReportingDetails: true })))
-		cleanupRenderedComponent = rendered.cleanup
+		await renderReportingSection({ reportingDetails: undefined, loadingReportingDetails: true })
 		expect(document.body.textContent).toContain('Progress to fork: —')
 		expect(document.body.textContent).not.toContain('0.000000000000000001 REP')
 	})
@@ -417,8 +412,7 @@ describe('ReportingSection', () => {
 	})
 
 	test('replaces the resolved report form with results and a claim summary', async () => {
-		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createReportingDetails({ questionOutcome: 'yes', parentWithdrawalEnabled: true, settlementState: 'resolved' }) })))
-		cleanupRenderedComponent = rendered.cleanup
+		await renderReportingSection({ reportingDetails: createReportingDetails({ questionOutcome: 'yes', parentWithdrawalEnabled: true, settlementState: 'resolved' }) })
 		expect(document.body.textContent).toContain('Resolved as Yes. You can claim')
 		// The claim renders through the shared amount component: rounded on screen, exact on hover.
 		expect(document.body.textContent).toContain('You can claim 2.20 REP.')
@@ -432,8 +426,7 @@ describe('ReportingSection', () => {
 
 	test('explains that clearing losing deposits returns no REP and when it is needed', async () => {
 		const details = createReportingDetails({ questionOutcome: 'no', parentWithdrawalEnabled: true, settlementState: 'resolved' })
-		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
-		cleanupRenderedComponent = rendered.cleanup
+		await renderReportingSection({ reportingDetails: details })
 		expect(settlementButtonLabel('Yes')).toBe('Clear Yes deposits (worth 0 REP)…')
 		expect(document.body.textContent).toContain('Losing ordinary deposits return no REP and require no cleanup transaction. Reporter deposits are separate from security pool capital.')
 	})
@@ -775,8 +768,7 @@ describe('ReportingSection', () => {
 	})
 
 	test('shows continuation timing instead of zero-valued ordinary activation times', async () => {
-		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createReportingDetails({ activationTime: 0n, forkContinuation: true, forkResumedAt: 100n, forkElapsedAtStart: 20n }) })))
-		cleanupRenderedComponent = rendered.cleanup
+		await renderReportingSection({ reportingDetails: createReportingDetails({ activationTime: 0n, forkContinuation: true, forkResumedAt: 100n, forkElapsedAtStart: 20n }) })
 		expect(document.body.textContent).toContain('Continuation resumed')
 		expect(document.body.textContent).toContain('Inherited attrition elapsed')
 		expect(document.body.textContent).not.toContain('Immediate')
@@ -2061,8 +2053,7 @@ describe('ReportingSection', () => {
 
 	for (const reason of ['This branch inherits a fixed question outcome; new reports are closed.', 'Resume the continuation game before reporting.']) {
 		test(`blocks reports when ${reason}`, async () => {
-			const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createReportingDetails({ reportingBlockedReason: reason }), reportingForm: createReportingForm({ selectedOutcome: 'yes', reportAmount: '5' }) })))
-			cleanupRenderedComponent = rendered.cleanup
+			await renderReportingSection({ reportingDetails: createReportingDetails({ reportingBlockedReason: reason }), reportingForm: createReportingForm({ selectedOutcome: 'yes', reportAmount: '5' }) })
 			expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'))
 			expect(document.body.textContent).toContain(reason)
 		})
@@ -2708,7 +2699,7 @@ describe('ReportingSection', () => {
 
 	for (const winning of [true, false]) {
 		test(`shows viewer ${winning ? 'winning' : 'losing'} status and the response reminder`, async () => {
-			const details = createReportingDetails({ bindingCapital: 0n })
+			const details = createReportingDetails({ bindingCapital: 0n, escalationEndTime: 7500n })
 			details.sides = details.sides.map(side => ({ ...side, balance: side.key === (winning ? 'yes' : 'no') ? rep(8n) : rep(1n) }))
 			const rendered = await renderIntoDocument(h(ReportingSectionHarness, { initialProps: createProps({ reportingDetails: details }) }))
 			cleanupRenderedComponent = rendered.cleanup
@@ -2717,12 +2708,12 @@ describe('ReportingSection', () => {
 			else {
 				// The minimum reads rounded up, so adding the shown figure takes the lead; hovering shows the exact amount that Take the lead fills in.
 				expect(status?.textContent).toContain('You’re behind on Yes. Add at least ≈ 7.01 REP')
-				expect(status?.textContent).toContain(`before ${formatReportingDeadline(300n, 150n)} or your 1.00 REP is lost.`)
+				expect(status?.textContent).toContain(`before ${formatReportingDeadline(7500n, 150n)} or your 1.00 REP is lost.`)
 				expect(status?.querySelector('.currency-value')?.getAttribute('title')).toBe('7.000000000000000001 REP')
 			}
 			expect(status?.classList.contains('notice')).toBe(false)
 			expect(status?.querySelector('strong:not(.notice-title)')?.textContent).toBe(winning ? 'You’re leading on Yes.' : 'You’re behind on Yes.')
-			expect(document.body.textContent).toContain(`Check back before ${formatReportingDeadline(300n, 150n)}. A report that raises the middle of the three balances can extend the response window (up to 7 weeks after activation, following the initial 3-day delay).`)
+			expect(document.body.textContent).toContain(`Check back before ${formatReportingDeadline(7500n, 150n)}. A report that raises the middle of the three balances can extend the response window (up to 7 weeks after activation, following the initial 3-day delay).`)
 			expect(within(document.body).getByRole('button', { name: 'Add reminder (.ics)' })).not.toBeNull()
 			if (!winning) {
 				const input = document.getElementById('reporting-contribution-amount')
@@ -2740,6 +2731,13 @@ describe('ReportingSection', () => {
 			}
 		})
 	}
+	test('keeps deadline guidance visible once the calendar alarm time has passed', async () => {
+		const details = createReportingDetails({ currentTime: 150n, escalationEndTime: 1950n })
+		await renderReportingSection({ reportingDetails: details })
+		expect(document.body.textContent).toContain('Check back before')
+		expect(within(document.body).queryByRole('button', { name: 'Add reminder (.ics)' })).toBeNull()
+	})
+
 	test('writes the calendar reminder status with rounded REP amounts', () => {
 		const details = createReportingDetails({ bindingCapital: 0n })
 		details.sides = details.sides.map(side => ({ ...side, balance: side.key === 'no' ? rep(8n) : rep(1n) }))
@@ -2749,8 +2747,7 @@ describe('ReportingSection', () => {
 	test('orders multi-side positions with the winner first and includes imported stake', async () => {
 		const details = createReportingDetails({ bindingCapital: 0n })
 		details.sides = details.sides.map(side => (side.key === 'no' ? { ...side, importedUserDeposits: [{ amountAttoRep: rep(2n), cumulativeAmountAttoRep: rep(2n), parentDepositIndex: 0n, depositor: zeroAddress }] } : side))
-		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
-		cleanupRenderedComponent = rendered.cleanup
+		await renderReportingSection({ reportingDetails: details })
 		const text = document.querySelector('.reporting-viewer-status')?.textContent ?? ''
 		expect(text).toContain('You’re leading on No. Your 2.00 REP would be worth 2.00 REP if it ended now.')
 		expect(document.querySelector('.reporting-viewer-status')?.classList.contains('notice')).toBe(false)
@@ -2760,8 +2757,7 @@ describe('ReportingSection', () => {
 	test('ties show no winner, link to the explanation, and label positions Tied', async () => {
 		const details = createReportingDetails()
 		details.sides = details.sides.map(side => ({ ...side, balance: rep(8n) }))
-		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
-		cleanupRenderedComponent = rendered.cleanup
+		await renderReportingSection({ reportingDetails: details })
 		expect(document.querySelector('.reporting-viewer-status')?.textContent).toContain(`No side leads right now. If this stays tied at ${formatReportingDeadline(300n, 150n)}, no side wins (see how ties resolve).`)
 		expect(within(document.body).getByRole('link', { name: 'see how ties resolve' }).getAttribute('href')).toBe('https://augurproject.github.io/zoltar/docs/explanation/escalation-game.html')
 		expect(document.querySelector('.reporting-viewer-status')?.textContent).toContain('No side leads right now.')
@@ -2769,8 +2765,7 @@ describe('ReportingSection', () => {
 	})
 	for (const started of [false, true]) {
 		test(`explainer defaults ${started ? 'closed' : 'open'} and stepper has three steps`, async () => {
-			const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: started ? createReportingDetails() : createNotStartedReportingDetails() })))
-			cleanupRenderedComponent = rendered.cleanup
+			await renderReportingSection({ reportingDetails: started ? createReportingDetails() : createNotStartedReportingDetails() })
 			const explainer = Array.from(document.querySelectorAll('details')).find(element => element.querySelector('summary')?.textContent === 'How the escalation game works')
 			expect(explainer?.open).toBe(!started)
 			expect(explainer?.querySelectorAll('li')).toHaveLength(5)
@@ -2779,49 +2774,46 @@ describe('ReportingSection', () => {
 		})
 	}
 	test('deadline movement stays dismissed for that deadline and reappears for a later move', async () => {
-		const details = createReportingDetails()
-		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
-		cleanupRenderedComponent = rendered.cleanup
+		const details = createReportingDetails({ escalationEndTime: 7500n })
+		const rendered = await renderReportingSection({ reportingDetails: details })
 		expect(document.body.textContent).not.toContain('The response window now ends')
-		await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 600n } })), rendered.container))
-		expect(document.body.textContent).toContain(`The response window now ends ${formatReportingDeadline(600n, 150n)} because a new report was added. Your status may have changed.`)
+		await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 7800n } })), rendered.container))
+		expect(document.body.textContent).toContain(`The response window now ends ${formatReportingDeadline(7800n, 150n)} because a new report was added. Your status may have changed.`)
 		expect(within(document.body).queryByRole('button', { name: 'Add reminder (.ics)' })).toBeNull()
 		expect(within(document.body).getByRole('button', { name: 'Update your reminder (.ics)' })).not.toBeNull()
 		const movedNotice = within(document.body).getByRole('button', { name: 'Update your reminder (.ics)' }).closest('[data-message-placement]')
 		expect(movedNotice?.getAttribute('aria-live')).toBe('polite')
 		expect(movedNotice?.getAttribute('role')).toBe('status')
-		await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 600n } })), rendered.container))
+		await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 7800n } })), rendered.container))
 		expect(document.body.textContent).toContain('The response window now ends')
 		await act(() => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss response window notice' }))
 		})
 		expect(within(document.body).queryByRole('button', { name: 'Update your reminder (.ics)' })).toBeNull()
 		expect(within(document.body).getByRole('button', { name: 'Add reminder (.ics)' })).not.toBeNull()
-		await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 600n } })), rendered.container))
+		await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 7800n } })), rendered.container))
 		expect(document.body.textContent).not.toContain('The response window now ends')
-		await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 900n } })), rendered.container))
+		await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 8100n } })), rendered.container))
 		expect(document.body.textContent).toContain('The response window now ends')
 		expect(within(document.body).getByRole('button', { name: 'Update your reminder (.ics)' })).not.toBeNull()
 	})
-	for (const closed of [{ currentTime: 601n }, { questionOutcome: 'yes', settlementState: 'resolved', parentWithdrawalEnabled: true }, { hasReachedNonDecision: true }, { escalationEndTime: (1n << 256n) - 1n }] satisfies Partial<ActiveReportingDetails>[]) {
+	for (const closed of [{ currentTime: 7801n }, { questionOutcome: 'yes', settlementState: 'resolved', parentWithdrawalEnabled: true }, { hasReachedNonDecision: true }, { escalationEndTime: (1n << 256n) - 1n }] satisfies Partial<ActiveReportingDetails>[]) {
 		test(`clears deadline movement when reminders are unavailable: ${Object.keys(closed).join(', ')}`, async () => {
-			const details = createReportingDetails()
-			const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
-			cleanupRenderedComponent = rendered.cleanup
-			await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 600n } })), rendered.container))
+			const details = createReportingDetails({ escalationEndTime: 7500n })
+			const rendered = await renderReportingSection({ reportingDetails: details })
+			await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 7800n } })), rendered.container))
 			expect(document.body.textContent).toContain('The response window now ends')
-			await act(() => render(h(ReportingSection, createProps({ currentTimestamp: closed.currentTime ?? details.currentTime, reportingDetails: { ...details, escalationEndTime: 600n, ...closed } })), rendered.container))
+			await act(() => render(h(ReportingSection, createProps({ currentTimestamp: closed.currentTime ?? details.currentTime, reportingDetails: { ...details, escalationEndTime: 7800n, ...closed } })), rendered.container))
 			expect(document.body.textContent).not.toContain('The response window now ends')
 			expect(document.body.textContent).not.toContain('Check back before')
-			await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 600n } })), rendered.container))
+			await act(() => render(h(ReportingSection, createProps({ reportingDetails: { ...details, escalationEndTime: 7800n } })), rendered.container))
 			expect(document.body.textContent).not.toContain('The response window now ends')
 		})
 	}
 	test('live zero balances do not display Invalid as leading or predict a tied timeout', async () => {
 		const details = createReportingDetails()
 		details.sides = details.sides.map(side => ({ ...side, balance: 0n }))
-		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
-		cleanupRenderedComponent = rendered.cleanup
+		await renderReportingSection({ reportingDetails: details })
 		expect(document.body.textContent).not.toContain('Invalid wins')
 		expect(document.body.textContent).not.toContain('Leading')
 		expect(document.body.textContent).not.toContain('no side wins')
@@ -2837,14 +2829,13 @@ describe('ReportingSection', () => {
 		const revoke = spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
 		const timer = spyOn(globalThis, 'setTimeout')
 		try {
-			const rendered = await renderIntoDocument(h(ReportingSection, createProps()))
-			cleanupRenderedComponent = rendered.cleanup
+			await renderReportingSection({ reportingDetails: createReportingDetails({ escalationEndTime: 7500n }) })
 			await act(() => {
 				fireEvent.click(within(document.body).getByRole('button', { name: 'Add reminder (.ics)' }))
 			})
 			const calendar = await calendarBlob?.text()
 			expect(calendar).toContain('DTSTAMP:20260924T000000Z\r\n')
-			expect(calendar).toContain('DTSTART:19691231T230500Z\r\n')
+			expect(calendar).toContain('DTSTART:19700101T010500Z\r\n')
 			expect(timer.mock.calls.some(call => call[1] === 1000)).toBe(true)
 			expect(revoke).not.toHaveBeenCalled()
 			await new Promise(resolve => setTimeout(resolve, 1100))
@@ -2858,8 +2849,7 @@ describe('ReportingSection', () => {
 	})
 	test('resolved claims show the amount without a reminder or an invented claim deadline', async () => {
 		const details = createReportingDetails({ questionOutcome: 'yes', settlementState: 'resolved', parentWithdrawalEnabled: true })
-		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
-		cleanupRenderedComponent = rendered.cleanup
+		await renderReportingSection({ reportingDetails: details })
 		expect(document.querySelector('.notice.success')?.textContent).toContain('Resolved as Yes. You can claim')
 		expect(document.body.textContent).not.toContain('Claim before')
 		expect(document.body.textContent).not.toContain('Check back before')

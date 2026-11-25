@@ -50,10 +50,12 @@ test('a chain rewind discards previously committed collateral identity', async (
 		spyOn(database, 'checkpoint')
 			.mockResolvedValueOnce({ number: 10n, hash: toHex(10n, { size: 32 }) })
 			.mockResolvedValue(undefined),
-		spyOn(indexer.providers.client, 'getBlock').mockResolvedValue({ number: 10n, hash: zeroHash, parentHash: zeroHash, timestamp: 100n, transactions: [] }),
-		spyOn(database, 'canonicalCheckpointAtOrBefore').mockResolvedValue(undefined),
+		spyOn(indexer.providers.client, 'getBlock').mockResolvedValue({ number: 9n, hash: zeroHash, parentHash: zeroHash, timestamp: 100n, transactions: [] }),
+		spyOn(database, 'canonicalCheckpointAtOrBefore')
+			.mockResolvedValueOnce({ number: 9n, hash: toHex(9n, { size: 32 }) })
+			.mockResolvedValue(undefined),
 		spyOn(database, 'rewind').mockResolvedValue(undefined),
-		spyOn(indexer.providers.client, 'getBlockNumber').mockResolvedValue(0n),
+		spyOn(indexer.providers.client, 'getBlockNumber').mockResolvedValue(9n),
 		spyOn(database, 'updateObservedHead').mockResolvedValue(undefined),
 	]
 	try {

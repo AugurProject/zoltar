@@ -209,14 +209,14 @@ describe('portfolio rows', () => {
 
 describe('portfolio overview', () => {
 	test('totals valued positions, counts unvalued ones, and lists dated action items first', () => {
-		const overview = portfolioOverview([entry({ questionOutcome: 1, title: 'Resolved' }, { yes: 2n * SET }), entry({ pool: secondPool, title: 'Closing', endTime: NOW + 60n }, { yes: SET, no: SET, invalid: SET }), entry({ title: 'Forked', universeForkTime: 1n, systemState: 1 }, { yes: SET })], NOW)
+		const overview = portfolioOverview([entry({ questionOutcome: 1, title: 'Resolved' }, { yes: 2n * SET }), entry({ pool: secondPool, title: 'Closing', endTime: NOW + 61n }, { yes: SET, no: SET, invalid: SET }), entry({ title: 'Forked', universeForkTime: 1n, systemState: 1 }, { yes: SET })], NOW)
 		expect(overview.positionCount).toBe(3)
 		expect(overview.totalValueAttoEth).toBe(3n * ATTO_ETH_PER_ETH)
 		expect(overview.unvaluedCount).toBe(1)
 		expect(overview.pendingResolutionCount).toBe(0)
 		expect(portfolioOverview([entry({}, { lp: SET })], NOW).pendingResolutionCount).toBe(1)
 		expect(overview.actionGroups.map(group => [group.title, group.deadline, group.items.map(item => item.kind)])).toEqual([
-			['Closing', NOW + 60n, ['trading-closes']],
+			['Closing', NOW + 61n, ['trading-closes']],
 			['Resolved', undefined, ['redeem']],
 			['Forked', undefined, ['settle']],
 		])

@@ -1,4 +1,6 @@
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
+import { formatCollateralAmount } from '../../protocol/collateral.js'
+import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { LiveMarket } from '../../protocol/live.js'
@@ -85,7 +87,13 @@ export function createPositionTransactionController({
 						? { ...quoteContext, kind: 'entry', value: await withReadTimeout(services.simulateEntry(walletClient, configuration, market, account, side, estimate.payAttoEth, validityMinutes, slippageBps)) }
 						: { ...quoteContext, kind: 'exit', value: await withReadTimeout(services.simulateExit(walletClient, configuration, market, account, side, estimate.quote.completeSetShares, validityMinutes, slippageBps)) }
 				if (authoritativeQuoteMoved(estimate, quote.value.result.totalLongShares, quote.kind === 'exit' ? quote.value.result.ethOut : undefined, quote.kind === 'exit' ? quote.value.expectedAttoRep : undefined)) {
-					const detail = priceMovedDetail(estimate, quote.value.result.totalLongShares, quote.value.market)
+					let detail = priceMovedDetail(estimate, quote.value.result.totalLongShares, quote.value.market)
+					if (estimate.kind === 'exit' && quote.kind === 'exit') {
+						const proceeds = []
+						if (quote.value.result.ethOut < estimate.minimumAttoEth) proceeds.push(formatCollateralAmount(quote.value.result.ethOut, market, 18))
+						if (quote.value.expectedAttoRep < estimate.minimumAttoRep) proceeds.push(`${formatTrimmedUnits(quote.value.expectedAttoRep, 18, 18)} REP`)
+						if (proceeds.length > 0) detail = ticketCopy.formatRequotedReceive(proceeds.join(' and '))
+					}
 					// Reload the reserves before the ticket unlocks, so the estimate on screen shows the price the chain now quotes
 					// and pressing again cannot reuse the old one. A refresh that failed, timed out, or was held or superseded left the
 					// old estimate on screen, so the notice says the estimate could not be updated instead of asking for a review.

@@ -55,17 +55,15 @@ export const poolStateHistory = async (sql: SQL, address: string, query: StateHi
 					WHEN market.token0_address = universe_rep.reputation_token_address THEN market.token1_address
 					ELSE market.token0_address
 				END AS quote_token_address,
-				TRUNC(CASE
+				CASE
 					WHEN observation.venue = 'v2' AND market.token0_address = universe_rep.reputation_token_address
-						THEN observation.reserve0 * power(10::numeric, COALESCE(quote_metadata.decimals, CASE WHEN quote_contract.kind = 'usdc' THEN ${USDC_QUOTE_DECIMALS} ELSE ${ETH_QUOTE_DECIMALS} END)) / observation.reserve1
+						THEN div(observation.reserve0 * power(10::numeric, COALESCE(quote_metadata.decimals, CASE WHEN quote_contract.kind = 'usdc' THEN ${USDC_QUOTE_DECIMALS} ELSE ${ETH_QUOTE_DECIMALS} END)), observation.reserve1)
 					WHEN observation.venue = 'v2'
-						THEN observation.reserve1 * power(10::numeric, COALESCE(quote_metadata.decimals, CASE WHEN quote_contract.kind = 'usdc' THEN ${USDC_QUOTE_DECIMALS} ELSE ${ETH_QUOTE_DECIMALS} END)) / observation.reserve0
+						THEN div(observation.reserve1 * power(10::numeric, COALESCE(quote_metadata.decimals, CASE WHEN quote_contract.kind = 'usdc' THEN ${USDC_QUOTE_DECIMALS} ELSE ${ETH_QUOTE_DECIMALS} END)), observation.reserve0)
 					WHEN market.token0_address = universe_rep.reputation_token_address
-						THEN 6277101735386680763835789423207666416102355444464034512896 * power(10::numeric, COALESCE(quote_metadata.decimals, CASE WHEN quote_contract.kind = 'usdc' THEN ${USDC_QUOTE_DECIMALS} ELSE ${ETH_QUOTE_DECIMALS} END))
-							/ (observation.sqrt_price_x96 * observation.sqrt_price_x96)
-					ELSE observation.sqrt_price_x96 * observation.sqrt_price_x96 * power(10::numeric, COALESCE(quote_metadata.decimals, CASE WHEN quote_contract.kind = 'usdc' THEN ${USDC_QUOTE_DECIMALS} ELSE ${ETH_QUOTE_DECIMALS} END))
-						/ 6277101735386680763835789423207666416102355444464034512896
-				END)::text AS rep_per_eth_1e18,
+						THEN div(6277101735386680763835789423207666416102355444464034512896 * power(10::numeric, COALESCE(quote_metadata.decimals, CASE WHEN quote_contract.kind = 'usdc' THEN ${USDC_QUOTE_DECIMALS} ELSE ${ETH_QUOTE_DECIMALS} END)), (observation.sqrt_price_x96 * observation.sqrt_price_x96))
+					ELSE div(observation.sqrt_price_x96 * observation.sqrt_price_x96 * power(10::numeric, COALESCE(quote_metadata.decimals, CASE WHEN quote_contract.kind = 'usdc' THEN ${USDC_QUOTE_DECIMALS} ELSE ${ETH_QUOTE_DECIMALS} END)), 6277101735386680763835789423207666416102355444464034512896)
+				END::text AS rep_per_eth_1e18,
 				TRUNC(CASE WHEN observation.venue = 'v2' THEN observation.reserve0 * observation.reserve1 ELSE observation.liquidity END)::text AS liquidity_value,
 				block.timestamp
 			FROM uniswap_rep_eth_price_observations observation

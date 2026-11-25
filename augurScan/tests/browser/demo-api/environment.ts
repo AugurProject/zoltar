@@ -90,6 +90,17 @@ export const createDemoEnvironment = (context: DemoContext) => {
 		...createDemoChainFixtures(),
 		...createDemoCatalogFixtures(context),
 	}
+	if (context.pageUrl.searchParams.has('wrapperLimitDemo')) {
+		const owner = fixtures.demoRichList.find(item => item.chain_id === '1')
+		const token = owner?.weth_balances[0]
+		if (owner === undefined || token === undefined) throw new Error('Missing wrapped-token ranking fixture')
+		owner.weth_balance = (101n * 10n ** 18n).toString()
+		owner.weth_token_count = '101'
+		owner.sampled_weth_token_count = '101'
+		owner.returned_weth_token_count = '100'
+		owner.weth_balances_truncated = true
+		owner.weth_balances = Array.from({ length: 100 }, (_, index) => ({ ...token, address: `0x${(index + 1).toString(16).padStart(40, '0')}`, balance: (10n ** 18n).toString() }))
+	}
 	return { context, settings, fixtures, counters: createDemoCounters() }
 }
 

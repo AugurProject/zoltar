@@ -71,10 +71,21 @@ describe('essential trading copy', () => {
 		expect(exitRows.get('You sell')).toBe(formatOutcomeQuantity(sell.quote.totalLongShares, 'YES', 6))
 		// The most the wallet signs over is shown beside the minimum it receives, and it never exceeds the 2 Yes typed.
 		expect(sell.maximumLongShares).toBeLessThanOrEqual(2n * 10n ** 18n)
-		expect(exitRows.get('Maximum sold')).toBe(formatOutcomeQuantity(sell.maximumLongShares, 'YES', 6))
+		expect(exitRows.get('Maximum sold')).toBe('2 Yes')
 		expect(exit.container.textContent).not.toContain('0 ETH otherwise')
 		expect(exit.container.textContent).not.toContain('Profit if the question resolves Yes')
 		expect(exit.container.textContent).not.toContain('Holding fees reduce')
+	})
+
+	test('shows the exact signed minimum for a small insured REP recovery', async () => {
+		const market = liveMarketFixture()
+		const sell = ticketEstimateFor(market, 'exit', '2', { scope: shareBalanceScope(market), yes: 10n ** 19n, no: 0n, invalid: 10n ** 19n, lp: 0n })
+		if (sell.kind !== 'exit') throw new Error('Expected a sell estimate')
+		const estimate = { ...sell, receiveAttoRep: 1_000_000_000_000n, minimumAttoRep: 995_000_000_000n }
+		const rendered = await renderIntoDocument(<TradeEstimatePanel estimate={estimate} market={market} settings={DEFAULT_TRADE_SETTINGS} impactTier='low' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={() => undefined} />)
+		cleanupRendered = rendered.cleanup
+		expect(estimateRows(rendered.container).get('Minimum recovery REP')).toBe('0.000000995\u00a0REP')
+		expect(estimateRows(rendered.container).get('Recovery REP')).toBe('0.000001\u00a0REP')
 	})
 
 	test('escalates price-impact warnings and asks for acknowledgment before a high-impact trade', async () => {

@@ -44,7 +44,10 @@ export function useLocalBrowseDirectory<TItem, TData>({ app, contextKey, externa
 	// Only a new page (a completed scan or a refresh) is recorded; the recorder is read through a ref.
 	const recordRefreshedPageRef = useRef(() => {})
 	recordRefreshedPageRef.current = () => {
-		if (refreshedPage !== undefined) recordPage(refreshedPage)
+		if (refreshedPage !== undefined) {
+			discovery.updateTotalCount(refreshedPage.totalCount)
+			recordPage(refreshedPage)
+		}
 	}
 	useEffect(() => {
 		if (discovery.hasScanned) recordRefreshedPageRef.current()

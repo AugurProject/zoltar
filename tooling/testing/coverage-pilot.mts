@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
+import { lstat, readFile, readlink } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { classifyCiChange } from '../ci/classify-ci-change.mts'
 import { listRepositoryFiles, runGit } from '../repo/git.mts'
@@ -32,7 +32,9 @@ export async function captureCoverageProvenance(repositoryRoot = process.cwd()):
 		// Deletions are represented by their path and marker, not silently omitted.
 		sources.update(`${file}\0`)
 		try {
-			sources.update(await readFile(resolve(repositoryRoot, file)))
+			const path = resolve(repositoryRoot, file)
+			if ((await lstat(path)).isSymbolicLink()) sources.update('symlink\0').update(await readlink(path))
+			else sources.update('file\0').update(await readFile(path))
 		} catch (error) {
 			if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error
 			sources.update('<deleted>')

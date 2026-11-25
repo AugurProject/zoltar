@@ -1,3 +1,4 @@
+import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
@@ -356,6 +357,14 @@ export function useZoltarFork(
 			console.error('[zoltar-fork] failed to auto-load fork access', error)
 		})
 	}, [accountAddress, activeUniverseId, environmentRefreshKey, shouldAutoLoadForkAccess, zoltarUniverse?.reputationToken, zoltarUniverse?.childUniverses.map(child => `${child.universeId.toString()}:${child.exists ? 'deployed' : 'undeployed'}:${child.reputationToken}`).join(',')])
+
+	useBlockRefresh(
+		() => {
+			if (forkAccessLoad.isLoading.peek() || zoltarForkPending.peek()) return
+			void loadZoltarForkAccess().catch(error => console.error('[zoltar-fork] balance refresh failed', error))
+		},
+		shouldAutoLoadForkAccess && accountAddress !== undefined,
+	)
 
 	const hasCurrentForkAccess = loadedForkAccessScopeGeneration.current === forkAccessScopeGeneration
 	return {

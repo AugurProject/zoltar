@@ -3,6 +3,8 @@ setlocal
 set "chaos_exit_code=0"
 set "chaos_pushed=0"
 set "chaos_container_list="
+if not "%~2"=="" goto usage
+if not "%~1"=="" if /I not "%~1"=="doctor" goto usage
 pushd "%~dp0" || goto failed
 set "chaos_pushed=1"
 docker network inspect zoltar >nul 2>&1 || docker network create zoltar || goto failed
@@ -41,6 +43,11 @@ docker compose run --rm --no-deps chaos bun run doctor || goto failed
 echo.
 echo Chaos stopped-process launch preflight passed. Run start.bat without arguments to start the persisted policy.
 
+goto finish
+
+:usage
+echo Usage: start.bat [doctor]
+set "chaos_exit_code=2"
 goto finish
 
 :failed

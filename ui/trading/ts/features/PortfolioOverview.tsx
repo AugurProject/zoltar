@@ -9,7 +9,7 @@ import { formatEthAmount } from '../copy/outcomes.js'
 import * as portfolioCopy from '../copy/portfolio.js'
 import { formatRoundedUnits } from '../lib/format.js'
 import { getTradingRouteHref } from '../lib/routing.js'
-import { marketTicketHref } from '../lib/routeState.js'
+import { marketViewHref, marketTicketHref } from '../lib/routeState.js'
 import type { PortfolioActionGroup, PortfolioActionItem, PortfolioOverview, PortfolioRow, PortfolioValuation } from './portfolioModel.js'
 
 function formatPortfolioEth(attoEth: bigint) {
@@ -56,7 +56,7 @@ function totalValueCaptions(overview: PortfolioOverview) {
 /** Current value, position count, and action items across every listed position. With no priced position the total is a dash, not a misleading 0 ETH. */
 export function PortfolioSummary({ overview }: { overview: PortfolioOverview }) {
 	const totalValue = overview.totalsByAsset === undefined ? formatPortfolioEth(overview.totalValueAttoEth) : overview.totalsByAsset.map(({ asset, value }) => <div key={asset.token}>{formatCollateralAmount(value, { collateral: asset })}</div>)
-	const noPricedPosition = overview.positionCount > 0 && overview.unvaluedCount === overview.positionCount
+	const noPricedPosition = overview.rows.length > 0 && overview.rows.every(row => row.valuation.kind === 'unavailable')
 	return (
 		<section className='portfolio-summary' aria-label={portfolioCopy.summaryLabel}>
 			<DataGrid className='portfolio-summary-grid'>
@@ -84,7 +84,7 @@ function actionBadge(item: PortfolioActionItem) {
 
 function actionLink(item: PortfolioActionItem) {
 	if (item.action === 'withdraw-liquidity') return { action: portfolioCopy.removeLiquidity, href: getTradingRouteHref(`#/liquidity/${item.pool}`) }
-	if (item.action === 'redeem') return { action: portfolioCopy.redeem, href: getTradingRouteHref(`#/market/${item.pool}`) }
+	if (item.action === 'redeem') return { action: portfolioCopy.redeem, href: marketViewHref(item.pool, 'settlement') }
 	if (item.action === 'settle') return { action: portfolioCopy.migrate, href: getTradingRouteHref(`#/market/${item.pool}`) }
 	return { action: portfolioCopy.sell, href: marketTicketHref(item.pool, { mode: 'exit', side: item.sellSide }) }
 }
@@ -140,7 +140,7 @@ export function PortfolioRowActions({ row }: { row: PortfolioRow }) {
 				</a>
 			) : undefined}
 			{row.canRedeem ? (
-				<a className='button-link primary' href={getTradingRouteHref(`#/market/${pool}`)} aria-label={portfolioCopy.actionFor(portfolioCopy.redeem, title)}>
+				<a className='button-link primary' href={marketViewHref(pool, 'settlement')} aria-label={portfolioCopy.actionFor(portfolioCopy.redeem, title)}>
 					{portfolioCopy.redeem}
 				</a>
 			) : undefined}

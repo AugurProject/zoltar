@@ -245,6 +245,36 @@ browserTest(
 )
 
 browserTest(
+	'a stale dashboard cannot confirm an earlier resume preflight',
+	async () => {
+		let unavailable = false
+		const mutations: unknown[] = []
+		await withDashboard(
+			{
+				getState: () => {
+					if (unavailable) throw new Error('State is temporarily unavailable')
+					return state({ wallet: walletAddress })
+				},
+				setPaused: value => {
+					mutations.push(value)
+				},
+			},
+			'/overview',
+			async (cdp, refresh) => {
+				await cdp.evaluate("document.querySelector('#pause-button').click()")
+				await cdp.waitFor("document.querySelector('#resume-dialog').open && !document.querySelector('#confirm-resume').disabled")
+				unavailable = true
+				await refresh()
+				await cdp.evaluate("document.querySelector('#confirm-resume').click()")
+				await cdp.waitFor("document.querySelector('#resume-dialog').open && document.querySelector('#confirm-resume').disabled", { attempts: 20 })
+				expect(mutations).toEqual([])
+			},
+		)
+	},
+	CHROMIUM_STARTUP_BUDGET_MILLISECONDS + 20_000,
+)
+
+browserTest(
 	'resume preflight reloads state first and refuses a stale checklist while the scan age keeps counting',
 	async () => {
 		let failState = false

@@ -1,3 +1,4 @@
+import { hasFreshCanonicalScan, publicSubmissionHealthMaximumAgeSeconds } from '../dashboard/public-state.ts'
 import { privateKeyToAccount, type Address } from '@zoltar/bot-shared/ethereum'
 import { checkPublicTransactionSubmissionEndpoints, checkRpcEndpoint, EndpointCheckFailure } from '@zoltar/bot-shared/monitoring/connectivity'
 import { parseSettings, serializedSettings, type OperatorSettings } from '../config/settings.ts'
@@ -14,9 +15,10 @@ export function assertLiveExecutionReadiness(state: RuntimeState, settings: Oper
 	if (address === undefined) throw new Error('Live execution requires a configured transaction signer')
 	const signerMatches = state.signerAddress?.toLowerCase() === address.toLowerCase() && state.wallet?.toLowerCase() === address.toLowerCase()
 	const topology = state.topology
-	if (!signerMatches || state.lastScanAt === undefined || state.lastScannedBlock === undefined || topology?.complete !== true || topology.anchor.blockNumber !== state.lastScannedBlock) {
+	if (!signerMatches || !hasFreshCanonicalScan(state.lastScanAt, publicSubmissionHealthMaximumAgeSeconds(settings)) || state.lastScannedBlock === undefined || topology?.complete !== true || topology.anchor.blockNumber !== state.lastScannedBlock) {
 		throw new Error('Live execution requires a fresh, complete canonical scan for the configured signer')
 	}
+	if (state.retirement.status !== 'inactive') return
 	const blocker = liveInventoryReadinessBlockers(state.inventory, topology.universes, settings.strategy)[0]
 	if (blocker !== undefined) throw new Error(blocker)
 }
