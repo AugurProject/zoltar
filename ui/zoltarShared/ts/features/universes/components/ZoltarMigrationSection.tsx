@@ -412,7 +412,7 @@ export function ZoltarMigrationSection({
 				{burnAmount > 0n && amountReady && (
 					<label className='migration-burn-confirmation'>
 						<input type='checkbox' checked={confirmedBurn === burnContext} onChange={event => setConfirmedBurn(event.currentTarget.checked ? burnContext : undefined)} disabled={zoltarMigrationPending} />
-						{zoltarCopy.migrationBurnConfirmation(formatRep(burnAmount))}
+						<span>{zoltarCopy.migrationBurnConfirmation(formatRep(burnAmount))}</span>
 					</label>
 				)}
 				<TransactionActionButton idleLabel={zoltarCopy.migrateRep} pendingLabel={zoltarCopy.migratingRepPending} onClick={() => onMigrateInternalRep(burnAmount)} pending={zoltarMigrationActiveAction === 'split'} availability={migrateAvailability} />

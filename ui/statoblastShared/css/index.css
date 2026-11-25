@@ -3105,6 +3105,11 @@ span.rep-price-status.stale,
 	gap: var(--space-2);
 }
 
+.migration-burn-confirmation > span {
+	min-inline-size: 0;
+	overflow-wrap: anywhere;
+}
+
 .migration-outcome-checklist small {
 	display: block;
 	color: var(--muted);
