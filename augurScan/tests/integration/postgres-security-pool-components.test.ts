@@ -59,7 +59,7 @@ test.skipIf(url === undefined)('events of security pool components reach the esc
 		const events: readonly StoredLog[] = [
 			projected(0, openOracle, 'ReportSubmitted', report),
 			projected(1, feed, 'PriceRequested', { reportId: '7', pendingReportMaxSettlementBaseFeeAttoEthPerGas: 1n.toString() }),
-			projected(2, feed, 'ReportFundingAssigned', { reportId: '7', coordinator, sponsor: coordinator }),
+			projected(2, feed, 'ReportFundingAssigned', { reportId: '7', sponsor: coordinator }),
 			projected(3, escrow, 'ReportCompleted', { reportId: '7', priceFeed: feed, outcome: 1 }),
 			// Another feed's escrow completes its own report 7; it must not join this report's decisions.
 			projected(4, escrow, 'ReportCompleted', { reportId: '7', priceFeed: otherFeed, outcome: 2 }),

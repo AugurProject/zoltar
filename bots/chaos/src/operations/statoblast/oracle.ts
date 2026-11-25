@@ -244,7 +244,7 @@ export const requestOraclePrice: OperationDefinition = {
 	},
 	id: ORACLE_REQUEST_DEFINITION_ID,
 	label: 'Request oracle price',
-	method: 'requestPrice',
+	method: 'requestSecurityPoolPrice',
 	risk: 'medium',
 }
 

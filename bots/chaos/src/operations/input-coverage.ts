@@ -11,6 +11,7 @@ const bindings: Record<string, Abi> = {
 	Zoltar: abis.zoltarAbi,
 	ReputationToken: abis.genesisReputationTokenAbi,
 	SecurityPoolFactory: abis.securityPoolFactoryAbi,
+	SharedPoolPriceFeed: abis.sharedPoolPriceFeedAbi,
 	QuestionLedger: abis.questionLedgerAbi,
 	QuestionForker: abis.questionForkerAbi,
 	SecurityPoolRepairAuction: abis.securityPoolRepairAuctionAbi,
