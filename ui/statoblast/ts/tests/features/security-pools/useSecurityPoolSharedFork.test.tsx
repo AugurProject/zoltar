@@ -154,10 +154,10 @@ test('the scalar fork diagram exposes every valid outcome in bounded pages', asy
 	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolSharedFork {...fixture.parameters} redesigned forkQuestion={question} />))
 	const figure = () => view.container.querySelector('figure.statoblast-fork-diagram')
 	const labels = () => [...(figure()?.querySelectorAll('li strong') ?? [])].map(label => label.textContent)
-	await waitFor(() => expect(labels()).toEqual(['Invalid', '-2', '-1', '0', '1', '2']))
+	await waitFor(() => expect(labels()).toEqual(['-2', '-1', '0', '1', '2', '3']))
 	const next = [...(figure()?.querySelectorAll('button') ?? [])].find(button => button.textContent === 'Next page')
 	await act(() => next?.click())
-	expect(labels()).toEqual(['3', '4', '5'])
+	expect(labels()).toEqual(['4', '5', 'Invalid'])
 	expect(next?.getAttribute('aria-disabled') === 'true' || next?.disabled).toBe(true)
 })
 
