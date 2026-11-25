@@ -159,7 +159,7 @@ export async function isUniverseForked(client: Pick<ReadClient, 'readContract'>,
 }
 
 /** Authenticate the actual custody tree before offering approvals or transactions. */
-export async function loadSecurityPoolAccount(client: ReadClient, securityPool: Address, owner: Address, universeId: bigint, questionStart = 0n, admissionStart = 0n, includeQuestions = true) {
+export async function loadSecurityPoolAccount(client: ReadClient, securityPool: Address, owner: Address | undefined, universeId: bigint, questionStart = 0n, admissionStart = 0n, includeQuestions = true) {
 	const anchor = await client.getBlock()
 	const blockNumber = anchor.number
 	if (blockNumber === undefined || anchor.hash === undefined) throw new Error('Security pool account requires a mined block.')
@@ -197,22 +197,22 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 	// Other contract accounts remain readable, but gain no auction-owner authority:
 	// a clone of another implementation stays an ordinary owner, and a clone of the
 	// canonical implementation is authenticated fully before it gains any.
-	const bindings = decodeAuctionVaultBindings(await client.getCode({ address: owner, blockNumber }))
-	const auctionVault = bindings !== undefined && (await isCanonicalAuctionVaultImplementation(client, bindings.implementation, blockNumber)) ? await authenticateSecurityPoolAuctionVault(client, securityPool, owner, blockNumber) : undefined
+	const bindings = owner === undefined ? undefined : decodeAuctionVaultBindings(await client.getCode({ address: owner, blockNumber }))
+	const auctionVault = owner !== undefined && bindings !== undefined && (await isCanonicalAuctionVaultImplementation(client, bindings.implementation, blockNumber)) ? await authenticateSecurityPoolAuctionVault(client, securityPool, owner, blockNumber) : undefined
 	const fundingOwner = auctionVault?.bidder ?? owner
 	const depositSpender = auctionVault?.vault ?? snapshot.capitalLedger
 	const collateralToken = await client.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'collateralToken', blockNumber })
 	const collateral = collateralPresentation(collateralToken)
 	const [walletCollateral, collateralAllowance] = await Promise.all([
-		client.readContract({ address: collateralToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [fundingOwner], blockNumber }),
-		client.readContract({ address: collateralToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [fundingOwner, services], blockNumber }),
+		fundingOwner === undefined ? 0n : client.readContract({ address: collateralToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [fundingOwner], blockNumber }),
+		fundingOwner === undefined ? 0n : client.readContract({ address: collateralToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [fundingOwner, services], blockNumber }),
 	])
 	const [questions, admission, walletAttoRep, allowanceAttoRep, walletAttoEth, bookValue, premiumValue] = await Promise.all([
 		includeQuestions ? client.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'getQuestions', args: [start, 64n], blockNumber }) : [],
 		loadSecurityPoolAdmission(client, admissionAddress, originUniverseId, blockNumber, admissionStart),
-		client.readContract({ address: snapshot.repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [fundingOwner], blockNumber }),
-		client.readContract({ address: snapshot.repToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [fundingOwner, depositSpender], blockNumber }),
-		client.getBalance({ address: fundingOwner, blockNumber }),
+		fundingOwner === undefined ? 0n : client.readContract({ address: snapshot.repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [fundingOwner], blockNumber }),
+		fundingOwner === undefined ? 0n : client.readContract({ address: snapshot.repToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [fundingOwner, depositSpender], blockNumber }),
+		fundingOwner === undefined ? 0n : client.getBalance({ address: fundingOwner, blockNumber }),
 		client.readContract({ address: settlement, abi: linksAbi, functionName: 'ledger', blockNumber }),
 		client.readContract({ address: services, abi: linksAbi, functionName: 'premiumLedger', blockNumber }),
 	])
@@ -246,7 +246,7 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 	if (block.hash !== snapshot.blockHash || chainId !== snapshot.chainId) throw new Error('Chain changed while reading the security pool. Refresh and try again.')
 	// The credited amounts stand in when the preview fails: the account stays usable and claiming still pays the full amount.
 	const [claimableEarnings, liquidationDuration] = await Promise.all([
-		loadSecurityPoolClaimableEarnings(snapshot, async (contracts, block) => await readRequiredMulticall(client, contracts, block)).catch(() => undefined),
+		owner === undefined ? undefined : loadSecurityPoolClaimableEarnings(snapshot, async (contracts, block) => await readRequiredMulticall(client, contracts, block)).catch(() => undefined),
 		client
 			.readContract({ address: snapshot.commitmentIndex, abi: indexArtifact.abi, functionName: 'LIQUIDATION_AUCTION_DURATION', blockNumber })
 			.then(value => requireBigintValue(value, 'liquidation duration'))

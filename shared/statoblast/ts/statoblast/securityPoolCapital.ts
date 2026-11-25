@@ -281,11 +281,11 @@ export async function loadSecurityPoolClaimableEarnings(
 	return { attoEth: account.feesAttoEth + decodeUint(eth, 'ETH earnings'), attoRep: account.feesAttoRep + decodeUint(rep, 'REP earnings') }
 }
 
-/** All reads share one block and inspect only the owner's single position. */
-export async function loadSecurityPoolCapitalSnapshot(parameters: { client: SecurityPoolReadClient; securityPool: Address; owner: Address; universeId?: bigint; blockNumber?: bigint }): Promise<SecurityPoolCapitalSnapshot> {
+/** All reads share one block. A position is only read when an owner is supplied. */
+export async function loadSecurityPoolCapitalSnapshot(parameters: { client: SecurityPoolReadClient; securityPool: Address; owner?: Address | undefined; universeId?: bigint; blockNumber?: bigint }): Promise<SecurityPoolCapitalSnapshot> {
 	const { client } = parameters
 	const securityPool = decodeAddress(parameters.securityPool, 'Security pool')
-	const owner = decodeAddress(parameters.owner, 'Owner')
+	const owner = parameters.owner === undefined ? undefined : decodeAddress(parameters.owner, 'Owner')
 	const [chainId, block] = await Promise.all([client.getChainId(), client.getBlock(parameters.blockNumber === undefined ? undefined : { blockNumber: parameters.blockNumber })])
 	if (!Number.isSafeInteger(chainId) || chainId <= 0 || block.number === undefined || block.hash === undefined) throw new Error('A confirmed block is required for capital accounting.')
 	const blockNumber = block.number
@@ -316,20 +316,20 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 		read(capitalLedger, 'totalFreeAttoRep'),
 		read(capitalLedger, 'frozen'),
 		read(capitalLedger, 'importing'),
-		read(capitalLedger, 'exported', [owner]),
-		read(capitalLedger, 'ownerAccount', [owner]),
-		read(capitalLedger, 'ownerCollateral', [owner]),
+		owner === undefined ? false : read(capitalLedger, 'exported', [owner]),
+		owner === undefined ? undefined : read(capitalLedger, 'ownerAccount', [owner]),
+		owner === undefined ? [0n, 0n, 0n] : read(capitalLedger, 'ownerCollateral', [owner]),
 		read(capitalLedger, 'totals'),
 		read(zoltar, 'getForkTime', [universeId]),
 		read(zoltar, 'getForkChoiceDeadline', [universeId]),
 		read(capitalLedger, 'conservativePrice'),
 		read(capitalLedger, 'liquidationPrice'),
 		feedValue === zeroAddress ? 0n : read(decodeAddress(feedValue, 'Shared price feed'), 'acceptedExposureLimitAttoEth'),
-		read(capitalLedger, 'ownerConservativePrice', [owner]),
+		owner === undefined ? 0n : read(capitalLedger, 'ownerConservativePrice', [owner]),
 		read(securityPool, 'availableMintCapacity', [universeId]),
 	])
 	const commitmentIndex = decodeAddress(indexValue, 'Commitment index')
-	const account = ownerAccount(ownerValue)
+	const account = owner === undefined ? { freeAttoRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, targetHealthFactorBps: 0n, positionId: 0n } : ownerAccount(ownerValue)
 	const [principal, commitment, withdrawable] = decodeFields(collateralValue, ['principal', 'commitment', 'withdrawable'], 'Invalid capital accounting response.')
 	const ownerPrincipalAttoRep = decodeUint(principal, 'Owner principal')
 	const withdrawableAttoRep = decodeUint(withdrawable, 'Withdrawable REP')
@@ -337,7 +337,7 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 	const [totalRep, totalK, healthyK] = decodeFields(totalsValue, ['rep', 'commitment', 'healthy'], 'Invalid capital accounting response.')
 	const [current, next, minimumOutcomeRate] = await Promise.all([read(commitmentIndex, 'currentBatch'), read(commitmentIndex, 'nextBatch'), read(decodeAddress(bookValue, 'Settlement book'), 'minimumOutcomeExchangeRate')])
 	const positions = await Promise.all(
-		(account.positionId === 0n ? [] : [account.positionId]).map(async id => {
+		(owner === undefined || account.positionId === 0n ? [] : [{ id: account.positionId, owner }]).map(async ({ id, owner }) => {
 			const [value, liquidation, penaltyPaid, elapsed] = await Promise.all([read(commitmentIndex, 'accountOf', [id]), read(capitalLedger, 'liquidationStarted', [id]), read(capitalLedger, 'liquidationPenaltyPaid', [id]), read(capitalLedger, 'liquidationElapsed', [id])])
 			const [holder, batch, rep, commitment, maximum, released, eth, repFees, remaining] = decodeFields(value, ['owner', 'batch', 'rep', 'commitment', 'maxHealthyPrice', 'releasedRep', 'ethFees', 'repFees', 'remainingCommitment'], 'Invalid capital accounting response.')
 			if (decodeAddress(holder, 'Position owner').toLowerCase() !== owner.toLowerCase()) throw new Error('Capital position belongs to another owner.')
@@ -374,7 +374,7 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 		blockHash: block.hash,
 		timestamp: block.timestamp,
 		securityPool,
-		owner,
+		owner: owner ?? zeroAddress,
 		universeId,
 		capitalLedger,
 		priceFeed: feedValue === zeroAddress ? zeroAddress : decodeAddress(feedValue, 'Shared price feed'),

@@ -49,8 +49,10 @@ export function SecurityPoolAggregatePanel({
 	priceReport,
 	priceDeadlineChecking = false,
 	redesigned = false,
+	positionMode = 'own',
 }: {
 	redesigned?: boolean
+	positionMode?: 'own' | 'other' | 'none'
 	priceDeadlineChecking?: boolean
 	model: Model
 	actions: Pick<SecurityPoolActions, 'scope' | 'busy'> & Partial<Pick<SecurityPoolActions, 'lastFailedAction'>>
@@ -69,6 +71,15 @@ export function SecurityPoolAggregatePanel({
 	const staleNotice = redesigned && readAge > 60_000 ? <p className='detail'>{formatOldDataCheck(formatDuration(BigInt(Math.floor(readAge / 1000))))}</p> : undefined
 	const fieldsLoading = model.loading && snapshot === undefined
 	const capitalId = useId()
+	if (redesigned && positionMode === 'none') {
+		return (
+			<SectionBlock title={pageCopy.poolTabLabels.capital}>
+				<UserMessage detail={pageCopy.connectToSeePosition} />
+			</SectionBlock>
+		)
+	}
+	let positionTitle = copy.title
+	if (redesigned) positionTitle = positionMode === 'other' ? pageCopy.position : pageCopy.yourPosition
 	const currentPosition = snapshot?.positions[0]
 	const collateral = (value: bigint | undefined) => <CurrencyValue value={value} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 	const rep = (value: bigint | undefined) => <CurrencyValue value={value} suffix={common.rep} />
@@ -165,7 +176,7 @@ export function SecurityPoolAggregatePanel({
 					{priceReport === undefined ? undefined : <PriceReportDisclosure requestable={priceRequestable}>{priceReport}</PriceReportDisclosure>}
 				</SectionBlock>
 			)}
-			<SectionBlock className='statoblast-capital-position' title={redesigned ? pageCopy.yourPosition : copy.title} description={redesigned ? undefined : copy.description}>
+			<SectionBlock className='statoblast-capital-position' title={positionTitle} description={redesigned ? undefined : copy.description}>
 				{snapshot?.auctionVault === undefined ? undefined : <UserMessage detail={copy.auctionVaultOwnership} />}
 				{redesigned && (
 					<div className='statoblast-health-gauge'>

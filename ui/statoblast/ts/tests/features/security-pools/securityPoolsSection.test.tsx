@@ -3,17 +3,30 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { createMulticallStub, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { getOpenOracleGameTuple } from '@zoltar/open-oracle-shared/openOracle/openOracle'
+import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
+import { resetRoutingForTesting } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { SecurityPoolsSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsSection.js'
 import * as copy from '@zoltar/ui-statoblast-shared/copy/securityPoolCapital.js'
 import * as priceCopy from '@zoltar/ui-statoblast-shared/copy/securityPoolPrice.js'
+import { poolTabLabels, returnFundsOnly } from '@zoltar/ui-statoblast-shared/copy/securityPoolPage.js'
+import { rememberSecurityPoolPriceReport, securityPoolPriceReportCache } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPrice.js'
 import { capitalSnapshot, owner, securityPool } from './capitalFixture.js'
 import { capitalClient } from './capitalClient.js'
-import { priceFeed, priceFixture } from './priceFixture.js'
+import { priceEscrow, priceFeed, priceFixture, priceOracle, priceWeth } from './priceFixture.js'
 
-const lifecycle = installDomTestLifecycle({ url: `https://example.test/#/security-pools?securityPool=${securityPool}&owner=${owner}`, afterTest: resetActiveEnvironmentForTesting })
+const lifecycle = installDomTestLifecycle({
+	url: `https://example.test/#/security-pools?securityPool=${securityPool}&owner=${owner}`,
+	afterTest: () => {
+		resetActiveEnvironmentForTesting()
+		resetRoutingForTesting()
+	},
+})
 const parameters = { accountAddress: owner, onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined, refreshState: async () => undefined }
 
 const renderSecurityPools = async () => {
@@ -23,6 +36,40 @@ const renderSecurityPools = async () => {
 }
 const sectionTitled = (container: Element, title: string) => [...container.querySelectorAll('section')].find(section => section.querySelector('h3')?.textContent === title)
 const universePriceReport = (backing: Element | undefined) => [...(backing?.querySelectorAll('details') ?? [])].find(details => details.querySelector('summary')?.textContent === priceCopy.scopes.universe.title)
+
+test('walletless Capital shows the pool without reading a zero-address position and keeps explicit positions viewable', async () => {
+	installStatoblastRouting()
+	const source = capitalClient()
+	const addressReads: Address[] = []
+	const client = source.client.extend(() => ({
+		getCode: async (request: Parameters<typeof source.client.getCode>[0]) => {
+			addressReads.push(request.address)
+			return await source.client.getCode(request)
+		},
+		getBalance: async ({ address }: { address: Address }) => {
+			addressReads.push(address)
+			return 0n
+		},
+	}))
+	installActiveEnvironmentForTesting({ ...source.backend, createReadClient: () => client })
+	const hash = `#/pool/${securityPool}`
+	window.history.replaceState({}, '', hash)
+	const element = <SecurityPoolsSection page={{ kind: 'pool', pool: securityPool, tab: 'capital' }} parameters={{ ...parameters, accountAddress: undefined }} walletConnected={false} enabled environmentKey={0} activeUniverseId={0n} />
+	const view = lifecycle.trackRendered(await renderIntoDocument(element))
+	await waitFor(() => expect(view.container.querySelector('.statoblast-pool-state')?.textContent).toContain('Active'))
+	expect(addressReads).not.toContain(zeroAddress)
+	expect(source.reads.some(read => read.args?.includes(zeroAddress))).toBe(false)
+	expect(view.container.textContent).toContain('Connect a wallet to see your position.')
+	expect(view.container.textContent).not.toContain('Your position')
+
+	await act(() => {
+		window.history.replaceState({}, '', `${hash}?owner=${owner}`)
+		window.dispatchEvent(new Event('hashchange'))
+	})
+	await waitFor(() => expect(source.reads.some(read => read.name === 'ownerAccount' && read.args?.includes(owner))).toBe(true))
+	await waitFor(() => expect(view.container.querySelector('.statoblast-capital-position h3')?.textContent).toBe('Position'))
+	expect(view.container.textContent).not.toContain('Connect a wallet to see your position.')
+})
 const firstPosition = (container: Element) => {
 	const position = [...container.querySelectorAll('.workflow-subsection')].find(section => section.querySelector('h4')?.textContent === copy.position(1n))
 	if (position === undefined) throw new Error('Position section missing')
@@ -166,6 +213,70 @@ test('an unforked security pool with an expired price can fund a new report from
 	await waitFor(() => expect(button(priceCopy.wrap)?.disabled).toBe(false))
 	expect(button(priceCopy.scopes.universe.request)?.disabled).toBe(true)
 	expect(report.textContent).toContain(priceCopy.insufficientWeth)
+})
+
+test('a forked pool on Capital checks older known report credits and clears the return-funds tab label after withdrawal', async () => {
+	installStatoblastRouting()
+	const fixture = priceFixture(capitalSnapshot({ forkTime: 100n, priceFeed }))
+	const olderEscrow = getAddress('0x0000000000000000000000000000000000000085')
+	const foreignEscrow = getAddress('0x0000000000000000000000000000000000000086')
+	let olderCredit = 20n
+	let failFundingRead = false
+	let failedReads = 0
+	const readReportIds: bigint[] = []
+	const client = fixture.client.extend(() => ({
+		multicall: createMulticallStub(async request =>
+			request.contracts.map(contract => {
+				const name = getContractFunctionName(contract)
+				const args: unknown = Reflect.get(contract, 'args')
+				const first: unknown = Array.isArray(args) ? args[0] : undefined
+				switch (name) {
+					case 'pendingReportId':
+						return 0n
+					case 'openOracle':
+						return priceOracle
+					case 'reportCandidates':
+						if (typeof first !== 'bigint') throw new Error('Expected report ID')
+						readReportIds.push(first)
+						if (first === 11n) return [foreignEscrow, priceFeed, priceFeed, 1n]
+						return [first === 8n ? olderEscrow : priceEscrow, owner, priceFeed, 1n]
+					case 'tokenHolder':
+						if (first === foreignEscrow) throw new Error('Foreign report funding must not be read')
+						if (failFundingRead) {
+							failedReads++
+							throw new Error('RPC unavailable')
+						}
+						return first === olderEscrow ? olderCredit : 1n
+					case 'storedGame':
+						return getOpenOracleGameTuple({ ...fixture.game, settlementTimestamp: 1100n, callbackContract: first === 8n ? olderEscrow : priceEscrow })
+					default:
+						throw new Error(`Unexpected multicall ${name}`)
+				}
+			}),
+		),
+	}))
+	installActiveEnvironmentForTesting({ ...fixture.backend, createReadClient: () => client })
+	const savedBlock = { number: 9n, timestamp: 1100n }
+	const oldPreview = securityPoolPriceReportCache(fixture.backend.profile, securityPool, 0n, owner, 8n)
+	oldPreview.write({ reportId: 8n, sponsor: owner, outcome: 1n, state: { settled: true }, eligibleAt: 1100n, baseFeePerGas: undefined, maxSettlementBaseFee: 1n, wethCredit: 19n, repCredit: 0n, collateralToken: priceWeth }, savedBlock)
+	for (const reportId of [8n, 9n, 11n]) rememberSecurityPoolPriceReport(fixture.backend.profile, securityPool, 0n, owner, reportId, savedBlock)
+	rememberSecurityPoolPriceReport(fixture.backend.profile, securityPool, 7n, owner, 12n, savedBlock)
+	expect(oldPreview.read()?.value.wethCredit).toBe(19n)
+	const view = await renderIntoDocument(<SecurityPoolsSection page={{ kind: 'pool', pool: securityPool, tab: 'capital' }} parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />)
+	lifecycle.trackRendered(view)
+	const priceTab = () => [...view.container.querySelectorAll('a')].find(link => link.hash.includes('/price'))
+	await waitFor(() => expect(priceTab()?.textContent).toContain(returnFundsOnly))
+	expect(new Set(readReportIds)).toEqual(new Set([8n, 9n, 11n]))
+
+	failFundingRead = true
+	await act(() => invalidateAppData())
+	await waitFor(() => expect(failedReads).toBeGreaterThan(0))
+	expect(priceTab()?.textContent).toContain(returnFundsOnly)
+	failFundingRead = false
+	olderCredit = 1n
+	await act(() => invalidateAppData())
+	await waitFor(() => expect(priceTab()?.textContent).toContain(poolTabLabels.price))
+	expect(priceTab()?.textContent).not.toContain(returnFundsOnly)
 })
 
 test('shared backing has no price report until a security pool account is shown', async () => {

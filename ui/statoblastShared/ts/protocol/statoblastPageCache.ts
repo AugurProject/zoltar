@@ -77,6 +77,10 @@ export function statoblastDisplayCache<T>(profile: NetworkProfile, identity: { u
 	const pageKey = (page: string) => `display:${identity.universeId}:${identity.owner?.toLowerCase() ?? ''}:${page}`
 	const key = pageKey(identity.page)
 	return {
+		pageSuffixes(prefix: string) {
+			const scopedPrefix = pageKey(prefix)
+			return storage.read().flatMap(item => (item.key.startsWith(scopedPrefix) ? [item.key.slice(scopedPrefix.length)] : []))
+		},
 		read() {
 			const page = storage.read().find(item => item.key === key)
 			if (page === undefined) return undefined

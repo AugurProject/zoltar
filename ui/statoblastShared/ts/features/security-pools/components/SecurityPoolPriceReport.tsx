@@ -23,7 +23,6 @@ import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
 export function SecurityPoolPriceReport({
 	returnFundsOnly = false,
-	onFundingStatus,
 	hideReportingDeadline = false,
 	redesigned = false,
 	priceBand,
@@ -32,7 +31,6 @@ export function SecurityPoolPriceReport({
 	...parameters
 }: SecurityPoolPriceParameters & {
 	returnFundsOnly?: boolean
-	onFundingStatus?: ((fundsRemain: boolean) => void) | undefined
 	hideReportingDeadline?: boolean
 	redesigned?: boolean
 	priceBand?: { accepted: bigint; health: bigint; liquidation: bigint; validUntil: bigint; timestamp: bigint; decimals: number } | undefined
@@ -53,9 +51,6 @@ export function SecurityPoolPriceReport({
 	const disabled = parameters.actions.busy !== undefined
 	const report = model.report
 	const fundsRemain = report !== undefined && (report.wethCredit > 0n || report.repCredit > 0n || !report.state.settled || report.outcome === 0n)
-	useEffect(() => {
-		if (report !== undefined) onFundingStatus?.(fundsRemain)
-	}, [report?.reportId, fundsRemain, onFundingStatus])
 	const visible = usePageVisible()
 	const chainTime = model.snapshot?.timestamp ?? priceBand?.timestamp
 	const [now, setNow] = useState<bigint>()

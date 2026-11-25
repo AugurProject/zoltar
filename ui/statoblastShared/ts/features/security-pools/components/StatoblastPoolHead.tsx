@@ -26,6 +26,7 @@ export function StatoblastPoolHead({ page, model, wallet, priceChecking, fundsRe
 	const labelForTab = (tab: PoolTab) => (forked && fundsRemain && tab === 'price' ? pageCopy.returnFundsOnly : pageCopy.poolTabLabels[tab])
 	const hasSelectedOwner = isAddress(model.ownerInput) && model.ownerInput.toLowerCase() !== zeroAddress
 	const you = wallet !== undefined && wallet.toLowerCase() === model.ownerInput.toLowerCase()
+	const positionLabel = hasSelectedOwner ? pageCopy.positionOf : pageCopy.browsePosition
 	return (
 		<>
 			<header className='statoblast-pool-head'>
@@ -81,7 +82,7 @@ export function StatoblastPoolHead({ page, model, wallet, priceChecking, fundsRe
 								<strong>{pageCopy.you}</strong>
 							</>
 						) : (
-							pageCopy.positionOf
+							positionLabel
 						)}{' '}
 						{hasSelectedOwner ? (
 							<code>
@@ -93,7 +94,7 @@ export function StatoblastPoolHead({ page, model, wallet, priceChecking, fundsRe
 						onSubmit={event => {
 							event.preventDefault()
 							const owner = new FormData(event.currentTarget).get('owner')
-							if (typeof owner !== 'string' || !isAddress(owner.trim())) return
+							if (typeof owner !== 'string' || !isAddress(owner.trim()) || owner.trim().toLowerCase() === zeroAddress) return
 							model.setOwnerInput(owner.trim())
 							event.currentTarget.closest('details')?.removeAttribute('open')
 						}}

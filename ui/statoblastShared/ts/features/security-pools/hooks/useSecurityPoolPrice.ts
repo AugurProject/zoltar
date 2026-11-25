@@ -14,6 +14,7 @@ import {
 	buildSecurityPoolPriceSettlement,
 	loadSecurityPoolBranchPrice,
 	loadSecurityPoolPriceReport,
+	rememberSecurityPoolPriceReport,
 	securityPoolPriceReportCache,
 	submittedSecurityPoolPriceReport,
 	type SecurityPoolPriceReport,
@@ -65,11 +66,12 @@ export type SecurityPoolPriceParameters = {
 	target: SecurityPoolPriceTarget | undefined
 	displayTarget?: SecurityPoolPriceTarget | undefined
 	bidder?: Address | undefined
+	defaultReportId?: bigint | undefined
 	actions: SecurityPoolSharedForkParameters['actions']
 	/** Compared with the proposed price until this branch's feed has accepted one of its own. */
 	referencePrice?: bigint | undefined
 }
-export function useSecurityPoolPrice({ scope, target, displayTarget = target, bidder, actions, referencePrice }: SecurityPoolPriceParameters) {
+export function useSecurityPoolPrice({ scope, target, displayTarget = target, bidder, actions, referencePrice, defaultReportId }: SecurityPoolPriceParameters) {
 	const backend = getActiveBackend()
 	const profile = getActiveNetworkProfile()
 	const scoped = copy.scopes[scope]
@@ -119,7 +121,7 @@ export function useSecurityPoolPrice({ scope, target, displayTarget = target, bi
 		const observation = snapshot.observation
 		loadedReference.current = { backend, identity, collateralToken: observation?.weth, price: observation !== undefined && observation.lastSettlementTimestamp !== 0n ? observation.lastPrice : referencePrice }
 	}
-	const reportId = reportInput.value.trim() === '' ? snapshot?.observation?.pendingReportId : securityPoolUnsignedId(reportInput.value)
+	const reportId = reportInput.value.trim() === '' ? (defaultReportId ?? snapshot?.observation?.pendingReportId) : securityPoolUnsignedId(reportInput.value)
 	const cache = useMemo(() => (shownTarget === undefined || sponsor === undefined || reportId === undefined || reportId === 0n ? undefined : securityPoolPriceReportCache(profile, shownTarget.securityPool, shownTarget.universeId, sponsor, reportId)), [profile, identity, reportId])
 	const saved = useMemo(() => cache?.read(), [cache, version.value, snapshot?.blockHash])
 	const reportKey = `${key}:${snapshot?.blockHash}:${reportId}`
@@ -227,11 +229,14 @@ export function useSecurityPoolPrice({ scope, target, displayTarget = target, bi
 			},
 			async () => undefined,
 			async result => {
-				if (getActiveBackend() !== backend || previous.current?.identity !== identity) return
+				if (getActiveBackend() !== backend) return
+				let createdReportId: bigint | undefined
 				if (captureReport && snapshot !== undefined) {
-					const id = submittedSecurityPoolPriceReport(result.receipt, snapshot.feed)
-					if (id !== undefined) reportInput.value = id.toString()
+					createdReportId = submittedSecurityPoolPriceReport(result.receipt, snapshot.feed)
+					if (createdReportId !== undefined) rememberSecurityPoolPriceReport(profile, snapshot.securityPool, snapshot.universeId, snapshot.owner, createdReportId, { number: result.receipt.blockNumber, timestamp: snapshot.timestamp })
 				}
+				if (previous.current?.identity !== identity) return
+				if (createdReportId !== undefined) reportInput.value = createdReportId.toString()
 				version.value += 1
 			},
 		)

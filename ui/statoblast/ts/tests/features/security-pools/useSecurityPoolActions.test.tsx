@@ -104,10 +104,25 @@ test('prepared question rules and locked deployment inputs survive remount for t
 	await act(() => resumed.state().deploy())
 	expect(requests).toHaveLength(2)
 	await act(() => resumed.cleanup())
-	const deployed = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolActionsWrapper, { model: model(), deploying: true }))
+	const restoredSetups: string[] = []
+	const deployed = lifecycle.trackRendered(
+		await renderHookWithProps(useSecurityPoolActionsWrapper, {
+			model: {
+				...model(),
+				load: async (pool, wallet, universe) => {
+					restoredSetups.push(`${pool}:${wallet}:${universe}`)
+				},
+			},
+			deploying: true,
+		}),
+	)
+	expect(restoredSetups).toEqual([`${securityPool}:${owner}:7`])
 	expect(deployed.state().deployReason).toBeDefined()
 	await act(() => deployed.state().deploy())
 	expect(requests).toHaveLength(2)
+	await deployed.setProps({ parameters: { ...parameters, accountAddress: token } })
+	expect(deployed.state().admissionAddress).toBeUndefined()
+	expect(deployed.state().originInput).toBe('0')
 })
 
 function useSecurityPoolActionsWrapper(props: { model: ReturnType<typeof model>; parameters?: Parameters<typeof useSecurityPoolActions>[1]; deploying?: boolean }) {

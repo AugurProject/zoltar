@@ -26,7 +26,8 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 	const wallet = parameters.accountAddress
 	const journal = useMemo(() => {
 		const store = deploymentProgressStore(backend.profile, deploying ? wallet : undefined)
-		return { store, current: signal(store.read()) }
+		const restored = store.read()
+		return { store, restored, current: signal(restored) }
 	}, [backend, wallet, deploying])
 	const progress = journal.current.value
 	const saveProgress = (next: typeof progress) => {
@@ -77,8 +78,11 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 	}, [model.universeInput])
 	const savedPool = progress?.pool
 	useEffect(() => {
-		if (savedPool !== undefined && wallet !== undefined && savedPool.toLowerCase() !== model.managerInput.toLowerCase()) void model.load(savedPool, wallet, draft.originInput)
-	}, [savedPool, wallet, backend])
+		const restored = journal.restored
+		if (restored?.pool === undefined || wallet === undefined) return
+		if (restored.pool.toLowerCase() === model.managerInput.toLowerCase() && wallet.toLowerCase() === model.ownerInput.toLowerCase() && restored.draft.originInput === model.universeInput) return
+		void model.load(restored.pool, wallet, restored.draft.originInput)
+	}, [journal, wallet])
 	const completedPool = model.setup?.stage === 4 ? model.setup.securityPool : undefined
 	useEffect(() => {
 		if (savedPool !== undefined && savedPool.toLowerCase() === completedPool?.toLowerCase()) saveProgress(undefined)

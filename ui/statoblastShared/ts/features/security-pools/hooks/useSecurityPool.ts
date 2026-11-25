@@ -53,9 +53,12 @@ export function useSecurityPool({
 	resumeSetup?: boolean
 	securityPoolAddress?: Address | undefined
 }) {
+	const publicPoolRoute = securityPoolAddress !== undefined
+	const ownerDraftForRoute = (value: string) => (publicPoolRoute && value.trim().toLowerCase() === zeroAddress ? '' : value)
+	const canReadOwner = (value: string) => (publicPoolRoute && value.trim() === '') || isAddress(value.trim())
 	const initial = new URLSearchParams(window.location.hash.split('?')[1])
 	const managerInput = useSignal(securityPoolAddress ?? initial.get('securityPool') ?? '')
-	const ownerInput = useSignal(initial.get('owner') ?? accountAddress ?? (securityPoolAddress === undefined ? '' : zeroAddress))
+	const ownerInput = useSignal(ownerDraftForRoute(initial.get('owner') ?? accountAddress ?? ''))
 	const followsWallet = useRef(!initial.has('owner'))
 	const universeInput = useSignal(String(activeUniverseId))
 	const previousActiveUniverse = useRef(activeUniverseId)
@@ -91,32 +94,35 @@ export function useSecurityPool({
 		const environment = createActiveEnvironmentGuard()
 		const current = () => active.current && id === generation.current && environment.isCurrent() && securityPoolBackendReady(getActiveBackend())
 		const previous = snapshot.value
-		if (previous !== undefined && (previous.securityPool.toLowerCase() !== managerOverride.trim().toLowerCase() || previous.owner.toLowerCase() !== ownerOverride.trim().toLowerCase() || previous.universeId !== securityPoolUnsignedId(universeOverride, 248))) snapshot.value = undefined
+		const selectedOwner = ownerDraftForRoute(ownerOverride).trim()
+		if (previous !== undefined && (previous.securityPool.toLowerCase() !== managerOverride.trim().toLowerCase() || previous.owner.toLowerCase() !== (selectedOwner.toLowerCase() || zeroAddress) || previous.universeId !== securityPoolUnsignedId(universeOverride, 248))) snapshot.value = undefined
 		loading.value = true
 		error.value = undefined
 		// Setup reads only security pool state, so a failed read of one owner's account keeps the shared setup visible.
 		let loadedSetup: SecurityPoolSetupSnapshot | undefined
 		try {
 			const securityPool = getAddress(managerOverride.trim())
-			const owner = getAddress(ownerOverride.trim())
+			const owner = publicPoolRoute && selectedOwner === '' ? undefined : getAddress(selectedOwner)
+			const cacheOwner = owner ?? zeroAddress
 			const universeId = securityPoolUnsignedId(universeOverride, 248)
 			if (universeId === undefined) throw new Error('Enter a valid universe ID.')
 			const client = createConnectedReadClient()
 			const questionPage = questionStart.value
 			const admissionPage = admissionStart.value
 			const readPage = async (readClient: typeof client) => {
-				const preparation = await loadSecurityPoolSetup(readClient, securityPool, owner, securityPoolAddress !== undefined)
+				const preparation = await loadSecurityPoolSetup(readClient, securityPool, cacheOwner, publicPoolRoute)
 				if (!cacheReads && current()) loadedSetup = preparation
 				const next = preparation.stage === 4 ? await loadSecurityPoolAccount(readClient, securityPool, owner, universeId, questionPage, admissionPage, securityPoolAddress === undefined) : undefined
 				return { preparation, next }
 			}
 			const read = async () => {
 				if (!cacheReads) return await readPage(client)
-				const cacheKey = `${environmentKey}:${securityPool}:${owner}:${universeId}:${questionPage}:${admissionPage}`
+				const cachePage = `${owner === undefined ? 'capital-public' : 'capital'}:${questionPage}:${admissionPage}`
+				const cacheKey = `${environmentKey}:${securityPool}:${cacheOwner}:${universeId}:${cachePage}`
 				if (pageCache.current?.key !== cacheKey) {
 					pageCache.current = {
 						key: cacheKey,
-						storage: statoblastPageCache(renderedBackend.profile, { pool: securityPool, owner, universeId, page: `capital:${questionPage}:${admissionPage}` }, (readClient, block) => requireCanonicalSecurityPool(readClient, securityPool, block)),
+						storage: statoblastPageCache(renderedBackend.profile, { pool: securityPool, owner: cacheOwner, universeId, page: cachePage }, (readClient, block) => requireCanonicalSecurityPool(readClient, securityPool, block)),
 					}
 				}
 				const cache = pageCache.current.storage
@@ -133,8 +139,8 @@ export function useSecurityPool({
 			presentationContext.current = { environmentKey, backend: renderedBackend, guard: environment }
 			universeInput.value = String(universeId)
 			managerInput.value = securityPool
-			ownerInput.value = owner
-			if (resumeSetup) setupDisplayCache(renderedBackend.profile, securityPool, owner, universeId).write(preparation.stage, { number: preparation.blockNumber, timestamp: preparation.timestamp })
+			ownerInput.value = owner ?? ''
+			if (resumeSetup && owner !== undefined) setupDisplayCache(renderedBackend.profile, securityPool, owner, universeId).write(preparation.stage, { number: preparation.blockNumber, timestamp: preparation.timestamp })
 			try {
 				const key = securityPoolStorageKey(preparation.chainId)
 				window.localStorage.setItem(key, securityPool)
@@ -156,7 +162,7 @@ export function useSecurityPool({
 		}
 	}
 	const refresh = async () => {
-		if (!enabled || !securityPoolBackendReady(getActiveBackend()) || inFlight.current === generation.current || !isAddress(managerInput.value) || !isAddress(ownerInput.value)) return
+		if (!enabled || !securityPoolBackendReady(getActiveBackend()) || inFlight.current === generation.current || !isAddress(managerInput.value) || !canReadOwner(ownerInput.value)) return
 		await load()
 	}
 	const invalidate = (preservePresentation = false) => {
@@ -185,7 +191,7 @@ export function useSecurityPool({
 			context.backend === renderedBackend &&
 			context.guard.isCurrent() &&
 			previous?.securityPool.toLowerCase() === managerInput.value.toLowerCase() &&
-			previous?.owner.toLowerCase() === ownerInput.value.toLowerCase() &&
+			previous?.owner.toLowerCase() === (ownerInput.value.toLowerCase() || zeroAddress) &&
 			previous?.universeId === securityPoolUnsignedId(universeInput.value, 248)
 		invalidate(preservePresentation)
 		questionStart.value = 0n
@@ -218,17 +224,19 @@ export function useSecurityPool({
 		const managerDraft = managerInput.value.trim()
 		const ownerDraft = ownerInput.value.trim()
 		const universeId = securityPoolUnsignedId(universeInput.value, 248)
-		if (!isAddress(managerDraft) || !isAddress(ownerDraft) || universeId === undefined) return
+		if (!isAddress(managerDraft) || !canReadOwner(ownerDraft) || universeId === undefined) return
 		const manager = getAddress(managerDraft)
-		const owner = getAddress(ownerDraft)
+		const owner = ownerDraft === '' ? undefined : getAddress(ownerDraft)
+		const cacheOwner = owner ?? zeroAddress
 		const questionPage = questionStart.value
 		const admissionPage = admissionStart.value
 		const environment = createActiveEnvironmentGuard()
 		let current = true
-		const cache = statoblastPageCache(renderedBackend.profile, { pool: manager, owner, universeId, page: `capital:${questionPage}:${admissionPage}` })
+		const cachePage = `${owner === undefined ? 'capital-public' : 'capital'}:${questionPage}:${admissionPage}`
+		const cache = statoblastPageCache(renderedBackend.profile, { pool: manager, owner: cacheOwner, universeId, page: cachePage })
 		void cache
 			.loadCached(renderedBackend.createReadClient(), async client => {
-				const preparation = await loadSecurityPoolSetup(client, manager, owner)
+				const preparation = await loadSecurityPoolSetup(client, manager, cacheOwner)
 				return preparation.stage === 4 ? await loadSecurityPoolAccount(client, manager, owner, universeId, questionPage, admissionPage, securityPoolAddress === undefined) : undefined
 			})
 			.then(cached => {
@@ -242,7 +250,7 @@ export function useSecurityPool({
 		}
 	}, [cacheReads, backendReady, environmentKey, renderedBackend, managerInput.value, ownerInput.value, universeInput.value, questionStart.value, admissionStart.value])
 	useEffect(() => {
-		const walletOwner = accountAddress ?? (securityPoolAddress === undefined ? '' : zeroAddress)
+		const walletOwner = ownerDraftForRoute(accountAddress ?? '')
 		if (!followsWallet.current || ownerInput.value === walletOwner) return
 		invalidate()
 		ownerInput.value = walletOwner
@@ -258,7 +266,8 @@ export function useSecurityPool({
 		const update = () => {
 			const query = new URLSearchParams(window.location.hash.split('?')[1])
 			const securityPool = query.get('securityPool')
-			const owner = query.get('owner')
+			const ownerParameter = query.get('owner')
+			const owner = ownerParameter === null ? null : ownerDraftForRoute(ownerParameter)
 			if (owner !== null) followsWallet.current = false
 			if (securityPool !== null && securityPool !== managerInput.value) {
 				invalidate()
@@ -302,9 +311,10 @@ export function useSecurityPool({
 		},
 		setOwnerInput: (value: string) => {
 			followsWallet.current = false
-			if (value === ownerInput.value) return
+			const nextOwner = ownerDraftForRoute(value)
+			if (nextOwner === ownerInput.value) return
 			invalidate()
-			ownerInput.value = value
+			ownerInput.value = nextOwner
 		},
 		setUniverseInput: (value: string) => {
 			if (value === universeInput.value) return

@@ -5,18 +5,20 @@ import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfil
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hasOpenOracleFlag, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { loadSecurityPoolPriceSnapshot, type SecurityPoolPriceSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import { readRequiredMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
 import { requireAddressValue, requireBigintValue, requireIntegerLikeValue, requireObjectValue, requireTupleValue } from './decoders.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { getOpenOracleSettleGasLimit } from './openOracle.js'
 import { loadOpenOracleStoredState } from './openOracleState.js'
-import { securityPoolReadClient, type SecurityPoolTransaction } from './securityPool.js'
+import { securityPoolReadClient, type SecurityPoolAccountSnapshot, type SecurityPoolTransaction } from './securityPool.js'
 import { statoblastDisplayCache } from './statoblastPageCache.js'
 import * as priceCopy from '../copy/securityPoolPrice.js'
 
 const abi = parseAbi([
 	'function reportCandidates(uint256 id) view returns (address escrow,address sponsor,address coordinator,uint256 maxSettlementBaseFee)',
 	'function reportOutcome(uint256 id) view returns (uint8)',
+	'function pendingReportId() view returns (uint256)',
 	'function feed() view returns (address)',
 	'function reportId() view returns (uint256)',
 	'function sponsor() view returns (address)',
@@ -91,8 +93,96 @@ function releasedCredit(value: unknown) {
 }
 export type SecurityPoolPriceReport = Awaited<ReturnType<typeof loadSecurityPoolPriceReport>>
 
+const reportPagePrefix = (pool: Address) => `price-report:${pool.toLowerCase()}:`
+
+function knownReportId(value: string) {
+	const decimal = value.replace(/:receipt$/u, '')
+	if (!/^[1-9][0-9]{0,77}$/u.test(decimal)) return undefined
+	const id = BigInt(decimal)
+	return id < 1n << 256n ? id : undefined
+}
+
+export function rememberSecurityPoolPriceReport(profile: NetworkProfile, pool: Address, universeId: bigint, owner: Address, reportId: bigint, block: { number: bigint; timestamp: bigint }) {
+	const page = `${reportPagePrefix(pool)}${reportId}:receipt`
+	statoblastDisplayCache(profile, { universeId, owner, page }, value => (value === true ? value : undefined)).write(true, block)
+}
+
+export function securityPoolPriceFundsCache(profile: NetworkProfile, pool: Address, universeId: bigint, owner: Address) {
+	return statoblastDisplayCache(profile, { universeId, owner, page: `price-funds:${pool.toLowerCase()}` }, value => {
+		if (!Array.isArray(value) || !value.every(item => typeof item === 'bigint' && item > 0n && item < 1n << 256n)) return undefined
+		return value.filter((item): item is bigint => typeof item === 'bigint')
+	})
+}
+
+/** The verified pool snapshot names its factory-registered feed at this block. Only report identities come from disk. */
+export async function loadSecurityPoolPriceFunds(client: Pick<ReadClient, 'multicall' | 'getBlock'>, profile: NetworkProfile, snapshot: Pick<SecurityPoolAccountSnapshot, 'securityPool' | 'universeId' | 'priceFeed' | 'repToken' | 'collateralToken' | 'blockNumber' | 'blockHash'>, wallet: Address) {
+	const { securityPool, universeId, priceFeed, repToken, collateralToken, blockNumber, blockHash } = snapshot
+	if (priceFeed === zeroAddress) return []
+	const calls = [
+		{ abi, address: priceFeed, functionName: 'pendingReportId' },
+		{ abi, address: priceFeed, functionName: 'openOracle' },
+	] as const
+	const [pending, oracleValue] = await readRequiredMulticall(client, calls, blockNumber)
+	const pendingId = requireBigintValue(pending, 'pending price report ID')
+	const oracle = requireAddressValue(oracleValue, 'price feed oracle')
+	const requirePinnedBlock = async () => {
+		const block = await client.getBlock({ blockNumber })
+		if (block.hash !== blockHash) throw new Error('Report state changed. Refresh and retry.')
+	}
+	const ids = new Set<bigint>()
+	if (pendingId > 0n) ids.add(pendingId)
+	const cache = securityPoolPriceFundsCache(profile, securityPool, universeId, wallet)
+	for (const suffix of cache.pageSuffixes(reportPagePrefix(securityPool))) {
+		const id = knownReportId(suffix)
+		if (id !== undefined) ids.add(id)
+	}
+	if (ids.size === 0) {
+		await requirePinnedBlock()
+		return []
+	}
+	const reports = [...ids]
+	const candidates = await readRequiredMulticall(
+		client,
+		reports.map(id => ({ abi, address: priceFeed, functionName: 'reportCandidates', args: [id] }) as const),
+		blockNumber,
+	)
+	const owned = candidates.flatMap((value, index) => {
+		const [escrowValue, sponsorValue] = requireTupleValue(value, 4, 'report candidate')
+		const escrow = requireAddressValue(escrowValue, 'report escrow')
+		const sponsor = requireAddressValue(sponsorValue, 'report funder')
+		const id = reports[index]
+		return id !== undefined && escrow !== zeroAddress && sponsor === getAddress(wallet) ? [{ id, escrow }] : []
+	})
+	if (owned.length === 0) {
+		await requirePinnedBlock()
+		return []
+	}
+	const funding = await readRequiredMulticall(
+		client,
+		owned.flatMap(
+			({ id, escrow }) =>
+				[
+					{ abi: statoblast_openOracle_OpenOracle_OpenOracle.abi, address: oracle, functionName: 'storedGame', args: [id] },
+					{ abi, address: oracle, functionName: 'tokenHolder', args: [escrow, collateralToken] },
+					{ abi, address: oracle, functionName: 'tokenHolder', args: [escrow, repToken] },
+				] as const,
+		),
+		blockNumber,
+	)
+	await requirePinnedBlock()
+	return owned.flatMap(({ id, escrow }, index) => {
+		const game = requireTupleValue(funding[index * 3], 20, 'stored report')
+		const collateral = releasedCredit(funding[index * 3 + 1])
+		const rep = releasedCredit(funding[index * 3 + 2])
+		const [amount1, amount2, reporter, , settled, token1, , , , , , token2, , , , , callback] = game
+		if (requireAddressValue(callback, 'report receiver') !== escrow || requireAddressValue(token1, 'report collateral') !== collateralToken || requireAddressValue(token2, 'report REP') !== repToken) throw new Error('Report escrow identities do not match this price feed.')
+		const locked = BigInt(requireIntegerLikeValue(settled, 'report settlement time')) === 0n && requireAddressValue(reporter, 'current reporter') === escrow && (requireBigintValue(amount1, 'locked collateral') > 0n || requireBigintValue(amount2, 'locked REP') > 0n)
+		return locked || collateral > 0n || rep > 0n ? [id] : []
+	})
+}
+
 export function securityPoolPriceReportCache(profile: NetworkProfile, pool: Address, universeId: bigint, owner: Address, reportId: bigint) {
-	return statoblastDisplayCache(profile, { universeId, owner, page: `price-report:${pool.toLowerCase()}:${reportId}` }, value =>
+	return statoblastDisplayCache(profile, { universeId, owner, page: `${reportPagePrefix(pool)}${reportId}` }, value =>
 		decodeStoredValue(value, read => ({
 			reportId,
 			sponsor: read.address('sponsor'),

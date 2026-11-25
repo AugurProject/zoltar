@@ -6,6 +6,7 @@ import { SecurityPoolQuestionsPanel } from './SecurityPoolQuestionsPanel.js'
 import { StatoblastPoolHead } from './StatoblastPoolHead.js'
 import { statoblastPageHref, type StatoblastPoolPage } from '../../../lib/routing.js'
 import { useSecurityPoolPriceDeadline } from '../hooks/useSecurityPoolPriceDeadline.js'
+import { useSecurityPoolPriceFunds } from '../hooks/useSecurityPoolPriceFunds.js'
 import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
@@ -67,7 +68,6 @@ export function SecurityPoolsSection({
 	environmentKey: number
 	activeUniverseId: bigint
 }) {
-	const [fundsRemain, setFundsRemain] = useState(false)
 	const [selectedDeployStep, setDeployStep] = useState<number>()
 	const deploySteps = [pageCopy.deployCollateralAndPrice, pageCopy.deployQuestionsSection, pageCopy.deployEconomicsSection, pageCopy.deployAndSetup]
 	const model = useSecurityPool({ accountAddress: parameters.accountAddress, enabled, environmentKey, activeUniverseId, cacheReads: cacheReads && !deploying, resumeSetup: deploying, securityPoolAddress: page?.pool })
@@ -90,6 +90,11 @@ export function SecurityPoolsSection({
 	const disabled = actions.busy !== undefined
 	const draftDisabled = disabled || actions.deploymentLocked
 	const shown = model.presentationSnapshot
+	const fundedPriceReports = useSecurityPoolPriceFunds(model.snapshot, shown, parameters.accountAddress, enabled && page !== undefined)
+	const hasPositionOwner = isAddress(model.ownerInput.trim())
+	const connectedPositionOwner = shown?.auctionVault?.bidder ?? model.ownerInput
+	let positionMode: 'own' | 'other' | 'none' = 'none'
+	if (hasPositionOwner) positionMode = connectedPositionOwner.toLowerCase() === parameters.accountAddress?.toLowerCase() ? 'own' : 'other'
 	const deployReasonId = useId()
 	// Once an account has been shown, its price report stays mounted through a failed refresh so typed drafts survive;
 	// only opening another security pool, owner or universe replaces it.
@@ -232,7 +237,7 @@ export function SecurityPoolsSection({
 			{page === undefined ? (
 				<RouteHeader title={deploying ? pageCopy.deployPool : pageCopy.securityPool} actions={<UpdatedAgo updatedAt={model.displayedAt} refreshing={model.loading} />} />
 			) : (
-				<StatoblastPoolHead page={page} model={model} wallet={parameters.accountAddress} priceChecking={priceDeadline.status !== undefined} fundsRemain={fundsRemain} />
+				<StatoblastPoolHead page={page} model={model} wallet={parameters.accountAddress} priceChecking={priceDeadline.status !== undefined} fundsRemain={(fundedPriceReports?.length ?? 0) > 0} />
 			)}
 			{page === undefined && (
 				<SectionBlock title={deploying ? pageCopy.securityPoolSettings : copy.setup}>
@@ -302,6 +307,7 @@ export function SecurityPoolsSection({
 					{(page === undefined || page.tab === 'capital') && (
 						<SecurityPoolAggregatePanel
 							redesigned={page !== undefined}
+							positionMode={positionMode}
 							model={capital}
 							priceDeadlineChecking={priceDeadline.status !== undefined}
 							actions={actions}
@@ -317,18 +323,19 @@ export function SecurityPoolsSection({
 						<SecurityPoolPriceReport
 							redesigned
 							scope='universe'
-							target={accountPriceTarget(model.snapshot)}
-							displayTarget={accountPriceTarget(shown)}
+							target={hasPositionOwner ? accountPriceTarget(model.snapshot) : undefined}
+							displayTarget={hasPositionOwner ? accountPriceTarget(shown) : undefined}
 							actions={actions}
 							bidder={parameters.accountAddress}
 							returnFundsOnly={(shown?.forkTime ?? 0n) > 0n}
-							onFundingStatus={setFundsRemain}
+							defaultReportId={fundedPriceReports?.[0]}
 							priceBand={shown === undefined || shown.acceptedPrice === 0n ? undefined : { accepted: shown.acceptedPrice, health: shown.conservativePrice, liquidation: shown.liquidationPrice, validUntil: shown.priceValidUntil, timestamp: shown.timestamp, decimals: shown.collateral.decimals }}
 							openOracleHref={openOracleHref}
 						/>
 					)}
 					{page?.tab === 'fork' && shown?.forkTime === 0n && <UserMessage detail={pageCopy.universeUnforked} />}
-					{(page === undefined || (page.tab === 'fork' && (shown?.forkTime ?? 0n) > 0n)) && (
+					{page?.tab === 'fork' && (shown?.forkTime ?? 0n) > 0n && !hasPositionOwner && <UserMessage detail={pageCopy.connectToSeePosition} />}
+					{(page === undefined || (page.tab === 'fork' && (shown?.forkTime ?? 0n) > 0n && hasPositionOwner)) && (
 						<SecurityPoolSharedFork
 							redesigned={page !== undefined}
 							forkQuestion={forkQuestion}

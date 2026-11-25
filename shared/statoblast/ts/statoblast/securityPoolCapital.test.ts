@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, parseAbi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { decodeFunctionData, parseAbi, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
 	buildSecurityPoolCapitalDepositRequest,
 	buildSecurityPoolCapitalDepositAndSetHealthRequest,
@@ -163,6 +163,14 @@ describe('personal security pool capital SDK', () => {
 		expect(new Set(calls.map(call => call.blockNumber))).toEqual(new Set([42n]))
 		expect(calls.filter(call => call.functionName === 'accountOf')).toHaveLength(1)
 		expect(calls.length).toBeLessThan(50)
+	})
+
+	test('public capital reads preserve pool totals without loading a position', async () => {
+		const { client, calls } = fixture()
+		const snapshot = await loadSecurityPoolCapitalSnapshot({ client, securityPool })
+		expect(snapshot).toMatchObject({ totalPledgedAttoRep: 600n, healthyCommitmentAttoEth: 50n, ownerPrincipalAttoRep: 0n, positions: [] })
+		expect(calls.some(call => ['exported', 'ownerAccount', 'ownerCollateral', 'ownerConservativePrice', 'accountOf'].includes(call.functionName))).toBe(false)
+		await expect(loadSecurityPoolCapitalSnapshot({ client, securityPool, owner: zeroAddress })).rejects.toThrow('Owner must be a nonzero address.')
 	})
 
 	test('a composing fork reader can select the same confirmed block for every capital read', async () => {
