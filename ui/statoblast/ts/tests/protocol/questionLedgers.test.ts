@@ -36,7 +36,8 @@ function fixture({ forked = false, reporting = false, missingSecurityPool = fals
 				case 'getForkTime':
 					return forked ? 900n : 0n
 				case 'priceValidUntil':
-					return 1200n
+					expect(request.address).toBe(capital)
+					return 1200
 				case 'questions':
 					return ['Question', 'Description', 1n, 2n, 2n, 0n, 2000n, '']
 				case 'getOutcomeLabels':
@@ -51,7 +52,6 @@ function fixture({ forked = false, reporting = false, missingSecurityPool = fals
 				reads.push(call.functionName)
 				if (call.functionName === 'isSecurityPool') return { status: 'success', result: true }
 				if (call.functionName === 'getQuestionLedger') return { status: 'success', result: owner }
-				if (call.functionName === 'openOraclePriceCoordinator') return token
 				if (call.functionName === 'questionId') return deployment.questionId
 				if (call.functionName === 'initialReportingResponseWindow') return 172_800n
 				if (call.functionName === 'questions') return ['Question', 'Description', 1n, 2000n, 2n, 0n, 2000n, '']
@@ -71,7 +71,7 @@ function fixture({ forked = false, reporting = false, missingSecurityPool = fals
 test.each([false, true])('discovers native security pool question snapshots (reporting: %s)', async reporting => {
 	const { client, reads } = fixture({ reporting })
 	const { question } = await loadStatoblastQuestion(client, securityPool, deployment.questionId, deployment.universeId, false)
-	expect(question).toMatchObject({ securityPoolAddress: securityPool, questionLedgerAddress: owner, settlementCollateralAttoEth: 60n, totalPoolHeldAttoRep: 300n, mintingCapacityAttoEth: reporting ? 0n : 80n, initialReportingResponseWindow: 172_800n })
+	expect(question).toMatchObject({ securityPoolAddress: securityPool, questionLedgerAddress: owner, settlementCollateralAttoEth: 60n, totalPoolHeldAttoRep: 300n, mintingCapacityAttoEth: reporting ? 0n : 80n, initialReportingResponseWindow: 172_800n, oraclePriceValidUntilTimestamp: 1200n })
 	expect(reads).not.toContain('getVaults')
 	expect(reads).not.toContain('securityVaults')
 })

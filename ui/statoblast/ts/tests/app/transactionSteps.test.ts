@@ -894,7 +894,7 @@ function setupMintReview(alwaysReview: boolean) {
 			if (request.functionName === 'balanceOfShares') return [2n, 3n, 4n].map(value => value * 10n ** 18n)
 			if (request.functionName === 'getQuestionEndDate') return 1000n
 			if (request.functionName === 'universeId') return 0n
-			if (request.functionName === 'openOraclePriceCoordinator') return account
+			if (request.functionName === 'priceFeed') return account
 			if (request.functionName === 'lastSettlementTimestamp') return 1n
 			if (request.functionName === 'additionalMintCapacityAttoEth') return 10n ** 18n
 			throw new Error(`Unexpected read: ${request.functionName}`)

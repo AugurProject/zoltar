@@ -333,7 +333,7 @@ describe('openOracle protocol client', () => {
 									{ status: 'success', result: association === 'different oracle' ? token1Address : getOpenOracleAddress() },
 									{ status: 'success', result: alternateQuestionLedgerAddress },
 								]
-					if (first === 'openOraclePriceCoordinator') return [{ status: 'success', result: association === 'different coordinator' ? token1Address : vaultAddress }]
+					if (first === 'priceFeed') return [{ status: 'success', result: association === 'different coordinator' ? token1Address : vaultAddress }]
 					if (first === 'lastSettlementTimestamp')
 						return [
 							{ status: 'success', result: 11n },
@@ -344,8 +344,7 @@ describe('openOracle protocol client', () => {
 				},
 			})
 			const report = await loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)
-			if (association === 'verified') expect(report.coordinatorPriceValidUntilTimestamp).toBe(612n)
-			else expect(report.coordinatorPriceValidUntilTimestamp).toBeUndefined()
+			expect(report.coordinatorPriceValidUntilTimestamp).toBeUndefined()
 		})
 	}
 
@@ -372,7 +371,7 @@ describe('openOracle protocol client', () => {
 								{ status: 'success', result: 1n },
 							]
 						case 'reportCandidates':
-							return [{ status: 'success', result: [vaultAddress, initialReporter, alternateQuestionLedgerAddress, 0n] }]
+							return [{ status: 'success', result: [vaultAddress, initialReporter, 0n] }]
 						case 'securityPoolFactory':
 							return [
 								{ status: 'success', result: getInfraContractAddresses().securityPoolFactory },
@@ -380,6 +379,7 @@ describe('openOracle protocol client', () => {
 								{ status: 'success', result: 0n },
 								{ status: 'success', result: game.token1 },
 								{ status: 'success', result: game.token2 },
+								{ status: 'success', result: getOpenOracleAddress() },
 							]
 						case 'sharedPriceFeeds':
 							return [
@@ -596,21 +596,22 @@ for (const change of ['settlement preimage', 'settled report', 'withdraw balance
 				account: wallet.account,
 				chain: wallet.chain,
 				call: async () => ({ data: toHex(0n) }),
-				multicall: createMulticallStub(async request => {
-					const first = getContractFunctionName(request.contracts[0])
-					if (first === 'openOracle')
-						return [
-							{ status: 'success', result: getOpenOracleAddress() },
-							{ status: 'success', result: alternateQuestionLedgerAddress },
-						]
-					if (first === 'lastSettlementTimestamp')
-						return [
-							{ status: 'success', result: 11n },
-							{ status: 'success', result: 3611n },
-							{ status: 'success', result: zeroAddress },
-						]
-					return [{ status: 'success', result: vaultAddress }]
-				}),
+				multicall: createMulticallStub(async request =>
+					request.contracts.map(contract => {
+						const name = getContractFunctionName(contract)
+						if (name === 'feed' || name === 'sharedPriceFeeds') return success(vaultAddress)
+						if (name === 'reportId') return success(1n)
+						if (name === 'reportCandidates') return success([vaultAddress, initialReporter, 0n])
+						if (name === 'securityPoolFactory') return success(getInfraContractAddresses().securityPoolFactory)
+						if (name === 'securityPool') return success(alternateQuestionLedgerAddress)
+						if (name === 'universeId') return success(0n)
+						if (name === 'openOracle') return success(getOpenOracleAddress())
+						if (name === 'collateralToken') return success(preimage.game.token1)
+						if (name === 'reputationToken') return success(preimage.game.token2)
+						if (name === 'priceValidityWindowSeconds') return success(3600n)
+						return failure()
+					}),
+				),
 				getBlock: async () => createBlockWithTimestamp(change === 'settlement stale unchanged' || (changed && change === 'settlement price expiry') ? 3611n : 1000n),
 				getBalance: async () => (changed && change === 'create ETH' ? 0n : 1000n),
 			},
@@ -729,12 +730,17 @@ function createOpenOracleMulticall({ tokens, universeTokens = {}, escrow }: { to
 				return token === undefined ? success([0n, 0n, 0n, zeroAddress, 0n]) : success([0n, 0n, 0n, token, 0n])
 			})
 		if (first === 'openOracle') return [failure(), failure()]
-		if (first === 'feed') return escrow === undefined ? [failure()] : [success(sharedFeedAddress)]
+		if (first === 'feed') return request.contracts.map(contract => (escrow === undefined ? failure() : success(getContractFunctionName(contract) === 'feed' ? sharedFeedAddress : 1n)))
 		if (first === 'reportCandidates') {
 			if (escrow === undefined) throw new Error('Unexpected feed read')
-			return [success([escrow.candidate, initialReporter, alternateQuestionLedgerAddress, 0n]), success(getInfraContractAddresses().securityPoolFactory), success(feedSecurityPoolAddress), success(0n), success(getOpenOracleAddress())]
+			return request.contracts.length === 1 ? [success([escrow.candidate, initialReporter, 0n])] : [success([escrow.candidate, initialReporter, 0n]), success(getInfraContractAddresses().securityPoolFactory), success(feedSecurityPoolAddress), success(0n), success(getOpenOracleAddress())]
 		}
-		if (first === 'sharedPriceFeeds') return [success(escrow?.registered === true ? sharedFeedAddress : zeroAddress)]
+		if (first === 'securityPoolFactory') return [success(getInfraContractAddresses().securityPoolFactory), success(feedSecurityPoolAddress), success(0n), success(wethAddress), success(getGenesisReputationTokenAddress()), success(getOpenOracleAddress())]
+		if (first === 'sharedPriceFeeds')
+			return request.contracts.map(contract => {
+				if (getContractFunctionName(contract) === 'priceValidityWindowSeconds') return success(780n)
+				return success(escrow?.registered === true ? sharedFeedAddress : zeroAddress)
+			})
 		throw new Error(`Unexpected multicall ${first}`)
 	}
 }

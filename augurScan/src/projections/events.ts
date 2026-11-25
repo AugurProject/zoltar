@@ -208,7 +208,7 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 				parentAddress: address(args['parent'], 'parent'),
 				universeId: integerString(args['universeId'], 'universeId'),
 				questionId: integerString(args['questionId'], 'questionId'),
-				coordinatorAddress: address(args['openOraclePriceCoordinator'], 'openOraclePriceCoordinator'),
+				coordinatorAddress: address(args['priceFeed'], 'priceFeed'),
 				shareTokenAddress: address(args['shareToken'], 'shareToken'),
 				securityMultiplierBps: integerString(args['statoblastSecurityMultiplierBps'], 'statoblastSecurityMultiplierBps'),
 				initialPriorityFeeAttoEthPerGas: integerString(args['initialReportPriorityFeeAttoEthPerGas'], 'initialReportPriorityFeeAttoEthPerGas'),

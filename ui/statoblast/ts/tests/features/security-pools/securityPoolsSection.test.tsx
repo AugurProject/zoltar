@@ -297,8 +297,8 @@ test('a forked pool on Capital checks older known report credits and clears the 
 					case 'reportCandidates':
 						if (typeof first !== 'bigint') throw new Error('Expected report ID')
 						readReportIds.push(first)
-						if (first === 11n) return [foreignEscrow, priceFeed, priceFeed, 1n]
-						return [first === 8n ? olderEscrow : priceEscrow, owner, priceFeed, 1n]
+						if (first === 11n) return [foreignEscrow, priceFeed, 1n]
+						return [first === 8n ? olderEscrow : priceEscrow, owner, 1n]
 					case 'tokenHolder':
 						if (first === foreignEscrow) throw new Error('Foreign report funding must not be read')
 						if (failFundingRead) {

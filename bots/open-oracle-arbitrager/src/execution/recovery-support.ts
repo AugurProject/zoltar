@@ -1,5 +1,5 @@
 import { bigintToSafeNumber, decodeEventLog, readContractAtBlock, rpcFailureWithContext, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
-import { erc20Abi, openOracleAbi, openOracleArbitrageExecutorAbi, openOraclePriceCoordinatorAbi } from '#contracts/abi'
+import { erc20Abi, openOracleAbi, openOracleArbitrageExecutorAbi, sharedPoolPriceFeedAbi } from '#contracts/abi'
 import type { Configuration } from '#config/configuration'
 import { receiptGasExpendituresWithQuorum, recoveredTransactionIntentMismatch, transactionIntentWithQuorum } from '#execution/execution-orchestration'
 import type { ReadClient, RecoveryConfiguration } from '#core/operator-types'
@@ -217,7 +217,7 @@ export async function pendingCoordinatorReports(client: BatchReader, config: Pic
 	const pendingIds = await batchRead(
 		client,
 		config.network.multicall3,
-		config.coordinatorAddresses.map(coordinator => ({ address: coordinator, abi: openOraclePriceCoordinatorAbi, functionName: 'pendingReportId' })),
+		config.coordinatorAddresses.map(coordinator => ({ address: coordinator, abi: sharedPoolPriceFeedAbi, functionName: 'pendingReportId' })),
 		blockNumber,
 	)
 	const pending = config.coordinatorAddresses.flatMap((coordinator, index) => {

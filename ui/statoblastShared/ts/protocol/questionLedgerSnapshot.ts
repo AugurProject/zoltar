@@ -1,10 +1,5 @@
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import {
-	statoblast_EscalationGame_EscalationGame as gameArtifact,
-	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator as coordinatorArtifact,
-	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
-	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact,
-} from '../contractArtifact.js'
+import { statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact } from '../contractArtifact.js'
 import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { QUESTION_LEDGER_QUESTION_OUTCOME_ABI } from './questionLedgerAbi.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -21,7 +16,7 @@ export async function loadQuestionLedgerDetails(client: ReadClient, questionLedg
 	const infrastructure = getInfraContractAddresses()
 	const ledger = { abi: poolArtifact.abi, address: questionLedgerAddress }
 	const readState = async () => {
-		const [confirmedId, capital, securityPoolAddress, escalationGameAddress, systemState, outcome, forkTime, managerAddress, initialReportingResponseWindow] = await readRequiredMulticall(
+		const [confirmedId, capital, securityPoolAddress, escalationGameAddress, systemState, outcome, forkTime, initialReportingResponseWindow] = await readRequiredMulticall(
 			client,
 			[
 				{ ...ledger, functionName: 'questionId' },
@@ -31,7 +26,6 @@ export async function loadQuestionLedgerDetails(client: ReadClient, questionLedg
 				{ ...ledger, functionName: 'systemState' },
 				{ abi: QUESTION_LEDGER_QUESTION_OUTCOME_ABI, address: infrastructure.questionForker, functionName: 'getQuestionOutcome', args: [questionLedgerAddress] },
 				{ abi: Zoltar_Zoltar.abi, address: infrastructure.zoltar, functionName: 'getForkTime', args: [universeId] },
-				{ ...ledger, functionName: 'openOraclePriceCoordinator' },
 				{ ...ledger, functionName: 'initialReportingResponseWindow' },
 			],
 			blockNumber,
@@ -41,7 +35,7 @@ export async function loadQuestionLedgerDetails(client: ReadClient, questionLedg
 		const [central, hasForkContinuationEscalationGame, validUntil] = await Promise.all([
 			loadCentralSecurityPoolQuestion(client, questionLedgerAddress, capital, blockNumber),
 			escalationGameAddress !== zeroAddress && client.readContract({ abi: gameArtifact.abi, address: escalationGameAddress, functionName: 'forkContinuation', blockNumber }),
-			client.readContract({ abi: coordinatorArtifact.abi, address: managerAddress, functionName: 'priceValidUntil', blockNumber }),
+			client.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'priceValidUntil', blockNumber }),
 		])
 		return { central, securityPoolAddress, escalationGameAddress, systemState, outcome, forkTime, initialReportingResponseWindow, validUntil, hasForkContinuationEscalationGame }
 	}
@@ -63,7 +57,7 @@ export async function loadQuestionLedgerDetails(client: ReadClient, questionLedg
 		feeEligibleUnderwritingLimitAttoEth: central.feeEligibleUnderwritingLimitAttoEth,
 		ordinaryEscalationGameStarted: escalationGameAddress !== zeroAddress && !hasForkContinuationEscalationGame,
 		initialReportingResponseWindow,
-		oraclePriceValidUntilTimestamp: validUntil > 0n ? validUntil : undefined,
+		oraclePriceValidUntilTimestamp: validUntil > 0 ? BigInt(validUntil) : undefined,
 		marketDetails,
 		questionOutcome: getReportingOutcomeKey(outcome),
 		questionId: formatQuestionIdHex(questionId),

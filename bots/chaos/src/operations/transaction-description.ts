@@ -21,7 +21,7 @@ const previewAbis: readonly Abi[] = [
 	contractAbis.zoltarQuestionDataAbi,
 	contractAbis.securityPoolFactoryAbi,
 	contractAbis.questionLedgerAbi,
-	contractAbis.openOraclePriceCoordinatorAbi,
+	contractAbis.sharedPoolPriceFeedAbi,
 	contractAbis.questionForkerAbi,
 	contractAbis.escalationGameAbi,
 	contractAbis.multicall3Abi,

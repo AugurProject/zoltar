@@ -229,10 +229,6 @@
 			"bun": "./ts/protocol/openOracle.ts",
 			"default": "./js/protocol/openOracle.js"
 		},
-		"./protocol/oracleTiming.js": {
-			"bun": "./ts/protocol/oracleTiming.ts",
-			"default": "./js/protocol/oracleTiming.js"
-		},
 		"./protocol/reporting.js": {
 			"bun": "./ts/protocol/reporting.ts",
 			"default": "./js/protocol/reporting.js"
