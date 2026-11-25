@@ -365,7 +365,7 @@ export const projects: readonly Project[] = [
 			audit: packageAuditTask('augurScan'),
 			integration: {
 				...packageTask('augurScan', 'test:integration'),
-				inputs: ['shared/**', 'bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts', 'augurScan/schema.sql', 'augurScan/migrations/**', 'augurScan/config/**', 'augurScan/src/**', 'augurScan/tests/**', 'augurScan/scripts/**', 'augurScan/package.json', 'bun.lock', 'augurScan/tsconfig.json'],
+				inputs: ['shared/**', 'bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts', 'augurScan/schema.sql', 'augurScan/config/**', 'augurScan/src/**', 'augurScan/tests/**', 'augurScan/scripts/**', 'augurScan/package.json', 'bun.lock', 'augurScan/tsconfig.json'],
 			},
 		},
 		generatedDirectories: [],

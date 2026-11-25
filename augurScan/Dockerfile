@@ -72,7 +72,6 @@ COPY --from=dependencies /workspace/shared/statoblast/node_modules ./shared/stat
 COPY augurScan/config ./augurScan/config
 COPY --from=metadata-build /workspace/augurScan/config ./augurScan/config
 COPY augurScan/schema.sql ./augurScan/schema.sql
-COPY augurScan/migrations ./augurScan/migrations
 COPY --from=browser-build /workspace/augurScan/public ./augurScan/public
 COPY augurScan/scripts/verify-compose-source.ts ./augurScan/scripts/verify-compose-source.ts
 COPY augurScan/scripts/verify-export-page.ts ./augurScan/scripts/verify-export-page.ts

@@ -8,7 +8,6 @@ import { executionProfileId } from '../config/execution-profile.ts'
 import { saveSettings, type OperatorSettings } from '../config/settings.ts'
 import { startDashboardServer } from '../dashboard/dashboard-server.ts'
 import type { OperationPlan } from '../operations/types.ts'
-import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity } from '../state/operator-state.ts'
 import { isPristineBootstrapState } from '../state/pristine.ts'
 import { performCanonicalScan } from './canonical-scan.ts'
@@ -28,12 +27,12 @@ export type LoadedConfiguration = { rememberSigner?: boolean; needsDeploymentPin
 
 export { executionProfileId } from '../config/execution-profile.ts'
 
-/** Load, migrate and repair durable runtime state, then pin the configuration the operator starts from. */
+/** Load and repair durable runtime state, then pin the configuration the operator starts from. */
 async function startOperator(loaded: LoadedConfiguration): Promise<OperatorState> {
 	const initialWallet = configuredWallet(loaded.settings)
 	const storedState = await loadRuntimeState(loaded.settings.runtime.stateFile, loaded.settings.paused, initialWallet, loaded.settings.network.chainId)
 	assertDurableStateFactories(loaded.settings, storedState)
-	const state = migrateEmptyBootstrapState(storedState, loaded.settings)
+	const state = storedState
 	const initialProfileId = executionProfileId(loaded.settings)
 	assertDurableSignerScope(state, initialWallet, loaded.settings.runtime.stateFile)
 	if (state.profileId === initialProfileId && (state.uniswapV3Factory !== undefined || !isPristineBootstrapState(state))) assertDurableDeploymentFactory(loaded.settings, state, loaded.settings.runtime.stateFile)

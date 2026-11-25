@@ -29,14 +29,7 @@ function record(value: unknown) {
 	return validateRecord(value, 'Deployment settings', 'Deployment settings must be a JSON object')
 }
 
-function optionalAddress(value: unknown, name: string) {
-	if (value === undefined || value === null || value === '') return undefined
-	if (typeof value !== 'string') throw new Error(`${name} must be an address or empty`)
-	return getAddress(value)
-}
-
-function venueEnabled(value: unknown, name: string, fallback: () => boolean) {
-	if (value === undefined) return fallback()
+function venueEnabled(value: unknown, name: string) {
 	if (typeof value !== 'boolean') throw new Error(`${name} must be a boolean`)
 	return value
 }
@@ -63,15 +56,9 @@ export function validateDeploymentSettings(value: unknown, network: NetworkName 
 	const manifest = network === 'mainnet' ? mainnet : sepolia
 	const identity = canonicalNetworkDeployment(manifest)
 	const uniswap = canonicalUniswapDeployment(identity.chainId)
-	// Fresh profiles specify switches in the template; missing switches retain legacy venue intent.
-	const uniswapV2Enabled = venueEnabled(settings['uniswapV2Enabled'], 'Uniswap V2 enabled', () => optionalAddress(settings['uniswapV2Router'], 'Uniswap V2 router') !== undefined)
-	const uniswapV3Enabled = venueEnabled(settings['uniswapV3Enabled'], 'Uniswap V3 enabled', () => optionalAddress(settings['uniswapRouter'], 'Uniswap V3 router') !== undefined)
-	const uniswapV4Enabled = venueEnabled(settings['uniswapV4Enabled'], 'Uniswap V4 enabled', () => {
-		const poolManager = optionalAddress(settings['uniswapV4PoolManager'], 'Uniswap V4 PoolManager')
-		const quoter = optionalAddress(settings['uniswapV4Quoter'], 'Uniswap V4 Quoter')
-		if ((poolManager === undefined) !== (quoter === undefined)) throw new Error('Uniswap V4 requires both PoolManager and Quoter')
-		return poolManager !== undefined
-	})
+	const uniswapV2Enabled = venueEnabled(settings['uniswapV2Enabled'], 'Uniswap V2 enabled')
+	const uniswapV3Enabled = venueEnabled(settings['uniswapV3Enabled'], 'Uniswap V3 enabled')
+	const uniswapV4Enabled = venueEnabled(settings['uniswapV4Enabled'], 'Uniswap V4 enabled')
 	return {
 		coordinatorAddresses: [],
 		executor: canonicalExecutorIdentity().address,

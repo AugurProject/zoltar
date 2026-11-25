@@ -482,7 +482,14 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 			expect(BigInt(mintedShares?.yes ?? '0')).toBeGreaterThan(0n)
 			expect(BigInt(mintedShares?.no ?? '0')).toBeGreaterThan(0n)
 
+			// Cross a fee-clock second even when the host runs the whole operation within one tick.
+			context.environment.beforeBroadcast = async () => {
+				const readClient = createPublicClient({ chain: context.chain, transport: context.pool.transport })
+				const block = await readClient.getBlock()
+				await current.node.anvilWindowEthereum.requestRaw({ method: 'evm_setNextBlockTimestamp', params: [`0x${(block.timestamp + 1n).toString(16)}`] })
+			}
 			await execute('statoblast.complete-set.redeem')
+			context.environment.beforeBroadcast = undefined
 			const redeemedShares = scan.snapshot.wallet.shares.find(shares => shares.universeId === '0')
 			expect(redeemedShares).toMatchObject({ invalid: '0', no: '0', yes: '0' })
 

@@ -50,9 +50,11 @@ function createSimulationController(overrides: Partial<SimulationController> = {
 		exportState: async name =>
 			serializeSavedSimulationStateEnvelope({
 				baseScenario: 'baseline',
+				genesisOutcome: 'yes',
 				name,
 				savedAt: '2026-06-02T12:34:56.000Z',
 				state: {
+					blocks: [],
 					blockCountSinceReset: 0n,
 					currentTimestamp: 1n,
 					queryDelayMilliseconds: 0,
@@ -604,14 +606,17 @@ describe('SimulationBanner', () => {
 			JSON.stringify([
 				{
 					baseScenario: 'baseline',
+					genesisOutcome: 'yes',
 					id: 'saved-baseline-20260602123456',
 					name: 'Saved baseline',
 					savedAt: '2026-06-02T12:34:56.000Z',
 					serialized: serializeSavedSimulationStateEnvelope({
 						baseScenario: 'baseline',
+						genesisOutcome: 'yes',
 						name: 'Saved baseline',
 						savedAt: '2026-06-02T12:34:56.000Z',
 						state: {
+							blocks: [],
 							blockCountSinceReset: 0n,
 							currentTimestamp: 1n,
 							queryDelayMilliseconds: 0,
@@ -699,14 +704,17 @@ describe('SimulationBanner', () => {
 			JSON.stringify([
 				{
 					baseScenario: 'baseline',
+					genesisOutcome: 'yes',
 					id: 'saved-baseline-20260602123456',
 					name: 'Saved baseline',
 					savedAt: '2026-06-02T12:34:56.000Z',
 					serialized: serializeSavedSimulationStateEnvelope({
 						baseScenario: 'baseline',
+						genesisOutcome: 'yes',
 						name: 'Saved baseline',
 						savedAt: '2026-06-02T12:34:56.000Z',
 						state: {
+							blocks: [],
 							blockCountSinceReset: 0n,
 							currentTimestamp: 1n,
 							queryDelayMilliseconds: 0,
@@ -722,6 +730,7 @@ describe('SimulationBanner', () => {
 				},
 				{
 					baseScenario: 'baseline',
+					genesisOutcome: 'yes',
 					id: 'broken-state',
 					name: 'Broken state',
 					savedAt: '2026-06-02T12:35:56.000Z',
@@ -749,14 +758,17 @@ describe('SimulationBanner', () => {
 			JSON.stringify([
 				{
 					baseScenario: 'baseline',
+					genesisOutcome: 'yes',
 					id: 'saved-baseline-20260602123456',
 					name: 'Saved baseline',
 					savedAt: '2026-06-02T12:34:56.000Z',
 					serialized: serializeSavedSimulationStateEnvelope({
 						baseScenario: 'baseline',
+						genesisOutcome: 'yes',
 						name: 'Saved baseline',
 						savedAt: '2026-06-02T12:34:56.000Z',
 						state: {
+							blocks: [],
 							blockCountSinceReset: 0n,
 							currentTimestamp: 1n,
 							queryDelayMilliseconds: 0,
@@ -772,6 +784,7 @@ describe('SimulationBanner', () => {
 				},
 				{
 					baseScenario: 'baseline',
+					genesisOutcome: 'yes',
 					id: 'broken-state',
 					name: 'Broken state',
 					savedAt: '2026-06-02T12:35:56.000Z',
@@ -812,9 +825,11 @@ describe('SimulationBanner', () => {
 		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onEnvironmentChanged={onEnvironmentChanged} onRefresh={onRefresh} />)
 		const importedState = serializeSavedSimulationStateEnvelope({
 			baseScenario: 'baseline',
+			genesisOutcome: 'yes',
 			name: 'Imported state',
 			savedAt: '2026-06-02T12:34:56.000Z',
 			state: {
+				blocks: [],
 				blockCountSinceReset: 0n,
 				currentTimestamp: 1n,
 				queryDelayMilliseconds: 0,
@@ -908,9 +923,11 @@ describe('SimulationBanner', () => {
 			exportedState.resolve(
 				serializeSavedSimulationStateEnvelope({
 					baseScenario: 'baseline',
+					genesisOutcome: 'yes',
 					name: 'Pending save',
 					savedAt: '2026-06-02T12:34:56.000Z',
 					state: {
+						blocks: [],
 						blockCountSinceReset: 0n,
 						currentTimestamp: 1n,
 						queryDelayMilliseconds: 0,
@@ -1103,6 +1120,7 @@ describe('SimulationBanner', () => {
 			JSON.stringify([
 				{
 					baseScenario: 'baseline',
+					genesisOutcome: 'yes',
 					id: 'broken-state',
 					name: 'Broken state',
 					savedAt: '2026-06-02T12:35:56.000Z',
@@ -1200,14 +1218,17 @@ describe('SimulationBanner', () => {
 			JSON.stringify([
 				{
 					baseScenario: 'baseline',
+					genesisOutcome: 'yes',
 					id: 'saved-baseline-20260602123456',
 					name: 'Saved baseline',
 					savedAt: '2026-06-02T12:34:56.000Z',
 					serialized: serializeSavedSimulationStateEnvelope({
 						baseScenario: 'baseline',
+						genesisOutcome: 'yes',
 						name: 'Saved baseline',
 						savedAt: '2026-06-02T12:34:56.000Z',
 						state: {
+							blocks: [],
 							blockCountSinceReset: 0n,
 							currentTimestamp: 1n,
 							queryDelayMilliseconds: 0,
@@ -1269,14 +1290,17 @@ describe('SimulationBanner', () => {
 		const serializedRecords = JSON.stringify([
 			{
 				baseScenario: 'baseline',
+				genesisOutcome: 'yes',
 				id: 'saved-baseline-20260602123456',
 				name: 'Saved baseline',
 				savedAt: '2026-06-02T12:34:56.000Z',
 				serialized: serializeSavedSimulationStateEnvelope({
 					baseScenario: 'baseline',
+					genesisOutcome: 'yes',
 					name: 'Saved baseline',
 					savedAt: '2026-06-02T12:34:56.000Z',
 					state: {
+						blocks: [],
 						blockCountSinceReset: 0n,
 						currentTimestamp: 1n,
 						queryDelayMilliseconds: 0,
@@ -1349,14 +1373,17 @@ describe('SimulationBanner', () => {
 		const serializedRecords = JSON.stringify([
 			{
 				baseScenario: 'baseline',
+				genesisOutcome: 'yes',
 				id: 'saved-baseline-20260602123456',
 				name: 'Saved baseline',
 				savedAt: '2026-06-02T12:34:56.000Z',
 				serialized: serializeSavedSimulationStateEnvelope({
 					baseScenario: 'baseline',
+					genesisOutcome: 'yes',
 					name: 'Saved baseline',
 					savedAt: '2026-06-02T12:34:56.000Z',
 					state: {
+						blocks: [],
 						blockCountSinceReset: 0n,
 						currentTimestamp: 1n,
 						queryDelayMilliseconds: 0,

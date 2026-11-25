@@ -261,58 +261,10 @@ function validateRuntimeSettings(value: unknown): RuntimeSettings {
 	}
 }
 
-/** Converts a canonical decimal integer string from an older file to a JSON number; anything else is left for validation to reject. */
-function migratedInteger(value: unknown) {
-	return typeof value === 'string' && /^(?:0|[1-9]\d*)$/.test(value) ? Number(value) : value
-}
-
-function migratedRecord(value: unknown) {
-	return typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : undefined
-}
-
-/**
- * Upgrades a version 4 document to version 5, so files and dashboard-saved settings written by earlier releases keep
- * loading. Version 4 stored `rpcQuorum` at the top level, quorum readers in `deployment.quorumRpcUrls`, the main loop
- * interval in `strategy.pollMilliseconds`, and `runtime.lookbackBlocks`, `runtime.maxHedgeSlippageBps`, and
- * `strategy.minimumProfitBps` as strings. An unconfigured profile cannot retain RPC connectivity, so its quorum readers
- * and policy are dropped. A shape the conversion does not recognize is passed through for validation to reject.
- */
-function migrateVersion4(document: Record<string, unknown>): Record<string, unknown> {
-	const { rpcQuorum, ...root } = document
-	const deployment = migratedRecord(root['deployment'])
-	const runtime = migratedRecord(root['runtime'])
-	const strategy = migratedRecord(root['strategy'])
-	const connectivity = migratedRecord(root['connectivity'])
-	const migrated: Record<string, unknown> = { ...root, version: SETTINGS_VERSION }
-	const quorumRpcUrls = deployment?.['quorumRpcUrls']
-	if (deployment !== undefined) {
-		const { quorumRpcUrls: _quorumRpcUrls, ...venues } = deployment
-		migrated['deployment'] = venues
-	}
-	if (connectivity !== undefined) migrated['connectivity'] = { ...connectivity, quorumRpcUrls: quorumRpcUrls ?? [], ...(rpcQuorum === undefined ? {} : { rpcQuorum }) }
-	if (runtime !== undefined) {
-		const { lookbackBlocks, ...rest } = runtime
-		// Version 4 previously shipped 50000 as the Docker default; migrate only that known value so existing named volumes
-		// start under the bounded scanner.
-		migrated['runtime'] = {
-			...rest,
-			logLookbackBlocks: lookbackBlocks === '50000' ? 256 : migratedInteger(lookbackBlocks),
-			maxHedgeSlippageBps: migratedInteger(rest['maxHedgeSlippageBps']),
-			...(strategy !== undefined && 'pollMilliseconds' in strategy ? { pollMilliseconds: strategy['pollMilliseconds'] } : {}),
-		}
-	}
-	if (strategy !== undefined) {
-		const { pollMilliseconds: _pollMilliseconds, ...rest } = strategy
-		migrated['strategy'] = { ...rest, minimumProfitBps: migratedInteger(rest['minimumProfitBps']) }
-	}
-	return migrated
-}
-
 export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex): PersistedOperatorSettings {
-	const document = requiredRecord(value)
-	const record = document['version'] === 4 ? migrateVersion4(document) : document
+	const record = requiredRecord(value)
 	validatedKeys(record)
-	if (record['version'] !== SETTINGS_VERSION) throw new Error('Operator configuration uses an unsupported version; expected version 5, or version 4 to migrate')
+	if (record['version'] !== SETTINGS_VERSION) throw new Error('Operator configuration uses an unsupported version; expected version 5')
 	const networkConfigured = record['networkConfigured'] === undefined ? record['connectivity'] !== undefined : record['networkConfigured'] === true
 	if (record['networkConfigured'] !== undefined && typeof record['networkConfigured'] !== 'boolean') throw new Error('Operator configuration networkConfigured must be a boolean')
 	if (record['network'] !== undefined && record['network'] !== 'mainnet' && record['network'] !== 'sepolia') throw new Error('Operator configuration network must be mainnet or sepolia')

@@ -92,19 +92,6 @@ describe('simulation engine prepared states', () => {
 		expect(await engine.request({ method: 'eth_getBalance', params: [getAddress(account), pinned] })).toBe(balanceAtPinned)
 	}, 60_000)
 
-	test('a state saved without block history still restores at its clock', async () => {
-		const engine = await createBaselineEngine()
-		await engine.bootstrap()
-		await engine.advanceTime(900n)
-		const envelope = parseSavedSimulationStateEnvelope(await engine.exportState('legacy'))
-		const { blocks: _blocks, ...legacyState } = envelope.state
-		const restored = await createSimulationEngine({ dependencies, initialization: { envelope: { ...envelope, state: legacyState }, kind: 'saved-state', stateId: 'legacy' } })
-		await restored.bootstrap()
-		expect(restored.getState().currentTimestamp).toBe(engine.getState().currentTimestamp)
-		expect(await readLogs(restored)).toEqual([])
-		expect(await restored.request({ method: 'eth_getBalance', params: [engine.getState().selectedAccount, 'latest'] })).toBe(await engine.request({ method: 'eth_getBalance', params: [engine.getState().selectedAccount, 'latest'] }))
-	}, 60_000)
-
 	test('a scenario bootstrap restores a matching prepared state and resets back to it', async () => {
 		const seeded = await createBaselineEngine()
 		await seeded.bootstrap()

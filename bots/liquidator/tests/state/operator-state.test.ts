@@ -79,17 +79,15 @@ describe('liquidator durable state', () => {
 		}
 	})
 
-	test('rejects a state journal that still holds legacy staged operations and ignores an empty legacy list', async () => {
+	test('rejects obsolete staged-operation fields even when empty', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-state-staged-'))
 		const path = join(directory, 'state.json')
 		try {
 			const legacyOperation = { coordinator: '0x0000000000000000000000000000000000000020', operationId: '7', queuedBlock: '101', target: '0x0000000000000000000000000000000000000030' }
 			await writeFile(path, JSON.stringify({ activities: [], chainId: 1, pendingStagedOperations: [legacyOperation], pendingTransactions: [], version: 2 }), { encoding: 'utf8', mode: 0o600 })
-			await expect(loadDurableState(path, 1)).rejects.toThrow('Liquidator state contains 1 legacy pending staged operation(s), which are no longer supported')
+			await expect(loadDurableState(path, 1)).rejects.toThrow('Unsupported liquidator state field: pendingStagedOperations')
 			await writeFile(path, JSON.stringify({ activities: [], chainId: 1, pendingStagedOperations: [], pendingTransactions: [], version: 2 }), { encoding: 'utf8', mode: 0o600 })
-			const loaded = await loadDurableState(path, 1)
-			expect(loaded.pendingTransactions).toEqual([])
-			expect(Reflect.has(loaded, 'pendingStagedOperations')).toBe(false)
+			await expect(loadDurableState(path, 1)).rejects.toThrow('Unsupported liquidator state field: pendingStagedOperations')
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}

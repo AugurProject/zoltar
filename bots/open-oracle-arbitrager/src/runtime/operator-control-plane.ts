@@ -6,7 +6,7 @@ import { parseApprovedUniverses, validateApprovedUniverseSelection } from '@zolt
 import { resolve } from 'node:path'
 import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { assertDistinctPersistentPaths, mutableStrategy, type Configuration } from '#config/configuration'
-import { monitoringTokensForDeployment, assertFocusedDeploymentCompatible, mergeStoredDeploymentUpdate, prepareDeploymentTokenTransition, type DeploymentSettings } from '#config/deployment-settings'
+import { monitoringTokensForDeployment, assertFocusedDeploymentCompatible, mergeStoredDeploymentUpdate, prepareDeploymentTokenTransition } from '#config/deployment-settings'
 import { loadOperatorSettingsWithRevision, operatorConfigurationRevisionConflict, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, switchOperatorNetworkProfile, type PersistedOperatorSettings } from '#config/settings-store'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import type { DashboardEnvironment } from '@zoltar/bot-shared/config/environment'
@@ -43,7 +43,7 @@ export function startOperatorControlPlane(parameters: {
 	/** The dashboard exposure settings the operator read from its environment at startup. */
 	dashboardEnvironment: DashboardEnvironment
 	deploymentRecovery: DeploymentRecoveryState
-	fixedState: OperatorSnapshotFixedState & { deployment: DeploymentSettings }
+	fixedState: OperatorSnapshotFixedState
 	getCursor: () => SyncCursor | undefined
 	lockManager: ExecutionLockManager | undefined
 	isStopping?: () => boolean

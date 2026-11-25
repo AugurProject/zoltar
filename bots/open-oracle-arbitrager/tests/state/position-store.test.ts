@@ -26,7 +26,7 @@ async function saveTerminalJournal(path: string, positions: PositionRecord[]) {
 
 async function expectRawJournalRejected(positions: readonly unknown[], message: string) {
 	const path = await journalPath()
-	await writeFile(path, JSON.stringify({ chainId: 1, positions, version: 2 }), { mode: 0o600 })
+	await writeFile(path, JSON.stringify({ chainId: 1, positions, version: 4, archived: emptyPositionJournalArchive() }), { mode: 0o600 })
 	await expect(loadPositionJournal(path, 1)).rejects.toThrow(message)
 }
 
@@ -39,27 +39,23 @@ function unrecoveredEntryPosition(reportId: string) {
 }
 
 describe('durable OpenOracle position journal', () => {
-	test.each([2, 3, 4])('loads version %i receipt timestamps without losing accounting', async version => {
+	test.each([2, 3])('rejects obsolete journal version %i', async version => {
 		const path = await journalPath()
-		const position = openPositionFixture()
-		const includedAt = '2026-01-01T00:00:00.000Z'
-		const expenditure = { costEth: '0.001', includedAt, transactionHash: position.entryTransactionHash }
-		const archived = version === 2 ? emptyPositionJournalArchive() : { ...emptyPositionJournalArchive(), gasSpentByUtcDay: { '2026-01-01': '0.002' } }
-		await writeFile(path, JSON.stringify({ archived, chainId: 1, positions: [{ ...position, gasExpenditures: version === 4 ? [expenditure] : [{ costEth: expenditure.costEth, minedAt: includedAt, transactionHash: expenditure.transactionHash }] }], version }), { mode: 0o600 })
-		const state = await loadPositionJournalState(path, 1)
-		expect(state).toEqual({ archived, positions: [{ ...position, gasExpenditures: [expenditure] }] })
-		await savePositionJournalState(path, state, 1)
-		const saved = await readFile(path, 'utf8')
-		expect(JSON.parse(saved).version).toBe(4)
-		expect(saved).not.toContain('minedAt')
-		expect(await loadPositionJournalState(path, 1)).toEqual(state)
+		await writeFile(path, JSON.stringify({ archived: emptyPositionJournalArchive(), chainId: 1, positions: [], version }), { mode: 0o600 })
+		await expect(loadPositionJournalState(path, 1)).rejects.toThrow('Invalid position journal schema')
 	})
 
-	test('rejects ambiguous and invalid legacy receipt timestamps', async () => {
+	test('rejects obsolete, ambiguous and invalid receipt timestamps', async () => {
 		const position = openPositionFixture()
 		const expenditure = { costEth: '0.001', minedAt: '2026-01-01T00:00:00.000Z', transactionHash: position.entryTransactionHash }
+		await expectRawJournalRejected([{ ...position, gasExpenditures: [expenditure] }], 'gas expenditure fields are invalid')
 		await expectRawJournalRejected([{ ...position, gasExpenditures: [{ ...expenditure, includedAt: expenditure.minedAt }] }], 'gas expenditure fields are invalid')
-		await expectRawJournalRejected([{ ...position, gasExpenditures: [{ ...expenditure, minedAt: 'invalid' }] }], 'must be canonical UTC ISO')
+		await expectRawJournalRejected([{ ...position, gasExpenditures: [{ ...expenditure, minedAt: 'invalid' }] }], 'gas expenditure fields are invalid')
+	})
+
+	test('rejects obsolete entry transaction arrays', async () => {
+		const position = openPositionFixture()
+		await expectRawJournalRejected([{ ...position, entryTransactionHashes: [position.entryTransactionHash] }], 'unsupported entry transaction list')
 	})
 
 	test('allows only one lifetime owner of a journal', async () => {
@@ -103,7 +99,7 @@ describe('durable OpenOracle position journal', () => {
 		const path = await journalPath()
 		const first = openPositionFixture({ reportId: '1', status: 'open' })
 		const secondHash = `0x${'cd'.repeat(32)}` as const
-		const second = openPositionFixture({ reportId: '1', entryTransactionHash: secondHash, entryTransactionHashes: [secondHash], status: 'open' })
+		const second = openPositionFixture({ reportId: '1', entryTransactionHash: secondHash, status: 'open' })
 		await savePositionJournal(path, [first, second], 1)
 		expect(await loadPositionJournal(path, 1)).toEqual([first, second])
 	})
@@ -234,8 +230,6 @@ describe('durable OpenOracle position journal', () => {
 			lifecycleTransactionNonce: '9',
 			lifecycleTransactionHashes: [`0x${'22'.repeat(32)}`, `0x${'33'.repeat(32)}`],
 			lifecycleUpdatedAt: '2026-01-02T00:00:00.000Z',
-			lifecycleWalletTokenBefore: '5000000000000000000',
-			lifecycleWalletWethBefore: '3000000000000000000',
 			status: 'withdrawing',
 		})
 		const pendingFinality = {
@@ -255,9 +249,9 @@ describe('durable OpenOracle position journal', () => {
 		}
 		await savePositionJournal(path, [position, pendingFinality], 1)
 		expect(await loadPositionJournal(path, 1)).toEqual([position, pendingFinality])
-		await writeFile(path, JSON.stringify({ chainId: 1, positions: [{ ...pendingFinality, lifecycleSettlerRewardEth: undefined }], version: 2 }), { mode: 0o600 })
+		await writeFile(path, JSON.stringify({ chainId: 1, positions: [{ ...pendingFinality, lifecycleSettlerRewardEth: undefined }], version: 4, archived: emptyPositionJournalArchive() }), { mode: 0o600 })
 		await expect(loadPositionJournal(path, 1)).rejects.toThrow('pending lifecycle finality recovery journal is incomplete')
-		await writeFile(path, JSON.stringify({ chainId: 1, positions: [{ ...pendingFinality, lifecycleTransactionIntent: undefined }], version: 2 }), { mode: 0o600 })
+		await writeFile(path, JSON.stringify({ chainId: 1, positions: [{ ...pendingFinality, lifecycleTransactionIntent: undefined }], version: 4, archived: emptyPositionJournalArchive() }), { mode: 0o600 })
 		await expect(loadPositionJournal(path, 1)).rejects.toThrow('pending lifecycle finality recovery journal is incomplete')
 	})
 
@@ -274,12 +268,12 @@ describe('durable OpenOracle position journal', () => {
 		})
 		await savePositionJournal(path, [position], 1)
 		expect(await loadPositionJournal(path, 1)).toEqual([position])
-		await writeFile(path, JSON.stringify({ chainId: 1, positions: [{ ...position, entryReceiptBlockHash: undefined }], version: 2 }), { mode: 0o600 })
+		await writeFile(path, JSON.stringify({ chainId: 1, positions: [{ ...position, entryReceiptBlockHash: undefined }], version: 4, archived: emptyPositionJournalArchive() }), { mode: 0o600 })
 		await expect(loadPositionJournal(path, 1)).rejects.toThrow('entry receipt finality fields are incomplete')
-		await writeFile(path, JSON.stringify({ chainId: 1, positions: [{ ...position, status: 'open' }], version: 2 }), { mode: 0o600 })
+		await writeFile(path, JSON.stringify({ chainId: 1, positions: [{ ...position, status: 'open' }], version: 4, archived: emptyPositionJournalArchive() }), { mode: 0o600 })
 		await expect(loadPositionJournal(path, 1)).rejects.toThrow('entry receipt finality evidence has an invalid status')
 		const historyOutbox = { ...executionIntentFixture(), actualGasCostEth: '0.001', blockNumber: '100', executedAt: '2026-01-01T00:00:00.000Z', trackedNetProfitEth: '0.099', transactionHash: `0x${'11'.repeat(32)}` }
-		await writeFile(path, JSON.stringify({ chainId: 1, positions: [{ ...position, historyOutbox }], version: 2 }), { mode: 0o600 })
+		await writeFile(path, JSON.stringify({ chainId: 1, positions: [{ ...position, historyOutbox }], version: 4, archived: emptyPositionJournalArchive() }), { mode: 0o600 })
 		await expect(loadPositionJournal(path, 1)).rejects.toThrow('pending entry finality cannot carry history')
 	})
 
@@ -364,8 +358,6 @@ describe('durable OpenOracle position journal', () => {
 			lifecycleTokenDecimals: '18',
 			lifecycleTransactionHashes: [`0x${'22'.repeat(32)}`],
 			lifecycleUpdatedAt: '2026-01-02T00:00:00.000Z',
-			lifecycleWalletTokenBefore: '1',
-			lifecycleWalletWethBefore: '1',
 			status: 'recovery-required',
 			withdrawnToken: '1.9',
 		})
