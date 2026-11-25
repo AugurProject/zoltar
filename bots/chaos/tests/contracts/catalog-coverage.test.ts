@@ -119,7 +119,6 @@ const expectedCanonicalManifest = [
 	'SecurityPoolCapitalLedger:contracts/statoblast/SecurityPoolCapitalLedger.sol:dynamic-endpoint',
 	'SecurityPoolCapitalLifecycleDelegate:contracts/statoblast/SecurityPoolCapitalLifecycleDelegate.sol:delegate-module',
 	'SecurityPoolCommitmentIndex:contracts/statoblast/SecurityPoolCommitmentIndex.sol:dynamic-endpoint',
-	'QuestionForkerDelegate:contracts/statoblast/QuestionForkerDelegate.sol:delegate-module',
 	'SecurityPool:contracts/statoblast/SecurityPool.sol:dynamic-endpoint',
 	'SecurityPoolRepairAuction:contracts/statoblast/SecurityPoolRepairAuction.sol:dynamic-endpoint',
 	'SecurityPoolRepairAuctionDeployer:contracts/statoblast/SecurityPoolRepairAuction.sol:deployment-helper',

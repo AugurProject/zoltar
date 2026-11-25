@@ -17,8 +17,7 @@ const artifacts = {
 	sharedPoolPriceFeedDeploymentWorker: artifact(8),
 	securityPoolFactory: artifact(9, 'address,address,address,address,address,address,address,address,address,bytes32,address[9]'),
 	securityPool: artifact(26),
-	questionForker: artifact(10, 'address,address'),
-	questionForkerDelegate: artifact(11, 'address'),
+	questionForker: artifact(10, 'address'),
 	questionLedgerOperationsDelegate: artifact(12),
 	questionLedgerEventEmitter: artifact(13),
 	shareTokenFactory: artifact(15, 'address'),
@@ -36,13 +35,11 @@ const builders = createStatoblastInitCodes(artifacts, { proxyDeployerAddress: pr
 const constructorArgs = (code: Hex) => `0x${code.slice(10)}` as const
 
 describe('shared capital infrastructure init codes', () => {
-	test('native fork delegation binds the same protocol and deterministic module address', () => {
-		const delegateCode = builders.getQuestionForkerDelegateByteCode(zoltar)
-		const delegate = getCreate2Address({ bytecode: delegateCode, from: proxy, salt: zeroSalt })
-		expect(constructorArgs(delegateCode)).toBe(encodeAbiParameters(parseAbiParameters('address'), [zoltar]))
-		expect(constructorArgs(builders.getQuestionForkerByteCode(zoltar))).toBe(encodeAbiParameters(parseAbiParameters('address,address'), [zoltar, delegate]))
+	test('the combined native forker binds the protocol directly', () => {
+		const code = builders.getQuestionForkerByteCode(zoltar)
+		expect(constructorArgs(code)).toBe(encodeAbiParameters(parseAbiParameters('address'), [zoltar]))
 		const addresses = builders.createInfraContractAddresses(weth, { getZoltarAddress: () => zoltar, getZoltarQuestionDataAddress: () => questionData })()
-		expect(addresses.questionForkerDelegate).toBe(delegate)
+		expect(addresses.questionForker).toBe(getCreate2Address({ bytecode: code, from: proxy, salt: zeroSalt }))
 	})
 
 	test('fork and auction deployers need no constructor parameters and all module addresses are distinct', () => {

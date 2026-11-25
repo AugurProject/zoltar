@@ -88,6 +88,22 @@ export async function demoOperationsCatalogRoute(env: DemoEnvironment, path: str
 			evidence_status: demoTimelineEvidenceStatus(false, 'chain-reorg'),
 			invalidation_reason: 'chain-reorg',
 		},
+		...(context.pageUrl.searchParams.get('feedTimeline') === '1'
+			? ['PriceReported', 'PriceReportRejected', 'PendingReportRecovered'].map((event, index) => ({
+					entity_type: 'price-feed',
+					entity_identity: demoAddress('bc'),
+					semantic_event_kind: event,
+					source_contract: demoAddress('bc'),
+					summary_data: { reportId: String(index + 20), [event === 'PriceReported' ? 'price' : 'lastPrice']: (2n * 10n ** 30n).toString() },
+					collateral: { address: demoAddress('c0'), symbol: 'USDC', decimals: 6 },
+					block_number: operations.asOf.blockNumber,
+					block_hash: operations.asOf.blockHash,
+					tx_hash: demoHash,
+					log_index: index + 20,
+					canonical: true,
+					evidence_status: demoTimelineEvidenceStatus(true),
+				}))
+			: []),
 		// `auctionTimeline=1` adds settled auction bids: one in a sampled 6-decimal USDC collateral, one before any sampled read.
 		...(context.pageUrl.searchParams.get('auctionTimeline') === '1'
 			? [

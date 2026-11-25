@@ -55,6 +55,7 @@ function oracleRequestSteps(snapshot: EcosystemSnapshot, coordinator: `0x${strin
 			args: [prepared.price, initialWethAttoEth, requestCostAttoEth],
 			evidence: [
 				eventEvidence(priceFeed, 'PriceRequested(uint256,uint256)'),
+				eventEvidence(priceFeed, 'ReportFundingAssigned(uint256,address)'),
 				exactOracleFundingTransferEvidence(snapshot, weth, initialWethAttoEth),
 				exactOracleFundingTransferEvidence(snapshot, repToken, initialRepAttoRep),
 				...(allowance(tokenInventory(snapshot, weth), coordinator) <= initialWethAttoEth ? [erc20AllowanceEvidence(weth, snapshot.wallet.address, coordinator, 0n)] : []),

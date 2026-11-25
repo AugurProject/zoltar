@@ -134,11 +134,6 @@ export const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 		compilerProfile: 'main',
 		contractName: 'SharedPoolPriceFeedFactory',
 	},
-	questionForkerDelegate: {
-		artifactPath: 'contracts/statoblast/QuestionForkerDelegate.sol',
-		compilerProfile: 'main',
-		contractName: 'QuestionForkerDelegate',
-	},
 	questionForker: {
 		artifactPath: 'contracts/statoblast/QuestionForker.sol',
 		compilerProfile: 'main',
