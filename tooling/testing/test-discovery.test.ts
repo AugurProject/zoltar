@@ -400,6 +400,23 @@ describe('canonical test discovery', () => {
 		expect(renderTestTimingMarkdown(report)).toContain('Timing regression budget: passed')
 	})
 
+	test('timing reports distinguish runner variation from a new regression', () => {
+		const history: TestTimingHistory = {
+			version: TEST_TIMING_HISTORY_VERSION,
+			samplesByFile: {
+				'fork-simulation.test.ts': [28, 29, 29.3, 35.6, 29.4],
+				'fuzz.test.ts': [27.5, 36.3, 27.3, 27.4, 27.3],
+				'new-regression.test.ts': [27.5, 36.3, 27.3, 27.4, 27.3],
+			},
+		}
+		const observation = createTestTimingObservation('<testcase file="fork-simulation.test.ts" time="44.2"/><testcase file="fuzz.test.ts" time="42.3"/><testcase file="new-regression.test.ts" time="52"/>', 138.5, ['fork-simulation.test.ts', 'fuzz.test.ts', 'new-regression.test.ts'])
+		const report = createTestTimingReport(history, [observation])
+
+		expect(report.regressions.map(regression => regression.filePath)).toEqual(['new-regression.test.ts'])
+		expect(report.timingWarnings.map(warning => warning.filePath)).toEqual(['fork-simulation.test.ts', 'fuzz.test.ts'])
+		expect(renderTestTimingMarkdown(report)).toContain('Above median budget, within historical timing tolerance')
+	})
+
 	test('timing reports expose shard imbalance and historically unstable files', () => {
 		const history: TestTimingHistory = { version: TEST_TIMING_HISTORY_VERSION, samplesByFile: { 'unstable.test.ts': [10, 12, 35] } }
 		const observations = [createTestTimingObservation('<testcase file="first.test.ts" time="10"/>', 10, ['first.test.ts']), createTestTimingObservation('<testcase file="second.test.ts" time="30"/>', 30, ['second.test.ts'])]
