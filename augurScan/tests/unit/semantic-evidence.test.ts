@@ -91,3 +91,9 @@ test('renders raw pool accounting columns without requiring an event payload', (
 	expect(summary).toContain('Last settlement security pool time: 120')
 	expect(summary).not.toContain('99')
 })
+
+test('delegate calls distinguish inherited value from a transfer', () => {
+	const rows = callTraceRows({ type: 'CALL', value: '0xde0b6b3a7640000', calls: [{ type: 'DELEGATECALL', value: '0xde0b6b3a7640000', calls: [{ type: 'CALL', value: '0x1' }] }] }, 'ETH')
+	expect(rows[1]).toContain('inherited value 1 ETH')
+	expect(rows[2]).toEndWith('0.000000000000000001 ETH')
+})

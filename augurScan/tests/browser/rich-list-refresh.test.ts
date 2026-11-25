@@ -31,3 +31,25 @@ browserTest(
 	},
 	30_000,
 )
+
+browserTest('switching networks clears the previous table and export during loading and failure', async () => {
+	await withBrowserPage(`${origin}/addresses?demo=1&chainId=1&view=table&richRouteRefreshDelayAfterLoad=1&routeRefreshErrorAfterLoad=1`, desktopViewport, async ({ evaluate, waitFor }) => {
+		await waitFor("document.querySelector('#richlist-table tbody tr') !== null")
+		await evaluate("document.querySelector('#global-network-filter').value = '11155111'; document.querySelector('#global-network-form').requestSubmit()")
+		expect(await evaluate("document.querySelector('#richlist-table').childElementCount")).toBe(0)
+		await waitFor("document.querySelector('#richlist-status button') !== null")
+		expect(await evaluate("document.querySelector('#richlist-table').childElementCount")).toBe(0)
+	})
+})
+
+browserTest('retry after a snapshot conflict gets a fresh ranking before appending', async () => {
+	await withBrowserPage(`${origin}/addresses?demo=1&chainId=1&richPaginationDemo=1&richSnapshotConflict=1`, desktopViewport, async ({ evaluate, waitFor }) => {
+		await waitFor("document.querySelectorAll('#richlist-table tbody tr').length === 50")
+		await evaluate("document.querySelector('#richlist-more').click()")
+		await waitFor("document.querySelector('#richlist-more-status button') !== null")
+		await evaluate("document.querySelector('#richlist-more-status button').click()")
+		await waitFor("!document.querySelector('#richlist-more').hidden && !document.querySelector('#richlist-more').disabled")
+		await evaluate("document.querySelector('#richlist-more').click()")
+		await waitFor("document.querySelectorAll('#richlist-table tbody tr').length === 100")
+	})
+})
