@@ -291,7 +291,14 @@ export async function demoRichListRoute(env: DemoEnvironment, path: string): Pro
 	const filtered = demoRichList.filter(item => (!chainId || item.chain_id === chainId) && (!address || item.address.toLowerCase() === address) && !(counters.reorgObserved && context.pageUrl.searchParams.get('evictAccountOnReorg') === '1' && item.address.toLowerCase() === counters.evictedAddress))
 	const paginationDemo = context.pageUrl.searchParams.get('richPaginationDemo')
 	const largePagination = paginationDemo === 'large'
-	const snapshot = largePagination ? 'rich-list-demo-snapshot' : undefined
+	const expiredSnapshot = context.pageUrl.searchParams.get('richSnapshotConflict') === '1'
+	if (expiredSnapshot && offset > 0 && request.searchParams.get('snapshot') === 'old') {
+		const error = new Error('Indexed state changed; restart pagination')
+		error.status = 409
+		throw error
+	}
+	let snapshot = largePagination ? 'rich-list-demo-snapshot' : undefined
+	if (expiredSnapshot) snapshot = counters.richListRequests === 1 ? 'old' : 'new'
 	if (largePagination && offset > 0) {
 		if (request.searchParams.get('snapshot') !== snapshot) throw new Error('Rich list refresh lost its snapshot')
 		counters.routeRequestsInFlight++
@@ -313,5 +320,12 @@ export async function demoRichListRoute(env: DemoEnvironment, path: string): Pro
 						.padStart(40, '0')}`,
 				}))
 			: filtered
-	return { items: ranked.slice(offset, offset + limit), total: ranked.length, limit, offset, snapshotCursor: snapshot }
+	const items = ranked
+		.slice(offset, offset + limit)
+		.map((item, index) =>
+			offset === 0 && index === 0 && context.pageUrl.searchParams.get('richCapped') === '1'
+				? { ...item, rep_balances_truncated: true, sampled_rep_token_count: 101, rep_token_count: 101, rep_balances: Array.from({ length: 100 }, (_, index) => ({ ...requiredArrayItem(item.rep_balances, 0, 'Demo REP token'), address: `0x${(index + 1).toString(16).padStart(40, '0')}` })) }
+				: item,
+		)
+	return { items, total: ranked.length, limit, offset, snapshotCursor: snapshot }
 }

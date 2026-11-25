@@ -38,9 +38,9 @@ export const documentationConsumers: readonly DocumentationConsumer[] = [
 	},
 	{
 		projectId: 'repository',
-		reason: 'developer documentation asserted by the UI split workflow test changed',
+		reason: 'developer launch instructions validated by the documentation content check changed',
 		files: ['README.md', 'testnetwork/README.md', 'docs/how-to/trading-set-up-development.html'],
-		tests: ['tooling/ui/ui-split-workflows.test.ts'],
+		checks: ['bun run docs:check-content'],
 	},
 	{
 		projectId: 'augur-scan',

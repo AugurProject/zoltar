@@ -319,7 +319,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 				'No LP-share ownership records match this view. Transfer history begins when this scanner started indexing the pair.',
 			),
 		)
-		addPanel('history', operationsPanel('Hourly NO-per-YES candles', renderCandleContent(operationRecords(data['candles']), operationRow, operationRatio), 'No reserve observations are available for candles.'))
+		addPanel('history', operationsPanel('Hourly NO-per-YES candles', renderCandleContent(operationRecords(data['candles']), operationRow), 'No reserve observations are available for candles.'))
 	}
 	if (route.kind === 'report') {
 		const decisionPanel = operationsPanel(

@@ -32,6 +32,7 @@ export const stateHistory = async (sql: SQL, parts: readonly string[], url: URL)
 	const requestedToBlock = url.searchParams.has('toBlock') ? toBlock : indexedThroughBlock
 	// An omitted toBlock means the indexed head, so a fromBlock beyond it is the same empty range as an explicit one.
 	if (url.searchParams.has('fromBlock') && requestedToBlock !== undefined && BigInt(requestedFromBlock) > BigInt(requestedToBlock)) throw new ApiRequestError(url.searchParams.has('toBlock') ? 'fromBlock must not exceed toBlock' : 'fromBlock must not exceed the indexed head')
+	if (!url.searchParams.has('fromBlock') && requestedToBlock !== undefined && BigInt(requestedToBlock) < BigInt(requestedFromBlock)) throw new ApiRequestError('toBlock must not precede the indexed start block')
 	const historyIdentity = JSON.stringify({ type, identity: parts.slice(2).map(part => part.toLowerCase()), fromBlock, toBlock, indexedFromBlock })
 	const page = offsetPage(url, chainId, 'state-history', historyIdentity)
 	if (page.identity !== historyIdentity) throw new ApiRequestError('cursor does not match filters')
