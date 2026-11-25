@@ -53,11 +53,13 @@ test(
 		let executeCalls = 0
 		let failInspect = false
 		let stateReads = 0
+		let onStateRead: (() => void) | undefined
 		let failNextStateRead = false
 		const dashboard = startDashboardServer(0, {
 			...inertDashboardControls,
 			getState: () => {
 				stateReads += 1
+				onStateRead?.()
 				if (failNextStateRead) {
 					failNextStateRead = false
 					throw new Error('Intentional automatic-refresh recovery fixture')
@@ -164,6 +166,7 @@ test(
 			}
 			await waitFor("document.querySelector('.operator-confirm-dialog')?.open === true")
 			expect(await evaluate("document.querySelector('.operator-confirm-dialog h2')?.textContent")).toBe('Sign and submit live transactions')
+			await capture('desktop-confirmation')
 			await evaluate("document.querySelector('#operator-confirm-submit')?.click()")
 			await waitFor("document.querySelector('.operator-confirm-dialog') === null")
 		}
@@ -180,21 +183,27 @@ test(
 		}
 		const screenshotDirectory = process.env['CHAOS_QA_SCREENSHOTS']
 		async function capture(name: string) {
-			if (screenshotDirectory === undefined) return
-			await mkdir(screenshotDirectory, { recursive: true })
-			const response = await session.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
-			if (typeof response !== 'object' || response === null) throw new Error('Invalid screenshot response')
-			const data = Reflect.get(response, 'data')
-			if (typeof data !== 'string') throw new Error('Missing screenshot')
-			await Bun.write(`${screenshotDirectory}/${name}.png`, Buffer.from(data, 'base64'))
+			// Check both layouts from the same observable state; signing and recovery run once.
+			for (const size of [
+				{ width: 390, height: 844, label: 'mobile' },
+				{ width: 1440, height: 900, label: 'desktop' },
+			]) {
+				await session.send('Emulation.setDeviceMetricsOverride', { width: size.width, height: size.height, deviceScaleFactor: 1, mobile: false })
+				expect(await evaluate('document.body.scrollWidth <= document.documentElement.clientWidth')).toBe(true)
+				expect(await evaluate("[...document.querySelectorAll('dialog[open]')].every(dialog => dialog.scrollWidth <= dialog.clientWidth)")).toBe(true)
+				if (screenshotDirectory === undefined) continue
+				await mkdir(screenshotDirectory, { recursive: true })
+				const response = await session.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
+				if (typeof response !== 'object' || response === null) throw new Error('Invalid screenshot response')
+				const data = Reflect.get(response, 'data')
+				if (typeof data !== 'string') throw new Error('Missing screenshot')
+				await Bun.write(`${screenshotDirectory}/${name.replace('desktop-', `${size.label}-`)}.png`, Buffer.from(data, 'base64'))
+			}
 		}
 		try {
 			await session.send('Page.enable')
 			await session.send('Runtime.enable')
-			for (const viewport of [
-				{ width: 1440, height: 900, label: 'desktop' },
-				{ width: 390, height: 844, label: 'mobile' },
-			]) {
+			for (const viewport of [{ width: 1440, height: 900, label: 'desktop' }]) {
 				await session.send('Emulation.setDeviceMetricsOverride', { width: viewport.width, height: viewport.height, deviceScaleFactor: 1, mobile: false })
 				await session.send('Page.navigate', { url: new URL('/catalog', dashboard.url).href })
 				await waitFor("document.querySelectorAll('#catalog-rows > details').length === 4")
@@ -356,6 +365,7 @@ test(
 				await evaluate("[...document.querySelectorAll('.operation-open')].find(button => button.getAttribute('aria-label') === 'Open Deposit OpenOracle credit').click()")
 				await waitFor("document.querySelector('#operation-input-token') !== null && document.querySelector('#operation-dialog fieldset').disabled === false")
 				await expectFullTokenAddress()
+				await session.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false })
 				await evaluate(`(() => {
 				const input = document.querySelector('#operation-input-token')
 				const source = input.parentElement.querySelector('select')
@@ -367,9 +377,20 @@ test(
 				await waitFor("document.querySelector('#operation-dialog fieldset').disabled === false")
 				await evaluate("document.querySelector('.operation-coverage').open = true")
 				await expectFullTokenAddress()
+				expect(await evaluate('document.activeElement.id')).toBe('operation-input-token')
+				fixture.state.lastScannedBlock = 101n
 				const tokenStateReads = stateReads
-				for (let attempt = 0; attempt < 150 && stateReads === tokenStateReads; attempt += 1) await Bun.sleep(100)
+				const refreshed = new Promise<void>(resolve => {
+					onStateRead = resolve
+				})
+				await evaluate("window.dispatchEvent(new Event('focus'))")
+				await refreshed
+				onStateRead = undefined
+				await waitFor("document.querySelector('#last-block')?.textContent === 'Block 101'")
+				expect(await evaluate('document.activeElement.id')).toBe('operation-input-token')
 				expect(stateReads).toBeGreaterThan(tokenStateReads)
+				await expectFullTokenAddress()
+				await session.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false })
 				await expectFullTokenAddress()
 				await capture(`${viewport.label}-token-inputs`)
 				expect(await evaluate("document.querySelector('#operation-input-token').disabled")).toBe(false)

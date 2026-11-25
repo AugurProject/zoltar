@@ -25,7 +25,8 @@ export function controlReconnectTimers(window: BrowserWindow) {
 				reconnectTicks.delete(timer)
 				run()
 			}
-			await Bun.sleep(1)
+			await new Promise<void>(resolve => setImmediate(resolve))
 		}
+		if (!ready()) throw new Error('Profile reconnect did not reach the expected state after controlled timer advances')
 	}
 }
