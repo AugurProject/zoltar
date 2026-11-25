@@ -369,6 +369,27 @@ export async function simulateSignedBundleEveryRelay(parameters: {
 	return { failedTargets, successful }
 }
 
+function relayAcceptance(relayUrls: readonly string[], settled: readonly PromiseSettledResult<void>[], minimumSuccessfulRelays: number, submission: 'Bundle submission' | 'Private transaction submission') {
+	const acceptedTargets: string[] = []
+	const failedTargets: SubmissionTargetResult[] = []
+	for (const [index, result] of settled.entries()) {
+		const relay = relayUrls[index]
+		if (relay === undefined) throw new Error('Missing relay URL for submission result')
+		const target = endpointLabel(relay)
+		if (result.status === 'fulfilled') acceptedTargets.push(target)
+		else failedTargets.push({ error: errorMessage(result.reason), target })
+	}
+	const acceptedOriginCount = new Set(acceptedTargets).size
+	if (acceptedOriginCount >= minimumSuccessfulRelays) return { acceptedTargets, failedTargets }
+
+	const failures = failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')
+	if (acceptedOriginCount === 0 && minimumSuccessfulRelays === 1) {
+		const subject = submission === 'Bundle submission' ? 'bundle' : 'transaction'
+		throw new SubmissionFailure(`Every private relay rejected the ${subject}: ${failures}`, failedTargets)
+	}
+	throw new SubmissionFailure(`${submission} required ${minimumSuccessfulRelays.toString()} accepting relays from distinct origins but received ${acceptedOriginCount.toString()} distinct relay origin${acceptedOriginCount === 1 ? '' : 's'}: ${failures}`, failedTargets)
+}
+
 export async function submitSignedBundle(parameters: {
 	address: Address
 	minimumSuccessfulRelays?: number | undefined
@@ -407,26 +428,7 @@ export async function submitSignedBundle(parameters: {
 			if (typeof bundleHash !== 'string' || bundleHash.toLowerCase() !== expectedBundleHash.toLowerCase()) throw new Error('Relay returned an unexpected bundle hash')
 		}),
 	)
-	const acceptedTargets: string[] = []
-	const failedTargets: SubmissionTargetResult[] = []
-	for (const [index, result] of settled.entries()) {
-		const relay = parameters.relayUrls[index]
-		if (relay === undefined) throw new Error('Missing relay URL for bundle submission result')
-		const target = endpointLabel(relay)
-		if (result.status === 'fulfilled') acceptedTargets.push(target)
-		else failedTargets.push({ error: errorMessage(result.reason), target })
-	}
-	const acceptedOriginCount = new Set(acceptedTargets).size
-	if (acceptedOriginCount < minimumSuccessfulRelays) {
-		if (acceptedTargets.length === 0 && minimumSuccessfulRelays === 1) {
-			throw new SubmissionFailure(`Every private relay rejected the bundle: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
-		}
-		throw new SubmissionFailure(
-			`Bundle submission required ${minimumSuccessfulRelays.toString()} accepting relays from distinct origins but received ${acceptedOriginCount.toString()} distinct relay origin${acceptedOriginCount === 1 ? '' : 's'}: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`,
-			failedTargets,
-		)
-	}
-	return { acceptedTargets, failedTargets }
+	return relayAcceptance(parameters.relayUrls, settled, minimumSuccessfulRelays, 'Bundle submission')
 }
 
 async function sendPrivateTransaction(parameters: { address: Address; hash: Hex; maxBlockNumber: bigint; relayUrl: string; serializedTransaction: Hex; signMessage: (message: string | Uint8Array) => Promise<Hex>; timeoutMilliseconds: number }) {
@@ -499,25 +501,7 @@ export async function submitSignedTransaction(parameters: {
 			}),
 		),
 	)
-	const acceptedTargets: string[] = []
-	const failedTargets: SubmissionTargetResult[] = []
-	for (const [index, result] of settled.entries()) {
-		const relay = settings.relayUrls[index]
-		if (relay === undefined) throw new Error('Missing relay URL for submission result')
-		const target = endpointLabel(relay)
-		if (result.status === 'fulfilled') acceptedTargets.push(target)
-		else failedTargets.push({ error: errorMessage(result.reason), target })
-	}
-	const acceptedOriginCount = new Set(acceptedTargets).size
-	if (acceptedOriginCount < settings.minimumBundleRelaySuccesses) {
-		if (acceptedTargets.length === 0 && settings.minimumBundleRelaySuccesses === 1) {
-			throw new SubmissionFailure(`Every private relay rejected the transaction: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
-		}
-		throw new SubmissionFailure(
-			`Private transaction submission required ${settings.minimumBundleRelaySuccesses.toString()} accepting relays from distinct origins but received ${acceptedOriginCount.toString()} distinct relay origin${acceptedOriginCount === 1 ? '' : 's'}: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`,
-			failedTargets,
-		)
-	}
+	const { acceptedTargets, failedTargets } = relayAcceptance(settings.relayUrls, settled, settings.minimumBundleRelaySuccesses, 'Private transaction submission')
 	return {
 		acceptedTargets,
 		failedTargets,

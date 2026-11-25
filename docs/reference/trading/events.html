@@ -13,7 +13,7 @@
 			<header>
 				<p class="kicker">Reference</p>
 				<h1>Trading events</h1>
-				<p>The factory and pair emit every reserve and LP state change. The router emits an event only for the two share-transfer operations it executes itself. Parameters prefixed with <code>indexed</code> are log topics.</p>
+				<p>The factory and pair emit every reserve and LP state change. Parameters prefixed with <code>indexed</code> are log topics.</p>
 			</header>
 			<section id="factory">
 				<h2>Factory</h2>
@@ -40,7 +40,12 @@
 			</section>
 			<section id="attribution">
 				<h2>Attributing router operations</h2>
-				<p>For router-mediated operations, pair <code>provider</code>/<code>sender</code> fields and question ledger <code>redeemer</code> identify the router. Question ledger <code>creator</code> identifies <code>SecurityPoolServices</code>, which supplies collateral; the router is the <code>recipient</code> in <code>CompleteSetsFunded</code>. None of these immediate-caller fields identifies the initiating wallet. Pair <code>recipient</code> identifies the explicit asset recipient only for direct pair calls and router liquidity operations; router entry and insured-exit swaps name the router, which then forwards the assets. Insured exits carry the owner in <code>PositionExitedByTransfer</code>. For complete-set redemptions, take the owner from the ShareToken <code>TransferBatch</code> log's <code>from</code> field, since <code>CompleteSetRedeemedByTransfer</code> records only the question ledger and payout recipient. Entry and liquidity operations emit no router event, so for those an indexer must combine the transaction sender, the called router method, pair and core logs, and the recipient from calldata or the ShareToken <code>TransferBatch</code> log; it must not infer wallet attribution from the immediate-caller fields alone.</p>
+				<p>Immediate-caller fields identify contracts: pair <code>provider</code>/<code>sender</code> and ledger <code>redeemer</code> name the router, while ledger <code>creator</code> names <code>SecurityPoolServices</code>. The router is the <code>recipient</code> in <code>CompleteSetsFunded</code> and in the pair’s entry and exit swaps. Pair <code>recipient</code> names the explicit asset recipient for direct pair calls and router liquidity operations.</p>
+				<ul>
+					<li><strong>Insured exit.</strong> Use <code>PositionExitedByTransfer.owner</code>.</li>
+					<li><strong>Complete-set redemption.</strong> Use the ShareToken <code>TransferBatch</code> log’s <code>from</code> field. <code>CompleteSetRedeemedByTransfer</code> carries the ledger and payout recipient.</li>
+					<li><strong>Entry and liquidity.</strong> Combine the transaction sender, router method, pair and core logs, and recipient from calldata or <code>TransferBatch</code>.</li>
+				</ul>
 				<p>Router return tuples are available from authoritative call simulation only; they are not stored in a transaction receipt. Complete-set and ETH-flow evidence comes from the question ledger's <code>CompleteSetCreated</code> and <code>CompleteSetRedeemed</code> events plus transaction logs.</p>
 			</section>
 		</main>

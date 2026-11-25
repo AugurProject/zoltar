@@ -17,7 +17,6 @@
 			</header>
 			<section id="before-you-start">
 				<h2>Before you start</h2>
-				<p>Zoltar is the base layer: it records questions and keeps the <a href="../reference/glossary.html#rep">REP</a> ledger of each <a href="../reference/glossary.html#universe">universe</a>. <a href="../explanation/zoltar.html">Zoltar and branching universes</a> explains the model.</p>
 				<p>Run <code>bun run app:serve:zoltar</code> and open <code>http://localhost:4153/?simulate=1&amp;genesis=yes&amp;simScenario=deployed</code>. That browser-local simulator has the contracts deployed and no questions yet; the screenshots below come from it. It never reflects live chain state.</p>
 			</section>
 			<section id="create">
@@ -39,7 +38,7 @@
 				<p>Select <strong>Create question</strong> below the preview and confirm the transaction. The confirmation card shows the <strong>Question ID</strong>, the end time, and the <strong>Outcomes</strong> Yes, No, and Invalid.</p>
 				<figure class="screenshot" id="fig-zoltar-question-created" aria-labelledby="fig-zoltar-question-created-caption">
 					<a class="screenshot-link" href="../assets/screenshots/zoltar/question-created.png"><img width="800" height="493" src="../assets/screenshots/zoltar/question-created.png" alt="The created question card for Will it rain in Lisbon on 1 June 2027?, with its description, question type Binary, question ID, end time, outcomes Yes, No, and Invalid, a Use for fork button that stays disabled until the question ends, and a Create another question button." loading="lazy" /></a>
-					<figcaption id="fig-zoltar-question-created-caption"><span class="figure-label">The new question.</span> The question ID identifies the question in every universe.</figcaption>
+					<figcaption id="fig-zoltar-question-created-caption"><span class="figure-label">The new question.</span></figcaption>
 				</figure>
 			</section>
 			<section id="find">
@@ -52,7 +51,7 @@
 					<a class="screenshot-link" href="../assets/screenshots/zoltar/discover-questions.png"><img width="800" height="434" src="../assets/screenshots/zoltar/discover-questions.png" alt="The Questions list with the Downloaded tab selected, showing Will it rain in Lisbon on 1 June 2027?, marked Binary, with its end time and a Use for fork button that stays disabled until the question ends." loading="lazy" /></a>
 					<figcaption id="fig-zoltar-discover-caption"><span class="figure-label">The registry.</span> Questions are global: any universe can use this one, and anyone can find it here.</figcaption>
 				</figure>
-				<p>That is a complete question. To put collateral behind a question, follow <a href="./statoblast-first-pool.html">Back a shared security pool and mint shares</a>; each simulator keeps its own chain. <strong>Use for fork</strong> instead starts a universe fork once the question has ended, which <a href="../explanation/zoltar.html">Zoltar and branching universes</a> explains.</p>
+				<p>Next, <a href="./statoblast-first-pool.html">back a shared security pool and mint shares</a> in a separate simulation, or see <a href="../explanation/zoltar.html">Zoltar and branching universes</a> to learn what <strong>Use for fork</strong> does after the question ends.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>

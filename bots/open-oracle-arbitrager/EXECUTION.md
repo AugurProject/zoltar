@@ -110,7 +110,7 @@ Verify the deployment address independently, set `runtime.execute` to `true`, sa
 bun run run
 ```
 
-Canonical contract addresses are supplied automatically from the bundled network deployment data. The bot inspects the executor deployment and the canonical contracts (OpenOracle, WETH, the security-pool factory, and the enabled Uniswap venue contracts) on its first scan and keeps re-checking each scan until all of them are present; live execution refuses to start until they hold.
+The bot checks the executor and [network deployment addresses](./CONFIGURATION.md#persistent-operator-settings) on each scan until the required contracts are present. Live execution waits for these checks.
 
 Execution mode can be changed in the dashboard's **Execution mode** form and applies at the next scan boundary. The form shows a readiness checklist (signer, quorum RPCs, venue, deployed executor, canonical contracts, delivery) and keeps the live-execution switch locked until every required row holds; the on-chain rows come from the latest scan, so a freshly deployed executor appears once the bot has inspected it, and a venue saved since that scan holds the contracts row until the next scan inspects its contracts. A trailing **Pool coordinators** row is advisory: arming does not need a discovered pool, but nothing can trade until one exists.
 

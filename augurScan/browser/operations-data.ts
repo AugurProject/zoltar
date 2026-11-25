@@ -1,5 +1,5 @@
 import type { OperationsDetailRoute, PagedOperationsCatalogSection } from './browser-types.ts'
-import { decodeOperationsResponseValue, isJsonRecord, operationRecords, operationsCatalogRecords, operationsRiskPagination, operationsRiskRecords, type JsonRecord, type OperationsResponse } from './api-validation.ts'
+import { decodeOperationsResponseValue, isJsonRecord, operationRecords, operationsSnapshotIdentity, operationsCatalogRecords, operationsRiskPagination, operationsRiskRecords, type JsonRecord, type OperationsResponse } from './api-validation.ts'
 import { canonicalPageLimit, collectCanonicalPages, collectCursorCollections } from './canonical-pagination.ts'
 import { operationsCatalogRecordKey, operationsDetailRecordKey } from './operations-presentation.ts'
 
@@ -77,6 +77,7 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 		const snapshot = await collectCanonicalPages(
 			async (cursor?: string, limit = 100) => {
 				const response = decodeOperationsResponse(await api(operationsCatalogEndpoint(section, cursor, limit)))
+				if (first !== undefined && operationsSnapshotIdentity(first) !== operationsSnapshotIdentity(response)) throw new Error('Indexed evidence changed while older evidence was loading; retry from the latest available block')
 				first ??= response
 				last = response
 				return {
@@ -105,7 +106,7 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 		const snapshot = await collectCanonicalPages(
 			async (cursor?: string, limit = 100) => {
 				const response = decodeOperationsResponse(await api(operationsRiskCatalogEndpoint(cursor, limit)))
-				const responseIdentity = `${response.chainId}:${String(response.asOf['blockNumber'] ?? '')}:${String(response.asOf['blockHash'] ?? '')}`
+				const responseIdentity = operationsSnapshotIdentity(response)
 				if (snapshotIdentity !== undefined && responseIdentity !== snapshotIdentity) throw new Error('Risk catalog changed while older evidence was loading; retry from the latest available block')
 				snapshotIdentity ??= responseIdentity
 				first ??= response
@@ -141,7 +142,7 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 		const collected = await collectCursorCollections(
 			async cursor => {
 				const response = decodeOperationsResponse(await api(operationsDetailEndpoint(route, cursor, 100)))
-				const responseIdentity = `${response.chainId}:${String(response.asOf['blockNumber'] ?? '')}:${String(response.asOf['blockHash'] ?? '')}`
+				const responseIdentity = operationsSnapshotIdentity(response)
 				if (snapshotIdentity !== undefined && responseIdentity !== snapshotIdentity) throw new Error('Risk history changed while older evidence was loading; retry from the latest available block')
 				snapshotIdentity ??= responseIdentity
 				first ??= response
@@ -190,15 +191,14 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 		const primaryLimit = canonicalPageLimit(roundTargetCount, 0, 100)
 		const secondaryLimit = canonicalPageLimit(decisionTargetCount, 0, 100)
 		const first = decodeOperationsResponse(await api(operationsDetailEndpoint(route, undefined, primaryLimit, undefined, secondaryLimit)))
-		const snapshotIdentity = (response: OperationsResponse) => JSON.stringify([response.chainId, ...['blockNumber', 'blockHash', 'invalidationId', 'abiSourceHash', 'applicationSourceHash', 'projectionSourceHash'].map(key => response.asOf[key])])
-		const firstIdentity = snapshotIdentity(first)
+		const firstIdentity = operationsSnapshotIdentity(first)
 		const collect = async (key: string, targetCount: number, continuationEndpoint: (cursor: string, limit: number) => string) => {
 			let lastPage = detailPageRecord(first.data, key)
 			const collected = await collectCanonicalPages(
 				async (cursor, limit = 100) => {
 					if (cursor !== undefined) {
 						const response = decodeOperationsResponse(await api(continuationEndpoint(cursor, limit)))
-						if (snapshotIdentity(response) !== firstIdentity) throw new Error('Indexed evidence changed while older evidence was loading; retry from the latest available block')
+						if (operationsSnapshotIdentity(response) !== firstIdentity) throw new Error('Indexed evidence changed while older evidence was loading; retry from the latest available block')
 						lastPage = detailPageRecord(response.data, key)
 					}
 					return {
@@ -237,6 +237,7 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 		const snapshot = await collectCanonicalPages(
 			async (cursor?: string, limit = 100) => {
 				const response = decodeOperationsResponse(await api(operationsDetailEndpoint(route, cursor, limit)))
+				if (first !== undefined && operationsSnapshotIdentity(first) !== operationsSnapshotIdentity(response)) throw new Error('Indexed evidence changed while older evidence was loading; retry from the latest available block')
 				first ??= response
 				last = response
 				const page = detailPageRecord(response.data, pageKey)

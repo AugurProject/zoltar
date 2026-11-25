@@ -12,7 +12,7 @@ import { captureViewState, restoreViewState } from '../../browser/view-state.ts'
 import { overrideGlobals } from '../support/global-overrides.ts'
 
 const blockHash = `0x${'1'.repeat(64)}`
-const asOfBlock = (blockNumber: string, historical = false): JsonRecord => ({
+const asOfBlock = (blockNumber: string, historical = false): OperationsResponse['asOf'] => ({
 	blockNumber,
 	blockHash,
 	blockTimestamp: '1767225600',

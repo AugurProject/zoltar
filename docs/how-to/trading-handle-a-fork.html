@@ -13,39 +13,32 @@
 			<header>
 				<p class="kicker">How-to guide</p>
 				<h1>Handle a universe fork</h1>
-				<p>A fork closes the parent <a href="../reference/glossary.html#trading-pool">trading pool</a> for swaps and additions and leaves every migration decision to you. This guide walks through moving a position into the child universe or universes you choose.</p>
+				<p>A fork closes the parent <a href="../reference/glossary.html#trading-pool">trading pool</a> for swaps and additions. Holders choose where to migrate their shares.</p>
 			</header>
 			<section id="steps">
-				<h2>Migrate a position</h2>
+				<h2>Check the position</h2>
+				<p>If the question has finalized, <a href="./trading-handle-resolution.html">redeem winning shares</a> through its question ledger. For an unresolved question, <a href="./trading-remove-liquidity.html">remove parent LP</a> into Yes and No before migrating it.</p>
+				<p>Migration copies the selected source token’s balance to each child you choose, less any shares you already migrated there. At least one child must receive additional shares. The parent balance stays visible and is permanently locked against outgoing transfers.</p>
+			</section>
+			<section id="in-the-ui">
+				<h2>Migrate in the UI</h2>
 				<ol>
-					<li>Check the market's outcome. If it has already finalized, follow <a href="./trading-handle-resolution.html">Handle resolution</a> to redeem winning shares through its question ledger. Continue below only while the question is unresolved.</li>
-					<li>Remove parent LP into parent Yes and No shares (<a href="./trading-remove-liquidity.html">Remove liquidity</a>).</li>
-					<li>Decide the destination child universe or universes for each of your Invalid, Yes, and No balances. Nothing in Trading chooses a child universe or migrates LP for you.</li>
-					<li>For every nonzero parent balance you intend to migrate, submit one <code>ShareToken.migrate(fromId, targetOutcomeIndexes)</code> call with that token ID and the explicitly chosen, strictly increasing target outcome indexes. Each call mints the matching child-universe share balance. A target child universe with no question ledger yet accepts the call only after the security pool's fork branch into it is active; see <a href="#choosing-targets">Choose fork targets</a>. The parent balance stays visible, but that source token ID is locked for the wallet and can no longer be transferred.</li>
-					<li>After each call, verify the expected child token ID and balance, then refresh or discover the canonical child question ledger.</li>
-					<li>Wait until the child question ledger is <code>Operational</code>: <a href="../explanation/statoblast.html#question-security-pools">shared security pool</a> branches use their fixed activation deadline and shared <a href="../reference/glossary.html#collateral-repair-auction">Collateral Repair Auction</a> where required. Then create a trading pool only if you intend to trade. A child question ledger can take a trading pool only if it is back to <code>Operational</code> before the question's end date. Parent and child token IDs and reserves stay separate.</li>
+					<li>Open the market’s <strong>Settlement</strong> tab and select <strong>Migrate</strong>.</li>
+					<li>Choose the <strong>Share to migrate</strong> (Invalid, Yes, or No), then <a href="#choosing-targets">choose your child universes</a>.</li>
+					<li>Tick the balance and transfer-lock acknowledgment. Select <strong>Migrate to N child universes</strong> and confirm.</li>
+					<li>Check the expected child token IDs and balances. Repeat for each source token you want to migrate.</li>
 				</ol>
-				<p>To recover collateral from an active shared security pool child, use <a href="./trading-handle-resolution.html">Settlement</a>. Complete-set and winning-share claims can pay ETH and REP together, including REP-only recovery. Redemption does not require a trading pool or an auction bid.</p>
 			</section>
 			<section id="choosing-targets">
 				<h2>Choose fork targets</h2>
-				<p>Source and destination are independent: a parent Invalid, Yes, or No share can migrate into any valid child universe of the fork question, and the child receives the same share outcome as the source. Migrating parent Yes into three scalar child universes, for example, produces child Yes shares in all three children.</p>
+				<p>The fork outcome identifies the child universe. Your migrated share keeps its original outcome. Select Invalid or a labeled answer for a categorical fork, or Invalid or an exact tick for a scalar fork.</p>
 				<ul>
-					<li>For a categorical fork, select Invalid or one or more labeled answers.</li>
-					<li>For a scalar fork, select Invalid or add one or more exact scalar ticks. The UI displays the human value and derives the packed onchain outcome index.</li>
+					<li><strong>One child with a ledger.</strong> Select it directly.</li>
+					<li><strong>One child without a ledger.</strong> Activate the child’s security pool branch first. Until then migration is blocked (<code>Fork branch not active</code>). A single migration can create the canonical child question ledger after activation. In Statoblast’s <strong>Fork choices and recovery</strong>, prepare the branch, start it after the eight-week fork-choice window closes, and activate it after the recapitalization deadline. Each step is a separate transaction.</li>
+					<li><strong>Multiple children.</strong> Each must already have a canonical question ledger. Migrate to each missing ledger in its own call. A token locked by an earlier migration can still migrate to a new child.</li>
 				</ul>
-				<p>A single-target call may create a missing child question ledger, but only once the security pool's fork branch into that child universe is active. Until then the call reverts with <code>Fork branch not active</code>, and Trading blocks the migration. Anyone can complete the branch under <strong>Fork choices and recovery</strong> in Statoblast, each step as its own transaction: prepare it, start it once the eight-week fork-choice window has closed, and activate it once the recapitalization deadline has passed. A multi-target call must reference children whose canonical question ledgers already exist. To migrate one source share to several new scalar outcomes, submit each missing outcome by itself; locking prevents transfers but not later migration of the same source into a new child. Once those children exist, another source share can target all of them in one call. Every call must add at least one source-and-child entitlement the wallet has not migrated before.</p>
-			</section>
-			<section id="in-the-ui">
-				<h2>In the UI</h2>
-				<ol>
-					<li>Open the market's <strong>Settlement</strong> tab and select <strong>Migrate</strong>.</li>
-					<li>Choose the <strong>Share to migrate</strong> (Invalid, Yes, or No).</li>
-					<li>Pick one or more child universes from the fork question's categorical answers or scalar ticks.</li>
-					<li>Tick the acknowledgment that the migration moves your entire balance and permanently locks that share's transfers in the parent universe.</li>
-					<li>Select <strong>Migrate to N child universes</strong>. The transaction copies and locks your entire balance of the selected source share.</li>
-					<li>Repeat for each source share you want to move.</li>
-				</ol>
+				<p>To migrate directly, call <code>ShareToken.migrate(fromId, targetOutcomeIndexes)</code> for each source token ID with strictly increasing target outcome indexes.</p>
+				<p>A child can open a trading pool only if its question ledger returns to <code>Operational</code> before question end. To recover collateral without trading, follow <a href="./trading-handle-resolution.html">Handle resolution</a>. An eligible complete set or winning share can pay ETH and REP together or REP alone, without a trading pool or auction bid.</p>
 				<p><a href="../explanation/trading/forks-and-resolution.html">Forks and resolution</a> explains why the trading pool behaves this way.</p>
 			</section>
 		</main>

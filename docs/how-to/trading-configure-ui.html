@@ -13,15 +13,19 @@
 			<header>
 				<p class="kicker">How-to guide</p>
 				<h1>Configure the Trading UI</h1>
-				<p>Use this guide to choose between live and simulated mode and to point the Trading UI at the network and RPC you need.</p>
 			</header>
 			<section id="modes">
 				<h2>Choose a mode</h2>
+				<p>Without a mode parameter, the UI reads live RPC and wallet state. Add <code>?simulate=1</code> to run a browser-local chain. A banner identifies simulation mode.</p>
+				<p>Set <code>simScenario</code> to choose a starting state.</p>
 				<ul>
-					<li>With no mode parameter, the UI reads live RPC and wallet state.</li>
-					<li><code>?simulate=1</code> boots a browser-local simulator with seeded contracts and balances. Add <code>&amp;simScenario=deployed</code> for a <a href="../reference/glossary.html#question-ledger">question ledger</a> with no <a href="../reference/glossary.html#trading-pool">trading pool</a>, <code>&amp;simScenario=baseline</code> for a chain without Statoblast or Trading contracts, <code>&amp;simScenario=trading-forked</code> for the funded market after its universe forks, <code>&amp;simScenario=trading-usdc</code> for a funded market using six-decimal USDC and separate router approvals, or leave it out for the default <code>trading-funded</code> scenario with one funded market. A banner labels the page as a simulation.</li>
+					<li><code>trading-funded</code> starts with one funded market by default.</li>
+					<li><code>deployed</code> starts with a <a href="../reference/glossary.html#question-ledger">question ledger</a> with no <a href="../reference/glossary.html#trading-pool">trading pool</a>.</li>
+					<li><code>baseline</code> starts without Statoblast or Trading contracts.</li>
+					<li><code>trading-forked</code> opens the funded market after its universe forks.</li>
+					<li><code>trading-usdc</code> opens a funded market using six-decimal USDC and separate router approvals.</li>
 				</ul>
-				<p><a href="./trading-set-up-development.html">Set up Trading development</a> lists the commands that serve the UI.</p>
+				<p><a href="./trading-set-up-development.html">Set up Trading development</a> to serve the UI locally.</p>
 			</section>
 			<section id="genesis">
 				<h2>Choose the truthful universe</h2>

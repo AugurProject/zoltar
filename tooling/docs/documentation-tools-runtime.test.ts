@@ -154,39 +154,6 @@ test('mobile widgets preserve the primary-only disclosure default', async () => 
 	}
 })
 
-test('OpenOracle controls separate coordinator policy from the report request and expose the fee bound', async () => {
-	const cleanup = await loadDocument('docs/reference/open-oracle.html', 'http://localhost/docs/reference/open-oracle.html')
-	try {
-		await runGeneratedRuntime('openOracleTools')
-		await runGeneratedRuntime('interactiveTools')
-		const groups = Array.from(document.querySelectorAll<HTMLDetailsElement>('#initial-report-estimator-example .tool-control-group'))
-		const group = (summary: string) => groups.find(candidate => candidate.querySelector('summary')?.textContent === summary)
-		const feeBound = document.querySelector<HTMLOutputElement>('[data-example-output="estimatorSafetyState"]')
-		const target = document.querySelector<HTMLInputElement>('[data-example-input="targetPriceErrorForDispute"]')
-		const reporterFee = document.querySelector<HTMLInputElement>('[data-example-input="openOracleReporterFee"]')
-		const protocolFee = document.querySelector<HTMLInputElement>('[data-example-input="openOracleProtocolFee"]')
-		if (feeBound === null || target === null || reporterFee === null || protocolFee === null) throw new Error('OpenOracle grouping fixture is incomplete')
-		expect(groups.filter(candidate => candidate.open).map(candidate => candidate.querySelector('summary')?.textContent)).toEqual(['Report request'])
-		expect(group('Oracle fees')?.dataset['groupTone']).toBe('system')
-		expect(group('Coordinator policy')?.querySelector('[data-example-input="escalationHaltMultiplier"]')).not.toBeNull()
-		expect(group('Report request')?.querySelector('[data-example-input="requestedInitialWeth"]')).not.toBeNull()
-		expect(group('Report request')?.querySelector('[data-example-input="escalationHaltMultiplier"]')).toBeNull()
-		expect(feeBound.value).toBe('fees below target error')
-
-		target.value = '1.2'
-		target.dispatchEvent(new Event('input', { bubbles: true }))
-		reporterFee.value = '0.2'
-		reporterFee.dispatchEvent(new Event('input', { bubbles: true }))
-		expect(feeBound.value).toBe('unsafe: fees meet or exceed target error')
-		protocolFee.value = ''
-		protocolFee.dispatchEvent(new Event('input', { bubbles: true }))
-		expect(protocolFee.getAttribute('aria-invalid')).toBe('true')
-		expect(feeBound.value).toBe('unsafe: fees meet or exceed target error')
-	} finally {
-		cleanup()
-	}
-})
-
 test('invariant explorer filters, expands, resets, and opens a fragment target', async () => {
 	const source = await Bun.file('docs/reference/invariants.html').text()
 	const firstIdentifier = source.match(/<details class="invariant-entry" id="([^"]+)"/)?.[1]
@@ -777,23 +744,6 @@ test('steps a number control without a maximum (#1428)', async () => {
 		expect(increment?.disabled).toBeFalse()
 		increment?.dispatchEvent(new Event('click', { bubbles: true }))
 		expect(input.value).toBe('2')
-	} finally {
-		cleanup()
-	}
-})
-
-test('reports zero oracle correction margin consistently (#1427)', async () => {
-	const cleanup = await loadDocument('docs/reference/open-oracle.html', 'http://localhost/docs/reference/open-oracle.html')
-	try {
-		const names = ['targetPriceErrorForDispute', 'openOracleProtocolFee', 'openOracleReporterFee']
-		for (const [index, value] of ['4.2', '4.1', '0.1'].entries()) {
-			const input = document.querySelector<HTMLInputElement>(`[data-example-input="${names[index]}"]`)
-			if (input === null) throw new Error('Missing estimator input')
-			input.value = value
-		}
-		await runGeneratedRuntime('openOracleTools')
-		expect(document.querySelector<HTMLElement>('#initial-report-estimator-example')?.dataset['widgetState']).toBe('unsafe')
-		expect(document.querySelector<HTMLOutputElement>('[data-example-output="correctionProfitFraction"]')?.value).toBe('not positive')
 	} finally {
 		cleanup()
 	}

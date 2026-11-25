@@ -61,7 +61,7 @@ Price samples are stored at `runtime.priceHistoryFile`. The example uses `.state
 
 Operator-configured DEX sources use constant-product V2 pair semantics, while the arbitrager's own authenticated discovery and execution cover V2, V3, and V4.
 
-The arbitrager uses the shared market observer described under [independent market consensus](../README.md#independent-market-consensus), which owns the source format, freshness and persistence rules, group agreement, required and advisory modes, and every `centralizedMarkets` key. This section covers only what is specific to the arbitrager.
+See [shared market consensus](../README.md#independent-market-consensus) for source formats, agreement rules, and configuration keys.
 
 The dashboard's **REP market sources** form edits the `centralizedMarkets` document as a source table plus threshold fields, with `venueConsensus` in its **Venue consensus** fieldset. It shows each normalized REP/ETH observation with its executable bid and ask depth, and reports the CEX median, DEX consensus, guarded reference, and DEX depth separately.
 

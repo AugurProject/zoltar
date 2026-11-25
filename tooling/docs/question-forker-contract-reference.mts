@@ -19,7 +19,7 @@ export const questionForkerContractReference: ContractReference = {
 			name: 'zoltar',
 		},
 	],
-	interactionNotes: 'Owner capital and reporter custody migrate through the shared security pool coordinator. Child question ledgers and their fixed-size reporter snapshots are prepared lazily. No owner migrates a vault for each question.',
+	interactionNotes: 'Child question ledgers and their fixed-size reporter snapshots are prepared lazily. See [shared fork accounting](./contract-inventory.html#security-pool-shared-fork-processing) for capital and reporter migration.',
 	securityBoundaryHeading: 'Child-game trust boundary',
 	securityBoundary: 'The forker binds Zoltar immutably at deployment. Security pool paths authenticate the source question through its factory namespace and central books before changing capital or installing claims. Fork preparation executes in the forker itself without delegate dispatch.',
 	sourcePath: 'solidity/contracts/statoblast/QuestionForker.sol',
