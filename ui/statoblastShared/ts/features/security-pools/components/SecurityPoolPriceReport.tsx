@@ -386,10 +386,11 @@ export function SecurityPoolPriceReport({
 			{fundingSteps}
 		</>
 	)
+	const reportSection = branch ? ({ variant: 'embedded', headingLevel: 4 } as const) : undefined
 	if (redesigned)
 		return (
 			<div className='route-view-flow'>
-				<SectionBlock title={copy.pricePage} description={acceptedPriceAge > 60n ? copy.asOf(formatDuration(acceptedPriceAge)) : undefined} badge={accepted === undefined ? undefined : <Badge tone={priceStatus === copy.priceCurrent ? 'ok' : 'muted'}>{priceStatus}</Badge>}>
+				<SectionBlock {...reportSection} title={copy.pricePage} description={acceptedPriceAge > 60n ? copy.asOf(formatDuration(acceptedPriceAge)) : undefined} badge={accepted === undefined ? undefined : <Badge tone={priceStatus === copy.priceCurrent ? 'ok' : 'muted'}>{priceStatus}</Badge>}>
 					{notice}
 					<div className='statoblast-price-summary'>
 						{branch ? summary : priceSummary}
@@ -398,12 +399,13 @@ export function SecurityPoolPriceReport({
 				</SectionBlock>
 				<div className='statoblast-price-layout' data-funding={!branch && !returnFundsOnly}>
 					{!returnFundsOnly && (
-						<SectionBlock title={copy.reportNewPrice} description={acceptedPriceAge > 60n ? formatOldDataCheck(formatDuration(acceptedPriceAge)) : undefined}>
+						<SectionBlock {...reportSection} title={copy.reportNewPrice} description={acceptedPriceAge > 60n ? formatOldDataCheck(formatDuration(acceptedPriceAge)) : undefined}>
 							{compactFunding}
 						</SectionBlock>
 					)}
 					<aside aria-label={copy.currentReport}>
 						<SectionBlock
+							{...reportSection}
 							title={reportHeading}
 							description={reportAge > 60n ? copy.asOf(formatDuration(reportAge)) : undefined}
 							badge={reportStatus === undefined ? undefined : <Badge tone={settlementReady || reportStatus === copy.states.accepted ? 'ok' : 'muted'}>{disputeChecking ? deadlineChecking : reportStatus}</Badge>}

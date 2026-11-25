@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { expect, spyOn, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { decodeFunctionData, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
@@ -103,6 +103,29 @@ test('a visited bid page stays readable after remount when the auction RPC fails
 	expect(restored.state().claimReason(bid)).toContain('Select a fork branch')
 	await restored.setProps({ savedBranch: { securityPool: state.fork.securityPool, universeId: child.universeId + 1n } })
 	expect(restored.state().snapshot).toBeUndefined()
+})
+
+test('successive auction reads can take longer than one request timeout', async () => {
+	const shortened = new Proxy(globalThis.setTimeout, {
+		apply(schedule, receiver, [handler, delay, ...args]) {
+			return Reflect.apply(schedule, receiver, [handler, delay === 15_000 ? 160 : delay, ...args])
+		},
+	})
+	const timer = spyOn(globalThis, 'setTimeout').mockImplementation(shortened)
+	try {
+		const state = await setup(fixture => {
+			const slow = fixture.client.extend(() => ({
+				getBlock: async (...args: Parameters<typeof fixture.client.getBlock>) => {
+					await Bun.sleep(100)
+					return await fixture.client.getBlock(...args)
+				},
+			}))
+			installActiveEnvironmentForTesting({ ...fixture.backend, createReadClient: () => slow })
+		})
+		expect(firstBid(state, 'bid read through slow RPC').id).toBe(1n)
+	} finally {
+		timer.mockRestore()
+	}
 })
 
 test('chosen health, integer lots and price grid are checked before sending', async () => {

@@ -314,20 +314,21 @@ export function ZoltarMigrationSection({
 			}
 			case 'approve': {
 				const approveStep = wizard.steps[2]
-				if (approveStep?.status === 'notNeeded') return <p className='detail'>{approveStep.reason}</p>
+				const approvalNotNeeded = approveStep?.status === 'notNeeded'
+				if (!singleForm && approvalNotNeeded) return <p className='detail'>{approveStep.reason}</p>
 				return (
 					<TokenApprovalControl
 						actionLabel={zoltarCopy.migrationApprovalActionLabel}
 						compact={singleForm}
-						allowanceError={zoltarForkApproval.error}
-						allowanceLoading={zoltarForkApproval.loading}
+						allowanceError={approvalNotNeeded ? undefined : zoltarForkApproval.error}
+						allowanceLoading={!approvalNotNeeded && zoltarForkApproval.loading}
 						approvedAmount={zoltarForkApproval.value}
-						disabled={!isOnActiveAppChain || wizard.walletRepToBurnAttoRep === undefined}
-						guardMessage={guardMessage}
+						disabled={approvalNotNeeded || !isOnActiveAppChain || wizard.walletRepToBurnAttoRep === undefined}
+						guardMessage={guardMessage ?? (approvalNotNeeded ? approveStep.reason : undefined)}
 						onApprove={approvalAmount => onApproveZoltarForkRep(approvalAmount)}
 						pending={zoltarForkActiveAction === 'approve'}
 						pendingLabel={commonCopy.approvingRep}
-						requiredAmount={wizard.walletRepToBurnAttoRep}
+						requiredAmount={approvalNotNeeded ? 0n : wizard.walletRepToBurnAttoRep}
 						resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${(wizard.walletRepToBurnAttoRep ?? 0n).toString()}`}
 						tokenSymbol={tokenSymbol}
 						tokenUnits={18}
@@ -394,7 +395,7 @@ export function ZoltarMigrationSection({
 					</dl>
 				)}
 				{hasForked && <p className='detail'>{zoltarCopy.migrationReuseHint}</p>}
-				{hasForked && wizard.steps[2]?.status !== 'notNeeded' && renderStepBody('approve')}
+				{hasForked && renderStepBody('approve')}
 				{burnAmount > 0n && amountReady && (
 					<label className='migration-burn-confirmation'>
 						<input type='checkbox' checked={confirmedBurn === burnContext} onChange={event => setConfirmedBurn(event.currentTarget.checked ? burnContext : undefined)} disabled={zoltarMigrationPending} />

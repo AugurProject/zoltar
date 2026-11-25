@@ -38,6 +38,7 @@ export function SecurityPoolRepairAuction({ onAuctionFinalized, sharedDeadline =
 	const deadline = parameters.fork?.activationDeadline
 	const closesAt = deadline !== undefined && deadline > 0n ? deadline : auction?.closesAt
 	const isOpen = auction?.opened === true && !auction.finalized && snapshot !== undefined && snapshot.timestamp < (closesAt ?? auction.closesAt)
+	const noSale = auction?.finalized === true && auction.shortfallAttoEth > 0n && (!auction.opened || auction.clearing?.filledLots === 0n)
 	const highest = isOpen && auction.maximumAdmissibleBidAttoRepPerLot >= auction.minimumCollateralAttoRepPerLot ? auction.maximumAdmissibleBidAttoRepPerLot : undefined
 	let askHint = copy.priceHint(auction?.repGrid)
 	if (model.minimumAsk !== undefined && highest !== undefined) askHint = model.minimumAsk > highest ? copy.noAskAtTarget : copy.askRange(formatCurrencyBalance(model.minimumAsk), formatCurrencyBalance(highest))
@@ -82,6 +83,7 @@ export function SecurityPoolRepairAuction({ onAuctionFinalized, sharedDeadline =
 					</MetricField>
 				</MetricGrid>
 			)}
+			{noSale && <UserMessage tone='warning' detail={copy.closedWithShortfall} />}
 			<MetricGrid>
 				<SecurityPoolInput label={copy.lotCount} hint={copy.lotHint} value={model.lotsInput} onChange={model.setLots} disabled={disabled} />
 				<SecurityPoolInput label={copy.minimumRep} hint={askHint} value={model.repInput} onChange={model.setRep} disabled={disabled} numeric />
@@ -163,7 +165,7 @@ function AuctionLots({ auction, lots, collateral }: { auction: Auction; lots: bi
 	const covered = lots === undefined || lots <= target ? (lots ?? 0n) : target
 	const segments = Number(target > 18n ? 18n : target)
 	return (
-		<div className='statoblast-auction-lots' role='img' aria-label={selected === undefined ? label : `${label}. ${selected}`}>
+		<div className='statoblast-auction-lots' role='img' aria-label={copy.lotsAriaLabel(label, selected)}>
 			<div className='statoblast-auction-lots-bar' style={{ gridTemplateColumns: `repeat(${segments}, minmax(0, 1fr))` }} aria-hidden='true'>
 				{Array.from({ length: segments }, (_, index) => {
 					const from = BigInt(index) * target

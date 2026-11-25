@@ -45,6 +45,7 @@ export function SecurityPoolsSection({
 	forkQuestion,
 	forkQuestionRead,
 	forkChildren,
+	forkRecapitalizationDeadline,
 	onBranchCommitted,
 	onSelectUniverse,
 	openOracleHref,
@@ -59,6 +60,7 @@ export function SecurityPoolsSection({
 	forkQuestion?: MarketDetails | undefined
 	forkQuestionRead?: ForkQuestionRead | undefined
 	forkChildren?: readonly ZoltarChildUniverseSummary[] | undefined
+	forkRecapitalizationDeadline?: bigint | undefined
 	onBranchCommitted?: ((committed: boolean) => void) | undefined
 	onSelectUniverse?: ((id: bigint) => void) | undefined
 	openOracleHref?: string | undefined
@@ -233,12 +235,13 @@ export function SecurityPoolsSection({
 					)}
 					{page?.tab === 'fork' && shown?.forkTime === 0n && <UserMessage detail={pageCopy.universeUnforked} />}
 					{page?.tab === 'fork' && (shown?.forkTime ?? 0n) > 0n && !hasPositionOwner && <UserMessage detail={pageCopy.connectToSeePosition} />}
-					{(page === undefined || (page.tab === 'fork' && (shown?.forkTime ?? 0n) > 0n && hasPositionOwner)) && (
+					{(page === undefined || (page.tab === 'fork' && (shown?.forkTime ?? 0n) > 0n)) && (
 						<SecurityPoolSharedFork
 							redesigned={page !== undefined}
 							forkQuestion={forkQuestion}
 							forkQuestionRead={forkQuestionRead}
 							childUniverses={forkChildren}
+							forkRecapitalizationDeadline={forkRecapitalizationDeadline}
 							autoRefresh={autoRefresh}
 							registerPageRefresh={registerPageRefresh}
 							onBranchCommitted={onBranchCommitted}
@@ -246,7 +249,7 @@ export function SecurityPoolsSection({
 							presentationSnapshot={shown}
 							actions={actions}
 							bidder={parameters.accountAddress}
-							openUniverse={universeId => openChildPosition(universeId, shown?.owner)}
+							openUniverse={universeId => openChildPosition(universeId, hasPositionOwner ? shown?.owner : undefined)}
 							openVault={(vault, universeId) => openChildPosition(universeId, vault)}
 						/>
 					)}

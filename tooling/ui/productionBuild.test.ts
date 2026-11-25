@@ -355,6 +355,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 					postMessage(message, ...options) {
 						if (message?.type === 'rpc') {
 							window.__statoblastRpcMethods.push(message.method);
+							if (location.pathname.startsWith('/statoblast/') && message.method === 'eth_getLogs') throw new Error('Statoblast attempted to query event logs');
 							if (window.__rpcDelay > 0) {
 								window.__delayedRpcMethods.push(message.method);
 								return void setTimeout(() => super.postMessage(message, ...options), window.__rpcDelay);
@@ -528,13 +529,14 @@ for (const scenario of productionBrowserScenarios) {
 		const timeout = scenario.workflow ? PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS : PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS
 		const waitForScenario = async (driver: ProductionBrowserDriver) => {
 			await driver.waitForBodyText(scenario.expected)
+			if (scenario.workflow) await checkStatoblastForkAuction(driver)
 		}
 		const state = JSON.parse(await loadProductionDocumentInChromium(`${baseUrl}/${scenario.appId}/${scenario.hash}`, scenario.viewport, waitForScenario, timeout))
 		if (typeof state !== 'object' || state === null || !('body' in state) || !('html' in state) || typeof state.body !== 'string' || typeof state.html !== 'string' || !('height' in state) || !('width' in state)) {
 			throw new Error(`${scenario.name} returned an invalid document state`)
 		}
 		expect(state.html).toContain('<main')
-		expect(state.body).toContain(scenario.expected)
+		expect(state.body).toContain(scenario.workflow ? 'Lower asks already fill the auction' : scenario.expected)
 		const appNames = { zoltar: 'Zoltar', trading: 'Statoblast Trading', statoblast: 'Augur Statoblast', openoracle: 'OpenOracle' }
 		expect(state.body).toContain(appNames[scenario.appId])
 		expect(state.body).toContain('Browser simulation')
@@ -544,6 +546,20 @@ for (const scenario of productionBrowserScenarios) {
 	}
 	if (scenario.workflow) productionWorkflowTest('auction-boot', run)
 	else productionBrowserTest(`production bundle boots the ${scenario.name} scenario in Chromium`, run)
+}
+
+async function checkStatoblastForkAuction(driver: ProductionBrowserDriver) {
+	await openSavedStatoblastItem(driver, 'pool')
+	await driver.waitForBodyText('Fork & recovery')
+	await driver.waitForExpression(`Array.from(document.querySelectorAll('a')).some(link => link.textContent.includes('Fork & recovery'))`)
+	await driver.evaluate(`Array.from(document.querySelectorAll('a')).find(link => link.textContent.includes('Fork & recovery')).click()`)
+	const yesChoice = `Array.from(document.querySelectorAll('.statoblast-branch-choices label')).find(label => label.textContent.trim() === 'Yes')?.querySelector('input')`
+	await driver.waitForExpression(`Boolean(${yesChoice})`)
+	await driver.evaluate(`${yesChoice}.click()`)
+	await driver.waitForBodyText('Lower asks already fill the auction')
+	expect(await driver.evaluate(`document.querySelectorAll('.statoblast-fork-workflow > li').length`)).toBe(7)
+	expect(await driver.evaluate(`document.querySelectorAll('.statoblast-branch-recapitalization').length`)).toBe(1)
+	expect(await driver.evaluate(`Boolean(document.querySelector('.statoblast-fork-workflow > li:nth-child(5) .statoblast-auction-ask-scale'))`)).toBe(true)
 }
 
 async function openSavedStatoblastItem(driver: ProductionBrowserDriver, kind: 'pool' | 'question') {

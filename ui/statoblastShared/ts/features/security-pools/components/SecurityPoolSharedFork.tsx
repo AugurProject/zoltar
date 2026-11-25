@@ -30,6 +30,7 @@ import { SecurityPoolPriceReport } from './SecurityPoolPriceReport.js'
 import { branchPriceTarget } from '../hooks/useSecurityPoolPrice.js'
 import { SecurityPoolRepairAuction } from './SecurityPoolRepairAuction.js'
 import * as copy from '../../../copy/securityPoolSharedFork.js'
+import { connect } from '../../../copy/securityPool.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
 export type ForkQuestionRead = { loading: boolean; error: string | undefined; retry: () => void }
@@ -40,6 +41,7 @@ export function SecurityPoolSharedFork({
 	forkQuestionRead,
 	onBranchCommitted,
 	childUniverses,
+	forkRecapitalizationDeadline,
 	autoRefresh,
 	registerPageRefresh,
 	...parameters
@@ -49,6 +51,7 @@ export function SecurityPoolSharedFork({
 	forkQuestionRead?: ForkQuestionRead | undefined
 	onBranchCommitted?: ((committed: boolean) => void) | undefined
 	childUniverses?: readonly Pick<ZoltarChildUniverseSummary, 'outcomeIndex' | 'universeId' | 'exists'>[] | undefined
+	forkRecapitalizationDeadline?: bigint | undefined
 	autoRefresh?: boolean | undefined
 	registerPageRefresh?: RegisterStatoblastPageRefresh | undefined
 }) {
@@ -58,13 +61,17 @@ export function SecurityPoolSharedFork({
 	const branch = display?.branch
 	const shownPool = parameters.presentationSnapshot ?? parameters.snapshot
 	const branchDone = display?.choice.recorded === true
-	const choiceAt = display?.choiceDeadline
-	const canChooseByDeadline = choiceAt !== undefined && display !== undefined && display.timestamp < choiceAt
+	const choiceAt = display?.choiceDeadline ?? shownPool?.forkChoiceDeadline
+	const activationAt = display?.activationDeadline ?? forkRecapitalizationDeadline
+	const choiceTime = display?.timestamp ?? shownPool?.timestamp
+	const forkTime = display?.forkTime ?? shownPool?.forkTime ?? 0n
+	const canChooseByDeadline = choiceAt !== undefined && choiceTime !== undefined && choiceTime < choiceAt
 	const choiceDate = choiceAt === undefined ? undefined : formatTimestamp(choiceAt)
 	const showReminder = !branchDone && canChooseByDeadline && choiceAt !== undefined && choiceAt <= LAST_CALENDAR_START
 	const addReminder = () => {
-		if (display === undefined || choiceAt === undefined || !showReminder) return
-		const event = buildStatoblastCalendarEvent({ id: `${display.securityPool}-${display.universeId}-${choiceAt}`, generatedAt: BigInt(Math.floor(Date.now() / 1000)), startsAt: choiceAt, title: pageCopy.branchChoiceCalendar, description: location.href })
+		const source = display ?? shownPool
+		if (source === undefined || choiceAt === undefined || !showReminder) return
+		const event = buildStatoblastCalendarEvent({ id: `${source.securityPool}-${source.universeId}-${choiceAt}`, generatedAt: BigInt(Math.floor(Date.now() / 1000)), startsAt: choiceAt, title: pageCopy.branchChoiceCalendar, description: location.href })
 		downloadStatoblastCalendarEvent(event, pageCopy.branchChoiceCalendarFile)
 	}
 	const disabled = parameters.actions.busy !== undefined
@@ -99,10 +106,13 @@ export function SecurityPoolSharedFork({
 	const accepted = branch !== undefined && pricedBranch === branch.universeId
 	const finalized = branch !== undefined && finalizedAuctionBranch === branch.universeId
 	const migrationStarted = branch?.started === true || model.savedBranch?.started === true
-	const priceReason = migrationStarted ? undefined : pageCopy.branchPriceLockedReason
-	let auctionReason: string | undefined
-	if (!migrationStarted) auctionReason = pageCopy.auctionLockedReason
-	else if (!accepted && !finalized) auctionReason = branch?.ready ? pageCopy.auctionClosed : pageCopy.auctionNeedsPrice
+	const walletReason = parameters.bidder === undefined ? connect : undefined
+	const priceReason = walletReason ?? (migrationStarted ? undefined : pageCopy.branchPriceLockedReason)
+	let auctionReason = walletReason
+	if (auctionReason === undefined) {
+		if (!migrationStarted) auctionReason = pageCopy.auctionLockedReason
+		else if (!accepted && !finalized) auctionReason = branch?.ready ? pageCopy.auctionClosed : pageCopy.auctionNeedsPrice
+	}
 	const [confirmedChoice, setConfirmedChoice] = useState(false)
 	useEffect(() => setConfirmedChoice(false), [model.outcomeInput, model.sourceInput])
 	useEffect(() => {
@@ -122,13 +132,37 @@ export function SecurityPoolSharedFork({
 	const startBranch = <SecurityPoolButton model={parameters.actions} action='startSecurityPoolFork' label={copy.start} pendingLabel={copy.starting} reason={model.startReason} onClick={model.start} />
 	const activateBranch = <SecurityPoolButton model={parameters.actions} action='finalizeSecurityPoolFork' label={copy.finalize} pendingLabel={copy.finalizing} reason={model.finalizeReason} onClick={model.finalize} />
 	const openBranch = <ActionLauncherButton tone='secondary' idleLabel={copy.open} pendingLabel={copy.loading} availability={{ disabled: disabled || model.openReason !== undefined, reason: disabled ? copy.busy : model.openReason }} onClick={rememberOpen} />
+	const pricePanel =
+		!redesigned || migrationStarted ? (
+			<div ref={priceSection} tabIndex={-1} className={redesigned ? 'statoblast-fork-step-body' : undefined}>
+				<SecurityPoolPriceReport
+					redesigned={redesigned}
+					hideReportingDeadline={redesigned}
+					scope='branch'
+					target={priceTarget}
+					displayTarget={priceTarget ?? model.savedBranch}
+					actions={parameters.actions}
+					bidder={parameters.bidder}
+					referencePrice={shownPool?.acceptedPrice}
+					onPriceAccepted={setPricedBranch}
+					autoRefresh={autoRefresh ?? false}
+					registerPageRefresh={registerPageRefresh}
+				/>
+			</div>
+		) : undefined
+	const auctionPanel =
+		!redesigned || migrationStarted ? (
+			<div ref={auctionSection} tabIndex={-1} className={redesigned ? 'statoblast-fork-step-body' : undefined} hidden={redesigned && auctionReason !== undefined}>
+				<SecurityPoolRepairAuction fork={state} savedBranch={model.savedBranch} actions={parameters.actions} bidder={parameters.bidder} openVault={parameters.openVault} onAuctionFinalized={setFinalizedAuctionBranch} sharedDeadline={redesigned} />
+			</div>
+		) : undefined
 	return (
 		<div className='route-view-flow'>
-			{redesigned && display !== undefined && display.forkTime > 0n && !branchDone && choiceDate !== undefined && (
+			{redesigned && forkTime > 0n && !branchDone && choiceAt !== undefined && choiceAt > 0n && choiceDate !== undefined && (
 				<div className='statoblast-fork-choice-deadline'>
 					<div>
 						<strong>{canChooseByDeadline ? pageCopy.chooseBy(choiceDate) : pageCopy.choiceExpired}</strong>
-						{canChooseByDeadline && choiceAt !== undefined && <span className='statoblast-fork-choice-countdown'>{pageCopy.choiceTimeLeft(formatDuration(choiceAt - display.timestamp))}</span>}
+						{canChooseByDeadline && <span className='statoblast-fork-choice-countdown'>{pageCopy.choiceTimeLeft(formatDuration(choiceAt - choiceTime))}</span>}
 						<p>{canChooseByDeadline ? pageCopy.choiceForfeit : pageCopy.noChoiceAfterDeadline}</p>
 					</div>
 					{showReminder && (
@@ -164,9 +198,9 @@ export function SecurityPoolSharedFork({
 				)}
 				{redesigned ? (
 					<>
-						{display !== undefined && display.activationDeadline > 0n && (
+						{activationAt !== undefined && activationAt > 0n && (
 							<div className='statoblast-branch-recapitalization'>
-								<strong>{pageCopy.recapitalizationDeadline}</strong> <span>{formatTimestamp(display.activationDeadline)}</span>
+								<strong>{pageCopy.recapitalizationDeadline}</strong> <span>{formatTimestamp(activationAt)}</span>
 								<p className='detail'>{pageCopy.recapitalizationHint}</p>
 							</div>
 						)}
@@ -183,19 +217,19 @@ export function SecurityPoolSharedFork({
 							<ForkStep title={copy.start} done={branch?.started === true} detail={pageCopy.pendingSharedStep} action={startBranch} />
 							<ForkStep
 								title={pageCopy.branchRepPrice}
+								body={pricePanel}
 								done={accepted}
-								revisit
 								detail={branch?.ready && !accepted ? pageCopy.branchPriceClosed : pageCopy.branchPriceConsequence}
 								action={<ActionLauncherButton tone='secondary' idleLabel={pageCopy.openPriceStep} pendingLabel={pageCopy.openPriceStep} availability={{ disabled: priceReason !== undefined, reason: priceReason }} onClick={() => openSection(priceSection.current)} />}
 							/>
 							<ForkStep
 								title={pageCopy.repairAuction}
+								body={auctionPanel}
 								done={finalized}
-								revisit
 								action={<ActionLauncherButton tone='secondary' idleLabel={pageCopy.openAuctionStep} pendingLabel={pageCopy.openAuctionStep} availability={{ disabled: auctionReason !== undefined, reason: auctionReason }} onClick={() => openSection(auctionSection.current)} />}
 							/>
 							<ForkStep title={copy.finalize} done={branch?.ready === true} detail={pageCopy.pendingSharedStep} action={activateBranch} />
-							<ForkStep title={copy.open} done={opened} revisit action={openBranch} />
+							<ForkStep title={copy.open} done={opened} action={openBranch} />
 						</ol>
 					</>
 				) : (
@@ -229,47 +263,25 @@ export function SecurityPoolSharedFork({
 					</>
 				)}
 			</SectionBlock>
-			{(!redesigned || migrationStarted) && (
-				<div ref={priceSection} tabIndex={-1}>
-					<SecurityPoolPriceReport
-						redesigned={redesigned}
-						hideReportingDeadline={redesigned}
-						scope='branch'
-						target={priceTarget}
-						displayTarget={priceTarget ?? model.savedBranch}
-						actions={parameters.actions}
-						bidder={parameters.bidder}
-						referencePrice={shownPool?.acceptedPrice}
-						onPriceAccepted={setPricedBranch}
-						autoRefresh={autoRefresh ?? false}
-						registerPageRefresh={registerPageRefresh}
-					/>
-				</div>
-			)}
-			{(!redesigned || migrationStarted) && (
-				<div ref={auctionSection} tabIndex={-1} hidden={redesigned && auctionReason !== undefined}>
-					<SecurityPoolRepairAuction fork={state} savedBranch={model.savedBranch} actions={parameters.actions} bidder={parameters.bidder} openVault={parameters.openVault} onAuctionFinalized={setFinalizedAuctionBranch} sharedDeadline={redesigned} />
-				</div>
-			)}
-			<SecurityPoolShareRecovery model={model} actions={parameters.actions} snapshot={shownPool} redesigned={redesigned} />
+			{!redesigned && pricePanel}
+			{!redesigned && auctionPanel}
+			<SecurityPoolShareRecovery model={model} actions={parameters.actions} snapshot={shownPool} redesigned={redesigned} forkQuestion={forkQuestion} />
 		</div>
 	)
 }
 
-function ForkStep({ title, done, detail, children, action, revisit = false }: { title: string; done: boolean; detail?: string; children?: ComponentChildren; action: ComponentChildren; revisit?: boolean }) {
+function ForkStep({ title, done, detail, children, body, action }: { title: string; done: boolean; detail?: string; children?: ComponentChildren; body?: ComponentChildren; action: ComponentChildren }) {
 	return (
 		<li data-done={done}>
 			<div className='statoblast-fork-step-row'>
 				<div className='statoblast-fork-step-copy'>
-					<strong>{title}</strong>
+					<strong>{title}</strong> {done && <span className='statoblast-step-done'>{pageCopy.completedStep}</span>}
 					{detail !== undefined && !done && <p className='detail'>{detail}</p>}
 					{children}
 				</div>
-				<div className='statoblast-fork-step-action'>
-					{done && <span className='statoblast-step-done'>{pageCopy.completedStep}</span>}
-					{(!done || revisit) && action}
-				</div>
+				<div className='statoblast-fork-step-action'>{action}</div>
 			</div>
+			{body}
 		</li>
 	)
 }

@@ -70,6 +70,51 @@ test('walletless Capital shows the pool without reading a zero-address position 
 	await waitFor(() => expect(view.container.querySelector('.statoblast-capital-position h3')?.textContent).toBe('Position'))
 	expect(view.container.textContent).not.toContain('Connect a wallet to see your position.')
 })
+
+test('walletless fork page shows public context and keeps personal reads and transactions locked', async () => {
+	installStatoblastRouting()
+	const source = capitalClient(capitalSnapshot({ forkTime: 900n, forkChoiceDeadline: 2_000n }))
+	installActiveEnvironmentForTesting(source.backend)
+	window.history.replaceState({}, '', `#/pool/${securityPool}/fork`)
+	const view = lifecycle.trackRendered(
+		await renderIntoDocument(
+			<SecurityPoolsSection
+				page={{ kind: 'pool', pool: securityPool, tab: 'fork' }}
+				parameters={{ ...parameters, accountAddress: undefined }}
+				walletConnected={false}
+				enabled
+				environmentKey={0}
+				activeUniverseId={0n}
+				forkRecapitalizationDeadline={3_000n}
+				forkQuestion={{ answerUnit: '', createdAt: 1n, description: '', displayValueMax: 100n, displayValueMin: 0n, endTime: 800n, exists: true, marketType: 'binary', numTicks: 2n, outcomeLabels: ['Yes', 'No'], questionId: '0x07', startTime: 1n, title: 'Will this resolve?' }}
+			/>,
+		),
+	)
+	await waitFor(() => expect(view.container.querySelector('.statoblast-fork-diagram')).not.toBeNull())
+	expect(view.container.querySelector('.statoblast-fork-diagram-stays .statoblast-fork-diagram-amounts')?.textContent).toBeUndefined()
+	expect(view.container.querySelector('.statoblast-fork-choice-deadline')?.textContent).toContain('Choose a branch by')
+	expect(view.container.querySelectorAll('.statoblast-branch-recapitalization')).toHaveLength(1)
+	expect(view.container.querySelector('.statoblast-branch-recapitalization')?.textContent).toContain('Recapitalization deadline')
+	const steps = [...view.container.querySelectorAll('.statoblast-fork-workflow > li')]
+	expect(steps).toHaveLength(7)
+	for (const step of steps) {
+		expect(step.textContent).toContain('Connect a wallet')
+		expect(step.querySelector('button')?.disabled).toBe(true)
+	}
+	const input = view.container.querySelector<HTMLInputElement>('.statoblast-recovery-picker input')
+	const form = input?.form
+	if (input === null || form === null || form === undefined) throw new Error('Recovery question ID input unavailable')
+	await act(() => {
+		input.value = '7'
+		input.dispatchEvent(new Event('input', { bubbles: true }))
+	})
+	await act(() => {
+		form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+	})
+	expect(view.container.textContent).toContain('Recovery for share holders')
+	expect(view.container.textContent).not.toContain('Checking recovery rights…')
+	expect(source.reads.some(read => read.args?.includes(zeroAddress) || read.name === 'choices' || read.name === 'balanceOfSecurityPoolRecoveryRights')).toBe(false)
+})
 const firstPosition = (container: Element) => {
 	const position = [...container.querySelectorAll('.workflow-subsection')].find(section => section.querySelector('h4')?.textContent === copy.position(1n))
 	if (position === undefined) throw new Error('Position section missing')

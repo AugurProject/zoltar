@@ -319,6 +319,7 @@ export function App() {
 						activeUniverseId,
 						forkQuestion: selectedUniverse?.forkQuestionDetails,
 						forkChildren: selectedUniverse?.childUniverses,
+						forkRecapitalizationDeadline: selectedUniverse?.forkRecapitalizationDeadline,
 						forkQuestionRead: { loading: operations.loadingZoltarUniverse, error: zoltarUniverseError, retry: () => void operations.loadZoltarUniverse({ clearCurrentState: false }) },
 						onSelectUniverse: setUniverse,
 						onBranchCommitted,

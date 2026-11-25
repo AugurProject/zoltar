@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks'
-import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
+import { formatUnits, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
@@ -12,8 +12,9 @@ import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSu
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 import { useFavorites } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { abbreviateAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
+import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import * as recoveryCopy from '../../../copy/forkRecovery.js'
 import * as copy from '../../../copy/securityPoolSharedFork.js'
@@ -28,10 +29,11 @@ import { SecurityPoolButton, SecurityPoolInput, type SecurityPoolActions } from 
 
 type Model = ReturnType<typeof useSecurityPoolSharedFork>
 type RecoveryActions = Pick<SecurityPoolActions, 'scope' | 'busy'>
+type ForkQuestionTitle = Pick<MarketDetails, 'questionId' | 'title'>
 
 const questionIdOption = 'question-id'
 
-function RecoveryQuestionPicker({ model, snapshot, disabled }: { model: Model; snapshot: SecurityPoolAccountSnapshot | undefined; disabled: boolean }) {
+function RecoveryQuestionPicker({ model, snapshot, disabled, forkQuestion }: { model: Model; snapshot: SecurityPoolAccountSnapshot | undefined; disabled: boolean; forkQuestion: ForkQuestionTitle | undefined }) {
 	const [manual, setManual] = useState(false)
 	const [draft, setDraft] = useState('')
 	const saved = useFavorites('statoblast', 'question')
@@ -40,7 +42,9 @@ function RecoveryQuestionPicker({ model, snapshot, disabled }: { model: Model; s
 		return entry?.kind === 'question' && sameAddress(entry.pool, snapshot?.securityPool) ? [{ ...entry, label: item.label }] : []
 	})
 	const universeId = model.displayedState?.universeId ?? snapshot?.universeId
-	const rows = universeId === undefined ? undefined : statoblastDisplayCache(getActiveNetworkProfile(), { universeId, owner: snapshot?.owner, page: 'watchlist' }, decodeWatchlistRows).read()?.value
+	const owner = snapshot?.owner === zeroAddress ? undefined : snapshot?.owner
+	const rows = universeId === undefined ? undefined : statoblastDisplayCache(getActiveNetworkProfile(), { universeId, owner, page: 'watchlist' }, decodeWatchlistRows).read()?.value
+	const forkQuestionId = forkQuestion === undefined ? undefined : designQuestionId(forkQuestion.questionId)
 	const selectedId = designQuestionId(model.questionInput)
 	const selectedFromDevice = questions.some(question => question.questionId === selectedId)
 	const showIdInput = manual || questions.length === 0 || (selectedId !== undefined && !selectedFromDevice)
@@ -65,11 +69,16 @@ function RecoveryQuestionPicker({ model, snapshot, disabled }: { model: Model; s
 					}}
 				>
 					<option value=''>{recoveryCopy.chooseRecoveryQuestion}</option>
-					{questions.map(question => (
-						<option key={question.id} value={formatQuestionIdHex(question.questionId)}>
-							{question.label ?? rows?.find(row => row.entity.id === question.id)?.question?.marketDetails.title ?? formatQuestionIdHex(question.questionId)}
-						</option>
-					))}
+					{questions.map(question => {
+						const questionId = formatQuestionIdHex(question.questionId)
+						const cachedTitle = rows?.find(row => row.entity.id === question.id)?.question?.marketDetails.title
+						const knownForkTitle = question.questionId === forkQuestionId ? forkQuestion?.title : undefined
+						return (
+							<option key={question.id} value={questionId}>
+								{question.label || cachedTitle || knownForkTitle || abbreviateAddress(questionId, 12, 10)}
+							</option>
+						)
+					})}
 					<option value={questionIdOption}>{recoveryCopy.useRecoveryQuestionId}</option>
 				</select>
 			</label>
@@ -132,7 +141,7 @@ function RecoveryButtons({ model, actions }: { model: Model; actions: RecoveryAc
 	)
 }
 
-export function SecurityPoolShareRecovery({ model, actions, snapshot, redesigned }: { model: Model; actions: RecoveryActions; snapshot: SecurityPoolAccountSnapshot | undefined; redesigned: boolean }) {
+export function SecurityPoolShareRecovery({ model, actions, snapshot, redesigned, forkQuestion }: { model: Model; actions: RecoveryActions; snapshot: SecurityPoolAccountSnapshot | undefined; redesigned: boolean; forkQuestion?: ForkQuestionTitle | undefined }) {
 	const state = model.displayedState
 	const branch = state?.branch
 	const units = snapshot?.collateral.decimals ?? 18
@@ -183,7 +192,10 @@ export function SecurityPoolShareRecovery({ model, actions, snapshot, redesigned
 		)
 	}
 	const maximum = model.recovery?.availableShares
-	const opensAt = state !== undefined && state.choiceDeadline > 0n && state.timestamp < state.choiceDeadline ? state.choiceDeadline : undefined
+	const deadline = state?.choiceDeadline ?? snapshot?.forkChoiceDeadline
+	const timestamp = state?.timestamp ?? snapshot?.timestamp
+	const forkTime = state?.forkTime ?? snapshot?.forkTime ?? 0n
+	const opensAt = deadline !== undefined && timestamp !== undefined && deadline > 0n && timestamp < deadline ? deadline : undefined
 	let badge
 	if (opensAt !== undefined)
 		badge = (
@@ -191,7 +203,7 @@ export function SecurityPoolShareRecovery({ model, actions, snapshot, redesigned
 				{recoveryCopy.recoveryOpens} <TimestampValue timestamp={opensAt} relative={false} />
 			</Badge>
 		)
-	else if (state !== undefined && state.forkTime > 0n) badge = <Badge tone='ok'>{recoveryCopy.recoveryOpen}</Badge>
+	else if (forkTime > 0n) badge = <Badge tone='ok'>{recoveryCopy.recoveryOpen}</Badge>
 	const hasRights = model.recovery !== undefined
 	return (
 		<SectionBlock title={recoveryCopy.shareRecovery} badge={badge}>
@@ -210,7 +222,7 @@ export function SecurityPoolShareRecovery({ model, actions, snapshot, redesigned
 				)}
 			</MetricField>
 			<MetricGrid>
-				<RecoveryQuestionPicker key={`${snapshot?.securityPool}:${snapshot?.owner}:${model.sourceInput}`} model={model} snapshot={snapshot} disabled={disabled} />
+				<RecoveryQuestionPicker key={`${snapshot?.securityPool}:${snapshot?.owner}:${model.sourceInput}`} model={model} snapshot={snapshot} disabled={disabled} forkQuestion={forkQuestion} />
 				<SecurityPoolInput
 					label={copy.shares}
 					value={model.sharesInput}

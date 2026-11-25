@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
 import { OnChainText } from '@zoltar/ui-core-shared/components/OnChainText.js'
@@ -89,6 +90,7 @@ export function SecurityPoolForkDiagram({ state, snapshot, question, outcomeInpu
 	const now = state?.timestamp ?? snapshot?.timestamp
 	const deadline = state?.choiceDeadline ?? snapshot?.forkChoiceDeadline
 	const showMove = !confirmed && position !== undefined && position.rep > 0n && position.commitment > 0n && now !== undefined && deadline !== undefined && now < deadline
+	const hasPositionOwner = snapshot !== undefined && snapshot.owner !== zeroAddress
 	const feesEth = snapshot?.claimableEarnings?.attoEth ?? snapshot?.accruedFeesAttoEth
 	const feesRep = snapshot?.claimableEarnings?.attoRep ?? snapshot?.accruedFeesAttoRep
 	const unpledgedRep = snapshot?.ownerAccount.freeAttoRep ?? 0n
@@ -121,10 +123,12 @@ export function SecurityPoolForkDiagram({ state, snapshot, question, outcomeInpu
 				<div className='statoblast-fork-diagram-stays'>
 					<small>{copy.stays}</small>
 					<strong>{copy.fees}</strong>
-					<div className='statoblast-fork-diagram-amounts'>
-						<CurrencyValue value={feesEth} units={snapshot?.collateral.decimals ?? 0} suffix={snapshot?.collateral.symbol ?? ''} />
-						<CurrencyValue value={feesRep} suffix={common.rep} />
-					</div>
+					{hasPositionOwner && (
+						<div className='statoblast-fork-diagram-amounts'>
+							<CurrencyValue value={feesEth} units={snapshot.collateral.decimals} suffix={snapshot.collateral.symbol} />
+							<CurrencyValue value={feesRep} suffix={common.rep} />
+						</div>
+					)}
 					{unpledgedRep > 0n && (
 						<div className='statoblast-fork-diagram-amounts'>
 							<small>{copy.unpledged}</small>

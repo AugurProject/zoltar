@@ -20,8 +20,8 @@ import {
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getActiveBackend, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
-import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { loadSecurityPoolBranchAuction, securityPoolAuctionCache } from '../../../protocol/securityPoolRepairAuction.js'
+import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
 import type { SecurityPoolTransaction } from '../../../protocol/securityPool.js'
 import type { SecurityPoolSharedForkParameters } from './useSecurityPoolSharedFork.js'
 import { securityPoolAmountOrUndefined, securityPoolUnsignedId } from '../lib/draft.js'
@@ -57,24 +57,23 @@ export function useSecurityPoolAuction({ fork, savedBranch, bidder, actions, ope
 	const cache = useMemo(() => (shownPool === undefined || shownUniverse === undefined || bidder === undefined ? undefined : securityPoolAuctionCache(profile, shownPool, shownUniverse, bidder, pageStart.value)), [profile, shownPool, shownUniverse, bidder, pageStart.value])
 	const saved = useMemo(() => cache?.read(), [cache, key])
 	useEffect(() => {
-		let active = true
+		const controller = new AbortController()
 		if (fork?.branch !== undefined && bidder !== undefined && identity !== undefined) {
-			void withTimeout(loadSecurityPoolBranchAuction(createConnectedReadClient(), fork.securityPool, bidder, fork.branch.universeId, pageStart.value), 15_000, copy.readTimeout)
+			const client = withStatoblastRequestTimeout(createConnectedReadClient(), copy.readTimeout, controller.signal)
+			void loadSecurityPoolBranchAuction(client, fork.securityPool, bidder, fork.branch.universeId, pageStart.value)
 				.then(snapshot => {
-					if (!active || getActiveBackend() !== backend) return
+					if (controller.signal.aborted || getActiveBackend() !== backend) return
 					if (snapshot.auction !== undefined) cache?.write({ ...snapshot, auction: snapshot.auction }, { number: snapshot.blockNumber, timestamp: snapshot.timestamp })
 					loaded.value = { backend, page, key, snapshot, readAt: Date.now() }
 				})
 				.catch(error => {
-					if (active && getActiveBackend() === backend) {
+					if (!controller.signal.aborted && getActiveBackend() === backend) {
 						const previousPage = loaded.value?.backend === backend && loaded.value.page === page ? loaded.value : undefined
 						loaded.value = { backend, page, key, snapshot: previousPage?.snapshot, readAt: previousPage?.readAt, error: getErrorMessage(error, copy.loadError) }
 					}
 				})
 		}
-		return () => {
-			active = false
-		}
+		return () => controller.abort()
 	}, [backend, cache, key])
 	const current = loaded.value?.backend === backend && loaded.value.page === page ? loaded.value : undefined
 	const snapshot = current?.snapshot
@@ -139,7 +138,8 @@ export function useSecurityPoolAuction({ fork, savedBranch, bidder, actions, ope
 					...build(selected),
 					validateBeforeSubmit: async () => {
 						if (getActiveBackend() !== backend || currentIdentity.current !== identity) throw new Error(copy.contextChanged)
-						const latest = await loadSecurityPoolBranchAuction(createConnectedReadClient(), selected.securityPool, selected.bidder, selected.universeId, selected.auction?.bidStart ?? 0n)
+						const client = withStatoblastRequestTimeout(createConnectedReadClient(), copy.readTimeout)
+						const latest = await loadSecurityPoolBranchAuction(client, selected.securityPool, selected.bidder, selected.universeId, selected.auction?.bidStart ?? 0n)
 						if (
 							getActiveBackend() !== backend ||
 							currentIdentity.current !== identity ||

@@ -113,6 +113,19 @@ describe('ZoltarMigrationSection', () => {
 		expect(sends).toEqual([5n * ATTO_REP])
 	})
 
+	test('the single migration form retains the approval when prepared REP covers the amount', async () => {
+		const props = { ...createProps({ zoltarMigrationForm: createForm({ amount: '5' }), zoltarForkApproval: { value: 0n, error: undefined, loading: false } }), singleForm: true }
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, props))
+		cleanupRenderedComponent = rendered.cleanup
+		const queries = within(document.body)
+		const approval = queries.getByRole('button', { name: /^Approve .*REP/ })
+		expect(approval.getAttribute('disabled')).not.toBeNull()
+		expect(document.body.textContent).toContain('no wallet REP needs approval')
+		await act(() => render(h(ZoltarMigrationSection, { ...props, zoltarMigrationForm: createForm({ amount: '15' }) }), rendered.container))
+		expect(queries.getByRole('button', { name: /^Approve .*REP/ })).toBe(approval)
+		expect(approval.getAttribute('disabled')).toBeNull()
+	})
+
 	test('explains why eight undeployed outcomes block moving past selection (#1369)', async () => {
 		const childUniverses = Array.from({ length: 8 }, (_, index) => ({ ...noChild, outcomeIndex: BigInt(index), outcomeLabel: `Outcome ${index + 1}`, universeId: BigInt(10 + index) }))
 		const rendered = await renderIntoDocument(

@@ -60,6 +60,7 @@ async function setup() {
 	const parameters: SecurityPoolSharedForkParameters = {
 		snapshot,
 		actions,
+		bidder: owner,
 		openUniverse: (universe: bigint) => {
 			opened.push(universe)
 		},
@@ -162,8 +163,14 @@ test('redesigned branch steps keep seven rows and show confirmed progress after 
 	const steps = () => [...view.container.querySelectorAll('.statoblast-fork-workflow > li')]
 	await waitFor(() => expect(steps().filter(step => step.getAttribute('data-done') === 'true')).toHaveLength(4))
 	expect(steps()).toHaveLength(7)
-	for (const index of [0, 1, 2, 5]) expect(steps()[index]?.textContent).toContain('Done')
+	for (const index of [0, 1, 2, 5]) {
+		expect(steps()[index]?.textContent).toContain('Done')
+		const button = steps()[index]?.querySelector('button')
+		expect(button?.disabled === true || button?.getAttribute('aria-disabled') === 'true').toBe(true)
+	}
 	expect(view.container.textContent?.match(/Recapitalization deadline/g)).toHaveLength(1)
+	expect(steps()[3]?.querySelector('.statoblast-price-summary')).not.toBeNull()
+	expect(steps()[4]?.querySelector('h4')?.textContent).toContain('auction')
 })
 
 test('the choice page states that missing the deadline ends the commitment', async () => {
@@ -213,6 +220,36 @@ test('shared preparation waits until cutoff and activation waits until the activ
 	await act(() => hook.state().start())
 	expect(requests).toHaveLength(1)
 	expect(hook.state().state?.branch?.recoveryAttoRep).toBe(100n * unit)
+})
+
+test('a viewer can prepare, start and activate a branch using their own wallet', async () => {
+	const { hook, source, snapshot, requests, parameters, setPrepared } = await setup()
+	const ownerReason = 'Connect the selected owner account'
+	setPrepared(false)
+	await hook.setProps({ bidder: token, actions: { ...parameters.actions, ownerReason }, snapshot: { ...snapshot, blockHash: `0x${'77'.repeat(32)}` } })
+	await waitFor(() => expect(hook.state().state?.branch?.prepared).toBe(false))
+	expect(hook.state().chooseReason).toBe(ownerReason)
+	await act(() => hook.state().setQuestion('7'))
+	expect(hook.state().recoverReason).toBe(ownerReason)
+	expect(hook.state().transferReason).toBe(ownerReason)
+	expect(hook.state().prepareBranchReason).toBeUndefined()
+	await act(() => hook.state().prepareBranch())
+
+	setPrepared(true)
+	source.setSnapshot({ ...snapshot, timestamp: 3_000n })
+	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'78'.repeat(32)}` } })
+	await waitFor(() => expect(hook.state().state?.timestamp).toBe(3_000n))
+	expect(hook.state().startReason).toBeUndefined()
+	expect(hook.state().finalizeReason).toBeUndefined()
+	await act(() => hook.state().start())
+	await act(() => hook.state().finalize())
+	expect(requests.map(request => request.account)).toEqual([token, token, token])
+	const abi = parseAbi(['function prepareBranch(uint248 source,uint256 outcome) returns (uint248)', 'function startBranch(uint248 source,uint256 outcome) returns (uint248)', 'function finalizeBranch(uint248 child)'])
+	expect(requests.map(request => decodeFunctionData({ abi, data: request.data }).functionName)).toEqual(['prepareBranch', 'startBranch', 'finalizeBranch'])
+	await hook.setProps({ bidder: undefined })
+	expect(hook.state().startReason).toContain('Connect a wallet')
+	await expect(hook.state().start()).rejects.toThrow('Connect a wallet')
+	expect(requests).toHaveLength(3)
 })
 test('fork drafts survive a transient snapshot reload so a prepared branch can be activated', async () => {
 	const { hook, source, snapshot, requests, setStarted } = await setup()
@@ -375,7 +412,9 @@ test('share recovery opens saved questions or a submitted decimal or hexadecimal
 		const readId = () => fixture.source.reads.some(read => read.name === 'questionOriginIds' && read.args?.[0] === id)
 		expect(readId()).toBe(false)
 		expect(recovery?.querySelector('.statoblast-recovery-rights')).toBeNull()
-		await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+		await act(() => {
+			form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+		})
 		await waitFor(() => expect(readId()).toBe(true))
 	}
 })
@@ -402,7 +441,9 @@ test('a failed recovery refresh keeps the selected question rights visible and b
 	expect(hook.state().recovery?.availableShares).toBe(3n * unit)
 	await expect(hook.state().transfer()).rejects.toThrow('source recovery rights')
 	source.setRead('balanceOfSecurityPoolRecoveryRights', [2n * unit, 5n * unit, 4n * unit])
-	await act(() => hook.state().retryRecovery())
+	await act(() => {
+		hook.state().retryRecovery()
+	})
 	await waitFor(() => expect(hook.state().recovery?.availableShares).toBe(2n * unit))
 	expect(hook.state().transferReason).toBeUndefined()
 })

@@ -1,6 +1,6 @@
 import { formatEther, formatUnits } from '@zoltar/core-shared/evm/ethereum'
 export const title = 'Branch collateral repair auction'
-export const description = 'Lowest REP asks fill first. Every winning lot receives the same amount of REP, at least the highest winning ask.'
+export const description = 'Lowest REP asks fill first. Every winning lot gets the higher of the highest winning ask and the minimum REP needed to back a lot at closing.'
 export const ownership = 'If the REP price rises before closing, fewer lots may fill and the position may start below your health target.'
 export const fairness = 'Equal asks fill in submission order. Unfilled lots are refunded. Bids cannot be cancelled or changed.'
 export const connect = 'Connect a wallet to view and fund your auction bids.'
@@ -23,7 +23,7 @@ export const lotCount = 'Number of lots'
 export const lotHint = 'Positive whole lots only. Each winning lot becomes one commitment at the displayed collateral amount.'
 export const lotsInvalid = 'Enter a positive whole number of lots.'
 export const minimumRep = 'REP you want per lot, at least'
-export const priceHint = (grid: bigint | undefined) => `This sets your maximum price. ${grid === undefined ? 'Checking REP price step.' : `Use multiples of ${formatEther(grid)} REP.`}`
+export const priceHint = (grid: bigint | undefined) => (grid === undefined ? 'Checking REP price step.' : `Use multiples of ${formatEther(grid)} REP.`)
 export const repInvalid = 'Enter a positive REP amount with up to 18 decimal places.'
 export const health = 'Target health (%)'
 export const healthInvalid = 'Enter a health target of at least 100%, with up to two decimal places.'
@@ -41,6 +41,7 @@ export const earnedEth = 'Unclaimed collateral fees'
 export const earnedRep = 'Unclaimed REP fees'
 export const funded = 'Funded position'
 export const noFill = 'No winning lots'
+export const closedWithShortfall = 'No lots sold. Bid collateral is refundable. The branch activates with its collateral shortfall.'
 export const credit = 'Credit this bid’s refunds'
 export const crediting = 'Crediting bid refunds…'
 export const credited = 'This bid’s refunds are already credited.'
@@ -93,6 +94,7 @@ export const askScale = 'Your ask, REP per lot'
 export const askAmount = (amount: string) => `${amount} REP per lot`
 export const lotsForShortfall = (lots: bigint, value: string) => `${lots} ${lots === 1n ? 'lot' : 'lots'} of ${value} cover the shortfall`
 export const bidLots = (lots: bigint) => `Your bid · ${lots} ${lots === 1n ? 'lot' : 'lots'}`
+export const lotsAriaLabel = (summary: string, bid: string | undefined) => (bid === undefined ? summary : `${summary}. ${bid}`)
 export const lowerAsksFill = 'Lower asks already fill the auction.'
 export const earlierBidsFill = 'Better asks or earlier bids at the same ask take the available lots.'
 export const lockedCollateral = (amount: string) => `${amount} locked until closing.`

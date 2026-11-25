@@ -3039,6 +3039,11 @@ span.rep-price-status.stale,
 	margin-block: var(--space-1) 0;
 }
 
+.statoblast-fork-step-body {
+	margin-block-start: var(--space-3);
+	scroll-margin-block-start: var(--space-4);
+}
+
 .statoblast-fork-step-row,
 .statoblast-fork-step-action {
 	display: grid;
@@ -4292,6 +4297,10 @@ span.rep-price-status.stale,
 	border-color: var(--accent);
 	background: var(--accent-faint);
 }
+.statoblast-fork-diagram .identifier-value.copyable {
+	font-size: 0.8125rem;
+	white-space: nowrap;
+}
 @media (min-width: 40rem) {
 	.statoblast-fork-diagram-flow {
 		grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
@@ -4632,9 +4641,15 @@ span.rep-price-status.stale,
 		content: attr(data-label);
 	}
 
+	.statoblast-auction-bid-table td:first-child,
 	.statoblast-auction-bid-table td:nth-child(5),
 	.statoblast-auction-bid-table td:nth-child(6),
 	.statoblast-auction-bid-actions {
 		grid-column: 1 / -1;
+	}
+
+	.statoblast-auction-bid-table td:first-child,
+	.statoblast-auction-bid-table td:nth-child(6) {
+		overflow-wrap: anywhere;
 	}
 }

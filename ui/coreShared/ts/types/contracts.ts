@@ -63,6 +63,7 @@ export type ZoltarUniverseSummary = {
 	earliestForkTime?: bigint
 	forkThresholdAttoRep: bigint
 	forkQuestionDetails: MarketDetails | undefined
+	forkRecapitalizationDeadline?: bigint
 	forkTime: bigint
 	forkingOutcomeIndex: bigint
 	hasForked: boolean

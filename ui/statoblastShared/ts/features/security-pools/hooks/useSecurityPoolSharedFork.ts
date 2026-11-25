@@ -22,6 +22,7 @@ import { loadSharedForkOutcome, loadSecurityPoolSourceRecovery, buildSecurityPoo
 import { securityPoolAmountOrUndefined, securityPoolUnsignedId } from '../lib/draft.js'
 import type { SecurityPoolActions } from '../components/SecurityPoolControls.js'
 import * as copy from '../../../copy/securityPoolSharedFork.js'
+import { connect } from '../../../copy/securityPool.js'
 import * as recoveryCopy from '../../../copy/forkRecovery.js'
 import { branchPriceTarget } from './useSecurityPoolPrice.js'
 import { statoblastDisplayCache } from '../../../protocol/statoblastPageCache.js'
@@ -32,7 +33,7 @@ export type SecurityPoolSharedForkParameters = {
 	presentationSnapshot?: SecurityPoolAccountSnapshot | undefined
 	actions: Pick<SecurityPoolActions, 'scope' | 'busy' | 'ownerReason' | 'runSecurityPoolAction'>
 	openUniverse: (universeId: bigint) => void
-	bidder?: Address | undefined
+	bidder: Address | undefined
 	openVault?: ((vault: Address, universeId: bigint) => void) | undefined
 }
 
@@ -46,7 +47,8 @@ function readRecovery(state: SecurityPoolForkSnapshot, questionId: bigint, signa
 	return loadSecurityPoolSourceRecovery(withStatoblastRequestTimeout(createConnectedReadClient(), recoveryCopy.recoveryReadTimeout, signal), state, questionId)
 }
 
-export function useSecurityPoolSharedFork({ snapshot: securityPool, presentationSnapshot = securityPool, actions, openUniverse }: SecurityPoolSharedForkParameters) {
+export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = snapshot, actions, openUniverse, bidder }: SecurityPoolSharedForkParameters) {
+	const securityPool = snapshot?.owner === zeroAddress ? undefined : snapshot
 	const backend = getActiveBackend()
 	const profile = getActiveNetworkProfile()
 	const sourceInput = useSignal('')
@@ -90,7 +92,7 @@ export function useSecurityPoolSharedFork({ snapshot: securityPool, presentation
 	const noRights = securityPoolAmountOrUndefined(noRightsInput.value, securityPool?.collateral.decimals ?? 18)
 	const transferAmounts = invalidRights === undefined || yesRights === undefined || noRights === undefined ? undefined : ([invalidRights, yesRights, noRights] satisfies readonly [bigint, bigint, bigint])
 	const branchCache = useMemo(() => {
-		if (presentationSnapshot === undefined || universeId === undefined) return undefined
+		if (presentationSnapshot === undefined || presentationSnapshot.owner === zeroAddress || universeId === undefined) return undefined
 		const { securityPool: pool, owner } = presentationSnapshot
 		return branchDisplayCache(profile, pool, owner, universeId, outcomeIndex)
 	}, [profile, presentationSnapshot?.securityPool, presentationSnapshot?.owner, universeId, outcomeIndex])
@@ -147,10 +149,14 @@ export function useSecurityPoolSharedFork({ snapshot: securityPool, presentation
 	}, [backend, recoveryScope, recoveryKey])
 	const recovery = recoveryState?.source
 	const pendingReason = universeId === undefined ? 'Enter a valid source universe.' : 'Checking fork status…'
-	const baseReason = actions.ownerReason ?? current?.error ?? (state === undefined ? pendingReason : undefined)
+	const walletReason = bidder === undefined ? connect : undefined
+	const ownerReason = walletReason ?? actions.ownerReason
+	const baseReason = current?.error ?? (state === undefined ? pendingReason : undefined)
 	const forkReason = baseReason ?? (state?.forkTime === 0n ? 'This source universe has not forked.' : undefined)
 	const branchReason = forkReason ?? (state?.branch === undefined || current?.outcome?.outcomeLabel === undefined ? 'Enter a valid fork outcome.' : undefined)
+	const publicBranchReason = walletReason ?? branchReason
 	const chooseReason =
+		ownerReason ??
 		branchReason ??
 		(state?.choice.recorded ? 'Your irreversible branch choice is already recorded.' : undefined) ??
 		(state !== undefined && state.timestamp >= state.choiceDeadline ? 'The fork choice window has closed.' : undefined) ??
@@ -160,20 +166,25 @@ export function useSecurityPoolSharedFork({ snapshot: securityPool, presentation
 		if (selected.timestamp < selected.choiceDeadline) return 'Wait until the choice deadline.'
 		return selected.branch?.started ? 'This branch migration is already started.' : undefined
 	}
-	const prepareBranchReason = branchReason ?? (state && custodyPreparationReason(state))
+	const prepareBranchReason = publicBranchReason ?? (state && custodyPreparationReason(state))
 	const recheckStage = (reasonFor: (latest: SecurityPoolForkSnapshot) => string | undefined) => async (latest: SecurityPoolForkSnapshot) => {
 		const reason = latest.forkTime === 0n || latest.branch === undefined ? 'Fork context changed. Review again.' : reasonFor(latest)
 		if (reason !== undefined) throw new Error(reason)
 	}
-	const startReason = branchReason ?? (state && migrationReason(state))
+	const startReason = publicBranchReason ?? (state && migrationReason(state))
 	const activationReason = (selected: SecurityPoolForkSnapshot) => {
 		if (!selected.branch?.prepared) return 'Prepare branch capital first.'
 		if (selected.timestamp < selected.activationDeadline) return 'Wait until the earliest activation time.'
 		return selected.branch.ready ? 'This branch is already active.' : undefined
 	}
-	const finalizeReason = branchReason ?? (state && activationReason(state))
+	const finalizeReason = publicBranchReason ?? (state && activationReason(state))
 	const sourceReason =
-		forkReason ?? (questionId === undefined ? recoveryCopy.selectRecoveryQuestion : undefined) ?? recoveryState?.error ?? (recovery === undefined ? recoveryCopy.loadingRecoveryRights : undefined) ?? (recovery !== undefined && recovery.pool !== zeroAddress && !recovery.eligible ? recoveryCopy.closedRecovery : undefined)
+		ownerReason ??
+		forkReason ??
+		(questionId === undefined ? recoveryCopy.selectRecoveryQuestion : undefined) ??
+		recoveryState?.error ??
+		(recovery === undefined ? recoveryCopy.loadingRecoveryRights : undefined) ??
+		(recovery !== undefined && recovery.pool !== zeroAddress && !recovery.eligible ? recoveryCopy.closedRecovery : undefined)
 	const recoveryDeadlineReason = state !== undefined && state.timestamp < state.choiceDeadline ? recoveryCopy.waitForRecovery : undefined
 	const prepareReason = sourceReason ?? recoveryDeadlineReason ?? (recovery?.pool !== zeroAddress ? recoveryCopy.recoveryAlreadyPrepared : undefined)
 	const recoverReason =
@@ -205,6 +216,10 @@ export function useSecurityPoolSharedFork({ snapshot: securityPool, presentation
 			}
 		})
 	const base = (selected: SecurityPoolForkSnapshot) => ({ owner: selected.owner, controller: selected.controller, universeId: selected.universeId })
+	const publicBase = (selected: SecurityPoolForkSnapshot) => {
+		if (bidder === undefined) throw new Error(connect)
+		return { ...base(selected), owner: bidder }
+	}
 	return {
 		state,
 		displayedState,
@@ -214,7 +229,7 @@ export function useSecurityPoolSharedFork({ snapshot: securityPool, presentation
 		recovery: displayedRecovery?.source,
 		recoveryError: recoveryState?.error,
 		recoveryReadAt: displayedRecovery?.readAt,
-		recoveryLoading: questionId !== undefined && (state === undefined ? current?.error === undefined : state.forkTime > 0n && recoveryState === undefined),
+		recoveryLoading: questionId !== undefined && presentationSnapshot?.owner !== zeroAddress && (state === undefined ? current?.error === undefined : state.forkTime > 0n && recoveryState === undefined),
 		retryRecovery: () => recoveryRetry.value++,
 		outcome: current?.outcome,
 		error: current?.error,
@@ -259,7 +274,7 @@ export function useSecurityPoolSharedFork({ snapshot: securityPool, presentation
 		finalizeReason,
 		prepareReason,
 		recoverReason,
-		openReason: state?.branch?.ready ? undefined : copy.openAfterActivation,
+		openReason: walletReason ?? (state?.branch?.ready ? undefined : copy.openAfterActivation),
 		open: () => {
 			if (state?.branch?.ready) openUniverse(state.branch.universeId)
 		},
@@ -287,7 +302,7 @@ export function useSecurityPoolSharedFork({ snapshot: securityPool, presentation
 				prepareBranchReason,
 				selected => {
 					if (selected.branch === undefined) throw new Error('Select a branch.')
-					return { ...buildSecurityPoolForkPreparationRequest({ ...base(selected), outcomeIndex: selected.branch.outcomeIndex }), reviewDescription: 'Create this branch’s REP token and shared capital contracts when needed.' }
+					return { ...buildSecurityPoolForkPreparationRequest({ ...publicBase(selected), outcomeIndex: selected.branch.outcomeIndex }), reviewDescription: 'Create this branch’s REP token and shared capital contracts when needed.' }
 				},
 				recheckStage(custodyPreparationReason),
 			),
@@ -298,7 +313,7 @@ export function useSecurityPoolSharedFork({ snapshot: securityPool, presentation
 				startReason,
 				selected => {
 					if (selected.branch === undefined) throw new Error('Select a branch.')
-					return { ...buildSecurityPoolForkStartRequest({ ...base(selected), outcomeIndex: selected.branch.outcomeIndex }), reviewDescription: 'Prepare this branch if needed, migrate its shared REP, and set up its collateral repair auction.' }
+					return { ...buildSecurityPoolForkStartRequest({ ...publicBase(selected), outcomeIndex: selected.branch.outcomeIndex }), reviewDescription: 'Prepare this branch if needed, migrate its shared REP, and set up its collateral repair auction.' }
 				},
 				recheckStage(migrationReason),
 			),
@@ -309,7 +324,7 @@ export function useSecurityPoolSharedFork({ snapshot: securityPool, presentation
 				finalizeReason,
 				selected => {
 					if (selected.branch === undefined) throw new Error('Select a branch.')
-					return { ...buildSecurityPoolForkFinalizeRequest({ ...base(selected), universeId: selected.branch.universeId }), reviewDescription: 'Start migration if needed, then activate this branch’s collateral and REP claim basket and chosen underwriting positions.' }
+					return { ...buildSecurityPoolForkFinalizeRequest({ ...publicBase(selected), universeId: selected.branch.universeId }), reviewDescription: 'Start migration if needed, then activate this branch’s collateral and REP claim basket and chosen underwriting positions.' }
 				},
 				recheckStage(activationReason),
 			),

@@ -52,6 +52,17 @@ test('an open bid shows the lower-ask reason only when the verified limit proves
 	expect(view.container.textContent).toContain('Outbid')
 })
 
+test('a finalized auction with no fills explains the remaining shortfall and makes bid collateral refundable', async () => {
+	const fixture = await auctionFixture()
+	fixture.values['finalized'] = true
+	fixture.values['clearing'] = [0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false]
+	fixture.values['previewBid'] = [owner, auctionVault, 12_000n, 0n, 0n, 0n, 2n * unit]
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolRepairAuction fork={fixture.fork} bidder={owner} actions={actions} />))
+	await waitFor(() => expect(view.container.textContent).toContain('Bid collateral is refundable. The branch activates with its collateral shortfall.'))
+	expect(button(view.container, 'Credit and withdraw refunds').disabled).toBe(false)
+	expect(view.container.textContent).toContain('No winning lots')
+})
+
 test('#1371 a full book displays no admissible limit rather than a price below the backing floor', async () => {
 	const fixture = await auctionFixture()
 	fixture.values['maximumAdmissibleBidAttoRepPerLot'] = 3n * unit
