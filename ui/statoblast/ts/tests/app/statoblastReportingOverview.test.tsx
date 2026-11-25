@@ -6,7 +6,7 @@ import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/mark
 import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { ActiveReportingDetails, EscalationSide } from '@zoltar/ui-statoblast-shared/types/contracts.js'
-import { decodeReportingOverview, reportingOverview, StatoblastReportingOverview } from '../../../app/components/StatoblastReportingOverview.js'
+import { decodeReportingOverview, reportingOverview, StatoblastReportingOverview } from '../../app/components/StatoblastReportingOverview.js'
 
 const lifecycle = installDomTestLifecycle()
 const rep = (amount: bigint) => amount * 10n ** 18n

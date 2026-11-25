@@ -185,6 +185,10 @@
 			"bun": "./ts/features/reporting/components/EscalationDepositSelectionList.tsx",
 			"default": "./js/features/reporting/components/EscalationDepositSelectionList.js"
 		},
+		"./features/reporting/components/EscalationExplainer.js": {
+			"bun": "./ts/features/reporting/components/EscalationExplainer.tsx",
+			"default": "./js/features/reporting/components/EscalationExplainer.js"
+		},
 		"./features/reporting/components/ReportingSection.js": {
 			"bun": "./ts/features/reporting/components/ReportingSection.tsx",
 			"default": "./js/features/reporting/components/ReportingSection.js"
