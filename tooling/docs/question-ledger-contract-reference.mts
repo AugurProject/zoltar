@@ -2,8 +2,7 @@ import type { ContractReference } from './contract-reference-metadata.mts'
 export const questionLedgerContractReference: ContractReference = {
 	compiledAbiFingerprint: '7ffb4294e73f490e4e1b84047201846c0d1c9f05a1efc401e2310d19c5c266e4',
 	name: 'QuestionLedger',
-	interactionNotes:
-		'All deployed question ledgers belong to a security pool. Providers use its capital ledger for deposits, commitments, health targets, retirement and liquidation. Reporters fund separate reporter custody with wallet REP. Purchases use the registered security pool route; traders redeem through the question ledger. There is no standalone vault, tick auction or operation queue.',
+	interactionNotes: 'See the [security pool module boundaries](./contract-inventory.html#security-pool-boundary) for capital, settlement, and reporter custody.',
 	purpose: 'Question ledger for one shared security pool, question and universe. Shares and reporting are question-specific; provider capital, settlement cash and fees are accounted centrally.',
 	readAbiFingerprint: '6111391e18edf62a3bf73327121ce9aa8db3827774d17114fde6ce95d901cd03',
 	readSurface:

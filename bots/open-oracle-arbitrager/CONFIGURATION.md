@@ -172,24 +172,16 @@ Set `runtime.ui` to `true`, choose `runtime.uiPort`, and run:
 bun run run
 ```
 
-The dashboard shows:
+See [Using the dashboard](./docs/operator-guide.html#dashboard) for the screen walkthrough.
 
-- Bot mode, **Syncing**, **Running**, **Paused**, **Error**, **Stopped**, **Connectivity degraded**, **Not deployed**, or **No execution pools** status, latest block, block age relative to the operator computer, errors, and active-report count.
-- Selected network, expected chain ID, read/public RPC controls, and endpoint checks.
-- A local signer control, connected address, and its ETH/WETH/REP balances.
-- ETH, WETH, REP, executable REP value, and estimated security pool value.
-- Native ETH stakes, WETH stakes, and ETH settler rewards locked in reports currently pending on discovered coordinators. The combined figure treats 1 WETH as 1 ETH.
-- Approved-coordinator reports awaiting third-party settlement, each with reward, projected gas and net, decision, and the settlement and reward-withdrawal history.
-- Current opportunities, token-metadata-normalized inventory requirements, deadline window, token-specific direction, pool, and decision. WETH/token reports still inside their settlement window that the scan declined before any venue priced them stay listed as `skipped` with the concrete gate (missing pool, execution allowlist, dispute delay, remaining window, spot/TWAP limit, or the venue quote failure) so they are not visible only in the operation log. Reports past their deadline, off their coordinator template, or not quoted in WETH are logged only.
-- Durable positions with actual hedge execution, entry and lifecycle gas, exact settler reward, withdrawals, state, and realized net P&L. A staged entry shows **Awaiting entry evidence** and is excluded from actual P&L totals until receipt and executor-event quorum succeeds. A lifecycle attempt is likewise excluded while any receipt is ambiguous. `open-pending-finality` retains its risk slot and has no history record until its entry receipt passes the finality quorum. `closed-pending-finality` retains its risk slot and does not contribute realized profit until its exact lifecycle evidence passes the finality quorum. Realized totals include only closed positions whose expected inventory fully reconciled or whose manual reconciliation explicitly records P&L.
-- Confirmed dispute transactions and their older quote-time accounting. The table and trend are bounded to the latest 500 records; durable position totals use the retained recovery records plus the journal's compacted accounting summary.
-- Signed transaction status, public/private delivery, accepted and failed relay targets, replacement hash from the receipt, actual gas, and ETH profit estimates.
-- A read-only active risk envelope showing configured position, locked-capital, daily-gas, and lifecycle-reserve limits alongside current usage and remaining capacity.
-- Persistent strategy, risk-limit, settlement, execution-mode, RPC fanout, relay submission, and REP market source controls, and pause/resume.
-- A token catalog with wallet balances and supported WETH/token pools. Each pool address links to the selected-network explorer. The [market discovery section](./MARKETS.md#token-and-pool-discovery) owns the venue, price, and liquidity semantics. A token with no supported pool is explicitly labeled instead of disappearing.
-- In coordinator-free diagnostic mode, the submitted/disputed/settled events observed for each OpenOracle report, including blocks, reporters, raw locked amounts, and transaction links. Discovered-coordinator mode shows current report state without reconstructing these historical paths. See [data freshness and retention](#data-freshness-and-retention) for lookback limits.
-- A per-asset current-head price-history chart with one series per supported pool, axes, point tooltips, and a recent exact-value table. Samples persist across restarts, subject to the retention and reorg limits above.
-- A 500-entry in-memory operations journal. The dashboard hides routine scan entries and shows decisions, configuration changes, transaction states, and the reason for each action.
+| Control | Settings and behavior |
+| --- | --- |
+| **Chain and RPC connectivity** | [Network and reader settings](#settings-page) |
+| **Execution mode** | [Readiness and scan-boundary changes](./EXECUTION.md#enable-execution) |
+| **REP market sources** | [Market source and consensus settings](./MARKETS.md#independent-cex-and-dex-manipulation-guard) |
+| Strategy and risk controls | [Thresholds and risk limits](#adjust-the-strategy) |
+| Third-party settlement | [Settlement policy](#third-party-settlement) |
+| Price and report history | [Retention and diagnostic coverage](#data-freshness-and-retention) |
 
 The UI is local-only by default. A private key entered there is sent over HTTP to the loopback endpoint, immediately cleared from the input, and never echoed by the API or written to logs or transaction history. [Dashboard access](../README.md#dashboard-access) covers the host-loopback container setup and the password a network-bound listener requires. The key is kept in memory unless **Save this key in the local operator file** is selected. That explicit choice stores the key in the owner-only operator settings file; protect the host, backups, and settings path as wallet credentials. **Remove saved key · keep signer** atomically removes only the persisted credential while retaining the active in-memory signer. **Remove signer & saved key** removes both. The status names the active address and, when different, the saved address. Setting a different memory-only key preserves an existing saved key until **Remove saved key · keep signer** or **Remove signer & saved key** is used.
 

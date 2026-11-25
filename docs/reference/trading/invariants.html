@@ -18,11 +18,10 @@
 			<section id="pair-custody">
 				<h2>Pair custody</h2>
 				<ul>
-					<li>Yes and No reserves are the current ShareToken balances, read directly without a stored copy.</li>
+					<li>Yes and No reserves are the current ShareToken balances. Donations immediately increase reserves and accrue to existing LPs.</li>
 					<li>The pair's Invalid balance is exactly zero.</li>
 					<li>An LP withdrawal cannot claim more Yes or No shares than the pair owns. Withdrawal amounts are proportional to current balances and the liquidity burned.</li>
 				</ul>
-				<p>Unsolicited Yes or No donations immediately increase reserves and accrue to existing LPs. Invalid shares are never a trading asset and cannot be donated through an accepted ERC-1155 callback.</p>
 			</section>
 			<section id="router-custody">
 				<h2>Router custody</h2>
@@ -42,7 +41,7 @@
 				<ul>
 					<li>Once the question has ended, the question has resolved, or the universe has forked, initialization, liquidity addition, and both swap forms revert permanently.</li>
 					<li>While <a href="../glossary.html#fork-continuation">fork continuation</a> is pending or the question ledger is not operational, the same operations also revert for as long as that state lasts.</li>
-					<li>Proportional liquidity removal has no lifecycle guard, so LP tokens never become trapped.</li>
+					<li>Proportional liquidity removal has no lifecycle guard.</li>
 				</ul>
 			</section>
 		</main>

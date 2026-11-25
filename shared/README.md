@@ -14,7 +14,7 @@ The protocol packages depend only on Core and never on one another. An applicati
 
 Each package has its own manifest and TypeScript configuration, and generated `js/` output. Cross-package imports use explicit public exports. There is no aggregate shared package or compatibility export layer.
 
-`tooling/repo/sharedPackages.ts` declares the allowed build dependency graph; `tooling/repo/projects.ts` incorporates it into repository tasks. `bun run check:shared-boundaries` rejects reverse imports, including type-only imports and relative-path bypasses. Manifests declare only packages directly imported by their sources; the build graph also prepares the upstream packages needed by product consumers. The root manifest installs `@zoltar/core-shared`, `@zoltar/open-oracle-shared`, `@zoltar/statoblast-shared`, and `@zoltar/trading-shared` for dynamic build and test orchestration; Knip exempts the three protocol packages among them as root-only installation dependencies. Internal dependencies use exact `workspace:1.0.0` constraints. Bun links them to source packages in the checkout; the root lockfile and root overrides own dependency resolution.
+The [repository dependency graph](../ARCHITECTURE.md#dependency-graph) describes the build order. `bun run check:shared-boundaries` enforces import direction, including type-only imports and relative paths. Internal dependencies use exact `workspace:1.0.0` constraints.
 
 Build one application's runtime packages with `bun tooling/repo/build-shared.mts zoltar` (or `statoblast` or `trading`). `bun run shared:build` builds every runtime package for repository-wide tasks.
 

@@ -69,7 +69,7 @@ The pruning configuration:
 This supports historical `eth_getLogs` and receipt lookup from the configured boundary. It does not support old state queries or traces outside the rolling state-history window. Block, transaction, and receipt storage will continue growing because the requested event history is retained permanently.
 
 > [!WARNING]
-> Never run `docker compose down --volumes` unless all Reth and Lighthouse data may be deleted. Never move the retention boundary forward unless the additional block, transaction, and receipt history may be irreversibly deleted.
+> Keep the volumes when stopping the node. `docker compose down --volumes` deletes the Reth and Lighthouse data. For retention changes, see [Choose the retention boundary](#choose-the-retention-boundary).
 
 ## Verify the node
 

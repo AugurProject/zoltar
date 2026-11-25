@@ -64,6 +64,8 @@ Exact domain calculations, filters, response fields, limits, and continuation ru
 
 Log history is complete only for the selected sources inside the network's configured and retrievable coverage boundary. The default scan selects transactions by log. With `SCAN_DIRECT_CALLS=1`, the indexer also reads each full block and retains failed and eventless direct transactions to tracked protocol contracts. The API exposes that boundary, the indexed block and hash, the current materialization generation, and collection-specific truncation or continuation fields. A missing row outside coverage is unknown, not zero or proof that an event never happened.
 
+Log and historical-state coverage have separate provider boundaries. Tagged reads below the historical-state boundary are skipped. At each indexed head, the sampler checks the 25 least recently read entities, so a capital position’s latest health reading can lag as the sampled set grows. A fee-read failure leaves the other capital-ledger values available.
+
 Balance and token-metadata failures are observation records, not numeric values. A successful attempt can update the current materialization; a failed attempt leaves the last successful materialization unchanged. Each balance target is recorded independently, so one failed native or token read does not erase the other outcomes from the same batch.
 
 Use `canonical=all` when auditing replacements. A noncanonical observation identifies the replacement that displaced it and reports chain reorganization, manifest supersession, or coverage reset as its evidence status. Follow every documented cursor until completion; do not infer completeness from the first page.
