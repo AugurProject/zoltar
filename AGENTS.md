@@ -188,6 +188,10 @@ Skip this gate for read-only analysis, exploration, or when the user asks not to
 
 ## Pull requests
 
+Use the `gh` command on PATH from inside the checkout for GitHub operations such as `gh pr create`, `gh pr view`, and `gh pr checks`. In the shared workspace it selects the credential for the repository’s `origin`. Use Git for fetching, committing, and pushing the branch before opening the PR.
+
+If GitHub rejects a push that changes `.github/workflows/` for insufficient workflow access, report the permission error. Publishing that branch requires a fine-grained token with Contents and Workflows write access or a classic token with repository write access and the `workflow` scope. A successful `gh` read does not establish those write permissions.
+
 When creating a pull request:
 
 - Write a pull request description that explains what changed and why.
