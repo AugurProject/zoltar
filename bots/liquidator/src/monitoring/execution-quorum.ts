@@ -14,13 +14,12 @@ export function availableExecutionObservations<T, V>(label: string, settled: rea
 	return available
 }
 
-export function liquidationExecutionSnapshotObservation<TBlock, TPool, TUniverse>(observation: { endpoint: string; scan: { block: TBlock; pools?: readonly TPool[]; universes: readonly TUniverse[]; securityPools?: readonly unknown[]; walletRepByToken: ReadonlyMap<string, bigint> } }) {
+export function liquidationExecutionSnapshotObservation<TBlock, TUniverse>(observation: { endpoint: string; scan: { block: TBlock; universes: readonly TUniverse[]; securityPools: readonly unknown[]; walletRepByToken: ReadonlyMap<string, bigint> } }) {
 	return {
 		endpoint: observation.endpoint,
 		value: {
 			block: observation.scan.block,
-			pools: observation.scan.pools ?? [],
-			securityPools: observation.scan.securityPools ?? [],
+			securityPools: observation.scan.securityPools,
 			universes: observation.scan.universes,
 			walletRepByToken: [...observation.scan.walletRepByToken.entries()].sort(([left], [right]) => left.localeCompare(right)),
 		},

@@ -270,7 +270,7 @@ export async function createChaosAnvilFixture(): Promise<ChaosAnvilFixture> {
 		const poolAddresses = await deployTestSecurityPool(deployer, ORIGIN_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS)
 		const infra = getInfraContractAddresses()
 		const pool = poolAddresses.questionLedger
-		await manipulatePriceOracle(deployer, simulator, poolAddresses.openOraclePriceCoordinator, ONE_TOKEN, 100n * ONE_TOKEN)
+		await manipulatePriceOracle(deployer, simulator, poolAddresses.priceFeed, ONE_TOKEN, 100n * ONE_TOKEN)
 
 		const tradingFactory = await deploy(
 			deployer,
@@ -296,6 +296,8 @@ export async function createChaosAnvilFixture(): Promise<ChaosAnvilFixture> {
 			address: infra.zoltarQuestionData,
 			functionName: 'getQuestionCount',
 		})
+		// Pending estimates must include the next block's fee checkpoints regardless of host timing.
+		await simulator.requestRaw({ method: 'anvil_setBlockTimestampInterval', params: [1] })
 		let baselineSnapshot = await simulator.anvilSnapshot()
 		return {
 			baselineQuestionCount,

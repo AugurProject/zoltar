@@ -1,7 +1,6 @@
 export type { DurableState } from './durable-state-document.ts'
 import { durableStateDocument, type DurableState } from './durable-state-document.ts'
 import { parseCompletedInstructions, parseSecurityPoolFunding, type SecurityPoolFundingEffect, type InstructionIdentity } from './security-pool-instructions.ts'
-import { marketConfigurationList, poolCentralizedPriceAllowed, poolCentralizedPriceDeviationBps } from './market-snapshot.ts'
 import { parseSecurityPoolScopes } from './security-pool-scopes.ts'
 import { parsePendingTransactionIntent } from './pending-transaction-intent.ts'
 import type { RuntimeState } from './runtime-state.ts'
@@ -11,8 +10,6 @@ import { stringifyWithBigInts } from '@zoltar/core-shared/serialization/bigInt'
 import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
-import { isVaultMigrationSourceEligible } from '#core/fork-migration'
-import { vaultHealthBps, type LiquidationCandidate, type VaultPosition } from '#core/strategy'
 import { serializeCentralizedMarketEstimate, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { serializeMarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
 
@@ -20,42 +17,6 @@ import { serializeMarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/
 const MAXIMUM_STATE_BYTES = 5 * 1024 * 1024
 // 500 retained activities with bounded details always fit under the state file cap.
 const MAXIMUM_ACTIVITY_DETAILS_LENGTH = 1_500
-
-export type PoolObservation = {
-	knownVaultCount: bigint
-	address: Address
-	approvedUniverse: boolean
-	botVault: VaultPosition
-	candidates: LiquidationCandidate[]
-	settlementCollateralAttoEth: bigint
-	forkActivationTime: bigint
-	forkOutcomeIndex: bigint | undefined
-	initialReportPriorityFeeAttoEthPerGas: bigint
-	isPriceValid: boolean
-	lastPrice: bigint
-	lastSettlementTimestamp: bigint
-	manager: Address
-	minLiquidationPriceDistanceBps: bigint
-	minimumSecurityBondDebtAttoEth: bigint
-	minimumToken1ReportAttoEth: bigint
-	minimumVaultRepDepositAttoRep: bigint
-	multiplierBps: bigint
-	parent: Address
-	parentUniverseId: bigint | undefined
-	pendingReportId: bigint
-	pendingReportSponsor: Address
-	questionId: bigint
-	repToken: Address
-	requestPriceCostAttoEth: bigint
-	selected: boolean
-	questionForker: Address
-	stagedOperations: StagedOperationObservation[]
-	systemState: bigint
-	totalUnderwritingLimitAttoEth: bigint
-	totalAttoRep: bigint
-	universeId: bigint
-	vaults: VaultPosition[]
-}
 
 export type UniverseObservation = {
 	approved: boolean
@@ -65,26 +26,6 @@ export type UniverseObservation = {
 	outcomeIndex: bigint | undefined
 	parentId: bigint | undefined
 	repToken: Address
-}
-
-type StagedOperationObservation = {
-	operationValue: bigint
-	id: bigint
-	liquidationApprovalId: `0x${string}`
-	isPendingSettlement: boolean
-	operation: bigint
-	operator: Address
-	queuedAt: bigint
-	receiverVault: Address
-	reservedLiquidationDebtAttoEth: bigint
-	snapshotTotalRepBackingUnits: bigint
-	snapshotTargetUnderwritingLimitAttoEth: bigint
-	snapshotTargetDisputeStakedAttoRep: bigint
-	snapshotTargetOpenInterestAttoEth: bigint
-	snapshotTargetBackingUnits: bigint
-	snapshotTotalPoolHeldAttoRep: bigint
-	targetVault: Address
-	validForSeconds: bigint
 }
 
 export type Activity = {
@@ -142,7 +83,6 @@ export function initialRuntimeState(paused: boolean, wallet: Address | undefined
 		pendingTransactions: [],
 		securityPools: [],
 		securityPoolScopes: [],
-		pools: [],
 		scanning: false,
 		startedAt: new Date().toISOString(),
 		status: paused ? 'paused' : 'starting',
@@ -197,44 +137,15 @@ export function assertIntentSender(intentSender: Address, activeSender: Address)
 	}
 }
 
-function vaultView(vault: VaultPosition, multiplierBps?: bigint, price?: bigint) {
-	const healthBps = multiplierBps === undefined || price === undefined ? undefined : vaultHealthBps(vault.vaultAttoRepBacking, vault.underwritingLimitAttoEth, multiplierBps, price, vault.disputeStakedAttoRep)
-	return {
-		address: vault.address,
-		capacityOwnershipEth: formatDecimalAmount(vault.underwritingLimitAttoEth),
-		openInterestDisplay: formatDecimalAmount(vault.openInterestAttoEth),
-		healthBps: healthBps?.toString(),
-		backingUnits: vault.backingUnits.toString(),
-		vaultRepBacking: formatDecimalAmount(vault.vaultAttoRepBacking),
-		claimableFeesEth: formatDecimalAmount(vault.claimableFeesAttoEth),
-	}
-}
-
-function candidateView(candidate: LiquidationCandidate) {
-	return {
-		takeoverRewardValueEth: formatDecimalAmount(candidate.takeoverRewardValueAttoEth),
-		requestedDebtEth: formatDecimalAmount(candidate.requestedDebtAttoEth),
-		priceDistanceBps: candidate.priceDistanceBps.toString(),
-		vaultRepBackingToTransferRep: formatDecimalAmount(candidate.vaultAttoRepBackingToTransfer),
-		resultingHealthBps: candidate.resultingHealthBps.toString(),
-		target: candidate.target.address,
-		topUpRep: formatDecimalAmount(candidate.topUpAttoRep),
-	}
-}
-
-export function operatorSnapshot(state: RuntimeState, execute: boolean, marketConfigurations?: CentralizedMarketSettings | readonly CentralizedMarketSettings[]) {
-	const configurations = marketConfigurationList(marketConfigurations)
-	const marketConfigurationFor = (asset: Address) => configurations.find(configuration => configuration.assetAddress.toLowerCase() === asset.toLowerCase())
-	const deployedRep = state.pools.reduce((total, pool) => total + pool.botVault.vaultAttoRepBacking, 0n)
-	const assumedOpenInterestAttoEth = state.pools.reduce((total, pool) => total + pool.botVault.openInterestAttoEth, 0n)
+export function operatorSnapshot(state: RuntimeState, execute: boolean, marketConfigurations?: readonly CentralizedMarketSettings[]) {
+	const configurations = marketConfigurations ?? []
 	const rootConfiguration = configurations[0]
-	const discoveredRepAssets = new Set(state.pools.map(pool => pool.repToken.toLowerCase()))
 	const alerts: { message: string; severity: 'error' | 'warning' }[] = []
 	if (state.status === 'connectivity-degraded') alerts.push({ message: state.error ?? 'RPC connectivity is degraded; automatic execution is blocked until connectivity recovers', severity: 'warning' })
 	if (state.pendingTransactions.length > 0) alerts.push({ message: `${state.pendingTransactions.length.toString()} transaction intent(s) require recovery before execution can continue`, severity: 'error' })
 	for (const configuration of configurations) {
-		if (configuration !== rootConfiguration && !discoveredRepAssets.has(configuration.assetAddress.toLowerCase())) continue
-		const consensus = state.marketConsensusByAsset.get(configuration.assetAddress.toLowerCase()) ?? (configuration === rootConfiguration ? state.marketConsensus : undefined)
+		if (configuration !== rootConfiguration) continue
+		const consensus = state.marketConsensusByAsset.get(configuration.assetAddress.toLowerCase()) ?? state.marketConsensus
 		const asset = `${configuration.assetAddress.slice(0, 6)}…${configuration.assetAddress.slice(-4)}`
 		if (configuration.requiredForExecution && consensus === undefined) alerts.push({ message: `Required REP market consensus is unavailable for ${asset}`, severity: 'error' })
 		else if (configuration.requiredForExecution && consensus?.reliable === false) alerts.push({ message: `Required REP market consensus is blocked for ${asset}: ${consensus.reasons.join('; ')}`, severity: 'error' })
@@ -242,66 +153,8 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 	}
 	const recentReorgResets = state.activities.filter(activity => activity.message === 'DEX market evidence reset after canonical head replacement' && Date.now() - Date.parse(activity.at) <= 60 * 60 * 1_000).length
 	if (recentReorgResets >= 2) alerts.push({ message: `${recentReorgResets.toString()} canonical market-evidence resets occurred during the last hour`, severity: 'warning' })
-	const universeMap = new Map<
-		string,
-		{
-			approved: boolean
-			forkedPoolCount: number
-			forkQuestionId: bigint
-			forkTime: bigint
-			id: bigint
-			migratableVaultCount: number
-			operationalPoolCount: number
-			outcomeIndex: bigint | undefined
-			parentId: bigint | undefined
-			poolCount: number
-			repToken: Address
-			selectedPoolCount: number
-		}
-	>()
-	for (const universe of state.universes) {
-		universeMap.set(universe.id.toString(), {
-			approved: universe.approved,
-			forkedPoolCount: 0,
-			forkQuestionId: universe.forkQuestionId,
-			forkTime: universe.forkTime,
-			id: universe.id,
-			migratableVaultCount: 0,
-			operationalPoolCount: 0,
-			outcomeIndex: universe.outcomeIndex,
-			parentId: universe.parentId,
-			poolCount: 0,
-			repToken: universe.repToken,
-			selectedPoolCount: 0,
-		})
-	}
-	for (const pool of state.pools) {
-		const key = pool.universeId.toString()
-		const existing = universeMap.get(key) ?? {
-			approved: pool.approvedUniverse,
-			forkedPoolCount: 0,
-			forkQuestionId: 0n,
-			forkTime: 0n,
-			id: pool.universeId,
-			migratableVaultCount: 0,
-			operationalPoolCount: 0,
-			outcomeIndex: pool.forkOutcomeIndex,
-			parentId: pool.parentUniverseId,
-			poolCount: 0,
-			repToken: pool.repToken,
-			selectedPoolCount: 0,
-		}
-		existing.poolCount += 1
-		if (pool.selected) existing.selectedPoolCount += 1
-		if (pool.systemState === 0n) existing.operationalPoolCount += 1
-		if (pool.systemState === 1n) existing.forkedPoolCount += 1
-		universeMap.set(key, existing)
-	}
-	for (const universe of universeMap.values()) {
-		const scannedTimestamp = state.lastScannedTimestamp
-		if (!universe.approved || universe.parentId === undefined || universe.outcomeIndex === undefined || scannedTimestamp === undefined) continue
-		universe.migratableVaultCount = state.pools.filter(parent => parent.universeId === universe.parentId && isVaultMigrationSourceEligible(parent, scannedTimestamp)).length
-	}
+	const universeMap = new Map(state.universes.map(universe => [universe.id.toString(), universe]))
+
 	return {
 		activities: state.activities,
 		alerts,
@@ -318,12 +171,12 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 		lastScannedTimestamp: state.lastScannedTimestamp?.toString(),
 		metrics: {
 			approvedUniverseCount: [...universeMap.values()].filter(universe => universe.approved).length,
-			assumedOpenInterestEth: formatDecimalAmount(assumedOpenInterestAttoEth),
-			candidateCount: state.pools.reduce((total, pool) => total + pool.candidates.length, 0),
-			deployedRep: formatDecimalAmount(deployedRep),
-			eligiblePoolCount: state.pools.filter(pool => pool.selected && pool.approvedUniverse && pool.systemState === 0n).length,
-			poolCount: state.pools.length,
-			selectedPoolCount: state.pools.filter(pool => pool.selected).length,
+			assumedOpenInterestEth: '0',
+			candidateCount: 0,
+			deployedRep: '0',
+			eligiblePoolCount: 0,
+			poolCount: 0,
+			selectedPoolCount: 0,
 			walletEth: formatDecimalAmount(state.walletAttoEth),
 		},
 		paused: state.paused,
@@ -338,45 +191,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 			requiresMarketEvidence: intent.requiresMarketEvidence,
 			submissionBlock: intent.submissionBlock.toString(),
 		})),
-		pools: state.pools.map(pool => {
-			const centralizedMarkets = marketConfigurationFor(pool.repToken)
-			const centralizedMarket = state.centralizedMarketsByAsset.get(pool.repToken.toLowerCase()) ?? (centralizedMarkets === configurations[0] ? state.centralizedMarket : undefined)
-			const marketConsensus = state.marketConsensusByAsset.get(pool.repToken.toLowerCase()) ?? (centralizedMarkets === configurations[0] ? state.marketConsensus : undefined)
-			return {
-				knownVaultCount: pool.knownVaultCount.toString(),
-				address: pool.address,
-				approvedUniverse: pool.approvedUniverse,
-				botVault: vaultView(pool.botVault, pool.multiplierBps, pool.lastPrice),
-				candidates: pool.candidates.map(candidateView),
-				settlementCollateralEth: formatDecimalAmount(pool.settlementCollateralAttoEth),
-				centralizedPriceAllowed: poolCentralizedPriceAllowed(pool, configurations.length === 0, centralizedMarkets, centralizedMarket, marketConsensus),
-				forkActivationTime: pool.forkActivationTime.toString(),
-				forkOutcomeIndex: pool.forkOutcomeIndex?.toString(),
-				initialReportPriorityFeeAttoEthPerGas: pool.initialReportPriorityFeeAttoEthPerGas.toString(),
-				isPriceValid: pool.isPriceValid,
-				lastPrice: formatDecimalAmount(pool.lastPrice),
-				centralizedPriceDeviationBps: poolCentralizedPriceDeviationBps(pool, centralizedMarkets, centralizedMarket, marketConsensus)?.toString(),
-				lastSettlementTimestamp: pool.lastSettlementTimestamp.toString(),
-				manager: pool.manager,
-				minLiquidationPriceDistanceBps: pool.minLiquidationPriceDistanceBps.toString(),
-				minimumToken1ReportEth: formatDecimalAmount(pool.minimumToken1ReportAttoEth),
-				multiplierBps: pool.multiplierBps.toString(),
-				parent: pool.parent,
-				parentUniverseId: pool.parentUniverseId?.toString(),
-				pendingReportId: pool.pendingReportId.toString(),
-				pendingReportSponsor: pool.pendingReportSponsor,
-				questionId: pool.questionId.toString(),
-				repToken: pool.repToken,
-				requestPriceCostEth: formatDecimalAmount(pool.requestPriceCostAttoEth),
-				selected: pool.selected,
-				questionForker: pool.questionForker,
-				systemState: pool.systemState.toString(),
-				totalCapacityOwnershipEth: formatDecimalAmount(pool.totalUnderwritingLimitAttoEth),
-				totalPoolHeldRep: formatDecimalAmount(pool.totalAttoRep),
-				universeId: pool.universeId.toString(),
-				vaults: pool.vaults.map(vault => vaultView(vault)),
-			}
-		}),
+		pools: [],
 		scanning: state.scanning,
 		marketSources: configurations.flatMap(configuration => {
 			const assetKey = configuration.assetAddress.toLowerCase()
@@ -418,28 +233,21 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 			.sort((left, right) => compareBigint(left.id, right.id))
 			.map(universe => ({
 				approved: universe.approved,
-				forkedPoolCount: universe.forkedPoolCount,
+				forkedPoolCount: 0,
 				forkQuestionId: universe.forkQuestionId.toString(),
 				forkTime: universe.forkTime.toString(),
 				id: universe.id.toString(),
-				migratableVaultCount: universe.migratableVaultCount,
-				operationalPoolCount: universe.operationalPoolCount,
+				migratableVaultCount: 0,
+				operationalPoolCount: 0,
 				outcomeIndex: universe.outcomeIndex?.toString(),
 				parentId: universe.parentId?.toString(),
-				poolCount: universe.poolCount,
+				poolCount: 0,
 				repToken: universe.repToken,
-				selectedPoolCount: universe.selectedPoolCount,
+				selectedPoolCount: 0,
 			})),
 		wallet: state.wallet,
 		walletRep: Object.fromEntries([...state.walletRepByToken.entries()].map(([token, amount]) => [token, formatDecimalAmount(amount)])),
 	}
-}
-
-/** Staged-operation recovery was removed; a journal still holding such entries needs manual resolution rather than silently blocking execution forever. */
-function assertNoLegacyStagedOperations(value: unknown, path: string) {
-	if (value === undefined || (Array.isArray(value) && value.length === 0)) return
-	const entries = Array.isArray(value) ? `${value.length.toString()} legacy pending staged operation(s)` : 'a legacy pendingStagedOperations field'
-	throw new Error(`Liquidator state contains ${entries}, which are no longer supported; resolve them on-chain, then remove pendingStagedOperations from ${path}`)
 }
 
 export async function loadDurableState(path: string, expectedChainId: number): Promise<DurableState> {
@@ -448,17 +256,17 @@ export async function loadDurableState(path: string, expectedChainId: number): P
 	if (contents === undefined) return { securityPoolFunding: {}, completedSecurityPoolInstructions: {}, securityPoolScopes: [], activities: [], chainId: expectedChainId, lastScannedBlock: undefined, pendingTransactions: [], version: 2 }
 	const value: unknown = JSON.parse(contents)
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Liquidator state must be an object')
+	const fields = new Set(['activities', 'chainId', 'lastScannedBlock', 'lastExpiredTakeoverBlock', 'pendingTransactions', 'securityPoolFunding', 'completedSecurityPoolInstructions', 'securityPoolScopes', 'version'])
+	for (const key of Object.keys(value)) if (!fields.has(key)) throw new Error(`Unsupported liquidator state field: ${key}`)
 	const version = Reflect.get(value, 'version')
 	const chainId = Reflect.get(value, 'chainId')
 	const activities = Reflect.get(value, 'activities')
 	const lastScannedBlock = Reflect.get(value, 'lastScannedBlock')
 	const lastExpiredTakeoverBlock = Reflect.get(value, 'lastExpiredTakeoverBlock')
 	if (lastExpiredTakeoverBlock !== undefined && (typeof lastExpiredTakeoverBlock !== 'string' || !/^[0-9]+$/.test(lastExpiredTakeoverBlock))) throw new Error('Invalid takeover retry budget block')
-	const pendingStagedOperations = Reflect.get(value, 'pendingStagedOperations')
 	const pendingTransactions = Reflect.get(value, 'pendingTransactions')
 	if (version !== 2 || !Array.isArray(activities)) throw new Error('Liquidator state version is unsupported')
 	if (chainId !== expectedChainId) throw new Error(`Liquidator state belongs to chain ${String(chainId)}, expected chain ${expectedChainId.toString()}`)
-	assertNoLegacyStagedOperations(pendingStagedOperations, path)
 	if (!Array.isArray(pendingTransactions)) throw new Error('pendingTransactions must be an array')
 	return {
 		activities: activities.flatMap(activity => {

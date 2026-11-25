@@ -32,7 +32,7 @@ const shareToken = `0x${'44'.repeat(20)}` as Address
 const configuration = deploymentConfigurationFixture()
 
 // One attoETH of collateral is worth 10^18 attoShares, mirroring the QuestionLedger genesis rate that makes raw share counts unreadable.
-const market = etherScaleMarketFixture({ pool, pair, shareToken, title: 'Background fixture market', description: 'Background refresh fixture' })
+const market = etherScaleMarketFixture({ collateral: { token: getAddress('0x1111111111111111111111111111111111111111'), symbol: 'ETH', decimals: 18, native: true }, pool, pair, shareToken, title: 'Background fixture market', description: 'Background refresh fixture' })
 
 // Stands in for the chain: reports a new block every interval so the block-driven background refresh runs.
 function produceBlocks(milliseconds: number) {

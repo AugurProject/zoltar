@@ -46,7 +46,7 @@ describe('ERC20 security pool collateral', () => {
 			}),
 		)
 		const report = await owner.readContract({ ...feed, functionName: 'pendingReportId' })
-		const [escrow, , , ceiling] = await owner.readContract({ ...feed, functionName: 'reportCandidates', args: [report] })
+		const [escrow, , ceiling] = await owner.readContract({ ...feed, functionName: 'reportCandidates', args: [report] })
 		const escrowAbi = parseAbi(['function withdrawTokenFunding(address token,address recipient)'])
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'setBlocked', args: [owner.account.address, true] }))
 		await fixture.base.mockWindow.advanceTime(481n)

@@ -87,15 +87,6 @@ function parseChangedLineNumbers(diffText: string) {
 export function getChangedLineNumbers(filePath: string, runGitFn: GitRunner = runGit) {
 	const untrackedPath = runGitFn(['ls-files', '--others', '--exclude-standard', '--', filePath])
 	if (untrackedPath === filePath) return undefined
-	const relocatedTradingPrefix = 'ui/trading/ts/'
-	if (filePath.startsWith(relocatedTradingPrefix)) {
-		const legacyPath = `trading/ui/ts/${filePath.slice(relocatedTradingPrefix.length)}`
-		const legacyCommit = runGitFn(['log', '--diff-filter=AM', '-1', '--format=%H', '--all', '--', legacyPath])
-		if (legacyCommit !== '') {
-			const relocationDiff = runGitFn(['diff', '--find-renames=20%', '--no-color', '--unified=0', legacyCommit, '--', legacyPath, filePath])
-			return parseChangedLineNumbers(relocationDiff)
-		}
-	}
 	const mergeBase = mergeBaseWithMain(runGitFn)
 	const diffTexts = [runGitFn(['diff', '--no-color', '--unified=0', mergeBase, '--', filePath])]
 	const changedLines = new Set<number>()

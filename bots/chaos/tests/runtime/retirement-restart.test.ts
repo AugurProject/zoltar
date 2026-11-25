@@ -282,7 +282,7 @@ describe('Drain & Retire persisted restart behavior', () => {
 		const executed: string[] = []
 
 		const drainingSnapshot = emptySnapshot()
-		drainingSnapshot.wallet.tokens = [{ address: address(40), allowances: { [address(41)]: '1' }, balance: '0', openOracleCredit: '0', symbol: 'TEST' }]
+		drainingSnapshot.wallet.tokens = [{ address: address(40), allowances: { [address(41)]: '1' }, balance: '0', openOracleInternalAllowanceToSelf: '0', openOracleCredit: '0', symbol: 'TEST' }]
 		let state = await reload(path, requestedState(drainingSnapshot))
 		expect(state.retirement.status).toBe('requested')
 		await cycle(path, state, drainingSnapshot, executed, async () => {
@@ -353,7 +353,7 @@ describe('Drain & Retire persisted restart behavior', () => {
 	test('does not repeat a WETH unwrap after a canonical scan', async () => {
 		const path = await statePath()
 		const snapshot = emptySnapshot()
-		snapshot.wallet.tokens = [{ address: snapshot.deployments.weth, allowances: {}, balance: '7', openOracleCredit: '0', symbol: 'WETH' }]
+		snapshot.wallet.tokens = [{ address: snapshot.deployments.weth, allowances: {}, balance: '7', openOracleInternalAllowanceToSelf: '0', openOracleCredit: '0', symbol: 'WETH' }]
 		let state = await reload(path, requestedState(snapshot))
 		const executed: string[] = []
 		await cycle(path, state, snapshot, executed, async plan => {
@@ -373,7 +373,7 @@ describe('Drain & Retire persisted restart behavior', () => {
 	test('does not send signer-held tokens during a restarted retirement', async () => {
 		const path = await statePath()
 		const snapshot = emptySnapshot()
-		snapshot.wallet.tokens = [{ address: address(80), allowances: {}, balance: '7', openOracleCredit: '0', symbol: 'TEST' }]
+		snapshot.wallet.tokens = [{ address: address(80), allowances: {}, balance: '7', openOracleInternalAllowanceToSelf: '0', openOracleCredit: '0', symbol: 'TEST' }]
 		let state = await reload(path, requestedState(snapshot))
 		const executed: string[] = []
 		await cycle(path, state, snapshot, executed)

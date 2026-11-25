@@ -325,6 +325,14 @@ test.skipIf(url === undefined)('capital positions rank by health, attribute liqu
 
 		const richEarlier = await richListRows(connection, { chainId, address: lower(alice), snapshotBlock: '1', limit: 10, offset: 0, sort: 'transactions' })
 		expect((richEarlier[0]?.['capital_positions'] as readonly Record<string, unknown>[])[0]).toMatchObject({ healthFactorBps: '20000', blockNumber: '1' })
+		for (let index = 1; index <= 100; index++) {
+			const additionalLedger = `0x${index.toString(16).padStart(40, '0')}`
+			await connection`INSERT INTO contracts (chain_id, address, label, kind, provenance, canonical) VALUES (${chainId}, ${additionalLedger}, 'Ledger', 'securityPoolCapitalLedger', 'test', true)`
+			await snapshot('capital-owner', `${additionalLedger}:${lower(alice)}`, 3, {})
+		}
+		const capped = await richListRows(connection, { chainId, address: lower(alice), snapshotBlock: '3', limit: 1, offset: 0, sort: 'transactions' })
+		expect(capped[0]?.['capital_position_count']).toBe(101)
+		expect(capped[0]?.['capital_positions']).toHaveLength(100)
 	} finally {
 		await database.close()
 		connection.release()

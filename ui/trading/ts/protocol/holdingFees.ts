@@ -22,6 +22,10 @@ export async function loadTransactionFeeMarket(client: WalletClient, market: Liv
 	const abi = statoblast_QuestionLedger_QuestionLedger.abi
 	const capital = await client.readContract({ abi, address: market.pool, functionName: 'securityPoolCustody', blockNumber })
 	const central = await loadCentralSecurityPoolQuestion(client, market.pool, capital, blockNumber)
+	return projectTransactionFeeMarket(market, central, timestamp)
+}
+
+export function projectTransactionFeeMarket(market: LiveMarket, central: Awaited<ReturnType<typeof loadCentralSecurityPoolQuestion>>, timestamp: bigint): LiveMarket {
 	const feeEndTime = central.feeEndTimestamp
 	const recovery = central.settlementRecoveryAttoRep
 	const feeAccounting = central

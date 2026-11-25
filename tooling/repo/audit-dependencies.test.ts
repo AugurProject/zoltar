@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { cpSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { validateLegacyZodAuditScope, validatePicomatchAuditScope } from './audit-dependencies.mts'
 import { repositoryRoot } from './root.mts'
@@ -145,5 +146,18 @@ test('rejects malformed picomatch scope metadata rather than silently accepting 
 		const lockfile = globbingFixture()
 		Object.assign(lockfile.packages, { 'runtime-client': entry })
 		expect(() => validatePicomatchAuditScope(lockfile)).toThrow('Picomatch audit exception')
+	}
+})
+
+test('the CI audit loads workspace sources before dependencies are installed', () => {
+	const checkout = mkdtempSync(path.join(tmpdir(), 'audit-checkout-'))
+	try {
+		for (const file of ['tsconfig.json', 'shared/tsconfig.strict.json', 'shared/tsconfig.source-paths.json', 'shared/core/ts/validation/guards.ts', 'tooling/repo/audit-dependencies.mts', 'tooling/repo/dependency-audit-policy.ts', 'tooling/repo/root.mts']) {
+			cpSync(path.join(repositoryRoot, file), path.join(checkout, file))
+		}
+		const result = Bun.spawnSync([process.execPath, '--no-install', '-e', "import './tooling/repo/audit-dependencies.mts'"], { cwd: checkout })
+		expect(result.exitCode, result.stderr.toString()).toBe(0)
+	} finally {
+		rmSync(checkout, { force: true, recursive: true })
 	}
 })

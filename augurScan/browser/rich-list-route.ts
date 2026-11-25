@@ -208,6 +208,8 @@ export const createRichListRoute = (deps: RichListRouteDeps) => {
 			richListRequestVersion++
 		},
 		clear() {
+			$('#richlist-table').replaceChildren()
+			richListSnapshot = undefined
 			richListItems = []
 			richListTotal = 0
 			richListRendered = false

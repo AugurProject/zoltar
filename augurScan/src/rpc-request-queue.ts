@@ -75,11 +75,11 @@ export const createRpcRequestQueue = (concurrency: number, maximumPending = 100)
 				pending.push(() => {
 					void Promise.resolve()
 						.then(operation)
-						.then(resolve, reject)
 						.finally(() => {
 							active--
 							drain()
 						})
+						.then(resolve, reject)
 				})
 				drain()
 				highWaterMark = Math.max(highWaterMark, pending.length)

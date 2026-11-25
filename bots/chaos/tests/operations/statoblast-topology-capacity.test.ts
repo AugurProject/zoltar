@@ -146,7 +146,7 @@ test('native child preparation respects the pool cap without blocking existing c
 	universe.forkTime = '1999999000'
 	universe.forkQuestionId = pool.questionId
 	pool.systemState = 1
-	pool.childPoolPreparations['0'] = { securityPool: pool.securityPool, branchReady: true, sourcePool: pool.address, sourceGame: address(0), childUniverseId: '88', childPool: address(0), game: address(0), historyOutcomesInitialized: 0, historyReady: false, feedRequired: false, dependenciesRequired: false }
+	pool.childPoolPreparations['0'] = { securityPool: pool.securityPool, branchReady: true, sourcePool: pool.address, sourceGame: address(0), childUniverseId: '88', childPool: address(0), game: address(0), historyOutcomesInitialized: 0, historyReady: false }
 	expect(plans(snapshot, 'statoblast.fork.create-child')).toHaveLength(1)
 	snapshot.pools.push({ ...pool, address: address(99), questionId: '999', childPoolPreparations: {} })
 	expect(plans(snapshot, 'statoblast.fork.create-child')).toHaveLength(0)

@@ -36,7 +36,7 @@ import {
 	statoblast_WETH9_WETH9,
 	test_statoblast_OpenOracleAdversarialHarnesses_OpenOracleRejectingETHReceiver as rejectingEthReceiverArtifact,
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
-	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
+	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed,
 	statoblast_openOracle_OpenOracle_OpenOracle,
 } from '../types/contractArtifact'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
@@ -74,8 +74,8 @@ describe('Shared security pool oracle security regressions', () => {
 	beforeEach(async () => {
 		client = fixture.owner()
 		mockWindow = fixture.base.mockWindow
-		priceOracle = fixture.poolFor(fixture.base.questionId).openOraclePriceCoordinator
-		priceFeed = await client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: priceOracle, functionName: 'priceFeed' })
+		priceOracle = fixture.poolFor(fixture.base.questionId).priceFeed
+		priceFeed = priceOracle
 	})
 	const setNextBlockBaseFee = async (baseFeeAttoEthPerGas: bigint) =>
 		await mockWindow.request({
@@ -109,8 +109,8 @@ describe('Shared security pool oracle security regressions', () => {
 		const minimum = await client.readContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [repPerEthPrice] })
 		await setNextBlockBaseFee(baseFeeAttoEthPerGas)
 		const requestHash = await client.writeContract({
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'requestPrice',
+			abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
+			functionName: 'requestSecurityPoolPrice',
 			address: priceOracle,
 			args: [repPerEthPrice, minimum, requestEthCost],
 			value: requestEthCost,
@@ -339,7 +339,7 @@ describe('Shared security pool oracle security regressions', () => {
 		const pendingMaxSettlementBaseFeeAfterRecovery = await getPendingReportMaxSettlementBaseFee(client, priceOracle)
 		const lastPriceAfterRecovery = await getLastPrice(client, priceOracle)
 		const lastSettlementTimestampAfterRecovery = await client.readContract({
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 			functionName: 'lastSettlementTimestamp',
 			address: priceOracle,
 			args: [],
@@ -386,7 +386,7 @@ describe('Shared security pool oracle security regressions', () => {
 
 	test('coordinator uses the configured collateral floor independently of the current base fee', async () => {
 		const targetPriceErrorForDispute = await client.readContract({
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 			functionName: 'targetPriceErrorForDispute',
 			address: priceOracle,
 			args: [],
@@ -394,7 +394,7 @@ describe('Shared security pool oracle security regressions', () => {
 		assert.strictEqual(targetPriceErrorForDispute, 500000n, 'the initial target price error should be five percent')
 
 		const minimumToken1ReportAttoEth = await client.readContract({
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 			functionName: 'minimumToken1ReportAttoEth',
 			address: priceOracle,
 			args: [],
@@ -413,7 +413,7 @@ describe('Shared security pool oracle security regressions', () => {
 		await setNextBlockBaseFee(baseFeeAttoEthPerGas)
 		await mockWindow.request({ method: 'evm_mine', params: [] })
 		const sizedForBaseFee = await client.readContract({
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 			functionName: 'minimumToken1ReportAttoEth',
 			address: priceOracle,
 			args: [],
@@ -431,7 +431,7 @@ describe('Shared security pool oracle security regressions', () => {
 					{ name: 'requestedInitialAttoWeth', type: 'uint256' },
 					{ name: 'bountyAttoEth', type: 'uint256' },
 				],
-				name: 'requestPrice',
+				name: 'requestSecurityPoolPrice',
 				outputs: [],
 				stateMutability: 'payable',
 				type: 'function',
@@ -444,7 +444,7 @@ describe('Shared security pool oracle security regressions', () => {
 
 		const hash = await client.writeContract({
 			abi: requestPriceWithMinimumAbi,
-			functionName: 'requestPrice',
+			functionName: 'requestSecurityPoolPrice',
 			address: priceOracle,
 			args: [proposedRepPerEthPrice, requestedInitialAttoWeth, await getRequestPriceCostAttoEth(client, priceOracle)],
 			value: await getRequestPriceCostAttoEth(client, priceOracle),
@@ -501,14 +501,14 @@ describe('Shared security pool oracle security regressions', () => {
 		await setNextBlockBaseFee(requestBaseFeeAttoEthPerGas)
 		await mockWindow.request({ method: 'evm_mine', params: [] })
 		const requestMinimumWethReport = await client.readContract({
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 			functionName: 'minimumToken1ReportAttoEth',
 			address: priceOracle,
 			args: [],
 		})
 		const requestHash = await client.writeContract({
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'requestPrice',
+			abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
+			functionName: 'requestSecurityPoolPrice',
 			address: priceOracle,
 			args: [proposedRepPerEthPrice, requestMinimumWethReport, await getRequestPriceCostAttoEth(client, priceOracle)],
 			value: (await getRequestPriceCostAttoEth(client, priceOracle)) + requestMinimumWethReport,
@@ -526,7 +526,7 @@ describe('Shared security pool oracle security regressions', () => {
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
 		const overpayment = costAttoEth * 2n
 		const minimumWethReport = await client.readContract({
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 			functionName: 'minimumToken1ReportAttoEth',
 			address: priceOracle,
 			args: [],
@@ -549,7 +549,7 @@ describe('Shared security pool oracle security regressions', () => {
 		try {
 			await mockWindow.request({ method: 'anvil_setChainId', params: [11155111] })
 			await manipulatePriceOracle(client, mockWindow, priceOracle)
-			const settledAt = await client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: priceOracle, functionName: 'lastSettlementTimestamp', args: [] })
+			const settledAt = await client.readContract({ abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, address: priceOracle, functionName: 'lastSettlementTimestamp', args: [] })
 			await mockWindow.setTime(settledAt + 480n + 3599n)
 			assert.strictEqual(await getIsPriceValid(client, priceOracle), true)
 			await mockWindow.setTime(settledAt + 480n + 3600n)
@@ -562,7 +562,7 @@ describe('Shared security pool oracle security regressions', () => {
 	test('cached prices expire exactly after one challenge period plus five minutes of renewal slack', async () => {
 		await manipulatePriceOracle(client, mockWindow, priceOracle)
 		const lastSettlementTimestamp = await client.readContract({
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 			address: priceOracle,
 			functionName: 'lastSettlementTimestamp',
 			args: [],
@@ -659,7 +659,7 @@ describe('Shared security pool oracle security regressions', () => {
 	})
 
 	test('rejecting sponsors roll back bounty refunds, report creation, and token funding', async () => {
-		const coordinatorAbi = statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
+		const coordinatorAbi = statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi
 		const receiver = await deployContract(
 			client,
 			encodeDeployData({
@@ -729,12 +729,12 @@ describe('Shared security pool oracle security regressions', () => {
 				priceOracle,
 				encodeFunctionData({
 					abi: coordinatorAbi,
-					functionName: 'requestPrice',
+					functionName: 'requestSecurityPoolPrice',
 					args: [proposedRepPerEthPrice, initialWethReport, costAttoEth],
 				}),
 				costAttoEth + 1n,
 			),
-			/Oracle coordinator failed to refund excess ETH bounty/,
+			/Oracle feed failed to refund excess ETH bounty/,
 		)
 		assert.strictEqual(await getPendingReportId(client, priceOracle), 0n, 'failed direct refund must roll back the pending report')
 		assert.strictEqual(
@@ -829,25 +829,22 @@ describe('Shared security pool oracle security regressions', () => {
 		assert.strictEqual(report.protocolFee, BigInt(ORACLE_PROTOCOL_FEE))
 	})
 
-	test('adapter setup rejects repeated and unauthorized binding without changing the canonical feed', async () => {
-		const target = { abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: priceOracle }
-		const pool = fixture.poolFor(fixture.base.questionId).questionLedger
-		await assert.rejects(client.writeContract({ ...target, functionName: 'setQuestionLedger', args: [pool] }), /Question ledger already set/)
-		await assert.rejects(client.writeContract({ ...target, functionName: 'setSharedPriceFeed', args: [priceFeed] }), /Shared feed setup invalid/)
-		await assert.rejects(client.writeContract({ abi: feedArtifact.abi, address: priceFeed, functionName: 'registerCoordinator', args: [priceOracle] }), /Only security pool factory/)
-		assert.strictEqual(await client.readContract({ ...target, functionName: 'questionLedger' }), pool)
-		assert.strictEqual(await client.readContract({ ...target, functionName: 'priceFeed' }), priceFeed)
+	test('exposure checkpoint rejects an unauthenticated caller without changing canonical exposure', async () => {
+		const target = { abi: feedArtifact.abi, address: priceFeed }
+		const before = await client.readContract({ ...target, functionName: 'aggregateExposureAttoEth' })
+		await assert.rejects(client.writeContract({ ...target, functionName: 'syncExposure' }), /Wrong exposure security pool/)
+		assert.strictEqual(await client.readContract({ ...target, functionName: 'aggregateExposureAttoEth' }), before)
 	})
 
 	test('funding, report widths, and forged callbacks fail atomically while concurrent candidates remain available', async () => {
-		const target = { abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: priceOracle }
+		const target = { abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, address: priceOracle }
 		const cost = await getRequestPriceCostAttoEth(client, priceOracle)
 		const direct = { abi: feedArtifact.abi, address: priceFeed }
 		const minimum = await client.readContract({ ...direct, functionName: 'minimumToken1ReportAttoEth' })
 		const nextId = () => client.readContract({ abi: statoblast_openOracle_OpenOracle_OpenOracle.abi, address: getInfraContractAddresses().openOracle, functionName: 'nextReportId' })
 		const beforeId = await nextId()
-		await assert.rejects(client.writeContract({ ...target, functionName: 'requestPrice', args: [1n, 0n, cost - 1n], value: cost - 1n }), /Oracle bounty too small/)
-		await assert.rejects(client.writeContract({ ...target, functionName: 'requestPrice', args: [1n, 0n, cost], value: cost - 1n }), /Not enough ETH for oracle bounty/)
+		await assert.rejects(client.writeContract({ ...target, functionName: 'requestSecurityPoolPrice', args: [1n, 0n, cost - 1n], value: cost - 1n }), /Oracle bounty too small/)
+		await assert.rejects(client.writeContract({ ...target, functionName: 'requestSecurityPoolPrice', args: [1n, 0n, cost], value: cost - 1n }), /Not enough ETH for oracle bounty/)
 		await assert.rejects(client.writeContract({ ...direct, functionName: 'requestSecurityPoolPrice', args: [0n, 0n, cost], value: cost }), /Initial oracle price zero/)
 		await assert.rejects(recoverSettledPendingReport(client, priceOracle), /No report to recover/)
 		await assert.rejects(client.writeContract({ ...direct, functionName: 'requestSecurityPoolPrice', args: [1n, 1n << 128n, cost], value: cost }), /WETH report exceeds uint128/)
@@ -885,8 +882,8 @@ describe('Shared security pool oracle security regressions', () => {
 		const balanceBefore = await getETHBalance(client, client.account.address)
 
 		const requestHash = await client.writeContract({
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'requestPrice',
+			abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
+			functionName: 'requestSecurityPoolPrice',
 			address: priceOracle,
 			args: [proposedRepPerEthPrice, minimumToken1ReportAttoEth, bountyAttoEth],
 			value: bountyAttoEth + excessAttoEth,

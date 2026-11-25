@@ -1,3 +1,4 @@
+import { validateDeploymentSettings } from '#config/deployment-settings'
 import { publicOpportunity } from '#state/opportunity-snapshot'
 import { ExecutionSignerLockHeldError, signerLockConflictMessage } from '@zoltar/bot-shared/execution/process-lock'
 import { parseSettlementSettings, settlementSnapshot } from '#state/settlement-store'
@@ -25,7 +26,19 @@ const temporaryDirectories: string[] = []
 const address = '0x0000000000000000000000000000000000000001' as Address
 const submission = { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: ['https://relay.flashbots.net/'] } as const
 const connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' } as const
-const fixed = { execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedSigner: undefined, savedWallet: undefined, wallet: undefined } as const
+const fixed = {
+	deployment: validateDeploymentSettings({ uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: false }),
+	networkConfigured: true,
+	execute: false,
+	executor: undefined,
+	expectedChainId: 1,
+	explorerUrl: 'https://etherscan.io',
+	network: 'mainnet',
+	openOracle: address,
+	queuedSigner: undefined,
+	savedWallet: undefined,
+	wallet: undefined,
+} as const
 
 test('presents signer contention as a Settings action even when polling is also failing or deployment is missing', () => {
 	const message = signerLockConflictMessage(new ExecutionSignerLockHeldError('Signer', '{"bot":"liquidator"}', '/protected/lock'))
@@ -71,7 +84,6 @@ function position(overrides: Partial<PositionRecord>): PositionRecord {
 		actualEntryGasCostEth: '0',
 		capitalAtRiskWeth: '1',
 		entryTransactionHash: entryHash,
-		entryTransactionHashes: [entryHash],
 		gasExpenditures: [],
 		hedgeAmountToken: '1',
 		lockedToken: '1',
@@ -100,7 +112,6 @@ test('publishes skipped reports beside evaluated opportunities with only their s
 			centralizedPriceDeviationBps: undefined,
 			decision: 'unprofitable',
 			direction: 'sell-rep',
-			estimatedNetProfitEth: '-1',
 			estimatedNetProfitWeth: '-1',
 			executablePriceRepPerEth: '10',
 			hasRequiredInventory: undefined,
@@ -148,6 +159,9 @@ test('publishes skipped reports beside evaluated opportunities with only their s
 	})
 	const snapshot = publicOperatorSnapshot(operatorSnapshot(state, strategy(), submission, connectivity, fixed))
 	expect(snapshot.opportunities).toEqual(state.opportunities)
+	const evaluated = snapshot.opportunities.find(opportunity => opportunity.decision === 'unprofitable')
+	expect(evaluated).toMatchObject({ estimatedNetProfitWeth: '-1' })
+	expect(evaluated).not.toHaveProperty('estimatedNetProfitEth')
 	expect(snapshot.settlements).toEqual(state.settlements)
 	expect(isSnapshot(JSON.parse(JSON.stringify(snapshot)))).toBe(true)
 	expect(isSnapshot(JSON.parse(JSON.stringify({ ...snapshot, settlements: { ...snapshot.settlements, queue: [{ ...snapshot.settlements.queue[0], decision: 'unknown' }] } })))).toBe(false)
@@ -432,7 +446,6 @@ describe('operator strategy settings', () => {
 					centralizedPriceDeviationBps: '25',
 					decision: 'eligible',
 					direction: 'buy-rep',
-					estimatedNetProfitEth: '1',
 					estimatedNetProfitWeth: '1',
 					executablePriceRepPerEth: '10',
 					hasRequiredInventory: true,
@@ -539,8 +552,6 @@ describe('operator execution history', () => {
 			lifecycleTokenDecimals: '18',
 			lifecycleTransactionHashes: [lifecycleHash],
 			lifecycleUpdatedAt: new Date(1).toISOString(),
-			lifecycleWalletTokenBefore: '1',
-			lifecycleWalletWethBefore: '1',
 			reportId: '3',
 			status: 'recovery-required',
 		})
@@ -581,6 +592,7 @@ describe('operator execution history', () => {
 		const state = operatorStateFixture({ executionHistory: history, status: 'running' })
 		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, fixed)
 		expect(snapshot.totalEstimatedNetProfitWeth).toBe('0.05')
+		expect(snapshot).not.toHaveProperty('totalEstimatedNetProfitEth')
 		expect(snapshot.totalActualGasCostEth).toBe('0.002')
 		expect(snapshot.totalRevenueBeforeGasEth).toBe('0.052')
 	})

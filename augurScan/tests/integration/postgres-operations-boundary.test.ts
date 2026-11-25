@@ -186,6 +186,14 @@ postgresTest(
 			const reportCursor = btoa(
 				JSON.stringify([historicalChainId, 'reports-catalog', 'catalog', operations.asOf.blockNumber, operations.asOf.blockHash, operations.asOf.invalidationId, operations.asOf.abiSourceHash, operations.asOf.applicationSourceHash, operations.asOf.projectionSourceHash, '1', firstTransactionHash, 0]),
 			)
+			for (const domain of ['reports', 'auctions', 'escalations', 'forks']) {
+				const historical = await handleApi(new Request(`http://localhost/api/v1/state/${domain}?chainId=${historicalChainId}&atBlock=1`), database.sql)
+				expect(historical?.status).toBe(200)
+				expect(await historical?.json()).toMatchObject({ asOf: { blockNumber: '1', indexedHead: '2' }, data: { items: domain === 'forks' ? [] : [expect.objectContaining({ block_number: '1' })] } })
+			}
+			const mismatch = await handleApi(new Request(`http://localhost/api/v1/state/reports?chainId=${historicalChainId}&cursor=${encodeURIComponent(reportCursor)}&atBlock=2`), database.sql)
+			expect(mismatch?.status).toBe(400)
+			expect(await mismatch?.json()).toEqual({ error: 'cursor does not match the requested snapshot block' })
 			const crossScopeResponse = await handleApi(new Request(`http://localhost/api/v1/state/escalations?chainId=${historicalChainId}&cursor=${encodeURIComponent(reportCursor)}`), database.sql)
 			expect(crossScopeResponse?.status).toBe(400)
 			expect(await crossScopeResponse?.json()).toEqual({ error: 'cursor does not match the requested entity' })

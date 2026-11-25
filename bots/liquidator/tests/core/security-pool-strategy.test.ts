@@ -3,7 +3,7 @@ import { securityPoolCureOutcome } from '../../src/core/security-pool-cure-state
 import { SIGNED_TRANSACTION_SLOT_SECONDS, securityPoolTakeoverPlan } from '../../src/core/security-pool-strategy.ts'
 import { DEFAULT_TRANSACTION_VALIDITY_BLOCKS } from '@zoltar/bot-shared/execution/transaction-submission'
 import { assertSecurityPoolPlanStillAllowed } from '../../src/execution/security-pool-executor.ts'
-import { initialRuntimeState } from '../../src/state/operator-state.ts'
+import { initialRuntimeState, operatorSnapshot } from '../../src/state/operator-state.ts'
 import { securityPoolScanMetrics } from '../../src/state/security-pool-view.ts'
 import { ownerAddress, securityPoolObservation, securityPoolSettings, unit } from '../support/security-pool-observation.ts'
 
@@ -28,7 +28,7 @@ test('scan metrics use active security pool observations', () => {
 	const unselected = securityPoolObservation()
 	unselected.selected = false
 	state.securityPools = [eligible, inactive, unselected]
-	expect(state.pools).toHaveLength(0)
+	expect(operatorSnapshot(state, true).pools).toHaveLength(0)
 	expect(securityPoolScanMetrics(state, settings)).toMatchObject({ poolCount: 3, selectedPoolCount: 2, eligiblePoolCount: 1 })
 })
 

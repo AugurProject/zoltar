@@ -4,7 +4,6 @@ import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { parsePositionCollateral, type PositionCollateral } from '#state/position-collateral'
 import { formatDecimalAmount, hash32, parseDecimalAmount, parseSignedDecimalAmount, record as validateRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { parseExecutionIntentFields, parseExecutionRecord, type ExecutionIntent, type ExecutionRecord } from '#state/execution-record'
-import { normalizeJournalPosition } from '#state/position-journal-format'
 
 /** The position journal writer's filesystem; tests substitute one to observe the durable write order. */
 export type PositionJournalFilesystem = RevisionedFileFilesystem
@@ -50,7 +49,6 @@ export type PositionRecord = {
 	entryTransactionIntent?: DurableTransactionIntent | undefined
 	entryTransactionNonce?: string | undefined
 	entryTransactionHash: Hex
-	entryTransactionHashes: readonly Hex[]
 	executionIntent?: ExecutionIntent | undefined
 	expiredTransactionAttempts?: readonly ExpiredTransactionAttempt[] | undefined
 	gasExpenditures: readonly {
@@ -76,8 +74,6 @@ export type PositionRecord = {
 	lifecycleTransactionNonce?: string | undefined
 	lifecycleTransactionHashes: readonly Hex[]
 	lifecycleUpdatedAt: string | undefined
-	lifecycleWalletTokenBefore: string | undefined
-	lifecycleWalletWethBefore: string | undefined
 	lockedToken: string
 	lockedWeth: string
 	manualReconciliation: ManualReconciliation | undefined
@@ -227,12 +223,7 @@ function parsePosition(record: Record<string, unknown>): PositionRecord {
 	if (record['direction'] !== 'buy-rep' && record['direction'] !== 'sell-rep') throw new Error('Position journal direction is invalid')
 	if (!['closed', 'closed-pending-finality', 'expired-not-included', 'open', 'open-pending-finality', 'pending-entry', 'recovery-required', 'replaced', 'settled', 'withdrawing'].includes(String(record['status']))) throw new Error('Position journal status is invalid')
 	if (typeof record['entryTransactionHash'] !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(record['entryTransactionHash'])) throw new Error('Position journal transaction hash is invalid')
-	const entryTransactionHashes = record['entryTransactionHashes']
-	if (!Array.isArray(entryTransactionHashes) || entryTransactionHashes.length === 0 || entryTransactionHashes.some(hash => typeof hash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(hash))) {
-		throw new Error('Position journal transaction hashes are invalid')
-	}
-	const lastEntryHash = entryTransactionHashes.at(-1)
-	if (typeof lastEntryHash !== 'string' || lastEntryHash.toLowerCase() !== record['entryTransactionHash'].toLowerCase()) throw new Error('Position journal executor transaction must be last')
+	if ('entryTransactionHashes' in record) throw new Error('Position journal contains an unsupported entry transaction list')
 	if (typeof record['token'] !== 'string') throw new Error('Position journal token is invalid')
 	const token = getAddress(record['token'])
 	const gasExpenditures = record['gasExpenditures']
@@ -313,12 +304,9 @@ function parsePosition(record: Record<string, unknown>): PositionRecord {
 		throw new Error('Position journal lifecycle transaction hashes are invalid')
 	}
 	const lifecycleFields = ['lifecycleTargetBlockNumber', 'lifecycleTokenDecimals'] as const
-	for (const key of [...lifecycleFields, 'lifecycleWalletTokenBefore', 'lifecycleWalletWethBefore'] as const) optionalIntegerField(record, key)
+	for (const key of lifecycleFields) optionalIntegerField(record, key)
 	const hasLifecycleState = lifecycleTransactionHashes.length !== 0 || record['lifecycleTargetBlockNumber'] === '0'
 	if (lifecycleFields.some(key => (record[key] !== undefined) !== hasLifecycleState)) throw new Error('Position journal lifecycle recovery fields are incomplete')
-	if ((record['lifecycleWalletTokenBefore'] === undefined) !== (record['lifecycleWalletWethBefore'] === undefined)) {
-		throw new Error('Position journal legacy lifecycle wallet snapshots are incomplete')
-	}
 	const lifecycleSubmissionBlockNumber = optionalIntegerField(record, 'lifecycleSubmissionBlockNumber')
 	const lifecycleTransactionNonce = optionalIntegerField(record, 'lifecycleTransactionNonce')
 	const lifecycleTransactionIntent = parseDurableTransactionIntent(record['lifecycleTransactionIntent'], 'lifecycle')
@@ -383,7 +371,6 @@ function parsePosition(record: Record<string, unknown>): PositionRecord {
 		...(entryTransactionIntent === undefined ? {} : { entryTransactionIntent }),
 		entryTransactionNonce,
 		entryTransactionHash: hash32(record['entryTransactionHash'], 'Position journal transaction hash'),
-		entryTransactionHashes: entryTransactionHashes.map(hash => hash32(hash, 'Position journal transaction hash')),
 		...(record['positionId'] === undefined ? {} : { positionId: hash32(record['positionId'], 'Position journal position id') }),
 		executionIntent,
 		...(expiredTransactionAttempts === undefined ? {} : { expiredTransactionAttempts }),
@@ -406,8 +393,6 @@ function parsePosition(record: Record<string, unknown>): PositionRecord {
 		lifecycleTransactionNonce,
 		lifecycleTransactionHashes: lifecycleTransactionHashes.map(hash => hash32(hash, 'Position journal lifecycle transaction hash')),
 		lifecycleUpdatedAt: record['lifecycleUpdatedAt'],
-		lifecycleWalletTokenBefore: optionalIntegerField(record, 'lifecycleWalletTokenBefore'),
-		lifecycleWalletWethBefore: optionalIntegerField(record, 'lifecycleWalletWethBefore'),
 		lockedToken: decimalField(record, 'lockedToken'),
 		lockedWeth: decimalField(record, 'lockedWeth'),
 		manualReconciliation,
@@ -549,16 +534,16 @@ export async function loadPositionJournalState(path: string, expectedChainId: nu
 		throw error
 	}
 	const root = validateRecord(parsed, 'Position journal value', 'Invalid position journal root')
-	if ((root['version'] !== 2 && root['version'] !== 3 && root['version'] !== 4) || !Array.isArray(root['positions'])) throw new Error('Invalid position journal schema')
+	if (root['version'] !== 4 || !Array.isArray(root['positions'])) throw new Error('Invalid position journal schema')
 	if (root['chainId'] !== expectedChainId) throw new Error(`Position journal belongs to chain ${String(root['chainId'])}, expected chain ${expectedChainId.toString()}`)
-	const positions = root['positions'].map(value => parsePosition(normalizeJournalPosition(value)))
+	const positions = root['positions'].map(value => parsePosition(validateRecord(value, 'Position journal value', 'Position journal record must be an object')))
 	const ids = new Set<string>()
 	for (const position of positions) {
 		const key = positionJournalKey(position)
 		if (ids.has(key)) throw new Error(`Duplicate position journal position ${key}`)
 		ids.add(key)
 	}
-	const archived = root['version'] === 2 ? emptyPositionJournalArchive() : parsePositionJournalArchive(root['archived'])
+	const archived = parsePositionJournalArchive(root['archived'])
 	return compactPositionJournal({ archived, positions })
 }
 

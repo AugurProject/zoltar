@@ -24,11 +24,15 @@ contract SecurityPoolServices {
 	address public immutable securityPool;
 	SecurityPoolResolutionPremiumBook public immutable premiumLedger;
 	bool private entered;
-	address private purchasePayer;
-	uint256 private purchaseMaximumRecoveryAttoRep;
-	address private purchasePool;
+	// Services alone owns the funded purchase and consumes each callback once.
+	struct Purchase {
+		address pool;
+		address payer;
+		uint256 cash;
+		uint256 maximumRecoveryAttoRep;
+	}
+	Purchase private currentPurchase;
 	mapping(uint248 => bool) public premiumChildCreated;
-	mapping(uint248 => bool) private syncingFees;
 	mapping(uint248 => bool) public feesEnabled;
 	mapping(address => uint256) public pendingCapitalCash;
 	mapping(uint248 => uint256) public pendingBurnCash;
@@ -59,6 +63,7 @@ contract SecurityPoolServices {
 		require(cash != 0, 'Purchase amount zero');
 		ISecurityPoolServiceRoot root = ISecurityPoolServiceRoot(securityPool);
 		IQuestionLedger pool = root.prepareServicePurchase(universeId, questionId);
+		root.capitalLedger(universeId).checkpoint();
 		uint256 premium;
 		(fee, premium) = root.quoteHelper().purchaseQuote(universeId, questionId, cash);
 		require(fee <= maximumFee, 'Purchase fee exceeds budget');
@@ -66,19 +71,16 @@ contract SecurityPoolServices {
 		Collateral.pull(collateral, trader, address(root.settlement()), cash);
 		Collateral.pull(collateral, trader, address(this), fee);
 		require(cash <= root.quoteHelper().availableMintCapacity(universeId), 'Purchase exceeds healthy capacity');
-		purchasePayer = trader;
-		purchaseMaximumRecoveryAttoRep = maximumRecoveryAttoRep;
 		require(recipient != address(0) && recipient != address(this), 'Invalid share recipient');
-		purchasePool = address(pool);
+		currentPurchase = Purchase(address(pool), trader, cash, maximumRecoveryAttoRep);
 		minted = pool.createCompleteSet(cash, recipient, minimumShares, fee, premium);
-		purchasePayer = address(0);
-		purchaseMaximumRecoveryAttoRep = 0;
+		require(currentPurchase.pool == address(0), 'Purchase funding incomplete');
 	}
 	/// @dev The canonical ledger calls back after its accounting and fee stream are complete,
 	/// but before minting shares to an untrusted recipient.
 	function completePurchaseFunding(uint256 fee, uint256 premium) external {
-		require(msg.sender == purchasePool && purchasePayer != address(0), 'No prepared purchase');
-		purchasePool = address(0);
+		require(msg.sender == currentPurchase.pool && currentPurchase.cash == 0, 'No prepared purchase');
+		delete currentPurchase;
 		IQuestionLedger pool = IQuestionLedger(payable(msg.sender));
 		uint248 universeId = pool.universeId();
 		if (premium != 0) _fundPremium(universeId, pool.questionId(), premium);
@@ -92,12 +94,15 @@ contract SecurityPoolServices {
 	}
 
 	function mintQuestionSettlement(IQuestionLedger pool, uint256 cash) external onlySecurityPool returns (uint256, uint256, uint256) {
-		require(purchasePayer != address(0), 'No authorized purchase payer');
+		Purchase memory active = currentPurchase;
+		require(address(pool) == active.pool && cash != 0 && cash == active.cash, 'No authorized security pool purchase');
+		// Consume mint authorization before calling custody or capital accounting.
+		currentPurchase.cash = 0;
 		ISecurityPoolServiceRoot root = ISecurityPoolServiceRoot(securityPool);
 		uint248 universeId = pool.universeId();
 		SecurityPoolCapitalLedger capital = root.capitalLedger(universeId);
 		capital.setDemand(capital.demandAttoEth() + cash);
-		(uint256 minted, SecurityPoolSettlement.Snapshot memory snapshot) = root.settlement().mintWithRecoveryRep(address(pool), purchasePayer, cash, 0, purchaseMaximumRecoveryAttoRep, root.securityPoolTime(universeId));
+		(uint256 minted, SecurityPoolSettlement.Snapshot memory snapshot) = root.settlement().mintWithRecoveryRep(address(pool), active.payer, cash, 0, active.maximumRecoveryAttoRep, root.securityPoolTime(universeId));
 		_creditSnapshot(universeId, snapshot);
 		return (minted, snapshot.outcomeSupplyAttoShares, snapshot.questionCashAttoEth);
 	}
@@ -134,16 +139,15 @@ contract SecurityPoolServices {
 		feesEnabled[universeId] = true;
 		_creditUniverse(universeId, fees, demand);
 	}
-	function checkpointCapitalFees(uint248 universeId, uint48 through) external onlySecurityPool {
-		if (syncingFees[universeId]) return;
-		syncingFees[universeId] = true;
+	/// @dev Capital owns checkpoint recursion and calls Services before changing weights.
+	function checkpointCapitalFees(uint248 universeId, uint48 through) external {
 		ISecurityPoolServiceRoot root = ISecurityPoolServiceRoot(securityPool);
+		SecurityPoolCapitalLedger capital = root.capitalLedger(universeId);
+		require(msg.sender == address(capital), 'Only universe capital ledger');
 		SecurityPoolSettlement settlement = root.settlement();
 		(, , , uint48 previous, bool isSealed) = settlement.ledger().totals(settlement.bookIds(universeId));
 		uint48 nowTime = root.securityPoolTime(universeId);
 		uint48 earnedThrough = uint48(Math.min(nowTime, root.securityPoolTimeForNative(universeId, through)));
-		// A universe's ledger is bound once at preparation; one read serves the checkpoint.
-		SecurityPoolCapitalLedger capital = root.capitalLedger(universeId);
 		if (!isSealed) {
 			if (through < capital.effectiveTime() && feesEnabled[universeId]) {
 				(uint256 stoppedFees, uint256 stoppedDemand) = settlement.setFeesEnabled(universeId, false, uint48(Math.max(previous, earnedThrough)));
@@ -162,7 +166,6 @@ contract SecurityPoolServices {
 			(uint256 stale, uint256 remainingUnused) = premiumLedger.checkpoint(universeId, nowTime);
 			_burn(universeId, unused + stale + remainingUnused);
 		}
-		syncingFees[universeId] = false;
 	}
 	function onQuestionFinalityChanged(IQuestionLedger pool, uint48 nativeFinalAfter) external onlySecurityPool {
 		ISecurityPoolServiceRoot root = ISecurityPoolServiceRoot(securityPool);

@@ -28,7 +28,7 @@ function forkFixture() {
 	pool.systemState = 1
 	universe.forkTime = '1999999000'
 	universe.forkQuestionId = question.id
-	pool.childPoolPreparations['0'] = { securityPool: address(90), branchReady: true, sourcePool: pool.address, sourceGame: zeroAddress, childUniverseId: '88', childPool: zeroAddress, game: zeroAddress, historyOutcomesInitialized: 0, historyReady: false, feedRequired: true, dependenciesRequired: true }
+	pool.childPoolPreparations['0'] = { securityPool: address(90), branchReady: true, sourcePool: pool.address, sourceGame: zeroAddress, childUniverseId: '88', childPool: zeroAddress, game: zeroAddress, historyOutcomesInitialized: 0, historyReady: false }
 	return { snapshot, pool }
 }
 

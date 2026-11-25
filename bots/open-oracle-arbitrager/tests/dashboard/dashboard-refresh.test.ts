@@ -534,7 +534,6 @@ test('lists skipped reports beside priced ones with their scan reason and token'
 			centralizedPriceDeviationBps: undefined,
 			decision: 'unprofitable',
 			direction: 'sell-rep',
-			estimatedNetProfitEth: '-0.0031',
 			estimatedNetProfitWeth: '-0.0031',
 			executablePriceRepPerEth: '10.284',
 			hasRequiredInventory: undefined,

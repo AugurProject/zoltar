@@ -54,7 +54,7 @@ export const renderExplorerPage = async (path: string, chainId: string, api: (pa
 	const identity = parts[1]
 	if ((kind !== 'tx' && kind !== 'block') || identity === undefined || parts.length !== 2) {
 		renderedEvidence.delete(content)
-		content.replaceChildren(node('h2', '', 'Page not found'), link('Back to activity', '/'))
+		content.replaceChildren(node('h2', '', 'Page not found'), link('Back to activity', `/?chainId=${encodeURIComponent(chainId)}`))
 		content.removeAttribute('aria-busy')
 		return false
 	}
@@ -145,7 +145,7 @@ export const renderExplorerPage = async (path: string, chainId: string, api: (pa
 			retry.type = 'button'
 			retry.addEventListener('click', () => void renderExplorerPage(path, chainId, api))
 			renderedEvidence.delete(content)
-			content.replaceChildren(node('h2', '', error instanceof Error && error.status === 404 ? 'Page not found' : 'Evidence unavailable'), node('p', 'system-status error', errorMessage(error)), retry, link('Back to activity', '/'))
+			content.replaceChildren(node('h2', '', error instanceof Error && error.status === 404 ? 'Page not found' : 'Evidence unavailable'), node('p', 'system-status error', errorMessage(error)), retry, link('Back to activity', `/?chainId=${encodeURIComponent(chainId)}`))
 		}
 		content.removeAttribute('aria-busy')
 		return false

@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { parseAbi, zeroAddress, getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
-import { loadAllQuestionLedgers } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
+import { loadQuestionLedgerListing } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
 
 const abi = parseAbi([
 	'function securityPoolCustody() view returns (address)',
@@ -18,8 +18,9 @@ test(
 		const backend = await createBootstrappedSimulationBackendWithRetry('securitypoolx2', 1, 'statoblast')
 		try {
 			const client = backend.createReadClient()
-			const pools = await loadAllQuestionLedgers(client)
+			const { pools } = await loadQuestionLedgerListing(client)
 			let securityPoolQuestions = 0
+			const feeds = new Set<string>()
 			for (const pool of pools) {
 				const capitalValue = await client.readContract({ address: pool.questionLedgerAddress, abi, functionName: 'securityPoolCustody' })
 				if (typeof capitalValue !== 'string') throw new Error('Missing capital address')
@@ -29,9 +30,10 @@ test(
 				const totals = await client.readContract({ address: capital, abi, functionName: 'totals' })
 				if (!Array.isArray(totals) || typeof totals[1] !== 'bigint') throw new Error('Invalid capital totals')
 				const commitment = totals[1]
-				const feedValue = await client.readContract({ address: pool.managerAddress, abi, functionName: 'priceFeed' })
+				const feedValue = await client.readContract({ address: pool.questionLedgerAddress, abi, functionName: 'priceFeed' })
 				if (typeof feedValue !== 'string') throw new Error('Missing feed address')
 				const feed = getAddress(feedValue)
+				feeds.add(feed)
 				const limit = await client.readContract({ address: feed, abi, functionName: 'acceptedExposureLimitAttoEth' })
 				const exposure = await client.readContract({ address: feed, abi, functionName: 'aggregateExposureAttoEth' })
 				if (typeof limit !== 'bigint' || typeof exposure !== 'bigint') throw new Error('Invalid feed exposure')
@@ -41,6 +43,7 @@ test(
 				expect(pool.shareTokenSupplyAttoShares).toBeGreaterThan(0n)
 			}
 			expect(securityPoolQuestions).toBe(2)
+			expect(feeds.size).toBe(1)
 		} finally {
 			await backend.dispose()
 			resetActiveEnvironmentForTesting()

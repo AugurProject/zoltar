@@ -187,7 +187,6 @@ describe('Docker packaging', () => {
 		const runtimeCopies = dockerInstructions(requireDockerStage(stages, 'runtime'), 'COPY')
 		expect(runtimeCopies).toContain('--from=browser-build /workspace/augurScan/public ./augurScan/public')
 		expect(runtimeCopies).toContain('augurScan/schema.sql ./augurScan/schema.sql')
-		expect(runtimeCopies).toContain('augurScan/migrations ./augurScan/migrations')
 		expect(runtimeCopies.some(copy => /^augurScan\/browser(?:\/| )/u.test(copy))).toBe(false)
 		expect(runtimeCopies.some(copy => /^--from=browser-build \/workspace\/augurScan\/node_modules(?:\/| )/u.test(copy))).toBe(false)
 	})

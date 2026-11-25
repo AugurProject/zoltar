@@ -186,14 +186,16 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 					) matched ORDER BY matched.block_number DESC, matched.log_index DESC LIMIT 101) event
 			), '[]'::jsonb) AS auction_claims,
 				-- The latest tagged read of each capital position the address owns: one per universe ledger.
-				COALESCE((SELECT jsonb_agg(jsonb_build_object(
+				capital.items AS capital_positions, capital.total AS capital_position_count
+			FROM page
+			CROSS JOIN LATERAL (SELECT COALESCE(MAX(position.total), 0)::integer AS total, COALESCE(jsonb_agg(jsonb_build_object(
 					'ledgerAddress', position.ledger_address, 'securityPool', position.read_result->>'securityPool', 'universeId', position.read_result->>'universeId',
 					'readStatus', position.read_status, 'principalAttoRep', position.read_result->>'principalAttoRep',
 					'commitmentAttoEth', position.read_result->>'commitmentAttoEth', 'healthFactorBps', position.read_result->>'healthFactorBps',
 					'unclaimedFeesAttoEth', position.read_result->>'unclaimedFeesAttoEth', 'unclaimedFeesAttoRep', position.read_result->>'unclaimedFeesAttoRep',
 					'collateral', position.read_result->'collateral', 'blockNumber', position.block_number::text
-				) ORDER BY position.ledger_address)
-				FROM (SELECT ledger.address AS ledger_address, latest.read_status, latest.read_result, latest.block_number
+				) ORDER BY position.ledger_address), '[]'::jsonb) AS items
+				FROM (SELECT count(*) OVER () AS total, ledger.address AS ledger_address, latest.read_status, latest.read_result, latest.block_number
 					FROM contracts ledger
 					-- One index seek per ledger: the exact identity of this address's position in it.
 					JOIN LATERAL (SELECT state.read_status, state.read_result, state.block_number FROM entity_state_snapshots state
@@ -203,8 +205,7 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 						ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) latest ON true
 					WHERE ledger.chain_id = page.chain_id AND ledger.canonical AND ledger.kind = 'securityPoolCapitalLedger'
 					ORDER BY ledger.address LIMIT 100) position
-			), '[]'::jsonb) AS capital_positions
-			FROM page
+			) capital
 		)
 		SELECT enriched.*, totals.total FROM totals LEFT JOIN enriched ON true ORDER BY enriched.page_order`,
 		values,

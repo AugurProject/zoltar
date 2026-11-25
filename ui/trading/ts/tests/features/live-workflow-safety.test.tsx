@@ -1,3 +1,4 @@
+import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
 import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { describe, expect, test } from 'bun:test'
@@ -117,6 +118,7 @@ describe('live workflow safety boundary', () => {
 		let discoveredLoadError: string | undefined
 		let rejectDiscovery = false
 		const market = etherScaleMarketFixture({
+			collateral: { token: getActiveNetworkProfile().wethAddress, symbol: 'ETH', decimals: 18, native: true },
 			pool,
 			shareToken,
 			title: 'Rendered workflow market',

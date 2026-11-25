@@ -27,11 +27,8 @@ export interface TokenInventory {
 	openOracleCredit: string
 	/**
 	 * Anchored OpenOracle internal allowance from this wallet to itself.
-	 *
-	 * Optionality preserves compatibility with snapshots produced before the
-	 * allowance was discovered. The planner fails closed when it is absent.
 	 */
-	openOracleInternalAllowanceToSelf?: string
+	openOracleInternalAllowanceToSelf: string
 }
 
 export interface ShareInventory {
@@ -64,12 +61,10 @@ export interface UniverseSnapshot {
 	earliestForkTime: string
 	id: string
 	repToken: Address
-	forkBurnDivisor?: string
 	forkTime: string
 	forkQuestionId: string
 	forkThresholdAttoRep: CanonicalUintString
 	nonDecisionThresholdAttoRep: CanonicalUintString
-	initialEscalationDepositAttoRep: CanonicalUintString
 	parentUniverseId?: string
 	forkingOutcomeIndex?: string
 	migrationBalance: string
@@ -121,7 +116,7 @@ export interface PoolSnapshot {
 	repToken: Address
 	shareToken: Address
 	coordinator: Address
-	childPoolPreparations: Record<string, { securityPool: Address; branchReady: boolean; sourcePool: Address; sourceGame: Address; childUniverseId: string; childPool: Address; game: Address; historyOutcomesInitialized: number; historyReady: boolean; feedRequired: boolean; dependenciesRequired: boolean }>
+	childPoolPreparations: Record<string, { securityPool: Address; branchReady: boolean; sourcePool: Address; sourceGame: Address; childUniverseId: string; childPool: Address; game: Address; historyOutcomesInitialized: number; historyReady: boolean }>
 	/** Canonical price authority, shared by security pool questions and authenticating candidate escrows. */
 	priceFeed: Address
 	/** Creator and callback authenticated for each current or retained shared candidate. */
@@ -144,17 +139,11 @@ export interface PoolSnapshot {
 	projectedSettlementRecoveryAttoRep: CanonicalUintString
 	shareTokenSupplyAttoShares: CanonicalUintString
 	additionalMintCapacityAttoEth: CanonicalUintString
-	statoblastSecurityMultiplierBps: string
 	lastSettlementSecurityPoolTime: string
-	poolRepBalanceAttoRep: CanonicalUintString
 	escalationRepBalanceAttoRep: CanonicalUintString
 	escalationResidualSweepExpectedSuccess: boolean
-	oraclePriceValid: boolean
 	requestPriceCostAttoEth: CanonicalUintString
-	oracleSettlementTime: string
 	lastRepPerEthPrice: string
-	lastOracleSettlementTimestamp: string
-	oraclePriceValidUntilTimestamp: string
 	minimumToken1ReportAttoEth: CanonicalUintString
 	oracleRequestFunding: OracleRequestFundingSnapshot
 	pendingReportId: string
@@ -226,7 +215,6 @@ export interface AuctionSnapshot {
 	lotAttoEth: CanonicalUintString
 	repGrid: CanonicalUintString
 	unroundedCollateralAttoRepPerLot: CanonicalUintString
-	minimumCollateralAttoRepPerLot: CanonicalUintString
 	maximumBidAttoRepPerLot: CanonicalUintString
 	maximumAdmissibleBidAttoRepPerLot: CanonicalUintString
 	pendingEthRefund: string

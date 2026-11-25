@@ -5,7 +5,7 @@ import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { formatDecimalAmount, parseDecimalAmount, parseSignedDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { bigintToSafeNumber, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { OpenOracleGame } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import { validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
+import type { DeploymentSettings } from '#config/deployment-settings'
 import type { CanonicalDeploymentStatus } from '#config/runtime-deployment'
 import type { ExecutorDeploymentRecoveryStatus } from '#state/executor-deployment-recovery'
 import type { ConnectivitySettings, EndpointCheck, NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
@@ -182,7 +182,6 @@ export type OperatorSnapshot = PollStatus & {
 	connectivity: ConnectivitySettings
 	deployment: DeploymentSettings
 	totalActualGasCostEth: string
-	totalEstimatedNetProfitEth: string
 	totalEstimatedNetProfitWeth: string
 	totalRevenueBeforeGasEth: string
 	totalHedgedProfitBeforeGasEth: string
@@ -424,14 +423,14 @@ function positionTotals(positions: readonly PositionRecord[], archived: Position
 export type QueuedSettingsSection = 'connectivity' | 'deployment' | 'execution' | 'markets' | 'risk' | 'settlement' | 'strategy' | 'submission' | 'universes'
 
 export type OperatorSnapshotFixedState = {
-	deployment?: DeploymentSettings | undefined
+	deployment: DeploymentSettings
 	execute: boolean
 	executor: Address | undefined
 	executorDeploymentRecovery?: ExecutorDeploymentRecoveryStatus | undefined
 	expectedChainId: number
 	explorerUrl: string
 	network: NetworkName
-	networkConfigured?: boolean | undefined
+	networkConfigured: boolean
 	openOracle: Address
 	queuedSigner: QueuedSigner | undefined
 	savedWallet: Address | undefined
@@ -488,7 +487,7 @@ export function operatorSnapshot(
 		retryInProgress: state.retryInProgress,
 		mode: fixed.execute ? 'execute' : 'dry-run',
 		network: fixed.network,
-		networkConfigured: fixed.networkConfigured ?? true,
+		networkConfigured: fixed.networkConfigured,
 		openOracle: fixed.openOracle,
 		operatorCapable: state.status === 'running' && state.lastPollAt !== undefined && state.blockNumber !== undefined && !state.paused && state.lastError === undefined && (fixed.execute === false || fixed.wallet !== undefined),
 		opportunities: state.opportunities,
@@ -523,9 +522,8 @@ export function operatorSnapshot(
 			},
 		},
 		connectivity,
-		deployment: fixed.deployment ?? validateDeploymentSettings({ coordinatorAddresses: [], executor: fixed.executor, uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: false }, fixed.network),
+		deployment: fixed.deployment,
 		totalActualGasCostEth: sumDecimalWeth(state.executionHistory, 'actualGasCostEth'),
-		totalEstimatedNetProfitEth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),
 		totalEstimatedNetProfitWeth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),
 		totalRevenueBeforeGasEth: sumDecimalWeth(state.executionHistory, 'estimatedProfitBeforeGasEth'),
 		totalHedgedProfitBeforeGasEth: totals.hedgedProfit,

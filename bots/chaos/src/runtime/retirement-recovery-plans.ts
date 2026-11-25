@@ -5,7 +5,7 @@ import type { EcosystemSnapshot, OperationPlan } from '../operations/types.ts'
 import { assertSafeRetirementRecipient, type DurableRetirementState } from '../state/retirement.ts'
 
 export function buildAllowanceRevocationPlan(snapshot: EcosystemSnapshot, seed: number): OperationPlan | undefined {
-	const internalApproval = [...snapshot.wallet.tokens].sort((left, right) => left.address.localeCompare(right.address)).find(token => BigInt(token.openOracleInternalAllowanceToSelf ?? '0') > 0n)
+	const internalApproval = [...snapshot.wallet.tokens].sort((left, right) => left.address.localeCompare(right.address)).find(token => BigInt(token.openOracleInternalAllowanceToSelf) > 0n)
 	if (internalApproval !== undefined) {
 		return {
 			...planBase({

@@ -91,7 +91,7 @@ describe('audit4: settlement checks live exposure before accepting a report or i
 		const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
 
 		await writeContractAndWait(griefer, () => griefer.writeContract({ ...capital(), functionName: 'setCommitment', args: [100n * unit + 1n] }))
-		const [, , , ceiling] = await sponsor.readContract({ ...feed, functionName: 'reportCandidates', args: [report] })
+		const [, , ceiling] = await sponsor.readContract({ ...feed, functionName: 'reportCandidates', args: [report] })
 		await fixture.base.mockWindow.advanceTime(800n)
 		const freshFunding = await griefer.readContract({ ...feed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [unit] })
 		await wrapWeth(griefer, freshFunding)

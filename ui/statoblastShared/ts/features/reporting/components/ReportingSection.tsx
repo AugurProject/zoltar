@@ -21,7 +21,6 @@ import { RepAmount } from './RepAmount.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { LifecycleStageBanner } from '@zoltar/ui-core-shared/components/LifecycleStageBanner.js'
-import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkflowPanel.js'
@@ -98,7 +97,6 @@ export function ReportingSection({
 	accountState,
 	oracleBlocker,
 	currentTimestamp,
-	embedInCard = false,
 	forkAlreadyTriggered = false,
 	loadingReportingDetails,
 	lockedReason,
@@ -116,8 +114,6 @@ export function ReportingSection({
 	reportingError,
 	reportingForm,
 	reportActionGuardMessage,
-	showHeader = true,
-	showQuestionLedgerAddressInput = true,
 	mode = 'full-reporting',
 	triggerZoltarForkApproval,
 	triggerZoltarForkAvailability,
@@ -331,7 +327,7 @@ export function ReportingSection({
 			showDisabledReason={false}
 		/>
 	)
-	const showReportingHeaderStack = showFullReporting && (showQuestionLedgerAddressInput || reportingStageBanner !== undefined)
+	const showReportingHeaderStack = showFullReporting && reportingStageBanner !== undefined
 	const settlementSection =
 		showSettlementSection && reportingReady !== false ? (
 			<ReportingSettlementSection
@@ -360,22 +356,7 @@ export function ReportingSection({
 	const sections = (
 		<>
 			{showReportingHeaderStack ? (
-				<div className='reporting-header-stack'>
-					{showQuestionLedgerAddressInput ? (
-						<LookupFieldRow
-							label={commonCopy.questionLedgerAddress}
-							value={reportingForm.questionLedgerAddress}
-							onInput={questionLedgerAddress => onReportingFormChange({ questionLedgerAddress })}
-							placeholder={commonCopy.hexValuePlaceholder}
-							action={
-								<button className='secondary' onClick={onLoadReporting} disabled={loadingReportingDetails || preOpenLockedReason !== undefined} title={preOpenLockedReason}>
-									{loadingReportingDetails ? <LoadingText>{reportingCopy.loadingEscalation}</LoadingText> : reportingCopy.refreshReporting}
-								</button>
-							}
-						/>
-					) : undefined}
-					{reportingReady === false ? <LifecycleStageBanner detailId={reportingStageDetailId} flat stage={reportingStageBanner} /> : <EscalationPhaseStepper detailId={reportingStageDetailId} details={effectiveReportingDetails} forkAlreadyTriggered={forkAlreadyTriggered} />}
-				</div>
+				<div className='reporting-header-stack'>{reportingReady === false ? <LifecycleStageBanner detailId={reportingStageDetailId} flat stage={reportingStageBanner} /> : <EscalationPhaseStepper detailId={reportingStageDetailId} details={effectiveReportingDetails} forkAlreadyTriggered={forkAlreadyTriggered} />}</div>
 			) : undefined}
 
 			{showFullReporting && effectiveReportingDetails !== undefined ? (
@@ -588,13 +569,8 @@ export function ReportingSection({
 
 			{forkTriggeredActions}
 
-			<RetryableNotice disabled={loadingReportingDetails} message={reportingError} onRetry={showQuestionLedgerAddressInput ? undefined : onLoadReporting} retryLabel={loadingReportingDetails ? <LoadingText>{reportingCopy.loadingEscalation}</LoadingText> : reportingCopy.retryReporting} />
+			<RetryableNotice disabled={loadingReportingDetails} message={reportingError} onRetry={onLoadReporting} retryLabel={loadingReportingDetails ? <LoadingText>{reportingCopy.loadingEscalation}</LoadingText> : reportingCopy.retryReporting} />
 		</>
 	)
-	if (embedInCard) return sections
-	return (
-		<RouteWorkflowPanel showHeader={showHeader} title={reportingCopy.reportingWorkflow}>
-			{sections}
-		</RouteWorkflowPanel>
-	)
+	return <RouteWorkflowPanel title={reportingCopy.reportingWorkflow}>{sections}</RouteWorkflowPanel>
 }

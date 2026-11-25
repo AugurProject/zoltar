@@ -398,12 +398,12 @@ export const coreContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '820a41f499c7c3888980fc0d633b9afb13136f3f2a71a9d959d79f68a790bc3e',
+		compiledAbiFingerprint: 'df50e386d46580c7d08a2f108b0e26c2fc2f369b4da8e1eb64ab844c5bd35bec',
 		name: 'SecurityPoolFactory',
 		purpose: 'Deploys every security pool from pinned creation code and module deployers, and deploys and registers their question ledgers and shared price feeds. No standalone deployment entry point exists.',
-		readAbiFingerprint: 'c5bae8b03b730f22009ece36ed0b8cedb22792b6f4ac7f0b4647659cd881021b',
+		readAbiFingerprint: 'd50a5cce841c9778e1262fb054b44a5e8b300a0e64076329eff4394989897109',
 		readSurface:
-			'Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). `questionLedgerDeploymentCount` and strict `questionLedgerDeploymentsRange` enumerate canonical question ledgers. `isSecurityPool` is true only for a security pool this factory deployed, and `securityPoolCreationCodeHash` is the hash of the only creation code it deploys. `securityPoolCount` and strict `securityPoolsRange` enumerate, in registration order, the factory-deployed security pools that have configured their namespace; a deployed security pool is listed when its final setup step calls `initializeSecurityPoolPriceFeed`. `getQuestionLedgerId`, `getQuestionLedger`, `getQuestionLedgerOriginId` and `getQuestionLedgerHasInheritedForkOutcome` identify their lineage. `getQuestionOriginId` includes the caller security pool namespace. `securityPoolOf` returns the factory-deployed security pool a ledger belongs to; `sharedPriceFeeds` is indexed by security pool and universe. `getChildQuestionLedgerCoordinator` returns the prepared child coordinator, or zero before preparation. `maximumReportPriorityFeeAttoEthPerGas` exposes the configured coordinator-factory ceiling used to reject over-cap security pool creation before setup. `zoltar` identifies the protocol root.',
+			'Each question derives its start bond as max(1 REP, universe theoretical REP supply / 10,000,000). `questionLedgerDeploymentCount` and strict `questionLedgerDeploymentsRange` enumerate canonical question ledgers. `isSecurityPool` is true only for a security pool this factory deployed, and `securityPoolCreationCodeHash` is the hash of the only creation code it deploys. `securityPoolCount` and strict `securityPoolsRange` enumerate, in registration order, the factory-deployed security pools that have configured their namespace; a deployed security pool is listed when its final setup step calls `initializeSecurityPoolPriceFeed`. `getQuestionLedgerId`, `getQuestionLedger`, `getQuestionLedgerOriginId` and `getQuestionLedgerHasInheritedForkOutcome` identify their lineage. `getQuestionOriginId` includes the caller security pool namespace. `securityPoolOf` returns the factory-deployed security pool a ledger belongs to; `sharedPriceFeeds` is indexed by security pool and universe. `maximumReportPriorityFeeAttoEthPerGas` exposes the configured feed-factory ceiling used to reject over-cap security pool creation before setup. `zoltar` identifies the protocol root.',
 		readDeclarations: [
 			{ name: 'maximumReportPriorityFeeAttoEthPerGas' },
 			{
@@ -435,9 +435,6 @@ export const coreContractReferences: ContractReference[] = [
 			},
 			{
 				name: 'securityPoolOf',
-			},
-			{
-				name: 'getChildQuestionLedgerCoordinator',
 			},
 		],
 		readStorageDeclarations: [
@@ -512,7 +509,7 @@ export const coreContractReferences: ContractReference[] = [
 				call: '`deploySecurityPoolQuestionLedger(universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)`',
 				caller: 'A security pool with a configured namespace, within its own caller-address namespace',
 				effect:
-					'Creates a separate origin ledger and share token in the caller namespace, attaching its coordinator to the namespace/universe shared REP/ETH feed. Security pool admission calls this from the security pool contract, after its immutable admission policy allows the question; it then enforces the question horizon, with failure reverting deployment.',
+					'Creates a separate origin ledger and share token in the caller namespace, referencing the canonical namespace/universe shared REP/collateral feed. Security pool admission calls this from the security pool contract, after its immutable admission policy allows the question; it then enforces the question horizon, with failure reverting deployment.',
 				declarations: [
 					{
 						name: 'deploySecurityPoolQuestionLedger',
@@ -520,7 +517,7 @@ export const coreContractReferences: ContractReference[] = [
 				],
 				preconditions:
 					'The caller has configured its namespace (`Security pool configuration missing`), which only a factory-deployed security pool can do. The ordinary origin deployment checks apply; no lineage for this question/configuration has been claimed in the caller namespace. The namespace is derived from msg.sender and cannot be supplied on behalf of another security pool.',
-				signals: '`SharedPriceFeedSet`, feed `CoordinatorRegistered`, `QuestionLedgerRegistered`, and `DeployQuestionLedger`',
+				signals: '`QuestionLedgerRegistered` and `DeployQuestionLedger`',
 			},
 			{
 				call: '`prepareSecurityPoolChildPriceFeed(parent, outcomeIndex)`',
@@ -535,21 +532,9 @@ export const coreContractReferences: ContractReference[] = [
 				signals: 'Returns the canonical child feed address. A newly deployed feed emits `SharedPriceFeedRegistered`. Child REP deployment may emit Zoltar events.',
 			},
 			{
-				call: '`prepareChildQuestionLedgerCoordinator(parent, outcomeIndex)`',
-				caller: 'Anyone',
-				effect: 'Predeploys the canonical child coordinator separately from the question ledger. Repeated calls return the same coordinator.',
-				declarations: [
-					{
-						name: 'prepareChildQuestionLedgerCoordinator',
-					},
-				],
-				preconditions: 'The parent is a canonical ledger in PoolForked state. A security pool must first prepare its child feed. Missing child REP is deployed through Zoltar. The authenticated factory chain exclusively controls subsequent coordinator binding.',
-				signals: 'Returns the coordinator address; no `DeployQuestionLedger` until the child ledger is deployed.',
-			},
-			{
 				call: '`deployChildQuestionLedger(parent, shareToken, universeId, questionId, statoblastSecurityMultiplierBps)`',
 				caller: '`QuestionForker` only (`Only question forker`)',
-				effect: 'Creates and registers a canonical child question ledger with the parent share token and a coordinator attached to its security pool branch feed.',
+				effect: 'Creates and registers a canonical child question ledger with the parent share token and its canonical security pool branch feed.',
 				declarations: [
 					{
 						name: 'deployChildQuestionLedger',

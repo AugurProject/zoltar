@@ -18,6 +18,10 @@ type CompiledContract = {
 		readonly bytecode?: {
 			readonly object?: unknown
 		}
+		readonly deployedBytecode?: {
+			readonly object?: unknown
+			readonly immutableReferences?: unknown
+		}
 	}
 }
 
@@ -47,6 +51,20 @@ function tradingRuntimeArtifact(contract: CompiledContract) {
 	return {
 		abi: contract.abi,
 		evm: { bytecode: { object: contract.evm?.bytecode?.object } },
+	}
+}
+
+function browserDeploymentArtifact(contract: CompiledContract) {
+	const { bytecode, deployedBytecode } = contract.evm ?? {}
+	return {
+		abi: contract.abi,
+		evm:
+			contract.evm === undefined
+				? undefined
+				: {
+						bytecode: bytecode === undefined ? undefined : { object: bytecode.object },
+						deployedBytecode: deployedBytecode === undefined ? undefined : { object: deployedBytecode.object, immutableReferences: deployedBytecode.immutableReferences },
+					},
 	}
 }
 
@@ -80,7 +98,7 @@ export async function copyProjectArtifacts(options: ProjectArtifactOptions = {},
 						.replace(/\//g, '_')
 						.replace(/\\/g, '_')
 						.replace(/\.sol$/, '')}_${contractName}`
-					return `export const ${normalizedName} = ${JSON.stringify(contractData, null, 4)} as const`
+					return `export const ${normalizedName} = ${JSON.stringify(browserDeploymentArtifact(contractData), null, 4)} as const`
 				})
 			})
 

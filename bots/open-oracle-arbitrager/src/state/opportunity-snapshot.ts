@@ -11,7 +11,6 @@ export type EvaluatedOpportunitySnapshot = {
 	decision: OpportunityDecision
 	direction: 'buy-rep' | 'sell-rep'
 	estimatedNetProfitWeth: string
-	estimatedNetProfitEth: string
 	executablePriceRepPerEth: string
 	hasRequiredInventory: boolean | undefined
 	pool: Address
@@ -63,7 +62,6 @@ export function publicOpportunity(opportunity: OpportunitySnapshot): Opportunity
 		decision: opportunity.decision,
 		direction: opportunity.direction,
 		estimatedNetProfitWeth: opportunity.estimatedNetProfitWeth,
-		estimatedNetProfitEth: opportunity.estimatedNetProfitEth,
 		executablePriceRepPerEth: opportunity.executablePriceRepPerEth,
 		hasRequiredInventory: opportunity.hasRequiredInventory,
 		pool: opportunity.pool,

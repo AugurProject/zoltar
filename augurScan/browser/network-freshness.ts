@@ -230,19 +230,15 @@ export const indexerProgressEstimate = (network: NetworkFreshnessRecord, previou
 	const hundredths = remainingBlocks > 0 && roundedHundredths >= 10_000n ? 9_999n : roundedHundredths
 	const percentage = `${hundredths / 100n}.${String(hundredths % 100n).padStart(2, '0')}`
 	if (remainingBlocks === 0) return { percentage: '100.00', eta: indexerHeadFreshness(network, sampledAt).stale ? 'RPC head stale' : 'Caught up' }
-	let blocksPerSecond = previousSample !== undefined && boundedIndexed >= previousSample.indexedBlock ? previousSample.blocksPerSecond : undefined
-	if (previousSample !== undefined && boundedIndexed > previousSample.indexedBlock && sampledAt - previousSample.sampledAt >= 1_000) {
+	let sample = previousSample
+	if (previousSample === undefined || boundedIndexed < previousSample.indexedBlock || sampledAt < previousSample.sampledAt) {
+		sample = { indexedBlock: boundedIndexed, sampledAt, blocksPerSecond: undefined }
+	} else if (boundedIndexed > previousSample.indexedBlock && sampledAt - previousSample.sampledAt >= 1_000) {
 		const observedRate = (boundedIndexed - previousSample.indexedBlock) / ((sampledAt - previousSample.sampledAt) / 1_000)
-		blocksPerSecond = blocksPerSecond === undefined ? observedRate : blocksPerSecond * 0.7 + observedRate * 0.3
+		const previousRate = previousSample.blocksPerSecond
+		sample = { indexedBlock: boundedIndexed, sampledAt, blocksPerSecond: previousRate === undefined ? observedRate : previousRate * 0.7 + observedRate * 0.3 }
 	}
-	const sample =
-		previousSample !== undefined && boundedIndexed === previousSample.indexedBlock
-			? previousSample
-			: {
-					indexedBlock: boundedIndexed,
-					sampledAt,
-					blocksPerSecond,
-				}
+	const blocksPerSecond = sample?.blocksPerSecond
 	return {
 		percentage,
 		eta: blocksPerSecond === undefined ? 'Estimating ETA' : `ETA ${compactIndexerDuration(remainingBlocks / blocksPerSecond)}`,

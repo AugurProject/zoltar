@@ -24,7 +24,7 @@ function getDisputeWindowPendingPresentation(report: OpenOracleStageReport): Lif
 	}
 }
 
-export function getOpenOraclePriceExpiryPresentation(report: OpenOracleStageReport): LifecycleStagePresentation | undefined {
+function getOpenOraclePriceExpiryPresentation(report: OpenOracleStageReport): LifecycleStagePresentation | undefined {
 	const expiresAt = report.coordinatorPriceValidUntilTimestamp
 	if (!report.timeType || expiresAt === undefined || report.currentTime < expiresAt) return undefined
 	const settled = report.settlementTimestamp !== undefined && report.settlementTimestamp > 0n

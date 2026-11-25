@@ -23,14 +23,8 @@ export const poolStateHistory = async (sql: SQL, address: string, query: StateHi
 			price.report_id::text AS report_id, price.rep_per_eth_1e18::text AS rep_per_eth_1e18,
 			price.settlement_timestamp, price.canonical, block.timestamp
 			FROM pools pool
-			LEFT JOIN LATERAL (
-				SELECT lower(binding.arguments->>'priceFeed') AS price_feed_address FROM logs binding
-				WHERE binding.chain_id = pool.chain_id AND binding.emitter_address = pool.coordinator_address
-					AND binding.event_name = 'SharedPriceFeedSet' AND binding.canonical
-				ORDER BY binding.block_number DESC, binding.log_index DESC LIMIT 1
-			) feed ON true
 			JOIN rep_eth_price_snapshots price ON price.chain_id = pool.chain_id
-				AND price.coordinator_address = COALESCE(feed.price_feed_address, pool.coordinator_address)
+				AND price.coordinator_address = pool.coordinator_address
 			JOIN blocks block ON block.chain_id = price.chain_id AND block.hash = price.block_hash
 			WHERE pool.chain_id = ${chainId} AND pool.pool_address = ${address} AND pool.canonical
 				AND price.canonical AND price.block_number BETWEEN ${fromBlock} AND ${toBlock}
@@ -102,20 +96,14 @@ export const poolStateHistory = async (sql: SQL, address: string, query: StateHi
 		sql`SELECT log.block_number::text AS block_number, log.block_hash, log.tx_hash, log.log_index, log.event_name,
 			log.arguments, log.summary, log.emitter_address AS coordinator_address, block.timestamp
 			FROM pools pool
-			LEFT JOIN LATERAL (
-				SELECT lower(binding.arguments->>'priceFeed') AS price_feed_address FROM logs binding
-				WHERE binding.chain_id = pool.chain_id AND binding.emitter_address = pool.coordinator_address
-					AND binding.event_name = 'SharedPriceFeedSet' AND binding.canonical
-				ORDER BY binding.block_number DESC, binding.log_index DESC LIMIT 1
-			) feed ON true
 			JOIN logs log ON log.chain_id = pool.chain_id
-				AND log.emitter_address IN (pool.coordinator_address, COALESCE(feed.price_feed_address, pool.coordinator_address))
+				AND log.emitter_address = pool.coordinator_address
 			JOIN blocks block ON block.chain_id = log.chain_id AND block.hash = log.block_hash
 			WHERE pool.chain_id = ${chainId} AND pool.pool_address = ${address} AND pool.canonical AND log.canonical
 				AND log.block_number BETWEEN ${fromBlock} AND ${toBlock}
 				AND log.event_name IN (
-					'PriceRequested', 'PriceReportDeferred', 'PriceReportRejected', 'PriceReported', 'PendingReportRecovered', 'QuestionLedgerSet',
-					'SharedPriceFeedSet', 'ReportFundingAssigned', 'ReportOperationAttempted', 'ExposureCheckpoint'
+					'PriceRequested', 'PriceReportDeferred', 'PriceReportRejected', 'PriceReported', 'PendingReportRecovered',
+					'ReportFundingAssigned', 'ReportOperationAttempted', 'ExposureCheckpoint'
 				)
 			ORDER BY log.block_number DESC, log.transaction_index DESC, log.log_index DESC, log.tx_hash DESC, log.block_hash DESC
 			LIMIT ${queryLimit} OFFSET ${offset}`,

@@ -31,7 +31,6 @@ export const marketsCopy = {
 	finalOutcome: 'Final outcome',
 	liquidity,
 	liquiditySort: 'Liquidity (collateral units)',
-	liquidityUnavailable: 'Unavailable',
 	closes: 'Closes',
 	ended: 'Ended',
 	closesIn: (duration: CoarseDuration) => `in ${durationText(duration)}`,

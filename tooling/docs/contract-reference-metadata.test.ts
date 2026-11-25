@@ -21,7 +21,7 @@ test('ABI fingerprints ignore declaration and property order but retain paramete
 
 test('coordinator metadata retains ABI event indexing and source enum values', () => {
 	const data = { events: ['CoordinatorStateCheckpoint'], eventDeclarations: { CoordinatorStateCheckpoint: 'CoordinatorStateCheckpoint(uint256 indexed reportId)' }, enumValues: { Operation: { '0': 'None', '1': 'Vault' } } }
-	const artifacts = { contracts: { 'contracts/statoblast/OpenOraclePriceCoordinator.sol': { OpenOraclePriceCoordinator: { abi: [{ type: 'event', name: 'CoordinatorStateCheckpoint', inputs: [{ type: 'uint256', name: 'reportId', indexed: true }] }] } } } }
+	const artifacts = { contracts: { 'contracts/statoblast/SharedPoolPriceFeed.sol': { SharedPoolPriceFeed: { abi: [{ type: 'event', name: 'CoordinatorStateCheckpoint', inputs: [{ type: 'uint256', name: 'reportId', indexed: true }] }] } } } }
 	const source = 'enum Operation { None, Vault }'
 	expect(() => assertCoordinatorDataEventAndEnumDeclarations(JSON.stringify(data), artifacts, source)).not.toThrow()
 	expect(() => assertCoordinatorDataEventAndEnumDeclarations(JSON.stringify({ ...data, eventDeclarations: { CoordinatorStateCheckpoint: 'CoordinatorStateCheckpoint(uint256 reportId)' } }), artifacts, source)).toThrow('event declarations')
@@ -30,7 +30,7 @@ test('coordinator metadata retains ABI event indexing and source enum values', (
 
 test('coordinator function inventory requires every signature and exact mutability', () => {
 	const data = { functions: { collateralToken: 'view' }, functionSignatures: { collateralToken: 'collateralToken()' } }
-	const artifacts = { contracts: { 'contracts/statoblast/OpenOraclePriceCoordinator.sol': { OpenOraclePriceCoordinator: { abi: [{ type: 'function', name: 'collateralToken', stateMutability: 'view', inputs: [] }] } } } }
+	const artifacts = { contracts: { 'contracts/statoblast/SharedPoolPriceFeed.sol': { SharedPoolPriceFeed: { abi: [{ type: 'function', name: 'collateralToken', stateMutability: 'view', inputs: [] }] } } } }
 	expect(() => assertCoordinatorDataFunctionInventory(JSON.stringify(data), artifacts)).not.toThrow()
 	expect(() => assertCoordinatorDataFunctionInventory(JSON.stringify({ ...data, functionSignatures: {} }), artifacts)).toThrow('signature inventory must exactly match')
 	expect(() => assertCoordinatorDataFunctionInventory(JSON.stringify({ ...data, functions: { collateralToken: 'nonpayable' } }), artifacts)).toThrow('mutability must match')

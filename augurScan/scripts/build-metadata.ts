@@ -11,6 +11,8 @@ async function run(command: readonly string[], cwd: string): Promise<void> {
 }
 
 export async function buildMetadata(): Promise<void> {
+	// The component workflow prepares its own checkout, while fixture checkouts still need a build.
+	if (process.env['ZOLTAR_AUGUR_SCAN_METADATA_CURRENT'] === '1' && process.env['GITHUB_WORKSPACE'] === repositoryRoot) return
 	await verifyDependencyAbiFile(path.join(projectRoot, 'config/dependency-abis.json'))
 	await mkdir(path.join(repositoryRoot, 'solidity/ts/types'), { recursive: true })
 	await run(['ts/compile.ts'], path.join(repositoryRoot, 'solidity'))

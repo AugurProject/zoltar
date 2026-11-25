@@ -1,7 +1,7 @@
 import { auctionFixture, readyChildFixture } from '../support/security-pool-fixtures.ts'
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, encodeAbiParameters } from '@zoltar/bot-shared/ethereum'
-import { openOraclePriceCoordinatorAbi, erc1155Abi, genesisReputationTokenAbi, escalationGameAbi } from '@zoltar/bot-shared/contracts/abi'
+import { sharedPoolPriceFeedAbi, erc1155Abi, genesisReputationTokenAbi, escalationGameAbi } from '@zoltar/bot-shared/contracts/abi'
 import { stepReceiptEvidenceDisposition } from '../../src/execution/receipt-validation.ts'
 import { CARRY_STORAGE_MAXIMUM_WITHDRAWALS } from '../../src/monitoring/carry-proof-storage.ts'
 import { canonicalLifecyclePresence, CHAOS_OPERATION_CATALOG, evaluateOperationCatalog, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
@@ -993,13 +993,12 @@ describe('chaos operation catalog', () => {
 		const snapshot = snapshotFixture()
 		const pool = snapshot.pools[0]
 		if (pool === undefined) throw new Error('Pool fixture missing')
-		pool.oraclePriceValid = false
 		const requestOptions = { ...permissiveOptions, maxEthSpendAttoEth: (5n * 10n ** 16n).toString(), maxRepSpendAttoRep: (5n * 10n ** 16n).toString() }
 		const plan = eligibleOperationPlans(snapshot, requestOptions).find(candidate => candidate.definitionId === 'statoblast.oracle.request-price')
 		if (plan === undefined) throw new Error('Prepared request-price plan missing')
 		const request = plan.steps.at(-1)
 		if (request === undefined) throw new Error('Request-price step missing')
-		const decoded = decodeFunctionData({ abi: openOraclePriceCoordinatorAbi, data: request.data })
+		const decoded = decodeFunctionData({ abi: sharedPoolPriceFeedAbi, data: request.data })
 		const maximumWeth = plan.metadata['maximumInitialAttoWeth']
 		const maximumRep = plan.metadata['maximumInitialAttoRep']
 		const maximumBounty = plan.metadata['maximumRequestPriceCostAttoEth']
@@ -1008,7 +1007,7 @@ describe('chaos operation catalog', () => {
 		expect(plan.lastValidBlockNumber).toBeUndefined()
 		expect(plan.terminalSubmission).toEqual({ kind: 'private-next-block', maximumFeePerGas: maximumBaseFee })
 		expect(request.value).toBe(maximumBounty)
-		expect(decoded.functionName).toBe('requestPrice')
+		expect(decoded.functionName).toBe('requestSecurityPoolPrice')
 		expect(decoded.args[1]).toBe(BigInt(maximumWeth))
 		expect(request.walletAssetDebits.find(debit => debit.kind === 'erc20' && debit.category === 'weth')?.amount).toBe(maximumWeth)
 		expect(request.walletAssetDebits.find(debit => debit.kind === 'erc20' && debit.category === 'rep')?.amount).toBe(maximumRep)
@@ -1040,7 +1039,7 @@ describe('chaos operation catalog', () => {
 		expect(eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'trading.shares.migrate')).toBeDefined()
 
 		universe.forkTime = '0'
-		universe.nonDecisionThresholdAttoRep = universe.initialEscalationDepositAttoRep
+		universe.nonDecisionThresholdAttoRep = (10n ** 18n).toString()
 		expect(eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'statoblast.pool.deploy')).toBeUndefined()
 	})
 
