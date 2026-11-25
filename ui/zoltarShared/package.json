@@ -19,7 +19,7 @@
 	},
 	"scripts": {
 		"build": "bun x tsc --project tsconfig.json",
-		"typecheck": "bun x tsc --project tsconfig.json --noEmit"
+		"typecheck": "bun x tsc --project tsconfig.typecheck.json --noEmit"
 	},
 	"exports": {
 		"./copy/market.js": {
