@@ -1,6 +1,7 @@
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 import type { SQL } from 'bun'
 import { accountTradingRows, tradingActivityRows, tradingVolumeRows } from '../repositories/trading-activity.ts'
-import { TRADING_PNL_BASIS, type TradingHoldings, type TradingMarketState, tradingExitAvailability, tradingHoldingsValue, tradingProfitAndLoss } from '../trading-pnl.ts'
+import { TRADING_PNL_BASIS, type SettledTradingClaim, type TradingHoldings, settledTradingHoldingsValue, type TradingMarketState, tradingExitAvailability, tradingHoldingsValue, tradingProfitAndLoss } from '../trading-pnl.ts'
 import { detailPage, paged, protocolCursorFor, protocolCursorForRequest } from './entity-details.ts'
 
 /** Rewrites `activityCursor`/`activityLimit` into the standard detail-page parameters for the activity collection. */
@@ -56,9 +57,23 @@ const newerEvidence = (readValue: unknown, readBlock: unknown, eventValue: unkno
 	return requiredBigint(eventBlock) > requiredBigint(readBlock) ? event : read
 }
 
-const holdingsValuation = (holdings: TradingHoldings, exitOpen: boolean, market: TradingMarketState) => {
+const settlementClaim = (value: unknown): SettledTradingClaim | undefined => {
+	if (!isPlainRecord(value)) return undefined
+	const outcome = value['outcome']
+	if (outcome !== '0' && outcome !== '1' && outcome !== '2') return undefined
+	const amount = (key: string) => optionalBigint(value[key])
+	const supply = amount('supply')
+	const questionUnits = amount('questionUnits')
+	const bookUnits = amount('bookUnits')
+	const bookCash = amount('bookCash')
+	if (supply === undefined || supply < 0n || questionUnits === undefined || questionUnits < 0n || bookUnits === undefined || bookUnits < 0n || bookCash === undefined || bookCash < 0n) return undefined
+	return { outcome, supply, questionUnits, bookUnits, bookCash }
+}
+
+const holdingsValuation = (holdings: TradingHoldings, exitOpen: boolean, market: TradingMarketState, claim: SettledTradingClaim | undefined) => {
 	if (Object.values(holdings).every(balance => balance === 0n)) return { valueAttoEth: 0n, completeSetsRedeemed: 0n, insuredExitSets: 0n, unvalued: holdings }
-	return exitOpen ? tradingHoldingsValue(holdings, market) : undefined
+	if (exitOpen) return tradingHoldingsValue(holdings, market)
+	return claim === undefined ? undefined : settledTradingHoldingsValue(holdings, market, claim)
 }
 
 const missingValuationReason = (holdings: TradingHoldings) => (Object.values(holdings).some(balance => balance < 0n) ? 'Indexed transfer history is incomplete for this account' : 'No indexed complete-set exchange rate for this pool')
@@ -88,7 +103,11 @@ export const accountTradingPnl = async (sql: SQL, query: { readonly chainId: num
 			lpTotalSupply: requiredBigint(row['lp_total_supply']),
 			...(collateral === undefined || supply === undefined ? {} : { completeSetRate: { settlementCollateralAttoEth: collateral, shareSupplyAttoShares: supply } }),
 		}
-		const valuation = holdingsValuation(holdings, exit.open, marketState)
+		// A later accounting event invalidates the sampled claim's pricing inputs.
+		const sampledBlock = requiredBigint(row['pool_read_block'])
+		const claim = systemState === '0' && row['universe_forked'] !== true && sampledBlock >= requiredBigint(row['settlement_collateral_block']) && sampledBlock >= requiredBigint(row['share_supply_block']) ? settlementClaim(row['settlement_claim']) : undefined
+		const valuation = holdingsValuation(holdings, exit.open, marketState, claim)
+		const unknownBasis = row['unknown_transfer_basis'] === true || Object.values(holdings).some(balance => balance < 0n)
 		const pnl = tradingProfitAndLoss(requiredBigint(row['cost_basis_atto_eth']), requiredBigint(row['proceeds_atto_eth']), holdings, valuation?.valueAttoEth)
 		return {
 			market_address: row['pair_address'],
@@ -100,18 +119,21 @@ export const accountTradingPnl = async (sql: SQL, query: { readonly chainId: num
 			yes_atto_shares: row['yes_atto_shares'],
 			no_atto_shares: row['no_atto_shares'],
 			lp_tokens: row['lp_tokens'],
-			cost_basis_atto_eth: pnl.costBasisAttoEth.toString(),
+			known_cost_atto_eth: pnl.costBasisAttoEth.toString(),
+			cost_basis_status: unknownBasis ? 'unknown' : 'indexed',
+			cost_basis_atto_eth: unknownBasis ? undefined : pnl.costBasisAttoEth.toString(),
 			proceeds_atto_eth: pnl.proceedsAttoEth.toString(),
 			holdings_value_atto_eth: text(pnl.holdingsValueAttoEth),
-			realized_pnl_atto_eth: pnl.realizedAttoEth.toString(),
-			unrealized_pnl_atto_eth: text(pnl.unrealizedAttoEth),
-			net_pnl_atto_eth: text(pnl.netAttoEth),
+			realized_pnl_atto_eth: unknownBasis ? undefined : pnl.realizedAttoEth.toString(),
+			unrealized_pnl_atto_eth: unknownBasis ? undefined : text(pnl.unrealizedAttoEth),
+			net_pnl_atto_eth: unknownBasis ? undefined : text(pnl.netAttoEth),
 			open: pnl.open,
 			valuation:
 				valuation === undefined
 					? { status: 'unavailable', reason: exit.open ? missingValuationReason(holdings) : exit.reason }
 					: {
 							status: 'available',
+							...(!exit.open && claim !== undefined ? { method: 'winning-share-settlement', settlement_block: row['pool_read_block'], winning_outcome: claim.outcome } : {}),
 							partial: Object.values(valuation.unvalued).some(balance => balance > 0n),
 							complete_sets_redeemed_atto_shares: valuation.completeSetsRedeemed.toString(),
 							insured_exit_sets_atto_shares: valuation.insuredExitSets.toString(),

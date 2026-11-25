@@ -42,7 +42,11 @@ Every visible route refreshes after a committed block notification and on the st
 
 ## What the index covers
 
-augurScan indexes protocol logs and selected Uniswap events, with tagged state reads for selected entities. Coverage starts at the configured boundary or the earliest verified deployment within it. Provider pruning can advance the log boundary independently of historical state availability.
+augurScan indexes protocol logs, selected Uniswap events, and tagged state reads. Coverage starts at the configured boundary or the earliest verified deployment within it. Provider pruning can advance the log boundary independently of historical state availability.
+
+Security pool discovery starts with `SecurityPoolDeployed`, before the pool has questions. `SetupAdvanced` and `UniversePrepared` register the pool's components, and coverage includes the entire registering block, including the original settlement book's `BookCreated` event. A later question deployment can establish the bindings when indexing starts after setup.
+
+By default, transaction coverage is log-based. Set `SCAN_DIRECT_CALLS=1` to scan full blocks for failed or eventless direct transactions to tracked contracts. Optional tracing adds internal calls to selected transactions.
 
 The [state model](STATE_MODEL.md) explains coverage limits, evidence layers, and how replays preserve provenance. The [API reference](API_REFERENCE.md) defines snapshot bounds, cursors, proof availability, and exports. See the [operations guide](OPERATIONS.md#prepare-the-deployment) for provider requirements.
 
