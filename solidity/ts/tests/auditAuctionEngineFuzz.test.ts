@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { getContractOutput, loadContractsJson, normalizeStorageLayout } from './contractArtifactHelpers'
+import { keccak256, encodeAbiParameters, encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
@@ -693,6 +694,99 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 				await finalizeAndCheck(engine, variant.maximum, variant.floor, true)
 				await revert(saved)
 				engine.withdrawn = withdrawn
+			}
+		}
+	})
+	test('early refunds identify all excluded bids and fee entitlements survive winner removal order', async () => {
+		await resetClock()
+		const engine = await createEngine({ lot: 3n, target: 13n, inventory: 1000n, grid: 1n })
+		for (const [minimum, lots] of [
+			[11n, 4n],
+			[9n, 2n],
+			[7n, 5n],
+			[6n, 2n],
+			[5n, 6n],
+			[2n, 4n],
+		] as const)
+			expect(await submit(engine, lots, minimum, controller)).toBe(true)
+		const target = { abi: engineArtifact.abi, address: engine.address }
+		const refunds = await Promise.all(engine.bids.map(bid => client.readContract({ ...target, functionName: 'earlyRefundAttoEth', args: [bid.id] })))
+		clock = CLOSE
+		await send(engine.address, encodeFunctionData({ ...target, functionName: 'finalize', args: [13n, 0n] }))
+		const winners: bigint[] = []
+		for (const [index, bid] of engine.bids.entries()) {
+			const { filledLots } = await client.readContract({ ...target, functionName: 'previewBid', args: [bid.id] })
+			expect(refunds[index]).toBe(filledLots === 0n ? bid.lots * 3n : 0n)
+			if (filledLots > 0n) winners.push(bid.id)
+		}
+		expect(winners.length).toBe(4)
+		const cash = 17n,
+			rep = 23n
+		const preview = (id: bigint, c: bigint, r: bigint) => client.readContract({ ...target, functionName: 'previewBidFees', args: [id, c, r] })
+		const planned = new Map(await Promise.all(winners.map(async id => [id, await preview(id, cash, rep)] as const)))
+		for (const first of winners) {
+			const saved = await snapshot()
+			const order = [first, ...winners.filter(id => id !== first).reverse()]
+			let totalCash = 0n,
+				totalRep = 0n
+			for (const [index, id] of order.entries()) {
+				const args = [id, index === 0 ? cash : 0n, index === 0 ? rep : 0n] as const
+				const { result } = await client.simulateContract({ ...target, functionName: 'allocateAndRemoveFees', args, account: controller })
+				const expected = planned.get(id)
+				if (!expected) throw new Error('Missing fee entitlement for winning bid')
+				expect(result).toEqual(expected)
+				await send(engine.address, encodeFunctionData({ ...target, functionName: 'allocateAndRemoveFees', args }))
+				totalCash += result[0]
+				totalRep += result[1]
+			}
+			expect([totalCash, totalRep]).toEqual([cash, rep])
+			expect(await client.readContract({ ...target, functionName: 'remainingFeeLots' })).toBe(0n)
+			await revert(saved)
+		}
+	})
+
+	test('rotated bid trees preserve node heights, sorted priority and subtree lot ownership', async () => {
+		await resetClock()
+		const name = 'SecurityPoolUniformPriceRepairAuction'
+		const layout = normalizeStorageLayout(getContractOutput(loadContractsJson(import.meta.dir), `contracts/statoblast/${name}.sol`, name))
+		const root = layout.find(entry => entry.label === 'root')
+		const nodes = layout.find(entry => entry.label === 'nodes')
+		if (!root || !nodes) throw new Error('Missing auction tree storage layout')
+		for (const prices of [
+			[1, 2, 3, 4, 5, 6, 7, 8],
+			[8, 7, 6, 5, 4, 3, 2, 1],
+			[5, 3, 4, 7, 6, 5, 5, 8],
+		]) {
+			const engine = await createEngine({ lot: 1n, target: 100n, inventory: 10000n, grid: 1n })
+			const word = async (slot: bigint) => {
+				const result = await raw('eth_getStorageAt', [engine.address, '0x' + slot.toString(16), 'latest'])
+				if (typeof result !== 'string') throw new Error('Missing auction storage word')
+				return BigInt(result)
+			}
+			for (const [i, price] of prices.entries()) {
+				expect(await submit(engine, BigInt(1 + (i % 3)), BigInt(price), controller)).toBe(true)
+				const order: bigint[] = [],
+					seen = new Set<bigint>()
+				const visit = async (id: bigint): Promise<readonly [number, bigint]> => {
+					if (id === 0n) return [0, 0n]
+					expect(seen.has(id)).toBe(false)
+					seen.add(id)
+					const bid = engine.bids[Number(id) - 1]
+					if (!bid) throw new Error('Unregistered bid in tree')
+					const slot = BigInt(keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [id, BigInt(nodes.slot)])))
+					const packed = await word(slot)
+					const [lh, ll] = await visit(BigInt.asUintN(96, packed))
+					order.push(id)
+					const [rh, rl] = await visit(BigInt.asUintN(96, packed >> 96n))
+					const height = 1 + Math.max(lh, rh),
+						lots = bid.lots + ll + rl
+					expect(Math.abs(lh - rh)).toBeLessThanOrEqual(1)
+					expect(Number(BigInt.asUintN(8, packed >> 192n))).toBe(height)
+					expect(BigInt.asUintN(128, await word(slot + 1n))).toBe(lots)
+					return [height, lots]
+				}
+				await visit(BigInt.asUintN(96, (await word(BigInt(root.slot))) >> BigInt(8 * root.offset)))
+				expect(order).toEqual(priceOrder(engine.bids).map(bid => bid.id))
 			}
 		}
 	})

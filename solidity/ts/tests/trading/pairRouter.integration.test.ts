@@ -180,12 +180,21 @@ describe('factory, pair, and router integration', () => {
 		await writeContractAndWait(client, () => client.writeContract({ abi: factoryArtifact.abi, address: freshFactory, functionName: 'createPair', args: [pool] }))
 		const cleanPair = await client.readContract({ abi: factoryArtifact.abi, address: freshFactory, functionName: 'getPair', args: [pool] })
 		expect(cleanPair).toBe(predicted)
-		for (const outcome of [0n, 1n, 2n] as const) expect(await tokenBalance(cleanPair, outcome)).toBe(0n)
+		const sink = await client.readContract({ abi: factoryArtifact.abi, address: freshFactory, functionName: 'predeploymentShareSink' })
+		for (const outcome of [0n, 1n, 2n] as const) {
+			expect(await tokenBalance(cleanPair, outcome)).toBe(0n)
+			expect(await tokenBalance(sink, outcome)).toBe(1n)
+		}
+		expect(await client.readContract({ abi: pairArtifact.abi, address: cleanPair, functionName: 'totalSupply' })).toBe(0n)
 
+		const recipient = createWriteClient(getAnvilWindowEthereum(), TEST_ADDRESSES[1]).account.address
 		const freshRouter = await deploy(routerArtifact, [freshFactory])
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [freshRouter, true] }))
-		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: freshRouter, functionName: 'initializeWithEth', args: [cleanPair, 10_000n, 5_000n, unboundedShares, unboundedShares, 0n, 0n, 1n, account, 10n ** 12n], value: 10_000n }))
-		expect(await client.readContract({ abi: pairArtifact.abi, address: cleanPair, functionName: 'totalSupply' })).toBeGreaterThan(0n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: freshRouter, functionName: 'initializeWithEth', args: [cleanPair, 10_000n, 5_000n, unboundedShares, unboundedShares, 0n, 0n, 1n, recipient, 10n ** 12n], value: 10_000n }))
+		const [yes, no] = await client.readContract({ abi: pairArtifact.abi, address: cleanPair, functionName: 'getReserves' })
+		const scale = yes < no ? yes : no
+		expect(await client.readContract({ abi: pairArtifact.abi, address: cleanPair, functionName: 'totalSupply' })).toBe(scale)
+		expect(await client.readContract({ abi: pairArtifact.abi, address: cleanPair, functionName: 'balanceOf', args: [recipient] })).toBe(scale - 1000n)
 	})
 
 	for (const probability of [2_000n, 8_000n])
@@ -529,6 +538,20 @@ describe('factory, pair, and router integration', () => {
 		}
 	})
 
+	test('exact-input swaps enforce the quoted minimum down to one outcome share unit', async () => {
+		await initialize(50_000n, 5_000n)
+		const input = 10n * rate
+		const [output] = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'quoteExactInput', args: [true, input] })
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, (universe << 8n) | 1n, input] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
+		const before = await shareBalances(account)
+		const swap = (minimum: bigint) => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, input, minimum, account, NO_DEADLINE] })
+		await expect(swap(output + 1n)).rejects.toThrow('Swap slippage')
+		expect(await shareBalances(account)).toEqual(before)
+		await writeContractAndWait(client, () => swap(output))
+		expect(await shareBalances(account)).toEqual([before[0], before[1] - input, before[2] + output])
+	})
+
 	test('exact-output swaps deliver exactly the request without exceeding max input', async () => {
 		await initialize(50_000n, 5_000n)
 		const requestedOutput = 10n * rate
@@ -544,6 +567,24 @@ describe('factory, pair, and router integration', () => {
 		const outputDelivered = (await tokenBalance(account, 2n)) - outputBefore
 		expect(outputDelivered).toBe(requestedOutput)
 		expect(inputCharged).toBe(requiredInput)
+	})
+
+	test('transferring LP tokens moves the claim without changing supply or reserves', async () => {
+		await initialize()
+		const recipient = '0x0000000000000000000000000000000000000123'
+		const balance = (holder: Address) => client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [holder] })
+		const supply = () => client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'totalSupply' })
+		const ownerBefore = await balance(account)
+		const recipientBefore = await balance(recipient)
+		const supplyBefore = await supply()
+		const reservesBefore = await shareBalances(pair)
+		const amount = ownerBefore / 2n
+		expect(amount).toBeGreaterThan(0n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'transfer', args: [recipient, amount] }))
+		expect(await balance(account)).toBe(ownerBefore - amount)
+		expect(await balance(recipient)).toBe(recipientBefore + amount)
+		expect(await supply()).toBe(supplyBefore)
+		expect(await shareBalances(pair)).toEqual(reservesBefore)
 	})
 
 	test('prevents LP withdrawals from claiming more shares than the pair owns', async () => {
@@ -585,6 +626,10 @@ describe('factory, pair, and router integration', () => {
 		const locked = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getReserves' })
 		expect(locked[0]).toBeGreaterThan(0n)
 		expect(locked[1]).toBeGreaterThan(0n)
+		const lock = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'MINIMUM_LIQUIDITY_LOCK' })
+		expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [lock] })).toBe(1000n)
+		expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'totalSupply' })).toBe(1000n)
+		await expect(client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'initialize', args: [2_000n, 3_000n, 0n, account, NO_DEADLINE] })).rejects.toThrow('Already initialized')
 	})
 
 	test('direct pair calls reject an expired deadline', async () => {

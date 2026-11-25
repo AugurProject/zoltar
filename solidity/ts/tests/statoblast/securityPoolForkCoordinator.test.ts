@@ -107,6 +107,28 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		expect((await alice.readContract({ ...ledger(capital), functionName: 'ownerAccount', args: [alice.account.address] })).freeAttoRep).toBe(0n)
 	})
 
+	test('branch cash uses cumulative chosen commitment and leaves only floor dust after all owners choose', async () => {
+		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'redeemQuestion', args: [0n, 1n, 1n, buyer.account.address] }))
+		for (const sameBranch of [false, true]) {
+			for (const order of [
+				[alice, bob],
+				[bob, alice],
+			] as const) {
+				const snapshot = await getAnvilWindowEthereum().anvilSnapshot()
+				for (const client of order) {
+					const outcome = client === alice || sameBranch ? 1n : 2n
+					await choose(client, outcome)
+					const fork = await owner.readContract({ ...forkTarget(), functionName: 'forks', args: [0n] })
+					const branch = await owner.readContract({ ...forkTarget(), functionName: 'branches', args: [await childId(outcome)] })
+					expect(fork.cash).toBe(200n * E - 1n)
+					expect(branch.parentCash).toBe((fork.cash * branch.chosenCommitment) / fork.commitment)
+				}
+				const fork = await owner.readContract({ ...forkTarget(), functionName: 'forks', args: [0n] })
+				expect(fork.cash - fork.assignedCash).toBe(sameBranch ? 0n : 1n)
+				await getAnvilWindowEthereum().anvilRevert(snapshot)
+			}
+		}
+	})
 	test('different choices split cash once while each branch receives its complete nominal liabilities', async () => {
 		await choose(alice, 1n)
 		await choose(bob, 2n)

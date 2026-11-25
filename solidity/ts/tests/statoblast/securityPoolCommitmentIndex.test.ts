@@ -956,4 +956,35 @@ describe('Statoblast: exact shared commitment and retirement index', () => {
 		expect(await account(1n)).toMatchObject({ commitment: 0n, releasedRep: 50n, ethFees: 50n, repFees: 70n })
 		await validate()
 	})
+	test('the last healthy price is the inverse of rounded required backing at each owner target', async () => {
+		const maximumPrice = (rep: bigint, commitment: bigint, multiplier: bigint) => client.readContract({ abi: artifact.abi, address, functionName: 'maximumHealthyPrice', args: [rep, commitment, multiplier] })
+		for (const multiplier of [10000n, 10001n, 13750n, 17500n]) {
+			for (const commitment of [1n, 10n ** 18n + 1n]) {
+				for (const rep of [7n, 10n ** 18n + 11n]) {
+					for (const target of [10000n, 10001n, 21357n]) {
+						const last = await maximumPrice((rep * 10000n) / target, commitment, multiplier)
+						for (const price of [last, last + 1n]) {
+							if (price === 0n) continue
+							const needed = await client.readContract({ abi: artifact.abi, address, functionName: 'requiredRep', args: [commitment, price, multiplier, target] })
+							expect(needed <= rep).toBe(price <= last)
+						}
+					}
+				}
+			}
+		}
+	})
+	test('rep-grid alignment preserves the healthy price across identical winning lots', async () => {
+		for (const [multiplier, grid] of [
+			[10001n, 10001n],
+			[13750n, 11n],
+			[17500n, 7n],
+			[25000n, 5n],
+		] as const) {
+			for (const commitment of [17n, 10n ** 18n + 1n]) {
+				const price = (lots: bigint) => client.readContract({ abi: artifact.abi, address, functionName: 'maximumHealthyPrice', args: [13n * grid * lots, commitment * lots, multiplier] })
+				const single = await price(1n)
+				for (const lots of [2n, 7n, 101n]) expect(await price(lots)).toBe(single)
+			}
+		}
+	})
 })
