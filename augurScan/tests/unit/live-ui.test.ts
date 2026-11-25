@@ -1444,3 +1444,10 @@ test('live reset notices distinguish an expired replay window from a cursor ahea
 	expect(liveResetNotice('cursor-ahead-of-head').title).toBe('Live cursor ahead of indexed history')
 	expect(liveResetNotice(undefined).title).toBe('Live stream reset')
 })
+
+test('subsecond indexer progress accumulates over the rate measurement window', () => {
+	const estimate = (index: number, sample?: Parameters<typeof indexerProgressEstimate>[1]) => indexerProgressEstimate({ start_block: '0', observed_block: '100', indexed_block: String(index) }, sample, 1000 + index * 500)
+	const first = estimate(0)
+	const second = estimate(1, first.sample)
+	expect(estimate(2, second.sample)).toMatchObject({ eta: 'ETA 49s', sample: { indexedBlock: 2, blocksPerSecond: 2 } })
+})

@@ -1051,3 +1051,36 @@ for (const traceStatus of ['not-requested', 'unavailable'] as const) {
 		})
 	}
 }
+
+test.each(['focusout', 'pointerdown'])('leaving search during debounce cancels the pending lookup on %s', async event => {
+	await withBrowser('https://scanner.test/', '<form id="global-search"><input id="global-search-input"></form><div id="global-search-results" hidden></div><button>Outside</button>', async browser => {
+		let requests = 0
+		mountSearch(
+			async () => {
+				requests++
+				return { items: [] }
+			},
+			() => '1',
+		)
+		const input = browser.document.querySelector('input')
+		const outside = browser.document.querySelector('button')
+		if (!input || !outside) throw new Error('Missing search controls')
+		input.focus()
+		input.value = 'market'
+		input.dispatchEvent(new browser.Event('input'))
+		if (event === 'pointerdown') outside.dispatchEvent(new browser.Event('pointerdown', { bubbles: true }))
+		else outside.focus()
+		await Bun.sleep(300)
+		expect(requests).toBe(0)
+		expect(document.querySelector<HTMLElement>('#global-search-results')?.hidden).toBe(true)
+	})
+})
+
+test('explorer error links retain the selected chain and demo mode', async () => {
+	await withBrowser('https://scanner.test/block/987?chainId=11155111&demo=1', '<div id="explorer-content"></div>', async () => {
+		await renderExplorerPage('/block/987', '11155111', async () => {
+			throw new Error('Offline')
+		})
+		expect(document.querySelector('a')?.href).toBe('https://scanner.test/?chainId=11155111&demo=1')
+	})
+})
