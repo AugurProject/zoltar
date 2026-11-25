@@ -18,12 +18,32 @@ const augurScanRunners = {
 	browser: 'AUGURSCAN_BROWSER_URL="${AUGURSCAN_BROWSER_URL:?set-AUGURSCAN_BROWSER_URL}" bun test',
 }
 
-function augurScanRunner(filePath: string, source?: string) {
+function augurScanRunner(filePath: string, root = repositoryRoot) {
 	if (filePath.startsWith('augurScan/tests/integration/')) return augurScanRunners.integration
-	if (filePath.startsWith('augurScan/tests/browser/')) {
-		const sourcePath = path.join(repositoryRoot, filePath)
-		const testSource = source ?? (existsSync(sourcePath) ? readFileSync(sourcePath, 'utf8') : '')
-		if (/from ['"].*\/browser-test\.ts['"]/.test(testSource)) return augurScanRunners.browser
+	if (!filePath.startsWith('augurScan/tests/browser/')) return augurScanRunners.unit
+
+	const absoluteRoot = path.resolve(root)
+	const browserHarness = path.join(absoluteRoot, 'augurScan/tests/browser/browser-test.ts')
+	const pending = [path.join(absoluteRoot, filePath)]
+	const visited = new Set<string>()
+	while (pending.length > 0) {
+		const source = pending.pop()
+		if (source === undefined || visited.has(source) || !existsSync(source)) continue
+		if (source === browserHarness) return augurScanRunners.browser
+		visited.add(source)
+		const parser = new Bun.Transpiler({ loader: source.endsWith('.tsx') ? 'tsx' : 'ts' })
+		for (const { path: specifier } of parser.scanImports(readFileSync(source))) {
+			if (!specifier.startsWith('.') && !specifier.startsWith('#')) continue
+			// A changed test may still import a module deleted in the same change.
+			let dependency: string
+			try {
+				dependency = Bun.resolveSync(specifier, path.dirname(source))
+			} catch (error) {
+				if (typeof error !== 'object' || error === null || !('code' in error) || error.code !== 'ERR_MODULE_NOT_FOUND') throw error
+				continue
+			}
+			if (dependency.startsWith(`${absoluteRoot}${path.sep}`) && /\.[cm]?tsx?$/.test(dependency)) pending.push(dependency)
+		}
 	}
 	return augurScanRunners.unit
 }
@@ -147,9 +167,9 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	},
 ]
 
-function directTestCommand(filePath: string) {
+function directTestCommand(filePath: string, root = repositoryRoot) {
 	if (!/\.(?:fuzz|spec|test)\.(?:cts|mts|ts|tsx)$/.test(filePath)) return undefined
-	if (filePath.startsWith('augurScan/')) return `cd augurScan && ${augurScanRunner(filePath)} ${filePath.slice('augurScan/'.length)}`
+	if (filePath.startsWith('augurScan/')) return `cd augurScan && ${augurScanRunner(filePath, root)} ${filePath.slice('augurScan/'.length)}`
 	const botMatch = /^bots\/([^/]+)\/(.+)$/.exec(filePath)
 	if (botMatch?.[1] !== undefined && botMatch[2] !== undefined) return `cd bots/${botMatch[1]} && bun ../../tooling/testing/bun-test.mts ${botMatch[2]}`
 	if (filePath.startsWith('solidity/ts/')) return `bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup.ts ${filePath}`
@@ -157,8 +177,8 @@ function directTestCommand(filePath: string) {
 	return `bun ./tooling/testing/bun-test.mts ${filePath}`
 }
 
-function specializedTestCommand(filePath: string, options: SpecializedTestOptions) {
-	const directCommand = directTestCommand(filePath)
+function specializedTestCommand(filePath: string, options: SpecializedTestOptions, root: string) {
+	const directCommand = directTestCommand(filePath, root)
 	if (directCommand === undefined) return undefined
 	const prerequisites = 'bun run ensure-contract-artifacts'
 	const flags = [...(options.timeout === undefined ? [] : [`--timeout ${options.timeout.toString()}`]), ...(options.testNamePattern === undefined ? [] : [`--test-name-pattern ${options.testNamePattern}`])].join(' ')
@@ -296,13 +316,13 @@ function resolveImportSpecifier(importer: string, specifier: string, sourceFiles
 	return candidates.find(candidate => sourceFiles.has(candidate))
 }
 
-function groupedTestCommands(testFiles: readonly string[], sources?: ReadonlyMap<string, string>) {
+function groupedTestCommands(testFiles: readonly string[], root = repositoryRoot) {
 	const groups = new Map<string, string[]>()
 	for (const filePath of testFiles) {
 		let group = 'root'
 		let commandPath = filePath
 		if (filePath.startsWith('augurScan/')) {
-			group = `augurScan && ${augurScanRunner(filePath, sources?.get(filePath))}`
+			group = `augurScan && ${augurScanRunner(filePath, root)}`
 			commandPath = filePath.slice('augurScan/'.length)
 		} else {
 			const botMatch = /^bots\/([^/]+)\/(.+)$/.exec(filePath)
@@ -389,10 +409,10 @@ export async function getImportGraphTestRecommendations(changes: readonly (strin
 			if (currentSources.has(testFile)) affectedTests.add(testFile)
 		}
 	}
-	return groupedTestCommands([...affectedTests], currentSources).map(command => ({ command, reason: 'imports changed production source directly or transitively' }))
+	return groupedTestCommands([...affectedTests], repositoryRoot).map(command => ({ command, reason: 'imports changed production source directly or transitively' }))
 }
 
-export function getTestImpactRecommendations(changes: readonly (string | ChangedFileEntry)[]) {
+export function getTestImpactRecommendations(changes: readonly (string | ChangedFileEntry)[], root = repositoryRoot) {
 	const normalizedChanges = normalizeChanges(changes)
 	const changedTestPaths = new Map<string, string | undefined>()
 	for (const change of normalizedChanges) {
@@ -406,7 +426,7 @@ export function getTestImpactRecommendations(changes: readonly (string | Changed
 			for (const testPath of changedOwnedPaths) {
 				const currentPath = changedTestPaths.get(testPath)
 				if (currentPath === undefined) continue
-				const command = rule.ownedTestOptions === undefined ? directTestCommand(currentPath) : specializedTestCommand(currentPath, rule.ownedTestOptions)
+				const command = rule.ownedTestOptions === undefined ? directTestCommand(currentPath, root) : specializedTestCommand(currentPath, rule.ownedTestOptions, root)
 				if (command !== undefined) recommendations.set(command, { command, reason: `renamed test: ${testPath} -> ${currentPath}` })
 			}
 			return
@@ -417,7 +437,7 @@ export function getTestImpactRecommendations(changes: readonly (string | Changed
 		const changedTestWasDeleted = change.status === 'deleted' && isTestSourceFile(change.path)
 		const matchingRules = changedTestWasDeleted ? [] : TEST_IMPACT_RULES.filter(rule => rule.matches(change.path) || (rule.selectOnOwnedRename === true && change.status === 'renamed' && change.previousPath !== undefined && rule.ownedTestPaths?.includes(change.previousPath) === true))
 		if (matchingRules.length === 0) {
-			const directCommand = change.status === 'deleted' ? undefined : directTestCommand(change.path)
+			const directCommand = change.status === 'deleted' ? undefined : directTestCommand(change.path, root)
 			if (directCommand !== undefined) recommendations.set(directCommand, { command: directCommand, reason: `changed test: ${change.path}` })
 		}
 		for (const rule of matchingRules) addRule(rule)

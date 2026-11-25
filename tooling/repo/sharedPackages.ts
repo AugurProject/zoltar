@@ -1,3 +1,5 @@
+import type { UiAppId } from '../ui/appIds.mts'
+
 export const sharedPackages = [
 	{ id: 'shared-core', path: 'shared/core', name: '@zoltar/core-shared', dependencies: [] },
 	{ id: 'shared-zoltar', path: 'shared/zoltar', name: '@zoltar/zoltar-shared', dependencies: ['shared-core'] },
@@ -6,7 +8,13 @@ export const sharedPackages = [
 	{ id: 'shared-trading', path: 'shared/trading', name: '@zoltar/trading-shared', dependencies: ['shared-core'] },
 ] as const
 
-export function sharedPackageClosure(ids: readonly string[]) {
+export type SharedPackageId = (typeof sharedPackages)[number]['id']
+
+export function isSharedPackageId(id: string): id is SharedPackageId {
+	return sharedPackages.some(entry => entry.id === id)
+}
+
+export function sharedPackageClosure(ids: readonly SharedPackageId[]) {
 	const selected = new Set(ids)
 	for (const entry of [...sharedPackages].reverse()) {
 		if (selected.has(entry.id)) for (const dependency of entry.dependencies) selected.add(dependency)
@@ -20,4 +28,4 @@ export const appSharedPackages = {
 	openoracle: ['shared-zoltar', 'shared-open-oracle', 'shared-statoblast'],
 	// ui/statoblastShared, which the trading app consumes, imports the Zoltar, OpenOracle and Statoblast packages at runtime.
 	trading: ['shared-zoltar', 'shared-open-oracle', 'shared-statoblast', 'shared-trading'],
-} as const
+} as const satisfies Record<UiAppId, readonly SharedPackageId[]>

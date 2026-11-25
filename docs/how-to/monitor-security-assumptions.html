@@ -21,8 +21,8 @@
 					<ol>
 						<li>List the assumptions the action depends on. The <a href="../reference/security-model.html">security model</a> lists which assumptions protect which mechanism.</li>
 						<li>Find the rows for those assumptions in the <a href="#assumption-monitoring">table below</a>.</li>
-						<li>Take each row’s reads for the same <a href="../reference/glossary.html#lineage">lineage</a>, question ledger, and block as the action. Compare values in one unit of account, such as ETH, and cover the period through the last deadline.</li>
-						<li>If a read is weak or unavailable, apply the row's response before proceeding.</li>
+						<li>Record the lineage, ledger, block number and hash for the decision. Use one block for current state. For A07, record the pre-fork parent and repair-time child snapshots separately. Compare values in one collateral unit.</li>
+						<li>Label each result observed, estimated or unknown. If a read fails or the block hash changes, retry the complete snapshot while time permits. Use canonical block-hash reads where supported and recheck the hash for number-only reads. Discard a stale simulation. If evidence is still missing, apply the row’s response.</li>
 						<li>Repeat the reads on the row's cadence until the action's last deadline has passed.</li>
 					</ol>
 					<p>Most on-chain reads are also indexed by augurScan under <code>/operations/…</code> (see the <a href="https://github.com/AugurProject/zoltar/blob/main/augurScan/README.md">augurScan README</a>). The liquidator and OpenOracle arbitrager bots in <code>bots/</code> show live security pool, vault, and report state in their dashboards.</p>
@@ -33,7 +33,7 @@
 						<dt>Corrector</dt>
 						<dd>An account that disputes an incorrect OpenOracle report; see <a href="../reference/security-model.html#assumption-a17">A17</a>.</dd>
 						<dt>Callback-recovery candidate</dt>
-						<dd>A <a href="../reference/glossary.html#shared-price-feed">shared price feed</a> whose pending report OpenOracle has already settled; see <a href="../reference/open-oracle.html#callback-rejection-and-recovery">settlement recovery</a>.</dd>
+						<dd>A report OpenOracle has settled but the shared feed has yet to process; see <a href="../reference/open-oracle.html#callback-rejection-and-recovery">settlement recovery</a>.</dd>
 					</dl>
 				</section>
 				<section id="assumption-monitoring">
@@ -49,106 +49,107 @@
 							</tr>
 						</thead>
 						<tbody>
-							<tr>
+							<tr id="check-execution">
 								<td>Executor incentives and participation — A01, A02, A03, A06</td>
 								<td>
 									<ul>
-										<li>Security pool exposure, distressed positions and takeover blockers: liquidator bot dashboard</li>
-										<li>Dispute opportunities and net reward: OpenOracle arbitrager dashboard</li>
-										<li>Active reporters, correctors, escalation depositors, and Collateral Repair Auction bidders: augurScan <code>/operations/reports</code>, <code>/operations/escalations</code>, <code>/operations/auctions</code></li>
+										<li>Name the next caller, its benefit, capital costs and ETH for gas. A takeover credits ledger principal and also needs receiver consent. Use the liquidator dashboard to check blockers.</li>
+										<li>Check whether a funded caller will settle, including third-party settlement settings on a bot. For a contest, identify funded opposing support.</li>
+										<li>Use augurScan activity in <code>/operations/reports</code>, <code>/operations/escalations</code> and <code>/operations/auctions</code> to identify participants. Establish independent control separately.</li>
 										<li>For a settled report whose callback failed or was deferred, follow <a href="../reference/open-oracle.html#callback-rejection-and-recovery">settlement recovery</a>.</li>
 									</ul>
 								</td>
 								<td>Continuously for deadline-bearing flows; before launch and after parameter or gas-regime changes</td>
 								<td>Fund or arrange independent executors, reduce exposed value, or disclose that the affected transition may stall</td>
 							</tr>
-							<tr>
+							<tr id="check-forks">
 								<td>Fork lineage value and migration readiness — A05, A07, A09, A11</td>
 								<td>
 									<ul>
 										<li>Fork start: Zoltar <code>getForkTime(universeId)</code></li>
-										<li>Migration progress: augurScan <code>/operations/forks</code></li>
-										<li>Parent and <a href="../reference/glossary.html#child-rep">child REP</a> prices: market quotes in the same unit of account</li>
-										<li>Custodian, exchange, interface, and proof-tool readiness: each party's published support statement (no on-chain read)</li>
+										<li>Check native REP migration, each underwriter’s branch-choice deadline and each share holder’s ability to call migration into the active branch. Track the branches actually supported in <code>/operations/forks</code>.</li>
+										<li>Value parent backing at the pre-fork block and child backing at repair. Record both inventories and prices, and the portion of child REP available for sale.</li>
+										<li>For A05, name the participants choosing a branch, the access they lose, their next-best alternative and the secured exposure. Estimate a range. Mark deterrence unknown if that range crosses the hurdle.</li>
 									</ul>
 								</td>
 								<td>Before a fork-security claim and throughout migration and coordination windows</td>
 								<td>Do not claim fork deterrence, practical migration, or value concentration; narrow supported lineage and exposure</td>
 							</tr>
-							<tr>
+							<tr id="check-exposure">
 								<td>REP value and liquidity versus secured exposure — A08, A13, A14</td>
 								<td>
 									<ul>
 										<li><a href="../reference/glossary.html#theoretical-rep-supply">Theoretical REP supply</a>: Zoltar <code>getUniverseTheoreticalSupplyAttoRep(universeId)</code></li>
-										<li>Question <a href="../reference/glossary.html#open-interest">open interest</a>: question ledger <code>settlementCollateralAttoEth()</code></li>
+										<li>Read question <code>settlementCollateralAttoEth()</code> with <code>lastSettlementSecurityPoolTime()</code>, its checkpoint. Define the exposure being valued. Pool oracle exposure and system-wide open interest can differ. Avoid counting the same REP backing independently for several ledgers.</li>
 										<li>REP deposited as underwriting capital: security pool <code>capitalLedger(universeId)</code>, then the <code>rep</code> value from that ledger's <code>totals()</code></li>
-										<li>Cached REP price: shared feed <code>lastPrice</code>, the accepted report's REP base units × 10<sup>18</sup> ÷ its collateral base units. It counts REP per unit of security pool collateral, so invert it before valuing REP in collateral</li>
-										<li>REP depth and price impact: arbitrager Uniswap venue quotes</li>
+										<li>For a valid nonzero <code>lastPrice</code>, raw collateral units = raw REP units × 10<sup>18</sup> ÷ <code>lastPrice</code>. Apply the collateral decimals for display. Record the observation time and <code>priceValidUntil</code>. See the <a href="../reference/open-oracle.html#openoracle-role">six-decimal example</a>.</li>
+										<li>For any required trade, record the pair, direction, size and latest usable time. Quote at that size and account for inventory already held.</li>
 										<li>Security pool and vault risk: augurScan <code>/operations/risk</code></li>
-										<li>REP discounted cash flow: off-chain valuation (no on-chain read)</li>
+										<li>Estimate discounted fee income off-chain. Record the supply and price basis of any market-cap proxy. If plausible valuations straddle the exposure, mark economic coverage unknown.</li>
 									</ul>
 								</td>
 								<td>At launch, continuously while open interest exists, and after material price, supply, liquidity, or exposure changes</td>
 								<td>Cap or stop new exposure in clients and disclosures; do not describe REP backing as economically sufficient</td>
 							</tr>
-							<tr>
+							<tr id="check-escalation">
 								<td>Outcome evidence and escalation funding — A04, A10</td>
 								<td>
 									<ul>
-										<li><a href="../reference/glossary.html#escalation-game">Escalation Game</a> deadline: <code>getEscalationGameEndDate()</code>; it moves later only when a deposit raises <a href="../reference/glossary.html#binding-capital">binding capital</a>, so a correction must land before it</li>
+										<li>Read <code>getEscalationGameEndDate()</code>, the last open second of the scheduled game. Project the new median and deadline after a change of leader. Check whether responders have time to deliver REP.</li>
 										<li><a href="../reference/glossary.html#required-support">Required support</a>, which closes the game once it exceeds binding capital while one outcome strictly leads: <code>totalCostAttoRep()</code></li>
 										<li>Outcome funding: <code>getOutcomeBalancesAttoRep()</code> and <code>getBindingCapitalAttoRep()</code>, or augurScan <code>/operations/escalations</code></li>
-										<li>REP available to fund a correction: wallet REP <code>balanceOf</code> of each ready account (escalation deposits come from wallet REP, not from capital-ledger deposits)</li>
-										<li>Outcome evidence: where each source publishes (off-chain)</li>
+										<li>Count wallet REP available for deposit. Add only principal the owner can withdraw and deliver before the cutoff.</li>
+										<li>Identify the resolution source and expected publication time. Allow time to interpret it, mobilize REP and obtain inclusion.</li>
 									</ul>
 								</td>
 								<td>From question creation through local resolution and any fork window</td>
 								<td>Mark the market or action impaired, surface the deadline, and avoid asserting that honest local correction remains fundable</td>
 							</tr>
-							<tr>
+							<tr id="check-auction">
 								<td>Collateral Repair Auction demand — A12</td>
 								<td>
 									<ul>
 										<li><a href="../reference/glossary.html#collateral-repair-auction">Collateral Repair Auction</a> bids: auction <code>engine()</code>, then engine <code>bidCount()</code>, <code>bids(index)</code>, and <code>previewFinalization(maximumFilledLots, floorAttoRepPerLot)</code>, or augurScan <code>/operations/auctions</code></li>
-										<li>REP market depth in security pool collateral and expected discount: arbitrager Uniswap venue quotes</li>
-										<li>Bidder gas cost: RPC <code>eth_feeHistory</code></li>
+										<li>Check that the auction opened with a fresh funded quote and at least one day for bidding. Closing needs a funded quote covering both pool collateral exposure and auction REP inventory, observed in the final day at or before close, and no fork at or before close. If ineligible, project zero proceeds even with funded bids.</li>
+										<li>For an eligible close, preview funded lots at the closing REP floor using available saleable inventory and the target lot cap. Collateral credited is the lesser of the shortfall and filled lots × collateral per lot. Estimate bidder costs and market depth separately.</li>
 									</ul>
 								</td>
 								<td>Before and during every repair auction</td>
 								<td>Disclose likely incomplete repair and plan operation of the child at only migrated collateral plus collateral raised by the auction</td>
 							</tr>
-							<tr>
+							<tr id="check-inclusion">
 								<td>Transaction inclusion and Ethereum execution — A16, A26</td>
 								<td>
 									<ul>
 										<li>Base and priority fees: RPC <code>eth_feeHistory</code></li>
-										<li>Block gas limit: latest block</li>
+										<li>Estimate gas units for the actual call, compare transaction and block gas limits, then price the units. Estimate branch preparation and share migration as separate calls.</li>
 										<li>Reorg history: augurScan <code>/operations/integrity</code></li>
 										<li>Escalation deadline: <code>getEscalationGameEndDate()</code></li>
 										<li>Collateral Repair Auction close: auction <code>closesAt()</code></li>
 										<li><a href="../reference/glossary.html#branch-choice-cutoff">Branch-choice cutoff</a>: Zoltar <code>getForkChoiceDeadline(universeId)</code>, eight weeks after the fork</li>
-										<li>Margin: each deadline minus expected inclusion delay</li>
+										<li>For a shared-feed report at time <var>t</var>, disputes open at <var>t</var> + <code>disputeDelay</code> and close strictly before <var>t</var> + <code>settlementTime</code>. Use the deployed values.</li>
+										<li>Take the last eligible second (the scheduled deadline for escalation) and subtract expected inclusion delay to estimate the latest submission time. Subtract the current time for remaining slack. Fee history alone cannot establish inclusion.</li>
 									</ul>
 								</td>
 								<td>Continuously while a deadline or mandatory transition is live</td>
 								<td>Raise transaction fees where rational, use independent submission paths, and disclose missed-deadline or stranded-transition risk</td>
 							</tr>
-							<tr>
+							<tr id="check-correction">
 								<td>REP/collateral price correction — A17, A18, A19</td>
 								<td>
 									<ul>
-										<li>Pending report: shared feed <code>pendingReportId</code>, then OpenOracle <code>storedGame(reportId)</code></li>
-										<li>Report outcomes: <code>PriceRequested</code>, <code>PriceReported</code>, <code>PriceReportDeferred</code>, and <code>PriceReportRejected</code> events from the canonical shared feed returned by <code>QuestionLedger.priceFeed()</code>, or augurScan <code>/operations/reports</code></li>
-										<li>Independent correctors: whether any, such as an operator running the <a href="https://github.com/AugurProject/zoltar/blob/main/bots/open-oracle-arbitrager/README.md">OpenOracle arbitrager</a>, reports disputes profitable after fees, gas, and price impact</li>
+										<li>Read <code>PriceRequested</code> events from the shared feed returned by <code>SecurityPool.priceFeed(universeId)</code>, including a prepared branch with no question ledger yet, starting at feed deployment. For each report ID, read the feed’s <code>reportOutcome(reportId)</code>. For a requested ID, 1 means accepted, 2 means rejected, and 0 needs follow-up.</li>
+										<li>For each unresolved ID, check OpenOracle <code>storedGame(reportId)</code> and follow <a href="../reference/open-oracle.html#callback-rejection-and-recovery">settlement recovery</a> if already settled. <code>pendingReportId</code> identifies only the latest candidate and can be zero while older candidates remain unresolved. For the active price, check the feed epoch and expiry. Acceptance at the same eligibility timestamp need not replace the cached price.</li>
+										<li>For each candidate, verify an executing signer on this network, universe and collateral, its approvals and its remaining position capacity. The reference bot can run in dry-run mode and defaults to one open position.</li>
 										<li>Creation-time floor: security pool <code>minimumReportCollateral</code> and the selected collateral token’s units and current ETH value</li>
 										<li>Correction economics: compare obtainable correction gains with OpenOracle fees, current ETH gas costs including approvals and recovery, price impact, and capital lockup under <a href="../reference/security-model.html#assumption-a18">A18</a>; do not compare the whole stake with gas alone</li>
-										<li>Corrector inventory: selected collateral and REP balances, plus ETH for gas</li>
+										<li>Net concurrent commitments against each corrector’s REP, collateral and gas funds. Check an independent reference venue at the intended size. Compare the same actor’s payoff from correcting and waiting, including any shared incentives or side payments that can be established.</li>
 									</ul>
 								</td>
 								<td>Continuously while a report is pending or a cached price can authorize operations</td>
 								<td>Do not add exposure when correction is uneconomic; disclose that a wrong report can settle despite passing the funding checks. The floor is immutable: a higher minimum requires a new security pool.</td>
 							</tr>
-							<tr>
+							<tr id="check-assets">
 								<td>Token behavior and recipient compatibility — A21, A22</td>
 								<td>
 									<ul>
@@ -156,52 +157,52 @@
 										<li>Sepolia WETH code: the same against <code>sepoliaPublished.weth.runtimeCodeHash</code> in <code>scripts/artifacts/uniswap-deployment.json</code></li>
 										<li>Mainnet genesis REP (Augur V2 REP Yes and REP No fork child tokens) and WETH code: an externally sourced reference hash (no repository pin)</li>
 										<li>Sepolia genesis REP supply: <code>shared/zoltar/ts/deployment/sepoliaRepAllocations.ts</code> against <code>getTotalTheoreticalSupply()</code></li>
-										<li>WETH redeemability and recipient ETH and ERC-1155 acceptance: a test transfer from a disposable account</li>
+										<li>From a disposable sender, simulate a withdrawal to check WETH redemption. Exercise the intended recipient’s native-ETH receive path or ERC-1155 callback for the actual delivery.</li>
 									</ul>
 								</td>
 								<td>At deployment verification and before first use of a new recipient or integration</td>
 								<td>Reject the deployment or incompatible recipient; do not rely on redirected recovery</td>
 							</tr>
-							<tr>
+							<tr id="check-deployment">
 								<td>Deployments, clients, data, and keys — A20, A23, A24, A27, A28</td>
 								<td>
 									<ul>
-										<li>Manifest freshness: <code>bun run check:mainnet-deployment:current</code></li>
+										<li>Select the intended chain and Yes or No genesis release. Compare its manifest and wiring with the selected deployment. Check manifest freshness with <code>bun run check:mainnet-deployment:current</code>.</li>
 										<li>Explorer source verification: <code>bun run verify:contracts -- --chain-id=&lt;chain ID&gt;</code></li>
 										<li>
-											Code presence: <a href="../reference/deployment-status.html"><code>getDeploymentMask()</code></a>
+											If the status oracle has no code, its mask is unavailable. Set bits indicate code presence only. Read <a href="../reference/deployment-status.html"><code>getDeploymentMask()</code></a>
 										</li>
 										<li>Runtime hashes: <a href="./launch-a-release.html#launch-release-checklist">release checklist</a></li>
-										<li>Event replay: a second RPC or augurScan <code>/operations/integrity</code></li>
-										<li>Signers, typed-data domains, nonces, and approvals: each operator's key store</li>
+										<li>For inherited claims, record the indexer coverage start and snapshot block. Reconstruct the outcome snapshot root from canonical history and check membership. Include the nullifier path for standalone games.</li>
+										<li>Check the signer inventory and on-chain approvals for the owner, spender or operator, asset and chain. Inspect typed-data domains and nonces before signing.</li>
 									</ul>
 								</td>
 								<td>At release, on every environment or account change, and continuously for indexers</td>
 								<td>Stop signing or operating, reject an unverifiable deployment, revoke compromised authority where possible, and re-establish canonical state from independent sources</td>
 							</tr>
-							<tr>
+							<tr id="check-question">
 								<td>Question selection — A15</td>
 								<td>
 									<ul>
-										<li><a href="../reference/glossary.html#question">Question</a> creation, end date, and labels: <code>ZoltarQuestionData</code> <code>questionCreatedTimestamp</code>, <code>getQuestionEndDate</code>, and <code>getOutcomeLabels</code></li>
+										<li>Read the immutable title, description, dates and outcome labels from <code>QuestionCreated</code>. Compare the full terms with the intended question, or recompute its ID with <code>getQuestionId</code>.</li>
 										<li>Evidence plan and security pool relevance: off-chain review</li>
 									</ul>
 								</td>
 								<td>Before security pool selection</td>
 								<td>Reject or warn on the selection; do not represent an admitted question as relevant or resolvable</td>
 							</tr>
-							<tr>
+							<tr id="check-parameters">
 								<td>Immutable parameters — A25</td>
 								<td>
 									<ul>
 										<li>Deployed configuration: manifest <code>protocolConfig</code></li>
 										<li>Fork and non-decision thresholds: Zoltar <code>getForkThresholdAttoRep(universeId)</code> and <code>getNonDecisionThresholdAttoRep(universeId)</code></li>
 										<li>Oracle costs: shared feed <code>getRequestPriceCostAttoEth()</code> and <code>getSettlementCallbackGasLimit()</code></li>
-										<li>Required relationships: <a href="../reference/security-model.html#assumption-a25">A25</a></li>
+										<li>Compare the fork threshold with minted child <code>totalSupply()</code>, then with REP willing holders can mobilize. A 50 REP threshold with 40 REP minted requires further migration before a fork is reachable.</li>
 									</ul>
 								</td>
 								<td>Before deployment and after any change in external gas or market conditions used by the model</td>
-								<td>Treat the immutable deployment as unsupported; there is no administrative parameter repair</td>
+								<td>If migration is insufficient, disclose that the backstop is presently unreachable and recheck after migration. An unsuitable immutable configuration requires another deployment.</td>
 							</tr>
 						</tbody>
 					</table>
