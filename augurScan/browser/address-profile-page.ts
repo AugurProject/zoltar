@@ -7,7 +7,7 @@ import { capitalPositionCard, capitalPositionPath } from './capital-presentation
 import { exactUnit, tokenDecimals } from './format.ts'
 import { forkParticipationUniverse } from './operations-presentation.ts'
 import { short, shortIdentifier } from './identifier-format.ts'
-import { SECURITY_POOL_KIND_LABELS, securityPoolItems, securityPoolPage } from './security-pool-helpers.ts'
+import { type SecurityPoolKind, SECURITY_POOL_KIND_LABELS, securityPoolItems, securityPoolPage } from './security-pool-helpers.ts'
 import type { createOperationsComponents } from './operations-components.ts'
 import { sharePositionSummary, tradingPnlPanel } from './trading-panels.ts'
 import { captureViewState, restoreViewState } from './view-state.ts'
@@ -47,7 +47,7 @@ export const addressTokenBalances = (item: Pick<RichListRecord, 'weth_balances' 
 		amount: exactUnit(token.balance, tokenDecimals(token.decimals), token.symbol ?? fallbackSymbol),
 	}))
 
-export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichListRecord, transactions: AccountTransaction[], interactions: AccountTransaction[], { live = false, securityPoolFocusKind }: { live?: boolean; securityPoolFocusKind?: 'forks' | 'lp' | 'reports' | undefined } = {}) => {
+export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichListRecord, transactions: AccountTransaction[], interactions: AccountTransaction[], { live = false, securityPoolFocusKind }: { live?: boolean; securityPoolFocusKind?: SecurityPoolKind | undefined } = {}) => {
 	const { lookup: $, liveSnapshot, nativeSymbol, element, isDemo, setLiveRecord, number, protocolAddressLink, operationsPanel, operationRow, operationCounted, operationsHref, openAccountTransactions, internalEvidenceLink, time, decodedArgumentsTable, applyLiveChanges, loadAddressProfile } = deps
 	const content = $('#address-profile-content')
 	const previousSections = liveSnapshot(content, '[data-live-key]')
@@ -134,10 +134,11 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 			operationRow(String(claim['type'] ?? 'Escalation position'), `${semanticSummary({ event_data: claim['data'] }, itemNativeSymbol)} · Historical position; winning payout depends on final resolution, carry proofs, reward intervals and fork payout scaling`, String(claim['entity'] ?? ''), claim['blockNumber']),
 		),
 		'No escalation interactions are associated with this address.',
+		item.escalation_claims_truncated ? { label: 'Latest 100 escalation interactions shown.' } : undefined,
 	)
 	const escalationPositions = operationsPanel(
 		'Escalation deposit positions',
-		(item.escalation_positions ?? []).slice(0, 250).map(position => {
+		(item.escalation_positions ?? []).map(position => {
 			let state = 'Unconsumed losing principal'
 			if (position['consumed_block'] != null) state = `Consumed at block ${position['consumed_block']} (${['winning claim', 'losing settlement', 'export', 'direct parent claim'][Number(position['consumption_reason'])] ?? 'unknown consumption reason'})`
 			else if (position['retired_block'] != null) state = `Losing principal retired by settlement at block ${position['retired_block']}`
@@ -146,7 +147,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 			return operationRow(`Deposit ${position['deposit_index']}`, `${exactUnit(String(position['principal_atto_rep']), 18, 'REP')} principal · ${state}`, String(position['game_address']), position['resolution_block'], operationsHref(`/escalation/${position['game_address']}`))
 		}),
 		'No indexed local deposits.',
-		{ label: `Indexed local deposit history; inherited positions and proofs appear in Escalation payouts.${item.escalation_positions_truncated === true ? ' First 250 positions shown.' : ''}` },
+		{ label: 'For inherited positions and proofs, see Escalation payouts.' },
 	)
 	const payouts = item.escalation_payouts ?? {}
 	const payoutPanel = operationsPanel(
@@ -167,13 +168,13 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	)
 	const refundPanel = operationsPanel(
 		'Pending auction refunds',
-		(item.pending_refunds ?? []).slice(0, 250).map(refund => {
+		(item.pending_refunds ?? []).map(refund => {
 			// Refunds are in the auction's collateral token; without sampled token metadata they stay in raw collateral units.
 			const collateral = collateralUnit(refund)
 			return operationRow('Pending refund', exactUnit(String(refund['pending_atto_eth']), collateral.decimals, collateral.symbol), String(refund['auction_address']), undefined, operationsHref(`/auction/${refund['auction_address']}`))
 		}),
 		'No indexed refund credits remain.',
-		{ label: `Balances cover indexed history.${item.pending_refunds_truncated === true ? ' First 250 auctions shown.' : ''}` },
+		{ label: 'Balances cover indexed history.' },
 	)
 	const shares = item.share_positions ?? {}
 	const sharePanel = operationsPanel(
@@ -187,6 +188,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		// Auction amounts are in the auction's collateral token; without sampled token metadata they stay in raw collateral units.
 		(item.auction_claims ?? []).map(claim => operationRow(String(claim['type'] ?? 'Auction position'), semanticSummary({ event_data: claim['data'] }, itemNativeSymbol, collateralUnit(claim)), String(claim['entity'] ?? ''), claim['blockNumber'])),
 		'No collateral-repair-auction interactions are associated with this address.',
+		item.auction_claims_truncated ? { label: 'Latest 100 auction interactions shown.' } : undefined,
 	)
 	const lpPositions = operationsPanel(
 		'AMM liquidity positions',
@@ -222,7 +224,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		),
 		'No OpenOracle rounds identify this address as the current reporter.',
 	)
-	const appendSecurityPoolPagination = (kind: 'forks' | 'lp' | 'reports', panel: HTMLElement) => {
+	const appendSecurityPoolPagination = (kind: SecurityPoolKind, panel: HTMLElement) => {
 		const page = securityPoolPage(item, kind)
 		const items = securityPoolItems(item, kind)
 		const singular = SECURITY_POOL_KIND_LABELS[kind].singular
@@ -266,6 +268,8 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 			panel.append(complete)
 		}
 	}
+	appendSecurityPoolPagination('positions', escalationPositions)
+	appendSecurityPoolPagination('refunds', refundPanel)
 	appendSecurityPoolPagination('lp', lpPositions)
 	appendSecurityPoolPagination('forks', forkParticipation)
 	appendSecurityPoolPagination('reports', reportParticipation)

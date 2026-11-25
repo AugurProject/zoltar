@@ -3,7 +3,7 @@ import { handleApi } from '../../src/api.ts'
 import { canonicalTablePolicies, ScannerDatabase } from '../../src/database.ts'
 import { initializeSchema } from '../../src/schema.ts'
 import { CURRENT_SCHEMA_VERSION, UNSUPPORTED_SCHEMA_MESSAGE } from '../../src/schema-policy.ts'
-import { rewindAccountingStorageToV6, rewindAuctionNamingToV5, rewindStaleContractValuesToV7 } from '../support/schema-fixtures.ts'
+import { rewindTransactionStatusToV10, rewindAccountingStorageToV6, rewindAuctionNamingToV5, rewindStaleContractValuesToV7 } from '../support/schema-fixtures.ts'
 import { address, blockHash, chainId, discoveredAddress, expectBehaviorChangingSchemaObjectsRejected, inverseUniswapPairAddress, pairAddress, postgresTest, rediscoveredAddress, requirePostgresUrl, wethAddress } from '../support/postgres-fixtures.ts'
 
 const v1ForkLogs = [
@@ -187,7 +187,7 @@ const expectMigratedTimelineEvidence = async (database: ScannerDatabase, migrati
 	const migratedMarker = await database.sql`SELECT schema_version FROM augurscan_schema WHERE singleton`
 	expect(migratedMarker).toEqual([{ schema_version: CURRENT_SCHEMA_VERSION }])
 	const appliedMigrations = await database.sql`SELECT schema_version FROM augurscan_schema_migrations ORDER BY schema_version::integer`
-	expect(appliedMigrations).toEqual([{ schema_version: '2' }, { schema_version: '3' }, { schema_version: '4' }, { schema_version: '5' }, { schema_version: '6' }, { schema_version: '7' }, { schema_version: '8' }, { schema_version: '9' }, { schema_version: '10' }])
+	expect(appliedMigrations).toEqual([{ schema_version: '2' }, { schema_version: '3' }, { schema_version: '4' }, { schema_version: '5' }, { schema_version: '6' }, { schema_version: '7' }, { schema_version: '8' }, { schema_version: '9' }, { schema_version: '10' }, { schema_version: '11' }])
 	const migratedTimeline = await database.sql`
 		SELECT entity_identity, source_event, canonical FROM protocol_timeline_entries
 		WHERE chain_id = ${migrationChainId} ORDER BY block_number
@@ -479,11 +479,12 @@ postgresTest('replaces v6 accounting storage and keeps the logs a projection reb
 		// A second startup must accept the migrated layout without replaying DDL.
 		await initializeSchema(database.sql)
 		expect(await database.sql`SELECT settlement_collateral_atto_eth::text, share_token_supply_atto_shares::text FROM pool_snapshots WHERE chain_id = ${migrationChainId}`).toEqual([{ settlement_collateral_atto_eth: '7', share_token_supply_atto_shares: '9' }])
+		await rewindTransactionStatusToV10(database)
 		// A v9 timestamp stores security-pool-clock seconds, including orphaned evidence.
 		await database.sql`UPDATE pool_snapshots SET canonical = false WHERE chain_id = ${migrationChainId}`
 		await database.sql.unsafe('ALTER TABLE public.pool_snapshots DROP CONSTRAINT pool_snapshots_reason_check, DROP CONSTRAINT pool_snapshots_portfolio_time_check, ALTER COLUMN last_settlement_portfolio_time TYPE timestamp with time zone USING to_timestamp(last_settlement_portfolio_time::double precision)')
 		await database.sql`UPDATE augurscan_schema SET schema_version = '9' WHERE singleton`
-		await database.sql`DELETE FROM augurscan_schema_migrations WHERE schema_version = '10'`
+		await database.sql`DELETE FROM augurscan_schema_migrations WHERE schema_version::integer >= 10`
 		await database.sql`UPDATE pool_snapshots SET reason = 3 WHERE chain_id = ${migrationChainId}`
 		await expect(initializeSchema(database.sql)).rejects.toThrow('pool_snapshots_reason_check')
 		expect(await database.sql`SELECT schema_version FROM augurscan_schema WHERE singleton`).toEqual([{ schema_version: '9' }])
@@ -535,7 +536,7 @@ postgresTest('removes v7 seed prices and constant pool columns while keeping acc
 				(${migrationChainId}, ${hash}, ${txHash}, 2, 1, ${coordinator}, 'PriceReported', 42, 19, to_timestamp(2000), true)
 		`
 		await database.sql`UPDATE augurscan_schema SET schema_version = '7' WHERE singleton`
-		await database.sql`DELETE FROM augurscan_schema_migrations WHERE schema_version IN ('8', '9', '10')`
+		await database.sql`DELETE FROM augurscan_schema_migrations WHERE schema_version IN ('8', '9', '10', '11')`
 		await initializeSchema(database.sql)
 		expect(await database.sql`SELECT schema_version FROM augurscan_schema WHERE singleton`).toEqual([{ schema_version: CURRENT_SCHEMA_VERSION }])
 		expect(await database.sql`SELECT description FROM augurscan_schema_migrations WHERE schema_version = '8'`).toEqual([{ description: 'Removal of values no current contract supplies' }])
@@ -563,6 +564,24 @@ postgresTest('removes v7 seed prices and constant pool columns while keeping acc
 		expect(await database.sql`SELECT count(*)::integer AS count FROM rep_eth_price_snapshots WHERE chain_id = ${migrationChainId}`).toEqual([{ count: 1 }])
 	} finally {
 		await database.sql.unsafe('TRUNCATE TABLE networks CASCADE')
+		await database.close()
+	}
+})
+
+postgresTest('stores reverted direct calls while rejecting reverted log-selected evidence', async () => {
+	const database = new ScannerDatabase(requirePostgresUrl())
+	try {
+		await initializeSchema(database.sql)
+		await database.sql.begin(async transaction => {
+			await transaction`CREATE TEMP TABLE selected_transactions (LIKE transactions INCLUDING CONSTRAINTS) ON COMMIT DROP`
+			const insert = (selectionSource: string) => transaction`
+				INSERT INTO selected_transactions (chain_id, hash, block_hash, block_number, transaction_index, from_address, value, input, status, receipt, canonical)
+				VALUES (1, 'hash', 'block', 1, 0, 'sender', 0, '0x', 'reverted', ${JSON.stringify({ selectionSource })}::text::jsonb, true)
+			`
+			await insert('protocol-call')
+			await expect(transaction.savepoint(async () => await insert('protocol-log'))).rejects.toThrow('transactions_selection_status')
+		})
+	} finally {
 		await database.close()
 	}
 })

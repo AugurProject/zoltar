@@ -115,7 +115,7 @@ export const parseLogCursor = (value: string | null, chainId: number, event: str
 export const logCursorFor = (chainId: number, event: string | null, address: string | null, decoded: 'true' | 'false' | null, canonical: CanonicalHistoryFilter, asOf: Record<string, unknown>, row: Record<string, unknown>): string =>
 	encodeOpaqueCursor([1, chainId, event, address, decoded, canonical, ...snapshotBoundary(asOf), cursorTimestamp(row['block_timestamp']), String(row['block_number']), Number(row['transaction_index']), Number(row['log_index']), String(row['block_hash'])] satisfies LogCursor)
 
-export type AddressHistoryKind = 'referenced' | 'sent'
+export type AddressHistoryKind = 'referenced' | 'sent' | 'open-oracle-custody'
 
 export type AddressHistoryCursor = readonly [version: 1, kind: AddressHistoryKind, chainId: number, address: string, snapshotBlock: string, snapshotHash: string, invalidationId: string, abiSourceHash: string, applicationSourceHash: string, projectionSourceHash: string, total: number, block: string, transaction: number]
 
