@@ -76,6 +76,17 @@ jobs:
           PUBLISHER_IMAGE: ${{ steps.image.outputs.image }}
         run: docker push "${PUBLISHER_IMAGE}"
 
+      - name: Verify public IPFS delivery
+        timeout-minutes: 25
+        env:
+          PUBLISHER_IMAGE: ${{ steps.image.outputs.image }}
+          IPFS_GATEWAY: ${{ vars.IPFS_GATEWAY }}
+        run: |
+          container=$(docker create "$PUBLISHER_IMAGE")
+          trap 'docker rm "$container" >/dev/null' EXIT
+          docker cp "$container:/export" "$RUNNER_TEMP/release-export"
+          bash tooling/ui/verify-ipfs-release.sh "$RUNNER_TEMP/release-export"
+
       - name: Create or update GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -138,4 +149,5 @@ jobs:
           RELEASE_TAGS=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases" --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name')
           LATEST_TAG=$(printf '%s\n' "${RELEASE_TAGS}" | grep -E '^v[0-9]+$' | sort -Vr | sed -n '1p')
           # Reconcile published versions even when builds finish out of order.
+          [[ "${LATEST_TAG}" == "${GITHUB_REF_NAME}" ]] || exit 0
           gh release edit "${LATEST_TAG}" --repo "${GITHUB_REPOSITORY}" --latest

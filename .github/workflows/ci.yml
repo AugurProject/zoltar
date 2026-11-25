@@ -294,6 +294,8 @@ jobs:
           [[ "${#reports[@]}" -gt 0 ]]
           for report in "${reports[@]}"; do test -s "${report%/*}/junit.xml"; done
           printf '%s\n' "${GITHUB_SHA}" > coverage/ci/commit.txt
+      - name: Summarize component coverage without thresholds
+        run: bun tooling/testing/component-coverage-report.mts "${{ matrix.package }}" "${{ matrix.directory }}/coverage/ci"
       - name: Publish component line coverage
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
