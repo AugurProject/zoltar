@@ -41,14 +41,24 @@ export async function searchReportingDepositsPage(client: Pick<ReadClient, 'getB
 	if (head.number === undefined || head.hash === undefined) throw new Error('Deposit search requires a confirmed block.')
 	const blockNumber = head.number
 	const safeBlockNumber = blockNumber > confirmationDepth ? blockNumber - confirmationDepth : 0n
-	const [safeBlock, previousBlock] = await Promise.all([client.getBlock({ blockNumber: safeBlockNumber }), position === undefined || position.block > blockNumber ? undefined : client.getBlock({ blockNumber: position.block })])
+	const safeBlock = safeBlockNumber === blockNumber ? head : await client.getBlock({ blockNumber: safeBlockNumber })
+	let previousBlock: typeof head | undefined
+	if (position !== undefined && position.block <= blockNumber) {
+		if (position.block === blockNumber) previousBlock = head
+		else if (position.block === safeBlockNumber) previousBlock = safeBlock
+		else previousBlock = await client.getBlock({ blockNumber: position.block })
+	}
 	const isContinuation = position !== undefined && previousBlock?.hash === position.hash
 	const start = isContinuation ? position.nextIndex : 0n
 	const lengthRead = { abi: gameArtifact.abi, address: game, functionName: 'getDepositsByOutcomeLength', args: [getReportingOutcomeValue(side.outcome)] } as const
-	const [first, second] = await readRequiredMulticall(client, [reportingDepositRead(game, side.outcome, start, pageSize), reportingDepositRead(game, side.outcome, start + pageSize, pageSize)], blockNumber)
-	const [totalDeposits] = await readOptionalMulticall(client, [lengthRead], blockNumber)
-	const [safeCount] = await readOptionalMulticall(client, [lengthRead], safeBlockNumber)
-	const [checkedHead, checkedSafeBlock] = await Promise.all([client.getBlock({ blockNumber }), client.getBlock({ blockNumber: safeBlockNumber })])
+	const [firstPage, secondPage, totalDeposits] = await readOptionalMulticall(client, [reportingDepositRead(game, side.outcome, start, pageSize), reportingDepositRead(game, side.outcome, start + pageSize, pageSize), lengthRead], blockNumber)
+	if (firstPage.status === 'failure') throw firstPage.error
+	if (secondPage.status === 'failure') throw secondPage.error
+	const first = firstPage.result
+	const second = secondPage.result
+	const safeCount = safeBlockNumber === blockNumber ? totalDeposits : (await readOptionalMulticall(client, [lengthRead], safeBlockNumber))[0]
+	const checkedHead = await client.getBlock({ blockNumber })
+	const checkedSafeBlock = safeBlockNumber === blockNumber ? checkedHead : await client.getBlock({ blockNumber: safeBlockNumber })
 	if (checkedHead.hash !== head.hash || checkedSafeBlock.hash !== safeBlock.hash) throw new Error('The chain changed during the deposit search. Retry this page.')
 	const nextIndex = start + BigInt(first.length + second.length)
 	const matches = [...first, ...second].flatMap((deposit, offset) => (sameAddress(deposit.depositor, side.depositor) && deposit.amountAttoRep > 0n ? [{ deposit: { ...side, index: start + BigInt(offset), originalAttoRep: deposit.amountAttoRep }, principal: deposit.amountAttoRep }] : []))

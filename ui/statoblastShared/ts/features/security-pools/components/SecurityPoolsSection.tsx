@@ -25,7 +25,7 @@ import { useSecurityPoolAggregate } from '../hooks/useSecurityPoolAggregate.js'
 import { useSecurityPoolPurchase } from '../hooks/useSecurityPoolPurchase.js'
 import { SecurityPoolTakeover } from './SecurityPoolTakeover.js'
 import { SecurityPoolAggregatePanel } from './SecurityPoolAggregatePanel.js'
-import { SecurityPoolSharedFork } from './SecurityPoolSharedFork.js'
+import { SecurityPoolSharedFork, type ForkQuestionRead } from './SecurityPoolSharedFork.js'
 import { SecurityPoolPurchasePanel } from './SecurityPoolPurchasePanel.js'
 import { SecurityPoolPriceReport } from './SecurityPoolPriceReport.js'
 import { accountPriceTarget } from '../hooks/useSecurityPoolPrice.js'
@@ -44,6 +44,7 @@ export function SecurityPoolsSection({
 	page,
 	deploying = false,
 	forkQuestion,
+	forkQuestionRead,
 	onBranchCommitted,
 	onSelectUniverse,
 	openOracleHref,
@@ -54,6 +55,7 @@ export function SecurityPoolsSection({
 	onReadStatus?: ReportStatoblastReadStatus | undefined
 	cacheReads?: boolean
 	forkQuestion?: MarketDetails | undefined
+	forkQuestionRead?: ForkQuestionRead | undefined
 	onBranchCommitted?: ((committed: boolean) => void) | undefined
 	onSelectUniverse?: ((id: bigint) => void) | undefined
 	openOracleHref?: string | undefined
@@ -325,6 +327,7 @@ export function SecurityPoolsSection({
 						<SecurityPoolSharedFork
 							redesigned={page !== undefined}
 							forkQuestion={forkQuestion}
+							forkQuestionRead={forkQuestionRead}
 							onBranchCommitted={onBranchCommitted}
 							snapshot={model.snapshot}
 							presentationSnapshot={shown}

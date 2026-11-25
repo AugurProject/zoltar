@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { loadStatoblastQuestion } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
+import { loadStatoblastQuestion, type QuestionReadCheckpoint } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
 import { loadQuestionLedgerMintCapacity } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
-import { createMockLoaderClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { createMockLoaderClient, createMulticallStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { centralSecurityPoolRead, owner, securityPool, capital, token } from '../features/security-pools/capitalFixture.js'
 
 const block = { hash: `0x${'11'.repeat(32)}`, number: 99n, timestamp: 1000n } as const
@@ -63,8 +63,16 @@ function fixture({ forked = false, reporting = false, missingSecurityPool = fals
 				if (call.functionName === 'statoblastSecurityMultiplierBps') return deployment.statoblastSecurityMultiplierBps
 				if (call.functionName === 'questions') return ['Question', 'Description', 1n, 2000n, 2n, 0n, 2000n, '']
 				if (call.functionName === 'questionCreatedTimestamp') return 1n
-				if (call.functionName === 'securityPoolCustody') return capital
+				if (call.functionName === 'securityPoolCustody') return missingSecurityPool ? zeroAddress : capital
+				if (call.functionName === 'securityPoolOf') return securityPool
 				if (call.functionName === 'escalationGame') return reporting ? token : zeroAddress
+				if (call.functionName === 'systemState') return 0n
+				if (call.functionName === 'getQuestionOutcome') return 3n
+				if (call.functionName === 'getForkTime') return forked ? 900n : 0n
+				if (call.functionName === 'lastPrice') return 10n
+				if (call.functionName === 'lastSettlementTimestamp') return 950n
+				if (call.functionName === 'priceValidUntil') return 1200n
+				if (call.functionName === 'initialReportPriorityFeeAttoEthPerGas') return 1n
 				return centralSecurityPoolRead(call.functionName, 'active')
 			})
 		},
@@ -83,6 +91,44 @@ test('direct loading rejects a question without verified security pool custody',
 })
 test('rejects a replaced discovery anchor after loading question snapshots', async () => {
 	await expect(loadStatoblastQuestion(fixture({ reorg: true }).client, securityPool, deployment.questionId, deployment.universeId, false)).rejects.toThrow('Question changed during refresh.')
+})
+
+test('a failed final block check resumes the verified question read on retry', async () => {
+	const { client, reads } = fixture()
+	const getBlock = client.getBlock
+	let blockReads = 0
+	client.getBlock = async parameters => {
+		if (++blockReads === 2) throw new Error('RPC unavailable')
+		return await getBlock(parameters)
+	}
+	const checkpoint: QuestionReadCheckpoint = {}
+	const load = () => loadStatoblastQuestion(client, securityPool, deployment.questionId, deployment.universeId, false, false, checkpoint)
+	await expect(load()).rejects.toThrow('RPC unavailable')
+	const previousReads = reads.length
+	await expect(load()).resolves.toMatchObject({ question: { questionLedgerAddress: owner } })
+	expect(reads).toHaveLength(previousReads)
+})
+
+test('retry starts from a new head when the question was missing at the previous block', async () => {
+	const { client } = fixture()
+	const getBlock = client.getBlock
+	const multicall = client.multicall
+	let latestReads = 0
+	let registered = false
+	client.getBlock = async request => {
+		if (request?.blockNumber === undefined) latestReads++
+		return await getBlock(request)
+	}
+	client.multicall = createMulticallStub(request => {
+		if (!registered && request.contracts[0]?.functionName === 'getQuestionLedger') return [{ status: 'failure', error: new Error('Multicall contract call failed: execution reverted: Question not registered') }]
+		return multicall(request)
+	})
+	const checkpoint: QuestionReadCheckpoint = {}
+	const load = () => loadStatoblastQuestion(client, securityPool, deployment.questionId, deployment.universeId, false, false, checkpoint)
+	await expect(load()).rejects.toThrow('Question not registered')
+	registered = true
+	await expect(load()).resolves.toMatchObject({ question: { questionLedgerAddress: owner } })
+	expect(latestReads).toBe(2)
 })
 test('reflects a forked universe without per-question vault scans', async () => {
 	const { question } = await loadStatoblastQuestion(fixture({ forked: true }).client, securityPool, deployment.questionId, deployment.universeId, false)

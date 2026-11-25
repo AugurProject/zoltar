@@ -78,7 +78,7 @@ export function SecurityPoolAggregatePanel({
 	const gaugeMax = Math.max(200, target)
 	const liquidation = snapshot === undefined || snapshot.conservativePrice === 0n ? undefined : Number((snapshot.liquidationPrice * 10_000n) / snapshot.conservativePrice) / 100
 	const priceCurrent = snapshot?.priceValid === true && !priceDeadlineChecking
-	const disabled = priceDeadlineChecking || actions.busy !== undefined || model.loading || model.showingPreviousSnapshot
+	const disabled = priceDeadlineChecking || actions.busy !== undefined || fieldsLoading || model.showingPreviousSnapshot
 	const disabledReason = actions.busy !== undefined ? copy.actionPending : copy.readUnavailable
 	let targetCapacityReason: string | undefined
 	if (disabled) targetCapacityReason = disabledReason

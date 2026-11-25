@@ -121,11 +121,13 @@ test('individual capital actions execute through the authenticated auction vault
 	expect(hook.state().error).toBeDefined()
 	expect(requests).toHaveLength(1)
 })
-test('an authenticated security pool refresh keeps actions disabled with a loading reason', async () => {
+test('security pool refresh keeps actions usable with an authenticated snapshot', async () => {
 	capitalClient().install()
 	const base = model()
 	const hook = await renderHookWithProps(useSecurityPoolActionsWrapper, { model: base })
 	lifecycle.trackRendered(hook)
+	await hook.setProps({ model: { ...base, loading: true } })
+	expect(hook.state().ownerReason).toBeUndefined()
 	await hook.setProps({ model: { ...base, snapshot: undefined, loading: true } })
 	expect(hook.state().ownerReason).toBe('Loading security pool…')
 	expect(hook.state().registerReason).toBe('Loading security pool…')

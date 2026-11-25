@@ -35,6 +35,7 @@ import type { ShareMigrationTargetsState, TradingActionResult, TradingDetails } 
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as tradingCopy from '../../../copy/trading.js'
+import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
 
 type UseTradingOperationsParameters = WriteOperationsParameters & {
 	deploymentStatuses: DeploymentStatus[]
@@ -54,13 +55,15 @@ export type UseTradingOperationsDependencies = {
 	redeemSharesInQuestionLedger: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], questionLedgerAddress: Address) => ReturnType<typeof redeemSharesInQuestionLedger>
 }
 
+const createTradingReadClient = () => withStatoblastRequestTimeout(createConnectedReadClient(), 'Shares refresh timed out.')
+
 const defaultUseTradingOperationsDependencies: UseTradingOperationsDependencies = {
 	createCompleteSetInQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress, amount) => await createCompleteSetInQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, amount),
 	getWalletEthBalance: async walletAddress => await createConnectedReadClient().getBalance({ address: walletAddress }),
 	loadQuestionLedgerMintCapacity: async questionLedgerAddress => await loadQuestionLedgerMintCapacity(createConnectedReadClient(), questionLedgerAddress),
-	loadShareMigrationTargets: async (source, childUniverses, accountAddress) => await loadShareMigrationTargets(createConnectedReadClient(), source, childUniverses, accountAddress),
-	loadTradingDetails: async (questionLedgerAddress, accountAddress) => await loadTradingDetailsForPool(createConnectedReadClient(), questionLedgerAddress, accountAddress),
-	loadZoltarUniverseSummary: async universeId => await loadZoltarUniverseSummary(createConnectedReadClient(), universeId),
+	loadShareMigrationTargets: async (source, childUniverses, accountAddress) => await loadShareMigrationTargets(createTradingReadClient(), source, childUniverses, accountAddress),
+	loadTradingDetails: async (questionLedgerAddress, accountAddress) => await loadTradingDetailsForPool(createTradingReadClient(), questionLedgerAddress, accountAddress),
+	loadZoltarUniverseSummary: async universeId => await loadZoltarUniverseSummary(createTradingReadClient(), universeId),
 	migrateSharesFromUniverse: async (accountAddress, callbacks, questionLedgerAddress, outcome, targetOutcomeIndexes, migratedAttoShares) => await migrateSharesFromUniverse(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, outcome, targetOutcomeIndexes, migratedAttoShares),
 	redeemCompleteSetInQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress, amount) => await redeemCompleteSetInQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, amount),
 	redeemSharesInQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress) => await redeemSharesInQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress),
@@ -68,7 +71,7 @@ const defaultUseTradingOperationsDependencies: UseTradingOperationsDependencies 
 
 export function useTradingOperations(parameters: UseTradingOperationsParameters, dependencies: UseTradingOperationsDependencies = defaultUseTradingOperationsDependencies) {
 	const { accountAddress, deploymentStatuses, enabled, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState, selectedQuestionLedgerAddress } = parameters
-	const tradingDetailsLoad = useLoadController({ timeoutMilliseconds: 15_000 })
+	const tradingDetailsLoad = useLoadController({ timeoutMilliseconds: false })
 	const nextTradingDetailsLoad = useRequestGuard()
 	const tradingDetails = useSignal<TradingDetails | undefined>(undefined)
 	const loadedDetailsScope = useSignal<string>()

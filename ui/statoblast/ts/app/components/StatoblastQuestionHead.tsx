@@ -47,9 +47,9 @@ export function StatoblastQuestionHead({
 	const poolPage = { kind: 'pool', pool: page.pool, tab: 'capital' } as const
 	const questionsPage = { ...poolPage, tab: 'questions' } as const
 	const title = getQuestionTitle(question.marketDetails)
-	const resolved = question.questionOutcome !== 'none'
+	const resolved = question.questionOutcome !== 'none' || reporting?.settlementState === 'resolved'
 	const started = question.ordinaryEscalationGameStarted || reporting?.status === 'active'
-	const forkStep = question.universeHasForked || (reporting?.status === 'active' && reporting.hasReachedNonDecision)
+	const forkStep = !resolved && (question.universeHasForked || (reporting?.status === 'active' && reporting.hasReachedNonDecision))
 	const ended = now !== undefined && now >= question.marketDetails.endTime
 	let step = 0
 	if (ended) step = 1
@@ -57,7 +57,7 @@ export function StatoblastQuestionHead({
 	if (resolved) step = 3
 	let phase = pageCopy.stageLabels[step] ?? pageCopy.trading
 	if (forkStep) phase = pageCopy.fork
-	if (checkingDeadline) phase = pageCopy.deadlineChecking
+	if (checkingDeadline && !resolved) phase = pageCopy.deadlineChecking
 	const phaseTone = resolved ? 'ok' : 'muted'
 	const hasStakedRep = reporting?.status === 'active' && reporting.sides.some(side => (side.localPrincipalAttoRep ?? 0n) > 0n || side.userDeposits.some(deposit => deposit.amountAttoRep > 0n))
 	const threshold = reporting?.nonDecisionThresholdAttoRep

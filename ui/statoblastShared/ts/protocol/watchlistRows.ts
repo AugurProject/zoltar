@@ -241,7 +241,7 @@ async function readQuestionRow(read: ReadWatchlistBatch, entity: Extract<Watchli
 					{ abi: gameAbi, address: gameAddress, functionName: 'hasReachedNonDecision' },
 				])
 	const sharesRead = owner !== undefined && token.status === 'success' && token.result !== zeroAddress ? read([{ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: token.result, functionName: 'balanceOfShares', args: [universeId, owner] }]) : undefined
-	const totalsRead = gameAddress === undefined || owner === undefined || !includeDeposits ? undefined : read(reportingSides.map(outcome => reportingPrincipalRead(gameAddress, { outcome, depositor: owner })))
+	const totalsRead = gameAddress === undefined || owner === undefined ? undefined : read(reportingSides.map(outcome => reportingPrincipalRead(gameAddress, { outcome, depositor: owner })))
 	const [gameResult, sharesResult, totals] = await Promise.all([gameReads, sharesRead, totalsRead])
 	const [deadline, continuation, nonDecision] = gameResult ?? []
 	if (nonDecision?.status === 'success') row.nonDecision = nonDecision.result
@@ -262,7 +262,7 @@ async function readQuestionRow(read: ReadWatchlistBatch, entity: Extract<Watchli
 	if (gameAddress !== undefined && owner !== undefined && totals !== undefined && totals.every(result => result.status === 'success')) {
 		const total = totals.reduce((sum, result) => sum + (result.status === 'success' ? result.result : 0n), 0n)
 		row.reportingPrincipal = total
-		if (total === 0n) return row
+		if (total === 0n || !includeDeposits) return row
 		const saved = reportingDepositStore(profile)
 			.read()
 			.filter(deposit => deposit.pool.toLowerCase() === entity.pool.toLowerCase() && deposit.questionId === entity.questionId && deposit.universeId === universeId && deposit.depositor.toLowerCase() === owner.toLowerCase())
@@ -278,15 +278,27 @@ async function readQuestionRow(read: ReadWatchlistBatch, entity: Extract<Watchli
 	return row
 }
 
-type WatchlistReadOptions = { includeDeposits?: boolean; onChunk?: (rows: readonly WatchlistRow[], finished: number, total: number, anchor: { number: bigint; timestamp: bigint }) => void }
+export type WatchlistReadCheckpoint = { anchor?: { number: bigint; hash: `0x${string}`; timestamp: bigint }; rows: WatchlistRow[] }
+type WatchlistReadOptions = { checkpoint?: WatchlistReadCheckpoint; includeDeposits?: boolean; onChunk?: (rows: readonly WatchlistRow[], finished: number, total: number, anchor: { number: bigint; timestamp: bigint }) => void }
 
-export async function loadWatchlistRows(client: ReadClient, entries: readonly WatchlistEntity[], universeId: bigint, owner: Address | undefined, profile: NetworkProfile, { onChunk, includeDeposits = true }: WatchlistReadOptions = {}) {
+export async function loadWatchlistRows(client: ReadClient, entries: readonly WatchlistEntity[], universeId: bigint, owner: Address | undefined, profile: NetworkProfile, { checkpoint = { rows: [] }, onChunk, includeDeposits = true }: WatchlistReadOptions = {}) {
 	if (entries.length === 0) return []
-	const head = await client.getBlock()
-	if (head.number === undefined) throw new Error('Watchlist refresh requires a mined block.')
+	if (checkpoint.anchor !== undefined) {
+		const verified = await client.getBlock({ blockNumber: checkpoint.anchor.number })
+		if (verified.hash !== checkpoint.anchor.hash) {
+			delete checkpoint.anchor
+			checkpoint.rows = []
+		}
+	}
+	if (checkpoint.anchor === undefined) {
+		const latest = await client.getBlock()
+		if (latest.number === undefined || latest.hash === undefined) throw new Error('Watchlist refresh requires a mined block.')
+		checkpoint.anchor = { number: latest.number, hash: latest.hash, timestamp: latest.timestamp }
+	}
+	const head = checkpoint.anchor
 	const block = head.number
-	const rows: WatchlistRow[] = []
-	for (let offset = 0; offset < entries.length; offset += 25) {
+	const rows = checkpoint.rows
+	for (let offset = rows.length; offset < entries.length; offset += 25) {
 		const chunk = entries.slice(offset, offset + 25)
 		const checks = await checkStatoblastEntries(
 			client,

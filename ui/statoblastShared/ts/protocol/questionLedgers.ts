@@ -1,11 +1,18 @@
 import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { readOptionalMulticall, readRequiredMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import { statoblast_QuestionLedger_QuestionLedger, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
+import { statoblast_QuestionLedger_QuestionLedger, statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
 import { checkStatoblastEntries } from './statoblastEntries.js'
 import { loadQuestionLedgerDetails } from './questionLedgerSnapshot.js'
 
 type DeploymentRegistryAnchor = Readonly<{ blockHash: `0x${string}`; blockNumber: bigint; timestamp: bigint }>
+
+export type QuestionReadCheckpoint = {
+	anchor?: DeploymentRegistryAnchor
+	ledger?: Address
+	question?: Awaited<ReturnType<typeof loadCheckedQuestionLedger>>
+	sharesFacts?: Awaited<ReturnType<typeof readSharesFacts>>
+}
 
 async function loadDeploymentRegistryAnchor(client: ReadClient): Promise<DeploymentRegistryAnchor> {
 	const block = await client.getBlock()
@@ -13,21 +20,45 @@ async function loadDeploymentRegistryAnchor(client: ReadClient): Promise<Deploym
 	return { blockHash: block.hash, blockNumber: block.number, timestamp: block.timestamp }
 }
 
-async function requireDeploymentRegistryAnchor(client: ReadClient, anchor: DeploymentRegistryAnchor, changedMessage = 'Question ledger deployments changed during discovery') {
+async function isDeploymentRegistryAnchorCurrent(client: ReadClient, anchor: DeploymentRegistryAnchor) {
 	const block = await client.getBlock({ blockNumber: anchor.blockNumber })
-	if (block.hash?.toLowerCase() !== anchor.blockHash.toLowerCase()) throw new Error(changedMessage)
+	return block.hash?.toLowerCase() === anchor.blockHash.toLowerCase()
 }
 
-export async function loadStatoblastQuestion(client: ReadClient, pool: Address, questionId: bigint, universeId: bigint, useSessionCache = true, includeSharesFacts = false) {
-	const anchor = await loadDeploymentRegistryAnchor(client)
-	const [checked] = await checkStatoblastEntries(client, [{ pool, questionId, universeId }], anchor.blockNumber, useSessionCache)
-	if (checked?.status === 'failed') throw checked.error
-	if (checked?.status === 'unregistered-question') throw new Error('Question not registered')
-	if (checked?.status === 'unprepared-question') throw new Error('Question pool unavailable')
-	if (checked?.status === 'non-statoblast-contract') throw new Error('This contract is not a Statoblast security pool.')
-	if (checked?.status !== 'question') throw new Error('No contract exists at this security pool address.')
-	const [question, sharesFacts] = await Promise.all([loadCheckedQuestionLedger(client, checked.ledger, universeId, anchor.blockNumber), includeSharesFacts ? readSharesFacts(client, checked.pool, universeId, anchor.blockNumber).catch(() => undefined) : undefined])
-	await requireDeploymentRegistryAnchor(client, anchor, 'Question changed during refresh.')
+export async function loadStatoblastQuestion(client: ReadClient, pool: Address, questionId: bigint, universeId: bigint, useSessionCache = true, includeSharesFacts = false, checkpoint: QuestionReadCheckpoint = {}) {
+	const checkAnchor = async (anchor: DeploymentRegistryAnchor) => {
+		if (await isDeploymentRegistryAnchorCurrent(client, anchor)) return
+		delete checkpoint.anchor
+		delete checkpoint.ledger
+		delete checkpoint.question
+		delete checkpoint.sharesFacts
+		throw new Error('Question changed during refresh.')
+	}
+	if (checkpoint.anchor !== undefined) await checkAnchor(checkpoint.anchor)
+	const anchor = (checkpoint.anchor ??= await loadDeploymentRegistryAnchor(client))
+	if (checkpoint.ledger === undefined) {
+		const [checked] = await checkStatoblastEntries(client, [{ pool, questionId, universeId }], anchor.blockNumber, useSessionCache)
+		if (checked?.status === 'failed') throw checked.error
+		if (checked?.status !== 'question') {
+			delete checkpoint.anchor
+			if (checked?.status === 'unregistered-question') throw new Error('Question not registered')
+			if (checked?.status === 'unprepared-question') throw new Error('Question pool unavailable')
+			if (checked?.status === 'non-statoblast-contract') throw new Error('This contract is not a Statoblast security pool.')
+			throw new Error('No contract exists at this security pool address.')
+		}
+		checkpoint.ledger = checked.ledger
+	}
+	const ledger = checkpoint.ledger
+	const [question, sharesFacts] = await Promise.all([
+		checkpoint.question ?? loadCheckedQuestionLedger(client, ledger, universeId, anchor.blockNumber).then(result => (checkpoint.question = result)),
+		includeSharesFacts
+			? (checkpoint.sharesFacts ??
+				readSharesFacts(client, pool, universeId, anchor.blockNumber)
+					.then(result => (checkpoint.sharesFacts = result))
+					.catch(() => undefined))
+			: undefined,
+	])
+	await checkAnchor(anchor)
 	return { question, sharesFacts, block: { number: anchor.blockNumber, timestamp: anchor.timestamp } }
 }
 
@@ -65,6 +96,5 @@ async function loadCheckedQuestionLedger(client: ReadClient, questionLedger: Add
 		],
 		blockNumber,
 	)
-	const priorityFee = await client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: getAddress(manager), functionName: 'initialReportPriorityFeeAttoEthPerGas', blockNumber })
-	return await loadQuestionLedgerDetails(client, { questionLedger, openOraclePriceCoordinator: getAddress(manager), parent: getAddress(parent), universeId, questionId, statoblastSecurityMultiplierBps: multiplier, initialReportPriorityFeeAttoEthPerGas: priorityFee }, blockNumber)
+	return await loadQuestionLedgerDetails(client, { questionLedger, openOraclePriceCoordinator: getAddress(manager), parent: getAddress(parent), universeId, questionId, statoblastSecurityMultiplierBps: multiplier }, blockNumber)
 }

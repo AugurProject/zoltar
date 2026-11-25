@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import type { SecurityPoolAccountSnapshot } from '../../../protocol/securityPool.js'
+import { deadlineRetryDelays } from '../../../lib/deadlineRefresh.js'
 
-const delays = [0, 1000, 4000, 12_000]
 const maxTimerDelay = 2_147_483_647
 
 export function useSecurityPoolPriceDeadline(snapshot: SecurityPoolAccountSnapshot | undefined, displayedAt: number | undefined, refresh: () => Promise<void>) {
@@ -21,7 +21,7 @@ export function useSecurityPoolPriceDeadline(snapshot: SecurityPoolAccountSnapsh
 		const active = () => !cancelled && current.current.identity === identity && !document.hidden
 		const refreshDeadline = () => {
 			if (!active()) return
-			const delay = delays[attempt++]
+			const delay = deadlineRetryDelays[attempt++]
 			if (delay === undefined) {
 				setState({ identity, status: 'failed' })
 				return

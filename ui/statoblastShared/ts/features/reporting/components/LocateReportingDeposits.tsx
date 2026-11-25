@@ -1,7 +1,7 @@
 import * as pageCopy from '../../../copy/reportingDeposits.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { useEffect, useId, useState } from 'preact/hooks'
+import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { createActiveEnvironmentGuard, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
@@ -9,7 +9,7 @@ import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
 import { formatCurrencyBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
+import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
 import type { ActiveReportingDetails } from '../../../types/contracts.js'
 import { locatedDepositKey, reportingDepositStore } from '../../../protocol/reportingDeposits.js'
 import { reportingDepositCursorStore, reportingDepositRead, searchReportingDepositsPage } from '../../../protocol/reportingDepositSearch.js'
@@ -26,6 +26,7 @@ export function LocateReportingDeposits({ details, wallet, refresh, openOnEntry 
 	const [checkingIndex, setCheckingIndex] = useState(false)
 	const [indexError, setIndexError] = useState<string>()
 	const [searchError, setSearchError] = useState<string>()
+	const singleFlight = useRef({ pending: false })
 	const indexInputId = useId()
 	const visible = usePageVisible()
 	const { escalationGameAddress, reportingDepositPool, reportingQuestionId, universeId } = details
@@ -38,7 +39,8 @@ export function LocateReportingDeposits({ details, wallet, refresh, openOnEntry 
 		const side = { pool: reportingDepositPool, questionId: reportingQuestionId, universeId, depositor: wallet, outcome }
 		const profile = getActiveNetworkProfile()
 		const guard = createActiveEnvironmentGuard()
-		const client = createConnectedReadClient()
+		const abort = new AbortController()
+		const client = withStatoblastRequestTimeout(createConnectedReadClient(), 'Deposit search timed out.', abort.signal, singleFlight.current)
 		const deposits = reportingDepositStore(profile)
 		const cursors = reportingDepositCursorStore(profile, side)
 		const known = new Set((missing?.userDeposits ?? []).map(deposit => locatedDepositKey({ ...side, index: deposit.depositIndex })))
@@ -55,7 +57,7 @@ export function LocateReportingDeposits({ details, wallet, refresh, openOnEntry 
 			if (!active()) return
 			setStatus('searching')
 			try {
-				const result = await withTimeout(searchReportingDepositsPage(client, escalationGameAddress, side, cursor), 15_000, 'Deposit search timed out.')
+				const result = await searchReportingDepositsPage(client, escalationGameAddress, side, cursor)
 				if (!active()) return
 				deposits.add(result.matches.map(match => match.deposit))
 				cursors.write(result.confirmed)
@@ -92,6 +94,7 @@ export function LocateReportingDeposits({ details, wallet, refresh, openOnEntry 
 		void work()
 		return () => {
 			current = false
+			abort.abort()
 			clearTimeout(timeout)
 		}
 	}, [attempt, open, visible, checkingIndex, wallet, reportingDepositPool, reportingQuestionId, universeId, outcome, total, locatedPrincipal, escalationGameAddress])
@@ -108,8 +111,8 @@ export function LocateReportingDeposits({ details, wallet, refresh, openOnEntry 
 		setCheckingIndex(true)
 		setIndexError(undefined)
 		try {
-			const client = createConnectedReadClient()
-			const [deposit] = await withTimeout(client.readContract(reportingDepositRead(escalationGameAddress, outcome, index, 1n)), 15_000, 'Deposit check timed out.')
+			const client = withStatoblastRequestTimeout(createConnectedReadClient(), 'Deposit check timed out.', undefined, singleFlight.current)
+			const [deposit] = await client.readContract(reportingDepositRead(escalationGameAddress, outcome, index, 1n))
 			if (!guard.isCurrent()) return
 			if (deposit === undefined) throw new Error(`There is no deposit #${index} on ${missing?.label ?? outcome}.`)
 			if (!sameAddress(deposit.depositor, wallet)) throw new Error('This deposit belongs to another address.')
@@ -123,8 +126,11 @@ export function LocateReportingDeposits({ details, wallet, refresh, openOnEntry 
 		}
 	}
 	const searchAgain = () => {
-		reportingDepositCursorStore(getActiveNetworkProfile(), { pool: reportingDepositPool, questionId: reportingQuestionId, universeId, depositor: wallet, outcome }).write(undefined)
-		setInspected(0n)
+		if (status === 'exhausted') {
+			reportingDepositCursorStore(getActiveNetworkProfile(), { pool: reportingDepositPool, questionId: reportingQuestionId, universeId, depositor: wallet, outcome }).write(undefined)
+			setInspected(0n)
+			setProgress(undefined)
+		}
 		setAttempt(value => value + 1)
 	}
 	return (

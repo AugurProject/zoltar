@@ -1,9 +1,12 @@
 import type { ChainBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { createReviewedClient } from './reviewedClient.js'
+import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
+import { currentStateCheckFailed } from '@zoltar/ui-core-shared/copy/transaction.js'
 
 export function withTransactionReviews<T extends ChainBackend>(backend: T, alwaysReview = false): T {
 	// Keep live backend getters for simulation status, balances, and counters.
 	const createWriteClient = backend.createWriteClient.bind(backend)
+	const walletRequest = <T>(request: Promise<T>) => (alwaysReview ? withTimeout(request, 15_000, currentStateCheckFailed) : request)
 	backend.createWriteClient = (account, callbacks) => {
 		let assertReviewActive: (() => void) | undefined
 		return createReviewedClient(
@@ -16,9 +19,9 @@ export function withTransactionReviews<T extends ChainBackend>(backend: T, alway
 				},
 			}),
 			async () => {
-				const accounts = await backend.getAccounts()
+				const accounts = await walletRequest(backend.getAccounts())
 				if (accounts[0]?.toLowerCase() !== account.toLowerCase()) throw new Error('The wallet changed. Review the action again.')
-				if (BigInt(await backend.getChainId()) !== BigInt(backend.profile.chain.id)) throw new Error('The network changed. Review the action again.')
+				if (BigInt(await walletRequest(backend.getChainId())) !== BigInt(backend.profile.chain.id)) throw new Error('The network changed. Review the action again.')
 			},
 			callbacks?.reviewSignal,
 			assertActive => {

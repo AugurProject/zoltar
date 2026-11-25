@@ -90,6 +90,8 @@ export function useSecurityPool({
 		inFlight.current = id
 		const environment = createActiveEnvironmentGuard()
 		const current = () => active.current && id === generation.current && environment.isCurrent() && securityPoolBackendReady(getActiveBackend())
+		const previous = snapshot.value
+		if (previous !== undefined && (previous.securityPool.toLowerCase() !== managerOverride.trim().toLowerCase() || previous.owner.toLowerCase() !== ownerOverride.trim().toLowerCase() || previous.universeId !== securityPoolUnsignedId(universeOverride, 248))) snapshot.value = undefined
 		loading.value = true
 		error.value = undefined
 		// Setup reads only security pool state, so a failed read of one owner's account keeps the shared setup visible.
@@ -103,7 +105,7 @@ export function useSecurityPool({
 			const questionPage = questionStart.value
 			const admissionPage = admissionStart.value
 			const readPage = async (readClient: typeof client) => {
-				const preparation = await loadSecurityPoolSetup(readClient, securityPool, owner)
+				const preparation = await loadSecurityPoolSetup(readClient, securityPool, owner, securityPoolAddress !== undefined)
 				if (!cacheReads && current()) loadedSetup = preparation
 				const next = preparation.stage === 4 ? await loadSecurityPoolAccount(readClient, securityPool, owner, universeId, questionPage, admissionPage, securityPoolAddress === undefined) : undefined
 				return { preparation, next }
@@ -145,7 +147,6 @@ export function useSecurityPool({
 			}
 		} catch (failure) {
 			if (current()) {
-				snapshot.value = undefined
 				setup.value = loadedSetup ?? setup.value
 				error.value = getErrorMessage(failure, 'Unable to load the security pool account.')
 			}

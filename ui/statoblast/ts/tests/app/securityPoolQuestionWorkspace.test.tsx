@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { expect, spyOn, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
@@ -32,9 +32,14 @@ test(
 			let balanceRead: ReturnType<typeof createDeferred<void>> | undefined
 			let reportingRead: ReturnType<typeof createDeferred<void>> | undefined
 			let detailsReadStarted = false
+			let boundaryBlockTime: bigint | undefined
+			let boundaryReads = 0
 			const client = backend.createReadClient()
+			const getBlock: typeof client.getBlock = async request => {
+				const block = await client.getBlock(request)
+				return boundaryBlockTime === undefined ? block : { ...block, timestamp: boundaryBlockTime }
+			}
 			const readContract: typeof client.readContract = async request => {
-				if (offline && request.functionName === 'initialReportPriorityFeeAttoEthPerGas') throw new Error('Temporary question read failure.')
 				if (request.functionName === 'balanceOfShares' && balanceRead !== undefined) {
 					detailsReadStarted = true
 					await balanceRead.promise
@@ -42,13 +47,17 @@ test(
 				return await client.readContract(request)
 			}
 			const multicall: typeof client.multicall = async request => {
+				if (request.contracts.some(call => call.functionName === 'initialReportPriorityFeeAttoEthPerGas')) {
+					if (offline) throw new Error('Temporary question read failure.')
+					if (boundaryBlockTime !== undefined) boundaryReads++
+				}
 				if (reportingRead !== undefined && request.contracts.some(call => call.functionName === 'initialEscalationGameDepositAttoRep')) {
 					detailsReadStarted = true
 					await reportingRead.promise
 				}
 				return await client.multicall(request)
 			}
-			installActiveEnvironmentForTesting({ ...backend, createReadClient: () => client.extend(() => ({ readContract, multicall })) })
+			installActiveEnvironmentForTesting({ ...backend, createReadClient: () => client.extend(() => ({ getBlock, readContract, multicall })) })
 			installStatoblastRouting()
 			window.history.replaceState({}, '', `#/pool/${pool.address}/question/${questionId}/shares?simulate=1&genesis=yes&simScenario=securitypoolx2`)
 			const deployments: DeploymentStatus[] = [{ address: zeroAddress, dependencies: [], deploy: async () => zeroAddress, deployed: true, id: 'proxyDeployer', label: 'proxyDeployer' }]
@@ -122,8 +131,11 @@ test(
 			await waitFor(assertSharesVisible, simulationWaitOptions)
 			await waitFor(() => expect(status?.progress).toBeUndefined(), simulationWaitOptions)
 			const sharesCache = statoblastDisplayCache(backend.profile, { universeId: 0n, owner, page: `shares:${pool.address}:${questionId}:0` }, value => value)
-			const savedBalances = sharesCache.read()
-			if (savedBalances === undefined) throw new Error('Missing saved share balances')
+			const savedBalances = await waitFor(() => {
+				const stored = sharesCache.read()
+				if (stored === undefined) throw new Error('Missing saved share balances')
+				return stored
+			}, simulationWaitOptions)
 			balanceRead = createDeferred<void>()
 			await checkDetailsFailure(balanceRead, assertSharesVisible, 'Share balances temporarily unavailable.')
 			expect(sharesCache.read()).toEqual(savedBalances)
@@ -139,6 +151,46 @@ test(
 			reportingRead = undefined
 			await clickRetry()
 			await waitFor(() => expect(view.container.textContent).not.toContain('showing data from'), simulationWaitOptions)
+			await act(async () => {
+				await refresh?.()
+			})
+			const deadline = view.container.querySelector('.statoblast-question-progress time')?.getAttribute('datetime')
+			if (typeof deadline !== 'string' || refresh === undefined) throw new Error('Missing question deadline')
+			let tick: (() => void) | undefined
+			const setClockInterval = globalThis.setInterval
+			const intervals = spyOn(globalThis, 'setInterval').mockImplementation(
+				new Proxy(setClockInterval, {
+					apply(schedule, receiver, [handler, delay, ...args]) {
+						if (delay === 1000 && typeof handler === 'function') tick = () => Reflect.apply(handler, receiver, args)
+						return Reflect.apply(schedule, receiver, [handler, delay, ...args])
+					},
+				}),
+			)
+			try {
+				boundaryBlockTime = BigInt(Date.parse(deadline) / 1000) - 2n
+				await act(async () => {
+					await refresh?.()
+				})
+				expect(boundaryReads).toBe(1)
+				await waitFor(() => expect(tick).toBeDefined())
+				const wallClock = Date.now
+				const later = spyOn(Date, 'now').mockImplementation(() => wallClock() + 3_000)
+				const shortTimers = new Proxy(globalThis.setTimeout, {
+					apply(schedule, receiver, [handler, delay, ...args]) {
+						return Reflect.apply(schedule, receiver, [handler, [500, 1000, 2000, 4000, 12_000].includes(delay) ? 5 : delay, ...args])
+					},
+				})
+				const schedule = spyOn(globalThis, 'setTimeout').mockImplementation(shortTimers)
+				try {
+					await act(() => tick?.())
+					await waitFor(() => expect(boundaryReads).toBe(5), { timeout: 6_000 })
+				} finally {
+					later.mockRestore()
+					schedule.mockRestore()
+				}
+			} finally {
+				intervals.mockRestore()
+			}
 		} finally {
 			await backend.dispose()
 		}

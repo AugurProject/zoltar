@@ -114,6 +114,26 @@ test('a previously verified branch identifies its saved views before live fork d
 	expect(restored.state().savedBranch).toBeUndefined()
 })
 
+test('the fork banner records a choice for the wallet’s own position only', async () => {
+	const fixture = await setup()
+	fixture.setChosen(true)
+	const choices: boolean[] = []
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolSharedFork {...fixture.parameters} bidder={token} onBranchCommitted={choice => choices.push(choice)} />))
+	await waitFor(() => expect(view.container.textContent).toContain(forkCopy.chosen(1n)))
+	await act(() => Bun.sleep(25))
+	expect(choices).toEqual([])
+})
+
+test('a failed fork question read keeps the chooser visible with a retry', async () => {
+	const fixture = await setup()
+	let retries = 0
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolSharedFork {...fixture.parameters} redesigned forkQuestionRead={{ loading: false, error: 'RPC could not load the fork question.', retry: () => retries++ }} />))
+	await waitFor(() => expect(view.container.textContent).toContain('RPC could not load the fork question.'))
+	const retry = [...view.container.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Try again')
+	await act(() => retry?.click())
+	expect(retries).toBe(1)
+})
+
 test('one irreversible choice has an explicit review and rechecks the strict native cutoff', async () => {
 	const { hook, requests, source, snapshot } = await setup()
 	expect(hook.state().chooseReason).toBeUndefined()

@@ -85,6 +85,10 @@
 			"bun": "./ts/lib/routing.ts",
 			"default": "./js/lib/routing.js"
 		},
+		"./lib/deadlineRefresh.js": {
+			"bun": "./ts/lib/deadlineRefresh.ts",
+			"default": "./js/lib/deadlineRefresh.js"
+		},
 		"./protocol/collateral.js": {
 			"bun": "./ts/protocol/collateral.ts",
 			"default": "./js/protocol/collateral.js"
@@ -261,6 +265,10 @@
 			"bun": "./ts/protocol/reviewedClient.ts",
 			"default": "./js/protocol/reviewedClient.js"
 		},
+		"./protocol/requestTimeout.js": {
+			"bun": "./ts/protocol/requestTimeout.ts",
+			"default": "./js/protocol/requestTimeout.js"
+		},
 		"./protocol/reviewedBackend.js": {
 			"bun": "./ts/protocol/reviewedBackend.ts",
 			"default": "./js/protocol/reviewedBackend.js"
@@ -288,6 +296,10 @@
 		"./features/security-pools/components/SecurityPoolsSection.js": {
 			"bun": "./ts/features/security-pools/components/SecurityPoolsSection.tsx",
 			"default": "./js/features/security-pools/components/SecurityPoolsSection.js"
+		},
+		"./features/security-pools/components/SecurityPoolQuestionsPanel.js": {
+			"bun": "./ts/features/security-pools/components/SecurityPoolQuestionsPanel.tsx",
+			"default": "./js/features/security-pools/components/SecurityPoolQuestionsPanel.js"
 		},
 		"./features/security-pools/components/SecurityPoolAggregatePanel.js": {
 			"bun": "./ts/features/security-pools/components/SecurityPoolAggregatePanel.tsx",

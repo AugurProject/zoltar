@@ -6,6 +6,7 @@ import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { approveReportingRep, loadReportingDetails, reportOutcomeInQuestionLedger, withdrawEscalationFromQuestionLedger } from '../../../protocol/reporting.js'
+import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -57,7 +58,7 @@ export type UseReportingOperationsDependencies = {
 
 const defaultUseReportingOperationsDependencies: UseReportingOperationsDependencies = {
 	approveReportingRep: async (accountAddress, callbacks, questionLedgerAddress, outcome, amount) => await approveReportingRep(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, outcome, amount),
-	loadReportingDetails: async (questionLedgerAddress, accountAddress, includeSchedule) => await loadReportingDetails(createConnectedReadClient(), questionLedgerAddress, accountAddress, includeSchedule),
+	loadReportingDetails: async (questionLedgerAddress, accountAddress, includeSchedule) => await loadReportingDetails(withStatoblastRequestTimeout(createConnectedReadClient(), 'Reporting refresh timed out.'), questionLedgerAddress, accountAddress, includeSchedule),
 	reportOutcomeInQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress, outcome, amount, reviewAmount, triggersFork, requireLead) => await reportOutcomeInQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, outcome, amount, reviewAmount, triggersFork, requireLead),
 	withdrawEscalationFromQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress, outcome, depositIndexes, claimAmount) => await withdrawEscalationFromQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, outcome, depositIndexes, claimAmount),
 }
@@ -94,7 +95,7 @@ export function useReportingOperations(
 	{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState, selectedQuestionLedgerAddress, includeSchedule = false }: ResolvedReportingOperationsParameters,
 	dependencies: UseReportingOperationsDependencies = defaultUseReportingOperationsDependencies,
 ) {
-	const reportingLoad = useLoadController({ timeoutMilliseconds: 15_000 })
+	const reportingLoad = useLoadController({ timeoutMilliseconds: false })
 	const reportingDetails = useSignal<ReportingDetails | undefined>(undefined)
 	const reportingError = useSignal<string | undefined>(undefined)
 	const { state: reportingForm, setState: setReportingForm } = useFormState<ReportingFormState>(getDefaultReportingFormState())

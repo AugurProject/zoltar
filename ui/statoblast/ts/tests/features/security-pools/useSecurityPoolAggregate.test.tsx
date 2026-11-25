@@ -459,6 +459,12 @@ test('presentation-only balances retain position context without authorizing a w
 	expect(requests).toHaveLength(0)
 })
 
+test.each([true, false])('authenticated Capital remains actionable during or after a failed refresh (loading: %s)', async loading => {
+	const hook = await renderHookWithProps(() => useSecurityPoolAggregate({ snapshot: capitalSnapshot(), loading, error: loading ? undefined : 'RPC unavailable', refresh: async () => undefined }, { ownerReason: undefined, runSecurityPoolAction: async () => undefined }, owner), {})
+	lifecycle.trackRendered(hook)
+	expect(hook.state().claimReason).toBeUndefined()
+})
+
 test.each([true, false])('#1448: liquidation blocks REP top-ups and combined health deposits at a fresh or stale price (%s)', async priceValid => {
 	const base = capitalSnapshot()
 	const snapshot = capitalSnapshot({ priceValid, allowanceAttoRep: 100n * unit, positions: base.positions.map(position => ({ ...position, maxHealthyPrice: unit, liquidationStarted: 1n })) })

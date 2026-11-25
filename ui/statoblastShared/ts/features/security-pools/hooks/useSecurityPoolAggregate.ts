@@ -17,6 +17,8 @@ import {
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { securityPoolReadClient, type SecurityPoolTransaction } from '../../../protocol/securityPool.js'
+import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
+import { currentStateCheckFailed } from '@zoltar/ui-core-shared/copy/transaction.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import * as capitalCopy from '../../../copy/securityPoolCapital.js'
 import { securityPoolAmountOrUndefined, securityPoolUnsignedId } from '../lib/draft.js'
@@ -82,7 +84,11 @@ export function useSecurityPoolAggregate(
 	const proof = useSignal<{ context: string; key: string; price?: bigint | undefined; error?: string; pending?: boolean }>()
 	const snapshot = model.snapshot ?? model.presentationSnapshot
 	const showingPreviousSnapshot = model.snapshot === undefined && snapshot !== undefined
-	const stateReason = (model.loading ? 'Refreshing security pool balances.' : undefined) ?? (showingPreviousSnapshot ? capitalCopy.readUnavailable : undefined) ?? (snapshot === undefined ? 'Load a security pool account first.' : model.error)
+	let stateReason: string | undefined
+	if (model.snapshot === undefined) {
+		if (showingPreviousSnapshot) stateReason = capitalCopy.readUnavailable
+		else stateReason = model.loading ? 'Refreshing security pool balances.' : 'Load a security pool account first.'
+	}
 	const ownerReason = actions.ownerReason ?? stateReason
 	const inactiveReason = snapshot !== undefined && (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing) ? 'This universe is closed to new commitments.' : undefined
 	const admissionReason = snapshot?.admission.mode === 'custom' ? 'This interface supports open or fixed question policies.' : undefined
@@ -105,7 +111,7 @@ export function useSecurityPoolAggregate(
 	const proofKey = `${proofContext}:${commitmentAttoEth}`
 	useEffect(() => {
 		let active = true
-		if (model.snapshot !== undefined && !model.loading && reportId !== undefined && reportId > 0n && commitmentAttoEth !== undefined && commitmentAttoEth > 0n) {
+		if (model.snapshot !== undefined && reportId !== undefined && reportId > 0n && commitmentAttoEth !== undefined && commitmentAttoEth > 0n) {
 			proof.value = { context: proofContext, key: proofKey, price: sizingProofPrice, pending: true }
 			void readAuthorizationProof(model.snapshot, reportId, commitmentAttoEth)
 				.then(price => {
@@ -118,7 +124,7 @@ export function useSecurityPoolAggregate(
 		return () => {
 			active = false
 		}
-	}, [proofKey, model.snapshot !== undefined, model.loading])
+	}, [proofKey, model.snapshot !== undefined])
 	const proofPrice = proof.value?.key === proofKey && !proof.value.pending && proof.value.error === undefined ? proof.value.price : undefined
 	let proofReason: string | undefined
 	if (reportInput.value.trim() !== '') {
@@ -206,7 +212,8 @@ export function useSecurityPoolAggregate(
 					return []
 				},
 				validateBeforeSubmit: async () => {
-					const latest = await loadSecurityPoolCapitalSnapshot({ client: securityPoolReadClient(createConnectedReadClient()), securityPool: selected.securityPool, owner: selected.owner, universeId: selected.universeId })
+					const reader = withStatoblastRequestTimeout(createConnectedReadClient(), currentStateCheckFailed)
+					const latest = await loadSecurityPoolCapitalSnapshot({ client: securityPoolReadClient(reader), securityPool: selected.securityPool, owner: selected.owner, universeId: selected.universeId })
 					if (latest.chainId !== selected.chainId || latest.capitalLedger !== selected.capitalLedger) throw new Error('Security pool context changed. Review the transaction again.')
 					if (['depositSecurityPoolRep', 'depositSecurityPoolHealthRep', 'approveSecurityPoolRep', 'approveSecurityPoolHealthRep'].includes(action)) {
 						const reason = capitalDepositReason(latest)

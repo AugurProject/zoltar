@@ -193,7 +193,15 @@ export function App() {
 		</label>
 	)
 	const overview = getStatoblastUniversePresentation({ canReadOnchainData, ...operations })
-	const branchScope = page.kind === 'pool' && walletScopedAccountAddress !== undefined ? `statoblast:branch:${profile.id}:${profile.chainIdHex}:${profile.genesisRepTokenAddress}:${page.pool}:${activeUniverseId}:${walletScopedAccountAddress}` : undefined
+	const branchScope = page.kind === 'pool' && walletScopedAccountAddress !== undefined ? `statoblast:branch:v2:${profile.id}:${profile.chainIdHex}:${profile.genesisRepTokenAddress}:${page.pool}:${activeUniverseId}:${walletScopedAccountAddress}` : undefined
+	const onBranchCommitted = useCallback(
+		(committed: boolean) => {
+			if (branchScope === undefined) return
+			savePreference(branchScope, committed ? 'committed' : '')
+			setCommittedBranch(committed ? branchScope : undefined)
+		},
+		[branchScope],
+	)
 	const branchAlreadyCommitted = branchScope !== undefined && (branchScope === committedBranch || readPreference(branchScope) === 'committed')
 	const forkAction = page.kind === 'pool' ? statoblastPageHref({ ...page, tab: 'fork' }) : statoblastPageHref({ kind: 'migrate-rep' })
 	const forkActionLabel = page.kind === 'pool' ? pageCopy.chooseBranchAction : pageCopy.migrateRepAction
@@ -309,11 +317,9 @@ export function App() {
 						environmentKey: activeEnvironmentNonce,
 						activeUniverseId,
 						forkQuestion: selectedUniverse?.forkQuestionDetails,
+						forkQuestionRead: { loading: operations.loadingZoltarUniverse, error: zoltarUniverseError, retry: () => void operations.loadZoltarUniverse({ clearCurrentState: false }) },
 						onSelectUniverse: setUniverse,
-						onBranchCommitted: committed => {
-							if (branchScope !== undefined) savePreference(branchScope, committed ? 'committed' : '')
-							setCommittedBranch(committed ? branchScope : undefined)
-						},
+						onBranchCommitted,
 						openOracleHref: oracleApp.href,
 					}}
 					questions={{ onReadStatus: reportReadStatus, autoRefresh, openDepositSearch, accountState, parameters: saveTouchedItem, deploymentStatuses, enabled, environmentKey: activeEnvironmentNonce, universeId: activeUniverseId, currentTimestamp }}

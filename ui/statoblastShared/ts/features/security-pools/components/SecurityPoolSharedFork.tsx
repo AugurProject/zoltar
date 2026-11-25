@@ -3,10 +3,12 @@ import { parseWatchlistEntity, decodeWatchlistRows } from '../../../protocol/wat
 import { statoblastDisplayCache } from '../../../protocol/statoblastPageCache.js'
 import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getBrowserStorage } from '@zoltar/ui-core-shared/lib/browserStorage.js'
+import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import { ScalarOutcomePicker } from '@zoltar/ui-core-shared/components/ScalarOutcomePicker.js'
 import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import * as pageCopy from '../../../copy/forkRecovery.js'
+import { tryAgain } from '../../../copy/securityPoolPage.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import * as collateralCopy from '../../../copy/collateral.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
@@ -15,6 +17,7 @@ import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
+import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import { formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
@@ -30,7 +33,15 @@ import { SecurityPoolRepairAuction } from './SecurityPoolRepairAuction.js'
 import * as copy from '../../../copy/securityPoolSharedFork.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
-export function SecurityPoolSharedFork({ redesigned = false, forkQuestion, onBranchCommitted, ...parameters }: SecurityPoolSharedForkParameters & { redesigned?: boolean; forkQuestion?: MarketDetails | undefined; onBranchCommitted?: ((committed: boolean) => void) | undefined }) {
+export type ForkQuestionRead = { loading: boolean; error: string | undefined; retry: () => void }
+
+export function SecurityPoolSharedFork({
+	redesigned = false,
+	forkQuestion,
+	forkQuestionRead,
+	onBranchCommitted,
+	...parameters
+}: SecurityPoolSharedForkParameters & { redesigned?: boolean; forkQuestion?: MarketDetails | undefined; forkQuestionRead?: ForkQuestionRead | undefined; onBranchCommitted?: ((committed: boolean) => void) | undefined }) {
 	const model = useSecurityPoolSharedFork(parameters)
 	const state = model.state
 	const saved = useFavorites('statoblast', 'question')
@@ -78,8 +89,8 @@ export function SecurityPoolSharedFork({ redesigned = false, forkQuestion, onBra
 	const [confirmedChoice, setConfirmedChoice] = useState(false)
 	useEffect(() => setConfirmedChoice(false), [model.outcomeInput, model.sourceInput])
 	useEffect(() => {
-		if (state !== undefined) onBranchCommitted?.(state.choice.recorded)
-	}, [state?.choice.recorded])
+		if (state !== undefined && parameters.bidder !== undefined && sameAddress(state.owner, parameters.bidder)) onBranchCommitted?.(state.choice.recorded)
+	}, [state?.choice.recorded, state?.owner, parameters.bidder, onBranchCommitted])
 	const chooseReason = model.chooseReason ?? (redesigned && !confirmedChoice ? pageCopy.branchConfirmationReason : undefined)
 	const committedMessage = redesigned ? pageCopy.branchCommitted : copy.chosen(state?.choice.outcomeIndex ?? 0n)
 	let branchState = copy.branchStates.choose
@@ -113,7 +124,7 @@ export function SecurityPoolSharedFork({ redesigned = false, forkQuestion, onBra
 					</div>
 				)}
 				{redesigned ? (
-					<BranchChoices question={forkQuestion} value={model.outcomeInput} onChange={model.setOutcome} disabled={disabled || state?.choice.recorded === true} />
+					<BranchChoices question={forkQuestion} read={forkQuestionRead} value={model.outcomeInput} onChange={model.setOutcome} disabled={disabled || state?.choice.recorded === true} />
 				) : (
 					<MetricGrid>
 						<SecurityPoolInput label={copy.universe} value={model.sourceInput} onChange={model.setSource} disabled={disabled} />
@@ -265,8 +276,12 @@ export function SecurityPoolSharedFork({ redesigned = false, forkQuestion, onBra
 	)
 }
 
-function BranchChoices({ question, value, onChange, disabled }: { question: MarketDetails | undefined; value: string; onChange: (outcome: string) => void; disabled: boolean }) {
-	if (question === undefined) return undefined
+function BranchChoices({ question, read, value, onChange, disabled }: { question: MarketDetails | undefined; read: ForkQuestionRead | undefined; value: string; onChange: (outcome: string) => void; disabled: boolean }) {
+	if (question === undefined) {
+		if (read === undefined) return undefined
+		if (read.loading) return <UserMessage announcement='polite' detail={pageCopy.loadingForkQuestion} />
+		return <RetryableNotice message={read.error ?? pageCopy.forkQuestionUnavailable} retryLabel={tryAgain} onRetry={read.retry} />
+	}
 	if (question.marketType === 'scalar') {
 		const outcome = /^\d+$/u.test(value) ? BigInt(value) : undefined
 		const selection = outcome === undefined ? undefined : getScalarOutcomeIndexDescriptor(question, outcome)

@@ -1,6 +1,6 @@
+import { decodeSharesBalance, SavedShares } from './SavedShares.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { decodeReportingOverview, reportingOverview, StatoblastReportingOverview } from './StatoblastReportingOverview.js'
-import { decodeStoredValue } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
 import { openHistory } from '../lib/watchlistHistory.js'
 import * as pageCopy from '@zoltar/ui-statoblast-shared/copy/questionPage.js'
 import { useStatoblastPageRefresh, useStatoblastRefreshError, type RegisterStatoblastPageRefresh, type ReportStatoblastReadStatus } from '@zoltar/ui-statoblast-shared/features/useStatoblastPageRefresh.js'
@@ -27,10 +27,11 @@ import { TradingSection } from '@zoltar/ui-statoblast-shared/features/markets/co
 import { useReportingOperations } from '@zoltar/ui-statoblast-shared/features/reporting/hooks/useReportingOperations.js'
 import { useTradingOperations } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useTradingOperations.js'
 import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import { statoblastDisplayCache } from '@zoltar/ui-statoblast-shared/protocol/statoblastPageCache.js'
-import { loadStatoblastQuestion } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
+import { loadStatoblastQuestion, type QuestionReadCheckpoint } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
+import { withStatoblastRequestTimeout } from '@zoltar/ui-statoblast-shared/protocol/requestTimeout.js'
+import { deadlineRetryDelays } from '@zoltar/ui-statoblast-shared/lib/deadlineRefresh.js'
 import type { ListedQuestionLedger } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import type { AccountState, WriteOperationsParameters } from '@zoltar/ui-statoblast-shared/types/app.js'
 import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -86,7 +87,8 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 	const readScope = `${cacheScope}:${entry.tab}`
 	const requestScope = useRef(readScope)
 	requestScope.current = readScope
-	const activeRead = useRef<{ scope: string; promise: Promise<void> }>()
+	const activeRead = useRef<{ scope: string; abort: AbortController; promise: Promise<void> }>()
+	const questionRead = useRef<{ scope: string; checkpoint: QuestionReadCheckpoint }>()
 	const [readStep, setReadStep] = useState(1)
 	const reportFallback = cachedReporting?.scope === cacheScope && reportingDetails === undefined ? cachedReporting.data : undefined
 	const sharesFallback = cachedShares?.scope === cacheScope && trading.tradingDetails === undefined ? cachedShares : undefined
@@ -98,8 +100,10 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 	const readQuestion = () => {
 		if (!enabled || document.hidden) return Promise.resolve()
 		if (activeRead.current?.scope === readScope) return activeRead.current.promise
+		const abort = new AbortController()
 		const request = {
 			scope: readScope,
+			abort,
 			promise: Promise.resolve().then(async () => {
 				const isCurrent = () => requestScope.current === readScope && activeRead.current === request
 				const showReadError = (error: unknown) => {
@@ -109,7 +113,9 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 				setReadStep(1)
 				setLoading(true)
 				try {
-					const { question, block, sharesFacts } = await withTimeout(loadStatoblastQuestion(createConnectedReadClient(), entry.pool, entry.questionId, universeId, true, entry.tab === 'shares'), 15_000, pageCopy.refreshTimeoutError)
+					if (questionRead.current?.scope !== readScope) questionRead.current = { scope: readScope, checkpoint: {} }
+					const client = withStatoblastRequestTimeout(createConnectedReadClient(), pageCopy.refreshTimeoutError, abort.signal)
+					const { question, block, sharesFacts } = await loadStatoblastQuestion(client, entry.pool, entry.questionId, universeId, true, entry.tab === 'shares', questionRead.current.checkpoint)
 					if (!isCurrent()) return
 					setSnapshot({ environmentKey, identity: selectionKey, block, question, sharesFacts })
 					displayCache.write(question, block)
@@ -119,6 +125,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 						if (details === undefined) return
 					}
 					if (isCurrent()) {
+						questionRead.current = undefined
 						setLastRead({ scope: readScope, at: Date.now() })
 						setRefresh(value => value + 1)
 					}
@@ -144,7 +151,9 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 		}
 		void readQuestion()
 		return () => {
-			if (activeRead.current?.scope === readScope) activeRead.current = undefined
+			if (activeRead.current?.scope !== readScope) return
+			activeRead.current.abort.abort()
+			activeRead.current = undefined
 		}
 	}, [enabled, readScope])
 	useEffect(() => onReadStatus?.(displayedAt, loading ? pageCopy.refreshStep(readStep, 2) : undefined), [displayedAt, loading, readStep, onReadStatus])
@@ -178,7 +187,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 		}
 		if (!checkingDeadline || !enabled || !visible || loading || deadlineFailed) return
 		const attempts = boundaryRead.current.attempts
-		const delay = [0, 500, 2000][attempts]
+		const delay = deadlineRetryDelays[attempts]
 		if (delay === undefined) {
 			setDeadlineFailed(true)
 			return
@@ -214,13 +223,20 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 		reportCache.write(reportingOverview(reportingDetails, checkedAt), snapshot.block)
 	}, [reportingDetails, cacheScope, snapshot])
 	const shareBalances = trading.tradingDetails?.shareBalances
+	const shareDecimals = trading.collateralFunding.collateral?.decimals
 	const lastDisplayedBalances = useRef<{ scope: string; data: typeof shareBalances }>()
+	const lastSavedBalances = useRef<{ scope: string; data: typeof shareBalances; decimals: number }>()
 	useEffect(() => {
 		if (shareBalances === undefined || (lastDisplayedBalances.current?.scope === cacheScope && lastDisplayedBalances.current.data === shareBalances) || snapshot?.identity !== selectionKey || selected === undefined) return
 		lastDisplayedBalances.current = { scope: cacheScope, data: shareBalances }
 		setSharesRead({ scope: cacheScope, at: Date.now() })
-		sharesCache.write(shareBalances, snapshot.block)
 	}, [shareBalances, snapshot, cacheScope])
+	useEffect(() => {
+		if (shareBalances === undefined || shareDecimals === undefined || snapshot?.identity !== selectionKey) return
+		if (lastSavedBalances.current?.scope === cacheScope && lastSavedBalances.current.data === shareBalances && lastSavedBalances.current.decimals === shareDecimals) return
+		lastSavedBalances.current = { scope: cacheScope, data: shareBalances, decimals: shareDecimals }
+		sharesCache.write({ ...shareBalances, decimals: shareDecimals }, snapshot.block)
+	}, [shareBalances, shareDecimals, snapshot, cacheScope])
 	useEffect(() => {
 		if (selected === undefined) return
 		openHistory(profile).add({ ...entry, tab: 'shares', sharesAction: undefined }, selected.marketDetails.title, universeId)
@@ -234,7 +250,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 					<a key={tab} aria-current={entry.tab === tab ? 'page' : undefined} href={statoblastPageHref({ ...entry, tab, sharesAction: undefined })}>
 						{tabLabels[tab]}
 						{tab === 'reporting' && availableClaim && <Badge tone='ok'>{pageCopy.claimAction}</Badge>}
-						{tab === 'reporting' && activeReporting?.hasReachedNonDecision && !selected?.universeHasForked && <Badge tone='warning'>{pageCopy.fork}</Badge>}
+						{tab === 'reporting' && activeReporting?.hasReachedNonDecision && activeReporting.settlementState !== 'resolved' && selected?.questionOutcome === 'none' && !selected.universeHasForked && <Badge tone='warning'>{pageCopy.fork}</Badge>}
 					</a>
 				),
 			)}
@@ -379,36 +395,5 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 			)}
 			{entry.tab === 'claims' && <InheritedReporterClaims parameters={parameters} accountState={accountState} details={reportingDetails} onRefresh={reporting.loadReporting} />}
 		</div>
-	)
-}
-
-function decodeSharesBalance(value: unknown) {
-	return decodeStoredValue(value, read => ({ yesAttoShares: read.bigint('yesAttoShares'), noAttoShares: read.bigint('noAttoShares'), invalidAttoShares: read.bigint('invalidAttoShares') }))
-}
-
-function SavedShares({ yesAttoShares, noAttoShares, invalidAttoShares }: NonNullable<ReturnType<typeof decodeSharesBalance>>) {
-	return (
-		<SectionBlock title={pageCopy.savedHoldings}>
-			<dl className='statoblast-saved-share-balances'>
-				<div>
-					<dt>{pageCopy.yes}</dt>
-					<dd>
-						<CurrencyValue value={yesAttoShares} />
-					</dd>
-				</div>
-				<div>
-					<dt>{pageCopy.no}</dt>
-					<dd>
-						<CurrencyValue value={noAttoShares} />
-					</dd>
-				</div>
-				<div>
-					<dt>{pageCopy.invalid}</dt>
-					<dd>
-						<CurrencyValue value={invalidAttoShares} />
-					</dd>
-				</div>
-			</dl>
-		</SectionBlock>
 	)
 }

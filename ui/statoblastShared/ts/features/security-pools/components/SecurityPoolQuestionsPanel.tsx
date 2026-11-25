@@ -3,6 +3,7 @@ import * as pageCopy from '../../../copy/securityPoolPage.js'
 import * as watchlistCopy from '../../../copy/watchlist.js'
 import type { SecurityPoolAccountSnapshot } from '../../../protocol/securityPool.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
+import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
 import { toHex, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -79,16 +80,13 @@ export function SecurityPoolQuestionsPanel({
 		const profile = getActiveNetworkProfile()
 		let now: bigint | undefined
 		try {
-			const rows = await withTimeout(
-				loadWatchlistRows(createConnectedReadClient(), saved, universeId, owner, profile, {
-					includeDeposits: false,
-					onChunk: (_rows, _finished, _total, anchor) => {
-						now = anchor.timestamp
-					},
-				}),
-				15_000,
-				pageCopy.savedQuestionReadFailed,
-			)
+			const client = withStatoblastRequestTimeout(createConnectedReadClient(), pageCopy.savedQuestionReadFailed)
+			const rows = await loadWatchlistRows(client, saved, universeId, owner, profile, {
+				includeDeposits: false,
+				onChunk: (_rows, _finished, _total, anchor) => {
+					now = anchor.timestamp
+				},
+			})
 			if (isCurrent()) setSavedDetails({ scope: readScope, rows, now })
 		} catch (error) {
 			if (isCurrent()) setRowsError(error instanceof Error ? error.message : pageCopy.savedQuestionReadFailed)
@@ -171,6 +169,7 @@ export function SecurityPoolQuestionsPanel({
 								const questionId = formatQuestionIdHex(entry.questionId)
 								const title = favoriteQuestions.entries.find(candidate => candidate.id === entry.id)?.label || question?.marketDetails.title || questionId
 								const shares = row?.shares
+								const hasPosition = (row?.reportingPrincipal ?? 0n) > 0n || (shares !== undefined && Object.values(shares).some(amount => amount > 0n))
 								const outcome = question?.questionOutcome ?? 'none'
 								const now = details?.now
 								const trading = question !== undefined && now !== undefined && now < question.marketDetails.endTime && !question.universeHasForked && !question.ordinaryEscalationGameStarted && outcome === 'none'
@@ -184,7 +183,7 @@ export function SecurityPoolQuestionsPanel({
 								return (
 									<tr key={entry.id} role='row'>
 										<td role='cell'>
-											<FavoriteToggle app='statoblast' id={entry.id} kind='question' entityLabel={title} confirmUnfavorite={() => shares === undefined || Object.values(shares).every(amount => amount === 0n) || window.confirm(watchlistCopy.unstarPositionConfirmation)} />
+											<FavoriteToggle app='statoblast' id={entry.id} kind='question' entityLabel={title} confirmUnfavorite={() => !hasPosition || window.confirm(watchlistCopy.unstarPositionConfirmation)} />
 										</td>
 										<td role='cell'>
 											<a href={statoblastPageHref(page, universeId)}>{title}</a>

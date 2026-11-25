@@ -6,7 +6,7 @@ import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { exportStatoblastWatchlist, importStatoblastWatchlist } from '@zoltar/ui-statoblast-shared/protocol/watchlistTransfer.js'
 import { getInfraContractAddresses } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
-import { loadWatchlistRows, type WatchlistEntity } from '@zoltar/ui-statoblast-shared/protocol/watchlistRows.js'
+import { loadWatchlistRows, type WatchlistEntity, type WatchlistReadCheckpoint } from '@zoltar/ui-statoblast-shared/protocol/watchlistRows.js'
 
 installDomTestLifecycle()
 
@@ -25,11 +25,16 @@ test('saved pools batch at most 25 verified items together at the same block', a
 	})
 	const batches: number[] = []
 	const progress: number[] = []
+	let failSecondChunk = true
 	const client = testDouble<Parameters<typeof loadWatchlistRows>[0]>({
 		getBlock: async () => ({ ...createBlockWithTimestamp(10n), number: 15n, hash }),
 		multicall: createMulticallStub(({ blockNumber, contracts }) => {
 			expect(blockNumber).toBe(15n)
 			batches.push(contracts.length)
+			if (contracts.length === 6 && failSecondChunk) {
+				failSecondChunk = false
+				throw new Error('RPC unavailable')
+			}
 			return contracts.map(call => {
 				if (call.functionName === 'isSecurityPool') return { status: 'success', result: true }
 				if (call.functionName === 'annualFeeBps') return { status: 'success', result: 15n }
@@ -37,8 +42,11 @@ test('saved pools batch at most 25 verified items together at the same block', a
 			})
 		}),
 	})
-	const rows = await loadWatchlistRows(client, entries, 0n, undefined, MAINNET_NETWORK_PROFILE, { onChunk: (_rows, finished) => progress.push(finished) })
-	expect(batches).toEqual([25, 150, 1, 6])
+	const checkpoint: WatchlistReadCheckpoint = { rows: [] }
+	const load = () => loadWatchlistRows(client, entries, 0n, undefined, MAINNET_NETWORK_PROFILE, { checkpoint, onChunk: (_rows, finished) => progress.push(finished) })
+	await expect(load()).rejects.toThrow('RPC unavailable')
+	const rows = await load()
+	expect(batches).toEqual([25, 150, 1, 6, 6])
 	expect(progress).toEqual([25, 26])
 	expect(rows.map(row => row.annualFee)).toEqual(entries.map(() => 15n))
 })

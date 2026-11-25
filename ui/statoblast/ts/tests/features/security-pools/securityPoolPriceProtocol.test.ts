@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'bun:test'
+import { afterEach, expect, spyOn, test } from 'bun:test'
 import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, parseAbi, parseAbiParameters, zeroHash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { buildSecurityPoolPriceTokenWithdrawal, loadSecurityPoolBranchPrice, loadSecurityPoolPriceReport, submittedSecurityPoolPriceReport } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPrice.js'
@@ -82,6 +82,38 @@ test('security pool sender preserves explicit callback gas for simulation, revie
 		'Settle report',
 	)
 	expect(observed).toEqual([2_000_000n, 2_000_000n, 2_000_000n])
+})
+
+test('Capital review allows successive slow validation and simulation requests', async () => {
+	const requests: Hex[] = []
+	const writer = asWriteClient(
+		createMockWriteClient(request => {
+			if (request.data !== undefined) requests.push(request.data)
+		}),
+	)
+	const shortened = new Proxy(globalThis.setTimeout, {
+		apply(schedule, receiver, [handler, delay, ...args]) {
+			return Reflect.apply(schedule, receiver, [handler, delay === 15_000 ? 40 : delay, ...args])
+		},
+	})
+	const timer = spyOn(globalThis, 'setTimeout').mockImplementation(shortened)
+	try {
+		const client = {
+			...writer,
+			account: { address: owner, type: 'json-rpc' },
+			chain: MAINNET_NETWORK_PROFILE.chain,
+			call: async () => {
+				await Bun.sleep(25)
+				return { data: undefined }
+			},
+		}
+		await sendSecurityPoolTransaction(client, { account: owner, to: priceOracle, data: '0x' }, 'Review', async () => {
+			await Bun.sleep(25)
+		})
+		expect(requests).toEqual(['0x'])
+	} finally {
+		timer.mockRestore()
+	}
 })
 
 test('#1252 the UI security pool adapter preserves the base fee for bounty quotes', async () => {

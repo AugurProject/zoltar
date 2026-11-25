@@ -964,6 +964,53 @@ test('a refreshed review shows verified rows and permits a changing simulation r
 	}
 })
 
+test('a review allows successive slow requests that each finish within the request timeout', async () => {
+	const { client, sendTransaction } = setup()
+	const shortened = new Proxy(globalThis.setTimeout, {
+		apply(schedule, receiver, [handler, delay, ...args]) {
+			return Reflect.apply(schedule, receiver, [handler, delay === 15_000 ? 40 : delay, ...args])
+		},
+	})
+	const timer = spyOn(globalThis, 'setTimeout').mockImplementation(shortened)
+	const reviewed = createReviewedClient(
+		{
+			...client,
+			sendTransaction,
+			readContract: createReadContractStub(async () => {
+				await Bun.sleep(25)
+				return 1n
+			}),
+			call: async () => {
+				await Bun.sleep(25)
+				return { data: '0x' }
+			},
+		},
+		undefined,
+		undefined,
+		undefined,
+		true,
+	)
+	try {
+		reviewed.onTransactionPlan?.([
+			{
+				functionName: 'claim',
+				contractAddress: account,
+				validateBeforeSubmit: async () => {
+					await reviewed.readContract({ abi: ABIS.mainnet.erc20, address: account, functionName: 'balanceOf', args: [account] })
+				},
+			},
+		])
+		reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, contractAddress: account, functionName: 'claim', args: [], data: '0x1234', value: undefined })
+		const sending = reviewed.sendTransaction({ to: account, data: '0x1234' })
+		void sending.catch(() => undefined)
+		await Promise.race([waitForTransactionStep(0), sending])
+		transactionSteps.value?.confirmStep(0)
+		await expect(sending).resolves.toBe(hash)
+	} finally {
+		timer.mockRestore()
+	}
+})
+
 test('an aged review shows newly checked comparison rows and stops when they changed', async () => {
 	const { client, sendTransaction } = setup()
 	let wallet = '10 REP → 8 REP'

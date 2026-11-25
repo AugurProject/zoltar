@@ -45,12 +45,12 @@ test('search restarts at zero when the stored block was reorganized and does not
 	const client = {
 		getBlock: async ({ blockNumber = 10n }: { blockNumber?: bigint } = {}) => ({ ...createBlockWithTimestamp(20n), hash: currentHash, number: blockNumber }),
 		multicall: createMulticallStub(request => {
-			if (request.allowFailure) return [{ status: 'success', result: 0n }]
 			return request.contracts.map(call => {
+				if (call.functionName === 'getDepositsByOutcomeLength') return { status: 'success', result: 0n }
 				const start = call.args?.[1]
 				if (typeof start !== 'bigint') throw new Error('Missing deposit index.')
 				queries.push({ start, blockNumber: request.blockNumber })
-				return start === 0n ? [{ depositor: wallet, amountAttoRep: 10n, cumulativeAmountAttoRep: 10n }] : []
+				return { status: 'success', result: start === 0n ? [{ depositor: wallet, amountAttoRep: 10n, cumulativeAmountAttoRep: 10n }] : [] }
 			})
 		}),
 	}
@@ -73,13 +73,13 @@ test('a fresh device finds a wallet deposit on the second page and Search again 
 	const client = testDouble<Parameters<typeof searchReportingDepositsPage>[0]>({
 		getBlock: async ({ blockNumber = 10n }: { blockNumber?: bigint } = {}) => ({ ...createBlockWithTimestamp(20n), hash: blockHash, number: blockNumber }),
 		multicall: createMulticallStub(request => {
-			if (request.allowFailure) return [{ status: 'success', result: 31n }]
 			return request.contracts.map(call => {
+				if (call.functionName === 'getDepositsByOutcomeLength') return { status: 'success', result: 31n }
 				const start = call.args?.[1]
 				if (typeof start !== 'bigint') throw new Error('Missing page offset.')
 				starts.push(start)
-				if (start === 0n) return Array.from({ length: 30 }, () => makeDeposit(other))
-				return start === 30n ? [makeDeposit(wallet)] : []
+				if (start === 0n) return { status: 'success', result: Array.from({ length: 30 }, () => makeDeposit(other)) }
+				return { status: 'success', result: start === 30n ? [makeDeposit(wallet)] : [] }
 			})
 		}),
 	})
@@ -94,4 +94,33 @@ test('a fresh device finds a wallet deposit on the second page and Search again 
 	cursor.write(undefined)
 	await searchReportingDepositsPage(client, game, side, cursor.read())
 	expect(starts).toEqual([0n, 30n, 0n, 30n])
+})
+
+test('deposit search issues at most one request at a time and batches the head count with the pages', async () => {
+	const hash = keccak256('0x04')
+	let active = 0
+	let peak = 0
+	const request = async <T>(result: T) => {
+		peak = Math.max(peak, ++active)
+		await Promise.resolve()
+		active--
+		return result
+	}
+	const batchedFunctions: string[][] = []
+	const client = testDouble<Parameters<typeof searchReportingDepositsPage>[0]>({
+		getBlock: async ({ blockNumber = 10n }: { blockNumber?: bigint } = {}) => await request({ ...createBlockWithTimestamp(20n), hash, number: blockNumber }),
+		multicall: createMulticallStub(({ allowFailure, contracts }) => {
+			batchedFunctions.push(contracts.map(call => call.functionName))
+			return request(
+				contracts.map(call => {
+					const result = call.functionName === 'getDepositsByOutcomeLength' ? 0n : []
+					return allowFailure ? { status: 'success', result } : result
+				}),
+			)
+		}),
+	})
+	const side = { pool: other, questionId: 5n, universeId: 0n, outcome: 'yes' as const, depositor: wallet }
+	await searchReportingDepositsPage(client, game, side, { block: 7n, hash, nextIndex: 0n })
+	expect(peak).toBe(1)
+	expect(batchedFunctions).toEqual([['getDepositsByOutcome', 'getDepositsByOutcome', 'getDepositsByOutcomeLength'], ['getDepositsByOutcomeLength']])
 })

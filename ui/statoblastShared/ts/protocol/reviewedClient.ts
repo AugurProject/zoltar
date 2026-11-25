@@ -12,6 +12,7 @@ import { humanizeTransactionAction } from '@zoltar/ui-core-shared/transactions/t
 import { createTransactionStepController, type TransactionStepDetails } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { createTransactionFailure, createTransactionFailureError } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
 import { changedSinceReview, missingTokenSpender } from '../copy/app.js'
+import { withStatoblastRequestTimeout } from './requestTimeout.js'
 
 async function describeTransaction(client: WriteClient, preview: TransactionRequestPreview & Pick<TransactionPlanStep, 'optional' | 'tokenFunding' | 'oracleOutcome' | 'approvalPurpose'>, requiredApprovalAmount?: bigint): Promise<TransactionStepDetails> {
 	const action = transactionCopy.reviewedActions[preview.functionName]
@@ -72,7 +73,8 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 	return details
 }
 
-export function createReviewedClient(client: WriteClient, validate: () => Promise<void> = async () => undefined, signal = getTransactionReviewSignal(), registerBeforeSubmit?: (assertActive: () => void) => void, alwaysReview = false): WriteClient {
+export function createReviewedClient(baseClient: WriteClient, validate: () => Promise<void> = async () => undefined, signal = getTransactionReviewSignal(), registerBeforeSubmit?: (assertActive: () => void) => void, alwaysReview = false): WriteClient {
+	const client = alwaysReview ? withStatoblastRequestTimeout(baseClient, transactionCopy.currentStateCheckFailed) : baseClient
 	let controller = createTransactionStepController(signal, false)
 	const environment = createActiveEnvironmentGuard()
 	// The injected backend can await wallet validation after our final review checks.
@@ -135,7 +137,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			if (expected === undefined || expected.functionName !== transaction.functionName || (expected.value ?? 0n) !== (transaction.value ?? 0n) || (expected.contractAddress ?? expected.to) !== (transaction.contractAddress ?? transaction.to))
 				throw new Error('The transaction plan changed. No further transactions were sent. Review the action again.')
 			if (transaction.functionName === 'approve' && (expected.args?.[0] !== transaction.args?.[0] || expected.args?.[1] !== transaction.args?.[1])) throw new Error('The approval amount changed. Review the action again.')
-			const check = (candidate: TransactionRequestPreview) => withTimeout(checkTransaction(candidate, expected, gas, raw), 15_000, transactionCopy.currentStateCheckFailed)
+			const check = (candidate: TransactionRequestPreview) => checkTransaction(candidate, expected, gas, raw)
 			const alreadyReviewedFunding = selectedFunding !== undefined
 			if (alwaysReview && !alreadyReviewedFunding) await check(transaction)
 			const reviewedRows = expected.readReviewRows?.()
@@ -195,7 +197,11 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 					controller.setReviewRows(stepIndex - 1, currentRows)
 					throw new Error(changedSinceReview)
 				}
-			} else if (expected.validateBeforeSubmit !== undefined) await withTimeout(expected.validateBeforeSubmit(), 15_000, transactionCopy.currentStateCheckFailed)
+			} else if (expected.validateBeforeSubmit !== undefined) {
+				const validation = expected.validateBeforeSubmit()
+				if (alwaysReview) await validation
+				else await withTimeout(validation, 15_000, transactionCopy.currentStateCheckFailed)
+			}
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			controller.assertActive()
 			client.onTransactionPrepared?.(transaction)

@@ -3,7 +3,6 @@ import type { ReadClient, ReportingOutcomeKey } from '@zoltar/ui-core-shared/typ
 import * as pageCopy from '../../../copy/reportingDeposits.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
-import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import * as copy from '../../../copy/reporting.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -20,6 +19,7 @@ import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { buildForkCarriedEscalationProofs, loadForkCarriedEscalationDepositsFromParentSnapshot, withdrawForkedEscalationDeposits, type ParentClaimPreparation } from '../../../protocol/reportingCarryState.js'
 import { loadReportingDetails } from '../../../protocol/reporting.js'
+import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
 import type { ActiveReportingDetails, AuthenticatedForkClaim, ReportingDetails } from '../../../types/contracts.js'
 import type { AccountState, WriteOperationsParameters } from '../../../types/app.js'
 
@@ -33,7 +33,7 @@ type Props = {
 async function loadClaims(active: ActiveReportingDetails, wallet: Address, signal?: AbortSignal, preparation?: ParentClaimPreparation) {
 	const parent = active.parentQuestionLedgerAddress
 	if (parent === undefined || parent === zeroAddress || active.forkContinuation !== true) return []
-	const client = createConnectedReadClient()
+	const client = withStatoblastRequestTimeout(createConnectedReadClient(), pageCopy.inheritedClaimTimeout, signal)
 	let queued = Promise.resolve()
 	const readContract: typeof client.readContract = parameters => {
 		const read = queued.then(async () => {
@@ -121,16 +121,12 @@ export function InheritedReporterClaims({ parameters, accountState, details, onR
 			abort.signal.addEventListener('abort', () => job.abort(), { once: true })
 			setLoading(true)
 			error.value = undefined
-			void withTimeout(
-				loadClaims(active, wallet, job.signal, {
-					read,
-					onProgress: (outcome, done, total) => {
-						if (!job.signal.aborted) setProgress(previous => new Map([...previous, [outcome, { done, total }]]))
-					},
-				}),
-				15_000,
-				pageCopy.inheritedClaimTimeout,
-			).then(
+			void loadClaims(active, wallet, job.signal, {
+				read,
+				onProgress: (outcome, done, total) => {
+					if (!job.signal.aborted) setProgress(previous => new Map([...previous, [outcome, { done, total }]]))
+				},
+			}).then(
 				claims => {
 					if (abort.signal.aborted) return
 					setLoaded({ selection, claims })
@@ -153,7 +149,7 @@ export function InheritedReporterClaims({ parameters, accountState, details, onR
 			abort.abort()
 			clearTimeout(pendingRetry)
 		}
-	}, [open, visible, canLoad, active?.escalationGameAddress, wallet, selection, active?.currentTime, retry])
+	}, [open, visible, canLoad, active?.escalationGameAddress, active?.parentQuestionLedgerAddress, wallet, selection, retry])
 	const claims = loaded?.selection === selection ? loaded.claims : (active?.sides.flatMap(side => side.importedUserDeposits.map(deposit => ({ side, deposit }))) ?? [])
 	if (claims.length === 0 && !canLoad) return undefined
 	const walletReason = getWalletActiveAppChainGuardState({ accountAddress: accountState.address, isOnActiveAppChain: isActiveAppChain(accountState.chainId) })?.reason
@@ -177,11 +173,11 @@ export function InheritedReporterClaims({ parameters, accountState, details, onR
 				}),
 				async (account, context) => {
 					assertSelection()
-					const read = createConnectedReadClient()
+					const read = withStatoblastRequestTimeout(createConnectedReadClient(), pageCopy.inheritedClaimTimeout, context.reviewSignal)
 					const latest = await loadReportingDetails(read, pool, account)
 					context.assertActive()
 					assertSelection()
-					const latestClaims = latest.status === 'active' ? await withTimeout(loadClaims(latest, account, context.reviewSignal), 15_000, pageCopy.inheritedClaimTimeout) : []
+					const latestClaims = latest.status === 'active' ? await loadClaims(latest, account, context.reviewSignal) : []
 					if (latest.settlementState !== 'resolved') throw new Error(copy.questionFinalizationRequired)
 					if (latest.questionOutcome !== identity.outcome) throw new Error(copy.claimWinningOutcomeRequired)
 					const indexes = identities.map(item => {

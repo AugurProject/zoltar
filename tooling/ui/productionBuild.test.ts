@@ -288,8 +288,8 @@ type ProductionBrowserDriver = {
 	pressTab: () => Promise<void>
 	resize: (viewport: { height: number; width: number }) => Promise<void>
 	setInputByLabel: (label: string, value: string) => Promise<void>
-	waitForButtonEnabled: (label: string, occurrence?: number) => Promise<void>
-	waitForBodyText: (text: string) => Promise<string>
+	waitForButtonEnabled: (label: string, occurrence?: number, timeoutMilliseconds?: number) => Promise<void>
+	waitForBodyText: (text: string, timeoutMilliseconds?: number) => Promise<string>
 	waitForBodyWithoutText: (text: string) => Promise<string>
 	waitForExpression: (expression: string) => Promise<void>
 	waitForReady: () => Promise<void>
@@ -307,9 +307,10 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			if (typeof body !== 'string') throw new Error('Chromium body evaluation did not return text')
 			return body
 		}
-		const waitForBody = async (predicate: (body: string) => boolean, description: string) => {
+		const waitForBody = async (predicate: (body: string) => boolean, description: string, timeoutMilliseconds = 120_000) => {
 			let body = ''
-			for (let attempt = 0; attempt < 2400; attempt += 1) {
+			const deadline = performance.now() + timeoutMilliseconds
+			while (performance.now() < deadline) {
 				body = await readBody()
 				if (body.includes('Simulation bootstrap failed')) throw new Error(`Production simulation failed to bootstrap: ${body}`)
 				if (predicate(body)) return body
@@ -345,13 +346,21 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 				const NativeWorker = window.Worker;
 				window.__zoltarProductionWorkers = [];
 				window.__statoblastRpcMethods = [];
+				window.__delayedRpcMethods = [];
+				window.__rpcDelay = Number(new URLSearchParams(location.search).get('rpcDelay'));
 				window.Worker = class TrackedProductionWorker extends NativeWorker {
 					constructor(...args) {
 						super(...args);
 						window.__zoltarProductionWorkers.push(this);
 					}
 					postMessage(message, ...options) {
-						if (message?.type === 'rpc') window.__statoblastRpcMethods.push(message.method);
+						if (message?.type === 'rpc') {
+							window.__statoblastRpcMethods.push(message.method);
+							if (window.__rpcDelay > 0) {
+								window.__delayedRpcMethods.push(message.method);
+								return void setTimeout(() => super.postMessage(message, ...options), window.__rpcDelay);
+							}
+						}
 						return super.postMessage(message, ...options);
 					}
 				}
@@ -382,15 +391,16 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 				)
 				if (updated !== true) throw new Error(`Unable to update browser input ${label}`)
 			},
-			waitForButtonEnabled: async (label, occurrence = 0) => {
-				for (let attempt = 0; attempt < 600; attempt += 1) {
+			waitForButtonEnabled: async (label, occurrence = 0, timeoutMilliseconds = 30_000) => {
+				const deadline = performance.now() + timeoutMilliseconds
+				while (performance.now() < deadline) {
 					const enabled = await evaluate(`[...document.querySelectorAll('button')].filter(button => ${browserButtonNameExpression} === ${JSON.stringify(label)} && !button.disabled)[${occurrence.toString()}] instanceof HTMLButtonElement`)
 					if (enabled === true) return
 					await Bun.sleep(50)
 				}
 				throw new Error(`Timed out waiting for enabled browser button ${label}. Last body: ${await readBody()}`)
 			},
-			waitForBodyText: async text => await waitForBody(body => body.includes(text), JSON.stringify(text)),
+			waitForBodyText: async (text, timeoutMilliseconds) => await waitForBody(body => body.includes(text), JSON.stringify(text), timeoutMilliseconds),
 			waitForBodyWithoutText: async text => await waitForBody(body => !body.includes(text), `body to omit ${JSON.stringify(text)}`),
 			waitForExpression: expression => page.waitFor(expression),
 			waitForReady: navigation.waitForReady,
@@ -579,7 +589,58 @@ test(
 )
 
 test(
-	'Statoblast keeps Capital visible during a 10-second RPC read and offers recovery after a timeout',
+	'Statoblast loads a cold question, refreshes Watchlist and sends with every RPC delayed ten seconds',
+	async () => {
+		if (server === undefined) throw new Error('Production test server did not start')
+		const baseUrl = server.url.toString().replace(/\/$/, '')
+		const watchlist = '#/watchlist?simulate=1&genesis=yes&simScenario=securitypoolx2'
+		await loadProductionDocumentInChromium(
+			`${baseUrl}/statoblast/${watchlist}`,
+			{ height: 844, width: 390 },
+			async driver => {
+				await openSavedStatoblastItem(driver, 'question')
+				const href = await driver.evaluate('location.href')
+				if (typeof href !== 'string') throw new Error('Missing seeded question link')
+				const coldQuestion = new URL(href)
+				coldQuestion.searchParams.set('rpcDelay', '10000')
+				await driver.navigate(coldQuestion.href)
+				await driver.waitForBodyText('Resolution rules and details', 180_000)
+				await driver.waitForBodyText('1.00 sets')
+
+				await driver.navigate(`?rpcDelay=10000${watchlist}`)
+				await driver.waitForBodyText('Saved security pools')
+				await driver.waitForBodyText('Refreshing saved items…')
+				await driver.waitForBodyWithoutText('Refreshing saved items…')
+				await driver.waitForButtonEnabled('Refresh', 0, 120_000)
+				await driver.evaluate('window.__statoblastRpcMethods.length = 0; window.__delayedRpcMethods.length = 0')
+				await driver.clickButton('Refresh')
+				await driver.waitForExpression('window.__delayedRpcMethods.includes("eth_getBlockByNumber")')
+				await driver.waitForButtonEnabled('Refresh', 0, 120_000)
+				expect(await driver.evaluate('document.body.innerText')).not.toContain('Couldn’t refresh')
+				expect(await driver.evaluate('window.__statoblastRpcMethods.slice()')).toEqual(await driver.evaluate('window.__delayedRpcMethods.slice()'))
+
+				await driver.navigate(href)
+				await driver.waitForButtonEnabled('Redeem complete sets')
+				await driver.clickButton('Redeem complete sets')
+				await driver.setInputByLabel('Complete sets to redeem', '0.01')
+				await driver.waitForButtonEnabled('Redeem complete sets', 1)
+				await driver.clickButton('Redeem complete sets', 1)
+				await driver.waitForButtonEnabled('Continue in wallet')
+				await driver.evaluate('window.__statoblastRpcMethods.length = 0; window.__rpcDelay = 10000')
+				await driver.clickButton('Continue in wallet')
+				await driver.waitForBodyText('0.99 sets', 240_000)
+				const delayed = await driver.evaluate('window.__delayedRpcMethods.slice()')
+				expect(delayed).toContain('eth_sendTransaction')
+				expect(await driver.evaluate('window.__statoblastRpcMethods.slice()')).toEqual(delayed)
+			},
+			SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS - PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS,
+		)
+	},
+	SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS,
+)
+
+test(
+	'Statoblast keeps Capital visible during a slow RPC read and offers recovery after a timeout',
 	async () => {
 		if (server === undefined) throw new Error('Production test server did not start')
 		const baseUrl = server.url.toString().replace(/\/$/, '')

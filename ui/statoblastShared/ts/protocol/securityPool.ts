@@ -36,6 +36,7 @@ import {
 	statoblast_SecurityPoolResolutionPremiumBook_SecurityPoolResolutionPremiumBook as premiumArtifact,
 } from '../contractArtifact.js'
 import { getInfraContractAddresses, getSecurityPoolCreationCode, getSecurityPoolRuntimeCode } from './deploymentHelpers.js'
+import { invalidPool, missingPoolContract } from '../copy/watchlist.js'
 import { requireAddressValue, requireBigintValue, requireIntegerLikeValue } from './decoders.js'
 import { readRequiredMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { loadSecurityPoolAdmission } from './securityPoolAdmission.js'
@@ -114,17 +115,20 @@ export async function verifyCapitalLedgerClone(client: ReadClient, securityPool:
  * The canonical factory deploys every security pool from its pinned creation code and module deployers and records it.
  * Runtime code alone proves nothing about the constructor arguments, so this record is what authenticates the modules.
  */
-export async function requireCanonicalSecurityPool(client: Pick<ReadClient, 'readContract'>, securityPool: Address, blockNumber?: bigint) {
+export async function requireCanonicalSecurityPool(client: Pick<ReadClient, 'readContract'>, securityPool: Address, blockNumber?: bigint, readUnverifiedCode?: ReadClient['getCode']) {
 	const recorded = await client.readContract({ address: getInfraContractAddresses().securityPoolFactory, abi: linksAbi, functionName: 'isSecurityPool', args: [securityPool], ...(blockNumber === undefined ? {} : { blockNumber }) })
-	if (recorded !== true) throw new Error('Security pool was not deployed by the canonical factory.')
+	if (recorded === true) return
+	if (readUnverifiedCode === undefined) throw new Error('Security pool was not deployed by the canonical factory.')
+	const code = await readUnverifiedCode({ address: securityPool, blockNumber })
+	throw new Error(code === undefined || code === '0x' ? missingPoolContract : invalidPool)
 }
 
 /** A bounded setup status is readable before the custody modules exist. */
-export async function loadSecurityPoolSetup(client: ReadClient, securityPool: Address, owner: Address) {
+export async function loadSecurityPoolSetup(client: ReadClient, securityPool: Address, owner: Address, fromDirectLink = false) {
 	const [block, chainId] = await Promise.all([client.getBlock(), client.getChainId()])
 	if (block.number === undefined || block.hash === undefined) throw new Error('Security pool setup requires a mined block.')
 	const blockNumber = block.number
-	await requireCanonicalSecurityPool(client, securityPool, blockNumber)
+	await requireCanonicalSecurityPool(client, securityPool, blockNumber, fromDirectLink ? request => client.getCode(request) : undefined)
 	verifyRuntimeCode(await client.getCode({ address: securityPool, blockNumber }), getSecurityPoolRuntimeCode(), securityPoolArtifact.evm.deployedBytecode.immutableReferences, 'securityPool')
 	const [stageValue, factoryValue, zoltarValue, originValue, auctionDeployerValue] = await Promise.all([
 		client.readContract({ address: securityPool, abi: linksAbi, functionName: 'setupStage', blockNumber }),
@@ -291,15 +295,9 @@ export async function sendSecurityPoolTransaction(client: WriteClient, request: 
 		await captured.validateBeforeSubmit?.()
 	}
 	const gas = captured.gas === undefined ? {} : { gas: captured.gas }
-	const simulate = () => client.call({ account: client.account, to: captured.to, data: captured.data, value: captured.value, ...gas })
-	await withTimeout(
-		(async () => {
-			await validateCaptured()
-			await simulate()
-		})(),
-		15_000,
-		currentStateCheckFailed,
-	)
+	const simulate = () => withTimeout(client.call({ account: client.account, to: captured.to, data: captured.data, value: captured.value, ...gas }), 15_000, currentStateCheckFailed)
+	await validateCaptured()
+	await simulate()
 	const checkedAt = performance.now()
 	const review = { functionName: title, contractAddress: captured.to, data: captured.data, value: captured.value, reviewTitle: title, reviewDescription: captured.reviewDescription, ...gas }
 	client.onTransactionPlan?.([

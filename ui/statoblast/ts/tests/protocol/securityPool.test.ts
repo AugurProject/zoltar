@@ -62,6 +62,16 @@ test('genuine runtime code the canonical factory did not deploy fails setup and 
 		[[securityPool], 10n],
 	])
 })
+
+test.each([
+	['0x', 'No contract exists at this address.'],
+	['0x6000', 'This isn’t a Statoblast security pool.'],
+] as const)('direct pool setup explains an unverified address with runtime code %s', async (code, message) => {
+	const fixture = capitalClient()
+	fixture.setRead('isSecurityPool', false)
+	const client = fixture.client.extend(() => ({ getCode: async () => code }))
+	await expect(loadSecurityPoolSetup(client, securityPool, owner, true)).rejects.toThrow(message)
+})
 test('a genuine capital ledger cannot nominate an unrelated fork authority', async () => {
 	const fixture = capitalClient()
 	fixture.setRead('forkAuthority', modules.engine)

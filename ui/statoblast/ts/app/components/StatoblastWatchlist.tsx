@@ -20,7 +20,6 @@ import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { useFavorites } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { createActiveEnvironmentGuard, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { ensureSentence, getErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
-import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { hasInvalidUniverseQueryParam, readUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
@@ -28,7 +27,8 @@ import { parseStatoblastPage, statoblastPageHref, type StatoblastPoolPage, type 
 import { checkStatoblastEntries } from '@zoltar/ui-statoblast-shared/protocol/statoblastEntries.js'
 import { exportStatoblastWatchlist, importStatoblastWatchlist } from '@zoltar/ui-statoblast-shared/protocol/watchlistTransfer.js'
 import { statoblastDisplayCache } from '@zoltar/ui-statoblast-shared/protocol/statoblastPageCache.js'
-import { decodeWatchlistRows, loadWatchlistRows, parseWatchlistEntity, type WatchlistEntity, type WatchlistRow } from '@zoltar/ui-statoblast-shared/protocol/watchlistRows.js'
+import { decodeWatchlistRows, loadWatchlistRows, parseWatchlistEntity, type WatchlistEntity, type WatchlistReadCheckpoint, type WatchlistRow } from '@zoltar/ui-statoblast-shared/protocol/watchlistRows.js'
+import { withStatoblastRequestTimeout } from '@zoltar/ui-statoblast-shared/protocol/requestTimeout.js'
 import { openHistory } from '../lib/watchlistHistory.js'
 
 function destination(entity: WatchlistEntity): StatoblastPoolPage | StatoblastQuestionPage {
@@ -100,12 +100,16 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 	const generation = useRef(0)
 	const tail = useRef(25)
 	const inFlight = useRef<number>()
+	const pendingRead = useRef<AbortController>()
+	const watchlistRead = useRef<{ scope: string; checkpoint: WatchlistReadCheckpoint }>()
 	const scope = `${environmentKey}:${universe}:${owner ?? ''}`
 	const rowScope = useRef('')
 	const refresh = async (automatic = false) => {
 		if (!enabled || inFlight.current !== undefined || source.length === 0 || document.hidden) return
 		const marker = ++generation.current
 		inFlight.current = marker
+		const abort = new AbortController()
+		pendingRead.current = abort
 		const guard = createActiveEnvironmentGuard()
 		const current = () => generation.current === marker && guard.isCurrent()
 		const first = source.slice(0, 25)
@@ -114,33 +118,34 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 			selected = [...first, ...source.slice(tail.current, tail.current + 10)]
 			tail.current = tail.current + 10 >= source.length ? 25 : tail.current + 10
 		}
+		const readScope = `${scope}:${selected.map(entry => entry.id).join(',')}`
+		if (watchlistRead.current?.scope !== readScope) watchlistRead.current = { scope: readScope, checkpoint: { rows: [] } }
+		const { checkpoint } = watchlistRead.current
 		setLoading(true)
-		setProgress({ completed: 0, total: Math.ceil(selected.length / 25) })
+		setProgress({ completed: Math.ceil(checkpoint.rows.length / 25), total: Math.ceil(selected.length / 25) })
 		setReadError(undefined)
-		let anchor: { number: bigint; timestamp: bigint } | undefined
-		await withTimeout(
-			loadWatchlistRows(createConnectedReadClient(), selected, universe, owner, profile, {
-				onChunk: (batch, finished, total, block) => {
-					anchor = block
-					if (!current()) return
-					setRows(previous => new Map([...previous, ...batch.map(row => [row.entity.id, row] as const)]))
-					setProgress({ completed: Math.ceil(finished / 25), total: Math.ceil(total / 25) })
-				},
-			}),
-			15_000,
-			pageCopy.refreshTimeoutError,
-		)
+		const client = withStatoblastRequestTimeout(createConnectedReadClient(), pageCopy.refreshTimeoutError, abort.signal)
+		await loadWatchlistRows(client, selected, universe, owner, profile, {
+			checkpoint,
+			onChunk: (batch, finished, total) => {
+				if (!current()) return
+				setRows(previous => new Map([...previous, ...batch.map(row => [row.entity.id, row] as const)]))
+				setProgress({ completed: Math.ceil(finished / 25), total: Math.ceil(total / 25) })
+			},
+		})
 			.then(
 				result => {
 					if (!current()) return
+					watchlistRead.current = undefined
 					setReadAt(Date.now())
-					if (!automatic && anchor !== undefined) displayCache.write(result, anchor)
+					if (!automatic && checkpoint.anchor !== undefined) displayCache.write(result, checkpoint.anchor)
 				},
 				error => {
 					if (current()) setReadError(ensureSentence(getErrorDetail(error) ?? pageCopy.refreshFailedError))
 				},
 			)
 			.finally(() => {
+				if (pendingRead.current === abort) pendingRead.current = undefined
 				if (inFlight.current === marker) inFlight.current = undefined
 				if (current()) setLoading(false)
 				if (generation.current === marker) generation.current++
@@ -160,6 +165,7 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 		return () => {
 			generation.current++
 			inFlight.current = undefined
+			pendingRead.current?.abort()
 		}
 	}, [enabled, scope, sourceKey])
 	useBlockRefresh(event => void refresh(event.reason === 'block'), enabled)
@@ -178,16 +184,10 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 		const guard = createActiveEnvironmentGuard()
 		try {
 			const { page, universe: targetUniverse } = openTarget(input, universe)
-			const client = createConnectedReadClient()
-			const [result] = await withTimeout(
-				(async () => {
-					const head = await client.getBlock()
-					if (head.number === undefined) throw new Error('Could not confirm the latest block.')
-					return await checkStatoblastEntries(client, [{ pool: page.pool, universeId: targetUniverse, ...(page.kind === 'question' ? { questionId: page.questionId } : {}) }], head.number, true)
-				})(),
-				15_000,
-				'Opening this item timed out. Try again.',
-			)
+			const client = withStatoblastRequestTimeout(createConnectedReadClient(), 'Opening this item timed out. Try again.')
+			const head = await client.getBlock()
+			if (head.number === undefined) throw new Error('Could not confirm the latest block.')
+			const [result] = await checkStatoblastEntries(client, [{ pool: page.pool, universeId: targetUniverse, ...(page.kind === 'question' ? { questionId: page.questionId } : {}) }], head.number, true)
 			if (!guard.isCurrent()) return
 			if (result?.status === 'failed') throw result.error
 			if (result?.status === 'unprepared-question') {

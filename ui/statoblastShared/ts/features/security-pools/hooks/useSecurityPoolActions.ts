@@ -46,7 +46,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 	const walletReason = parameters.accountAddress === undefined ? copy.connect : undefined
 	const ownerReason =
 		walletReason ??
-		(model.loading || (busy.value !== undefined && snapshot === undefined) ? copy.loading : undefined) ??
+		(snapshot === undefined && (model.loading || busy.value !== undefined) ? copy.loading : undefined) ??
 		(snapshot === undefined && model.presentationSnapshot !== undefined ? copy.readUnavailable : undefined) ??
 		(snapshot === undefined ? copy.enterSecurityPool : undefined) ??
 		(parameters.accountAddress?.toLowerCase() !== (snapshot?.auctionVault?.bidder ?? snapshot?.owner)?.toLowerCase() ? copy.ownerRequired : undefined)
