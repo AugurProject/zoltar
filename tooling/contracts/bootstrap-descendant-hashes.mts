@@ -11,7 +11,7 @@ export type BootstrapDescendantHashProfile = 'deterministic' | 'mainnet' | 'sepo
 // Every descendant except the question ledger deployer and its deployment worker hashes identically on all profiles.
 const PROFILE_INDEPENDENT_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<string, Hash>> = {
 	securityPoolCapitalRepairAuctionDelegate: '0xf73b58c41d17ab66f24514c1eed0d0794d29ed8ff5ffa44935f0e8781139585a',
-	securityPoolCapitalLifecycleDelegate: '0xd522b87cb86a1012deba3fc1678f4ffa4c461605af9b7fd093da169c2eff5828',
+	securityPoolCapitalLifecycleDelegate: '0x670a420955e30b7b745b21edb90ed479fa22573edbe2b49aa370964fafb56c0b',
 	escalationGameCreationCodePartOne: '0x918ed8ca0e46f620f8e5aff4063d1e1de4da749502123d0e1f47c3a4c2b5cdc2',
 	escalationGameCreationCodePartTwo: '0x6138e84c51b884fdab1d23db44ffbf5a474dab530fa0434b000eabf4093b3f99',
 	escalationGameProofVerifier: '0x0fbe595430d3ba685500c339fadc1bca2bdfe8caa73ab0739f06d7a4a6962d4a',
@@ -37,33 +37,33 @@ const PROFILE_INDEPENDENT_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Rec
 export const EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<BootstrapDescendantHashProfile, Readonly<Record<string, Hash>>>> = {
 	sepolia: {
 		...PROFILE_INDEPENDENT_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES,
-		questionLedgerDeployer: '0xe87eb8cc110d27c918eab55c579449d6d36e5162d9692ceeb18363be91add0c8',
-		questionLedgerDeploymentWorker: '0x61f9099c679f3cd8c146b4fbaba259b60923ccadb7c740beeb47d7793a8ae808',
+		questionLedgerDeployer: '0xe2577483a81691af99554e06fa5c3ec6c1db4b2e494a1e41346fb335c99a46b4',
+		questionLedgerDeploymentWorker: '0xc7b87d96ac481ce54bf4c0f3a4926e5578274d38954fe01b158aa7610744bac6',
 	},
 	deterministic: {
 		...PROFILE_INDEPENDENT_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES,
-		questionLedgerDeployer: '0x02cc5a132084ffd36950e58614ed713499e96a040570aa73c3d12bf994110f2d',
-		questionLedgerDeploymentWorker: '0xfecc157fb1cb77a4dcc97dbbc46833889ffe0a6bf937d323d055626bea5346d4',
+		questionLedgerDeployer: '0xd028aff7289fa3df93aa3d8987d98b4c58502b7a16f7637988d5fb20856d574c',
+		questionLedgerDeploymentWorker: '0xcde4ef40ee471d3cbda8b139891865bc5df450219c1c03ece94b94cd608624b2',
 	},
 	mainnet: {
 		...PROFILE_INDEPENDENT_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES,
-		questionLedgerDeployer: '0x040065e84356b0e894fa56026ef8cbddd5f20201e6f9b7082372332d418049e0',
-		questionLedgerDeploymentWorker: '0xcc7f218416b8c7aea1b739cc2251676adafd758217d6ea08607e763dfb246761',
+		questionLedgerDeployer: '0x9686ab52244299586b9d75dca354e82bd98f4db2fa20fa8b971aa06b63393528',
+		questionLedgerDeploymentWorker: '0xf0d8766f6aeb7ea549804e01b9bcf04c841e77ff7193a1cbc7816354e53e7489',
 	},
 }
 
 // Only descendants that embed a selected Zoltar address differ between the two genesis deployments.
 export const EXPECTED_NO_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<BootstrapDescendantHashProfile, Readonly<Record<string, Hash>>>> = {
 	sepolia: {
-		questionLedgerDeployer: '0xc8c490edce7fd5b4c7c093e7437a0e4f7c965aaf29b7f846c1798e8339282d0e',
-		questionLedgerDeploymentWorker: '0x5ef6da08372cc331d24eec8ba8f8341ad492b05eb2eb7d1570e229fb223de40c',
+		questionLedgerDeployer: '0xc46bbb41622f1e2128ae490b0167c63e93c51e58361fab7e546afbf99d6d72d1',
+		questionLedgerDeploymentWorker: '0x1e7b21edf5510407bb002a27a055f36e3d4a332303c13e51ffa5071cafec8475',
 	},
 	deterministic: {
-		questionLedgerDeployer: '0x89d153e36f0acad85d60003d0b965e63a0d331fe2c569a8b70e43b1258ed68cc',
-		questionLedgerDeploymentWorker: '0xa0fe34d682d5d3c73574ed2a012edc5625a243e871513ce50bedfcd9b4c0ce45',
+		questionLedgerDeployer: '0xcd300d04f3d64bee21e691f709767879c65bc03f1d712e787415c48dfaa4e933',
+		questionLedgerDeploymentWorker: '0x0be9b4ce8a2675b9ef93cad34ddfc1ff8b26fb376f631de2555380ea0f85b673',
 	},
 	mainnet: {
-		questionLedgerDeployer: '0xfb3e5e8d23e99de29933d0b4386bf00412334f8f7618e3183fe2c6abbf0d07e8',
-		questionLedgerDeploymentWorker: '0x4a1fb74ac301e8d75b0d30d20b6046d836844f80e28e6daddc98d526ef3f6fc0',
+		questionLedgerDeployer: '0x51bc7ee0e51156724f8b41f13a3d9e23e80c97c210ab1921ac63e9c8870354d2',
+		questionLedgerDeploymentWorker: '0x87f1a3cd5994d8194c52b9cf80071bbd8b6c5852420ff4014bb272e7b6603b04',
 	},
 }
