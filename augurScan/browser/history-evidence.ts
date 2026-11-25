@@ -68,6 +68,8 @@ export const timelineEntityTypeLabel = (value: JsonValue | undefined): string =>
 			return 'Reputation token'
 		case 'share-token':
 			return 'Share token'
+		case 'open-oracle':
+			return 'OpenOracle'
 		case 'open-oracle-report':
 			return 'OpenOracle report'
 		case 'price-coordinator':

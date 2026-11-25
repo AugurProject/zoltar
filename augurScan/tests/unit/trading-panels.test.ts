@@ -48,3 +48,10 @@ test('summarizes profit and loss with signed results and unavailable valuations'
 	expect(tradingPnlHoldings({ open: false })).toBe('Closed position')
 	expect(tradingPnlHoldings({ collateral: { symbol: 'ETH', decimals: 18 }, open: true, invalid_atto_shares: '1000000000000000000', yes_atto_shares: '0', no_atto_shares: '0', lp_tokens: '0' })).toBe('Open · 1 INVALID · 0 YES · 0 NO · 0 LP tokens')
 })
+
+test('shows the assets delivered by the router, including REP-only receipts', () => {
+	const receipt = { kind: 'exit', side: 'YES', shares: '1000000000000000000', collateral: { symbol: 'WETH', decimals: 18 }, native_collateral: true, recovery_rep_atto_rep: '1000000000000000000' }
+	expect(tradingActivitySummary({ ...receipt, eth_out_atto_eth: '0' }, 'ETH')).toBe('1 YES shares · 1 REP received')
+	expect(tradingActivitySummary({ ...receipt, eth_out_atto_eth: '2000000000000000000' }, 'ETH')).toBe('1 YES shares · 2 ETH received · 1 REP received')
+	expect(tradingActivitySummary({ ...receipt, native_collateral: false, kind: 'settlement', side: null, eth_out_atto_eth: '2000000000000000000' }, 'ETH')).toBe('1 winning shares · 2 WETH received · 1 REP received')
+})

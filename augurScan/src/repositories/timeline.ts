@@ -56,11 +56,11 @@ export const timelineCatalogRows = async (sql: SQL, filters: TimelineFilters) =>
 				-- Auction amounts are in the auction's collateral token, which its tagged reads sample.
 				CASE WHEN timeline.entity_type = 'auction' THEN ${latestAuctionCollateral(sql, chainId, asOfBlock, sql`timeline.entity_identity`)}
 				-- SecurityPool amounts are in the securityPool's collateral token, which its capital ledgers' tagged reads sample.
-				-- Each of these identities starts with the ledger, securityPool, services or settlement-book address.
-				WHEN timeline.entity_type IN ('vault', 'capital-position', 'security-pool', 'security-pool-services', 'settlement-book') THEN (
+				-- Each of these identities starts with the ledger, securityPool, services, settlement book or shared price feed address.
+				WHEN timeline.entity_type IN ('vault', 'capital-position', 'security-pool', 'security-pool-services', 'settlement-book', 'price-feed') THEN (
 					SELECT ledger.read_result->'collateral' FROM ledgers ledger
 					WHERE ledger.read_result->'collateral' IS NOT NULL AND lower(split_part(timeline.entity_identity, ':', 1)) IN (
-						ledger.ledger_address, lower(ledger.read_result->>'securityPool'), lower(ledger.read_result->'fees'->>'services'), lower(ledger.read_result->'fees'->>'settlementBook'))
+						ledger.ledger_address, lower(ledger.read_result->>'securityPool'), lower(ledger.read_result->'fees'->>'services'), lower(ledger.read_result->'fees'->>'settlementBook'), lower(ledger.read_result->>'priceFeed'))
 					LIMIT 1) END AS collateral
 			FROM (SELECT timeline.* FROM protocol_timeline_entries timeline ${timelineFilter()}
 			 AND (timeline.block_number, timeline.log_index, timeline.tx_hash, timeline.block_hash, timeline.entity_type, timeline.entity_identity) <
@@ -113,7 +113,7 @@ export const timelineRows = async (
 
 export const stateCatalogRows = async (sql: SQL, chainId: number | undefined, queryLimit: number, offset = 0, query?: string) => {
 	const search = query === undefined ? undefined : literalContainsPattern(query)
-	const questionId = query === undefined ? undefined : numericIdentity(query)
+	const searchedIdentity = query === undefined ? undefined : numericIdentity(query)
 	const versionRows = await sql`
 		WITH catalog_identity AS (
 			SELECT 'question'::text AS kind, q.chain_id::text AS chain_id, q.question_id::text AS identity, q.created_timestamp::text AS position, q.title::text AS detail
@@ -151,11 +151,11 @@ export const stateCatalogRows = async (sql: SQL, chainId: number | undefined, qu
 			? await sql`SELECT q.*, q.start_time::text AS start_time, q.end_time::text AS end_time, n.id AS network_id,
 				(SELECT count(*) FROM pools p WHERE p.chain_id = q.chain_id AND p.question_id = q.question_id AND p.canonical) AS pool_count,
 				(SELECT count(*) FROM universe_events u WHERE u.chain_id = q.chain_id AND u.fork_question_id = q.question_id AND u.event_name = 'UniverseForked' AND u.canonical) AS fork_count
-				FROM questions q JOIN networks n USING (chain_id) WHERE q.canonical AND (${search ?? null}::text IS NULL OR q.title ILIKE ${search ?? ''} OR q.question_id::text ILIKE ${search ?? ''} OR q.question_id::text = ${questionId ?? null}) ORDER BY q.created_timestamp DESC, q.chain_id, q.question_id LIMIT ${queryLimit} OFFSET ${offset}`
+				FROM questions q JOIN networks n USING (chain_id) WHERE q.canonical AND (${search ?? null}::text IS NULL OR q.title ILIKE ${search ?? ''} OR q.question_id::text ILIKE ${search ?? ''} OR q.question_id::text = ${searchedIdentity ?? null}) ORDER BY q.created_timestamp DESC, q.chain_id, q.question_id LIMIT ${queryLimit} OFFSET ${offset}`
 			: await sql`SELECT q.*, q.start_time::text AS start_time, q.end_time::text AS end_time, n.id AS network_id,
 				(SELECT count(*) FROM pools p WHERE p.chain_id = q.chain_id AND p.question_id = q.question_id AND p.canonical) AS pool_count,
 				(SELECT count(*) FROM universe_events u WHERE u.chain_id = q.chain_id AND u.fork_question_id = q.question_id AND u.event_name = 'UniverseForked' AND u.canonical) AS fork_count
-				FROM questions q JOIN networks n USING (chain_id) WHERE q.canonical AND q.chain_id = ${chainId} AND (${search ?? null}::text IS NULL OR q.title ILIKE ${search ?? ''} OR q.question_id::text ILIKE ${search ?? ''} OR q.question_id::text = ${questionId ?? null}) ORDER BY q.created_timestamp DESC, q.chain_id, q.question_id LIMIT ${queryLimit} OFFSET ${offset}`
+				FROM questions q JOIN networks n USING (chain_id) WHERE q.canonical AND q.chain_id = ${chainId} AND (${search ?? null}::text IS NULL OR q.title ILIKE ${search ?? ''} OR q.question_id::text ILIKE ${search ?? ''} OR q.question_id::text = ${searchedIdentity ?? null}) ORDER BY q.created_timestamp DESC, q.chain_id, q.question_id LIMIT ${queryLimit} OFFSET ${offset}`
 	const pools =
 		chainId === undefined
 			? await sql`SELECT p.*, (SELECT state.read_result->'collateral' FROM entity_state_snapshots state WHERE state.chain_id = p.chain_id AND state.entity_type = 'pool' AND state.entity_identity = p.pool_address AND state.canonical AND state.read_status = 'success' ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1) AS collateral, n.id AS network_id, q.title AS question_title,
@@ -186,7 +186,7 @@ export const stateCatalogRows = async (sql: SQL, chainId: number | undefined, qu
 				(SELECT count(*) FROM identity child WHERE child.chain_id = i.chain_id AND child.parent_universe_id = i.universe_id AND child.universe_id <> i.universe_id) AS child_count,
 				(SELECT count(*) FROM pools p WHERE p.chain_id = i.chain_id AND p.universe_id = i.universe_id AND p.canonical) AS pool_count
 				FROM identity i JOIN networks n USING (chain_id) LEFT JOIN latest_supply s USING (chain_id, universe_id) LEFT JOIN fork f USING (chain_id, universe_id)
-				LEFT JOIN fork parent_fork ON parent_fork.chain_id = i.chain_id AND parent_fork.universe_id = i.parent_universe_id AND i.universe_id <> i.parent_universe_id WHERE (${search ?? null}::text IS NULL OR i.universe_id::text ILIKE ${search ?? ''}) ORDER BY i.chain_id, i.block_number, i.universe_id LIMIT ${queryLimit} OFFSET ${offset}`
+				LEFT JOIN fork parent_fork ON parent_fork.chain_id = i.chain_id AND parent_fork.universe_id = i.parent_universe_id AND i.universe_id <> i.parent_universe_id WHERE (${search ?? null}::text IS NULL OR i.universe_id::text ILIKE ${search ?? ''} OR i.universe_id::text = ${searchedIdentity ?? null}) ORDER BY i.chain_id, i.block_number, i.universe_id LIMIT ${queryLimit} OFFSET ${offset}`
 			: await sql`WITH identity AS (
 				SELECT DISTINCT ON (chain_id, universe_id) * FROM universe_events WHERE canonical AND event_name IN ('UniverseInitialized', 'DeployChild') AND chain_id = ${chainId} ORDER BY chain_id, universe_id, block_number, log_index
 			), latest_supply AS (
@@ -199,7 +199,7 @@ export const stateCatalogRows = async (sql: SQL, chainId: number | undefined, qu
 				(SELECT count(*) FROM identity child WHERE child.chain_id = i.chain_id AND child.parent_universe_id = i.universe_id AND child.universe_id <> i.universe_id) AS child_count,
 				(SELECT count(*) FROM pools p WHERE p.chain_id = i.chain_id AND p.universe_id = i.universe_id AND p.canonical) AS pool_count
 				FROM identity i JOIN networks n USING (chain_id) LEFT JOIN latest_supply s USING (chain_id, universe_id) LEFT JOIN fork f USING (chain_id, universe_id)
-				LEFT JOIN fork parent_fork ON parent_fork.chain_id = i.chain_id AND parent_fork.universe_id = i.parent_universe_id AND i.universe_id <> i.parent_universe_id WHERE (${search ?? null}::text IS NULL OR i.universe_id::text ILIKE ${search ?? ''}) ORDER BY i.chain_id, i.block_number, i.universe_id LIMIT ${queryLimit} OFFSET ${offset}`
+				LEFT JOIN fork parent_fork ON parent_fork.chain_id = i.chain_id AND parent_fork.universe_id = i.parent_universe_id AND i.universe_id <> i.parent_universe_id WHERE (${search ?? null}::text IS NULL OR i.universe_id::text ILIKE ${search ?? ''} OR i.universe_id::text = ${searchedIdentity ?? null}) ORDER BY i.chain_id, i.block_number, i.universe_id LIMIT ${queryLimit} OFFSET ${offset}`
 	const returnedPools: Array<Record<string, unknown>> = pools.slice(0, queryLimit - 1)
 	const poolAddresses = returnedPools.map(pool => String(pool['pool_address']))
 	const pagePoolKeys = new Set(returnedPools.map(pool => `${pool['chain_id']}:${pool['pool_address']}`))

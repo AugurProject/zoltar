@@ -52,3 +52,20 @@ test('projects shared funding, aggregate exposure, and price acceptance under th
 	}
 	expect(projectionsFrom(log('PriceReported', { reportId: 7n, price: 2000000000000000000n, lastSettlementTimestamp: 1000n }))).toContainEqual(expect.objectContaining({ type: 'repEthPrice', coordinatorAddress: feed.toLowerCase(), reportId: '7', repPerEth1e18: '2000000000000000000' }))
 })
+
+test('accepted candidates at one observation time do not add candidate prices to canonical history', () => {
+	const timestamp = 1000n
+	const canonicalPrice = 2000000000000000000n
+	for (const [reportId, candidatePrice, canonicalUpdated] of [
+		[7n, canonicalPrice, true],
+		[8n, 3000000000000000000n, false],
+	] as const) {
+		const accepted = { reportId, candidatePrice, canonicalPrice, observationTimestamp: timestamp, canonicalUpdated }
+		const occurrence = log('PriceCandidateAccepted', accepted)
+		const projections = projectionsFrom(occurrence)
+		expect(projectionsFrom({ ...occurrence, contractKind: 'shareToken' })).toEqual([])
+		expect(projections).toEqual([expect.objectContaining({ type: 'domainEvent', domain: 'oracle', entityType: 'price-feed', entityIdentity: feed.toLowerCase(), semanticEventKind: 'PriceCandidateAccepted' })])
+		expect(projections[0]).toHaveProperty('data', { reportId: reportId.toString(), candidatePrice: candidatePrice.toString(), canonicalPrice: canonicalPrice.toString(), observationTimestamp: timestamp.toString(), canonicalUpdated })
+		expect(projectionsFrom(log('PriceReported', { reportId, price: canonicalPrice, lastSettlementTimestamp: timestamp }))).toContainEqual(expect.objectContaining({ type: 'repEthPrice', reportId: reportId.toString(), repPerEth1e18: canonicalPrice.toString() }))
+	}
+})

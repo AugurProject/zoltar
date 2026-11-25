@@ -255,7 +255,7 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 			...first,
 			data: {
 				...first.data,
-				...(route.kind === 'escalation' ? { deposits: snapshot.items.filter(item => item['event_name'] === 'DepositOnOutcome' || item['event_name'] === 'LocalDepositAppended'), claims: snapshot.items.filter(item => String(item['event_name']).includes('Claim')) } : {}),
+				...(route.kind === 'escalation' ? { deposits: snapshot.items.filter(item => item['event_name'] === 'LocalDepositAppended'), claims: snapshot.items.filter(item => item['event_name'] === 'ClaimDeposit') } : {}),
 				[pageKey]: {
 					...lastPage,
 					items: snapshot.items,

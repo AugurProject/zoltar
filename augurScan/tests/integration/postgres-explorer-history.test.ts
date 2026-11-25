@@ -52,6 +52,127 @@ postgresTest('a settled timestamp report keeps its timestamp clock in the detail
 	})
 })
 
+postgresTest('retains an unknown clock when report coverage begins with settlement', async () => {
+	await withExplorerTables(['open_oracle_report_events', 'logs'], async connection => {
+		await connection`INSERT INTO open_oracle_report_events (chain_id, block_hash, tx_hash, log_index, block_number, open_oracle_address, report_id, event_name, report_data, canonical)
+			VALUES (${chainId}, ${blockHash(4)}, ${txHash(4)}, 0, 4, ${oracle}, 8, 'ReportSettled', '{"reportId":"8"}'::jsonb, true)`
+		const detail = await request(connection, `/api/v1/state/reports/${chainId}/${oracle}/8`)
+		expect(detail.status).toBe(200)
+		const payload = await detail.json()
+		expect(payload).toMatchObject({ data: { current: { event_name: 'ReportSettled' }, rounds: { items: [] } } })
+		expect(payload.data.current.lifecycle).toEqual({ state: 'Settled' })
+	})
+})
+
+postgresTest('numbers observed untracked report rounds across keyset pages without changing the protocol counter', async () => {
+	await withExplorerTables(['open_oracle_report_events', 'logs'], async connection => {
+		const insert = async (number: number, logIndex: number, name: string, reportId: number, count: number, flags: string, canonical = true) =>
+			await connection`INSERT INTO open_oracle_report_events (chain_id, block_hash, tx_hash, log_index, block_number, open_oracle_address, report_id, event_name, round_number, report_data, canonical)
+				VALUES (${chainId}, ${blockHash(number)}, ${txHash(number)}, ${logIndex}, ${number}, ${oracle}, ${reportId}, ${name}, ${count},
+					${JSON.stringify({ reportId: String(reportId), numReports: String(count), flags })}::text::jsonb, ${canonical})`
+		await insert(1, 0, 'ReportSubmitted', 8, 0, '0')
+		await insert(2, 0, 'ReportDisputed', 8, 0, '0', false)
+		await insert(2, 1, 'ReportDisputed', 8, 0, '0')
+		await insert(2, 2, 'ReportDisputed', 8, 0, '0')
+		await insert(1, 1, 'ReportSubmitted', 9, 0, '2')
+		await insert(2, 3, 'ReportDisputed', 9, 1, '2')
+		const path = `/api/v1/state/reports/${chainId}/${oracle}/8?limit=1`
+		const first = await (await request(connection, path)).json()
+		expect(first.data.rounds.items).toEqual([expect.objectContaining({ observed_round_number: '3', report_data: expect.objectContaining({ numReports: '0' }), comparison: expect.objectContaining({ previousRoundNumber: '0', previousObservedRoundNumber: '2' }) })])
+		const second = await (await request(connection, `${path}&cursor=${encodeURIComponent(first.data.rounds.nextCursor)}`)).json()
+		expect(second.data.rounds.items).toEqual([expect.objectContaining({ observed_round_number: '2', comparison: expect.objectContaining({ previousRoundNumber: '0', previousObservedRoundNumber: '1' }) })])
+		const third = await (await request(connection, `${path}&cursor=${encodeURIComponent(second.data.rounds.nextCursor)}`)).json()
+		expect(third.data.rounds.items).toEqual([expect.objectContaining({ observed_round_number: '1', comparison: expect.objectContaining({ state: 'initial' }) })])
+		const tracked = await (await request(connection, `/api/v1/state/reports/${chainId}/${oracle}/9`)).json()
+		expect(tracked.data.rounds.items).toEqual([expect.objectContaining({ round_number: '1', observed_round_number: null, comparison: expect.objectContaining({ previousRoundNumber: '0' }) }), expect.objectContaining({ round_number: '0', observed_round_number: null })])
+	})
+})
+
+postgresTest('links each accepted candidate and its canonical price to that report’s decision history', async () => {
+	await withExplorerTables(['open_oracle_report_events', 'logs', 'contracts'], async connection => {
+		await connection`INSERT INTO contracts (chain_id, address, label, kind, provenance, canonical)
+			VALUES (${chainId}, ${game}, 'Shared feed', 'sharedPoolPriceFeed', 'discovered', true),
+				(${chainId}, ${auction}, 'Other contract', 'shareToken', 'discovered', true)`
+		const candidateEvents = [
+			{ reportId: '7', candidatePrice: '100', canonicalPrice: '100', observationTimestamp: '1767225660', canonicalUpdated: true },
+			{ reportId: '8', candidatePrice: '200', canonicalPrice: '100', observationTimestamp: '1767225660', canonicalUpdated: false },
+		]
+		const decision = async (number: number, index: number, emitter: string, name: string, args: Record<string, unknown>) =>
+			await connection`INSERT INTO logs (chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, topics, data, event_name, arguments, decode_status, summary, canonical)
+				VALUES (${chainId}, ${txHash(number)}, ${blockHash(number)}, ${number}, 0, ${index}, ${emitter}, '[]', '0x', ${name}, ${JSON.stringify(args)}::text::jsonb, 'decoded', ${name}, true)`
+		for (const [index, args] of candidateEvents.entries()) {
+			const number = index + 1
+			await connection`INSERT INTO open_oracle_report_events (chain_id, block_hash, tx_hash, log_index, block_number, open_oracle_address, report_id, event_name, report_data, canonical)
+				VALUES (${chainId}, ${blockHash(number)}, ${txHash(number)}, 0, ${number}, ${oracle}, ${args.reportId}, 'ReportSubmitted', '{}'::jsonb, true)`
+			await decision(number, 1, game, 'PriceRequested', { reportId: args.reportId })
+			await decision(number + 2, 1, game, 'PriceReported', { reportId: args.reportId, price: '100', lastSettlementTimestamp: '1767225660' })
+			await decision(number + 2, 2, game, 'PriceCandidateAccepted', args)
+		}
+		// A decodable request signature in the same receipt does not establish that its emitter is a shared feed.
+		await decision(2, 3, auction, 'PriceRequested', { reportId: '8' })
+		await decision(5, 3, auction, 'PriceCandidateAccepted', { ...candidateEvents[1], reportId: '8', candidatePrice: '999' })
+		for (const args of candidateEvents) {
+			const response = await request(connection, `/api/v1/state/reports/${chainId}/${oracle}/${args.reportId}`)
+			expect(response.status).toBe(200)
+			const decisions = (await response.json()).data.coordinatorDecisions.items as readonly Record<string, unknown>[]
+			expect(decisions.filter(row => row['event_name'] === 'PriceCandidateAccepted')).toEqual([expect.objectContaining({ event_name: 'PriceCandidateAccepted', arguments: args, emitter_address: game })])
+			expect(decisions.filter(row => row['emitter_address'] === game)).toEqual([
+				expect.objectContaining({ event_name: 'PriceCandidateAccepted', arguments: args, emitter_address: game }),
+				expect.objectContaining({ event_name: 'PriceReported', arguments: expect.objectContaining({ reportId: args.reportId, price: '100' }) }),
+				expect.objectContaining({ event_name: 'PriceRequested' }),
+			])
+		}
+	})
+})
+
+postgresTest('requires indexed start evidence to report that an auction is scheduled', async () => {
+	await withExplorerTables(['collateral_repair_auction_events'], async connection => {
+		const entries = [
+			[auction, 'BidSubmitted', { bidId: '1' }],
+			[oracle, 'RefundWithdrawn', { amount: '1' }],
+			[game, 'RepairAuctionStarted', { opensAt: '1767229200', closesAt: '1767232800' }],
+		] as const
+		for (const [logIndex, [address, name, data]] of entries.entries()) {
+			await connection`INSERT INTO collateral_repair_auction_events (chain_id, block_hash, tx_hash, log_index, block_number, auction_address, event_name, event_data, canonical)
+				VALUES (${chainId}, ${blockHash(1)}, ${txHash(1)}, ${logIndex}, 1, ${address}, ${name}, ${JSON.stringify(data)}::text::jsonb, true)`
+		}
+		const catalog = await request(connection, `/api/v1/state/auctions?chainId=${chainId}`)
+		expect(catalog.status).toBe(200)
+		expect(await catalog.json()).toMatchObject({
+			data: {
+				items: [
+					{ auction_address: game, status: 'Scheduled' },
+					{ auction_address: oracle, status: 'Awaiting indexed evidence' },
+					{ auction_address: auction, status: 'Awaiting indexed evidence', bid_count: 1 },
+				],
+			},
+		})
+	})
+})
+
+postgresTest('corrects the destination in retained escalation payout snapshots', async () => {
+	await withExplorerTables(['escalation_game_events', 'entity_state_snapshots'], async connection => {
+		await connection`INSERT INTO escalation_game_events (chain_id, block_hash, tx_hash, log_index, block_number, game_address, event_name, event_data, canonical)
+			VALUES (${chainId}, ${blockHash(1)}, ${txHash(1)}, 0, 1, ${game}, 'LocalDepositAppended', '{}'::jsonb, true)`
+		const originalBasis = 'Authenticated leaf allocations. Payouts credit the depositor claim bundle, not a wallet transfer quote.'
+		const currentBasis = 'Payouts transfer REP to the depositor’s wallet on a successful claim.'
+		const positions = [{ depositor: oracle, payout_atto_rep: '142', proof: { leafIndex: '2' } }]
+		for (const [number, basis] of [
+			[1, originalBasis],
+			[2, currentBasis],
+		] as const) {
+			const read = { claimEvidence: { status: 'available', basis, positions } }
+			await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, block_timestamp, source_method, read_status, read_result, canonical)
+				VALUES (${chainId}, 'escalation', ${game}, ${number}, ${blockHash(number)}, now(), 'getCarryLeafPageByOutcome', 'success', ${JSON.stringify(read)}::text::jsonb, true)`
+		}
+		const path = `/api/v1/state/escalations/${chainId}/${game}`
+		const old = await (await request(connection, `${path}?atBlock=1`)).json()
+		expect(old.data.snapshot.read_result.claimEvidence).toEqual({ status: 'available', basis: `Authenticated leaf allocations. ${currentBasis}`, positions })
+		const current = await (await request(connection, path)).json()
+		expect(current.data.snapshot.read_result.claimEvidence).toEqual({ status: 'available', basis: currentBasis, positions })
+	})
+})
+
 postgresTest('entity detail continuations reject a conflicting historical block', async () => {
 	await withExplorerTables(['collateral_repair_auction_events', 'escalation_game_events', 'entity_state_snapshots', 'fork_migration_events', 'universe_events'], async connection => {
 		for (const number of [1, 2, 3]) {
@@ -107,6 +228,24 @@ postgresTest('the universe catalog counts only universes it can list and names t
 			['11', '42'],
 			['12', '42'],
 		])
+		const direct = await request(connection, '/api/v1/state/catalog?chainId=1&limit=1&selectedType=universes&selectedIdentity=12')
+		expect(await direct.json()).toMatchObject({
+			universes: [
+				{ universe_id: '11', inherited_fork_question_id: '42' },
+				{ universe_id: '12', inherited_fork_question_id: '42' },
+			],
+		})
+
+		await universe(1, 0, '0', 'UniverseInitialized', { parent: '0' })
+		for (const chain of [undefined, chainId]) {
+			const genesis = await stateCatalogRows(connection, chain, 10, 0, '0x0')
+			expect(genesis.universes).toEqual([expect.objectContaining({ universe_id: '0', inherited_fork_question_id: null })])
+			expect(genesis.totals[0]).toMatchObject({ universes: 3 })
+			const child = await stateCatalogRows(connection, chain, 10, 0, '0xc')
+			expect(child.universes).toEqual([expect.objectContaining({ universe_id: '12', inherited_fork_question_id: '42' })])
+			const decimal = await stateCatalogRows(connection, chain, 10, 0, '1')
+			expect(decimal.universes.map((row: Record<string, unknown>) => row['universe_id'])).toEqual(['11', '12'])
+		}
 	})
 })
 

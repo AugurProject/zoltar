@@ -6,7 +6,16 @@ import { useEffect, useRef } from 'preact/hooks'
 import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import { getOpenOracleAddress } from '../../../protocol/deploymentHelpers.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
-import { formatOpenOracleDisputeWriteErrorMessage, formatOpenOracleSettleWriteErrorMessage, getOpenOracleCreateGuardMessage, getOpenOracleCreateValidation, getOpenOracleSelectedReportActionMode, getOpenOracleSettleAvailability, parseOpenOracleCreateFormSubmission } from '../lib/openOracle.js'
+import {
+	formatOpenOracleDisputeWriteErrorMessage,
+	formatOpenOracleReportPriceUnit,
+	formatOpenOracleSettleWriteErrorMessage,
+	getOpenOracleCreateGuardMessage,
+	getOpenOracleCreateValidation,
+	getOpenOracleSelectedReportActionMode,
+	getOpenOracleSettleAvailability,
+	parseOpenOracleCreateFormSubmission,
+} from '../lib/openOracle.js'
 import type { OpenOracleCreateContractFieldErrors } from '../lib/openOracle.js'
 import { deriveOpenOracleDisputeSubmissionDetails } from '../lib/openOracleDispute.js'
 import { assertDisputeSwapTokenUnchanged, submitPreparedDispute } from '../lib/disputeSubmission.js'
@@ -30,6 +39,13 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 
 export type { UseOpenOracleOperationsDependencies } from './openOracleOperationDependencies.js'
+
+function getSettlementPriceUnits(details: OpenOracleReportDetails) {
+	return {
+		decimals: 18 + details.token2Decimals - details.token1Decimals,
+		label: formatOpenOracleReportPriceUnit(details),
+	}
+}
 
 function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	{ accountAddress, enabled, onReportSettled, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState, walletEthBalanceAttoEth }: UseOpenOracleOperationsParameters,
@@ -131,6 +147,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		errorFallback: string,
 		options?: {
 			formatErrorMessage?: (error: unknown, fallbackMessage: string) => string
+			getReceiptPriceUnits?: () => ReturnType<typeof getSettlementPriceUnits> | undefined
 			refreshTokenAccessOnSuccess?: boolean
 		},
 	) => {
@@ -157,6 +174,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 						tokenPair: reportDetailsSnapshot === undefined ? undefined : `${reportDetailsSnapshot.token1Symbol} / ${reportDetailsSnapshot.token2Symbol}`,
 						withdrawalTokenSymbol,
 					}
+		const receiptContext = () => ({ ...transactionContext, priceUnits: options?.getReceiptPriceUnits?.() })
 		try {
 			openOracleFeedback.value = createPendingActionFeedback(actionName, getOpenOraclePendingTitle(actionName))
 			await runWriteAction(
@@ -171,7 +189,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					onRefreshError: (message, hash) => {
 						openOracleFeedback.value = createWarningActionFeedback(actionName, getOpenOracleSuccessTitle(actionName), message, hash)
 						const result = openOracleResult.value
-						if (result !== undefined) onTransactionPresented(createOpenOracleWarningPresentation(result, message, transactionContext))
+						if (result !== undefined) onTransactionPresented(createOpenOracleWarningPresentation(result, message, receiptContext()))
 					},
 					onWriteCanceled: () => {
 						openOracleFeedback.value = undefined
@@ -199,7 +217,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					} else {
 						openOracleFeedback.value = createSuccessActionFeedback(actionName, getOpenOracleSuccessTitle(actionName), result.hash)
 					}
-					onTransactionPresented(createOpenOracleSuccessPresentation(result, transactionContext))
+					onTransactionPresented(createOpenOracleSuccessPresentation(result, receiptContext()))
 					if (result.action === 'createReportInstance') {
 						openOracleCreateForm.value = getDefaultOpenOracleCreateFormState()
 						openOracleCreateFieldErrors.value = {}
@@ -364,19 +382,22 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		}
 	}
 
-	const settleReport = async () =>
+	const settleReport = async () => {
+		let priceUnits: ReturnType<typeof getSettlementPriceUnits> | undefined
 		await runOracleAction(
 			'settle',
 			async (walletAddress, context) => {
 				const { details } = await ensureLoadedSelectedReport({ forceReload: true, requireCurrentSelection: true })
 				const settleAvailability = getOpenOracleSettleAvailability(details)
 				if (!settleAvailability.canAct) throw new Error(settleAvailability.message ?? 'This report is not ready to settle.')
+				priceUnits = getSettlementPriceUnits(details)
 
 				return await dependencies.settleOracleReport(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), getOpenOracleAddress(), details.reportId)
 			},
 			'Failed to settle report',
-			{ formatErrorMessage: formatOpenOracleSettleWriteErrorMessage },
+			{ formatErrorMessage: formatOpenOracleSettleWriteErrorMessage, getReceiptPriceUnits: () => priceUnits },
 		)
+	}
 
 	const cancelWithdrawalBalanceCheck = () => {
 		if (!openOracleWithdrawalBalanceChecking.value) return

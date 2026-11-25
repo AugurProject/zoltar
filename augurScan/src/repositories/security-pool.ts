@@ -258,14 +258,16 @@ export const addressSecurityPoolRows = async (
 				LEFT JOIN questions question ON question.chain_id = pool.chain_id AND question.question_id = pool.question_id AND question.canonical AND question.block_number <= ${snapshotBlock}
 				WHERE balance.balance <> 0
 			), totals AS (SELECT count(*)::integer AS total FROM positions)
-			SELECT page.market_address, page.balance::text, page.transfer_count, page.pool_address, page.question_title, totals.total
+			SELECT page.market_address, CASE WHEN page.balance >= 0 THEN page.balance::text END AS balance,
+				page.balance::text AS observed_balance_delta, page.transfer_count, page.pool_address, page.question_title, totals.total
 			FROM totals LEFT JOIN LATERAL (SELECT * FROM positions ORDER BY balance DESC, market_address LIMIT ${limit} OFFSET ${lpOffset}) page ON true
 		`,
 		sql`
 			WITH participation AS (SELECT universe_identity, event_name, event_data, block_number, block_hash, tx_hash, log_index
 				FROM fork_migration_events event WHERE event.chain_id = ${chainId} AND event.canonical AND event.block_number <= ${snapshotBlock} AND (
 					lower(event.event_data->>'migrator') = ${address} OR lower(event.event_data->>'owner') = ${address}
-					OR lower(event.event_data->>'recipient') = ${address})), totals AS (SELECT count(*)::integer AS total FROM participation)
+					OR lower(event.event_data->>'recipient') = ${address}
+					OR (event.event_name = 'UniverseForked' AND lower(event.event_data->>'forker') = ${address}))), totals AS (SELECT count(*)::integer AS total FROM participation)
 			SELECT page.universe_identity, page.event_name, page.event_data, page.block_number::text,
 				page.block_hash, page.tx_hash, page.log_index, totals.total FROM totals LEFT JOIN LATERAL (
 					SELECT * FROM participation ORDER BY block_number DESC, log_index DESC, tx_hash DESC, block_hash DESC, universe_identity
