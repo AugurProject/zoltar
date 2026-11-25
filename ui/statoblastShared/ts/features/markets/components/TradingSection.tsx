@@ -156,14 +156,12 @@ export function TradingSection({
 	const redeemCollateralReason = collateralFunding !== undefined && collateralFunding.collateral === undefined ? (collateralFunding.error ?? tradingCopy.redeemCollateralLoading) : undefined
 	const redeemCompleteSetGuardMessage = getTradingRedeemCompleteSetGuardMessage({
 		accountAddress: accountState.address,
-		settlementCollateralAttoEth: selectedPool?.settlementCollateralAttoEth,
 		hasSelectedPool,
 		isOnActiveAppChain,
 		loadingTradingDetails,
 		redeemAmountInput: tradingForm.redeemAmount,
 		shareDecimals: collateralDecimals,
 		shareBalances,
-		shareTokenSupplyAttoShares: selectedPool?.shareTokenSupplyAttoShares,
 	})
 	const migrateSharesGuardMessage = getTradingMigrateSharesGuardMessage({
 		accountAddress: accountState.address,

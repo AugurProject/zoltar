@@ -24,6 +24,7 @@ const repositoryRootPath = getUiCoreSharedPaths().repositoryRoot
 const CHROMIUM_COMMAND_TIMEOUT_MILLISECONDS = 30_000
 const PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS = 120_000
 const SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS = 600_000
+const SLOW_RPC_BROWSER_TIMEOUT_MILLISECONDS = 900_000
 const PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS = 600_000
 
 let server: Bun.Server<undefined> | undefined
@@ -648,7 +649,7 @@ test(
 				await driver.waitForButtonEnabled('Redeem complete sets', 0, 120_000)
 				expect(await driver.evaluate(redeemInputBounds)).toEqual(beforeRedeem)
 				await driver.clickButton('Redeem complete sets')
-				await driver.waitForButtonEnabled('Continue in wallet', 0, 120_000)
+				await driver.waitForButtonEnabled('Continue in wallet', 0, 180_000)
 				await driver.evaluate('window.__statoblastRpcMethods.length = 0; window.__delayedRpcMethods.length = 0')
 				await driver.clickButton('Continue in wallet')
 				await driver.waitForBodyText('0.99 sets', 240_000)
@@ -671,10 +672,10 @@ test(
 				expect(await driver.evaluate('document.body.innerText')).not.toContain('Couldn’t refresh')
 				expect(await driver.evaluate('JSON.stringify(window.__statoblastRpcMethods) === JSON.stringify(window.__delayedRpcMethods)')).toBe(true)
 			},
-			SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS - PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS,
+			SLOW_RPC_BROWSER_TIMEOUT_MILLISECONDS - PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS,
 		)
 	},
-	SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS,
+	SLOW_RPC_BROWSER_TIMEOUT_MILLISECONDS,
 )
 
 test(

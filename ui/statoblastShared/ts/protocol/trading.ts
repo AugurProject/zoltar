@@ -24,6 +24,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { getReportingOutcomeKey, getReportingOutcomeValue } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import { changedSinceReview } from '../copy/app.js'
+import { checksTransactionReview } from './reviewedClient.js'
 
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
 type QuestionLedgerMintCapacity = {
@@ -477,8 +478,7 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 }
 export async function redeemCompleteSetInQuestionLedger(client: WriteClient, questionLedgerAddress: Address, amount: bigint) {
 	const universeId = await readQuestionLedgerUniverseId(client, questionLedgerAddress)
-	const block = await client.getBlock()
-	const quote = await readRedemptionQuote(client, questionLedgerAddress, amount, block.number)
+	const upfrontQuote = checksTransactionReview(client) ? undefined : await readRedemptionQuote(client, questionLedgerAddress, amount, (await client.getBlock()).number)
 	const callParams = {
 		address: questionLedgerAddress,
 		abi: statoblast_QuestionLedger_QuestionLedger.abi,
@@ -496,14 +496,18 @@ export async function redeemCompleteSetInQuestionLedger(client: WriteClient, que
 			validateBeforeSubmit: async () => {
 				const { number: blockNumber } = await client.getBlock()
 				if (blockNumber === undefined) throw new Error(tradingCopy.redemptionNeedsBlock)
-				const shareToken = await client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'shareToken', blockNumber })
-				const balances = await client.readContract({ address: shareToken, abi: statoblast_tokens_ShareToken_ShareToken.abi, functionName: 'balanceOfShares', args: [universeId, client.account.address], blockNumber })
-				if (balances.some(balance => amount > balance)) throw new Error(tradingCopy.redemptionInsufficientShares)
-				reviewRows = redemptionRows(await readRedemptionQuote(client, questionLedgerAddress, amount, blockNumber), amount, balances, ['yes', 'no', 'invalid'])
+				const readBalances = async () => {
+					const shareToken = await client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'shareToken', blockNumber })
+					const balances = await client.readContract({ address: shareToken, abi: statoblast_tokens_ShareToken_ShareToken.abi, functionName: 'balanceOfShares', args: [universeId, client.account.address], blockNumber })
+					if (balances.some(balance => amount > balance)) throw new Error(tradingCopy.redemptionInsufficientShares)
+					return balances
+				}
+				const [balances, quote] = await Promise.all([readBalances(), readRedemptionQuote(client, questionLedgerAddress, amount, blockNumber)])
+				reviewRows = redemptionRows(quote, amount, balances, ['yes', 'no', 'invalid'])
 			},
 		},
 	])
-	const hash = await writeContractAndWait(client, () => ({ ...callParams, reviewDescription: quote.description }))
+	const hash = await writeContractAndWait(client, () => ({ ...callParams, reviewDescription: upfrontQuote?.description ?? tradingCopy.redeemSetsReview }))
 	return {
 		action: 'redeemCompleteSet',
 		hash,

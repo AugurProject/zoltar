@@ -319,17 +319,14 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 					}
 					if (actionName === 'redeemCompleteSet') {
 						if ((parseCollateralAmount(currentForm.redeemAmount) ?? 0n) <= 0n) throw new Error('Invalid redeem amount.')
-						const latestMintCapacity = await dependencies.loadQuestionLedgerMintCapacity(questionLedgerAddress)
 						const guardMessage = getTradingRedeemCompleteSetGuardMessage({
 							accountAddress: walletAddress,
-							settlementCollateralAttoEth: latestMintCapacity.settlementCollateralAttoEth,
 							hasSelectedPool: true,
 							isOnActiveAppChain,
 							loadingTradingDetails: false,
 							redeemAmountInput: currentForm.redeemAmount,
 							shareDecimals: requireCollateralDecimals(),
 							shareBalances: latestTradingDetails.shareBalances,
-							shareTokenSupplyAttoShares: latestMintCapacity.shareTokenSupplyAttoShares,
 						})
 						if (guardMessage !== undefined) throw new Error(guardMessage)
 					}

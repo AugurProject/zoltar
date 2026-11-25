@@ -377,12 +377,13 @@ describe('useTradingOperations', () => {
 
 	test('submits the amounts the mint and redeem guards accept, including a leading decimal point and digit grouping spaces', async () => {
 		const halfShare = ATTO_ETH_PER_ETH / 2n
+		const readMintCapacity = mock(async () => createMintCapacity({ shareTokenSupplyAttoShares: ATTO_ETH_PER_ETH }))
 		const createCompleteSetInQuestionLedger = mock(async (_accountAddress: Address, _callbacks: unknown, questionLedgerAddress: Address, _amount: bigint) => ({ action: 'createCompleteSet' as const, hash: zeroHash, questionLedgerAddress, universeId: 1n }))
 		const redeemCompleteSetInQuestionLedger = mock(async (_accountAddress: Address, _callbacks: unknown, questionLedgerAddress: Address, _amount: bigint) => ({ action: 'redeemCompleteSet' as const, hash: zeroHash, questionLedgerAddress, universeId: 1n }))
 		const hook = await renderTradingHook(
 			createMintDependencies({
 				createCompleteSetInQuestionLedger,
-				loadQuestionLedgerMintCapacity: mock(async () => createMintCapacity({ shareTokenSupplyAttoShares: ATTO_ETH_PER_ETH })),
+				loadQuestionLedgerMintCapacity: readMintCapacity,
 				loadTradingDetails: mock(async () => createTradingDetails({ maxRedeemableCompleteSetsAttoShares: ATTO_ETH_PER_ETH, shareBalances: { invalidAttoShares: ATTO_ETH_PER_ETH, noAttoShares: ATTO_ETH_PER_ETH, yesAttoShares: ATTO_ETH_PER_ETH } })),
 				redeemCompleteSetInQuestionLedger,
 			}),
@@ -396,6 +397,7 @@ describe('useTradingOperations', () => {
 			await hook.state().redeemCompleteSet()
 		})
 
+		expect(readMintCapacity).toHaveBeenCalledTimes(1)
 		expect(hook.onTransactionFailed.mock.calls).toEqual([])
 		expect(createCompleteSetInQuestionLedger.mock.calls[0]?.[3]).toBe(halfShare)
 		expect(redeemCompleteSetInQuestionLedger.mock.calls[0]?.[3]).toBe(halfShare)

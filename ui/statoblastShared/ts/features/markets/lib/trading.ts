@@ -300,13 +300,11 @@ export function getTradingRedeemCompleteSetGuardMessage({
 }: {
 	shareDecimals?: number
 	accountAddress: Address | undefined
-	settlementCollateralAttoEth: bigint | undefined
 	hasSelectedPool: boolean
 	isOnActiveAppChain: boolean
 	loadingTradingDetails: boolean
 	redeemAmountInput: string
 	shareBalances: TradingShareBalances | undefined
-	shareTokenSupplyAttoShares: bigint | undefined
 }) {
 	if (!hasSelectedPool) return 'Select a question before redeeming complete sets.'
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('redeeming complete sets') })
