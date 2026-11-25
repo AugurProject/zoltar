@@ -66,10 +66,12 @@ browserTest(
 			await waitFor("document.querySelector('#schedule-action-status')?.textContent.startsWith('Next choice requested.')")
 			expect(mutations[0]).toEqual({ revision: 'controls-1', nextRunAt: initialSchedule })
 			expect(await cdp.evaluate("document.querySelector('#run-next-now').disabled")).toBe(true)
+			await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
 			await waitFor("document.querySelector('#schedule-action-status')?.textContent === ''")
 			await capture('overview-due-mobile-390x844')
 			await cdp.command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false })
 			paused = true
+			await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
 			await waitFor("document.querySelector('#countdown')?.textContent === 'Paused'")
 			expect(await cdp.evaluate("document.querySelector('#schedule-action-status').textContent")).toBe('')
 			await cdp.command('Page.navigate', { url: `http://127.0.0.1:${port.toString()}/catalog` })
