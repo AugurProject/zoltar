@@ -1,4 +1,4 @@
-import { encodeDeployData, type Address, type Hex, toHex } from '@zoltar/core-shared/evm/ethereum'
+import { concatHex, encodeDeployData, encodeAbiParameters, getCreate2Address, keccak256, type Address, type Hex, toHex } from '@zoltar/core-shared/evm/ethereum'
 import { createQuestionLedgerAddressHelper } from '../../../evm/questionLedgerAddressDerivation'
 import { createDeploymentStatusOracleAddressHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { createStatoblastInitCodes } from '@zoltar/statoblast-shared/deployment/initCodes'
@@ -40,6 +40,8 @@ import {
 } from '../../../../types/contractArtifact'
 import { objectEntries } from '../typescript'
 import { getRepTokenAddress } from './zoltar'
+import { getCallerScopedSalt } from '../../../evm/callerScopedSalt'
+import { boundCloneRuntimeCode, universeCloneBindings } from '@zoltar/statoblast-shared/statoblast/securityPoolBoundClone'
 
 const ZERO_SALT: Hex = toHex(0, { size: 32 })
 const MULTICALL3_BYTECODE = `0x${statoblast_Multicall3_Multicall3.evm.bytecode.object}` satisfies Hex
@@ -142,19 +144,26 @@ export const { getQuestionLedgerAddresses } = createQuestionLedgerAddressHelper(
 			args: [questionLedger, repToken, proofVerifier, getInfraContractAddresses().escalationGameDepositDelegate],
 		}),
 	getInfraContracts: () => getInfraContractAddresses(),
-	getSharedPoolPriceFeedInitCode: (securityPool, initialReportPriorityFeeAttoEthPerGas) =>
-		encodeDeployData({
-			abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
-			bytecode: `0x${statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.evm.bytecode.object}`,
-			args: [getInfraContractAddresses().sharedPoolPriceFeedFactory, getInfraContractAddresses().openOracle, initialReportPriorityFeeAttoEthPerGas, getInfraContractAddresses().securityPoolFactory, securityPool],
-		}),
+	getPriceFeedAddress: (securityPool, universeId, priorityFee) => {
+		const infra = getInfraContractAddresses()
+		const hash = (types: readonly { type: string }[], values: readonly unknown[]) => keccak256(encodeAbiParameters(types, values))
+		const implementation = getCreate2Address({
+			from: infra.sharedPoolPriceFeedDeploymentWorker,
+			salt: hash([{ type: 'address' }, { type: 'address' }, { type: 'address' }], [infra.sharedPoolPriceFeedFactory, infra.securityPoolFactory, securityPool]),
+			bytecode: encodeDeployData({ abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, bytecode: `0x${statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.evm.bytecode.object}`, args: [infra.sharedPoolPriceFeedFactory, infra.openOracle, priorityFee, infra.securityPoolFactory, securityPool] }),
+		})
+		const runtime = boundCloneRuntimeCode(implementation, universeCloneBindings(universeId, getRepTokenAddress(universeId)))
+		const salt = hash([{ type: 'address' }, { type: 'uint248' }], [securityPool, universeId])
+		const factorySalt = getCallerScopedSalt(infra.securityPoolFactory, salt)
+		return getCreate2Address({ from: infra.sharedPoolPriceFeedDeploymentWorker, bytecode: concatHex(['0x3d61', toHex((runtime.length - 2) / 2, { size: 2 }), '0x80600b3d3981f3', runtime]), salt: getCallerScopedSalt(infra.sharedPoolPriceFeedFactory, factorySalt) })
+	},
 	getRepTokenAddress,
-	getQuestionLedgerInitCode: ({ escalationGameFactory, openOracle, parent, sharedPriceFeed, questionId, statoblastSecurityMultiplierBps, questionForker, shareToken, universeId, zoltar, zoltarQuestionData }) =>
+	getQuestionLedgerInitCode: ({ escalationGameFactory, openOracle, parent, priceFeed, questionId, statoblastSecurityMultiplierBps, questionForker, shareToken, universeId, zoltar, zoltarQuestionData }) =>
 		(() => {
 			return encodeDeployData({
 				abi: statoblast_QuestionLedger_QuestionLedger.abi,
 				bytecode: `0x${statoblast_QuestionLedger_QuestionLedger.evm.bytecode.object}`,
-				args: [questionForker, zoltarQuestionData, escalationGameFactory, sharedPriceFeed, shareToken, openOracle, parent, zoltar, universeId, questionId, statoblastSecurityMultiplierBps],
+				args: [questionForker, zoltarQuestionData, escalationGameFactory, priceFeed, shareToken, openOracle, parent, zoltar, universeId, questionId, statoblastSecurityMultiplierBps],
 			})
 		})(),
 	getShareTokenInitCode: (securityPoolFactory, zoltarAddress, questionId) =>
