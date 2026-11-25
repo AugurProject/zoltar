@@ -6,7 +6,7 @@ import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { observeCentralizedMarkets } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { createHeadWatcher, type HeadWatcher, type ObservedHead } from '@zoltar/bot-shared/monitoring/head-watcher'
 
-const centralizedExchangeFactory = createCentralizedExchangeFactory(exchanges)
+const centralizedExchangeFactory = createCentralizedExchangeFactory(exchanges, process.env['ZOLTAR_BOT_VERIFIED_MARKETS'])
 
 /** How often the head watcher polls `eth_blockNumber`; well under one slot so every block is observed promptly. */
 const HEAD_WATCH_INTERVAL_MILLISECONDS = 1_000

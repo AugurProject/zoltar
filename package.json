@@ -100,6 +100,7 @@
 		"ui:snapshots:check": "bun ./tooling/ui/simulationSnapshots.mts --check",
 		"deploy:testnet": "bun ./tooling/contracts/ensure-contract-artifacts.mts --headless && bun ./tooling/contracts/run-deploy-testnet.mts",
 		"verify:contracts": "bun ./tooling/contracts/ensure-contract-artifacts.mts --headless && bun ./tooling/contracts/verify-contracts.mts",
+		"verify:mainnet-runtime": "bun ./tooling/contracts/ensure-contract-artifacts.mts --headless && bun ./tooling/contracts/verify-mainnet-runtime.mts",
 		"gas-costs": "bun run ensure-contract-artifacts && cd solidity && bun run gas-costs",
 		"test": "bun run tsc && bun run test:run",
 		"check:complete": "bun run format:check && bun run check && bun run knip && bun run check:generated-clean",

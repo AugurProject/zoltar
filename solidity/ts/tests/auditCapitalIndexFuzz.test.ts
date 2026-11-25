@@ -499,9 +499,8 @@ describe('audit fuzz: commitment index and fee streams against naive reference m
 		return admin
 	}
 	const latest = async () => (await client().getBlock()).timestamp
-	const transact = async (call: Call) => {
+	const transact = async (call: Call, next: bigint) => {
 		const ethereum = node.getAnvilWindowEthereum()
-		const next = (await latest()) + 1n
 		await ethereum.request({ method: 'evm_setNextBlockTimestamp', params: [`0x${next.toString(16)}`] })
 		const transaction = { from: call.from, to: call.to, data: call.data, value: '0x0', gas: '0x1000000', gasPrice: '0x0' }
 		const hash = await ethereum.requestRaw({ method: 'eth_sendTransaction', params: [transaction] })
@@ -542,7 +541,7 @@ describe('audit fuzz: commitment index and fee streams against naive reference m
 		await node.setBaselineSnapshot()
 	})
 
-	const send = async (op: Operation) => {
+	const send = async (op: Operation, timestamp: bigint) => {
 		const abi = harnessArtifact.abi
 		const from = client().account.address
 		const owner = addressString(0xabcdn)
@@ -578,7 +577,7 @@ describe('audit fuzz: commitment index and fee streams against naive reference m
 					throw new Error('Unknown operation')
 			}
 		})()
-		await transact({ from, to: harness, data })
+		await transact({ from, to: harness, data }, timestamp)
 	}
 
 	const encoded = new Map<string, `0x${string}`>()
@@ -595,7 +594,10 @@ describe('audit fuzz: commitment index and fee streams against naive reference m
 		const harnessAbi = harnessArtifact.abi
 		const batch: { target: Address; allowFailure: boolean; callData: `0x${string}` }[] = []
 		const add = (target: Address, callData: `0x${string}`) => batch.push({ target, allowFailure: true, callData }) - 1
-		const ids = Array.from({ length: positions }, (_unused, offset) => BigInt(offset + 1))
+		const clock = add(
+			multicall,
+			cached('clock', () => encodeFunctionData({ abi: multicallArtifact.abi, functionName: 'getCurrentBlockTimestamp' })),
+		)
 		const validate = add(
 			harness,
 			cached('validate', () => encodeFunctionData({ abi: harnessAbi, functionName: 'validateAll' })),
@@ -618,38 +620,8 @@ describe('audit fuzz: commitment index and fee streams against naive reference m
 		)
 		const eligibleAt = prices.map(price => add(index, encodeFunctionData({ abi: indexAbi, functionName: 'eligibleCommitment', args: [price] })))
 		const activeAt = prices.map(price => add(index, encodeFunctionData({ abi: indexAbi, functionName: 'eligibleActiveCommitment', args: [price] })))
-		const accounts = ids.map(id =>
-			add(
-				index,
-				cached(`account.${id}`, () => encodeFunctionData({ abi: indexAbi, functionName: 'accountOf', args: [id] })),
-			),
-		)
-		const startedAt = ids.map(id =>
-			add(
-				index,
-				cached(`started.${id}`, () => encodeFunctionData({ abi: indexAbi, functionName: 'liquidationStarted', args: [id] })),
-			),
-		)
-		const paidRep = ids.map(id =>
-			add(
-				harness,
-				cached(`paidRep.${id}`, () => encodeFunctionData({ abi: harnessAbi, functionName: 'paidRep', args: [id] })),
-			),
-		)
-		const paidEth = ids.map(id =>
-			add(
-				harness,
-				cached(`paidEth.${id}`, () => encodeFunctionData({ abi: harnessAbi, functionName: 'paidEthFees', args: [id] })),
-			),
-		)
-		const paidRepFees = ids.map(id =>
-			add(
-				harness,
-				cached(`paidRepFees.${id}`, () => encodeFunctionData({ abi: harnessAbi, functionName: 'paidRepFees', args: [id] })),
-			),
-		)
 		const previews = probes.map(probe => add(index, encodeFunctionData({ abi: indexAbi, functionName: 'previewRetirement', args: [probe.id, probe.price, probe.demand] })))
-		const [returned, timestamp] = await Promise.all([client().readContract({ abi: multicallArtifact.abi, address: multicall, functionName: 'aggregate3', args: [batch] }), latest()])
+		const [returned, snapshots] = await Promise.all([client().readContract({ abi: multicallArtifact.abi, address: multicall, functionName: 'aggregate3', args: [batch] }), client().readContract({ abi: harnessAbi, address: harness, functionName: 'positionSnapshots', args: [BigInt(positions)] })])
 		const data = (offset: number) => {
 			const entry = returned[offset]
 			if (entry === undefined) throw new Error('Aggregate entry missing')
@@ -665,19 +637,12 @@ describe('audit fuzz: commitment index and fee streams against naive reference m
 			tallies: tallies.map(first),
 			eligible: eligibleAt.map(first),
 			active: activeAt.map(first),
-			accounts: accounts.map(offset => {
-				const bytes = data(offset).returnData
-				return { batch: word(bytes, 1), rep: word(bytes, 2), commitment: word(bytes, 3), price: word(bytes, 4), released: word(bytes, 5), ethFees: word(bytes, 6), repFees: word(bytes, 7), remaining: word(bytes, 8) }
-			}),
-			started: startedAt.map(first),
-			paidRep: paidRep.map(first),
-			paidEth: paidEth.map(first),
-			paidRepFees: paidRepFees.map(first),
+			snapshots,
 			previews: previews.map(offset => {
 				const bytes = data(offset).returnData
 				return { status: STATUS[Number(word(bytes, 0))], effective: word(bytes, 1), ahead: word(bytes, 4), reduction: word(bytes, 5) }
 			}),
-			timestamp,
+			timestamp: first(clock),
 		}
 	}
 
@@ -708,7 +673,7 @@ describe('audit fuzz: commitment index and fee streams against naive reference m
 			}
 			let actual: string | undefined
 			try {
-				await send(op)
+				await send(op, next.now)
 			} catch (error) {
 				actual = reasonOf(error)
 			}
@@ -761,19 +726,18 @@ describe('audit fuzz: commitment index and fee streams against naive reference m
 				let feesEth = 0n
 				let feesRep = 0n
 				for (const p of m.positions) {
-					const account = a.accounts[Number(p.id) - 1]
-					if (account === undefined) throw new Error('Account read missing')
+					const snapshot = a.snapshots[Number(p.id) - 1]
+					if (snapshot === undefined) throw new Error('Account read missing')
+					const { account, paidEth, paidRepFees } = snapshot
 					const tag = `POSITION[${p.id}]`
 					check(`${tag}.rep`, account.rep, inTree(p) ? p.rep : 0n)
 					check(`${tag}.commitment`, account.commitment, inTree(p) ? p.k : 0n)
-					check(`${tag}.released`, account.released, p.retired && !p.repClaimed ? p.rep : 0n)
-					check(`${tag}.price`, account.price, p.price)
-					check(`${tag}.remaining`, account.remaining, p.remaining)
+					check(`${tag}.released`, account.releasedRep, p.retired && !p.repClaimed ? p.rep : 0n)
+					check(`${tag}.price`, account.maxHealthyPrice, p.price)
+					check(`${tag}.remaining`, account.remainingCommitment, p.remaining)
 					if (inTree(p)) check(`${tag}.batch`, account.batch, p.batch)
-					check(`LIQUIDATION[${p.id}]`, a.started[Number(p.id) - 1], started(m, p))
-					check(`${tag}.paidRep`, a.paidRep[Number(p.id) - 1], p.paidRep)
-					const paidEth = a.paidEth[Number(p.id) - 1] ?? 0n
-					const paidRepFees = a.paidRepFees[Number(p.id) - 1] ?? 0n
+					check(`LIQUIDATION[${p.id}]`, snapshot.started, started(m, p))
+					check(`${tag}.paidRep`, snapshot.paidRep, p.paidRep)
 					if (!within(paidEth + account.ethFees, p.ethFees, p.dust)) issues.push(`FEES.eth[${p.id}]: actual ${paidEth + account.ethFees} model ${p.ethFees / SCALE} dust ${p.dust}`)
 					if (!within(paidRepFees + account.repFees, p.repFees, p.dust)) issues.push(`FEES.rep[${p.id}]: actual ${paidRepFees + account.repFees} model ${p.repFees / SCALE} dust ${p.dust}`)
 					feesEth += paidEth + account.ethFees
@@ -946,7 +910,7 @@ describe('audit fuzz: commitment index and fee streams against naive reference m
 				}
 				let actual: string | undefined
 				try {
-					await transact({ from, to: target.address, data })
+					await transact({ from, to: target.address, data }, now)
 				} catch (error) {
 					const message = error instanceof Error ? error.message : String(error)
 					actual = ['Empty fee stream', 'Checkpoint fees before funding', 'Future fee checkpoint', 'Fee time moved backwards'].find(reason => message.includes(reason)) ?? `UNKNOWN: ${message.slice(0, 160)}`
