@@ -86,9 +86,9 @@ describe('test impact recommendations', () => {
 		])
 	})
 
-	test('maps developer documentation asserted by the UI split workflow test to that test', () => {
-		expect(commandsFor(['docs/how-to/trading-set-up-development.html'])).toEqual(['bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts tooling/ui/ui-split-workflows.test.ts'])
-		expect(commandsFor(['testnetwork/README.md'])).toEqual(['bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts tooling/ui/ui-split-workflows.test.ts', 'bun ./tooling/testing/bun-test.mts tooling/testing/testnetwork.test.ts'])
+	test('maps developer launch instructions to the documentation content check', () => {
+		expect(commandsFor(['docs/how-to/trading-set-up-development.html'])).toEqual(['bun run docs:check-content'])
+		expect(commandsFor(['testnetwork/README.md'])).toEqual(['bun ./tooling/testing/bun-test.mts tooling/testing/testnetwork.test.ts', 'bun run docs:check-content'])
 	})
 
 	test('maps documentation read or executed by tests or checks to those tests and checks', () => {
