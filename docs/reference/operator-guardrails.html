@@ -14,39 +14,36 @@
 				<header>
 					<p class="kicker">Reference</p>
 					<h1 id="subsystem-guardrails">Subsystem guardrails</h1>
-					<p>What Statoblast <a href="./glossary.html#security-pool">security pool</a> capital, share migration, <a href="./glossary.html#escalation-game">Escalation Game</a>, fork migration, <a href="./glossary.html#collateral-repair-auction">Collateral Repair Auction</a>, or REP/collateral <a href="./glossary.html#shared-price-feed">shared price feed</a> will and will not accept, one subsystem at a time. Statoblast is the prediction-market layer built on the Zoltar fork oracle; see the <a href="../explanation/system-overview.html">system overview</a>. Every rule names the contract source that enforces it, so operators, indexers, and interface maintainers can check it against the exact Solidity.</p>
-					<p>The <a href="./invariants.html">invariant catalog</a> connects these local guardrails to cross-contract conservation, liveness, and the stated economic assumptions; the <a href="./security-model.html">security model</a> is normative for external assumptions. Release procedure lives in <a href="../how-to/launch-a-release.html">Prepare a protocol release</a>, assumption monitoring in <a href="../how-to/monitor-security-assumptions.html">Monitor security assumptions</a>, and the remaining support contracts in the <a href="./contract-inventory.html">contract inventory</a>.</p>
+					<p>Check these subsystem boundaries before sending a transaction. See the <a href="./security-model.html">security model</a> for external assumptions and the <a href="./invariants.html">invariant catalog</a> for cross-contract properties.</p>
 				</header>
 				<section id="security-pool-guardrails">
 					<h2>Security pool capital operations</h2>
 					<p>Every question belongs to a shared security pool. Verify the factory registration, capital ledger, settlement module and universe before sending funds. Deposits add principal; setting a commitment separately authorizes risk. Withdrawals and retirement check current owner principal and demand. Complete-set purchases use the registered security pool route and recheck fees, available healthy capacity and backing floor.</p>
-					<p>The Statoblast security pool view includes <strong>Liquidation takeover</strong>. Deposit your backing REP and choose a health target first. The transaction caps your own REP, resulting principal and commitment, and pins the price epoch, health target and retirement cohort. The one-hour auction credits the takeover reward (REP taken from the provider’s pledged REP) to your vault alongside future fee rights; nothing is paid to your wallet. The contract sizes the repair after subtracting the takeover reward from the source and may transfer less commitment than requested. When unused commitment alone restores health, the panel offers <strong>Cure position</strong>, which takes no obligation and pays nothing.</p>
-					<p>See the <a href="./contract-inventory.html#security-pool-underwriting">canonical module and accounting reference</a> and the <a href="./contracts.html">contract entrypoints</a>.</p>
+					<p>Before <strong>Liquidation takeover</strong>, deposit backing REP and set a health target. Verify the funding caps, price epoch, health target and retirement cohort. The reward goes to the receiver vault. See <a href="../explanation/liquidations.html">how takeovers and cures work</a> and the <a href="./contract-inventory.html#security-pool-underwriting">capital ledger reference</a>.</p>
 				</section>
 				<section id="share-migration">
 					<h2>Share migration</h2>
 					<p>Share tokens retain one question lineage and separate outcome balances per universe. A forked source uses its canonical child question. Activate the shared branch with <code>prepareBranch</code>, <code>startBranch</code> and <code>finalizeBranch</code> before migrating shares into it; until then <code>ShareToken.migrate</code> reverts with <code>Fork branch not active</code> instead of running that work inside the migration. In an active branch a single-target migration materializes a missing child question itself. Finalized claims retain protected source settlement; do not assume every source claim must migrate.</p>
-					<p>See the <a href="./contract-inventory.html#security-pool-recovery-rights">canonical module and accounting reference</a> and the <a href="./contracts.html">contract entrypoints</a>.</p>
+					<p>See <a href="./contracts/sharetoken.html#interactions">ShareToken entrypoints</a> for migration and recovery calls.</p>
 				</section>
 				<section id="escalation-resolution-and-deposits">
 					<h2>Reporting and settlement</h2>
 					<p>For reports through the question ledger, approve wallet REP to that ledger; direct deposits into an existing Escalation Game require approval to the game. The accepted deposit enters separate reporter custody and never becomes provider capital. Finalized local claims use deposit indexes; inherited claims use authenticated frozen-leaf proofs. Payouts go to recorded owners. Batches can be split, and deep lineage proofs use bounded preparation transactions.</p>
-					<p>See the <a href="./contract-inventory.html#security-pool-boundary">canonical module and accounting reference</a> and the <a href="./contracts.html">contract entrypoints</a>.</p>
+					<p>See <a href="./contracts/escalationgame.html#interactions">Escalation Game entrypoints</a> for deposits and claims.</p>
 				</section>
 				<section id="fork-migration">
 					<h2>Shared forks</h2>
 					<p>Owners choose one branch before the native cutoff. The shared coordinator snapshots and prepares each chosen branch once, then lazy owner activation and question materialization apply that state. A missing keeper cannot extend choice or auction deadlines.</p>
-					<p>See the <a href="./contract-inventory.html#security-pool-boundary">canonical module and accounting reference</a> and the <a href="./contracts.html">contract entrypoints</a>.</p>
+					<p>See the <a href="./contract-inventory.html#security-pool-shared-fork-processing">shared fork processing reference</a> for branch preparation.</p>
 				</section>
 				<section id="collateral-repair-auction-operations">
 					<h2>Collateral repair auctions</h2>
 					<p>The branch auction sells fresh unchosen provider REP against its aggregate collateral shortfall. Buyers bid lots of the security pool’s collateral token with minimum REP-per-lot limits and their health targets. Winning backing and commitments enter aggregate accounting immediately at closing. Activating a winner enables individual controls; it is not required to count the winner’s obligation. Losing-bid credits and refunds remain independently withdrawable.</p>
-					<p>See the <a href="./contract-inventory.html#security-pool-collateral-repair-auction">canonical module and accounting reference</a> and the <a href="./contracts.html">contract entrypoints</a>.</p>
+					<p>See the <a href="./contract-inventory.html#security-pool-collateral-repair-auction">Collateral Repair Auction reference</a> for bid and refund calls.</p>
 				</section>
 				<section id="repeth-oracle-operations">
 					<h2>REP/collateral price reports</h2>
-					<p>The shared feed accepts independent candidates. A pending report cannot reserve a sponsor lane or block unrelated reports. Sponsor funding and public settlement bounties are separate from provider capital. Capital transactions execute directly and recheck the accepted price, owner authorization, current health and exposure.</p>
-					<p>See the <a href="./contract-inventory.html#security-pool-underwriting">canonical module and accounting reference</a> and the <a href="./contracts.html">contract entrypoints</a>.</p>
+					<p>Verify that the report sponsor can fund its collateral, REP and settlement bounty separately from provider capital. A pending report does not block independent candidates. Capital operations recheck price, owner authorization, health and exposure. See <a href="./open-oracle.html#sponsor-takeover">sponsor-authorized operation batches</a> for report-bound calls.</p>
 				</section>
 			</article>
 		</main>

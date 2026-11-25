@@ -87,11 +87,11 @@
 					<dt id="escalation-game">Escalation Game</dt>
 					<dd>The local Statoblast dispute mechanism in which REP-backed balances accumulate behind Invalid, Yes, and No.</dd>
 					<dt id="start-bond">Start bond</dt>
-					<dd>The minimum Escalation Game deposit: the larger of 1 REP and the universe's theoretical REP supply when the question ledger was deployed ÷ 10<sup>7</sup>. Origin question ledger deployment requires it to be below the non-decision threshold; a game started with a bond at or above that threshold is clamped to one attoREP below that threshold. A smaller deposit is accepted only when it fills an outcome exactly to that threshold, or when an offered start bond that would tie the leading outcome is trimmed by one attoREP. A child question ledger continuing a forked game keeps its parent's start bond.</dd>
+					<dd>The minimum opening Escalation Game deposit, based on the larger of 1 REP and theoretical REP supply at question ledger deployment divided by 10<sup>7</sup>. See <a href="./contracts/escalationgame.html">Escalation Game deposit rules</a> for exceptions and continuations.</dd>
 					<dt id="binding-capital">Binding capital</dt>
 					<dd>The median of the three outcome balances. See <a href="../explanation/escalation-game.html#lifecycle-first">Escalation Game deadlines</a> for its role in finality.</dd>
 					<dt id="required-support">Required support</dt>
-					<dd>The rising REP level that closes the Escalation Game once it exceeds binding capital, called attrition cost in the contracts (<code>totalCostAttoRep</code>). It is zero for the three-day activation delay, then rises from the start bond to the non-decision threshold over 49 days. An unresolved Escalation Game's scheduled deadline is the last second at or below binding capital. After that deadline, while one outcome strictly leads, the game accepts no deposits. An unrelated <a href="../explanation/escalation-game.html#continuation-clock">fork continuation</a> resumes its remaining curve time when the child branch becomes operational. A deposit does not have to reach this amount.</dd>
+					<dd>The rising REP level that closes the Escalation Game when it exceeds binding capital. See <a href="../explanation/escalation-game.html#lifecycle-first">Escalation Game deadlines</a> for the clock and <code>totalCostAttoRep</code> for the contract value.</dd>
 					<dt id="non-decision-threshold">Non-decision threshold</dt>
 					<dd>The balance that two outcomes must each reach for the Escalation Game to enter non-decision: half of the universe's fork threshold, rounded up, read when the game opens and fixed for that game and any game carried from it.</dd>
 					<dt id="non-decision">Non-decision</dt>
@@ -129,7 +129,7 @@
 					<dt id="takeover-reward">Takeover reward</dt>
 					<dd>REP a receiver vault gains by taking over distressed commitment. It is taken from the <a href="#target-vault">target vault</a>’s pledged REP, not paid by the protocol, and grows linearly from zero to all of that REP over one hour from the start of liquidation; a partial takeover receives a proportional share.</dd>
 					<dt id="liquidation-penalty">Liquidation penalty</dt>
-					<dd>The same REP seen from the side of the target vault’s owner: up to all of the vault’s pledged REP, rising over one hour from the start of liquidation, which moves to whoever takes over its commitment.</dd>
+					<dd>Pledged REP the <a href="#target-vault">target vault</a> loses to the receiver as the <a href="#takeover-reward">takeover reward</a>.</dd>
 					<dt id="operator">Operator</dt>
 					<dd>An account submitting permissionless maintenance transactions, such as a funded takeover of distressed commitment. A takeover receiver must authorize its own capital and satisfy the transaction bounds.</dd>
 				</dl>

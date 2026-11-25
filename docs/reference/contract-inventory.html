@@ -180,8 +180,8 @@
 							</tr>
 							<tr>
 								<td><code>DeploymentStatusOracle</code></td>
-								<td>Anyone can call <code>getDeploymentMask</code>; the constructor alone fixes the ordered address list and emits <code>DeploymentAddressesSet</code>.</td>
-								<td>It reports code presence only, not canonical wiring or readiness. Decode it using its constructor event or the matching deployment manifest order.</td>
+								<td>Anyone can read the fixed address list’s code-presence mask.</td>
+								<td>Code presence does not establish readiness. See <a href="./deployment-status.html#interpretation">deployment status verification boundaries</a>.</td>
 							</tr>
 						</tbody>
 					</table>
@@ -193,7 +193,6 @@
 				</section>
 				<section id="production-contract-inventory">
 					<h2>Production contract inventory</h2>
-					<p>Every production Solidity source is linked below. The preceding authority and accounting reference defines their canonical use; deploying a helper or a security pool contract independently does not create a registered security pool.</p>
 					<table>
 						<thead>
 							<tr>

@@ -316,14 +316,11 @@ bun run run</code></pre>
 					<li>withdrawing (replacement credit)</li>
 					<li>replaced</li>
 				</ul>
-				<p>A successful entry receipt is provisional too. The position holds its risk slot as <code>open-pending-finality</code>, starts no lifecycle transaction, and gets no execution-history record until the same receipt block passes the finality check below. If a reorganization removes the receipt or moves it to another block, the bot removes the provisional entry gas and returns the position to <code>pending-entry</code>. Normal entry recovery then re-derives a re-included receipt, or marks an absent attempt <code>expired-not-included</code> and keeps watching its hash.</p>
-				<p>A successful lifecycle receipt is provisional. The bot retains its transaction hash, receipt block number and hash, exact withdrawals, gas, and risk slot until the configured reader requirement returns the same receipt and twelfth-descendant finality evidence, with every available response agreeing. The primary reader is sufficient by default. With quorum 2, at least two readers must be available, and a lagging or contradictory reader delays closure; a reader is omitted only for a retryable transport failure.</p>
-				<p>If a shallow reorganization removes that receipt, provisional gas and withdrawals are rolled back, the old signed hash is archived for late revert monitoring, and the position returns to <code>open</code> for a fresh parent-bound lifecycle attempt. Disagreement between readers keeps finality pending and fails the scan closed. Once the read quorum agrees, evidence that conflicts with the durable journal—such as a missing executor event or assets that cannot be attributed exactly—moves the position to <code>recovery-required</code> and continues consuming the risk limit.</p>
-				<p>A canonical immediate replacement is handled separately. The bot withdraws the exact replacement credit and any token2 credit left by its original dispute in one parent-bound transaction. After the normal twelve-descendant RPC quorum confirms the withdrawals, the position becomes <code>replaced</code>. Reconcile the remaining inventory before recording realized profit or loss.</p>
+				<p>A position awaiting <a href="/documentation/reference#read-agreement-and-finality">receipt finality</a> still uses a risk slot. A reorganization can move it back to entry recovery or reopen it for a fresh withdrawal attempt. Keep new entries paused when evidence conflicts with the journal and the position shows <code>recovery-required</code>.</p>
+				<p>After replacement credits are finalized, the position becomes <code>replaced</code>. Reconcile its remaining inventory before recording realized profit or loss.</p>
 				<div class="callout">
-					<strong>Never delete a recovery record to make the bot trade again</strong>
-					Preserve the journal, stop new entries, compare all configured read RPCs and an explorer, verify the signer, chain, OpenOracle, executor, report, nonce, calldata, receipt event, wallet balances, and OpenOracle internal balances, then use the signer-authorized reconciliation command documented in
-					<a href="/documentation/reference#recovery-required-runbook">the complete runbook</a>.
+					<strong>Preserve the journal and stop new entries</strong>
+					Use the <a href="/documentation/reference#recovery-required-runbook">recovery runbook</a> to verify the evidence and reconcile the position.
 				</div>
 			</section>
 

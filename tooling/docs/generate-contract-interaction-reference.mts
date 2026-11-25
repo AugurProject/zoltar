@@ -211,7 +211,7 @@ async function generateReferencePages(): Promise<GeneratedPage[]> {
 	${securityBoundaryHeading}
 	${securityBoundary}
 	<h2 id="interactions">State-changing interactions</h2>
-	<p>Each call lists its parameter names in ABI order. The <a href="../contracts.html#table-columns">contract index</a> defines the columns.${contractReference.interactionNotes === undefined ? '' : ` ${renderRichText(contractReference.interactionNotes)}`}</p>
+	<p>The <a href="../contracts.html#table-columns">contract index</a> defines the columns.${contractReference.interactionNotes === undefined ? '' : ` ${renderRichText(contractReference.interactionNotes)}`}</p>
 	<!-- Validated read ABI fingerprint: ${readAbiFingerprint} -->
 	<!-- Validated complete compiled ABI fingerprint: ${compiledAbiFingerprint} -->
 	<table>
@@ -251,7 +251,6 @@ ${rows}
 	</header>
 	<p>The entrypoint count is the number of state-changing function signatures a contract answers, counting each overload, each selector its <code>fallback()</code> routes to a delegate, and <code>receive()</code>.</p>
 	<h2 id="table-columns">Table columns</h2>
-	<p>Every contract page uses the same five columns.</p>
 	<ul>
 		<li><strong>Transaction</strong>: the function name with its parameter names in ABI order. Overloads appear as separate signatures.</li>
 		<li><strong>Caller</strong>: the addresses the contract accepts as <code>msg.sender</code>.</li>

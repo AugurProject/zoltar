@@ -43,7 +43,7 @@
 				<p id="shared-feed-rules">A shared feed's aggregate exposure is the largest of current security pool commitment, backing demand and the maximum commitment a preparing branch auction can add to chosen backing. The feed reads these aggregates without scanning questions or bidders. Escalation halts use aggregate exposure.</p>
 				<p>A shared feed permits concurrent candidates, including renewal before the accepted price expires. Each candidate has its own <code>SharedPoolReportEscrow</code>, which holds its reporter identity and funding credits. <code>pendingReportId</code> and the associated pending getters identify only the latest candidate; they do not enumerate or exclude other pending candidates. A pending, disputed or rejected report never extends accepted-price freshness.</p>
 				<p>Accepting a strictly newer shared observation atomically checkpoints security pool fees under the previous price and updates capital eligibility. A failed mandatory checkpoint rolls back that acceptance. Ordinary capital operations execute separately and recheck current safety constraints against the accepted price. An optional batch of sponsor-authorized capital operations is attempted immediately after acceptance.</p>
-				<p id="report-headroom">The request form shows current underwriting exposure, the exposure its selected report stake can cover, and the remaining growth headroom. Commitments can grow while a report waits to settle. Settlement therefore rechecks funding against current exposure: accepting an underfunded price could weaken the correction incentive just as more capital depends on it. An underfunded report is rejected and its attached operation batch is skipped. Headroom is shared and can change before inclusion; it is not a capacity reservation. REP exposure coverage remains a separate required bound.</p>
+				<p id="report-headroom">The request form shows current underwriting exposure, the exposure its selected report stake can cover, and the remaining growth headroom. Commitments can grow while a report waits to settle. Settlement therefore rechecks funding against current exposure: accepting an underfunded price could weaken the correction incentive just as more capital depends on it. An underfunded report is rejected. Any attached operations follow the <a href="#security-guarantee">canonical-price fallback</a>. Headroom is shared and can change before inclusion; it is not a capacity reservation. REP exposure coverage remains a separate required bound.</p>
 				<p id="capacity-race">Accepted report capacity is shared across security pool owners; sponsoring a larger report does not reserve its added capacity. Another owner can consume it before a separate commitment-growth transaction. Attach growth to <code>requestSecurityPoolPriceWithOperations</code> to attempt it atomically after acceptance, with an operation gas allowance, deadline and price bounds. Each operation still rechecks safety constraints and can fail independently; inspect <code>ReportOperationAttempted</code> before treating growth as complete.</p>
 				<h3 id="security-pool-preparation-reports">Security pool branch preparation</h3>
 				<p><code>SecurityPoolFactory.prepareSecurityPoolPriceFeed(source, universeId)</code> prepares the canonical child feed without deploying a child question. <code>source</code> must be a canonical question ledger already admitted to this security pool, with its security pool binding recorded by the factory. Security pool configuration is supplied directly at deployment; preparing its initial shared feed does not require a seed question. <code>SecurityPool.isPriceReportingOpen(universeId)</code> permits requests and acceptance after <code>startBranch</code>, until the fixed native recapitalization deadline at week nine. From that deadline until activation, the accepted observation is frozen. Reporting reopens on activation if the child universe has not forked; a forked universe rejects new prices. Late branch preparation does not extend the window.</p>
@@ -187,106 +187,6 @@
 					<li><code>minLiquidationPriceDistanceBps</code> no greater than <code>100%</code></li>
 				</ol>
 				<p>The priority-fee bound uses the fixed gas and security factors above and half the smaller of the maximum report amount and the escalation-halt capacity. A larger fee reverts with <code>Initial report priority fee exceeds OpenOracle limits</code>. <code>SharedPoolPriceFeedFactory</code> validates report timing, fees and risk configuration at construction. Each feed implementation validates its positive priority fee against that configuration.</p>
-
-				<p>For comparison only, under the former WETH gas-sizing model, at a <code>30 nanoETH</code> base fee, a configured <code>10 nanoETH</code> priority fee, and <code>100 WETH</code> of aggregate exposure, the modeled gas cost of one dispute is <code>0.012 ETH</code>, the minimum report is <code>3.230769230769230770 WETH</code>, and the escalation halt is <code>32.307692307692307700 WETH</code>.</p>
-				<details class="interactive-example" id="initial-report-estimator-example" open="">
-					<summary>WETH dispute-gas comparison model</summary>
-					<p>This calculator illustrates the former WETH gas-sizing model. It does not calculate the current protocol minimum, which uses the configured collateral stake floor above. It excludes the separate REP exposure minimum. The deployment parameters and caller-selected amount are shown as adjustable inputs to make their effect explicit. For a deployed feed, the base fee and aggregate exposure can change from one request block to another.</p>
-					<div class="tool-outcome-strip">
-						<div data-primary-output><span>Selected initial WETH</span><output data-example-output="selectedInitialWethReport">3.2308 WETH</output></div>
-						<div data-primary-output><span>Fee bound</span><output data-example-output="estimatorSafetyState">fees below target error</output></div>
-					</div>
-					<div class="tool-workspace">
-						<div class="tool-control-stack tool-workspace-controls">
-							<details class="tool-control-group" data-group-tone="system">
-								<summary>Network costs</summary>
-								<div class="example-grid">
-									<label>
-										Block base fee
-										<input data-example-input="blockBaseFeeNanoEth" max="200" min="0" step="1" type="number" inputmode="decimal" value="30" />
-										<span class="example-value" data-example-value="blockBaseFeeNanoEth">30 nanoETH</span>
-									</label>
-									<label>
-										Initial-report priority fee
-										<input data-example-input="initialReportPriorityFeeNanoEth" max="100" min="1" step="1" type="number" inputmode="decimal" value="10" />
-										<span class="example-value" data-example-value="initialReportPriorityFeeNanoEth">10 nanoETH</span>
-									</label>
-									<label>
-										Gas units for one dispute
-										<input data-example-input="gasUnitsForOneDispute" max="1000000" min="100000" step="10000" type="number" inputmode="decimal" value="300000" />
-										<span class="example-value" data-example-value="gasUnitsForOneDispute">300,000 gas</span>
-									</label>
-								</div>
-							</details>
-							<details class="tool-control-group" data-group-tone="system">
-								<summary>Security pool exposure</summary>
-								<div class="example-grid">
-									<label>
-										Aggregate security pool exposure
-										<input data-example-input="aggregateExposureEth" max="10000" min="0" step="100" type="number" inputmode="decimal" value="100" />
-										<span class="example-value" data-example-value="aggregateExposureEth">100 WETH</span>
-									</label>
-									<label>
-										OpenOracle security multiplier
-										<input data-example-input="openOracleSecurityMultiplier" max="20" min="1" step="0.5" type="number" inputmode="decimal" value="10" />
-										<span class="example-value" data-example-value="openOracleSecurityMultiplier">10.0x</span>
-									</label>
-									<label>
-										Target wrong-price error
-										<input data-example-input="targetPriceErrorForDispute" max="25" min="1.2" step="0.1" type="number" inputmode="decimal" value="5" />
-										<span class="example-value" data-example-value="targetPriceErrorForDispute">5.0%</span>
-									</label>
-								</div>
-							</details>
-							<details class="tool-control-group" data-group-tone="system">
-								<summary>Oracle fees</summary>
-								<div class="example-grid">
-									<label>
-										OpenOracle protocol fee
-										<input data-example-input="openOracleProtocolFee" max="5" min="0" step="0.1" type="number" inputmode="decimal" value="1" />
-										<span class="example-value" data-example-value="openOracleProtocolFee">1.0%</span>
-									</label>
-									<label>
-										OpenOracle reporter fee (<code>feePercentage</code>)
-										<input data-example-input="openOracleReporterFee" max="2" min="0" step="0.1" type="number" inputmode="decimal" value="0.1" />
-										<span class="example-value" data-example-value="openOracleReporterFee">0.1%</span>
-									</label>
-								</div>
-							</details>
-							<details class="tool-control-group" data-group-tone="system">
-								<summary>Feed policy</summary>
-								<div class="example-grid">
-									<label>
-										Escalation halt multiplier
-										<input data-example-input="escalationHaltMultiplier" max="20" min="1" step="1" type="number" inputmode="decimal" value="10" />
-										<span class="example-value" data-example-value="escalationHaltMultiplier">10x</span>
-									</label>
-								</div>
-							</details>
-							<details class="tool-control-group" data-group-tone="action" data-mobile-open open>
-								<summary>Report request</summary>
-								<div class="example-grid">
-									<label>
-										Requested initial WETH
-										<input data-example-input="requestedInitialWeth" max="25" min="0" step="0.25" type="number" inputmode="decimal" value="0" />
-										<span class="example-value" data-example-value="requestedInitialWeth">0.00 WETH</span>
-									</label>
-								</div>
-							</details>
-						</div>
-						<div class="tool-workspace-view">
-							<div class="example-output-grid tool-detail-grid oracle-threshold-grid">
-								<div><span>Initial-derived halt</span><output data-example-output="initialReportEscalationHalt">32.307692307692307700 WETH</output></div>
-								<div><span>Aggregate-exposure halt floor</span><output data-example-output="openInterestEscalationHalt">1.000000000000000000 WETH</output></div>
-								<div><span>Minimum token1 report</span><output data-example-output="estimatedMinimumWethReport">3.230769230769230770 WETH</output></div>
-								<div><span>Escalation halt</span><output data-example-output="selectedEscalationHalt">32.307692307692307700 WETH</output></div>
-								<div><span>Modeled dispute gas cost</span><output data-example-output="disputeGasCost">0.012000 ETH</output></div>
-								<div><span>Buffered gas target</span><output data-example-output="bufferedGasCost">0.120000 ETH</output></div>
-								<div><span>Correction profit fraction after fees</span><output data-example-output="correctionProfitFraction">3.7143%</output></div>
-							</div>
-						</div>
-					</div>
-				</details>
 			</section>
 
 			<section id="callback-rejection-and-recovery">
@@ -442,7 +342,6 @@
 		</main>
 
 		<script src="../assets/js/chartRuntime.js"></script>
-		<script type="module" src="../assets/js/openOracleTools.js"></script>
 		<script type="module" src="../assets/js/interactiveTools.js"></script>
 		<script src="../assets/js/responsiveDocs.js"></script>
 		<script src="../assets/js/docsData.js"></script>

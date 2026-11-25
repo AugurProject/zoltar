@@ -13,7 +13,7 @@
 			<header>
 				<p class="kicker">How-to guide</p>
 				<h1>Remove liquidity</h1>
-				<p>Use this guide to withdraw an LP position from a <a href="../reference/glossary.html#trading-pool">trading pool</a>.</p>
+				<p>Removing liquidity from a <a href="../reference/glossary.html#trading-pool">trading pool</a> returns Yes and No shares, including after question end, finalization, or a fork.</p>
 			</header>
 			<section id="in-the-ui">
 				<h2>Remove in the UI</h2>
@@ -37,8 +37,8 @@
 				<p>Integrations that need router-based removal call the router's <a href="../reference/trading/router.html#entrypoints"><code>removeLiquidityWithPermit</code></a>, whose bounds are named <code>minYesOut</code> and <code>minNoOut</code>. The router reference gives the values the permit must sign and the allowance fallback. Never grant a permanent or infinite allowance.</p>
 			</section>
 			<section id="what-removal-does-not-do">
-				<h2>What removal does not do</h2>
-				<p>Removal always returns raw Yes and No, before and after question end, resolution, and forks. It does not use your wallet Invalid, redeem complete sets, settle winning shares, choose a child branch, or migrate liquidity. For those, see <a href="./trading-handle-resolution.html">Handle resolution</a> and <a href="./trading-handle-a-fork.html">Handle a universe fork</a>.</p>
+				<h2>Use the returned shares</h2>
+				<p>See <a href="./trading-handle-resolution.html">Handle resolution</a> to redeem eligible shares or <a href="./trading-handle-a-fork.html">Handle a universe fork</a> to migrate them.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>
