@@ -228,7 +228,6 @@ export const isSnapshot = object<PublicOperatorSnapshot>({
 				decision: oneOf('dry-run-opportunity', 'eligible', 'execution-failed', 'history-unavailable', 'insufficient-inventory', 'market-risk', 'paused', 'risk-limit', 'selected', 'self-report', 'signer-unavailable', 'submitted', 'unprofitable'),
 				direction: oneOf('buy-rep', 'sell-rep'),
 				estimatedNetProfitWeth: stringValue,
-				estimatedNetProfitEth: stringValue,
 				executablePriceRepPerEth: stringValue,
 				hasRequiredInventory: optional(booleanValue),
 				pool: hexValue,

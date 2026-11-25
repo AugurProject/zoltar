@@ -1,0 +1,7 @@
+{
+	"extends": ["./tsconfig.json", "../../shared/tsconfig.source-paths.json"],
+	"compilerOptions": {
+		"rootDir": "../..",
+		"noEmit": true
+	}
+}

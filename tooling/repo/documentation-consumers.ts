@@ -33,14 +33,14 @@ export const documentationConsumers: readonly DocumentationConsumer[] = [
 		// documentation-consumers.test.ts derives that page from docs/manifest.json and requires it to be listed here.
 		projectId: 'repository',
 		reason: 'a documentation page loaded by the documentation shell runtime test changed',
-		files: ['docs/documentation.html', 'docs/explanation/contract-architecture.html', 'docs/explanation/open-oracle.html', 'docs/explanation/system-overview.html', 'docs/reference/contracts.html', 'docs/reference/contracts/openoraclepricecoordinator.html'],
+		files: ['docs/documentation.html', 'docs/explanation/contract-architecture.html', 'docs/explanation/open-oracle.html', 'docs/explanation/system-overview.html', 'docs/reference/contracts.html', 'docs/reference/contracts/sharedpoolpricefeed.html'],
 		tests: ['tooling/docs/docs-shell-runtime.test.ts'],
 	},
 	{
 		projectId: 'repository',
-		reason: 'developer documentation asserted by the UI split workflow test changed',
+		reason: 'developer launch instructions validated by the documentation content check changed',
 		files: ['README.md', 'testnetwork/README.md', 'docs/how-to/trading-set-up-development.html'],
-		tests: ['tooling/ui/ui-split-workflows.test.ts'],
+		checks: ['bun run docs:check-content'],
 	},
 	{
 		projectId: 'augur-scan',

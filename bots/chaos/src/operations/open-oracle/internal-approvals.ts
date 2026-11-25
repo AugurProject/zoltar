@@ -10,7 +10,7 @@ function internalApprovalCandidates(snapshot: EcosystemSnapshot, options: Planni
 	return snapshot.wallet.tokens.flatMap(token => {
 		const isWeth = token.address.toLowerCase() === snapshot.deployments.weth.toLowerCase()
 		const isRep = knownRep.has(token.address.toLowerCase())
-		if ((!isWeth && !isRep) || token.openOracleInternalAllowanceToSelf === undefined) return []
+		if (!isWeth && !isRep) return []
 		const current = amount(token.openOracleInternalAllowanceToSelf)
 		if (current !== 0n) return [{ current, target: 0n, token: token.address }]
 		const configuredMaximum = isRep ? optionAmount(options, 'maxRepSpendAttoRep', ONE_TOKEN) : optionAmount(options, 'maxEthSpendAttoEth', 10n ** 16n)

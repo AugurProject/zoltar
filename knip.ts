@@ -182,6 +182,7 @@ const config = (options => {
 				paths: { ...sharedPackagePaths },
 			},
 			'shared/core': {
+				ignore: productionOnly(['tests/**']),
 				entry: ['ts/**/*.test.ts'],
 				includeEntryExports: true,
 				project: ['**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}!'],

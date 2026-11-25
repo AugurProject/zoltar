@@ -7,7 +7,6 @@ import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBa
 import { getGenesisNetworkProfile, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { formatMarketLiquidity } from '../../features/MarketCard.js'
 import { LiveMarketBrowser } from '../../features/LiveMarketBrowser.js'
 import { getRememberableMarket, marketDownloadStore, selectFavoriteMarkets, selectMarketCacheUpdates, selectPortfolioMarkets } from '../../lib/favoriteMarkets.js'
 import type { LiveMarket } from '../../protocol/liveMarket.js'
@@ -65,7 +64,7 @@ describe('favorite markets', () => {
 		}
 	})
 
-	test('round-trips a cached market through storage, including optional fields', () => {
+	test('round-trips current caches and discards entries without collateral metadata', () => {
 		const dom = installDomEnvironment()
 		resetLocalEntityStoreForTesting()
 		try {
@@ -88,19 +87,17 @@ describe('favorite markets', () => {
 			]
 			window.localStorage.setItem(getDownloadedStorageKey(scope), serializeStoredValue({ items, version: 1 }))
 			const recovered = marketDownloadStore.read(scope).map(entry => entry.data)
-			expect(recovered).toEqual([market, withoutCheckpoint, { ...legacyMarket, cachedCollateralMissing: true }])
-			const cachedLegacyMarket = recovered[2]
-			if (cachedLegacyMarket === undefined) throw new Error('Missing cached legacy market')
-			expect(formatMarketLiquidity(cachedLegacyMarket)).toBeUndefined()
+			expect(recovered).toEqual([market, withoutCheckpoint])
 		} finally {
 			resetLocalEntityStoreForTesting()
 			dom.cleanup()
 		}
 	})
 
-	test('remembers only loaded markets with a pair', () => {
+	test('remembers only loaded markets with a pair and collateral metadata', () => {
 		expect(getRememberableMarket(createMarket(1))?.title).toBe('Market 1')
 		expect(getRememberableMarket(createMarket(1, { pair: undefined }))).toBeUndefined()
+		expect(getRememberableMarket(createMarket(1, { collateral: undefined }))).toBeUndefined()
 		expect(getRememberableMarket(createMarket(1, { loadError: 'failed' }))).toBeUndefined()
 		expect(getRememberableMarket(undefined)).toBeUndefined()
 	})
@@ -139,13 +136,13 @@ describe('favorite markets', () => {
 	test('renders saved market rows with their favorite controls', async () => {
 		const dom = installDomEnvironment()
 		resetLocalEntityStoreForTesting()
-		const favorite = createMarket(1, { collateral: undefined, cachedCollateralMissing: true, tradingStatus: 0 })
+		const favorite = createMarket(1, { tradingStatus: 0 })
 		setEntityFavorite(getLocalEntityScope('trading', 'market'), favorite.pool, true)
 		const rendered = await renderIntoDocument(<LiveMarketBrowser lookupRoute='market' markets={[createMarket(2), favorite]} registry={readyMarketRegistry()} discoveryState='ready' discoveryError={undefined} workflowLocked={false} nowSeconds={0n} retry={() => undefined} />)
 		try {
-			const legacy = [...rendered.container.querySelectorAll('.market-card')].find(card => card.textContent?.includes('Market 1'))
-			expect(legacy?.textContent).toContain('Unavailable')
-			expect(legacy?.querySelectorAll('a[aria-label^="Buy Yes"]')).toHaveLength(1)
+			const favoriteCard = [...rendered.container.querySelectorAll('.market-card')].find(card => card.textContent?.includes('Market 1'))
+			expect(favoriteCard?.textContent).not.toContain('Unavailable')
+			expect(favoriteCard?.querySelectorAll('a[aria-label^="Buy Yes"]')).toHaveLength(1)
 			// Favorites lead under their own heading; with nothing else on the registry page no second heading follows.
 			const headings = [...rendered.container.querySelectorAll('.market-list-heading')].map(heading => heading.textContent)
 			expect(headings).toEqual(['Favorites (2)'])

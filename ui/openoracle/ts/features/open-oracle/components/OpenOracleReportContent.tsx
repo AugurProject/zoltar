@@ -1,4 +1,3 @@
-import { getOpenOraclePriceExpiryPresentation } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracleStage.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
@@ -16,16 +15,7 @@ import { TransactionActionButton } from '@zoltar/ui-core-shared/components/Trans
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import {
-	formatOpenOracleReportPriceUnit,
-	getOpenOracleDisputeAvailability,
-	getOpenOracleSettleAvailability,
-	OPEN_ORACLE_PRICE_UNITS,
-	type OpenOracleCreateField,
-	type OpenOracleDisputeInputField,
-	type OpenOracleDisputeSubmissionDetails,
-	type OpenOracleSelectedReportActionMode,
-} from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
+import { formatOpenOracleReportPriceUnit, getOpenOracleDisputeAvailability, OPEN_ORACLE_PRICE_UNITS, type OpenOracleCreateField, type OpenOracleDisputeInputField, type OpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
 import { loadOpenOracleReportSummaries } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getWalletConnectionActiveAppChainGuardState, withWalletGuardFirst } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
@@ -133,7 +123,6 @@ function renderTokenAmounts(amounts: ReadonlyArray<{ amount: bigint | undefined;
 }
 
 export function renderSelectedReportActionSection({
-	actionMode,
 	disputeSubmission,
 	isConnected,
 	isOnActiveAppChain,
@@ -141,7 +130,6 @@ export function renderSelectedReportActionSection({
 	onApproveToken2,
 	onDisputeReport,
 	onOpenOracleFormChange,
-	onSettleReport,
 	onWrapDisputeWeth,
 	openOracleActiveAction,
 	openOracleForm,
@@ -152,7 +140,6 @@ export function renderSelectedReportActionSection({
 	token1Symbol,
 	token2Symbol,
 }: {
-	actionMode: Exclude<OpenOracleSelectedReportActionMode, 'read-only'>
 	disputeSubmission: OpenOracleDisputeSubmissionDetails | undefined
 	isConnected: boolean
 	isOnActiveAppChain: boolean
@@ -160,7 +147,6 @@ export function renderSelectedReportActionSection({
 	onApproveToken2: (amount?: bigint) => void
 	onDisputeReport: () => void
 	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void
-	onSettleReport: () => void
 	onWrapDisputeWeth: () => void
 	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction']
 	openOracleForm: OpenOracleFormState
@@ -173,279 +159,225 @@ export function renderSelectedReportActionSection({
 	token2Symbol: string
 }) {
 	const disputeAvailability = openOracleReportDetails === undefined ? { canAct: true, message: undefined } : getOpenOracleDisputeAvailability(openOracleReportDetails)
-	const settleAvailability = openOracleReportDetails === undefined ? { canAct: true, message: undefined } : getOpenOracleSettleAvailability(openOracleReportDetails)
-	switch (actionMode) {
-		case 'dispute': {
-			const disputeDisabledMessage = (() => {
-				if (openOracleForm.reportId.trim() === '') return openOracleCopy.reportLoadRequired
+	const disputeDisabledMessage = (() => {
+		if (openOracleForm.reportId.trim() === '') return openOracleCopy.reportLoadRequired
 
-				return disputeAvailability.message
-			})()
-			const sharedApprovalGuardMessage = (() => {
-				if (!isConnected) return openOracleCopy.disputeWalletRequiredReason
-				if (!isOnActiveAppChain) return getWrongNetworkReason()
-				if (openOracleReportDetails === undefined) return openOracleCopy.reportLoadRequired
-				return undefined
-			})()
-			const disputeActionDisabledReason = (() => {
-				if (!isConnected) return openOracleCopy.disputeWalletRequiredReason
-				if (!isOnActiveAppChain) return getWrongNetworkReason()
-				return disputeDisabledMessage ?? (disputeSubmission?.blockMessage?.kind === 'visible' ? disputeSubmission.blockMessage.message : undefined)
-			})()
-			const disputeActionAvailability = withWalletGuardFirst(
-				{ disabled: !isConnected || !isOnActiveAppChain || openOracleForm.reportId.trim() === '' || !disputeAvailability.canAct || disputeSubmission?.canSubmit === false, reason: disputeActionDisabledReason },
-				getWalletConnectionActiveAppChainGuardState({ isOnActiveAppChain, walletConnected: isConnected, walletRequiredReason: openOracleCopy.disputeWalletRequiredReason }),
-			)
-			const disputeReportId = openOracleForm.reportId.trim() || 'unselected'
-			const sharedApprovalGuardMessageId = `open-oracle-dispute-approval-guard-${disputeReportId}`
-			const renderDisputeTokenApproval = (token: 'token1' | 'token2') => {
-				const isToken1 = token === 'token1'
-				const tokenSymbol = isToken1 ? token1Symbol : token2Symbol
-				const approval = isToken1 ? openOracleTokenAccessState.token1Approval : openOracleTokenAccessState.token2Approval
-				const approvalActionPending = openOracleActiveAction === (isToken1 ? 'approveToken1' : 'approveToken2')
-				const requiredAmount = isToken1 ? disputeSubmission?.token1ContributionAmount : disputeSubmission?.token2ContributionAmount
-				const tokenApprovalGuardMessage = (() => {
-					if (openOracleReportDetails === undefined) return openOracleCopy.reportLoadRequired
-					if (requiredAmount === undefined) return openOracleCopy.formatDisputeAmountsInvalidReason(tokenSymbol)
+		return disputeAvailability.message
+	})()
+	const sharedApprovalGuardMessage = (() => {
+		if (!isConnected) return openOracleCopy.disputeWalletRequiredReason
+		if (!isOnActiveAppChain) return getWrongNetworkReason()
+		if (openOracleReportDetails === undefined) return openOracleCopy.reportLoadRequired
+		return undefined
+	})()
+	const disputeActionDisabledReason = (() => {
+		if (!isConnected) return openOracleCopy.disputeWalletRequiredReason
+		if (!isOnActiveAppChain) return getWrongNetworkReason()
+		return disputeDisabledMessage ?? (disputeSubmission?.blockMessage?.kind === 'visible' ? disputeSubmission.blockMessage.message : undefined)
+	})()
+	const disputeActionAvailability = withWalletGuardFirst(
+		{ disabled: !isConnected || !isOnActiveAppChain || openOracleForm.reportId.trim() === '' || !disputeAvailability.canAct || disputeSubmission?.canSubmit === false, reason: disputeActionDisabledReason },
+		getWalletConnectionActiveAppChainGuardState({ isOnActiveAppChain, walletConnected: isConnected, walletRequiredReason: openOracleCopy.disputeWalletRequiredReason }),
+	)
+	const disputeReportId = openOracleForm.reportId.trim() || 'unselected'
+	const sharedApprovalGuardMessageId = `open-oracle-dispute-approval-guard-${disputeReportId}`
+	const renderDisputeTokenApproval = (token: 'token1' | 'token2') => {
+		const isToken1 = token === 'token1'
+		const tokenSymbol = isToken1 ? token1Symbol : token2Symbol
+		const approval = isToken1 ? openOracleTokenAccessState.token1Approval : openOracleTokenAccessState.token2Approval
+		const approvalActionPending = openOracleActiveAction === (isToken1 ? 'approveToken1' : 'approveToken2')
+		const requiredAmount = isToken1 ? disputeSubmission?.token1ContributionAmount : disputeSubmission?.token2ContributionAmount
+		const tokenApprovalGuardMessage = (() => {
+			if (openOracleReportDetails === undefined) return openOracleCopy.reportLoadRequired
+			if (requiredAmount === undefined) return openOracleCopy.formatDisputeAmountsInvalidReason(tokenSymbol)
 
-					return undefined
-				})()
-				return (
-					<SectionBlock headingLevel={4} title={openOracleCopy.formatTokenApprovalTitle(tokenSymbol)} variant='embedded'>
-						<TokenApprovalControl
-							actionLabel={openOracleCopy.disputingTheReport}
-							allowanceError={approval.error}
-							allowanceLoading={approval.loading}
-							approvedAmount={approval.value}
-							disabled={!isConnected || !isOnActiveAppChain}
-							guardMessage={sharedApprovalGuardMessage ?? tokenApprovalGuardMessage}
-							guardMessageElementId={sharedApprovalGuardMessage === undefined ? undefined : sharedApprovalGuardMessageId}
-							onApprove={amount => (isToken1 ? onApproveToken1 : onApproveToken2)(amount)}
-							pending={approvalActionPending}
-							pendingLabel={commonCopy.formatApprovingToken(tokenSymbol)}
-							requiredAmount={requiredAmount}
-							resetKey={`dispute:${token}:${tokenSymbol}:${requiredAmount?.toString() ?? ''}:${openOracleForm.reportId}`}
-							tokenSymbol={tokenSymbol}
-							tokenUnits={(isToken1 ? disputeSubmission?.token1Decimals : disputeSubmission?.token2Decimals) ?? 18}
-						/>
-					</SectionBlock>
-				)
-			}
-			const wethWrap = disputeSubmission?.wethWrap
-			// WETH the wallet lacks is wrapped first, so the wrap step comes before the approvals that spend it.
-			const disputeWrapStep =
-				wethWrap === undefined ? undefined : (
-					<SectionBlock headingLevel={4} title={openOracleCopy.wrapEth} variant='embedded'>
-						<div className='actions'>
-							<TransactionActionButton
-								idleLabel={wethWrap.amountAttoEth === undefined || wethWrap.amountAttoEth === 0n ? openOracleCopy.wrapEth : openOracleCopy.formatWrapEthAmount(formatCeilingAmountDisplay(wethWrap.amountAttoEth))}
-								pendingLabel={openOracleCopy.wrappingEth}
-								onClick={onWrapDisputeWeth}
-								pending={openOracleActiveAction === 'wrapWeth'}
-								tone='secondary'
-								availability={withWalletGuardFirst(
-									{ disabled: wethWrap.blockMessage !== undefined, loading: wethWrap.blockMessage?.kind === 'hidden-loading', reason: wethWrap.blockMessage?.message },
-									getWalletConnectionActiveAppChainGuardState({ isOnActiveAppChain, walletConnected: isConnected, walletRequiredReason: openOracleCopy.disputeWalletRequiredReason }),
-								)}
-								disabledReasonElementId={sharedApprovalGuardMessage === undefined ? undefined : sharedApprovalGuardMessageId}
-								showDisabledReason={sharedApprovalGuardMessage === undefined}
-							/>
-						</div>
-					</SectionBlock>
-				)
-			const allDisputeInputFieldErrors = disputeSubmission?.inputFieldErrors ?? {}
-			// Amount errors wait for blur so typing stays quiet.
-			const disputeInputFieldErrors = {
-				disputeNewAmount1: revealedDisputeFields.has('disputeNewAmount1') ? allDisputeInputFieldErrors.disputeNewAmount1 : undefined,
-				disputeNewAmount2: revealedDisputeFields.has('disputeNewAmount2') ? allDisputeInputFieldErrors.disputeNewAmount2 : undefined,
-			}
-			const firstDisputeInputErrorField = OPEN_ORACLE_DISPUTE_INPUT_FIELD_ORDER.find(field => disputeInputFieldErrors[field] !== undefined)
-			const disputeInputBlockMessageId = firstDisputeInputErrorField === undefined ? `open-oracle-dispute-input-blocker-${disputeReportId}` : getOpenOracleDisputeFieldErrorId(firstDisputeInputErrorField, disputeReportId)
-			const disputeNewAmount1Error = disputeInputFieldErrors.disputeNewAmount1
-			const disputeNewAmount2Error = disputeInputFieldErrors.disputeNewAmount2
-			const disputeActionReasonUsesInputBlockMessage = disputeSubmission?.inputBlockMessage?.kind === 'visible' && disputeActionDisabledReason === disputeSubmission.inputBlockMessage.message
-			const disputeActionReasonElementId = (() => {
-				if (sharedApprovalGuardMessage !== undefined) return sharedApprovalGuardMessageId
-				if (disputeActionReasonUsesInputBlockMessage) return disputeInputBlockMessageId
-				return undefined
-			})()
-			const flexibleNewAmount1 = disputeSubmission?.maximumNewAmount1 !== undefined
-			const newAmount1RangeHint =
-				disputeSubmission?.expectedNewAmount1 === undefined || disputeSubmission.maximumNewAmount1 === undefined || disputeSubmission.token1Decimals === undefined
-					? undefined
-					: openOracleCopy.formatNewAmountRangeDetail(token1Symbol, formatCurrencyInputBalance(disputeSubmission.expectedNewAmount1, disputeSubmission.token1Decimals), formatCurrencyInputBalance(disputeSubmission.maximumNewAmount1, disputeSubmission.token1Decimals))
-			const swapToken = (() => {
-				if (disputeSubmission?.swapTokenKey === undefined) return { decimals: undefined, symbol: undefined }
-				if (disputeSubmission.swapTokenKey === 'token1') return { decimals: disputeSubmission.token1Decimals, symbol: token1Symbol }
-				return { decimals: disputeSubmission.token2Decimals, symbol: token2Symbol }
-			})()
-			const swapTokenSymbol = swapToken.symbol
-			const swapTokenDecimals = swapToken.decimals
-			const proposedPriceValue = disputeSubmission?.proposedPrice === undefined || openOracleReportDetails === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={disputeSubmission.proposedPrice} suffix={formatOpenOracleReportPriceUnit(openOracleReportDetails)} units={OPEN_ORACLE_PRICE_UNITS} />
-			const disputeInputBlockDetail =
-				disputeSubmission?.inputBlockMessage !== undefined && firstDisputeInputErrorField === undefined ? <UserMessage className='detail' id={disputeInputBlockMessageId} loading={disputeSubmission.inputBlockMessage.kind === 'hidden-loading'} detail={disputeSubmission.inputBlockMessage.message} /> : undefined
-			return (
-				<SectionBlock variant='embedded'>
-					<div className='form-grid'>
-						{openOracleReportDetails === undefined
-							? undefined
-							: renderReportSection(openOracleCopy.currentReportState, [
-									{ label: openOracleCopy.report, value: `#${openOracleReportDetails.reportId.toString()}` },
-									{ label: openOracleCopy.currentReporter, value: openOracleReportDetails.currentReporter === zeroAddress ? commonCopy.none : <AddressValue address={openOracleReportDetails.currentReporter} /> },
-									{ label: openOracleCopy.currentPrice, value: <CurrencyValue value={openOracleReportDetails.price} suffix={formatOpenOracleReportPriceUnit(openOracleReportDetails)} units={OPEN_ORACLE_PRICE_UNITS} /> },
-								])}
-						<div className='field-row'>
-							{flexibleNewAmount1 ? (
-								<label className='field'>
-									<span>{openOracleCopy.formatNewTokenAmountFieldLabel(token1Symbol)}</span>
-									<FormInput
-										adornment={token1Symbol}
-										aria-label={openOracleCopy.formatNewTokenAmountFieldLabel(token1Symbol)}
-										error={disputeNewAmount1Error}
-										errorId={getOpenOracleDisputeFieldErrorId('disputeNewAmount1', disputeReportId)}
-										hint={newAmount1RangeHint}
-										inputMode='decimal'
-										liveError
-										onBlur={() => onDisputeFieldRevealChange('disputeNewAmount1', true)}
-										onInput={event => {
-											onDisputeFieldRevealChange('disputeNewAmount1', false)
-											onOpenOracleFormChange({ disputeNewAmount1: event.currentTarget.value })
-										}}
-										value={openOracleForm.disputeNewAmount1}
-									/>
-								</label>
-							) : (
-								// Without flexible escalation the report fixes the base amount, so it is shown instead of entered.
-								<div className='field'>
-									<span>{openOracleCopy.formatNewTokenAmountFieldLabel(token1Symbol)}</span>
-									<strong className='field-read-only-value'>
-										<CurrencyValue value={disputeSubmission?.expectedNewAmount1} suffix={token1Symbol} units={disputeSubmission?.token1Decimals ?? 18} />
-									</strong>
-									<UserMessage placement='field' detail={openOracleCopy.newBaseAmountFixedHint} />
-								</div>
-							)}
-							<label className='field'>
-								<span>{openOracleCopy.formatNewTokenAmountFieldLabel(token2Symbol)}</span>
-								<FormInput
-									adornment={token2Symbol}
-									aria-label={openOracleCopy.formatNewTokenAmountFieldLabel(token2Symbol)}
-									error={disputeNewAmount2Error}
-									errorId={getOpenOracleDisputeFieldErrorId('disputeNewAmount2', disputeReportId)}
-									hint={openOracleCopy.newQuoteAmountHint}
-									inputMode='decimal'
-									liveError
-									onBlur={() => onDisputeFieldRevealChange('disputeNewAmount2', true)}
-									onInput={event => {
-										onDisputeFieldRevealChange('disputeNewAmount2', false)
-										onOpenOracleFormChange({ disputeNewAmount2: event.currentTarget.value })
-									}}
-									value={openOracleForm.disputeNewAmount2}
-								/>
-							</label>
-						</div>
-						<SectionBlock headingLevel={4} title={openOracleCopy.disputeOutcome} variant='embedded'>
-							<MetricGrid variant='question'>
-								<MetricField label={openOracleCopy.proposedPrice}>{proposedPriceValue}</MetricField>
-								{/* The pending explanation is prose, so it uses body text rather than the value font. */}
-								<MetricField label={openOracleCopy.tokenToSwapOut} valueClassName={swapTokenSymbol === undefined ? 'metric-field-prose' : ''} valueTagName={swapTokenSymbol === undefined ? 'span' : 'strong'}>
-									{swapTokenSymbol ?? openOracleCopy.disputeSwapTokenPending}
-								</MetricField>
-								<MetricField label={openOracleCopy.youPay}>
-									{renderTokenAmounts(
-										[
-											{ amount: disputeSubmission?.token1ContributionAmount, decimals: disputeSubmission?.token1Decimals, symbol: token1Symbol },
-											{ amount: disputeSubmission?.token2ContributionAmount, decimals: disputeSubmission?.token2Decimals, symbol: token2Symbol },
-										],
-										true,
-									)}
-								</MetricField>
-								<MetricField label={openOracleCopy.disputeFee}>{renderTokenAmounts([{ amount: disputeSubmission?.disputeFeeAmount, decimals: swapTokenDecimals, symbol: swapTokenSymbol }])}</MetricField>
-								<MetricField label={openOracleCopy.protocolFee}>{renderTokenAmounts([{ amount: disputeSubmission?.protocolFeeAmount, decimals: swapTokenDecimals, symbol: swapTokenSymbol }])}</MetricField>
-								<MetricField label={openOracleCopy.creditedToOracleBalance}>{renderTokenAmounts([{ amount: disputeSubmission?.token2CreditAmount, decimals: disputeSubmission?.token2Decimals, symbol: token2Symbol }])}</MetricField>
-								<MetricField label={openOracleCopy.yourNewReport}>
-									{renderTokenAmounts([
-										{ amount: disputeSubmission?.newAmount1, decimals: disputeSubmission?.token1Decimals, symbol: token1Symbol },
-										{ amount: disputeSubmission?.newAmount2, decimals: disputeSubmission?.token2Decimals, symbol: token2Symbol },
-									])}
-								</MetricField>
-							</MetricGrid>
-							<UserMessage className='detail' detail={swapTokenSymbol === undefined ? openOracleCopy.disputeOutcomePending : openOracleCopy.feesIncludedInPayment} />
-						</SectionBlock>
-						{sharedApprovalGuardMessage === undefined ? undefined : (
-							// The approvals and the dispute share this reason, so while the wallet blocks them it holds their one wallet fix.
-							<WalletActionFixReason availability={disputeActionAvailability} id={sharedApprovalGuardMessageId}>
-								<InlineHint id={sharedApprovalGuardMessageId} message={sharedApprovalGuardMessage} />
-							</WalletActionFixReason>
-						)}
-						{disputeInputBlockDetail}
-						{/* The wrap and approval steps stay in place while amounts are invalid; each explains why it is unavailable. */}
-						{disputeWrapStep}
-						{renderDisputeTokenApproval('token1')}
-						{renderDisputeTokenApproval('token2')}
-						{!isOnActiveAppChain || disputeSubmission?.blockMessage?.kind !== 'visible' || disputeSubmission.blockMessage === disputeSubmission.inputBlockMessage ? undefined : <UserMessage className='detail' detail={disputeSubmission.blockMessage.message} />}
-						<div className='actions'>
-							<TransactionActionButton
-								idleLabel={openOracleCopy.disputeAndSwap}
-								pendingLabel={openOracleCopy.submittingDispute}
-								onClick={onDisputeReport}
-								pending={openOracleActiveAction === 'dispute'}
-								availability={disputeActionAvailability}
-								disabledReasonElementId={disputeActionReasonElementId}
-								showDisabledReason={sharedApprovalGuardMessage === undefined && !disputeActionReasonUsesInputBlockMessage}
-							/>
-						</div>
-					</div>
-				</SectionBlock>
-			)
-		}
-		case 'settle': {
-			const priceExpiry = openOracleReportDetails === undefined ? undefined : getOpenOraclePriceExpiryPresentation(openOracleReportDetails)
-			const settleDisabledMessage = (() => {
-				if (openOracleForm.reportId.trim() === '') return openOracleCopy.reportLoadRequired
-
-				return settleAvailability.message
-			})()
-			const settleActionDisabledReason = (() => {
-				if (!isConnected) return openOracleCopy.settlementWalletRequiredReason
-				if (!isOnActiveAppChain) return getWrongNetworkReason()
-				return settleDisabledMessage
-			})()
-			return (
-				<SectionBlock variant='embedded'>
-					<div className='form-grid'>
-						{openOracleReportDetails === undefined
-							? undefined
-							: renderReportSection(openOracleCopy.settlementSummary, [
-									{ label: openOracleCopy.report, value: `#${openOracleReportDetails.reportId.toString()}` },
-									{ label: openOracleCopy.currentReporter, value: openOracleReportDetails.currentReporter === zeroAddress ? commonCopy.none : <AddressValue address={openOracleReportDetails.currentReporter} /> },
-									{
-										label: getOpenOracleClockLabel(openOracleReportDetails.timeType, openOracleCopy.settlementTimestamp, openOracleCopy.settlementBlock),
-										value:
-											openOracleReportDetails.settlementTimestamp === 0n ? (
-												openOracleCopy.settlementTimestampOnConfirmation
-											) : (
-												<OpenOracleClockValue currentTimestamp={openOracleReportDetails.currentTime} timeType={openOracleReportDetails.timeType} value={openOracleReportDetails.settlementTimestamp} zeroText={openOracleCopy.notSettled} />
-											),
-									},
-								])}
-						{priceExpiry === undefined ? undefined : <UserMessage tone='warning' detail={priceExpiry.detail} />}
-						<div className='actions'>
-							<TransactionActionButton
-								idleLabel={openOracleReportDetails === undefined ? openOracleCopy.settleReport : openOracleCopy.settleReportTitle(openOracleReportDetails.reportId)}
-								pendingLabel={openOracleCopy.settlingReport}
-								onClick={onSettleReport}
-								pending={openOracleActiveAction === 'settle'}
-								availability={withWalletGuardFirst(
-									{ disabled: !isConnected || !isOnActiveAppChain || openOracleForm.reportId.trim() === '' || !settleAvailability.canAct, reason: settleActionDisabledReason },
-									getWalletConnectionActiveAppChainGuardState({ isOnActiveAppChain, walletConnected: isConnected, walletRequiredReason: openOracleCopy.settlementWalletRequiredReason }),
-								)}
-							/>
-						</div>
-					</div>
-				</SectionBlock>
-			)
-		}
-		default:
-			return assertNever(actionMode)
+			return undefined
+		})()
+		return (
+			<SectionBlock headingLevel={4} title={openOracleCopy.formatTokenApprovalTitle(tokenSymbol)} variant='embedded'>
+				<TokenApprovalControl
+					actionLabel={openOracleCopy.disputingTheReport}
+					allowanceError={approval.error}
+					allowanceLoading={approval.loading}
+					approvedAmount={approval.value}
+					disabled={!isConnected || !isOnActiveAppChain}
+					guardMessage={sharedApprovalGuardMessage ?? tokenApprovalGuardMessage}
+					guardMessageElementId={sharedApprovalGuardMessage === undefined ? undefined : sharedApprovalGuardMessageId}
+					onApprove={amount => (isToken1 ? onApproveToken1 : onApproveToken2)(amount)}
+					pending={approvalActionPending}
+					pendingLabel={commonCopy.formatApprovingToken(tokenSymbol)}
+					requiredAmount={requiredAmount}
+					resetKey={`dispute:${token}:${tokenSymbol}:${requiredAmount?.toString() ?? ''}:${openOracleForm.reportId}`}
+					tokenSymbol={tokenSymbol}
+					tokenUnits={(isToken1 ? disputeSubmission?.token1Decimals : disputeSubmission?.token2Decimals) ?? 18}
+				/>
+			</SectionBlock>
+		)
 	}
+	const wethWrap = disputeSubmission?.wethWrap
+	// WETH the wallet lacks is wrapped first, so the wrap step comes before the approvals that spend it.
+	const disputeWrapStep =
+		wethWrap === undefined ? undefined : (
+			<SectionBlock headingLevel={4} title={openOracleCopy.wrapEth} variant='embedded'>
+				<div className='actions'>
+					<TransactionActionButton
+						idleLabel={wethWrap.amountAttoEth === undefined || wethWrap.amountAttoEth === 0n ? openOracleCopy.wrapEth : openOracleCopy.formatWrapEthAmount(formatCeilingAmountDisplay(wethWrap.amountAttoEth))}
+						pendingLabel={openOracleCopy.wrappingEth}
+						onClick={onWrapDisputeWeth}
+						pending={openOracleActiveAction === 'wrapWeth'}
+						tone='secondary'
+						availability={withWalletGuardFirst(
+							{ disabled: wethWrap.blockMessage !== undefined, loading: wethWrap.blockMessage?.kind === 'hidden-loading', reason: wethWrap.blockMessage?.message },
+							getWalletConnectionActiveAppChainGuardState({ isOnActiveAppChain, walletConnected: isConnected, walletRequiredReason: openOracleCopy.disputeWalletRequiredReason }),
+						)}
+						disabledReasonElementId={sharedApprovalGuardMessage === undefined ? undefined : sharedApprovalGuardMessageId}
+						showDisabledReason={sharedApprovalGuardMessage === undefined}
+					/>
+				</div>
+			</SectionBlock>
+		)
+	const allDisputeInputFieldErrors = disputeSubmission?.inputFieldErrors ?? {}
+	// Amount errors wait for blur so typing stays quiet.
+	const disputeInputFieldErrors = {
+		disputeNewAmount1: revealedDisputeFields.has('disputeNewAmount1') ? allDisputeInputFieldErrors.disputeNewAmount1 : undefined,
+		disputeNewAmount2: revealedDisputeFields.has('disputeNewAmount2') ? allDisputeInputFieldErrors.disputeNewAmount2 : undefined,
+	}
+	const firstDisputeInputErrorField = OPEN_ORACLE_DISPUTE_INPUT_FIELD_ORDER.find(field => disputeInputFieldErrors[field] !== undefined)
+	const disputeInputBlockMessageId = firstDisputeInputErrorField === undefined ? `open-oracle-dispute-input-blocker-${disputeReportId}` : getOpenOracleDisputeFieldErrorId(firstDisputeInputErrorField, disputeReportId)
+	const disputeNewAmount1Error = disputeInputFieldErrors.disputeNewAmount1
+	const disputeNewAmount2Error = disputeInputFieldErrors.disputeNewAmount2
+	const disputeActionReasonUsesInputBlockMessage = disputeSubmission?.inputBlockMessage?.kind === 'visible' && disputeActionDisabledReason === disputeSubmission.inputBlockMessage.message
+	const disputeActionReasonElementId = (() => {
+		if (sharedApprovalGuardMessage !== undefined) return sharedApprovalGuardMessageId
+		if (disputeActionReasonUsesInputBlockMessage) return disputeInputBlockMessageId
+		return undefined
+	})()
+	const flexibleNewAmount1 = disputeSubmission?.maximumNewAmount1 !== undefined
+	const newAmount1RangeHint =
+		disputeSubmission?.expectedNewAmount1 === undefined || disputeSubmission.maximumNewAmount1 === undefined || disputeSubmission.token1Decimals === undefined
+			? undefined
+			: openOracleCopy.formatNewAmountRangeDetail(token1Symbol, formatCurrencyInputBalance(disputeSubmission.expectedNewAmount1, disputeSubmission.token1Decimals), formatCurrencyInputBalance(disputeSubmission.maximumNewAmount1, disputeSubmission.token1Decimals))
+	const swapToken = (() => {
+		if (disputeSubmission?.swapTokenKey === undefined) return { decimals: undefined, symbol: undefined }
+		if (disputeSubmission.swapTokenKey === 'token1') return { decimals: disputeSubmission.token1Decimals, symbol: token1Symbol }
+		return { decimals: disputeSubmission.token2Decimals, symbol: token2Symbol }
+	})()
+	const swapTokenSymbol = swapToken.symbol
+	const swapTokenDecimals = swapToken.decimals
+	const proposedPriceValue = disputeSubmission?.proposedPrice === undefined || openOracleReportDetails === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={disputeSubmission.proposedPrice} suffix={formatOpenOracleReportPriceUnit(openOracleReportDetails)} units={OPEN_ORACLE_PRICE_UNITS} />
+	const disputeInputBlockDetail =
+		disputeSubmission?.inputBlockMessage !== undefined && firstDisputeInputErrorField === undefined ? <UserMessage className='detail' id={disputeInputBlockMessageId} loading={disputeSubmission.inputBlockMessage.kind === 'hidden-loading'} detail={disputeSubmission.inputBlockMessage.message} /> : undefined
+	return (
+		<SectionBlock variant='embedded'>
+			<div className='form-grid'>
+				{openOracleReportDetails === undefined
+					? undefined
+					: renderReportSection(openOracleCopy.currentReportState, [
+							{ label: openOracleCopy.report, value: `#${openOracleReportDetails.reportId.toString()}` },
+							{ label: openOracleCopy.currentReporter, value: openOracleReportDetails.currentReporter === zeroAddress ? commonCopy.none : <AddressValue address={openOracleReportDetails.currentReporter} /> },
+							{ label: openOracleCopy.currentPrice, value: <CurrencyValue value={openOracleReportDetails.price} suffix={formatOpenOracleReportPriceUnit(openOracleReportDetails)} units={OPEN_ORACLE_PRICE_UNITS} /> },
+						])}
+				<div className='field-row'>
+					{flexibleNewAmount1 ? (
+						<label className='field'>
+							<span>{openOracleCopy.formatNewTokenAmountFieldLabel(token1Symbol)}</span>
+							<FormInput
+								adornment={token1Symbol}
+								aria-label={openOracleCopy.formatNewTokenAmountFieldLabel(token1Symbol)}
+								error={disputeNewAmount1Error}
+								errorId={getOpenOracleDisputeFieldErrorId('disputeNewAmount1', disputeReportId)}
+								hint={newAmount1RangeHint}
+								inputMode='decimal'
+								liveError
+								onBlur={() => onDisputeFieldRevealChange('disputeNewAmount1', true)}
+								onInput={event => {
+									onDisputeFieldRevealChange('disputeNewAmount1', false)
+									onOpenOracleFormChange({ disputeNewAmount1: event.currentTarget.value })
+								}}
+								value={openOracleForm.disputeNewAmount1}
+							/>
+						</label>
+					) : (
+						// Without flexible escalation the report fixes the base amount, so it is shown instead of entered.
+						<div className='field'>
+							<span>{openOracleCopy.formatNewTokenAmountFieldLabel(token1Symbol)}</span>
+							<strong className='field-read-only-value'>
+								<CurrencyValue value={disputeSubmission?.expectedNewAmount1} suffix={token1Symbol} units={disputeSubmission?.token1Decimals ?? 18} />
+							</strong>
+							<UserMessage placement='field' detail={openOracleCopy.newBaseAmountFixedHint} />
+						</div>
+					)}
+					<label className='field'>
+						<span>{openOracleCopy.formatNewTokenAmountFieldLabel(token2Symbol)}</span>
+						<FormInput
+							adornment={token2Symbol}
+							aria-label={openOracleCopy.formatNewTokenAmountFieldLabel(token2Symbol)}
+							error={disputeNewAmount2Error}
+							errorId={getOpenOracleDisputeFieldErrorId('disputeNewAmount2', disputeReportId)}
+							hint={openOracleCopy.newQuoteAmountHint}
+							inputMode='decimal'
+							liveError
+							onBlur={() => onDisputeFieldRevealChange('disputeNewAmount2', true)}
+							onInput={event => {
+								onDisputeFieldRevealChange('disputeNewAmount2', false)
+								onOpenOracleFormChange({ disputeNewAmount2: event.currentTarget.value })
+							}}
+							value={openOracleForm.disputeNewAmount2}
+						/>
+					</label>
+				</div>
+				<SectionBlock headingLevel={4} title={openOracleCopy.disputeOutcome} variant='embedded'>
+					<MetricGrid variant='question'>
+						<MetricField label={openOracleCopy.proposedPrice}>{proposedPriceValue}</MetricField>
+						{/* The pending explanation is prose, so it uses body text rather than the value font. */}
+						<MetricField label={openOracleCopy.tokenToSwapOut} valueClassName={swapTokenSymbol === undefined ? 'metric-field-prose' : ''} valueTagName={swapTokenSymbol === undefined ? 'span' : 'strong'}>
+							{swapTokenSymbol ?? openOracleCopy.disputeSwapTokenPending}
+						</MetricField>
+						<MetricField label={openOracleCopy.youPay}>
+							{renderTokenAmounts(
+								[
+									{ amount: disputeSubmission?.token1ContributionAmount, decimals: disputeSubmission?.token1Decimals, symbol: token1Symbol },
+									{ amount: disputeSubmission?.token2ContributionAmount, decimals: disputeSubmission?.token2Decimals, symbol: token2Symbol },
+								],
+								true,
+							)}
+						</MetricField>
+						<MetricField label={openOracleCopy.disputeFee}>{renderTokenAmounts([{ amount: disputeSubmission?.disputeFeeAmount, decimals: swapTokenDecimals, symbol: swapTokenSymbol }])}</MetricField>
+						<MetricField label={openOracleCopy.protocolFee}>{renderTokenAmounts([{ amount: disputeSubmission?.protocolFeeAmount, decimals: swapTokenDecimals, symbol: swapTokenSymbol }])}</MetricField>
+						<MetricField label={openOracleCopy.creditedToOracleBalance}>{renderTokenAmounts([{ amount: disputeSubmission?.token2CreditAmount, decimals: disputeSubmission?.token2Decimals, symbol: token2Symbol }])}</MetricField>
+						<MetricField label={openOracleCopy.yourNewReport}>
+							{renderTokenAmounts([
+								{ amount: disputeSubmission?.newAmount1, decimals: disputeSubmission?.token1Decimals, symbol: token1Symbol },
+								{ amount: disputeSubmission?.newAmount2, decimals: disputeSubmission?.token2Decimals, symbol: token2Symbol },
+							])}
+						</MetricField>
+					</MetricGrid>
+					<UserMessage className='detail' detail={swapTokenSymbol === undefined ? openOracleCopy.disputeOutcomePending : openOracleCopy.feesIncludedInPayment} />
+				</SectionBlock>
+				{sharedApprovalGuardMessage === undefined ? undefined : (
+					// The approvals and the dispute share this reason, so while the wallet blocks them it holds their one wallet fix.
+					<WalletActionFixReason availability={disputeActionAvailability} id={sharedApprovalGuardMessageId}>
+						<InlineHint id={sharedApprovalGuardMessageId} message={sharedApprovalGuardMessage} />
+					</WalletActionFixReason>
+				)}
+				{disputeInputBlockDetail}
+				{/* The wrap and approval steps stay in place while amounts are invalid; each explains why it is unavailable. */}
+				{disputeWrapStep}
+				{renderDisputeTokenApproval('token1')}
+				{renderDisputeTokenApproval('token2')}
+				{!isOnActiveAppChain || disputeSubmission?.blockMessage?.kind !== 'visible' || disputeSubmission.blockMessage === disputeSubmission.inputBlockMessage ? undefined : <UserMessage className='detail' detail={disputeSubmission.blockMessage.message} />}
+				<div className='actions'>
+					<TransactionActionButton
+						idleLabel={openOracleCopy.disputeAndSwap}
+						pendingLabel={openOracleCopy.submittingDispute}
+						onClick={onDisputeReport}
+						pending={openOracleActiveAction === 'dispute'}
+						availability={disputeActionAvailability}
+						disabledReasonElementId={disputeActionReasonElementId}
+						showDisabledReason={sharedApprovalGuardMessage === undefined && !disputeActionReasonUsesInputBlockMessage}
+					/>
+				</div>
+			</div>
+		</SectionBlock>
+	)
 }

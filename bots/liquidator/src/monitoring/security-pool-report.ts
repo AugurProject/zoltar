@@ -8,7 +8,7 @@ export async function loadSponsoredOperationReport(client: ReadClient, snapshot:
 	const feed = { abi: sharedPoolPriceFeedAbi, address: snapshot.priceFeed, blockNumber }
 	const id = await client.readContract({ ...feed, functionName: 'sponsorOperationReport', args: [snapshot.owner] })
 	if (id === 0n || (await client.readContract({ ...feed, functionName: 'reportOutcome', args: [id] })) !== 0n) return undefined
-	const [escrow, sponsor, , maxSettlementBaseFee] = await client.readContract({ ...feed, functionName: 'reportCandidates', args: [id] })
+	const [escrow, sponsor, maxSettlementBaseFee] = await client.readContract({ ...feed, functionName: 'reportCandidates', args: [id] })
 	if (sponsor.toLowerCase() !== snapshot.owner.toLowerCase()) throw new Error('Report sponsor index mismatch')
 	const oracle = await client.readContract({ ...feed, functionName: 'openOracle' })
 	const game = await client.readContract({ address: oracle, abi: openOracleAbi, functionName: 'storedGame', args: [id], blockNumber })

@@ -12,7 +12,7 @@ function knownApprovalCount(snapshot: EcosystemSnapshot) {
 	let count = 0
 	for (const token of snapshot.wallet.tokens) {
 		count += Object.values(token.allowances).filter(value => BigInt(value) > 0n).length
-		if (BigInt(token.openOracleInternalAllowanceToSelf ?? '0') > 0n) count += 1
+		if (BigInt(token.openOracleInternalAllowanceToSelf) > 0n) count += 1
 	}
 	count += snapshot.wallet.shares.flatMap(shares => Object.values(shares.isApprovedForAll)).filter(Boolean).length
 	count += snapshot.wallet.lpTokens.filter(lp => BigInt(lp.allowanceToRouter) > 0n).length

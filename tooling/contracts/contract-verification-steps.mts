@@ -124,20 +124,15 @@ export const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 		compilerProfile: 'main',
 		contractName: 'ShareTokenFactory',
 	},
-	priceCoordinatorDeploymentWorker: {
-		artifactPath: 'contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol',
-		compilerProfile: 'main',
-		contractName: 'PriceCoordinatorDeploymentWorker',
-	},
 	sharedPoolPriceFeedDeploymentWorker: {
-		artifactPath: 'contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol',
+		artifactPath: 'contracts/statoblast/factories/SharedPoolPriceFeedFactory.sol',
 		compilerProfile: 'main',
 		contractName: 'SharedPoolPriceFeedDeploymentWorker',
 	},
-	openOraclePriceCoordinatorFactory: {
-		artifactPath: 'contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol',
+	sharedPoolPriceFeedFactory: {
+		artifactPath: 'contracts/statoblast/factories/SharedPoolPriceFeedFactory.sol',
 		compilerProfile: 'main',
-		contractName: 'OpenOraclePriceCoordinatorFactory',
+		contractName: 'SharedPoolPriceFeedFactory',
 	},
 	questionForkerDelegate: {
 		artifactPath: 'contracts/statoblast/QuestionForkerDelegate.sol',

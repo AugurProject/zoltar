@@ -1,6 +1,6 @@
 import { executorArtifact } from '#contracts/artifacts.generated'
 
-export { erc20Abi, openOracleAbi, openOraclePriceCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
+export { erc20Abi, openOracleAbi, sharedPoolPriceFeedAbi } from '@zoltar/bot-shared/contracts/abi'
 export { constantProductPairAbi } from '@zoltar/bot-shared/monitoring/constant-product-markets'
 
 export const constantProductFactoryAbi = [

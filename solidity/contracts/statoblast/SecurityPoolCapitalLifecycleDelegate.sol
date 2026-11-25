@@ -2,7 +2,7 @@
 pragma solidity 0.8.35;
 
 import { OraclePriceMath } from './OraclePriceMath.sol';
-import { OPEN_ORACLE_PERCENTAGE_PRECISION } from './OpenOraclePriceCoordinatorTypes.sol';
+import { OPEN_ORACLE_PERCENTAGE_PRECISION } from './OraclePriceTypes.sol';
 
 import { SecurityPoolCapitalState } from './SecurityPoolCapitalState.sol';
 import { SecurityPoolCommitmentIndex } from './SecurityPoolCommitmentIndex.sol';

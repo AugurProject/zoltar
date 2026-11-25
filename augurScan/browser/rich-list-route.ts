@@ -144,7 +144,7 @@ export const createRichListRoute = (deps: RichListRouteDeps) => {
 			if (!isCurrentContextRequest(contextVersion, deps.getViewContextVersion(), requestVersion, richListRequestVersion) || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalState.dataGeneration)) return false
 			$('#richlist-rows').setAttribute('aria-busy', 'false')
 			const failureStatus = append ? paginationStatus : status
-			renderRetryStatus(failureStatus, richListError(errorMessage(error), append, richListItems.length === 0), () => retryCanonicalViewOr(() => loadRichList({ append })))
+			renderRetryStatus(failureStatus, richListError(errorMessage(error), append, richListItems.length === 0), () => retryCanonicalViewOr(() => loadRichList({ append: append && !(error instanceof Error && error.status === 409) })))
 			more.hidden = !retainedPaginationAvailable(richListContinuationAvailable(richListItems.length, richListTotal), canonicalState.refreshRequired)
 			if (append) more.hidden = true
 			if (richListItems.length === 0) $('#richlist-summary').textContent = ''
@@ -208,6 +208,8 @@ export const createRichListRoute = (deps: RichListRouteDeps) => {
 			richListRequestVersion++
 		},
 		clear() {
+			$('#richlist-table').replaceChildren()
+			richListSnapshot = undefined
 			richListItems = []
 			richListTotal = 0
 			richListRendered = false

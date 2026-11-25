@@ -66,11 +66,11 @@ export const timelineResponse = async (sql: SQL, parts: readonly string[], url: 
 	url.searchParams.set('limit', String(requestedLimit))
 	const identity = `${entityType}:${entityIdentity}`
 	const cursor = protocolCursorForRequest(url, chainId, 'timeline', identity)
-	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])
+	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [cursor.snapshot])
 	const page = detailPage(url, chainId, 'timeline', identity, asOf, cursor)
-	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
-	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
-	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
+	const cursorBlock = page.position.block
+	const cursorTx = page.position.tx
+	const cursorLog = page.position.log
 	const rows = await timelineRows(sql, { chainId, entityType, entityIdentity, cursorBlock, cursorLog, cursorTx, limit: page.queryLimit })
 	return json({ chainId, asOf, data: paged(rows, page.limit, row => protocolCursorFor(chainId, 'timeline', identity, asOf, row)) })
 }

@@ -22,8 +22,6 @@ import type { MarketFormState } from '../../../types/app.js'
 import type { MarketCreationResult, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { ScalarCreatePreview, type ScalarCreatePreviewDetails } from './ScalarCreatePreview.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
-import type { ComponentChildren } from 'preact'
-import type { ActionAvailability } from '@zoltar/ui-core-shared/types/components.js'
 import { withActiveAppChainWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { QuestionDraftPreview } from './QuestionDraftPreview.js'
 import { QuestionTypeOptions } from './QuestionTypeOptions.js'
@@ -34,17 +32,14 @@ import { getForkQuestionTimingReason } from '../lib/questionForkHandoff.js'
 import { formatQuestionTimeZoneLabel, getBrowserTimeZone } from '../lib/questionTimeZone.js'
 import { tryParseTimestampInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 
-const MARKET_TYPES: readonly MarketFormState['marketType'][] = ['binary', 'categorical', 'scalar']
 type MarketFormFieldName = keyof ReturnType<typeof validateMarketForm>['fieldErrors']
 type QuestionCreateSectionProps = {
-	allowedMarketTypes?: readonly MarketFormState['marketType'][]
 	accountAddress: Address | undefined
 	canUseForFork: boolean
 	/** The lookup of the question this draft would create; an existing question blocks Create, since the contract rejects duplicates. */
 	existingQuestionCheck?: ExistingQuestionCheck | undefined
 	/** Why the selected universe cannot take a fork question right now, such as unreadable universe details. */
 	forkUnavailableReason?: string | undefined
-	formDisabled?: boolean
 	hasForked: boolean
 	isOnActiveAppChain: boolean
 	questionCreating: boolean
@@ -57,17 +52,6 @@ type QuestionCreateSectionProps = {
 	onOpenForkTab: () => void
 	onResetQuestion: () => void
 	onUseQuestionForFork: (questionId: string) => void
-	renderResultActions?: (result: { marketType: MarketCreationResult['marketType']; questionId: string; questionTitle: string }) => ComponentChildren
-	submitFields?: ComponentChildren
-	submitActionOverride?: {
-		availability: ActionAvailability
-		idleLabel: ComponentChildren
-		onSubmit: () => void
-		pending: boolean
-		pendingLabel: string
-		/** Replaces the submit button while the submitted transaction is being reviewed inline. */
-		reviewContent?: ComponentChildren
-	}
 	zoltarQuestions: MarketDetails[]
 }
 
@@ -81,12 +65,10 @@ function getScalarCreatePreviewDetails(questionForm: MarketFormState, scalarInpu
 }
 
 export function QuestionCreateSection({
-	allowedMarketTypes = ['binary', 'categorical', 'scalar'],
 	accountAddress,
 	canUseForFork,
 	existingQuestionCheck,
 	forkUnavailableReason,
-	formDisabled = false,
 	hasForked,
 	isOnActiveAppChain,
 	loadingZoltarQuestions,
@@ -99,9 +81,6 @@ export function QuestionCreateSection({
 	onOpenForkTab,
 	onResetQuestion,
 	onUseQuestionForFork,
-	renderResultActions,
-	submitFields,
-	submitActionOverride,
 	zoltarQuestions,
 }: QuestionCreateSectionProps) {
 	const [scalarCreatePreviewTick, setScalarCreatePreviewTick] = useState('0')
@@ -110,7 +89,6 @@ export function QuestionCreateSection({
 	const visibleQuestionError = suppressPresentedTransactionError(questionError, transactionPresentation, transactionCopy.questionCreation)
 	const [touchedFields, setTouchedFields] = useState<ReadonlySet<MarketFormFieldName>>(new Set())
 	const selectedQuestionDetails = useMemo(() => (questionResult === undefined ? undefined : zoltarQuestions.find(question => question.questionId === questionResult.questionId)), [questionResult?.questionId, zoltarQuestions])
-	const marketTypes = useMemo(() => MARKET_TYPES.filter(marketType => allowedMarketTypes.includes(marketType)), [allowedMarketTypes])
 	const timeZone = useMemo(() => getBrowserTimeZone(), [])
 	const questionFormValidation = validateMarketForm(questionForm)
 	const scalarInputsValid = questionFormValidation.fieldErrors.scalarIncrement === undefined && questionFormValidation.fieldErrors.scalarMax === undefined && questionFormValidation.fieldErrors.scalarMin === undefined
@@ -151,25 +129,22 @@ export function QuestionCreateSection({
 		if (checkingExistingQuestion) return marketCopy.checkingExistingQuestion
 		return undefined
 	})()
-	const submitAction =
-		submitActionOverride === undefined
-			? {
-					availability: withActiveAppChainWalletBlocker(
-						{
-							disabled: !canCreateQuestion,
-							loading: createQuestionReason === marketCopy.checkingExistingQuestion,
-							reason: createQuestionReason,
-						},
-						{ accountAddress, isOnActiveAppChain },
-					),
-					idleLabel: commonCopy.createQuestion,
-					onSubmit: onCreateQuestion,
-					pending: questionCreating,
-					pendingLabel: marketCopy.createQuestionPendingLabel,
-				}
-			: submitActionOverride
+	const submitAction = {
+		availability: withActiveAppChainWalletBlocker(
+			{
+				disabled: !canCreateQuestion,
+				loading: createQuestionReason === marketCopy.checkingExistingQuestion,
+				reason: createQuestionReason,
+			},
+			{ accountAddress, isOnActiveAppChain },
+		),
+		idleLabel: commonCopy.createQuestion,
+		onSubmit: onCreateQuestion,
+		pending: questionCreating,
+		pendingLabel: marketCopy.createQuestionPendingLabel,
+	}
 	// The submitted draft stays visible but locked until its transaction settles, so the confirmed question matches what is shown.
-	const editorDisabled = formDisabled || submitAction.pending
+	const editorDisabled = submitAction.pending
 	const showEndedQuestionWarning = questionFormValidation.fieldErrors.endTime === undefined && hasMarketEndTimePassed(questionForm, currentTimestamp)
 	useEffect(() => {
 		if (scalarCreatePreviewDetails === undefined || scalarCreatePreviewTick.trim() === '') return
@@ -212,7 +187,6 @@ export function QuestionCreateSection({
 									reason={useForForkReason}
 								/>
 							) : undefined}
-							{renderResultActions?.({ marketType: questionResult.marketType, questionId: questionResult.questionId, questionTitle: selectedQuestionTitle })}
 							<button className='secondary' onClick={onResetQuestion}>
 								{marketCopy.createAnotherQuestion}
 							</button>
@@ -242,7 +216,7 @@ export function QuestionCreateSection({
 				<SectionBlock className='question-create-container' variant='plain'>
 					<form
 						aria-label={commonCopy.createQuestion}
-						className={submitFields === undefined ? 'form-grid question-create-form' : 'form-grid question-create-form has-extra-fields'}
+						className='form-grid question-create-form'
 						noValidate
 						onSubmit={event => {
 							event.preventDefault()
@@ -251,7 +225,7 @@ export function QuestionCreateSection({
 						}}
 					>
 						<fieldset className='question-create-editor' disabled={editorDisabled}>
-							<QuestionTypeOptions allowedMarketTypes={marketTypes} disabled={editorDisabled} value={questionForm.marketType} onChange={marketType => onQuestionFormChange({ marketType })} />
+							<QuestionTypeOptions disabled={editorDisabled} value={questionForm.marketType} onChange={marketType => onQuestionFormChange({ marketType })} />
 
 							<FormField id='market-create-title' label={marketCopy.title} required>
 								<FormInput
@@ -404,7 +378,6 @@ export function QuestionCreateSection({
 								</WarningSurface>
 							) : undefined}
 						</fieldset>
-						{submitFields === undefined ? undefined : <div className='question-create-extra-fields'>{submitFields}</div>}
 						<QuestionDraftPreview currentTimestamp={currentTimestamp} description={draftDescription} endTime={questionForm.endTime} marketType={questionForm.marketType} outcomeItems={draftOutcomeItems} startTime={questionForm.startTime} timeZone={timeZone} title={draftTitle}>
 							{(() => {
 								if (questionForm.marketType !== 'scalar') return undefined
@@ -413,11 +386,9 @@ export function QuestionCreateSection({
 							})()}
 						</QuestionDraftPreview>
 						<div className='question-create-submit'>
-							{submitActionOverride?.reviewContent ?? (
-								<div className='actions'>
-									<TransactionActionButton idleLabel={submitAction.idleLabel} pendingLabel={submitAction.pendingLabel} onClick={() => undefined} pending={submitAction.pending} type='submit' availability={submitAction.availability} />
-								</div>
-							)}
+							<div className='actions'>
+								<TransactionActionButton idleLabel={submitAction.idleLabel} pendingLabel={submitAction.pendingLabel} onClick={() => undefined} pending={submitAction.pending} type='submit' availability={submitAction.availability} />
+							</div>
 							{existingQuestion === undefined ? undefined : (
 								<ReadOnlyDetailAccordion title={marketCopy.existingQuestion}>
 									<Question question={existingQuestion} abbreviateIdentifier />

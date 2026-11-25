@@ -65,7 +65,7 @@ test('does not infer an operated unpinned journal factory from the current core 
 	expect(await readFile(stateFile)).toEqual(stateBefore)
 })
 
-test('selects current contracts for a safely migratable zero-root bootstrap journal', async () => {
+test('rejects obsolete zero-root bootstrap profiles without rewriting their journal', async () => {
 	const { path, settings, signer, stateFile } = await fixture(true)
 	const zeroed = structuredClone(settings)
 	for (const key of Object.keys(zeroed.deployment)) Reflect.set(zeroed.deployment, key, zeroAddress)
@@ -78,27 +78,10 @@ test('selects current contracts for a safely migratable zero-root bootstrap jour
 	]
 	await saveDurableState(stateFile, state)
 	const before = await readFile(stateFile)
-	const result = await prepareCurrentDeployment({
-		acquireLocks: noLocks,
-		path,
-	})
-	expect(result.kind).toBe('current')
-	expect((await loadSettings(path)).settings.deployment).toEqual(canonicalDeployment(settings.network.chainId))
-	expect((await loadSettings(path)).settings.runtime.stateFile).toBe(stateFile)
+	await expect(prepareCurrentDeployment({ acquireLocks: noLocks, path })).rejects.toThrow('restore the old pin')
 	expect(await readFile(stateFile)).toEqual(before)
 	expect(state.signerAddress).toBe(signer)
-	state.activities.push({ at: new Date(1).toISOString(), message: 'Operation planned', status: 'dry-run', type: 'operation' })
-	await saveDurableState(stateFile, state)
-	const rejectedBefore = await readFile(stateFile)
-	await expect(
-		prepareCurrentDeployment({
-			acquireLocks: noLocks,
-			path,
-		}),
-	).rejects.toThrow('restore the old pin')
-	expect(await readFile(stateFile)).toEqual(rejectedBefore)
 })
-
 test('rejects a changed signer before requesting retirement or changing either file', async () => {
 	const { path, settings, stateFile } = await fixture(true)
 	const state = await loadDurableState(stateFile, settings.network.chainId)

@@ -6,19 +6,38 @@ import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
 type EvidenceRow = (title: string, status: string, identity: string | undefined, block: unknown) => HTMLElement
 
-export const renderCandleContent = (candles: readonly JsonRecord[], operationRow: EvidenceRow, operationRatio: (numerator: unknown, denominator: unknown) => string): Element[] => {
-	const ratio = (value: unknown): number | undefined => {
-		if (!isPlainRecord(value) || typeof value['numerator'] !== 'string' || typeof value['denominator'] !== 'string' || !/^\d+$/.test(value['numerator']) || !/^\d+$/.test(value['denominator']) || value['denominator'] === '0') return undefined
-		return Number((BigInt(value['numerator']) * 1_000_000_000n) / BigInt(value['denominator'])) / 1_000_000_000
-	}
+const fraction = (value: unknown) => {
+	if (!isPlainRecord(value) || typeof value['numerator'] !== 'string' || typeof value['denominator'] !== 'string' || !/^\d+$/.test(value['numerator']) || !/^\d+$/.test(value['denominator'])) return undefined
+	const numerator = BigInt(value['numerator'])
+	const denominator = BigInt(value['denominator'])
+	if (denominator === 0n) return undefined
+	return { numerator, denominator, value: Number(numerator) / Number(denominator), exact: `${numerator}/${denominator}` }
+}
+
+/** @internal Exported for exact-price regression tests. */
+export const candlePrices = (candle: JsonRecord) => {
+	const open = fraction(candle['open'])
+	const high = fraction(candle['high'])
+	const low = fraction(candle['low'])
+	const close = fraction(candle['close'])
+	if (!open || !high || !low || !close) return undefined
+	const change = close.numerator * open.denominator - open.numerator * close.denominator
+	let direction = 'flat'
+	if (change < 0n) direction = 'down'
+	if (change > 0n) direction = 'up'
+	return { open: open.value, high: high.value, low: low.value, close: close.value, exactOpen: open.exact, exactHigh: high.exact, exactLow: low.exact, exactClose: close.exact, direction }
+}
+
+export const renderCandleContent = (candles: readonly JsonRecord[], operationRow: EvidenceRow): Element[] => {
 	const plotRows = candles.flatMap(candle => {
 		const start = Number(candle['bucketStart']) * 1_000
-		const open = ratio(candle['open'])
-		const high = ratio(candle['high'])
-		const low = ratio(candle['low'])
-		const close = ratio(candle['close'])
-		return Number.isFinite(start) && open !== undefined && high !== undefined && low !== undefined && close !== undefined ? [{ start, open, high, low, close, direction: close >= open ? 'up' : 'down' }] : []
+		const prices = candlePrices(candle)
+		return Number.isFinite(start) && prices ? [{ start, ...prices, observations: String(candle['observations'] ?? '0') }] : []
 	})
+	const candleColor = (row: (typeof plotRows)[number]) => {
+		if (row.direction === 'flat') return 'currentColor'
+		return row.direction === 'down' ? '#e58989' : '#56d7d0'
+	}
 	const orderedStarts = plotRows.map(row => row.start).toSorted((left, right) => left - right)
 	const minimumGap = orderedStarts.reduce<number | undefined>((smallest, start, index) => {
 		const previous = orderedStarts[index - 1]
@@ -42,8 +61,12 @@ export const renderCandleContent = (candles: readonly JsonRecord[], operationRow
 			x: { type: 'utc', ticks: 5, label: null, domain: [new Date((orderedStarts[0] ?? 0) - domainPadding), new Date((orderedStarts.at(-1) ?? 0) + domainPadding)] },
 			y: { grid: true, label: 'NO per YES', domain: [bounds.minimum, bounds.maximum] },
 			marks: [
-				Plot.ruleX(plotRows, { x: row => new Date(row.start), y1: 'low', y2: 'high', stroke: row => (row.direction === 'up' ? '#56d7d0' : '#e58989') }),
-				Plot.rect(plotRows, { x1: row => new Date(row.start - bodyHalfWidth), x2: row => new Date(row.start + bodyHalfWidth), y1: 'open', y2: 'close', fill: row => (row.direction === 'up' ? '#56d7d0' : '#e58989'), tip: true }),
+				Plot.ruleX(plotRows, { x: row => new Date(row.start), y1: 'low', y2: 'high', stroke: candleColor }),
+				Plot.ruleY(
+					plotRows.filter(row => row.open === row.close),
+					{ y: 'open', x1: row => new Date(row.start - bodyHalfWidth), x2: row => new Date(row.start + bodyHalfWidth), stroke: candleColor },
+				),
+				Plot.rect(plotRows, { x1: row => new Date(row.start - bodyHalfWidth), x2: row => new Date(row.start + bodyHalfWidth), y1: 'open', y2: 'close', fill: candleColor, tip: true }),
 			],
 		})
 		chart.querySelector('style')?.remove()
@@ -56,19 +79,8 @@ export const renderCandleContent = (candles: readonly JsonRecord[], operationRow
 		const disclosureLabel = document.createElement('summary')
 		disclosureLabel.textContent = 'View exact candle data'
 		disclosure.append(disclosureLabel)
-		for (const candle of candles) {
-			const open = isPlainRecord(candle['open']) ? candle['open'] : {}
-			const high = isPlainRecord(candle['high']) ? candle['high'] : {}
-			const low = isPlainRecord(candle['low']) ? candle['low'] : {}
-			const close = isPlainRecord(candle['close']) ? candle['close'] : {}
-			disclosure.append(
-				operationRow(
-					utcDateTime(Number(candle['bucketStart'] ?? 0) * 1_000),
-					`O ${operationRatio(open['numerator'], open['denominator'])} · H ${operationRatio(high['numerator'], high['denominator'])} · L ${operationRatio(low['numerator'], low['denominator'])} · C ${operationRatio(close['numerator'], close['denominator'])}`,
-					`${String(candle['observations'] ?? '0')} observations`,
-					undefined,
-				),
-			)
+		for (const row of plotRows) {
+			disclosure.append(operationRow(utcDateTime(row.start), `O ${row.exactOpen} · H ${row.exactHigh} · L ${row.exactLow} · C ${row.exactClose}`, `${row.observations} observations`, undefined))
 		}
 		candleContent.push(disclosure)
 	}

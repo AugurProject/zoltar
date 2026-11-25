@@ -1,4 +1,4 @@
-import { openOraclePriceCoordinatorAbi, sharedPoolPriceFeedAbi } from '@zoltar/bot-shared/contracts/abi'
+import { sharedPoolPriceFeedAbi } from '@zoltar/bot-shared/contracts/abi'
 import { getAddress, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { sameAddress } from '@zoltar/core-shared/evm/address'
 import { assertAnchoredOracleRequestFunding, oracleRequestPriceCostAttoEth } from '../operations/oracle-request-funding.ts'
@@ -7,7 +7,7 @@ import type { ChaosReadClient } from './discovery-client.ts'
 import type { CanonicalCoordinatorReportRoute } from './protocol-index.ts'
 
 export async function discoverPoolPriceFeed(client: ChaosReadClient, coordinator: Address, blockNumber: bigint, funding: OracleRequestFundingSnapshot, baseFee: bigint, pendingReportId: bigint, retainedReportIds: readonly bigint[] = []) {
-	const priceFeed = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'priceFeed' })
+	const priceFeed = coordinator
 	const oracleExposureAttoEth = await client.readContract({ abi: sharedPoolPriceFeedAbi, address: priceFeed, blockNumber, functionName: 'aggregateExposureAttoEth' })
 	const oracleRequestFunding = {
 		...funding,
@@ -18,7 +18,7 @@ export async function discoverPoolPriceFeed(client: ChaosReadClient, coordinator
 	}
 	// Canonical shared-feed stake floors do not inspect BASEFEE. Ordinary calls
 	// must work even when the public RPC client's default sender has no funds.
-	const minimumReport = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'minimumToken1ReportAttoEth' })
+	const minimumReport = await client.readContract({ abi: sharedPoolPriceFeedAbi, address: coordinator, blockNumber, functionName: 'minimumToken1ReportAttoEth' })
 	const requestCost = oracleRequestPriceCostAttoEth({ baseFeePerGas: baseFee.toString(), coordinator: oracleRequestFunding })
 	assertAnchoredOracleRequestFunding({ baseFeePerGas: baseFee.toString(), coordinator: oracleRequestFunding, minimumToken1ReportAttoEth: minimumReport.toString(), requestPriceCostAttoEth: requestCost, settlementCollateralAttoEth: oracleExposureAttoEth.toString(), subject: `Coordinator ${coordinator}` })
 	const reportEscrows: Record<string, Address> = {}

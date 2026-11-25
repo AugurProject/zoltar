@@ -2,27 +2,33 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import ts from 'typescript'
 import { repositoryRoot } from './root.mts'
-import { appSharedPackages, sharedPackageClosure, sharedPackages } from './sharedPackages.ts'
+import { appSharedPackages, sharedPackageClosure, type SharedPackageId, sharedPackages } from './sharedPackages.ts'
 import { walkFiles } from './walk.mts'
 
-const uiConsumers = ['coreShared', 'zoltarShared', 'statoblastShared', 'zoltar', 'statoblast', 'trading', 'openoracle'] as const
+const uiSharedPackages = {
+	...appSharedPackages,
+	coreShared: ['shared-core'],
+	zoltarShared: ['shared-zoltar'],
+	statoblastShared: ['shared-zoltar', 'shared-open-oracle', 'shared-statoblast'],
+} as const satisfies Record<string, readonly SharedPackageId[]>
+
+// The common shell, simulator and scalar picker consume these protocol exports.
+const coreUiProductImports = new Set(['@zoltar/zoltar-shared/deployment/genesisUniverses', '@zoltar/zoltar-shared/constants', '@zoltar/zoltar-shared/deployment/sepoliaRepAllocations', '@zoltar/zoltar-shared/questions/scalarOutcome'])
+const uiConsumers = Object.entries(uiSharedPackages).map(([name, packages]) => ({ name, packages }))
 
 export function sharedImportBoundaryViolation(source: string, specifier: string): string | undefined {
 	const owner = sharedPackages.find(entry => source.startsWith(`${entry.path}/`))
-	const uiOwner = uiConsumers.find(entry => source.startsWith(`ui/${entry}/ts/`))
+	const uiOwner = uiConsumers.find(entry => source.startsWith(`ui/${entry.name}/ts/`))
 	if (owner === undefined && uiOwner === undefined) return undefined
 	if (specifier.startsWith('@zoltar/shared/')) return 'The aggregate shared package no longer exists'
 	const relativeTarget = specifier.startsWith('.') ? path.posix.normalize(path.posix.join(path.posix.dirname(source), specifier)) : undefined
 	if (owner !== undefined && (specifier.startsWith('@zoltar/ui-') || relativeTarget?.startsWith('ui/') === true)) return 'Runtime packages must not depend on UI packages'
-	const target = sharedPackages.find(entry => specifier.startsWith(`${entry.name}/`) || relativeTarget?.startsWith(`${entry.path}/`) === true)
+	const target = sharedPackages.find(entry => specifier === entry.name || specifier.startsWith(`${entry.name}/`) || relativeTarget?.startsWith(`${entry.path}/`) === true)
 	if (target === undefined) return undefined
 	if (relativeTarget !== undefined && owner?.id !== target.id) return 'Cross-package imports must use a public package export'
-	let app: keyof typeof appSharedPackages = 'zoltar'
-	if (uiOwner === 'trading') app = 'trading'
-	else if (uiOwner === 'openoracle') app = 'openoracle'
-	else if (uiOwner === 'statoblast' || uiOwner === 'statoblastShared') app = 'statoblast'
-	const allowed = owner === undefined ? sharedPackageClosure(appSharedPackages[app]).map(entry => entry.id) : [owner.id, ...owner.dependencies]
-	if (!allowed.some(id => id === target.id)) return `${owner?.name ?? uiOwner} must not depend on ${target.name}`
+	if (uiOwner?.name === 'coreShared' && coreUiProductImports.has(specifier)) return undefined
+	const allowed = owner === undefined ? sharedPackageClosure(uiOwner?.packages ?? []).map(entry => entry.id) : [owner.id, ...owner.dependencies]
+	if (!allowed.some(id => id === target.id)) return `${owner?.name ?? uiOwner?.name} must not depend on ${target.name}`
 	return undefined
 }
 
@@ -52,7 +58,7 @@ async function checkDirectory(directory: string): Promise<string[]> {
 }
 
 if (import.meta.main) {
-	const violations = (await Promise.all([...sharedPackages.map(entry => `${entry.path}/ts`), ...uiConsumers.map(entry => `ui/${entry}/ts`)].map(checkDirectory))).flat()
+	const violations = (await Promise.all([...sharedPackages.map(entry => `${entry.path}/ts`), ...uiConsumers.map(entry => `ui/${entry.name}/ts`)].map(checkDirectory))).flat()
 	if (violations.length > 0) throw new Error(violations.join('\n'))
 	console.log('Shared package dependency boundaries passed.')
 }

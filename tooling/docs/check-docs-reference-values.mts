@@ -18,8 +18,8 @@ const coordinatorData = await readFile('docs/data/open-oracle-coordinator.json',
 const compiledContractArtifacts: unknown = JSON.parse(await readFile('solidity/artifacts/Contracts.json', 'utf8'))
 const operatorReference = (await Promise.all(['docs/reference/operator-guardrails.html', 'docs/reference/contract-inventory.html'].map(async pagePath => htmlToDocumentationText(await readFile(pagePath, 'utf8'))))).join('\n')
 const contractInteractionReference = (await Promise.all(['docs/reference/contracts.html', ...[...new Bun.Glob('docs/reference/contracts/*.html').scanSync('.')].toSorted()].map(async pagePath => htmlToDocumentationText(await readFile(pagePath, 'utf8'))))).join('\n')
-const priceCoordinator = `${await readFile('solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol', 'utf8')}\n${await readFile('solidity/contracts/statoblast/OpenOraclePriceSource.sol', 'utf8')}\n${await readFile('solidity/contracts/statoblast/OpenOracleReportDelegate.sol', 'utf8')}`
-const priceCoordinatorTypes = await readFile('solidity/contracts/statoblast/OpenOraclePriceCoordinatorTypes.sol', 'utf8')
+const priceCoordinator = await readFile('solidity/contracts/statoblast/SharedPoolPriceFeed.sol', 'utf8')
+const priceCoordinatorTypes = await readFile('solidity/contracts/statoblast/OraclePriceTypes.sol', 'utf8')
 const openOracleSource = await readFile('solidity/contracts/statoblast/openOracle/OpenOracle.sol', 'utf8')
 const openOracleProvenance = await readFile('solidity/contracts/statoblast/openOracle/UPSTREAM.md', 'utf8')
 

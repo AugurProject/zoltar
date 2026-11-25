@@ -5,7 +5,6 @@ import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { assertDurableDeploymentFactory, assertDurableStateFactories, assertSepoliaDurableFactory } from '../config/deployment-state.ts'
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
-import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { access, lstat } from 'node:fs/promises'
 import { constants } from 'node:fs'
@@ -459,7 +458,7 @@ async function runChaosDoctorWithLoaded(loaded: LoadedDoctorSettings, dependenci
 		const configuredSigner = loaded.settings.privateKey === undefined ? undefined : privateKeyToAccount(loaded.settings.privateKey).address
 		const storedState = await dependencies.loadState(loaded.settings.runtime.stateFile, loaded.settings.network.chainId)
 		assertDurableStateFactories(loaded.settings, storedState)
-		const durableState = migrateEmptyBootstrapState(storedState, loaded.settings)
+		const durableState = storedState
 		const durableScope = assertDoctorDurableStateScope(loaded.settings, durableState, configuredSigner)
 		const companionState = await dependencies.validateCompanionState(loaded.settings)
 		const submissionChecks = await dependencies.preflightSubmission(loaded.settings)

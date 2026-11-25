@@ -48,7 +48,6 @@ export type ForkAdmissionApproval = {
 export type ReportingSectionProps = ReportingRouteContentProps & {
 	oracleBlocker?: import('preact').ComponentChildren
 	currentTimestamp?: bigint | undefined
-	embedInCard?: boolean
 	forkAlreadyTriggered?: boolean | undefined
 	lockedReason?: string | undefined
 	mode?: 'full-reporting' | 'withdraw-only'
@@ -57,8 +56,6 @@ export type ReportingSectionProps = ReportingRouteContentProps & {
 	onTriggerZoltarFork?: (() => void) | undefined
 	previewMarketDetails?: MarketDetails | undefined
 	reportActionGuardMessage?: string | undefined
-	showHeader?: boolean
-	showQuestionLedgerAddressInput?: boolean
 	triggerZoltarForkApproval?: ForkAdmissionApproval | undefined
 	triggerZoltarForkAvailability?: ActionAvailability | undefined
 	triggerZoltarForkPending?: boolean | undefined

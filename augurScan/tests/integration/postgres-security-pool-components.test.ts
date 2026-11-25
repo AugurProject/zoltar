@@ -59,7 +59,7 @@ test.skipIf(url === undefined)('events of security pool components reach the esc
 		const events: readonly StoredLog[] = [
 			projected(0, openOracle, 'ReportSubmitted', report),
 			projected(1, feed, 'PriceRequested', { reportId: '7', pendingReportMaxSettlementBaseFeeAttoEthPerGas: 1n.toString() }),
-			projected(2, feed, 'ReportFundingAssigned', { reportId: '7', coordinator, sponsor: coordinator }),
+			projected(2, feed, 'ReportFundingAssigned', { reportId: '7', sponsor: coordinator }),
 			projected(3, escrow, 'ReportCompleted', { reportId: '7', priceFeed: feed, outcome: 1 }),
 			// Another feed's escrow completes its own report 7; it must not join this report's decisions.
 			projected(4, escrow, 'ReportCompleted', { reportId: '7', priceFeed: otherFeed, outcome: 2 }),
@@ -102,7 +102,7 @@ test.skipIf(url === undefined)('events of security pool components reach the esc
 			{ semantic_event_kind: 'AggregateFeesAccrued', entity_type: 'settlement-book', entity_identity: `${book.toLowerCase()}:1` },
 		])
 
-		const catalog = await forkCatalogData(connection, chainId, '1')
+		const catalog = await forkCatalogData(connection, { chainId, snapshotBlock: '1' })
 		expect(catalog).toEqual([expect.objectContaining({ universe_identity: '1', portfolio_fork_events: 2, child_count: 1 })])
 		const fork = await forkDetailData(connection, { chainId, snapshotBlock: '1', identity: '1', page })
 		expect(fork.summary).toMatchObject({ portfolio_fork_events: 2, reporter_fork_frozen_count: 1, reporter_migration_atto_rep: '60', reporter_protected_parent_atto_rep: '10', child_count: 1 })

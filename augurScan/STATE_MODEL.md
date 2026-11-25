@@ -70,10 +70,8 @@ Balance and token-metadata failures are observation records, not numeric values.
 
 Use `canonical=all` when auditing replacements. A noncanonical observation identifies the replacement that displaced it and reports chain reorganization, manifest supersession, or coverage reset as its evidence status. Follow every documented cursor until completion; do not infer completeness from the first page.
 
-## Upgrading from schema version 1
+## Database schema
 
-Append-only observations, `indexer_runs`, and interpretation provenance exist from schema version 2 onward. A database migrated from version 1 keeps its history with these gaps:
+Only the current schema version is supported. Initialization creates the schema in an empty database or verifies an existing current database. Historical versions and altered layouts are rejected without modification; use a fresh development database instead of upgrading old schemas.
 
-- Migration keeps the version 1 materialized snapshot rows that still exist, but cannot reconstruct attempts that version 1 already overwrote.
-- Migrated version 1 evidence has no invented run, source, or interpretation provenance, so its run and source-hash fields are null in API responses.
-- Invalidation records created outside a provenance-aware indexer run can likewise have null run and source fields rather than inferred values.
+Invalidation records created outside a provenance-aware indexer run can have null run and source fields rather than inferred values.

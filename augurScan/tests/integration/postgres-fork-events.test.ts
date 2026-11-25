@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 import { SQL } from 'bun'
+import { domainCatalogResponse } from '../../src/api/operations.ts'
 import { forkDetailData } from '../../src/repositories/entity-details.ts'
 import { forkCatalogData } from '../../src/repositories/operations.ts'
 import { addressSecurityPoolRows } from '../../src/repositories/security-pool.ts'
@@ -12,7 +13,7 @@ test.skipIf(url === undefined)('fork summaries attribute security pool fork even
 	await initializeSchema(sql)
 	const connection = await sql.reserve()
 	try {
-		for (const table of ['blocks', 'fork_migration_events', 'universe_events']) await connection.unsafe(`CREATE TEMP TABLE ${table} AS SELECT * FROM public.${table} WITH NO DATA`)
+		for (const table of ['blocks', 'fork_migration_events', 'universe_events', 'networks']) await connection.unsafe(`CREATE TEMP TABLE ${table} AS SELECT * FROM public.${table} WITH NO DATA`)
 		const chainId = 1
 		const hash = `0x${'3'.repeat(64)}`
 		const coordinator = `0x${'c'.repeat(40)}`
@@ -56,7 +57,7 @@ test.skipIf(url === undefined)('fork summaries attribute security pool fork even
 		await insertBurn('2', '700', coordinator, 1, hash, otherTx, 3)
 		await insertBurn('2', '900', ownerB, 1, hash, hash, 4)
 
-		const catalog = await forkCatalogData(connection, chainId, '1')
+		const catalog = await forkCatalogData(connection, { chainId, snapshotBlock: '1' })
 		const catalogCounts = Object.fromEntries(catalog.map((row: Record<string, unknown>) => [String(row['universe_identity']), row['portfolio_fork_events']]))
 		// Universe 1: its freeze and two choices plus the start and activation of its child 2.
 		// Universe 2: its freeze and one choice plus the start of its child 4, but not its own start and activation.
@@ -76,6 +77,22 @@ test.skipIf(url === undefined)('fork summaries attribute security pool fork even
 			[branch('1'), 'BranchChosen'],
 			[branch('2'), 'BranchChosen'],
 		])
+		// Both fork roots are at block 1. Page two must still count the child burn at the block-2 snapshot.
+		const laterHash = `0x${'6'.repeat(64)}`
+		await connection`INSERT INTO networks (chain_id, indexed_block, indexed_hash) VALUES (${chainId}, 3, ${otherTx})`
+		await connection`INSERT INTO blocks (chain_id, number, hash, canonical, timestamp) VALUES (${chainId}, 2, ${laterHash}, true, now())`
+		await insertBurn('2', '11', coordinator, 2, laterHash, laterHash, 1)
+		await connection`INSERT INTO fork_migration_events (chain_id, block_hash, tx_hash, log_index, block_number, universe_identity, event_name, event_data, canonical) VALUES
+			(${chainId}, ${laterHash}, ${laterHash}, 2, 2, ${branch('2')}, 'BranchStarted', '{"universeId":"2"}', true),
+			(${chainId}, ${otherTx}, ${otherTx}, 1, 3, '3', 'UniverseForked', '{"universeId":"3"}', true)`
+		const request = new URL(`http://localhost/api/v1/state/forks?chainId=${chainId}&atBlock=2&limit=1`)
+		const first = await (await domainCatalogResponse(connection, request, 'forks')).json()
+		expect(first).toMatchObject({ asOf: { blockNumber: '2' }, data: { total: 2, hasMore: true, items: [{ universe_identity: '2' }] } })
+		expect(typeof first.data.nextCursor).toBe('string')
+		request.searchParams.delete('atBlock')
+		request.searchParams.set('cursor', first.data.nextCursor)
+		const second = await (await domainCatalogResponse(connection, request, 'forks')).json()
+		expect(second).toMatchObject({ asOf: { blockNumber: '2' }, data: { total: 2, hasMore: false, items: [{ universe_identity: '1', burned_atto_rep: '44' }] } })
 	} finally {
 		connection.release()
 		await sql.close()

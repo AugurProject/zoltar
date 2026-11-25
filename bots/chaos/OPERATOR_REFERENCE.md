@@ -475,10 +475,7 @@ Treat the main runtime state and its companion stores as one backup unit:
 
 ## Upgrading
 
-Before starting an older configuration, replace `strategy.selectableOperationAllowlist: null` with an explicit array of the operation IDs you want to enable, or `[]` to start with no random operations. See [selection rules](#scheduler-and-execution-controls). The following compatibility and deployment boundaries apply:
+Use operator file version `2` with explicit `runtime.pollMilliseconds` and the current deployment pin. Older operator schemas and obsolete `deployment` overrides are rejected. See [selection rules](#scheduler-and-execution-controls) for operation allowlists. The following deployment boundaries apply:
 
-- **Operator file `version: 1`.** Its `runtime.lifecyclePollMilliseconds` becomes `runtime.pollMilliseconds`, and the next save writes version 2.
-- **Saved `deployment` fields.** They are obsolete: they are ignored and removed when settings are saved.
 - **State from an earlier deployment.** Startup does not infer a historical pin. Restore the exact old deployment pin to operate its journal, then drain it before switching deployments, or configure a distinct state file for the new deployment.
 - **State without a recorded Uniswap V3 factory.** Operated journals fail closed because the current manifest cannot prove their historical factory. Restore the original deployment and factory binding before recovery. Pristine or unoperated signerless state may bind through the guarded upgrade path.
-- **The shipped zero-root configuration.** An upgrade from it permits migration when no execution or recovery state exists and the audit contains only configuration, wallet, or failed scan entries. That migration preserves the signer and audit entries, retains unrelated safety stops, and clears only the previous missing-root safety latch.

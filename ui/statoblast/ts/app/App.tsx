@@ -1,8 +1,6 @@
 import type { QuestionLedgersView } from '@zoltar/ui-statoblast-shared/features/types.js'
-import { resolveRepPrice } from '@zoltar/ui-statoblast-shared/features/question-ledgers/lib/uiPriceOracle.js'
 import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import { RepPriceRefreshContext } from '@zoltar/ui-statoblast-shared/features/question-ledgers/components/RepPriceStatusLabel.js'
 import { TransactionStepsModal } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
 import { UniverseNamesProvider } from '@zoltar/ui-core-shared/components/UniverseNames.js'
 import { UniverseSwitcher } from '@zoltar/ui-core-shared/components/UniverseSwitcher.js'
@@ -28,7 +26,6 @@ import { STATOBLAST_ROUTES, type StatoblastRoute } from '@zoltar/ui-statoblast-s
 import { statoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { getStatoblastDeploymentSections } from '@zoltar/ui-statoblast-shared/features/deployment/deploymentSections.js'
 import { getInvalidStatoblastRouteState, isInvalidStatoblastRouteState } from './lib/routeValidation.js'
-import { getHeaderRepPerEthPrice } from './lib/headerRepPrice.js'
 import { getRouteSecondaryNavigation, getStatoblastRouteTabs, getTransactionRouteKey } from './lib/appNavigation.js'
 import { getStatoblastOverviewUniverse, getStatoblastUniversePresentation } from './lib/overviewUniverse.js'
 import { useOpenOracleRoute } from './hooks/useOpenOracleRoute.js'
@@ -39,7 +36,7 @@ export function App() {
 	const { navigate, route } = useHashRoute()
 	const resolvedRoute = resolveEnumValue<StatoblastRoute>(route, 'not-found', STATOBLAST_ROUTES)
 	const repPrices = useRepPrices()
-	const { repPerEthFailure, repPerEthSource, repPerEthSourceUrl, repUsdcFailure, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, isRefreshingRepPrices, refreshRepPrices } = repPrices
+	const { repPerEthFailure, repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcFailure, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, isRefreshingRepPrices, refreshRepPrices } = repPrices
 	const {
 		accountState,
 		activeEnvironmentNonce,
@@ -104,7 +101,10 @@ export function App() {
 			isLoading: isLoadingRepPrices,
 			isRefreshing: isRefreshingRepPrices,
 			onRefresh: refreshRepPrices,
-			...getHeaderRepPerEthPrice({ currentTimestamp, hasSelectedPool: false, repPerEthFailure, repPerEthSource, repPerEthSourceUrl, repPrice: resolveRepPrice({ now: currentTimestamp, setting: 'uniswap', uniswapPrice: repPrices.repPerEthPrice }) }),
+			repPerEthFailure,
+			repPerEthPrice,
+			repPerEthSource,
+			repPerEthSourceUrl,
 			repUsdcFailure,
 			repUsdcPrice,
 			repUsdcSource,
@@ -167,35 +167,33 @@ export function App() {
 				transactionState={transactionState.value}
 				walletActions={overviewWalletProps}
 			>
-				<RepPriceRefreshContext.Provider value={{ onRefresh: refreshRepPrices, busy: isLoadingRepPrices || isRefreshingRepPrices }}>
-					<AppRouteContent
-						deploy={deployRouteContentProps}
-						openOracle={openOracleRouteContentProps}
-						securityPools={{ parameters: walletScopedHookConfig, walletConnected: accountState.address !== undefined, enabled: canReadOnchainData && walletBootstrapComplete, environmentKey: activeEnvironmentNonce, activeUniverseId }}
-						readBackendMessage={readBackendMessage}
-						route={activeRoute}
-						questions={{
-							accountState,
-							parameters: walletScopedHookConfig,
-							deploymentStatuses,
-							enabled: canReadOnchainData && walletBootstrapComplete,
-							environmentKey: activeEnvironmentNonce,
-							universeId: activeUniverseId,
-							currentTimestamp,
-							selectedAddress: questionLedgerAddress,
-							onSelect: urlState.openQuestionLedgerInUniverse,
-						}}
-						questionView={activeQuestionLedgersView}
-						universeDirectory={{ activeUniverseId, zoltarUniverse, universeMissing: marketCreation.zoltarUniverseMissing, universeError: marketCreation.zoltarUniverseError, onRetryUniverse: () => void marketCreation.loadZoltarUniverse(), onMigrateRep: () => setQuestionLedgersView('migrate') }}
-						migration={{
-							accountState,
-							activeUniverseId,
-							operations: marketCreation,
-							universeState: resolveLoadableValueState({ isLoading: marketCreation.loadingZoltarUniverse, isMissing: marketCreation.zoltarUniverseMissing, value: zoltarUniverse }),
-							universeBrowserHref: buildRouteHref('#/pools/universes', getTopLevelRouteSearch('pools')),
-						}}
-					/>
-				</RepPriceRefreshContext.Provider>
+				<AppRouteContent
+					deploy={deployRouteContentProps}
+					openOracle={openOracleRouteContentProps}
+					securityPools={{ parameters: walletScopedHookConfig, walletConnected: accountState.address !== undefined, enabled: canReadOnchainData && walletBootstrapComplete, environmentKey: activeEnvironmentNonce, activeUniverseId }}
+					readBackendMessage={readBackendMessage}
+					route={activeRoute}
+					questions={{
+						accountState,
+						parameters: walletScopedHookConfig,
+						deploymentStatuses,
+						enabled: canReadOnchainData && walletBootstrapComplete,
+						environmentKey: activeEnvironmentNonce,
+						universeId: activeUniverseId,
+						currentTimestamp,
+						selectedAddress: questionLedgerAddress,
+						onSelect: urlState.openQuestionLedgerInUniverse,
+					}}
+					questionView={activeQuestionLedgersView}
+					universeDirectory={{ activeUniverseId, zoltarUniverse, universeMissing: marketCreation.zoltarUniverseMissing, universeError: marketCreation.zoltarUniverseError, onRetryUniverse: () => void marketCreation.loadZoltarUniverse(), onMigrateRep: () => setQuestionLedgersView('migrate') }}
+					migration={{
+						accountState,
+						activeUniverseId,
+						operations: marketCreation,
+						universeState: resolveLoadableValueState({ isLoading: marketCreation.loadingZoltarUniverse, isMissing: marketCreation.zoltarUniverseMissing, value: zoltarUniverse }),
+						universeBrowserHref: buildRouteHref('#/pools/universes', getTopLevelRouteSearch('pools')),
+					}}
+				/>
 				<TransactionStepsModal contextKey={`${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}`} />
 			</ProtocolAppFrame>
 		</UniverseNamesProvider>

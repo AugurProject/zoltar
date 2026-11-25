@@ -20,7 +20,6 @@ const firstPrivateKey = `0x${'11'.repeat(32)}` as Hex
 const secondPrivateKey = `0x${'22'.repeat(32)}` as Hex
 
 function configuredSettings(paused: boolean, execute: boolean, privateKey = firstPrivateKey) {
-	const deploymentAddress = '0x0000000000000000000000000000000000000001'
 	return parseSettings({
 		...example,
 		connectivity: {
@@ -29,16 +28,7 @@ function configuredSettings(paused: boolean, execute: boolean, privateKey = firs
 			readRpcUrl: 'https://read.example',
 			rpcQuorum: 2,
 		},
-		deployment: {
-			openOracle: deploymentAddress,
-			questionData: deploymentAddress,
-			securityPoolFactory: deploymentAddress,
-			questionForker: deploymentAddress,
-			tradingFactory: deploymentAddress,
-			tradingRouter: deploymentAddress,
-			weth: deploymentAddress,
-			zoltar: deploymentAddress,
-		},
+
 		networkConfigured: true,
 		paused,
 		privateKey,

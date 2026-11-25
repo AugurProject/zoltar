@@ -39,9 +39,9 @@ export function assertCoordinatorDataEventAndEnumDeclarations(coordinatorData: s
 	assert.ok(isPlainRecord(compiledContractArtifacts))
 	const compiledContracts = compiledContractArtifacts['contracts']
 	assert.ok(isPlainRecord(compiledContracts))
-	const coordinatorSourceArtifact = compiledContracts['contracts/statoblast/OpenOraclePriceCoordinator.sol']
+	const coordinatorSourceArtifact = compiledContracts['contracts/statoblast/SharedPoolPriceFeed.sol']
 	assert.ok(isPlainRecord(coordinatorSourceArtifact))
-	const coordinatorArtifact = coordinatorSourceArtifact['OpenOraclePriceCoordinator']
+	const coordinatorArtifact = coordinatorSourceArtifact['SharedPoolPriceFeed']
 	assert.ok(isPlainRecord(coordinatorArtifact))
 	const coordinatorAbi = coordinatorArtifact['abi']
 	assert.ok(Array.isArray(coordinatorAbi))
@@ -84,7 +84,7 @@ export function assertCoordinatorDataEventAndEnumDeclarations(coordinatorData: s
 			.filter(member => member !== '')
 		sourceEnumValues[enumName] = Object.fromEntries(members.map((member, index) => [String(index), member]))
 	}
-	assert.deepEqual(coordinatorIndex['enumValues'], sourceEnumValues, 'Coordinator data enum values must exactly match OpenOraclePriceCoordinatorTypes.sol')
+	assert.deepEqual(coordinatorIndex['enumValues'], sourceEnumValues, 'Coordinator data enum values must exactly match OraclePriceTypes.sol')
 }
 
 /** The coordinator parameter table and the worked request cost state literal values; keep them equal to the deployment configuration and source constants. */

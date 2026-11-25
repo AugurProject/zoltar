@@ -8,12 +8,11 @@ type SnapshotState = SavedSimulationStateEnvelopeV1['state']
 export async function restoreSimulationSnapshot(restored: SimulationChain, state: SnapshotState, initializeAccounts: () => Promise<void>) {
 	await requireSuccessfulLoadState(restored.memoryClient, state.snapshot as DumpedTevmState)
 	await initializeAccounts()
-	if (state.blocks !== undefined && state.blocks.length > 0) {
+	if (state.blocks.length > 0) {
 		// The saved blocks bring back logs, receipts and numbering; one fresh block ties the loaded state to the head.
 		await restored.restoreHistory(state.blocks)
 		await advanceNextSimulationBlock(restored.memoryClient)
 	} else {
-		// Loading state leaves the chain at genesis time; the saved contracts expect the clock they were saved under.
 		await initializeSimulationClock(restored.memoryClient, state.currentTimestamp)
 	}
 }

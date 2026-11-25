@@ -187,11 +187,6 @@ The UI is local-only by default. A private key entered there is sent over HTTP t
 
 ## Upgrading
 
-The current formats are operator file `version: 5` and position journal `version: 4`. Files written by earlier releases still load:
+The supported formats are operator file `version: 5` and position journal `version: 4`. Earlier versions are rejected. Start development environments with the current operator template and fresh journals. Deployment venue switches must be explicit, and receipt timestamps use `includedAt`; `minedAt` is rejected. Entry records use the single `entryTransactionHash`; obsolete multi-transaction lists are rejected.
 
-- **Operator file `version: 4`.** Its top-level `rpcQuorum` and `deployment.quorumRpcUrls` move into `connectivity`, `strategy.pollMilliseconds` becomes `runtime.pollMilliseconds`, the string `runtime.lookbackBlocks` becomes the number `runtime.logLookbackBlocks`, and the string basis points `runtime.maxHedgeSlippageBps` and `strategy.minimumProfitBps` become numbers. An unconfigured version 4 profile drops its quorum RPCs and policy, because it has no `connectivity` to hold them. The next successful settings save or chain profile switch writes version 5.
-- **`runtime.lookbackBlocks: "50000"`.** Version 4 shipped that value as its Docker default. For that exact value the bot starts with `256` instead of failing; other values above `256` remain invalid.
-- **Venue switches.** A profile without the `deployment.uniswapV*Enabled` switches retains its venue choices: a saved router enables V2 or V3, and a saved PoolManager and Quoter pair enables V4. Saving records those choices as switches; all addresses still derive from the network. Saved executor and coordinator overrides are ignored and removed on save.
-- **Position journals `version: 2` and `3`.** They are normalized on load and written as version 4 on the next save. Receipt timestamps use `includedAt`; existing settlement history is normalized on read, and new append-only records use `includedAt`, preserving earlier audit lines.
 - **Journals without durable dispute evidence.** A legacy journal without durable dispute evidence is marked for manual reconciliation instead of starting an unbounded recovery scan.
-- **Multi-transaction private records.** Legacy multi-transaction private records are never auto-expired, because their prerequisite signatures lack the executor's on-chain parent binding. Reconcile them with the [runbook](./RECOVERY.md#recovery-required-runbook).

@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { MainnetDisabledNotice } from '../../app/components/MainnetDisabledNotice.js'
+import { HeaderToolbar } from '../../components/HeaderToolbar.js'
 import { AppHeaderShell } from '../../app/components/AppHeaderShell.js'
 import { installActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
 import { createFakeBackend, createFakeSimulationProfile } from '../testUtils/fakeBackend.js'
@@ -33,7 +34,7 @@ test('notice only shows the notice for a connected mainnet wallet and follows wa
 		}
 	}
 	const restore = installActiveEnvironmentForTesting(backend)
-	const rendered = await renderIntoDocument(<AppHeaderShell overview={<MainnetDisabledNotice />} simulationController={undefined} onRefresh={async () => undefined} />)
+	const rendered = await renderIntoDocument(<AppHeaderShell renderOverview={({ navigation, settingsMenu }) => <HeaderToolbar brand='App' controls={<MainnetDisabledNotice />} navigation={navigation} settings={settingsMenu} />} simulationController={undefined} onRefresh={async () => undefined} />)
 	cleanup = async () => {
 		await rendered.cleanup()
 		restore()
@@ -60,7 +61,7 @@ test('simulation has no mainnet notice and settings offer only Sepolia and simul
 	const backend = createFakeBackend({ accountAddress: zeroAddress, profile: createFakeSimulationProfile() })
 	backend.getChainId = async () => '0x1'
 	const restore = installActiveEnvironmentForTesting(backend)
-	const rendered = await renderIntoDocument(<AppHeaderShell overview={<MainnetDisabledNotice />} simulationController={undefined} onRefresh={async () => undefined} />)
+	const rendered = await renderIntoDocument(<AppHeaderShell renderOverview={({ navigation, settingsMenu }) => <HeaderToolbar brand='App' controls={<MainnetDisabledNotice />} navigation={navigation} settings={settingsMenu} />} simulationController={undefined} onRefresh={async () => undefined} />)
 	cleanup = async () => {
 		await rendered.cleanup()
 		restore()
