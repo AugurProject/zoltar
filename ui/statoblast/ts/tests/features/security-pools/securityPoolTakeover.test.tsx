@@ -8,6 +8,7 @@ import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { SecurityPoolTakeover } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolTakeover.js'
 import { statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { changedSinceReview } from '@zoltar/ui-statoblast-shared/copy/app.js'
 import type { SecurityPoolAccountSnapshot, SecurityPoolTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
 import { capitalSnapshot, index, capital, unit } from './capitalFixture.js'
 import { capitalClient } from './capitalClient.js'
@@ -110,6 +111,7 @@ test.each([true, false])('an existing auction permits manual takeover with conse
 	snapshot.ownerPrincipalAttoRep = 40n * unit
 	snapshot.positions = snapshot.positions.map(position => ({ ...position, rep: 40n * unit }))
 	const reader = installTakeoverReader(snapshot)
+	reader.setRead('liquidationElapsed', 900n, capital)
 	const requests: SecurityPoolTransaction[] = []
 	const actions = {
 		ownerReason: undefined,
@@ -134,10 +136,16 @@ test.each([true, false])('an existing auction permits manual takeover with conse
 	const decoded = decodeFunctionData({ abi: capitalArtifact.abi, data: request.data })
 	expect(decoded.functionName).toBe('takeOverWithBounds')
 	if (decoded.functionName !== 'takeOverWithBounds') throw new Error('Wrong takeover entry point')
-	expect(decoded.args).toEqual([2n, 10n * unit, 0n, 20n * unit, { maximumOwnerPrincipal: 200n * unit, maximumOwnerCommitment: 100n * unit, expectedTargetHealthFactorBps: snapshot.ownerAccount.targetHealthFactorBps, expectedAcceptedPriceEpoch: 4n, expectedSourceBatch: 0n }])
+	expect(decoded.args).toEqual([2n, 10n * unit, (375n * unit) / 100n, 20n * unit, { maximumOwnerPrincipal: 200n * unit, maximumOwnerCommitment: 100n * unit, expectedTargetHealthFactorBps: snapshot.ownerAccount.targetHealthFactorBps, expectedAcceptedPriceEpoch: 4n, expectedSourceBatch: 0n }])
 	await request.validateBeforeSubmit?.()
+	const rows = request.readReviewRows?.()
+	expect(rows).toContainEqual({ label: 'Takeover reward', value: '0 REP → at least 3.75 REP if taken over' })
+	expect(rows).toContainEqual({ label: 'Additional commitment', value: '0 WETH → up to 10 WETH' })
+	reader.setRead('liquidationElapsed', 1800n, capital)
+	await request.validateBeforeSubmit?.()
+	expect(request.readReviewRows?.()).toEqual(rows)
 	reader.setRead('acceptedPriceEpoch', 5n, capital)
-	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('changed')
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow(changedSinceReview)
 	reader.setRead('liquidationStarted', 0n, capital)
 	await fill(fields[0], '3')
 	await waitFor(() => expect(view.container.textContent).toContain('Not started'))
@@ -191,8 +199,12 @@ test('a position that unused pool commitment restores is offered as an unpaid cu
 	// No takeover reward is requested, and zero consent keeps the call from acquiring anything if the cure stops being enough.
 	expect(decoded.args).toEqual([2n, 10n * unit, 0n, 0n, { maximumOwnerPrincipal: 0n, maximumOwnerCommitment: 0n, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: 4n, expectedSourceBatch: 0n }])
 	await request.validateBeforeSubmit?.()
+	expect(request.readReviewRows?.()).toEqual([{ label: 'Target commitment', value: '10 WETH → 7.142857142857142857 WETH' }])
+	reader.setRead('demandAttoEth', 20n * unit, capital)
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow(changedSinceReview)
+	reader.setRead('demandAttoEth', 10n * unit, capital)
 	reader.setRead('acceptedPriceEpoch', 5n, capital)
-	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('changed')
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow(changedSinceReview)
 })
 
 test('#1570 a partial takeover that would leave the source between the two prices stays disabled', async () => {

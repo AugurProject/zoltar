@@ -1,8 +1,12 @@
-import { afterEach, expect, spyOn, test } from 'bun:test'
+import { afterEach, expect, mock, spyOn, test } from 'bun:test'
 import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, parseAbi, parseAbiParameters, zeroHash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { acceptedSecurityPoolPriceReport, buildSecurityPoolPriceTokenWithdrawal, loadSecurityPoolBranchPrice, loadSecurityPoolPriceReport, submittedSecurityPoolPriceReport } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPrice.js'
 import { sendSecurityPoolTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
+import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
+import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { asWriteClient, createMockWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
@@ -136,6 +140,31 @@ test('Capital review allows successive slow validation and simulation requests',
 		expect(requests).toEqual(['0x'])
 	} finally {
 		timer.mockRestore()
+	}
+})
+
+test('Capital opens review while its preflight is still reading', async () => {
+	const abort = new AbortController()
+	const reading = createDeferred<void>()
+	const sent = mock(() => undefined)
+	const call = mock(async () => ({ data: undefined }))
+	const client = createReviewedClient({ ...asWriteClient(createMockWriteClient(sent)), account: { address: owner, type: 'json-rpc' }, chain: MAINNET_NETWORK_PROFILE.chain, call }, undefined, abort.signal, undefined, true)
+	const sending = sendSecurityPoolTransaction(client, { account: owner, to: priceOracle, data: '0x', validateBeforeSubmit: () => reading.promise }, 'Claim earnings')
+	const settled = sending.catch(() => undefined)
+	try {
+		await waitFor(() => expect(transactionSteps.value?.reviewCheck?.status).toBe('checking'), { timeout: 300 })
+		expect(call).not.toHaveBeenCalled()
+		expect(sent).not.toHaveBeenCalled()
+		reading.resolve()
+		await waitFor(() => expect(transactionSteps.value?.reviewCheck).toBeUndefined())
+		expect(call).toHaveBeenCalledTimes(1)
+		transactionSteps.value?.confirmStep(0)
+		await sending
+		expect(sent).toHaveBeenCalledTimes(1)
+	} finally {
+		abort.abort()
+		reading.resolve()
+		await settled
 	}
 })
 

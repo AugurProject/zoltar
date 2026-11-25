@@ -51,7 +51,7 @@ function retirementQueueDescription(covered: bigint | undefined, remainingCommit
 }
 
 async function readAuthorizationProof(snapshot: SecurityPoolCapitalSnapshot, reportId: bigint, commitment: bigint) {
-	const client = createConnectedReadClient()
+	const client = withStatoblastRequestTimeout(createConnectedReadClient(), currentStateCheckFailed)
 	const totalCommitment = snapshot.totalCommitmentAttoEth - snapshot.ownerCommitmentAttoEth + commitment
 	const exposure = totalCommitment > snapshot.demandAttoEth ? totalCommitment : snapshot.demandAttoEth
 	const [price] = await client.readContract({ address: snapshot.priceFeed, abi: proofAbi, functionName: 'reportAuthorization', args: [reportId, exposure], blockNumber: snapshot.blockNumber })
@@ -383,7 +383,7 @@ export function useSecurityPoolAggregate(
 					const reason = capitalHealthReason(latest, healthBps, healthDepositAttoRep)
 					if (reason !== undefined) throw new Error(reason)
 					if (healthDepositAttoRep === undefined) throw new Error('Enter a REP deposit.')
-					const client = createConnectedReadClient()
+					const client = withStatoblastRequestTimeout(createConnectedReadClient(), currentStateCheckFailed)
 					const [balance, allowance] = await Promise.all([
 						client.readContract({ address: latest.repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [snapshot?.auctionVault?.bidder ?? latest.owner] }),
 						client.readContract({ address: latest.repToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [snapshot?.auctionVault?.bidder ?? latest.owner, snapshot?.auctionVault?.vault ?? latest.capitalLedger] }),

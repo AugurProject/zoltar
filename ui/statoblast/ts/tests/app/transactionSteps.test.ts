@@ -45,7 +45,7 @@ function setup(replacementReason?: ReplacementReason) {
 
 async function waitForTransactionStep(index: number) {
 	for (let attempt = 0; attempt < 100; attempt += 1) {
-		if (transactionSteps.value?.steps[index]?.phase === 'review') {
+		if (transactionSteps.value?.steps[index]?.phase === 'review' && transactionSteps.value.reviewCheck === undefined) {
 			return
 		}
 		await new Promise(resolve => setTimeout(resolve, 1))
@@ -1011,7 +1011,43 @@ test('a review allows successive slow requests that each finish within the reque
 	}
 })
 
-test('an aged review shows newly checked comparison rows and stops when they changed', async () => {
+test('opens review during the first simulation, blocks sending after a timeout, and rechecks on retry', async () => {
+	const { client, sendTransaction } = setup()
+	const simulation = createDeferred<{ data: '0x' }>()
+	const call = mock(async () => ({ data: '0x' as const }))
+	call.mockImplementationOnce(async () => await simulation.promise)
+	const reviewed = createReviewedClient({ ...client, sendTransaction, call }, undefined, undefined, undefined, true)
+	const shortened = new Proxy(globalThis.setTimeout, {
+		apply(schedule, receiver, [handler, delay, ...args]) {
+			return Reflect.apply(schedule, receiver, [handler, delay === 15_000 ? 50 : delay, ...args])
+		},
+	})
+	const timer = spyOn(globalThis, 'setTimeout').mockImplementation(shortened)
+	const sending = reviewed.sendTransaction({ to: account, value: 1n })
+	void sending.catch(() => undefined)
+	try {
+		await waitForStarted()
+		expect(transactionSteps.value?.reviewCheck?.status).toBe('checking')
+		confirm()
+		await Bun.sleep(60)
+		expect(transactionSteps.value?.reviewCheck?.status).toBe('failed')
+		expect(sendTransaction).not.toHaveBeenCalled()
+		const status = transactionSteps.value?.reviewCheck
+		if (status?.status !== 'failed') throw new Error('Expected a failed check')
+		status.retry()
+		await waitForTransactionStep(0)
+		expect(call).toHaveBeenCalledTimes(2)
+		expect(sendTransaction).not.toHaveBeenCalled()
+		confirm()
+		await expect(sending).resolves.toBe(hash)
+	} finally {
+		simulation.resolve({ data: '0x' })
+		timer.mockRestore()
+		transactionSteps.value?.cancel()
+	}
+})
+
+test('an aged review exposes changed rows and requires a fresh review confirmation before sending', async () => {
 	const { client, sendTransaction } = setup()
 	let wallet = '10 REP → 8 REP'
 	const now = spyOn(performance, 'now').mockReturnValue(0)
@@ -1020,13 +1056,22 @@ test('an aged review shows newly checked comparison rows and stops when they cha
 		reviewed.onTransactionPlan?.([{ functionName: 'report', contractAddress: account, readReviewRows: () => [{ label: 'Wallet REP', value: wallet }] }])
 		reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, contractAddress: account, functionName: 'report', args: [], data: '0x1234', value: undefined })
 		const sending = reviewed.sendTransaction({ to: account, data: '0x1234' })
+		void sending.catch(() => undefined)
 		await waitForTransactionStep(0)
 		wallet = '11 REP → 9 REP'
 		now.mockReturnValue(31_000)
 		transactionSteps.value?.confirmStep(0)
-		await expect(sending).rejects.toThrow('Changed since you reviewed')
+		for (let attempt = 0; attempt < 100 && transactionSteps.value?.reviewCheck?.status !== 'changed'; attempt += 1) await Bun.sleep(1)
+		const status = transactionSteps.value?.reviewCheck
+		if (status?.status !== 'changed') throw new Error('Expected changed rows to require review again')
+		expect(status.message).toContain('Changed since you reviewed')
 		expect(transactionSteps.value?.steps[0]?.reviewRows).toEqual([{ label: 'Wallet REP', value: '11 REP → 9 REP' }])
 		expect(sendTransaction).not.toHaveBeenCalled()
+		status.retry()
+		await waitForTransactionStep(0)
+		expect(sendTransaction).not.toHaveBeenCalled()
+		confirm()
+		await expect(sending).resolves.toBe(hash)
 	} finally {
 		now.mockRestore()
 	}
@@ -1078,6 +1123,10 @@ test('report review shows the wallet and staked REP at the freshly checked block
 		if (request.functionName === 'getEscalationGameEndDate') return 1000n
 		if (request.functionName === 'previewLeadingDepositOnOutcome') return [2n * rep, 15n * rep]
 		if (request.functionName === 'nonDecisionThresholdAttoRep') return 20n * rep
+		if (request.functionName === 'getOutcomeBalancesAttoRep') return [0n, 13n * rep, 14n * rep]
+		if (request.functionName === 'forkContinuation') return false
+		if (request.functionName === 'activationTime') return 1n
+		if (request.functionName === 'startBondAttoRep') return rep
 		if (request.functionName === 'getLocalUnresolvedPrincipalByVaultAndOutcome') {
 			expect(request.blockNumber).toBe(1n)
 			return 4n * rep
@@ -1094,5 +1143,7 @@ test('report review shows the wallet and staked REP at the freshly checked block
 	await expect(sending).resolves.toMatchObject({ hash })
 	expect(rows?.find(row => row.label === 'Wallet REP')?.value).toMatch(/10.*REP → 8.*REP/)
 	expect(rows?.find(row => row.label === 'Your REP staked on Yes')?.value).toMatch(/4.*REP → 6.*REP/)
+	expect(rows?.find(row => row.label === 'Leader')?.value).toBe('No → Yes')
+	expect(rows?.find(row => row.label === 'Window ends')?.value).toContain(' → ')
 	expect(sendTransaction).toHaveBeenCalledTimes(1)
 })

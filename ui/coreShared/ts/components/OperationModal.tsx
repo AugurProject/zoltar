@@ -1,5 +1,6 @@
 import { registerTransactionReviewScope } from '../transactions/transactionReviewScope.js'
 import * as transactionCopy from '../copy/transaction.js'
+import { formatPendingAction } from '../copy/transactionSteps.js'
 import { transactionSteps } from '../transactions/transactionSteps.js'
 import { UserMessage } from './UserMessage.js'
 import { TransactionStepsContent } from './TransactionStepsContent.js'
@@ -30,6 +31,8 @@ function getModalTransactionPresentation(transaction: ReturnType<typeof useGloba
 export function OperationModal({ children, confirmSingleStepFromForm = false, closeDisabled = false, closeOnSuccessKey, context = [], description, embedTransactionSteps = true, finalActionLabel, getReturnFocusTarget, hostsExternalReview = false, isOpen, onClose, title }: OperationModalProps) {
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+	const lastFormFocus = useRef<HTMLElement>()
+	const lifecycleWasShown = useRef(false)
 	const [reviewScope, setReviewScope] = useState<AbortController>()
 	const [retainedWorkflow, setRetainedWorkflow] = useState<NonNullable<typeof transactionSteps.value>>()
 	useLayoutEffect(() => {
@@ -48,11 +51,15 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 	const ownedWorkflow = ownsWorkflow ? workflow : undefined
 	const activeStep = ownedWorkflow?.steps[ownedWorkflow.activeIndex]
 	// A workflow made only of approvals was started by the form's own approve control, which already shows the amount and its pending state.
-	const approvalOnly = !hostsExternalReview && ownedWorkflow !== undefined && activeStep !== undefined && ownedWorkflow.steps.every(step => step.spender !== undefined)
-	const singleFormAction = confirmSingleStepFromForm && ownedWorkflow?.steps.length === 1
+	const approvalOnly = !hostsExternalReview && ownedWorkflow !== undefined && !ownedWorkflow.showLifecycle && activeStep !== undefined && ownedWorkflow.steps.every(step => step.spender !== undefined)
+	const singleFormAction = confirmSingleStepFromForm && ownedWorkflow?.showLifecycle !== true && ownedWorkflow?.steps.length === 1
 	const displayedWorkflow = ownedWorkflow ?? retainedWorkflow
 	const showSteps = displayedWorkflow?.showReviewDialog === true && displayedWorkflow.steps[displayedWorkflow.activeIndex] !== undefined && !approvalOnly && !singleFormAction
 	const runningReview = showSteps && ownedWorkflow !== undefined
+	const showLifecycle = runningReview && ownedWorkflow?.showLifecycle === true
+	const showFormContext = !showLifecycle || activeStep?.phase === 'review'
+	let modalTitle = title
+	if (showLifecycle && activeStep !== undefined) modalTitle = activeStep.phase === 'pending' ? formatPendingAction(activeStep.title) : activeStep.title
 	useEffect(() => {
 		if (!isOpen || ownsWorkflow) setRetainedWorkflow(undefined)
 	}, [isOpen, ownsWorkflow])
@@ -67,7 +74,7 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 	const ownedFailure = ownsPresentation && activeTransaction?.tone === 'error'
 	// Release a failed controller for retry while keeping its transaction buttons visible and disabled.
 	useEffect(() => {
-		if (hostsExternalReview) return
+		if (hostsExternalReview || ownedWorkflow?.showLifecycle) return
 		if (ownedWorkflow === undefined || activeStep === undefined || activeStep.phase === 'review' || activeStep.phase === 'upcoming') return
 		if (activeStep.phase !== 'failed' && !ownedFailure) return
 		if (ownedWorkflow.steps.length > 1)
@@ -88,7 +95,7 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 	const reviewError = activeStep?.failure?.message ?? (ownedFailure && typeof activeTransaction?.detail === 'string' ? activeTransaction.detail : undefined)
 	const titleId = useId()
 	const descriptionElementId = useId()
-	const descriptionId = description === undefined ? undefined : descriptionElementId
+	const descriptionId = description === undefined || !showFormContext ? undefined : descriptionElementId
 	const modalOperationKeysRef = useRef<Set<string>>(new Set())
 	const transactionOperationKeyAtOpenRef = useRef<string | undefined>()
 	const wasOpenRef = useRef(false)
@@ -126,12 +133,18 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 		}
 	}, [activeTransaction?.hash, activeTransaction?.tone, activeTransactionOperationKey, approvalOnly, closeOnSuccessKey, isOpen, onClose, ownsWorkflow, singleFormAction, workflow?.cancel])
 
-	// The inline review takes focus itself when it appears; returning to the form hands focus back to the close control.
+	// Restore the initiating control when this review replaces the form inside the same dialog.
 	useLayoutEffect(() => {
+		const returningToForm = lifecycleWasShown.current && !showLifecycle
+		lifecycleWasShown.current = showLifecycle
+		if (isOpen && returningToForm && lastFormFocus.current?.isConnected && !lastFormFocus.current.matches(':disabled')) {
+			lastFormFocus.current.focus()
+			return
+		}
 		if (!isOpen || showSteps || !dialogRef.current?.contains(document.activeElement)) return
 		if (cannotClose) dialogRef.current.focus()
 		else closeButtonRef.current?.focus()
-	}, [showSteps])
+	}, [showLifecycle, showSteps])
 
 	useModalFocusIsolation({
 		dialogRef,
@@ -147,22 +160,29 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 		if (ownsWorkflow) workflow.cancel()
 	}
 	return (
-		<ModalFrame busy={cannotClose} closeButtonRef={closeButtonRef} closeDisabled={cannotClose} describedBy={descriptionId} dialogRef={dialogRef} focusable onClose={requestClose} panelClassName='operation-modal-panel' title={title} titleId={titleId}>
+		<ModalFrame busy={cannotClose} closeButtonRef={closeButtonRef} closeDisabled={cannotClose} describedBy={descriptionId} dialogRef={dialogRef} focusable onClose={requestClose} panelClassName='operation-modal-panel' title={modalTitle} titleId={titleId}>
 			{/* Only this region scrolls, so the title and close control stay pinned. */}
 			<div className='operation-modal-scroll'>
-				{description === undefined ? undefined : (
+				{descriptionId === undefined ? undefined : (
 					<p id={descriptionId} className='detail'>
 						{description}
 					</p>
 				)}
-				<TransactionObjectContext className='operation-modal-context' items={context} />
-				{/* Keep the form and its disabled action row in place while the transaction buttons run below. */}
-				<div className='operation-modal-body' inert={runningReview || undefined}>
+				{showFormContext ? <TransactionObjectContext className='operation-modal-context' items={context} /> : undefined}
+				{/* The form stays mounted so canceling a review restores its values. */}
+				<div
+					className='operation-modal-body'
+					hidden={showLifecycle || undefined}
+					inert={runningReview || undefined}
+					onFocusIn={event => {
+						if (event.target instanceof HTMLElement) lastFormFocus.current = event.target
+					}}
+				>
 					<TransactionReviewActiveContext.Provider value={runningReview}>{children}</TransactionReviewActiveContext.Provider>
 				</div>
 				{showSteps ? (
 					<div className='operation-modal-steps'>
-						{hostsExternalReview && reviewError !== undefined ? <UserMessage placement='section' tone='error' announcement='polite' detail={reviewError} /> : undefined}
+						{hostsExternalReview && displayedWorkflow?.showLifecycle !== true && reviewError !== undefined ? <UserMessage placement='section' tone='error' announcement='polite' detail={reviewError} /> : undefined}
 						{/* The dialog already shows its context rows above the form, so the step review only keeps the rows it does not cover. */}
 						<GlobalTransactionPresentationProvider transaction={modalTransaction}>
 							<TransactionStepsContent contextKey={titleId} finalActionLabel={finalActionLabel} focusOnMount keepActionsVisible onClose={returnToForm} retainedWorkflow={ownedWorkflow === undefined ? retainedWorkflow : undefined} />

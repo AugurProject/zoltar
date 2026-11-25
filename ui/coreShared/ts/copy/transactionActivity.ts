@@ -14,6 +14,7 @@ export const formatPendingTransactionCount = (pendingCount: number) => (pendingC
 export const rejected = 'Canceled in wallet'
 export const reverted = 'Reverted'
 export const replaced = 'Replaced'
+export const spedUpInWallet = 'Sped up in your wallet.'
 export const dropped = 'No longer tracked'
 export const stopTracking = 'Stop tracking'
 export const formatStopTracking = (title: CopyTemplateValue) => `Stop tracking ${title}`

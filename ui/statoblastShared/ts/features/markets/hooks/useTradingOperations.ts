@@ -59,8 +59,8 @@ const createTradingReadClient = () => withStatoblastRequestTimeout(createConnect
 
 const defaultUseTradingOperationsDependencies: UseTradingOperationsDependencies = {
 	createCompleteSetInQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress, amount) => await createCompleteSetInQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, amount),
-	getWalletEthBalance: async walletAddress => await createConnectedReadClient().getBalance({ address: walletAddress }),
-	loadQuestionLedgerMintCapacity: async questionLedgerAddress => await loadQuestionLedgerMintCapacity(createConnectedReadClient(), questionLedgerAddress),
+	getWalletEthBalance: async walletAddress => await createTradingReadClient().getBalance({ address: walletAddress }),
+	loadQuestionLedgerMintCapacity: async questionLedgerAddress => await loadQuestionLedgerMintCapacity(createTradingReadClient(), questionLedgerAddress),
 	loadShareMigrationTargets: async (source, childUniverses, accountAddress) => await loadShareMigrationTargets(createTradingReadClient(), source, childUniverses, accountAddress),
 	loadTradingDetails: async (questionLedgerAddress, accountAddress) => await loadTradingDetailsForPool(createTradingReadClient(), questionLedgerAddress, accountAddress),
 	loadZoltarUniverseSummary: async universeId => await loadZoltarUniverseSummary(createTradingReadClient(), universeId),

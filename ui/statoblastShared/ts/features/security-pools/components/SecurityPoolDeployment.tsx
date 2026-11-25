@@ -18,6 +18,7 @@ import * as copy from '../../../copy/securityPool.js'
 import * as capitalCopy from '../../../copy/securityPoolCapital.js'
 import * as pageCopy from '../../../copy/securityPoolPage.js'
 import { statoblastPageHref } from '../../../lib/routing.js'
+import { useOldActionDataNotice } from '../../useStatoblastPageRefresh.js'
 import type { useSecurityPool } from '../hooks/useSecurityPool.js'
 import { securityPoolAmountOrUndefined, securityPoolUnsignedId } from '../lib/draft.js'
 import { SecurityPoolButton, SecurityPoolInput, type SecurityPoolActions } from './SecurityPoolControls.js'
@@ -238,6 +239,7 @@ export function SecurityPoolDeployment({ actions, model }: { actions: SecurityPo
 	const cachedSetupStage = currentDeployment ? model.savedSetupStage : undefined
 	const savedSetupStage = actions.deploymentActivated ? 4 : cachedSetupStage
 	const setupStage = verifiedSetupStage ?? savedSetupStage
+	const setupDataNotice = useOldActionDataNotice(currentDeployment && verifiedSetupStage !== undefined && verifiedSetupStage < 4 ? model.displayedAt : undefined)
 	const completedCount = Number(actions.admissionAddress !== undefined) + Number(actions.deploymentPool !== undefined) + (setupStage ?? 0)
 	let transactionProgress = pageCopy.deployTransactionProgress(completedCount)
 	if (completedCount === 0 && activeStep < 3) transactionProgress = pageCopy.deployTransactionCount
@@ -285,7 +287,8 @@ export function SecurityPoolDeployment({ actions, model }: { actions: SecurityPo
 					)}
 				</SectionBlock>
 				{showTransactions ? (
-					<SectionBlock title={pageCopy.deployStepNumber(3, pageCopy.deployAndSetup)} headingLevel={2} description={pageCopy.deployProgressSaved} className='security-pool-creation-form'>
+					<SectionBlock title={pageCopy.deployStepNumber(3, pageCopy.deployAndSetup)} headingLevel={2} description={setupDataNotice ?? pageCopy.deployProgressSaved} className='security-pool-creation-form'>
+						{setupDataNotice !== undefined && <p className='detail'>{pageCopy.deployProgressSaved}</p>}
 						{actions.creationError === undefined ? undefined : <UserMessage tone='error' detail={actions.creationError} />}
 						<DeploymentActions actions={actions} setupStage={setupStage} progressList setupVerificationPending={verifiedSetupStage === undefined && setupStage !== undefined && setupStage < 4} />
 						{openPool === undefined ? undefined : (

@@ -4,6 +4,7 @@ import { act } from 'preact/test-utils'
 import { useLayoutEffect } from 'preact/hooks'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { withFakeClock } from '@zoltar/ui-core-shared/tests/testUtils/fakeClock.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { unscopedTransaction } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import { SecurityPoolAggregatePanel } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolAggregatePanel.js'
@@ -12,8 +13,8 @@ import * as copy from '@zoltar/ui-statoblast-shared/copy/securityPoolCapital.js'
 import { capitalSnapshot, owner, unit } from './capitalFixture.js'
 import { formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 const lifecycle = installDomTestLifecycle()
-function Harness({ snapshot = capitalSnapshot(), redesigned, lastFailedAction }: { snapshot?: ReturnType<typeof capitalSnapshot>; redesigned?: boolean; lastFailedAction?: string }) {
-	const model = useSecurityPoolAggregate({ snapshot, loading: false, error: undefined, refresh: async () => undefined }, { ownerReason: undefined, runSecurityPoolAction: async () => undefined }, owner, redesigned)
+function Harness({ snapshot = capitalSnapshot(), redesigned, lastFailedAction, displayedAt }: { snapshot?: ReturnType<typeof capitalSnapshot>; redesigned?: boolean; lastFailedAction?: string; displayedAt?: number }) {
+	const model = useSecurityPoolAggregate({ snapshot, loading: false, error: undefined, displayedAt, refresh: async () => undefined }, { ownerReason: undefined, runSecurityPoolAction: async () => undefined }, owner, redesigned)
 	return <SecurityPoolAggregatePanel model={model} redesigned={redesigned ?? false} actions={{ scope: unscopedTransaction, busy: undefined, ...(lastFailedAction === undefined ? {} : { lastFailedAction }) }} />
 }
 
@@ -170,6 +171,23 @@ test('earnings show what claiming pays, and the credited amounts when that previ
 	lifecycle.trackRendered(claimable)
 	expect(metric(claimable, copy.ethEarnings)).toBe('5WETH')
 	expect(metric(claimable, copy.repEarnings)).toBe('7REP')
+})
+
+test('claims remain usable and describe the age of the last successful Capital read', async () => {
+	await withFakeClock(async ({ advance }) => {
+		const snapshot = capitalSnapshot({ accruedFeesAttoEth: unit, accruedFeesAttoRep: 2n * unit })
+		const view = lifecycle.trackRendered(await renderIntoDocument(<Harness snapshot={snapshot} redesigned displayedAt={Date.now() - 59_999} />))
+		const earnings = view.container.querySelector('section:has([id$="-earnings"])')
+		const description = () => earnings?.querySelector('.section-block-copy')?.textContent
+		await advance(1)
+		expect(description()).not.toContain('Checked again before sending.')
+		await advance(1)
+		expect(description()).toContain('Data from 1m ago. Checked again before sending.')
+		expect(earnings?.querySelector('button')?.disabled).toBe(false)
+		await act(() => render(<Harness snapshot={snapshot} redesigned displayedAt={Date.now()} />, view.container))
+		expect(description()).not.toContain('Checked again before sending.')
+		await view.cleanup()
+	})
 })
 
 test('a pending position exposes re-submission without unlocking its saved target', async () => {

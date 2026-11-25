@@ -1,6 +1,7 @@
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import { getTransactionReviewSignal } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { getAddress, encodeFunctionData, maxUint256, parseTransaction, recoverTransactionAddress } from '@zoltar/core-shared/evm/ethereum'
 import { formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -8,11 +9,17 @@ import type { TransactionPlanStep, TransactionRequestPreview, WriteClient } from
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getErrorMessage, isRecoverableContractReadError, transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { humanizeTransactionAction } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
+import { getPreparedTransactionTechnicalRows, humanizeTransactionAction } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import { createTransactionStepController, type TransactionStepDetails } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { createTransactionFailure, createTransactionFailureError } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
 import { changedSinceReview, missingTokenSpender } from '../copy/app.js'
 import { withStatoblastRequestTimeout } from './requestTimeout.js'
+
+const checkedReviewClients = new WeakSet<WriteClient>()
+
+export function checksTransactionReview(client: WriteClient) {
+	return checkedReviewClients.has(client)
+}
 
 async function describeTransaction(client: WriteClient, preview: TransactionRequestPreview & Pick<TransactionPlanStep, 'optional' | 'tokenFunding' | 'oracleOutcome' | 'approvalPurpose'>, requiredApprovalAmount?: bigint): Promise<TransactionStepDetails> {
 	const action = transactionCopy.reviewedActions[preview.functionName]
@@ -94,7 +101,7 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 		if (!initialized) {
 			if (plan === undefined) throw new Error('Missing transaction plan.')
 			// Multi-transaction actions expose a separate control for every write, including the first funding step.
-			controller = createTransactionStepController(signal, requiresReview())
+			controller = createTransactionStepController(signal, requiresReview(), alwaysReview)
 			controller.setPlan(
 				await Promise.all(
 					plan.map(step =>
@@ -129,7 +136,7 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 		try {
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			controller.assertActive()
-			await validate()
+			if (!alwaysReview) await validate()
 			plan ??= [transaction]
 			if (prepared !== undefined && (prepared.data !== fallback.data || (prepared.contractAddress ?? prepared.to)?.toLowerCase() !== (fallback.contractAddress ?? fallback.to)?.toLowerCase() || (prepared.value ?? 0n) !== (fallback.value ?? 0n))) throw new Error('The prepared transaction changed.')
 			await initialize()
@@ -138,14 +145,43 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 				throw new Error('The transaction plan changed. No further transactions were sent. Review the action again.')
 			if (transaction.functionName === 'approve' && (expected.args?.[0] !== transaction.args?.[0] || expected.args?.[1] !== transaction.args?.[1])) throw new Error('The approval amount changed. Review the action again.')
 			const check = (candidate: TransactionRequestPreview) => checkTransaction(candidate, expected, gas, raw)
+			if (alwaysReview) controller.setTechnicalRows(stepIndex, [...getPreparedTransactionTechnicalRows(transaction), { label: appCopy.network, value: client.chain.name }])
 			const alreadyReviewedFunding = selectedFunding !== undefined
-			if (alwaysReview && !alreadyReviewedFunding) await check(transaction)
-			const reviewedRows = expected.readReviewRows?.()
-			if (reviewedRows !== undefined) controller.setReviewRows(stepIndex, reviewedRows)
-			const checkedAt = performance.now()
+			let reviewedRows: ReturnType<NonNullable<TransactionPlanStep['readReviewRows']>> | undefined
+			let checkedAt = 0
+			const readRows = () => {
+				const rows = expected.readReviewRows?.()
+				if (rows !== undefined) controller.setReviewRows(stepIndex, rows)
+				return rows
+			}
 			let selectedAmount = selectedFunding?.amount
 			if (selectedFunding === undefined) {
-				selectedAmount = requiresReview() ? await controller.review(stepIndex) : controller.startWithoutReview(stepIndex)
+				if (alwaysReview) {
+					selectedAmount = await controller.review(stepIndex, {
+						deferWallet: true,
+						check: async () => {
+							await check(transaction)
+							reviewedRows = readRows()
+							checkedAt = performance.now()
+						},
+						recheck: () => {
+							if (performance.now() - checkedAt <= 30_000) return undefined
+							return check(transaction).then(() => {
+								const currentRows = readRows()
+								if (reviewedRows !== undefined && currentRows !== undefined && (reviewedRows.length !== currentRows.length || reviewedRows.some((row, index) => row.label !== currentRows[index]?.label || row.value !== currentRows[index]?.value))) throw new Error(changedSinceReview)
+							})
+						},
+						retryStatus: error => {
+							if (!(error instanceof Error)) return undefined
+							if (error.message === transactionCopy.currentStateCheckFailed) return 'failed'
+							if (error.message === changedSinceReview) return 'changed'
+							return undefined
+						},
+					})
+				} else {
+					readRows()
+					selectedAmount = requiresReview() ? await controller.review(stepIndex) : controller.startWithoutReview(stepIndex)
+				}
 			}
 			selectedFunding = undefined
 			let approvalArgs: readonly [ReturnType<typeof getAddress>, bigint] | undefined
@@ -190,20 +226,14 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			controller.assertActive()
 			if (alwaysReview && (approvalArgs !== undefined || alreadyReviewedFunding)) await check(transaction)
-			else if (alwaysReview && performance.now() - checkedAt > 30_000) {
-				await check(transaction)
-				const currentRows = expected.readReviewRows?.()
-				if (reviewedRows !== undefined && currentRows !== undefined && (reviewedRows.length !== currentRows.length || reviewedRows.some((row, index) => row.label !== currentRows[index]?.label || row.value !== currentRows[index]?.value))) {
-					controller.setReviewRows(stepIndex - 1, currentRows)
-					throw new Error(changedSinceReview)
-				}
-			} else if (expected.validateBeforeSubmit !== undefined) {
+			else if (expected.validateBeforeSubmit !== undefined) {
 				const validation = expected.validateBeforeSubmit()
 				if (alwaysReview) await validation
 				else await withTimeout(validation, 15_000, transactionCopy.currentStateCheckFailed)
 			}
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			controller.assertActive()
+			controller.openWallet()
 			client.onTransactionPrepared?.(transaction)
 			const hash = await execute(approvalArgs, gas)
 			controller.submitted(hash)
@@ -213,7 +243,7 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 			throw error
 		}
 	}
-	return {
+	const reviewedClient: WriteClient = {
 		...client,
 		onTransactionPlan: steps => {
 			if (initialized) throw new Error('Cannot change a transaction plan after it has started.')
@@ -223,9 +253,30 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 			try {
 				if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 				controller.assertActive()
-				await validate()
+				if (!alwaysReview) await validate()
 				await initialize()
-				selectedFunding = await controller.chooseFunding(requiredIndices, !requiresReview() && plan?.length === 1)
+				selectedFunding = await controller.chooseFunding(
+					requiredIndices,
+					!requiresReview() && plan?.length === 1,
+					alwaysReview
+						? {
+								deferWallet: true,
+								check: async () => {
+									await Promise.all(
+										requiredIndices.map(async index => {
+											const step = plan?.[index]
+											if (step === undefined) throw new Error('Missing planned funding transaction.')
+											const transaction = { account: client.account, args: undefined, chainName: client.chain.name, value: undefined, ...step }
+											controller.setTechnicalRows(index, [...getPreparedTransactionTechnicalRows(transaction), { label: appCopy.network, value: client.chain.name }])
+											await checkTransaction(transaction, step, undefined)
+											const rows = step.readReviewRows?.()
+											if (rows !== undefined) controller.setReviewRows(index, rows)
+										}),
+									)
+								},
+							}
+						: undefined,
+				)
 				stepIndex = selectedFunding?.index ?? (plan?.length ?? 1) - 1
 				if (selectedFunding === undefined) return false
 				await execute(selectedFunding.index)
@@ -276,12 +327,12 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 					onReplaced: replacement => {
 						replaced = replacement.reason === 'cancelled' || replacement.reason === 'replaced'
 						confirmedHash = replacement.transaction.hash
-						controller.submitted(confirmedHash)
+						controller.submitted(confirmedHash, replacement.reason === 'repriced')
 						parameters.onReplaced?.(replacement)
 					},
 				})
-				controller.receipt(confirmedHash, replaced ? 'reverted' : receipt.status)
 				if (replaced) throw createTransactionFailureError('replaced', transactionErrorMessages.canceledOrReplaced)
+				controller.receipt(confirmedHash, receipt.status)
 				if (receipt.status === 'reverted') {
 					let exhaustedGas = false
 					try {
@@ -311,4 +362,6 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 			}
 		},
 	}
+	if (alwaysReview) checkedReviewClients.add(reviewedClient)
+	return reviewedClient
 }

@@ -2,8 +2,9 @@ import { getReportingSubmissionTimingGuard } from './reportingTiming.js'
 import * as reportingCopy from '../copy/reporting.js'
 import * as securityPoolCopy from '../copy/securityPool.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
-import { zeroAddress, type Address, type ContractFunctionParameters } from '@zoltar/core-shared/evm/ethereum'
-import { formatCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { encodeFunctionData, zeroAddress, type Address, type ContractFunctionParameters } from '@zoltar/core-shared/evm/ethereum'
+import { formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { projectEscalationEndTime, type EscalationBalanceTuple } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
@@ -25,6 +26,19 @@ import { readLocatedReportingDeposits } from './reportingDepositSearch.js'
 import { getRuntimeNetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { readWinningClaimReview } from './reportingClaimReview.js'
+import { getSecondLargestEscalationBalance, getStrictLeadingEscalationOutcome } from '../lib/reportingOutcomeBalances.js'
+
+async function projectCheckedResponseDeadline(client: ReadClient, address: Address, blockNumber: bigint, threshold: bigint, balancesAttoRep: EscalationBalanceTuple) {
+	const game = { address, abi: statoblast_EscalationGame_EscalationGame.abi, blockNumber }
+	const [activationTime, startBondAttoRep, forkContinuation] = await Promise.all([client.readContract({ ...game, functionName: 'activationTime' }), client.readContract({ ...game, functionName: 'startBondAttoRep' }), client.readContract({ ...game, functionName: 'forkContinuation' })])
+	if (forkContinuation) {
+		const [forkResumedAt, forkElapsedAtStart, fixed] = await Promise.all([client.readContract({ ...game, functionName: 'forkResumedAt' }), client.readContract({ ...game, functionName: 'forkElapsedAtStart' }), client.readContract({ ...game, functionName: 'fixedQuestionOutcome' })])
+		if (forkResumedAt === 0n || getReportingOutcomeKey(fixed) !== 'none') return undefined
+		return projectEscalationEndTime({ activationTime, startBondAttoRep, nonDecisionThresholdAttoRep: threshold, balancesAttoRep, continuation: { forkResumedAt, forkElapsedAtStart } })
+	}
+	if (activationTime === 0n) return undefined
+	return projectEscalationEndTime({ activationTime, startBondAttoRep, nonDecisionThresholdAttoRep: threshold, balancesAttoRep })
+}
 
 type ReportingBootstrapReadResult = {
 	questionId: bigint
@@ -351,6 +365,7 @@ export async function reportOutcomeInQuestionLedger(client: WriteClient, questio
 		args: [getReportingOutcomeValue(outcome), amountAttoRep],
 	}
 	let reviewRows: readonly { label: string; value: string }[] = []
+	const outcomeIndex = getReportingOutcomeValue(outcome)
 	const reportSteps = [
 		{
 			...callParams,
@@ -369,33 +384,47 @@ export async function reportOutcomeInQuestionLedger(client: WriteClient, questio
 					client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'systemState', blockNumber }),
 				])
 				if (currentGame !== escalationGameAddress || getQuestionLedgerSystemState(systemState) !== 'operational') throw new Error('Reporting changed. Review the question again.')
-				if (currentGame !== zeroAddress) {
-					const [endTime, acceptedDeposit] = await Promise.all([
-						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate', blockNumber }),
-						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: requireLead ? 'previewLeadingDepositOnOutcome' : 'previewDepositOnOutcome', args: [getReportingOutcomeValue(outcome), amountAttoRep], blockNumber }),
-					])
-					if (acceptedDeposit[0] !== reviewAmountAttoRep || acceptedDeposit[0] <= 0n) throw new Error('The report amount changed. Review the report again.')
-					const timingGuard = getReportingSubmissionTimingGuard({ currentTime: block.timestamp, escalationEndTime: endTime })
-					if (timingGuard !== undefined) throw new Error(timingGuard)
-					if (!triggersFork) {
-						const threshold = await client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'nonDecisionThresholdAttoRep', blockNumber })
-						if (acceptedDeposit[1] === threshold) {
-							const balances = await client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getOutcomeBalancesAttoRep', blockNumber })
-							if (balances.some((balance, index) => index !== getReportingOutcomeValue(outcome) && balance >= threshold)) throw new Error(reportingCopy.forkTriggerChangedSinceReview)
-						}
-					}
-				}
+				let leaderBefore: string = reportingCopy.reportComparisonNoReports
+				let leaderAfter: string = getEscalationSideLabel(outcome)
+				let deadlineChange: string | undefined
 				const wallet = client.account.address
 				const repToken = await client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'repToken', blockNumber })
 				const [walletRep, stakedRep] = await Promise.all([
 					client.readContract({ address: repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [wallet], blockNumber }),
-					currentGame === zeroAddress ? 0n : client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getLocalUnresolvedPrincipalByVaultAndOutcome', args: [wallet, getReportingOutcomeValue(outcome)], blockNumber }),
+					currentGame === zeroAddress ? 0n : client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getLocalUnresolvedPrincipalByVaultAndOutcome', args: [wallet, outcomeIndex], blockNumber }),
 				])
+				if (currentGame !== zeroAddress) {
+					const [endTime, acceptedDeposit, balances, threshold] = await Promise.all([
+						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate', blockNumber }),
+						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: requireLead ? 'previewLeadingDepositOnOutcome' : 'previewDepositOnOutcome', args: [outcomeIndex, amountAttoRep], blockNumber }),
+						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getOutcomeBalancesAttoRep', blockNumber }),
+						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'nonDecisionThresholdAttoRep', blockNumber }),
+					])
+					if (acceptedDeposit[0] !== reviewAmountAttoRep || acceptedDeposit[0] <= 0n) throw new Error('The report amount changed. Review the report again.')
+					const timingGuard = getReportingSubmissionTimingGuard({ currentTime: block.timestamp, escalationEndTime: endTime })
+					if (timingGuard !== undefined) throw new Error(timingGuard)
+					const endsUndecided = acceptedDeposit[1] === threshold && balances.some((balance, index) => index !== outcomeIndex && balance >= threshold)
+					if (endsUndecided && !triggersFork) throw new Error(reportingCopy.forkTriggerChangedSinceReview)
+					const sides = (['invalid', 'yes', 'no'] as const).map((key, index) => ({ key, balance: balances[index] ?? 0n }))
+					const stateLabel = (side: ReportingOutcomeKey | undefined) => (side === undefined ? reportingCopy.tiedPosition : getEscalationSideLabel(side))
+					if (balances.some(balance => balance > 0n)) leaderBefore = stateLabel(getStrictLeadingEscalationOutcome(sides))
+					const projected = sides.map(side => (side.key === outcome ? { ...side, balance: acceptedDeposit[1] } : side))
+					leaderAfter = endsUndecided ? reportingCopy.reportComparisonUndecided : stateLabel(getStrictLeadingEscalationOutcome(projected))
+					if (endsUndecided) {
+						deadlineChange = `${formatTimestamp(endTime)} → ${reportingCopy.reportComparisonUndecided}`
+					} else if (getSecondLargestEscalationBalance(sides) !== getSecondLargestEscalationBalance(projected)) {
+						const projectedBalances: EscalationBalanceTuple = [projected[0]?.balance ?? 0n, projected[1]?.balance ?? 0n, projected[2]?.balance ?? 0n]
+						const deadline = await projectCheckedResponseDeadline(client, currentGame, blockNumber, threshold, projectedBalances)
+						if (deadline !== undefined && deadline > endTime) deadlineChange = `${formatTimestamp(endTime)} → ${formatTimestamp(deadline)}`
+					}
+				}
 				if (walletRep < reviewAmountAttoRep) throw new Error(reportingCopy.reportReviewInsufficientRep)
 				const comparison = (before: bigint, after: bigint) => `${formatCurrencyBalanceWithUnit(before, commonCopy.rep)} → ${formatCurrencyBalanceWithUnit(after, commonCopy.rep)}`
 				reviewRows = [
 					{ label: reportingCopy.walletRepReviewLabel, value: comparison(walletRep, walletRep - reviewAmountAttoRep) },
 					{ label: reportingCopy.stakedRepReviewLabel(getEscalationSideLabel(outcome)), value: comparison(stakedRep, stakedRep + reviewAmountAttoRep) },
+					...(leaderBefore === leaderAfter ? [] : [{ label: reportingCopy.reportComparisonLeader, value: `${leaderBefore} → ${leaderAfter}` }]),
+					...(deadlineChange === undefined ? [] : [{ label: reportingCopy.reportComparisonDeadline, value: deadlineChange }]),
 				]
 			},
 		},
@@ -438,7 +467,15 @@ async function getEscalationGamePreparation(client: WriteClient, questionLedgerA
 	if (!(await isRequired())) return undefined
 	const callParams = { address: factory, abi: statoblast_factories_EscalationGameFactory_EscalationGameFactory.abi, functionName: 'prepareEscalationGame', args: [questionLedgerAddress] } as const
 	return {
-		step: { functionName: callParams.functionName, contractAddress: factory, args: callParams.args },
+		step: {
+			functionName: callParams.functionName,
+			contractAddress: factory,
+			args: callParams.args,
+			data: encodeFunctionData(callParams),
+			validateBeforeSubmit: async () => {
+				if (!(await isRequired())) throw new Error(reportingCopy.escalationPreparationChanged)
+			},
+		},
 		isRequired,
 		execute: async () => await writeContractAndWait(client, () => callParams),
 	}

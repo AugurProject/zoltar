@@ -110,8 +110,6 @@ export const forkAdmissionApproved = 'Fork admission REP approved'
 
 export const universeForkTriggered = 'Universe fork triggered'
 
-export const loadingQuestion = 'Loading question…'
-
 export const questionUnavailable = 'Question unavailable'
 
 export const securityMultiplier = 'Security multiplier (%)'

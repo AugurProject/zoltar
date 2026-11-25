@@ -132,6 +132,7 @@ export const deviationLabel = (percent: string) => `±${percent}%`
 export const latestReportHint = 'Enter an older ID to return its funds.'
 export const asOf = (age: string) => `as of ${age} ago`
 export const currentReport = 'Current report'
+export const releasedToken = (symbol: string) => `Released ${symbol}`
 export const reportHeading = (id: bigint) => `Report #${id}`
 export const reportedStep = 'Reported'
 export const disputeStep = 'Dispute window'

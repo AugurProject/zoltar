@@ -1,15 +1,19 @@
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { expect, test } from 'bun:test'
+import { expect, mock, spyOn, test } from 'bun:test'
 import { act } from 'preact/test-utils'
-import { decodeFunctionData, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { createWalletClient, custom, decodeFunctionData, parseAbi, publicActions, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { unscopedTransaction } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
+import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
+import { currentStateCheckFailed } from '@zoltar/ui-core-shared/copy/transaction.js'
+import { mockTransactionHash } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { accountPriceTarget, branchPriceTarget, useSecurityPoolPrice, type SecurityPoolPriceParameters } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolPrice.js'
 import type { SecurityPoolAccountSnapshot, SecurityPoolTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
 import * as priceCopy from '@zoltar/ui-statoblast-shared/copy/securityPoolPrice.js'
+import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
 import { renderHookWithProps } from '../../support/renderHook.js'
 import { capitalSnapshot, owner, token, unit } from './capitalFixture.js'
 import { priceFixture, priceFeed, priceWeth } from './priceFixture.js'
@@ -103,7 +107,9 @@ test('wrapping and editable approvals remain independent from requesting a funde
 	expect(request.reviewDescription).toContain('Disputes may change')
 	expect(request.value).toBe(15_804_573n * 10_000_000_001n + 101n)
 	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'requestSecurityPoolPrice', args: [2n * unit, (21n * unit) / 10n, 15_804_573n * 10_000_000_001n + 101n] })
+	expect(request.readReviewRows?.()).toEqual([])
 	await request.validateBeforeSubmit?.()
+	expect(request.readReviewRows?.()).toContainEqual({ label: 'Wallet WETH', value: '2.1 WETH → 0 WETH' })
 	state.setAllowances(0n, 0n)
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Approve both')
 	expect(state.requests).toHaveLength(4)
@@ -197,6 +203,56 @@ test('settlement and recovery remain independent after funding closes', async ()
 	expect(state.hook.state().withdrawReason).toBeUndefined()
 	await act(() => state.hook.state().withdraw())
 	expect(state.requests).toHaveLength(3)
+})
+
+test.each(['minimumToken1ReportAttoEth', 'reportCandidates'] as const)('retrying Review can recover a timed-out %s price read', async read => {
+	const state = await setup()
+	await act(() => state.hook.state().setReportId('9'))
+	await waitFor(() => expect(state.hook.state().report?.reportId).toBe(9n))
+	await act(() => state.hook.state().withdraw())
+	const request = lastRequest(state.requests)
+	const { validateBeforeSubmit } = request
+	if (validateBeforeSubmit === undefined) throw new Error('Missing price review validation')
+	const original = state.values[read]
+	const pending = createDeferred<unknown>()
+	state.values[read] = pending.promise
+	const sendTransaction = mock(async (): Promise<typeof mockTransactionHash> => mockTransactionHash)
+	const client = createWalletClient({
+		account: owner,
+		chain: MAINNET_NETWORK_PROFILE.chain,
+		transport: custom({
+			request: async () => {
+				throw new Error('Unexpected wallet RPC')
+			},
+		}),
+	}).extend(publicActions)
+	const reviewed = createReviewedClient({ ...client, sendTransaction, call: async () => ({ data: '0x' }) }, undefined, undefined, undefined, true)
+	const shortened = new Proxy(globalThis.setTimeout, {
+		apply(schedule, receiver, [handler, delay, ...args]) {
+			return Reflect.apply(schedule, receiver, [handler, delay === 15_000 ? 50 : delay, ...args])
+		},
+	})
+	const timer = spyOn(globalThis, 'setTimeout').mockImplementation(shortened)
+	try {
+		reviewed.onTransactionPlan?.([{ functionName: 'Contract transaction', contractAddress: request.to, data: request.data, value: request.value, validateBeforeSubmit }])
+		const sending = reviewed.sendTransaction({ to: request.to, data: request.data, value: request.value })
+		void sending.catch(() => undefined)
+		await waitFor(() => expect(transactionSteps.value?.reviewCheck?.status).toBe('failed'), { timeout: 400 })
+		const failure = transactionSteps.value?.reviewCheck
+		if (failure?.status !== 'failed') throw new Error('Expected a failed check')
+		expect(failure.message).toBe(currentStateCheckFailed)
+		expect(sendTransaction).not.toHaveBeenCalled()
+		state.values[read] = original
+		failure.retry()
+		await waitFor(() => expect(transactionSteps.value?.reviewCheck).toBeUndefined())
+		transactionSteps.value?.confirm()
+		await expect(sending).resolves.toBe(mockTransactionHash)
+		expect(sendTransaction).toHaveBeenCalledTimes(1)
+	} finally {
+		pending.resolve(original)
+		timer.mockRestore()
+		transactionSteps.value?.cancel()
+	}
 })
 
 test('an older report remains readable on a cold open while its RPC reads are unavailable', async () => {

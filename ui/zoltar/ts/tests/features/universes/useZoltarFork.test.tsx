@@ -441,10 +441,12 @@ describe('useZoltarFork', () => {
 		})
 		expect(state().hasLoadedZoltarForkAccess).toBe(true)
 		expect(state().zoltarMigrationChildRepBalancesAttoRep).toEqual({ '2': 10n })
+		expect(state().migrationBalancesReadAt).toBeNumber()
 
 		rerender(createForkParameters({ accountAddress: NEXT_WALLET_ADDRESS, zoltarUniverse: universe }))
 		expect(state().hasLoadedZoltarForkAccess).toBe(false)
 		expect(state().zoltarMigrationChildRepBalancesAttoRep).toEqual({})
+		expect(state().migrationBalancesReadAt).toBeUndefined()
 		await act(async () => {
 			await state().loadZoltarForkAccess()
 		})

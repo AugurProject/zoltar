@@ -17,9 +17,12 @@ import type { useSecurityPoolPurchase } from '../hooks/useSecurityPoolPurchase.j
 import * as copy from '../../../copy/securityPool.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 import * as capitalCopy from '../../../copy/securityPoolCapital.js'
+import { useOldActionDataNotice } from '../../useStatoblastPageRefresh.js'
 
 export function SecurityPoolPurchasePanel({ model, purchase, actions }: { model: ReturnType<typeof useSecurityPool>; purchase: ReturnType<typeof useSecurityPoolPurchase>; actions: SecurityPoolActions }) {
 	const snapshot = model.snapshot
+	const registrationDataNotice = useOldActionDataNotice(snapshot === undefined ? undefined : model.displayedAt)
+	const purchaseDataNotice = useOldActionDataNotice(purchase.quoteReadAt)
 	const id = useId()
 	const details = useSecurityPoolQuestionDetails(snapshot, purchase.questionInput)
 	const admission = snapshot?.admission
@@ -28,6 +31,7 @@ export function SecurityPoolPurchasePanel({ model, purchase, actions }: { model:
 	return (
 		<>
 			<SectionBlock title={copy.addQuestion} description={copy.questionHint}>
+				{registrationDataNotice !== undefined && <p className='detail'>{registrationDataNotice}</p>}
 				<MetricGrid>
 					<MetricField label={copy.admissionMode}>{admission === undefined ? undefined : admissionLabels[admission.mode]}</MetricField>
 					<MetricField label={capitalCopy.annualFee}>{snapshot === undefined ? undefined : `${formatUnits(snapshot.economics.annualFeeBps, 2)}%`}</MetricField>
@@ -55,6 +59,7 @@ export function SecurityPoolPurchasePanel({ model, purchase, actions }: { model:
 				<SecurityPoolButton model={actions} action='registerSecurityPoolQuestion' label={copy.addQuestion} pendingLabel={copy.addingQuestion} reason={actions.registerReason} onClick={actions.register} />
 			</SectionBlock>
 			<SectionBlock title={copy.mint} description={copy.mintHint}>
+				{purchaseDataNotice !== undefined && <p className='detail'>{purchaseDataNotice}</p>}
 				<div className='field'>
 					<label htmlFor={id}>{copy.registeredQuestions}</label>
 					<select id={id} value={selected === undefined ? '' : toHex(selected)} disabled={actions.busy !== undefined || model.loading} onChange={event => purchase.setQuestionInput(event.currentTarget.value)}>

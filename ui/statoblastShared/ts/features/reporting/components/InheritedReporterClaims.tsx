@@ -20,10 +20,12 @@ import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-c
 import { buildForkCarriedEscalationProofs, loadForkCarriedEscalationDepositsFromParentSnapshot, withdrawForkedEscalationDeposits, type ParentClaimPreparation } from '../../../protocol/reportingCarryState.js'
 import { loadReportingDetails } from '../../../protocol/reporting.js'
 import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
+import { useOldActionDataNotice } from '../../useStatoblastPageRefresh.js'
 import type { ActiveReportingDetails, AuthenticatedForkClaim, ReportingDetails } from '../../../types/contracts.js'
 import type { AccountState, WriteOperationsParameters } from '../../../types/app.js'
 
 type Props = {
+	actionDataReadAt?: number | undefined
 	parameters: WriteOperationsParameters
 	accountState: AccountState
 	details: ReportingDetails | undefined
@@ -85,7 +87,7 @@ function createClaimCheckpoint() {
 }
 
 /** Inherited reporter claims are question claims, independent of underwriting ownership. */
-export function InheritedReporterClaims({ parameters, accountState, details, onRefresh }: Props) {
+export function InheritedReporterClaims({ actionDataReadAt, parameters, accountState, details, onRefresh }: Props) {
 	const error = useSignal<string | undefined>(undefined)
 	const pending = useSignal<string | undefined>(undefined)
 	const selection = `${details?.questionLedgerAddress ?? ''}:${accountState.address ?? ''}:${accountState.chainId ?? ''}:${details?.universeId ?? ''}`
@@ -105,6 +107,7 @@ export function InheritedReporterClaims({ parameters, accountState, details, onR
 	const checkpoint = useRef<{ selection: string; read: ReturnType<typeof createClaimCheckpoint> }>()
 	const [loaded, setLoaded] = useState<{ selection: string; claims: Awaited<ReturnType<typeof loadClaims>> }>()
 	const visible = usePageVisible()
+	const oldActionData = useOldActionDataNotice(active?.settlementState === 'resolved' ? actionDataReadAt : undefined)
 	const wallet = accountState.address
 	const canLoad = active?.forkContinuation === true && wallet !== undefined
 	useEffect(() => {
@@ -209,9 +212,11 @@ export function InheritedReporterClaims({ parameters, accountState, details, onR
 	const batchReason = walletReason ?? (loading ? pageCopy.checkingInheritedClaims : pendingReason)
 	const allClaims = winners.flatMap(({ deposit }) => (deposit.claimIdentity === undefined ? [] : [deposit.claimIdentity]))
 	const totalPayout = winners.reduce((sum, { side, deposit }) => sum + (getImportedEscalationDepositClaimAmount(active, side.key, deposit) ?? 0n), 0n)
+	const claimDataNotice = allClaims.length > 0 ? oldActionData : undefined
 
 	return (
-		<SectionBlock title={copy.inheritedClaims} description={copy.inheritedClaimsDescription}>
+		<SectionBlock title={copy.inheritedClaims} description={claimDataNotice ?? copy.inheritedClaimsDescription}>
+			{claimDataNotice !== undefined && <p className='detail'>{copy.inheritedClaimsDescription}</p>}
 			{canLoad && !open && (
 				<button type='button' onClick={() => setOpen(true)}>
 					{pageCopy.prepareInheritedClaims}

@@ -8,8 +8,9 @@ import { buildRouteHref, parseRouteHash } from '@zoltar/ui-core-shared/navigatio
 import { useSecurityPoolPriceDeadline } from '../hooks/useSecurityPoolPriceDeadline.js'
 import { useSecurityPoolPriceFunds } from '../hooks/useSecurityPoolPriceFunds.js'
 import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
-import { useEffect, useId, useRef } from 'preact/hooks'
+import { useCallback, useEffect, useId, useRef } from 'preact/hooks'
 import { isAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
@@ -36,6 +37,7 @@ import * as capitalCopy from '../../../copy/securityPoolCapital.js'
 export function SecurityPoolsSection({
 	parameters,
 	walletConnected,
+	walletAddress,
 	enabled,
 	environmentKey,
 	activeUniverseId,
@@ -68,17 +70,21 @@ export function SecurityPoolsSection({
 	deploying?: boolean
 	parameters: WriteOperationsParameters
 	walletConnected: boolean
+	walletAddress?: Address | undefined
 	enabled: boolean
 	environmentKey: number
 	activeUniverseId: bigint
 }) {
-	const model = useSecurityPool({ accountAddress: parameters.accountAddress, enabled, environmentKey, activeUniverseId, cacheReads: cacheReads && !deploying, resumeSetup: deploying, securityPoolAddress: page?.pool })
+	const readingWallet = page === undefined ? parameters.accountAddress : (walletAddress ?? parameters.accountAddress)
+	const model = useSecurityPool({ accountAddress: readingWallet, enabled, environmentKey, activeUniverseId, cacheReads: cacheReads && !deploying, resumeSetup: deploying, securityPoolAddress: page?.pool })
 	const refreshError = useStatoblastRefreshError(model.error, model.displayedAt)
 	useStatoblastPageRefresh(registerPageRefresh, model.refresh)
 	useEffect(() => {
 		if (page?.tab !== 'price') onReadStatus?.(model.displayedAt, undefined)
 	}, [model.displayedAt, onReadStatus, page?.tab])
-	const actions = useSecurityPoolActions(model, parameters, deploying)
+	const reportPriceReadStatus = useCallback<ReportStatoblastReadStatus>((readAt, progress) => onReadStatus?.(readAt ?? model.displayedAt, progress), [model.displayedAt, onReadStatus])
+	const wrongNetwork = walletConnected && parameters.accountAddress === undefined ? getWrongNetworkReason() : undefined
+	const actions = useSecurityPoolActions(model, parameters, deploying, wrongNetwork)
 	const openChildPosition = (universeId: bigint, owner: Address | undefined) => {
 		if (page === undefined) {
 			if (owner !== undefined) model.setOwnerInput(owner)
@@ -109,7 +115,7 @@ export function SecurityPoolsSection({
 	const hasPositionOwner = isAddress(model.ownerInput.trim())
 	const connectedPositionOwner = shown?.auctionVault?.bidder ?? model.ownerInput
 	let positionMode: 'own' | 'other' | 'none' = 'none'
-	if (hasPositionOwner) positionMode = connectedPositionOwner.toLowerCase() === parameters.accountAddress?.toLowerCase() ? 'own' : 'other'
+	if (hasPositionOwner) positionMode = connectedPositionOwner.toLowerCase() === readingWallet?.toLowerCase() ? 'own' : 'other'
 	// Once an account has been shown, its price report stays mounted through a failed refresh so typed drafts survive;
 	// only opening another security pool, owner or universe replaces it.
 	const accountIdentity = `${model.managerInput.trim().toLowerCase()}:${model.ownerInput.trim().toLowerCase()}:${model.universeInput.trim()}`
@@ -135,7 +141,7 @@ export function SecurityPoolsSection({
 					</SectionBlock>
 				</>
 			)}
-			{!deploying && page !== undefined && <StatoblastPoolHead page={page} model={model} wallet={parameters.accountAddress} priceChecking={priceDeadline.status !== undefined} fundsRemain={(fundedPriceReports?.length ?? 0) > 0} />}
+			{!deploying && page !== undefined && <StatoblastPoolHead page={page} model={model} wallet={readingWallet} priceChecking={priceDeadline.status !== undefined} fundsRemain={(fundedPriceReports?.length ?? 0) > 0} />}
 			{!deploying && (page === undefined || (model.setup?.stage !== undefined && model.setup.stage < 4)) && (
 				<SectionBlock title={capitalCopy.prepareTitle} description={shownSetupStage === 4 ? undefined : capitalCopy.prepareHint}>
 					<UserMessage tone={shownSetupStage === 4 ? 'success' : 'neutral'} detail={shownSetupStage === undefined ? capitalCopy.prepareProgressUnknown : capitalCopy.prepareProgress(shownSetupStage)} />
@@ -224,7 +230,7 @@ export function SecurityPoolsSection({
 							priceWindowChecking={priceDeadline.status !== undefined}
 							autoRefresh={autoRefresh ?? false}
 							registerPageRefresh={registerPageRefresh}
-							onReadStatus={onReadStatus}
+							onReadStatus={reportPriceReadStatus}
 							priceBand={
 								shown === undefined || shown.acceptedPrice === 0n
 									? undefined

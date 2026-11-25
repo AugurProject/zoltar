@@ -11,6 +11,9 @@ import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { loadSecurityPoolAccount, securityPoolReadClient } from '../../../protocol/securityPool.js'
 import { loadSecurityPoolMintQuestion } from '../../../protocol/securityPoolMint.js'
 import { securityPoolAmountOrUndefined, securityPoolUnsignedId } from '../lib/draft.js'
+import { reviewBalance, type ReviewRow } from '../lib/reviewRows.js'
+import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
+import { currentStateCheckFailed } from '@zoltar/ui-core-shared/copy/transaction.js'
 import type { useSecurityPool } from './useSecurityPool.js'
 import type { useSecurityPoolActions } from './useSecurityPoolActions.js'
 
@@ -21,7 +24,7 @@ export function useSecurityPoolPurchase(model: Pick<ReturnType<typeof useSecurit
 	const maximumRecoveryRep = useSignal('')
 	const minimumShares = useSignal('0')
 	const recoveryKnowledge = useSignal<{ selection: string; applicable: boolean }>()
-	const loaded = useSignal<{ key: string; quote?: SecurityPoolMintQuote; recovery?: Awaited<ReturnType<typeof loadRecoveryMintFunding>>; question?: Awaited<ReturnType<typeof loadSecurityPoolMintQuestion>>; error?: string } | undefined>(undefined)
+	const loaded = useSignal<{ key: string; quote?: SecurityPoolMintQuote; readAt?: number; recovery?: Awaited<ReturnType<typeof loadRecoveryMintFunding>>; question?: Awaited<ReturnType<typeof loadSecurityPoolMintQuestion>>; error?: string } | undefined>(undefined)
 	const snapshot = model.snapshot
 	const questionId = securityPoolUnsignedId(questionInput.value)
 	const decimals = snapshot?.collateral.decimals ?? 18
@@ -48,7 +51,7 @@ export function useSecurityPoolPurchase(model: Pick<ReturnType<typeof useSecurit
 				}
 				const recovery = await loadRecoveryMintFunding(client, snapshot.securityPool, snapshot.universeId, snapshot.auctionVault?.bidder ?? snapshot.owner, quote.recoveryAttoRep, snapshot.blockNumber)
 				if (current) {
-					loaded.value = { key, quote, question, recovery }
+					loaded.value = { key, quote, question, recovery, readAt: Date.now() }
 				}
 			})().catch(failure => {
 				if (current) loaded.value = { key, error: getErrorMessage(failure, 'Unable to quote this purchase.') }
@@ -132,6 +135,7 @@ export function useSecurityPoolPurchase(model: Pick<ReturnType<typeof useSecurit
 			minimumShares.value = value
 		},
 		quote,
+		quoteReadAt: current?.readAt,
 		position: current?.question,
 		quoteLoading: current === undefined && amount !== undefined && amount > 0n,
 		reason,
@@ -142,8 +146,10 @@ export function useSecurityPoolPurchase(model: Pick<ReturnType<typeof useSecurit
 				const buyer = selected.auctionVault?.bidder ?? selected.owner
 				const captured = { questionId, mintAttoEth: amount, maximumPurchaseFeeAttoEth: fee, minimumShares: minimum, maximumRecoveryAttoRep: recoveryBudget }
 				const collateral = (value: bigint) => `${formatUnits(value, decimals)} ${selected.collateral.symbol}`
+				let reviewRows: readonly ReviewRow[] = []
 				return {
 					...buildSecurityPoolMintRequest({ trader: buyer, securityPool: selected.securityPool, universeId: selected.universeId, recipient: buyer, ...captured }),
+					readReviewRows: () => reviewRows,
 					reviewDescription: mintReview({
 						amount: collateral(amount),
 						purchaseFee: collateral(quote.purchaseFeeAttoEth),
@@ -152,7 +158,7 @@ export function useSecurityPoolPurchase(model: Pick<ReturnType<typeof useSecurit
 						recovery: quote.recoveryAttoRep === 0n ? undefined : { amount: formatUnits(quote.recoveryAttoRep, 18), cap: formatUnits(recoveryBudget, 18) },
 					}),
 					validateBeforeSubmit: async () => {
-						const client = createConnectedReadClient()
+						const client = withStatoblastRequestTimeout(createConnectedReadClient(), currentStateCheckFailed)
 						const latest = await loadSecurityPoolAccount(client, selected.securityPool, selected.owner, selected.universeId)
 						if (latest.chainId !== selected.chainId || latest.capitalLedger !== selected.capitalLedger) throw new Error('Security pool context changed. Review again.')
 						const question = await loadSecurityPoolMintQuestion(client, latest, captured.questionId)
@@ -171,6 +177,11 @@ export function useSecurityPoolPurchase(model: Pick<ReturnType<typeof useSecurit
 							latest.collateralAllowance < captured.mintAttoEth + fresh.purchaseFeeAttoEth
 						)
 							throw new Error('Purchase prerequisites changed. Refresh and review again.')
+						const { symbol } = latest.collateral
+						reviewRows = [
+							reviewBalance(collateralCopy.walletBalance(symbol), latest.walletCollateral, latest.walletCollateral - captured.mintAttoEth - fresh.purchaseFeeAttoEth, decimals, symbol),
+							...(fresh.recoveryAttoRep === 0n ? [] : [reviewBalance(collateralCopy.walletBalance('REP'), funding.balance, funding.balance - fresh.recoveryAttoRep, 18, 'REP')]),
+						]
 					},
 				}
 			}),

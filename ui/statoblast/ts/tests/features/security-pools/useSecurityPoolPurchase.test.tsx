@@ -94,6 +94,7 @@ test('a wallet that covers the collateral and quoted fee can purchase without fu
 	if (request === undefined) throw new Error('Missing purchase')
 	expect(decodeFunctionData({ abi, data: request.data }).args[5]).toBe(unit / 50n)
 	await request.validateBeforeSubmit?.()
+	expect(request.readReviewRows?.()).toContainEqual({ label: 'Wallet WETH', value: '1.01 WETH → 0 WETH' })
 	await hook.setProps({ snapshot: { ...snapshot, collateralAllowance: unit, blockNumber: 11n } })
 	await waitFor(() => expect(hook.state().reason).toBe('Collateral approval required.'))
 })

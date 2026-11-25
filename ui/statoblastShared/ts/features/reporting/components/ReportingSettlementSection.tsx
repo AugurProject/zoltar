@@ -247,6 +247,7 @@ function ReportingClaimTable({
 }
 
 export function ReportingSettlementSection({
+	actionDataNotice,
 	showPositions = true,
 	designedOverview = false,
 	activeReportingDetails,
@@ -269,6 +270,7 @@ export function ReportingSettlementSection({
 	withdrawEscalationEnabled,
 	withdrawGuardMessage,
 }: {
+	actionDataNotice?: string | undefined
 	showPositions?: boolean
 	designedOverview?: boolean
 	activeReportingDetails: ActiveReportingDetails | undefined
@@ -327,8 +329,9 @@ export function ReportingSettlementSection({
 	const shouldShowWithdrawEmptyState = !loadingReportingDetails && !reportingStatusMissing && !hasLocalClaimRecords
 	const hasImportedForkedDeposits = activeReportingDetails?.sides.some(side => side.importedUserDeposits.length > 0) ?? false
 	const migrationSettlement = activeReportingDetails?.settlementState === 'migration-required'
+	const hasSettlementAction = designedClaimDetails === undefined ? withdrawableSides.length > 0 && !migrationSettlement : designedClaimDetails.sides.some(side => side.key === designedClaimDetails.questionOutcome && side.userDeposits.length > 0)
 	return (
-		<SectionBlock className='reporting-settlement-section' title={designedClaimDetails === undefined ? transactionCopy.settleEscalationDeposits : claimsCopy.claimYourRep} variant={designedClaimDetails === undefined ? 'embedded' : 'default'}>
+		<SectionBlock className='reporting-settlement-section' title={designedClaimDetails === undefined ? transactionCopy.settleEscalationDeposits : claimsCopy.claimYourRep} description={hasSettlementAction ? actionDataNotice : undefined} variant={designedClaimDetails === undefined ? 'embedded' : 'default'}>
 			<WalletActionFixReason
 				actionButtonRef={firstSettleActionButtonRef}
 				availability={{ disabled: !isOnActiveAppChain || !withdrawEscalationEnabled || withdrawGuardMessage !== undefined, reason: displayedWithdrawGuardMessage, walletBlocker: settlementWalletBlocker }}

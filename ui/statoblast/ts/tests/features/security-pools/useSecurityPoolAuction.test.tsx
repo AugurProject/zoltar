@@ -5,6 +5,7 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { currentStateCheckFailed } from '@zoltar/ui-core-shared/copy/transaction.js'
 import { unscopedTransaction } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import { useSecurityPoolAuction, type SecurityPoolAuctionParameters } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolAuction.js'
 import type { SecurityPoolTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
@@ -74,6 +75,7 @@ test('auction bidding sends only the reviewed collateral bid without REP approva
 	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'submitBid', args: [2n, 5n * unit, 12_000n] })
 	expect(last(state.requests).reviewDescription).toContain('At closing, that REP backs the position’s commitment.')
 	await last(state.requests).validateBeforeSubmit?.()
+	expect(last(state.requests).readReviewRows?.()).toContainEqual({ label: 'Number of lots', value: '0 → 2' })
 	state.values['lotAttoEth'] = 2n * unit
 	state.values['targetLots'] = 5n
 	await expect(last(state.requests).validateBeforeSubmit?.()).rejects.toThrow()
@@ -125,6 +127,39 @@ test('successive auction reads can take longer than one request timeout', async 
 		expect(firstBid(state, 'bid read through slow RPC').id).toBe(1n)
 	} finally {
 		timer.mockRestore()
+	}
+})
+
+test('a timed-out bid check uses the review retry message and recalculates on retry', async () => {
+	const stalled = createDeferred<void>()
+	let delay = false
+	const state = await setup(fixture => {
+		const client = fixture.client.extend(() => ({
+			getBlock: async (...args: Parameters<typeof fixture.client.getBlock>) => {
+				if (delay) await stalled.promise
+				return await fixture.client.getBlock(...args)
+			},
+		}))
+		installActiveEnvironmentForTesting({ ...fixture.backend, createReadClient: () => client })
+	})
+	await terms(state)
+	await act(() => state.hook.state().bid())
+	const request = last(state.requests)
+	const shortened = new Proxy(globalThis.setTimeout, {
+		apply(schedule, receiver, [handler, timeout, ...args]) {
+			return Reflect.apply(schedule, receiver, [handler, timeout === 15_000 ? 20 : timeout, ...args])
+		},
+	})
+	const timer = spyOn(globalThis, 'setTimeout').mockImplementation(shortened)
+	try {
+		delay = true
+		await expect(request.validateBeforeSubmit?.()).rejects.toThrow(currentStateCheckFailed)
+		delay = false
+		await request.validateBeforeSubmit?.()
+		expect(request.readReviewRows?.()).toContainEqual({ label: 'Number of lots', value: '0 → 2' })
+	} finally {
+		timer.mockRestore()
+		stalled.resolve()
 	}
 })
 

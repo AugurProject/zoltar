@@ -1,5 +1,5 @@
 import * as pageCopy from '@zoltar/ui-statoblast-shared/copy/statoblastShell.js'
-import type { RegisterStatoblastPageRefresh } from '@zoltar/ui-statoblast-shared/features/useStatoblastPageRefresh.js'
+import { useOldActionDataNotice, type RegisterStatoblastPageRefresh } from '@zoltar/ui-statoblast-shared/features/useStatoblastPageRefresh.js'
 import { StatoblastWatchlist } from './StatoblastWatchlist.js'
 import type { ComponentProps } from 'preact'
 import { DeploymentRouteContent } from '@zoltar/ui-zoltar-shared/features/deployment/components/DeploymentRouteContent.js'
@@ -20,6 +20,11 @@ type Props = {
 	migration: ComponentProps<typeof ZoltarMigrationWorkflow>
 }
 
+function StatoblastMigrationWorkflow(props: Props['migration']) {
+	const actionDataNotice = useOldActionDataNotice(props.operations.zoltarUniverse?.hasForked === true ? props.operations.migrationBalancesReadAt : undefined)
+	return <ZoltarMigrationWorkflow {...props} singleForm actionDataNotice={actionDataNotice} />
+}
+
 export function AppRouteContent({ page, registerPageRefresh, contractsMissing, deploy, securityPools, questions, migration }: Props) {
 	if (contractsMissing)
 		return (
@@ -38,7 +43,7 @@ export function AppRouteContent({ page, registerPageRefresh, contractsMissing, d
 		case 'deploy-pool':
 			return <SecurityPoolsSection key='deploy-pool' {...securityPools} deploying />
 		case 'migrate-rep':
-			return <ZoltarMigrationWorkflow {...migration} singleForm />
+			return <StatoblastMigrationWorkflow {...migration} />
 		default:
 			return <NotFoundSection links={[{ href: statoblastPageHref({ kind: 'watchlist' }), label: pageCopy.watchlist }]} />
 	}

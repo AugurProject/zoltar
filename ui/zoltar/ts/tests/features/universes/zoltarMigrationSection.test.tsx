@@ -100,12 +100,14 @@ describe('ZoltarMigrationSection', () => {
 
 	test('the single migration form shows outcomes and amount together and confirms an irreversible burn', async () => {
 		const sends: bigint[] = []
-		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, { ...createProps({ zoltarMigrationForm: createForm({ amount: '15' }), onMigrateInternalRep: amount => sends.push(amount) }), singleForm: true }))
+		const actionDataNotice = 'Data from 6m ago. Checked again before sending.'
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, { ...createProps({ zoltarMigrationForm: createForm({ amount: '15' }), onMigrateInternalRep: amount => sends.push(amount) }), singleForm: true, actionDataNotice }))
 		cleanupRenderedComponent = rendered.cleanup
 		const queries = within(document.body)
 		expect(queries.getByRole('checkbox', { name: /Yes/ })).toBeTruthy()
 		expect(queries.getByLabelText('Amount to migrate')).toBeTruthy()
 		expect(document.body.querySelector('.migration-wizard-steps')).toBeNull()
+		expect(document.body.querySelector('.migration-single-form .section-block-copy p')?.textContent).toBe(actionDataNotice)
 		expectTransactionButtonDisabled(document.body, 'Migrate REP')
 		const confirmation = queries.getByRole('checkbox', { name: /Burn .*irreversible/ })
 		expect(confirmation.closest('label')?.querySelector('span')?.textContent).toMatch(/Burn 5\sREP.*irreversible/)

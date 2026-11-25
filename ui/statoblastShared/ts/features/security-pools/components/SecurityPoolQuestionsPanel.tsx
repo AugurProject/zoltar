@@ -26,7 +26,7 @@ import { checkStatoblastEntries } from '../../../protocol/statoblastEntries.js'
 import { decodeWatchlistRows, loadWatchlistRows, parseWatchlistEntity, type WatchlistRow } from '../../../protocol/watchlistRows.js'
 import { statoblastDisplayCache } from '../../../protocol/statoblastPageCache.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
-import { useStatoblastPageRefresh, type RegisterStatoblastPageRefresh } from '../../useStatoblastPageRefresh.js'
+import { useOldActionDataNotice, useStatoblastPageRefresh, type RegisterStatoblastPageRefresh } from '../../useStatoblastPageRefresh.js'
 import type { SecurityPoolActions } from './SecurityPoolControls.js'
 import { SecurityPoolApprovedQuestions } from './SecurityPoolApprovedQuestions.js'
 import { SecurityPoolButton } from './SecurityPoolControls.js'
@@ -121,12 +121,13 @@ export function SecurityPoolQuestionsPanel({
 	useBlockRefresh(() => void refreshRows(), enabled && saved.length > 0)
 	useStatoblastPageRefresh(registerPageRefresh, refreshRows)
 	const details = savedDetails?.scope === readScope ? savedDetails : undefined
-	const [result, setResult] = useState<{ scope: string; status: string; id: bigint; mint: boolean }>()
+	const [result, setResult] = useState<{ scope: string; status: string; id: bigint; mint: boolean; readAt: number }>()
 	const [error, setError] = useState<string>()
 	const [checking, setChecking] = useState(false)
 	const id = designQuestionId(actions.questionInput.trim())
 	const findId = useId()
 	const selected = result?.scope === readScope && result.id === id ? result : undefined
+	const registrationDataNotice = useOldActionDataNotice(selected?.status === 'unregistered-question' && !forked ? selected.readAt : undefined)
 	const find = async () => {
 		if (id === undefined || checking) return
 		setError(undefined)
@@ -146,7 +147,7 @@ export function SecurityPoolQuestionsPanel({
 				if (!market.exists) status = 'not-a-question'
 				mint = market.exists && market.endTime > block.timestamp && !forked && admission?.mode !== 'custom'
 			}
-			if (guard.isCurrent()) setResult({ scope: readScope, status, id, mint })
+			if (guard.isCurrent()) setResult({ scope: readScope, status, id, mint, readAt: Date.now() })
 		} catch (failure) {
 			setError(failure instanceof Error ? failure.message : pageCopy.couldNotFindQuestion)
 		} finally {
@@ -203,6 +204,7 @@ export function SecurityPoolQuestionsPanel({
 				{selected?.status === 'unregistered-question' && (
 					<>
 						<p>{pageCopy.questionNotRegistered}</p>
+						{registrationDataNotice !== undefined && <p className='detail'>{registrationDataNotice}</p>}
 						<SecurityPoolButton
 							model={actions}
 							action='registerSecurityPoolQuestion'

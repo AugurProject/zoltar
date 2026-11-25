@@ -6,7 +6,7 @@ import { SecurityPoolQuestionWorkspace } from '../../app/components/SecurityPool
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
+import { createAccountState, disconnectedAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs, simulationWaitOptions } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
@@ -18,6 +18,20 @@ import { statoblastDisplayCache } from '@zoltar/ui-statoblast-shared/protocol/st
 
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 const callbacks = { onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined, refreshState: async () => undefined }
+
+test('a cold question keeps its layout and announces loading while the read connection starts', async () => {
+	installStatoblastRouting()
+	const view = lifecycle.trackRendered(
+		await renderIntoDocument(
+			<SecurityPoolQuestionWorkspace accountState={disconnectedAccountState} parameters={{ ...callbacks, accountAddress: undefined }} deploymentStatuses={[]} enabled={false} environmentKey={0} universeId={0n} currentTimestamp={undefined} entry={{ kind: 'question', pool: zeroAddress, questionId: 1n, tab: 'shares' }} />,
+		),
+	)
+	expect(view.container.querySelector('.statoblast-question-loading [role="status"]')?.textContent).toBe('Loading question details…')
+	expect(view.container.querySelector('.statoblast-question-loading [aria-busy="true"]')).not.toBeNull()
+	expect(view.container.querySelectorAll('.statoblast-question-loading .skeleton-line').length).toBeGreaterThan(1)
+	expect(view.container.querySelector('nav[aria-label="Question views"]')?.textContent).toContain('Shares')
+	expect(view.container.querySelector('.empty-state')).toBeNull()
+})
 
 test(
 	'a pool and question ID open the question and preserve visible data through a failed refresh',
@@ -92,6 +106,7 @@ test(
 			}
 			await waitFor(() => expect(view.container.textContent).toContain('Temporary question read failure.'), simulationWaitOptions)
 			expect(view.container.textContent).not.toContain('showing data from')
+			expect(view.container.querySelector('.statoblast-question-loading')).toBeNull()
 			offline = false
 			await clickRetry()
 			await waitFor(() => expect(view.container.textContent).toContain('Mint complete sets'), simulationWaitOptions)
@@ -104,6 +119,7 @@ test(
 			await waitFor(() => expect(view.container.textContent).toContain('Temporary question read failure.'), simulationWaitOptions)
 			expect(view.container.textContent).toMatch(/Couldn’t refresh, showing data from \d+s ago\./)
 			expect(view.container.textContent).toContain('Mint complete sets')
+			expect(view.container.querySelector('.statoblast-question-loading')).toBeNull()
 			offline = false
 			await clickRetry()
 			await waitFor(() => expect(view.container.textContent).not.toContain('showing data from'), simulationWaitOptions)

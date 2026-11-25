@@ -12,6 +12,8 @@ import { TransactionStepsModal } from '../components/TransactionStepsModal.js'
 import { TransactionStepsContent } from '../components/TransactionStepsContent.js'
 import { TransactionFundingSummary } from '../components/TransactionFundingSummary.js'
 import { createTransactionStepController, transactionStepOutcome, transactionSteps } from '../transactions/transactionSteps.js'
+import { recordTransactionSubmitted, resetTransactionActivityForTesting, transactionActivity } from '../transactions/transactionActivityStore.js'
+import { createDeferred } from './testUtils/deferred.js'
 
 test('shows funding in plan order with readable amounts and exact values available', async () => {
 	const dom = installDomEnvironment()
@@ -93,6 +95,87 @@ test('closes a confirmed transaction review without another dialog', async () =>
 		expect(within(rendered.container).queryByRole('dialog')).toBeNull()
 		expect(transactionSteps.value).toBeUndefined()
 	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('shows a fixed review placeholder with an available retry after a check fails', async () => {
+	const dom = installDomEnvironment()
+	const controller = createTransactionStepController(undefined, true, true)
+	controller.setPlan([{ title: 'Claim REP', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: undefined }])
+	const checking = createDeferred<void>()
+	let retry = false
+	const reviewed = controller.review(0, {
+		check: async () => {
+			if (!retry) await checking.promise
+			controller.setReviewRows(0, [{ label: 'Wallet REP', value: '1 → 3' }])
+		},
+	})
+	void reviewed.catch(() => undefined)
+	const rendered = await renderIntoDocument(<TransactionStepsModal contextKey='rep-claim' finalActionLabel='Continue in wallet' />)
+	const queries = within(rendered.container)
+	try {
+		expect(rendered.container.querySelectorAll('.skeleton-row')).toHaveLength(3)
+		expect(queries.getByRole('button', { name: 'Continue in wallet' }).hasAttribute('disabled')).toBe(true)
+		await act(async () => {
+			checking.reject(new Error('The current state check timed out.'))
+			await checking.promise.catch(() => undefined)
+		})
+		expect(rendered.container.textContent).toContain('The current state check timed out.')
+		expect(queries.getByRole('button', { name: 'Continue in wallet' }).hasAttribute('disabled')).toBe(true)
+		retry = true
+		await act(async () => {
+			fireEvent.click(queries.getByRole('button', { name: 'Try again' }))
+			await Promise.resolve()
+		})
+		expect(rendered.container.textContent).toContain('1 → 3')
+		expect(queries.getByRole('button', { name: 'Continue in wallet' }).hasAttribute('disabled')).toBe(false)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Continue in wallet' })))
+		await reviewed
+		expect(rendered.container.textContent).toContain('Confirm the transaction in your wallet.')
+	} finally {
+		transactionSteps.value?.cancel()
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('keeps a sped-up transaction visible and can release its replacement hash from the pending dialog', async () => {
+	const dom = installDomEnvironment()
+	const controller = createTransactionStepController(undefined, true, true)
+	const hash = '0x1111111111111111111111111111111111111111111111111111111111111111'
+	const replacement = '0x2222222222222222222222222222222222222222222222222222222222222222'
+	controller.setPlan([{ title: 'Claim REP', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: undefined }])
+	controller.startWithoutReview(0)
+	const rendered = await renderIntoDocument(<TransactionStepsModal contextKey='rep-claim' />)
+	const queries = within(rendered.container)
+	try {
+		expect(queries.getByRole('button', { name: 'Close' }).hasAttribute('disabled')).toBe(true)
+		await act(() => {
+			recordTransactionSubmitted({ hash, scope: undefined, title: 'Claim REP' })
+			controller.submitted(hash)
+		})
+		expect(queries.getByRole('button', { name: 'Close' }).hasAttribute('disabled')).toBe(false)
+		expect(rendered.container.textContent).toContain('Safe to close. This stays tracked in Activity.')
+		await act(() => {
+			recordTransactionSubmitted({ hash: replacement, previousHash: hash, scope: undefined, title: 'Claim REP' })
+			controller.submitted(replacement, true)
+		})
+		expect(rendered.container.textContent).toContain('Sped up in your wallet.')
+		expect(rendered.container.querySelector('.transaction-hash-link')?.getAttribute('title')).toBe(replacement)
+		const details = rendered.container.querySelector('details')
+		if (details === null) throw new Error('Missing transaction tracking controls')
+		await act(() => {
+			details.open = true
+			details.dispatchEvent(new Event('toggle'))
+		})
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Stop tracking' })))
+		expect(transactionActivity.value.entries).toEqual([expect.objectContaining({ hash: replacement, status: 'failed', failureKind: 'dropped' })])
+		expect(rendered.container.textContent).toContain('No longer tracked. Check it before sending again.')
+	} finally {
+		transactionSteps.value?.cancel()
+		resetTransactionActivityForTesting()
 		await rendered.cleanup()
 		dom.cleanup()
 	}

@@ -10,6 +10,7 @@ import { getOpenOracleGameTuple } from '@zoltar/open-oracle-shared/openOracle/op
 import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { resetRoutingForTesting } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { SecurityPoolsSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsSection.js'
 import * as copy from '@zoltar/ui-statoblast-shared/copy/securityPoolCapital.js'
@@ -69,6 +70,22 @@ test('walletless Capital shows the pool without reading a zero-address position 
 	await waitFor(() => expect(source.reads.some(read => read.name === 'ownerAccount' && read.args?.includes(owner))).toBe(true))
 	await waitFor(() => expect(view.container.querySelector('.statoblast-capital-position h3')?.textContent).toBe('Position'))
 	expect(view.container.textContent).not.toContain('Connect a wallet to see your position.')
+})
+
+test('Capital keeps the connected wallet position readable with a switch-network reason when writes are unavailable', async () => {
+	installStatoblastRouting()
+	const source = capitalClient()
+	source.install()
+	window.history.replaceState({}, '', `#/pool/${securityPool}`)
+	const props = { page: { kind: 'pool', pool: securityPool, tab: 'capital' }, enabled: true, environmentKey: 0, activeUniverseId: 0n, walletConnected: true, walletAddress: owner } as const
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolsSection {...props} parameters={parameters} />))
+	await waitFor(() => expect(view.container.querySelector('.statoblast-capital-position h3')?.textContent).toBe('Your position'))
+	await act(() => render(<SecurityPoolsSection {...props} parameters={{ ...parameters, accountAddress: undefined }} />, view.container))
+	expect(view.container.querySelector('.statoblast-capital-position h3')?.textContent).toBe('Your position')
+	const claim = [...view.container.querySelectorAll('button')].find(button => button.textContent === copy.claim)
+	expect(claim?.disabled).toBe(true)
+	const reasonId = claim?.getAttribute('aria-describedby')
+	expect(reasonId === null || reasonId === undefined ? undefined : document.getElementById(reasonId)?.textContent).toBe(getWrongNetworkReason())
 })
 
 test('walletless fork page shows public context and keeps personal reads and transactions locked', async () => {

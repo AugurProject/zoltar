@@ -46,6 +46,7 @@ export type ForkAdmissionApproval = {
 }
 
 export type ReportingSectionProps = ReportingRouteContentProps & {
+	actionDataReadAt?: number | undefined
 	designedOverview?: boolean
 	manageDeadlineRefresh?: boolean
 	showLifecycle?: boolean

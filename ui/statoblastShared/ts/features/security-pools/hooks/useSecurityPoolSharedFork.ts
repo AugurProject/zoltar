@@ -14,18 +14,22 @@ import {
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getActiveBackend, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
+import { currentStateCheckFailed } from '@zoltar/ui-core-shared/copy/transaction.js'
 import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
+import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { decodeStoredValue } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
 import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
 import { securityPoolReadClient, type SecurityPoolAccountSnapshot, type SecurityPoolTransaction } from '../../../protocol/securityPool.js'
 import { loadSharedForkOutcome, loadSecurityPoolSourceRecovery, buildSecurityPoolRecoveryPreparation } from '../../../protocol/securityPoolSharedFork.js'
 import { securityPoolAmountOrUndefined, securityPoolUnsignedId } from '../lib/draft.js'
+import { reviewBalance, type ReviewRow } from '../lib/reviewRows.js'
 import type { SecurityPoolActions } from '../components/SecurityPoolControls.js'
 import * as copy from '../../../copy/securityPoolSharedFork.js'
 import { connect } from '../../../copy/securityPool.js'
 import * as recoveryCopy from '../../../copy/forkRecovery.js'
 import { branchPriceTarget } from './useSecurityPoolPrice.js'
 import { statoblastDisplayCache } from '../../../protocol/statoblastPageCache.js'
+import { forkDisplayCache, recoveryDisplayCache, storedRecoverySnapshot } from '../../../protocol/forkDisplayCache.js'
 import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 
 export type SecurityPoolSharedForkParameters = {
@@ -43,10 +47,6 @@ function branchDisplayCache(profile: NetworkProfile, pool: Address, owner: Addre
 	)
 }
 
-function readRecovery(state: SecurityPoolForkSnapshot, questionId: bigint, signal?: AbortSignal) {
-	return loadSecurityPoolSourceRecovery(withStatoblastRequestTimeout(createConnectedReadClient(), recoveryCopy.recoveryReadTimeout, signal), state, questionId)
-}
-
 export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = snapshot, actions, openUniverse, bidder }: SecurityPoolSharedForkParameters) {
 	const securityPool = snapshot?.owner === zeroAddress ? undefined : snapshot
 	const backend = getActiveBackend()
@@ -59,10 +59,10 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 	const invalidRightsInput = useSignal('0')
 	const yesRightsInput = useSignal('0')
 	const noRightsInput = useSignal('0')
-	const loaded = useSignal<{ backend: typeof backend; key: string; state?: SecurityPoolForkSnapshot; outcome?: Awaited<ReturnType<typeof loadSharedForkOutcome>>; error?: string } | undefined>(undefined)
-	const savedFork = useSignal<{ backend: typeof backend; key: string; state: SecurityPoolForkSnapshot } | undefined>(undefined)
+	const loaded = useSignal<{ backend: typeof backend; key: string; state?: SecurityPoolForkSnapshot; readAt?: number; outcome?: Awaited<ReturnType<typeof loadSharedForkOutcome>>; error?: string } | undefined>(undefined)
+	const savedFork = useSignal<{ backend: typeof backend; key: string; state: SecurityPoolForkSnapshot; readAt: number } | undefined>(undefined)
 	const retry = useSignal(0)
-	const recovered = useSignal<{ backend: typeof backend; scope: string; key: string; source?: Awaited<ReturnType<typeof readRecovery>> | undefined; readAt?: number | undefined; error?: string } | undefined>(undefined)
+	const recovered = useSignal<{ backend: typeof backend; scope: string; key: string; source?: Awaited<ReturnType<typeof loadSecurityPoolSourceRecovery>> | undefined; readAt?: number | undefined; error?: string } | undefined>(undefined)
 	const recoveryRetry = useSignal(0)
 	const clearRecoveryDraft = () => {
 		sharesInput.value = ''
@@ -96,6 +96,10 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 		const { securityPool: pool, owner } = presentationSnapshot
 		return branchDisplayCache(profile, pool, owner, universeId, outcomeIndex)
 	}, [profile, presentationSnapshot?.securityPool, presentationSnapshot?.owner, universeId, outcomeIndex])
+	const displayCache = useMemo(() => {
+		if (presentationSnapshot === undefined || presentationSnapshot.owner === zeroAddress || universeId === undefined) return undefined
+		return forkDisplayCache(profile, presentationSnapshot.securityPool, presentationSnapshot.owner, universeId, outcomeIndex)
+	}, [profile, presentationSnapshot?.securityPool, presentationSnapshot?.owner, universeId, outcomeIndex])
 	const presentationKey = `${presentationSnapshot?.securityPool}:${presentationSnapshot?.owner}:${universeId}:${outcomeIndex}`
 	const key = `${securityPool?.securityPool}:${securityPool?.owner}:${universeId}:${outcomeIndex}:${securityPool?.blockHash}:${retry.value}`
 	useEffect(() => {
@@ -112,41 +116,69 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 				.then(({ state, outcome }) => {
 					if (abort.signal.aborted || getActiveBackend() !== backend) return
 					const child = branchPriceTarget(state)
+					const block = { number: state.blockNumber, timestamp: state.timestamp }
+					if (state.forkTime > 0n) {
+						const { chainId, securityPool, owner, universeId, timestamp, forkTime, choiceDeadline, activationDeadline, choice, branch } = state
+						const display = {
+							chainId,
+							securityPool,
+							owner,
+							universeId,
+							timestamp,
+							forkTime,
+							choiceDeadline,
+							activationDeadline,
+							choice,
+							branch: branch === undefined ? undefined : { universeId: branch.universeId, outcomeIndex: branch.outcomeIndex, prepared: branch.prepared, started: branch.started, ready: branch.ready, parentCash: branch.parentCash, recoveryAttoRep: branch.recoveryAttoRep },
+						}
+						displayCache?.write(display, block)
+						if (outcomeIndex !== undefined && choice.recorded && choice.outcomeIndex === outcomeIndex) forkDisplayCache(profile, securityPool, owner, universeId).write(display, block)
+					}
 					if (child !== undefined && state.forkTime > 0n) {
-						const block = { number: state.blockNumber, timestamp: state.timestamp }
 						branchCache?.write(child, block)
 						if (outcomeIndex !== undefined && state.choice.recorded && state.choice.outcomeIndex === outcomeIndex) branchDisplayCache(profile, state.securityPool, state.owner, state.universeId).write(child, block)
 					}
-					loaded.value = { backend, key, state, ...(outcome === undefined ? {} : { outcome }) }
-					savedFork.value = { backend, key: presentationKey, state }
+					const readAt = Date.now()
+					loaded.value = { backend, key, state, readAt, ...(outcome === undefined ? {} : { outcome }) }
+					savedFork.value = { backend, key: presentationKey, state, readAt }
 				})
 				.catch(error => {
 					if (!abort.signal.aborted && getActiveBackend() === backend) loaded.value = { backend, key, error: getErrorMessage(error, copy.forkReadFailed) }
 				})
 		}
 		return () => abort.abort()
-	}, [backend, key, branchCache])
+	}, [backend, key, branchCache, displayCache])
 	const current = loaded.value?.backend === backend && loaded.value.key === key ? loaded.value : undefined
 	const state = current?.state
-	const displayedState = state ?? (savedFork.value?.backend === backend && savedFork.value.key === presentationKey ? savedFork.value.state : undefined)
+	const savedState = savedFork.value?.backend === backend && savedFork.value.key === presentationKey ? savedFork.value : undefined
+	const restoredState = useMemo(() => (state === undefined && savedState === undefined ? displayCache?.read() : undefined), [displayCache, state, savedState])
+	const displayedState = state ?? savedState?.state ?? restoredState?.value
 	const savedBranch = useMemo(() => (state === undefined ? branchCache?.read()?.value : undefined), [branchCache, key, state])
 	const recoveryScope = `${presentationSnapshot?.securityPool}:${presentationSnapshot?.owner}:${universeId}:${questionId}`
+	const recoveryCache = useMemo(() => {
+		if (presentationSnapshot === undefined || presentationSnapshot.owner === zeroAddress || universeId === undefined || questionId === undefined) return undefined
+		return recoveryDisplayCache(profile, presentationSnapshot.securityPool, presentationSnapshot.owner, universeId, questionId)
+	}, [profile, recoveryScope])
 	const recoveryKey = `${securityPool?.blockHash}:${state?.blockHash}:${retry.value}:${recoveryRetry.value}`
 	const displayedRecovery = recovered.value?.backend === backend && recovered.value.scope === recoveryScope ? recovered.value : undefined
+	const restoredRecovery = useMemo(() => recoveryCache?.read(), [recoveryCache])
 	const recoveryState = state !== undefined && displayedRecovery?.key === recoveryKey ? displayedRecovery : undefined
 	useEffect(() => {
 		const abort = new AbortController()
 		if (state !== undefined && state.forkTime > 0n && questionId !== undefined) {
-			void readRecovery(state, questionId, abort.signal)
+			const client = withStatoblastRequestTimeout(createConnectedReadClient(), recoveryCopy.recoveryReadTimeout, abort.signal)
+			void loadSecurityPoolSourceRecovery(client, state, questionId)
 				.then(source => {
-					if (!abort.signal.aborted && getActiveBackend() === backend) recovered.value = { backend, scope: recoveryScope, key: recoveryKey, source, readAt: Date.now() }
+					if (abort.signal.aborted || getActiveBackend() !== backend) return
+					recoveryCache?.write(storedRecoverySnapshot(source), { number: state.blockNumber, timestamp: state.timestamp })
+					recovered.value = { backend, scope: recoveryScope, key: recoveryKey, source, readAt: Date.now() }
 				})
 				.catch(error => {
 					if (!abort.signal.aborted && getActiveBackend() === backend) recovered.value = { backend, scope: recoveryScope, key: recoveryKey, source: displayedRecovery?.source, readAt: displayedRecovery?.readAt, error: getErrorMessage(error, recoveryCopy.recoveryReadFailed) }
 				})
 		}
 		return () => abort.abort()
-	}, [backend, recoveryScope, recoveryKey])
+	}, [backend, recoveryScope, recoveryKey, recoveryCache])
 	const recovery = recoveryState?.source
 	const pendingReason = universeId === undefined ? 'Enter a valid source universe.' : 'Checking fork status…'
 	const walletReason = bidder === undefined ? connect : undefined
@@ -167,9 +199,14 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 		return selected.branch?.started ? 'This branch migration is already started.' : undefined
 	}
 	const prepareBranchReason = publicBranchReason ?? (state && custodyPreparationReason(state))
-	const recheckStage = (reasonFor: (latest: SecurityPoolForkSnapshot) => string | undefined) => async (latest: SecurityPoolForkSnapshot) => {
+	const recheckStage = (reasonFor: (latest: SecurityPoolForkSnapshot) => string | undefined, after: string) => async (latest: SecurityPoolForkSnapshot) => {
 		const reason = latest.forkTime === 0n || latest.branch === undefined ? 'Fork context changed. Review again.' : reasonFor(latest)
 		if (reason !== undefined) throw new Error(reason)
+		const branch = latest.branch
+		let before: string = copy.branchStates.unprepared
+		if (branch?.started) before = copy.branchStates.waiting
+		else if (branch?.prepared) before = copy.branchStates.chosen
+		return [{ label: copy.state, value: `${before} → ${after}` }]
 	}
 	const startReason = publicBranchReason ?? (state && migrationReason(state))
 	const activationReason = (selected: SecurityPoolForkSnapshot) => {
@@ -200,18 +237,21 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 		(transferAmounts === undefined || transferAmounts.every(amount => amount === 0n) || transferAmounts.some(amount => amount >= 1n << 256n) ? recoveryCopy.enterTransferAmounts : undefined) ??
 		(recovery !== undefined && transferAmounts?.some((amount, index) => amount > (recovery.rights[index] ?? 0n)) ? recoveryCopy.insufficientTransferRights : undefined)
 
-	const run = (action: string, title: string, reason: string | undefined, build: (selected: SecurityPoolForkSnapshot) => SecurityPoolTransaction, check?: (latest: SecurityPoolForkSnapshot) => Promise<void>) =>
+	const run = (action: string, title: string, reason: string | undefined, build: (selected: SecurityPoolForkSnapshot) => SecurityPoolTransaction, check?: (latest: SecurityPoolForkSnapshot, client: ReadClient) => Promise<readonly ReviewRow[] | void>) =>
 		actions.runSecurityPoolAction(action, title, () => {
 			if (reason !== undefined || state === undefined) throw new Error(reason ?? 'Fork state unavailable.')
 			const selected = state
 			const request = build(selected)
+			let reviewRows: readonly ReviewRow[] = []
 			return {
 				...request,
+				readReviewRows: () => reviewRows,
 				validateBeforeSubmit: async () => {
 					if (getActiveBackend() !== backend) throw new Error('Wallet environment changed. Review again.')
-					const latest = await loadSecurityPoolForkSnapshot({ client: securityPoolReadClient(createConnectedReadClient()), securityPool: selected.securityPool, owner: selected.owner, universeId: selected.universeId, ...(selected.branch === undefined ? {} : { outcomeIndex: selected.branch.outcomeIndex }) })
+					const client = withStatoblastRequestTimeout(createConnectedReadClient(), currentStateCheckFailed)
+					const latest = await loadSecurityPoolForkSnapshot({ client: securityPoolReadClient(client), securityPool: selected.securityPool, owner: selected.owner, universeId: selected.universeId, ...(selected.branch === undefined ? {} : { outcomeIndex: selected.branch.outcomeIndex }) })
 					if (latest.chainId !== selected.chainId || latest.controller !== selected.controller) throw new Error('Fork context changed. Review again.')
-					await check?.(latest)
+					reviewRows = (await check?.(latest, client)) ?? []
 				},
 			}
 		})
@@ -223,12 +263,13 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 	return {
 		state,
 		displayedState,
+		displayedAt: current?.readAt ?? savedState?.readAt ?? restoredState?.savedAt,
 		forkError: current?.error,
 		retryFork: () => retry.value++,
 		savedBranch,
-		recovery: displayedRecovery?.source,
+		recovery: displayedRecovery?.source ?? restoredRecovery?.value,
 		recoveryError: recoveryState?.error,
-		recoveryReadAt: displayedRecovery?.readAt,
+		recoveryReadAt: displayedRecovery?.readAt ?? restoredRecovery?.savedAt,
 		recoveryLoading: questionId !== undefined && presentationSnapshot?.owner !== zeroAddress && (state === undefined ? current?.error === undefined : state.forkTime > 0n && recoveryState === undefined),
 		retryRecovery: () => recoveryRetry.value++,
 		outcome: current?.outcome,
@@ -293,6 +334,9 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 				},
 				async latest => {
 					if (latest.forkTime === 0n || latest.branch === undefined || latest.choice.recorded || latest.timestamp >= latest.choiceDeadline) throw new Error('Fork choice is no longer available.')
+					const outcomeLabel = current?.outcome?.outcomeLabel
+					if (outcomeLabel === undefined) throw new Error(copy.forkReadFailed)
+					return [{ label: copy.yourBranch, value: `${copy.unchosen} → ${outcomeLabel}` }]
 				},
 			),
 		prepareBranch: () =>
@@ -304,7 +348,7 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 					if (selected.branch === undefined) throw new Error('Select a branch.')
 					return { ...buildSecurityPoolForkPreparationRequest({ ...publicBase(selected), outcomeIndex: selected.branch.outcomeIndex }), reviewDescription: 'Create this branch’s REP token and shared capital contracts when needed.' }
 				},
-				recheckStage(custodyPreparationReason),
+				recheckStage(custodyPreparationReason, copy.branchStates.chosen),
 			),
 		start: () =>
 			run(
@@ -315,7 +359,7 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 					if (selected.branch === undefined) throw new Error('Select a branch.')
 					return { ...buildSecurityPoolForkStartRequest({ ...publicBase(selected), outcomeIndex: selected.branch.outcomeIndex }), reviewDescription: 'Prepare this branch if needed, migrate its shared REP, and set up its collateral repair auction.' }
 				},
-				recheckStage(migrationReason),
+				recheckStage(migrationReason, copy.branchStates.waiting),
 			),
 		finalize: () =>
 			run(
@@ -326,7 +370,7 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 					if (selected.branch === undefined) throw new Error('Select a branch.')
 					return { ...buildSecurityPoolForkFinalizeRequest({ ...publicBase(selected), universeId: selected.branch.universeId }), reviewDescription: 'Start migration if needed, then activate this branch’s collateral and REP claim basket and chosen underwriting positions.' }
 				},
-				recheckStage(activationReason),
+				recheckStage(activationReason, copy.branchStates.active),
 			),
 		prepare: () =>
 			run(
@@ -337,10 +381,11 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 					if (recovery === undefined) throw new Error(recoveryCopy.questionUnavailable)
 					return { ...buildSecurityPoolRecoveryPreparation(selected, recovery), reviewDescription: recoveryCopy.prepareRecoveryReview }
 				},
-				async latest => {
+				async (latest, client) => {
 					if (questionId === undefined || recovery === undefined) throw new Error(recoveryCopy.questionUnavailable)
-					const fresh = await readRecovery(latest, questionId)
+					const fresh = await loadSecurityPoolSourceRecovery(client, latest, questionId)
 					if (latest.forkTime === 0n || latest.timestamp < latest.choiceDeadline || fresh.pool !== zeroAddress || fresh.source !== recovery.source) throw new Error(recoveryCopy.prepareRecoveryChanged)
+					return [{ label: copy.recoveryPreparation, value: `${copy.branchStates.unprepared} → ${copy.recoveryPrepared}` }]
 				},
 			),
 		transfer: () =>
@@ -356,10 +401,15 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 						reviewDescription: recoveryCopy.reviewRecoveryTransfer({ invalid: formatUnits(transferAmounts[0], decimals), yes: formatUnits(transferAmounts[1], decimals), no: formatUnits(transferAmounts[2], decimals), question: formatQuestionIdHex(questionId), universe: selected.universeId, recipient }),
 					}
 				},
-				async latest => {
+				async (latest, client) => {
 					if (questionId === undefined || recovery === undefined || transferAmounts === undefined) throw new Error(recoveryCopy.transferUnavailable)
-					const fresh = await readRecovery(latest, questionId)
+					const fresh = await loadSecurityPoolSourceRecovery(client, latest, questionId)
 					if (latest.forkTime === 0n || !fresh.eligible || fresh.pool === zeroAddress || fresh.shareToken !== recovery.shareToken || transferAmounts.some((amount, index) => amount > (fresh.rights[index] ?? 0n))) throw new Error(recoveryCopy.transferChanged)
+					return [copy.invalidAvailable, copy.yesAvailable, copy.noAvailable].flatMap((label, index) => {
+						const before = fresh.rights[index] ?? 0n
+						const amount = transferAmounts[index] ?? 0n
+						return amount === 0n ? [] : [reviewBalance(label, before, before - amount, securityPool?.collateral.decimals ?? 18)]
+					})
 				},
 			),
 
@@ -375,10 +425,11 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 						reviewDescription: recoveryCopy.reviewRecoveryClaim(formatUnits(shares, securityPool?.collateral.decimals ?? 18), formatQuestionIdHex(questionId)),
 					}
 				},
-				async latest => {
+				async (latest, client) => {
 					if (questionId === undefined || recovery === undefined || shares === undefined) throw new Error(recoveryCopy.recoveryAmountUnavailable)
-					const fresh = await readRecovery(latest, questionId)
+					const fresh = await loadSecurityPoolSourceRecovery(client, latest, questionId)
 					if (latest.forkTime === 0n || latest.timestamp < latest.choiceDeadline || !fresh.eligible || fresh.availableShares < shares || fresh.pool === zeroAddress || fresh.shareToken !== recovery.shareToken) throw new Error(recoveryCopy.recoveryChanged)
+					return [reviewBalance(copy.available, fresh.availableShares, fresh.availableShares - shares, securityPool?.collateral.decimals ?? 18)]
 				},
 			),
 	}

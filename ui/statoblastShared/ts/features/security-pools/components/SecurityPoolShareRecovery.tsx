@@ -23,7 +23,7 @@ import { designQuestionId } from '../../../lib/routing.js'
 import type { SecurityPoolAccountSnapshot } from '../../../protocol/securityPool.js'
 import { statoblastDisplayCache } from '../../../protocol/statoblastPageCache.js'
 import { decodeWatchlistRows, parseWatchlistEntity } from '../../../protocol/watchlistRows.js'
-import { useStatoblastRefreshError } from '../../useStatoblastPageRefresh.js'
+import { useOldActionDataNotice, useStatoblastRefreshError } from '../../useStatoblastPageRefresh.js'
 import type { useSecurityPoolSharedFork } from '../hooks/useSecurityPoolSharedFork.js'
 import { SecurityPoolButton, SecurityPoolInput, type SecurityPoolActions } from './SecurityPoolControls.js'
 
@@ -147,6 +147,7 @@ export function SecurityPoolShareRecovery({ model, actions, snapshot, redesigned
 	const units = snapshot?.collateral.decimals ?? 18
 	const disabled = actions.busy !== undefined
 	const recoveryError = useStatoblastRefreshError(model.recoveryError, model.recoveryReadAt)
+	const actionDataNotice = useOldActionDataNotice(redesigned ? model.recoveryReadAt : undefined)
 	const failure = <RetryableNotice message={recoveryError} onRetry={model.retryRecovery} retryLabel={tryAgain} disabled={disabled} />
 	if (!redesigned) {
 		return (
@@ -206,7 +207,7 @@ export function SecurityPoolShareRecovery({ model, actions, snapshot, redesigned
 	else if (forkTime > 0n) badge = <Badge tone='ok'>{recoveryCopy.recoveryOpen}</Badge>
 	const hasRights = model.recovery !== undefined
 	return (
-		<SectionBlock title={recoveryCopy.shareRecovery} badge={badge}>
+		<SectionBlock title={recoveryCopy.shareRecovery} description={actionDataNotice} badge={badge}>
 			<UserMessage tone='warning' detail={recoveryCopy.repaymentWarning} />
 			<details>
 				<summary>{recoveryCopy.recoveryDisclosure}</summary>

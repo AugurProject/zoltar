@@ -29,6 +29,7 @@ export const migrationReuseHint = 'You can reuse REP burned here to migrate into
 export const migrationBurnConfirmation = (amount: string) => `Burn ${amount} in this universe. This is irreversible.`
 export const migrationConfirmationRequired = 'Confirm the irreversible burn first.'
 export const migrationSourceBalance = 'REP in this universe'
+export const migratedToUniverse = (universeId: bigint) => `Migrated to universe ${universeId}`
 export const migrationAvailable = 'Available to migrate'
 export const migrationProgress = 'Migration steps'
 export const migrationStepSelectOutcomes = 'Select outcomes'

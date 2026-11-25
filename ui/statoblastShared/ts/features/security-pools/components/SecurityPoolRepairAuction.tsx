@@ -19,6 +19,7 @@ import type { SecurityPoolAuctionBid } from '@zoltar/statoblast-shared/statoblas
 import * as copy from '../../../copy/securityPoolRepairAuction.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
+import { useOldActionDataNotice } from '../../useStatoblastPageRefresh.js'
 import { formatCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 
 type AuctionModel = ReturnType<typeof useSecurityPoolAuction>
@@ -28,6 +29,7 @@ type Collateral = Pick<NonNullable<AuctionModel['snapshot']>['collateral'], 'sym
 export function SecurityPoolRepairAuction({ onAuctionFinalized, sharedDeadline = false, ...parameters }: SecurityPoolAuctionParameters & { onAuctionFinalized?: ((universeId: bigint) => void) | undefined; sharedDeadline?: boolean }) {
 	const model = useSecurityPoolAuction(parameters)
 	const snapshot = model.snapshot
+	const actionDataNotice = useOldActionDataNotice(sharedDeadline ? model.displayedAt : undefined)
 	const loadingDetails = model.loading && snapshot === undefined
 	const auction = snapshot?.auction
 	const childUniverse = parameters.fork?.branch?.universeId
@@ -51,6 +53,7 @@ export function SecurityPoolRepairAuction({ onAuctionFinalized, sharedDeadline =
 	const refreshReason = (disabled ? copy.busy : undefined) ?? (model.loading ? copy.loading : undefined) ?? (parameters.bidder === undefined ? copy.connect : undefined) ?? (parameters.fork?.branch === undefined ? copy.selectBranch : undefined)
 	return (
 		<WorkflowSubsection title={copy.title}>
+			{actionDataNotice !== undefined && <p className='detail'>{actionDataNotice}</p>}
 			<UserMessage detail={copy.description} />
 			{model.error === undefined ? undefined : <UserMessage tone='error' detail={model.error} />}
 			{model.savedAt !== undefined && (

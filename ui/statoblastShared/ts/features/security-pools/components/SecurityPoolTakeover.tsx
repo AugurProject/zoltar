@@ -4,7 +4,7 @@ import { formatUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
 import { formatDuration, formatTimestamp, formatTimestampDateTime } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
-import { formatOldDataCheck } from '@zoltar/ui-core-shared/copy/transaction.js'
+import { currentStateCheckFailed, formatOldDataCheck } from '@zoltar/ui-core-shared/copy/transaction.js'
 import { requiredSecurityPoolCollateral } from '../lib/capital.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import { useSignal } from '@preact/signals'
@@ -21,7 +21,10 @@ import { securityPoolAmountOrUndefined, securityPoolUnsignedId } from '../lib/dr
 import { SecurityPoolButton, SecurityPoolInput, type SecurityPoolActions } from './SecurityPoolControls.js'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import * as copy from '../../../copy/securityPoolTakeover.js'
+import { changedSinceReview } from '../../../copy/app.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
+import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
+import { reviewBalance, type ReviewRow } from '../lib/reviewRows.js'
 
 import { liquidationHealth, readKnownLiquidationTargets, useLiquidationTarget, type LiquidationTarget, type TakeoverSnapshot } from '../hooks/useLiquidationTarget.js'
 import { useStatoblastRefreshError } from '../../useStatoblastPageRefresh.js'
@@ -39,6 +42,22 @@ function LiquidationTime({ timestamp }: { timestamp: bigint }) {
 			{copy.formatUtcTime(dateTime.slice(11, 16))}
 		</time>
 	)
+}
+
+function liquidationReview(snapshot: TakeoverSnapshot, expected: LiquidationTarget, positionId: bigint, compare: (position: LiquidationTarget['position'], client: ReturnType<typeof createConnectedReadClient>, blockNumber: bigint) => readonly ReviewRow[] | Promise<readonly ReviewRow[]>) {
+	let rows: readonly ReviewRow[] = []
+	return {
+		readReviewRows: () => rows,
+		validateBeforeSubmit: async () => {
+			const client = withStatoblastRequestTimeout(createConnectedReadClient(), currentStateCheckFailed)
+			const { number: blockNumber } = await client.getBlock()
+			if (typeof blockNumber !== 'bigint') throw new Error(currentStateCheckFailed)
+			const [epoch, position] = await Promise.all([client.readContract({ address: snapshot.capitalLedger, abi: capital.abi, functionName: 'acceptedPriceEpoch', blockNumber }), client.readContract({ address: snapshot.commitmentIndex, abi: index.abi, functionName: 'accountOf', args: [positionId], blockNumber })])
+			const original = expected.position
+			if (epoch !== expected.epoch || position.rep !== original.rep || position.commitment !== original.commitment || position.owner !== original.owner || position.batch !== original.batch || position.remainingCommitment !== original.remainingCommitment) throw new Error(changedSinceReview)
+			rows = await compare(position, client, blockNumber)
+		},
+	}
 }
 
 export function SecurityPoolTakeover({
@@ -171,34 +190,42 @@ export function SecurityPoolTakeover({
 		else if (totalCommitment > maximumOwnerCommitment) reason = copy.receiverCommitmentBound
 	}
 
-	const validateTarget = (current: LiquidationTarget, capitalLedger: TakeoverSnapshot['capitalLedger'], commitmentIndex: TakeoverSnapshot['commitmentIndex'], positionId: bigint) => async () => {
-		const client = createConnectedReadClient()
-		const epoch = await client.readContract({ address: capitalLedger, abi: capital.abi, functionName: 'acceptedPriceEpoch' })
-		const position = await client.readContract({ address: commitmentIndex, abi: index.abi, functionName: 'accountOf', args: [positionId] })
-		if (epoch !== current.epoch || position.rep !== current.position.rep || position.commitment !== current.position.commitment || position.owner !== current.position.owner || position.batch !== current.position.batch) throw new Error(copy.changed)
-	}
 	const cure = async () => {
 		if (cureReason !== undefined || snapshot === undefined || fresh === undefined || source === undefined || id === undefined) throw new Error(cureReason ?? copy.notEligible)
 		await actions.runSecurityPoolAction('cureSecurityPoolPosition', copy.cure, () => ({
 			...buildSecurityPoolCapitalCureRequest({ owner: snapshot.owner, capitalLedger: snapshot.capitalLedger, positionId: id, commitment: fresh.position.commitment, expectedAcceptedPriceEpoch: fresh.epoch, expectedSourceBatch: source.batch }),
 			reviewDescription: copy.cureReview,
-			validateBeforeSubmit: validateTarget(fresh, snapshot.capitalLedger, snapshot.commitmentIndex, id),
+			...liquidationReview(snapshot, fresh, id, async (position, client, blockNumber) => {
+				const [[, totalCommitmentAttoEth], demandAttoEth] = await Promise.all([client.readContract({ address: snapshot.capitalLedger, abi: capital.abi, functionName: 'totals', blockNumber }), client.readContract({ address: snapshot.capitalLedger, abi: capital.abi, functionName: 'demandAttoEth', blockNumber })])
+				const cured = securityPoolTakeoverSource({ ...snapshot, totalCommitmentAttoEth, demandAttoEth }, position)
+				if (!cured.healthy || cured.removed === 0n) throw new Error(changedSinceReview)
+				return [reviewBalance(copy.targetCommitment, position.commitment, cured.commitment, snapshot.collateral.decimals, snapshot.collateral.symbol)]
+			}),
 		}))
 	}
 	const takeOver = async () => {
 		if (reason !== undefined || snapshot === undefined || fresh === undefined || source === undefined || id === undefined || commitment === undefined || maximumOwnRep === undefined || maximumOwnerPrincipal === undefined || maximumOwnerCommitment === undefined) throw new Error(reason ?? copy.enterBounds)
+		const minimumTakeoverReward = securityPoolTakeoverFill(source, commitment, snapshot.economics.minimumCommitmentAttoEth).takeoverReward
 		await actions.runSecurityPoolAction('takeOverSecurityPoolPosition', copy.takeOver, () => ({
 			...buildSecurityPoolCapitalTakeOverWithBoundsRequest({
 				owner: snapshot.owner,
 				capitalLedger: snapshot.capitalLedger,
 				positionId: id,
 				commitment,
-				minimumTakeoverReward: securityPoolTakeoverFill(source, commitment, snapshot.economics.minimumCommitmentAttoEth).takeoverReward,
+				minimumTakeoverReward,
 				maximumOwnRep,
 				bounds: { maximumOwnerPrincipal, maximumOwnerCommitment, expectedTargetHealthFactorBps: snapshot.ownerAccount.targetHealthFactorBps || 10_000n, expectedAcceptedPriceEpoch: fresh.epoch, expectedSourceBatch: source.batch },
 			}),
 			reviewDescription: copy.review,
-			validateBeforeSubmit: validateTarget(fresh, snapshot.capitalLedger, snapshot.commitmentIndex, id),
+			...liquidationReview(snapshot, fresh, id, position => {
+				const maximumTransfer = [position.commitment, commitment, maximumOwnerCommitment].reduce((least, next) => (least < next ? least : next))
+				const { symbol, decimals } = snapshot.collateral
+				const rows = [{ label: copy.additionalCommitment, value: copy.addedUpTo(formatUnits(maximumTransfer, decimals), symbol) }]
+				if (maximumOwnRep > 0n) rows.push({ label: copy.ownRepPledged, value: copy.addedUpTo(formatUnits(maximumOwnRep, 18), common.rep) })
+				// Quote the encoded floor. The live reward grows over time and does not invalidate the reviewed limits.
+				if (minimumTakeoverReward > 0n) rows.push({ label: copy.takeoverReward, value: copy.rewardAtLeast(formatUnits(minimumTakeoverReward, 18), common.rep) })
+				return rows
+			}),
 		}))
 	}
 	const duration = displayedSnapshot?.liquidationDuration
@@ -233,6 +260,7 @@ export function SecurityPoolTakeover({
 	const displayCollateral = (value: bigint | undefined) => <CurrencyValue value={value} suffix={pool?.collateral.symbol ?? collateralCopy.fallback} units={pool?.collateral.decimals ?? 0} />
 	const displayRep = (value: bigint | undefined) => <CurrencyValue value={value} suffix={common.rep} />
 	const formAge = readAge > 60_000 ? formatDuration(elapsedSinceRead) : undefined
+	const staleFormDescription = formAge === undefined ? undefined : formatOldDataCheck(formAge)
 	// Both actions often rest disabled for one shared cause, such as a missing position ID; that reason renders once for the pair.
 	const sharedReason = actions.busy === undefined && reason !== undefined && reason === cureReason ? reason : undefined
 	const reasonShownInForm = redesigned && !canOpenPosition && sharedReason === copy.enterTarget
@@ -289,7 +317,7 @@ export function SecurityPoolTakeover({
 		</div>
 	)
 	const work = (
-		<SectionBlock title={redesigned && id !== undefined && id > 0n ? copy.formatTargetPosition(id.toString()) : copy.title} description={redesigned ? undefined : copy.description} badge={showTakeoverOnly ? <Badge tone='warning'>{copy.takeoverOnly}</Badge> : undefined}>
+		<SectionBlock title={redesigned && id !== undefined && id > 0n ? copy.formatTargetPosition(id.toString()) : copy.title} description={redesigned ? staleFormDescription : copy.description} badge={showTakeoverOnly ? <Badge tone='warning'>{copy.takeoverOnly}</Badge> : undefined}>
 			{!redesigned && positionField}
 			{showTakeoverOnly && <InlineHint id={cureReasonId} message={copy.takeOverInstead} />}
 			{redesigned && distressed && preview !== undefined && (
@@ -354,7 +382,6 @@ export function SecurityPoolTakeover({
 				limitFields
 			)}
 			{redesigned && distressed && <p className='detail'>{copy.fillHint}</p>}
-			{redesigned && formAge !== undefined && <p className='detail'>{formatOldDataCheck(formAge)}</p>}
 			<div className='actions'>
 				<SecurityPoolButton model={actions} action='takeOverSecurityPoolPosition' label={copy.takeOver} pendingLabel={copy.takingOver} reason={reason} sharedReasonId={reasonId} onClick={takeOver} />
 				<SecurityPoolButton model={actions} action='cureSecurityPoolPosition' label={copy.cure} pendingLabel={copy.curing} reason={cureReason} sharedReasonId={showTakeoverOnly ? cureReasonId : reasonId} onClick={cure} />

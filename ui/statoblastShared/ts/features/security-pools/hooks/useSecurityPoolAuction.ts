@@ -20,11 +20,13 @@ import {
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getActiveBackend, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
+import { currentStateCheckFailed } from '@zoltar/ui-core-shared/copy/transaction.js'
 import { loadSecurityPoolBranchAuction, securityPoolAuctionCache } from '../../../protocol/securityPoolRepairAuction.js'
 import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
 import type { SecurityPoolTransaction } from '../../../protocol/securityPool.js'
 import type { SecurityPoolSharedForkParameters } from './useSecurityPoolSharedFork.js'
 import { securityPoolAmountOrUndefined, securityPoolUnsignedId } from '../lib/draft.js'
+import { reviewBalance, type ReviewRow } from '../lib/reviewRows.js'
 import * as copy from '../../../copy/securityPoolRepairAuction.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 
@@ -127,18 +129,27 @@ export function useSecurityPoolAuction({ fork, savedBranch, bidder, actions, ope
 		return claimQuote(snapshot, bid).settles ? copy.claim : copy.withdraw
 	}
 	const activateReason = (bid: SecurityPoolAuctionBid) => auctionReason ?? (bid.fill === undefined || bid.fill.filledLots === 0n ? copy.managePending : undefined) ?? (bid.materialized ? copy.activated : undefined)
-	const run = (action: string, title: string, reason: string | undefined, build: (selected: Awaited<ReturnType<typeof loadSecurityPoolBranchAuction>>) => SecurityPoolTransaction, verify: (latest: Awaited<ReturnType<typeof loadSecurityPoolBranchAuction>>) => void = () => undefined, onConfirmed?: () => void) =>
+	const run = (
+		action: string,
+		title: string,
+		reason: string | undefined,
+		build: (selected: Awaited<ReturnType<typeof loadSecurityPoolBranchAuction>>) => SecurityPoolTransaction,
+		verify: (latest: Awaited<ReturnType<typeof loadSecurityPoolBranchAuction>>) => readonly ReviewRow[] | void = () => undefined,
+		onConfirmed?: () => void,
+	) =>
 		actions.runSecurityPoolAction(
 			action,
 			title,
 			() => {
 				if (reason !== undefined || snapshot === undefined) throw new Error(reason ?? copy.loading)
 				const selected = snapshot
+				let reviewRows: readonly ReviewRow[] = []
 				return {
 					...build(selected),
+					readReviewRows: () => reviewRows,
 					validateBeforeSubmit: async () => {
 						if (getActiveBackend() !== backend || currentIdentity.current !== identity) throw new Error(copy.contextChanged)
-						const client = withStatoblastRequestTimeout(createConnectedReadClient(), copy.readTimeout)
+						const client = withStatoblastRequestTimeout(createConnectedReadClient(), currentStateCheckFailed)
 						const latest = await loadSecurityPoolBranchAuction(client, selected.securityPool, selected.bidder, selected.universeId, selected.auction?.bidStart ?? 0n)
 						if (
 							getActiveBackend() !== backend ||
@@ -150,7 +161,7 @@ export function useSecurityPoolAuction({ fork, savedBranch, bidder, actions, ope
 							latest.capitalLedger !== selected.capitalLedger
 						)
 							throw new Error(copy.contextChanged)
-						verify(latest)
+						reviewRows = verify(latest) ?? []
 					},
 				}
 			},
@@ -183,9 +194,12 @@ export function useSecurityPoolAuction({ fork, savedBranch, bidder, actions, ope
 						data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [selected.auction.address, amount] }),
 					}
 				},
-				verifyQuote,
+				latest => {
+					verifyQuote(latest)
+				},
 			),
 		snapshot: snapshot ?? savedSnapshot?.value,
+		displayedAt: snapshot === undefined ? savedSnapshot?.savedAt : current?.readAt,
 		savedAt: savedSnapshot?.savedAt ?? (loading || current?.error !== undefined || fork?.branch === undefined ? current?.readAt : undefined),
 		manageReadReason: baseReason,
 		quote,
@@ -225,6 +239,7 @@ export function useSecurityPoolAuction({ fork, savedBranch, bidder, actions, ope
 		open: () =>
 			run('openSecurityPoolAuction', copy.open, openReason, buildSecurityPoolAuctionOpenRequest, latest => {
 				buildSecurityPoolAuctionOpenRequest(latest)
+				return [{ label: copy.status, value: `${copy.states.unopened} → ${copy.states.bidding}` }]
 			}),
 		bid: () =>
 			run(
@@ -236,7 +251,10 @@ export function useSecurityPoolAuction({ fork, savedBranch, bidder, actions, ope
 					return { ...buildSecurityPoolAuctionBidRequest(selected, quote), reviewDescription: copy.bidReview(quote.lots, quote.bidAttoEth, quote.minimumAttoRepPerLot, selected.collateral.decimals, selected.collateral.symbol) }
 				},
 				latest => {
-					buildSecurityPoolAuctionBidRequest(latest, verifyQuote(latest))
+					const fresh = verifyQuote(latest)
+					buildSecurityPoolAuctionBidRequest(latest, fresh)
+					const { decimals, symbol } = latest.collateral
+					return [reviewBalance(collateralCopy.walletBalance(symbol), latest.walletCollateral, latest.walletCollateral - fresh.bidAttoEth, decimals, symbol), reviewBalance(copy.lotCount, 0n, fresh.lots, 0)]
 				},
 			),
 		credit: (bid: SecurityPoolAuctionBid) =>
@@ -247,6 +265,11 @@ export function useSecurityPoolAuction({ fork, savedBranch, bidder, actions, ope
 				selected => buildSecurityPoolAuctionRefundCreditRequest(selected, bid.id),
 				latest => {
 					buildSecurityPoolAuctionRefundCreditRequest(latest, bid.id)
+					const auction = latest.auction
+					const selected = auction?.bids.find(item => item.id === bid.id)
+					if (auction === undefined || selected === undefined) throw new Error(copy.contextChanged)
+					const refund = auction.finalized ? (selected.fill?.refundAttoEth ?? 0n) : selected.earlyRefundAttoEth
+					return refund === 0n ? [] : [reviewBalance(copy.refundEth, auction.refundAttoEth, auction.refundAttoEth + refund, latest.collateral.decimals, latest.collateral.symbol)]
 				},
 			),
 		claim: (bid: SecurityPoolAuctionBid) =>
@@ -259,8 +282,10 @@ export function useSecurityPoolAuction({ fork, savedBranch, bidder, actions, ope
 					if (snapshot === undefined) throw new Error(copy.loading)
 					// A credit someone else made in the meantime is skipped on chain; the
 					// disclosed total must still match what the bidder reviewed.
-					if (claimQuote(latest, bid).totalAttoEth !== claimQuote(snapshot, bid).totalAttoEth) throw new Error(copy.refundChanged)
+					const fresh = claimQuote(latest, bid)
+					if (fresh.totalAttoEth !== claimQuote(snapshot, bid).totalAttoEth) throw new Error(copy.refundChanged)
 					buildSecurityPoolAuctionRefundClaimRequest(latest, bid.id, latest.bidder)
+					return [reviewBalance(collateralCopy.walletBalance(latest.collateral.symbol), latest.walletCollateral, latest.walletCollateral + fresh.totalAttoEth, latest.collateral.decimals, latest.collateral.symbol)]
 				},
 			),
 		activate: (bid: SecurityPoolAuctionBid) =>
@@ -284,6 +309,9 @@ export function useSecurityPoolAuction({ fork, savedBranch, bidder, actions, ope
 				selected => buildSecurityPoolAuctionRefundWithdrawRequest(selected, selected.bidder),
 				latest => {
 					buildSecurityPoolAuctionRefundWithdrawRequest(latest, latest.bidder)
+					const refund = latest.auction?.refundAttoEth ?? 0n
+					const { decimals, symbol } = latest.collateral
+					return [reviewBalance(copy.refundEth, refund, 0n, decimals, symbol), reviewBalance(collateralCopy.walletBalance(symbol), latest.walletCollateral, latest.walletCollateral + refund, decimals, symbol)]
 				},
 			),
 	}

@@ -25,7 +25,6 @@ export const currentTargetRequired = 'Refresh the position before sending a tran
 export const enterBounds = 'Enter the takeover amount and all consent limits.'
 export const inactive = 'Takeovers require an active universe.'
 export const notEligible = 'Choose another owner’s position in liquidation.'
-export const changed = 'The target or accepted price changed. Refresh and review the takeover again.'
 export const hint = 'Find a position by ID. Takeover first applies any reduction or cure the position qualifies for.'
 export const review = 'Take on the commitment and pledge the required backing. You earn future fees and the takeover reward stays pledged. The owner keeps their existing earnings.'
 export const takeoverLimit = 'Maximum takeover'
@@ -42,6 +41,10 @@ export const receiverPrincipalBound = 'The resulting pledged REP exceeds your li
 export const receiverCommitmentBound = 'Your resulting commitment exceeds the maximum total commitment.'
 
 export const takeoverReward = 'Takeover reward'
+export const additionalCommitment = 'Additional commitment'
+export const ownRepPledged = 'Your own REP pledged'
+export const addedUpTo = (amount: string, symbol: string) => `0 ${symbol} → up to ${amount} ${symbol}`
+export const rewardAtLeast = (amount: string, symbol: string) => `0 ${symbol} → at least ${amount} ${symbol} if taken over`
 export const knownPositions = 'Positions known on this device'
 export const devicePositions = 'Positions this device knows: yours, ones you opened by ID, and ones from shared links.'
 export const positionColumn = 'Position'

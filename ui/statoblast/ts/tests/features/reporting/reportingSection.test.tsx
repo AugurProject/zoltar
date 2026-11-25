@@ -259,17 +259,22 @@ function requireButton(element: HTMLElement) {
 describe('ReportingSection', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
+	test('shows the age of stale reporting inputs under the report title without blocking the report', async () => {
+		const details = createReportingDetails({ currentTime: 150n, escalationEndTime: 1_000n })
+		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ designedOverview: true, currentTimestamp: details.currentTime, reportingDetails: details, reportingForm: createReportingForm({ selectedOutcome: 'yes', reportAmount: '5' }), actionDataReadAt: Date.now() - 360_000 })))
+		cleanupRenderedComponent = rendered.cleanup
+		const section = getClosestSection(within(document.body).getByRole('heading', { name: 'Report an outcome' }))
+
+		expect(within(section).getByText('Data from 6m ago. Checked again before sending.')).toBeDefined()
+		expectTransactionButtonEnabled(section, reportingButtonLabel('Yes'))
+	})
+
 	test.each([0n, 1n, 60n, 61n])('reserves report submission time without resolving early (%s)', async remaining => {
-		const rendered = await renderIntoDocument(
-			h(
-				ReportingSection,
-				createProps({
-					currentTimestamp: 1000n - remaining,
-					reportingDetails: createReportingDetails({ currentTime: 1000n - remaining, escalationEndTime: 1000n, viewerWalletRepAllowanceAttoRep: rep(10n), viewerWalletRepBalanceAttoRep: rep(10n) }),
-					reportingForm: createReportingForm({ selectedOutcome: 'yes', reportAmount: '5' }),
-				}),
-			),
-		)
+		const currentTime = 1000n - remaining
+		const reportingDetails = createReportingDetails({ currentTime, escalationEndTime: 1000n, viewerWalletRepAllowanceAttoRep: rep(10n), viewerWalletRepBalanceAttoRep: rep(10n) })
+		const reportingForm = createReportingForm({ selectedOutcome: 'yes', reportAmount: '5' })
+
+		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ currentTimestamp: currentTime, reportingDetails, reportingForm })))
 		cleanupRenderedComponent = rendered.cleanup
 		const button = within(document.body).getByRole('button', { name: /Report Yes/ })
 		if (remaining > 60n) expectTransactionButtonEnabled(document.body, button.textContent ?? '')
@@ -278,16 +283,11 @@ describe('ReportingSection', () => {
 	})
 
 	test.each([0n, 60n, 61n])('stops the approval when the report it unlocks can no longer be sent (%s)', async remaining => {
-		const rendered = await renderIntoDocument(
-			h(
-				ReportingSection,
-				createProps({
-					currentTimestamp: 1000n - remaining,
-					reportingDetails: createReportingDetails({ currentTime: 1000n - remaining, escalationEndTime: 1000n, viewerWalletRepAllowanceAttoRep: 0n, viewerWalletRepBalanceAttoRep: rep(10n) }),
-					reportingForm: createReportingForm({ selectedOutcome: 'yes', reportAmount: '5' }),
-				}),
-			),
-		)
+		const currentTime = 1000n - remaining
+		const reportingDetails = createReportingDetails({ currentTime, escalationEndTime: 1000n, viewerWalletRepAllowanceAttoRep: 0n, viewerWalletRepBalanceAttoRep: rep(10n) })
+		const reportingForm = createReportingForm({ selectedOutcome: 'yes', reportAmount: '5' })
+
+		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ currentTimestamp: currentTime, reportingDetails, reportingForm })))
 		cleanupRenderedComponent = rendered.cleanup
 		const approval = within(document.body).getByRole('button', { name: /^Approve/ })
 		expect((approval as HTMLButtonElement).disabled).toBe(remaining <= 60n)

@@ -149,6 +149,7 @@ export function useZoltarFork(
 	const zoltarForkActiveAction = useSignal<'approve' | 'fork' | undefined>(undefined)
 	const zoltarForkFeedback = useSignal<ActionFeedback<ZoltarForkActionResult['action']> | undefined>(undefined)
 	const zoltarMigrationPreparedRepBalanceAttoRep = useSignal<bigint | undefined>(undefined)
+	const migrationBalancesReadAt = useSignal<number | undefined>(undefined)
 	const zoltarMigrationChildSplitAmountsAttoRep = useSignal<Record<string, bigint | undefined>>({})
 	const zoltarMigrationChildRepBalancesAttoRep = useSignal<Record<string, bigint | undefined>>({})
 	const nextForkAccessLoad = useRequestGuard()
@@ -175,6 +176,7 @@ export function useZoltarFork(
 			}
 			zoltarForkRepBalanceAttoRep.value = undefined
 			zoltarMigrationPreparedRepBalanceAttoRep.value = undefined
+			migrationBalancesReadAt.value = undefined
 			zoltarMigrationChildRepBalancesAttoRep.value = {}
 			zoltarMigrationChildSplitAmountsAttoRep.value = {}
 			return
@@ -201,6 +203,7 @@ export function useZoltarFork(
 			if (!isCurrentScope()) return
 			completedForkAccessScopeGeneration.value = forkAccessScopeGeneration
 			loadedForkAccessScopeGeneration.current = forkAccessScopeGeneration
+			migrationBalancesReadAt.value = repBalanceResult?.status === 'success' && preparedRepBalanceResult?.status === 'success' ? Date.now() : undefined
 			zoltarForkRepBalanceAttoRep.value = repBalanceResult?.status === 'success' ? repBalanceResult.result : undefined
 			if (approvalResult?.status === 'success') {
 				zoltarForkApproval.value = {
@@ -364,6 +367,7 @@ export function useZoltarFork(
 		loadZoltarForkAccess,
 		hasLoadedZoltarForkAccess: completedForkAccessScopeGeneration.value === forkAccessScopeGeneration,
 		loadingZoltarForkAccess: forkAccessLoad.isLoading.value,
+		migrationBalancesReadAt: hasCurrentForkAccess ? migrationBalancesReadAt.value : undefined,
 		zoltarForkActiveAction: zoltarForkActiveAction.value,
 		zoltarForkApproval: hasCurrentForkAccess
 			? zoltarForkApproval.value

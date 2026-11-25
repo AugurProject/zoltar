@@ -5,7 +5,7 @@ import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.
 import { createActiveEnvironmentGuard, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { localEntityScopeForNetwork, setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
-import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
+import { useCallback, useEffect, useId, useRef, useState } from 'preact/hooks'
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import { getBrowserStorage } from '@zoltar/ui-core-shared/lib/browserStorage.js'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
@@ -33,6 +33,7 @@ import { getStatoblastUniversePresentation } from './lib/overviewUniverse.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
 import { AppRouteContent } from './components/AppRouteContent.js'
 import { StatoblastUniverseMenu } from './components/StatoblastUniverseMenu.js'
+import { StatoblastReadFailure } from './components/StatoblastReadFailure.js'
 
 const autoRefreshKey = 'zoltar-ui:statoblast:auto-refresh'
 
@@ -73,6 +74,7 @@ export function App() {
 	const [committedBranch, setCommittedBranch] = useState<string>()
 	const [refreshingPage, setRefreshingPage] = useState(false)
 	const [readStatus, setReadStatus] = useState<{ scope: string; readAt: number | undefined; progress: string | undefined }>()
+	const settingsTriggerId = useId()
 	const pageRefreshInFlight = useRef(false)
 	const currentPageRefresh = useRef(new Set<() => Promise<unknown>>())
 	const registerPageRefresh = useCallback<RegisterStatoblastPageRefresh>(refresh => {
@@ -210,6 +212,11 @@ export function App() {
 	const readScope = `${activeEnvironmentNonce}:${activeUniverseId}:${walletScopedAccountAddress ?? ''}:${routeKey}`
 	const reportReadStatus = useCallback<ReportStatoblastReadStatus>((readAt, progress) => setReadStatus({ scope: readScope, readAt, progress }), [readScope])
 	const currentReadStatus = readStatus?.scope === readScope ? readStatus : undefined
+	const readUnavailable = readBackendStatus.issue === 'unreachable' && readBackendMessage !== undefined
+	const openRpcSettings = () => {
+		const trigger = document.getElementById(settingsTriggerId)
+		if (trigger instanceof HTMLButtonElement && trigger.getAttribute('aria-expanded') !== 'true') trigger.click()
+	}
 	useEffect(() => {
 		const history = openHistory(profile)
 		if (page.kind === 'pool') history.add({ ...page, tab: 'capital' }, page.pool, activeUniverseId)
@@ -232,6 +239,7 @@ export function App() {
 				currentTimestamp={currentTimestamp}
 				header={
 					<AppHeaderShell
+						showWalletSpeedUp
 						renderOverview={({ settingsMenu }) => (
 							<OverviewPanels
 								{...overviewWalletProps}
@@ -273,6 +281,7 @@ export function App() {
 						onEnvironmentChanged={refreshActiveEnvironment}
 						onRefresh={refreshSimulationView}
 						settingsContent={autoRefreshToggle('statoblast-auto-mobile')}
+						settingsTriggerId={settingsTriggerId}
 					/>
 				}
 				heading={<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={title} />}
@@ -282,12 +291,13 @@ export function App() {
 							errorMessages={errorMessages}
 							isDeploymentRoute={applicationDeploymentMissing}
 							onRetryReadBackend={() => void retryReadBackend()}
-							readBackendMessage={readBackendMessage}
+							readBackendMessage={readUnavailable ? undefined : readBackendMessage}
 							readBackendStatus={readBackendStatus}
 							simulationBootstrapError={environmentBootstrapError}
 							showApplicationDeploymentWarning={false}
 							zoltarUniverseError={zoltarUniverseError}
 						/>
+						{readUnavailable && <StatoblastReadFailure reason={readBackendMessage} readAt={currentReadStatus?.readAt} onRetry={() => void retryReadBackend()} onOpenSettings={openRpcSettings} />}
 						{forked && (
 							<div className='statoblast-fork-banner'>
 								<strong>{pageCopy.universeForked}</strong>
@@ -314,6 +324,7 @@ export function App() {
 						onReadStatus: reportReadStatus,
 						parameters: saveTouchedItem,
 						walletConnected: accountState.address !== undefined,
+						walletAddress: accountState.address,
 						enabled,
 						environmentKey: activeEnvironmentNonce,
 						activeUniverseId,
@@ -325,7 +336,7 @@ export function App() {
 						onBranchCommitted,
 						openOracleHref: oracleApp.href,
 					}}
-					questions={{ onReadStatus: reportReadStatus, autoRefresh, openDepositSearch, accountState, parameters: saveTouchedItem, deploymentStatuses, enabled, environmentKey: activeEnvironmentNonce, universeId: activeUniverseId, currentTimestamp }}
+					questions={{ onReadStatus: reportReadStatus, autoRefresh, openDepositSearch, accountState, parameters: saveTouchedItem, deploymentStatuses, enabled, environmentKey: activeEnvironmentNonce, universeId: activeUniverseId, currentTimestamp, readUnavailable }}
 					migration={{
 						accountState,
 						activeUniverseId,

@@ -1,6 +1,7 @@
 import { currentStateCheckFailed } from '@zoltar/ui-core-shared/copy/transaction.js'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { collateralPresentation } from './collateral.js'
+import { checksTransactionReview } from './reviewedClient.js'
 import { encodeFunctionData, getAddress, parseAbi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
 	buildSecurityPoolDeploymentRequest,
@@ -296,8 +297,11 @@ export async function sendSecurityPoolTransaction(client: WriteClient, request: 
 	}
 	const gas = captured.gas === undefined ? {} : { gas: captured.gas }
 	const simulate = () => withTimeout(client.call({ account: client.account, to: captured.to, data: captured.data, value: captured.value, ...gas }), 15_000, currentStateCheckFailed)
-	await validateCaptured()
-	await simulate()
+	const reviewChecksTransaction = checksTransactionReview(client)
+	if (!reviewChecksTransaction) {
+		await validateCaptured()
+		await simulate()
+	}
 	const checkedAt = performance.now()
 	const review = { functionName: title, contractAddress: captured.to, data: captured.data, value: captured.value, reviewTitle: title, reviewDescription: captured.reviewDescription, ...gas }
 	client.onTransactionPlan?.([
@@ -307,7 +311,7 @@ export async function sendSecurityPoolTransaction(client: WriteClient, request: 
 			readReviewRows: captured.readReviewRows,
 			validateBeforeSubmit: async () => {
 				await validateCaptured()
-				if (performance.now() - checkedAt > 30_000) await simulate()
+				if (!reviewChecksTransaction && performance.now() - checkedAt > 30_000) await simulate()
 			},
 		},
 	])

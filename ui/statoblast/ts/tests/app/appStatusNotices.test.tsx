@@ -6,7 +6,7 @@ import { waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { resetRoutingForTesting } from '@zoltar/ui-core-shared/navigation/routing.js'
-import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
+import { createInjectedBackend, type ReadBackendStatus } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
@@ -45,7 +45,13 @@ await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/appShell/hooks/u
 			errorMessages: [],
 			overviewWalletProps: disconnectedOverviewWalletProps,
 			readBackendMessage: undefined,
-			readBackendStatus: undefined,
+			readBackendStatus: {
+				blockNumber: 10n,
+				blockTimestamp: 200n,
+				rpcSource: 'default',
+				rpcUrl: SEPOLIA_NETWORK_PROFILE.chain.rpcUrls.default.http[0] ?? '',
+				transportMode: 'rpc',
+			} satisfies ReadBackendStatus,
 			refreshActiveEnvironment: async () => undefined,
 			refreshSimulationView: async () => undefined,
 			retryReadBackend: async () => undefined,

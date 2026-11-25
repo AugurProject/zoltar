@@ -1,5 +1,4 @@
-import { formatOldDataCheck } from '@zoltar/ui-core-shared/copy/transaction.js'
-import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
+import { useOldActionDataNotice } from '../../useStatoblastPageRefresh.js'
 import * as pageCopy from '../../../copy/securityPoolPage.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import type { ComponentChildren } from 'preact'
@@ -59,16 +58,17 @@ export function SecurityPoolAggregatePanel({
 	priceReport?: ((unfolded: boolean) => ComponentChildren) | undefined
 }) {
 	const snapshot = model.snapshot
-	const [clock, setClock] = useState(Date.now)
-	const visible = usePageVisible()
-	useEffect(() => {
-		if (!redesigned || model.displayedAt === undefined || !visible) return
-		setClock(Date.now())
-		const timer = setInterval(() => setClock(Date.now()), 1000)
-		return () => clearInterval(timer)
-	}, [redesigned, model.displayedAt, visible])
-	const readAge = model.displayedAt === undefined ? 0 : clock - model.displayedAt
-	const staleNotice = redesigned && readAge > 60_000 ? <p className='detail'>{formatOldDataCheck(formatDuration(BigInt(Math.floor(readAge / 1000))))}</p> : undefined
+	const oldActionData = useOldActionDataNotice(redesigned && positionMode === 'own' ? model.displayedAt : undefined)
+	const actionDescription = (hint: string) =>
+		oldActionData === undefined ? (
+			hint
+		) : (
+			<>
+				{oldActionData}
+				<br />
+				{hint}
+			</>
+		)
 	const fieldsLoading = model.loading && snapshot === undefined
 	const capitalId = useId()
 	if (redesigned && positionMode === 'none') {
@@ -263,7 +263,7 @@ export function SecurityPoolAggregatePanel({
 					</MetricField>
 				</MetricGrid>
 			</SectionBlock>
-			<SectionBlock headingId={`${capitalId}-deposit`} title={copy.deposit} description={redesigned ? copy.idleDepositHint : copy.depositHint}>
+			<SectionBlock headingId={`${capitalId}-deposit`} title={copy.deposit} description={actionDescription(redesigned ? copy.idleDepositHint : copy.depositHint)}>
 				<SecurityPoolInput label={copy.repAmount} value={model.depositAmount} onChange={model.setDepositAmount} disabled={disabled} hint={redesigned && snapshot !== undefined ? copy.walletBalanceHint(formatCurrencyBalanceWithUnit(snapshot.walletAttoRep, common.rep)) : undefined} numeric />
 				{redesigned ? (
 					<ol className='statoblast-capital-actions'>
@@ -278,8 +278,7 @@ export function SecurityPoolAggregatePanel({
 				)}
 			</SectionBlock>
 			{redesigned ? (
-				<SectionBlock headingId={`${capitalId}-commitment`} title={pageCopy.commitmentSection}>
-					{staleNotice}
+				<SectionBlock headingId={`${capitalId}-commitment`} title={pageCopy.commitmentSection} description={oldActionData}>
 					<UserMessage tone='warning' detail={liquidationNotice} />
 					<details>
 						<summary>{copy.howTargetWorks}</summary>
@@ -354,7 +353,6 @@ export function SecurityPoolAggregatePanel({
 				</SectionBlock>
 			) : (
 				<SectionBlock headingId={`${capitalId}-commitment`} title={copy.authorize} description={copy.authorizationHint}>
-					{staleNotice}
 					<SecurityPoolInput label={copy.health} hint={copy.healthHint} value={model.healthPercent} onChange={model.setHealthPercent} disabled={disabled} numeric />
 					<MetricGrid>
 						<MetricField label={copy.targetCapacity}>
@@ -388,7 +386,7 @@ export function SecurityPoolAggregatePanel({
 				</SectionBlock>
 			)}
 
-			<SectionBlock headingId={`${capitalId}-reduce`} title={redesigned ? pageCopy.reduceCommitment : copy.positions} description={redesigned ? copy.queueHint : copy.positionsHint}>
+			<SectionBlock headingId={`${capitalId}-reduce`} title={redesigned ? pageCopy.reduceCommitment : copy.positions} description={actionDescription(redesigned ? copy.queueHint : copy.positionsHint)}>
 				{snapshot !== undefined && model.livePositions.length === 0 ? <EmptyState title={copy.noPositions} detail={copy.noPositionsHint} /> : undefined}
 				{model.livePositions.map(position => {
 					const reasons = model.positionReasons(position.id, position.batch === 0n ? undefined : position.remainingCommitment)
@@ -472,7 +470,7 @@ export function SecurityPoolAggregatePanel({
 				})}
 				{!redesigned && <SecurityPoolButton model={actions} action='serveSecurityPoolRetirement' label={copy.serve} pendingLabel={copy.serving} reason={model.serveReason} onClick={model.serve} />}
 			</SectionBlock>
-			<SectionBlock headingId={`${capitalId}-withdraw`} title={copy.withdraw} description={copy.withdrawHint}>
+			<SectionBlock headingId={`${capitalId}-withdraw`} title={copy.withdraw} description={actionDescription(copy.withdrawHint)}>
 				<SecurityPoolInput
 					label={copy.repAmount}
 					value={model.withdrawalAmount}
@@ -491,7 +489,7 @@ export function SecurityPoolAggregatePanel({
 				/>
 				<SecurityPoolButton model={actions} action='withdrawSecurityPoolRep' label={copy.withdraw} pendingLabel={copy.withdrawing} reason={model.withdrawReason} onClick={model.withdraw} />
 			</SectionBlock>
-			<SectionBlock headingId={`${capitalId}-earnings`} title={copy.earnings} description={redesigned && snapshot !== undefined ? copy.formatRewardVesting(formatDuration(snapshot.economics.rewardVestingSeconds)) : copy.earningsHint}>
+			<SectionBlock headingId={`${capitalId}-earnings`} title={copy.earnings} description={actionDescription(redesigned && snapshot !== undefined ? copy.formatRewardVesting(formatDuration(snapshot.economics.rewardVestingSeconds)) : copy.earningsHint)}>
 				<MetricGrid>
 					<MetricField label={copy.ethEarnings} loading={fieldsLoading}>
 						<CurrencyValue value={snapshot?.claimableEarnings?.attoEth ?? snapshot?.accruedFeesAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />

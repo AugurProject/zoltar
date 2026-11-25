@@ -44,6 +44,7 @@ type Props = {
 	universeId: bigint
 	currentTimestamp: bigint | undefined
 	entry: StatoblastQuestionPage
+	readUnavailable?: boolean
 	registerPageRefresh?: RegisterStatoblastPageRefresh | undefined
 	onReadStatus?: ReportStatoblastReadStatus | undefined
 	autoRefresh?: boolean
@@ -51,19 +52,21 @@ type Props = {
 }
 
 /** Question-specific shares and reporting; backing, liquidation and auctions live in the security pool workspace. */
-export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploymentStatuses, enabled, environmentKey, universeId, currentTimestamp, entry, registerPageRefresh, onReadStatus, autoRefresh = false, openDepositSearch = false }: Props) {
+export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploymentStatuses, enabled, environmentKey, universeId, currentTimestamp, entry, readUnavailable = false, registerPageRefresh, onReadStatus, autoRefresh = false, openDepositSearch = false }: Props) {
 	const [snapshot, setSnapshot] = useState<{ environmentKey: number; identity: string; block: { number: bigint; timestamp: bigint }; question: ListedQuestionLedger; sharesFacts: Awaited<ReturnType<typeof loadStatoblastQuestion>>['sharesFacts'] }>()
 	const selectionKey = `${entry.pool}:${entry.questionId}:${universeId}`
 	const selected = snapshot?.environmentKey === environmentKey && snapshot.identity === selectionKey ? snapshot.question : undefined
 	const [cachedHeading, setCachedHeading] = useState<{ scope: string; page: NonNullable<ReturnType<typeof displayCache.read>> }>()
 	const cacheScope = `${environmentKey}:${selectionKey}:${accountState.address ?? ''}`
+	const readScope = `${cacheScope}:${entry.tab}`
 	const displayCache = statoblastDisplayCache(getActiveNetworkProfile(), { universeId, owner: accountState.address, page: selectionKey }, decodeQuestionHeading)
 	const cached = cacheScope === cachedHeading?.scope ? cachedHeading.page : undefined
 	const [lastRead, setLastRead] = useState<{ scope: string; at: number }>()
 	const [reportRead, setReportRead] = useState<{ scope: string; at: number }>()
 	const [sharesRead, setSharesRead] = useState<{ scope: string; at: number }>()
 	const [loading, setLoading] = useState(false)
-	const [loadError, setLoadError] = useState<string>()
+	const [failure, setFailure] = useState<{ scope: string; message: string }>()
+	const loadError = failure?.scope === readScope ? failure.message : undefined
 	const [refresh, setRefresh] = useState(0)
 	const [deadlineFailed, setDeadlineFailed] = useState(false)
 	const [cachedReporting, setCachedReporting] = useState<{ scope: string; data: NonNullable<ReturnType<typeof decodeReportingOverview>> }>()
@@ -83,14 +86,13 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 		setCachedReporting(storedReporting === undefined ? undefined : { scope: cacheScope, data: storedReporting.value })
 		setCachedShares(storedShares === undefined ? undefined : { scope: cacheScope, savedAt: storedShares.savedAt, data: storedShares.value })
 	}, [cacheScope])
-	const readScope = `${cacheScope}:${entry.tab}`
 	const requestScope = useRef(readScope)
 	requestScope.current = readScope
 	const activeRead = useRef<{ scope: string; abort: AbortController; promise: Promise<void> }>()
 	const questionRead = useRef<{ scope: string; checkpoint: QuestionReadCheckpoint }>()
 	const [readStep, setReadStep] = useState(1)
 	const reportFallback = cachedReporting?.scope === cacheScope && reportingDetails === undefined ? cachedReporting.data : undefined
-	const sharesFallback = cachedShares?.scope === cacheScope && trading.tradingDetails === undefined ? cachedShares : undefined
+	const sharesFallback = cachedShares?.scope === cacheScope && trading.tradingDetails?.shareBalances === undefined ? cachedShares : undefined
 	const reportCheckedAt = reportRead?.scope === cacheScope ? reportRead.at : undefined
 	const sharesCheckedAt = sharesRead?.scope === cacheScope ? sharesRead.at : undefined
 	const dataAge = entry.tab === 'shares' ? (sharesFallback?.savedAt ?? sharesCheckedAt) : (reportFallback?.checkedAt ?? reportCheckedAt)
@@ -106,9 +108,9 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 			promise: Promise.resolve().then(async () => {
 				const isCurrent = () => requestScope.current === readScope && activeRead.current === request
 				const showReadError = (error: unknown) => {
-					if (isCurrent()) setLoadError(getErrorMessage(error, copy.questionUnavailable))
+					if (isCurrent()) setFailure({ scope: readScope, message: getErrorMessage(error, copy.questionUnavailable) })
 				}
-				setLoadError(undefined)
+				setFailure(undefined)
 				setReadStep(1)
 				setLoading(true)
 				try {
@@ -234,7 +236,10 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 		if (shareBalances === undefined || shareDecimals === undefined || snapshot?.identity !== selectionKey) return
 		if (lastSavedBalances.current?.scope === cacheScope && lastSavedBalances.current.data === shareBalances && lastSavedBalances.current.decimals === shareDecimals) return
 		lastSavedBalances.current = { scope: cacheScope, data: shareBalances, decimals: shareDecimals }
-		sharesCache.write({ ...shareBalances, decimals: shareDecimals }, snapshot.block)
+		const data = { ...shareBalances, decimals: shareDecimals }
+		const savedAt = Date.now()
+		sharesCache.write(data, snapshot.block)
+		setCachedShares({ scope: cacheScope, savedAt, data })
 	}, [shareBalances, shareDecimals, snapshot, cacheScope])
 	useEffect(() => {
 		if (selected === undefined) return
@@ -242,7 +247,9 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 	}, [profile, selectionKey, selected?.marketDetails.title])
 	const availableClaim = reportingDetails?.settlementState === 'resolved' && activeReporting?.sides.some(side => side.key === reportingDetails.questionOutcome && side.userDeposits.some(deposit => deposit.amountAttoRep > 0n))
 	const winningOutcome = selected?.questionOutcome ?? cached?.value.questionOutcome
-	const winningBalance = winningOutcome === undefined || winningOutcome === 'none' ? undefined : getSelectedOutcomeShareBalance(shareBalances ?? sharesFallback?.data, winningOutcome)
+	const visibleShareBalances = shareBalances ?? sharesFallback?.data
+	const winningBalance = winningOutcome === undefined || winningOutcome === 'none' ? undefined : getSelectedOutcomeShareBalance(visibleShareBalances, winningOutcome)
+	const hasShares = visibleShareBalances !== undefined && (visibleShareBalances.yesAttoShares > 0n || visibleShareBalances.noAttoShares > 0n || visibleShareBalances.invalidAttoShares > 0n)
 	const winningDecimals = shareDecimals ?? sharesFallback?.data.decimals
 	const canRedeemShares = accountState.address !== undefined && (winningBalance ?? 0n) > 0n
 	const winningShares = canRedeemShares && winningBalance !== undefined && winningDecimals !== undefined ? { winningShares: { amount: winningBalance, decimals: winningDecimals, href: statoblastPageHref({ ...entry, tab: 'shares', sharesAction: 'redeem' }) } } : undefined
@@ -271,18 +278,45 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 					{tabs}
 					{entry.tab === 'shares' && cachedShares?.scope === cacheScope && <SavedShares {...cachedShares.data} />}
 					{entry.tab === 'reporting' && cachedReporting?.scope === cacheScope && <StatoblastReportingOverview view={cachedReporting.data} now={cached.timestamp} autoRefresh={autoRefresh} {...winningShares} />}
-					<RetryableNotice message={refreshError} retryLabel={pageCopy.tryAgain} onRetry={retryQuestion} disabled={loading} />
+					<RetryableNotice message={readUnavailable ? undefined : refreshError} retryLabel={pageCopy.tryAgain} onRetry={retryQuestion} disabled={loading} />
+				</div>
+			)
+		}
+		if (readUnavailable) return undefined
+		if (loadError === undefined) {
+			return (
+				<div className='route-view-flow statoblast-question-loading'>
+					<span className='visually-hidden' role='status'>
+						{pageCopy.loadingQuestionDetails}
+					</span>
+					<div className='statoblast-question-skeleton' aria-busy='true' aria-hidden='true'>
+						<span className='skeleton-line skeleton-line-title' />
+						<div className='statoblast-question-head'>
+							<span className='skeleton-line skeleton-line-detail' />
+							<span className='skeleton-line' />
+						</div>
+						<span className='skeleton-line statoblast-question-skeleton-progress' />
+						<div className='statoblast-question-skeleton-metrics'>
+							{[1, 2, 3].map(index => (
+								<div key={index}>
+									<span className='skeleton-line skeleton-line-title' />
+									<span className='skeleton-line' />
+								</div>
+							))}
+						</div>
+					</div>
+					{tabs}
 				</div>
 			)
 		}
 		const destination = unavailable ? statoblastPageHref({ kind: 'pool', pool: entry.pool, tab: 'fork' }) : statoblastPageHref({ kind: 'watchlist' })
 		return (
 			<EmptyState
-				title={loading ? copy.loadingQuestion : copy.questionUnavailable}
-				detail={unavailable ? pageCopy.questionUnprepared : (loadError ?? pageCopy.loadingQuestionDetails)}
+				title={copy.questionUnavailable}
+				detail={unavailable ? pageCopy.questionUnprepared : loadError}
 				actions={
 					<>
-						{loadError !== undefined && !unavailable && (
+						{!unavailable && (
 							<button className='secondary' type='button' onClick={retryQuestion}>
 								{pageCopy.tryAgain}
 							</button>
@@ -296,16 +330,17 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 
 	return (
 		<div className='route-view-flow'>
-			<StatoblastQuestionHead page={entry} question={selected} reporting={reportingDetails} now={now} checkingDeadline={checkingDeadline} hasShares={Object.values(trading.tradingDetails?.shareBalances ?? {}).some(balance => balance > 0n)} />
+			<StatoblastQuestionHead page={entry} question={selected} reporting={reportingDetails} now={now} checkingDeadline={checkingDeadline} hasShares={hasShares} />
 			<UpdatedAgo updatedAt={displayedAt} refreshing={loading} />
-			<RetryableNotice message={refreshError} retryLabel={pageCopy.tryAgain} onRetry={retryQuestion} disabled={loading} />
+			<RetryableNotice message={readUnavailable ? undefined : refreshError} retryLabel={pageCopy.tryAgain} onRetry={retryQuestion} disabled={loading} />
 			<ErrorNotice message={ownFork.error} />
 			{tabs}
 			{entry.tab === 'shares' && <StatoblastSharesFacts question={selected} facts={snapshot?.sharesFacts} now={now} />}
-			{entry.tab === 'shares' && sharesFallback !== undefined && <SavedShares {...sharesFallback.data} />}
 			{entry.tab === 'shares' && (
 				<TradingSection
+					actionDataReadAt={sharesCheckedAt}
 					requestedSharesAction={entry.sharesAction}
+					savedHoldings={sharesFallback === undefined ? undefined : <SavedShares {...sharesFallback.data} />}
 					accountState={accountState}
 					loadingTradingDetails={trading.loadingTradingDetails}
 					loadingTradingForkUniverse={trading.loadingTradingForkUniverse}
@@ -351,6 +386,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 			)}
 			{entry.tab === 'reporting' && (
 				<ReportingSection
+					actionDataReadAt={reportCheckedAt}
 					accountState={accountState}
 					currentTimestamp={now}
 					showLifecycle={false}
@@ -381,7 +417,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 				/>
 			)}
 			{entry.tab === 'reporting' && reportingDetails?.status === 'active' && accountState.address !== undefined && <LocateReportingDeposits key={reportingDetails.escalationGameAddress} details={reportingDetails} wallet={accountState.address} refresh={reporting.loadReporting} openOnEntry={openDepositSearch} />}
-			{entry.tab === 'claims' && <InheritedReporterClaims parameters={parameters} accountState={accountState} details={reportingDetails} onRefresh={reporting.loadReporting} />}
+			{entry.tab === 'claims' && <InheritedReporterClaims actionDataReadAt={reportCheckedAt} parameters={parameters} accountState={accountState} details={reportingDetails} onRefresh={reporting.loadReporting} />}
 		</div>
 	)
 }

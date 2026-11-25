@@ -21,6 +21,7 @@ export const reportComparisonAfter = 'After'
 export const reportComparisonPayout = 'You’d get back if the window ended now'
 export const reportComparisonStake = (outcome: string) => `Your REP staked on ${outcome}`
 export const reportComparisonLeader = 'Leader'
+export const reportComparisonNoReports = 'No reports'
 export const reportComparisonDeadline = 'Window ends'
 export const reportComparisonUndecided = 'Ends undecided'
 export const reportComparisonKnownDeposits = 'Payout estimates include deposits this device knows about.'
@@ -259,3 +260,4 @@ export const claimPayoutReviewLabel = 'Claim payout'
 export const claimPayoutChangedSinceReview = 'The claim payout changed. Refresh and review the claim again.'
 export const stakedRepReviewLabel = (outcome: string) => `Your REP staked on ${outcome}`
 export const reportReviewInsufficientRep = 'Wallet REP changed. Add enough REP for this report and try again.'
+export const escalationPreparationChanged = 'Reporting is already prepared. Review the question again.'

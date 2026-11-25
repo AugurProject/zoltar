@@ -1177,6 +1177,10 @@ html:has(.global-transaction-dialog-nonblocking) {
 	gap: 1rem;
 }
 
+.operation-modal-body[hidden] {
+	display: none;
+}
+
 /* The modal header already draws a rule, so a leading embedded section does not add a second one. */
 .operation-modal-body > .section-block.embedded:first-child {
 	padding-top: 0;

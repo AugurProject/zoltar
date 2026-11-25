@@ -10,6 +10,7 @@ import { createTransactionScope, mergeTransactionScopes } from '@zoltar/ui-core-
 import { localEntityScopeForNetwork, setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { getErrorDetail, getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
+import { currentStateCheckFailed } from '@zoltar/ui-core-shared/copy/transaction.js'
 import { getActiveBackend, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { WriteOperationsParameters } from '../../../types/app.js'
 import { isUniverseForked, loadSecurityPoolSetup, securityPoolPreparationRequest, securityPoolAddressFromCreationReceipt, securityPoolContractRequest, securityPoolCreationRequest, sendSecurityPoolTransaction, type SecurityPoolTransaction } from '../../../protocol/securityPool.js'
@@ -21,6 +22,9 @@ import { loadSecurityPoolAdmission, securityPoolAdmissionCreationRequest, requir
 import { buildSecurityPoolAuctionVaultExecuteRequest } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { authenticateSecurityPoolAuctionVault } from '../../../protocol/securityPoolRepairAuction.js'
 import { deploymentProgressStore, type DeploymentDraft } from '../lib/deploymentProgress.js'
+import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
+
+const createReviewReadClient = () => withStatoblastRequestTimeout(createConnectedReadClient(), currentStateCheckFailed)
 
 function initialDeploymentDraft(originInput: string): DeploymentDraft {
 	return {
@@ -36,7 +40,7 @@ function initialDeploymentDraft(originInput: string): DeploymentDraft {
 	}
 }
 
-export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>, parameters: WriteOperationsParameters, deploying = false) {
+export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>, parameters: WriteOperationsParameters, deploying = false, walletUnavailableReason?: string) {
 	const backend = getActiveBackend()
 	const wallet = parameters.accountAddress
 	const journal = useMemo(() => {
@@ -66,7 +70,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 	const snapshot = model.snapshot
 	const universeId = snapshot?.universeId ?? securityPoolUnsignedId(model.universeInput, 248) ?? 0n
 	const scope = mergeTransactionScopes(createTransactionScope('securityPool', snapshot?.securityPool ?? model.setup?.securityPool), createTransactionScope('security-pool-capital', snapshot?.capitalLedger))
-	const walletReason = parameters.accountAddress === undefined ? copy.connect : undefined
+	const walletReason = parameters.accountAddress === undefined ? (walletUnavailableReason ?? copy.connect) : undefined
 	const ownerReason =
 		walletReason ??
 		(snapshot === undefined && (model.loading || busy.value !== undefined) ? copy.loading : undefined) ??
@@ -137,7 +141,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 							...buildSecurityPoolAuctionVaultExecuteRequest({ bidder: selectedVault.bidder, vault: selectedVault.vault, request: { account: original.account, to: request.to, value: original.value ?? 0n, data: original.data }, sweep: { repToken: snapshot.repToken, recipient: selectedVault.bidder } }),
 							reviewDescription: `${original.reviewDescription ?? label} This operation uses your independent auction vault ${selectedVault.vault}. Returned collateral, ETH and REP are sent to your wallet ${selectedVault.bidder}.`,
 							validateBeforeSubmit: async () => {
-								const client = createConnectedReadClient()
+								const client = createReviewReadClient()
 								const block = await client.getBlock()
 								if (block.number === undefined) throw new Error('A confirmed block is required to authenticate this vault.')
 								const fresh = await authenticateSecurityPoolAuctionVault(client, snapshot.securityPool, selectedVault.vault, block.number)
@@ -203,7 +207,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 	const originForkReason = originForked ? copy.originForked : undefined
 	const requireUnforkedOrigin = async () => {
 		if (origin === undefined) throw new Error(copy.enterOrigin)
-		if (!(await isUniverseForked(createConnectedReadClient(), origin.universeId))) return
+		if (!(await isUniverseForked(createReviewReadClient(), origin.universeId))) return
 		originForkState.value = { backend, key: originForkKey, forked: true }
 		throw new Error(copy.originForked)
 	}
@@ -316,7 +320,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 			run(
 				'deploySecurityPool',
 				copy.deploy,
-				async () => {
+				() => {
 					if (parameters.accountAddress === undefined) throw new Error(copy.connect)
 					if (journal.current.value?.pool !== undefined) throw new Error(copy.poolAlreadyDeployed)
 					if (creationError !== undefined || economics === undefined || admission === undefined || horizon === undefined || origin === undefined) throw new Error(creationError ?? copy.deployAdmissionFirst)
@@ -325,7 +329,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 					const config = { ...economics }
 					const originConfig = { ...origin }
 					const validateAdmission = async () => {
-						const client = createConnectedReadClient()
+						const client = createReviewReadClient()
 						const verified = await loadSecurityPoolAdmission(client, chosen.address, chosen.universeId)
 						if (verified.mode !== mode) throw new Error(copy.unsupportedAdmission)
 						if (verified.mode === 'fixed') {
@@ -337,7 +341,6 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 							}
 						}
 					}
-					await validateAdmission()
 					return {
 						...securityPoolCreationRequest(parameters.accountAddress, originConfig, horizon, chosen.address, config),
 						validateBeforeSubmit: validateAdmission,
@@ -377,7 +380,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 						...securityPoolPreparationRequest(parameters.accountAddress, selected.securityPool),
 						reviewDescription: `Complete setup stage ${stage} of 4. This deploys the next bounded group of custody modules. No REP or trader ETH is deposited.`,
 						validateBeforeSubmit: async () => {
-							const latest = await loadSecurityPoolSetup(createConnectedReadClient(), selected.securityPool, selected.owner)
+							const latest = await loadSecurityPoolSetup(createReviewReadClient(), selected.securityPool, selected.owner)
 							if (latest.chainId !== selected.chainId || latest.stage !== selected.stage) throw new Error('Setup advanced. Refresh before sending another preparation transaction.')
 							if (latest.originForkTime !== 0n) throw new Error('Origin universe forked; setup is permanently closed.')
 						},
@@ -405,7 +408,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 					...securityPoolContractRequest(parameters.accountAddress, selected.securityPool, 'addQuestion', [id]),
 					reviewDescription: copy.formatRegisterQuestionReview(formatQuestionIdHex(id)),
 					validateBeforeSubmit: async () => {
-						const client = createConnectedReadClient()
+						const client = createReviewReadClient()
 						await requireSecurityPoolQuestionAdmission(client, selected.questionAdmissionPolicy, selected.securityPool, selected.originUniverseId, id)
 						// The transaction is included in a later block, at least one second after the latest one.
 						const latest = await client.getBlock()

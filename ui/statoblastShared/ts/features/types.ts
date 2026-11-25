@@ -2,6 +2,7 @@ import type { AccountState, TradingFormState } from '../types/app.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ListedQuestionLedger, TradingActionResult, TradingDetails } from '../types/contracts.js'
 import type { QuestionLedgerStateModel } from './question-ledgers/lib/questionLedgerState.js'
+import type { ComponentChildren } from 'preact'
 
 export type * from '@zoltar/ui-core-shared/types/components.js'
 
@@ -25,6 +26,8 @@ type TradingRouteContentProps = {
 }
 
 export type TradingSectionProps = TradingRouteContentProps & {
+	actionDataReadAt?: number | undefined
+	savedHoldings?: ComponentChildren
 	requestedSharesAction?: 'mint' | 'redeem' | undefined
 	embedInCard?: boolean
 	poolState?: QuestionLedgerStateModel | undefined

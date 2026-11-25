@@ -6,6 +6,7 @@ import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { SecurityPoolTakeover } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolTakeover.js'
+import { changedSinceReview } from '@zoltar/ui-statoblast-shared/copy/app.js'
 import type { SecurityPoolTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
 import { loadSecurityPoolCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { useSecurityPoolFixture, unit } from '../../../../../../solidity/ts/tests/statoblast/securityPoolFixture'
@@ -83,7 +84,7 @@ describe('manual takeover against native security pool contracts', () => {
 			if (scenario !== 'success') {
 				if (scenario === 'changed-price') {
 					await waitFor(() => expect(failure).toBeDefined(), { timeout: 30_000 })
-					expect(String(failure)).toContain('changed')
+					expect(String(failure)).toContain(changedSinceReview)
 				} else expect(failure).toBeUndefined()
 				expect(submitted).toBe(false)
 				const after = await loadSecurityPoolCapitalSnapshot({ client: keeper, owner: keeper.account.address, securityPool: fixture.securityPool })

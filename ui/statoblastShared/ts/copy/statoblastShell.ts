@@ -13,6 +13,9 @@ export const repLead = '1 REP = '
 export const ethTail = ' ETH'
 export const refresh = 'Refresh'
 export const refreshing = 'Refreshing…'
+export const cannotReachNetwork = "Can't reach the network"
+export const changeRpcInSettings = 'Change RPC in Settings'
+export const tryAgain = 'Try again'
 export const formatSavedReadFailure = (age: string, reason: string) => `Couldn’t refresh, showing data from ${age} ago. ${reason}`
 export const autoLead = 'Auto '
 export const on = 'on'

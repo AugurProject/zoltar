@@ -42,6 +42,7 @@ import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from
 import { getEffectiveReportingDetails, getEscalationGameStartTimestamp, getReportingStagePresentation } from '../lib/reportingStagePresentation.js'
 import { ReportingSettlementSection } from './ReportingSettlementSection.js'
 import { ForkTriggeredActions } from './ForkTriggeredActions.js'
+import { useOldActionDataNotice } from '../../useStatoblastPageRefresh.js'
 import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
 import type { ReportingSectionProps } from '../../oracleTypes.js'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -61,6 +62,7 @@ function isRedundantPresetReason(reason: string | undefined) {
 }
 export function ReportingSection({
 	accountState,
+	actionDataReadAt,
 	oracleBlocker,
 	currentTimestamp,
 	embedInCard = false,
@@ -90,6 +92,7 @@ export function ReportingSection({
 	triggerZoltarForkAvailability,
 	triggerZoltarForkPending = false,
 }: ReportingSectionProps) {
+	const oldActionData = useOldActionDataNotice(actionDataReadAt)
 	const presetBlockerId = useId()
 	const reportingStageDetailId = useId()
 	const reportDisabledReasonId = useId()
@@ -246,6 +249,7 @@ export function ReportingSection({
 	const forkTriggeredActions =
 		reportingStageKey !== 'forkTriggered' || (!showForkWorkflowAction && !showTriggerZoltarForkAction) ? undefined : (
 			<ForkTriggeredActions
+				actionDataNotice={oldActionData}
 				approval={showTriggerZoltarForkAction ? triggerZoltarForkApproval : undefined}
 				designedOverview={designedOverview}
 				forkButton={
@@ -311,6 +315,7 @@ export function ReportingSection({
 	const settlementSection =
 		showSettlementSection && reportingReady !== false ? (
 			<ReportingSettlementSection
+				actionDataNotice={oldActionData}
 				designedOverview={designedOverview}
 				showPositions={!showFullReporting}
 				activeReportingDetails={activeReportingDetails}
@@ -421,7 +426,7 @@ export function ReportingSection({
 			) : undefined}
 
 			{showFullReporting && reportingReady !== false && (!designedOverview || (!finalized && reportingStageKey !== 'forkTriggered')) ? (
-				<SectionBlock className='reporting-outcome-section' title={finalized ? reportingCopy.results : reportTitle} variant={designedOverview ? 'default' : 'embedded'}>
+				<SectionBlock className='reporting-outcome-section' title={finalized ? reportingCopy.results : reportTitle} description={finalized ? undefined : oldActionData} variant={designedOverview ? 'default' : 'embedded'}>
 					{oracleBlocker ??
 						(reportActionGuardMessage === undefined ? undefined : (
 							<WarningSurface ariaLive='polite' role='status' surface='flat' variant='compact'>

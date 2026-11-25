@@ -22,6 +22,9 @@ export const choiceReview = (outcome: string) => `Commit your pledged REP to ${o
 export const loading = 'Loading fork state'
 export const noFork = 'This source universe has not forked.'
 export const unchosen = 'No branch chosen'
+export const yourBranch = 'Your branch'
+export const recoveryPreparation = 'Recovery rights'
+export const recoveryPrepared = 'Prepared'
 export const chosen = (outcome: bigint) => `Chosen outcome: ${outcome}`
 export const basketTitle = 'Claim recovery'
 export const basketHint = 'After activation, returning complete sets or redeeming winning shares pays their share of this branch’s collateral and unchosen REP. The assets below cover all questions together; full repayment in collateral is not guaranteed.'

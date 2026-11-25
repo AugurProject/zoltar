@@ -15,7 +15,7 @@ export function TransactionStepsModal({ contextKey, finalActionLabel }: { contex
 	useEffect(() => () => transactionSteps.peek()?.cancel(), [contextKey])
 	const workflow = transactionSteps.value
 	// Standalone approval buttons already specify their spending limit on the page.
-	const directApproval = workflow?.steps.length === 1 && workflow.steps[0]?.spender !== undefined && workflow.steps[0].approval === undefined
+	const directApproval = workflow?.showLifecycle === false && workflow.steps.length === 1 && workflow.steps[0]?.spender !== undefined && workflow.steps[0].approval === undefined
 	const embedded = workflow !== undefined && (isEmbeddedTransactionReview(workflow.reviewSignal) || (embeddedTransactionSteps.value !== undefined && workflow.reviewSignal === embeddedTransactionSteps.value))
 	const completed = workflow?.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped') ?? false
 	useEffect(() => {

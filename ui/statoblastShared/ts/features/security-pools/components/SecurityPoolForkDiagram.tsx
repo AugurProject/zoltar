@@ -8,7 +8,7 @@ import { useUniverseName } from '@zoltar/ui-core-shared/components/UniverseNames
 import { formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import { formatUniverseIdHex } from '@zoltar/ui-core-shared/lib/universeLabels.js'
 import type { MarketDetails, ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { SecurityPoolForkSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
+import type { ForkPageDisplay } from '../../../protocol/forkDisplayCache.js'
 import type { SecurityPoolAccountSnapshot } from '../../../protocol/securityPool.js'
 import { securityPoolUnsignedId } from '../lib/draft.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
@@ -29,7 +29,7 @@ function branchLabel(question: MarketDetails, outcomeIndex: bigint) {
 	return outcomeIndex <= BigInt(question.outcomeLabels.length) ? question.outcomeLabels[Number(outcomeIndex) - 1] : undefined
 }
 
-function BranchNodes({ question, selected, confirmed, knownChildren, branch }: { question: MarketDetails; selected: bigint | undefined; confirmed: boolean; knownChildren: readonly KnownChild[]; branch: SecurityPoolForkSnapshot['branch'] }) {
+function BranchNodes({ question, selected, confirmed, knownChildren, branch }: { question: MarketDetails; selected: bigint | undefined; confirmed: boolean; knownChildren: readonly KnownChild[]; branch: ForkPageDisplay['branch'] }) {
 	const [page, setPage] = useState<{ start: bigint; selected: bigint | undefined }>()
 	const scalar = question.marketType === 'scalar'
 	const total = scalar ? question.numTicks + 2n : BigInt(question.outcomeLabels.length + 1)
@@ -77,7 +77,7 @@ function BranchNodes({ question, selected, confirmed, knownChildren, branch }: {
 	)
 }
 
-export function SecurityPoolForkDiagram({ state, snapshot, question, outcomeInput, childUniverses = [] }: { state: SecurityPoolForkSnapshot | undefined; snapshot: SecurityPoolAccountSnapshot | undefined; question: MarketDetails | undefined; outcomeInput: string; childUniverses?: readonly KnownChild[] | undefined }) {
+export function SecurityPoolForkDiagram({ state, snapshot, question, outcomeInput, childUniverses = [] }: { state: ForkPageDisplay | undefined; snapshot: SecurityPoolAccountSnapshot | undefined; question: MarketDetails | undefined; outcomeInput: string; childUniverses?: readonly KnownChild[] | undefined }) {
 	const universeId = state?.universeId ?? snapshot?.universeId
 	const source = useUniverseName(universeId ?? 0n)
 	const forkTime = state?.forkTime ?? snapshot?.forkTime ?? 0n

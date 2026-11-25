@@ -45,6 +45,7 @@ function getChildDeploymentAvailabilityReason({ accountAddress, exists, hasForke
 }
 
 type ZoltarMigrationSectionProps = {
+	actionDataNotice?: string | undefined
 	universeBrowserHref?: string | undefined
 	singleForm?: boolean
 	onScalarOutcomesChange?: ((indexes: readonly bigint[]) => void) | undefined
@@ -86,6 +87,7 @@ function formatRep(value: bigint) {
  * that do not exist yet).
  */
 export function ZoltarMigrationSection({
+	actionDataNotice,
 	universeBrowserHref,
 	singleForm = false,
 	onScalarOutcomesChange,
@@ -388,7 +390,8 @@ export function ZoltarMigrationSection({
 			</dd>
 		)
 		return (
-			<SectionBlock title={zoltarCopy.migrateRep} className='migration-single-form' description={zoltarCopy.migrationIntro}>
+			<SectionBlock title={zoltarCopy.migrateRep} className='migration-single-form' description={actionDataNotice ?? zoltarCopy.migrationIntro}>
+				{actionDataNotice !== undefined && <p className='detail'>{zoltarCopy.migrationIntro}</p>}
 				{renderStepBody('outcomes')}
 				{hasForked && renderStepBody('amount')}
 				{amountReady && (

@@ -290,6 +290,19 @@ void describe('TradingSection', () => {
 		},
 	})
 
+	test.each(['Mint complete sets', 'Redeem complete sets'])('shows the age of stale inputs without disabling %s', async action => {
+		const props = createTradingSectionProps()
+		const rendered = await renderIntoDocument(<TradingSection {...props} actionDataReadAt={Date.now() - 360_000} />)
+		cleanupRenderedComponent = rendered.cleanup
+		fireEvent.click(within(document.body).getByRole('button', { name: action }))
+		const dialog = within(document.body).getByRole('dialog')
+		const age = within(dialog).getByText('Data from 6m ago. Checked again before sending.')
+		expect(dialog.getAttribute('aria-describedby')).toBe(age.id)
+		expect(getTransactionButtonState(dialog, action).disabled).toBe(false)
+		await act(() => render(<TradingSection {...props} actionDataReadAt={Date.now()} />, rendered.container))
+		expect(within(dialog).queryByText(/Checked again before sending/)).toBeNull()
+	})
+
 	test.each([false, true])('recovery purchases show their REP contribution and separate approval (pending: %s)', async pending => {
 		const props = createTradingSectionProps()
 		const funding = props.collateralFunding
@@ -1074,6 +1087,15 @@ void describe('TradingSection', () => {
 
 		expect(getTransactionButtonState(document.body, 'Mint complete sets')).toMatchObject({ disabled: true, reason: 'This action is unavailable in the current question state.' })
 		expect(Array.from(document.querySelectorAll('.vault-action-launcher-grid .action-launcher-card button')).map(button => button.textContent)).toEqual(['Mint complete sets', 'Redeem complete sets', 'Migrate forked shares', 'Redeem winning shares'])
+	})
+
+	test('uses saved holdings in place of the empty live holdings surface', async () => {
+		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ tradingDetails: undefined })} savedHoldings={<div data-saved-holdings>Saved balances</div>} />)
+		cleanupRenderedComponent = rendered.cleanup
+		const queries = within(rendered.container)
+		expect(queries.getByText('Saved balances')).not.toBeNull()
+		expect(queries.queryByRole('heading', { name: 'Your holdings' })).toBeNull()
+		expect(queries.getByRole('button', { name: 'Mint complete sets' })).not.toBeNull()
 	})
 
 	void test('replaces empty holdings with one line once balances load as zero', async () => {

@@ -6,6 +6,8 @@ import { buildSecurityPoolPriceApprovalRequest, buildSecurityPoolPricePreparatio
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getActiveBackend, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
+import { currentStateCheckFailed } from '@zoltar/ui-core-shared/copy/transaction.js'
+import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
 import {
 	acceptedSecurityPoolPriceCache,
@@ -24,7 +26,9 @@ import {
 import type { SecurityPoolAccountSnapshot, SecurityPoolTransaction } from '../../../protocol/securityPool.js'
 import type { SecurityPoolSharedForkParameters } from './useSecurityPoolSharedFork.js'
 import { securityPoolAmountOrUndefined, securityPoolUnsignedId } from '../lib/draft.js'
+import { reviewBalance, type ReviewRow } from '../lib/reviewRows.js'
 import * as copy from '../../../copy/securityPoolPrice.js'
+import { walletBalance } from '../../../copy/collateral.js'
 
 /** The shared price feed one report funds. */
 export type SecurityPoolPriceTarget = {
@@ -224,18 +228,21 @@ export function useSecurityPoolPrice({ scope, target, displayTarget = target, bi
 	const credit = (selected: SecurityPoolPriceReport | undefined, token: 'collateral' | 'rep') => (token === 'collateral' ? selected?.wethCredit : selected?.repCredit)
 	const tokenWithdrawReason = (token: 'collateral' | 'rep') => selectedReportReason ?? recipientError ?? (credit(report, token) === 0n ? noCreditReason : undefined)
 
-	const run = (action: string, label: string, reason: string | undefined, build: (selected: SecurityPoolPriceSnapshot) => SecurityPoolTransaction, check: (latest: SecurityPoolPriceSnapshot) => Promise<void> = async () => undefined, captureReport = false) =>
+	const run = (action: string, label: string, reason: string | undefined, build: (selected: SecurityPoolPriceSnapshot) => SecurityPoolTransaction, check: (latest: SecurityPoolPriceSnapshot, client: ReadClient) => Promise<readonly ReviewRow[] | void> = async () => undefined, captureReport = false) =>
 		actions.runSecurityPoolAction(
 			action,
 			label,
 			() => {
 				if (reason !== undefined || snapshot === undefined) throw new Error(reason ?? scoped.loading)
 				const selected = snapshot
+				let reviewRows: readonly ReviewRow[] = []
 				return {
 					...build(selected),
+					readReviewRows: () => reviewRows,
 					validateBeforeSubmit: async () => {
 						if (getActiveBackend() !== backend || previous.current?.identity !== identity) throw new Error('Price feed or wallet environment changed. Review again.')
-						const latest = await loadSecurityPoolBranchPrice(createConnectedReadClient(), selected.securityPool, selected.owner, selected.universeId)
+						const client = withStatoblastRequestTimeout(createConnectedReadClient(), currentStateCheckFailed)
+						const latest = await loadSecurityPoolBranchPrice(client, selected.securityPool, selected.owner, selected.universeId)
 						if (
 							latest.chainId !== selected.chainId ||
 							latest.feed !== selected.feed ||
@@ -246,7 +253,7 @@ export function useSecurityPoolPrice({ scope, target, displayTarget = target, bi
 							latest.observation?.openOracle !== selected.observation?.openOracle
 						)
 							throw new Error('Price feed identities changed. Review again.')
-						await check(latest)
+						reviewRows = (await check(latest, client)) ?? []
 						if (getActiveBackend() !== backend || previous.current?.identity !== identity) throw new Error('Price feed or wallet environment changed. Review again.')
 					},
 				}
@@ -284,9 +291,9 @@ export function useSecurityPoolPrice({ scope, target, displayTarget = target, bi
 		if (report === undefined) throw new Error(copy.noReport)
 		return build(selected, report)
 	}
-	const freshReport = async (latest: SecurityPoolPriceSnapshot) => {
+	const freshReport = async (latest: SecurityPoolPriceSnapshot, client: ReadClient) => {
 		if (report === undefined) throw new Error(copy.noReport)
-		const fresh = await loadSecurityPoolPriceReport(createConnectedReadClient(), latest, report.reportId)
+		const fresh = await loadSecurityPoolPriceReport(client, latest, report.reportId)
 		if (fresh.escrow !== report.escrow || fresh.state.stateHash !== report.state.stateHash) throw new Error('This report changed. Refresh and review it again.')
 		return fresh
 	}
@@ -300,10 +307,12 @@ export function useSecurityPoolPrice({ scope, target, displayTarget = target, bi
 				if (recipient === undefined) throw new Error(copy.invalidWithdrawalRecipient)
 				return { ...buildSecurityPoolPriceTokenWithdrawal(selected, selectedReport, token, recipient), reviewDescription: copy.tokenWithdrawalReview(symbol, recipient) }
 			}),
-			async latest => {
-				const fresh = await freshReport(latest)
+			async (latest, client) => {
+				const fresh = await freshReport(latest, client)
 				if (fresh.sponsor !== report?.sponsor) throw new Error(copy.reportFunderChanged)
-				if (credit(fresh, token) === 0n) throw new Error(copy.noFunding)
+				const released = credit(fresh, token)
+				if (released === undefined || released === 0n) throw new Error(copy.noFunding)
+				return [reviewBalance(copy.releasedToken(symbol), released, 0n, token === 'collateral' ? collateral.decimals : 18, symbol)]
 			},
 		)
 	}
@@ -380,6 +389,9 @@ export function useSecurityPoolPrice({ scope, target, displayTarget = target, bi
 				async latest => {
 					const fresh = freshFunding(latest)
 					if (fresh.wrap !== funding?.wrap || latest.ethBalanceAttoEth < fresh.requiredEth) throw new Error('Wallet funding changed. Refresh before wrapping ETH.')
+					const weth = latest.observation?.wethBalanceAttoEth
+					if (weth === undefined) throw new Error(scoped.loading)
+					return [reviewBalance(walletBalance('ETH'), latest.ethBalanceAttoEth, latest.ethBalanceAttoEth - fresh.wrap, 18, 'ETH'), reviewBalance(walletBalance('WETH'), weth, weth + fresh.wrap, 18, 'WETH')]
 				},
 			),
 		approve: (token: 'weth' | 'rep', amount: bigint) =>
@@ -412,6 +424,11 @@ export function useSecurityPoolPrice({ scope, target, displayTarget = target, bi
 					const observation = latest.observation
 					if (observation === undefined || observation.wethBalanceAttoEth < fresh.weth || observation.repBalanceAttoRep < fresh.rep || latest.ethBalanceAttoEth < fresh.bounty) throw new Error('Wallet report funding is insufficient.')
 					if (observation.wethAllowanceAttoEth < fresh.weth || observation.repAllowanceAttoRep < fresh.rep) throw new Error(copy.approvalRequired)
+					return [
+						reviewBalance(walletBalance(collateral.symbol), observation.wethBalanceAttoEth, observation.wethBalanceAttoEth - fresh.weth, collateral.decimals, collateral.symbol),
+						reviewBalance(scoped.walletRep, observation.repBalanceAttoRep, observation.repBalanceAttoRep - fresh.rep, 18, 'REP'),
+						...(fresh.bounty === 0n ? [] : [reviewBalance(walletBalance('ETH'), latest.ethBalanceAttoEth, latest.ethBalanceAttoEth - fresh.bounty, 18, 'ETH')]),
+					]
 				},
 				true,
 			),
@@ -424,21 +441,22 @@ export function useSecurityPoolPrice({ scope, target, displayTarget = target, bi
 					...buildSecurityPoolPriceSettlement(selected, selectedReport),
 					reviewDescription: copy.formatSettlementReview(selectedReport.baseFeePerGas === undefined ? undefined : formatUnits(selectedReport.baseFeePerGas, 9), formatUnits(selectedReport.maxSettlementBaseFee, 9)),
 				})),
-				async latest => {
-					const fresh = await freshReport(latest)
+				async (latest, client) => {
+					const fresh = await freshReport(latest, client)
 					if (fresh.state.settled || latest.timestamp < fresh.eligibleAt) throw new Error('This report is not ready to settle.')
 				},
 			),
 		recover: () =>
-			run(securityPoolPriceAction(scope, 'recover'), copy.recover, recoverReason, withReport(buildSecurityPoolPriceRecovery), async latest => {
-				const fresh = await freshReport(latest)
+			run(securityPoolPriceAction(scope, 'recover'), copy.recover, recoverReason, withReport(buildSecurityPoolPriceRecovery), async (latest, client) => {
+				const fresh = await freshReport(latest, client)
 				if (!fresh.state.settled || fresh.outcome !== 0n) throw new Error(copy.callbackComplete)
 				if (feeReason(fresh) !== undefined) throw new Error(copy.waitForBaseFee)
 			}),
 		withdraw: () =>
-			run(securityPoolPriceAction(scope, 'withdraw'), copy.withdraw, withdrawReason, withReport(buildSecurityPoolPriceFundingWithdrawal), async latest => {
-				const fresh = await freshReport(latest)
+			run(securityPoolPriceAction(scope, 'withdraw'), copy.withdraw, withdrawReason, withReport(buildSecurityPoolPriceFundingWithdrawal), async (latest, client) => {
+				const fresh = await freshReport(latest, client)
 				if (fresh.wethCredit === 0n && fresh.repCredit === 0n) throw new Error(copy.noFunding)
+				return [...(fresh.wethCredit === 0n ? [] : [reviewBalance(copy.releasedToken(collateral.symbol), fresh.wethCredit, 0n, collateral.decimals, collateral.symbol)]), ...(fresh.repCredit === 0n ? [] : [reviewBalance(copy.releasedToken('REP'), fresh.repCredit, 0n, 18, 'REP')])]
 			}),
 	}
 }

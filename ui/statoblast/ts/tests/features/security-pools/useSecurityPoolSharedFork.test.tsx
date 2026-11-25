@@ -1,7 +1,7 @@
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { SecurityPoolSharedFork } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolSharedFork.js'
 import * as forkCopy from '@zoltar/ui-statoblast-shared/copy/securityPoolSharedFork.js'
-import { expect, test } from 'bun:test'
+import { expect, spyOn, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { decodeFunctionData, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
@@ -26,9 +26,11 @@ async function setup() {
 	let started = false
 	let ready = false
 	let forkReadError: Error | undefined
+	let readDelay = 0
 	const client = source.client.extend(() =>
 		createMockReadClient(async request => {
 			if (request.functionName === 'getForkChoiceDeadline' && forkReadError !== undefined) throw forkReadError
+			if (readDelay > 0 && (request.functionName === 'getForkChoiceDeadline' || request.functionName === 'getChildUniverseId')) await Bun.sleep(readDelay)
 			const values: Record<string, unknown> = {
 				getForkChoiceDeadline: 2_000n,
 				getForkRecapitalizationDeadline: 3_000n,
@@ -79,6 +81,9 @@ async function setup() {
 		setForkReadError: (error: Error | undefined) => {
 			forkReadError = error
 		},
+		setReadDelay: (milliseconds: number) => {
+			readDelay = milliseconds
+		},
 		setChosen: (v: boolean) => {
 			chosen = v
 		},
@@ -113,6 +118,8 @@ test('a previously verified branch identifies its saved views before live fork d
 	const restored = await renderHookWithProps(useSecurityPoolSharedFork, { ...parameters, snapshot: undefined, presentationSnapshot: snapshot })
 	lifecycle.trackRendered(restored)
 	expect(restored.state().savedBranch?.universeId).toBe(branch.universeId)
+	expect(restored.state().displayedState?.choice).toEqual({ recorded: true, outcomeIndex: 1n })
+	expect(restored.state().displayedAt).toBeGreaterThan(0)
 	await act(() => restored.state().setOutcome('1'))
 	expect(restored.state().state).toBeUndefined()
 	expect(restored.state().savedBranch?.universeId).toBe(branch.universeId)
@@ -194,6 +201,27 @@ test('a failed fork refresh retains the completed steps and visibly retries the 
 	})
 	await waitFor(() => expect(hook.state().state?.branch?.prepared).toBe(true))
 	expect(hook.state().forkError).toBeUndefined()
+})
+
+test('successive fork RPC reads keep the verified steps usable for display beyond one request timeout', async () => {
+	const shortened = new Proxy(globalThis.setTimeout, {
+		apply(schedule, receiver, [handler, delay, ...args]) {
+			return Reflect.apply(schedule, receiver, [handler, delay === 15_000 ? 460 : delay, ...args])
+		},
+	})
+	const timer = spyOn(globalThis, 'setTimeout').mockImplementation(shortened)
+	try {
+		const { hook, snapshot, setReadDelay } = await setup()
+		const prepared = hook.state().displayedState?.branch
+		setReadDelay(290)
+		await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'42'.repeat(32)}` } })
+		expect(hook.state().state).toBeUndefined()
+		expect(hook.state().displayedState?.branch).toEqual(prepared)
+		await waitFor(() => expect(hook.state().state?.branch?.prepared).toBe(true))
+		expect(hook.state().forkError).toBeUndefined()
+	} finally {
+		timer.mockRestore()
+	}
 })
 
 test('one irreversible choice has an explicit review and rechecks the strict native cutoff', async () => {
@@ -448,6 +476,18 @@ test('a failed recovery refresh keeps the selected question rights visible and b
 	expect(hook.state().transferReason).toBeUndefined()
 })
 
+test('a cold recovery page displays verified rights for the same selected question without using them for sends', async () => {
+	const { parameters, snapshot, setForkReadError } = await recoverySetup()
+	setForkReadError(new Error('Fork RPC unavailable'))
+	const restored = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolSharedFork, { ...parameters, snapshot: undefined, presentationSnapshot: snapshot }))
+	await act(() => restored.state().setQuestion('7'))
+	expect(restored.state().recovery?.availableShares).toBe(3n * unit)
+	expect(restored.state().recoveryReadAt).toBeGreaterThan(0)
+	expect(restored.state().recoverReason).toBeDefined()
+	await act(() => restored.state().setQuestion('8'))
+	expect(restored.state().recovery).toBeUndefined()
+})
+
 test('preparing recovery rechecks that the specific question still needs preparation', async () => {
 	const { hook, source, snapshot, requests } = await recoverySetup()
 	const factory = getInfraContractAddresses().securityPoolFactory
@@ -522,6 +562,7 @@ test('received recovery sets can be redeemed independently of source balances an
 	expect(decodeFunctionData({ abi: parseAbi(['function recoverUnchosenCash(uint248 source,uint256 questionId,uint256 shares) returns (uint256)']), data: request.data })).toEqual({ functionName: 'recoverUnchosenCash', args: [0n, 7n, 3n * unit] })
 	expect(request.reviewDescription).toContain('Received recovery rights are consumed first')
 	await request.validateBeforeSubmit?.()
+	expect(request.readReviewRows?.()).toEqual([{ label: 'Available recovery sets', value: '3 → 0' }])
 	source.setRead('balanceOfSecurityPoolRecoveryRights', [2n * unit, 5n * unit, 4n * unit])
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Source recovery prerequisites changed')
 })
