@@ -39,7 +39,7 @@ test.skipIf(url === undefined)('fork summaries attribute security pool fork even
 			[branch('1'), 'BranchChosen', { universeId: '1', owner: ownerB, outcome: '2' }],
 			[branch('2'), 'BranchStarted', { universeId: '2' }],
 			[branch('2'), 'BranchActivated', { universeId: '2' }],
-			['2', 'UniverseForked', { universeId: '2', forker: ownerB, forkThresholdAttoRep: '100', migrationRepBalanceAttoRep: '80' }],
+			['2', 'UniverseForked', { universeId: '2', forker: ownerB, forkThresholdAttoRep: String(100n), migrationRepBalanceAttoRep: String(80n) }],
 			[branch('2'), 'ForkFrozen', { universeId: '2' }],
 			[branch('2'), 'BranchChosen', { universeId: '2', owner: ownerA, outcome: '1' }],
 			[branch('4'), 'BranchStarted', { universeId: '4' }],
@@ -88,9 +88,9 @@ test.skipIf(url === undefined)('fork summaries attribute security pool fork even
 		await insertBurn('2', '11', coordinator, 2, laterHash, laterHash, 1)
 		await connection`INSERT INTO fork_migration_events (chain_id, block_hash, tx_hash, log_index, block_number, universe_identity, event_name, event_data, canonical) VALUES
 			(${chainId}, ${laterHash}, ${laterHash}, 2, 2, ${branch('2')}, 'BranchStarted', '{"universeId":"2"}', true),
-			(${chainId}, ${otherTx}, ${otherTx}, 1, 3, '3', 'UniverseForked', ${JSON.stringify({ universeId: '3', forker: ownerC, migrationRepBalanceAttoRep: '80' })}::text::jsonb, true)`
+			(${chainId}, ${otherTx}, ${otherTx}, 1, 3, '3', 'UniverseForked', ${JSON.stringify({ universeId: '3', forker: ownerC, migrationRepBalanceAttoRep: String(80n) })}::text::jsonb, true)`
 		const initiator = { chainId, address: ownerC, limit: 1, lpOffset: 0, forkOffset: 0, reportOffset: 0 }
-		expect((await addressSecurityPoolRows(connection, { ...initiator, snapshotBlock: '3' })).forkRows).toEqual([expect.objectContaining({ universe_identity: '3', event_name: 'UniverseForked', event_data: expect.objectContaining({ migrationRepBalanceAttoRep: '80' }) })])
+		expect((await addressSecurityPoolRows(connection, { ...initiator, snapshotBlock: '3' })).forkRows).toEqual([expect.objectContaining({ universe_identity: '3', event_name: 'UniverseForked', event_data: expect.objectContaining({ migrationRepBalanceAttoRep: String(80n) }) })])
 		expect((await addressSecurityPoolRows(connection, { ...initiator, snapshotBlock: '2' })).forkRows[0]).toMatchObject({ total: 0, event_name: null })
 		const request = new URL(`http://localhost/api/v1/state/forks?chainId=${chainId}&atBlock=2&limit=1`)
 		const first = await (await domainCatalogResponse(connection, request, 'forks')).json()

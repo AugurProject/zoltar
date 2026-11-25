@@ -280,33 +280,23 @@ describe('useOpenOracleOperations', () => {
 		}))
 		const dependencies = createOpenOracleOperationsDependencies({ loadOpenOracleReportDetails: async () => report, settleOracleReport })
 		const onTransactionRequested = mock((_intent: TransactionIntent) => undefined)
-		let receipt: GlobalTransactionPresentation | undefined
-		let state: UseOpenOracleOperationsState | undefined
-		const Harness = createHarness(
-			dependencies,
-			next => {
-				state = next
-			},
-			true,
-			{
-				onTransactionRequested,
-				onTransactionPresented: presentation => {
-					receipt = presentation
-				},
-			},
-		)
+		const onTransactionPresented = mock((_presentation: GlobalTransactionPresentation) => undefined)
+		const onRender = mock((_state: UseOpenOracleOperationsState) => undefined)
+		const Harness = createHarness(dependencies, onRender, true, { onTransactionRequested, onTransactionPresented })
+		const currentState = () => requireHookState(onRender.mock.calls.at(-1)?.[0])
 		trackCleanup((await renderIntoDocument(<Harness />)).cleanup)
 		await act(() => {
-			requireHookState(state).setOpenOracleForm(current => ({ ...current, reportId: '07' }))
+			currentState().setOpenOracleForm(current => ({ ...current, reportId: '07' }))
 		})
-		expect(requireHookState(state).openOracleForm.reportId).toBe('07')
+		expect(currentState().openOracleForm.reportId).toBe('07')
 		await act(async () => {
-			await requireHookState(state).settleReport()
+			await currentState().settleReport()
 		})
-		expect(requireHookState(state).openOracleError).toBeUndefined()
+		expect(currentState().openOracleError).toBeUndefined()
 		expect(settleOracleReport).toHaveBeenCalledTimes(1)
 		expect(onTransactionRequested).toHaveBeenCalledTimes(1)
 		expect(onTransactionRequested).toHaveBeenCalledWith(expect.objectContaining({ scope: ['open-oracle-report:7'] }))
+		const receipt = onTransactionPresented.mock.calls.at(-1)?.[0]
 		expect(receipt?.title).toBe('Report #7 settled')
 		expect(receipt?.rows?.slice(-2).map(({ label, value }) => [label, isValidElement(value) ? value.props.children : value])).toEqual([
 			['Candidate price', '3 REP per USDC'],

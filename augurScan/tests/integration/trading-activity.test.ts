@@ -171,7 +171,7 @@ test.skipIf(url === undefined)('derives market ETH volume, activity, and account
 		expect(await traderValuation()).toEqual({ status: 'unavailable', reason: 'Trading has closed because the universe forked' })
 		await connection`DELETE FROM universe_events`
 
-		const sampledRate = { systemState: '0', questionSettlementAttoEth: '700', shareTokenSupplyAttoShares: '1000' }
+		const sampledRate = { systemState: '0', questionSettlementAttoEth: String(700n), shareTokenSupplyAttoShares: String(1000n) }
 		await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, read_status, read_result, canonical, observed_at)
 			VALUES (${chainId}, 'pool', ${pool}, 3, ${blocks[2].hash}, 'success', ${JSON.stringify(sampledRate)}::text::jsonb, true, now())`
 		expect((await securityPoolFor(directBuyer)).items[0]).toMatchObject({ holdings_value_atto_eth: '4', valuation: { settlement_collateral_block: '3', share_supply_block: '3' } })
@@ -324,7 +324,7 @@ test.skipIf(url === undefined)('derives market ETH volume, activity, and account
 		await connection`UPDATE logs SET log_index = 118 WHERE tx_hash = ${hash(3)} AND emitter_address = ${shareToken} AND log_index = 24`
 		await connection`UPDATE logs SET log_index = 120 WHERE tx_hash = ${hash(3)} AND emitter_address = ${pool} AND event_name = 'CompleteSetRedeemed'`
 		await insertLogs([
-			{ block: 2, tx: 3, logIndex: 119, emitter: settlement, name: 'RecoveryRepPaid', data: { universeId: '0', questionId: '42', recipient: router, amountAttoRep: '7' } },
+			{ block: 2, tx: 3, logIndex: 119, emitter: settlement, name: 'RecoveryRepPaid', data: { universeId: '0', questionId: '42', recipient: router, amountAttoRep: String(7n) } },
 			{ block: 2, tx: 3, logIndex: 121, emitter: weth, name: 'Withdrawal', data: { src: router, wad: '4' } },
 			{ block: 2, tx: 3, logIndex: 122, emitter: router, name: 'PositionExitedByTransfer', data: { pair, completeSetShares: '4', payoutRecipient } },
 		])
@@ -348,7 +348,7 @@ test.skipIf(url === undefined)('derives market ETH volume, activity, and account
 			return [
 				{ block: 2, tx, logIndex, emitter: pool, name: 'CompleteSetCreated', data: { creator: services, settlementCollateralProvidedAttoEth: String(sets), completeSetsMintedAttoShares: String(sets) } },
 				{ block: 2, tx, logIndex: logIndex + 1, emitter: shareToken, name: 'TransferBatch', data: { ...batch(zero, router, [0, 1, 2], [sets, sets, sets]), operator: pool } },
-				{ block: 2, tx, logIndex: logIndex + 2, emitter: securityPool, name: 'CompleteSetsFunded', data: { universeId: '0', questionId: '42', recipient: router, cashAttoEth: String(sets), shares: String(sets), purchaseFeeAttoEth: '3' } },
+				{ block: 2, tx, logIndex: logIndex + 2, emitter: securityPool, name: 'CompleteSetsFunded', data: { universeId: '0', questionId: '42', recipient: router, cashAttoEth: String(sets), shares: String(sets), purchaseFeeAttoEth: String(3n) } },
 				{ block: 2, tx, logIndex: logIndex + 3, emitter: shareToken, name: 'TransferSingle', data: single(router, pair, 2, sets) },
 				addLiquidity ? { block: 2, tx, logIndex: logIndex + 4, emitter: shareToken, name: 'TransferSingle', data: single(router, pair, 1, sets) } : { block: 2, tx, logIndex: logIndex + 4, emitter: shareToken, name: 'TransferSingle', data: single(pair, router, 1, 6) },
 				addLiquidity ? { block: 2, tx, logIndex: logIndex + 5, emitter: pair, name: 'Transfer', data: lpTransfer(zero, liquidityProvider, 99n) } : { block: 2, tx, logIndex: logIndex + 5, emitter: pair, name: 'Sync', data: { yesReserve: '1000', noReserve: '1000' } },
