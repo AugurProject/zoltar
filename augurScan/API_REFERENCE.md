@@ -165,7 +165,7 @@ Durable commit, reorg, and status notifications with seven-day `Last-Event-ID` r
 
 The Operations overview returns at most 250 report summaries, 250 escalation summaries, 250 auction summaries, 250 pools, every capital ledger (at most 250), the 100 capital positions most at risk, the latest 25 liquidation-feed entries, the fee economics of every universe, 100 fork-root summaries, 30 recent semantic changes, and the latest coordinator price. It supplies exact snapshot totals for reports, escalations, auctions, pools, and markets, plus a current all-time `reorganizations` total; it does not supply an exact fork-root total. Dedicated catalogs expose continuation controls, and the dedicated fork catalog supplies its exact root total. Every Operations `asOf` envelope includes the selected `blockNumber`, `indexedHead`, `observedHead`, `historyDepthBlocks`, and `lagBlocks`. For an `atBlock` response, `historyDepthBlocks` is the distance from the fixed historical block to the current indexed head, while `lagBlocks` is its distance to the observed provider head; `historical` is true and live refreshes do not advance the selected evidence boundary.
 
-Operations overview is also bounded without continuation. Its available exact totals link clients to dedicated catalogs; fork clients use the dedicated catalog's exact `data.total`. A response without a documented continuation field or completeness signal cannot be made complete by inventing an offset.
+The overview has no continuation field. Use dedicated catalogs to page beyond its limits.
 
 ### Cursors
 

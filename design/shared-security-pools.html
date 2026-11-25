@@ -443,11 +443,8 @@
 
 			<section id="summary">
 				<h2>1. The change in one minute</h2>
-				<p>Statoblast is Augur's market layer on top of the Zoltar oracle. Before this pull request, every question had its own SecurityPool: its own vaults holding REP, its own ETH collateral, its own fee curve, its own REP/ETH price coordinator and, after a fork, its own Collateral Repair Auction. A REP holder who wanted to secure twenty questions had to run twenty vaults and pay for twenty price reports.</p>
-				<p>After this pull request, a <strong>portfolio</strong> holds REP once per universe in a <strong>capital ledger</strong>, and every question registered in the portfolio draws on that same backing. A provider deposits REP, picks a personal <strong>health target</strong>, and sets one ETH <strong>commitment</strong>. A buyer picks a question and an amount; the portfolio checks that total <strong>demand</strong> (ETH liabilities) stays within the <strong>healthy commitment</strong> of all providers, mints the complete set (one Invalid, one Yes and one No share per unit of ETH), and charges a fee made of a backing fee for providers and a prepaid resolution premium. Each question keeps its own outcome tokens, its own Escalation Game (the REP-staked dispute process that resolves a question locally) and separate settlement accounting, but ETH custody and fee bookkeeping are centralized in a <strong>settlement book</strong>.</p>
-				<p>The pull request also replaces per-vault liquidation with two actions: the owner's own <strong>cure</strong> (at a fresh price, lowering the commitment removes unbacked commitment at once, within unused commitment and never below the new value, for no reward) and a permissionless <strong>takeover</strong> (take over a distressed commitment for a time-ramped REP award), and redesigns the <strong>Collateral Repair Auction</strong> that repairs a branch's ETH shortfall after a fork: bids are whole ETH lots with a minimum REP-per-lot limit, every winning lot receives the same clearing REP amount, provably losing bids can be refunded before closing, in one transaction if the bidder wants, and all sold REP enters capital custody immediately so winners never need to claim. Each bid's vault is a cheap clone of one shared implementation, with the bidder, ledger, auction and bid number fixed in its own code.</p>
-				<p>No shared pot pays for upkeep. Whoever needs a fresh price pays for it, an owner pays for their own cure, and ETH that no current underwriter has earned and whose payer is not recorded, such as income from unhealthy or stale intervals and unused premiums, is burned rather than refunded, with one fork-time exception described in <a href="#fork-choice">5.2</a>. Reporters are paid only under the Escalation Game's own REP rules; the portfolio adds no ETH reward.</p>
-				<p>Everything is built so that no operation iterates over all questions, owners or bidders: commitments live in balanced trees keyed by health, fees vest through cumulative integrals, and forks copy immutable roots instead of migrating each vault.</p>
+				<p>PR #1164 replaces per-question security pools with a shared portfolio. A provider deposits REP once and sets an ETH commitment. Registered questions draw on the same healthy commitment and use one price feed per universe. Each keeps its own shares, Escalation Game, and settlement accounting.</p>
+				<p>Owners cure distressed positions by reducing unused commitment. Keepers can take over remaining distressed commitment for a REP award. After a fork, each branch can repair its ETH shortfall in a uniform-price auction. Winning bids enter backing at finalization.</p>
 			</section>
 
 			<section id="problem">
@@ -1627,7 +1624,6 @@
 
 			<section id="issues">
 				<h2>10. Issues, risks and accepted limits</h2>
-				<p>Some of these are stated in the pull request as accepted limits; others are observations about the design. None of them is hidden by the implementation, but all of them matter for anyone deciding whether to use a portfolio.</p>
 				<h3>10.1 Economic</h3>
 				<ul>
 					<li><strong>Weak-demand capture.</strong> When the auction target is missed, all inventory is sold to the bidders present. A lone bidder can acquire the entire fresh inventory for one lot of ETH, then retire and withdraw surplus REP if spare capacity exists. Selling every REP does not pledge every REP.</li>
@@ -1642,7 +1638,7 @@
 					<li><strong>Quotes drift.</strong> On a question that already has shares, a fee quoted in one block can be slightly too low a few blocks later (<a href="#eq-fee-total">4.3</a>); a caller with a budget tighter than the SDK's 1% allowance sees the purchase revert.</li>
 					<li><strong>Unassigned income is destroyed, not reused.</strong> ETH from unhealthy or stale intervals and unused premiums is burned. Nothing leaks to new providers and nothing rewards whoever let a price go stale, but the ETH no longer pays for anyone's upkeep either, and providers still lose the income of every stale interval.</li>
 					<li><strong>Fork cutoff forfeiture.</strong> An owner who does not choose a branch within eight weeks loses their pledged principal’s <a href="#fork-choice">branch fallback</a>. Absent, sleeping or unaware providers are penalized hard.</li>
-					<li><strong>Shared fate within a universe.</strong> Providers back every admitted question, including ones they would not have chosen. The admission policy is the only filter, and a custom policy can be arbitrary; the UI labels a custom policy “Custom policy — underwriting unavailable”.</li>
+					<li><strong>Shared fate within a universe.</strong> Providers back every admitted question. Under Open admission, anyone can register an eligible question and pay the registration gas. Only funded purchases create exposure, and providers cannot individually veto them. A custom policy can be arbitrary; the UI labels a custom policy “Custom policy — underwriting unavailable”.</li>
 				</ul>
 				<h3>10.2 Oracle and operational</h3>
 				<ul>
@@ -1668,22 +1664,9 @@
 				<h2>11. Assessment and suggested improvements</h2>
 				<p>The preceding sections describe the portfolio-only implementation. The proposals below are alternatives for future evaluation, not features of PR #1164 or conclusions that they would improve security without tradeoffs.</p>
 
-				<h3>11.1 What the design achieves</h3>
-				<ul>
-					<li><strong>Individual principal accounting.</strong> A position's cure keeps its REP, and its takeover award comes from its own backing. Other providers do not pay that award, although they still share oracle, capacity and fork risks.</li>
-					<li><strong>Lazy accounting.</strong> Tree paths and cumulative indices replace fund-wide scans for capacity, income, retirements and auction ownership. Costs and remaining bounds are described in <a href="#scaling">section 7</a>.</li>
-					<li><strong>Explicit auction obligations.</strong> Winners back commitments on activation, before individual materialization. Provably losing bids can recover ETH early, while potentially winning bids stay bound until closing.</li>
-				</ul>
+				<p>See <a href="#benefits">section 9</a> for the design’s benefits and <a href="#issues">section 10</a> for its operational risks.</p>
 
-				<h3>11.2 Risks to evaluate in operation</h3>
-				<ul>
-					<li><strong>Weak demand and runoff.</strong> A lone eligible bidder can acquire the auction inventory for one lot when the target is missed. A branch with outstanding recovery REP remains in runoff. These are possible outcomes under the conditions in <a href="#issues">section 10</a>, not predictions about the first fork.</li>
-					<li><strong>Liveness incentives.</strong> Sponsors pay for price reports without service reimbursement; owners pay for cures; takeovers pay receivers in REP; reporters earn only the Escalation Game's REP payout. Branch starts, auction closes and winner materialization rely on interested users or operators paying gas. Their willingness depends on position size, REP liquidity and transaction costs.</li>
-					<li><strong>Open admission.</strong> Anyone can register an eligible question under the Open policy. Registration creates no demand or provider liability by itself. Funded complete-set purchases create exposure, subject to shared capacity and fees; providers cannot individually veto those purchases. The registrant pays the registration transaction's gas.</li>
-					<li><strong>Audit surface.</strong> The custom trees, persistent maps, lazy income accounting and fork imports need review together. Passing gas and model tests does not prove economic security or eliminate implementation risk.</li>
-				</ul>
-
-				<h3>11.3 Possible design changes and their tradeoffs</h3>
+				<h3>11.1 Possible design changes and their tradeoffs</h3>
 				<ol>
 					<li><strong>Bound actual REP sold per lot.</strong> A seller reserve could limit weak-demand discounts, leaving unsold REP for recovery claims. Capping only a bid's minimum REP would not achieve this: the current weak-demand rule distributes all inventory regardless of that minimum. This proposal requires changing clearing and recovery accounting, and trades the current sell-all policy for a price floor that may reduce participation and ETH repair.</li>
 					<li><strong>Reopen repaired branches.</strong> Separating old recovery entitlements from new complete sets could allow a cash-repaired branch to accept purchases before all old recovery REP is redeemed. New buyers must not acquire old recovery rights or dilute existing holders; claim generations would add accounting and audit complexity.</li>
@@ -1696,7 +1679,7 @@
 					<li><strong>Reporting liveness.</strong> With the ETH reporting reward gone, nothing in the portfolio pays for the first report on a small question. A holder-posted reward or a share of the resolution premium for the final reporter would restore a payment, but the removed design shows the cost: any ETH reward needs attribution and anti-farming rules of its own, and the premium compensates providers for their exposure during the reporting window, so diverting part of it would move that compensation without reducing the exposure.</li>
 				</ol>
 
-				<h3>11.4 Focused follow-up checks</h3>
+				<h3>11.2 Focused follow-up checks</h3>
 				<ul>
 					<li><strong>Cure properties.</strong> Fuzz removal against unused commitment, the owner's target and minimum-size rules. A residual is fully backed only when the removal covers its deficit; otherwise check the remaining distress and conservation of principal. Cures pay no reward.</li>
 					<li><strong>Income conservation.</strong> Check that released, outstanding, deferred and burned amounts reconcile with funded income, including stale intervals and fork preparation.</li>

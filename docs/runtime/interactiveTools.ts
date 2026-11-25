@@ -26,17 +26,6 @@ const presetDefinitions: Record<string, ToolPreset[]> = {
 			values: { days: '56', depositOutcome: 'no', invalid: '1', no: '2', yes: '4' },
 		},
 	],
-	'initial-report-estimator-example': [
-		{
-			label: 'High gas cost',
-			values: { blockBaseFeeNanoEth: '200', gasUnitsForOneDispute: '1000000', initialReportPriorityFeeNanoEth: '100', openOracleSecurityMultiplier: '20' },
-		},
-		{
-			label: 'Caller raises report',
-			values: { aggregateExposureEth: '100', requestedInitialWeth: '25' },
-		},
-	],
-
 	'deployment-mask-decoder': [
 		{
 			label: 'First and third set',

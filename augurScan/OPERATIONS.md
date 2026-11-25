@@ -6,11 +6,7 @@ This guide covers a Compose deployment whose working directory is `augurScan/`. 
 
 Use archival-capable JSON-RPC providers that can return runtime bytecode, block headers, transactions, and receipts throughout the configured history boundary. Each RPC environment variable accepts an ordered comma-separated provider pool. augurScan verifies a provider's chain before using it and resumes failed work from its durable checkpoint.
 
-At startup, augurScan probes historical state. When the provider reports pruned state, augurScan locates its earliest retrievable state block and skips token metadata, balance, snapshot, and deployment-code reads below that boundary. Repeated state-discovery failures produce one console warning per provider, while every failed RPC exchange remains in the rotating JSONL log.
-
-Tagged state reads cover question ledgers, escalation games, collateral repair auctions, capital ledgers, owner capital positions, and, once each, the owner of every capital position id. After each indexed head the indexer reads the 25 entities whose latest read is oldest, so the age of a capital position's health grows with the number of sampled entities; every read records the block it was taken at. A capital ledger read also carries its universe's fee state; a failed fee read is recorded as `feeReadError` beside the ledger's price and totals instead of failing the read.
-
-Log availability is discovered separately. If an `eth_getLogs` request reports pruned history, augurScan warns that it is locating the log boundary, finds the earliest retrievable log block on demand, and advances log coverage to that block. The state and log boundaries can differ. An archival provider remains necessary for evidence before either reported boundary.
+When a provider has pruned history, augurScan finds the earliest available block separately for logs and historical state. Use an archival provider if you need evidence before either boundary. The [state model](STATE_MODEL.md#completeness-and-absence) explains which evidence is missing when a provider cannot return it.
 
 `config/networks.json` selects each network's manifest. Manifest entries are `[address, label, kind]` or `[address, label, kind, deploymentBlock]`. A verified deployment block avoids historical bytecode discovery and gives later replay a deterministic boundary. Keep an old address in the manifest while it remains a valid activity source.
 
