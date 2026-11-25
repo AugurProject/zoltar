@@ -4562,7 +4562,7 @@ span.rep-price-status.stale,
 }
 
 .statoblast-auction-ask-mark[data-tone="draft"] {
-	z-index: 1;
+	z-index: var(--z-content);
 	color: var(--accent);
 	background: var(--accent);
 }
