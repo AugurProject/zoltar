@@ -1,5 +1,6 @@
 import * as pageCopy from '../../../copy/reportingDeposits.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
+import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -8,7 +9,7 @@ import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients
 import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
-import { formatCurrencyBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
 import type { ActiveReportingDetails } from '../../../types/contracts.js'
 import { locatedDepositKey, reportingDepositStore } from '../../../protocol/reportingDeposits.js'
@@ -98,7 +99,8 @@ export function LocateReportingDeposits({ details, wallet, refresh, openOnEntry 
 			clearTimeout(timeout)
 		}
 	}, [attempt, open, visible, checkingIndex, wallet, reportingDepositPool, reportingQuestionId, universeId, outcome, total, locatedPrincipal, escalationGameAddress])
-	if (outcome === undefined || total === undefined || reportingDepositPool === undefined || reportingQuestionId === undefined) return undefined
+	if (missing === undefined || total === undefined || reportingDepositPool === undefined || reportingQuestionId === undefined) return undefined
+	const missingOutcome = missing.key
 	const checkIndex = async () => {
 		if (!/^\d{1,78}$/u.test(manualIndex) || checkingIndex) return
 		const index = BigInt(manualIndex)
@@ -112,12 +114,12 @@ export function LocateReportingDeposits({ details, wallet, refresh, openOnEntry 
 		setIndexError(undefined)
 		try {
 			const client = withStatoblastRequestTimeout(createConnectedReadClient(), 'Deposit check timed out.', undefined, singleFlight.current)
-			const [deposit] = await client.readContract(reportingDepositRead(escalationGameAddress, outcome, index, 1n))
+			const [deposit] = await client.readContract(reportingDepositRead(escalationGameAddress, missingOutcome, index, 1n))
 			if (!guard.isCurrent()) return
-			if (deposit === undefined) throw new Error(`There is no deposit #${index} on ${missing?.label ?? outcome}.`)
+			if (deposit === undefined) throw new Error(`There is no deposit #${index} on ${missing.label}.`)
 			if (!sameAddress(deposit.depositor, wallet)) throw new Error('This deposit belongs to another address.')
 			if (deposit.amountAttoRep === 0n) throw new Error('This deposit was already claimed.')
-			reportingDepositStore(profile).add([{ pool: reportingDepositPool, questionId: reportingQuestionId, universeId, depositor: wallet, outcome, index, originalAttoRep: deposit.amountAttoRep }])
+			reportingDepositStore(profile).add([{ pool: reportingDepositPool, questionId: reportingQuestionId, universeId, depositor: wallet, outcome: missingOutcome, index, originalAttoRep: deposit.amountAttoRep }])
 			await refresh()
 		} catch (failure) {
 			if (guard.isCurrent()) setIndexError(failure instanceof Error ? failure.message : 'Could not check that deposit.')
@@ -127,19 +129,39 @@ export function LocateReportingDeposits({ details, wallet, refresh, openOnEntry 
 	}
 	const searchAgain = () => {
 		if (status === 'exhausted') {
-			reportingDepositCursorStore(getActiveNetworkProfile(), { pool: reportingDepositPool, questionId: reportingQuestionId, universeId, depositor: wallet, outcome }).write(undefined)
+			reportingDepositCursorStore(getActiveNetworkProfile(), { pool: reportingDepositPool, questionId: reportingQuestionId, universeId, depositor: wallet, outcome: missingOutcome }).write(undefined)
 			setInspected(0n)
 			setProgress(undefined)
 		}
 		setAttempt(value => value + 1)
 	}
 	return (
-		<details open={open} onToggle={event => setOpen(event.currentTarget.open)}>
+		<details className='statoblast-deposit-search' open={open} onToggle={event => setOpen(event.currentTarget.open)}>
 			<summary>{pageCopy.locateDeposits}</summary>
-			<p>
-				{formatCurrencyBalance(total - locatedPrincipal)}
-				{pageCopy.repToLocateTail}
-			</p>
+			<div className='statoblast-deposit-search-split'>
+				<dl>
+					<div>
+						<dt>{pageCopy.formatStakeToLocate(missing.label)}</dt>
+						<dd>
+							<CurrencyValue value={total} suffix={pageCopy.rep} />
+						</dd>
+					</div>
+					<div>
+						<dt>{pageCopy.locatedStake}</dt>
+						<dd>
+							<CurrencyValue value={locatedPrincipal} suffix={pageCopy.rep} /> {pageCopy.formatDepositCount(missing.userDeposits.length)}
+						</dd>
+					</div>
+					<div>
+						<dt>{pageCopy.unlocatedStake}</dt>
+						<dd>
+							<CurrencyValue value={total - locatedPrincipal} suffix={pageCopy.rep} />
+						</dd>
+					</div>
+				</dl>
+				<meter min={0} max={1} aria-label={pageCopy.locatedStake} value={getVisualRatio({ value: locatedPrincipal, maxValue: total })} />
+				<p>{pageCopy.unlocatedStakeSafe}</p>
+			</div>
 			{status === 'searching' && (
 				<div role='status'>
 					<progress max={1} aria-label={pageCopy.locateDeposits} value={getVisualRatio({ value: inspected, maxValue: progress?.count })} />

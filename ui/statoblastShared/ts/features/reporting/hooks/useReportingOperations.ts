@@ -245,7 +245,7 @@ export function useReportingOperations(
 					reportingFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
 					// A submitted report must not leave its amount behind for an accidental second report.
 					if (actionName === 'reportOutcome') setReportingForm(current => (current.reportAmount === '' ? current : { ...current, reportAmount: '' }))
-					const details = await dependencies.loadReportingDetails(result.questionLedgerAddress, accountAddress)
+					const details = await dependencies.loadReportingDetails(result.questionLedgerAddress, accountAddress, includeSchedule)
 					if (!isCurrentSelection()) return
 					reportingDetails.value = details
 					setReportingForm(current => {

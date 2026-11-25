@@ -1,13 +1,13 @@
 /// <reference types="bun-types" />
 
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
-import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 import { ReportingSection } from '@zoltar/ui-statoblast-shared/features/reporting/components/ReportingSection.js'
 import type { OwnForkAdmission } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
@@ -52,10 +52,10 @@ const reportingDetails: ActiveReportingDetails = {
 	viewerWalletRepBalanceAttoRep: 100n * ATTO_REP,
 }
 
-function Harness({ dependencies }: { dependencies: UseOwnForkTriggerDependencies }) {
+function Harness({ dependencies, details = reportingDetails, reportAmount = '5' }: { dependencies: UseOwnForkTriggerDependencies; details?: ActiveReportingDetails; reportAmount?: string }) {
 	const ownFork = useOwnForkTrigger(
 		{
-			active: true,
+			active: details.hasReachedNonDecision,
 			onForked: async () => undefined,
 			parameters: { accountAddress: zeroAddress, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined, onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, refreshState: async () => undefined },
 			question: { questionLedgerAddress: pool, universeId: 1n },
@@ -67,6 +67,7 @@ function Harness({ dependencies }: { dependencies: UseOwnForkTriggerDependencies
 		<ReportingSection
 			accountState={createAccountState({ address: zeroAddress })}
 			currentTimestamp={150n}
+			designedOverview
 			loadingReportingDetails={false}
 			onApproveReportingRep={() => undefined}
 			onLoadReporting={() => undefined}
@@ -75,9 +76,9 @@ function Harness({ dependencies }: { dependencies: UseOwnForkTriggerDependencies
 			onTriggerZoltarFork={() => void ownFork.triggerFork()}
 			onWithdrawEscalation={() => undefined}
 			reportingActiveAction={undefined}
-			reportingDetails={reportingDetails}
+			reportingDetails={details}
 			reportingError={undefined}
-			reportingForm={{ reportAmount: '', questionLedgerAddress: pool, selectedOutcome: undefined, selectedWithdrawDepositIndexesByOutcome: { invalid: [], no: [], yes: [] } }}
+			reportingForm={{ reportAmount, questionLedgerAddress: pool, selectedOutcome: 'yes', selectedWithdrawDepositIndexesByOutcome: { invalid: [], no: [], yes: [] } }}
 			reportingResult={undefined}
 			showHeader={false}
 			showQuestionLedgerAddressInput={false}
@@ -106,6 +107,39 @@ function createDependencies(initial: OwnForkAdmission) {
 	return { dependencies, sent }
 }
 
+describe('redesigned question report', () => {
+	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: zeroAddress, installActiveEnvironment: installActiveEnvironmentForTesting })
+
+	test('previews the wallet payout, accepted stake, new leader, and response deadline', async () => {
+		const { dependencies } = createDependencies({ allowanceAttoRep: 0n, recommendedApprovalAttoRep: 0n, shortfallAttoRep: 0n })
+		const details: ActiveReportingDetails = {
+			...reportingDetails,
+			bindingCapital: 5n * ATTO_REP,
+			forkThresholdAttoRep: 40n * ATTO_REP,
+			hasReachedNonDecision: false,
+			nonDecisionThresholdAttoRep: 20n * ATTO_REP,
+			sides: [side('invalid', 'Invalid', ATTO_REP), { ...side('yes', 'Yes', 5n * ATTO_REP), userDeposits: [{ amountAttoRep: ATTO_REP, cumulativeAmountAttoRep: ATTO_REP, depositIndex: 0n, depositor: zeroAddress }] }, side('no', 'No', 8n * ATTO_REP)],
+			startBondAttoRep: 3n * ATTO_REP,
+		}
+		const rendered = await renderIntoDocument(<Harness dependencies={dependencies} details={details} reportAmount='4' />)
+		trackCleanup(rendered.cleanup)
+		const queries = within(document.body)
+		const comparison = queries.getByText('After this report', { selector: 'caption' }).closest('table')
+		const cells = (label: RegExp) => {
+			const row = Array.from(comparison?.querySelectorAll('tbody tr') ?? []).find(candidate => label.test(candidate.querySelector('th')?.textContent ?? ''))
+			return Array.from(row?.querySelectorAll('td') ?? [], cell => cell.textContent?.replaceAll('\u00a0', ' '))
+		}
+		expect(cells(/^You.d get back/)).toEqual(['0.00 REP', '≈ 7.67 REP(exact 7.666666666666666667 REP)'])
+		expect(cells(/^Your REP staked on Yes/)).toEqual(['1.00 REP', '5.00 REP'])
+		expect(cells(/^Leader/)).toEqual(['No', 'Yes'])
+		const [before, after] = cells(/^Window ends/)
+		expect(before).toBe(formatTimestamp(details.escalationEndTime))
+		expect(after).not.toBe(before)
+		expect(queries.getByRole('radio', { name: /^Yes/ })).not.toBeNull()
+		expect(document.body.textContent?.replaceAll('\u00a0', ' ')).toContain('If Yes loses, you lose 5.00 REP.')
+	})
+})
+
 const forkSection = () => {
 	const heading = within(document.body).getByRole('heading', { name: securityPoolCopy.forkAdmission })
 	const section = heading.closest('section')
@@ -128,6 +162,7 @@ describe('own-question fork admission', () => {
 		}
 		// The approval precedes the fork as its own button, defaulting to the shortfall plus the recommended 1 REP buffer.
 		await waitFor(() => expect(approveButton().textContent?.replaceAll('\u00a0', ' ')).toBe('Approve 41 REP'))
+		expect(forkSection().textContent?.replaceAll('\u00a0', ' ')).toContain('Triggering costs you 40.00 REP')
 		expect(
 			within(forkSection())
 				.getAllByRole('button')
@@ -139,25 +174,50 @@ describe('own-question fork admission', () => {
 		})
 		await waitFor(() => expectTransactionButtonEnabled(document.body, securityPoolCopy.triggerUniverseFork))
 		expect(sent).toEqual([`approve:${(shortfall + ATTO_REP).toString()}`])
-		expectTransactionButtonDisabled(document.body, commonCopy.approvalSatisfied)
+		expect(
+			within(forkSection())
+				.getAllByRole('button')
+				.map(button => button.textContent),
+		).toEqual([securityPoolCopy.triggerUniverseFork])
+		expect(within(forkSection()).getByRole('textbox', { name: 'REP approval amount' })).not.toBeNull()
 		await act(async () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: securityPoolCopy.triggerUniverseFork }))
 		})
 		await waitFor(() => expect(sent).toEqual([`approve:${(shortfall + ATTO_REP).toString()}`, 'fork']))
 	})
 
-	test('without a shortfall the cost is shown and one fork click sends exactly the fork', async () => {
+	test('without a shortfall the fork is the only step and one click sends exactly the fork', async () => {
 		const { dependencies, sent } = createDependencies({ allowanceAttoRep: 0n, recommendedApprovalAttoRep: 0n, shortfallAttoRep: 0n })
 		const rendered = await renderIntoDocument(<Harness dependencies={dependencies} />)
 		trackCleanup(rendered.cleanup)
 		await waitFor(() => expectTransactionButtonEnabled(document.body, securityPoolCopy.triggerUniverseFork))
 		expect(within(forkSection()).queryByRole('button', { name: /approve/i })).toBeNull()
-		expect(forkSection().textContent).toContain(securityPoolCopy.forkCost)
-		// A finished step shows the read allowance, not a loading placeholder.
+		expect(within(forkSection()).queryByRole('textbox', { name: 'REP approval amount' })).toBeNull()
+		expect(forkSection().textContent).not.toContain('Triggering costs you')
+		expect(forkSection().textContent).not.toContain('Cost from your wallet')
+		expect(forkSection().textContent).toContain('A fork cannot be undone.')
+		expect(forkSection().textContent).toContain('Your REP stays staked and carries to the child universes after the fork.')
 		expect(forkSection().textContent).not.toContain('—')
+		expect(within(document.body).queryByRole('textbox', { name: 'Report amount' })).toBeNull()
+		expect(within(document.body).queryByRole('button', { name: /^Report Yes/ })).toBeNull()
 		await act(async () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: securityPoolCopy.triggerUniverseFork }))
 		})
 		await waitFor(() => expect(sent).toEqual(['fork']))
+	})
+
+	test('shows only the checking fork step while the cost is unknown', async () => {
+		const { dependencies } = createDependencies({ allowanceAttoRep: 0n, recommendedApprovalAttoRep: 0n, shortfallAttoRep: 0n })
+		const admission = Promise.withResolvers<OwnForkAdmission>()
+		const rendered = await renderIntoDocument(<Harness dependencies={{ ...dependencies, loadOwnForkAdmission: () => admission.promise }} />)
+		trackCleanup(rendered.cleanup)
+		expectTransactionButtonDisabled(forkSection(), 'Checking…', securityPoolCopy.checkingForkAdmission)
+		expect(within(forkSection()).queryByRole('textbox', { name: 'REP approval amount' })).toBeNull()
+		expect(forkSection().textContent).not.toContain('Triggering costs you')
+		expect(forkSection().textContent).not.toContain('—')
+		await act(async () => {
+			admission.resolve({ allowanceAttoRep: 0n, recommendedApprovalAttoRep: 0n, shortfallAttoRep: 0n })
+		})
+		await waitFor(() => expectTransactionButtonEnabled(forkSection(), securityPoolCopy.triggerUniverseFork))
 	})
 })

@@ -5,9 +5,7 @@ import { openHistory } from '../lib/watchlistHistory.js'
 import * as pageCopy from '@zoltar/ui-statoblast-shared/copy/questionPage.js'
 import { useStatoblastPageRefresh, useStatoblastRefreshError, type RegisterStatoblastPageRefresh, type ReportStatoblastReadStatus } from '@zoltar/ui-statoblast-shared/features/useStatoblastPageRefresh.js'
 import { StatoblastSharesFacts } from './StatoblastSharesFacts.js'
-import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { decodeQuestionHeading, StatoblastQuestionHead } from './StatoblastQuestionHead.js'
 import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { LocateReportingDeposits } from '@zoltar/ui-statoblast-shared/features/reporting/components/LocateReportingDeposits.js'
@@ -24,6 +22,7 @@ import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNoti
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { ReportingSection } from '@zoltar/ui-statoblast-shared/features/reporting/components/ReportingSection.js'
 import { TradingSection } from '@zoltar/ui-statoblast-shared/features/markets/components/TradingSection.js'
+import { getSelectedOutcomeShareBalance } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
 import { useReportingOperations } from '@zoltar/ui-statoblast-shared/features/reporting/hooks/useReportingOperations.js'
 import { useTradingOperations } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useTradingOperations.js'
 import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -242,6 +241,11 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 		openHistory(profile).updateTitle(entry, selected.marketDetails.title, universeId)
 	}, [profile, selectionKey, selected?.marketDetails.title])
 	const availableClaim = reportingDetails?.settlementState === 'resolved' && activeReporting?.sides.some(side => side.key === reportingDetails.questionOutcome && side.userDeposits.some(deposit => deposit.amountAttoRep > 0n))
+	const winningOutcome = selected?.questionOutcome ?? cached?.value.questionOutcome
+	const winningBalance = winningOutcome === undefined || winningOutcome === 'none' ? undefined : getSelectedOutcomeShareBalance(shareBalances ?? sharesFallback?.data, winningOutcome)
+	const winningDecimals = shareDecimals ?? sharesFallback?.data.decimals
+	const canRedeemShares = accountState.address !== undefined && (winningBalance ?? 0n) > 0n
+	const winningShares = canRedeemShares && winningBalance !== undefined && winningDecimals !== undefined ? { winningShares: { amount: winningBalance, decimals: winningDecimals, href: statoblastPageHref({ ...entry, tab: 'shares', sharesAction: 'redeem' }) } } : undefined
 	const tabLabels = { shares: pageCopy.shares, reporting: pageCopy.reporting, claims: pageCopy.inheritedClaims }
 	const tabs = (
 		<nav className='statoblast-page-tabs' aria-label={pageCopy.questionViews}>
@@ -249,6 +253,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 				tab === 'claims' && activeReporting?.forkContinuation !== true && entry.tab !== 'claims' ? undefined : (
 					<a key={tab} aria-current={entry.tab === tab ? 'page' : undefined} href={statoblastPageHref({ ...entry, tab, sharesAction: undefined })}>
 						{tabLabels[tab]}
+						{tab === 'shares' && canRedeemShares && <Badge tone='ok'>{pageCopy.redeemAction}</Badge>}
 						{tab === 'reporting' && availableClaim && <Badge tone='ok'>{pageCopy.claimAction}</Badge>}
 						{tab === 'reporting' && activeReporting?.hasReachedNonDecision && activeReporting.settlementState !== 'resolved' && selected?.questionOutcome === 'none' && !selected.universeHasForked && <Badge tone='warning'>{pageCopy.fork}</Badge>}
 					</a>
@@ -256,7 +261,6 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 			)}
 		</nav>
 	)
-	const losing = reportingDetails?.status === 'active' && reportingDetails.settlementState === 'resolved' ? reportingDetails.sides.filter(side => side.key !== reportingDetails.questionOutcome).flatMap(side => side.deposits.map(deposit => ({ side, deposit }))) : []
 	if (selected === undefined) {
 		const unavailable = loadError?.includes('Question pool unavailable') === true
 		if (cached !== undefined && !unavailable && loadError?.includes('Question not registered') !== true) {
@@ -266,7 +270,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 					<UpdatedAgo updatedAt={displayedAt} refreshing={loading} />
 					{tabs}
 					{entry.tab === 'shares' && cachedShares?.scope === cacheScope && <SavedShares {...cachedShares.data} />}
-					{entry.tab === 'reporting' && cachedReporting?.scope === cacheScope && <StatoblastReportingOverview view={cachedReporting.data} now={cached.timestamp} autoRefresh={autoRefresh} />}
+					{entry.tab === 'reporting' && cachedReporting?.scope === cacheScope && <StatoblastReportingOverview view={cachedReporting.data} now={cached.timestamp} autoRefresh={autoRefresh} {...winningShares} />}
 					<RetryableNotice message={refreshError} retryLabel={pageCopy.tryAgain} onRetry={retryQuestion} disabled={loading} />
 				</div>
 			)
@@ -332,6 +336,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 					autoRefresh={autoRefresh}
 					checkingDeadline={checkingDeadline}
 					question={selected}
+					{...winningShares}
 					onTakeLead={(outcome, amount) => {
 						const side = activeReporting?.sides.find(candidate => candidate.label === outcome)
 						if (side === undefined) return
@@ -342,7 +347,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 					}}
 				/>
 			)}
-			{entry.tab === 'reporting' && reportFallback !== undefined && <StatoblastReportingOverview view={reportFallback} now={now} autoRefresh={autoRefresh} checkingDeadline={checkingDeadline} />}
+			{entry.tab === 'reporting' && reportFallback !== undefined && <StatoblastReportingOverview view={reportFallback} now={now} autoRefresh={autoRefresh} checkingDeadline={checkingDeadline} {...winningShares} />}
 			{deadlineFailed && (
 				<button type='button' className='secondary' onClick={retryQuestion}>
 					{pageCopy.tryAgain}
@@ -381,18 +386,6 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 				/>
 			)}
 			{entry.tab === 'reporting' && reportingDetails?.status === 'active' && accountState.address !== undefined && <LocateReportingDeposits key={reportingDetails.escalationGameAddress} details={reportingDetails} wallet={accountState.address} refresh={reporting.loadReporting} openOnEntry={openDepositSearch} />}
-			{entry.tab === 'reporting' && losing.length > 0 && (
-				<SectionBlock title={pageCopy.losingDeposits}>
-					<ul>
-						{losing.map(({ side, deposit }) => (
-							<li key={`${side.key}:${deposit.depositIndex}`}>
-								{side.label} #{deposit.depositIndex.toString()} · {deposit.originalAttoRep === undefined ? undefined : <CurrencyValue value={deposit.originalAttoRep} suffix={pageCopy.rep} />}
-								{pageCopy.losingDepositPayoutTail}
-							</li>
-						))}
-					</ul>
-				</SectionBlock>
-			)}
 			{entry.tab === 'claims' && <InheritedReporterClaims parameters={parameters} accountState={accountState} details={reportingDetails} onRefresh={reporting.loadReporting} />}
 		</div>
 	)

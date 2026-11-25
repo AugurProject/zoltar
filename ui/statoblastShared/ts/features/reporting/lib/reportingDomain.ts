@@ -58,7 +58,7 @@ function getContinuationTiming(details: ActiveReportingDetails) {
 	if (!details.forkContinuation || details.forkResumedAt === undefined || details.forkElapsedAtStart === undefined) return undefined
 	return { forkElapsedAtStart: details.forkElapsedAtStart, forkResumedAt: details.forkResumedAt }
 }
-function getWinningEscalationDepositClaimAmount(details: ActiveReportingDetails, outcome: ReportingOutcomeKey, deposit: EscalationDeposit) {
+function getWinningEscalationDepositClaimAmount(details: ActiveReportingDetails, outcome: ReportingOutcomeKey, deposit: Pick<EscalationDeposit, 'amountAttoRep' | 'cumulativeAmountAttoRep'>) {
 	const winningOutcomeBalance = details.sides.find(side => side.key === outcome)?.balance
 	if (winningOutcomeBalance === undefined) return undefined
 	return computeWinningEscalationDepositClaimAmount({
@@ -95,6 +95,15 @@ export function getImportedEscalationDepositClaimAmount(details: ReportingDetail
 	if (!isPoolQuestionFinalized(details)) return undefined
 	if (details.questionOutcome !== outcome) return 0n
 	return getWinningImportedEscalationDepositClaimAmount(details, outcome, deposit)
+}
+
+export function getKnownReportingClaimAmount(details: ReportingDetails | undefined) {
+	if (details?.status !== 'active' || details.settlementState !== 'resolved') return 0n
+	const winner = details.sides.find(side => side.key === details.questionOutcome)
+	if (winner === undefined) return 0n
+	const local = winner.userDeposits.reduce((sum, deposit) => sum + (getEscalationDepositClaimAmount(details, winner.key, deposit) ?? 0n), 0n)
+	const inherited = winner.importedUserDeposits.reduce((sum, deposit) => sum + (deposit.claimIdentity === undefined ? 0n : (getImportedEscalationDepositClaimAmount(details, winner.key, deposit) ?? 0n)), 0n)
+	return local + inherited
 }
 
 export function getRemainingSelectedOutcomeContributionCapacity(details: ReportingDetails, outcome: ReportingOutcomeKey) {
@@ -324,4 +333,56 @@ export function previewReportingDeadline(details: ReportingDetails, outcome: Rep
 	// A report never moves the deadline earlier.
 	const deadline = projectedDeadline > details.escalationEndTime ? projectedDeadline : details.escalationEndTime
 	return { deadline, extension: deadline - details.escalationEndTime, reachesNonDecision: false }
+}
+
+function knownReportingReturn(details: ActiveReportingDetails, leader: ReportingOutcomeKey | undefined) {
+	const winner = details.sides.find(side => side.key === leader)
+	if (winner === undefined) return undefined
+	const local = winner.userDeposits.reduce((sum, deposit) => sum + (getWinningEscalationDepositClaimAmount(details, winner.key, deposit) ?? 0n), 0n)
+	return local + winner.importedUserDeposits.reduce((sum, deposit) => sum + (getWinningImportedEscalationDepositClaimAmount(details, winner.key, deposit) ?? 0n), 0n)
+}
+
+/** Models accepted stake and payouts at the new balances, keeping payout estimates scoped to deposits this device can verify. */
+export function previewReportingComparison(details: ReportingDetails, outcome: ReportingOutcomeKey, amount: bigint) {
+	const acceptedAmount = previewReportingContribution(details, outcome, amount).actualDepositAmount
+	const deadlinePreview = previewReportingDeadline(details, outcome, amount)
+	if (acceptedAmount === undefined || deadlinePreview === undefined) return undefined
+	if (details.status === 'not-started') {
+		if (acceptedAmount > details.nonDecisionThresholdAttoRep) return undefined
+		return {
+			payoutBefore: 0n,
+			payoutAfter: acceptedAmount,
+			stakeBefore: 0n,
+			stakeAfter: acceptedAmount,
+			leaderBefore: undefined,
+			leaderAfter: outcome,
+			endsBefore: undefined,
+			endsAfter: deadlinePreview.deadline,
+			endsUndecided: false,
+			missingDeposits: false,
+		}
+	}
+	const side = details.sides.find(candidate => candidate.key === outcome)
+	if (side === undefined) return undefined
+	const localStake = side.localPrincipalAttoRep ?? side.userDeposits.reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n)
+	const stakeBefore = localStake + side.importedUserDeposits.reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n)
+	const newBalance = side.balance + acceptedAmount
+	const sides = details.sides.map(candidate => (candidate.key === outcome ? { ...candidate, balance: newBalance } : candidate))
+	const projected = { ...details, sides, bindingCapital: getSecondLargestEscalationBalance(sides) }
+	const leaderBefore = details.sides.some(candidate => candidate.balance > 0n) ? getStrictLeadingEscalationOutcome(details.sides) : undefined
+	const leaderAfter = deadlinePreview.reachesNonDecision ? undefined : getStrictLeadingEscalationOutcome(sides)
+	const knownPayoutAfter = knownReportingReturn(projected, leaderAfter)
+	const newDepositPayout = leaderAfter === outcome ? getWinningEscalationDepositClaimAmount(projected, outcome, { amountAttoRep: acceptedAmount, cumulativeAmountAttoRep: newBalance }) : 0n
+	return {
+		payoutBefore: knownReportingReturn(details, leaderBefore) ?? (details.sides.every(candidate => candidate.balance === 0n) ? 0n : undefined),
+		payoutAfter: knownPayoutAfter === undefined || newDepositPayout === undefined ? undefined : knownPayoutAfter + newDepositPayout,
+		stakeBefore,
+		stakeAfter: stakeBefore + acceptedAmount,
+		leaderBefore,
+		leaderAfter,
+		endsBefore: details.escalationEndTime,
+		endsAfter: deadlinePreview.deadline,
+		endsUndecided: deadlinePreview.reachesNonDecision,
+		missingDeposits: details.sides.some(candidate => (candidate.localPrincipalAttoRep ?? 0n) > candidate.userDeposits.reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n)),
+	}
 }

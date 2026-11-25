@@ -5,8 +5,14 @@ export const tryAgain = 'Try again'
 export const formatClaimRepDeposits = (detail: string | number | bigint, length: string | number | bigint) => `Claim ${detail} REP (${length} deposits)`
 export const claimingDeposits = 'Claiming deposits…'
 export const checkingInheritedClaims = 'Checking inherited claims.'
+export const inheritedDepositLost = 'Lost · no action needed'
 export const locateDeposits = 'Locate deposits'
-export const repToLocateTail = ' REP to locate'
+export const locatedStake = 'Located'
+export const unlocatedStake = 'Still to locate'
+export const rep = 'REP'
+export const formatDepositCount = (count: number) => `(${count} ${count === 1 ? 'deposit' : 'deposits'})`
+export const formatStakeToLocate = (outcome: string) => `Your REP staked on ${outcome}`
+export const unlocatedStakeSafe = 'Your REP is safe. This device is missing some deposit numbers.'
 export const depositsCheckedTail = ' deposits checked'
 export const manualDepositLookup = 'I know the deposit number'
 export const depositNumber = 'Deposit number'

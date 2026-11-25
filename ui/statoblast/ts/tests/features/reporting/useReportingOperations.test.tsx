@@ -73,16 +73,18 @@ function createReportingDetails(questionLedgerAddress: Address, overrides: Parti
 }
 
 type HarnessCallbacks = {
+	includeSchedule?: boolean
 	onTransactionCanceled?: () => void
 	onTransactionFinished?: () => void
 	onTransactionRequested?: Parameters<UseReportingOperations>[0]['onTransactionRequested']
 }
 
-function createHarness(onRender: (state: UseReportingOperationsState) => void, dependencies: UseReportingOperationsDependencies, { onTransactionCanceled = () => undefined, onTransactionFinished = () => undefined, onTransactionRequested = () => undefined }: HarnessCallbacks = {}) {
+function createHarness(onRender: (state: UseReportingOperationsState) => void, dependencies: UseReportingOperationsDependencies, { includeSchedule = false, onTransactionCanceled = () => undefined, onTransactionFinished = () => undefined, onTransactionRequested = () => undefined }: HarnessCallbacks = {}) {
 	return function ReportingOperationsHarness({ accountAddress = zeroAddress, selectedQuestionLedgerAddress }: { accountAddress?: Address; selectedQuestionLedgerAddress?: string }) {
 		const state = useReportingOperations(
 			{
 				accountAddress,
+				includeSchedule,
 				onTransactionCanceled,
 				onTransactionFinished,
 				onTransactionPresented: () => undefined,
@@ -384,7 +386,7 @@ describe('useReportingOperations', () => {
 			}
 		})
 
-		const { state, setForm } = await renderOperations(createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInQuestionLedger }))
+		const { state, setForm } = await renderOperations(createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInQuestionLedger }), { includeSchedule: true })
 
 		await setForm({
 			reportAmount: '5',
@@ -402,6 +404,7 @@ describe('useReportingOperations', () => {
 		// Wallet deposits pull the accepted amount with transferFrom, so the maximum must not exceed the reviewed and approved amount.
 		expect(submittedMaximumAttoRep).toBe(submittedReviewAttoRep)
 		expect(state().reportingResult?.action).toBe('reportOutcome')
+		expect(loadReportingDetails).toHaveBeenLastCalledWith(questionLedgerAddress, zeroAddress, true)
 		// A submitted report clears its amount so a second click cannot repeat it.
 		expect(state().reportingForm.reportAmount).toBe('')
 		expect(state().reportingForm.selectedOutcome).toBe('yes')

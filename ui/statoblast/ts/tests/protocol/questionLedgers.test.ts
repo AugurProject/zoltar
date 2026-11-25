@@ -61,6 +61,7 @@ function fixture({ forked = false, reporting = false, missingSecurityPool = fals
 				if (call.functionName === 'parent') return zeroAddress
 				if (call.functionName === 'questionId') return deployment.questionId
 				if (call.functionName === 'statoblastSecurityMultiplierBps') return deployment.statoblastSecurityMultiplierBps
+				if (call.functionName === 'initialReportingResponseWindow') return 172_800n
 				if (call.functionName === 'questions') return ['Question', 'Description', 1n, 2000n, 2n, 0n, 2000n, '']
 				if (call.functionName === 'questionCreatedTimestamp') return 1n
 				if (call.functionName === 'securityPoolCustody') return missingSecurityPool ? zeroAddress : capital
@@ -82,7 +83,7 @@ function fixture({ forked = false, reporting = false, missingSecurityPool = fals
 test.each([false, true])('discovers native security pool question snapshots (reporting: %s)', async reporting => {
 	const { client, reads } = fixture({ reporting })
 	const { question } = await loadStatoblastQuestion(client, securityPool, deployment.questionId, deployment.universeId, false)
-	expect(question).toMatchObject({ securityPoolAddress: securityPool, questionLedgerAddress: owner, settlementCollateralAttoEth: 60n, totalPoolHeldAttoRep: 300n, mintingCapacityAttoEth: reporting ? 0n : 80n })
+	expect(question).toMatchObject({ securityPoolAddress: securityPool, questionLedgerAddress: owner, settlementCollateralAttoEth: 60n, totalPoolHeldAttoRep: 300n, mintingCapacityAttoEth: reporting ? 0n : 80n, initialReportingResponseWindow: 172_800n })
 	expect(reads).not.toContain('getVaults')
 	expect(reads).not.toContain('securityVaults')
 })

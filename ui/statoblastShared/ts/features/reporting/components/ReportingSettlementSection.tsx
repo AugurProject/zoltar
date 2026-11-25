@@ -1,9 +1,10 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { getViewerPositions } from '../lib/reportingViewerStatus.js'
 import { renderRepAmount } from './RepAmount.js'
-import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatAmountDisplay, formatCurrencyBalance, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
+import * as claimsCopy from '../../../copy/reportingClaims.js'
 import * as escalationCopy from '../../../copy/reportingEscalation.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -11,7 +12,7 @@ import { EscalationDepositSelectionList } from './EscalationDepositSelectionList
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { WalletActionFixReason } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
-import { useRef } from 'preact/hooks'
+import { useRef, useState } from 'preact/hooks'
 import type { RefObject } from 'preact'
 import { getEscalationDepositClaimAmount, isPoolQuestionFinalized } from '../lib/reportingDomain.js'
 import type { ReportingSectionProps } from '../../oracleTypes.js'
@@ -148,8 +149,106 @@ function ReportingSettlementSide({
 	)
 }
 
+function ReportingClaimTable({
+	actionButtonRef,
+	details,
+	isOnActiveAppChain,
+	loadingReportingDetails,
+	onWithdraw,
+	settlementActionDisabledReasonId,
+	withdrawActionPending,
+	withdrawControlsLocked,
+	withdrawEscalationEnabled,
+	withdrawGuardMessage,
+}: Pick<ReportingSettlementSideProps, 'actionButtonRef' | 'isOnActiveAppChain' | 'loadingReportingDetails' | 'onWithdraw' | 'settlementActionDisabledReasonId' | 'withdrawActionPending' | 'withdrawControlsLocked' | 'withdrawEscalationEnabled' | 'withdrawGuardMessage'> & { details: ActiveReportingDetails }) {
+	const [unselected, setUnselected] = useState<ReadonlySet<bigint>>(() => new Set())
+	const winner = details.sides.find(side => side.key === details.questionOutcome)
+	const winning = winner?.userDeposits.map(deposit => ({ deposit, payout: getEscalationDepositClaimAmount(details, winner.key, deposit) })) ?? []
+	const losing = details.sides.filter(side => side.key !== details.questionOutcome).flatMap(side => side.deposits.map(deposit => ({ deposit, side })))
+	const selected = winning.filter(({ deposit }) => !unselected.has(deposit.depositIndex))
+	const selectedAmount = selected.reduce((sum, { payout }) => sum + (payout ?? 0n), 0n)
+	const amount = formatValueWithUnit(formatAmountDisplay(selectedAmount), commonCopy.rep)
+	const toggleDeposit = (index: bigint, checked: boolean) => {
+		setUnselected(previous => {
+			const next = new Set(previous)
+			if (checked) next.delete(index)
+			else next.add(index)
+			return next
+		})
+	}
+	const reason = withdrawGuardMessage ?? (selected.length === 0 ? claimsCopy.selectDepositToClaim : undefined)
+	if (winning.length === 0 && losing.length === 0) return undefined
+	return (
+		<>
+			<table className='statoblast-claim-table' aria-label={claimsCopy.claimYourRep}>
+				<thead>
+					<tr>
+						<th scope='col'>
+							<span className='visually-hidden'>{claimsCopy.selectDeposits}</span>
+						</th>
+						<th scope='col'>{claimsCopy.deposit}</th>
+						<th scope='col'>{claimsCopy.deposited}</th>
+						<th scope='col'>{claimsCopy.youReceive}</th>
+					</tr>
+				</thead>
+				<tbody>
+					{winner === undefined
+						? undefined
+						: winning.map(({ deposit, payout }) => (
+								<tr key={`${winner.key}:${deposit.depositIndex}`} data-selected={!unselected.has(deposit.depositIndex) || undefined}>
+									<td>
+										<input type='checkbox' aria-label={claimsCopy.depositCheckboxLabel(deposit.depositIndex, winner.label)} checked={!unselected.has(deposit.depositIndex)} disabled={withdrawControlsLocked || withdrawActionPending} onChange={event => toggleDeposit(deposit.depositIndex, event.currentTarget.checked)} />
+									</td>
+									<th scope='row'>{claimsCopy.depositLabel(deposit.depositIndex, winner.label)}</th>
+									<td>
+										<CurrencyValue value={deposit.amountAttoRep} suffix={commonCopy.rep} />
+									</td>
+									<td className='statoblast-claim-winning-value'>
+										<CurrencyValue value={payout} suffix={commonCopy.rep} />
+									</td>
+								</tr>
+							))}
+					{losing.map(({ deposit, side }) => (
+						<tr key={`${side.key}:${deposit.depositIndex}`}>
+							<td />
+							<th scope='row'>{claimsCopy.depositLabel(deposit.depositIndex, side.label)}</th>
+							<td>
+								<CurrencyValue value={deposit.originalAttoRep ?? (deposit.amountAttoRep > 0n ? deposit.amountAttoRep : undefined)} suffix={commonCopy.rep} />
+							</td>
+							<td>
+								<CurrencyValue value={0n} suffix={commonCopy.rep} />
+								<small>{claimsCopy.lostNoActionNeeded}</small>
+							</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+			{winner !== undefined && winning.length > 0 && (
+				<div className='actions statoblast-claim-actions'>
+					<TransactionActionButton
+						actionButtonRef={actionButtonRef}
+						idleLabel={claimsCopy.claimRep(amount)}
+						pendingLabel={claimsCopy.claimingRep(amount)}
+						onClick={() =>
+							onWithdraw(
+								winner.key,
+								selected.map(({ deposit }) => deposit.depositIndex),
+							)
+						}
+						availability={{ disabled: !isOnActiveAppChain || !withdrawEscalationEnabled || reason !== undefined, loading: loadingReportingDetails, reason }}
+						pending={withdrawActionPending}
+						disabledReasonElementId={withdrawGuardMessage === undefined ? undefined : settlementActionDisabledReasonId}
+						showDisabledReason={withdrawGuardMessage === undefined}
+					/>
+				</div>
+			)}
+		</>
+	)
+}
+
 export function ReportingSettlementSection({
 	showPositions = true,
+	designedOverview = false,
 	activeReportingDetails,
 	displayedWithdrawGuardMessage,
 	effectiveReportingDetails,
@@ -171,6 +270,7 @@ export function ReportingSettlementSection({
 	withdrawGuardMessage,
 }: {
 	showPositions?: boolean
+	designedOverview?: boolean
 	activeReportingDetails: ActiveReportingDetails | undefined
 	displayedWithdrawGuardMessage: string | undefined
 	effectiveReportingDetails: ReportingDetails | undefined
@@ -222,11 +322,13 @@ export function ReportingSettlementSection({
 						))}
 			</SectionBlock>
 		)
-	const shouldShowWithdrawEmptyState = !loadingReportingDetails && !reportingStatusMissing && withdrawableSides.length === 0
+	const designedClaimDetails = designedOverview && activeReportingDetails?.settlementState === 'resolved' ? activeReportingDetails : undefined
+	const hasLocalClaimRecords = designedClaimDetails?.sides.some(side => (side.key === designedClaimDetails.questionOutcome ? side.userDeposits : side.deposits).length > 0) ?? withdrawableSides.length > 0
+	const shouldShowWithdrawEmptyState = !loadingReportingDetails && !reportingStatusMissing && !hasLocalClaimRecords
 	const hasImportedForkedDeposits = activeReportingDetails?.sides.some(side => side.importedUserDeposits.length > 0) ?? false
 	const migrationSettlement = activeReportingDetails?.settlementState === 'migration-required'
 	return (
-		<SectionBlock className='reporting-settlement-section' title={transactionCopy.settleEscalationDeposits} variant='embedded'>
+		<SectionBlock className='reporting-settlement-section' title={designedClaimDetails === undefined ? transactionCopy.settleEscalationDeposits : claimsCopy.claimYourRep} variant={designedClaimDetails === undefined ? 'embedded' : 'default'}>
 			<WalletActionFixReason
 				actionButtonRef={firstSettleActionButtonRef}
 				availability={{ disabled: !isOnActiveAppChain || !withdrawEscalationEnabled || withdrawGuardMessage !== undefined, reason: displayedWithdrawGuardMessage, walletBlocker: settlementWalletBlocker }}
@@ -238,28 +340,43 @@ export function ReportingSettlementSection({
 			{settlementContextMessage === undefined || settlementContextMessage === withdrawGuardMessage ? undefined : <UserMessage className='detail' detail={<>{settlementContextMessage}</>} />}
 			{hasImportedForkedDeposits ? <UserMessage className='detail' detail={<>{reportingCopy.forkCarriedSettlementRedirectDetail}</>} /> : undefined}
 			{shouldShowWithdrawEmptyState && !migrationSettlement ? <UserMessage className='detail' detail={<>{reportingCopy.walletUnsettledDepositsEmpty}</>} /> : undefined}
-			{migrationSettlement
-				? undefined
-				: withdrawableSides.map((side, index) => (
-						<ReportingSettlementSide
-							key={side.key}
-							actionButtonRef={index === 0 ? firstSettleActionButtonRef : undefined}
-							effectiveReportingDetails={effectiveReportingDetails}
-							isOnActiveAppChain={isOnActiveAppChain}
-							isPendingSide={withdrawActionPending && pendingWithdrawOutcome === side.key}
-							loadingReportingDetails={loadingReportingDetails}
-							onReportingFormChange={onReportingFormChange}
-							onWithdraw={onWithdrawEscalation}
-							otherSidePending={withdrawActionPending && pendingWithdrawOutcome !== side.key}
-							selectedWithdrawDepositIndexesByOutcome={selectedWithdrawDepositIndexesByOutcome}
-							settlementActionDisabledReasonId={settlementActionDisabledReasonId}
-							side={side}
-							withdrawActionPending={withdrawActionPending}
-							withdrawControlsLocked={withdrawControlsLocked}
-							withdrawEscalationEnabled={withdrawEscalationEnabled}
-							withdrawGuardMessage={withdrawGuardMessage}
-						/>
-					))}
+			{!migrationSettlement && designedClaimDetails !== undefined && (
+				<ReportingClaimTable
+					key={`${designedClaimDetails.escalationGameAddress}:${designedClaimDetails.universeId}:${designedClaimDetails.questionOutcome}:${designedClaimDetails.sides.find(side => side.key === designedClaimDetails.questionOutcome)?.userDeposits[0]?.depositor ?? ''}`}
+					actionButtonRef={firstSettleActionButtonRef}
+					details={designedClaimDetails}
+					isOnActiveAppChain={isOnActiveAppChain}
+					loadingReportingDetails={loadingReportingDetails}
+					onWithdraw={onWithdrawEscalation}
+					settlementActionDisabledReasonId={settlementActionDisabledReasonId}
+					withdrawActionPending={withdrawActionPending}
+					withdrawControlsLocked={withdrawControlsLocked}
+					withdrawEscalationEnabled={withdrawEscalationEnabled}
+					withdrawGuardMessage={withdrawGuardMessage}
+				/>
+			)}
+			{!migrationSettlement &&
+				designedClaimDetails === undefined &&
+				withdrawableSides.map((side, index) => (
+					<ReportingSettlementSide
+						key={side.key}
+						actionButtonRef={index === 0 ? firstSettleActionButtonRef : undefined}
+						effectiveReportingDetails={effectiveReportingDetails}
+						isOnActiveAppChain={isOnActiveAppChain}
+						isPendingSide={withdrawActionPending && pendingWithdrawOutcome === side.key}
+						loadingReportingDetails={loadingReportingDetails}
+						onReportingFormChange={onReportingFormChange}
+						onWithdraw={onWithdrawEscalation}
+						otherSidePending={withdrawActionPending && pendingWithdrawOutcome !== side.key}
+						selectedWithdrawDepositIndexesByOutcome={selectedWithdrawDepositIndexesByOutcome}
+						settlementActionDisabledReasonId={settlementActionDisabledReasonId}
+						side={side}
+						withdrawActionPending={withdrawActionPending}
+						withdrawControlsLocked={withdrawControlsLocked}
+						withdrawEscalationEnabled={withdrawEscalationEnabled}
+						withdrawGuardMessage={withdrawGuardMessage}
+					/>
+				))}
 		</SectionBlock>
 	)
 }

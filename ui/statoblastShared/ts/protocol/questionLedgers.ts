@@ -86,15 +86,17 @@ async function readSharesFacts(client: ReadClient, pool: Address, universeId: bi
 
 async function loadCheckedQuestionLedger(client: ReadClient, questionLedger: Address, universeId: bigint, blockNumber: bigint) {
 	const pool = { abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedger }
-	const [manager, parent, questionId, multiplier] = await readRequiredMulticall(
+	const [manager, parent, questionId, multiplier, initialReportingResponseWindow] = await readRequiredMulticall(
 		client,
 		[
 			{ ...pool, functionName: 'openOraclePriceCoordinator' },
 			{ ...pool, functionName: 'parent' },
 			{ ...pool, functionName: 'questionId' },
 			{ ...pool, functionName: 'statoblastSecurityMultiplierBps' },
+			{ ...pool, functionName: 'initialReportingResponseWindow' },
 		],
 		blockNumber,
 	)
-	return await loadQuestionLedgerDetails(client, { questionLedger, openOraclePriceCoordinator: getAddress(manager), parent: getAddress(parent), universeId, questionId, statoblastSecurityMultiplierBps: multiplier }, blockNumber)
+	const details = await loadQuestionLedgerDetails(client, { questionLedger, openOraclePriceCoordinator: getAddress(manager), parent: getAddress(parent), universeId, questionId, statoblastSecurityMultiplierBps: multiplier }, blockNumber)
+	return { ...details, initialReportingResponseWindow }
 }

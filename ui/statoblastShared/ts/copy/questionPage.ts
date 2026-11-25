@@ -6,9 +6,7 @@ export const questionViews = 'Question views'
 export const shares = 'Shares'
 export const reporting = 'Reporting'
 export const inheritedClaims = 'Inherited claims'
-export const losingDeposits = 'Losing deposits'
 export const rep = 'REP'
-export const losingDepositPayoutTail = ' Lost, no action needed · 0 REP payout'
 export const breadcrumbs = 'Breadcrumbs'
 export const securityPool = 'Security pool'
 export const questions = 'Questions'
@@ -27,6 +25,9 @@ export const forkThresholdPerOutcome = 'Fork threshold per outcome'
 export const questionProgress = 'Question progress'
 export const trading = 'Trading'
 export const reportingOpens = 'Reporting opens'
+export const tradingEnded = 'Trading ended'
+export const reportingOpened = 'Reporting opened'
+export const undecidedForkStage = 'Undecided · fork step'
 export const addToCalendar = 'Add to calendar'
 export const reportingOpensReminder = (title: string) => `Reporting opens: ${title}`
 export const resolved = 'Resolved'
@@ -34,6 +35,8 @@ export const fork = 'Fork'
 export const nonDecisionCondition = 'If two outcomes reach the threshold'
 export const questionIdLead = ' · question ID '
 export const responseWindow = 'Response window'
+export const pausedUntilBranchActivation = 'Paused until this branch is activated'
+export const startsAtActivation = 'Starts at activation'
 export const tradingActive = 'Trading is open'
 export const responseWindowBeforeReport = 'Starts with the first report'
 export const resolutionAction = 'Redeem winning shares'
@@ -49,7 +52,12 @@ export const priceNeeded = 'Price due'
 export const refreshStep = (step: number, total: number) => `Refreshing… ${step} of ${total}`
 
 export const reportingOpen = 'Reporting open'
-export const noRepStaked = 'You have no REP staked'
+export const noRepStaked = 'No REP staked on any outcome'
+export const noRepStakedConsequence = 'If it stays that way, the outcome is Invalid.'
+export const noReportsYet = 'No reports yet.'
+export const firstReportMinimum = <Amount>(amount: Amount) => ['No reports yet. The first report needs at least ', amount, '.']
+export const reportingTied = 'Tied'
+export const reportingTiedConsequence = 'A tie doesn’t resolve the question: it stays open until one outcome leads.'
 export const deadlineChecking = 'Ended · checking…'
 export const followWithAutoRefresh = 'Turn on Auto-refresh to follow this.'
 export const asOfMinutes = (minutes: number) => `as of ${minutes} min ago`
@@ -62,14 +70,22 @@ export const responseWindowLatest = 'Latest end'
 export const responseWindowRule = 'Only a report that raises the second-highest outcome extends the window.'
 export const stakedPerOutcome = 'REP staked per outcome'
 export const leadingOutcome = 'Leading'
+export const behindOutcome = 'Behind'
 export const moreToLead = 'more to lead'
 export const endedUndecided = 'Ended undecided'
 export const waitingForFork = 'Waiting for a trigger'
 export const reportOpensAt = 'Reporting opens at'
 export const reportReminder = (title: string) => `Reporting deadline: ${title}`
-export const takeLead = (side: string) => `Take the lead on ${side}`
-export const moreBeforeDeadline = 'Add this amount before the window ends to take the lead.'
+export const behindOn = (side: string) => `You're behind on ${side}`
+export const howToLead = <Value>(side: string, amount: Value, deadline: Value) => ['Add ', amount, ` to ${side} before `, deadline, ' to take the lead']
+export const stakeAtRisk = <Amount>(side: string, amount: Amount) => [`If ${side} is still behind when the window ends, your `, amount, ' is lost.']
+export const takeLead = <Amount>(side: string, amount: Amount) => ['Report ', amount, ` on ${side} ↓`]
+export const resolvedAs = (side: string) => `Resolved as ${side}`
+export const claimKnownDeposits = <Amount>(side: string, amount: Amount) => ['Claim ', amount, ` from your ${side} deposits`]
+export const depositSaved = 'Deposit saved on this device'
+export const winningSharesToRedeem = <Value>(side: string, amount: Value, link: Value) => [amount, ` ${side} shares can also be redeemed on `, link, '.']
 export const claimAction = 'Claim'
+export const redeemAction = 'Redeem'
 export const savedHoldings = 'Your saved holdings'
 export const yes = 'Yes'
 export const no = 'No'

@@ -241,26 +241,28 @@ export function InheritedReporterClaims({ parameters, accountState, details, onR
 			{claims.map(({ side, deposit }) => {
 				const identity = deposit.claimIdentity
 				const baseReason = walletReason ?? (pending.value === undefined ? undefined : copy.claimPending) ?? (identity === undefined ? copy.claimAuthenticationRequired : undefined)
-				let settlementReason: string | undefined
-				if (active?.settlementState !== 'resolved') settlementReason = copy.claimResolutionRequired
-				else if (active.questionOutcome !== side.key) settlementReason = copy.claimWinningOutcomeRequired
-				const settleReason = baseReason ?? settlementReason
+				const lost = active?.settlementState === 'resolved' && active.questionOutcome !== side.key
+				const settleReason = baseReason ?? (active?.settlementState === 'resolved' ? undefined : copy.claimResolutionRequired)
 				return (
 					<div key={`${side.key}:${deposit.parentDepositIndex}`} className='workflow-subsection'>
 						<p>
 							{copy.inheritedClaimIdentity(side.label, deposit.parentDepositIndex.toString())} <CurrencyValue value={getImportedEscalationDepositClaimAmount(active, side.key, deposit)} suffix={copy.repUnit} />
 						</p>
-						<div className='actions'>
-							<TransactionActionButton
-								idleLabel={copy.settleClaim}
-								pendingLabel={copy.settlingClaim}
-								pending={pending.value === `${side.key}:${deposit.parentDepositIndex}`}
-								availability={{ disabled: settleReason !== undefined, reason: settleReason }}
-								onClick={() => {
-									if (identity !== undefined) void run([identity])
-								}}
-							/>
-						</div>
+						{lost ? (
+							<p className='detail'>{pageCopy.inheritedDepositLost}</p>
+						) : (
+							<div className='actions'>
+								<TransactionActionButton
+									idleLabel={copy.settleClaim}
+									pendingLabel={copy.settlingClaim}
+									pending={pending.value === `${side.key}:${deposit.parentDepositIndex}`}
+									availability={{ disabled: settleReason !== undefined, reason: settleReason }}
+									onClick={() => {
+										if (identity !== undefined) void run([identity])
+									}}
+								/>
+							</div>
+						)}
 					</div>
 				)
 			})}

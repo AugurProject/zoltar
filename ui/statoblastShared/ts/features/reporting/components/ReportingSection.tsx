@@ -1,7 +1,7 @@
 import { getReportingSubmissionTimingGuard } from '../../../protocol/reportingTiming.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ReportingDepositPreview } from './ReportingDepositPreview.js'
-import { getDisplayedLeadingEscalationOutcome, REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingLockedUntilMessage, getReportingOutcomeLabel, hasReportingOpened, deriveReportingStage, isReportingOutcomeEnabled, isWithdrawEscalationEnabled } from '../lib/reporting.js'
+import { getDisplayedLeadingEscalationOutcome, getReportingLockedUntilMessage, getReportingOutcomeLabel, hasReportingOpened, deriveReportingStage, isReportingOutcomeEnabled, isWithdrawEscalationEnabled } from '../lib/reporting.js'
 import { ReportingViewerStatus } from './ReportingViewerStatus.js'
 import { EscalationReminderLine } from './EscalationReminderLine.js'
 import { EscalationExplainer } from './EscalationExplainer.js'
@@ -9,6 +9,7 @@ import { formatReportingDeadline } from '../lib/reportingViewerStatus.js'
 import { EscalationPhaseStepper } from './EscalationPhaseStepper.js'
 import { ReportingResultCard } from './ReportingResultCard.js'
 import { ReportingSides } from './ReportingSides.js'
+import { getOutcomeSides, ReportingOutcomePicker } from './ReportingOutcomePicker.js'
 import { useKeyedConfirmation } from '../hooks/useKeyedConfirmation.js'
 import { getReportingMaxContribution } from '../lib/reportingMaxContribution.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -45,7 +46,6 @@ import { ForkTriggeredActions } from './ForkTriggeredActions.js'
 import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
 import type { ReportingSectionProps } from '../../oracleTypes.js'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { EscalationDeposit, ReportingDetails } from '../../../types/contracts.js'
 function formatInheritedAttritionElapsed(elapsed: bigint | undefined) {
 	if (elapsed === undefined) return commonCopy.metricUnavailablePlaceholder
 	return elapsed < 0n ? reportingCopy.attritionBeginsAfter(formatDuration(-elapsed)) : formatDuration(elapsed)
@@ -54,45 +54,12 @@ function formatKnownAmount(amount: bigint | undefined) {
 	return amount === undefined ? commonCopy.metricUnavailablePlaceholder : formatCurrencyBalance(amount)
 }
 type ReportingStatus = 'active' | 'missing' | 'not-started'
-type EscalationSideDisplay = {
-	balance: bigint | undefined
-	key: ReportingOutcomeKey
-	label: string
-	userDeposits: EscalationDeposit[] | undefined
-	userStake: bigint | undefined
-}
 const LOAD_REPORTING_PRESETS_REASON = reportingCopy.loadingReportingDetails
 const SELECT_OUTCOME_PRESET_REASON = reportingCopy.presetOutcomeSelectionRequired
 const SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE = reportingCopy.reportingActivationHint
 function isRedundantPresetReason(reason: string | undefined) {
 	return reason === LOAD_REPORTING_PRESETS_REASON || reason === SELECT_OUTCOME_PRESET_REASON
 }
-function getOutcomeSides(reportingDetails: ReportingDetails | undefined) {
-	if (reportingDetails?.status === 'active')
-		return reportingDetails.sides.map<EscalationSideDisplay>(side => ({
-			balance: side.balance,
-			key: side.key,
-			label: side.label,
-			userDeposits: side.userDeposits,
-			userStake: side.localPrincipalAttoRep ?? side.userDeposits.reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n),
-		}))
-	if (reportingDetails?.status === 'not-started')
-		return REPORTING_OUTCOME_DROPDOWN_OPTIONS.map<EscalationSideDisplay>(option => ({
-			balance: 0n,
-			key: option.value,
-			label: option.label,
-			userDeposits: [],
-			userStake: 0n,
-		}))
-	return REPORTING_OUTCOME_DROPDOWN_OPTIONS.map<EscalationSideDisplay>(option => ({
-		balance: undefined,
-		key: option.value,
-		label: option.label,
-		userDeposits: undefined,
-		userStake: undefined,
-	}))
-}
-
 export function ReportingSection({
 	accountState,
 	oracleBlocker,
@@ -283,7 +250,18 @@ export function ReportingSection({
 		reportingStageKey !== 'forkTriggered' || (!showForkWorkflowAction && !showTriggerZoltarForkAction) ? undefined : (
 			<ForkTriggeredActions
 				approval={showTriggerZoltarForkAction ? triggerZoltarForkApproval : undefined}
-				forkButton={showTriggerZoltarForkAction ? <TransactionActionButton idleLabel={reportingCopy.triggerZoltarFork} pendingLabel={reportingCopy.triggeringZoltarFork} onClick={onTriggerZoltarFork} pending={triggerZoltarForkPending} tone='primary' availability={resolvedTriggerZoltarForkAvailability} /> : undefined}
+				designedOverview={designedOverview}
+				forkButton={
+					showTriggerZoltarForkAction ? (
+						<TransactionActionButton
+							idleLabel={resolvedTriggerZoltarForkAvailability.loading === true ? reportingCopy.checkingFork : reportingCopy.triggerZoltarFork}
+							pendingLabel={reportingCopy.triggeringZoltarFork}
+							onClick={onTriggerZoltarFork}
+							pending={triggerZoltarForkPending}
+							availability={resolvedTriggerZoltarForkAvailability}
+						/>
+					) : undefined
+				}
 				forkPending={triggerZoltarForkPending}
 				onOpenForkWorkflow={showForkWorkflowAction ? onOpenForkWorkflow : undefined}
 				questionLedgerAddress={activeReportingDetails?.questionLedgerAddress}
@@ -332,9 +310,11 @@ export function ReportingSection({
 		/>
 	)
 	const showReportingHeaderStack = showLifecycle && showFullReporting && (showQuestionLedgerAddressInput || reportingStageBanner !== undefined)
+	const reportTitle = designedOverview ? reportingCopy.reportAnOutcome : reportingCopy.reportOutcome
 	const settlementSection =
 		showSettlementSection && reportingReady !== false ? (
 			<ReportingSettlementSection
+				designedOverview={designedOverview}
 				showPositions={!showFullReporting}
 				activeReportingDetails={activeReportingDetails}
 				displayedWithdrawGuardMessage={displayedWithdrawGuardMessage}
@@ -357,6 +337,30 @@ export function ReportingSection({
 				withdrawGuardMessage={withdrawGuardMessage}
 			/>
 		) : undefined
+	const reportSidesPanel = (
+		<ReportingSides
+			forkProgressBalance={forkProgressBalance}
+			chartScaleMax={chartScaleMax}
+			displayBindingCapital={displayBindingCapital}
+			finalized={finalized}
+			outcomeSides={outcomeSides}
+			disabled={showWithdrawOnly ? withdrawControlsLocked : reportControlsLocked}
+			questionOutcome={effectiveReportingDetails?.questionOutcome}
+			leadingOutcome={leadingOutcome}
+			selectedOutcome={selectedOutcome}
+			onSelect={outcome => onReportingFormChange({ selectedOutcome: outcome })}
+		/>
+	)
+	const depositPreview = (
+		<ReportingDepositPreview
+			designedOverview={designedOverview}
+			details={effectiveReportingDetails}
+			outcome={selectedOutcome}
+			outcomeLabel={selectedOutcomeLabel}
+			amount={selectedAmount}
+			forkConfirmation={{ confirmed: forkConfirmation.confirmed, disabled: reportControlsLocked || reportingActiveAction !== undefined, onChange: forkConfirmation.setConfirmed }}
+		/>
+	)
 	const sections = (
 		<>
 			{showReportingHeaderStack ? (
@@ -393,11 +397,11 @@ export function ReportingSection({
 						/>
 					)}
 					{activeReportingDetails === undefined || activeReportingDetails.sides.some(side => side.userDeposits.length > 0 || side.importedUserDeposits.length > 0) ? undefined : <EscalationReminderLine key={activeReportingDetails.questionLedgerAddress} details={activeReportingDetails} />}
-					<EscalationExplainer details={effectiveReportingDetails} />
+					<EscalationExplainer firstReportMinimum={effectiveReportingDetails.startBondAttoRep} nonDecisionThreshold={effectiveReportingDetails.nonDecisionThresholdAttoRep} defaultOpen={effectiveReportingDetails.status === 'not-started'} />
 				</>
 			) : undefined}
 
-			<ReportingResultCard details={effectiveReportingDetails} />
+			{designedOverview ? undefined : <ReportingResultCard details={effectiveReportingDetails} />}
 			{finalized ? settlementSection : undefined}
 			{!designedOverview && showFullReporting && reportingReady !== false ? (
 				<SectionBlock className='reporting-metrics-section' title={reportingCopy.escalationMetrics} variant='embedded'>
@@ -434,8 +438,8 @@ export function ReportingSection({
 				</SectionBlock>
 			) : undefined}
 
-			{showFullReporting && reportingReady !== false ? (
-				<SectionBlock className='reporting-outcome-section' title={finalized ? reportingCopy.results : reportingCopy.reportOutcome} variant='embedded'>
+			{showFullReporting && reportingReady !== false && (!designedOverview || (!finalized && reportingStageKey !== 'forkTriggered')) ? (
+				<SectionBlock className='reporting-outcome-section' title={finalized ? reportingCopy.results : reportTitle} variant={designedOverview ? 'default' : 'embedded'}>
 					{oracleBlocker ??
 						(reportActionGuardMessage === undefined ? undefined : (
 							<WarningSurface ariaLive='polite' role='status' surface='flat' variant='compact'>
@@ -449,91 +453,80 @@ export function ReportingSection({
 								)}
 							</WarningSurface>
 						))}
-					<ReportingSides
-						forkProgressBalance={forkProgressBalance}
-						chartScaleMax={chartScaleMax}
-						displayBindingCapital={displayBindingCapital}
-						finalized={finalized}
-						outcomeSides={outcomeSides}
-						disabled={showWithdrawOnly ? withdrawControlsLocked : reportControlsLocked}
-						questionOutcome={effectiveReportingDetails?.questionOutcome}
-						leadingOutcome={leadingOutcome}
-						selectedOutcome={selectedOutcome}
-						onSelect={outcome => onReportingFormChange({ selectedOutcome: outcome })}
-					/>
+					{finalized || !designedOverview ? reportSidesPanel : undefined}
 					{finalized ? undefined : (
 						<>
-							<AmountField
-								disabled={reportControlsLocked}
-								id='reporting-contribution-amount'
-								label={reportingCopy.reportAmountFieldLabel}
-								fillMax={{ amount: maxContributionAmount.amountAttoRep, unavailableReason: reportControlsLocked ? reportControlsLockedReason : maxContributionAmount.reason, showUnavailableReason: false }}
-								onChange={reportAmount => onReportingFormChange({ reportAmount })}
-								placeholder={reportingCopy.reportAmountPlaceholder}
-								unit={commonCopy.rep}
-								value={reportingForm.reportAmount}
-							/>
+							<div className={designedOverview ? 'statoblast-report-draft' : 'reporting-draft-flow'}>
+								<div className={designedOverview ? 'statoblast-report-inputs' : 'reporting-draft-flow'}>
+									{designedOverview && <ReportingOutcomePicker sides={outcomeSides} details={effectiveReportingDetails} selectedOutcome={selectedOutcome} leadingOutcome={leadingOutcome} disabled={reportControlsLocked} onSelect={outcome => onReportingFormChange({ selectedOutcome: outcome })} />}
+									<AmountField
+										disabled={reportControlsLocked}
+										id='reporting-contribution-amount'
+										label={reportingCopy.reportAmountFieldLabel}
+										fillMax={{ amount: maxContributionAmount.amountAttoRep, unavailableReason: reportControlsLocked ? reportControlsLockedReason : maxContributionAmount.reason, showUnavailableReason: false }}
+										onChange={reportAmount => onReportingFormChange({ reportAmount })}
+										placeholder={reportingCopy.reportAmountPlaceholder}
+										unit={commonCopy.rep}
+										value={reportingForm.reportAmount}
+									/>
 
-							{maxContributionAmount.stopsBelowFork === true && maxContributionAmount.amountAttoRep !== undefined && !reportTriggersFork ? <UserMessage className='detail' detail={reportingCopy.maxBelowForkHint(<RepAmount rounding='down' value={maxContributionAmount.amountAttoRep} />)} /> : undefined}
-							<ReportingDepositPreview
-								details={effectiveReportingDetails}
-								outcome={selectedOutcome}
-								outcomeLabel={selectedOutcomeLabel}
-								amount={selectedAmount}
-								forkConfirmation={{ confirmed: forkConfirmation.confirmed, disabled: reportControlsLocked || reportingActiveAction !== undefined, onChange: forkConfirmation.setConfirmed }}
-							/>
+									{maxContributionAmount.stopsBelowFork === true && maxContributionAmount.amountAttoRep !== undefined && !reportTriggersFork ? <UserMessage className='detail' detail={reportingCopy.maxBelowForkHint(<RepAmount rounding='down' value={maxContributionAmount.amountAttoRep} />)} /> : undefined}
+									{!designedOverview && depositPreview}
 
-							<div className='actions'>
-								<button
-									className='secondary'
-									type='button'
-									onClick={() => {
-										if (minimumOutcomeChangeContribution.amountAttoRep === undefined) return
-										onReportingFormChange({ reportAmount: formatCurrencyInputBalance(minimumOutcomeChangeContribution.amountAttoRep) })
-									}}
-									disabled={reportControlsLocked || minimumOutcomeChangeContribution.amountAttoRep === undefined}
-									aria-describedby={presetBlocker !== undefined && minimumOutcomeChangeContribution.reason === presetBlocker ? presetBlockerId : undefined}
-									title={reportControlsLocked ? reportControlsLockedReason : minimumOutcomeChangeContribution.reason}
-								>
-									{reportingCopy.minimumPreset(minimumPresetKind, minimumPresetAmount === undefined ? undefined : <RepAmount rounding='up' value={minimumPresetAmount} />)}
-								</button>
-								<button
-									className='secondary'
-									type='button'
-									onClick={() => {
-										if (maxProfitContribution.amountAttoRep === undefined) return
-										onReportingFormChange({ reportAmount: formatCurrencyInputBalance(maxProfitContribution.amountAttoRep) })
-									}}
-									disabled={reportControlsLocked || maxProfitContribution.amountAttoRep === undefined}
-									aria-describedby={presetBlocker !== undefined && maxProfitContribution.reason === presetBlocker ? presetBlockerId : undefined}
-									title={reportControlsLocked ? reportControlsLockedReason : maxProfitContribution.reason}
-								>
-									{reportingCopy.rewardPreset(maxProfitContribution.amountAttoRep === undefined ? undefined : <RepAmount value={maxProfitContribution.amountAttoRep} />)}
-								</button>
+									<div className='actions'>
+										<button
+											className='secondary'
+											type='button'
+											onClick={() => {
+												if (minimumOutcomeChangeContribution.amountAttoRep === undefined) return
+												onReportingFormChange({ reportAmount: formatCurrencyInputBalance(minimumOutcomeChangeContribution.amountAttoRep) })
+											}}
+											disabled={reportControlsLocked || minimumOutcomeChangeContribution.amountAttoRep === undefined}
+											aria-describedby={presetBlocker !== undefined && minimumOutcomeChangeContribution.reason === presetBlocker ? presetBlockerId : undefined}
+											title={reportControlsLocked ? reportControlsLockedReason : minimumOutcomeChangeContribution.reason}
+										>
+											{reportingCopy.minimumPreset(minimumPresetKind, minimumPresetAmount === undefined ? undefined : <RepAmount rounding='up' value={minimumPresetAmount} />)}
+										</button>
+										<button
+											className='secondary'
+											type='button'
+											onClick={() => {
+												if (maxProfitContribution.amountAttoRep === undefined) return
+												onReportingFormChange({ reportAmount: formatCurrencyInputBalance(maxProfitContribution.amountAttoRep) })
+											}}
+											disabled={reportControlsLocked || maxProfitContribution.amountAttoRep === undefined}
+											aria-describedby={presetBlocker !== undefined && maxProfitContribution.reason === presetBlocker ? presetBlockerId : undefined}
+											title={reportControlsLocked ? reportControlsLockedReason : maxProfitContribution.reason}
+										>
+											{reportingCopy.rewardPreset(maxProfitContribution.amountAttoRep === undefined ? undefined : <RepAmount value={maxProfitContribution.amountAttoRep} />)}
+										</button>
+									</div>
+									{presetBlocker === undefined ? undefined : <UserMessage id={presetBlockerId} className='detail' detail={presetBlocker} />}
+
+									{actualReportDepositAmount === undefined || selectedAmount === undefined || actualReportDepositAmount === selectedAmount ? undefined : (
+										<UserMessage
+											className='detail'
+											detail={
+												<>
+													{reportingCopy.currentEscalationDisputeStakeLead}
+													<CurrencyValue value={actualReportDepositAmount} suffix={commonCopy.rep} />
+													{reportingCopy.formatAcceptedAmountTail(reportContributionPreview?.tieAdjusted === true)}
+												</>
+											}
+										/>
+									)}
+									{visiblePresetReasons.length === 0 ? undefined : <UserMessage className='detail' detail={visiblePresetReasons.join(' ')} />}
+									<UserMessage
+										className='detail'
+										detail={
+											<>
+												{reportingCopy.paidFromWallet} · {reportingCopy.availableBalance(formatKnownAmount(availableReportingRep))}
+											</>
+										}
+									/>
+								</div>
+								{designedOverview && depositPreview}
 							</div>
-							{presetBlocker === undefined ? undefined : <UserMessage id={presetBlockerId} className='detail' detail={presetBlocker} />}
-
-							{actualReportDepositAmount === undefined || selectedAmount === undefined || actualReportDepositAmount === selectedAmount ? undefined : (
-								<UserMessage
-									className='detail'
-									detail={
-										<>
-											{reportingCopy.currentEscalationDisputeStakeLead}
-											<CurrencyValue value={actualReportDepositAmount} suffix={commonCopy.rep} />
-											{reportingCopy.formatAcceptedAmountTail(reportContributionPreview?.tieAdjusted === true)}
-										</>
-									}
-								/>
-							)}
-							{visiblePresetReasons.length === 0 ? undefined : <UserMessage className='detail' detail={visiblePresetReasons.join(' ')} />}
-							<UserMessage
-								className='detail'
-								detail={
-									<>
-										{reportingCopy.paidFromWallet} · {reportingCopy.availableBalance(formatKnownAmount(availableReportingRep))}
-									</>
-								}
-							/>
 							<div className='reporting-shared-action-region'>
 								<TokenApprovalControl
 									// Both actions share one row under a reserved message slot, so neither moves as the approval changes.

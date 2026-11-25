@@ -5,11 +5,12 @@ import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.j
 import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
+import { formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { statoblastPageHref, type StatoblastQuestionPage } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { decodeStoredValue } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
 import type { ListedQuestionLedger, ReportingDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 
-type QuestionHeading = Pick<ListedQuestionLedger, 'ordinaryEscalationGameStarted' | 'questionId' | 'questionLedgerAddress' | 'questionOutcome' | 'universeHasForked'> & {
+type QuestionHeading = Pick<ListedQuestionLedger, 'initialReportingResponseWindow' | 'ordinaryEscalationGameStarted' | 'questionId' | 'questionLedgerAddress' | 'questionOutcome' | 'universeHasForked'> & {
 	marketDetails: Pick<ListedQuestionLedger['marketDetails'], 'description' | 'endTime' | 'title'>
 }
 
@@ -18,6 +19,7 @@ export function decodeQuestionHeading(value: unknown): QuestionHeading | undefin
 		const details = read.record('marketDetails')
 		return {
 			marketDetails: { description: details.string('description'), endTime: details.bigint('endTime'), title: details.string('title') },
+			initialReportingResponseWindow: read.optional('initialReportingResponseWindow', read.bigint),
 			ordinaryEscalationGameStarted: read.boolean('ordinaryEscalationGameStarted'),
 			questionId: read.string('questionId'),
 			questionLedgerAddress: read.address('questionLedgerAddress'),
@@ -49,6 +51,7 @@ export function StatoblastQuestionHead({
 	const title = getQuestionTitle(question.marketDetails)
 	const resolved = question.questionOutcome !== 'none' || reporting?.settlementState === 'resolved'
 	const started = question.ordinaryEscalationGameStarted || reporting?.status === 'active'
+	const paused = !resolved && reporting?.status === 'active' && reporting.forkContinuation && reporting.forkResumedAt === 0n
 	const forkStep = !resolved && (question.universeHasForked || (reporting?.status === 'active' && reporting.hasReachedNonDecision))
 	const ended = now !== undefined && now >= question.marketDetails.endTime
 	let step = 0
@@ -56,7 +59,8 @@ export function StatoblastQuestionHead({
 	if (started) step = 2
 	if (resolved) step = 3
 	let phase = pageCopy.stageLabels[step] ?? pageCopy.trading
-	if (forkStep) phase = pageCopy.fork
+	if (paused) phase = pageCopy.pausedUntilBranchActivation
+	if (forkStep) phase = pageCopy.undecidedForkStage
 	if (checkingDeadline && !resolved) phase = pageCopy.deadlineChecking
 	const phaseTone = resolved ? 'ok' : 'muted'
 	const hasStakedRep = reporting?.status === 'active' && reporting.sides.some(side => (side.localPrincipalAttoRep ?? 0n) > 0n || side.userDeposits.some(deposit => deposit.amountAttoRep > 0n))
@@ -71,11 +75,12 @@ export function StatoblastQuestionHead({
 			</>
 		)
 	const responseEnd = reporting?.status === 'active' ? reporting.escalationEndTime : undefined
+	const responseDeadline = responseEnd === undefined || responseEnd === 0n ? pageCopy.responseWindowBeforeReport : <TimestampValue timestamp={responseEnd} relative={false} />
 	const forkDetail = question.universeHasForked ? undefined : pageCopy.waitingForFork
 	const steps = [
-		{ label: pageCopy.trading, detail: step === 0 ? pageCopy.tradingActive : undefined },
-		{ label: pageCopy.reportingOpens, detail: <TimestampValue timestamp={question.marketDetails.endTime} relative={now === undefined ? false : 'after'} {...(now === undefined ? {} : { currentTimestamp: now })} /> },
-		{ label: forkStep ? pageCopy.endedUndecided : pageCopy.responseWindow, detail: responseEnd === undefined || responseEnd === 0n ? pageCopy.responseWindowBeforeReport : <TimestampValue timestamp={responseEnd} relative={false} /> },
+		{ label: forkStep ? pageCopy.tradingEnded : pageCopy.trading, detail: step === 0 && !forkStep ? pageCopy.tradingActive : undefined },
+		{ label: forkStep ? pageCopy.reportingOpened : pageCopy.reportingOpens, detail: <TimestampValue timestamp={question.marketDetails.endTime} relative={now === undefined ? false : 'after'} {...(now === undefined ? {} : { currentTimestamp: now })} /> },
+		{ label: forkStep ? pageCopy.endedUndecided : pageCopy.responseWindow, detail: paused ? pageCopy.startsAtActivation : responseDeadline },
 		{ label: forkStep ? pageCopy.fork : pageCopy.resolved, detail: forkStep ? forkDetail : pageCopy.resolutionAction },
 	]
 	return (
@@ -146,20 +151,26 @@ export function StatoblastQuestionHead({
 						</dd>
 					</div>
 					{reporting !== undefined && (
-						<>
-							<div>
-								<dt>{pageCopy.minimumFirstReport}</dt>
-								<dd>
-									<CurrencyValue value={reporting.startBondAttoRep} suffix={pageCopy.rep} />
-								</dd>
-							</div>
-							<div>
-								<dt>{pageCopy.forkThresholdPerOutcome}</dt>
-								<dd>
-									<CurrencyValue value={reporting.nonDecisionThresholdAttoRep} suffix={pageCopy.rep} />
-								</dd>
-							</div>
-						</>
+						<div>
+							<dt>{pageCopy.minimumFirstReport}</dt>
+							<dd>
+								<CurrencyValue value={reporting.startBondAttoRep} suffix={pageCopy.rep} />
+							</dd>
+						</div>
+					)}
+					{question.initialReportingResponseWindow !== undefined && (
+						<div>
+							<dt>{pageCopy.responseWindow}</dt>
+							<dd>{formatDuration(question.initialReportingResponseWindow)}</dd>
+						</div>
+					)}
+					{reporting !== undefined && (
+						<div>
+							<dt>{pageCopy.forkThresholdPerOutcome}</dt>
+							<dd>
+								<CurrencyValue value={reporting.nonDecisionThresholdAttoRep} suffix={pageCopy.rep} />
+							</dd>
+						</div>
 					)}
 				</dl>
 				{question.marketDetails.description !== '' && <p>{question.marketDetails.description}</p>}
@@ -167,7 +178,7 @@ export function StatoblastQuestionHead({
 			<div className='statoblast-question-progress' aria-label={pageCopy.questionProgress}>
 				<ol>
 					{steps.map(({ label, detail }, index) => (
-						<li key={label} data-completed={index < (forkStep ? 3 : step)} aria-current={!checkingDeadline && index === (forkStep ? 3 : step) ? 'step' : undefined}>
+						<li key={label} data-completed={index < (forkStep ? 3 : step)} data-danger={forkStep && index === 2 ? true : undefined} aria-current={!checkingDeadline && index === (forkStep ? 3 : step) ? 'step' : undefined}>
 							<strong>{label}</strong>
 							{detail === undefined ? undefined : <span>{detail}</span>}
 						</li>

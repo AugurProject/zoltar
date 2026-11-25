@@ -23,6 +23,15 @@ const side = testDouble<EscalationSide>({ key: 'yes', label: 'Yes', localPrincip
 const details = testDouble<ActiveReportingDetails>({ status: 'active', currentTime: 1n, forkContinuation: true, parentQuestionLedgerAddress: parent, escalationGameAddress: game, questionLedgerAddress: parent, reportingDepositPool: parent, reportingQuestionId: 1n, universeId: 0n, questionOutcome: 'yes', sides: [side] })
 const callbacks = { onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined, refreshState: async () => undefined }
 
+test('deposit search separates the device’s located stake from the stake still to find', async () => {
+	const missingStake = { ...side, localPrincipalAttoRep: 620n * 10n ** 18n, userDeposits: [{ depositor: account, depositIndex: 1n, amountAttoRep: 500n * 10n ** 18n, cumulativeAmountAttoRep: 500n * 10n ** 18n }] }
+	const view = lifecycle.trackRendered(await renderIntoDocument(<LocateReportingDeposits details={{ ...details, sides: [missingStake] }} wallet={account} refresh={callbacks.refreshState} />))
+	const amounts = [...view.container.querySelectorAll('dd')].map(item => item.textContent?.replace(/\s+/gu, ' '))
+	expect(amounts).toContain('500.00 REP (1 deposit)')
+	expect(amounts).toContain('120.00 REP')
+	expect(view.container.textContent).toContain('Your REP is safe')
+})
+
 test('a visible inherited claim job is not restarted when another block arrives', async () => {
 	const backend = createFakeBackend({ accountAddress: account })
 	let attempts = 0

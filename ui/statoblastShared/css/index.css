@@ -4664,10 +4664,6 @@ span.rep-price-status.stale,
 	background: var(--surface-inset);
 }
 
-.statoblast-question-progress .statoblast-fork-step {
-	border-block-start-style: dashed;
-}
-
 .statoblast-capital-layout {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) minmax(16rem, 0.4fr);
@@ -4718,22 +4714,27 @@ span.rep-price-status.stale,
 	font-weight: normal;
 }
 
-.statoblast-capital-preview {
+.statoblast-capital-preview,
+.statoblast-report-preview {
 	inline-size: 100%;
 	border-collapse: collapse;
 	font-size: 0.875rem;
 }
 
-.statoblast-capital-preview caption,
-.statoblast-capital-preview th[scope="row"] {
-	text-align: start;
-}
-
 .statoblast-capital-preview td,
-.statoblast-capital-preview th {
+.statoblast-capital-preview th,
+.statoblast-report-preview td,
+.statoblast-report-preview th {
 	border-block-end: 1px solid var(--divider-strong);
 	padding: var(--space-1);
 	text-align: end;
+}
+
+.statoblast-capital-preview caption,
+.statoblast-capital-preview th[scope="row"],
+.statoblast-report-preview caption,
+.statoblast-report-preview th[scope="row"] {
+	text-align: start;
 }
 
 .statoblast-retirement-queue {
@@ -4765,19 +4766,6 @@ span.rep-price-status.stale,
 
 	.statoblast-back-link {
 		display: inline-block;
-	}
-
-	.statoblast-question-progress ol {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
-	.statoblast-question-progress li {
-		border-block-start: 0;
-		border-inline-start: 2px solid var(--divider-strong);
-	}
-
-	.statoblast-question-progress .statoblast-fork-step {
-		border-inline-start-style: dashed;
 	}
 }
 
@@ -5073,10 +5061,19 @@ span.rep-price-status.stale,
 	background: transparent;
 }
 
+.statoblast-question-progress li:nth-child(4) {
+	border-block-start-color: transparent;
+}
+
 .statoblast-question-progress li[aria-current="step"]::before,
 .statoblast-question-progress li[data-completed="true"]::before {
 	border-color: var(--accent);
 	background: var(--accent);
+}
+
+.statoblast-question-progress li[data-danger="true"]::before {
+	border-color: var(--danger);
+	background: var(--danger);
 }
 
 .statoblast-question-progress li > span {
@@ -5085,14 +5082,46 @@ span.rep-price-status.stale,
 
 .statoblast-question-progress .statoblast-fork-step {
 	grid-column: 4;
-	margin-inline-start: var(--space-2);
-	padding-inline-start: var(--space-2);
-	border-block-start: 0;
-	border-inline-start: 2px dashed var(--divider-strong);
+	padding: 0 0 0 var(--space-4);
+	border: 0;
 }
 
 .statoblast-question-progress .statoblast-fork-step::before {
-	display: none;
+	inset-block-start: 0.125rem;
+	inset-inline-start: calc(-0.5rem + 2px);
+}
+
+.statoblast-question-progress li:has(+ .statoblast-fork-step)::after {
+	content: "";
+	position: absolute;
+	inset-block: 0 calc(-1 * var(--space-2) - 0.5rem);
+	inset-inline-end: 100%;
+	width: var(--space-4);
+	border: 2px dashed var(--divider-strong);
+	border-block-start: 0;
+	border-inline-end: 0;
+	border-end-start-radius: var(--radius-shell);
+}
+
+.statoblast-deposit-search-split {
+	display: grid;
+	gap: var(--space-2);
+}
+
+.statoblast-deposit-search-split dl,
+.statoblast-deposit-search-split p {
+	margin: 0;
+}
+
+.statoblast-deposit-search-split dl > div {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	column-gap: var(--space-3);
+}
+
+.statoblast-deposit-search-split meter {
+	width: 100%;
 }
 
 .statoblast-watchlist-open {
@@ -5131,10 +5160,24 @@ span.rep-price-status.stale,
 		inset-inline-start: -0.5rem;
 	}
 
+	.statoblast-question-progress li:nth-child(4) {
+		border-inline-start-color: transparent;
+	}
+
 	.statoblast-question-progress .statoblast-fork-step {
 		grid-column: 1;
-		margin-inline-start: var(--space-3);
-		padding: 0 0 0 var(--space-2);
+	}
+
+	.statoblast-question-progress .statoblast-fork-step::before {
+		inset-inline-start: calc(-0.5rem + 2px);
+	}
+
+	.statoblast-question-progress li:has(+ .statoblast-fork-step)::after {
+		inset-inline-end: calc(100% - 2px);
+		inset-block-start: calc(-1 * var(--space-2));
+		width: var(--space-2);
+		border-block-start: 2px dashed var(--divider-strong);
+		border-start-start-radius: var(--radius-shell);
 	}
 }
 
@@ -5280,9 +5323,88 @@ span.rep-price-status.stale,
 	inline-size: 7rem;
 }
 
-.statoblast-fork-danger {
-	border-inline-start: 3px solid var(--warning);
-	padding-inline-start: var(--space-3);
+.statoblast-fork-danger-grid,
+.statoblast-fork-consequences,
+.statoblast-report-fork-steps {
+	display: grid;
+	gap: var(--space-3);
+}
+
+.statoblast-fork-danger-grid {
+	align-items: start;
+}
+
+.statoblast-fork-consequences p,
+.statoblast-fork-trigger p {
+	margin: 0;
+}
+
+.statoblast-fork-consequences .tx-action-notice p + p {
+	margin-block-start: var(--space-2);
+}
+
+.statoblast-report-fork-steps {
+	margin: 0;
+	padding-inline-start: var(--space-4);
+}
+
+.reporting-draft-flow {
+	display: contents;
+}
+
+.statoblast-report-draft,
+.statoblast-report-inputs,
+.statoblast-report-outcomes,
+.statoblast-report-comparison {
+	display: grid;
+	min-inline-size: 0;
+	gap: var(--space-3);
+}
+
+.statoblast-report-outcomes {
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.statoblast-report-outcomes legend {
+	margin-block-end: var(--space-2);
+}
+
+.statoblast-report-option {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: var(--space-2);
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--divider-strong);
+	border-radius: var(--radius-control);
+}
+
+.statoblast-report-option:has(input:checked) {
+	border-color: var(--accent);
+}
+
+.statoblast-report-option-label {
+	display: grid;
+	gap: var(--space-1);
+}
+
+.statoblast-report-preview caption {
+	font-weight: 600;
+}
+
+.statoblast-report-comparison p {
+	margin: 0;
+}
+
+@media (min-width: 64rem) {
+	.statoblast-fork-danger-grid,
+	.statoblast-report-draft {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--space-5);
+		align-items: start;
+	}
 }
 
 .statoblast-deploy-layout {
@@ -5397,9 +5519,21 @@ span.rep-price-status.stale,
 	border-radius: var(--radius-shell);
 	background: var(--surface-section-opaque);
 }
+.statoblast-report-banner[data-behind="true"] {
+	border-inline-start-color: var(--warning);
+	background: var(--warning-soft);
+}
+.statoblast-report-banner-copy {
+	display: grid;
+	gap: var(--space-2);
+}
+.statoblast-report-banner-copy > :is(p, h3) {
+	margin: 0;
+}
 .statoblast-report-banner-actions {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: center;
 	gap: var(--space-2);
 }
 .statoblast-report-columns {
@@ -5408,6 +5542,9 @@ span.rep-price-status.stale,
 	align-items: start;
 }
 @media (min-width: 64rem) {
+	.statoblast-report-banner:has(.statoblast-report-banner-actions) {
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
 	.statoblast-report-columns:has(.statoblast-response-timeline) {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
@@ -5422,23 +5559,104 @@ span.rep-price-status.stale,
 .statoblast-report-stakes .badge {
 	margin-inline-start: var(--space-2);
 }
+.statoblast-report-saved {
+	margin-inline-start: var(--space-2);
+	color: var(--success);
+}
 .statoblast-stake-bar {
 	display: flex;
 	height: 0.75rem;
 	background: var(--surface-inset);
 }
 .statoblast-stake-bar > div:first-child {
-	background: var(--divider-strong);
+	background: var(--accent);
 }
 .statoblast-stake-bar > div:last-child {
+	background: var(--text);
+}
+.statoblast-report-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-3);
+}
+.statoblast-report-legend > span {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-1);
+}
+.statoblast-report-legend > span::before {
+	content: "";
+	inline-size: 0.625rem;
+	block-size: 0.625rem;
+	border-radius: 50%;
 	background: var(--accent);
+}
+.statoblast-report-legend > span:last-child::before {
+	background: var(--text);
 }
 .statoblast-response-timeline,
 .statoblast-liquidation-reward {
 	display: grid;
 	gap: var(--space-2);
 }
-.statoblast-response-timeline progress,
+.statoblast-response-track {
+	position: relative;
+	height: 0.375rem;
+	margin: var(--space-2) var(--space-1);
+	border-radius: var(--radius-control);
+	background: var(--divider-strong);
+}
+.statoblast-response-elapsed,
+.statoblast-response-extension {
+	position: absolute;
+	inset-block: 0;
+	border-radius: var(--radius-control);
+	background: var(--accent);
+}
+.statoblast-response-extension {
+	background: var(--warning);
+}
+.statoblast-response-track > span {
+	position: absolute;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	inline-size: 0.625rem;
+	block-size: 0.625rem;
+	border: 1px solid var(--surface-section-opaque);
+	border-radius: 50%;
+	background: var(--milestone-color, var(--text));
+}
+.statoblast-response-timeline [data-milestone="ends"] {
+	--milestone-color: var(--accent);
+}
+.statoblast-response-timeline [data-milestone="projection"] {
+	--milestone-color: var(--warning);
+}
+.statoblast-response-timeline [data-milestone="latest"] {
+	--milestone-color: var(--muted);
+}
+.statoblast-response-timeline dl {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+	gap: var(--space-2);
+	margin: 0;
+}
+.statoblast-response-timeline dd {
+	margin: 0;
+}
+.statoblast-response-timeline dt {
+	color: var(--muted);
+}
+.statoblast-response-timeline dt::before {
+	content: "";
+	display: inline-block;
+	inline-size: 0.375rem;
+	block-size: 0.375rem;
+	margin-inline-end: var(--space-1);
+	border-radius: 50%;
+	background: var(--milestone-color, var(--text));
+	vertical-align: middle;
+}
 .statoblast-liquidation-reward progress {
 	inline-size: 100%;
 }
@@ -5572,5 +5790,62 @@ span.rep-price-status.stale,
 		content: attr(data-label) / "";
 		display: block;
 		font-size: var(--font-caption);
+	}
+}
+
+.statoblast-claim-table {
+	width: 100%;
+	border-collapse: collapse;
+	table-layout: fixed;
+}
+
+.statoblast-claim-table th,
+.statoblast-claim-table td {
+	padding: var(--space-2);
+	border-block-end: 1px solid var(--divider-strong);
+	text-align: start;
+	vertical-align: top;
+	overflow-wrap: anywhere;
+}
+
+.statoblast-claim-table th:first-child {
+	width: 2.25rem;
+}
+
+.statoblast-claim-table th:nth-child(n + 3),
+.statoblast-claim-table td:nth-child(n + 3) {
+	text-align: end;
+}
+
+.statoblast-claim-table td > small {
+	display: block;
+	color: var(--text-secondary);
+}
+
+.statoblast-claim-table tr[data-selected] {
+	background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.statoblast-claim-winning-value .currency-value {
+	color: var(--success);
+}
+
+.statoblast-claim-actions {
+	justify-content: end;
+}
+
+@media (max-width: 40rem) {
+	.statoblast-claim-table th,
+	.statoblast-claim-table td {
+		padding-inline: var(--space-1);
+	}
+
+	.statoblast-claim-table th {
+		font-size: var(--font-caption);
+		overflow-wrap: normal;
+	}
+
+	.statoblast-claim-table th:first-child {
+		width: 1.75rem;
 	}
 }

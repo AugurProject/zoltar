@@ -93,7 +93,6 @@ export const triggerUniverseFork = 'Trigger universe fork'
 
 export const triggerUniverseForkDescription = 'This unresolved question forks its universe. Security pool owners choose a recovery branch. Reporter balances are copied into every child branch.'
 
-export const forkCost = 'Cost from your wallet'
 export const registrationOriginRequired = 'Register questions in the unforked origin universe.'
 export const forkAdmission = 'Fork the universe'
 

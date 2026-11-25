@@ -10,6 +10,7 @@ import type { ForkAdmissionApproval } from '../../oracleTypes.js'
 
 type Props = {
 	approval: ForkAdmissionApproval | undefined
+	designedOverview: boolean
 	forkButton: ComponentChildren
 	forkPending: boolean
 	onOpenForkWorkflow: (() => void) | undefined
@@ -17,62 +18,85 @@ type Props = {
 }
 
 /** Only a nonzero admission shortfall requires a wallet approval before the fork. */
-export function ForkTriggeredActions({ approval, forkButton, forkPending, onOpenForkWorkflow, questionLedgerAddress }: Props) {
-	if (approval === undefined)
+export function ForkTriggeredActions({ approval, designedOverview, forkButton, forkPending, onOpenForkWorkflow, questionLedgerAddress }: Props) {
+	if (onOpenForkWorkflow !== undefined)
 		return (
 			<div className='actions'>
-				{forkButton}
-				{onOpenForkWorkflow === undefined ? undefined : (
-					<button className='secondary' type='button' onClick={onOpenForkWorkflow}>
-						{reportingCopy.openForkAndMigration}
-					</button>
-				)}
+				<button className='secondary' type='button' onClick={onOpenForkWorkflow}>
+					{reportingCopy.openForkAndMigration}
+				</button>
 			</div>
 		)
-	const { approvedAmount, requiredAmount } = approval
-	let completedLabel: string | undefined
-	if (requiredAmount !== undefined && approvedAmount !== undefined && approvedAmount >= requiredAmount) completedLabel = commonCopy.approvalSatisfied
+	const approvedAmount = approval?.approvedAmount
+	const requiredAmount = approval?.requiredAmount
+	const hasCost = requiredAmount !== undefined && requiredAmount > 0n
+	const allowanceCoversCost = hasCost && approvedAmount !== undefined && approvedAmount >= requiredAmount
+	const triggerStep = (
+		<div className='statoblast-fork-trigger'>
+			{forkButton}
+			<p className='detail'>{reportingCopy.forkTriggerOnce}</p>
+		</div>
+	)
 	return (
-		<SectionBlock className='fork-admission-section statoblast-fork-danger' title={securityPoolCopy.forkAdmission} variant='embedded'>
-			<UserMessage
-				tone='warning'
-				detail={
-					<>
-						{securityPoolCopy.forkCost} <CurrencyValue value={requiredAmount} suffix={commonCopy.rep} />
-					</>
-				}
-			/>
-			{requiredAmount === 0n ? (
-				<div className='actions'>{forkButton}</div>
-			) : (
-				<TokenApprovalControl
-					renderActions={({ button, notice, noticeId }) => (
-						<>
-							{notice === undefined ? undefined : <UserMessage id={noticeId} placement='field' detail={notice} />}
-							<div className='actions'>
-								{button}
-								{forkButton}
-							</div>
-						</>
-					)}
-					completedLabel={completedLabel}
-					showRequirementNotice={false}
-					actionLabel={securityPoolCopy.forkAdmissionActionLabel}
-					allowanceError={approval.allowanceError}
-					allowanceLoading={approval.loading}
-					approvedAmount={approvedAmount}
-					disabled={forkPending}
-					guardMessage={undefined}
-					onApprove={approval.onApprove}
-					pending={approval.pending}
-					pendingLabel={commonCopy.approvingRep}
-					requiredAmount={requiredAmount}
-					recommendedAmount={approval.recommendedAmount}
-					resetKey={`${questionLedgerAddress ?? ''}:${requiredAmount?.toString() ?? ''}`}
-					tokenSymbol={commonCopy.rep}
-					tokenUnits={18}
-				/>
-			)}
+		<SectionBlock className='statoblast-fork-danger' title={securityPoolCopy.forkAdmission} tone='critical' variant={designedOverview ? 'default' : 'embedded'}>
+			<div className='statoblast-fork-danger-grid'>
+				<div className='statoblast-fork-consequences'>
+					<UserMessage
+						tone='error'
+						detail={
+							<>
+								<p>
+									<strong>{reportingCopy.forkIrreversible}</strong> {reportingCopy.forkFreeze}
+								</p>
+								{hasCost && approval?.loading === false ? (
+									<p>
+										<strong>
+											{reportingCopy.forkCostLead} <CurrencyValue value={requiredAmount} suffix={commonCopy.rep} />.
+										</strong>{' '}
+										{reportingCopy.forkCostDetail}
+									</p>
+								) : undefined}
+							</>
+						}
+					/>
+					<p className='detail'>{reportingCopy.forkStakeCarries}</p>
+				</div>
+				{!hasCost || approval === undefined ? (
+					triggerStep
+				) : (
+					<TokenApprovalControl
+						renderActions={({ button, notice, noticeId }) => (
+							<>
+								{notice === undefined ? undefined : <UserMessage id={noticeId} placement='field' detail={notice} />}
+								{allowanceCoversCost ? (
+									triggerStep
+								) : (
+									<ol className='statoblast-report-fork-steps'>
+										<li>{button}</li>
+										<li>{triggerStep}</li>
+									</ol>
+								)}
+							</>
+						)}
+						completedLabel={allowanceCoversCost ? commonCopy.approvalSatisfied : undefined}
+						showRequirementNotice={false}
+						actionLabel={securityPoolCopy.forkAdmissionActionLabel}
+						allowanceError={approval.allowanceError}
+						allowanceLoading={approval.loading}
+						approvedAmount={approvedAmount}
+						disabled={forkPending}
+						guardMessage={undefined}
+						onApprove={approval.onApprove}
+						pending={approval.pending}
+						pendingLabel={commonCopy.approvingRep}
+						requiredAmount={requiredAmount}
+						recommendedAmount={approval.recommendedAmount}
+						resetKey={`${questionLedgerAddress ?? ''}:${requiredAmount.toString()}`}
+						tokenSymbol={commonCopy.rep}
+						tokenUnits={18}
+					/>
+				)}
+			</div>
 		</SectionBlock>
 	)
 }

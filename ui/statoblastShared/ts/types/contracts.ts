@@ -129,6 +129,7 @@ export type ListedQuestionLedger = {
 	hasForkActivity: boolean
 	hasForkContinuationEscalationGame: boolean
 	initialReportPriorityFeeAttoEthPerGas: bigint
+	initialReportingResponseWindow?: bigint | undefined
 	lastOraclePrice: bigint | undefined
 	lastOracleSettlementTimestamp: bigint
 	oraclePriceValidUntilTimestamp?: bigint | undefined
