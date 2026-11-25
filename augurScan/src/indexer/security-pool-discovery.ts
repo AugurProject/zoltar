@@ -40,17 +40,44 @@ export async function discoverSecurityPoolEventDependencies(emitter: ContractMet
 		if (streams === zeroAddress || address(await call(streams, 'securityPoolCapitalFeeStreams', 'capitalLedger')) !== capital) throw new Error('Security pool capital fee streams binding mismatch')
 		return [component('capitalLedger', capital), component('commitmentIndex', index), component('feeStreams', streams)]
 	}
-	// Setup deploys services in the constructor and settlement, its book and the reporter ledger before any question can be added.
-	const discoverModules = async (securityPool: Address): Promise<readonly Discovery[]> => {
+	const discoverServices = async (securityPool: Address) => {
 		const services = address(await call(securityPool, 'securityPool', 'services'))
 		if (services === zeroAddress || address(await call(services, 'securityPoolServices', 'securityPool')) !== securityPool) throw new Error('Security pool services binding mismatch')
+		return component('services', services)
+	}
+	const discoverSettlement = async (securityPool: Address) => {
 		const settlement = address(await call(securityPool, 'securityPool', 'settlement'))
 		if (settlement === zeroAddress || address(await call(settlement, 'securityPoolSettlement', 'securityPool')) !== securityPool) throw new Error('Security pool settlement binding mismatch')
 		const book = address(await call(settlement, 'securityPoolSettlement', 'ledger'))
 		if (book === zeroAddress || address(await call(book, 'securityPoolSettlementBook', 'securityPool')) !== settlement) throw new Error('Security pool settlement book binding mismatch')
+		return [component('settlement', settlement), component('settlementBook', book)]
+	}
+	const discoverReporters = async (securityPool: Address) => {
 		const reporters = address(await call(securityPool, 'securityPool', 'reporters'))
 		if (reporters === zeroAddress || address(await call(reporters, 'securityPoolReporterLedger', 'securityPool')) !== securityPool) throw new Error('Security pool reporter ledger binding mismatch')
-		return [component('services', services), component('settlement', settlement), component('settlementBook', book), component('reporterLedger', reporters)]
+		return component('reporterLedger', reporters)
+	}
+	const discoverController = async (securityPool: Address) => {
+		const controller = address(await call(securityPool, 'securityPool', 'forkController'))
+		if (controller === zeroAddress || address(await call(controller, 'securityPoolForkCoordinator', 'securityPool')) !== securityPool) throw new Error('Security pool fork controller binding mismatch')
+		return component('forkCoordinator', controller)
+	}
+	if (emitter.kind === 'securityPoolFactory' && (decoded.name === 'SecurityPoolDeployed' || decoded.name === 'DeployQuestionLedger')) {
+		const deployment = decoded.name === 'SecurityPoolDeployed'
+		const securityPool = deployment ? address(decoded.arguments?.['securityPool']) : address(await call(emitterAddress, 'securityPoolFactory', 'securityPoolOf', [address(decoded.arguments?.['questionLedger'])]))
+		if (securityPool === zeroAddress) throw new Error('Factory event is missing its security pool binding')
+		if (address(await call(securityPool, 'securityPool', 'factory')) !== emitterAddress) throw new Error('Security pool factory binding mismatch')
+		const pool = component('securityPool', securityPool)
+		const services = await discoverServices(securityPool)
+		if (deployment) return [pool, services]
+		// Recover the complete binding when the scanner starts after the factory deployment.
+		return [pool, await discoverController(securityPool), services, ...(await discoverSettlement(securityPool)), await discoverReporters(securityPool), ...(await discoverCapital(securityPool))]
+	}
+	if (emitter.kind === 'securityPool' && decoded.name === 'SetupAdvanced') {
+		// prepareNext emits the stage after incrementing it. UniversePrepared discovers the capital stage.
+		const stage = String(decoded.arguments?.['stage'])
+		if (stage === '1') return await discoverSettlement(emitterAddress)
+		if (stage === '2') return [await discoverController(emitterAddress), await discoverReporters(emitterAddress)]
 	}
 	if (emitter.kind === 'securityPool' && decoded.name === 'UniversePrepared') return await discoverCapital(emitterAddress)
 	// The escrow settles its report on the feed and then emits `ReportCompleted`, so the feed's decision (or its
@@ -63,15 +90,6 @@ export async function discoverSecurityPoolEventDependencies(emitter: ContractMet
 		const escrow = address(candidate[0])
 		if (escrow === zeroAddress || address(await call(escrow, 'sharedPoolReportEscrow', 'feed')) !== emitterAddress) throw new Error('Report escrow binding mismatch')
 		return [component('reportEscrow', escrow)]
-	}
-	if (emitter.kind === 'securityPoolFactory' && decoded.name === 'DeployQuestionLedger') {
-		const pool = address(decoded.arguments?.['questionLedger'])
-		const securityPool = address(await call(emitterAddress, 'securityPoolFactory', 'securityPoolOf', [pool]))
-		if (securityPool === zeroAddress) throw new Error('Question ledger is missing its security pool binding')
-		if (address(await call(securityPool, 'securityPool', 'factory')) !== emitterAddress) throw new Error('Security pool factory binding mismatch')
-		const controller = address(await call(securityPool, 'securityPool', 'forkController'))
-		if (controller === zeroAddress || address(await call(controller, 'securityPoolForkCoordinator', 'securityPool')) !== securityPool) throw new Error('Security pool fork controller binding mismatch')
-		return [component('securityPool', securityPool), component('forkCoordinator', controller), ...(await discoverModules(securityPool)), ...(await discoverCapital(securityPool))]
 	}
 	if (emitter.kind === 'securityPoolForkCoordinator' && decoded.name === 'BranchStarted') {
 		const universe = decoded.arguments?.['universeId']
