@@ -9,12 +9,10 @@ function decodeCachedLiveMarket(value: unknown) {
 		const pair = read.optional('pair', read.address)
 		const originUniverseId = read.optional('originUniverseId', read.bigint)
 		const tradingStatus = read.optional('tradingStatus', read.number)
-		const collateral = read.optional('collateral', key => {
-			const asset = read.record(key)
-			const decimals = asset.number('decimals')
-			if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) throw new Error('Invalid stored collateral precision')
-			return { token: asset.address('token'), symbol: asset.string('symbol'), decimals, native: asset.boolean('native') }
-		})
+		const asset = read.record('collateral')
+		const decimals = asset.number('decimals')
+		if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) throw new Error('Invalid stored collateral precision')
+		const collateral = { token: asset.address('token'), symbol: asset.string('symbol'), decimals, native: asset.boolean('native') }
 		const mintFees = read.optional('mintFees', key => {
 			const fees = read.record(key)
 			return { annualFeeBps: fees.bigint('annualFeeBps'), purchaseFeeBps: fees.bigint('purchaseFeeBps'), minimumPurchaseFeeAttoEth: fees.bigint('minimumPurchaseFeeAttoEth'), securityMultiplierBps: fees.bigint('securityMultiplierBps'), feePrincipalAttoEth: fees.bigint('feePrincipalAttoEth') }
@@ -44,7 +42,7 @@ function decodeCachedLiveMarket(value: unknown) {
 			return { feeEndTime: stored.bigint('feeEndTime'), projectedCollateralAttoEth: stored.bigint('projectedCollateralAttoEth'), timestamp: stored.bigint('timestamp'), ...(feeAccounting === undefined ? {} : { feeAccounting }) }
 		})
 		return {
-			...(collateral === undefined ? { cachedCollateralMissing: true } : { collateral }),
+			collateral,
 			...(mintFees === undefined ? {} : { mintFees }),
 			...(settlementRecoveryAttoRep === undefined ? {} : { settlementRecoveryAttoRep }),
 			availableMintingCapacityAttoEth: read.bigint('availableMintingCapacityAttoEth'),
@@ -80,9 +78,9 @@ function decodeCachedLiveMarket(value: unknown) {
 
 export const marketDownloadStore = createDownloadedEntityStore(decodeCachedLiveMarket)
 
-/** Only a loaded market with a trading pair is worth remembering; unloaded or pair-less pools are not markets yet. */
+/** Only a loaded market with a trading pair and collateral metadata can be cached. */
 export function getRememberableMarket(market: LiveMarket | undefined) {
-	return market === undefined || market.loadError !== undefined || market.pair === undefined ? undefined : market
+	return market === undefined || market.loadError !== undefined || market.pair === undefined || market.collateral === undefined ? undefined : market
 }
 
 /** Favorites in the selected universe, most recently saved first. Cached data is only for browsing. */

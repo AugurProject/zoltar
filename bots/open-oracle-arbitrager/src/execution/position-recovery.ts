@@ -43,23 +43,17 @@ export async function recoverPendingEntryWithQuorum(readClients: readonly ReadCl
 		throw new Error('Private entry target block does not match the durable journal')
 	}
 	const privateTargetBlockNumber = expectedBlockNumber ?? journaledPrivateTargetBlockNumber
-	const receipts = await transactionReceiptsWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `pending entry ${position.reportId}`, position.entryTransactionHashes, config.rpcQuorum)
-	const firstReceipt = receipts[0]
-	const executorReceipt = receipts.at(-1)
-	if (firstReceipt === undefined || executorReceipt === undefined) throw new Error('Entry bundle receipts are missing, reverted, or split across blocks')
-	const publicEntry = position.entrySubmissionMode === 'public' && expectedBlockNumber === undefined && receipts.length === 1
-	const atomicPrivateEntry = position.entrySubmissionMode === 'private' && privateTargetBlockNumber !== undefined && receipts.length === 1
-	const invalidPrivateReceipt = atomicPrivateEntry
-		? firstReceipt.status === 'success' && firstReceipt.blockNumber !== privateTargetBlockNumber
-		: !publicEntry && receipts.some(receipt => receipt.status !== 'success' || receipt.blockNumber !== firstReceipt.blockNumber || receipt.blockHash.toLowerCase() !== firstReceipt.blockHash.toLowerCase() || (privateTargetBlockNumber !== undefined && receipt.blockNumber !== privateTargetBlockNumber))
-	if (invalidPrivateReceipt) throw new Error('Entry bundle receipts are missing, reverted, or split across blocks')
-	const canonicalReceiptBlockHash = await canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `pending entry ${position.reportId}`, firstReceipt.blockNumber, config.rpcQuorum)
-	assertReceiptSnapshotBlockHash(firstReceipt.blockHash, canonicalReceiptBlockHash, 'Entry')
-	for (const [index, receipt] of receipts.entries()) {
-		const expectedHash = position.entryTransactionHashes[index]
-		if (expectedHash === undefined || receipt.transactionHash.toLowerCase() !== expectedHash.toLowerCase()) throw new Error('Entry bundle receipt hash does not match the durable journal')
-	}
-	const actualEntryGasCost = receipts.reduce((total, receipt) => total + receiptGasCost(receipt), 0n)
+	const receipts = await transactionReceiptsWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `pending entry ${position.reportId}`, [position.entryTransactionHash], config.rpcQuorum)
+	const executorReceipt = receipts[0]
+	if (receipts.length !== 1 || executorReceipt === undefined) throw new Error('Entry receipt is missing')
+	const publicEntry = position.entrySubmissionMode === 'public' && expectedBlockNumber === undefined
+	const privateEntry = position.entrySubmissionMode === 'private' && privateTargetBlockNumber !== undefined
+	if (!publicEntry && !privateEntry) throw new Error('Entry submission mode or target block is missing')
+	if (privateEntry && executorReceipt.status === 'success' && executorReceipt.blockNumber !== privateTargetBlockNumber) throw new Error('Private entry receipt is outside its target block')
+	const canonicalReceiptBlockHash = await canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `pending entry ${position.reportId}`, executorReceipt.blockNumber, config.rpcQuorum)
+	assertReceiptSnapshotBlockHash(executorReceipt.blockHash, canonicalReceiptBlockHash, 'Entry')
+	if (executorReceipt.transactionHash.toLowerCase() !== position.entryTransactionHash.toLowerCase()) throw new Error('Entry receipt hash does not match the durable journal')
+	const actualEntryGasCost = receiptGasCost(executorReceipt)
 	const gasExpenditures = await confirmedGasExpenditures(readClients, config, `pending entry ${position.reportId}`, receipts)
 	const transactionIntentMismatch =
 		publicEntry && executorReceipt.status === 'success' ? await recoveredTransactionIntentMismatchWithQuorum(readClients, config, `pending public entry ${position.reportId}`, executorReceipt.transactionHash, position.account, position.entryTransactionNonce, position.entryTransactionIntent) : undefined
@@ -80,10 +74,9 @@ export async function recoverPendingEntryWithQuorum(readClients: readonly ReadCl
 		hedgeExecution = hedgeExecutionFromLogs(executorReceipt.logs, executor)
 	} catch (error) {
 		if (!(error instanceof Error) || error.message !== 'Confirmed executor transaction did not emit HedgeAndDisputeExecuted') throw error
-		if (!publicEntry && !atomicPrivateEntry) throw new Error('Executor hedge event is missing from the durable entry receipt')
 	}
 	if (hedgeExecution === undefined || hedgeExecution.account.toLowerCase() !== position.account.toLowerCase() || hedgeExecution.reportId.toString() !== position.reportId) {
-		if ((publicEntry || atomicPrivateEntry) && executorReceipt.status === 'reverted') {
+		if (executorReceipt.status === 'reverted') {
 			const closedAt = gasExpenditures.at(-1)?.includedAt
 			if (closedAt === undefined) throw new Error('Recovered atomic entry gas timestamp is unavailable')
 			return {
@@ -103,19 +96,16 @@ export async function recoverPendingEntryWithQuorum(readClients: readonly ReadCl
 				receipts,
 			}
 		}
-		if (publicEntry || atomicPrivateEntry) {
-			return {
-				position: {
-					...position,
-					actualEntryGasCostEth: decimalWeth(actualEntryGasCost),
-					entryTransactionHash: executorReceipt.transactionHash,
-					gasExpenditures,
-					status: 'recovery-required' as const,
-				},
-				receipts,
-			}
+		return {
+			position: {
+				...position,
+				actualEntryGasCostEth: decimalWeth(actualEntryGasCost),
+				entryTransactionHash: executorReceipt.transactionHash,
+				gasExpenditures,
+				status: 'recovery-required' as const,
+			},
+			receipts,
 		}
-		throw new Error('Executor hedge event does not match the durable position')
 	}
 	const actualProfitBeforeGas = recoveredHedgedProfitBeforeGasWeth(position.direction, parseSignedDecimalEth(position.hedgedProfitBeforeGasEth), parsePositionCollateralAmount(position, position.hedgeWeth), hedgeExecution.hedgeAmountAttoWeth, positionCollateralValuation(position))
 	// The entry stays provisional, holding its risk slot and withholding its history record, until finalizeEntryAfterFinalityWithQuorum proves the receipt block canonical.
@@ -137,8 +127,8 @@ export async function recoverPendingEntryWithQuorum(readClients: readonly ReadCl
 
 /** Returns a provisional entry to `pending-entry`, removing the receipt gas so the normal entry recovery or expiry path re-derives it. */
 function rollbackProvisionalEntry(position: PositionRecord): PositionRecord {
-	const entryHashes = new Set(position.entryTransactionHashes.map(hash => hash.toLowerCase()))
-	const provisionalGas = position.gasExpenditures.filter(expenditure => entryHashes.has(expenditure.transactionHash.toLowerCase())).reduce((total, expenditure) => total + parseDecimalWeth(expenditure.costEth), 0n)
+	const entryHash = position.entryTransactionHash.toLowerCase()
+	const provisionalGas = position.gasExpenditures.filter(expenditure => expenditure.transactionHash.toLowerCase() === entryHash).reduce((total, expenditure) => total + parseDecimalWeth(expenditure.costEth), 0n)
 	const recordedEntryGas = parseDecimalWeth(position.actualEntryGasCostEth)
 	if (provisionalGas > recordedEntryGas) throw new Error('Provisional entry gas exceeds the recorded entry total')
 	return {
@@ -146,7 +136,7 @@ function rollbackProvisionalEntry(position: PositionRecord): PositionRecord {
 		actualEntryGasCostEth: decimalWeth(recordedEntryGas - provisionalGas),
 		entryReceiptBlockHash: undefined,
 		entryReceiptBlockNumber: undefined,
-		gasExpenditures: position.gasExpenditures.filter(expenditure => !entryHashes.has(expenditure.transactionHash.toLowerCase())),
+		gasExpenditures: position.gasExpenditures.filter(expenditure => expenditure.transactionHash.toLowerCase() !== entryHash),
 		historyOutbox: undefined,
 		status: 'pending-entry',
 	}
@@ -163,7 +153,7 @@ export async function finalizeEntryAfterFinalityWithQuorum(readClients: readonly
 	const receiptBlockNumber = BigInt(position.entryReceiptBlockNumber)
 	if (!attemptHasFinality(currentBlockNumber, receiptBlockNumber)) return position
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
-	const receipts = await transactionReceiptsOrMissingWithQuorum(readClients, endpoints, `pending entry finality ${position.reportId}`, position.entryTransactionHashes, config.rpcQuorum)
+	const receipts = await transactionReceiptsOrMissingWithQuorum(readClients, endpoints, `pending entry finality ${position.reportId}`, [position.entryTransactionHash], config.rpcQuorum)
 	const executorReceipt = receipts.at(-1)
 	if (receipts.some(receipt => receipt === undefined) || executorReceipt === undefined) {
 		// Absence is accepted only from readers that already serve the receipt block's finality descendant.
@@ -178,16 +168,14 @@ export async function finalizeEntryAfterFinalityWithQuorum(readClients: readonly
 
 export async function expireEntryWithQuorum(readClients: readonly ReadClient[], config: RecoveryConfiguration, position: PositionRecord, currentBlockNumber: bigint, expiredAt: string) {
 	if (position.entrySubmissionMode === undefined || position.entrySubmissionBlockNumber === undefined) throw new Error('Only a journaled atomic entry can expire without inclusion')
-	if (position.entryTransactionHashes.length !== 1) throw new Error('Only an atomic entry can expire automatically')
 	const targetBlockNumber = BigInt(position.entrySubmissionBlockNumber) + 1n
 	if (!attemptHasFinality(currentBlockNumber, targetBlockNumber)) throw new Error('Entry target block is not sufficiently confirmed')
 	const finalityDescendantBlockNumber = targetBlockNumber + REORG_OVERLAP_BLOCKS
 	await fixedBlockHashWithQuorum(readClients, config, `expired entry ${position.reportId} finality descendant`, finalityDescendantBlockNumber)
-	const optionalReceipts = await transactionReceiptsOrMissingWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `expired entry ${position.reportId}`, position.entryTransactionHashes, config.rpcQuorum)
+	const optionalReceipts = await transactionReceiptsOrMissingWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `expired entry ${position.reportId}`, [position.entryTransactionHash], config.rpcQuorum)
 	const executorReceipt = optionalReceipts.at(-1)
 	if (executorReceipt !== undefined) throw new Error('Entry executor receipt exists and requires normal recovery')
-	const transactionHash = position.entryTransactionHashes[0]
-	if (transactionHash === undefined) throw new Error('Atomic entry transaction hash is missing')
+	const transactionHash = position.entryTransactionHash
 	if (position.entryTransactionNonce === undefined) throw new Error('Atomic entry transaction nonce is missing')
 	return {
 		...position,
@@ -281,8 +269,6 @@ function withoutLifecycleAttempt(position: PositionRecord, preserveExpiredAttemp
 		lifecycleTransactionIntent: undefined,
 		lifecycleTransactionNonce: undefined,
 		lifecycleTransactionHashes: [],
-		lifecycleWalletTokenBefore: undefined,
-		lifecycleWalletWethBefore: undefined,
 	}
 }
 
@@ -530,14 +516,13 @@ export async function discoverPublicReplacementWithQuorum(readClients: readonly 
 		config.rpcQuorum,
 	)
 	if (discoveredHash === undefined) return position
-	const currentHashes = kind === 'entry' ? position.entryTransactionHashes : position.lifecycleTransactionHashes
+	const currentHashes = kind === 'entry' ? [position.entryTransactionHash] : position.lifecycleTransactionHashes
 	if (currentHashes.length === 1 && currentHashes[0]?.toLowerCase() === discoveredHash.toLowerCase()) return position
 	const updated =
 		kind === 'entry'
 			? {
 					...position,
 					entryTransactionHash: discoveredHash,
-					entryTransactionHashes: [discoveredHash],
 				}
 			: {
 					...position,

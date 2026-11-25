@@ -7,7 +7,6 @@ import * as blockerCopy from '../copy/marketBlockers.js'
 
 export type LiveMarket = Readonly<{
 	collateral?: TradingCollateral | undefined
-	cachedCollateralMissing?: true
 	mintFees?: Omit<SecurityPoolMintFees, 'cashAttoEth' | 'outcomeSupplyAttoShares'>
 	loadError?: string
 	pool: Address

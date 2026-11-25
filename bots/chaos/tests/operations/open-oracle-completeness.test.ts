@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, encodeAbiParameters, keccak256, toHex } from '@zoltar/bot-shared/ethereum'
 import { openOracleAbi } from '@zoltar/bot-shared/contracts/abi'
-import { evaluateOperationCatalog } from '../../src/operations/catalog.ts'
 import { eligibleOperationPlans } from '../support/operation-plans.ts'
 import type { OperationPlan } from '../../src/operations/types.ts'
 import { snapshotFixture } from './fixture.ts'
@@ -105,7 +104,7 @@ describe('OpenOracle safe operation completeness', () => {
 		const weth = snapshot.wallet.tokens.find(token => token.address.toLowerCase() === snapshot.deployments.weth.toLowerCase())
 		const rep = snapshot.wallet.tokens.find(token => token.address.toLowerCase() !== snapshot.deployments.weth.toLowerCase())
 		if (weth === undefined || rep === undefined) throw new Error('Canonical token inventory missing')
-		delete rep.openOracleInternalAllowanceToSelf
+		snapshot.wallet.tokens = [weth]
 		weth.openOracleInternalAllowanceToSelf = 0n.toString()
 
 		const setPlan = plan(snapshot, 'open-oracle.approve-internal')
@@ -140,13 +139,5 @@ describe('OpenOracle safe operation completeness', () => {
 		if (revokeStep === undefined) throw new Error('Internal allowance revocation step missing')
 		expect(decodeFunctionData({ abi: openOracleAbi, data: revokeStep.data })).toEqual({ args: [snapshot.wallet.address, weth.address, 0n], functionName: 'approveInternal' })
 		expect(revokePlan.metadata).toMatchObject({ allowanceBefore: options.maxEthSpendAttoEth, allowanceTarget: 0n.toString(), owner: snapshot.wallet.address, spender: snapshot.wallet.address, token: weth.address })
-	})
-
-	test('fails closed for legacy snapshots without discovered internal allowances', () => {
-		const snapshot = snapshotFixture()
-		for (const token of snapshot.wallet.tokens) delete token.openOracleInternalAllowanceToSelf
-		expect(eligibleOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'open-oracle.approve-internal')).toBeUndefined()
-		const evaluated = evaluateOperationCatalog(snapshot, options).find(candidate => candidate.definition.id === 'open-oracle.approve-internal')
-		expect(evaluated?.eligibility).toEqual({ blockers: ['No canonical token has a discovered self-allowance that can be safely toggled within policy'], eligible: false })
 	})
 })

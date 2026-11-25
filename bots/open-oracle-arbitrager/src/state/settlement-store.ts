@@ -212,9 +212,8 @@ export function settlementJournalPath(positionFile: string) {
 function parseSettlementRecord(value: unknown): SettlementRecord | undefined {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
 	const record = value as Record<string, unknown>
-	// Read legacy append-only history without rewriting its audit lines.
-	if ('includedAt' in record && 'minedAt' in record) return undefined
-	const includedAt = 'includedAt' in record ? record['includedAt'] : record['minedAt']
+	if ('minedAt' in record) return undefined
+	const includedAt = record['includedAt']
 	const optionalString = (field: string, pattern: RegExp) => record[field] === undefined || (typeof record[field] === 'string' && pattern.test(record[field]))
 	if (
 		typeof record['account'] !== 'string' ||

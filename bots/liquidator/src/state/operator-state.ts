@@ -1,7 +1,6 @@
 export type { DurableState } from './durable-state-document.ts'
 import { durableStateDocument, type DurableState } from './durable-state-document.ts'
 import { parseCompletedInstructions, parseSecurityPoolFunding, type SecurityPoolFundingEffect, type InstructionIdentity } from './security-pool-instructions.ts'
-import { marketConfigurationList } from './market-snapshot.ts'
 import { parseSecurityPoolScopes } from './security-pool-scopes.ts'
 import { parsePendingTransactionIntent } from './pending-transaction-intent.ts'
 import type { RuntimeState } from './runtime-state.ts'
@@ -138,8 +137,8 @@ export function assertIntentSender(intentSender: Address, activeSender: Address)
 	}
 }
 
-export function operatorSnapshot(state: RuntimeState, execute: boolean, marketConfigurations?: CentralizedMarketSettings | readonly CentralizedMarketSettings[]) {
-	const configurations = marketConfigurationList(marketConfigurations)
+export function operatorSnapshot(state: RuntimeState, execute: boolean, marketConfigurations?: readonly CentralizedMarketSettings[]) {
+	const configurations = marketConfigurations ?? []
 	const rootConfiguration = configurations[0]
 	const alerts: { message: string; severity: 'error' | 'warning' }[] = []
 	if (state.status === 'connectivity-degraded') alerts.push({ message: state.error ?? 'RPC connectivity is degraded; automatic execution is blocked until connectivity recovers', severity: 'warning' })
@@ -251,30 +250,23 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 	}
 }
 
-/** Staged-operation recovery was removed; a journal still holding such entries needs manual resolution rather than silently blocking execution forever. */
-function assertNoLegacyStagedOperations(value: unknown, path: string) {
-	if (value === undefined || (Array.isArray(value) && value.length === 0)) return
-	const entries = Array.isArray(value) ? `${value.length.toString()} legacy pending staged operation(s)` : 'a legacy pendingStagedOperations field'
-	throw new Error(`Liquidator state contains ${entries}, which are no longer supported; resolve them on-chain, then remove pendingStagedOperations from ${path}`)
-}
-
 export async function loadDurableState(path: string, expectedChainId: number): Promise<DurableState> {
 	if (!Number.isSafeInteger(expectedChainId) || expectedChainId < 1) throw new Error('Expected state chain ID must be a positive integer')
 	const contents = await readOwnerFileIfPresent(path, 'Liquidator state', MAXIMUM_STATE_BYTES)
 	if (contents === undefined) return { securityPoolFunding: {}, completedSecurityPoolInstructions: {}, securityPoolScopes: [], activities: [], chainId: expectedChainId, lastScannedBlock: undefined, pendingTransactions: [], version: 2 }
 	const value: unknown = JSON.parse(contents)
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Liquidator state must be an object')
+	const fields = new Set(['activities', 'chainId', 'lastScannedBlock', 'lastExpiredTakeoverBlock', 'pendingTransactions', 'securityPoolFunding', 'completedSecurityPoolInstructions', 'securityPoolScopes', 'version'])
+	for (const key of Object.keys(value)) if (!fields.has(key)) throw new Error(`Unsupported liquidator state field: ${key}`)
 	const version = Reflect.get(value, 'version')
 	const chainId = Reflect.get(value, 'chainId')
 	const activities = Reflect.get(value, 'activities')
 	const lastScannedBlock = Reflect.get(value, 'lastScannedBlock')
 	const lastExpiredTakeoverBlock = Reflect.get(value, 'lastExpiredTakeoverBlock')
 	if (lastExpiredTakeoverBlock !== undefined && (typeof lastExpiredTakeoverBlock !== 'string' || !/^[0-9]+$/.test(lastExpiredTakeoverBlock))) throw new Error('Invalid takeover retry budget block')
-	const pendingStagedOperations = Reflect.get(value, 'pendingStagedOperations')
 	const pendingTransactions = Reflect.get(value, 'pendingTransactions')
 	if (version !== 2 || !Array.isArray(activities)) throw new Error('Liquidator state version is unsupported')
 	if (chainId !== expectedChainId) throw new Error(`Liquidator state belongs to chain ${String(chainId)}, expected chain ${expectedChainId.toString()}`)
-	assertNoLegacyStagedOperations(pendingStagedOperations, path)
 	if (!Array.isArray(pendingTransactions)) throw new Error('pendingTransactions must be an array')
 	return {
 		activities: activities.flatMap(activity => {

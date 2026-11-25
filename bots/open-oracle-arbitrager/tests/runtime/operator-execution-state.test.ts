@@ -54,7 +54,6 @@ test('logs a decision entry for priced reports only; skipped reports already log
 		centralizedPriceDeviationBps: undefined,
 		decision: 'unprofitable',
 		direction: 'sell-rep',
-		estimatedNetProfitEth: '-0.1',
 		estimatedNetProfitWeth: '-0.1',
 		executablePriceRepPerEth: '10',
 		hasRequiredInventory: undefined,

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { expectedSchemaLayout, schemaLayoutDifferences } from '../../src/schema-layout.ts'
-import { assertSupportedPostgresVersion, CURRENT_SCHEMA_VERSION, pendingSchemaMigrations, runSchemaTransaction, type SupportedSchemaVersion, schemaInitializationAction, UNSUPPORTED_SCHEMA_MESSAGE } from '../../src/schema-policy.ts'
+import { assertSupportedPostgresVersion, CURRENT_SCHEMA_VERSION, runSchemaTransaction, schemaInitializationAction, UNSUPPORTED_SCHEMA_MESSAGE } from '../../src/schema-policy.ts'
 
 // The PostgreSQL release that produced schema.sql; the policy module pins it as the only supported server.
 const SUPPORTED_POSTGRES_VERSION = '17.11'
@@ -14,96 +14,10 @@ test('accepts the PostgreSQL release used to generate the schema fingerprint acr
 	expect(() => assertSupportedPostgresVersion('unknown')).toThrow(UNSUPPORTED_POSTGRES_VERSION_MESSAGE)
 })
 
-test('initializes an empty database, migrates the preceding schema, and accepts the current marker', () => {
+test('initializes only an empty database and accepts the current marker', () => {
 	expect(schemaInitializationAction(undefined, [])).toBe('initialize')
 	expect(schemaInitializationAction(CURRENT_SCHEMA_VERSION, ['augurscan_schema', 'networks'])).toBe('current')
-	expect(schemaInitializationAction('4', ['augurscan_schema', 'networks'])).toBe('migrate-from-4')
-	expect(schemaInitializationAction('3', ['augurscan_schema', 'networks'])).toBe('migrate-from-3')
-	expect(schemaInitializationAction('2', ['augurscan_schema', 'networks'])).toBe('migrate-from-2')
-	expect(schemaInitializationAction('1', ['augurscan_schema', 'networks'])).toBe('migrate-from-1')
-})
-
-test('records every applied migration version when upgrading an older schema', () => {
-	const versions = (startingVersion: SupportedSchemaVersion) => pendingSchemaMigrations(startingVersion).map(migration => [migration.version, migration.file])
-	expect(versions('1')).toEqual([
-		['2', '002-historical-integrity.sql'],
-		['3', '003-indexer-ownership.sql'],
-		['4', '004-question-seconds.sql'],
-		['5', '005-invalidation-counts.sql'],
-		['6', '006-collateral-repair-auctions.sql'],
-		['7', '007-current-contract-events.sql'],
-		['8', '008-stale-contract-values.sql'],
-		['9', '009-bounded-read-indexes.sql'],
-		['10', '010-accounting-clock-and-reasons.sql'],
-		['11', '011-direct-call-evidence.sql'],
-		['12', '012-multiple-amm-pairs.sql'],
-	])
-	expect(versions('2')).toEqual([
-		['3', '003-indexer-ownership.sql'],
-		['4', '004-question-seconds.sql'],
-		['5', '005-invalidation-counts.sql'],
-		['6', '006-collateral-repair-auctions.sql'],
-		['7', '007-current-contract-events.sql'],
-		['8', '008-stale-contract-values.sql'],
-		['9', '009-bounded-read-indexes.sql'],
-		['10', '010-accounting-clock-and-reasons.sql'],
-		['11', '011-direct-call-evidence.sql'],
-		['12', '012-multiple-amm-pairs.sql'],
-	])
-	expect(versions('3')).toEqual([
-		['4', '004-question-seconds.sql'],
-		['5', '005-invalidation-counts.sql'],
-		['6', '006-collateral-repair-auctions.sql'],
-		['7', '007-current-contract-events.sql'],
-		['8', '008-stale-contract-values.sql'],
-		['9', '009-bounded-read-indexes.sql'],
-		['10', '010-accounting-clock-and-reasons.sql'],
-		['11', '011-direct-call-evidence.sql'],
-		['12', '012-multiple-amm-pairs.sql'],
-	])
-	expect(versions('4')).toEqual([
-		['5', '005-invalidation-counts.sql'],
-		['6', '006-collateral-repair-auctions.sql'],
-		['7', '007-current-contract-events.sql'],
-		['8', '008-stale-contract-values.sql'],
-		['9', '009-bounded-read-indexes.sql'],
-		['10', '010-accounting-clock-and-reasons.sql'],
-		['11', '011-direct-call-evidence.sql'],
-		['12', '012-multiple-amm-pairs.sql'],
-	])
-	expect(versions('5')).toEqual([
-		['6', '006-collateral-repair-auctions.sql'],
-		['7', '007-current-contract-events.sql'],
-		['8', '008-stale-contract-values.sql'],
-		['9', '009-bounded-read-indexes.sql'],
-		['10', '010-accounting-clock-and-reasons.sql'],
-		['11', '011-direct-call-evidence.sql'],
-		['12', '012-multiple-amm-pairs.sql'],
-	])
-	expect(versions('6')).toEqual([
-		['7', '007-current-contract-events.sql'],
-		['8', '008-stale-contract-values.sql'],
-		['9', '009-bounded-read-indexes.sql'],
-		['10', '010-accounting-clock-and-reasons.sql'],
-		['11', '011-direct-call-evidence.sql'],
-		['12', '012-multiple-amm-pairs.sql'],
-	])
-	expect(versions('7')).toEqual([
-		['8', '008-stale-contract-values.sql'],
-		['9', '009-bounded-read-indexes.sql'],
-		['10', '010-accounting-clock-and-reasons.sql'],
-		['11', '011-direct-call-evidence.sql'],
-		['12', '012-multiple-amm-pairs.sql'],
-	])
-	expect(versions('8')).toEqual([
-		['9', '009-bounded-read-indexes.sql'],
-		['10', '010-accounting-clock-and-reasons.sql'],
-		['11', '011-direct-call-evidence.sql'],
-		['12', '012-multiple-amm-pairs.sql'],
-	])
-	expect(versions('11')).toEqual([['12', '012-multiple-amm-pairs.sql']])
-	expect(versions(CURRENT_SCHEMA_VERSION)).toEqual([])
-	expect(pendingSchemaMigrations('1').at(-1)?.version).toBe(CURRENT_SCHEMA_VERSION)
+	for (let version = 1; version < Number(CURRENT_SCHEMA_VERSION); version++) expect(() => schemaInitializationAction(version.toString(), ['augurscan_schema', 'networks'])).toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
 })
 
 test('rejects legacy, unknown, and incomplete database schemas', () => {
@@ -121,12 +35,9 @@ test('rejects legacy, unknown, and incomplete database schemas', () => {
 test('fingerprints every supported table, column, constraint, index, and sequence and rejects behavior-changing objects', async () => {
 	const schema = await Bun.file(new URL('../../schema.sql', import.meta.url)).text()
 	expect(schema).toContain(`Dumped from database version ${SUPPORTED_POSTGRES_VERSION}`)
-	const current = expectedSchemaLayout(schema, CURRENT_SCHEMA_VERSION)
-	const previous = expectedSchemaLayout(schema, '2')
-	const initial = expectedSchemaLayout(schema, '1')
+	const current = expectedSchemaLayout(schema)
 	expect(current.relations).toContain('table:indexer_ownership')
 	expect(current.indexes.some(signature => signature.startsWith('indexer_ownership_heartbeat|'))).toBe(true)
-	expect(previous.relations).not.toContain('table:indexer_ownership')
 	expect(current.relations).toContain('table:chain_reorganizations')
 	expect(current.relations).toContain('table:address_balance_observations')
 	expect(current.relations).toContain('table:entity_state_observations')
@@ -149,18 +60,6 @@ test('fingerprints every supported table, column, constraint, index, and sequenc
 	expect(current.indexes.some(signature => signature.startsWith('entity_state_observation_canonical_history|'))).toBe(true)
 	expect(current.constraints.find(signature => signature.startsWith('history_invalidation_occurrences.history_invalidation_occurrences_kind_check|'))).toContain("'address-balance'")
 	expect(current.constraints.find(signature => signature.startsWith('history_invalidation_occurrences.history_invalidation_occurrences_kind_check|'))).toContain("'token-metadata'")
-	expect(initial.relations).not.toContain('table:chain_reorganizations')
-	expect(initial.relations).not.toContain('table:address_balance_observations')
-	expect(initial.relations).not.toContain('table:entity_state_observations')
-	expect(initial.relations).not.toContain('table:token_metadata_observations')
-	expect(initial.relations).not.toContain('table:history_invalidation_causes')
-	expect(initial.relations).not.toContain('sequence:chain_reorganizations_id_seq')
-	expect(initial.constraints.some(signature => signature.startsWith('chain_reorganizations.'))).toBe(false)
-	expect(initial.indexes.some(signature => signature.startsWith('chain_reorganizations_history|'))).toBe(false)
-	expect(initial.columns.some(signature => signature.startsWith('networks.applied_abi_source_hash|'))).toBe(false)
-	expect(initial.columns.some(signature => signature.startsWith('networks.applied_application_source_hash|'))).toBe(false)
-	expect(initial.columns.some(signature => signature.startsWith('networks.applied_projection_source_hash|'))).toBe(false)
-	expect(initial.columns.some(signature => signature.startsWith('entity_state_snapshots.indexer_run_id|'))).toBe(false)
 	const schemaLayoutsMatch = (expected: typeof current, actual: typeof current) => Object.keys(schemaLayoutDifferences(expected, actual)).length === 0
 	expect(schemaLayoutsMatch(current, current)).toBe(true)
 	expect(schemaLayoutsMatch(current, { ...current, columns: current.columns.slice(1) })).toBe(false)
@@ -174,7 +73,7 @@ test('fingerprints every supported table, column, constraint, index, and sequenc
 
 test('fingerprints schema files checked out with Windows line endings', async () => {
 	const schema = await Bun.file(new URL('../../schema.sql', import.meta.url)).text()
-	expect(expectedSchemaLayout(schema.replaceAll('\n', '\r\n'), CURRENT_SCHEMA_VERSION)).toEqual(expectedSchemaLayout(schema, CURRENT_SCHEMA_VERSION))
+	expect(expectedSchemaLayout(schema.replaceAll('\n', '\r\n'))).toEqual(expectedSchemaLayout(schema))
 })
 
 test('reports the exact schema fingerprint differences without database contents', () => {
@@ -197,38 +96,6 @@ test('reports the exact schema fingerprint differences without database contents
 		columns: { missing: ['expected.id|bigint|not-null||'], unexpected: ['expected.id|integer|not-null||'] },
 		unsupportedObjects: { missing: [], unexpected: ['trigger:expected.unexpected_trigger'] },
 	})
-})
-
-test('keeps the supported migration additive and backfills retained evidence', async () => {
-	const migration = await Bun.file(new URL('../../migrations/002-historical-integrity.sql', import.meta.url)).text()
-	expect(migration).toContain('CREATE TABLE public.chain_reorganizations')
-	expect(migration).toContain('ADD COLUMN applied_abi_source_hash')
-	expect(migration).toContain('ADD COLUMN applied_application_source_hash')
-	expect(migration).toContain('ADD COLUMN configured_deployment_block')
-	expect(migration).toContain('CREATE TABLE public.indexer_runs')
-	expect(migration).toContain('chain_reorganizations_indexer_run_fkey')
-	expect(migration).toContain('CREATE TABLE public.entity_state_observations')
-	expect(migration).toContain('CREATE TABLE public.address_balance_observations')
-	expect(migration).toContain('CREATE TABLE public.token_metadata_observations')
-	expect(migration).toContain('CREATE TABLE public.history_invalidation_causes')
-	expect(migration).toContain("'address-balance'::text")
-	expect(migration).toContain("'token-metadata'::text")
-	expect(migration).toContain('FROM public.entity_state_snapshots')
-	expect(migration).toContain('FROM public.address_balance_snapshots')
-	expect(migration).toContain('FROM public.token_metadata')
-	expect(migration).toContain('INSERT INTO public.protocol_timeline_entries')
-	expect(migration).toContain('INSERT INTO public.amm_trade_events')
-	expect(migration).toContain('log.emitter_address, log.event_name, log.canonical')
-	expect(migration).toContain("WHERE entity_type = 'fork' AND source_event <> 'Migrate'")
-	expect(migration).not.toMatch(/DROP\s+(?:TABLE|SCHEMA)/i)
-	expect(migration).not.toMatch(/TRUNCATE/i)
-})
-
-test('adds durable indexer ownership through an additive migration', async () => {
-	const migration = await Bun.file(new URL('../../migrations/003-indexer-ownership.sql', import.meta.url)).text()
-	expect(migration).toContain('CREATE TABLE public.indexer_ownership')
-	expect(migration).toContain("'release-failed'::text")
-	expect(migration).toContain('REFERENCES public.indexer_runs(id)')
 })
 
 test('uses one explicit transaction boundary for successful schema initialization', async () => {
@@ -283,73 +150,4 @@ test('reports both failures when PostgreSQL also rejects the rollback', async ()
 		if (!(error instanceof AggregateError)) throw error
 		expect(error.errors).toEqual([schemaFailure, rollbackFailure])
 	}
-})
-
-test('retains historical date fingerprints and v3 ownership during migration', async () => {
-	const schema = await Bun.file(new URL('../../schema.sql', import.meta.url)).text()
-	for (const version of ['1', '2', '3'] as const) expect(expectedSchemaLayout(schema, version).columns).toContain('questions.start_time|timestamp with time zone|not-null||')
-	expect(expectedSchemaLayout(schema, '3').relations).toContain('table:indexer_ownership')
-	expect(expectedSchemaLayout(schema, CURRENT_SCHEMA_VERSION).columns).toContain('questions.start_time|bigint|not-null||')
-})
-
-test('upgrades version 5 auction names while fingerprinting its existing layout', async () => {
-	expect(schemaInitializationAction('5', ['augurscan_schema', 'networks'])).toBe('migrate-from-5')
-	const schema = await Bun.file(new URL('../../schema.sql', import.meta.url)).text()
-	const previous = expectedSchemaLayout(schema, '5')
-	const current = expectedSchemaLayout(schema, CURRENT_SCHEMA_VERSION)
-	expect(previous.relations).toContain('table:truth_auction_events')
-	expect(previous.columns.some(column => column.startsWith('pools.truth_auction_address|'))).toBe(true)
-	expect(previous.columns.some(column => column.startsWith('chain_reorganizations.occurrence_counts|'))).toBe(true)
-	expect(current.relations).toContain('table:collateral_repair_auction_events')
-	expect(current.relations).not.toContain('table:truth_auction_events')
-	expect(expectedSchemaLayout(schema, '6').columns.some(column => column.startsWith('pools.collateral_repair_auction_address|'))).toBe(true)
-	expect(pendingSchemaMigrations('5').map(migration => migration.file)).toEqual([
-		'006-collateral-repair-auctions.sql',
-		'007-current-contract-events.sql',
-		'008-stale-contract-values.sql',
-		'009-bounded-read-indexes.sql',
-		'010-accounting-clock-and-reasons.sql',
-		'011-direct-call-evidence.sql',
-		'012-multiple-amm-pairs.sql',
-	])
-})
-
-test('upgrades version 6 accounting storage while fingerprinting its existing layout', async () => {
-	expect(schemaInitializationAction('6', ['augurscan_schema', 'networks'])).toBe('migrate-from-6')
-	const schema = await Bun.file(new URL('../../schema.sql', import.meta.url)).text()
-	const previous = expectedSchemaLayout(schema, '6')
-	const current = expectedSchemaLayout(schema, CURRENT_SCHEMA_VERSION)
-	for (const table of ['vault_snapshots', 'liquidation_approval_events']) {
-		expect(previous.relations).toContain(`table:${table}`)
-		expect(current.relations).not.toContain(`table:${table}`)
-	}
-	expect(previous.indexes.some(index => index.startsWith('vault_snapshots_detail_page|'))).toBe(true)
-	expect(previous.constraints.some(constraint => constraint.startsWith('liquidation_approval_events.liquidation_approval_events_pkey|'))).toBe(true)
-	expect(previous.columns.some(column => column.startsWith('pool_snapshots.unallocated_accrued_fees_atto_eth|'))).toBe(true)
-	expect(previous.columns.some(column => column.startsWith('pool_snapshots.share_token_supply_atto_shares|'))).toBe(false)
-	expect(current.columns.some(column => column.startsWith('pool_snapshots.share_token_supply_atto_shares|'))).toBe(true)
-	expect(current.columns.some(column => column.startsWith('pool_snapshots.vault_address|'))).toBe(false)
-	// The auction rename of migration 006 is already applied at version 6.
-	expect(previous.relations).toContain('table:collateral_repair_auction_events')
-	expect(pendingSchemaMigrations('6').map(migration => migration.file)).toEqual(['007-current-contract-events.sql', '008-stale-contract-values.sql', '009-bounded-read-indexes.sql', '010-accounting-clock-and-reasons.sql', '011-direct-call-evidence.sql', '012-multiple-amm-pairs.sql'])
-})
-
-test('upgrades version 7 stale contract values while fingerprinting its existing layout', async () => {
-	expect(schemaInitializationAction('7', ['augurscan_schema', 'networks'])).toBe('migrate-from-7')
-	const schema = await Bun.file(new URL('../../schema.sql', import.meta.url)).text()
-	const previous = expectedSchemaLayout(schema, '7')
-	const current = expectedSchemaLayout(schema, CURRENT_SCHEMA_VERSION)
-	for (const column of ['collateral_repair_auction_address', 'initial_retention_rate', 'initial_settlement_collateral_atto_eth']) {
-		expect(previous.columns.some(signature => signature.startsWith(`pools.${column}|`))).toBe(true)
-		expect(current.columns.some(signature => signature.startsWith(`pools.${column}|`))).toBe(false)
-	}
-	expect(previous.constraints).toContain("rep_eth_price_snapshots.rep_eth_price_snapshots_event_name_check|CHECK (event_name = ANY (ARRAY['RepEthPriceSet'::text, 'PriceReported'::text]))")
-	expect(current.constraints).toContain("rep_eth_price_snapshots.rep_eth_price_snapshots_event_name_check|CHECK (event_name = 'PriceReported'::text)")
-	expect(previous.columns).toContain('rep_eth_price_snapshots.report_id|numeric(78,0)|nullable||')
-	expect(previous.columns).toContain('rep_eth_price_snapshots.settlement_timestamp|timestamp with time zone|nullable||')
-	expect(current.columns).toContain('rep_eth_price_snapshots.report_id|numeric(78,0)|not-null||')
-	expect(current.columns).toContain('rep_eth_price_snapshots.settlement_timestamp|timestamp with time zone|not-null||')
-	// The accounting storage of migration 007 is already replaced at version 7.
-	expect(previous.relations).not.toContain('table:vault_snapshots')
-	expect(pendingSchemaMigrations('7').map(migration => migration.file)).toEqual(['008-stale-contract-values.sql', '009-bounded-read-indexes.sql', '010-accounting-clock-and-reasons.sql', '011-direct-call-evidence.sql', '012-multiple-amm-pairs.sql'])
 })

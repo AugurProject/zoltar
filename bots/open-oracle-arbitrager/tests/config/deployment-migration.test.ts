@@ -6,7 +6,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { canonicalCoreDeployment, canonicalUniswapDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
-import { createPublicClient, getAddress } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { loadConfiguration } from '#config/configuration'
 import { validateDeploymentSettings } from '#config/deployment-settings'
@@ -21,7 +21,6 @@ const network = networkConfiguration('mainnet')
 const uniswap = canonicalUniswapDeployment(1)
 const openOracle = canonicalCoreDeployment(mainnet).openOracle
 const executor = canonicalExecutorIdentity().address
-const coordinator = getAddress('0x0000000000000000000000000000000000000002')
 
 afterEach(async () => {
 	await Promise.all(temporaryDirectories.splice(0).map(path => rm(path, { recursive: true, force: true })))
@@ -32,33 +31,24 @@ for (const [name, v3, v4] of [
 	['V3 and V4', true, true],
 	['V4-only', false, true],
 ] as const) {
-	test(`migrates a legacy ${name} profile without changing venue intent`, async () => {
+	test(`loads a current ${name} profile without changing venue intent`, async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'arbitrager-venue-migration-'))
 		temporaryDirectories.push(directory)
 		const path = join(directory, 'operator.json')
 
-		// Version 4 profiles stored optional addresses, with no enable switches. JSON omits disabled routers.
-		const { logLookbackBlocks: _logLookbackBlocks, pollMilliseconds, ...runtime } = example.runtime
+		// Current profiles store explicit venue switches.
+		const runtime = example.runtime
 		await writeFile(
 			path,
 			JSON.stringify({
 				...example,
 				network: 'mainnet',
 				networkConfigured: true,
-				connectivity: { readRpcUrl: 'https://primary.example', publicRpcUrls: ['https://submit.example'] },
-				runtime: { ...runtime, execute: true, historyFile: join(directory, 'history.jsonl'), lookbackBlocks: '256', maxHedgeSlippageBps: '50', positionFile: join(directory, 'positions.json'), priceHistoryFile: join(directory, 'prices.jsonl') },
-				strategy: { ...example.strategy, minimumProfitBps: '100', pollMilliseconds },
-				version: 4,
-				deployment: {
-					coordinatorAddresses: [coordinator],
-					executor,
-					quorumRpcUrls: ['https://second.example', 'https://third.example'],
-					uniswapFactory: uniswap.factory,
-					uniswapQuoter: uniswap.quoter,
-					uniswapRouter: v3 ? uniswap.router : undefined,
-					uniswapV4PoolManager: v4 ? uniswap.v4PoolManager : undefined,
-					uniswapV4Quoter: v4 ? uniswap.v4Quoter : undefined,
-				},
+				connectivity: { readRpcUrl: 'https://primary.example', publicRpcUrls: ['https://submit.example'], quorumRpcUrls: ['https://second.example', 'https://third.example'], rpcQuorum: 1 },
+				runtime: { ...runtime, execute: true, historyFile: join(directory, 'history.jsonl'), logLookbackBlocks: 256, maxHedgeSlippageBps: 50, positionFile: join(directory, 'positions.json'), priceHistoryFile: join(directory, 'prices.jsonl') },
+				strategy: { ...example.strategy, minimumProfitBps: 100 },
+				version: 5,
+				deployment: { uniswapV2Enabled: false, uniswapV3Enabled: v3, uniswapV4Enabled: v4 },
 			}),
 			{ mode: 0o600 },
 		)
@@ -74,7 +64,7 @@ for (const [name, v3, v4] of [
 				},
 			}),
 		})
-		// A V3-only profile has no V2 router. Migration must not make that identity mandatory.
+		// A V3-only profile has no V2 router. Loading must not make that identity mandatory.
 		await authenticateConfiguredDeployments([client], config, {})
 		expect(config.operatorSettings.deployment).toMatchObject({ uniswapV2Enabled: false, uniswapV3Enabled: v3, uniswapV4Enabled: v4 })
 		expect(config.router).toBe(v3 ? uniswap.router : undefined)
@@ -87,7 +77,7 @@ for (const [name, v3, v4] of [
 		expect(stored.version).toBe(5)
 		expect((await loadOperatorSettings(path))?.deployment).toEqual(config.operatorSettings.deployment)
 		await authenticateConfiguredDeployments([client], await loadConfiguration(path), {})
-		// A new network profile gets template defaults; returning to the migrated profile restores its choices.
+		// A new network profile gets template defaults; returning to the saved profile restores its choices.
 		const fresh = await switchOperatorNetworkProfile(path, 'sepolia', join(import.meta.dir, '../../config/operator.example.json'))
 		expect(fresh.settings.deployment).toMatchObject({ uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: false })
 		const restored = await switchOperatorNetworkProfile(path, 'mainnet', join(import.meta.dir, '../../config/operator.example.json'))
@@ -95,26 +85,10 @@ for (const [name, v3, v4] of [
 	})
 }
 
-for (const empty of [undefined, null, '']) {
-	test(`preserves disabled legacy routers represented by ${String(empty)}`, () => {
-		const migrated = validateDeploymentSettings({ coordinatorAddresses: [], uniswapRouter: empty, uniswapV2Router: empty, uniswapV4PoolManager: empty, uniswapV4Quoter: empty })
-		expect(migrated).toMatchObject({ uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: false })
-	})
-}
-
-test('new-profile defaults remain explicit while omitted legacy routers remain disabled', () => {
-	expect(parseOperatorSettings(example).deployment).toMatchObject({ uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: false })
-	expect(validateDeploymentSettings({ coordinatorAddresses: [] })).toMatchObject({ uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: false })
-})
-
-test('explicit switches take precedence over legacy addresses', () => {
-	expect(validateDeploymentSettings({ ...example.deployment, uniswapV2Router: uniswap.v2Router, uniswapRouter: undefined, uniswapV4PoolManager: uniswap.v4PoolManager, uniswapV4Quoter: uniswap.v4Quoter, uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: false })).toMatchObject({
-		uniswapV2Enabled: false,
-		uniswapV3Enabled: true,
-		uniswapV4Enabled: false,
-	})
-})
-
-test('rejects incomplete legacy V4 enablement instead of silently disabling it', () => {
-	for (const pair of [{ uniswapV4PoolManager: uniswap.v4PoolManager }, { uniswapV4Quoter: uniswap.v4Quoter }]) expect(() => validateDeploymentSettings({ coordinatorAddresses: [], ...pair })).toThrow('both PoolManager and Quoter')
+test('requires explicit venue switches', () => {
+	expect(parseOperatorSettings(example).deployment).toMatchObject(example.deployment)
+	for (const key of Object.keys(example.deployment)) {
+		const incomplete = Object.fromEntries(Object.entries(example.deployment).filter(([name]) => name !== key))
+		expect(() => validateDeploymentSettings(incomplete)).toThrow('must be a boolean')
+	}
 })

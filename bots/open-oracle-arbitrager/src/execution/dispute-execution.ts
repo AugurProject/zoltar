@@ -243,7 +243,6 @@ export async function executeDispute(
 		entryTransactionNonce: executionSigned.transaction.nonce.toString(),
 		positionId: executionSigned.hash,
 		entryTransactionHash: executionSigned.hash,
-		entryTransactionHashes: signedTransactions.map(transaction => transaction.signed.hash),
 		executionIntent: executionPayload.executionIntent,
 		expiredTransactionAttempts: [],
 		gasExpenditures: [],
@@ -257,8 +256,6 @@ export async function executeDispute(
 		lifecycleTokenDecimals: undefined,
 		lifecycleTransactionHashes: [],
 		lifecycleUpdatedAt: undefined,
-		lifecycleWalletTokenBefore: undefined,
-		lifecycleWalletWethBefore: undefined,
 		lockedToken: formatTokenAmount(lockedToken, tokenMetadata.decimals),
 		lockedWeth: formatPositionCollateralAmount(collateralPosition, newAmount1),
 		manualReconciliation: undefined,
@@ -304,14 +301,12 @@ export async function executeDispute(
 				persistPosition({
 					...stagedPosition,
 					entryTransactionHash: replacement.transaction.hash,
-					entryTransactionHashes: [replacement.transaction.hash],
 				}),
 			isPaused,
 		)
 		const receiptPosition = {
 			...stagedPosition,
 			entryTransactionHash: observedReceipt.transactionHash,
-			entryTransactionHashes: [observedReceipt.transactionHash],
 		}
 		await persistPosition(receiptPosition)
 		const receipts = await transactionReceiptsWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `public entry ${reportId}`, [observedReceipt.transactionHash], config.rpcQuorum)
@@ -520,7 +515,6 @@ export async function executeDispute(
 			entryReceiptBlockHash: receiptBlockHash,
 			entryReceiptBlockNumber: receiptBlockNumber.toString(),
 			entryTransactionHash: executionHash,
-			entryTransactionHashes: [executionHash],
 			gasExpenditures: entryGasExpenditures,
 			hedgeAmountToken: formatTokenAmount(hedgeExecution.hedgeAmountToken2, tokenMetadata.decimals),
 			hedgeWeth: formatPositionCollateralAmount(collateralPosition, hedgeExecution.hedgeAmountAttoWeth),

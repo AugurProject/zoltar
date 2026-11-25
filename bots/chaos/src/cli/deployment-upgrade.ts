@@ -15,7 +15,6 @@ import { assertSettingsProfileIsolation, loadSettings, saveSettings, serializedS
 import { CHAOS_PROCESS_LOCK_OPTIONS } from '../core/process-lock-options.ts'
 import { deploymentArchiveIds, loadVerifiedDeploymentArchive } from '../runtime/deployment-archives.ts'
 import { retirementReplacementTargetId, RetirementCompletionPendingError, verifyRetirementCompletionFinality } from '../runtime/deployment-profile.ts'
-import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { loadDurableState, saveDurableState } from '../state/operator-state.ts'
 import { isPristineBootstrapState } from '../state/pristine.ts'
 import { assertSafeRetirementRecipient, DEFAULT_RETIREMENT_POLICIES, requestRetirement } from '../state/retirement.ts'
@@ -122,12 +121,6 @@ export async function prepareCurrentDeployment(options: PreparationOptions = {})
 		const current: OperatorSettings = { ...active, deployment: canonicalDeployment(active.network.chainId) }
 		const wallet = configuredWallet(active)
 		if (wallet !== undefined && state.signerAddress !== undefined && wallet.toLowerCase() !== state.signerAddress.toLowerCase()) throw new Error(`Durable state is scoped to signer ${state.signerAddress}; restore the old signer before changing deployments`)
-		const migratedBootstrap = migrateEmptyBootstrapState(state, current)
-		if (migratedBootstrap !== state) {
-			await assertSettingsProfileIsolation(loaded.path, current)
-			await saveSettings(loaded.path, current, loaded.revision)
-			return { kind: 'current', message: 'Selected current contracts for the safely migratable zero-root bootstrap. Its journal will be preserved at startup.' }
-		}
 		if (!isPristineBootstrapState(state)) {
 			if (state.profileId !== executionProfileId(active)) throw new Error(`Durable state belongs to profile ${state.profileId}; restore the old pin before changing deployments`)
 		}

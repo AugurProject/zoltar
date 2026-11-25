@@ -1,22 +1,9 @@
 export const CURRENT_SCHEMA_VERSION = '12'
-export const DIRECT_CALL_EVIDENCE_SCHEMA_VERSION = '11'
-export const ACCOUNTING_CLOCK_SCHEMA_VERSION = '10'
-export const BOUNDED_READ_SCHEMA_VERSION = '9'
-export const STALE_CONTRACT_VALUES_SCHEMA_VERSION = '8'
 const SUPPORTED_POSTGRES_VERSION = '17.11'
 
 const UNSUPPORTED_POSTGRES_VERSION_MESSAGE = `Unsupported PostgreSQL server version. augurScan requires PostgreSQL ${SUPPORTED_POSTGRES_VERSION} because schema fingerprints are version-specific; the database was not modified.`
 
-export const UNSUPPORTED_SCHEMA_MESSAGE = 'Unsupported augurScan database schema. Restore a compatible backup or upgrade through a supported augurScan release; the database was not modified.'
-
-export const CURRENT_CONTRACT_EVENTS_SCHEMA_VERSION = '7'
-export const COLLATERAL_REPAIR_AUCTIONS_SCHEMA_VERSION = '6'
-export const INVALIDATION_COUNTS_SCHEMA_VERSION = '5'
-export const QUESTION_SECONDS_SCHEMA_VERSION = '4'
-export const INDEXER_OWNERSHIP_SCHEMA_VERSION = '3'
-export const HISTORICAL_INTEGRITY_SCHEMA_VERSION = '2'
-
-export const INITIAL_MIGRATABLE_SCHEMA_VERSION = '1'
+export const UNSUPPORTED_SCHEMA_MESSAGE = 'Unsupported augurScan database schema. Initialize a fresh database from the current schema; the database was not modified.'
 
 const postgresVersionNumber = (release: string): string => {
 	const match = /^(\d+)\.(\d+)$/u.exec(release)
@@ -25,40 +12,6 @@ const postgresVersionNumber = (release: string): string => {
 }
 
 const SUPPORTED_POSTGRES_VERSION_NUM = postgresVersionNumber(SUPPORTED_POSTGRES_VERSION)
-
-export type SupportedSchemaVersion =
-	| typeof INITIAL_MIGRATABLE_SCHEMA_VERSION
-	| typeof INDEXER_OWNERSHIP_SCHEMA_VERSION
-	| typeof CURRENT_SCHEMA_VERSION
-	| typeof HISTORICAL_INTEGRITY_SCHEMA_VERSION
-	| typeof QUESTION_SECONDS_SCHEMA_VERSION
-	| typeof INVALIDATION_COUNTS_SCHEMA_VERSION
-	| typeof COLLATERAL_REPAIR_AUCTIONS_SCHEMA_VERSION
-	| typeof CURRENT_CONTRACT_EVENTS_SCHEMA_VERSION
-	| typeof STALE_CONTRACT_VALUES_SCHEMA_VERSION
-	| typeof BOUNDED_READ_SCHEMA_VERSION
-	| typeof ACCOUNTING_CLOCK_SCHEMA_VERSION
-	| typeof DIRECT_CALL_EVIDENCE_SCHEMA_VERSION
-
-type SchemaMigration = { readonly version: SupportedSchemaVersion; readonly file: string; readonly description: string }
-
-// Ordered upgrade steps; each records its own row in augurscan_schema_migrations when applied.
-const SCHEMA_MIGRATIONS: readonly SchemaMigration[] = [
-	{ version: HISTORICAL_INTEGRITY_SCHEMA_VERSION, file: '002-historical-integrity.sql', description: 'Historical integrity observations and indexer provenance' },
-	{ version: INDEXER_OWNERSHIP_SCHEMA_VERSION, file: '003-indexer-ownership.sql', description: 'Indexer ownership leases' },
-	{ version: QUESTION_SECONDS_SCHEMA_VERSION, file: '004-question-seconds.sql', description: 'Exact question timestamps in Unix seconds' },
-	{ version: INVALIDATION_COUNTS_SCHEMA_VERSION, file: '005-invalidation-counts.sql', description: 'Stored history invalidation occurrence counts' },
-	{ version: COLLATERAL_REPAIR_AUCTIONS_SCHEMA_VERSION, file: '006-collateral-repair-auctions.sql', description: 'Collateral repair auction storage names' },
-	{ version: CURRENT_CONTRACT_EVENTS_SCHEMA_VERSION, file: '007-current-contract-events.sql', description: 'Storage for events the current contracts emit' },
-	{ version: STALE_CONTRACT_VALUES_SCHEMA_VERSION, file: '008-stale-contract-values.sql', description: 'Removal of values no current contract supplies' },
-	{ version: BOUNDED_READ_SCHEMA_VERSION, file: '009-bounded-read-indexes.sql', description: 'Selective address and report reads' },
-	{ version: ACCOUNTING_CLOCK_SCHEMA_VERSION, file: '010-accounting-clock-and-reasons.sql', description: 'Exact security pool accounting clock and current reason enum' },
-	{ version: DIRECT_CALL_EVIDENCE_SCHEMA_VERSION, file: '011-direct-call-evidence.sql', description: 'Reverted direct protocol call evidence' },
-	{ version: CURRENT_SCHEMA_VERSION, file: '012-multiple-amm-pairs.sql', description: 'Multiple AMM pairs per question ledger' },
-]
-
-/** Migrations that upgrade a database at `startingVersion` to the current schema, in application order. */
-export const pendingSchemaMigrations = (startingVersion: SupportedSchemaVersion): readonly SchemaMigration[] => SCHEMA_MIGRATIONS.filter(migration => Number(migration.version) > Number(startingVersion))
 
 export const runSchemaTransaction = async <T>(begin: () => Promise<unknown>, commit: () => Promise<unknown>, rollback: () => Promise<unknown>, operation: () => Promise<T>): Promise<T> => {
 	await begin()
@@ -76,22 +29,8 @@ export const runSchemaTransaction = async <T>(begin: () => Promise<unknown>, com
 	}
 }
 
-export const schemaInitializationAction = (
-	markerVersion: string | undefined,
-	publicObjects: readonly string[],
-): 'initialize' | 'migrate-from-1' | 'migrate-from-2' | 'migrate-from-3' | 'migrate-from-4' | 'migrate-from-5' | 'migrate-from-6' | 'migrate-from-7' | 'migrate-from-8' | 'migrate-from-9' | 'migrate-from-10' | 'migrate-from-11' | 'current' => {
+export const schemaInitializationAction = (markerVersion: string | undefined, publicObjects: readonly string[]): 'initialize' | 'current' => {
 	if (markerVersion === CURRENT_SCHEMA_VERSION) return 'current'
-	if (markerVersion === DIRECT_CALL_EVIDENCE_SCHEMA_VERSION) return 'migrate-from-11'
-	if (markerVersion === ACCOUNTING_CLOCK_SCHEMA_VERSION) return 'migrate-from-10'
-	if (markerVersion === BOUNDED_READ_SCHEMA_VERSION) return 'migrate-from-9'
-	if (markerVersion === STALE_CONTRACT_VALUES_SCHEMA_VERSION) return 'migrate-from-8'
-	if (markerVersion === CURRENT_CONTRACT_EVENTS_SCHEMA_VERSION) return 'migrate-from-7'
-	if (markerVersion === COLLATERAL_REPAIR_AUCTIONS_SCHEMA_VERSION) return 'migrate-from-6'
-	if (markerVersion === INVALIDATION_COUNTS_SCHEMA_VERSION) return 'migrate-from-5'
-	if (markerVersion === QUESTION_SECONDS_SCHEMA_VERSION) return 'migrate-from-4'
-	if (markerVersion === INDEXER_OWNERSHIP_SCHEMA_VERSION) return 'migrate-from-3'
-	if (markerVersion === HISTORICAL_INTEGRITY_SCHEMA_VERSION) return 'migrate-from-2'
-	if (markerVersion === INITIAL_MIGRATABLE_SCHEMA_VERSION) return 'migrate-from-1'
 	if (markerVersion !== undefined || publicObjects.length > 0) throw new Error(UNSUPPORTED_SCHEMA_MESSAGE)
 	return 'initialize'
 }
