@@ -39,13 +39,13 @@ function unrecoveredEntryPosition(reportId: string) {
 }
 
 describe('durable OpenOracle position journal', () => {
-	test.each([2, 3])('migrates version %i receipt timestamps without losing accounting', async version => {
+	test.each([2, 3, 4])('loads version %i receipt timestamps without losing accounting', async version => {
 		const path = await journalPath()
 		const position = openPositionFixture()
 		const includedAt = '2026-01-01T00:00:00.000Z'
 		const expenditure = { costEth: '0.001', includedAt, transactionHash: position.entryTransactionHash }
 		const archived = version === 2 ? emptyPositionJournalArchive() : { ...emptyPositionJournalArchive(), gasSpentByUtcDay: { '2026-01-01': '0.002' } }
-		await writeFile(path, JSON.stringify({ archived, chainId: 1, positions: [{ ...position, gasExpenditures: [{ costEth: expenditure.costEth, minedAt: includedAt, transactionHash: expenditure.transactionHash }] }], version }), { mode: 0o600 })
+		await writeFile(path, JSON.stringify({ archived, chainId: 1, positions: [{ ...position, gasExpenditures: version === 4 ? [expenditure] : [{ costEth: expenditure.costEth, minedAt: includedAt, transactionHash: expenditure.transactionHash }] }], version }), { mode: 0o600 })
 		const state = await loadPositionJournalState(path, 1)
 		expect(state).toEqual({ archived, positions: [{ ...position, gasExpenditures: [expenditure] }] })
 		await savePositionJournalState(path, state, 1)

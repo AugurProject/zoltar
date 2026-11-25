@@ -24,7 +24,7 @@ import type {
 	Transport,
 } from '../types.js'
 
-import { ContractFunctionError, RpcError } from '../errors.js'
+import { ContractFunctionError, RpcError, TransactionLookupNotFoundError } from '../errors.js'
 
 import { bigintToSafeNumber, ensure0x, getAddress, hexQuantity, normalizeBlockTag, normalizeHash, normalizeRequiredRpcBigInt, normalizeRpcHex, requireMatchingTransactionHash } from '../encoding.js'
 
@@ -123,6 +123,20 @@ async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(t
 		abiItem,
 		data: rawResult,
 	}
+}
+
+async function requestTransactionLookup(transport: Transport, kind: 'transaction' | 'receipt', hash: Hash) {
+	const method = kind === 'transaction' ? 'eth_getTransactionByHash' : 'eth_getTransactionReceipt'
+	let result: JsonValue
+	try {
+		result = await requestTransportWithRateLimitRetries<JsonValue>(transport, { method, params: [hash] })
+	} catch (error) {
+		// Preserve providers that report a missing lookup as an RPC error instead of returning null.
+		if (error instanceof Error && error.message.includes('could not be found')) throw new TransactionLookupNotFoundError(kind, hash, error)
+		throw error
+	}
+	if (result === null) throw new TransactionLookupNotFoundError(kind, hash)
+	return result
 }
 
 export function buildPublicClientActions<TTransport extends Transport, TChain extends Chain | undefined>({ chain, transport }: { chain: TChain; transport: TTransport }): Omit<PublicClientShape<TTransport, TChain>, 'chain' | 'extend' | 'transport'> {
@@ -263,22 +277,14 @@ export function buildPublicClientActions<TTransport extends Transport, TChain ex
 		getLogs,
 		getTransaction: async parameters => {
 			const requestedHash = normalizeHash(parameters.hash)
-			const rawTransaction = await requestTransportWithRateLimitRetries<JsonValue>(transport, {
-				method: 'eth_getTransactionByHash',
-				params: [requestedHash],
-			})
-			if (rawTransaction === null) throw new Error(`Transaction with hash "${requestedHash}" could not be found.`)
+			const rawTransaction = await requestTransactionLookup(transport, 'transaction', requestedHash)
 			const transaction = normalizeTransaction(rawTransaction)
 			requireMatchingTransactionHash(requestedHash, transaction.hash, 'transaction')
 			return transaction
 		},
 		getTransactionReceipt: async parameters => {
 			const requestedHash = normalizeHash(parameters.hash)
-			const rawReceipt = await requestTransportWithRateLimitRetries<JsonValue>(transport, {
-				method: 'eth_getTransactionReceipt',
-				params: [requestedHash],
-			})
-			if (rawReceipt === null) throw new Error(`Transaction receipt with hash "${requestedHash}" could not be found.`)
+			const rawReceipt = await requestTransactionLookup(transport, 'receipt', requestedHash)
 			const receipt = normalizeReceipt(rawReceipt)
 			requireMatchingTransactionHash(requestedHash, receipt.transactionHash, 'transaction receipt')
 			return receipt

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { TransactionLookupNotFoundError } from '@zoltar/core-shared/evm/ethereum'
 import type { Hex, TransactionReceipt } from '../src/ethereum.ts'
 import { isReceiptNotFound, observeReceiptWithQuorum, readReceiptOrMissing } from '../src/execution/receipt-quorum.ts'
 import { ConnectivityDegradedError } from '../src/monitoring/resilience.ts'
@@ -37,6 +38,8 @@ describe('receipt quorum', () => {
 		const named = new Error('lookup failed')
 		named.name = 'TransactionReceiptNotFoundError'
 		expect(isReceiptNotFound(named)).toBe(true)
+		expect(isReceiptNotFound(new TransactionLookupNotFoundError('receipt', hash))).toBe(true)
+		expect(isReceiptNotFound(new TransactionLookupNotFoundError('transaction', hash))).toBe(false)
 		expect(isReceiptNotFound(notFound())).toBe(true)
 		expect(isReceiptNotFound(new Error('Transaction receipt not found'))).toBe(true)
 		expect(isReceiptNotFound(new Error('Transaction with hash "0x01" could not be found.'))).toBe(true)

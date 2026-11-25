@@ -1,12 +1,9 @@
+import { TransactionLookupNotFoundError } from '../errors.js'
 import { isRateLimitError, retryRateLimited, runWithDeadline } from '../transport.js'
 import type { BlockTransaction, Hash, PublicClientActions, ReplacementReason, Transport } from '../types.js'
 
 function isBlockTransaction(value: unknown): value is BlockTransaction {
 	return typeof value === 'object' && value !== null && 'hash' in value && 'from' in value && 'nonce' in value
-}
-
-function isTransactionNotFoundError(error: unknown): error is Error {
-	return error instanceof Error && error.message.includes('could not be found')
 }
 
 function getReplacementReason(originalTransaction: BlockTransaction, replacementTransaction: BlockTransaction): ReplacementReason {
@@ -104,7 +101,7 @@ export const waitForTransactionReceipt = async (actions: Pick<PublicClientAction
 				try {
 					return await requestWithRetry(() => actions.getTransaction({ hash: parameters.hash }))
 				} catch (error) {
-					if (!isTransactionNotFoundError(error)) throw error
+					if (!(error instanceof TransactionLookupNotFoundError) || error.kind !== 'transaction') throw error
 					return undefined
 				}
 			}
@@ -115,7 +112,7 @@ export const waitForTransactionReceipt = async (actions: Pick<PublicClientAction
 				try {
 					return await requestWithRetry(() => actions.getTransactionReceipt({ hash: parameters.hash }))
 				} catch (error) {
-					if (!isTransactionNotFoundError(error)) throw error
+					if (!(error instanceof TransactionLookupNotFoundError) || error.kind !== 'receipt') throw error
 					lastReceiptNotFoundError = error
 					if (parameters.onReplaced !== undefined) originalTransaction ??= await findOriginalTransaction()
 					if (originalTransaction !== undefined) {
