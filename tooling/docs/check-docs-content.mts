@@ -204,3 +204,17 @@ for (const path of visibleFormulaSourcePaths) {
 	const visibleSource = path.endsWith('.html') ? source.replaceAll(/<script\b[\s\S]*?<\/script>/gi, '') : source
 	assert.doesNotMatch(visibleSource, functionStyleRoundingPattern, `${path} uses function-style rounding notation in displayed documentation`)
 }
+
+const developerLaunchInstructions = [
+	{ path: 'README.md', app: 'zoltar', port: 4153 },
+	{ path: 'testnetwork/README.md', app: 'zoltar', port: 4153 },
+	{ path: 'docs/how-to/trading-set-up-development.html', app: 'trading', port: 4163 },
+]
+for (const { path, app, port } of developerLaunchInstructions) {
+	const source = await Bun.file(path).text()
+	const command = `bun run app:serve:${app}`
+	assert(source.includes(command), `${path} must document ${command}`)
+	assert(source.includes(`localhost:${port}`), `${path} must document port ${port}`)
+	assert.doesNotMatch(source, /bun run app:(?:serve|watch)(?:`|\s)/, `${path} must use app-specific launch commands`)
+	assert(!source.includes('localhost:12345'), `${path} still references the retired UI port 12345`)
+}
