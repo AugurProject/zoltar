@@ -184,7 +184,15 @@ ${command}`,
 		}
 	})
 
-	test('GitHub release promotion always chooses the highest published version under a shared lock', async () => {
+	test('public delivery verification gates release publication', async () => {
+		const steps = workflowSteps(workflowJobs(await readWorkflow(versionDeployWorkflowPath))['deploy'])
+		const verify = steps.findIndex(step => step['name'] === 'Verify public IPFS delivery')
+		expect(verify).toBeGreaterThan(steps.findIndex(step => step['name'] === 'Push versioned publisher image'))
+		expect(verify).toBeLessThan(steps.findIndex(step => step['name'] === 'Create or update GitHub release'))
+		expect(steps[verify]?.['run']).toContain('bash tooling/ui/verify-ipfs-release.sh')
+	})
+
+	test('only the verified tag can promote itself when it is the highest published version under a shared lock', async () => {
 		const jobs = workflowJobs(await readWorkflow(versionDeployWorkflowPath))
 		const deploy = workflowSteps(jobs['deploy']).find(step => step['name'] === 'Create or update GitHub release')
 		expect(deploy?.['run']).toContain('--latest=false')
@@ -209,7 +217,8 @@ ${command}`,
 				{ env: { GITHUB_REPOSITORY: 'example/app', GITHUB_REF_NAME: triggeringTag }, encoding: 'utf8' },
 			)
 			expect(result.status).toBe(0)
-			expect(result.stdout).toContain('release edit v11 --repo example/app --latest')
+			if (triggeringTag === 'v11') expect(result.stdout).toContain('release edit v11 --repo example/app --latest')
+			else expect(result.stdout).not.toContain('release edit')
 		}
 		const unavailable = spawnSync(
 			'bash',

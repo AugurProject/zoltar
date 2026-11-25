@@ -64,6 +64,21 @@ contract CommitmentIndexHarness {
 		index = InspectableCommitmentIndex(SecurityPoolBoundClones.create(address(implementation), abi.encodePacked(address(this))));
 		index.initialize();
 	}
+	struct PositionSnapshot {
+		SecurityPoolCommitmentIndex.Account account;
+		uint256 started;
+		uint256 paidRep;
+		uint256 paidEth;
+		uint256 paidRepFees;
+	}
+
+	function positionSnapshots(uint96 count) external view returns (PositionSnapshot[] memory snapshots) {
+		snapshots = new PositionSnapshot[](count);
+		for (uint96 id = 1; id <= count; ++id) {
+			snapshots[id - 1] = PositionSnapshot(index.accountOf(id), index.liquidationStarted(id), paidRep[id], paidEthFees[id], paidRepFees[id]);
+		}
+	}
+
 	function validateAll() external view {
 		index.validate(0);
 		uint96 current = index.currentBatch();
