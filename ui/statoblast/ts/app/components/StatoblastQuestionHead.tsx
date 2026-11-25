@@ -10,7 +10,7 @@ import { statoblastPageHref, type StatoblastQuestionPage } from '@zoltar/ui-stat
 import { decodeStoredValue } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
 import type { ListedQuestionLedger, ReportingDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 
-type QuestionHeading = Pick<ListedQuestionLedger, 'initialReportingResponseWindow' | 'ordinaryEscalationGameStarted' | 'questionId' | 'questionLedgerAddress' | 'questionOutcome' | 'universeHasForked'> & {
+type QuestionHeading = Pick<ListedQuestionLedger, 'forkQuestionId' | 'forkedAt' | 'initialReportingResponseWindow' | 'ordinaryEscalationGameStarted' | 'questionId' | 'questionLedgerAddress' | 'questionOutcome' | 'universeHasForked'> & {
 	marketDetails: Pick<ListedQuestionLedger['marketDetails'], 'description' | 'endTime' | 'title'>
 }
 
@@ -25,6 +25,8 @@ export function decodeQuestionHeading(value: unknown): QuestionHeading | undefin
 			questionLedgerAddress: read.address('questionLedgerAddress'),
 			questionOutcome: read.oneOf('questionOutcome', ['none', 'yes', 'no', 'invalid']),
 			universeHasForked: read.boolean('universeHasForked'),
+			forkQuestionId: read.optional('forkQuestionId', read.bigint),
+			forkedAt: read.optional('forkedAt', read.bigint),
 		}
 	})
 }
@@ -52,8 +54,9 @@ export function StatoblastQuestionHead({
 	const resolved = question.questionOutcome !== 'none' || reporting?.settlementState === 'resolved'
 	const started = question.ordinaryEscalationGameStarted || reporting?.status === 'active'
 	const paused = !resolved && reporting?.status === 'active' && reporting.forkContinuation && reporting.forkResumedAt === 0n
-	const forkStep = !resolved && (question.universeHasForked || (reporting?.status === 'active' && reporting.hasReachedNonDecision))
-	const ended = now !== undefined && now >= question.marketDetails.endTime
+	const forkStep = !resolved && (question.forkQuestionId === page.questionId || (reporting?.status === 'active' && reporting.hasReachedNonDecision))
+	const stageTime = question.forkedAt ?? now
+	const ended = stageTime !== undefined && stageTime >= question.marketDetails.endTime
 	let step = 0
 	if (ended) step = 1
 	if (started) step = 2
@@ -76,9 +79,9 @@ export function StatoblastQuestionHead({
 		)
 	const responseEnd = reporting?.status === 'active' ? reporting.escalationEndTime : undefined
 	const responseDeadline = responseEnd === undefined || responseEnd === 0n ? pageCopy.responseWindowBeforeReport : <TimestampValue timestamp={responseEnd} relative={false} />
-	const forkDetail = question.universeHasForked ? undefined : pageCopy.waitingForFork
+	const forkDetail = question.forkQuestionId === page.questionId ? undefined : pageCopy.waitingForFork
 	const steps = [
-		{ label: forkStep ? pageCopy.tradingEnded : pageCopy.trading, detail: step === 0 && !forkStep ? pageCopy.tradingActive : undefined },
+		{ label: forkStep ? pageCopy.tradingEnded : pageCopy.trading, detail: step === 0 && !forkStep && !question.universeHasForked ? pageCopy.tradingActive : undefined },
 		{ label: forkStep ? pageCopy.reportingOpened : pageCopy.reportingOpens, detail: <TimestampValue timestamp={question.marketDetails.endTime} relative={now === undefined ? false : 'after'} {...(now === undefined ? {} : { currentTimestamp: now })} /> },
 		{ label: forkStep ? pageCopy.endedUndecided : pageCopy.responseWindow, detail: paused ? pageCopy.startsAtActivation : responseDeadline },
 		{ label: forkStep ? pageCopy.fork : pageCopy.resolved, detail: forkStep ? forkDetail : pageCopy.resolutionAction },
@@ -110,6 +113,7 @@ export function StatoblastQuestionHead({
 						{pageCopy.questionIdLead}
 						<code>{question.questionId}</code>
 					</span>
+					{!resolved && question.universeHasForked && !forkStep && <span>{pageCopy.universeHasForked}</span>}
 				</div>
 				<div className='statoblast-question-title'>
 					{!presentationOnly && <FavoriteToggle app='statoblast' kind='question' id={`${page.pool}:${question.questionId}`} entityLabel={pageCopy.formatInSecurityPool(title, page.pool)} confirmUnfavorite={() => (!hasShares && !hasStakedRep) || window.confirm(pageCopy.unstarPositionConfirmation)} />}
@@ -183,7 +187,7 @@ export function StatoblastQuestionHead({
 							{detail === undefined ? undefined : <span>{detail}</span>}
 						</li>
 					))}
-					{!forkStep && (
+					{!forkStep && !question.universeHasForked && (
 						<li className='statoblast-fork-step'>
 							<strong>{pageCopy.orFork}</strong>
 							<span>{forkCondition}</span>

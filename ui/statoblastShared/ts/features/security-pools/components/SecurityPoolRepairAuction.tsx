@@ -106,40 +106,44 @@ export function SecurityPoolRepairAuction({ onAuctionFinalized, sharedDeadline =
 				</MetricGrid>
 			)}
 			{noSale && <UserMessage tone='warning' detail={copy.closedWithShortfall} />}
-			<MetricGrid>
-				<SecurityPoolInput label={copy.lotCount} hint={copy.lotHint} value={model.lotsInput} onChange={model.setLots} disabled={disabled} />
-				<SecurityPoolInput label={copy.minimumRep} hint={askHint} value={model.repInput} onChange={model.setRep} disabled={disabled} numeric />
-				<SecurityPoolInput label={copy.health} hint={model.minimumAsk === undefined ? undefined : copy.lowestAtTarget(formatCurrencyBalanceWithUnit(model.minimumAsk, common.rep))} value={model.healthInput} onChange={model.setHealth} disabled={disabled} numeric />
-			</MetricGrid>
-			{isOpen && <AuctionAskScale floor={auction.minimumCollateralAttoRepPerLot} lowest={model.minimumAsk} ask={model.ask} highest={highest} />}
-			<MetricGrid>
-				<MetricField label={copy.collateralLocked}>{collateralAmount(model.quote?.bidAttoEth)}</MetricField>
-				<MetricField label={copy.repIfFilled}>
-					<CurrencyValue value={model.quote?.minimumPrincipalAttoRep} suffix={common.rep} />
-				</MetricField>
-			</MetricGrid>
-			<UserMessage tone='warning' detail={copy.ownership} />
-			<UserMessage detail={copy.fairness} />
-			<TokenApprovalControl
-				actionLabel={copy.bid}
-				compact
-				customAmountDisclosureLabel={copy.approveCollateral}
-				allowanceError={model.error}
-				allowanceLoading={model.loading}
-				approvedAmount={snapshot?.collateralAllowance}
-				disabled={disabled}
-				guardMessage={deadlineReason ?? model.fundingReason}
-				onApprove={amount => {
-					if (amount !== undefined) void model.approve(amount)
-				}}
-				pending={parameters.actions.busy === 'approveAuctionCollateral'}
-				pendingLabel={common.formatApprovingToken(snapshot?.collateral.symbol ?? collateralCopy.fallback)}
-				requiredAmount={model.quote?.bidAttoEth}
-				resetKey={`${snapshot?.auction?.address}:${parameters.bidder}:${model.quote?.bidAttoEth}`}
-				tokenSymbol={snapshot?.collateral.symbol ?? collateralCopy.fallback}
-				tokenUnits={snapshot?.collateral.decimals ?? 18}
-			/>
-			<SecurityPoolButton model={parameters.actions} action='bidSecurityPoolAuction' label={copy.bid} pendingLabel={copy.bidding} reason={deadlineReason ?? model.bidReason} onClick={model.bid} />
+			{!closed && auction?.finalized !== true && (
+				<>
+					<MetricGrid>
+						<SecurityPoolInput label={copy.lotCount} hint={copy.lotHint} value={model.lotsInput} onChange={model.setLots} disabled={disabled} />
+						<SecurityPoolInput label={copy.minimumRep} hint={askHint} value={model.repInput} onChange={model.setRep} disabled={disabled} numeric />
+						<SecurityPoolInput label={copy.health} hint={model.minimumAsk === undefined ? undefined : copy.lowestAtTarget(formatCurrencyBalanceWithUnit(model.minimumAsk, common.rep))} value={model.healthInput} onChange={model.setHealth} disabled={disabled} numeric />
+					</MetricGrid>
+					{isOpen && <AuctionAskScale floor={auction.minimumCollateralAttoRepPerLot} lowest={model.minimumAsk} ask={model.ask} highest={highest} />}
+					<MetricGrid>
+						<MetricField label={copy.collateralLocked}>{collateralAmount(model.quote?.bidAttoEth)}</MetricField>
+						<MetricField label={copy.repIfFilled}>
+							<CurrencyValue value={model.quote?.minimumPrincipalAttoRep} suffix={common.rep} />
+						</MetricField>
+					</MetricGrid>
+					<UserMessage tone='warning' detail={copy.ownership} />
+					<UserMessage detail={copy.fairness} />
+					<TokenApprovalControl
+						actionLabel={copy.bid}
+						compact
+						customAmountDisclosureLabel={copy.approveCollateral}
+						allowanceError={model.error}
+						allowanceLoading={model.loading}
+						approvedAmount={snapshot?.collateralAllowance}
+						disabled={disabled}
+						guardMessage={deadlineReason ?? model.fundingReason}
+						onApprove={amount => {
+							if (amount !== undefined) void model.approve(amount)
+						}}
+						pending={parameters.actions.busy === 'approveAuctionCollateral'}
+						pendingLabel={common.formatApprovingToken(snapshot?.collateral.symbol ?? collateralCopy.fallback)}
+						requiredAmount={model.quote?.bidAttoEth}
+						resetKey={`${snapshot?.auction?.address}:${parameters.bidder}:${model.quote?.bidAttoEth}`}
+						tokenSymbol={snapshot?.collateral.symbol ?? collateralCopy.fallback}
+						tokenUnits={snapshot?.collateral.decimals ?? 18}
+					/>
+					<SecurityPoolButton model={parameters.actions} action='bidSecurityPoolAuction' label={copy.bid} pendingLabel={copy.bidding} reason={deadlineReason ?? model.bidReason} onClick={model.bid} />
+				</>
+			)}
 			<h4>{copy.yourBids}</h4>
 			{auction?.bids.length === 0 && !model.loading ? <EmptyState title={copy.noBids} /> : undefined}
 			{snapshot !== undefined && auction !== undefined && auction.bids.length > 0 && (

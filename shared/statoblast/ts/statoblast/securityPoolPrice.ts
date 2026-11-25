@@ -49,7 +49,7 @@ type PriceReadClient = SecurityPoolReadClient & { getBalance(parameters: { addre
 export async function loadSecurityPoolPriceSnapshot(parameters: { client: PriceReadClient; securityPool: Address; owner: Address; universeId: bigint; blockNumber?: bigint }) {
 	const { client } = parameters
 	const securityPool = decodeAddress(parameters.securityPool, 'Security pool')
-	const owner = decodeAddress(parameters.owner, 'Report sponsor')
+	const owner = decodeAddress(parameters.owner, 'Report funder')
 	const universeId = decodeUint(parameters.universeId, 'Universe', 248)
 	const [block, chainId] = await Promise.all([client.getBlock(parameters.blockNumber === undefined ? undefined : { blockNumber: parameters.blockNumber }), client.getChainId()])
 	if (block.number === undefined || block.hash === undefined) throw new Error('Price preparation requires a mined block.')
@@ -130,7 +130,7 @@ export async function loadSecurityPoolPriceSnapshot(parameters: { client: PriceR
 		// contract quote from immutable settings and the pinned block instead.
 		const settlementSettings = {
 			maxSettlementBaseFeeMultiplierBps: decodeUint(multiplier, 'Settlement fee multiplier'),
-			settlementCallbackGasLimit: decodeUint(callbackGas, 'Settlement callback gas', 32),
+			settlementCallbackGasLimit: decodeUint(callbackGas, 'Settlement gas limit', 32),
 			initialReportPriorityFeeAttoEthPerGas: decodeUint(priority, 'Report priority fee'),
 		}
 		const baseFeePerGas = decodeUint(block.baseFeePerGas ?? 0n, 'Block base fee')
@@ -172,7 +172,7 @@ export function quoteSecurityPoolPriceFunding(snapshot: SecurityPoolPriceSnapsho
 	if (observation.minimumWethAttoEth === undefined || observation.minimumRepAttoRep === undefined) throw new Error('The branch price reporting window is closed.')
 	const price = decodeUint(proposedRepPerEth, 'REP per ETH price')
 	if (price === 0n) throw new Error('Enter a positive REP per ETH price.')
-	decodeUint(requestedWeth, 'Requested WETH', 128)
+	decodeUint(requestedWeth, 'WETH for the report', 128)
 	const inventoryWeth = (observation.minimumRepAttoRep * 10n ** 18n + price - 1n) / price
 	const required = inventoryWeth > observation.minimumWethAttoEth ? inventoryWeth : observation.minimumWethAttoEth
 	// The feed judges the report against exposure at settlement. Its minimum covers
@@ -184,7 +184,7 @@ export function quoteSecurityPoolPriceFunding(snapshot: SecurityPoolPriceSnapsho
 	const coveredExposureAttoEth = weth > observation.minimumReportCollateral ? (weth - observation.minimumReportCollateral) * 100n : 0n
 	const growthHeadroomAttoEth = coveredExposureAttoEth > observation.currentExposureAttoEth ? coveredExposureAttoEth - observation.currentExposureAttoEth : 0n
 	const callbackGas = SECURITY_POOL_REPORT_SETTLEMENT_CALLBACK_GAS + decodeUint(operationsGas, 'Operations gas', 32)
-	if (callbackGas > MAXIMUM_SECURITY_POOL_REPORT_CALLBACK_GAS) throw new Error('Callback gas exceeds limit.')
+	if (callbackGas > MAXIMUM_SECURITY_POOL_REPORT_CALLBACK_GAS) throw new Error('Report settlement gas exceeds the limit.')
 	const paddedGas = (callback: bigint) => ((callback + callback / 63n + 310_000n) * 12_000n + 9_999n) / 10_000n + 20_000n
 	const baseGas = paddedGas(SECURITY_POOL_REPORT_SETTLEMENT_CALLBACK_GAS)
 	const bounty = operationsGas === 0n ? observation.nextBlockBounty : ((observation.nextBlockBounty - 101n) * paddedGas(callbackGas) + baseGas - 1n) / baseGas + 101n
@@ -221,7 +221,7 @@ export type SecurityPoolReportOperations = { gasLimit: bigint; minimumPrice: big
 export function buildSecurityPoolPriceOperationsRequest(snapshot: SecurityPoolPriceSnapshot, proposedRepPerEth: bigint, requestedWethAttoEth: bigint, batch: SecurityPoolReportOperations) {
 	const request = buildSecurityPoolPriceRequest(snapshot, proposedRepPerEth, requestedWethAttoEth)
 	const funding = quoteSecurityPoolPriceFunding(snapshot, proposedRepPerEth, requestedWethAttoEth, batch.gasLimit)
-	if (decodeUint(batch.gasLimit, 'Operations gas') + SECURITY_POOL_REPORT_SETTLEMENT_CALLBACK_GAS > MAXIMUM_SECURITY_POOL_REPORT_CALLBACK_GAS) throw new Error('Callback gas exceeds limit.')
+	if (decodeUint(batch.gasLimit, 'Operations gas') + SECURITY_POOL_REPORT_SETTLEMENT_CALLBACK_GAS > MAXIMUM_SECURITY_POOL_REPORT_CALLBACK_GAS) throw new Error('Report settlement gas exceeds the limit.')
 	decodeUint(batch.minimumPrice, 'Minimum operation price')
 	decodeUint(batch.maximumPrice, 'Maximum operation price')
 	decodeUint(batch.deadline, 'Operations deadline', 48)

@@ -183,11 +183,12 @@ export async function loadMaximumTradingMintAmount(client: ReadClient, collatera
 	if (initial === undefined) throw new Error(maximumMintAmountUnavailable)
 	const { balance: recoveryBalance } = await loadRecoveryMintFunding(client, collateral.securityPool, collateral.universeId, collateral.owner, initial.recoveryAttoRep, blockNumber)
 	const recoveryBudget = (candidate: MintCandidate) => securityPoolRecoveryMintBudget(candidate.recoveryAttoRep)
-	const funded = (candidate: MintCandidate) => candidate.amount + candidate.fee <= wallet && recoveryBudget(candidate) <= recoveryBalance
+	const mintCost = (candidate: MintCandidate) => candidate.amount + defaultMintLimits(candidate.fee, candidate.shares).maximumFee
+	const funded = (candidate: MintCandidate) => mintCost(candidate) <= wallet && recoveryBudget(candidate) <= recoveryBalance
 	if (funded(initial)) return initial.shares > 0n ? initial.amount : undefined
 
 	const initialRecovery = recoveryBudget(initial)
-	const guess = getMinBigintValue([maximum - 1n, (maximum * wallet) / (maximum + initial.fee), initialRecovery === 0n ? maximum : (maximum * recoveryBalance) / initialRecovery]) ?? 0n
+	const guess = getMinBigintValue([maximum - 1n, (maximum * wallet) / mintCost(initial), initialRecovery === 0n ? maximum : (maximum * recoveryBalance) / initialRecovery]) ?? 0n
 	let affordable: MintCandidate | undefined
 	let upper = maximum
 	let lower = 0n
@@ -195,11 +196,11 @@ export async function loadMaximumTradingMintAmount(client: ReadClient, collatera
 	// At a fixed block the successful fee, share, and recovery quotes are nondecreasing. Reverts leave a candidate unclassified.
 	for (let round = 0; upper - lower > 1n && round < maxRounds; round++) {
 		const width = upper - lower
-		const candidates = round === 0 && guess > lower ? [guess, guess + 1n, wallet - initial.fee] : [lower + width / 4n, lower + width / 2n, upper - width / 4n]
+		const candidates = round === 0 && guess > lower ? [guess, guess + 1n, wallet - defaultMintLimits(initial.fee, initial.shares).maximumFee] : [lower + width / 4n, lower + width / 2n, upper - width / 4n]
 		const amounts = [...new Set(candidates)].filter(amount => amount > lower && amount < upper)
 		for (const candidate of await quote(amounts)) {
 			if (funded(candidate)) {
-				if (candidate.amount + candidate.fee === wallet && candidate.shares > 0n) return candidate.amount
+				if (mintCost(candidate) === wallet && candidate.shares > 0n) return candidate.amount
 				if (candidate.amount > lower) {
 					lower = candidate.amount
 					affordable = candidate

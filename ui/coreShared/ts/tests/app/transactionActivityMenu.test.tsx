@@ -213,7 +213,7 @@ test('shows an empty list when this account has no transactions', async () => {
 	await act(() => {
 		fireEvent.click(queries.getByRole('button', { name: 'Activity' }))
 	})
-	expect(queries.getByRole('dialog', { name: 'Recent transactions' }).textContent).toContain('No transactions from this account yet.')
+	expect(queries.getByRole('dialog', { name: 'Recent transactions' }).textContent).toContain('No transactions from this wallet yet.')
 	await rendered.cleanup()
 })
 

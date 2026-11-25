@@ -169,19 +169,19 @@ function retirementStatus(value: unknown): SecurityPoolRetirementPreview['status
 		case 5n:
 			return 'ready'
 		default:
-			throw new Error('Invalid retirement preview status.')
+			throw new Error('Invalid commitment reduction preview status.')
 	}
 }
 function retirementPreview(value: unknown): SecurityPoolRetirementPreview {
 	const [status, batch, healthy, spare, ahead, reduction, rep] = decodeFields(value, ['status', 'effectiveCurrentBatch', 'healthyCommitment', 'spareCommitment', 'queuedAheadCommitment', 'commitmentReduction', 'releasedRep'], 'Invalid capital accounting response.')
 	return {
 		status: retirementStatus(status),
-		effectiveCurrentBatch: decodeUint(batch, 'Effective current cohort', 96),
+		effectiveCurrentBatch: decodeUint(batch, 'Current queue group', 96),
 		healthyCommitment: decodeUint(healthy, 'Preview healthy commitment'),
 		spareCommitment: decodeUint(spare, 'Preview spare commitment'),
 		queuedAheadCommitment: decodeUint(ahead, 'Earlier reserved reductions'),
-		commitmentReduction: decodeUint(reduction, 'Requested commitment reduction'),
-		releasedRep: decodeUint(rep, 'Requested REP release'),
+		commitmentReduction: decodeUint(reduction, 'Commitment reduction'),
+		releasedRep: decodeUint(rep, 'REP to release'),
 	}
 }
 function ownerAccount(value: unknown): SecurityPoolCapitalOwner {
@@ -197,7 +197,7 @@ function ownerAccount(value: unknown): SecurityPoolCapitalOwner {
 
 type CapitalRequest = { owner: Address; capitalLedger: Address }
 function request(parameters: CapitalRequest, functionName: string, args: readonly AbiValue[] = [], value = 0n) {
-	return { account: decodeAddress(parameters.owner, 'Owner'), to: decodeAddress(parameters.capitalLedger, 'Capital ledger'), value: decodeUint(value, 'Transaction value'), data: encodeFunctionData({ abi, functionName, args }) }
+	return { account: decodeAddress(parameters.owner, 'Owner'), to: decodeAddress(parameters.capitalLedger, 'Capital contract'), value: decodeUint(value, 'Transaction value'), data: encodeFunctionData({ abi, functionName, args }) }
 }
 
 export function buildSecurityPoolCapitalDepositRequest(parameters: CapitalRequest & { amountAttoRep: bigint }) {
@@ -244,7 +244,7 @@ export function buildSecurityPoolCapitalTakeOverWithBoundsRequest(parameters: Ca
 		positive(parameters.commitment, 'Takeover commitment'),
 		decodeUint(parameters.minimumTakeoverReward, 'Minimum takeover reward'),
 		decodeUint(parameters.maximumOwnRep, 'Maximum own REP'),
-		[decodeUint(bounds.maximumOwnerPrincipal, 'Maximum owner principal'), decodeUint(bounds.maximumOwnerCommitment, 'Maximum owner commitment'), expectedTargetHealthFactorBps, decodeUint(bounds.expectedAcceptedPriceEpoch, 'Expected price epoch'), decodeUint(bounds.expectedSourceBatch, 'Expected source cohort', 96)],
+		[decodeUint(bounds.maximumOwnerPrincipal, 'Maximum pledged REP'), decodeUint(bounds.maximumOwnerCommitment, 'Maximum owner commitment'), expectedTargetHealthFactorBps, decodeUint(bounds.expectedAcceptedPriceEpoch, 'Expected price epoch'), decodeUint(bounds.expectedSourceBatch, 'Expected queue group', 96)],
 	])
 }
 
@@ -302,7 +302,7 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 		read(securityPool, 'rewardVestingSeconds'),
 		read(securityPool, 'priceFeed', [universeId]),
 	])
-	const capitalLedger = decodeAddress(ledgerValue, 'Capital ledger')
+	const capitalLedger = decodeAddress(ledgerValue, 'Capital contract')
 	const zoltar = decodeAddress(zoltarValue, 'Zoltar')
 	const [indexValue, tokenValue, bookValue, price, multiplier, validUntil, valid, demand, free, frozen, importing, exported, ownerValue, collateralValue, totalsValue, forkTimeValue, choiceDeadlineValue, conservative, liquidation, exposureLimit, ownerPrice, availableCapacity] = await Promise.all([
 		read(capitalLedger, 'commitmentIndex'),
@@ -331,9 +331,9 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 	const commitmentIndex = decodeAddress(indexValue, 'Commitment index')
 	const account = owner === undefined ? { freeAttoRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, targetHealthFactorBps: 0n, positionId: 0n } : ownerAccount(ownerValue)
 	const [principal, commitment, withdrawable] = decodeFields(collateralValue, ['principal', 'commitment', 'withdrawable'], 'Invalid capital accounting response.')
-	const ownerPrincipalAttoRep = decodeUint(principal, 'Owner principal')
+	const ownerPrincipalAttoRep = decodeUint(principal, 'Position pledged REP')
 	const withdrawableAttoRep = decodeUint(withdrawable, 'Withdrawable REP')
-	if (withdrawableAttoRep > ownerPrincipalAttoRep) throw new Error('Withdrawal allowance exceeds owner principal.')
+	if (withdrawableAttoRep > ownerPrincipalAttoRep) throw new Error('Withdrawal allowance exceeds pledged REP.')
 	const [totalRep, totalK, healthyK] = decodeFields(totalsValue, ['rep', 'commitment', 'healthy'], 'Invalid capital accounting response.')
 	const [current, next, minimumOutcomeRate] = await Promise.all([read(commitmentIndex, 'currentBatch'), read(commitmentIndex, 'nextBatch'), read(decodeAddress(bookValue, 'Settlement book'), 'minimumOutcomeExchangeRate')])
 	const positions = await Promise.all(
@@ -341,9 +341,9 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 			const [value, liquidation, penaltyPaid, elapsed] = await Promise.all([read(commitmentIndex, 'accountOf', [id]), read(capitalLedger, 'liquidationStarted', [id]), read(capitalLedger, 'liquidationPenaltyPaid', [id]), read(capitalLedger, 'liquidationElapsed', [id])])
 			const [holder, batch, rep, commitment, maximum, released, eth, repFees, remaining] = decodeFields(value, ['owner', 'batch', 'rep', 'commitment', 'maxHealthyPrice', 'releasedRep', 'ethFees', 'repFees', 'remainingCommitment'], 'Invalid capital accounting response.')
 			if (decodeAddress(holder, 'Position owner').toLowerCase() !== owner.toLowerCase()) throw new Error('Capital position belongs to another owner.')
-			const cohort = decodeUint(batch, 'Cohort id', 96)
+			const cohort = decodeUint(batch, 'Queue group ID', 96)
 			const liveCommitment = decodeUint(commitment, 'Commitment')
-			const preview = cohort !== 0n && liveCommitment !== 0n ? retirementPreview(await read(commitmentIndex, 'previewRetirement', [id, decodeUint(conservative, 'Conservative price'), decodeUint(demand, 'Demand')])) : undefined
+			const preview = cohort !== 0n && liveCommitment !== 0n ? retirementPreview(await read(commitmentIndex, 'previewRetirement', [id, decodeUint(conservative, 'Health price'), decodeUint(demand, 'Demand')])) : undefined
 			return {
 				id,
 				owner,
@@ -381,7 +381,7 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 		commitmentIndex,
 		repToken: decodeAddress(tokenValue, 'REP token'),
 		acceptedPrice: decodeUint(price, 'Accepted price'),
-		conservativePrice: decodeUint(conservative, 'Conservative price'),
+		conservativePrice: decodeUint(conservative, 'Health price'),
 		liquidationPrice: decodeUint(liquidation, 'Liquidation price'),
 		ownerConservativePrice: decodeUint(ownerPrice, 'Owner collateral price'),
 		oracleExposureLimitAttoEth: decodeUint(exposureLimit, 'Oracle exposure limit'),
@@ -394,8 +394,8 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 		healthyCommitmentAttoEth: decodeUint(healthyK, 'Healthy commitment'),
 		availableMintCapacityAttoEth: decodeUint(availableCapacity, 'Available mint capacity'),
 		totalFreeAttoRep: decodeUint(free, 'Total free REP'),
-		currentBatch: decodeUint(current, 'Current cohort', 96),
-		nextBatch: decodeUint(next, 'Next cohort', 96),
+		currentBatch: decodeUint(current, 'Current queue group', 96),
+		nextBatch: decodeUint(next, 'Next queue group', 96),
 		forkTime,
 		forkChoiceDeadline,
 		frozen: decodeBool(frozen, 'Frozen capital must be a boolean.'),

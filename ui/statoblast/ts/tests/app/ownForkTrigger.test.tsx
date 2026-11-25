@@ -10,6 +10,7 @@ import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accou
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 import { ReportingSection } from '@zoltar/ui-statoblast-shared/features/reporting/components/ReportingSection.js'
+import type { ReportingSectionProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import type { OwnForkAdmission } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
 import type { ActiveReportingDetails, EscalationSide } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { useOwnForkTrigger, type UseOwnForkTriggerDependencies } from '../../app/hooks/useOwnForkTrigger.js'
@@ -52,7 +53,7 @@ const reportingDetails: ActiveReportingDetails = {
 	viewerWalletRepBalanceAttoRep: 100n * ATTO_REP,
 }
 
-function Harness({ dependencies, details = reportingDetails, reportAmount = '5' }: { dependencies: UseOwnForkTriggerDependencies; details?: ActiveReportingDetails; reportAmount?: string }) {
+function Harness({ dependencies, details = reportingDetails, reportAmount = '5', onReportingFormChange = () => undefined }: { dependencies: UseOwnForkTriggerDependencies; details?: ActiveReportingDetails; reportAmount?: string; onReportingFormChange?: ReportingSectionProps['onReportingFormChange'] }) {
 	const ownFork = useOwnForkTrigger(
 		{
 			active: details.hasReachedNonDecision,
@@ -72,7 +73,7 @@ function Harness({ dependencies, details = reportingDetails, reportAmount = '5' 
 			onApproveReportingRep={() => undefined}
 			onLoadReporting={() => undefined}
 			onReportOutcome={() => undefined}
-			onReportingFormChange={() => undefined}
+			onReportingFormChange={onReportingFormChange}
 			onTriggerZoltarFork={() => void ownFork.triggerFork()}
 			onWithdrawEscalation={() => undefined}
 			reportingActiveAction={undefined}
@@ -115,6 +116,18 @@ describe('redesigned question report', () => {
 		const queries = within(view.container)
 		expect(Boolean(queries.queryByRole('heading', { name: securityPoolCopy.forkAdmission }))).toBe(false)
 		expect(Boolean(queries.queryByRole('button', { name: /Trigger universe fork|Checking/ }))).toBe(false)
+	})
+
+	test('the designed form fills Min and Take the lead independently', async () => {
+		const { dependencies } = createDependencies({ allowanceAttoRep: 0n, recommendedApprovalAttoRep: 0n, shortfallAttoRep: 0n })
+		const details = { ...reportingDetails, hasReachedNonDecision: false, startBondAttoRep: ATTO_REP, nonDecisionThresholdAttoRep: 20n * ATTO_REP, sides: [side('invalid', 'Invalid', 0n), side('yes', 'Yes', ATTO_REP), side('no', 'No', 8n * ATTO_REP)] }
+		const amounts: (string | undefined)[] = []
+		const view = await renderIntoDocument(<Harness dependencies={dependencies} details={details} onReportingFormChange={patch => amounts.push(patch.reportAmount)} />)
+		trackCleanup(view.cleanup)
+		const queries = within(view.container)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: /^Min \(/ })))
+		await act(() => fireEvent.click(queries.getByRole('button', { name: /^Take the lead \(/ })))
+		expect(amounts).toEqual(['1', '7.000000000000000001'])
 	})
 
 	test('previews the wallet payout, accepted stake, new leader, and response deadline', async () => {
@@ -170,6 +183,7 @@ describe('own-question fork admission', () => {
 		// The approval precedes the fork as its own button, defaulting to the shortfall plus the recommended 1 REP buffer.
 		await waitFor(() => expect(approveButton().textContent?.replaceAll('\u00a0', ' ')).toBe('Approve 41 REP'))
 		expect(forkSection().textContent?.replaceAll('\u00a0', ' ')).toContain('Triggering costs you 40.00 REP')
+		expect(forkSection().textContent).toContain('This universe freezes; everything moves to child universes Yes, No and Invalid.')
 		expect(
 			within(forkSection())
 				.getAllByRole('button')

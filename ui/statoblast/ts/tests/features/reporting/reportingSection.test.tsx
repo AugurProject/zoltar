@@ -37,7 +37,7 @@ function rep(value: bigint) {
 }
 
 function settlementButtonLabel(outcome: string) {
-	return within(document.body).getByRole('button', { name: new RegExp(`^(Claim .* REP from ${outcome}|Remove settled ${outcome} records)`) }).textContent ?? ''
+	return within(document.body).getByRole('button', { name: new RegExp(`^(Claim .* REP from ${outcome}|Settle ${outcome} deposits)`) }).textContent ?? ''
 }
 
 function reportingButtonLabel(outcome: string) {
@@ -434,7 +434,7 @@ describe('ReportingSection', () => {
 		const details = createReportingDetails({ questionOutcome: 'no', parentWithdrawalEnabled: true, settlementState: 'resolved' })
 		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
 		cleanupRenderedComponent = rendered.cleanup
-		expect(settlementButtonLabel('Yes')).toBe('Remove settled Yes records (0 REP payout)…')
+		expect(settlementButtonLabel('Yes')).toBe('Settle Yes deposits (0 REP payout)…')
 		expect(document.body.textContent).toContain('Losing ordinary deposits return no REP and require no cleanup transaction. Reporter deposits are separate from security pool capital.')
 	})
 

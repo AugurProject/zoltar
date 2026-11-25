@@ -231,7 +231,15 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 
 	// A confirmed write consumes its amount; a value the user typed since submitting stays.
 	const clearSubmittedAmount = (actionName: TradingActionResult['action'], submittedForm: TradingFormState) => {
-		if (actionName === 'createCompleteSet' && tradingForm.value.completeSetAmount === submittedForm.completeSetAmount) tradingForm.value = { ...tradingForm.value, completeSetAmount: '' }
+		if (actionName === 'createCompleteSet' && tradingForm.value.completeSetAmount === submittedForm.completeSetAmount) {
+			const { mintMaximumFee, mintMinimumShares, ...form } = tradingForm.value
+			tradingForm.value = {
+				...form,
+				completeSetAmount: '',
+				...(mintMaximumFee === submittedForm.mintMaximumFee ? {} : { mintMaximumFee }),
+				...(mintMinimumShares === submittedForm.mintMinimumShares ? {} : { mintMinimumShares }),
+			}
+		}
 		if (actionName === 'redeemCompleteSet' && tradingForm.value.redeemAmount === submittedForm.redeemAmount) tradingForm.value = { ...tradingForm.value, redeemAmount: '' }
 	}
 

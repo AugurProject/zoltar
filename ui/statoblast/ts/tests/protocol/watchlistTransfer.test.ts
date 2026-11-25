@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { expect, spyOn, test } from 'bun:test'
 import { keccak256, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createBlockWithTimestamp, createMulticallStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
@@ -102,4 +102,49 @@ test('import verifies the pool, question, game and depositor in order and skips 
 	await expect(importStatoblastWatchlist(client, MAINNET_NETWORK_PROFILE, 0n, file)).resolves.toEqual({ skipped: 5 })
 	expect(calls.some(call => call.target === foreign)).toBe(false)
 	expect(JSON.parse(exportStatoblastWatchlist(MAINNET_NETWORK_PROFILE))).toMatchObject({ saved: [], deposits: [deposit] })
+})
+
+test('import ignores question labels while preserving labels on saved pools', async () => {
+	const client = testDouble<Parameters<typeof importStatoblastWatchlist>[0]>({
+		getBlock: async () => ({ ...createBlockWithTimestamp(10n), number: 1n, hash }),
+		multicall: createMulticallStub(request => request.contracts.map(call => ({ status: 'success', result: call.functionName === 'isSecurityPool' ? true : ledger }))),
+	})
+	const file = JSON.stringify({
+		version: 1,
+		chainId: MAINNET_NETWORK_PROFILE.chain.id,
+		saved: [
+			{ kind: 'pool', pool, label: 'My pool' },
+			{ kind: 'question', pool, questionId: '1', label: 'Forged title' },
+		],
+		deposits: [],
+	})
+	await expect(importStatoblastWatchlist(client, MAINNET_NETWORK_PROFILE, 0n, file)).resolves.toEqual({ skipped: 0 })
+	expect(JSON.parse(exportStatoblastWatchlist(MAINNET_NETWORK_PROFILE)).saved).toEqual([
+		{ kind: 'pool', pool, label: 'My pool' },
+		{ kind: 'question', pool, questionId: '1' },
+	])
+})
+
+test.each(['expired', 'historical read failed'] as const)('watchlist retries from the latest block when the checkpoint is %s', async condition => {
+	const clock = spyOn(Date, 'now').mockReturnValue(1_000)
+	try {
+		const entry: WatchlistEntity = { kind: 'pool', id: pool, pool }
+		const checkpoint: WatchlistReadCheckpoint = { rows: [{ entity: entry, status: 'pool', annualFee: 15n }], anchor: { number: 1n, timestamp: 10n, hash, observedAt: 1_000 } }
+		if (condition === 'expired') clock.mockReturnValue(61_001)
+		const client = testDouble<Parameters<typeof loadWatchlistRows>[0]>({
+			getBlock: async request => ({ ...createBlockWithTimestamp(11n), number: request?.blockNumber ?? 2n, hash }),
+			multicall: createMulticallStub(({ blockNumber, contracts }) => {
+				if (blockNumber === 1n) throw new Error('Historical state unavailable')
+				return contracts.map(call => ({
+					status: 'success',
+					result: call.functionName === 'isSecurityPool' ? true : call.functionName === 'annualFeeBps' ? 20n : call.functionName === 'universes' ? [0n, 0n] : '0x0000000000000000000000000000000000000000',
+				}))
+			}),
+		})
+		const entries = condition === 'expired' ? [entry] : [entry, entry]
+		await expect(loadWatchlistRows(client, entries, 0n, undefined, MAINNET_NETWORK_PROFILE, { checkpoint })).resolves.toEqual(entries.map(() => expect.objectContaining({ annualFee: 20n })))
+		expect(checkpoint.anchor?.number).toBe(2n)
+	} finally {
+		clock.mockRestore()
+	}
 })

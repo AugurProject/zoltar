@@ -33,10 +33,10 @@ type Props = {
 	onRefresh: () => Promise<unknown>
 }
 
-async function loadClaims(active: ActiveReportingDetails, wallet: Address, signal?: AbortSignal, preparation?: ParentClaimPreparation, singleFlight = { pending: false }) {
+async function loadClaims(active: ActiveReportingDetails, wallet: Address, signal?: AbortSignal, preparation?: ParentClaimPreparation, singleFlight = { pending: false }, rpcSignal = signal) {
 	const parent = active.parentQuestionLedgerAddress
 	if (parent === undefined || parent === zeroAddress || active.forkContinuation !== true) return []
-	const client = withStatoblastRequestTimeout(createConnectedReadClient(), pageCopy.inheritedClaimTimeout, signal, singleFlight)
+	const client = withStatoblastRequestTimeout(createConnectedReadClient(), pageCopy.inheritedClaimTimeout, rpcSignal, singleFlight)
 	let queued = Promise.resolve()
 	const readContract: typeof client.readContract = parameters => {
 		const read = queued.then(async () => {
@@ -53,7 +53,7 @@ async function loadClaims(active: ActiveReportingDetails, wallet: Address, signa
 		)
 		return read
 	}
-	const reads = { ...client, readContract }
+	const reads: Pick<ReadClient, 'readContract' | 'getBlock' | 'getBlockNumber'> = { readContract, getBlock: args => client.getBlock(args), getBlockNumber: () => client.getBlockNumber() }
 	const claims = []
 	for (const side of active.sides) {
 		const deposits = await loadForkCarriedEscalationDepositsFromParentSnapshot(reads, active.escalationGameAddress, parent, side.key, wallet, preparation)
@@ -137,6 +137,7 @@ export function InheritedReporterClaims({ actionDataReadAt, parameters, accountS
 					},
 				},
 				singleFlight.current,
+				abort.signal,
 			).then(
 				claims => {
 					if (abort.signal.aborted) return

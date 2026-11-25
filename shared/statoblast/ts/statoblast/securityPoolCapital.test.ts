@@ -194,7 +194,7 @@ describe('personal security pool capital SDK', () => {
 	})
 	test('retirement preview rejects an unknown status and does not inspect active or lazily closed history', async () => {
 		const retiring = { owner, batch: 9n, rep: 200n, commitment: 20n, maxHealthyPrice: 20n, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 7n }
-		await expect(loadSecurityPoolCapitalSnapshot({ client: fixture({ accountOf: retiring, previewRetirement: [6n, 9n, 50n, 10n, 0n, 13n, 0n] }).client, securityPool, owner })).rejects.toThrow('Invalid retirement preview status')
+		await expect(loadSecurityPoolCapitalSnapshot({ client: fixture({ accountOf: retiring, previewRetirement: [6n, 9n, 50n, 10n, 0n, 13n, 0n] }).client, securityPool, owner })).rejects.toThrow('Invalid commitment reduction preview status')
 		for (const overrides of [{}, { accountOf: { ...retiring, commitment: 0n, rep: 0n, releasedRep: 200n } }]) {
 			const { client, calls } = fixture(overrides)
 			const snapshot = await loadSecurityPoolCapitalSnapshot({ client, securityPool, owner })
@@ -223,7 +223,7 @@ test('idle owners need no position reads and retain the canonical stale-price wi
 test('live collateral never becomes withdrawable merely because principal exists', async () => {
 	const { client } = fixture({ ownerCollateral: [260n, 20n, 0n], isPriceValid: false })
 	expect((await loadSecurityPoolCapitalSnapshot({ client, securityPool, owner })).withdrawableAttoRep).toBe(0n)
-	await expect(loadSecurityPoolCapitalSnapshot({ client: fixture({ ownerCollateral: [260n, 20n, 261n] }).client, securityPool, owner })).rejects.toThrow('exceeds owner principal')
+	await expect(loadSecurityPoolCapitalSnapshot({ client: fixture({ ownerCollateral: [260n, 20n, 261n] }).client, securityPool, owner })).rejects.toThrow('exceeds pledged REP')
 	await expect(loadSecurityPoolCapitalSnapshot({ client: fixture({ accountOf: { owner: securityPool, batch: 0n, rep: 200n, commitment: 20n, maxHealthyPrice: 20n, releasedRep: 60n, ethFees: 11n, repFees: 13n } }).client, securityPool, owner })).rejects.toThrow('another owner')
 })
 

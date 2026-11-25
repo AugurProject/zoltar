@@ -126,3 +126,18 @@ test('deposit search issues at most one request at a time and batches the head c
 	expect(peak).toBe(1)
 	expect(batchedFunctions).toEqual([['getDepositsByOutcome', 'getDepositsByOutcome', 'getDepositsByOutcomeLength'], ['getDepositsByOutcomeLength']])
 })
+
+test('a lagging head retries without scanning or treating a newer search position as reorganized', async () => {
+	const hash = keccak256('0x05')
+	const reads: Array<bigint | undefined> = []
+	const client = testDouble<Parameters<typeof searchReportingDepositsPage>[0]>({
+		getBlock: async ({ blockNumber }: { blockNumber?: bigint } = {}) => {
+			reads.push(blockNumber)
+			return { ...createBlockWithTimestamp(20n), hash, number: blockNumber ?? 8n }
+		},
+		multicall: createMulticallStub(({ contracts }) => contracts.map(call => (call.functionName === 'getDepositsByOutcomeLength' ? { status: 'success', result: 0n } : { status: 'success', result: [] }))),
+	})
+	const side = { pool: other, questionId: 5n, universeId: 0n, outcome: 'yes' as const, depositor: wallet }
+	await expect(searchReportingDepositsPage(client, game, side, { block: 9n, hash, nextIndex: 30n })).rejects.toThrow('Try again')
+	expect(reads).toEqual([undefined])
+})

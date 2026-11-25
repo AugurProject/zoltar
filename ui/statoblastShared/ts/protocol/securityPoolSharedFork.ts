@@ -45,9 +45,9 @@ export async function loadSecurityPoolSourceRecovery(client: ReadClient, snapsho
 		client.readContract({ address: shareToken, abi, functionName: 'balanceOfSecurityPoolRecoveryRights', args: [snapshot.universeId, snapshot.owner], blockNumber }),
 		client.readContract({ address: shareToken, abi, functionName: 'isSecurityPoolRecoveryEligible', args: [snapshot.universeId], blockNumber }),
 	])
-	const eligible = requireBooleanValue(eligibleValue, 'source recovery eligibility')
-	const rights = requireBigintArray(rightsValue, 'source recovery rights')
-	if (rights.length !== 3 || rights.some(value => value < 0n || value >= 1n << 256n)) throw new Error('Invalid source recovery rights.')
+	const eligible = requireBooleanValue(eligibleValue, 'collateral recovery eligibility')
+	const rights = requireBigintArray(rightsValue, 'collateral recovery rights')
+	if (rights.length !== 3 || rights.some(value => value < 0n || value >= 1n << 256n)) throw new Error('Invalid collateral recovery rights.')
 	const availableShares = rights.reduce((minimum, value) => (value < minimum ? value : minimum), rights[0] ?? 0n)
 	if ((await client.getBlock({ blockNumber })).hash !== snapshot.blockHash) throw new Error('Fork snapshot changed. Refresh and retry.')
 	return { pool, source, shareToken, eligible, rights, availableShares }

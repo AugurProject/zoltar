@@ -146,7 +146,7 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 			current.cancel()
 		}
 	}
-	const reviewChoices = async (indices: readonly number[], checked?: { check: () => Promise<void>; recheck?: () => Promise<void> | undefined; retryStatus?: (error: unknown) => 'failed' | 'changed' | undefined; deferWallet?: boolean }) => {
+	const reviewChoices = async (indices: readonly number[], checked?: { check: (retrying: boolean) => Promise<void>; recheck?: (amount?: bigint) => Promise<void> | undefined; retryStatus?: (error: unknown) => 'failed' | 'changed' | undefined; deferWallet?: boolean }) => {
 		claimWorkflow()
 		const first = indices[0]
 		if (first === undefined || indices.some(index => steps[index] === undefined)) throw new Error('An unexpected transaction was blocked. Review the action again.')
@@ -177,23 +177,25 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 				publish()
 				resolve({ index, amount })
 			}
-			const runCheck = async () => {
+			const runCheck = async (retrying = false) => {
 				if (checked === undefined || canceled || reviewCheck?.status === 'checking') return
 				reviewCheck = { status: 'checking' }
 				publish(confirmChoice)
 				try {
-					await checked.check()
+					await checked.check(retrying)
 					if (canceled) return
 					reviewCheck = undefined
 				} catch (error) {
 					if (canceled) return
-					reviewCheck = { status: 'failed', message: getErrorMessage(error, transactionCopy.currentStateCheckFailed), retry: () => void runCheck() }
+					const status = checked.retryStatus?.(error) ?? 'failed'
+					const message = status === 'changed' && error instanceof Error ? error.message : getErrorMessage(error, transactionCopy.currentStateCheckFailed)
+					reviewCheck = { status, message, retry: () => void runCheck(true) }
 				}
 				publish(confirmChoice)
 			}
 			const confirmChoice = (index: number, amount?: bigint) => {
 				if (selected || canceled || reviewCheck !== undefined || !indices.includes(index) || steps[index]?.phase !== 'review') return
-				const recheck = checked?.recheck?.()
+				const recheck = checked?.recheck?.(amount)
 				if (recheck === undefined) {
 					accept(index, amount)
 					return
@@ -210,7 +212,7 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 						if (canceled) return
 						const status = checked?.retryStatus?.(error)
 						if (status !== undefined) {
-							reviewCheck = { status, message: error instanceof Error ? error.message : transactionCopy.currentStateCheckFailed, retry: () => void runCheck() }
+							reviewCheck = { status, message: error instanceof Error ? error.message : transactionCopy.currentStateCheckFailed, retry: () => void runCheck(true) }
 							publish(confirmChoice)
 							return
 						}

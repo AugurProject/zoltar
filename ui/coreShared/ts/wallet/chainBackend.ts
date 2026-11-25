@@ -53,6 +53,8 @@ export type TransactionPlanStep = Pick<TransactionRequestPreview, 'functionName'
 		/** Require an explicit review even when the plan contains only one transaction. */
 		requireReview?: boolean
 		validateBeforeSubmit?: () => Promise<void>
+		/** Rebuild calldata for the same target after a failed state check, before a new confirmation. */
+		refreshReviewData?: () => Promise<Hex>
 		readReviewRows?: (() => readonly { label: string; value: string }[]) | undefined
 		refreshFundingRequirements?: () => Promise<TransactionPlanStep['tokenFunding']>
 		optional?: boolean

@@ -216,7 +216,7 @@ export function SecurityPoolPriceReport({
 				<MetricField label={copy.reportCoverage}>
 					<CurrencyValue value={model.funding?.coveredExposureAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
 				</MetricField>
-				<MetricField label={copy.growthHeadroom}>
+				<MetricField label={copy.extraCoverage}>
 					<CurrencyValue value={model.funding?.growthHeadroomAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
 				</MetricField>
 				<MetricField label={copy.bounty} loading={model.loading}>
@@ -523,7 +523,7 @@ function PriceCoverage({ exposure, coverage, headroom, collateral }: { exposure:
 				<MetricField label={copy.exposureNow}>
 					<CurrencyValue value={exposure} units={collateral.decimals} suffix={collateral.symbol} />
 				</MetricField>
-				<MetricField label={copy.headroom}>
+				<MetricField label={copy.extraCoverage}>
 					<CurrencyValue value={headroom} units={collateral.decimals} suffix={collateral.symbol} />
 				</MetricField>
 			</MetricGrid>

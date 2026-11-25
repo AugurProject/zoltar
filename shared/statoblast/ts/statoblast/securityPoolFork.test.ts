@@ -71,7 +71,7 @@ describe('bounded security pool fork SDK', () => {
 		expect(() => buildSecurityPoolRecoveryRightsTransferRequest({ ...parameters, amountsAttoShares: [0n, 0n, 0n] })).toThrow('positive')
 		expect(() => buildSecurityPoolRecoveryRightsTransferRequest({ ...parameters, amountsAttoShares: [-1n, 0n, 1n] })).toThrow('uint256')
 		expect(() => buildSecurityPoolRecoveryRightsTransferRequest({ ...parameters, recipient: zeroAddress })).toThrow('nonzero')
-		expect(() => buildSecurityPoolRecoveryRightsTransferRequest({ ...parameters, recipient: owner })).toThrow('another account')
+		expect(() => buildSecurityPoolRecoveryRightsTransferRequest({ ...parameters, recipient: owner })).toThrow('different recipient address')
 	})
 
 	test('reads one chosen branch at a pinned block without owner, question or ancestor history', async () => {

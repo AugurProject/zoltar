@@ -16,7 +16,7 @@ export async function loadQuestionLedgerDetails(client: ReadClient, questionLedg
 	const infrastructure = getInfraContractAddresses()
 	const ledger = { abi: poolArtifact.abi, address: questionLedgerAddress }
 	const readState = async () => {
-		const [confirmedId, capital, securityPoolAddress, escalationGameAddress, systemState, outcome, forkTime, initialReportingResponseWindow] = await readRequiredMulticall(
+		const [confirmedId, capital, securityPoolAddress, escalationGameAddress, systemState, outcome, [forkTime, forkQuestionId], initialReportingResponseWindow] = await readRequiredMulticall(
 			client,
 			[
 				{ ...ledger, functionName: 'questionId' },
@@ -25,7 +25,7 @@ export async function loadQuestionLedgerDetails(client: ReadClient, questionLedg
 				{ ...ledger, functionName: 'escalationGame' },
 				{ ...ledger, functionName: 'systemState' },
 				{ abi: QUESTION_LEDGER_QUESTION_OUTCOME_ABI, address: infrastructure.questionForker, functionName: 'getQuestionOutcome', args: [questionLedgerAddress] },
-				{ abi: Zoltar_Zoltar.abi, address: infrastructure.zoltar, functionName: 'getForkTime', args: [universeId] },
+				{ abi: Zoltar_Zoltar.abi, address: infrastructure.zoltar, functionName: 'universes', args: [universeId] },
 				{ ...ledger, functionName: 'initialReportingResponseWindow' },
 			],
 			blockNumber,
@@ -37,10 +37,10 @@ export async function loadQuestionLedgerDetails(client: ReadClient, questionLedg
 			escalationGameAddress !== zeroAddress && client.readContract({ abi: gameArtifact.abi, address: escalationGameAddress, functionName: 'forkContinuation', blockNumber }),
 			client.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'priceValidUntil', blockNumber }),
 		])
-		return { central, securityPoolAddress, escalationGameAddress, systemState, outcome, forkTime, initialReportingResponseWindow, validUntil, hasForkContinuationEscalationGame }
+		return { central, securityPoolAddress, escalationGameAddress, systemState, outcome, forkTime, forkQuestionId, initialReportingResponseWindow, validUntil, hasForkContinuationEscalationGame }
 	}
 	const [state, marketDetails] = await Promise.all([readState(), loadMarketDetails(client, questionId)])
-	const { central, securityPoolAddress, escalationGameAddress, outcome, forkTime, initialReportingResponseWindow, validUntil, hasForkContinuationEscalationGame } = state
+	const { central, securityPoolAddress, escalationGameAddress, outcome, forkTime, forkQuestionId, initialReportingResponseWindow, validUntil, hasForkContinuationEscalationGame } = state
 	return {
 		securityPoolAddress,
 		hasEscalationGame: escalationGameAddress !== zeroAddress,
@@ -67,6 +67,8 @@ export async function loadQuestionLedgerDetails(client: ReadClient, questionLedg
 		totalPoolHeldAttoRep: central.totalPoolHeldAttoRep,
 		totalUnderwritingLimitAttoEth: central.totalUnderwritingLimitAttoEth,
 		universeHasForked: forkTime > 0n,
+		forkQuestionId: forkTime > 0n ? forkQuestionId : undefined,
+		forkedAt: forkTime > 0n ? forkTime : undefined,
 		universeId,
 	}
 }

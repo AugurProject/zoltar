@@ -170,7 +170,7 @@ export const creditedToOracleBalance = 'Credited to your oracle balance'
 export const yourNewReport = 'Your new report'
 export const proposedPrice = 'New price'
 export const newBaseAmountFixedHint = 'Set by the report’s dispute rules.'
-export const newQuoteAmountHint = 'The quote amount sets the price you propose.'
+export const newQuoteAmountHint = 'The quote amount sets the report price.'
 export const disputeSwapTokenPending = 'Determined by the new price'
 export const formatReportCreatedDetail = (reportId: CopyTemplateValue) => `Report #${reportId} is live. Open it to track disputes and settlement.`
 export const reportCreatedWithoutIdDetail = 'Your report is live. Find it in the report directory.'

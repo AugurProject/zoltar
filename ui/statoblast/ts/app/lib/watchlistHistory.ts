@@ -24,8 +24,8 @@ function isRecentEntry(value: unknown): value is RecentEntry {
 	)
 }
 
-function historyHash(page: StatoblastPage) {
-	if (page.kind === 'pool') return statoblastPageHash({ kind: 'pool', pool: getAddress(page.pool), tab: 'capital' })
+function historyHash(page: StatoblastPage, preserveFork = true) {
+	if (page.kind === 'pool') return statoblastPageHash({ kind: 'pool', pool: getAddress(page.pool), tab: preserveFork && page.tab === 'fork' ? 'fork' : 'capital' })
 	if (page.kind === 'question') return statoblastPageHash({ kind: 'question', pool: getAddress(page.pool), questionId: page.questionId, tab: 'shares' })
 	return undefined
 }
@@ -51,7 +51,7 @@ export function openHistory(profile: NetworkProfile) {
 				const hash = historyHash(page)
 				if (hash === undefined) continue
 				const universe = BigInt(entry.universe).toString()
-				const identity = `${hash}:${universe}`
+				const identity = `${historyHash(page, false)}:${universe}`
 				const existing = unique.get(identity)
 				if (existing === undefined) unique.set(identity, { ...entry, hash, universe })
 				else if (isFallbackTitle(page, existing.title) && !isFallbackTitle(page, entry.title)) unique.set(identity, { ...existing, title: entry.title })
@@ -76,7 +76,7 @@ export function openHistory(profile: NetworkProfile) {
 			if (hash === undefined) return
 			const universe = universeId.toString()
 			const previous = read()
-			const existing = previous.find(entry => entry.hash === hash && entry.universe === universe)
+			const existing = previous.find(entry => entry.universe === universe && historyHash(parseStatoblastPage(entry.hash), false) === historyHash(page, false))
 			const fallback = isFallbackTitle(page, title)
 			save([{ hash, title: fallback ? (existing?.title ?? title) : title, universe, opened: Date.now() }, ...previous.filter(entry => entry !== existing)].slice(0, limit))
 		},
@@ -85,7 +85,7 @@ export function openHistory(profile: NetworkProfile) {
 			if (hash === undefined || isFallbackTitle(page, title)) return
 			const universe = universeId.toString()
 			const previous = read()
-			const existing = previous.find(entry => entry.hash === hash && entry.universe === universe)
+			const existing = previous.find(entry => entry.universe === universe && historyHash(parseStatoblastPage(entry.hash), false) === historyHash(page, false))
 			if (existing === undefined || existing.title === title) return
 			save(previous.map(entry => (entry === existing ? { ...entry, title } : entry)))
 		},

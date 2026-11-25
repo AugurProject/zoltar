@@ -458,7 +458,7 @@ describe('reporting protocol client', () => {
 		const writeClient = asWriteClient(client)
 		writeClient.onTransactionPrepared = preview => previews.push(preview)
 		await withdrawEscalationFromQuestionLedger(writeClient, questionLedgerAddress, 'no', [0n], 0n)
-		expect(previews[0]?.reviewTitle).toBe('Remove settled No records (0 REP payout)')
+		expect(previews[0]?.reviewTitle).toBe('Settle No deposits (0 REP payout)')
 		expect(previews[0]?.reviewDescription).toBe('Returns no REP. Losing deposits need no action after resolution.')
 		await withdrawEscalationFromQuestionLedger(writeClient, questionLedgerAddress, 'yes', [0n], 4n)
 		expect(previews[1]?.reviewDescription).toBeUndefined()

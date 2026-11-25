@@ -12,7 +12,7 @@ import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle
 import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
-import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
+import { SkeletonList } from '@zoltar/ui-core-shared/components/Skeleton.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
@@ -220,10 +220,11 @@ export function SecurityPoolQuestionsPanel({
 					</>
 				)}
 				{selected?.status === 'invalid-pool' && <p>{pageCopy.invalidPool}</p>}
-				{rowsLoading && details === undefined && <LoadingText>{pageCopy.checking}</LoadingText>}
 				<RetryableNotice message={rowsError} retryLabel={pageCopy.tryAgain} onRetry={() => void refreshRows()} disabled={rowsLoading} />
 				{saved.length === 0 ? (
 					<p>{pageCopy.emptySavedQuestionsDetail}</p>
+				) : rowsLoading && details === undefined ? (
+					<SkeletonList label={pageCopy.checking} rows={Math.min(3, saved.length)} />
 				) : (
 					<table className='statoblast-watchlist-table' role='table'>
 						<thead>

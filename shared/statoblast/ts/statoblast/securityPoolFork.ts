@@ -55,7 +55,7 @@ export function buildSecurityPoolForkRecoveryRequest(parameters: ForkRequest & {
 export function buildSecurityPoolRecoveryRightsTransferRequest(parameters: { owner: Address; shareToken: Address; universeId: bigint; recipient: Address; amountsAttoShares: readonly [bigint, bigint, bigint] }) {
 	const owner = address(parameters.owner)
 	const recipient = address(parameters.recipient)
-	if (owner === recipient) throw new Error('Recovery recipient must be another account.')
+	if (owner === recipient) throw new Error('Enter a different recipient address.')
 	const amounts = parameters.amountsAttoShares.map(amount => decodeUint(amount, 'Recovery rights'))
 	if (amounts.length !== 3 || amounts.every(amount => amount === 0n)) throw new Error('Choose positive recovery rights for at least one of three outcomes.')
 	return { account: owner, to: address(parameters.shareToken), value: 0n, data: encodeFunctionData({ abi, functionName: 'transferSecurityPoolRecoveryRights', args: [decodeUint(parameters.universeId, 'Universe', 248), recipient, amounts] }) }

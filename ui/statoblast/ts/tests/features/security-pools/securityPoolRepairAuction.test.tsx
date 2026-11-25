@@ -58,6 +58,8 @@ test('an auction deadline stops live bidding and rechecks the last observed bloc
 		await act(() => pending.resolve(2n))
 	}
 	await waitFor(() => expect(metric(view.container, 'Auction state')).toBe('Awaiting branch activation'))
+	expect([...view.container.querySelectorAll('button')].some(node => node.textContent === 'Submit funded bid')).toBe(false)
+	expect(view.container.querySelectorAll('input')).toHaveLength(0)
 })
 
 test('an open bid shows the lower-ask reason only when the verified limit proves strictly better bids', async () => {

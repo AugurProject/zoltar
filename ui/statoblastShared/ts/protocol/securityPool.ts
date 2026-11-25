@@ -44,7 +44,7 @@ import { readRequiredMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js
 import { loadSecurityPoolAdmission } from './securityPoolAdmission.js'
 import { authenticateSecurityPoolAuctionVault, isCanonicalAuctionVaultImplementation } from './securityPoolRepairAuction.js'
 
-export type SecurityPoolTransaction = { account: Address; to?: Address; data: Hex; value?: bigint; gas?: bigint; reviewDescription?: string; readReviewRows?: (() => readonly { label: string; value: string }[]) | undefined; validateBeforeSubmit?: () => Promise<void> }
+export type SecurityPoolTransaction = { account: Address; to?: Address; data: Hex; value?: bigint; gas?: bigint; reviewDescription?: string; readReviewRows?: (() => readonly { label: string; value: string }[]) | undefined; validateBeforeSubmit?: () => Promise<void>; refreshReviewData?: () => Promise<Hex> }
 const linksAbi = parseAbi([
 	'function securityPool() view returns (address)',
 	'function implementation() view returns (address)',
@@ -310,6 +310,7 @@ export async function sendSecurityPoolTransaction(client: WriteClient, request: 
 			...review,
 			requireReview: true,
 			readReviewRows: captured.readReviewRows,
+			...(captured.refreshReviewData === undefined ? {} : { refreshReviewData: captured.refreshReviewData }),
 			validateBeforeSubmit: async () => {
 				await validateCaptured()
 				if (!reviewChecksTransaction && performance.now() - checkedAt > 30_000) await simulate()

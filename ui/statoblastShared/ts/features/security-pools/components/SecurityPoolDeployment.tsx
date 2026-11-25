@@ -25,7 +25,7 @@ import { SecurityPoolButton, SecurityPoolInput, type SecurityPoolActions } from 
 
 const deploySteps = [pageCopy.deployCollateralAndPrice, pageCopy.deployQuestionsSection, pageCopy.deployEconomicsSection, pageCopy.deployAndSetup]
 
-type DeployStepProps = { actions: SecurityPoolActions; step?: number | undefined }
+type DeployStepProps = { actions: SecurityPoolActions; step: number }
 
 function DeploymentFields({ actions, step }: DeployStepProps) {
 	const disabled = actions.busy !== undefined || actions.deploymentLocked
@@ -33,7 +33,7 @@ function DeploymentFields({ actions, step }: DeployStepProps) {
 	const validIds = actions.fixedQuestionCount === undefined ? undefined : pageCopy.deployValidQuestionCount(actions.fixedQuestionCount)
 	return (
 		<>
-			{(step === undefined || step === 0) && (
+			{step === 0 && (
 				<>
 					<fieldset className='statoblast-deploy-section'>
 						<legend>{pageCopy.deployCollateralSection}</legend>
@@ -51,12 +51,12 @@ function DeploymentFields({ actions, step }: DeployStepProps) {
 					</fieldset>
 					<fieldset className='statoblast-deploy-section'>
 						<legend>{pageCopy.deployPriceSection}</legend>
-						<SecurityPoolInput label={step === undefined ? collateralCopy.oracleStake(actions.collateral.symbol) : pageCopy.deployMinimumPriceStake(actions.collateral.symbol)} hint={collateralCopy.floorHint} value={actions.reportFloor} onChange={actions.setReportFloor} disabled={disabled} numeric />
-						<SecurityPoolInput label={step === undefined ? copy.oraclePriorityFee : pageCopy.deployPricePriorityFee} value={actions.priorityFeeInput} onChange={actions.setPriorityFeeInput} disabled={disabled} numeric />
+						<SecurityPoolInput label={pageCopy.deployMinimumPriceStake(actions.collateral.symbol)} hint={collateralCopy.floorHint} value={actions.reportFloor} onChange={actions.setReportFloor} disabled={disabled} numeric />
+						<SecurityPoolInput label={pageCopy.deployPricePriorityFee} value={actions.priorityFeeInput} onChange={actions.setPriorityFeeInput} disabled={disabled} numeric />
 					</fieldset>
 				</>
 			)}
-			{(step === undefined || step === 1) && (
+			{step === 1 && (
 				<fieldset className='statoblast-deploy-section'>
 					<legend>{copy.admissionMode}</legend>
 					<ViewTabs
@@ -74,9 +74,8 @@ function DeploymentFields({ actions, step }: DeployStepProps) {
 					<SecurityPoolInput label={copy.horizon} hint={copy.horizonHint} value={actions.horizonDays} onChange={actions.setHorizonDays} disabled={disabled} numeric />
 				</fieldset>
 			)}
-			{(step === undefined || step === 2) && (
+			{step === 2 && (
 				<fieldset className='statoblast-deploy-section'>
-					{step === undefined && <legend>{pageCopy.deployEconomicsSection}</legend>}
 					<SecurityPoolInput label={copy.securityMultiplier} hint={copy.securityMultiplierHint} value={actions.multiplierInput} onChange={actions.setMultiplierInput} disabled={disabled} numeric />
 					<MetricGrid>
 						<SecurityPoolInput label={copy.purchaseFeePercent} value={actions.economicsDraft.purchaseFeePercent} onChange={value => actions.setEconomicsField('purchaseFeePercent', value)} disabled={disabled} numeric />
@@ -92,7 +91,7 @@ function DeploymentFields({ actions, step }: DeployStepProps) {
 	)
 }
 
-function DeploymentActions({ actions, setupStage, setupVerificationPending, progressList = false }: { actions: SecurityPoolActions; setupStage?: number | undefined; setupVerificationPending?: boolean; progressList?: boolean }) {
+function DeploymentActions({ actions, setupStage, setupVerificationPending }: { actions: SecurityPoolActions; setupStage?: number | undefined; setupVerificationPending?: boolean }) {
 	const originReasonId = useId()
 	const setupReasonId = useId()
 	const sharedSetupReason = setupVerificationPending ? actions.preparationReason(1) : undefined
@@ -106,17 +105,6 @@ function DeploymentActions({ actions, setupStage, setupVerificationPending, prog
 		</div>
 	) : undefined
 	const deployButton = (stage: (typeof deployActions)[number]) => <SecurityPoolButton model={actions} action={stage.action} label={stage.label} pendingLabel={stage.pendingLabel} reason={stage.reason} sharedReasonId={stage.reason === copy.originForked ? originReasonId : undefined} onClick={stage.onClick} />
-	if (!progressList)
-		return (
-			<>
-				<UserMessage detail={copy.immutableEconomics} />
-				{actions.creationError === undefined ? undefined : <UserMessage tone='error' detail={actions.creationError} />}
-				{deployButton(deployActions[0])}
-				{actions.admissionAddress === undefined ? undefined : <AddressValue address={actions.admissionAddress} longAbbreviation />}
-				{deployButton(deployActions[1])}
-				{originReason}
-			</>
-		)
 	return (
 		<>
 			<ol className='statoblast-deploy-transactions' aria-label={pageCopy.deployTransactions}>
@@ -157,16 +145,6 @@ function DeploymentTransaction({ label, index, done, current, detail, children }
 			</div>
 			{children}
 		</li>
-	)
-}
-
-/** The legacy pool screen opens the same defaults and deploy actions in a single disclosure. */
-export function SecurityPoolDeploymentForm({ actions }: { actions: SecurityPoolActions }) {
-	return (
-		<div className='form-grid security-pool-creation-form'>
-			<DeploymentFields actions={actions} />
-			<DeploymentActions actions={actions} />
-		</div>
 	)
 }
 
@@ -290,22 +268,31 @@ export function SecurityPoolDeployment({ actions, model }: { actions: SecurityPo
 					<SectionBlock title={pageCopy.deployStepNumber(3, pageCopy.deployAndSetup)} headingLevel={2} description={setupDataNotice ?? pageCopy.deployProgressSaved} className='security-pool-creation-form'>
 						{setupDataNotice !== undefined && <p className='detail'>{pageCopy.deployProgressSaved}</p>}
 						{actions.creationError === undefined ? undefined : <UserMessage tone='error' detail={actions.creationError} />}
-						<DeploymentActions actions={actions} setupStage={setupStage} progressList setupVerificationPending={verifiedSetupStage === undefined && setupStage !== undefined && setupStage < 4} />
-						{openPool === undefined ? undefined : (
+						<DeploymentActions actions={actions} setupStage={setupStage} setupVerificationPending={verifiedSetupStage === undefined && setupStage !== undefined && setupStage < 4} />
+						{actions.pendingDeployment !== undefined && actions.busy === undefined && (
+							<button type='button' className='secondary' disabled={actions.checkingDeploymentReceipt} onClick={() => void actions.refreshDeploymentReceipt()}>
+								{actions.checkingDeploymentReceipt ? pageCopy.deployCheckingReceipt : pageCopy.deployCheckReceipt}
+							</button>
+						)}
+						{(openPool !== undefined || actions.canStartNewDeployment) && (
 							<div className='actions'>
-								<a className='button-link' href={statoblastPageHref({ kind: 'pool', pool: openPool, tab: 'capital' })}>
-									{pageCopy.openSecurityPool}
-								</a>
-								<button
-									type='button'
-									className='secondary'
-									onClick={() => {
-										actions.startNewDeployment()
-										selectStep(0)
-									}}
-								>
-									{pageCopy.deployAnother}
-								</button>
+								{openPool !== undefined && (
+									<a className='button-link' href={statoblastPageHref({ kind: 'pool', pool: openPool, tab: 'capital' })}>
+										{pageCopy.openSecurityPool}
+									</a>
+								)}
+								{actions.canStartNewDeployment && (
+									<button
+										type='button'
+										className='secondary'
+										disabled={actions.busy !== undefined}
+										onClick={() => {
+											if (window.confirm(pageCopy.deployDiscardConfirmation) && actions.startNewDeployment()) selectStep(0)
+										}}
+									>
+										{pageCopy.deployAnother}
+									</button>
+								)}
 							</div>
 						)}
 					</SectionBlock>

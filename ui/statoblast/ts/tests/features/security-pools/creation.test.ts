@@ -29,7 +29,8 @@ test('six-decimal collateral parses minimums in token units and rejects excess p
 
 test('the deployment review states the purchase fee floor and minimum commitment in collateral units', () => {
 	const config = parseSecurityPoolCreationEconomics({ ...defaultSecurityPoolCreationDraft(), minimumCommitment: '100', minimumPurchaseFee: '1.5' }, 6)
-	const review = securityPoolDeploymentReviewDescription('open', config, { decimals: 6, symbol: 'USDC' })
+	const review = securityPoolDeploymentReviewDescription('open', config, { decimals: 6, symbol: 'USDC' }, 30n * 86_400n)
 	expect(review).toContain('minimum 1.5 USDC.')
-	expect(review).toContain('Minimum collateral commitment 100 USDC; fork auction lots may be larger;')
+	expect(review).toContain('Minimum collateral commitment 100 USDC. Rewards vest over 1 day.')
+	expect(review).toContain('30 days.')
 })

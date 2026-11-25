@@ -1,3 +1,5 @@
+import { currentStateCheckFailed } from '@zoltar/ui-core-shared/copy/transaction.js'
+import { changedSinceReview } from '@zoltar/ui-statoblast-shared/copy/app.js'
 import type { ChainBackend, TransactionRequestPreview, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { createCompleteSetInQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { reportOutcomeInQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
@@ -1045,6 +1047,73 @@ test('opens review during the first simulation, blocks sending after a timeout, 
 		timer.mockRestore()
 		transactionSteps.value?.cancel()
 	}
+})
+
+test('Review again re-runs an initially changed check without sending', async () => {
+	const { client, sendTransaction } = setup()
+	const validateBeforeSubmit = mock(async () => undefined)
+	validateBeforeSubmit.mockRejectedValueOnce(new Error(changedSinceReview))
+	const reviewed = createReviewedClient({ ...client, sendTransaction }, undefined, undefined, undefined, true)
+	reviewed.onTransactionPlan?.([{ contractAddress: account, functionName: 'Transfer ETH', value: 1n, validateBeforeSubmit }])
+	const sending = reviewed.sendTransaction({ to: account, value: 1n })
+	void sending.catch(() => undefined)
+	await waitForStarted()
+	await Bun.sleep(5)
+	const check = transactionSteps.value?.reviewCheck
+	expect(check?.status).toBe('changed')
+	if (check?.status !== 'changed') throw new Error('Expected Review again')
+	check.retry()
+	await waitForTransactionStep(0)
+	expect(sendTransaction).not.toHaveBeenCalled()
+	confirm()
+	await expect(sending).resolves.toBe(hash)
+})
+
+test('rebuilding a changed review checks the replacement call and sends it only after confirmation', async () => {
+	const { client, sendTransaction } = setup()
+	const call = mock(async () => ({ data: '0x' as const }))
+	const refreshReviewData = mock(async () => '0x5678' as const)
+	const validateBeforeSubmit = mock(async () => undefined)
+	validateBeforeSubmit.mockRejectedValueOnce(new Error(changedSinceReview))
+	const reviewed = createReviewedClient({ ...client, call, sendTransaction }, undefined, undefined, undefined, true)
+	reviewed.onTransactionPlan?.([{ contractAddress: account, functionName: 'Take over position', data: '0x1234', validateBeforeSubmit, refreshReviewData }])
+	reviewed.onTransactionPrepared?.({ account, contractAddress: account, functionName: 'Take over position', data: '0x1234', args: undefined, chainName: client.chain.name, value: undefined })
+	const sending = reviewed.sendTransaction({ to: account, data: '0x1234' })
+	void sending.catch(() => undefined)
+	await waitForStarted()
+	await Bun.sleep(5)
+	const check = transactionSteps.value?.reviewCheck
+	if (check?.status !== 'changed') throw new Error('Expected Review again')
+	check.retry()
+	await waitForTransactionStep(0)
+	expect(refreshReviewData).toHaveBeenCalledTimes(1)
+	expect(call).toHaveBeenCalledWith(expect.objectContaining({ data: '0x5678' }))
+	expect(sendTransaction).not.toHaveBeenCalled()
+	confirm()
+	await expect(sending).resolves.toBe(hash)
+	expect(sendTransaction).toHaveBeenCalledWith(expect.objectContaining({ data: '0x5678' }))
+})
+
+test('a timeout in the final preflight returns to a review that can retry without sending', async () => {
+	const { client, sendTransaction } = setup()
+	const validateBeforeSubmit = mock(async () => undefined)
+	const reviewed = createReviewedClient({ ...client, sendTransaction }, undefined, undefined, undefined, true)
+	reviewed.onTransactionPlan?.([{ contractAddress: account, functionName: 'Transfer ETH', value: 1n, validateBeforeSubmit }])
+	const sending = reviewed.sendTransaction({ to: account, value: 1n })
+	void sending.catch(() => undefined)
+	await waitForTransactionStep(0)
+	validateBeforeSubmit.mockRejectedValueOnce(new Error(currentStateCheckFailed))
+	confirm()
+	await Bun.sleep(5)
+	const check = transactionSteps.value?.reviewCheck
+	expect(check?.status).toBe('failed')
+	if (check?.status !== 'failed') throw new Error('Expected retryable preflight')
+	expect(sendTransaction).not.toHaveBeenCalled()
+	check.retry()
+	await waitForTransactionStep(0)
+	confirm()
+	await expect(sending).resolves.toBe(hash)
+	expect(sendTransaction).toHaveBeenCalledTimes(1)
 })
 
 test('an aged review exposes changed rows and requires a fresh review confirmation before sending', async () => {

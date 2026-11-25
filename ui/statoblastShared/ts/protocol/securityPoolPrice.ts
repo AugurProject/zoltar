@@ -140,15 +140,20 @@ export function rememberSecurityPoolPriceReport(profile: NetworkProfile, pool: A
 	statoblastDisplayCache(profile, { universeId, owner, page }, value => (value === true ? value : undefined)).write(true, block)
 }
 
-export function securityPoolPriceFundsCache(profile: NetworkProfile, pool: Address, universeId: bigint, owner: Address) {
-	return statoblastDisplayCache(profile, { universeId, owner, page: `price-funds:${pool.toLowerCase()}` }, value => {
-		if (!Array.isArray(value) || !value.every(item => typeof item === 'bigint' && item > 0n && item < 1n << 256n)) return undefined
-		return value.filter((item): item is bigint => typeof item === 'bigint')
+function knownFundedReport(value: unknown) {
+	return decodeStoredValue(value, read => {
+		const reportId = read.bigint('reportId')
+		const funder = read.address('funder')
+		return reportId > 0n && reportId < 1n << 256n ? { reportId, funder } : undefined
 	})
 }
 
+export function securityPoolPriceFundsCache(profile: NetworkProfile, pool: Address, universeId: bigint) {
+	return statoblastDisplayCache(profile, { universeId, owner: undefined, page: `price-funds:${pool.toLowerCase()}` }, value => (Array.isArray(value) ? value.flatMap(item => knownFundedReport(item) ?? []) : undefined))
+}
+
 /** The verified pool snapshot names its factory-registered feed at this block. Only report identities come from disk. */
-export async function loadSecurityPoolPriceFunds(client: Pick<ReadClient, 'multicall' | 'getBlock'>, profile: NetworkProfile, snapshot: Pick<SecurityPoolAccountSnapshot, 'securityPool' | 'universeId' | 'priceFeed' | 'repToken' | 'collateralToken' | 'blockNumber' | 'blockHash'>, wallet: Address) {
+export async function loadSecurityPoolPriceFunds(client: Pick<ReadClient, 'multicall' | 'getBlock'>, profile: NetworkProfile, snapshot: Pick<SecurityPoolAccountSnapshot, 'securityPool' | 'universeId' | 'priceFeed' | 'repToken' | 'collateralToken' | 'blockNumber' | 'blockHash'>) {
 	const { securityPool, universeId, priceFeed, repToken, collateralToken, blockNumber, blockHash } = snapshot
 	if (priceFeed === zeroAddress) return []
 	const calls = [
@@ -164,8 +169,9 @@ export async function loadSecurityPoolPriceFunds(client: Pick<ReadClient, 'multi
 	}
 	const ids = new Set<bigint>()
 	if (pendingId > 0n) ids.add(pendingId)
-	const cache = securityPoolPriceFundsCache(profile, securityPool, universeId, wallet)
-	for (const suffix of cache.pageSuffixes(reportPagePrefix(securityPool))) {
+	const cache = securityPoolPriceFundsCache(profile, securityPool, universeId)
+	for (const funded of cache.read()?.value ?? []) ids.add(funded.reportId)
+	for (const suffix of cache.universePageSuffixes(reportPagePrefix(securityPool))) {
 		const id = knownReportId(suffix)
 		if (id !== undefined) ids.add(id)
 	}
@@ -179,20 +185,20 @@ export async function loadSecurityPoolPriceFunds(client: Pick<ReadClient, 'multi
 		reports.map(id => ({ abi, address: priceFeed, functionName: 'reportCandidates', args: [id] }) as const),
 		blockNumber,
 	)
-	const owned = candidates.flatMap((value, index) => {
+	const registered = candidates.flatMap((value, index) => {
 		const [escrowValue, sponsorValue] = requireTupleValue(value, 3, 'report candidate')
 		const escrow = requireAddressValue(escrowValue, 'report escrow')
-		const sponsor = requireAddressValue(sponsorValue, 'report funder')
+		const funder = requireAddressValue(sponsorValue, 'report funder')
 		const id = reports[index]
-		return id !== undefined && escrow !== zeroAddress && sponsor === getAddress(wallet) ? [{ id, escrow }] : []
+		return id !== undefined && escrow !== zeroAddress && funder !== zeroAddress ? [{ id, escrow, funder }] : []
 	})
-	if (owned.length === 0) {
+	if (registered.length === 0) {
 		await requirePinnedBlock()
 		return []
 	}
 	const funding = await readRequiredMulticall(
 		client,
-		owned.flatMap(
+		registered.flatMap(
 			({ id, escrow }) =>
 				[
 					{ abi: statoblast_openOracle_OpenOracle_OpenOracle.abi, address: oracle, functionName: 'storedGame', args: [id] },
@@ -203,14 +209,14 @@ export async function loadSecurityPoolPriceFunds(client: Pick<ReadClient, 'multi
 		blockNumber,
 	)
 	await requirePinnedBlock()
-	return owned.flatMap(({ id, escrow }, index) => {
+	return registered.flatMap(({ id, escrow, funder }, index) => {
 		const game = requireTupleValue(funding[index * 3], 20, 'stored report')
 		const collateral = releasedCredit(funding[index * 3 + 1])
 		const rep = releasedCredit(funding[index * 3 + 2])
 		const [amount1, amount2, reporter, , settled, token1, , , , , , token2, , , , , callback] = game
 		if (requireAddressValue(callback, 'report receiver') !== escrow || requireAddressValue(token1, 'report collateral') !== collateralToken || requireAddressValue(token2, 'report REP') !== repToken) throw new Error('Report escrow identities do not match this price feed.')
 		const locked = BigInt(requireIntegerLikeValue(settled, 'report settlement time')) === 0n && requireAddressValue(reporter, 'current reporter') === escrow && (requireBigintValue(amount1, 'locked collateral') > 0n || requireBigintValue(amount2, 'locked REP') > 0n)
-		return locked || collateral > 0n || rep > 0n ? [id] : []
+		return locked || collateral > 0n || rep > 0n ? [{ reportId: id, funder }] : []
 	})
 }
 

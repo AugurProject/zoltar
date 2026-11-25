@@ -189,8 +189,20 @@ export function ReportingSection({
 	let minimumPresetKind: Parameters<typeof reportingCopy.minimumPreset>[0] = reportingStatus === 'active' ? 'lead' : 'start'
 	if (reportingContributionTriggersFork(effectiveReportingDetails, selectedOutcome, minimumOutcomeChangeContribution.amountAttoRep)) minimumPresetKind = 'fork'
 	const maxProfitContribution = selectedOutcome === undefined ? { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMaxProfitContribution(effectiveReportingDetails, selectedOutcome)
-	const presetBlocker = reportControlsLocked ? undefined : [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason].find(reason => reason !== undefined && !isRedundantPresetReason(reason))
 	const remainingSelectedOutcomeCapacity = effectiveReportingDetails === undefined || selectedOutcome === undefined ? undefined : getRemainingSelectedOutcomeContributionCapacity(effectiveReportingDetails, selectedOutcome)
+	const minimumAmount = remainingSelectedOutcomeCapacity !== undefined && remainingSelectedOutcomeCapacity > 0n ? effectiveReportingDetails?.startBondAttoRep : undefined
+	const minimumReason = remainingSelectedOutcomeCapacity === 0n ? reportingCopy.selectedSideCapacityEmpty : minimumOutcomeChangeContribution.reason
+	const takeLeadAmount = minimumPresetKind === 'lead' ? minimumOutcomeChangeContribution.amountAttoRep : undefined
+	let takeLeadReason = minimumOutcomeChangeContribution.reason
+	if (minimumPresetKind === 'fork') takeLeadReason = reportingCopy.takeLeadForkReason
+	else if (minimumPresetKind === 'start' && selectedOutcome !== undefined && effectiveReportingDetails !== undefined) takeLeadReason = reportingCopy.takeLeadBeforeFirstReport
+	const outcomePresets = designedOverview
+		? ([
+				{ kind: 'min', amount: minimumAmount, display: minimumAmount, reason: minimumAmount === undefined ? minimumReason : undefined },
+				{ kind: 'takeLead', amount: takeLeadAmount, display: takeLeadAmount, reason: takeLeadReason },
+			] as const)
+		: [{ kind: minimumPresetKind, amount: minimumOutcomeChangeContribution.amountAttoRep, display: minimumPresetAmount, reason: minimumOutcomeChangeContribution.reason }]
+	const presetBlocker = reportControlsLocked ? undefined : [...outcomePresets.map(preset => preset.reason), maxProfitContribution.reason].find(reason => reason !== undefined && !isRedundantPresetReason(reason))
 	const maxContributionAmount = getReportingMaxContribution({ availableReportingRep, details: effectiveReportingDetails, forkConfirmed: forkConfirmation.confirmed, selectedOutcome, usesWalletFunding: true })
 	const presetReasons = [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason, maxContributionAmount.reason].filter((reason, index, reasons) => reason !== undefined && !isRedundantPresetReason(reason) && reason !== presetBlocker && reasons.indexOf(reason) === index)
 	const reportGuardParameters = {
@@ -463,19 +475,21 @@ export function ReportingSection({
 									{!designedOverview && depositPreview}
 
 									<div className='actions'>
-										<button
-											className='secondary'
-											type='button'
-											onClick={() => {
-												if (minimumOutcomeChangeContribution.amountAttoRep === undefined) return
-												onReportingFormChange({ reportAmount: formatCurrencyInputBalance(minimumOutcomeChangeContribution.amountAttoRep) })
-											}}
-											disabled={reportControlsLocked || minimumOutcomeChangeContribution.amountAttoRep === undefined}
-											aria-describedby={presetBlocker !== undefined && minimumOutcomeChangeContribution.reason === presetBlocker ? presetBlockerId : undefined}
-											title={reportControlsLocked ? reportControlsLockedReason : minimumOutcomeChangeContribution.reason}
-										>
-											{reportingCopy.minimumPreset(minimumPresetKind, minimumPresetAmount === undefined ? undefined : <RepAmount rounding='up' value={minimumPresetAmount} />)}
-										</button>
+										{outcomePresets.map(({ kind, amount, display, reason }) => (
+											<button
+												key={kind}
+												className='secondary'
+												type='button'
+												onClick={() => {
+													if (amount !== undefined) onReportingFormChange({ reportAmount: formatCurrencyInputBalance(amount) })
+												}}
+												disabled={reportControlsLocked || amount === undefined}
+												aria-describedby={presetBlocker !== undefined && reason === presetBlocker ? presetBlockerId : undefined}
+												title={reportControlsLocked ? reportControlsLockedReason : reason}
+											>
+												{reportingCopy.minimumPreset(kind, display === undefined ? undefined : <RepAmount rounding='up' value={display} />)}
+											</button>
+										))}
 										<button
 											className='secondary'
 											type='button'

@@ -92,7 +92,7 @@ test('the current mint quote blocks an amount above free pool capacity', async (
 	expect(hook.state().reason).toBe('Insufficient shared REP backing after queued commitment reductions.')
 })
 
-test('Max finds the largest affordable amount with the fresh rounded fee without refreshing or changing the draft', async () => {
+test('Max finds the largest affordable amount with room for the fresh rounded fee cap without refreshing or changing the draft', async () => {
 	const { source, hook, quoteBatches } = await setup(3_000_009n, 0n)
 	const read = source.client.readContract
 	const blockNumbers: (bigint | undefined)[] = []
@@ -108,7 +108,7 @@ test('Max finds the largest affordable amount with the fresh rounded fee without
 	await act(async () => {
 		maximum = await hook.state().findMaximumMintAmount?.()
 	})
-	expect(maximum).toBe(2_803_653n)
+	expect(maximum).toBe(2_785_421n)
 	expect(quoteBatches.mock.calls.length - before).toBeLessThanOrEqual(16)
 	expect(blockNumbers.length).toBeGreaterThan(0)
 	expect(blockNumbers.every(block => block !== undefined && block === blockNumbers[0])).toBe(true)
@@ -139,7 +139,7 @@ test('Max does not turn an unresolved quote into a lower verified maximum', asyn
 	const read = source.client.readContract
 	source.client.readContract = createReadContractStub(async request => {
 		if (request.functionName === 'purchaseQuote') {
-			if (request.args?.[2] === 2_999_999n) throw new Error('Mint fee precision rate unsupported')
+			if (request.args?.[2] === 2_999_998n) throw new Error('Mint fee precision rate unsupported')
 			return [1n, 0n]
 		}
 		return read(request)

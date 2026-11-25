@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { expect, spyOn, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { loadStatoblastQuestion, type QuestionReadCheckpoint } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
 import { loadQuestionLedgerMintCapacity } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
@@ -33,8 +33,6 @@ function fixture({ forked = false, reporting = false, missingSecurityPool = fals
 					return 0n
 				case 'getQuestionOutcome':
 					return 3n
-				case 'getForkTime':
-					return forked ? 900n : 0n
 				case 'priceValidUntil':
 					expect(request.address).toBe(capital)
 					return 1200
@@ -61,7 +59,7 @@ function fixture({ forked = false, reporting = false, missingSecurityPool = fals
 				if (call.functionName === 'escalationGame') return reporting ? token : zeroAddress
 				if (call.functionName === 'systemState') return 0n
 				if (call.functionName === 'getQuestionOutcome') return 3n
-				if (call.functionName === 'getForkTime') return forked ? 900n : 0n
+				if (call.functionName === 'universes') return [forked ? 900n : 0n, forked ? deployment.questionId : 0n]
 				return centralSecurityPoolRead(call.functionName, 'active')
 			})
 		},
@@ -122,6 +120,7 @@ test('retry starts from a new head when the question was missing at the previous
 test('reflects a forked universe without per-question vault scans', async () => {
 	const { question } = await loadStatoblastQuestion(fixture({ forked: true }).client, securityPool, deployment.questionId, deployment.universeId, false)
 	expect(question.universeHasForked).toBe(true)
+	expect(question.forkQuestionId).toBe(deployment.questionId)
 })
 test.each([false, true])('mint capacity uses central fees and closes when reporting starts (%s)', async reporting => {
 	const capacity = await loadQuestionLedgerMintCapacity(fixture({ reporting }).client, owner)
@@ -135,4 +134,36 @@ test('direct question loading never enumerates other deployments', async () => {
 	expect(reads.slice(0, 3)).toEqual(['isSecurityPool', 'getQuestionLedger', 'questionId'])
 	expect(reads).not.toContain('questionLedgerDeploymentCount')
 	expect(reads).not.toContain('questionLedgerDeploymentsRange')
+})
+
+test.each(['expired', 'historical read failed'] as const)('question retries from the latest block when the checkpoint is %s', async condition => {
+	const clock = spyOn(Date, 'now').mockReturnValue(condition === 'expired' ? 61_001 : 1_000)
+	try {
+		const { client } = fixture()
+		const getBlock = client.getBlock
+		client.getBlock = async request => {
+			if (request?.blockNumber === 98n) {
+				if (condition === 'expired') return { ...block, number: 98n }
+				throw new Error('Historical block unavailable')
+			}
+			return getBlock(request)
+		}
+		const checkpoint: QuestionReadCheckpoint = { anchor: { blockHash: block.hash, blockNumber: 98n, timestamp: 990n, observedAt: 1_000 }, ledger: owner }
+		const load = () => loadStatoblastQuestion(client, securityPool, deployment.questionId, deployment.universeId, false, false, checkpoint)
+		await expect(load()).resolves.toMatchObject({ block: { number: 99n, timestamp: 1000n }, observedAt: Date.now() })
+	} finally {
+		clock.mockRestore()
+	}
+})
+
+test('a resumed question keeps the time its block was observed', async () => {
+	const clock = spyOn(Date, 'now').mockReturnValue(20_000)
+	try {
+		const { client } = fixture()
+		const checkpoint: QuestionReadCheckpoint = { anchor: { blockHash: block.hash, blockNumber: block.number, timestamp: block.timestamp, observedAt: 1_000 }, ledger: owner }
+		const result = await loadStatoblastQuestion(client, securityPool, deployment.questionId, deployment.universeId, false, false, checkpoint)
+		expect(result.observedAt).toBe(1_000)
+	} finally {
+		clock.mockRestore()
+	}
 })

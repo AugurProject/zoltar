@@ -1,6 +1,7 @@
 import { expect, spyOn, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { localEntityScopeForNetwork, setEntityFavoriteLabel } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
@@ -75,6 +76,7 @@ test('recent rows show the pool address, age, star, and an Open link for the rec
 		expect(questionRow.textContent).toContain('Will it resolve?')
 		expect(questionRow.textContent).toContain(pool)
 		expect(questionRow.textContent).toContain('opened 2h ago')
+		expect(questionRow.textContent).toContain('Universe 0x7')
 		expect(poolRow.textContent).toContain('opened 2h ago')
 		expect(section.textContent).toContain('Last 20 opened')
 		const questionStar = within(questionRow).getByRole('button', { name: `Favorite: Will it resolve? in security pool ${pool}` })
@@ -93,6 +95,31 @@ test('recent rows show the pool address, age, star, and an Open link for the rec
 	} finally {
 		confirm.mockRestore()
 		clock.mockRestore()
+		restoreEnvironment()
+	}
+})
+
+test('a Fork and recovery open is retained as the destination for the pool', () => {
+	const history = openHistory(profile)
+	const capital = { kind: 'pool', pool, tab: 'capital' } as const
+	const fork = { ...capital, tab: 'fork' } as const
+	history.add(capital, pool, 0n)
+	history.add(fork, pool, 0n)
+	expect(history.read().map(item => item.hash)).toEqual([statoblastPageHash(fork)])
+})
+
+test('a saved question displays its verified title and ignores an old imported label', async () => {
+	installStatoblastRouting()
+	const restoreEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile }))
+	try {
+		const id = `${pool}:${formatQuestionIdHex(question.questionId)}`
+		setEntityFavoriteLabel(localEntityScopeForNetwork(profile, 'statoblast', 'question'), id, 'Forged title')
+		const cache = statoblastDisplayCache(profile, { universeId: 0n, owner: undefined, page: 'watchlist' }, decodeWatchlistRows)
+		cache.write([{ entity: { ...question, id }, status: 'question', question: { marketDetails: { title: 'Verified title', endTime: 1n }, ordinaryEscalationGameStarted: false, questionOutcome: 'none', universeHasForked: false } }], { number: 1n, timestamp: 1n })
+		const view = lifecycle.trackRendered(await renderIntoDocument(<StatoblastWatchlist enabled={false} environmentKey={0} owner={undefined} universe={0n} registerPageRefresh={() => () => undefined} />))
+		expect(view.container.textContent).toContain('Verified title')
+		expect(view.container.textContent).not.toContain('Forged title')
+	} finally {
 		restoreEnvironment()
 	}
 })

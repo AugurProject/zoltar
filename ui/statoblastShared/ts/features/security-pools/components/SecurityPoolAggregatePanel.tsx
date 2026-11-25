@@ -1,64 +1,28 @@
 import { useOldActionDataNotice } from '../../useStatoblastPageRefresh.js'
 import * as pageCopy from '../../../copy/securityPoolPage.js'
 import * as collateralCopy from '../../../copy/collateral.js'
-import type { ComponentChildren } from 'preact'
-import { useEffect, useId, useState } from 'preact/hooks'
+import { useId } from 'preact/hooks'
 import { formatCurrencyBalanceWithUnit, formatDuration, formatRoundedCurrencyBalance, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
-import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import { SecurityPoolButton, SecurityPoolInput, type SecurityPoolActions } from './SecurityPoolControls.js'
 import { SecurityPoolRetirementPreview } from './SecurityPoolRetirementPreview.js'
 import type { useSecurityPoolAggregate } from '../hooks/useSecurityPoolAggregate.js'
-import { capitalPositionPhase, maximumSecurityPoolCommitment, requiredSecurityPoolCollateral } from '../lib/capital.js'
+import { maximumSecurityPoolCommitment, requiredSecurityPoolCollateral } from '../lib/capital.js'
 import * as copy from '../../../copy/securityPoolCapital.js'
-import * as priceCopy from '../../../copy/securityPoolPrice.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 
 type Model = ReturnType<typeof useSecurityPoolAggregate>
-/** The request form is long, so it stays folded unless the price has expired and a new report can be requested. */
-function PriceReportDisclosure({ requestable, children }: { requestable: boolean; children: (unfolded: boolean) => ComponentChildren }) {
-	const [open, setOpen] = useState(requestable)
-	// Never folds by itself: settling a report must not hide the control that still has focus.
-	useEffect(() => {
-		if (requestable) setOpen(true)
-	}, [requestable])
-	// The report stays mounted so folding keeps its drafts; it learns it is folded and reads nothing until unfolded.
-	return (
-		<details open={open} onToggle={event => setOpen(event.currentTarget.open)}>
-			<summary>{priceCopy.scopes.universe.title}</summary>
-			{children(open)}
-		</details>
-	)
-}
-
-/** `priceReport` renders inside Shared backing, next to the price status it refreshes, and is told whether its disclosure is unfolded. */
-export function SecurityPoolAggregatePanel({
-	model,
-	actions,
-	priceReport,
-	priceDeadlineChecking = false,
-	redesigned = false,
-	positionMode = 'own',
-}: {
-	redesigned?: boolean
-	positionMode?: 'own' | 'other' | 'none'
-	priceDeadlineChecking?: boolean
-	model: Model
-	actions: Pick<SecurityPoolActions, 'scope' | 'busy'> & Partial<Pick<SecurityPoolActions, 'lastFailedAction'>>
-	priceReport?: ((unfolded: boolean) => ComponentChildren) | undefined
-}) {
+export function SecurityPoolAggregatePanel({ model, actions, priceDeadlineChecking = false, positionMode = 'own' }: { positionMode?: 'own' | 'other' | 'none'; priceDeadlineChecking?: boolean; model: Model; actions: Pick<SecurityPoolActions, 'scope' | 'busy'> & Partial<Pick<SecurityPoolActions, 'lastFailedAction'>> }) {
 	const snapshot = model.snapshot
-	const oldActionData = useOldActionDataNotice(redesigned && positionMode === 'own' ? model.displayedAt : undefined)
+	const oldActionData = useOldActionDataNotice(positionMode === 'own' ? model.displayedAt : undefined)
 	const actionDescription = (hint: string) =>
 		oldActionData === undefined ? (
 			hint
@@ -71,15 +35,14 @@ export function SecurityPoolAggregatePanel({
 		)
 	const fieldsLoading = model.loading && snapshot === undefined
 	const capitalId = useId()
-	if (redesigned && positionMode === 'none') {
+	if (positionMode === 'none') {
 		return (
 			<SectionBlock title={pageCopy.poolTabLabels.capital}>
 				<UserMessage detail={pageCopy.connectToSeePosition} />
 			</SectionBlock>
 		)
 	}
-	let positionTitle = copy.title
-	if (redesigned) positionTitle = positionMode === 'other' ? pageCopy.position : pageCopy.yourPosition
+	const positionTitle = positionMode === 'other' ? pageCopy.position : pageCopy.yourPosition
 	const currentPosition = snapshot?.positions[0]
 	const queued = currentPosition !== undefined && currentPosition.batch !== 0n
 	const collateral = (value: bigint | undefined) => <CurrencyValue value={value} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
@@ -97,12 +60,6 @@ export function SecurityPoolAggregatePanel({
 	let targetCapacityReason: string | undefined
 	if (disabled) targetCapacityReason = disabledReason
 	else if (model.targetCapacity === undefined) targetCapacityReason = copy.targetUnavailable
-	// A forked or importing universe cannot accept a new report, so only an expired price in an active universe asks for one.
-	const priceRequestable = snapshot !== undefined && !snapshot.priceValid && snapshot.forkTime === 0n && !snapshot.importing
-	let status = priceCurrent ? copy.priceValid : copy.priceStale
-	if (priceDeadlineChecking) status = pageCopy.priceWindowEndedChecking
-	if (snapshot?.importing) status = copy.importing
-	if (snapshot !== undefined && snapshot.forkTime > 0n) status = copy.forked
 	const sections = [
 		{ id: 'deposit', label: copy.deposit, value: rep(snapshot?.ownerPrincipalAttoRep) },
 		{ id: 'commitment', label: pageCopy.commitmentSection, value: `${target}%` },
@@ -133,10 +90,10 @@ export function SecurityPoolAggregatePanel({
 	const depositApproval = (
 		<TokenApprovalControl
 			actionLabel={copy.deposit}
-			compact={redesigned}
-			customAmountDisclosureLabel={redesigned ? copy.adjustApproval : undefined}
-			allowanceError={redesigned && snapshot !== undefined ? undefined : model.readError}
-			allowanceLoading={redesigned ? fieldsLoading : model.loading}
+			compact
+			customAmountDisclosureLabel={copy.adjustApproval}
+			allowanceError={snapshot !== undefined ? undefined : model.readError}
+			allowanceLoading={fieldsLoading}
 			approvedAmount={snapshot?.allowanceAttoRep}
 			disabled={disabled}
 			guardMessage={model.fundingReason}
@@ -157,10 +114,10 @@ export function SecurityPoolAggregatePanel({
 	const healthApproval = (
 		<TokenApprovalControl
 			actionLabel={copy.depositHealth}
-			compact={redesigned}
-			customAmountDisclosureLabel={redesigned ? copy.adjustApproval : undefined}
-			allowanceError={redesigned && snapshot !== undefined ? undefined : model.readError}
-			allowanceLoading={redesigned ? fieldsLoading : model.loading}
+			compact
+			customAmountDisclosureLabel={copy.adjustApproval}
+			allowanceError={snapshot !== undefined ? undefined : model.readError}
+			allowanceLoading={fieldsLoading}
 			approvedAmount={snapshot?.allowanceAttoRep}
 			disabled={disabled}
 			guardMessage={model.healthFundingReason}
@@ -178,75 +135,40 @@ export function SecurityPoolAggregatePanel({
 
 	const healthDeposit = <SecurityPoolButton model={actions} action='depositSecurityPoolHealthRep' label={copy.depositHealth} pendingLabel={copy.depositingHealth} reason={model.healthDepositReason} onClick={model.depositAndSetHealth} />
 	return (
-		<div className={redesigned ? 'statoblast-capital-layout' : 'route-view-flow'}>
-			{redesigned && (
-				<nav className='statoblast-capital-nav' aria-label={pageCopy.capitalSections}>
-					{sections.map(section => (
-						<button
-							key={section.id}
-							type='button'
-							className='secondary'
-							onClick={() => {
-								const heading = document.getElementById(`${capitalId}-${section.id}`)
-								heading?.scrollIntoView({ block: 'start' })
-								heading?.focus({ preventScroll: true })
-							}}
-						>
-							{section.label}
-							{snapshot !== undefined && section.value !== undefined && <small>{section.value}</small>}
-						</button>
-					))}
-				</nav>
-			)}
-			{!redesigned && (
-				<SectionBlock className='statoblast-capital-facts' title={copy.poolTitle} description={copy.poolDescription}>
-					{model.showingPreviousSnapshot ? <UserMessage detail={copy.lastConfirmed} /> : undefined}
-					{snapshot === undefined ? undefined : (
-						<Badge className='badge-wrap' tone={priceCurrent ? 'ok' : 'warning'}>
-							{status}
-						</Badge>
-					)}
-					<MetricGrid>
-						<MetricField label={copy.totalPledged} loading={fieldsLoading}>
-							<CurrencyValue value={snapshot?.totalPledgedAttoRep} suffix={common.rep} />
-						</MetricField>
-						<MetricField label={copy.healthyCommitment} loading={fieldsLoading}>
-							<CurrencyValue value={snapshot?.healthyCommitmentAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
-						</MetricField>
-						<MetricField label={copy.demand} loading={fieldsLoading}>
-							<CurrencyValue value={snapshot?.demandAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
-						</MetricField>
-						<MetricField label={copy.availableCapacity} loading={fieldsLoading}>
-							<CurrencyValue value={snapshot?.availableMintCapacityAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
-						</MetricField>
-						<MetricField label={copy.priceExpiry} loading={fieldsLoading}>
-							<TimestampValue timestamp={snapshot?.priceValidUntil} relative={false} zeroText={copy.noPrice} />
-						</MetricField>
-						<MetricField label={copy.snapshotTime} loading={fieldsLoading}>
-							<TimestampValue timestamp={snapshot?.timestamp} relative={false} />
-						</MetricField>
-					</MetricGrid>
-					{priceReport === undefined ? undefined : <PriceReportDisclosure requestable={priceRequestable}>{priceReport}</PriceReportDisclosure>}
-				</SectionBlock>
-			)}
-			<SectionBlock className='statoblast-capital-position' title={positionTitle} description={redesigned ? undefined : copy.description}>
+		<div className='statoblast-capital-layout'>
+			<nav className='statoblast-capital-nav' aria-label={pageCopy.capitalSections}>
+				{sections.map(section => (
+					<button
+						key={section.id}
+						type='button'
+						className='secondary'
+						onClick={() => {
+							const heading = document.getElementById(`${capitalId}-${section.id}`)
+							heading?.scrollIntoView({ block: 'start' })
+							heading?.focus({ preventScroll: true })
+						}}
+					>
+						{section.label}
+						{snapshot !== undefined && section.value !== undefined && <small>{section.value}</small>}
+					</button>
+				))}
+			</nav>
+			<SectionBlock className='statoblast-capital-position' title={positionTitle}>
 				{snapshot?.auctionVault === undefined ? undefined : <UserMessage detail={copy.auctionVaultOwnership} />}
-				{redesigned && (
-					<div className='statoblast-health-gauge'>
-						<strong>{health === undefined ? pageCopy.healthUnavailable : pageCopy.formatHealth(health.toLocaleString('en-US', { maximumFractionDigits: 1 }))}</strong>
-						{health !== undefined && (
-							<div className='statoblast-marked-meter'>
-								<meter min={0} max={gaugeMax} low={liquidation} high={100} optimum={target} value={Math.min(health, gaugeMax)} aria-label={pageCopy.positionHealth} />
-								{[liquidation, 100, target].map((point, index) => (point === undefined ? undefined : <span key={index} aria-hidden='true' style={{ insetInlineStart: `${Math.min(99, (point * 100) / gaugeMax)}%` }} />))}
-							</div>
-						)}
-						<p>
-							{liquidation === undefined ? pageCopy.liquidationThresholdUnavailable : pageCopy.formatLiquidation(liquidation)}
-							{pageCopy.backingAndTargetTail}
-							{target}%
-						</p>
-					</div>
-				)}
+				<div className='statoblast-health-gauge'>
+					<strong>{health === undefined ? pageCopy.healthUnavailable : pageCopy.formatHealth(health.toLocaleString('en-US', { maximumFractionDigits: 1 }))}</strong>
+					{health !== undefined && (
+						<div className='statoblast-marked-meter'>
+							<meter min={0} max={gaugeMax} low={liquidation} high={100} optimum={target} value={Math.min(health, gaugeMax)} aria-label={pageCopy.positionHealth} />
+							{[liquidation, 100, target].map((point, index) => (point === undefined ? undefined : <span key={index} aria-hidden='true' style={{ insetInlineStart: `${Math.min(99, (point * 100) / gaugeMax)}%` }} />))}
+						</div>
+					)}
+					<p>
+						{liquidation === undefined ? pageCopy.liquidationThresholdUnavailable : pageCopy.formatLiquidation(liquidation)}
+						{pageCopy.backingAndTargetTail}
+						{target}%
+					</p>
+				</div>
 
 				<MetricGrid>
 					<MetricField label={copy.withdrawableRep} loading={fieldsLoading}>
@@ -263,212 +185,118 @@ export function SecurityPoolAggregatePanel({
 					</MetricField>
 				</MetricGrid>
 			</SectionBlock>
-			<SectionBlock headingId={`${capitalId}-deposit`} title={copy.deposit} description={actionDescription(redesigned ? copy.idleDepositHint : copy.depositHint)}>
-				<SecurityPoolInput label={copy.repAmount} value={model.depositAmount} onChange={model.setDepositAmount} disabled={disabled} hint={redesigned && snapshot !== undefined ? copy.walletBalanceHint(formatCurrencyBalanceWithUnit(snapshot.walletAttoRep, common.rep)) : undefined} numeric />
-				{redesigned ? (
+			<SectionBlock headingId={`${capitalId}-deposit`} title={copy.deposit} description={actionDescription(copy.idleDepositHint)}>
+				<SecurityPoolInput label={copy.repAmount} value={model.depositAmount} onChange={model.setDepositAmount} disabled={disabled} hint={snapshot !== undefined ? copy.walletBalanceHint(formatCurrencyBalanceWithUnit(snapshot.walletAttoRep, common.rep)) : undefined} numeric />
+				<ol className='statoblast-capital-actions'>
+					<li>{depositApproval}</li>
+					<li>{depositAction}</li>
+				</ol>
+			</SectionBlock>
+			<SectionBlock headingId={`${capitalId}-commitment`} title={pageCopy.commitmentSection} description={oldActionData}>
+				<UserMessage tone='warning' detail={liquidationNotice} />
+				<details>
+					<summary>{copy.howTargetWorks}</summary>
+					<UserMessage detail={copy.healthHint} />
+				</details>
+				<div className='statoblast-capital-plan'>
+					<div>
+						<SecurityPoolInput label={copy.health} value={model.healthPercent} onChange={model.setHealthPercent} disabled={disabled} numeric />
+						<SecurityPoolInput label={copy.commitment} hint={queued ? copy.queuedCommitmentLock : undefined} value={model.commitmentAmount} onChange={model.setCommitmentAmount} disabled={disabled || queued} numeric />
+						{snapshot !== undefined && (
+							<div className='statoblast-capital-presets'>
+								<button type='button' className='secondary' disabled={disabled || queued} onClick={() => model.setCommitmentAmount(formatUnits(snapshot.ownerCommitmentAttoEth, snapshot.collateral.decimals))}>
+									{copy.currentCommitmentPreset}
+								</button>
+								<ActionLauncherButton tone='secondary' idleLabel={common.max} pendingLabel={common.max} availability={{ disabled: queued || targetCapacityReason !== undefined, reason: queued ? copy.queuedCommitmentLock : targetCapacityReason }} onClick={model.useTargetCapacity} />
+							</div>
+						)}
+						<SecurityPoolInput
+							label={copy.optionalHealthDeposit}
+							hint={model.targetShortfall === undefined || model.targetShortfall === 0n ? undefined : copy.repToReachTarget(formatCurrencyBalanceWithUnit(model.targetShortfall, common.rep))}
+							value={model.healthDepositAmount}
+							onChange={model.setHealthDepositAmount}
+							disabled={disabled}
+							numeric
+						/>
+						<details>
+							<summary>{copy.olderPriceReport}</summary>
+							<SecurityPoolInput label={copy.reportId} hint={copy.reportHint} value={model.reportInput} onChange={model.setReportInput} disabled={disabled || queued} />
+						</details>
+					</div>
+					{snapshot !== undefined && (
+						<table className='statoblast-capital-preview'>
+							<caption>{copy.preview}</caption>
+							<thead>
+								<tr>
+									<td />
+									<th scope='col'>{copy.previewBefore}</th>
+									<th scope='col'>{copy.previewAfter}</th>
+								</tr>
+							</thead>
+							<tbody>
+								{previewRows.map(row => (
+									<tr key={row.label}>
+										<th scope='row'>{row.label}</th>
+										<td>{row.before}</td>
+										<td>{row.after ?? '—'}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					)}
+				</div>
+				{(addRep || targetChanged || commitmentChanged) && (
 					<ol className='statoblast-capital-actions'>
-						<li>{depositApproval}</li>
-						<li>{depositAction}</li>
+						{addRep && (model.healthDepositAttoRep === undefined || snapshot === undefined || snapshot.allowanceAttoRep < model.healthDepositAttoRep) && <li>{healthApproval}</li>}
+						{addRep ? (
+							<li>{healthDeposit}</li>
+						) : (
+							targetChanged && (
+								<li>
+									<SecurityPoolButton model={actions} action='setSecurityPoolHealth' label={copy.saveHealth} pendingLabel={copy.savingHealth} reason={model.healthReason} onClick={model.setHealth} />
+								</li>
+							)
+						)}
+						{commitmentChanged && (
+							<li>
+								<SecurityPoolButton model={actions} action='authorizeSecurityPoolCommitment' label={copy.setCommitment} pendingLabel={copy.authorizing} reason={addRep ? copy.depositBeforeCommitment : model.authorizeReason} onClick={model.authorize} />
+							</li>
+						)}
 					</ol>
-				) : (
-					<>
-						{depositApproval}
-						{depositAction}
-					</>
 				)}
 			</SectionBlock>
-			{redesigned ? (
-				<SectionBlock headingId={`${capitalId}-commitment`} title={pageCopy.commitmentSection} description={oldActionData}>
-					<UserMessage tone='warning' detail={liquidationNotice} />
-					<details>
-						<summary>{copy.howTargetWorks}</summary>
-						<UserMessage detail={copy.healthHint} />
-					</details>
-					<div className='statoblast-capital-plan'>
-						<div>
-							<SecurityPoolInput label={copy.health} value={model.healthPercent} onChange={model.setHealthPercent} disabled={disabled} numeric />
-							<SecurityPoolInput label={copy.commitment} hint={queued ? copy.queuedCommitmentLock : undefined} value={model.commitmentAmount} onChange={model.setCommitmentAmount} disabled={disabled || queued} numeric />
-							{snapshot !== undefined && (
-								<div className='statoblast-capital-presets'>
-									<button type='button' className='secondary' disabled={disabled || queued} onClick={() => model.setCommitmentAmount(formatUnits(snapshot.ownerCommitmentAttoEth, snapshot.collateral.decimals))}>
-										{copy.currentCommitmentPreset}
-									</button>
-									<ActionLauncherButton tone='secondary' idleLabel={common.max} pendingLabel={common.max} availability={{ disabled: queued || targetCapacityReason !== undefined, reason: queued ? copy.queuedCommitmentLock : targetCapacityReason }} onClick={model.useTargetCapacity} />
-								</div>
-							)}
-							<SecurityPoolInput
-								label={copy.optionalHealthDeposit}
-								hint={model.targetShortfall === undefined || model.targetShortfall === 0n ? undefined : copy.repToReachTarget(formatCurrencyBalanceWithUnit(model.targetShortfall, common.rep))}
-								value={model.healthDepositAmount}
-								onChange={model.setHealthDepositAmount}
-								disabled={disabled}
-								numeric
-							/>
-							<details>
-								<summary>{copy.olderPriceReport}</summary>
-								<SecurityPoolInput label={copy.reportId} hint={copy.reportHint} value={model.reportInput} onChange={model.setReportInput} disabled={disabled || queued} />
-							</details>
-						</div>
-						{snapshot !== undefined && (
-							<table className='statoblast-capital-preview'>
-								<caption>{copy.preview}</caption>
-								<thead>
-									<tr>
-										<td />
-										<th scope='col'>{copy.previewBefore}</th>
-										<th scope='col'>{copy.previewAfter}</th>
-									</tr>
-								</thead>
-								<tbody>
-									{previewRows.map(row => (
-										<tr key={row.label}>
-											<th scope='row'>{row.label}</th>
-											<td>{row.before}</td>
-											<td>{row.after ?? '—'}</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
-						)}
-					</div>
-					{(addRep || targetChanged || commitmentChanged) && (
-						<ol className='statoblast-capital-actions'>
-							{addRep && (model.healthDepositAttoRep === undefined || snapshot === undefined || snapshot.allowanceAttoRep < model.healthDepositAttoRep) && <li>{healthApproval}</li>}
-							{addRep ? (
-								<li>{healthDeposit}</li>
-							) : (
-								targetChanged && (
-									<li>
-										<SecurityPoolButton model={actions} action='setSecurityPoolHealth' label={copy.saveHealth} pendingLabel={copy.savingHealth} reason={model.healthReason} onClick={model.setHealth} />
-									</li>
-								)
-							)}
-							{commitmentChanged && (
-								<li>
-									<SecurityPoolButton model={actions} action='authorizeSecurityPoolCommitment' label={copy.setCommitment} pendingLabel={copy.authorizing} reason={addRep ? copy.depositBeforeCommitment : model.authorizeReason} onClick={model.authorize} />
-								</li>
-							)}
-						</ol>
-					)}
-				</SectionBlock>
-			) : (
-				<SectionBlock headingId={`${capitalId}-commitment`} title={copy.authorize} description={copy.authorizationHint}>
-					<SecurityPoolInput label={copy.health} hint={copy.healthHint} value={model.healthPercent} onChange={model.setHealthPercent} disabled={disabled} numeric />
-					<MetricGrid>
-						<MetricField label={copy.targetCapacity}>
-							<CurrencyValue value={model.targetCapacity} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
-						</MetricField>
-						<MetricField label={copy.targetShortfall}>
-							<CurrencyValue value={model.targetShortfall} suffix={common.rep} />
-						</MetricField>
-					</MetricGrid>
-					<SecurityPoolButton model={actions} action='setSecurityPoolHealth' label={copy.saveHealth} pendingLabel={copy.savingHealth} reason={model.healthReason} onClick={model.setHealth} />
-					<details>
-						<summary>{copy.healthDepositDetails}</summary>
-						<SecurityPoolInput label={copy.healthDepositAmount} hint={copy.healthDepositHint} value={model.healthDepositAmount} onChange={model.setHealthDepositAmount} disabled={disabled} numeric />
-						{healthApproval}
-						{healthDeposit}
-					</details>
-					<MetricGrid>
-						<SecurityPoolInput label={copy.activeCommitment} value={model.commitmentAmount} onChange={model.setCommitmentAmount} disabled={disabled} numeric />
-					</MetricGrid>
-					<ActionLauncherButton tone='secondary' idleLabel={copy.useTargetCapacity} pendingLabel={copy.useTargetCapacity} availability={{ disabled: targetCapacityReason !== undefined, reason: targetCapacityReason }} onClick={model.useTargetCapacity} />
-					<MetricGrid>
-						<MetricField label={copy.requiredCollateral}>
-							<CurrencyValue value={model.requiredCollateral} suffix={common.rep} />
-						</MetricField>
-						<MetricField label={copy.minimumCommitment}>
-							<CurrencyValue value={snapshot?.economics.minimumCommitmentAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
-						</MetricField>
-					</MetricGrid>
-					<SecurityPoolInput label={copy.reportId} hint={copy.reportHint} value={model.reportInput} onChange={model.setReportInput} disabled={disabled} />
-					<SecurityPoolButton model={actions} action='authorizeSecurityPoolCommitment' label={copy.authorize} pendingLabel={copy.authorizing} reason={model.authorizeReason} onClick={model.authorize} />
-				</SectionBlock>
-			)}
 
-			<SectionBlock headingId={`${capitalId}-reduce`} title={redesigned ? pageCopy.reduceCommitment : copy.positions} description={actionDescription(redesigned ? copy.queueHint : copy.positionsHint)}>
+			<SectionBlock headingId={`${capitalId}-reduce`} title={pageCopy.reduceCommitment} description={actionDescription(copy.queueHint)}>
 				{snapshot !== undefined && model.livePositions.length === 0 ? <EmptyState title={copy.noPositions} detail={copy.noPositionsHint} /> : undefined}
 				{model.livePositions.map(position => {
 					const reasons = model.positionReasons(position.id, position.batch === 0n ? undefined : position.remainingCommitment)
-					if (redesigned && snapshot !== undefined) {
-						const key = String(position.id)
-						if (position.batch === 0n) {
-							return (
-								<div key={key}>
-									<SecurityPoolInput label={copy.remainingCommitment} value={model.remainingCommitmentAmount} onChange={model.setRemainingCommitmentAmount} disabled={disabled} numeric />
-									<SecurityPoolButton model={actions} action={`retireSecurityPool-${position.id}`} label={copy.requestReduction} pendingLabel={copy.retiring} reason={reasons.retire} onClick={() => model.retire(position.id)} />
-								</div>
-							)
-						}
-						const keep = formatCurrencyBalanceWithUnit(position.remainingCommitment, snapshot.collateral.symbol, snapshot.collateral.decimals)
-						const waitingReasonId = model.serveReason === copy.waitingForFreeCapacity ? `${capitalId}-${key}-waiting` : undefined
-						let releaseLabel = copy.releaseKeeping(keep)
-						if (model.serveReason === copy.waitingForFreeCapacity) releaseLabel = copy.waitingForFreeCapacity
-						else if (actions.lastFailedAction === 'serveSecurityPoolRetirement') releaseLabel = copy.retryRelease
+					if (snapshot === undefined) return undefined
+					const key = String(position.id)
+					if (position.batch === 0n) {
 						return (
 							<div key={key}>
-								<SecurityPoolRetirementPreview snapshot={snapshot} position={position} redesigned />
-								{waitingReasonId !== undefined && (
-									<span className='visually-hidden' id={waitingReasonId}>
-										{copy.waitingForFreeCapacity}
-									</span>
-								)}
-								<SecurityPoolButton model={actions} action='serveSecurityPoolRetirement' label={releaseLabel} pendingLabel={copy.serving} reason={model.serveReason} sharedReasonId={actions.busy === undefined ? waitingReasonId : undefined} onClick={model.serve} />
+								<SecurityPoolInput label={copy.remainingCommitment} value={model.remainingCommitmentAmount} onChange={model.setRemainingCommitmentAmount} disabled={disabled} numeric />
+								<SecurityPoolButton model={actions} action={`retireSecurityPool-${position.id}`} label={copy.requestReduction} pendingLabel={copy.retiring} reason={reasons.retire} onClick={() => model.retire(position.id)} />
 							</div>
 						)
 					}
-					const required = snapshot === undefined ? 0n : requiredSecurityPoolCollateral({ ...snapshot, ownerAccount: { ...snapshot.ownerAccount, targetHealthFactorBps: 10_000n } }, snapshot.ownerCommitmentAttoEth)
-					const healthy = snapshot !== undefined && position.rep >= required
-					const targetMet = snapshot !== undefined && position.rep >= requiredSecurityPoolCollateral(snapshot, position.commitment)
-					const health = snapshot !== undefined && priceCurrent && required > 0n ? `${formatUnits((position.rep * 10_000n) / required, 2)}%` : copy.healthUnknown
-					let liquidationStatus: string = copy.healthUnknown
-					if (snapshot !== undefined && priceCurrent) liquidationStatus = position.maxHealthyPrice >= snapshot.liquidationPrice ? copy.liquidationHealthy : copy.liquidationUnhealthy
-					let retirementSizingReason: string | undefined
-					if (disabled) retirementSizingReason = disabledReason
-					else if (position.batch !== 0n) retirementSizingReason = copy.retirementRequested
-					else if (model.retirementTargetCapacity === undefined) retirementSizingReason = copy.targetUnavailable
-					else if (model.retirementTargetCapacity >= position.commitment) retirementSizingReason = copy.currentTargetSatisfied
+					const keep = formatCurrencyBalanceWithUnit(position.remainingCommitment, snapshot.collateral.symbol, snapshot.collateral.decimals)
+					const waitingReasonId = model.serveReason === copy.waitingForFreeCapacity ? `${capitalId}-${key}-waiting` : undefined
+					let releaseLabel = copy.releaseKeeping(keep)
+					if (model.serveReason === copy.waitingForFreeCapacity) releaseLabel = copy.waitingForFreeCapacity
+					else if (actions.lastFailedAction === 'serveSecurityPoolRetirement') releaseLabel = copy.retryRelease
 					return (
-						<WorkflowSubsection key={String(position.id)} title={copy.position(position.id)} badge={<Badge>{copy.phase[capitalPositionPhase(position.batch, snapshot?.currentBatch ?? 0n)]}</Badge>}>
-							<MetricGrid>
-								<MetricField label={copy.positionPledged}>
-									<CurrencyValue value={position.rep} suffix={common.rep} />
-								</MetricField>
-								<MetricField label={copy.positionCommitment}>
-									<CurrencyValue value={position.commitment} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
-								</MetricField>
-								<MetricField label={copy.currentHealth}>{health}</MetricField>
-								<MetricField label={copy.liquidationHealth}>{liquidationStatus}</MetricField>
-								<MetricField label={copy.liquidationSince}>
-									<TimestampValue timestamp={position.liquidationStarted} relative={false} zeroText={copy.noLiquidationInterval} />
-								</MetricField>
-								{position.batch === 0n ? undefined : (
-									<MetricField label={copy.queuedRemainingCommitment}>
-										<CurrencyValue value={position.remainingCommitment} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
-									</MetricField>
-								)}
-							</MetricGrid>
-							{priceCurrent && !healthy ? <UserMessage tone='warning' detail={copy.unhealthy} /> : undefined}
-							{priceCurrent && healthy && !targetMet ? <UserMessage tone='warning' detail={copy.belowTarget} /> : undefined}
-							<UserMessage detail={copy.liquidationHint(snapshot?.liquidationDuration === undefined ? undefined : formatDuration(snapshot.liquidationDuration))} />
-							{position.liquidationStarted === 0n ? undefined : <UserMessage detail={copy.liquidationTimingHint} />}
-							{snapshot === undefined || position.batch === 0n ? undefined : <SecurityPoolRetirementPreview snapshot={snapshot} position={position} />}
-							{/* A queued target stays fixed; repeating it lets the ledger cure or release capacity. */}
-							{position.batch === 0n ? (
-								<>
-									<SecurityPoolInput label={copy.remainingCommitment} hint={copy.remainingCommitmentHint} value={model.remainingCommitmentAmount} onChange={model.setRemainingCommitmentAmount} disabled={disabled} numeric />
-									<ActionLauncherButton tone='secondary' idleLabel={copy.retireToTarget} pendingLabel={copy.retireToTarget} availability={{ disabled: retirementSizingReason !== undefined, reason: retirementSizingReason }} onClick={model.retireToTarget} />
-									<UserMessage detail={copy.retirementTargetHint} />
-									<div className='actions'>
-										<SecurityPoolButton model={actions} action={`retireSecurityPool-${position.id}`} label={copy.retire} pendingLabel={copy.retiring} reason={reasons.retire} onClick={() => model.retire(position.id)} />
-									</div>
-								</>
-							) : undefined}
-							{position.batch !== 0n && <SecurityPoolButton model={actions} action={`retireSecurityPool-${position.id}`} label={copy.resubmitRetirement} pendingLabel={copy.resubmittingRetirement} reason={reasons.retire} onClick={() => model.retire(position.id, position.remainingCommitment)} />}
-						</WorkflowSubsection>
+						<div key={key}>
+							<SecurityPoolRetirementPreview snapshot={snapshot} position={position} redesigned />
+							{waitingReasonId !== undefined && (
+								<span className='visually-hidden' id={waitingReasonId}>
+									{copy.waitingForFreeCapacity}
+								</span>
+							)}
+							<SecurityPoolButton model={actions} action='serveSecurityPoolRetirement' label={releaseLabel} pendingLabel={copy.serving} reason={model.serveReason} sharedReasonId={actions.busy === undefined ? waitingReasonId : undefined} onClick={model.serve} />
+						</div>
 					)
 				})}
-				{!redesigned && <SecurityPoolButton model={actions} action='serveSecurityPoolRetirement' label={copy.serve} pendingLabel={copy.serving} reason={model.serveReason} onClick={model.serve} />}
 			</SectionBlock>
 			<SectionBlock headingId={`${capitalId}-withdraw`} title={copy.withdraw} description={actionDescription(copy.withdrawHint)}>
 				<SecurityPoolInput
@@ -476,9 +304,8 @@ export function SecurityPoolAggregatePanel({
 					value={model.withdrawalAmount}
 					onChange={model.setWithdrawalAmount}
 					disabled={disabled}
-					hint={redesigned && snapshot !== undefined ? copy.maximumWithdrawalHint(formatValueWithUnit(formatRoundedCurrencyBalance(snapshot.withdrawableAttoRep, 18, 2, 'down'), common.rep)) : undefined}
+					hint={snapshot !== undefined ? copy.maximumWithdrawalHint(formatValueWithUnit(formatRoundedCurrencyBalance(snapshot.withdrawableAttoRep, 18, 2, 'down'), common.rep)) : undefined}
 					action={
-						redesigned &&
 						snapshot !== undefined && (
 							<button type='button' className='secondary' disabled={disabled || snapshot.withdrawableAttoRep === 0n} onClick={() => model.setWithdrawalAmount(formatUnits(snapshot.withdrawableAttoRep, 18))}>
 								{common.max}
@@ -489,7 +316,7 @@ export function SecurityPoolAggregatePanel({
 				/>
 				<SecurityPoolButton model={actions} action='withdrawSecurityPoolRep' label={copy.withdraw} pendingLabel={copy.withdrawing} reason={model.withdrawReason} onClick={model.withdraw} />
 			</SectionBlock>
-			<SectionBlock headingId={`${capitalId}-earnings`} title={copy.earnings} description={actionDescription(redesigned && snapshot !== undefined ? copy.formatRewardVesting(formatDuration(snapshot.economics.rewardVestingSeconds)) : copy.earningsHint)}>
+			<SectionBlock headingId={`${capitalId}-earnings`} title={copy.earnings} description={actionDescription(snapshot !== undefined ? copy.formatRewardVesting(formatDuration(snapshot.economics.rewardVestingSeconds)) : copy.earningsHint)}>
 				<MetricGrid>
 					<MetricField label={copy.ethEarnings} loading={fieldsLoading}>
 						<CurrencyValue value={snapshot?.claimableEarnings?.attoEth ?? snapshot?.accruedFeesAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />

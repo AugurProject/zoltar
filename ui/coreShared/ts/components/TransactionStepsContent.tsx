@@ -137,7 +137,7 @@ function TransactionStepLifecycle({ current, detail, close }: { current: Workflo
 			{hash === undefined ? undefined : <TransactionHashLink hash={hash} />}
 			<div className='actions'>
 				<button className='secondary' type='button' onClick={close}>
-					{hash === undefined && !canceled ? copy.reviewAgain : commonCopy.close}
+					{commonCopy.close}
 				</button>
 			</div>
 		</div>

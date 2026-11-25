@@ -11,7 +11,7 @@ import { readLocatedDeposit, reportingDepositStore } from './reportingDeposits.j
 import { reportingDepositRead } from './reportingDepositSearch.js'
 import { checkStatoblastEntries } from './statoblastEntries.js'
 
-type SavedWatchlistEntry = { kind: 'pool'; pool: Address; label?: string } | { kind: 'question'; pool: Address; questionId: bigint; label?: string }
+type SavedWatchlistEntry = { kind: 'pool'; pool: Address; label?: string } | { kind: 'question'; pool: Address; questionId: bigint }
 
 function unsignedDecimal(value: unknown) {
 	return typeof value === 'string' && /^\d{1,78}$/u.test(value) ? BigInt(value) : undefined
@@ -24,7 +24,7 @@ function readSavedEntry(value: unknown): SavedWatchlistEntry | undefined {
 	if (value['kind'] === 'pool') return { kind: 'pool', pool, ...label }
 	if (value['kind'] !== 'question') return undefined
 	const questionId = unsignedDecimal(value['questionId'])
-	return questionId === undefined || questionId >= 1n << 256n ? undefined : { kind: 'question', pool, questionId, ...label }
+	return questionId === undefined || questionId >= 1n << 256n ? undefined : { kind: 'question', pool, questionId }
 }
 
 function readDeposit(value: unknown) {
@@ -34,11 +34,11 @@ function readDeposit(value: unknown) {
 
 export function exportStatoblastWatchlist(profile: NetworkProfile) {
 	const savedPools = readFavoriteEntries(localEntityScopeForNetwork(profile, 'statoblast', 'pool')).map(({ id, label }) => ({ kind: 'pool', pool: id, label }))
-	const savedQuestions = readFavoriteEntries(localEntityScopeForNetwork(profile, 'statoblast', 'question')).flatMap(({ id, label }) => {
+	const savedQuestions = readFavoriteEntries(localEntityScopeForNetwork(profile, 'statoblast', 'question')).flatMap(({ id }) => {
 		const [pool, rawQuestionId] = id.split(':')
 		const questionId = rawQuestionId === undefined ? undefined : normalizeQuestionId(rawQuestionId)
 		if (pool === undefined || !isAddress(pool) || questionId === undefined) return []
-		return [{ kind: 'question', pool, questionId: BigInt(questionId).toString(), label }]
+		return [{ kind: 'question', pool, questionId: BigInt(questionId).toString() }]
 	})
 	const deposits = reportingDepositStore(profile)
 		.read()
@@ -123,7 +123,7 @@ export async function importStatoblastWatchlist(client: Pick<ReadClient, 'getBlo
 	for (const entry of acceptedSaved) {
 		const id = entry.kind === 'pool' ? entry.pool : `${entry.pool}:${formatQuestionIdHex(entry.questionId)}`
 		const scope = localEntityScopeForNetwork(profile, 'statoblast', entry.kind)
-		if (entry.label === undefined) setEntityFavorite(scope, id, true)
+		if (entry.kind === 'question' || entry.label === undefined) setEntityFavorite(scope, id, true)
 		else setEntityFavoriteLabel(scope, id, entry.label, false)
 	}
 	return { skipped: value['saved'].length + value['deposits'].length - acceptedSaved.length - acceptedDeposits.length }

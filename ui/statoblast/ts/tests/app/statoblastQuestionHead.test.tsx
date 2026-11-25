@@ -55,3 +55,20 @@ test.each([
 	expect(view.container.querySelector('.statoblast-question-stage .badge')?.textContent).toBe('Resolved')
 	expect(view.container.textContent).not.toContain('Ended undecided')
 })
+
+test.each([
+	{ forkQuestionId: 1n, started: true, phase: 'Undecided · fork step', current: 'Fork' },
+	{ forkQuestionId: 2n, started: true, phase: 'Response window', current: 'Response window' },
+	{ forkQuestionId: 2n, started: false, phase: 'Trading', current: 'Trading' },
+])('a forked universe keeps the actual question stage when forked question ID is $forkQuestionId', async ({ forkQuestionId, started, phase, current }) => {
+	installStatoblastRouting()
+	const heading = decodeQuestionHeading({ ...question, ordinaryEscalationGameStarted: started, questionOutcome: 'none', universeHasForked: true, forkQuestionId, forkedAt: 5n })
+	if (heading === undefined) throw new Error('Saved heading was not decoded')
+	const view = lifecycle.trackRendered(await renderIntoDocument(<StatoblastQuestionHead page={{ kind: 'question', pool, questionId: 1n, tab: 'reporting' }} question={heading} reporting={undefined} now={20n} hasShares={false} />))
+	expect(view.container.querySelector('.statoblast-question-stage .badge')?.textContent).toBe(phase)
+	expect(view.container.querySelector('.statoblast-question-progress [aria-current=step] strong')?.textContent).toBe(current)
+	if (forkQuestionId === 2n) {
+		expect(view.container.textContent).toContain('This universe has forked.')
+		expect(view.container.textContent).not.toContain('Trading is open')
+	}
+})

@@ -11,11 +11,10 @@ import { SecurityPoolAggregatePanel } from '@zoltar/ui-statoblast-shared/feature
 import { useSecurityPoolAggregate } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolAggregate.js'
 import * as copy from '@zoltar/ui-statoblast-shared/copy/securityPoolCapital.js'
 import { capitalSnapshot, owner, unit } from './capitalFixture.js'
-import { formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 const lifecycle = installDomTestLifecycle()
-function Harness({ snapshot = capitalSnapshot(), redesigned, lastFailedAction, displayedAt }: { snapshot?: ReturnType<typeof capitalSnapshot>; redesigned?: boolean; lastFailedAction?: string; displayedAt?: number }) {
-	const model = useSecurityPoolAggregate({ snapshot, loading: false, error: undefined, displayedAt, refresh: async () => undefined }, { ownerReason: undefined, runSecurityPoolAction: async () => undefined }, owner, redesigned)
-	return <SecurityPoolAggregatePanel model={model} redesigned={redesigned ?? false} actions={{ scope: unscopedTransaction, busy: undefined, ...(lastFailedAction === undefined ? {} : { lastFailedAction }) }} />
+function Harness({ snapshot = capitalSnapshot(), lastFailedAction, displayedAt }: { snapshot?: ReturnType<typeof capitalSnapshot>; lastFailedAction?: string; displayedAt?: number }) {
+	const model = useSecurityPoolAggregate({ snapshot, loading: false, error: undefined, displayedAt, refresh: async () => undefined }, { ownerReason: undefined, runSecurityPoolAction: async () => undefined }, owner, true)
+	return <SecurityPoolAggregatePanel model={model} actions={{ scope: unscopedTransaction, busy: undefined, ...(lastFailedAction === undefined ? {} : { lastFailedAction }) }} />
 }
 
 test.each(['ready', 'insufficient-spare', 'retry'] as const)('redesigned reduction shows the saved queue with %s action', async state => {
@@ -31,7 +30,7 @@ test.each(['ready', 'insufficient-spare', 'retry'] as const)('redesigned reducti
 		})),
 	}
 	const failedAction = state === 'retry' ? { lastFailedAction: 'serveSecurityPoolRetirement' } : {}
-	const view = await renderIntoDocument(<Harness redesigned snapshot={snapshot} {...failedAction} />)
+	const view = await renderIntoDocument(<Harness snapshot={snapshot} {...failedAction} />)
 	lifecycle.trackRendered(view)
 	const reduction = view.container.querySelector('section:has([id$="-reduce"])')
 	const text = reduction?.textContent ?? ''
@@ -45,7 +44,7 @@ test.each(['ready', 'insufficient-spare', 'retry'] as const)('redesigned reducti
 })
 
 test('Capital starts with the saved target and commitment and lists only the planned actions', async () => {
-	const view = lifecycle.trackRendered(await renderIntoDocument(<Harness redesigned />))
+	const view = lifecycle.trackRendered(await renderIntoDocument(<Harness />))
 	const plan = view.container.querySelector('section:has([id$="-commitment"])')
 	const actions = () => [...(plan?.querySelectorAll('ol > li .tx-action-button') ?? [])].map(button => button.textContent)
 	const input = (text: string) => [...(plan?.querySelectorAll('input') ?? [])].find(field => field.labels?.[0]?.textContent === text)
@@ -76,15 +75,13 @@ test('personal capital shows exact principal and keeps distinct approval, deposi
 	expect(amounts(copy.withdrawableRep)).toEqual(['4.8REP'])
 	expect(amounts(copy.principalRep)).toEqual(['30REP'])
 	expect(amounts(copy.commitment)).toEqual(['10WETH'])
-	expect(amounts(copy.positionPledged)).toEqual(['30REP'])
-	expect(amounts(copy.totalPledged)).toEqual(['100REP'])
 	expect(amounts(copy.ethEarnings)).toEqual(['1WETH'])
 	expect(amounts(copy.repEarnings)).toEqual(['2REP'])
 	expect(text).toContain('120%')
 	const labels = Array.from(view.container.querySelectorAll('button')).map(button => button.textContent ?? '')
 	expect(labels.some(label => label.includes('Approve'))).toBe(true)
 	expect(labels.some(label => label.includes('Deposit REP'))).toBe(true)
-	expect(labels.some(label => label.includes(copy.retire))).toBe(true)
+	expect(labels.some(label => label.includes(copy.requestReduction))).toBe(true)
 	expect(labels.some(label => label.includes('Claim earnings'))).toBe(true)
 	expect(text).not.toContain('Claim each question')
 	expect(text).not.toContain('Execution reserve')
@@ -108,7 +105,7 @@ test('draft initialization preserves a deposit entered as the panel becomes inte
 	await waitFor(() => expect(view.container.textContent).toBe('1'))
 })
 
-test('retirement readiness exposes the reserved capacity and observed times without promising completion', async () => {
+test('earlier reductions and free capacity remain visible when a release cannot complete', async () => {
 	const base = capitalSnapshot()
 	const snapshot = {
 		...base,
@@ -120,22 +117,15 @@ test('retirement readiness exposes the reserved capacity and observed times with
 			retirementPreview: { status: 'earlier-requests' as const, effectiveCurrentBatch: 1n, healthyCommitment: 20n * unit, spareCommitment: unit, queuedAheadCommitment: 2n * unit, commitmentReduction: 5n * unit, releasedRep: 0n },
 		})),
 	}
-	const view = await renderIntoDocument(<Harness snapshot={snapshot} />)
-	lifecycle.trackRendered(view)
-	const text = view.container.textContent ?? ''
-	expect(text).toContain(copy.retirementPreviewStatus['earlier-requests'])
-	expect(text).toContain(copy.retirementPreviewHint)
-	expect(text).toContain(copy.liquidationTimingHint)
-	for (const timestamp of [900n, snapshot.timestamp, snapshot.priceValidUntil]) expect(text).toContain(formatTimestamp(timestamp))
-	const amount = (label: string) =>
-		[...view.container.querySelectorAll('.metric-label')]
-			.find(node => node.textContent === label)
-			?.parentElement?.querySelector('.currency-value')
-			?.getAttribute('title')
-			?.replaceAll(/\s/g, '')
-	expect(amount(copy.reductionFreeCapacity)).toBe('1WETH')
-	expect(amount(copy.retirementAhead)).toBe('2WETH')
-	expect(amount(copy.retirementReduction)).toBe('5WETH')
+	const view = lifecycle.trackRendered(await renderIntoDocument(<Harness snapshot={snapshot} />))
+	const queue = view.container.querySelector('section:has([id$="-reduce"])')
+	const text = queue?.textContent?.replaceAll('\u00a0', ' ')
+	expect(text).toContain(copy.queueAhead)
+	expect(text).toContain('2.00 WETH')
+	expect(text).toContain(copy.queueYourReduction)
+	expect(text).toContain('5.00 WETH')
+	expect(text).toContain(copy.queueFreeNow('1.00 WETH', undefined))
+	expect(queue?.querySelector('button')?.disabled).toBe(true)
 })
 
 test('stale prices and closed universes never present a ready retirement preview', async () => {
@@ -176,7 +166,7 @@ test('earnings show what claiming pays, and the credited amounts when that previ
 test('claims remain usable and describe the age of the last successful Capital read', async () => {
 	await withFakeClock(async ({ advance }) => {
 		const snapshot = capitalSnapshot({ accruedFeesAttoEth: unit, accruedFeesAttoRep: 2n * unit })
-		const view = lifecycle.trackRendered(await renderIntoDocument(<Harness snapshot={snapshot} redesigned displayedAt={Date.now() - 59_999} />))
+		const view = lifecycle.trackRendered(await renderIntoDocument(<Harness snapshot={snapshot} displayedAt={Date.now() - 59_999} />))
 		const earnings = view.container.querySelector('section:has([id$="-earnings"])')
 		const description = () => earnings?.querySelector('.section-block-copy')?.textContent
 		await advance(1)
@@ -184,29 +174,18 @@ test('claims remain usable and describe the age of the last successful Capital r
 		await advance(1)
 		expect(description()).toContain('Data from 1m ago. Checked again before sending.')
 		expect(earnings?.querySelector('button')?.disabled).toBe(false)
-		await act(() => render(<Harness snapshot={snapshot} redesigned displayedAt={Date.now()} />, view.container))
+		await act(() => render(<Harness snapshot={snapshot} displayedAt={Date.now()} />, view.container))
 		expect(description()).not.toContain('Checked again before sending.')
 		await view.cleanup()
 	})
 })
 
-test('a pending position exposes re-submission without unlocking its saved target', async () => {
+test('a pending reduction keeps the saved amount locked', async () => {
 	const base = capitalSnapshot()
 	const snapshot = { ...base, positions: base.positions.map(position => ({ ...position, batch: 1n, remainingCommitment: 5n * unit })) }
-	const view = await renderIntoDocument(<Harness snapshot={snapshot} />)
-	lifecycle.trackRendered(view)
-	const button = [...view.container.querySelectorAll('button')].find(button => button.textContent === copy.resubmitRetirement)
-	expect(button?.disabled).toBe(false)
-	expect(view.container.textContent).not.toContain(copy.remainingCommitmentHint)
-})
-
-test.each([0n, 3n * unit])('available backing uses the canonical purchase capacity (%s)', async available => {
-	const view = await renderIntoDocument(<Harness snapshot={{ ...capitalSnapshot(), availableMintCapacityAttoEth: available }} />)
-	lifecycle.trackRendered(view)
-	const value = [...view.container.querySelectorAll('.metric-label')]
-		.find(node => node.textContent === copy.availableCapacity)
-		?.parentElement?.querySelector('.currency-value')
-		?.getAttribute('title')
-		?.replaceAll(/\s/g, '')
-	expect(value).toBe(`${available / unit}WETH`)
+	const view = lifecycle.trackRendered(await renderIntoDocument(<Harness snapshot={snapshot} />))
+	const queue = view.container.querySelector('section:has([id$="-reduce"])')
+	expect(queue?.textContent?.replaceAll('\u00a0', ' ')).toContain('5 WETH')
+	expect(queue?.querySelector('input')).toBeNull()
+	expect(queue?.textContent).not.toContain(copy.remainingCommitmentHint)
 })

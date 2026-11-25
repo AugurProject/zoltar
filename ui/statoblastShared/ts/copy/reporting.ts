@@ -33,7 +33,7 @@ export const triggerZoltarFork = 'Trigger universe fork'
 export const checkingFork = 'Checking…'
 export const forkTriggerOnce = 'Anyone can send this. It only needs to be sent once.'
 export const forkIrreversible = 'A fork cannot be undone.'
-export const forkFreeze = 'This universe freezes. Use a child universe to continue.'
+export const forkFreeze = 'This universe freezes; everything moves to child universes Yes, No and Invalid.'
 export const forkCostLead = 'Triggering costs you'
 export const forkCostDetail = 'REP supply grew after reporting started. You give up this REP permanently.'
 export const forkStakeCarries = 'Your REP stays staked and carries to the child universes after the fork.'
@@ -124,7 +124,10 @@ export const startsWithFirstReport = 'After the first report'
 export const progressToFork = (secondLargest: string, threshold: string, percent: string) => `Progress to fork: second side at ${secondLargest} / ${threshold} REP (${percent}%)`
 export const forkProgressHelp = 'A fork needs two sides at this threshold, so progress follows the second-largest side.'
 export const bindingCapitalHelp = 'The second-largest side balance; exceed it to hold the lead.'
-const minimumPresetLabels = { fork: 'Reach non-decision', lead: 'Min to lead', start: 'Minimum report' } as const
+export const takeTheLead = 'Take the lead'
+export const takeLeadBeforeFirstReport = 'Take the lead is available after the first report.'
+export const takeLeadForkReason = 'Two outcomes would reach the threshold and end reporting without a decision.'
+const minimumPresetLabels = { fork: 'Reach non-decision', lead: 'Min to lead', min: 'Min', start: 'Minimum report', takeLead: takeTheLead } as const
 /** The minimum preset fills the minimum first report, the smallest lead, or the amount that ends reporting without a decision. */
 export const minimumPreset = <Amount>(kind: keyof typeof minimumPresetLabels, amount?: Amount): CopyParts<Amount> => (amount === undefined ? [minimumPresetLabels[kind]] : [minimumPresetLabels[kind], ' (', amount, ')'])
 export const rewardPreset = <Amount>(amount?: Amount): CopyParts<Amount> => (amount === undefined ? ['Full reward share'] : ['Full reward share (', amount, ')'])
@@ -135,7 +138,7 @@ export const availableBalance = (amount: string) => `Available: ${amount} REP.`
 export const yourPositions = 'Your positions'
 export const resultSummary = (outcome: string) => `Resolved as ${outcome}.`
 export const claimDeposits = (outcome: string, amount: string) => `Claim ${amount}\u00a0REP from ${outcome}`
-export const clearDeposits = (outcome: string) => `Remove settled ${outcome} records (0 REP payout)`
+export const clearDeposits = (outcome: string) => `Settle ${outcome} deposits (0 REP payout)`
 export const clearLosingDepositsDetail = 'Losing ordinary deposits return no REP and require no cleanup transaction. Reporter deposits are separate from security pool capital.'
 export const clearLosingDepositsReviewDescription = 'Returns no REP. Losing deposits need no action after resolution.'
 export const results = 'Results'
@@ -146,10 +149,10 @@ export const approvedAmount = (amount: string) => `Approved ${amount} REP`
 export const reportingAmount = (outcome: string, amount: string) => `Reporting ${outcome} · ${amount} REP…`
 
 export const claimedDeposits = (outcome: string, amount: string) => `Claimed ${amount} REP from ${outcome}`
-export const clearedDeposits = (outcome: string) => `Cleared ${outcome} deposits (worth 0 REP)`
+export const clearedDeposits = (outcome: string) => `Settled ${outcome} deposits (0 REP payout)`
 
 export const claimingDeposits = (outcome: string, amount: string) => `Claiming ${amount} REP from ${outcome}…`
-export const clearingDeposits = (outcome: string) => `Clearing ${outcome} deposits (worth 0 REP)…`
+export const clearingDeposits = (outcome: string) => `Settling ${outcome} deposits (0 REP payout)…`
 
 export const progressToForkUnavailable = 'Progress to fork: —'
 
@@ -157,7 +160,6 @@ export const winningStatusLead = (side: string) => `You’re leading on ${side}.
 export const winningStatusDetail = <Amount>(stake: Amount, worth: Amount): CopyParts<Amount> => ['Your ', stake, ' would be worth ', worth, ' if it ended now.']
 export const losingStatusLead = (side: string) => `You’re behind on ${side}.`
 export const losingStatusDetail = <Amount>(minimum: Amount | undefined, deadline: string, stake: Amount): CopyParts<Amount> => [...(minimum === undefined ? ['Report more on this side'] : ['Add at least ', minimum]), ` before ${deadline} or your `, stake, ' is lost.']
-export const takeTheLead = 'Take the lead'
 export const tieStatusLead = 'No side leads right now.'
 export const tieStatusDetail = (deadline: string) => `If this stays tied at ${deadline}, no side wins (`
 export const tiesResolve = 'see how ties resolve'

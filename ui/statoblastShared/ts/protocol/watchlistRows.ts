@@ -15,6 +15,7 @@ import {
 	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator,
 	statoblast_tokens_ShareToken_ShareToken,
 } from '../contractArtifact.js'
+import { isReadCheckpointRecent } from './readCheckpoint.js'
 import { checkStatoblastEntries, type StatoblastEntryResult } from './statoblastEntries.js'
 import { designQuestionId } from '../lib/routing.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
@@ -344,50 +345,63 @@ async function readQuestionRow(read: ReadWatchlistBatch, fork: ReturnType<typeof
 	return row
 }
 
-export type WatchlistReadCheckpoint = { anchor?: { number: bigint; hash: `0x${string}`; timestamp: bigint }; rows: WatchlistRow[] }
-type WatchlistReadOptions = { checkpoint?: WatchlistReadCheckpoint; includeDeposits?: boolean; onChunk?: (rows: readonly WatchlistRow[], finished: number, total: number, anchor: { number: bigint; timestamp: bigint }) => void }
+export type WatchlistReadCheckpoint = { anchor?: { number: bigint; hash: `0x${string}`; timestamp: bigint; observedAt: number }; rows: WatchlistRow[] }
+type WatchlistReadOptions = { checkpoint?: WatchlistReadCheckpoint; includeDeposits?: boolean; onChunk?: (rows: readonly WatchlistRow[], finished: number, total: number, anchor: { number: bigint; timestamp: bigint; observedAt: number }) => void }
 
 export async function loadWatchlistRows(client: ReadClient, entries: readonly WatchlistEntity[], universeId: bigint, owner: Address | undefined, profile: NetworkProfile, { checkpoint = { rows: [] }, onChunk, includeDeposits = true }: WatchlistReadOptions = {}) {
 	if (entries.length === 0) return []
-	if (checkpoint.anchor !== undefined) {
-		const verified = await client.getBlock({ blockNumber: checkpoint.anchor.number })
-		if (verified.hash !== checkpoint.anchor.hash) {
-			delete checkpoint.anchor
-			checkpoint.rows = []
+	const resetCheckpoint = () => {
+		delete checkpoint.anchor
+		checkpoint.rows = []
+	}
+	const savedAnchor = checkpoint.anchor
+	if (savedAnchor !== undefined && !isReadCheckpointRecent(savedAnchor.observedAt)) resetCheckpoint()
+	const read = async (resuming: boolean) => {
+		if (resuming && savedAnchor !== undefined) {
+			const verified = await client.getBlock({ blockNumber: savedAnchor.number })
+			if (verified.hash !== savedAnchor.hash) throw new Error(copy.refreshFailedError)
 		}
+		if (checkpoint.anchor === undefined) {
+			const observedAt = Date.now()
+			const latest = await client.getBlock()
+			if (latest.number === undefined || latest.hash === undefined) throw new Error('Watchlist refresh requires a mined block.')
+			checkpoint.anchor = { number: latest.number, hash: latest.hash, timestamp: latest.timestamp, observedAt }
+		}
+		const head = checkpoint.anchor
+		const block = head.number
+		const rows = checkpoint.rows
+		for (let offset = rows.length; offset < entries.length; offset += 25) {
+			const chunk = entries.slice(offset, offset + 25)
+			const checks = await checkStatoblastEntries(
+				client,
+				chunk.map(entry => ({ ...entry, universeId })),
+				block,
+				true,
+			)
+			const read = watchlistBatch(client, block)
+			const fork = watchlistForkReads(read, profile, universeId)
+			const batch = await Promise.all(
+				chunk.map(async (entry, index): Promise<WatchlistRow> => {
+					const result = checks[index]
+					if (result?.status === 'failed') throw result.error
+					if (result?.status === 'pool') {
+						const [row, forkStage] = await Promise.all([readPoolRow(read, client, block, entry, owner, universeId, profile), readPoolFork(read, fork, entry.pool, owner, universeId)])
+						return { ...row, ...forkStage, observedAt: head.timestamp }
+					}
+					if (result?.status === 'question' && entry.kind === 'question') return { ...(await readQuestionRow(read, fork, entry, result.ledger, owner, universeId, profile, includeDeposits)), observedAt: head.timestamp }
+					return { entity: entry, status: result?.status ?? 'failed' }
+				}),
+			)
+			rows.push(...batch)
+			onChunk?.(batch, Math.min(offset + 25, entries.length), entries.length, head)
+		}
+		return rows
 	}
-	if (checkpoint.anchor === undefined) {
-		const latest = await client.getBlock()
-		if (latest.number === undefined || latest.hash === undefined) throw new Error('Watchlist refresh requires a mined block.')
-		checkpoint.anchor = { number: latest.number, hash: latest.hash, timestamp: latest.timestamp }
+	if (checkpoint.anchor === undefined) return await read(false)
+	try {
+		return await read(true)
+	} catch {
+		resetCheckpoint()
+		return await read(false)
 	}
-	const head = checkpoint.anchor
-	const block = head.number
-	const rows = checkpoint.rows
-	for (let offset = rows.length; offset < entries.length; offset += 25) {
-		const chunk = entries.slice(offset, offset + 25)
-		const checks = await checkStatoblastEntries(
-			client,
-			chunk.map(entry => ({ ...entry, universeId })),
-			block,
-			true,
-		)
-		const read = watchlistBatch(client, block)
-		const fork = watchlistForkReads(read, profile, universeId)
-		const batch = await Promise.all(
-			chunk.map(async (entry, index): Promise<WatchlistRow> => {
-				const result = checks[index]
-				if (result?.status === 'failed') throw result.error
-				if (result?.status === 'pool') {
-					const [row, forkStage] = await Promise.all([readPoolRow(read, client, block, entry, owner, universeId, profile), readPoolFork(read, fork, entry.pool, owner, universeId)])
-					return { ...row, ...forkStage, observedAt: head.timestamp }
-				}
-				if (result?.status === 'question' && entry.kind === 'question') return { ...(await readQuestionRow(read, fork, entry, result.ledger, owner, universeId, profile, includeDeposits)), observedAt: head.timestamp }
-				return { entity: entry, status: result?.status ?? 'failed' }
-			}),
-		)
-		rows.push(...batch)
-		onChunk?.(batch, Math.min(offset + 25, entries.length), entries.length, { number: block, timestamp: head.timestamp })
-	}
-	return rows
 }

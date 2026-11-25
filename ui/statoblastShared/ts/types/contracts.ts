@@ -139,6 +139,8 @@ export type ListedQuestionLedger = {
 	totalPoolHeldAttoRep: bigint
 	totalUnderwritingLimitAttoEth: bigint
 	universeHasForked: boolean
+	forkQuestionId?: bigint | undefined
+	forkedAt?: bigint | undefined
 	universeId: bigint
 }
 

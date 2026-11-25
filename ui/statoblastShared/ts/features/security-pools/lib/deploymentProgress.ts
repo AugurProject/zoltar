@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
 import { getBrowserStorage } from '@zoltar/ui-core-shared/lib/browserStorage.js'
 import { localEntityScopeForNetwork } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { decodeStoredValue } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
@@ -18,7 +18,12 @@ export type DeploymentDraft = {
 	economicsDraft: SecurityPoolCreationDraft
 }
 
-type DeploymentProgress = { rules: Address; pool?: Address | undefined; activated?: boolean | undefined; draft: DeploymentDraft }
+type PendingDeployment = { id: string; step: 'rules' | 'pool'; hash?: Hash | undefined }
+type DeploymentProgress = { rules?: Address | undefined; pool?: Address | undefined; activated?: boolean | undefined; pending?: PendingDeployment | undefined; draft: DeploymentDraft }
+
+function isTransactionHash(value: string | undefined): value is Hash {
+	return value !== undefined && /^0x[\da-fA-F]{64}$/.test(value)
+}
 
 export function deploymentProgressStore(profile: NetworkProfile, owner: Address | undefined) {
 	const { network, persistence } = localEntityScopeForNetwork(profile, 'statoblast', 'pool')
@@ -32,10 +37,13 @@ export function deploymentProgressStore(profile: NetworkProfile, owner: Address 
 				return decodeStoredValue<DeploymentProgress>(JSON.parse(raw), read => {
 					const draft = read.record('draft')
 					const economics = draft.record('economicsDraft')
+					const pending = read.optional('pending', read.record)
+					const hash = pending?.optional('hash', pending.string)
 					return {
-						rules: read.address('rules'),
+						rules: read.optional('rules', read.address),
 						pool: read.optional('pool', read.address),
 						activated: read.optional('activated', read.boolean),
+						pending: pending === undefined ? undefined : { id: pending.string('id'), step: pending.oneOf('step', ['rules', 'pool']), hash: isTransactionHash(hash) ? hash : undefined },
 						draft: {
 							collateralSymbol: draft.oneOf('collateralSymbol', ['WETH', 'USDC']),
 							reportFloor: draft.string('reportFloor'),

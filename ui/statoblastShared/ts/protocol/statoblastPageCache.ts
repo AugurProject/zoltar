@@ -4,6 +4,7 @@ import { getBrowserStorage } from '@zoltar/ui-core-shared/lib/browserStorage.js'
 import { parseStoredValue, serializeStoredValue } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { isStoredRecord } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import { poolBatchResponseInvalid, poolNeedsMinedBlock, poolReadTimeout, poolRefreshChainChanged, poolRpcNetworkChanged } from '../copy/securityPoolTransactions.js'
 import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 
 const version = 1
@@ -77,9 +78,15 @@ export function statoblastDisplayCache<T>(profile: NetworkProfile, identity: { u
 	const pageKey = (page: string) => `display:${identity.universeId}:${identity.owner?.toLowerCase() ?? ''}:${page}`
 	const key = pageKey(identity.page)
 	return {
-		pageSuffixes(prefix: string) {
-			const scopedPrefix = pageKey(prefix)
-			return storage.read().flatMap(item => (item.key.startsWith(scopedPrefix) ? [item.key.slice(scopedPrefix.length)] : []))
+		universePageSuffixes(prefix: string) {
+			const universePrefix = `display:${identity.universeId}:`
+			return storage.read().flatMap(item => {
+				if (!item.key.startsWith(universePrefix)) return []
+				const separator = item.key.indexOf(':', universePrefix.length)
+				if (separator === -1) return []
+				const page = item.key.slice(separator + 1)
+				return page.startsWith(prefix) ? [page.slice(prefix.length)] : []
+			})
 		},
 		read() {
 			const page = storage.read().find(item => item.key === key)
@@ -101,9 +108,8 @@ export function statoblastDisplayCache<T>(profile: NetworkProfile, identity: { u
 			}
 			return result
 		},
-		write(value: T, block: { number: bigint; timestamp: bigint }) {
-			const now = Date.now()
-			storage.write({ key, updated: now, accessed: now, block: String(block.number), timestamp: String(block.timestamp), reads: [], display: value })
+		write(value: T, block: { number: bigint; timestamp: bigint }, observedAt = Date.now()) {
+			storage.write({ key, updated: observedAt, accessed: Date.now(), block: String(block.number), timestamp: String(block.timestamp), reads: [], display: value })
 		},
 	}
 }
@@ -137,7 +143,7 @@ function readCall(request: RpcRead) {
 	return target === undefined || callData === undefined ? undefined : { target, callData, allowFailure: true }
 }
 
-export function statoblastPageCache(profile: NetworkProfile, identity: { pool: Address; universeId: bigint; owner: Address; page: string }, verifyRestoredPool?: (client: ReadClient, block: bigint) => Promise<void>) {
+export function statoblastPageCache(profile: NetworkProfile, identity: { pool: Address; universeId: bigint; owner: Address; page: string }) {
 	const storage = pageStorage(profile)
 	const key = `${identity.pool.toLowerCase()}:${identity.universeId}:${identity.owner.toLowerCase()}:${identity.page}`
 	let livePlan: PageCache | undefined
@@ -164,10 +170,12 @@ export function statoblastPageCache(profile: NetworkProfile, identity: { pool: A
 		return result === undefined ? undefined : { value: result, savedAt: cached.updated }
 	}
 	const refresh = async <T>(client: ReadClient, multicall: Address, load: (client: ReadClient) => Promise<T>, isCurrent: () => boolean = () => true) => {
-		const request = (read: RpcRead) => withTimeout(requestRpc<unknown>(client.transport, read), 15_000, 'Security pool read timed out.')
+		const request = (read: RpcRead) => withTimeout(requestRpc<unknown>(client.transport, read), 15_000, poolReadTimeout)
 		const latest = { method: 'eth_getBlockByNumber', params: ['latest', false] }
-		const rawHead = await request(latest)
-		if (!isStoredRecord(rawHead) || typeof rawHead['number'] !== 'string' || typeof rawHead['timestamp'] !== 'string' || typeof rawHead['hash'] !== 'string') throw new Error('Page refresh requires a mined block.')
+		const chainRead = { method: 'eth_chainId' }
+		const [rawHead, rawChain] = await Promise.all([request(latest), request(chainRead)])
+		if (typeof rawChain !== 'string' || !/^0x[0-9a-f]+$/iu.test(rawChain) || BigInt(rawChain) !== BigInt(profile.chainIdHex)) throw new Error(poolRpcNetworkChanged)
+		if (!isStoredRecord(rawHead) || typeof rawHead['number'] !== 'string' || typeof rawHead['timestamp'] !== 'string' || typeof rawHead['hash'] !== 'string') throw new Error(poolNeedsMinedBlock)
 		const block = BigInt(rawHead['number'])
 		const timestamp = BigInt(rawHead['timestamp'])
 		const current = new Map<string, CachedRead>()
@@ -175,39 +183,42 @@ export function statoblastPageCache(profile: NetworkProfile, identity: { pool: A
 		const pinned = replaceBlock({ method: latest.method, params: [toHex(block), false] }, block)
 		record(latest, rawHead)
 		record(pinned, rawHead)
-		record({ method: 'eth_chainId' }, profile.chainIdHex)
-		let plan = livePlan
-		if (plan === undefined && verifyRestoredPool !== undefined) {
-			plan = storage.read().find(item => item.key === key)
-			if (plan !== undefined) await withTimeout(verifyRestoredPool(client, block), 15_000, 'Security pool verification timed out.')
-		}
+		record(chainRead, rawChain)
+		// Persisted reads can only render a saved view. A live plan is built after
+		// the current session has read and verified the network and runtime codes.
+		const plan = livePlan
 		if (plan !== undefined) {
-			const reusable = plan.reads.flatMap(entry => {
-				if (entry.request.method === 'eth_getCode') {
-					record(replaceBlock(entry.request, block), entry.response)
-					return []
+			try {
+				const reusable = plan.reads.flatMap(entry => {
+					const first = Array.isArray(entry.request.params) ? entry.request.params[0] : undefined
+					const balanceOwner = entry.request.method === 'eth_getBalance' ? address(first) : undefined
+					const call =
+						balanceOwner === undefined
+							? readCall(entry.request)
+							: {
+									target: multicall,
+									callData: encodeFunctionData({ abi: aggregateAbi, functionName: 'getEthBalance', args: [balanceOwner] }),
+									allowFailure: true,
+								}
+					return call === undefined ? [] : [{ read: replaceBlock(entry.request, block), call, balance: balanceOwner !== undefined }]
+				})
+				if (reusable.length > 0) {
+					const responses = await withTimeout(client.readContract({ abi: aggregateAbi, address: multicall, functionName: 'aggregate3', args: [reusable.map(item => item.call)], blockNumber: block }), 15_000, poolReadTimeout)
+					if (responses.length !== reusable.length) throw new Error(poolBatchResponseInvalid)
+					const results = responses.flatMap((response, index) => {
+						const entry = reusable[index]
+						if (entry === undefined || !response.success) return []
+						const result = response.returnData
+						return [{ read: entry.read, value: entry.balance ? toHex(BigInt(result)) : result }]
+					})
+					for (const result of results) record(result.read, result.value)
 				}
-				const first = Array.isArray(entry.request.params) ? entry.request.params[0] : undefined
-				const balanceOwner = entry.request.method === 'eth_getBalance' ? address(first) : undefined
-				const call =
-					balanceOwner === undefined
-						? readCall(entry.request)
-						: {
-								target: multicall,
-								callData: encodeFunctionData({ abi: aggregateAbi, functionName: 'getEthBalance', args: [balanceOwner] }),
-								allowFailure: true,
-							}
-				return call === undefined ? [] : [{ read: replaceBlock(entry.request, block), call, balance: balanceOwner !== undefined }]
-			})
-			if (reusable.length > 0) {
-				const responses = await withTimeout(client.readContract({ abi: aggregateAbi, address: multicall, functionName: 'aggregate3', args: [reusable.map(item => item.call)], blockNumber: block }), 15_000, 'Security pool read timed out.')
-				if (!Array.isArray(responses)) throw new Error('Unexpected page batch response.')
-				for (const [index, response] of responses.entries()) {
-					const entry = reusable[index]
-					if (entry === undefined || !isStoredRecord(response) || response['success'] !== true) continue
-					const result = calldata(response['returnData'])
-					if (result !== undefined) record(entry.read, entry.balance ? toHex(BigInt(result)) : result)
+				for (const entry of plan.reads) {
+					if (entry.request.method === 'eth_getCode') record(replaceBlock(entry.request, block), entry.response)
 				}
+			} catch {
+				if (livePlan === plan) livePlan = undefined
+				// The normal read below verifies fresh runtime codes and rebuilds the plan.
 			}
 		}
 		const captured = new Map<string, CachedRead>()
@@ -235,7 +246,7 @@ export function statoblastPageCache(profile: NetworkProfile, identity: { pool: A
 		})
 		const value = await load(scopedClient)
 		const checked = await request(pinned)
-		if (!isStoredRecord(checked) || checked['hash'] !== rawHead['hash']) throw new Error('The chain changed during refresh. Try again.')
+		if (!isStoredRecord(checked) || checked['hash'] !== rawHead['hash']) throw new Error(poolRefreshChainChanged)
 		if (!isCurrent()) return value
 		const now = Date.now()
 		livePlan = { key, block: block.toString(), timestamp: timestamp.toString(), accessed: now, updated: now, reads: [...captured.values()] }

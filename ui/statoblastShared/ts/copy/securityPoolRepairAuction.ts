@@ -106,3 +106,6 @@ export const noAskAtTarget = 'No new bids fit this health target.'
 export const approveCollateral = 'Adjust approval amount'
 export const collateralUsed = (symbol: string) => `${symbol} used`
 export const collateralRefundable = (symbol: string) => `${symbol} refundable`
+
+export const approvalTitle = 'Approve auction collateral'
+export const approvalNeedsAuction = 'Auction is unavailable. Refresh before approving collateral.'

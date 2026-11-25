@@ -18,6 +18,8 @@ export const manualDepositLookup = 'I know the deposit number'
 export const depositNumber = 'Deposit number'
 export const checking = 'Checking…'
 export const checkDeposit = 'Check deposit'
+export const depositCheckTimeout = 'Deposit check timed out.'
+export const depositSearchLagging = 'The RPC is behind the last searched block. Try again.'
 export const searchFailedError = 'Deposit search could not finish.'
 export const formatMissingDepositsDetail = (remaining: string) => `Couldn't find deposits for ${remaining}. Your REP is safe.`
 export const searchAgain = 'Search again'

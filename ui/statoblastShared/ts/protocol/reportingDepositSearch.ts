@@ -7,6 +7,7 @@ import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { readRequiredMulticall, readOptionalMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { statoblast_EscalationGame_EscalationGame as gameArtifact } from '../contractArtifact.js'
+import { depositSearchLagging } from '../copy/reportingDeposits.js'
 import { locatedDepositKey, type LocatedDeposit } from './reportingDeposits.js'
 import { isHex, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 
@@ -40,10 +41,11 @@ export async function searchReportingDepositsPage(client: Pick<ReadClient, 'getB
 	const head = await client.getBlock()
 	if (head.number === undefined || head.hash === undefined) throw new Error('Deposit search requires a confirmed block.')
 	const blockNumber = head.number
+	if (position !== undefined && blockNumber < position.block) throw new Error(depositSearchLagging)
 	const safeBlockNumber = blockNumber > confirmationDepth ? blockNumber - confirmationDepth : 0n
 	const safeBlock = safeBlockNumber === blockNumber ? head : await client.getBlock({ blockNumber: safeBlockNumber })
 	let previousBlock: typeof head | undefined
-	if (position !== undefined && position.block <= blockNumber) {
+	if (position !== undefined) {
 		if (position.block === blockNumber) previousBlock = head
 		else if (position.block === safeBlockNumber) previousBlock = safeBlock
 		else previousBlock = await client.getBlock({ blockNumber: position.block })

@@ -19,7 +19,6 @@ import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { useFavorites } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { createActiveEnvironmentGuard, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { ensureSentence, getErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
-import { formatRelativeTimestamp, getWallClockTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
 import { parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { hasInvalidUniverseQueryParam, readUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
@@ -31,6 +30,7 @@ import { statoblastDisplayCache } from '@zoltar/ui-statoblast-shared/protocol/st
 import { decodeWatchlistRows, loadWatchlistRows, parseWatchlistEntity, type WatchlistEntity, type WatchlistReadCheckpoint, type WatchlistRow } from '@zoltar/ui-statoblast-shared/protocol/watchlistRows.js'
 import { withStatoblastRequestTimeout } from '@zoltar/ui-statoblast-shared/protocol/requestTimeout.js'
 import { openHistory } from '../lib/watchlistHistory.js'
+import { RecentWatchlistMetadata } from './RecentWatchlistMetadata.js'
 import { WatchlistPoolForkStage, WatchlistQuestionStage } from './WatchlistStages.js'
 
 function destination(entity: WatchlistEntity): StatoblastPoolPage | StatoblastQuestionPage {
@@ -74,7 +74,7 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 	const profile = getActiveNetworkProfile()
 	const history = openHistory(profile)
 	const displayCache = statoblastDisplayCache(profile, { universeId: universe, owner, page: 'watchlist' }, decodeWatchlistRows)
-	const labels = new Map([...questions.entries, ...pools.entries].map(entry => [entry.id, entry.label]))
+	const poolLabels = new Map(pools.entries.map(entry => [entry.id, entry.label]))
 	const [recent, setRecent] = useState(history.read)
 	const [input, setInput] = useState('')
 	const [opening, setOpening] = useState(false)
@@ -119,9 +119,10 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 		const client = withStatoblastRequestTimeout(createConnectedReadClient(), pageCopy.refreshTimeoutError, abort.signal)
 		await loadWatchlistRows(client, selected, universe, owner, profile, {
 			checkpoint,
-			onChunk: (batch, finished, total) => {
+			onChunk: (batch, finished, total, { observedAt }) => {
 				if (!current()) return
 				setRows(previous => new Map([...previous, ...batch.map(row => [row.entity.id, row] as const)]))
+				setReadAt(previous => (previous === undefined ? observedAt : Math.min(previous, observedAt)))
 				setProgress({ completed: Math.ceil(finished / 25), total: Math.ceil(total / 25) })
 			},
 		})
@@ -129,8 +130,11 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 				result => {
 					if (!current()) return
 					watchlistRead.current = undefined
-					setReadAt(Date.now())
-					if (!automatic && checkpoint.anchor !== undefined) displayCache.write(result, checkpoint.anchor)
+					const anchor = checkpoint.anchor
+					if (anchor === undefined) return
+					const observedAt = anchor.observedAt
+					setReadAt(previous => (selected.length === source.length || previous === undefined ? observedAt : Math.min(previous, observedAt)))
+					if (selected.length === source.length) displayCache.write(result, anchor, observedAt)
 				},
 				error => {
 					if (current()) setReadError(ensureSentence(getErrorDetail(error) ?? pageCopy.refreshFailedError))
@@ -143,6 +147,8 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 				if (generation.current === marker) generation.current++
 			})
 	}
+	const refreshVisibleWatchlist = useRef(refresh)
+	refreshVisibleWatchlist.current = refresh
 	useEffect(() => {
 		if (!enabled || source.length === 0) setLoading(false)
 		if (rowScope.current !== scope) {
@@ -153,11 +159,26 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 			setRecent(history.read())
 			tail.current = 25
 		}
-		void refresh()
-		return () => {
+		const cancel = () => {
 			generation.current++
 			inFlight.current = undefined
 			pendingRead.current?.abort()
+			pendingRead.current = undefined
+			watchlistRead.current = undefined
+		}
+		const visibilityChanged = () => {
+			if (!document.hidden) {
+				void refreshVisibleWatchlist.current()
+				return
+			}
+			cancel()
+			setLoading(false)
+		}
+		document.addEventListener('visibilitychange', visibilityChanged)
+		void refresh()
+		return () => {
+			document.removeEventListener('visibilitychange', visibilityChanged)
+			cancel()
 		}
 	}, [enabled, scope, sourceKey])
 	useBlockRefresh(event => void refresh(event.reason === 'block'), enabled)
@@ -287,7 +308,7 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 			{source.length === 0 && <EmptyState title={pageCopy.yourWatchlistIsEmpty} detail={pageCopy.emptyWatchlistDetail} />}
 			{questionRows.length > 0 && (
 				<SectionBlock title={pageCopy.savedQuestions} badge={frozen ? <Badge>{pageCopy.frozen}</Badge> : undefined}>
-					<table className='statoblast-watchlist-table' role='table'>
+					<table className='statoblast-watchlist-table' role='table' aria-busy={loading}>
 						<thead role='rowgroup'>
 							<tr role='row'>
 								<th role='columnheader'>{pageCopy.saved}</th>
@@ -301,7 +322,7 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 						<tbody role='rowgroup'>
 							{questionRows.map(entity => {
 								const row = visibleRows.get(entity.id)
-								const questionTitle = labels.get(entity.id) ?? row?.question?.marketDetails.title
+								const questionTitle = row?.question?.marketDetails.title
 								const questionId = formatQuestionIdHex(entity.questionId)
 								const title = questionTitle ?? pageCopy.formatQuestion(questionId)
 								const reason = row === undefined ? undefined : entryReason(row.status)
@@ -312,7 +333,13 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 									<tr role='row' key={entity.id}>
 										<td role='cell'>{row?.status === 'unprepared-question' ? pageCopy.saved : star(entity, title, row)}</td>
 										<td role='cell' className='statoblast-watchlist-question-title'>
-											{questionTitle === undefined ? <IdentifierValue value={questionId} abbreviated /> : <strong>{questionTitle}</strong>}
+											{questionTitle === undefined ? (
+												<>
+													<strong>{pageCopy.question}</strong> <IdentifierValue value={questionId} abbreviated />
+												</>
+											) : (
+												<strong>{questionTitle}</strong>
+											)}
 											{row?.missingDeposits !== undefined && (
 												<p>
 													<CurrencyValue value={row.missingDeposits} suffix={pageCopy.rep} />
@@ -325,10 +352,10 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 											<AddressValue longAbbreviation address={entity.pool} />
 										</td>
 										<td role='cell' data-label={frozen ? pageCopy.afterTheFork : pageCopy.stage}>
-											<WatchlistQuestionStage row={row} reason={reason} />
+											{row === undefined && loading ? <span className='skeleton-line' aria-hidden='true' /> : <WatchlistQuestionStage row={row} reason={reason} />}
 										</td>
 										<td role='cell' data-label='Your shares'>
-											{shares === undefined && '—'}
+											{shares === undefined && (row === undefined && loading ? <span className='skeleton-line' aria-hidden='true' /> : '—')}
 											{onlyCompleteSets && <CurrencyValue value={completeSets} suffix={row?.collateral === undefined ? pageCopy.sets : pageCopy.formatSets(row.collateral)} units={row?.collateralDecimals ?? 18} />}
 											{shares !== undefined && !onlyCompleteSets && (
 												<>
@@ -342,7 +369,7 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 											)}
 										</td>
 										<td role='cell'>
-											{row?.status === 'unprepared-question' && <a href={statoblastPageHref({ kind: 'pool', pool: entity.pool, tab: 'fork' })}>{pageCopy.forkRecovery}</a>}
+											{row?.status === 'unprepared-question' && entityLink(entity, entity.pool, { kind: 'pool', pool: entity.pool, tab: 'fork' }, universe, pageCopy.forkRecovery)}
 											{row?.status !== 'unprepared-question' && reason !== undefined && (
 												<button type='button' className='secondary' onClick={() => remove(entity)}>
 													{pageCopy.remove}
@@ -362,7 +389,7 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 				{poolRows.length === 0 ? (
 					<EmptyState title={pageCopy.noSavedSecurityPools} />
 				) : (
-					<table className='statoblast-watchlist-table' role='table'>
+					<table className='statoblast-watchlist-table' role='table' aria-busy={loading}>
 						<thead role='rowgroup'>
 							<tr role='row'>
 								<th role='columnheader'>{pageCopy.saved}</th>
@@ -387,7 +414,7 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 										<td role='cell'>{star(entity, entity.pool, row)}</td>
 										<td role='cell'>
 											<AddressValue longAbbreviation address={entity.pool} />
-											{labels.get(entity.id) === undefined ? undefined : <strong>{labels.get(entity.id)}</strong>}
+											{poolLabels.get(entity.id) === undefined ? undefined : <strong>{poolLabels.get(entity.id)}</strong>}
 											<small>
 												{row?.collateral}
 												{row?.admission === undefined ? undefined : pageCopy.poolPolicy[row.admission]}
@@ -402,19 +429,27 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 											</small>
 										</td>
 										<td role='cell' data-label={frozen ? pageCopy.afterTheFork : pageCopy.repPrice}>
-											{reason ??
+											{row === undefined && loading ? (
+												<span className='skeleton-line' aria-hidden='true' />
+											) : (
+												(reason ??
 												(frozen ? (
 													<WatchlistPoolForkStage row={row} />
 												) : (
 													<a href={statoblastPageHref({ kind: 'pool', pool: entity.pool, tab: 'price' })}>
 														<Badge tone={row?.priceValid ? 'ok' : 'muted'}>{row?.priceValid === undefined ? pageCopy.unavailable : priceStatus}</Badge>
 													</a>
-												))}
+												)))
+											)}
 										</td>
 										{!frozen && (
 											<td role='cell' data-label='Capacity in use'>
 												{row?.demand === undefined || row.capacity === undefined ? (
-													'—'
+													row === undefined && loading ? (
+														<span className='skeleton-line' aria-hidden='true' />
+													) : (
+														'—'
+													)
 												) : (
 													<>
 														{used === undefined ? undefined : <meter max={1} value={used} aria-label={pageCopy.capacityInUse} />}
@@ -429,7 +464,11 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 										)}
 										<td role='cell' data-label='Your position'>
 											{row?.pledged === undefined ? (
-												'—'
+												row === undefined && loading ? (
+													<span className='skeleton-line' aria-hidden='true' />
+												) : (
+													'—'
+												)
 											) : (
 												<>
 													<CurrencyValue value={row.pledged} suffix={pageCopy.rep} />
@@ -509,14 +548,18 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 							const entity = { ...page, id }
 							const openedUniverse = BigInt(item.universe)
 							const row = openedUniverse === universe ? visibleRows.get(id) : undefined
-							const title = labels.get(id) ?? item.title
+							const title = page.kind === 'pool' ? (poolLabels.get(id) ?? item.title) : (row?.question?.marketDetails.title ?? item.title)
 							const questionId = page.kind === 'question' ? formatQuestionIdHex(page.questionId) : undefined
-							const questionName = title === questionId ? pageCopy.formatQuestion(title) : title
-							const questionTitle = questionId !== undefined && title === questionId ? <IdentifierValue value={questionId} abbreviated /> : <strong>{title}</strong>
+							const idTitle = questionId !== undefined && (title.toLowerCase() === questionId || title === pageCopy.formatQuestion(questionId))
+							const questionName = idTitle ? pageCopy.formatQuestion(questionId) : title
+							const questionTitle = idTitle ? (
+								<>
+									<strong>{pageCopy.question}</strong> <IdentifierValue value={questionId} abbreviated />
+								</>
+							) : (
+								<strong>{title}</strong>
+							)
 							const starLabel = page.kind === 'question' ? pageCopy.questionInPool(questionName, page.pool) : `${pageCopy.securityPool} ${page.pool}`
-							const openedAt = BigInt(Math.floor(item.opened / 1_000))
-							const now = getWallClockTimestamp()
-							const age = formatRelativeTimestamp(openedAt > now ? now : openedAt, now)
 							const savedRow = () =>
 								statoblastDisplayCache(profile, { universeId: openedUniverse, owner, page: 'watchlist' }, decodeWatchlistRows)
 									.read()
@@ -526,17 +569,7 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 									{row?.status === 'unprepared-question' ? pageCopy.saved : star(entity, starLabel, row, savedRow)}
 									<div className='statoblast-history-identity'>
 										{page.kind === 'pool' ? <AddressValue longAbbreviation address={page.pool} /> : questionTitle}
-										<small>
-											{pageCopy.securityPool}
-											{page.kind === 'question' && (
-												<>
-													{' '}
-													<AddressValue longAbbreviation address={page.pool} />
-												</>
-											)}
-											{page.kind === 'pool' && row?.collateral !== undefined ? `, ${row.collateral}` : undefined}
-											{pageCopy.formatOpened(age)}
-										</small>
+										<RecentWatchlistMetadata page={page} collateral={row?.collateral} openedAt={item.opened} universe={openedUniverse} />
 									</div>
 									<a className='statoblast-outlined-link' href={statoblastPageHref(page, openedUniverse)} onClick={() => remember(page, title, openedUniverse)}>
 										{pageCopy.open}

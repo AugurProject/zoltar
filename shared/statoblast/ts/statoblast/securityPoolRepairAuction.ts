@@ -25,7 +25,7 @@ function uint(value: bigint, label: string, bits = 256) {
 	return value
 }
 function requireAuction(snapshot: SecurityPoolAuctionSnapshot) {
-	if (snapshot.auction === undefined) throw new Error('This branch has no collateral repair auction.')
+	if (snapshot.auction === undefined) throw new Error('This branch has no recapitalization auction.')
 	return snapshot.auction
 }
 
@@ -105,7 +105,7 @@ export function buildSecurityPoolAuctionBidRequest(snapshot: SecurityPoolAuction
 export function buildSecurityPoolAuctionMaterializeRequest(snapshot: SecurityPoolAuctionSnapshot, bidId: bigint) {
 	const auction = requireAuction(snapshot)
 	const bid = auction.bids.find(candidate => candidate.id === uint(bidId, 'Bid ID'))
-	if (!auction.finalized || bid === undefined || bid.fill === undefined || bid.fill.filledLots === 0n || bid.materialized) throw new Error('Choose a funded winning bid whose individual vault controls are not active.')
+	if (!auction.finalized || bid === undefined || bid.fill === undefined || bid.fill.filledLots === 0n || bid.materialized) throw new Error('Choose a funded winning bid with an inactive auction position.')
 	return { account: snapshot.bidder, to: snapshot.capitalLedger, value: 0n, data: encodeFunctionData({ abi, functionName: 'materializeRepairAuctionBid', args: [bidId] }) }
 }
 export function buildSecurityPoolAuctionRefundCreditRequest(snapshot: SecurityPoolAuctionSnapshot, bidId: bigint) {
@@ -147,19 +147,19 @@ export function buildSecurityPoolAuctionRefundClaimRequest(snapshot: SecurityPoo
 }
 /** Call only after authenticating the vault owner and its original auction binding. */
 export function buildSecurityPoolAuctionVaultExecuteRequest(parameters: { bidder: Address; vault: Address; request: { account: Address; to: Address; value: bigint; data: Hex }; fundingAttoEth?: bigint; sweep?: { repToken: Address; recipient: Address } }) {
-	const vault = address(parameters.vault, 'Auction vault')
-	if (address(parameters.request.account, 'Capital account') !== vault) throw new Error('The capital transaction must belong to the selected auction vault.')
-	if (!isHex(parameters.request.data, { strict: true }) || parameters.request.data.length % 2 !== 0) throw new Error('Vault call data must contain whole hexadecimal bytes.')
+	const vault = address(parameters.vault, 'Auction position')
+	if (address(parameters.request.account, 'Capital position') !== vault) throw new Error('The capital transaction must belong to the selected auction position.')
+	if (!isHex(parameters.request.data, { strict: true }) || parameters.request.data.length % 2 !== 0) throw new Error('Auction position call data must contain whole hexadecimal bytes.')
 	const value = uint(parameters.request.value, 'Forwarded ETH')
-	const target = address(parameters.request.to, 'Vault target')
+	const target = address(parameters.request.to, 'Auction position target')
 	const data =
 		parameters.sweep === undefined
 			? encodeFunctionData({ abi, functionName: 'execute', args: [target, value, parameters.request.data] })
 			: encodeFunctionData({ abi, functionName: 'executeAndSweep', args: [target, value, parameters.request.data, address(parameters.sweep.repToken, 'Sweep REP token'), address(parameters.sweep.recipient, 'Sweep recipient')] })
-	return { account: address(parameters.bidder, 'Vault owner'), to: vault, value: uint(parameters.fundingAttoEth ?? value, 'Wallet ETH funding'), data }
+	return { account: address(parameters.bidder, 'Position owner'), to: vault, value: uint(parameters.fundingAttoEth ?? value, 'Wallet ETH funding'), data }
 }
 /** The vault pulls the exact approved REP amount from its owner before depositing. */
 export function buildSecurityPoolAuctionVaultDepositRequest(parameters: { bidder: Address; vault: Address; capitalLedger: Address; amountAttoRep: bigint; targetHealthFactorBps: bigint }) {
 	if (uint(parameters.amountAttoRep, 'REP deposit') === 0n || uint(parameters.targetHealthFactorBps, 'Health target') < BPS) throw new Error('Choose a positive REP deposit and a health target of at least 100%.')
-	return { account: address(parameters.bidder, 'Vault owner'), to: address(parameters.vault, 'Auction vault'), value: 0n, data: encodeFunctionData({ abi, functionName: 'depositPrincipal', args: [address(parameters.capitalLedger, 'Capital ledger'), parameters.amountAttoRep, parameters.targetHealthFactorBps] }) }
+	return { account: address(parameters.bidder, 'Position owner'), to: address(parameters.vault, 'Auction position'), value: 0n, data: encodeFunctionData({ abi, functionName: 'depositPrincipal', args: [address(parameters.capitalLedger, 'Capital contract'), parameters.amountAttoRep, parameters.targetHealthFactorBps] }) }
 }

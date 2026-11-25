@@ -805,7 +805,7 @@ for (const result of ['pending', 'reverted'] as const) {
 }
 
 test('uses reviewed result titles and generic action tenses', () => {
-	expect(completedAction('Request new price')).toBe('Price requested')
+	expect(completedAction('Report a price')).toBe('Report funded')
 	expect(completedAction('Queue custom operation')).toBe('Queued custom operation')
 	expect(formatPendingAction('Queue custom operation')).toBe('Queuing custom operation…')
 	expect(completedAction('Custom operation')).toBe('Custom operation – done')

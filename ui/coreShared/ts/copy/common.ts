@@ -120,13 +120,13 @@ export const formatApprovalAlreadyUnlimitedReason = (tokenLabel: CopyTemplateVal
 export const notDeployed = 'Not deployed'
 export const formatNetworkRequiredReason = (networkName: CopyTemplateValue) => `Switch to ${networkName}.`
 export const walletAssetAutomaticImportUnavailable = 'Automatic import unavailable. Copy the token address to import it manually.'
-export const walletAssetRequestAccepted = 'Request accepted'
-export const walletAssetRequestFailed = 'Unable to send the token request to your wallet. Try again.'
+export const walletAssetRequestAccepted = 'Accepted by wallet'
+export const walletAssetRequestFailed = 'Couldn’t ask your wallet to show this token. Try again.'
 export const walletAssetUnavailable = 'Wallet import is unavailable. Copy the token address to import it manually.'
 export const formatAddTokenToWallet = (tokenLabel: CopyTemplateValue) => `Add ${tokenLabel} to wallet`
 export const formatOpeningWalletForToken = (tokenLabel: CopyTemplateValue) => `Opening wallet to add ${tokenLabel}`
 export const formatRetryWalletAssetRequest = (tokenLabel: CopyTemplateValue) => `Retry adding ${tokenLabel} to wallet`
-export const formatWalletAssetRequestAccepted = (tokenLabel: CopyTemplateValue) => `${tokenLabel} wallet request accepted`
+export const formatWalletAssetRequestAccepted = (tokenLabel: CopyTemplateValue) => `${tokenLabel} accepted by wallet`
 export const answerUnit = 'Answer unit'
 export const created = 'Created'
 export const currentValue = 'Current value'

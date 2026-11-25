@@ -14,11 +14,24 @@ export const deployment = {
 	collateralUnavailable: 'This collateral token is unavailable on the selected network.',
 	reportStakeRequired: (decimals: number) => `Enter a positive minimum report stake with up to ${decimals} decimal places.`,
 	poolAddressUnavailable: 'Security pool deployment address unavailable.',
+	receiptPending: 'Waiting for the deployment receipt.',
+	walletSendUncertain: 'The wallet hasn’t returned a transaction hash. Check the activity in your wallet.',
 	setupClosed: 'The origin universe has forked. Setup is closed.',
 	stageComplete: 'This setup stage is complete.',
 	previousStageRequired: 'Complete the previous setup stage first.',
 	prepareModules: 'Prepare security pool modules',
 	nextStageRequired: 'Refresh and select the next setup stage.',
+	invalidPercentage: (label: string) => `${label} must be a nonnegative percentage with at most two decimal places.`,
+	invalidCollateral: (decimals: number) => `Enter a nonnegative amount with up to ${decimals} decimal places.`,
+	annualHoldingFee: 'Annual holding fee',
+	purchaseFee: 'Purchase fee',
+	fixedQuestionsRequired: 'Enter at least one approved question ID.',
+	invalidQuestionList: 'Use decimal or hexadecimal question IDs separated by commas or spaces.',
+	questionIdTooLarge: 'Question ID must fit uint256.',
+	reviewQuestionRules: (mode: 'open' | 'fixed', horizon: string) => `${mode === 'open' ? 'Any eligible question may be registered.' : 'Only questions on the fixed list may be registered.'} Maximum time to the question close is ${horizon}.`,
+	reviewFees: (annual: string, purchase: string, floor: string) => `Annual holding fee ${annual}%. Purchase fee ${purchase}% of required backing value, minimum ${floor}.`,
+	reviewCommitment: (minimum: string, vesting: string) => `Minimum collateral commitment ${minimum}. Rewards vest over ${vesting}.`,
+	reviewDuration: (days: string) => (days === '1' ? '1 day' : `${days} days`),
 	prepareModulesReview: (stage: number, total: number) => `Complete setup stage ${stage} of ${total}. This deploys more pool modules without moving funds.`,
 	stageChanged: 'Setup advanced. Refresh and review again.',
 }
@@ -57,7 +70,7 @@ export const capital = {
 }
 
 export const fork = {
-	sourceRequired: 'Enter a valid source universe.',
+	sourceRequired: 'Enter a valid parent universe.',
 	checkingStatus: 'Checking fork status…',
 	chooseOutcome: 'Choose a fork outcome.',
 	choiceRecorded: 'Your branch choice is already recorded.',
@@ -96,3 +109,10 @@ export const purchase = {
 	quoteUnavailable: 'Purchase quote unavailable.',
 	prerequisitesChanged: 'Purchase prerequisites changed. Refresh and review again.',
 }
+
+export const invalidPoolUniverse = 'Enter a valid universe ID.'
+export const poolReadTimeout = 'Security pool read timed out.'
+export const poolRpcNetworkChanged = 'Security pool RPC uses another network.'
+export const poolNeedsMinedBlock = 'Wait for a confirmed block before refreshing.'
+export const poolBatchResponseInvalid = 'The RPC returned an incomplete batch.'
+export const poolRefreshChainChanged = 'The chain changed during refresh. Try again.'

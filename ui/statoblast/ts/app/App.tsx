@@ -135,12 +135,12 @@ export function App() {
 			await refreshWalletStateOnly(walletScopedHookConfig.refreshState)
 			invalidateAppData()
 		},
-		onTransactionPresented: (presentation: Parameters<typeof walletScopedHookConfig.onTransactionPresented>[0]) => {
-			if (presentation.tone === 'success' && transactionEnvironment.isCurrent()) {
+		onTransactionSubmitted: (...submission: Parameters<typeof walletScopedHookConfig.onTransactionSubmitted>) => {
+			if (transactionEnvironment.isCurrent()) {
 				if (page.kind === 'pool') setEntityFavorite(localEntityScopeForNetwork(profile, 'statoblast', 'pool'), page.pool, true)
 				if (page.kind === 'question') setEntityFavorite(localEntityScopeForNetwork(profile, 'statoblast', 'question'), `${page.pool}:${formatQuestionIdHex(page.questionId)}`, true)
 			}
-			walletScopedHookConfig.onTransactionPresented(presentation)
+			walletScopedHookConfig.onTransactionSubmitted(...submission)
 		},
 	}
 	const { zoltarUniverse, zoltarUniverseError } = operations
@@ -205,7 +205,8 @@ export function App() {
 		[branchScope],
 	)
 	const branchAlreadyCommitted = branchScope !== undefined && (branchScope === committedBranch || readPreference(branchScope) === 'committed')
-	const forkAction = page.kind === 'pool' && page.tab !== 'fork' && !branchAlreadyCommitted ? statoblastPageHref({ ...page, tab: 'fork' }) : undefined
+	const forkAction = page.kind === 'pool' && !branchAlreadyCommitted ? statoblastPageHref({ ...page, tab: 'fork' }) : undefined
+	const showMigrationActions = page.kind !== 'pool' && page.kind !== 'migrate-rep'
 	const repToEth = repPrices.repPerEthPrice
 	const repPrice = repToEth === undefined || repToEth === 0n ? undefined : formatUnits(10n ** 36n / repToEth, 18)
 	const routeKey = parseRouteHash(window.location.hash).routeHash
@@ -219,9 +220,9 @@ export function App() {
 	}
 	useEffect(() => {
 		const history = openHistory(profile)
-		if (page.kind === 'pool') history.add({ ...page, tab: 'capital' }, page.pool, activeUniverseId)
+		if (page.kind === 'pool') history.add(page, page.pool, activeUniverseId)
 		if (page.kind === 'question') history.add({ ...page, tab: 'shares', sharesAction: undefined }, formatQuestionIdHex(page.questionId), activeUniverseId)
-	}, [profile, activeUniverseId, page.kind === 'pool' || page.kind === 'question' ? page.pool : undefined, page.kind === 'question' ? page.questionId : undefined])
+	}, [profile, activeUniverseId, page.kind === 'pool' || page.kind === 'question' ? page.pool : undefined, page.kind === 'question' ? page.questionId : undefined, page.kind === 'pool' && page.tab === 'fork'])
 	const oracleApp = new URL('../openoracle/#/open-oracle', window.location.href)
 	if (window.location.port === '12347') {
 		oracleApp.port = '4143'
@@ -302,9 +303,9 @@ export function App() {
 						{forked && (
 							<div className='statoblast-fork-banner'>
 								<strong>{pageCopy.universeForked}</strong>
-								<a href='../docs/explanation/statoblast.html#forks-migration'>{pageCopy.forkHelp}</a>
+								{showMigrationActions && <a href='../docs/explanation/statoblast.html#forks-migration'>{pageCopy.forkHelp}</a>}
 								{forkAction !== undefined && <a href={forkAction}>{pageCopy.chooseBranchAction}</a>}
-								{page.kind !== 'migrate-rep' && <a href={statoblastPageHref({ kind: 'migrate-rep' })}>{pageCopy.migrateRepAction}</a>}
+								{showMigrationActions && <a href={statoblastPageHref({ kind: 'migrate-rep' })}>{pageCopy.migrateRepAction}</a>}
 							</div>
 						)}
 					</>
@@ -333,7 +334,6 @@ export function App() {
 						forkChildren: selectedUniverse?.childUniverses,
 						forkRecapitalizationDeadline: selectedUniverse?.forkRecapitalizationDeadline,
 						forkQuestionRead: { loading: operations.loadingZoltarUniverse, error: zoltarUniverseError, retry: () => void operations.loadZoltarUniverse({ clearCurrentState: false }) },
-						onSelectUniverse: setUniverse,
 						onBranchCommitted,
 						openOracleHref: oracleApp.href,
 					}}
@@ -345,7 +345,7 @@ export function App() {
 						universeState: resolveLoadableValueState({ isLoading: operations.loadingZoltarUniverse, isMissing: operations.zoltarUniverseMissing, value: zoltarUniverse }),
 					}}
 				/>
-				<TransactionStepsModal contextKey={`${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}`} finalActionLabel={pageCopy.continueInWallet} keepConfirmed={page.kind === 'question' && page.tab === 'shares'} />
+				<TransactionStepsModal contextKey={`${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}`} finalActionLabel={pageCopy.continueInWallet} keepConfirmed />
 			</ProtocolAppFrame>
 		</UniverseNamesProvider>
 	)

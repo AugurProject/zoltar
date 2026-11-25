@@ -84,7 +84,7 @@ export async function loadSecurityPoolMintQuote(parameters: { client: SecurityPo
 	if (!Array.isArray(feeQuote) || feeQuote.length !== 2) throw new Error('Invalid funded purchase fee quote.')
 	const fee = decodeUint(feeQuote[0], 'Purchase fee')
 	const pool = decodeAddress(poolValue, 'Question pool', !registered)
-	const capitalLedger = decodeAddress(capitalValue, 'Capital ledger')
+	const capitalLedger = decodeAddress(capitalValue, 'Capital contract')
 	const [shares, valid, capacity] = await Promise.all([registered ? read(securityPool, 'quoteQuestionMint', [pool, cash]) : cash, read(capitalLedger, 'isPriceValid'), read(securityPool, 'availableMintCapacity', [universeId])])
 	if (typeof valid !== 'boolean') throw new Error('Invalid capital price validity.')
 	const available = decodeUint(capacity, 'Available commitment')
@@ -96,7 +96,7 @@ export async function loadSecurityPoolMintQuote(parameters: { client: SecurityPo
 		maximumPurchaseFeeAttoEth: decodeUint((fee * 10_100n + 9_999n) / 10_000n, 'Maximum purchase fee'),
 		recoveryAttoRep: decodeUint(recoveryQuote, 'Recovery REP contribution'),
 		maximumRecoveryAttoRep: securityPoolRecoveryMintBudget(decodeUint(recoveryQuote, 'Recovery REP contribution')),
-		resolutionPremiumAttoEth: decodeUint(feeQuote[1], 'Resolution premium'),
+		resolutionPremiumAttoEth: decodeUint(feeQuote[1], 'Resolution fee'),
 		availableCommitmentAttoEth: available,
 		priceValid: valid,
 		blockNumber,

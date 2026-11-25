@@ -62,8 +62,10 @@ export const prepareRecoveryReview = 'Prepare recovery rights for everyone holdi
 export const enterTransferDraft = 'Enter the recipient and recovery rights to transfer.'
 export const transferUnavailable = 'Recovery transfer unavailable.'
 export const transferChanged = 'Recovery transfer prerequisites changed. Refresh and review again.'
-export const recoveryChanged = 'Source recovery prerequisites changed.'
+export const recoveryChanged = 'Collateral recovery prerequisites changed.'
 export const prepareRecoveryChanged = 'The question or its recovery status changed. Refresh and review again.'
 export const reviewRecoveryTransfer = ({ invalid, yes, no, question, universe, recipient }: { invalid: string; yes: string; no: string; question: string; universe: bigint; recipient: string }) =>
-	`Transfer ${invalid} Invalid, ${yes} Yes and ${no} No recovery rights for question ${question} in source universe ${universe} to ${recipient}. The recipient gets these rights to collateral. Spending source-backed rights locks the matching shares. Your child migration rights remain yours.`
-export const reviewRecoveryClaim = (sets: string, question: string) => `Use ${sets} complete-set recovery rights for question ${question}. Spending source-backed rights locks the matching shares. Received recovery rights are consumed first. All child migration rights remain available.`
+	`Transfer ${invalid} Invalid, ${yes} Yes and ${no} No recovery rights for question ${question} in parent universe ${universe} to ${recipient}. The recipient gets these rights to collateral. Using recovery rights from shares locks those shares. Your child migration rights remain yours.`
+export const reviewRecoveryClaim = (sets: string, question: string) => `Use ${sets} complete-set recovery rights for question ${question}. Using recovery rights from shares locks those shares. Received recovery rights are consumed first. All child migration rights remain available.`
+
+export const formatMoveCommitment = (rep: string, collateral: string) => `Move ${rep} and ${collateral} to the selected branch. This is irreversible.`

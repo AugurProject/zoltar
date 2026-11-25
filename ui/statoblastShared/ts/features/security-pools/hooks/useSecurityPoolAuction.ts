@@ -183,10 +183,10 @@ export function useSecurityPoolAuction({ fork, savedBranch, bidder, actions, ope
 		approve: (amount: bigint) =>
 			run(
 				'approveAuctionCollateral',
-				'Approve auction collateral',
+				copy.approvalTitle,
 				fundingReason,
 				selected => {
-					if (selected.auction === undefined) throw new Error('Auction is unavailable. Refresh before approving collateral.')
+					if (selected.auction === undefined) throw new Error(copy.approvalNeedsAuction)
 					return {
 						account: selected.bidder,
 						to: selected.collateralToken,

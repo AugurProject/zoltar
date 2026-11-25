@@ -615,18 +615,30 @@ test(
 		if (server === undefined) throw new Error('Production test server did not start')
 		const baseUrl = server.url.toString().replace(/\/$/, '')
 		const watchlist = '#/watchlist?simulate=1&genesis=yes&simScenario=securitypoolx2'
+		let discoveredQuestion: string | undefined
+		await loadProductionDocumentInChromium(`${baseUrl}/statoblast/${watchlist}`, { height: 844, width: 390 }, async driver => {
+			await openSavedStatoblastItem(driver, 'question')
+			const href = await driver.evaluate('location.href')
+			if (typeof href !== 'string') throw new Error('Missing seeded question link')
+			discoveredQuestion = href
+			await driver.evaluate('sessionStorage.setItem("production-link-discovery", "warm")')
+		})
+		if (discoveredQuestion === undefined) throw new Error('Could not discover the seeded question URL')
+		const coldQuestion = new URL(discoveredQuestion)
+		coldQuestion.searchParams.set('rpcDelay', '10000')
 		await loadProductionDocumentInChromium(
-			`${baseUrl}/statoblast/${watchlist}`,
+			coldQuestion.href,
 			{ height: 844, width: 390 },
 			async driver => {
-				await openSavedStatoblastItem(driver, 'question')
-				const href = await driver.evaluate('location.href')
-				if (typeof href !== 'string') throw new Error('Missing seeded question link')
-				const coldQuestion = new URL(href)
-				coldQuestion.searchParams.set('rpcDelay', '10000')
-				await driver.navigate(coldQuestion.href)
+				expect(await driver.evaluate('sessionStorage.getItem("production-link-discovery")')).toBeNull()
+				await driver.waitForExpression('document.querySelector(".statoblast-question-loading .skeleton-line") !== null')
+				expect(await driver.evaluate('document.body.innerText')).not.toContain('Resolution rules and details')
 				await driver.waitForBodyText('Resolution rules and details', 180_000)
 				await driver.waitForBodyText('1.00 sets')
+				expect(await driver.evaluate('document.querySelector(".statoblast-question-loading") === null')).toBe(true)
+				const coldMethods = await driver.evaluate('window.__statoblastRpcMethods.slice()')
+				expect(coldMethods).toContain('eth_call')
+				expect(coldMethods).toEqual(await driver.evaluate('window.__delayedRpcMethods.slice()'))
 
 				await driver.navigate(`?rpcDelay=10000${watchlist}`)
 				await driver.waitForBodyText('Saved security pools')
@@ -640,8 +652,8 @@ test(
 				expect(await driver.evaluate('document.body.innerText')).not.toContain('Couldn’t refresh')
 				expect(await driver.evaluate('window.__statoblastRpcMethods.slice()')).toEqual(await driver.evaluate('window.__delayedRpcMethods.slice()'))
 
-				await driver.navigate(href)
-				await driver.waitForButtonEnabled('Redeem sets')
+				await driver.navigate(coldQuestion.href)
+				await driver.waitForButtonEnabled('Redeem sets', 0, 180_000)
 				await driver.clickButton('Redeem sets')
 				const redeemInputBounds = '(() => { const {width, height} = document.querySelector(".statoblast-share-action-form input").getBoundingClientRect(); return [width, height] })()'
 				const beforeRedeem = await driver.evaluate(redeemInputBounds)
@@ -649,8 +661,8 @@ test(
 				await driver.waitForButtonEnabled('Redeem complete sets')
 				expect(await driver.evaluate(redeemInputBounds)).toEqual(beforeRedeem)
 				await driver.clickButton('Redeem complete sets')
-				await driver.waitForButtonEnabled('Continue in wallet')
-				await driver.evaluate('window.__statoblastRpcMethods.length = 0; window.__rpcDelay = 10000')
+				await driver.waitForButtonEnabled('Continue in wallet', 0, 120_000)
+				await driver.evaluate('window.__statoblastRpcMethods.length = 0; window.__delayedRpcMethods.length = 0')
 				await driver.clickButton('Continue in wallet')
 				await driver.waitForBodyText('0.99 sets', 240_000)
 				const delayed = await driver.evaluate('window.__delayedRpcMethods.slice()')

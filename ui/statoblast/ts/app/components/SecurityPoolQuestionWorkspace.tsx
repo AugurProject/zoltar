@@ -53,7 +53,7 @@ type Props = {
 
 /** Question-specific shares and reporting; backing, liquidation and auctions live in the security pool workspace. */
 export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploymentStatuses, enabled, environmentKey, universeId, currentTimestamp, entry, readUnavailable = false, registerPageRefresh, onReadStatus, autoRefresh = false, openDepositSearch = false }: Props) {
-	const [snapshot, setSnapshot] = useState<{ environmentKey: number; identity: string; block: { number: bigint; timestamp: bigint }; question: ListedQuestionLedger; sharesFacts: Awaited<ReturnType<typeof loadStatoblastQuestion>>['sharesFacts'] }>()
+	const [snapshot, setSnapshot] = useState<{ environmentKey: number; identity: string; observedAt: number; block: { number: bigint; timestamp: bigint }; question: ListedQuestionLedger; sharesFacts: Awaited<ReturnType<typeof loadStatoblastQuestion>>['sharesFacts'] }>()
 	const selectionKey = `${entry.pool}:${entry.questionId}:${universeId}`
 	const selected = snapshot?.environmentKey === environmentKey && snapshot.identity === selectionKey ? snapshot.question : undefined
 	const [cachedHeading, setCachedHeading] = useState<{ scope: string; page: NonNullable<ReturnType<typeof displayCache.read>> }>()
@@ -61,7 +61,6 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 	const readScope = `${cacheScope}:${entry.tab}`
 	const displayCache = statoblastDisplayCache(getActiveNetworkProfile(), { universeId, owner: accountState.address, page: selectionKey }, decodeQuestionHeading)
 	const cached = cacheScope === cachedHeading?.scope ? cachedHeading.page : undefined
-	const [lastRead, setLastRead] = useState<{ scope: string; at: number }>()
 	const [reportRead, setReportRead] = useState<{ scope: string; at: number }>()
 	const [sharesRead, setSharesRead] = useState<{ scope: string; at: number }>()
 	const [loading, setLoading] = useState(false)
@@ -102,7 +101,8 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 	const reportCheckedAt = reportRead?.scope === cacheScope ? reportRead.at : undefined
 	const sharesCheckedAt = sharesRead?.scope === cacheScope ? sharesRead.at : undefined
 	const dataAge = entry.tab === 'shares' ? (sharesFallback?.savedAt ?? sharesCheckedAt) : (reportFallback?.checkedAt ?? reportCheckedAt)
-	const displayedAt = dataAge ?? (lastRead?.scope === readScope ? lastRead.at : cached?.savedAt)
+	const headingAge = selected !== undefined ? snapshot?.observedAt : cached?.savedAt
+	const displayedAt = headingAge === undefined ? dataAge : dataAge === undefined ? headingAge : Math.min(dataAge, headingAge)
 	const refreshError = useStatoblastRefreshError(loadError, displayedAt)
 	const readQuestion = () => {
 		if (!enabled || document.hidden) return Promise.resolve()
@@ -122,20 +122,17 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 				try {
 					if (questionRead.current?.scope !== readScope) questionRead.current = { scope: readScope, checkpoint: {} }
 					const client = withStatoblastRequestTimeout(createConnectedReadClient(), pageCopy.refreshTimeoutError, abort.signal)
-					const { question, block, sharesFacts } = await loadStatoblastQuestion(client, entry.pool, entry.questionId, universeId, true, entry.tab === 'shares', questionRead.current.checkpoint)
+					const { question, block, sharesFacts, observedAt } = await loadStatoblastQuestion(client, entry.pool, entry.questionId, universeId, true, entry.tab === 'shares', questionRead.current.checkpoint)
 					if (!isCurrent()) return
-					setSnapshot({ environmentKey, identity: selectionKey, block, question, sharesFacts })
-					displayCache.write(question, block)
-					if (ledgerAddress === question.questionLedgerAddress) {
+					if (selected !== undefined && ledgerAddress === question.questionLedgerAddress) {
 						setReadStep(2)
 						const details = await (entry.tab === 'shares' ? trading.refreshShares(showReadError) : reporting.readReporting(showReadError))
-						if (details === undefined) return
+						if (details === undefined || !isCurrent()) return
 					}
-					if (isCurrent()) {
-						questionRead.current = undefined
-						setLastRead({ scope: readScope, at: Date.now() })
-						setRefresh(value => value + 1)
-					}
+					setSnapshot({ environmentKey, identity: selectionKey, block, question, sharesFacts, observedAt })
+					displayCache.write(question, block, observedAt)
+					questionRead.current = undefined
+					setRefresh(value => value + 1)
 				} catch (error) {
 					showReadError(error)
 				} finally {
@@ -149,6 +146,8 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 		activeRead.current = request
 		return request.promise
 	}
+	const readVisibleQuestion = useRef(readQuestion)
+	readVisibleQuestion.current = readQuestion
 	useStatoblastPageRefresh(registerPageRefresh, readQuestion)
 	useBlockRefresh(() => void readQuestion(), enabled)
 	useEffect(() => {
@@ -156,11 +155,25 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 			setLoading(false)
 			return
 		}
-		void readQuestion()
-		return () => {
+		const cancel = () => {
+			if (questionRead.current?.scope === readScope) questionRead.current = undefined
 			if (activeRead.current?.scope !== readScope) return
 			activeRead.current.abort.abort()
 			activeRead.current = undefined
+		}
+		const visibilityChanged = () => {
+			if (!document.hidden) {
+				void readVisibleQuestion.current()
+				return
+			}
+			cancel()
+			setLoading(false)
+		}
+		document.addEventListener('visibilitychange', visibilityChanged)
+		void readQuestion()
+		return () => {
+			document.removeEventListener('visibilitychange', visibilityChanged)
+			cancel()
 		}
 	}, [enabled, readScope])
 	useEffect(() => onReadStatus?.(displayedAt, loading ? pageCopy.refreshStep(readStep, 2) : undefined), [displayedAt, loading, readStep, onReadStatus])
@@ -252,6 +265,8 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 		openHistory(profile).updateTitle(entry, selected.marketDetails.title, universeId)
 	}, [profile, selectionKey, selected?.marketDetails.title])
 	const availableClaim = reportingDetails?.settlementState === 'resolved' && activeReporting?.sides.some(side => side.key === reportingDetails.questionOutcome && side.userDeposits.some(deposit => deposit.amountAttoRep > 0n))
+	const loadingShares = entry.tab === 'shares' && (loading || trading.loadingTradingDetails) && trading.tradingDetails === undefined && sharesFallback === undefined
+	const loadingReporting = entry.tab === 'reporting' && (loading || reporting.loadingReportingDetails) && reportingDetails === undefined && reportFallback === undefined
 	const winningOutcome = selected?.questionOutcome ?? cached?.value.questionOutcome
 	const visibleShareBalances = shareBalances ?? sharesFallback?.data
 	const winningBalance = winningOutcome === undefined || winningOutcome === 'none' ? undefined : getSelectedOutcomeShareBalance(visibleShareBalances, winningOutcome)
@@ -284,6 +299,8 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 					{tabs}
 					{entry.tab === 'shares' && cachedShares?.scope === cacheScope && <SavedShares {...cachedShares.data} />}
 					{entry.tab === 'reporting' && cachedReporting?.scope === cacheScope && <StatoblastReportingOverview view={cachedReporting.data} now={cached.timestamp} autoRefresh={autoRefresh} {...winningShares} />}
+					{loadingShares && <QuestionTabSkeleton label={pageCopy.loadingShares} />}
+					{loadingReporting && <QuestionTabSkeleton label={pageCopy.loadingReporting} />}
 					<RetryableNotice message={readUnavailable ? undefined : refreshError} retryLabel={pageCopy.tryAgain} onRetry={retryQuestion} disabled={loading} />
 				</div>
 			)
@@ -315,7 +332,8 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 				</div>
 			)
 		}
-		const destination = unavailable ? statoblastPageHref({ kind: 'pool', pool: entry.pool, tab: 'fork' }) : statoblastPageHref({ kind: 'watchlist' })
+		const forkPage = { kind: 'pool', pool: entry.pool, tab: 'fork' } as const
+		const destination = unavailable ? statoblastPageHref(forkPage, universeId) : statoblastPageHref({ kind: 'watchlist' })
 		return (
 			<EmptyState
 				title={copy.questionUnavailable}
@@ -327,7 +345,9 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 								{pageCopy.tryAgain}
 							</button>
 						)}
-						<a href={destination}>{unavailable ? pageCopy.forkRecovery : pageCopy.watchlist}</a>
+						<a href={destination} onClick={() => unavailable && openHistory(profile).add(forkPage, entry.pool, universeId)}>
+							{unavailable ? pageCopy.forkRecovery : pageCopy.watchlist}
+						</a>
 					</>
 				}
 			/>
@@ -342,6 +362,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 			<ErrorNotice message={ownFork.error} />
 			{tabs}
 			{entry.tab === 'shares' && <StatoblastSharesFacts question={selected} facts={snapshot?.sharesFacts} now={now} />}
+			{loadingShares && <QuestionTabSkeleton label={pageCopy.loadingShares} />}
 			{entry.tab === 'shares' && (
 				<TradingSection
 					actionDataReadAt={sharesCheckedAt}
@@ -391,6 +412,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 					{pageCopy.tryAgain}
 				</button>
 			)}
+			{loadingReporting && <QuestionTabSkeleton label={pageCopy.loadingReporting} />}
 			{entry.tab === 'reporting' && (
 				<ReportingSection
 					actionDataReadAt={reportCheckedAt}
@@ -426,5 +448,25 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 			{entry.tab === 'reporting' && reportingDetails?.status === 'active' && accountState.address !== undefined && <LocateReportingDeposits key={reportingDetails.escalationGameAddress} details={reportingDetails} wallet={accountState.address} refresh={reporting.loadReporting} openOnEntry={openDepositSearch} />}
 			{entry.tab === 'claims' && <InheritedReporterClaims actionDataReadAt={reportCheckedAt} parameters={parameters} accountState={accountState} details={reportingDetails} onRefresh={reporting.loadReporting} />}
 		</div>
+	)
+}
+
+function QuestionTabSkeleton({ label }: { label: string }) {
+	return (
+		<section className='statoblast-question-skeleton' aria-busy='true'>
+			<span className='visually-hidden' role='status'>
+				{label}
+			</span>
+			<span className='skeleton-line skeleton-line-title' aria-hidden='true' />
+			<div className='statoblast-question-skeleton-metrics' aria-hidden='true'>
+				{[1, 2, 3].map(index => (
+					<div key={index}>
+						<span className='skeleton-line skeleton-line-title' />
+						<span className='skeleton-line' />
+					</div>
+				))}
+			</div>
+			<span className='skeleton-line skeleton-line-detail' aria-hidden='true' />
+		</section>
 	)
 }

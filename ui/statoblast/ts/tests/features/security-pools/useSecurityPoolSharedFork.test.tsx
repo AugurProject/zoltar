@@ -380,7 +380,7 @@ test('replacing the backend clears fork drafts even when the same security pool 
 test('fork actions distinguish invalid source input from an automatic pending read', async () => {
 	const { hook, source } = await setup()
 	await act(() => hook.state().setSource('invalid'))
-	expect(hook.state().chooseReason).toBe('Enter a valid source universe.')
+	expect(hook.state().chooseReason).toBe('Enter a valid parent universe.')
 	const controller = createDeferred<typeof modules.fork>()
 	source.setRead('forkController', controller.promise)
 	await act(() => hook.state().setSource('0'))
@@ -479,9 +479,9 @@ test('a failed recovery refresh keeps the selected question rights visible and b
 	expect(hook.state().transferReason).toBeUndefined()
 	source.setRead('balanceOfSecurityPoolRecoveryRights', 'invalid')
 	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'44'.repeat(32)}` } })
-	await waitFor(() => expect(hook.state().recoveryError).toContain('source recovery rights'))
+	await waitFor(() => expect(hook.state().recoveryError).toContain('collateral recovery rights'))
 	expect(hook.state().recovery?.availableShares).toBe(3n * unit)
-	await expect(hook.state().transfer()).rejects.toThrow('source recovery rights')
+	await expect(hook.state().transfer()).rejects.toThrow('collateral recovery rights')
 	source.setRead('balanceOfSecurityPoolRecoveryRights', [2n * unit, 5n * unit, 4n * unit])
 	await act(() => {
 		hook.state().retryRecovery()
@@ -532,7 +532,7 @@ test('outcome recovery transfer reviews one exact transaction before the choice 
 	expect(request).toMatchObject({ to: token, account: owner, value: 0n })
 	expect(decodeFunctionData({ abi: parseAbi(['function transferSecurityPoolRecoveryRights(uint248 source,address recipient,uint256[3] amounts)']), data: request.data })).toEqual({ functionName: 'transferSecurityPoolRecoveryRights', args: [0n, capital, [unit, 0n, 2n * unit]] })
 	expect(request.reviewDescription).toContain('1 Invalid, 0 Yes and 2 No')
-	expect(request.reviewDescription).toContain('question 0x7 in source universe 0')
+	expect(request.reviewDescription).toContain('question 0x7 in parent universe 0')
 	expect(request.reviewDescription).toContain(capital)
 	expect(request.reviewDescription).toContain('child migration rights remain yours')
 	await request.validateBeforeSubmit?.()
@@ -578,7 +578,7 @@ test('received recovery sets can be redeemed independently of source balances an
 	await request.validateBeforeSubmit?.()
 	expect(request.readReviewRows?.()).toEqual([{ label: 'Available recovery sets', value: '3 → 0' }])
 	source.setRead('balanceOfSecurityPoolRecoveryRights', [2n * unit, 5n * unit, 4n * unit])
-	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Source recovery prerequisites changed')
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Collateral recovery prerequisites changed')
 })
 
 test('finalized questions keep ordinary redemption and cannot detach source recovery rights', async () => {

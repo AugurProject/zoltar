@@ -108,7 +108,7 @@ describe('security pool branch price SDK', () => {
 		expect(() => buildSecurityPoolPriceOperationsRequest(snapshot, unit, 2n * unit, { ...batch, gasLimit: batch.gasLimit - 1n })).toThrow('gas budget')
 		// The feed adds 4,000,000 settlement gas and rejects a callback above 10,000,000.
 		expect(() => buildSecurityPoolPriceOperationsRequest(snapshot, unit, 2n * unit, { ...batch, gasLimit: 6_000_000n })).not.toThrow()
-		expect(() => buildSecurityPoolPriceOperationsRequest(snapshot, unit, 2n * unit, { ...batch, gasLimit: 6_000_001n })).toThrow('Callback gas exceeds limit')
+		expect(() => buildSecurityPoolPriceOperationsRequest(snapshot, unit, 2n * unit, { ...batch, gasLimit: 6_000_001n })).toThrow('Report settlement gas exceeds the limit')
 	})
 
 	test('a confirmed execution quote requires the requested block for every funding read', async () => {

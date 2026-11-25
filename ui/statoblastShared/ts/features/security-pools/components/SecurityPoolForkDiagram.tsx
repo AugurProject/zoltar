@@ -1,5 +1,12 @@
-import { useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
+import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
+import { readOptionalMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
+import type { SecurityPoolForkSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
+import { statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator as forkArtifact } from '../../../contractArtifact.js'
+import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
+import { currentStateCheckFailed } from '@zoltar/ui-core-shared/copy/transaction.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
 import { OnChainText } from '@zoltar/ui-core-shared/components/OnChainText.js'
@@ -19,6 +26,41 @@ type KnownChild = Pick<ZoltarChildUniverseSummary, 'outcomeIndex' | 'universeId'
 type BranchChoice = { outcomeIndex: bigint; label: string }
 
 const branchPageSize = 6n
+type VerifiedFork = Pick<SecurityPoolForkSnapshot, 'controller' | 'universeId' | 'blockNumber' | 'blockHash' | 'branch'>
+
+function useBranchBacking(fork: VerifiedFork | undefined, children: readonly KnownChild[], choices: readonly BranchChoice[], start: bigint) {
+	const visible = usePageVisible()
+	const targets = choices.flatMap(({ outcomeIndex }) => {
+		const child = children.find(candidate => candidate.outcomeIndex === outcomeIndex && candidate.exists)
+		return child === undefined || fork?.branch?.outcomeIndex === outcomeIndex ? [] : [child]
+	})
+	const key = fork === undefined ? undefined : `${fork.controller}:${fork.blockHash}:${fork.universeId}:${start}:${targets.map(child => child.universeId).join(',')}`
+	const [result, setResult] = useState<{ key: string; amounts: Map<bigint, bigint> }>()
+	useEffect(() => {
+		if (!visible || key === undefined || fork === undefined || targets.length === 0) return
+		const abort = new AbortController()
+		const client = withStatoblastRequestTimeout(createConnectedReadClient(), currentStateCheckFailed, abort.signal)
+		void readOptionalMulticall(
+			client,
+			targets.map(child => ({ address: fork.controller, abi: forkArtifact.abi, functionName: 'branches' as const, args: [child.universeId] as const })),
+			fork.blockNumber,
+		)
+			.then(results => {
+				const amounts = new Map<bigint, bigint>()
+				for (const [index, target] of targets.entries()) {
+					const read = results[index]
+					if (read?.status !== 'success') continue
+					const [parent, outcomeIndex, backing, , , , prepared] = read.result
+					if (!prepared) amounts.set(target.outcomeIndex, 0n)
+					else if (parent === fork.universeId && outcomeIndex === target.outcomeIndex) amounts.set(outcomeIndex, backing)
+				}
+				if (!abort.signal.aborted) setResult({ key, amounts })
+			})
+			.catch(() => undefined)
+		return () => abort.abort()
+	}, [visible, key])
+	return result?.key === key ? result?.amounts : undefined
+}
 
 function branchLabel(question: MarketDetails, outcomeIndex: bigint) {
 	if (outcomeIndex === 0n) return invalid
@@ -29,7 +71,7 @@ function branchLabel(question: MarketDetails, outcomeIndex: bigint) {
 	return outcomeIndex <= BigInt(question.outcomeLabels.length) ? question.outcomeLabels[Number(outcomeIndex) - 1] : undefined
 }
 
-function BranchNodes({ question, selected, confirmed, knownChildren, branch }: { question: MarketDetails; selected: bigint | undefined; confirmed: boolean; knownChildren: readonly KnownChild[]; branch: ForkPageDisplay['branch'] }) {
+function BranchNodes({ question, selected, confirmed, knownChildren, branch, verifiedFork }: { question: MarketDetails; selected: bigint | undefined; confirmed: boolean; knownChildren: readonly KnownChild[]; branch: ForkPageDisplay['branch']; verifiedFork: VerifiedFork | undefined }) {
 	const [page, setPage] = useState<{ start: bigint; selected: bigint | undefined }>()
 	const scalar = question.marketType === 'scalar'
 	const total = scalar ? question.numTicks + 2n : BigInt(question.outcomeLabels.length + 1)
@@ -46,6 +88,7 @@ function BranchNodes({ question, selected, confirmed, knownChildren, branch }: {
 		const label = branchLabel(question, outcomeIndex)
 		if (label !== undefined) choices.push({ outcomeIndex, label })
 	}
+	const backing = useBranchBacking(verifiedFork, knownChildren, choices, start)
 	return (
 		<>
 			<ul className='statoblast-fork-diagram-branches'>
@@ -54,6 +97,9 @@ function BranchNodes({ question, selected, confirmed, knownChildren, branch }: {
 					const matchingBranch = branch?.outcomeIndex === outcomeIndex ? branch : undefined
 					const exists = matchingBranch?.prepared || child?.exists
 					const universeId = matchingBranch?.universeId ?? (child?.exists === true ? child.universeId : undefined)
+					let committedRep = backing?.get(outcomeIndex)
+					if (verifiedFork?.branch?.outcomeIndex === outcomeIndex) committedRep = verifiedFork.branch.chosenBacking
+					else if (child?.exists === false) committedRep = 0n
 					return (
 						<li key={outcomeIndex.toString()} data-chosen={outcomeIndex === selected}>
 							<strong>
@@ -62,6 +108,11 @@ function BranchNodes({ question, selected, confirmed, knownChildren, branch }: {
 							{outcomeIndex === selected && <small>{confirmed ? copy.committed : copy.selected}</small>}
 							{universeId !== undefined && <IdentifierValue abbreviated value={formatUniverseIdHex(universeId)} />}
 							{exists !== undefined && <small>{exists ? copy.created : copy.notCreated}</small>}
+							{committedRep !== undefined && (
+								<small>
+									<CurrencyValue value={committedRep} suffix={common.rep} /> {copy.repCommitted}
+								</small>
+							)}
 						</li>
 					)
 				})}
@@ -77,7 +128,21 @@ function BranchNodes({ question, selected, confirmed, knownChildren, branch }: {
 	)
 }
 
-export function SecurityPoolForkDiagram({ state, snapshot, question, outcomeInput, childUniverses = [] }: { state: ForkPageDisplay | undefined; snapshot: SecurityPoolAccountSnapshot | undefined; question: MarketDetails | undefined; outcomeInput: string; childUniverses?: readonly KnownChild[] | undefined }) {
+export function SecurityPoolForkDiagram({
+	state,
+	snapshot,
+	question,
+	outcomeInput,
+	childUniverses = [],
+	verifiedFork,
+}: {
+	state: ForkPageDisplay | undefined
+	snapshot: SecurityPoolAccountSnapshot | undefined
+	question: MarketDetails | undefined
+	outcomeInput: string
+	childUniverses?: readonly KnownChild[] | undefined
+	verifiedFork?: VerifiedFork | undefined
+}) {
 	const universeId = state?.universeId ?? snapshot?.universeId
 	const source = useUniverseName(universeId ?? 0n)
 	const forkTime = state?.forkTime ?? snapshot?.forkTime ?? 0n
@@ -137,7 +202,7 @@ export function SecurityPoolForkDiagram({ state, snapshot, question, outcomeInpu
 					)}
 				</div>
 			</div>
-			{question !== undefined && <BranchNodes key={`${universeId}:${question.questionId}`} question={question} selected={selected} confirmed={confirmed} knownChildren={childUniverses} branch={branch} />}
+			{question !== undefined && <BranchNodes key={`${universeId}:${question.questionId}`} question={question} selected={selected} confirmed={confirmed} knownChildren={childUniverses} branch={branch} verifiedFork={verifiedFork} />}
 		</figure>
 	)
 }

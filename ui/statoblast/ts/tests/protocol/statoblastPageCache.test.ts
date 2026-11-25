@@ -15,46 +15,68 @@ const block = { number: '0xa', hash, parentHash: hash, timestamp: '0xa', gasLimi
 const abi = parseAbi(['function value() view returns (uint256)'])
 const cacheIdentity = { pool, owner, universeId: 0n, page: 'capital' }
 
-test('replays saved display data without RPC and batches verified warm reads at one pinned block', async () => {
+test.each(['session verification', 'aggregate failure', 'wrong RPC network'] as const)('Capital keeps saved display data and performs live %s safely', async scenario => {
 	const methods: string[] = []
 	let currentValue = 20n
+	let currentCode = '0x6000'
+	let chainIdHex = '0x1'
+	let failAggregate = false
 	const word = (value: bigint) => encodeAbiParameters(parseAbiParameters('uint256'), [value])
 	const client = createPublicClient({
-		transport: custom({
-			request: async ({ method, params }) => {
-				methods.push(method)
-				if (method === 'eth_getBlockByNumber') return block
-				if (method === 'eth_getCode') return '0x6000'
-				if (method === 'eth_call') {
-					if (!Array.isArray(params)) throw new Error('Missing RPC args.')
-					expect(params[1]).toBe('0xa')
-					return params[0].to === multicall ? encodeAbiParameters(parseAbiParameters('(bool success,bytes returnData)[]'), [[{ success: true, returnData: word(currentValue) }]]) : word(currentValue)
-				}
-				throw new Error(`Unexpected RPC method ${method}`)
+		transport: custom(
+			{
+				request: async ({ method, params }) => {
+					methods.push(method)
+					if (method === 'eth_getBlockByNumber') return block
+					if (method === 'eth_getCode') return currentCode
+					if (method === 'eth_chainId') return chainIdHex
+					if (method === 'eth_call') {
+						if (!Array.isArray(params)) throw new Error('Missing RPC args.')
+						expect(params[1]).toBe('0xa')
+						if (params[0].to === multicall && failAggregate) throw new Error('Aggregate stopped working.')
+						return params[0].to === multicall ? encodeAbiParameters(parseAbiParameters('(bool success,bytes returnData)[]'), [[{ success: true, returnData: word(currentValue) }]]) : word(currentValue)
+					}
+					throw new Error(`Unexpected RPC method ${method}`)
+				},
 			},
-		}),
+			{ retryCount: 0 },
+		),
 	})
 	const read = async (reader: ReadClient) => {
-		const latest = await reader.getBlock()
+		const [latest, chainId] = await Promise.all([reader.getBlock(), reader.getChainId()])
+		expect(chainId).toBe(1)
 		const [value, code] = await Promise.all([reader.readContract({ abi, address: pool, functionName: 'value', blockNumber: latest.number }), reader.getCode({ address: pool, blockNumber: latest.number })])
 		return { value, code }
 	}
 	const session = statoblastPageCache(MAINNET_NETWORK_PROFILE, cacheIdentity)
 	await expect(session.refresh(client, multicall, read)).resolves.toEqual({ value: 20n, code: '0x6000' })
-	const mounted = statoblastPageCache(MAINNET_NETWORK_PROFILE, cacheIdentity, async (reader, blockNumber) => {
-		await reader.readContract({ abi, address: pool, functionName: 'value', blockNumber })
-	})
+	const mounted = statoblastPageCache(MAINNET_NETWORK_PROFILE, cacheIdentity)
 	const initialMethods = methods.length
 	await expect(mounted.loadCached(client, read)).resolves.toMatchObject({ value: { value: 20n, code: '0x6000' } })
 	expect(methods).toHaveLength(initialMethods)
 	methods.length = 0
 	currentValue = 21n
 	await expect(session.refresh(client, multicall, read)).resolves.toEqual({ value: 21n, code: '0x6000' })
-	expect(methods).toEqual(['eth_getBlockByNumber', 'eth_call', 'eth_getBlockByNumber'])
+	expect(methods).toEqual(['eth_getBlockByNumber', 'eth_chainId', 'eth_call', 'eth_getBlockByNumber'])
+	if (scenario === 'aggregate failure') {
+		methods.length = 0
+		failAggregate = true
+		currentValue = 23n
+		await expect(session.refresh(client, multicall, read)).resolves.toEqual({ value: 23n, code: '0x6000' })
+		expect(methods).toEqual(['eth_getBlockByNumber', 'eth_chainId', 'eth_call', 'eth_call', 'eth_getCode', 'eth_getBlockByNumber'])
+		return
+	}
 	methods.length = 0
+	if (scenario === 'wrong RPC network') {
+		chainIdHex = '0x2'
+		await expect(mounted.refresh(client, multicall, read)).rejects.toThrow('another network')
+		expect(methods).toEqual(['eth_getBlockByNumber', 'eth_chainId'])
+		return
+	}
 	currentValue = 22n
-	await expect(mounted.refresh(client, multicall, read)).resolves.toEqual({ value: 22n, code: '0x6000' })
-	expect(methods).toEqual(['eth_getBlockByNumber', 'eth_call', 'eth_call', 'eth_getBlockByNumber'])
+	currentCode = '0x6001'
+	await expect(mounted.refresh(client, multicall, read)).resolves.toEqual({ value: 22n, code: '0x6001' })
+	expect(methods).toEqual(['eth_getBlockByNumber', 'eth_chainId', 'eth_call', 'eth_getCode', 'eth_getBlockByNumber'])
 })
 
 test('saved display data uses the matching wallet and universe and evicts the least recently used page', () => {

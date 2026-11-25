@@ -44,17 +44,34 @@ function LiquidationTime({ timestamp }: { timestamp: bigint }) {
 	)
 }
 
-function liquidationReview(snapshot: TakeoverSnapshot, expected: LiquidationTarget, positionId: bigint, compare: (position: LiquidationTarget['position'], client: ReturnType<typeof createConnectedReadClient>, blockNumber: bigint) => readonly ReviewRow[] | Promise<readonly ReviewRow[]>) {
+function liquidationReview(
+	snapshot: TakeoverSnapshot,
+	expected: Pick<LiquidationTarget, 'epoch' | 'position'>,
+	positionId: bigint,
+	build: (target: Pick<LiquidationTarget, 'epoch' | 'position'>) => { data: `0x${string}` },
+	compare: (position: LiquidationTarget['position'], client: ReturnType<typeof createConnectedReadClient>, blockNumber: bigint) => readonly ReviewRow[] | Promise<readonly ReviewRow[]>,
+) {
 	let rows: readonly ReviewRow[] = []
+	const readTarget = async () => {
+		const client = withStatoblastRequestTimeout(createConnectedReadClient(), currentStateCheckFailed)
+		const { number: blockNumber } = await client.getBlock()
+		if (typeof blockNumber !== 'bigint') throw new Error(currentStateCheckFailed)
+		const [epoch, position] = await Promise.all([client.readContract({ address: snapshot.capitalLedger, abi: capital.abi, functionName: 'acceptedPriceEpoch', blockNumber }), client.readContract({ address: snapshot.commitmentIndex, abi: index.abi, functionName: 'accountOf', args: [positionId], blockNumber })])
+		return { epoch, position, client, blockNumber }
+	}
+	let baseline = expected
 	return {
 		readReviewRows: () => rows,
+		refreshReviewData: async () => {
+			const target = await readTarget()
+			const data = build(target).data
+			baseline = target
+			return data
+		},
 		validateBeforeSubmit: async () => {
-			const client = withStatoblastRequestTimeout(createConnectedReadClient(), currentStateCheckFailed)
-			const { number: blockNumber } = await client.getBlock()
-			if (typeof blockNumber !== 'bigint') throw new Error(currentStateCheckFailed)
-			const [epoch, position] = await Promise.all([client.readContract({ address: snapshot.capitalLedger, abi: capital.abi, functionName: 'acceptedPriceEpoch', blockNumber }), client.readContract({ address: snapshot.commitmentIndex, abi: index.abi, functionName: 'accountOf', args: [positionId], blockNumber })])
-			const original = expected.position
-			if (epoch !== expected.epoch || position.rep !== original.rep || position.commitment !== original.commitment || position.owner !== original.owner || position.batch !== original.batch || position.remainingCommitment !== original.remainingCommitment) throw new Error(changedSinceReview)
+			const { epoch, position, client, blockNumber } = await readTarget()
+			const original = baseline.position
+			if (epoch !== baseline.epoch || position.rep !== original.rep || position.commitment !== original.commitment || position.owner !== original.owner || position.batch !== original.batch || position.remainingCommitment !== original.remainingCommitment) throw new Error(changedSinceReview)
 			rows = await compare(position, client, blockNumber)
 		},
 	}
@@ -192,10 +209,11 @@ export function SecurityPoolTakeover({
 
 	const cure = async () => {
 		if (cureReason !== undefined || snapshot === undefined || fresh === undefined || source === undefined || id === undefined) throw new Error(cureReason ?? copy.notEligible)
+		const build = (target: Pick<LiquidationTarget, 'epoch' | 'position'>) => buildSecurityPoolCapitalCureRequest({ owner: snapshot.owner, capitalLedger: snapshot.capitalLedger, positionId: id, commitment: target.position.commitment, expectedAcceptedPriceEpoch: target.epoch, expectedSourceBatch: target.position.batch })
 		await actions.runSecurityPoolAction('cureSecurityPoolPosition', copy.cure, () => ({
-			...buildSecurityPoolCapitalCureRequest({ owner: snapshot.owner, capitalLedger: snapshot.capitalLedger, positionId: id, commitment: fresh.position.commitment, expectedAcceptedPriceEpoch: fresh.epoch, expectedSourceBatch: source.batch }),
+			...build(fresh),
 			reviewDescription: copy.cureReview,
-			...liquidationReview(snapshot, fresh, id, async (position, client, blockNumber) => {
+			...liquidationReview(snapshot, fresh, id, build, async (position, client, blockNumber) => {
 				const [[, totalCommitmentAttoEth], demandAttoEth] = await Promise.all([client.readContract({ address: snapshot.capitalLedger, abi: capital.abi, functionName: 'totals', blockNumber }), client.readContract({ address: snapshot.capitalLedger, abi: capital.abi, functionName: 'demandAttoEth', blockNumber })])
 				const cured = securityPoolTakeoverSource({ ...snapshot, totalCommitmentAttoEth, demandAttoEth }, position)
 				if (!cured.healthy || cured.removed === 0n) throw new Error(changedSinceReview)
@@ -206,18 +224,20 @@ export function SecurityPoolTakeover({
 	const takeOver = async () => {
 		if (reason !== undefined || snapshot === undefined || fresh === undefined || source === undefined || id === undefined || commitment === undefined || maximumOwnRep === undefined || maximumOwnerPrincipal === undefined || maximumOwnerCommitment === undefined) throw new Error(reason ?? copy.enterBounds)
 		const minimumTakeoverReward = securityPoolTakeoverFill(source, commitment, snapshot.economics.minimumCommitmentAttoEth).takeoverReward
-		await actions.runSecurityPoolAction('takeOverSecurityPoolPosition', copy.takeOver, () => ({
-			...buildSecurityPoolCapitalTakeOverWithBoundsRequest({
+		const build = (target: Pick<LiquidationTarget, 'epoch' | 'position'>) =>
+			buildSecurityPoolCapitalTakeOverWithBoundsRequest({
 				owner: snapshot.owner,
 				capitalLedger: snapshot.capitalLedger,
 				positionId: id,
 				commitment,
 				minimumTakeoverReward,
 				maximumOwnRep,
-				bounds: { maximumOwnerPrincipal, maximumOwnerCommitment, expectedTargetHealthFactorBps: snapshot.ownerAccount.targetHealthFactorBps || 10_000n, expectedAcceptedPriceEpoch: fresh.epoch, expectedSourceBatch: source.batch },
-			}),
+				bounds: { maximumOwnerPrincipal, maximumOwnerCommitment, expectedTargetHealthFactorBps: snapshot.ownerAccount.targetHealthFactorBps || 10_000n, expectedAcceptedPriceEpoch: target.epoch, expectedSourceBatch: target.position.batch },
+			})
+		await actions.runSecurityPoolAction('takeOverSecurityPoolPosition', copy.takeOver, () => ({
+			...build(fresh),
 			reviewDescription: copy.review,
-			...liquidationReview(snapshot, fresh, id, position => {
+			...liquidationReview(snapshot, fresh, id, build, position => {
 				const maximumTransfer = [position.commitment, commitment, maximumOwnerCommitment].reduce((least, next) => (least < next ? least : next))
 				const { symbol, decimals } = snapshot.collateral
 				const rows = [{ label: copy.additionalCommitment, value: copy.addedUpTo(formatUnits(maximumTransfer, decimals), symbol) }]

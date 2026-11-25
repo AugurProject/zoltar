@@ -128,7 +128,7 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 		const signer = await recoverTransactionAddress({ serializedTransaction: transaction.data })
 		return await client.call({ account: signer, to: signed.to ?? undefined, data: signed.data, value: signed.value, gas: signed.gas })
 	}
-	const send = async (fallback: TransactionRequestPreview, execute: (approvalArgs?: readonly [ReturnType<typeof getAddress>, bigint], gas?: bigint) => Promise<`0x${string}`>, requestedGas?: bigint, raw = false) => {
+	const send = async (fallback: TransactionRequestPreview, execute: (approvalArgs?: readonly [ReturnType<typeof getAddress>, bigint], gas?: bigint, data?: TransactionRequestPreview['data']) => Promise<`0x${string}`>, requestedGas?: bigint, raw = false) => {
 		const prepared = preview
 		let transaction = prepared ?? fallback
 		let gas = requestedGas
@@ -154,22 +154,82 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 				if (rows !== undefined) controller.setReviewRows(stepIndex, rows)
 				return rows
 			}
+			let originalTransaction = transaction
+			let approvalArgs: readonly [ReturnType<typeof getAddress>, bigint] | undefined
+			const prepareToSend = async (selectedAmount: bigint | undefined) => {
+				approvalArgs = undefined
+				transaction = originalTransaction
+				gas = requestedGas
+				if (selectedAmount !== undefined) {
+					const [spender] = transaction.args ?? []
+					if (transaction.functionName !== 'approve' || typeof spender !== 'string' || selectedAmount < 0n || selectedAmount > maxUint256) throw new Error('Invalid token approval selection.')
+					approvalArgs = [getAddress(spender), selectedAmount]
+					const requiredAmount =
+						expected.requiredApprovalAmount ??
+						plan
+							?.filter(step => (step.fundingSpender ?? step.contractAddress) === spender)
+							.flatMap(step => step.tokenFunding ?? [])
+							.find(funding => funding.tokenAddress === transaction.contractAddress)?.amount
+					partialApproval = requiredAmount !== undefined && selectedAmount < requiredAmount
+					transaction = { ...transaction, args: approvalArgs, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs }) }
+				}
+				controller.assertActive()
+				await validate()
+				if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
+				if (transaction.functionName === 'requestPrice') {
+					const gasPrice = await client.getGasPrice()
+					const estimate = await client.estimateGas({ account: client.account, to: transaction.contractAddress, data: transaction.data, value: transaction.value, gasPrice: gasPrice > 0n ? gasPrice : 1n })
+					// Reserve execution headroom for refunds and nested calls when an RPC returns gas spent instead of the minimum successful limit.
+					const bufferedGas = (estimate * 150n + 99n) / 100n
+					if (gas === undefined || gas < bufferedGas) gas = bufferedGas
+					await validate()
+					if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
+					controller.assertActive()
+				}
+				const currentFunding = await expected.refreshFundingRequirements?.()
+				for (const funding of currentFunding ?? expected.tokenFunding ?? []) {
+					const spender = expected.fundingSpender ?? expected.contractAddress
+					if (spender === undefined) throw new Error(missingTokenSpender)
+					const [balance, allowance] = await Promise.all([
+						client.readContract({ address: funding.tokenAddress, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [client.account.address] }),
+						client.readContract({ address: funding.tokenAddress, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, spender] }),
+					])
+					if (balance < funding.amount || allowance < funding.amount) throw new Error('Funding requirements changed. Review balances and approvals again before sending.')
+				}
+				if (expected.tokenFunding !== undefined) await validate()
+				if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
+				controller.assertActive()
+				if (alwaysReview && (approvalArgs !== undefined || alreadyReviewedFunding)) await check(transaction)
+				else if (expected.validateBeforeSubmit !== undefined) {
+					const validation = expected.validateBeforeSubmit()
+					if (alwaysReview) await validation
+					else await withTimeout(validation, 15_000, transactionCopy.currentStateCheckFailed)
+				}
+				if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
+				controller.assertActive()
+			}
+
 			let selectedAmount = selectedFunding?.amount
 			if (selectedFunding === undefined) {
 				if (alwaysReview) {
 					selectedAmount = await controller.review(stepIndex, {
 						deferWallet: true,
-						check: async () => {
-							await check(transaction)
+						check: async retrying => {
+							if (retrying && expected.refreshReviewData !== undefined) {
+								originalTransaction = { ...originalTransaction, data: await expected.refreshReviewData() }
+								controller.setTechnicalRows(stepIndex, [...getPreparedTransactionTechnicalRows(originalTransaction), { label: appCopy.network, value: client.chain.name }])
+							}
+							await check(originalTransaction)
 							reviewedRows = readRows()
 							checkedAt = performance.now()
 						},
-						recheck: () => {
-							if (performance.now() - checkedAt <= 30_000) return undefined
-							return check(transaction).then(() => {
+						recheck: async amount => {
+							if (performance.now() - checkedAt > 30_000) {
+								await check(originalTransaction)
 								const currentRows = readRows()
 								if (reviewedRows !== undefined && currentRows !== undefined && (reviewedRows.length !== currentRows.length || reviewedRows.some((row, index) => row.label !== currentRows[index]?.label || row.value !== currentRows[index]?.value))) throw new Error(changedSinceReview)
-							})
+							}
+							await prepareToSend(amount)
 						},
 						retryStatus: error => {
 							if (!(error instanceof Error)) return undefined
@@ -184,58 +244,11 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 				}
 			}
 			selectedFunding = undefined
-			let approvalArgs: readonly [ReturnType<typeof getAddress>, bigint] | undefined
-			if (selectedAmount !== undefined) {
-				const [spender] = transaction.args ?? []
-				if (transaction.functionName !== 'approve' || typeof spender !== 'string' || selectedAmount < 0n || selectedAmount > maxUint256) throw new Error('Invalid token approval selection.')
-				approvalArgs = [getAddress(spender), selectedAmount]
-				const requiredAmount =
-					expected.requiredApprovalAmount ??
-					plan
-						?.filter(step => (step.fundingSpender ?? step.contractAddress) === spender)
-						.flatMap(step => step.tokenFunding ?? [])
-						.find(funding => funding.tokenAddress === transaction.contractAddress)?.amount
-				partialApproval = requiredAmount !== undefined && selectedAmount < requiredAmount
-				transaction = { ...transaction, args: approvalArgs, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs }) }
-			}
+			if (!alwaysReview || alreadyReviewedFunding) await prepareToSend(selectedAmount)
 			stepIndex += 1
-			controller.assertActive()
-			await validate()
-			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
-			if (transaction.functionName === 'requestPrice') {
-				const gasPrice = await client.getGasPrice()
-				const estimate = await client.estimateGas({ account: client.account, to: transaction.contractAddress, data: transaction.data, value: transaction.value, gasPrice: gasPrice > 0n ? gasPrice : 1n })
-				// Reserve execution headroom for refunds and nested calls when an RPC returns gas spent instead of the minimum successful limit.
-				const bufferedGas = (estimate * 150n + 99n) / 100n
-				if (gas === undefined || gas < bufferedGas) gas = bufferedGas
-				await validate()
-				if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
-				controller.assertActive()
-			}
-			const currentFunding = await expected.refreshFundingRequirements?.()
-			for (const funding of currentFunding ?? expected.tokenFunding ?? []) {
-				const spender = expected.fundingSpender ?? expected.contractAddress
-				if (spender === undefined) throw new Error(missingTokenSpender)
-				const [balance, allowance] = await Promise.all([
-					client.readContract({ address: funding.tokenAddress, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [client.account.address] }),
-					client.readContract({ address: funding.tokenAddress, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, spender] }),
-				])
-				if (balance < funding.amount || allowance < funding.amount) throw new Error('Funding requirements changed. Review balances and approvals again before sending.')
-			}
-			if (expected.tokenFunding !== undefined) await validate()
-			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
-			controller.assertActive()
-			if (alwaysReview && (approvalArgs !== undefined || alreadyReviewedFunding)) await check(transaction)
-			else if (expected.validateBeforeSubmit !== undefined) {
-				const validation = expected.validateBeforeSubmit()
-				if (alwaysReview) await validation
-				else await withTimeout(validation, 15_000, transactionCopy.currentStateCheckFailed)
-			}
-			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
-			controller.assertActive()
 			controller.openWallet()
 			client.onTransactionPrepared?.(transaction)
-			const hash = await execute(approvalArgs, gas)
+			const hash = await execute(approvalArgs, gas, transaction.data)
 			controller.submitted(hash)
 			return hash
 		} catch (error) {
@@ -296,7 +309,7 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 		sendTransaction: async parameters =>
 			await send(
 				{ account: client.account, args: undefined, chainName: client.chain.name, data: parameters.data, functionName: parameters.data === undefined ? 'Transfer ETH' : 'Contract transaction', to: parameters.to ?? undefined, value: parameters.value },
-				async (approvalArgs, gas) => await client.sendTransaction({ ...parameters, ...(gas === undefined ? {} : { gas }), ...(approvalArgs === undefined ? {} : { data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs }) }) }),
+				async (approvalArgs, gas, data) => await client.sendTransaction({ ...parameters, ...(gas === undefined ? {} : { gas }), ...(data === undefined ? {} : { data }), ...(approvalArgs === undefined ? {} : { data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs }) }) }),
 				parameters.gas,
 			),
 		sendRawTransaction: async parameters => await send({ account: undefined, args: undefined, chainName: client.chain.name, functionName: 'Deploy contract', data: parameters.serializedTransaction, value: undefined }, async () => await client.sendRawTransaction(parameters), undefined, true),

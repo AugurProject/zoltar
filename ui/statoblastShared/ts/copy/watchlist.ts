@@ -39,6 +39,7 @@ export const importWatchlist = 'Import watchlist'
 export const importing = 'Importing…'
 export const recentlyOpened = 'Recently opened'
 export const recentlyOpenedLimit = 'Last 20 opened'
+export const formatRecentUniverse = (name: string) => ` · ${name}`
 export const formatOpened = (age: string) => `, opened ${age}`
 export const questionInPool = (title: string, pool: string) => `${title} in security pool ${pool}`
 export const clearHistory = 'Clear history'

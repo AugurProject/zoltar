@@ -11,3 +11,5 @@ export const notCreated = 'Universe not created yet'
 export const selected = 'Selected'
 export const committed = 'Committed'
 export const pageRange = (start: bigint, end: bigint, total: bigint) => `Branches ${start}–${end} of ${total}`
+
+export const repCommitted = 'committed'

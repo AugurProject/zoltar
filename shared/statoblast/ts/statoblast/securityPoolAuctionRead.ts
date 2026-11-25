@@ -97,7 +97,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 	const controller = decodeAddress(controllerValue, 'Fork controller')
 	const zoltar = decodeAddress(protocolValue, 'Protocol')
 	const factory = decodeAddress(factoryValue, 'Factory')
-	const capitalLedger = decodeAddress(capitalValue, 'Capital ledger', true)
+	const capitalLedger = decodeAddress(capitalValue, 'Capital contract', true)
 	const priceFeed = decodeAddress(feedValue, 'Price feed', true)
 	const [authorityValue, controllerProtocol, auctionValue, tokenValue, forkTimeValue] = await Promise.all([read(controller, 'securityPool'), read(controller, 'zoltar'), read(controller, 'repairAuctions', [universeId]), read(zoltar, 'getRepToken', [universeId]), read(zoltar, 'getForkTime', [universeId])])
 	if (decodeAddress(authorityValue, 'Fork authority') !== securityPool || decodeAddress(controllerProtocol, 'Fork protocol') !== zoltar) throw new Error('Auction fork controller belongs to another security pool.')
@@ -173,7 +173,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 		)
 			throw new Error('Auction identities do not match the selected branch.')
 		const engine = decodeAddress(engineValue, 'Auction engine')
-		const vaultImplementation = decodeAddress(implementationValue, 'Vault implementation')
+		const vaultImplementation = decodeAddress(implementationValue, 'Auction position implementation')
 		const opened = decodeBool(openedValue, 'Invalid auction state.')
 		const finalized = decodeBool(finalizedValue, 'Invalid auction state.')
 		const [engineController, initialized, engineFinalized, maximum, admissible, deposited, count, bidCredit] = await Promise.all([
@@ -212,7 +212,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 		if (priceFeed !== zeroAddress) {
 			const [values, exposureValue] = await Promise.all([Promise.all(['conservativePrice', 'priceValidUntil', 'lastSettlementTimestamp', 'acceptedExposureLimitAttoEth', 'acceptedRepExposureLimitAttoRep'].map(name => read(priceFeed, name))), read(securityPool, 'oracleExposure', [universeId])])
 			price = {
-				conservativePrice: decodeUint(values[0], 'Conservative price'),
+				conservativePrice: decodeUint(values[0], 'Health price'),
 				validUntil: decodeUint(values[1], 'Price validity'),
 				lastSettlementTimestamp: decodeUint(values[2], 'Price settlement'),
 				exposureLimitAttoEth: decodeUint(values[3], 'Funded ETH exposure'),
@@ -242,18 +242,18 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			const id = decodeUint(await read(engine, 'bidderBidId', [bidder, index]), 'Bid ID')
 			if (id === 0n) throw new Error('Auction bid ID is missing.')
 			const values = decodeFields(await read(engine, 'bids', [id]), ['bidder', 'vault', 'targetHealthBps', 'lots', 'minimumAttoRepPerLot', 'settled', 'feesRemoved'], 'Invalid auction response.')
-			const vault = decodeAddress(values[1], 'Auction vault')
+			const vault = decodeAddress(values[1], 'Auction position')
 			const [vaultOwner, vaultCapital, vaultAuction, vaultId, registeredId] = await Promise.all([read(vault, 'owner'), read(vault, 'initialCapital'), read(vault, 'repairAuction'), read(vault, 'bidId'), read(auctionAddress, 'bidIdForVault', [vault])])
 			if (
 				decodeAddress(values[0], 'Bid owner') !== bidder ||
-				decodeAddress(vaultOwner, 'Vault owner') !== bidder ||
-				decodeAddress(vaultCapital, 'Vault initial capital') !== capitalLedger ||
-				decodeAddress(vaultAuction, 'Vault auction') !== auctionAddress ||
-				decodeUint(vaultId, 'Vault bid ID') !== id ||
-				decodeUint(registeredId, 'Registered vault bid') !== id ||
+				decodeAddress(vaultOwner, 'Position owner') !== bidder ||
+				decodeAddress(vaultCapital, 'Position initial capital') !== capitalLedger ||
+				decodeAddress(vaultAuction, 'Position auction') !== auctionAddress ||
+				decodeUint(vaultId, 'Position bid ID') !== id ||
+				decodeUint(registeredId, 'Registered position bid') !== id ||
 				predictAuctionVaultAddress({ implementation: vaultImplementation, owner: bidder, capital: capitalLedger, auction: auctionAddress, bidId: id }) !== vault
 			)
-				throw new Error('Auction bid or vault belongs to another account.')
+				throw new Error('Auction bid or position belongs to another wallet.')
 			const bid = {
 				id,
 				bidder,
@@ -268,16 +268,16 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			let position: SecurityPoolAuctionBid['position']
 			if (finalized) {
 				const result = decodeFields(await read(engine, 'previewBid', [id]), ['bidder', 'vault', 'targetHealthBps', 'filledLots', 'usedAttoEth', 'principalAttoRep', 'refundAttoEth'], 'Invalid auction response.')
-				if (decodeAddress(result[0], 'Fill bidder') !== bidder || decodeAddress(result[1], 'Fill vault') !== vault || decodeUint(result[2], 'Fill health') !== bid.targetHealthFactorBps) throw new Error('Auction fill identity mismatch.')
+				if (decodeAddress(result[0], 'Fill bidder') !== bidder || decodeAddress(result[1], 'Filled position') !== vault || decodeUint(result[2], 'Fill health') !== bid.targetHealthFactorBps) throw new Error('Auction fill identity mismatch.')
 				const filledLots = decodeUint(result[3], 'Filled bid lots')
 				fill = { filledLots, usedAttoEth: decodeUint(result[4], 'Used ETH'), refundAttoEth: decodeUint(result[6], 'Unused bid ETH'), principalAttoRep: decodeUint(result[5], 'Purchased collateral REP') }
 				if (filledLots > bid.lots || fill.usedAttoEth !== filledLots * terms.lotAttoEth || fill.refundAttoEth !== (bid.lots - filledLots) * terms.lotAttoEth) throw new Error('Invalid auction fill accounting.')
 				if (filledLots !== 0n) {
 					const current = decodeFields(await read(capitalLedger, 'repairAuctionPosition', [id]), ['vault', 'positionId', 'principal', 'commitment', 'targetHealthFactorBps', 'liquidationStarted', 'materialized', 'earnedAttoEth', 'earnedAttoRep'], 'Invalid auction response.')
-					if (decodeAddress(current[0], 'Capital auction vault') !== vault || decodeBool(current[6], 'Invalid auction state.') !== bid.materialized) throw new Error('Auction capital position identity mismatch.')
+					if (decodeAddress(current[0], 'Auction capital position') !== vault || decodeBool(current[6], 'Invalid auction state.') !== bid.materialized) throw new Error('Auction capital position identity mismatch.')
 					position = {
 						positionId: decodeUint(current[1], 'Auction position ID', 96),
-						principalAttoRep: decodeUint(current[2], 'Current principal REP'),
+						principalAttoRep: decodeUint(current[2], 'Current pledged REP'),
 						commitmentAttoEth: decodeUint(current[3], 'Current commitment ETH'),
 						targetHealthFactorBps: decodeUint(current[4], 'Current health target'),
 						liquidationStarted: decodeUint(current[5], 'Liquidation start', 48),

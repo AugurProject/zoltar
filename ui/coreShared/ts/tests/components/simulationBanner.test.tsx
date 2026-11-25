@@ -173,7 +173,7 @@ describe('SimulationBanner', () => {
 			if (!(summary instanceof HTMLElement)) throw new Error('Expected simulation banner disclosure summary')
 			expect(summary.textContent).toContain('Ready')
 			expect(summary.textContent).toContain('Question ledger')
-			expect(summary.textContent).toContain('QA account 1')
+			expect(summary.textContent).toContain('QA wallet 1')
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()
@@ -218,7 +218,7 @@ describe('SimulationBanner', () => {
 			})
 			expect(disclosure.open).toBe(false)
 			expect(summary.querySelector('.simulation-strip-progress-track')).toBeNull()
-			expect(summary.textContent).toContain('QA account 1')
+			expect(summary.textContent).toContain('QA wallet 1')
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()
@@ -345,12 +345,12 @@ describe('SimulationBanner', () => {
 		try {
 			const documentQueries = within(renderedComponent.container)
 			expect(documentQueries.getByLabelText('Simulation scenario')).toBeTruthy()
-			expect(documentQueries.getByLabelText('Simulation QA account')).toBeTruthy()
-			const accountSelect = documentQueries.getByLabelText('Simulation QA account')
+			expect(documentQueries.getByLabelText('Simulation QA wallet address')).toBeTruthy()
+			const accountSelect = documentQueries.getByLabelText('Simulation QA wallet address')
 			const accountOption = accountSelect.querySelector('option')
 			if (accountOption === null) throw new Error('Expected QA account option')
 			expect(accountOption.getAttribute('value')).toBe(controller.selectedAccount)
-			expect(accountOption.textContent).toBe('QA account 1')
+			expect(accountOption.textContent).toBe('QA wallet 1')
 			expect(accountOption.textContent).not.toContain(controller.selectedAccount)
 			expect(documentQueries.getByText(controller.selectedAccount)).toBeTruthy()
 		} finally {
@@ -385,7 +385,7 @@ describe('SimulationBanner', () => {
 			await act(() => render(<SimulationBanner controller={controller} onRefresh={onRefresh} />, renderedComponent.container))
 			expect(getElementValue(documentQueries.getByLabelText('Simulation QA wallet'))).toBe('disconnected')
 			expect(documentQueries.getAllByText('Wallet disconnected').length).toBeGreaterThan(0)
-			expect(documentQueries.queryByText('QA account 1', { selector: '.simulation-banner-compact-account' })).toBeNull()
+			expect(documentQueries.queryByText('QA wallet 1', { selector: '.simulation-banner-compact-account' })).toBeNull()
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()

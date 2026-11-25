@@ -126,7 +126,7 @@ export const disputeTip = 'Disputers can trade against your quote. You may get b
 export const coverageTip = 'You fund a two-sided quote at your price. A report that covers less than the pool’s exposure is rejected.'
 export const coverLabel = 'This report covers'
 export const exposureNow = 'Exposure now'
-export const headroom = 'Headroom'
+export const extraCoverage = 'Extra coverage'
 export const bountyPaidByYou = 'Settle bounty, paid by you'
 export const deviationLabel = (percent: string) => `±${percent}%`
 export const latestReportHint = 'Enter an older ID to return its funds.'
@@ -180,9 +180,18 @@ export const formatPriceBelowReferenceWarning = (reference: string, collateral: 
 
 export const currentExposure = 'Current exposure'
 export const reportCoverage = 'Report coverage'
-export const growthHeadroom = 'Growth headroom'
 export const coverageWarning = 'Growth beyond this coverage before settlement rejects this price. Attached operations may still use a separately accepted fresh price, within their signed bounds.'
 
 export const deviation = 'Deviation'
 export const formatDeviation = (percent: string) => `${percent}%`
 export const returnFunds = 'Return funds'
+
+export const invalidReportFunding = 'Invalid report funding.'
+export const wrappingUnavailable = 'Wrapping does not apply to this collateral.'
+export const priceEnvironmentChanged = 'Price feed or wallet environment changed. Review again.'
+export const priceIdentityChanged = 'Price feed identities changed. Review again.'
+export const fundingChanged = 'Report funding changed. Review the updated amounts before trying again.'
+export const reportChanged = 'This report changed. Refresh and review it again.'
+export const wrapFundingChanged = 'Wallet funding changed. Refresh before wrapping ETH.'
+export const insufficientReportFunding = 'Wallet report funding is insufficient.'
+export const reportNotReady = 'This report is not ready to settle.'

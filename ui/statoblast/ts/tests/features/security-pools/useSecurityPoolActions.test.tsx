@@ -4,13 +4,13 @@ import { expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { asWriteClient, createMockWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { asWriteClient, createMockWriteClient, mockTransactionHash } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { localEntityScopeForNetwork, readFavoriteEntries } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { useSecurityPoolActions } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolActions.js'
-import { decodeFunctionData, encodeAbiParameters, encodeFunctionData, parseAbi, parseAbiItem, parseAbiParameters, toEventSelector, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { decodeFunctionData, encodeAbiParameters, encodeFunctionData, parseAbi, parseAbiItem, parseAbiParameters, toEventSelector, type Address, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { getInfraContractAddresses } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { renderHookWithProps } from '../../support/renderHook.js'
 import { auctionCapitalSnapshot, capitalSnapshot, owner, securityPool, token, capital } from './capitalFixture.js'
@@ -42,15 +42,46 @@ function model(): Parameters<typeof useSecurityPoolActions>[0] {
 		nextApprovedQuestionPage: async () => undefined,
 	}
 }
+const factory = () => getInfraContractAddresses().securityPoolFactory
+const deploymentTopic = (value: Address) => encodeAbiParameters(parseAbiParameters('address'), [value])
+const deployedPoolLog = () => ({ address: factory(), data: '0x' as const, topics: [toEventSelector(parseAbiItem('event SecurityPoolDeployed(address indexed securityPool, address indexed creator)')), deploymentTopic(securityPool), deploymentTopic(owner)] })
+
 /** Renders the actions over `source` with an owner wallet that records each transaction, reports `token` as the first deployed contract and the factory's deployment event for `securityPool` after it. */
-async function renderWithDeploymentWallet(source: ReturnType<typeof capitalClient>, deploying = false) {
+async function renderWithDeploymentWallet(source: ReturnType<typeof capitalClient>, deploying = false, delays: { wallet?: Promise<void>; receipt?: Promise<void>; confirmed?: () => boolean } = {}) {
 	// The factory creates the security pool, so the receipt carries no contract address for it: only the factory's event names it.
-	const topic = (value: Address) => encodeAbiParameters(parseAbiParameters('address'), [value])
-	const deployed = () => ({ address: getInfraContractAddresses().securityPoolFactory, data: '0x' as const, topics: [toEventSelector(parseAbiItem('event SecurityPoolDeployed(address indexed securityPool, address indexed creator)')), topic(securityPool), topic(owner)] })
 	const requests: { to?: Address | null | undefined; data?: Hex | undefined }[] = []
 	const loaded: string[] = []
-	const writer = asWriteClient({ ...createMockWriteClient(request => requests.push(request)), waitForTransactionReceipt: async () => (requests.length === 1 ? { status: 'success' as const, contractAddress: token, logs: [] } : { status: 'success' as const, contractAddress: undefined, logs: [deployed()] }) })
-	installActiveEnvironmentForTesting({ ...source.backend, createWriteClient: () => ({ ...writer, account: { address: owner, type: 'json-rpc' }, chain: MAINNET_NETWORK_PROFILE.chain, call: async () => ({ data: undefined }) }) })
+	const receipt = () => (requests.length === 1 ? { from: owner, to: undefined, status: 'success' as const, contractAddress: token, logs: [] } : { from: owner, to: factory(), status: 'success' as const, contractAddress: undefined, logs: [deployedPoolLog()] })
+	const writer = asWriteClient({
+		...createMockWriteClient(request => requests.push(request)),
+		waitForTransactionReceipt: async () => {
+			if (requests.length !== 1 || delays.wallet === undefined) await delays.receipt
+			return receipt()
+		},
+	})
+	installActiveEnvironmentForTesting({
+		...source.backend,
+		createReadClient: () =>
+			source.client.extend(() => ({
+				getTransactionReceipt: async () => {
+					if (delays.confirmed?.() !== true) throw new Error('Receipt not yet available')
+					return { ...receipt(), transactionHash: mockTransactionHash, blockHash: mockTransactionHash, blockNumber: 1n, cumulativeGasUsed: 1n, gasUsed: 1n, transactionIndex: 0n } satisfies TransactionReceipt
+				},
+			})),
+		createWriteClient: (_, callbacks) => ({
+			...writer,
+			account: { address: owner, type: 'json-rpc' },
+			chain: MAINNET_NETWORK_PROFILE.chain,
+			call: async () => ({ data: undefined }),
+			sendTransaction: async request => {
+				callbacks?.assertBeforeSubmit?.()
+				const hash = await writer.sendTransaction(request)
+				if (requests.length === 1) await delays.wallet
+				callbacks?.onTransactionSubmitted?.(hash)
+				return hash
+			},
+		}),
+	})
 	const hook = await renderHookWithProps(useSecurityPoolActionsWrapper, {
 		deploying,
 		model: {
@@ -140,6 +171,67 @@ test('confirmed activation keeps the locked deployment available after remount',
 	const restored = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolActionsWrapper, { model: ready, deploying: true }))
 	expect(restored.state().deploymentLocked).toBe(true)
 	expect(restored.state().admissionAddress).toBe(token)
+})
+
+test('the deployment wizard keeps a wallet-dispatched rules deployment locked on reload before the hash arrives', async () => {
+	const wallet = createDeferred<void>()
+	const { hook, requests } = await renderWithDeploymentWallet(capitalClient(), true, { wallet: wallet.promise })
+	let sending: Promise<void> | undefined
+	try {
+		await act(() => {
+			sending = hook.state().deployAdmission()
+		})
+		await waitFor(() => expect(requests).toHaveLength(1))
+		await act(() => hook.cleanup())
+		const restored = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolActionsWrapper, { model: model(), deploying: true }))
+		expect(restored.state().deploymentLocked).toBe(true)
+		expect(restored.state().admissionDeployReason).toBeDefined()
+		await act(() => restored.state().deployAdmission())
+		expect(requests).toHaveLength(1)
+	} finally {
+		wallet.resolve()
+		await sending
+	}
+})
+
+for (const step of ['rules', 'pool'] as const) {
+	test(`the deployment wizard verifies the pending ${step} receipt on reload before unlocking the next step`, async () => {
+		const receipt = createDeferred<void>()
+		let confirmed = false
+		const { hook, requests } = await renderWithDeploymentWallet(capitalClient(), true, { ...(step === 'pool' ? { wallet: Promise.resolve() } : {}), receipt: receipt.promise, confirmed: () => confirmed })
+		let sending: Promise<void> | undefined
+		try {
+			if (step === 'pool') await act(() => hook.state().deployAdmission())
+			await act(() => {
+				sending = step === 'rules' ? hook.state().deployAdmission() : hook.state().deploy()
+			})
+			const transactionCount = step === 'rules' ? 1 : 2
+			await waitFor(() => expect(requests).toHaveLength(transactionCount))
+			await act(() => hook.cleanup())
+			const waiting = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolActionsWrapper, { model: model(), deploying: true }))
+			expect(waiting.state().deploymentLocked).toBe(true)
+			expect(step === 'rules' ? waiting.state().admissionDeployReason : waiting.state().deployReason).toBeDefined()
+			await act(() => waiting.cleanup())
+			confirmed = true
+			const restored = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolActionsWrapper, { model: model(), deploying: true }))
+			await waitFor(() => expect(step === 'rules' ? restored.state().admissionAddress : restored.state().deploymentPool).toBe(step === 'rules' ? token : securityPool))
+			expect(requests).toHaveLength(transactionCount)
+		} finally {
+			receipt.resolve()
+			await sending
+		}
+	})
+}
+
+test('starting a new deployment unlocks a discarded rules-only draft', async () => {
+	const { hook } = await renderWithDeploymentWallet(capitalClient(), true)
+	await act(() => hook.state().setHorizonDays('45'))
+	await act(() => hook.state().deployAdmission())
+	expect(hook.state().deploymentLocked).toBe(true)
+	await act(() => hook.state().startNewDeployment())
+	expect(hook.state().deploymentLocked).toBe(false)
+	expect(hook.state().admissionAddress).toBeUndefined()
+	expect(hook.state().horizonDays).toBe('30')
 })
 
 function useSecurityPoolActionsWrapper(props: { model: ReturnType<typeof model>; parameters?: Parameters<typeof useSecurityPoolActions>[1]; deploying?: boolean }) {

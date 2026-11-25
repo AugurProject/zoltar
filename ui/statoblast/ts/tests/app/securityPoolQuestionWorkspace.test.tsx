@@ -48,8 +48,10 @@ test(
 			let detailsReadStarted = false
 			let boundaryBlockTime: bigint | undefined
 			let boundaryReads = 0
+			let headReads = 0
 			const client = backend.createReadClient()
 			const getBlock: typeof client.getBlock = async request => {
+				if (request?.blockNumber === undefined) headReads++
 				const block = await client.getBlock(request)
 				return boundaryBlockTime === undefined ? block : { ...block, timestamp: boundaryBlockTime }
 			}
@@ -108,8 +110,19 @@ test(
 			expect(view.container.textContent).not.toContain('showing data from')
 			expect(view.container.querySelector('.statoblast-question-loading')).toBeNull()
 			offline = false
-			await clickRetry()
-			await waitFor(() => expect(view.container.textContent).toContain('Mint complete sets'), simulationWaitOptions)
+			const beforeVisibilityRefresh = headReads
+			let hidden = true
+			Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden })
+			try {
+				await act(() => document.dispatchEvent(new Event('visibilitychange')))
+				expect(headReads).toBe(beforeVisibilityRefresh)
+				hidden = false
+				await act(() => document.dispatchEvent(new Event('visibilitychange')))
+				await waitFor(() => expect(view.container.textContent).toContain('Mint complete sets'), simulationWaitOptions)
+				expect(headReads).toBe(beforeVisibilityRefresh + 1)
+			} finally {
+				Reflect.deleteProperty(document, 'hidden')
+			}
 			expect(view.container.textContent).toContain('Resolution rules and details')
 			expect(view.container.querySelector('[aria-current="page"]')?.textContent).toBe('Question')
 			const poolLink = [...view.container.querySelectorAll('a')].find(link => link.textContent === 'Open security pool')

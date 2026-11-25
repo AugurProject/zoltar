@@ -16,7 +16,7 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
-import { formatDuration, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalanceWithUnit, formatDuration, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { formatUniverseIdHex } from '@zoltar/ui-core-shared/lib/universeLabels.js'
 import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
@@ -58,12 +58,19 @@ export function SecurityPoolSharedFork({
 }) {
 	const model = useSecurityPoolSharedFork(parameters)
 	const state = model.state
+	const livePool = parameters.snapshot
+	const verifiedFork = state ?? (livePool === undefined
+		? undefined
+		: { controller: livePool.forkController, universeId: livePool.universeId, blockNumber: livePool.blockNumber, blockHash: livePool.blockHash, branch: undefined })
 	const display = model.displayedState
 	const refreshError = useStatoblastRefreshError(model.forkError, redesigned ? model.displayedAt : undefined)
 	const actionDataNotice = useOldActionDataNotice(redesigned ? model.displayedAt : undefined)
 	const branch = display?.branch
 	const shownPool = parameters.presentationSnapshot ?? parameters.snapshot
 	const branchDone = display?.choice.recorded === true
+	const positionToMove = shownPool?.positions.find(position => position.id === shownPool.ownerAccount.positionId)
+	const branchConfirmation =
+		shownPool === undefined || positionToMove === undefined ? pageCopy.branchConfirmation : pageCopy.formatMoveCommitment(formatCurrencyBalanceWithUnit(positionToMove.rep, common.rep), formatCurrencyBalanceWithUnit(positionToMove.commitment, shownPool.collateral.symbol, shownPool.collateral.decimals))
 	const choiceAt = display?.choiceDeadline ?? shownPool?.forkChoiceDeadline
 	const activationAt = display?.activationDeadline ?? forkRecapitalizationDeadline
 	const choiceTime = display?.timestamp ?? shownPool?.timestamp
@@ -192,7 +199,7 @@ export function SecurityPoolSharedFork({
 				</div>
 			)}
 			<SectionBlock title={redesigned ? pageCopy.branchMigration : copy.title} description={redesigned ? pageCopy.branchDefinition : copy.description}>
-				{redesigned && <SecurityPoolForkDiagram state={display} snapshot={shownPool} question={forkQuestion} outcomeInput={model.outcomeInput} childUniverses={childUniverses} />}
+				{redesigned && <SecurityPoolForkDiagram state={display} snapshot={shownPool} question={forkQuestion} outcomeInput={model.outcomeInput} childUniverses={childUniverses} verifiedFork={verifiedFork} />}
 				{redesigned ? (
 					<BranchChoices question={forkQuestion} read={forkQuestionRead} value={model.outcomeInput} onChange={model.setOutcome} disabled={disabled || branchDone} />
 				) : (
@@ -230,7 +237,7 @@ export function SecurityPoolSharedFork({
 								{!branchDone && (
 									<label className='statoblast-choice-confirmation'>
 										<input type='checkbox' checked={confirmedChoice} disabled={disabled || !canChooseByDeadline || state?.branch === undefined} onChange={event => setConfirmedChoice(event.currentTarget.checked)} />
-										{pageCopy.branchConfirmation}
+										{branchConfirmation}
 									</label>
 								)}
 							</ForkStep>

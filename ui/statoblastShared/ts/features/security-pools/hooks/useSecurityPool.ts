@@ -9,9 +9,9 @@ import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
-import { loadSecurityPoolAccount, loadSecurityPoolSetup, requireCanonicalSecurityPool, type SecurityPoolSetupSnapshot, type SecurityPoolAccountSnapshot } from '../../../protocol/securityPool.js'
+import { loadSecurityPoolAccount, loadSecurityPoolSetup, type SecurityPoolSetupSnapshot, type SecurityPoolAccountSnapshot } from '../../../protocol/securityPool.js'
 import { securityPoolUnsignedId } from '../lib/draft.js'
-import { loadPoolFailed } from '../../../copy/securityPoolTransactions.js'
+import { invalidPoolUniverse, loadPoolFailed, poolReadTimeout } from '../../../copy/securityPoolTransactions.js'
 
 function securityPoolStorageKey(chainId: number) {
 	const backend = getActiveBackend()
@@ -108,7 +108,7 @@ export function useSecurityPool({
 			const owner = publicPoolRoute && selectedOwner === '' ? undefined : getAddress(selectedOwner)
 			const cacheOwner = owner ?? zeroAddress
 			const universeId = securityPoolUnsignedId(universeOverride, 248)
-			if (universeId === undefined) throw new Error('Enter a valid universe ID.')
+			if (universeId === undefined) throw new Error(invalidPoolUniverse)
 			const client = createConnectedReadClient()
 			const questionPage = questionStart.value
 			const admissionPage = admissionStart.value
@@ -119,13 +119,13 @@ export function useSecurityPool({
 				return { preparation, next }
 			}
 			const read = async () => {
-				if (!cacheReads) return await readPage(withStatoblastRequestTimeout(client, 'Security pool read timed out.'))
+				if (!cacheReads) return await readPage(withStatoblastRequestTimeout(client, poolReadTimeout))
 				const cachePage = `${owner === undefined ? 'capital-public' : 'capital'}:${questionPage}:${admissionPage}`
 				const cacheKey = `${environmentKey}:${securityPool}:${cacheOwner}:${universeId}:${cachePage}`
 				if (pageCache.current?.key !== cacheKey) {
 					pageCache.current = {
 						key: cacheKey,
-						storage: statoblastPageCache(renderedBackend.profile, { pool: securityPool, owner: cacheOwner, universeId, page: cachePage }, (readClient, block) => requireCanonicalSecurityPool(readClient, securityPool, block)),
+						storage: statoblastPageCache(renderedBackend.profile, { pool: securityPool, owner: cacheOwner, universeId, page: cachePage }),
 					}
 				}
 				const cache = pageCache.current.storage

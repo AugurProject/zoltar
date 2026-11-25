@@ -76,7 +76,7 @@ export function LocateReportingDeposits({ details, wallet, refresh, openOnEntry 
 					setProgress(undefined)
 				}
 				deposits.add(result.matches.map(match => match.deposit))
-				cursors.write(result.confirmed)
+				if (result.confirmed !== undefined) cursors.write(result.confirmed)
 				cursor = result.position
 				setInspected(cursor.nextIndex)
 				const count = result.totalDeposits
@@ -138,7 +138,7 @@ export function LocateReportingDeposits({ details, wallet, refresh, openOnEntry 
 		try {
 			if (publishing.current !== undefined) await publishing.current
 			if (!guard.isCurrent()) return
-			const client = withStatoblastRequestTimeout(createConnectedReadClient(), 'Deposit check timed out.', undefined, singleFlight.current)
+			const client = withStatoblastRequestTimeout(createConnectedReadClient(), pageCopy.depositCheckTimeout)
 			const [deposit] = await client.readContract(reportingDepositRead(escalationGameAddress, missingOutcome, index, 1n))
 			if (!guard.isCurrent()) return
 			if (deposit === undefined) throw new Error(`There is no deposit #${index} on ${missing.label}.`)

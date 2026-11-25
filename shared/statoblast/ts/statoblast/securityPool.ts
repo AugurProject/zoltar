@@ -56,7 +56,7 @@ export function buildSecurityPoolDeploymentRequest(parameters: { owner: Address;
 	if (parameters.origin.securityMultiplierBps < 10_500n) throw new Error('Security multiplier must be at least 10500 BPS.')
 	if (parameters.origin.reportPriorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) throw new Error('Initial report priority fee exceeds OpenOracle limits.')
 	if (parameters.origin.reportPriorityFeeAttoEthPerGas === 0n) throw new Error('Report priority fee must be positive.')
-	address(parameters.questionAdmissionPolicy, 'Question admission policy')
+	address(parameters.questionAdmissionPolicy, 'Question rules')
 	uint(parameters.maximumQuestionHorizonSeconds, 48, 'Question horizon')
 	if (parameters.maximumQuestionHorizonSeconds === 0n) throw new Error('Question horizon must be positive.')
 	validateSecurityPoolEconomics(parameters.economics)

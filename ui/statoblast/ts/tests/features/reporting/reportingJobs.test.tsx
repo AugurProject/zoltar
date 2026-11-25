@@ -304,3 +304,60 @@ test('a deposit search waits for the timed-out request to settle before sending 
 		timer.mockRestore()
 	}
 })
+
+test('manual deposit lookup can finish while the background search RPC is still pending', async () => {
+	const backend = createFakeBackend({ accountAddress: account })
+	const stalled = createDeferred<never>()
+	let searchStarted = false
+	installActiveEnvironmentForTesting({
+		...backend,
+		createReadClient: () =>
+			testDouble({
+				getBlock: () => {
+					searchStarted = true
+					return stalled.promise
+				},
+				readContract: async () => [{ depositor: account, amountAttoRep: 1n, cumulativeAmountAttoRep: 1n }],
+			}),
+	})
+	try {
+		const view = lifecycle.trackRendered(await renderIntoDocument(<LocateReportingDeposits details={details} wallet={account} refresh={callbacks.refreshState} openOnEntry />))
+		await waitFor(() => expect(searchStarted).toBe(true))
+		const input = view.container.querySelector('input')
+		if (input === null || input.form === null) throw new Error('Missing manual lookup form')
+		const form = input.form
+		await act(() => {
+			input.value = '5'
+			input.dispatchEvent(new Event('input', { bubbles: true }))
+		})
+		await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+		await waitFor(() =>
+			expect(
+				reportingDepositStore(backend.profile)
+					.read()
+					.map(item => item.index),
+			).toEqual([5n]),
+		)
+	} finally {
+		stalled.reject(new Error('Fixture closed'))
+	}
+})
+
+test('a page with an unavailable confirmed count preserves the saved search cursor', async () => {
+	const backend = createFakeBackend({ accountAddress: account })
+	const hash = keccak256('0x55')
+	const cursors = reportingDepositCursorStore(backend.profile, { pool: parent, questionId: 1n, universeId: 0n, depositor: account, outcome: 'yes' })
+	const cursor = { block: 7n, hash, nextIndex: 30n }
+	cursors.write(cursor)
+	installActiveEnvironmentForTesting({
+		...backend,
+		createReadClient: () =>
+			testDouble({
+				getBlock: async ({ blockNumber = 10n } = {}) => ({ ...createBlockWithTimestamp(20n), hash, number: blockNumber }),
+				multicall: createMulticallStub(({ contracts, blockNumber }) => contracts.map(call => (call.functionName === 'getDepositsByOutcomeLength' ? (blockNumber === 7n ? { status: 'failure', error: new Error('Unavailable count') } : { status: 'success', result: 30n }) : { status: 'success', result: [] }))),
+			}),
+	})
+	const view = lifecycle.trackRendered(await renderIntoDocument(<LocateReportingDeposits details={details} wallet={account} refresh={callbacks.refreshState} openOnEntry />))
+	await waitFor(() => expect(within(view.container).getByRole('button', { name: 'Search again' })).toBeDefined())
+	expect(cursors.read()).toEqual(cursor)
+})
