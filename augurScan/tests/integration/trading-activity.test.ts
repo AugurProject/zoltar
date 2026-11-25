@@ -408,23 +408,30 @@ test.skipIf(url === undefined)('derives market ETH volume, activity, and account
 		])
 		expect(groupedLp[0]).not.toHaveProperty('holdings_value_atto_eth')
 
-		for (const [owner, shares, logIndex] of [
-			[historySender, 2, 280],
-			[historyRecipient, 3, 290],
-		] as const) {
-			await insertLogs([
-				{ block: 2, tx: 26, logIndex, emitter: shareToken, name: 'TransferBatch', data: batch(owner, router, [0, 1, 2], [shares, shares, shares]) },
-				{ block: 2, tx: 26, logIndex: logIndex + 1, emitter: shareToken, name: 'TransferBatch', data: batch(router, zero, [0, 1, 2], [shares, shares, shares]) },
-				{ block: 2, tx: 26, logIndex: logIndex + 2, emitter: pool, name: 'CompleteSetRedeemed', data: { redeemer: router, completeSetsBurnedAttoShares: String(shares), settlementCollateralRedeemedAttoEth: String(shares) } },
-				{ block: 2, tx: 26, logIndex: logIndex + 3, emitter: router, name: 'CompleteSetRedeemedByTransfer', data: { questionLedger: pool, completeSetShares: String(shares), payoutRecipient } },
-			])
-		}
+		const previousActionCount = Number((await securityPoolFor(historyRecipient)).items[0]?.['action_count'])
+		await connection`INSERT INTO transactions (chain_id, block_hash, hash, block_number, transaction_index, from_address, to_address, canonical, status)
+			VALUES (${chainId}, ${blocks[1].hash}, ${hash(26)}, 2, 26, ${historyRecipient}, ${router}, true, 'success')`
+		await insertLogs([
+			{ block: 2, tx: 26, logIndex: 280, emitter: shareToken, name: 'TransferBatch', data: batch(historySender, router, [0, 1], [2, 5]) },
+			{ block: 2, tx: 26, logIndex: 281, emitter: shareToken, name: 'TransferSingle', data: single(router, pair, 1, 2) },
+			{ block: 2, tx: 26, logIndex: 282, emitter: shareToken, name: 'TransferSingle', data: single(pair, router, 2, 2) },
+			{ block: 2, tx: 26, logIndex: 283, emitter: pair, name: 'Swap', data: swap(router, true, true, 2, 2) },
+			{ block: 2, tx: 26, logIndex: 284, emitter: shareToken, name: 'TransferBatch', data: batch(router, zero, [0, 1, 2], [2, 2, 2]) },
+			{ block: 2, tx: 26, logIndex: 285, emitter: pool, name: 'CompleteSetRedeemed', data: { redeemer: router, completeSetsBurnedAttoShares: '2', settlementCollateralRedeemedAttoEth: '2' } },
+			{ block: 2, tx: 26, logIndex: 286, emitter: shareToken, name: 'TransferSingle', data: single(router, historySender, 1, 1) },
+			{ block: 2, tx: 26, logIndex: 287, emitter: router, name: 'PositionExitedByTransfer', data: { pair, completeSetShares: '2', payoutRecipient: directBuyer } },
+			{ block: 2, tx: 26, logIndex: 290, emitter: shareToken, name: 'TransferBatch', data: batch(historyRecipient, router, [0, 1, 2], [3, 3, 3]) },
+			{ block: 2, tx: 26, logIndex: 291, emitter: shareToken, name: 'TransferBatch', data: batch(router, zero, [0, 1, 2], [3, 3, 3]) },
+			{ block: 2, tx: 26, logIndex: 292, emitter: pool, name: 'CompleteSetRedeemed', data: { redeemer: router, completeSetsBurnedAttoShares: '3', settlementCollateralRedeemedAttoEth: '3' } },
+			{ block: 2, tx: 26, logIndex: 293, emitter: router, name: 'CompleteSetRedeemedByTransfer', data: { questionLedger: pool, completeSetShares: '3', payoutRecipient: directBuyer } },
+		])
 		const redemptionResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading/${chainId}/${pair}`), connection)
 		const redemptions = (await redemptionResponse?.json()) as typeof batched
 		expect(redemptions.data.activity.items.filter(item => item['tx_hash'] === hash(26)).map(item => [item['kind'], item['account'], item['payout_recipient']])).toEqual([
-			['redeem-complete-sets', historyRecipient, payoutRecipient],
-			['redeem-complete-sets', historySender, payoutRecipient],
+			['redeem-complete-sets', historyRecipient, directBuyer],
+			['exit', historySender, directBuyer],
 		])
+		expect((await securityPoolFor(historyRecipient)).items[0]).toMatchObject({ action_count: previousActionCount + 1 })
 	} finally {
 		connection.release()
 		await sql.close()
