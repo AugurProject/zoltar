@@ -1,0 +1,1358 @@
+diff --git a/SolidCore/Solidity/Interpreter.lean b/SolidCore/Solidity/Interpreter.lean
+index b42d4be0d344c7b36d55a1dd125920ee6ef3d941..376d1b3b7047e7811208c7b9fdfef26d4e9d8689 100644
+--- a/SolidCore/Solidity/Interpreter.lean
++++ b/SolidCore/Solidity/Interpreter.lean
+@@ -352,6 +352,14 @@ inductive RevertData where
+   | raw : List Byte -> RevertData
+   deriving Repr
+
++/-- A source-import intrinsic for the exact scratch-memory encoding of
++    Panic(uint256) and byte-exact memory rethrows. Solidity identifiers exclude these markers. -/
++def RevertData.fromCustom (name : String) (values : List Value) : RevertData :=
++  match name, values with
++  | "#yul.panic", [.word code] => .panic code
++  | "#yul.rethrow", [.bytes bytes] => if bytes.isEmpty then .empty else .raw bytes
++  | _, _ => .custom name values
++
+ def RevertData.overflow : RevertData :=
+   RevertData.panic 0x11
+
+@@ -10462,7 +10470,7 @@ def Stmt.eval (fuel : Nat) (table : FunctionTable) (context : Context)
+                         | Except.ok args =>
+                             pure
+                               (Result.reverted runtime''
+-                                (RevertData.custom name args))
++                                (RevertData.fromCustom name args))
+                         | Except.error err =>
+                             pure (Result.reverted runtime'' err)
+                   | Except.error err => pure (Result.reverted runtime'' err)
+@@ -10896,13 +10904,13 @@ def Stmt.eval (fuel : Nat) (table : FunctionTable) (context : Context)
+                       | some values =>
+                           pure
+                             (Result.reverted runtime'
+-                              (RevertData.custom name values))
++                              (RevertData.fromCustom name values))
+                       | none =>
+                           pure (Result.reverted runtime' RevertData.typeMismatch)
+                   | none =>
+                       pure
+                         (Result.reverted runtime'
+-                          (RevertData.custom name values))
++                          (RevertData.fromCustom name values))
+               | Except.error err => pure (Result.reverted runtime' err)
+           | Except.error err => pure (Result.reverted runtime err)
+       | Stmt.emitEvent name exprs => do
+diff --git a/prototypes/mul512/Probe.lean.in b/prototypes/mul512/Probe.lean.in
+new file mode 100644
+index 0000000000000000000000000000000000000000..faa86ad46dc648014493a313276133283f489901
+--- /dev/null
++++ b/prototypes/mul512/Probe.lean.in
+@@ -0,0 +1,56 @@
++namespace SolidCore.Solidity.WordBlock.Probe
++
++def imported : List Step := __STEPS__
++
++def header : FunctionDecl :=
++__HEADER__
++
++-- Keep the imported function internal. Expose it through the same two-word ABI
++-- as the EVM probe, within this isolated single-contract SolidCore source unit.
++def entry : FunctionDecl :=
++  { header with
++    name := some "probe"
++    visibility := some .external_
++    returns := [{ty := .uint 256}, {ty := .uint 256}]
++    body := some (.returnValues (some (.call (.ident "mul512")
++      [.positional (.ident "a"), .positional (.ident "b")])) ) }
++
++def source : SourceUnit :=
++  {items := [.contract {kind := .contract, name := "Probe", items :=
++    [.function {header with body := some (lower imported)}, .function entry]}]}
++
++def checkedResult (contract : TypeCheck.CheckedContract) (a b : Nat) : Except String (Nat × Nat) := do
++  match TypeCheck.CheckedContract.callFunctionWithContext 5000 contract "probe"
++      Source.Context.empty Source.State.empty [.word a, .word b] with
++  | .ok (.returned _ [.word high, .word low]) => return (high, low)
++  | .ok (.returned _ vals) => throw s!"wrong return shape: {repr vals}"
++  | .ok (.reverted _ err) => throw s!"revert: {repr err}"
++  | .error err => throw s!"checked call: {repr err}"
++
++def blockResultAt (w a b : Nat) : Nat × Nat :=
++  let state := run w imported (fun key => if key = "a" then a else if key = "b" then b else 0)
++  (state "high", state "low")
++
++__PROOF__
++
++#print axioms exactLimbs
++
++def checkFile (file : System.FilePath) : IO Unit := do
++  let contract ← match TypeCheck.CheckedInput.contract source "Probe" with
++    | .ok contract => pure contract
++    | .error err => throw (IO.userError s!"typecheck/lower: {repr err}")
++  for line in ← IO.FS.lines file do
++    let [a,b] := line.splitOn " " | throw (IO.userError "expected two words")
++    let some a := a.toNat? | throw (IO.userError "invalid first word")
++    let some b := b.toNat? | throw (IO.userError "invalid second word")
++    match checkedResult contract a b with
++    | .error e => throw (IO.userError e)
++    | .ok (hi,lo) =>
++      unless (hi,lo) == blockResultAt modulus a b do throw (IO.userError "word and checked semantics disagree")
++      IO.println s!"{hi} {lo}"
++
++end SolidCore.Solidity.WordBlock.Probe
++
++def main : List String → IO Unit
++  | [file] => SolidCore.Solidity.WordBlock.Probe.checkFile file
++  | _ => throw (IO.userError "usage: probe <vectors>")
+diff --git a/prototypes/mul512/Proof.lean.in b/prototypes/mul512/Proof.lean.in
+new file mode 100644
+index 0000000000000000000000000000000000000000..803d4bd26c95bd109594fde103f8cb664cf86762
+--- /dev/null
++++ b/prototypes/mul512/Proof.lean.in
+@@ -0,0 +1,48 @@
++-- Recover the high limb from residues modulo w and w-1.
++private theorem recover (w p : Nat) (positive : 1 < w) (bound : p ≤ (w-1)*(w-1)) :
++    let low := p%w
++    let mm := p%(w-1)
++    ((mm+w-low)%w + w - (if mm < low then 1 else 0)) % w = p/w := by
++  let q := p/w
++  let l := p%w
++  let mm := p%(w-1)
++  have decomp : w*q+l = p := Nat.div_add_mod p w
++  have low : l < w := Nat.mod_lt _ (by omega)
++  have high : q < w-1 := by
++    apply (Nat.div_lt_iff_lt_mul (by omega : 0 < w)).mpr
++    exact Nat.lt_of_le_of_lt bound (Nat.mul_lt_mul_of_pos_left (by omega) (by omega))
++  have modEq : mm = (q+l)%(w-1) := by
++    change p%(w-1) = _
++    have decomp' : p = q+l + q*(w-1) := by
++      rw [Nat.mul_comm q (w-1), Nat.sub_mul, Nat.one_mul]
++      have le : q ≤ w*q := by simpa using Nat.mul_le_mul_right q (show 1 ≤ w by omega)
++      omega
++    rw [decomp', Nat.mul_comm q (w-1), Nat.add_mul_mod_self_left]
++  change ((mm + w - l) % w + w - (if mm < l then 1 else 0)) % w = q
++  by_cases small : q+l < w-1
++  · rw [Nat.mod_eq_of_lt small] at modEq
++    have ge : ¬mm < l := by rw [modEq]; exact Nat.not_lt.mpr (Nat.le_add_left l q)
++    rw [if_neg ge]
++    have h : mm+w-l = q+w := by omega
++    rw [h]
++    simp [Nat.mod_eq_of_lt (by omega : q < w)]
++  · have small' : q+l-(w-1) < w-1 := by omega
++    rw [Nat.mod_eq_sub_mod (by omega), Nat.mod_eq_of_lt small'] at modEq
++    have lt : mm < l := by omega
++    rw [if_pos lt]
++    have h : mm+w-l = q+1 := by omega
++    rw [h, Nat.mod_eq_of_lt (by omega : q+1 < w)]
++    have h' : q+1+w-1 = q+w := by omega
++    rw [h']
++    simp [Nat.mod_eq_of_lt (by omega : q < w)]
++
++private theorem exactAt (w a b : Nat) (large : 1 < w) (ha : a < w) (hb : b < w) :
++    blockResultAt w a b = (a*b / w, a*b % w) := by
++  have bound : a*b ≤ (w-1)*(w-1) := Nat.mul_le_mul (by omega) (by omega)
++  have nonzero : w-1 ≠ 0 := by omega
++  simp [blockResultAt, imported, run, Term.eval, nonzero]
++  exact recover w (a*b) large bound
++
++theorem exactLimbs (a b : Nat) (ha : a < modulus) (hb : b < modulus) :
++    blockResultAt modulus a b = (a*b / modulus, a*b % modulus) :=
++  exactAt modulus a b (by decide) ha hb
+diff --git a/prototypes/mul512/WordBlock.lean b/prototypes/mul512/WordBlock.lean
+new file mode 100644
+index 0000000000000000000000000000000000000000..b996fb295ca3b788fdcfd2df04eb7f9650e4ec76
+--- /dev/null
++++ b/prototypes/mul512/WordBlock.lean
+@@ -0,0 +1,60 @@
++import SolidCore.Solidity.Checked
++
++/-! Straight-line, side-effect-free Yul word expressions. Reads and writes cross
++the Solidity boundary only for checked uint256 locals. No memory or world state. -/
++namespace SolidCore.Solidity.WordBlock
++
++inductive Term where
++  | lit (n : Nat)
++  | var (name : String)
++  | mul (a b : Term)
++  | sub (a b : Term)
++  | lt (a b : Term)
++  | not (a : Term)
++  | mulmod (a b m : Term)
++  deriving Repr
++
++inductive Step where
++  | declare (name : String) (rhs : Term)
++  | assign (name : String) (rhs : Term)
++  deriving Repr
++
++def modulus : Nat := 2^256
++
++def Term.eval (w : Nat) (env : String → Nat) : Term → Nat
++  | .lit n => n % w
++  | .var name => env name
++  | .mul a b => (a.eval w env * b.eval w env) % w
++  | .sub a b => (a.eval w env + w - b.eval w env) % w
++  | .lt a b => if a.eval w env < b.eval w env then 1 else 0
++  | .not a => w - 1 - a.eval w env
++  | .mulmod a b m =>
++    let v := m.eval w env
++    if v = 0 then 0 else (a.eval w env * b.eval w env) % v
++
++def run (w : Nat) (steps : List Step) (env : String → Nat) : String → Nat :=
++  steps.foldl (fun state step => match step with
++    | .declare name rhs | .assign name rhs =>
++      fun key => if key = name then rhs.eval w state else state key) env
++
++private def uintLit (n : Nat) : Expr :=
++  .call (.typeName (.uint 256)) [.positional (.literal (.number (toString n)))]
++
++def Term.toExpr : Term → Expr
++  | .lit n => uintLit n
++  | .var name => .ident name
++  | .mul a b => .binary .mul a.toExpr b.toExpr
++  | .sub a b => .binary .sub a.toExpr b.toExpr
++  | .lt a b => .ternary (.binary .lt a.toExpr b.toExpr) (uintLit 1) (uintLit 0)
++  | .not a => .unary .bitNot a.toExpr
++  | .mulmod a b m =>
++    -- EVM MULMOD returns zero for modulus zero; Solidity's builtin can revert.
++    .ternary (.binary .eq m.toExpr (uintLit 0)) (uintLit 0)
++      (.call (.ident "mulmod") [.positional a.toExpr, .positional b.toExpr, .positional m.toExpr])
++
++def lower (steps : List Step) : Stmt :=
++  .unchecked (.block (steps.map fun step => match step with
++    | .declare name rhs => .varDecl [{name := some name, ty := some (.uint 256)}] (some rhs.toExpr)
++    | .assign name rhs => .expr (.assign (.ident name) .assign rhs.toExpr)))
++
++end SolidCore.Solidity.WordBlock
+diff --git a/prototypes/mul512/import_word.py b/prototypes/mul512/import_word.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..51813dfb37cedea638b91911cf65a6867d88564b
+--- /dev/null
++++ b/prototypes/mul512/import_word.py
+@@ -0,0 +1,83 @@
++"""Import one analyzed function consisting of one straight-line Yul word block."""
++import json
++import sys
++from pathlib import Path
++
++sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
++from solc_ast_to_lean_source import function_decl_from_node, lean_string
++
++
++def require(condition, message):
++    if not condition:
++        raise ValueError(message)
++
++
++def import_block(function):
++    params = function['parameters']['parameters']
++    returns = function['returnParameters']['parameters']
++    require(function['stateMutability'] == 'pure' and not function['modifiers'],
++            'expected an unmodified pure function')
++    require(all(p['typeDescriptions']['typeString'] == 'uint256' and p['name']
++                for p in params + returns), 'only named uint256 bindings are supported')
++    statements = function['body']['statements']
++    require(len(statements) == 1 and statements[0]['nodeType'] == 'InlineAssembly',
++            'expected exactly one assembly block')
++    block = statements[0]
++    require(block['AST']['nodeType'] == 'YulBlock' and
++            set(block.get('flags', [])) <= {'memory-safe'}, 'unsupported block')
++    bindings = {p['id']: p['name'] for p in params + returns}
++    refs = {}
++    for ref in block['externalReferences']:
++        require(ref['declaration'] in bindings and ref['valueSize'] == 1 and
++                not ref['isSlot'] and not ref['isOffset'] and not ref.get('suffix'),
++                'unsupported outer binding')
++        require(ref['src'] not in refs, 'duplicate external reference')
++        refs[ref['src']] = bindings[ref['declaration']]
++    locals_ = set()
++    used_refs = set()
++
++    def resolve(node):
++        name = node['name']
++        require(node['nodeType'] == 'YulIdentifier', 'expected word identifier')
++        if node['src'] in refs:
++            require(refs[node['src']] == name, 'outer declaration/name mismatch')
++            used_refs.add(node['src'])
++        else:
++            require(name in locals_, f'unresolved Yul local {name}')
++        return lean_string(name)
++
++    def expr(node):
++        kind = node['nodeType']
++        if kind == 'YulIdentifier':
++            return '(.var ' + resolve(node) + ')'
++        if kind == 'YulLiteral':
++            require(node['kind'] == 'number', 'only word literals are supported')
++            n = int(node['value'], 0)
++            require(0 <= n < 2**256, 'literal does not fit uint256')
++            return f'(.lit {n})'
++        require(kind == 'YulFunctionCall', f'unsupported expression {kind}')
++        op = node['functionName']['name']
++        args = node['arguments']
++        require(op in {'mul', 'sub', 'lt', 'not', 'mulmod'}, f'unsupported builtin {op}')
++        require(len(args) == {'not': 1, 'mulmod': 3}.get(op, 2), 'wrong builtin arity')
++        return '(.' + op + ' ' + ' '.join(map(expr, args)) + ')'
++
++    steps = []
++    for stmt in block['AST']['statements']:
++        kind = stmt['nodeType']
++        require(kind in ('YulVariableDeclaration', 'YulAssignment'), f'unsupported statement {kind}')
++        rhs = expr(stmt['value'])
++        if kind == 'YulVariableDeclaration':
++            var, = stmt['variables']
++            name = var['name']
++            require(var['nodeType'] == 'YulTypedName' and not var.get('type') and
++                    name not in locals_ and name not in bindings.values(), 'invalid local')
++            locals_.add(name)
++            steps.append('.declare ' + lean_string(name) + ' ' + rhs)
++        else:
++            target, = stmt['variableNames']
++            steps.append('.assign ' + resolve(target) + ' ' + rhs)
++    require(used_refs == set(refs), 'unused external reference')
++    # Preserve the original Solidity function header; install its imported block in Lean.
++    header = function_decl_from_node({**function, 'body': None})
++    return '[' + ',\n    '.join(steps) + ']', header
+diff --git a/prototypes/mul512/replay.py b/prototypes/mul512/replay.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..dc3a3e591479ee39df229099a524ad1b38bf8b2a
+--- /dev/null
++++ b/prototypes/mul512/replay.py
+@@ -0,0 +1,181 @@
++#!/usr/bin/env python3
++"""Run with Python 3.10+, solc 0.8.35, Anvil and SolidCore's pinned Lake/Lean.
++From the SolidCore checkout, run:
++    lake build +SolidCore.Solidity.Checked:olean
++    python3 prototypes/mul512/replay.py /path/to/zoltar
++
++The --solc and --anvil flags select local binaries. The kernel theorem covers
++the imported word block. The differential test independently checks lowering
++through SolidCore's Solidity interpreter and execution on a fresh local EVM.
++"""
++import argparse
++from contextlib import contextmanager
++from copy import deepcopy
++import json
++from pathlib import Path
++import random
++import re
++import subprocess
++import time
++from tempfile import TemporaryDirectory
++from threading import Thread
++from urllib.request import urlopen, Request
++
++from import_word import import_block
++
++HERE = Path(__file__).resolve().parent
++ROOT = HERE.parents[1]
++W = 2**256
++
++
++def compile_probe(repo, compiler):
++    version = subprocess.check_output([compiler, '--version'], text=True)
++    if 'Version: 0.8.35+commit.47b9dedd' not in version:
++        raise ValueError('expected native solc 0.8.35')
++    base = repo / 'solidity/contracts/statoblast/openOracle/openzeppelin/contracts/utils'
++    sources = {key: {'content': (base / key).read_text()}
++               for key in ['math/Math.sol', 'math/SafeCast.sol', 'Panic.sol']}
++    sources['Probe.sol'] = {'content': """// SPDX-License-Identifier: MIT
++pragma solidity 0.8.35;
++import {Math} from './math/Math.sol';
++contract Probe {
++    function probe(uint256 a, uint256 b) external pure returns (uint256, uint256) {
++        return Math.mul512(a, b);
++    }
++}"""}
++    settings = {'viaIR': True, 'evmVersion': 'osaka', 'optimizer': {'enabled': True, 'runs': 0},
++                'metadata': {'appendCBOR': False, 'bytecodeHash': 'none'},
++                'outputSelection': {'math/Math.sol': {'': ['ast']},
++                                    'Probe.sol': {'Probe': ['evm.bytecode.object', 'evm.methodIdentifiers']}}}
++    request = {'language': 'Solidity', 'sources': sources, 'settings': settings}
++    out = json.loads(subprocess.check_output([compiler, '--standard-json'],
++                                             input=json.dumps(request), text=True))
++    errors = [e['formattedMessage'] for e in out.get('errors', []) if e['severity'] == 'error']
++    if errors:
++        raise ValueError('\n'.join(errors))
++    contract, = (c for c in out['sources']['math/Math.sol']['ast']['nodes'] if c.get('name') == 'Math')
++    function, = (f for f in contract['nodes'] if f.get('name') == 'mul512')
++    return function, out['contracts']['Probe.sol']['Probe']['evm']
++
++
++def vectors():
++    edges = [0, 1, 2, 2**64-1, 2**128-1, 2**128, 2**128+1, 2**255-1,
++             2**255, W-3, W-2, W-1]
++    rng = random.Random(512)
++    return [(a,b) for a in edges for b in edges] + [
++        (rng.getrandbits(256), rng.getrandbits(256)) for _ in range(256)]
++
++
++def check_rejections(function):
++    for mutation, expected in [('builtin', 'unsupported builtin'), ('binding', 'unsupported outer binding')]:
++        f = deepcopy(function)
++        block = f['body']['statements'][0]
++        if mutation == 'builtin':
++            block['AST']['statements'][0]['value']['functionName']['name'] = 'mload'
++        else:
++            block['externalReferences'][0]['isSlot'] = True
++        try:
++            import_block(f)
++        except ValueError as e:
++            if expected not in str(e):
++                raise
++        else:
++            raise ValueError(f'importer silently accepted {mutation}')
++
++
++def run_lean(function, pairs, tmp):
++    # The proof below is attached to this concrete ABI and its two named returns.
++    if [[p['name'] for p in function[k]['parameters']] for k in ['parameters','returnParameters']] != [
++            ['a','b'], ['high','low']]:
++        raise ValueError('unexpected mul512 signature')
++    steps, header = import_block(function)
++    code = (HERE/'Probe.lean.in').read_text().replace('__HEADER__',header).replace('__STEPS__',steps)
++    code = (HERE/'WordBlock.lean').read_text() + '\n' + code.replace('__PROOF__',(HERE/'Proof.lean.in').read_text())
++    script, inputs = tmp/'Mul512.lean', tmp/'vectors.txt'
++    script.write_text(code)
++    inputs.write_text(''.join(f'{a} {b}\n' for a,b in pairs))
++    cmd = ['lake','env','lean','-s','131072','-DmaxRecDepth=16384','--trust=0',
++           '-DwarningAsError=true','--run',str(script),str(inputs)]
++    p = subprocess.run(cmd, cwd=ROOT, text=True, stdout=subprocess.PIPE)
++    if p.returncode:
++        raise RuntimeError(p.stdout)
++    lines = p.stdout.splitlines()
++    audit = [s for s in lines if 'exactLimbs' in s]
++    if len(audit) != 1 or not re.fullmatch(
++            r"'.*\.exactLimbs' depends on axioms: \[(?:propext|Classical\.choice|Quot\.sound)(?:, (?:propext|Classical\.choice|Quot\.sound))*\]", audit[0]):
++        raise RuntimeError(f'unexpected kernel audit: {audit}')
++    print(audit[0], flush=True)
++    values = [tuple(map(int,line.split())) for line in lines if line != audit[0]]
++    if len(values) != len(pairs):
++        raise RuntimeError('Lean result count differs from input count')
++    return values
++
++
++@contextmanager
++def local_chain(binary):
++    process = subprocess.Popen([binary,'--host','127.0.0.1','--port','0','--hardfork','osaka'],
++                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
++    try:
++        for line in process.stdout:
++            match = re.search(r'Listening on (127\.0\.0\.1:\d+)', line)
++            if match:
++                Thread(target=process.stdout.read, daemon=True).start()
++                yield 'http://' + match[1]
++                return
++        raise RuntimeError('Anvil exited before listening')
++    finally:
++        process.terminate()
++        try:
++            process.wait(timeout=10)
++        except subprocess.TimeoutExpired:
++            process.kill()
++            process.wait()
++        process.stdout.close()
++
++
++def rpc(url, method, params):
++    payload = json.dumps({'jsonrpc':'2.0','id':1,'method':method,'params':params}).encode()
++    with urlopen(Request(url, data=payload, headers={'Content-Type':'application/json'}), timeout=15) as r:
++        result = json.load(r)
++    if 'error' in result:
++        raise RuntimeError(result['error'])
++    return result['result']
++
++
++def compare(url, evm, pairs, lean):
++    account = rpc(url, 'eth_accounts', [])[0]
++    tx = rpc(url, 'eth_sendTransaction', [{'from':account, 'data':'0x'+evm['bytecode']['object'],
++                                           'gas':hex(3_000_000)}])
++    deadline = time.monotonic() + 20
++    receipt = rpc(url, 'eth_getTransactionReceipt', [tx])
++    while receipt is None and time.monotonic() < deadline:
++        time.sleep(0.05)
++        receipt = rpc(url, 'eth_getTransactionReceipt', [tx])
++    if receipt is None or int(receipt['status'],16) != 1:
++        raise RuntimeError(f'deployment failed: {receipt}')
++    address = receipt['contractAddress']
++    selector = evm['methodIdentifiers']['probe(uint256,uint256)']
++    for (a,b), got in zip(pairs, lean, strict=True):
++        raw = rpc(url, 'eth_call', [{'to':address,'data':f'0x{selector}{a:064x}{b:064x}'}, 'latest'])
++        if len(raw) != 130:
++            raise ValueError(f'unexpected ABI return: {raw}')
++        solidity = (int(raw[2:66],16), int(raw[66:],16))
++        exact = divmod(a*b,W)
++        if not got == solidity == exact:
++            raise AssertionError(f'{a=} {b=} SolidCore={got} Solidity={solidity} product limbs={exact}')
++
++
++if __name__ == '__main__':
++    cli = argparse.ArgumentParser(description=__doc__)
++    cli.add_argument('zoltar',type=Path)
++    cli.add_argument('--solc',default='solc')
++    cli.add_argument('--anvil',default='anvil')
++    args = cli.parse_args()
++    function, evm = compile_probe(args.zoltar, args.solc)
++    check_rejections(function)
++    pairs = vectors()
++    with TemporaryDirectory() as work:
++        results = run_lean(function, pairs, Path(work))
++    with local_chain(args.anvil) as url:
++        compare(url, evm, pairs, results)
++    print(f'{len(pairs)} pairs matched in checked SolidCore, imported word semantics, Anvil and exact arithmetic')
+diff --git a/prototypes/source/MulDiv.lean.in b/prototypes/source/MulDiv.lean.in
+new file mode 100644
+index 0000000000000000000000000000000000000000..753b21f5bebb03e1cc3c59caa8d74e5aae4144f2
+--- /dev/null
++++ b/prototypes/source/MulDiv.lean.in
+@@ -0,0 +1,29 @@
++
++open SolidCore.Solidity
++
++def main (args : List String) : IO Unit := do
++  let [file] := args | throw (IO.userError "usage: Probe <inputs>")
++  let contract ← match TypeCheck.CheckedInput.contract MulDiv.importedSourceUnit "MulDivProbe" with
++    | .ok c => pure c
++    | .error e => throw (IO.userError s!"source lowering: {repr e}")
++  for line in ← IO.FS.lines file do
++    let mode :: inputs := line.splitOn " " | throw (IO.userError "missing mode")
++    let vals ← inputs.mapM fun v => match v.toNat? with
++      | some n => pure (Source.Value.word n)
++      | none => throw (IO.userError "bad word")
++    let (name, vals) := if mode == "-2" then ("scalar", vals) else if mode == "-1" then ("floor", vals) else ("rounded", vals ++ [.word (mode.toNat?.getD 255)])
++    match TypeCheck.CheckedContract.callFunctionWithContext 5000 contract name Source.Context.empty Source.State.empty vals with
++    | .ok (.returned _ [.word n]) => IO.println s!"ok {n}"
++    | .ok (.reverted _ (.error message)) => IO.println s!"error {message}"
++    | .ok (.reverted _ (.panic n)) => IO.println s!"panic {n}"
++    | .ok (.reverted _ e) => throw (IO.userError s!"unexpected revert: {repr e}")
++    | .ok (.returned _ _) => throw (IO.userError "wrong ABI return shape")
++    | .error e => throw (IO.userError s!"call: {repr e}")
++
++  for size in [0, 1, 4, 31, 32, 33, 65] do
++    let bytes := List.range size
++    match TypeCheck.CheckedContract.callFunctionWithContext 5000 contract "bubble" Source.Context.empty Source.State.empty [.bytes bytes] with
++    | .ok (.reverted _ .empty) => if size != 0 then throw (IO.userError "lost revert bytes")
++    | .ok (.reverted _ (.raw out)) => if out != bytes || size == 0 then throw (IO.userError "wrong revert bytes")
++    | _ => throw (IO.userError s!"expected raw revert of length {size}")
++    IO.println s!"rethrew {size}"
+diff --git a/prototypes/source/assembly.py b/prototypes/source/assembly.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..9cd37007f0d064e92707b2394ef7754e51d2c1ba
+--- /dev/null
++++ b/prototypes/source/assembly.py
+@@ -0,0 +1,317 @@
++"""Lower supported solc inline assembly ASTs to typed Solidity source AST nodes.
++
++Unsupported statements and external references are errors. This pass only reads
++solc's analyzed source tree. It never reads IR or bytecode.
++"""
++
++from copy import deepcopy
++
++
++class Unsupported(ValueError):
++    pass
++
++
++def walk(node):
++    if isinstance(node, dict):
++        yield node
++        for value in node.values():
++            yield from walk(value)
++    elif isinstance(node, list):
++        for value in node:
++            yield from walk(value)
++
++
++def n(node_type, **fields):
++    return {'nodeType': node_type, **fields}
++
++
++def ident(name):
++    return n('Identifier', name=name)
++
++
++def call(target, *args):
++    return n('FunctionCall', expression=target, arguments=list(args))
++
++
++def uint_type():
++    return n('ElementaryTypeName', name='uint256')
++
++
++def lit(value):
++    return call(
++        n('ElementaryTypeNameExpression', typeName=uint_type()),
++        n('Literal', kind='number', value=str(value)),
++    )
++
++
++def binary(op, left, right):
++    return n('BinaryOperation', operator=op, leftExpression=left, rightExpression=right)
++
++
++def choose(cond, yes, no):
++    return n('Conditional', condition=cond, trueExpression=yes, falseExpression=no)
++
++
++def variable(name):
++    return n(
++        'VariableDeclaration',
++        name=name,
++        typeName=uint_type(),
++        storageLocation='default',
++    )
++
++
++def word_bool(expr):
++    return choose(expr, lit(1), lit(0))
++
++
++def raw_rethrow(block, declarations):
++    """Recognize revert(add(data, 32), mload(data)) on one resolved bytes memory value."""
++    stmts = block['AST']['statements']
++    if len(stmts) != 1 or stmts[0]['nodeType'] != 'YulExpressionStatement':
++        return None
++
++    def args(node, op):
++        if node.get('functionName', {}).get('name') == op:
++            return node['arguments']
++        return []
++
++    operands = args(stmts[0]['expression'], 'revert')
++    if len(operands) != 2:
++        return None
++    start, length = args(operands[0], 'add'), args(operands[1], 'mload')
++    if len(start) != 2 or len(length) != 1:
++        return None
++    offset = start[1]
++    if offset.get('kind') != 'number' or int(offset['value'], 0) != 32:
++        return None
++    pointers = [start[0], length[0]]
++    refs = block['externalReferences']
++    if (
++        len(refs) != 2
++        or any(p['nodeType'] != 'YulIdentifier' for p in pointers)
++        or {r['src'] for r in refs} != {p['src'] for p in pointers}
++        or len({r['declaration'] for r in refs}) != 1
++        or any(
++            r.get('suffix') or r['isSlot'] or r['isOffset'] or r['valueSize'] != 1
++            for r in refs
++        )
++    ):
++        return None
++    decl = declarations.get(refs[0]['declaration'], {})
++    if (
++        decl.get('storageLocation') == 'memory'
++        and decl.get('typeName', {}).get('name') == 'bytes'
++        and all(p['name'] == decl['name'] for p in pointers)
++    ):
++        return n(
++            'RevertStatement',
++            errorCall=call(ident('#yul.rethrow'), ident(decl['name'])),
++        )
++    return None
++
++
++def lower_block(block, declarations):
++    if set(block.get('flags', [])) - {'memory-safe'}:
++        raise Unsupported('assembly flags')
++    rethrow = raw_rethrow(block, declarations)
++    if rethrow:
++        return rethrow, {'#yul.rethrow'}
++    refs = {}
++    for r in block['externalReferences']:
++        decl = declarations.get(r['declaration'], {})
++        typ = decl.get('typeDescriptions', {}).get('typeString')
++        if (
++            typ not in ('uint256', 'bool')
++            or r.get('suffix')
++            or r['isSlot']
++            or r['isOffset']
++            or r['valueSize'] != 1
++            or decl.get('stateVariable')
++        ):
++            raise Unsupported(f'assembly outer binding {decl.get("name")} ({typ})')
++        refs[r['src']] = (decl['name'], typ)
++    locals_ = set()
++    used = set()
++
++    def binding(node):
++        name = node['name']
++        if node['src'] in refs:
++            bound, typ = refs[node['src']]
++            if bound != name:
++                raise Unsupported('assembly declaration/name mismatch')
++            used.add(node['src'])
++            return typ
++        if name not in locals_:
++            raise Unsupported(f'unbound assembly local {name}')
++        return 'uint256'
++
++    def expr(node):
++        kind = node['nodeType']
++        if kind == 'YulIdentifier':
++            return (
++                word_bool(ident(node['name']))
++                if binding(node) == 'bool'
++                else ident(node['name'])
++            )
++        if kind == 'YulLiteral' and node['kind'] == 'number':
++            return lit(int(node['value'], 0))
++        if kind != 'YulFunctionCall':
++            raise Unsupported(kind)
++        op = node['functionName']['name']
++        args = [expr(arg) for arg in node['arguments']]
++        ops = {'add': '+', 'mul': '*', 'sub': '-', 'and': '&', 'or': '|', 'xor': '^'}
++        if op in ops:
++            return binary(ops[op], *args)
++        if op in ('eq', 'lt', 'gt'):
++            return word_bool(binary({'eq': '==', 'lt': '<', 'gt': '>'}[op], *args))
++        if op == 'byte':
++            index, word = args
++            shift = binary('*', binary('-', lit(31), index), lit(8))
++            return choose(
++                binary('<', index, lit(32)),
++                binary('&', binary('>>', word, shift), lit(255)),
++                lit(0),
++            )
++        if op == 'not':
++            return n('UnaryOperation', operator='~', prefix=True, subExpression=args[0])
++        if op == 'iszero':
++            return word_bool(binary('==', args[0], lit(0)))
++        if op in ('shl', 'shr'):
++            return binary('<<' if op == 'shl' else '>>', args[1], args[0])
++        if op in ('mulmod', 'addmod', 'div', 'mod'):
++            value = (
++                call(ident(op), *args)
++                if op.endswith('mod') and len(args) == 3
++                else binary('/' if op == 'div' else '%', *args)
++            )
++            return choose(binary('==', args[-1], lit(0)), lit(0), value)
++        raise Unsupported(f'assembly builtin {op}')
++
++    def signature(node):
++        if node['nodeType'] == 'YulLiteral' and node['kind'] == 'number':
++            return int(node['value'], 0)
++        if node['nodeType'] == 'YulFunctionCall':
++            return (
++                node['functionName']['name'],
++                *(signature(x) for x in node['arguments']),
++            )
++        return None
++
++    stmts = block['AST']['statements']
++    # Two scratch-word writes followed by a terminal revert have exactly this
++    # Panic(uint256) ABI payload; require the complete layout and control flow.
++    if len(stmts) == 3 and all(
++        s['nodeType'] == 'YulExpressionStatement' for s in stmts
++    ):
++        first, second, last = [s['expression'] for s in stmts]
++        if (
++            signature(first) == ('mstore', 0, 0x4E487B71)
++            and signature(second) == ('mstore', 32, None)
++            and signature(last) == ('revert', 28, 36)
++        ):
++            payload = expr(second['arguments'][1])
++            if used != refs.keys():
++                raise Unsupported('unconsumed panic binding')
++            return n('RevertStatement', errorCall=call(ident('#yul.panic'), payload)), {
++                '#yul.panic'
++            }
++    out = []
++    for stmt in stmts:
++        kind = stmt['nodeType']
++        if kind not in ('YulVariableDeclaration', 'YulAssignment'):
++            raise Unsupported(
++                f'assembly {kind}: {stmt.get("expression", {}).get("functionName", {}).get("name", "")}'
++            )
++        value = expr(stmt['value'])
++        if kind == 'YulVariableDeclaration':
++            (target,) = stmt['variables']
++            name = target['name']
++            if (
++                name in locals_
++                or name in (name for name, _ in refs.values())
++                or target.get('type')
++            ):
++                raise Unsupported('unsupported Yul declaration')
++            locals_.add(name)
++            out.append(
++                n(
++                    'VariableDeclarationStatement',
++                    declarations=[variable(name)],
++                    initialValue=value,
++                )
++            )
++        else:
++            (target,) = stmt['variableNames']
++            if binding(target) == 'bool':
++                # Arbitrary dirty bits cannot be faithfully stored in a Solidity bool.
++                if stmt['value'].get('functionName', {}).get('name') not in (
++                    'iszero',
++                    'eq',
++                    'lt',
++                    'gt',
++                ):
++                    raise Unsupported('assembly assignment of noncanonical bool')
++                value = binary('!=', value, lit(0))
++            out.append(
++                n(
++                    'ExpressionStatement',
++                    expression=n(
++                        'Assignment',
++                        operator='=',
++                        leftHandSide=ident(target['name']),
++                        rightHandSide=value,
++                    ),
++                )
++            )
++    if used != refs.keys():
++        raise Unsupported('unconsumed assembly external reference')
++    return n('UncheckedBlock', statements=out), set()
++
++
++def lower_assembly(ast):
++    ast = deepcopy(ast)
++    decls = {
++        v['id']: v
++        for v in walk(ast)
++        if v.get('nodeType') == 'VariableDeclaration' and 'id' in v
++    }
++    for contract in ast['nodes']:
++        intrinsics = set()
++
++        def rewrite(node, unchecked=False):
++            if isinstance(node, list):
++                for child in node:
++                    rewrite(child, unchecked)
++            elif isinstance(node, dict):
++                if node.get('nodeType') == 'InlineAssembly':
++                    replacement, names = lower_block(node, decls)
++                    intrinsics.update(names)
++                    if unchecked and replacement['nodeType'] == 'UncheckedBlock':
++                        replacement['nodeType'] = 'Block'
++                    node.clear()
++                    node.update(replacement)
++                    return
++                unchecked = unchecked or node.get('nodeType') == 'UncheckedBlock'
++                for value in node.values():
++                    rewrite(value, unchecked)
++
++        rewrite(contract)
++        for name in sorted(intrinsics):
++            if contract.get('nodeType') != 'ContractDefinition':
++                raise Unsupported('assembly intrinsic outside contract')
++            param = variable('code')
++            if name == '#yul.rethrow':
++                param.update(
++                    name='data',
++                    typeName=n('ElementaryTypeName', name='bytes'),
++                    storageLocation='default',
++                )
++            contract['nodes'].append(
++                n(
++                    'ErrorDefinition',
++                    name=name,
++                    parameters=n('ParameterList', parameters=[param]),
++                )
++            )
++    return ast
+diff --git a/prototypes/source/muldiv.py b/prototypes/source/muldiv.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..c3af60f47f50ddf6e0ed8ff16bbc1d5ad4497164
+--- /dev/null
++++ b/prototypes/source/muldiv.py
+@@ -0,0 +1,283 @@
++"""Differential test of both Math.mulDiv overloads through checked Solidity source."""
++
++import argparse
++import json
++import random
++import re
++import subprocess
++import sys
++import tempfile
++import time
++from pathlib import Path
++
++HERE = Path(__file__).resolve().parent
++ROOT = HERE.parents[1]
++sys.path[:0] = [str(HERE.parent / 'mul512'), str(ROOT / 'scripts')]
++# The pinned checkout provides the two sibling script modules.
++import replay  # noqa: E402
++import solc_ast_to_lean_source as importer  # noqa: E402
++from assembly import lower_assembly  # noqa: E402
++from project import project  # noqa: E402
++
++WRAPPER = """
++contract MulDivProbe {
++    function bubble(bytes memory data) external pure {
++        DelegateCall.bubbleRevert(data);
++    }
++    function scalar(uint256 x, uint256 y, uint256 d) external pure returns (uint256) {
++        return ScalarOutcomes.mulDiv(x,y,d);
++    }
++    function floor(uint256 x, uint256 y, uint256 d) external pure returns (uint256) {
++        return Math.mulDiv(x,y,d);
++    }
++    function rounded(uint256 x, uint256 y, uint256 d, uint8 mode) external pure returns (uint256) {
++        return Math.mulDiv(x,y,d,Math.Rounding(mode));
++    }
++}
++"""
++
++
++def compile_solc(compiler, sources, outputs):
++    config = {
++        'language': 'Solidity',
++        'sources': {k: {'content': v} for k, v in sources.items()},
++        'settings': {
++            'viaIR': True,
++            'evmVersion': 'osaka',
++            'optimizer': {'enabled': True, 'runs': 0},
++            'metadata': {'appendCBOR': False, 'bytecodeHash': 'none'},
++            'outputSelection': outputs,
++        },
++    }
++    result = json.loads(
++        subprocess.check_output(
++            [compiler, '--standard-json'], input=json.dumps(config), text=True
++        )
++    )
++    errors = [
++        e['formattedMessage']
++        for e in result.get('errors', [])
++        if e['severity'] == 'error'
++    ]
++    if errors:
++        raise ValueError('\n'.join(errors))
++    return result
++
++
++def compile_probe(repo, compiler):
++    if '0.8.35+commit.47b9dedd' not in subprocess.check_output(
++        [compiler, '--version'], text=True
++    ):
++        raise ValueError('expected solc 0.8.35')
++    directory = (
++        repo / 'solidity/contracts/statoblast/openOracle/openzeppelin/contracts/utils'
++    )
++    sources = {
++        p: (directory / p).read_text()
++        for p in ('Panic.sol', 'math/SafeCast.sol', 'math/Math.sol')
++    }
++    sources['DelegateCall.sol'] = (
++        repo / 'solidity/contracts/statoblast/DelegateCall.sol'
++    ).read_text()
++    for name in ('DecimalStrings.sol', 'ScalarOutcomes.sol'):
++        sources[name] = (repo / 'solidity/contracts' / name).read_text()
++    evm_sources = {
++        **sources,
++        'Probe.sol': "pragma solidity 0.8.35; import {Math} from './math/Math.sol'; import {DelegateCall} from './DelegateCall.sol'; import {ScalarOutcomes} from './ScalarOutcomes.sol';"
++        + WRAPPER,
++    }
++    evm = compile_solc(
++        compiler,
++        evm_sources,
++        {
++            'Probe.sol': {
++                'MulDivProbe': ['evm.bytecode.object', 'evm.methodIdentifiers']
++            }
++        },
++    )
++    # Flatten the same four units. No renaming or edits to function bodies.
++    flat = (
++        '\n'.join(
++            re.sub(r'(?m)^(?:// SPDX-License-Identifier:.*|import [^;]+;)', '', s)
++            for s in sources.values()
++        )
++        + WRAPPER
++    )
++    ast = compile_solc(compiler, {'Flat.sol': flat}, {'*': {'': ['ast']}})['sources'][
++        'Flat.sol'
++    ]['ast']
++    return lower_assembly(project(ast, 'MulDivProbe')), evm['contracts']['Probe.sol'][
++        'MulDivProbe'
++    ]['evm']
++
++
++def cases():
++    w = 2**256
++    triples = [
++        (0, 0, 0),
++        (0, 1, 1),
++        (4, 6, 3),
++        (4, 6, 5),
++        (1, 1, 0),
++        (w - 1, w - 1, 0),
++        (w - 1, w - 1, w - 2),
++        (w - 1, w - 1, w - 1),
++        (w - 2, w - 2, w - 3),
++        (2**128, 2**128, 1),
++        (2**128, 2**128, 2),
++        (w - 1, 2, 3),
++    ]
++    rng = random.Random(0xD17)
++    for _ in range(24):
++        a, b = rng.getrandbits(256), rng.getrandbits(256)
++        hi = a * b // w
++        triples.extend([(a, b, hi), (a, b, hi + 1), (a, b, rng.randrange(1, w))])
++    return [
++        (mode, a, b, d)
++        for a, b, d in dict.fromkeys(triples)
++        for mode in (-2, -1, 0, 1, 2, 3)
++    ] + [(4, 1, 2, 3)]
++
++
++def expected(mode, a, b, d):
++    if mode > 3:
++        return 'panic 33'
++    if not d:
++        return (
++            'error mulDiv denominator must be greater than zero'
++            if mode == -2
++            else 'panic 18'
++        )
++    q, r = divmod(a * b, d)
++    q += int(mode in (1, 3) and r != 0)
++    if mode == -2 and q >= 2**256:
++        return 'error mulDiv result would overflow uint256'
++    return 'panic 17' if q >= 2**256 else f'ok {q}'
++
++
++def run(repo, compiler, anvil):
++    ast, evm = compile_probe(repo, compiler)
++    code = importer.render_module(
++        ast, 'Flat.sol', 'MulDivProbe', 'SolidCore.Solidity.MulDiv', True
++    )
++    with tempfile.TemporaryDirectory() as tmp:
++        tmp = Path(tmp)
++        script = tmp / 'Probe.lean'
++        script.write_text(
++            'import SolidCore.Solidity.Checked\n'
++            + code
++            + (HERE / 'MulDiv.lean.in').read_text()
++        )
++        vectors = cases()
++        inp = tmp / 'inputs'
++        inp.write_text(''.join(' '.join(map(str, c)) + '\n' for c in vectors))
++        p = subprocess.run(
++            [
++                'lake',
++                'env',
++                'lean',
++                '-DmaxRecDepth=16384',
++                '-DmaxHeartbeats=20000000',
++                '--run',
++                str(script),
++                str(inp),
++            ],
++            cwd=ROOT,
++            stdout=subprocess.PIPE,
++            stderr=subprocess.STDOUT,
++            text=True,
++        )
++        if p.returncode:
++            raise RuntimeError(p.stdout)
++        lines = p.stdout.splitlines()
++        actual = lines[: len(vectors)]
++        raw_results = lines[len(vectors) :]
++    with replay.local_chain(anvil) as url:
++        sender = replay.rpc(url, 'eth_accounts', [])[0]
++        tx = replay.rpc(
++            url,
++            'eth_sendTransaction',
++            [
++                {
++                    'from': sender,
++                    'data': '0x' + evm['bytecode']['object'],
++                    'gas': '0x300000',
++                }
++            ],
++        )
++        for _ in range(200):
++            receipt = replay.rpc(url, 'eth_getTransactionReceipt', [tx])
++            if receipt:
++                break
++            time.sleep(0.05)
++        if not receipt or int(receipt['status'], 16) != 1:
++            raise RuntimeError('probe deployment failed')
++        for c, lean in zip(vectors, actual, strict=True):
++            mode, a, b, d = c
++            if mode == -2:
++                func, args = 'scalar(uint256,uint256,uint256)', [a, b, d]
++            elif mode == -1:
++                func, args = 'floor(uint256,uint256,uint256)', [a, b, d]
++            else:
++                func, args = 'rounded(uint256,uint256,uint256,uint8)', [a, b, d, mode]
++            data = (
++                '0x'
++                + evm['methodIdentifiers'][func]
++                + ''.join(f'{v:064x}' for v in args)
++            )
++            try:
++                raw = replay.rpc(
++                    url,
++                    'eth_call',
++                    [{'to': receipt['contractAddress'], 'data': data}, 'latest'],
++                )
++                if len(raw) != 66:
++                    raise ValueError(f'unexpected result: {raw}')
++                result = f'ok {int(raw, 16)}'
++            except RuntimeError as e:
++                raw = e.args[0]['data']
++                if raw.startswith('0x4e487b71') and len(raw) == 74:
++                    result = f'panic {int(raw[10:], 16)}'
++                elif raw.startswith('0x08c379a0') and lean.startswith('error '):
++                    message = lean.removeprefix('error ').encode()
++                    padded = message.hex().ljust(((len(message) + 31) // 32) * 64, '0')
++                    if raw != f'0x08c379a0{32:064x}{len(message):064x}{padded}':
++                        raise AssertionError(f'wrong revert data: {raw}')
++                    result = lean
++                else:
++                    raise
++            if lean != result or result != expected(*c):
++                raise AssertionError(
++                    f'{c}: SolidCore={lean}, EVM={result}, exact={expected(*c)}'
++                )
++        payloads = [bytes(range(size)) for size in [0, 1, 4, 31, 32, 33, 65]]
++        selector = evm['methodIdentifiers']['bubble(bytes)']
++        for payload, lean in zip(payloads, raw_results, strict=True):
++            size = len(payload)
++            tail = payload.hex().ljust(((size + 31) // 32) * 64, '0')
++            data = f'0x{selector}{32:064x}{size:064x}{tail}'
++            try:
++                replay.rpc(
++                    url,
++                    'eth_call',
++                    [{'to': receipt['contractAddress'], 'data': data}, 'latest'],
++                )
++            except RuntimeError as exc:
++                raw = exc.args[0]['data']
++                if raw != '0x' + payload.hex() or lean != f'rethrew {size}':
++                    raise AssertionError(f'rethrow {size}: {raw}, {lean}')
++            else:
++                raise AssertionError('bubble returned successfully')
++    print(f'{len(payloads)} byte-exact DelegateCall.bubbleRevert calls matched')
++    print(
++        f'{len(vectors)} mulDiv calls matched: ScalarOutcomes and both Math overloads, all rounding modes and revert data'
++    )
++
++
++if __name__ == '__main__':
++    cli = argparse.ArgumentParser(description=__doc__)
++    cli.add_argument('zoltar', type=Path)
++    cli.add_argument('--solc', default='solc')
++    cli.add_argument('--anvil', default='anvil')
++    args = cli.parse_args()
++    run(args.zoltar, args.solc, args.anvil)
+diff --git a/prototypes/source/project.py b/prototypes/source/project.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..2c8da3509dd237bdb2f6459fc72aa014aec13424
+--- /dev/null
++++ b/prototypes/source/project.py
+@@ -0,0 +1,88 @@
++"""Retain the complete target contract and its referenced library members."""
++
++from assembly import walk
++
++
++def project(ast, target):
++    nodes = ast['nodes']
++    (root,) = (
++        n
++        for n in nodes
++        if n.get('nodeType') == 'ContractDefinition' and n['name'] == target
++    )
++    owners = {}
++    units = {}
++    containers = {}
++    for top in nodes:
++        units[top['id']] = top
++        if top['nodeType'] == 'ContractDefinition':
++            for member in top['nodes']:
++                units[member['id']] = member
++                containers[member['id']] = top
++                for d in walk(member):
++                    if 'id' in d:
++                        owners[d['id']] = member['id']
++            owners[top['id']] = top['id']
++        else:
++            for d in walk(top):
++                if 'id' in d:
++                    owners[d['id']] = top['id']
++
++    # A qualified enum or struct names its declaring scope without executing
++    # that scope. Keep the type and its container. A direct use of the
++    # contract itself, its bases, or an ordinary executable member still
++    # retains the complete foreign contract (including virtual dispatch).
++    type_members = {
++        'EnumDefinition',
++        'StructDefinition',
++        'UserDefinedValueTypeDefinition',
++    }
++    used = set()
++    shells = set()
++    pending = [root['id']] + [
++        i['id']
++        for i in nodes
++        if i['nodeType'] in ('PragmaDirective', 'UsingForDirective')
++    ]
++    while pending:
++        key = pending.pop()
++        if key in used:
++            continue
++        used.add(key)
++        node = units[key]
++        if key in containers:
++            owner = containers[key]
++            if node['nodeType'] in type_members:
++                shells.add(owner['id'])
++                # Keep the original inheritance environment if present.
++                for base in owner.get('baseContracts', []):
++                    pending.append(base['baseName']['referencedDeclaration'])
++            else:
++                pending.append(owner['id'])
++        if node['nodeType'] == 'ContractDefinition':
++            for member in node['nodes']:
++                if (
++                    node is root
++                    or node['contractKind'] != 'library'
++                    or member['nodeType'] == 'UsingForDirective'
++                ):
++                    pending.append(member['id'])
++            node = {k: v for k, v in node.items() if k != 'nodes'}
++        for item in walk(node):
++            for field in ('referencedDeclaration', 'function', 'declaration'):
++                ref = item.get(field)
++                if isinstance(ref, int) and ref in owners:
++                    pending.append(owners[ref])
++    return {
++        **ast,
++        'nodes': [
++            {
++                **node,
++                'nodes': [member for member in node['nodes'] if member['id'] in used],
++            }
++            if node['nodeType'] == 'ContractDefinition'
++            else node
++            for node in nodes
++            if node['id'] in used or node['id'] in shells
++        ],
++    }
+diff --git a/prototypes/source/test_assembly.py b/prototypes/source/test_assembly.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..8a36cf95f3bfc5612daf3505f5a2bbed122dc36f
+--- /dev/null
++++ b/prototypes/source/test_assembly.py
+@@ -0,0 +1,109 @@
++"""Check the boundaries of source rewrites against actual analyzed Solidity."""
++
++import copy
++import sys
++import unittest
++
++from assembly import Unsupported, lower_assembly, walk
++from muldiv import compile_solc
++from project import project
++
++compiler = 'solc'
++
++
++class AssemblyTests(unittest.TestCase):
++    def setUp(self):
++        self.ast = compile_solc(
++            compiler,
++            {
++                'Test.sol': """
++pragma solidity 0.8.35;
++contract T {
++    function bubble(bytes memory a, bytes memory b) public pure {
++        assembly { revert(add(a, 32), mload(a)) }
++    }
++    function panic(uint256 code) public pure {
++        assembly { mstore(0, 0x4e487b71) mstore(32, code) revert(28,36) }
++    }
++}
++"""
++            },
++            {'*': {'': ['ast']}},
++        )['sources']['Test.sol']['ast']
++
++    def test_exact_intrinsics(self):
++        names = [
++            d['name']
++            for d in walk(lower_assembly(self.ast))
++            if d.get('nodeType') == 'ErrorDefinition'
++        ]
++        self.assertEqual(names, ['#yul.panic', '#yul.rethrow'])
++
++    def test_rethrow_requires_exact_pointer_and_extent(self):
++        for variant in ['offset', 'distinct', 'slot']:
++            with self.subTest(variant=variant):
++                ast = copy.deepcopy(self.ast)
++                block = next(
++                    d for d in walk(ast) if d.get('nodeType') == 'InlineAssembly'
++                )
++                ptr, size = block['AST']['statements'][0]['expression']['arguments']
++                if variant == 'offset':
++                    ptr['arguments'][1]['value'] = '31'
++                elif variant == 'slot':
++                    block['externalReferences'][0]['isSlot'] = True
++                else:
++                    second = size['arguments'][0]
++                    second['name'] = 'b'
++                    ref = next(
++                        r
++                        for r in block['externalReferences']
++                        if r['src'] == second['src']
++                    )
++                    ref['declaration'] = next(
++                        d['id']
++                        for d in walk(ast)
++                        if d.get('nodeType') == 'VariableDeclaration'
++                        and d['name'] == 'b'
++                    )
++                with self.assertRaises(Unsupported):
++                    lower_assembly(ast)
++
++    def test_panic_requires_exact_payload(self):
++        block = [d for d in walk(self.ast) if d.get('nodeType') == 'InlineAssembly'][1]
++        block['AST']['statements'][-1]['expression']['arguments'][1]['value'] = '35'
++        with self.assertRaises(Unsupported):
++            lower_assembly(self.ast)
++
++
++class ProjectTests(unittest.TestCase):
++    def test_type_only_and_executable_contract_dependencies(self):
++        ast = compile_solc(
++            compiler,
++            {
++                'Project.sol': """
++pragma solidity 0.8.35;
++contract Foreign {
++    struct S { uint a; }
++    function m() external pure returns(uint) { return 1; }
++}
++contract TypeOnly { function read(Foreign.S memory s) public pure returns(uint) { return s.a; } }
++contract Caller { function read(Foreign f) public view returns(uint) { return f.m(); } }
++"""
++            },
++            {'*': {'': ['ast']}},
++        )['sources']['Project.sol']['ast']
++
++        def members(target):
++            declaration = next(
++                d for d in project(ast, target)['nodes'] if d.get('name') == 'Foreign'
++            )
++            return [d.get('name') for d in declaration['nodes']]
++
++        self.assertEqual(members('TypeOnly'), ['S'])
++        self.assertEqual(members('Caller'), ['S', 'm'])
++        self.assertEqual(members('Foreign'), ['S', 'm'])
++
++
++if __name__ == '__main__':
++    compiler = sys.argv.pop(1) if len(sys.argv) > 1 else 'solc'
++    unittest.main()

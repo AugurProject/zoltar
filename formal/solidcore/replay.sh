@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'HELP'
+Usage: bash formal/solidcore/replay.sh WORKDIR
+
+In a fresh directory, fetch the pinned SolidCore source, apply the bundled diff,
+build its checked interpreter, replay the arithmetic probes, and lower every
+Zoltar contract from Solidity source. Safe to rerun in the same directory.
+Requires Git, Python 3.10+, Bun with the repository dependencies installed,
+elan with Lean 4.28.0, Forge 1.5.1, Anvil 1.5.1 and native Solidity compilers.
+Set SOLC_035 and SOLC_028 to the native solc executable paths. FORGE and ANVIL
+override the respective binaries on PATH. Set SOLIDCORE_JOBS to limit parallel
+contract checks. Each run writes passing Lean modules under WORKDIR/models-*
+and coverage to WORKDIR/contracts.tsv. A nonzero exit
+indicates a build/test failure or one or more unsupported source declarations.
+HELP
+}
+if [[ ${1:-} == --help ]]; then usage; exit 0; fi
+if [[ $# != 1 ]]; then usage >&2; exit 2; fi
+
+base=6f899b80263ba63aa69b46aed4907c9e37e0b06e
+here=$(cd "$(dirname "$0")" && pwd)
+repo=$(git -C "$here" rev-parse --show-toplevel)
+mkdir -p "$1"
+work=$(cd "$1" && pwd)
+sc="$work/solidity-lean"
+resolve_tool() {
+  local path
+  path=$(command -v "$1") || { echo "Missing executable: $1" >&2; return 1; }
+  realpath "$path"
+}
+solc35=$(resolve_tool "${SOLC_035:-solc-0.8.35}")
+solc28=$(resolve_tool "${SOLC_028:-solc-0.8.28}")
+forge=$(resolve_tool "${FORGE:-forge}")
+anvil=$(resolve_tool "${ANVIL:-anvil}")
+if [[ ! -d "$sc/.git" ]]; then
+  git clone --no-checkout https://github.com/paradigmxyz/solidity-lean.git "$sc"
+  git -C "$sc" checkout --detach "$base"
+fi
+if [[ $(git -C "$sc" rev-parse HEAD) != "$base" ]]; then
+  echo "Expected SolidCore $base in $sc. Use a fresh work directory." >&2
+  exit 1
+fi
+if git -C "$sc" apply --check "$here/solidcore.patch" 2>/dev/null; then
+  git -C "$sc" apply "$here/solidcore.patch"
+else
+  git -C "$sc" apply --reverse --check "$here/solidcore.patch"
+fi
+(
+  cd "$sc"
+  lake build +SolidCore.Solidity.Checked:olean
+  python3 prototypes/mul512/replay.py "$repo" --solc "$solc35" --anvil "$anvil"
+  python3 prototypes/source/test_assembly.py "$solc35"
+  python3 prototypes/source/muldiv.py "$repo" --solc "$solc35" --anvil "$anvil"
+  models=$(mktemp -d "$work/models-XXXXXX")
+  echo "Writing checked Lean source modules to $models/contracts"
+  python3 "$here/check_contracts.py" --models "$models/contracts" --solidcore "$sc" --solc "$solc35" --oracle-solc "$solc28" --forge "$forge" --jobs "${SOLIDCORE_JOBS:-3}" --report "$work/contracts.tsv"
+)
