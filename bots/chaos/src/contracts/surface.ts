@@ -291,7 +291,6 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('SecurityPool', 'createCompleteSetWithRecoveryRep', 'excluded-dangerous', undefined, 'Recovery-bearing purchases require explicit collateral and REP budgets and separate reviewed approvals; random purchases use the zero-REP path.'),
 	entry('SecurityPool', 'activateForkChild', 'role-restricted', undefined, 'Only the bound protocol accounting, security pool, fork, or auction authority may invoke this component callback.'),
 	entry('SecurityPool', 'addQuestion', 'selectable', 'statoblast.security-pool.add-question'),
-	entry('SecurityPool', 'checkpointCapitalFees', 'excluded-dangerous', undefined, 'Capital mutations checkpoint shared fees; direct randomized checkpointing adds no owner action.'),
 	entry('SecurityPool', 'checkpointQuestionSettlement', 'excluded-dangerous', undefined, 'Question accounting checkpoints already route through the bound question host.'),
 	entry('SecurityPool', 'createCompleteSet', 'selectable', 'statoblast.complete-set.create'),
 	entry('SecurityPool', 'forkWithReporterQuestion', 'excluded-dangerous', undefined, 'Own-question initiation runs through the canonical question forker with an anchored readiness simulation.'),

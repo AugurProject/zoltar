@@ -121,7 +121,6 @@ contract SecurityPool is ISecurityPoolSettlement {
 	mapping(address => bool) public registeredLedgers;
 	uint256[] private questions;
 	bool private entered;
-	address private purchasingPool;
 
 	event QuestionRegistered(uint256 indexed questionId, bytes32 indexed originId, IQuestionLedger indexed pool);
 	event CompleteSetsFunded(uint248 indexed universeId, uint256 indexed questionId, address indexed recipient, uint256 cashAttoEth, uint256 shares, uint256 purchaseFeeAttoEth);
@@ -341,7 +340,6 @@ contract SecurityPool is ISecurityPoolSettlement {
 	function _purchase(uint248 universeId, uint256 questionId, uint256 mintAttoEth, address recipient, uint256 minimumShares, uint256 maximumFee, uint256 maximumRecoveryAttoRep) private returns (uint256 minted) {
 		uint256 fee;
 		(minted, fee) = services.purchase(msg.sender, universeId, questionId, mintAttoEth, recipient, minimumShares, maximumFee, maximumRecoveryAttoRep);
-		purchasingPool = address(0);
 		emit CompleteSetsFunded(universeId, questionId, recipient, mintAttoEth, minted, fee);
 	}
 	function prepareServicePurchase(uint248 universeId, uint256 questionId) external onlyServices returns (IQuestionLedger pool) {
@@ -351,13 +349,11 @@ contract SecurityPool is ISecurityPoolSettlement {
 		if (universeId != originUniverseId)
 			require(questionAdmissionPolicy.isQuestionAllowed(address(this), originUniverseId, questionId), 'Question rejected by admission policy');
 		pool = universeId == originUniverseId ? addQuestion(questionId) : getQuestionLedger(questionId, universeId);
-		purchasingPool = address(pool);
-		capitalLedger[universeId].checkpoint();
 	}
 
+	/// @dev The root authenticates ledger identity; Services owns purchase authorization.
 	function mintQuestionSettlement(uint256 cash) external returns (uint256, uint256, uint256) {
 		IQuestionLedger pool = _pool(msg.sender);
-		require(entered && purchasingPool == msg.sender, 'No authorized security pool purchase');
 		return services.mintQuestionSettlement(pool, cash);
 	}
 	function redeemQuestionSettlement(address recipient, uint256 burnedShares) external returns (uint256, uint256, uint256) {
@@ -389,10 +385,6 @@ contract SecurityPool is ISecurityPoolSettlement {
 		require(ISecurityPoolForkCoordinator(forkController).isPriceReportingOpen(universeId), 'Security pool reporting window closed');
 		capitalLedger[universeId].acceptPrice(price, validUntil);
 		if (ISecurityPoolForkCoordinator(forkController).isReady(universeId)) services.activateFees(universeId);
-	}
-	function checkpointCapitalFees(uint248 universeId, uint48 through) external {
-		require(msg.sender == address(capitalLedger[universeId]), 'Only universe capital ledger');
-		services.checkpointCapitalFees(universeId, through);
 	}
 	function onQuestionRepIncome(uint256 amountAttoRep) external {
 		IQuestionLedger pool = _pool(msg.sender);
