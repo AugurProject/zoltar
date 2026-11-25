@@ -20,7 +20,8 @@ test('exchange adapters cache per venue and timeout while preserving method rece
 			return { last: this.options.timeout }
 		}
 	}
-	const factory = createCentralizedExchangeFactory({ first: Exchange, second: Exchange })
+	const asset = '0x00000000000000000000000000000000000000AB'
+	const factory = createCentralizedExchangeFactory({ first: Exchange, second: Exchange }, `first:REP/ETH=1:${asset}`)
 	const first = factory('first', 100)
 	expect(factory('first', 100)).toBe(first)
 	expect(factory('first', 200)).not.toBe(first)
@@ -30,6 +31,11 @@ test('exchange adapters cache per venue and timeout while preserving method rece
 		{ enableRateLimit: true, timeout: 200 },
 		{ enableRateLimit: true, timeout: 100 },
 	])
+	expect(first.settlesAsset('REP/ETH', asset.toLowerCase(), 1)).toBe(true)
+	expect(first.settlesAsset('REP/ETH', asset, 2)).toBe(false)
+	expect(first.settlesAsset('REP/USD', asset, 1)).toBe(false)
+	expect(first.settlesAsset('REP/ETH', asset.replace('AB', 'AC'), 1)).toBe(false)
+	expect(factory('second', 100).settlesAsset('REP/ETH', asset, 1)).toBe(false)
 	expect(await first.loadMarkets()).toBe(100)
 	expect(await first.fetchOrderBook('REP/ETH', 20)).toEqual({ asks: [[2, 3]], bids: [[1, 4]], timestamp: 100 })
 	expect(await first.fetchTicker('ETH/USD')).toEqual({ ask: undefined, bid: undefined, last: 100, timestamp: undefined })

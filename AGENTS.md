@@ -188,6 +188,10 @@ Skip this gate for read-only analysis, exploration, or when the user asks not to
 
 ## Pull requests
 
+Use the `gh` command on PATH from inside the checkout for GitHub operations such as `gh pr create`, `gh pr view`, and `gh pr checks`. In the shared workspace it selects the credential for the repository’s `origin`. Use Git for fetching, committing, and pushing the branch before opening the PR.
+
+If GitHub rejects a push that changes `.github/workflows/` for insufficient workflow access, report the permission error. Publishing that branch requires a fine-grained token with Contents and Workflows write access or a classic token with repository write access and the `workflow` scope. A successful `gh` read does not establish those write permissions.
+
 When creating a pull request:
 
 - Write a pull request description that explains what changed and why.
@@ -207,7 +211,7 @@ Supply the standard handoff plus every visual-review field required by the revie
 
 For every task that changes code, tests, configuration, agent definitions, or repository instructions, the main agent must spawn the project-scoped reviewer from `.codex/agents/reviewer.toml` after validation, any branch synchronization, and any specialized review gates. Supply every handoff field required by the review contract, including the exact baseline and task paths, and summarize material specialized-review results. The reviewer must not modify files.
 
-Disposition every finding using the contract. After material fixes, rerun affected checks and repeat the reviewer. Completion requires no valid High or Medium findings and an explicit disposition for every Low finding.
+Follow the review contract’s closure rules for findings, validation reruns, and re-review.
 
 ### Documentation reviewer
 

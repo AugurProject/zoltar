@@ -5,6 +5,7 @@ import type { MarketConsensusObservation, MarketConsensusSettings } from './mark
 
 const FIXED_UNIT = 10n ** 18n
 const BPS = 10_000n
+const unverifiedVenueAsset = new Error('Unverified venue settlement asset')
 
 type CentralizedMarketSource = {
 	ethMarket: string | undefined
@@ -88,6 +89,7 @@ type MarketTicker = {
 }
 
 export type MarketExchange = {
+	settlesAsset: (market: string, assetId: string, chainId: number) => boolean
 	fetchOrderBook: (symbol: string, limit: number) => Promise<MarketOrderBook>
 	fetchTicker: (symbol: string) => Promise<MarketTicker>
 	loadMarkets: () => Promise<unknown>
@@ -421,6 +423,7 @@ function tickerPrice(ticker: MarketTicker) {
 
 async function observeSource(source: CentralizedMarketSource, settings: CentralizedMarketSettings, assetId: string, chainId: number, factory: CentralizedExchangeFactory, observedAt: number): Promise<CentralizedMarketObservation> {
 	const exchange = factory(source.exchangeId, settings.requestTimeoutMilliseconds)
+	if (!exchange.settlesAsset(source.repMarket, assetId, chainId)) throw unverifiedVenueAsset
 	await exchange.loadMarkets()
 	const [orderBook, ethTicker] = await Promise.all([exchange.fetchOrderBook(source.repMarket, settings.orderBookLimit), source.ethMarket === undefined ? Promise.resolve(undefined) : exchange.fetchTicker(source.ethMarket)])
 	const bestBid = requiredPositiveNumber(orderBook.bids[0]?.[0], `${source.exchangeId} best bid`)
@@ -458,7 +461,8 @@ export async function observeCentralizedMarkets(settings: CentralizedMarketSetti
 	const errors = settled.flatMap((result, index) => {
 		if (result.status === 'fulfilled') return []
 		const source = settings.sources[index]
-		return [`${source?.exchangeId ?? 'Unknown exchange'} observation unavailable`]
+		const reason = result.reason === unverifiedVenueAsset ? 'has no verified settlement mapping for this token and chain' : 'observation unavailable'
+		return [`${source?.exchangeId ?? 'Unknown exchange'} ${reason}`]
 	})
 	return errors.length === 0 ? estimate : { ...estimate, reasons: [...estimate.reasons, ...errors] }
 }

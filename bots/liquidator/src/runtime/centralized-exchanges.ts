@@ -2,4 +2,4 @@ import { createCentralizedExchangeFactory } from '@zoltar/bot-shared/monitoring/
 import { exchanges } from 'ccxt'
 
 /** One CCXT-backed exchange factory shared by the scan loop and the dashboard market source test. */
-export const centralizedExchangeFactory = createCentralizedExchangeFactory(exchanges)
+export const centralizedExchangeFactory = createCentralizedExchangeFactory(exchanges, process.env['ZOLTAR_BOT_VERIFIED_MARKETS'])

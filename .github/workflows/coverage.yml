@@ -26,6 +26,10 @@ jobs:
             profile: full
             command: coverage:typescript
             report: coverage/typescript
+          - domain: typescript-pilot
+            profile: full
+            command: coverage:typescript
+            report: coverage/typescript-pilot
           - domain: solidity
             profile: contracts
             command: coverage:contracts:bytecode
@@ -37,6 +41,7 @@ jobs:
           profile: ${{ matrix.profile }}
       - name: Capture coverage and record provenance
         env:
+          ZOLTAR_TYPESCRIPT_COVERAGE_PILOT: ${{ matrix.domain == 'typescript-pilot' && '1' || '0' }}
           COVERAGE_COMMAND: ${{ matrix.command }}
           COVERAGE_REPORT: ${{ matrix.report }}
         run: |

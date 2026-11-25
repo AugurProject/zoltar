@@ -17,7 +17,7 @@ const config = (options => {
 			'.': {
 				entry: [
 					'docs/charts/chartRuntime.ts!',
-					'docs/runtime/{deploymentMaskDecoder,docsShell,responsiveDocs,interactiveTools,invariantExplorer,mmrProofPlanner,openOracleTools}.ts!',
+					'docs/runtime/{deploymentMaskDecoder,docsShell,responsiveDocs,interactiveTools,invariantExplorer,mmrProofPlanner}.ts!',
 					'tooling/**/*.test.ts',
 					'tooling/contracts/prettier-solidity-batch.mjs!',
 					'bun-test-setup*.ts',
