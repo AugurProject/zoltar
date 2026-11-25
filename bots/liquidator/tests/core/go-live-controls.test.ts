@@ -68,10 +68,11 @@ function controls(settings: OperatorSettings, pending: PendingTransactionIntent[
 			return current
 		},
 		runMutation: mutation => gate.run(mutation),
+		settingsRevision: () => 'reviewed-policy',
 		settings: () => current,
 		state,
 	})
-	return { active: () => active, controller, events, settings: () => current, state }
+	return { active: () => active, controller, events, settingsRevision: () => 'reviewed-policy', settings: () => current, state }
 }
 
 describe('liquidator go-live controls', () => {
@@ -134,19 +135,28 @@ describe('liquidator go-live controls', () => {
 		})
 	}
 
+	test('refuses live resume when the reviewed policy is missing or stale', async () => {
+		const fixture = controls({ ...settings, privateKey: keyA, runtime: { ...settings.runtime, execute: true } }, [])
+		for (const revision of [undefined, 'previous-policy']) {
+			await expect(fixture.controller.setPaused({ paused: false, revision })).rejects.toThrow('Review the live resume preflight again')
+		}
+		expect(fixture.events).toEqual([])
+		expect(fixture.state.paused).toBe(true)
+	})
+
 	test('resume checks live identity before persistence and stays paused on failure', async () => {
 		const fixture = controls({ ...settings, privateKey: keyA }, [])
 		await fixture.controller.setSigner({ privateKey: keyB, rememberSigner: false })
 		fixture.settings().runtime = { ...fixture.settings().runtime, execute: true }
 		fixture.events.length = 0
-		await expect(fixture.controller.setPaused({ paused: false })).rejects.toThrow('saved key differs')
+		await expect(fixture.controller.setPaused({ paused: false, revision: 'reviewed-policy' })).rejects.toThrow('saved key differs')
 		expect(fixture.events).toEqual([])
 		expect(fixture.state.paused).toBe(true)
 		await fixture.controller.setExecution({ execute: false })
 		await fixture.controller.setSigner({ privateKey: '', rememberSigner: true })
 		await fixture.controller.setSigner({ privateKey: keyB, rememberSigner: false })
 		await fixture.controller.setExecution({ execute: true })
-		await fixture.controller.setPaused({ paused: false })
+		await fixture.controller.setPaused({ paused: false, revision: 'reviewed-policy' })
 		expect(fixture.state.paused).toBe(false)
 		expect(fixture.settings().privateKey).toBeUndefined()
 	})
@@ -175,7 +185,7 @@ describe('liquidator go-live controls', () => {
 
 	test('failed resume persistence leaves the operator paused', async () => {
 		const fixture = controls({ ...settings, privateKey: keyA, runtime: { ...settings.runtime, execute: true } }, [], 'persist')
-		await expect(fixture.controller.setPaused({ paused: false })).rejects.toThrow('disk full')
+		await expect(fixture.controller.setPaused({ paused: false, revision: 'reviewed-policy' })).rejects.toThrow('disk full')
 		expect(fixture.state.paused).toBe(true)
 	})
 
@@ -200,6 +210,7 @@ describe('liquidator go-live controls', () => {
 					throw new Error('Rejected replacement must not persist')
 				},
 				runMutation: mutation => mutation(),
+				settingsRevision: () => 'reviewed-policy',
 				settings: () => current,
 				state,
 			})

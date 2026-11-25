@@ -83,7 +83,7 @@ function completeSignerScan(state: RuntimeState, current: OperatorSettings, bala
 		],
 		weth: '0',
 	}
-	state.lastScanAt = '2026-08-29T00:00:00.000Z'
+	state.lastScanAt = new Date().toISOString()
 	state.lastScannedBlock = 42n
 	state.topology = {
 		anchor: { blockNumber: 42n, timestamp: 1_777_075_200n },
@@ -282,7 +282,7 @@ describe('chaos dashboard configuration boundary', () => {
 		}
 		const { controller } = noopController(current, state)
 		if (controller.setRetirement === undefined) throw new Error('Retirement controller is unavailable')
-		await controller.setRetirement({ action: 'accept-residuals', confirmation: 'ACCEPT RESIDUALS FOR profile:next', reason: 'Reviewed residual assets and accepted replacement.', targetProfileId: 'profile:next' })
+		await controller.setRetirement({ action: 'accept-residuals', evidence: state.retirement.completionEvidence, confirmation: 'ACCEPT RESIDUALS FOR profile:next', reason: 'Reviewed residual assets and accepted replacement.', targetProfileId: 'profile:next' })
 		expect(state.retirement.profileReplacementOverride).toMatchObject({ completionBlockHash: zeroHash, completionBlockNumber: '42', recipient: state.retirement.recipient, sourceProfileId: 'profile:test', targetProfileId: 'profile:next' })
 	})
 
@@ -534,7 +534,7 @@ describe('chaos dashboard configuration boundary', () => {
 			safetyPaused: true,
 		})
 
-		state.lastScanAt = '2026-08-29T00:00:00.000Z'
+		state.lastScanAt = new Date().toISOString()
 		expect(await controller.getState()).toMatchObject({ inventoryAvailable: false })
 		const address = privateKeyToAccount(firstPrivateKey).address
 		state.wallet = address
@@ -744,7 +744,7 @@ describe('chaos dashboard configuration boundary', () => {
 			rep: [{ balance: '1000000000000000000', symbol: 'REP', token: canonicalRepToken, universeId: 'root' }],
 			weth: '1000000000000000000',
 		}
-		state.lastScanAt = '2026-08-29T00:00:00.000Z'
+		state.lastScanAt = new Date().toISOString()
 		state.lastScannedBlock = 42n
 		state.topology = {
 			anchor: { blockNumber: 42n, timestamp: 1_777_075_200n },
@@ -789,7 +789,7 @@ describe('chaos dashboard configuration boundary', () => {
 		const state = runtimeState(current)
 		if (current.privateKey === undefined) throw new Error('Expected a configured signer')
 		bindRuntimeStateToSigner(state, privateKeyToAccount(current.privateKey).address)
-		state.lastScanAt = '2026-08-29T00:00:00.000Z'
+		state.lastScanAt = new Date().toISOString()
 		state.lastScannedBlock = 42n
 		state.topology = {
 			anchor: { blockNumber: 42n, timestamp: 1_777_075_200n },

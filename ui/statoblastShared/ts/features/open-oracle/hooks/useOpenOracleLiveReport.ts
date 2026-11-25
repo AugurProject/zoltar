@@ -1,3 +1,4 @@
+import { useChainBlockNumber } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { OpenOracleReportDetails } from '../../../types/contracts.js'
 import { getOpenOracleLifecycleBoundaryOffsets, getOpenOracleLiveReportDetails } from '../lib/openOracle.js'
@@ -6,6 +7,7 @@ const MAX_TIMEOUT_MS = 2_147_483_647
 
 /** Advances dispute and settlement availability at the report's lifecycle boundaries. */
 export function useOpenOracleLiveReport(details: OpenOracleReportDetails | undefined) {
+	const block = useChainBlockNumber()
 	const clock = useRef({ details, loadedAtMs: Date.now() })
 	if (clock.current.details !== details) clock.current = { details, loadedAtMs: Date.now() }
 	const [tick, setTick] = useState(0)
@@ -20,5 +22,6 @@ export function useOpenOracleLiveReport(details: OpenOracleReportDetails | undef
 		const timeout = setTimeout(() => setTick(value => value + 1), Math.min(nextBoundaryAtMs - now + 50, MAX_TIMEOUT_MS))
 		return () => clearTimeout(timeout)
 	}, [details, tick])
+	if (details !== undefined && !details.timeType && block !== undefined) return { ...details, currentBlockNumber: block }
 	return details === undefined ? undefined : getOpenOracleLiveReportDetails(details, BigInt(Math.floor((Date.now() - clock.current.loadedAtMs) / 1000)))
 }

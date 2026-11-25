@@ -384,6 +384,7 @@ function ensureConstructorAbi(abi: readonly unknown[]) {
 }
 
 export function encodeAbiParameters(parameters: readonly AbiParameter[], values: readonly unknown[]) {
+	if (parameters.length === 0 && values.length === 0) return '0x' as const
 	return deployContract(
 		[
 			{

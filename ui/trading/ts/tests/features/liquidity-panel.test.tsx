@@ -278,6 +278,19 @@ describe('liquidity panel', () => {
 		}
 	})
 
+	for (const questionOutcome of [0, 1, 2] as const) {
+		test(`removal guidance identifies the payout of LP shares for final outcome ${questionOutcome}`, async () => {
+			const market = { ...closedMarket, questionOutcome }
+			const rendered = await renderPanel(market, true, { scope: shareBalanceScope(market), invalid: 0n, yes: 0n, no: 0n, lp: 10n ** 18n })
+			try {
+				expect(operationButton('Remove').getAttribute('aria-pressed')).toBe('true')
+				expect(document.body.textContent).toContain(questionOutcome === 0 ? 'Neither Yes nor No pays out after an Invalid resolution.' : 'redeem the winning shares')
+			} finally {
+				await rendered.cleanup()
+			}
+		})
+	}
+
 	test('opens on Remove when the market no longer takes new liquidity', async () => {
 		const rendered = await renderPanel(closedMarket, true, { scope: shareBalanceScope(closedMarket), invalid: 0n, yes: 0n, no: 0n, lp: 10n ** 18n })
 		try {
@@ -330,7 +343,7 @@ describe('liquidity panel', () => {
 			expect(removal?.querySelector('.portfolio-holding-yes .payout-caption')?.textContent?.trim()).toBe('5.00 ETH if the question resolves Yes')
 			expect(removal?.textContent).not.toContain('5 Yes (')
 			expect(removal?.textContent).toContain('Worth about 5.00 ETH at the current trading pool price')
-			expect(document.body.textContent).toContain('Removing liquidity returns Yes and No shares to your wallet, not collateral. Next, sell them on the Trade tab')
+			expect(document.body.textContent).toContain('If you hold matching Invalid shares, you can sell insured shares on the Trade tab.')
 			expect(document.body.textContent).not.toContain('raw Yes and No')
 		} finally {
 			await rendered.cleanup()

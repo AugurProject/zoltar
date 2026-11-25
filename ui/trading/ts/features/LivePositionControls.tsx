@@ -1,3 +1,4 @@
+import { submissionWindowBlocker } from '../protocol/submissionWindow.js'
 import { ETH_GAS_RESERVE_ATTO_ETH } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 import * as collateralCopy from '../copy/collateral.js'
 import { walletConnectionRequired } from '@zoltar/ui-core-shared/copy/common.js'
@@ -28,7 +29,7 @@ import type { TransactionPhase } from './live/transactionWorkflow.js'
 import type { TradeMode } from './live/useTransactionWorkflow.js'
 import { panelWalletStep, QuotedTransactionPanel } from './QuotedTransactionPanel.js'
 import { estimateAnnouncement, TradeEstimatePanel } from './TradeEstimatePanel.js'
-import { roundDownShortcut, tradeTicketModel, type TradeEstimate, type TradeTicketModel } from './live/tradeTicketModel.js'
+import { tradeTicketModel, type TradeEstimate, type TradeTicketModel } from './live/tradeTicketModel.js'
 import { useDebouncedValue } from './live/useDebouncedValue.js'
 
 const ESTIMATE_DEBOUNCE_MILLISECONDS = 250
@@ -85,9 +86,16 @@ function InvalidCoverageExplanation({ model, side, disabled, onUseSellable, mark
 	const sellable = model.sellable ?? 0n
 	return (
 		<WarningSurface role='status' surface='flat' variant='compact' className='trade-invalid-coverage'>
-			<p>{ticketCopy.invalidCoverageExplanation(formatOutcomeQuantity(model.shortfall.invalidRequired, shareOutcome.invalid, 4, 'nearest', market), formatOutcomeQuantity(model.shortfall.invalidHeld, shareOutcome.invalid, 4, 'nearest', market), formatOutcomeQuantity(sellable, side, 4, 'down', market), side)}</p>
+			<p>
+				{ticketCopy.invalidCoverageExplanation(
+					formatOutcomeQuantity(model.shortfall.invalidRequired, shareOutcome.invalid, collateralAsset(market).decimals, 'nearest', market),
+					formatOutcomeQuantity(model.shortfall.invalidHeld, shareOutcome.invalid, collateralAsset(market).decimals, 'nearest', market),
+					formatOutcomeQuantity(sellable, side, 4, 'down', market),
+					side,
+				)}
+			</p>
 			{sellable > 0n ? (
-				<button type='button' className='secondary' disabled={disabled} onClick={() => onUseSellable(formatCurrencyInputBalance(roundDownShortcut(sellable, collateralAsset(market).decimals), collateralAsset(market).decimals))}>
+				<button type='button' className='secondary' disabled={disabled} onClick={() => onUseSellable(formatCurrencyInputBalance(sellable, collateralAsset(market).decimals))}>
 					{ticketCopy.sellInsteadAction(formatOutcomeQuantity(sellable, side, 4, 'down', market))}
 				</button>
 			) : undefined}
@@ -138,10 +146,11 @@ export function LivePositionControls({
 	const { mode, side, state } = ticket
 	const asset = collateralAsset(market)
 	const required = mode === 'entry' ? tryParseNonNegativeDecimalInput(ticket.amount, asset.decimals) : undefined
-	const funding = useCollateralFunding(market, required, fundingContext, mode === 'entry')
+	const canFund = mode === 'entry' && marketAcceptsNewRisk(market, nowSeconds) && submissionWindowBlocker(market, 'entry', nowSeconds) === undefined
+	const funding = useCollateralFunding(market, required, fundingContext, canFund)
 	let gasReason: string | undefined
 	if (tokenFunded(market) && wallet.connected) {
-		if (wallet.walletEthAttoEth === undefined) gasReason = collateralCopy.loading
+		if (wallet.walletEthAttoEth === undefined) gasReason = wallet.walletEthState === 'error' ? collateralCopy.nativeBalanceUnavailable : collateralCopy.nativeBalanceLoading
 		else if (wallet.walletEthAttoEth < ETH_GAS_RESERVE_ATTO_ETH) gasReason = collateralCopy.gasRequired
 	}
 	const fundingBalance = tokenFunded(market) ? funding.balance : wallet.walletEthAttoEth
@@ -191,7 +200,7 @@ export function LivePositionControls({
 		if (actionButton !== null && actionButton !== undefined && !actionButton.disabled) actionButton.click()
 	}
 	const amountFieldError = model.amountError ?? model.insufficientReason
-	const announcement = useEstimateAnnouncement(estimate, `${market.pool}|${mode}|${side}|${settledAmount}`, market)
+	const announcement = useEstimateAnnouncement(estimate, `${market.pool}|${mode}|${side}|${settledAmount}|${settings.slippageBps}`, market)
 	return (
 		<div ref={controlsRef} className='position-controls' aria-busy={revalidatingAfterReceipt}>
 			{closed ? (
@@ -268,7 +277,7 @@ export function LivePositionControls({
 			<p className='visually-hidden trade-quote-announcement' role='status'>
 				{announcement}
 			</p>
-			{mode === 'entry' ? (
+			{canFund ? (
 				<CollateralFundingControls
 					actionLabel={model.actionLabel}
 					funding={funding}
@@ -280,7 +289,7 @@ export function LivePositionControls({
 			<QuotedTransactionPanel
 				phase={state}
 				actionLabel={model.actionLabel}
-				availability={mode === 'entry' && (funding.reason !== undefined || funding.pending || gasReason !== undefined) ? { disabled: true, reason: gasReason ?? funding.reason ?? collateralCopy.loading } : model.availability}
+				availability={canFund && (funding.reason !== undefined || funding.pending || gasReason !== undefined) ? { disabled: true, reason: gasReason ?? funding.reason ?? collateralCopy.loading } : model.availability}
 				statusText={confirmedText}
 				transactionHash={ticket.positionHash}
 				receiptWarning={ticket.positionReceiptWarning}

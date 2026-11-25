@@ -27,7 +27,7 @@ const assertSchemaLayout = async (connection: Awaited<ReturnType<SQL['reserve']>
 	if (Object.keys(differences).length > 0) throw new Error(`${UNSUPPORTED_SCHEMA_MESSAGE} Differences: ${JSON.stringify(differences)}`)
 }
 
-export const initializeSchema = async (sql: SQL): Promise<void> => {
+export const initializeSchema = async (sql: SQL, validateMigratedSchema?: (transaction: SQL) => Promise<void>): Promise<void> => {
 	const connection = await sql.reserve()
 	let advisoryLockAcquired = false
 	try {
@@ -101,6 +101,7 @@ export const initializeSchema = async (sql: SQL): Promise<void> => {
 				async () => {
 					for (const migration of migrations) await connection.unsafe(migration.sql)
 					await assertSchemaLayout(connection, schema, CURRENT_SCHEMA_VERSION)
+					await validateMigratedSchema?.(connection)
 					for (const migration of migrations)
 						await connection`
 							INSERT INTO public.augurscan_schema_migrations (schema_version, description)

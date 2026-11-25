@@ -278,7 +278,7 @@ export async function logScanCursors(this: ScannerDatabase, chainId: number, lea
 	})
 }
 
-export async function richListBalanceTargets(this: ScannerDatabase, chainId: number, limit = 10, lease?: IndexerLease): Promise<RichListBalanceTargets> {
+export async function richListBalanceTargets(this: ScannerDatabase, chainId: number, limit = 10, lease?: IndexerLease, blockHash?: string): Promise<RichListBalanceTargets> {
 	return await withOptionalIndexerLease(this.sql, lease, async sql => {
 		const addressRows = await sql`
 				WITH assets AS (
@@ -297,24 +297,35 @@ export async function richListBalanceTargets(this: ScannerDatabase, chainId: num
 					WHERE snapshot.chain_id = ${chainId} AND snapshot.address = activity.address AND snapshot.canonical
 						AND snapshot.block_number <= network.indexed_block
 				) latest ON true
-				ORDER BY ((SELECT count(*) FROM assets) + 1 - COALESCE(latest.sampled_assets, 0)) DESC,
+				LEFT JOIN LATERAL (
+					SELECT max(observation.block_number) AS attempted_block FROM address_balance_observations observation
+					WHERE observation.chain_id = ${chainId} AND observation.address = activity.address AND observation.canonical
+				) attempt ON true
+				ORDER BY attempt.attempted_block ASC NULLS FIRST, ((SELECT count(*) FROM assets) + 1 - COALESCE(latest.sampled_assets, 0)) DESC,
 					latest.block_number ASC NULLS FIRST, activity.address
 				LIMIT ${limit}
 			`
+		const addresses = addressRows.map((row: Record<string, unknown>) => String(row['address']) as Address)
 		const assetRows = await sql`
 				SELECT asset.address, asset.kind FROM contracts asset
 				LEFT JOIN LATERAL (SELECT max(snapshot.block_number) AS sampled_block, count(DISTINCT snapshot.address) AS sampled_addresses
 				 FROM address_balance_snapshots snapshot WHERE snapshot.chain_id = asset.chain_id
 				  AND snapshot.asset_address = asset.address AND snapshot.canonical
-				  AND snapshot.address = ANY(${sql.array(
-						addressRows.map((row: Record<string, unknown>) => String(row['address'])),
-						'TEXT',
-					)})) sampled ON true
+				  AND snapshot.address = ANY(${sql.array(addresses, 'TEXT')})) sampled ON true
 				WHERE asset.chain_id = ${chainId} AND asset.canonical AND asset.kind IN ('reputationToken', 'weth')
 				ORDER BY sampled.sampled_addresses ASC, sampled.sampled_block ASC NULLS FIRST, asset.kind, asset.address LIMIT 8
 			`
+		const completed =
+			blockHash === undefined
+				? []
+				: await sql`
+					SELECT address, asset_address FROM address_balance_snapshots
+					WHERE chain_id = ${chainId} AND canonical AND block_hash = ${blockHash}
+						AND address = ANY(${sql.array(addresses, 'TEXT')})
+				`
 		return {
-			addresses: addressRows.map((row: Record<string, unknown>) => String(row['address']) as Address),
+			completed: new Set<string>(completed.map((row: Record<string, unknown>) => `${row['address']}:${row['asset_address']}`)),
+			addresses,
 			assets: assetRows.map((row: Record<string, unknown>) => ({
 				address: String(row['address']) as Address,
 				kind: row['kind'] === 'weth' ? 'weth' : 'rep',

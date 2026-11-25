@@ -280,6 +280,12 @@ export function publicSubmissionHealthMaximumAgeSeconds(configurationValue: unkn
 	return Math.ceil((pollMilliseconds * 3) / 1_000) + maximumBlockIntervalSeconds * 2
 }
 
+export function hasFreshCanonicalScan(lastScanAt: string | undefined, maximumAgeSeconds: number, nowMilliseconds = Date.now()) {
+	if (lastScanAt === undefined) return false
+	const age = nowMilliseconds - Date.parse(lastScanAt)
+	return age >= 0 && age <= maximumAgeSeconds * 1000
+}
+
 export function publicSubmissionHealth(value: unknown, configurationValue: unknown, nowMilliseconds: number, maximumAgeSeconds: number) {
 	const configuration = record(configurationValue)
 	const settings = record(configuration?.['settings']) ?? configuration
@@ -453,6 +459,7 @@ export function publicChaosState(value: unknown, configurationValue?: unknown, n
 		inventory: publicInventory(source['inventory']),
 		inventoryAvailable: booleanField(source, 'inventoryAvailable') === true && stringField(source, 'wallet') !== undefined,
 		lastScanAt: stringField(source, 'lastScanAt'),
+		scanFresh: hasFreshCanonicalScan(stringField(source, 'lastScanAt'), publicSubmissionHealthMaximumAgeSeconds(configurationValue), nowMilliseconds),
 		lastDeploymentCheckedBlock: scalar(source, 'lastDeploymentCheckedBlock'),
 		lastDeploymentCheckAt: stringField(source, 'lastDeploymentCheckAt'),
 		lastScannedBlock: scalar(source, 'lastScannedBlock') ?? scalar(source, 'block'),

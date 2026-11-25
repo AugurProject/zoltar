@@ -7,7 +7,6 @@ import { startDashboardServer } from '#dashboard/dashboard-server'
 import { loadPoolCatalog } from '#monitoring/pool-catalog'
 import { operatorSnapshot } from '#state/operator-state'
 import { setApprovedUniverses, setMarketConfiguration, setNetworkConnectivity, setSelectedSecurityPools, setStrategy, setSupportedSecurityPool, switchNetworkProfile } from './configuration-handlers.ts'
-import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { persistSettings, signerWalletFor, type LiquidatorDeps, type LiquidatorRuntime } from './liquidator-runtime.ts'
 import { testMarketSources } from './market-source-test.ts'
 import { reconcileTransaction } from './transaction-reconciliation-handler.ts'
@@ -24,6 +23,7 @@ function goLiveControlsFor(runtime: LiquidatorRuntime, deps: LiquidatorDeps) {
 		persist: update => persistSettings(runtime, deps, update),
 		runMutation: mutation => deps.configurationMutationGate.run(mutation),
 		settings: () => runtime.settings,
+		settingsRevision: () => runtime.settingsRevision,
 		state: deps.state,
 	})
 }
@@ -34,8 +34,8 @@ export function startLiquidatorDashboard(runtime: LiquidatorRuntime, deps: Liqui
 	const goLiveControls = goLiveControlsFor(runtime, deps)
 	if (!runtime.settings.runtime.ui) return undefined
 	return startDashboardServer(runtime.settings.runtime.uiPort, {
-		getConfiguration: () => ({ ...serializedSettings(runtime.settings, true), savedSigner: runtime.settings.privateKey === undefined ? undefined : privateKeyToAccount(runtime.settings.privateKey).address }),
-		getPoolCatalog: (page, address, scope) => loadPoolCatalog(runtime.client, runtime.settings.deployment.securityPoolFactory, runtime.settings.network.chainId, page, address, scope === 'monitored' ? state.pools.map(pool => pool.address) : undefined, deps.poolDeploymentDates),
+		getConfiguration: () => serializedSettings(runtime.settings, true),
+		getPoolCatalog: (page, address) => loadPoolCatalog(runtime.client, runtime.settings.deployment.securityPoolFactory, runtime.settings.network.chainId, page, address, undefined, deps.poolDeploymentDates),
 		getState: () => {
 			state.rpcEndpointHealth = runtime.readPool.snapshot()
 			const snapshot = operatorSnapshot(state, runtime.settings.runtime.execute, marketConfigurations(runtime.settings))

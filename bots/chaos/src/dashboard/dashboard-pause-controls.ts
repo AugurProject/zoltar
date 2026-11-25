@@ -19,13 +19,14 @@ type PauseControlsContext = {
 export function registerPauseControls({ state, elements, put, refresh, reconcileUnknownMutation, renderHeader }: PauseControlsContext) {
 	const { pauseStatus, resumeDialog, resumePreflight, resumeRandomScopeWarning, resumeStaleWarning, cancelResume, confirmResume } = elements
 	let resumeDialogOpening = false
+	let reviewedRevision: string | number | undefined
 
-	async function mutatePaused(paused: boolean) {
+	async function mutatePaused(paused: boolean, revision: string | number | undefined) {
 		state.pauseMutationPending = true
 		pauseStatus.textContent = paused ? 'Pausing…' : 'Resuming…'
 		if (state.snapshot !== undefined) renderHeader(state.snapshot)
 		try {
-			await put('/api/paused', { paused, revision: state.configuration?.revision })
+			await put('/api/paused', { paused, revision })
 			pauseStatus.textContent = paused ? 'Pause saved.' : 'Resume saved.'
 			await refresh()
 			pauseStatus.textContent = ''
@@ -55,9 +56,16 @@ export function registerPauseControls({ state, elements, put, refresh, reconcile
 		}
 		const value = state.snapshot
 		if (value === undefined || value.paused !== true) return
+		renderResumeChecklist(value)
+		resumeDialog.showModal()
+		cancelResume.focus()
+	}
+
+	function renderResumeChecklist(value: Snapshot) {
 		const executable = value.operationEvaluations.filter(operationIsIndependentlyExecutable)
 		const eligible = executable.filter(operation => operation.enabled !== false && operation.eligible === true).length
 		const signerDetail = value.signerReady === true && value.wallet !== undefined ? fullIdentifier(value.wallet, 'recovery signer address') : 'Missing'
+		reviewedRevision = state.configuration?.revision
 		const selectionPolicy = state.configuration?.selectableOperationAllowlist
 		let randomScope: HTMLElement | string = 'Unavailable — keep paused'
 		if (Array.isArray(selectionPolicy)) {
@@ -87,21 +95,27 @@ export function registerPauseControls({ state, elements, put, refresh, reconcile
 		)
 		resumeRandomScopeWarning.classList.toggle('hidden', selectionPolicy !== undefined)
 		resumeRandomScopeWarning.textContent = selectionPolicy === undefined ? 'The current random-selection policy is unavailable. Reload configuration before resuming.' : ''
-		resumeStaleWarning.classList.toggle('hidden', !state.snapshotStale)
-		confirmResume.disabled = selectionPolicy === undefined || state.snapshotStale || state.configurationCommitIndeterminate
+		const unavailable = !state.selectionControlsAvailable || state.snapshotStale || value.execute !== state.configuration?.execute || value.paused !== true || state.configuration?.paused !== true
+		resumeStaleWarning.classList.toggle('hidden', !unavailable)
+		confirmResume.disabled = reviewedRevision === undefined || selectionPolicy === undefined || unavailable || state.configurationCommitIndeterminate
 		confirmResume.textContent = 'Resume bot'
-		resumeDialog.showModal()
-		cancelResume.focus()
 	}
 
 	elements.pauseButton.addEventListener('click', () => {
 		if (state.snapshot?.paused === true) void openResumeDialog()
-		else void mutatePaused(true)
+		else void mutatePaused(true, state.configuration?.revision)
 	})
 	cancelResume.addEventListener('click', () => resumeDialog.close())
 	confirmResume.addEventListener('click', () => {
 		if (confirmResume.disabled) return
 		resumeDialog.close()
-		void mutatePaused(false)
+		if (reviewedRevision === undefined || state.configuration?.revision !== reviewedRevision) {
+			void openResumeDialog()
+			return
+		}
+		void mutatePaused(false, reviewedRevision)
 	})
+	return () => {
+		if (resumeDialog.open && state.snapshot !== undefined) renderResumeChecklist(state.snapshot)
+	}
 }

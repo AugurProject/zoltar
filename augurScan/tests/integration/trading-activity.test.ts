@@ -262,6 +262,10 @@ test.skipIf(url === undefined)('derives market ETH volume, activity, and account
 			{ block: 2, tx: 13, logIndex: 79, emitter: shareToken, name: 'Migrate', data: { migrator: migrant, fromId: '1', toId: '257', amountAttoShares: String(3n) } },
 		])
 		expect((await securityPoolFor(migrant)).items[0]).toMatchObject({ yes_atto_shares: '3', cost_basis_status: 'unknown' })
+		const walletBatch = [...poolAndShareLogs, ...pairLogs].filter(item => item.tx === 1 || item.tx === 2)
+		await insertLogs(walletBatch.map(item => ({ ...item, tx: 14, logIndex: item.logIndex + 100 })))
+		const batched = await handleApi(new Request(`http://localhost/api/v1/state/trading/${chainId}/${pair}`), connection)
+		expect(await batched?.json()).toMatchObject({ data: { summary: { eth_trade_count: 3 }, activity: { items: expect.arrayContaining([expect.objectContaining({ tx_hash: hash(14), kind: 'enter', account: trader }), expect.objectContaining({ tx_hash: hash(14), kind: 'add-liquidity', account: liquidityProvider })]) } } })
 	} finally {
 		connection.release()
 		await sql.close()

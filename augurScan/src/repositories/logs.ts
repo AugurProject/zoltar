@@ -49,7 +49,7 @@ export const logListRows = async (sql: SQL, query: LogListQuery) => {
 	}
 	values.push(query.limit + 1)
 	return await sql.unsafe(
-		`SELECT l.*, b.timestamp AS block_timestamp, canonical_block.hash AS canonical_block_hash, t.from_address AS origin_address, t.to_address, a.function_name, a.function_signature, a.summary AS action_summary, c.label AS contract_label, c.kind AS contract_kind, n.id AS network_id, n.name AS network_name, n.explorer_base_url,
+		`SELECT l.*, b.timestamp AS block_timestamp, n.finalized_block AS current_confirmation_boundary, canonical_block.hash AS canonical_block_hash, t.from_address AS origin_address, t.to_address, a.function_name, a.function_signature, a.summary AS action_summary, c.label AS contract_label, c.kind AS contract_kind, n.id AS network_id, n.name AS network_name, n.explorer_base_url,
 			CASE WHEN l.canonical THEN 'canonical'
 				WHEN invalidation.reason = 'chain-reorg' THEN 'chain-orphaned'
 				WHEN invalidation.reason = 'manifest-reset' THEN 'manifest-superseded'

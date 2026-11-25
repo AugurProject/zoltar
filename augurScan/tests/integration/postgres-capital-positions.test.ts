@@ -150,10 +150,11 @@ test.skipIf(url === undefined)('capital positions rank by health, attribute liqu
 
 		const ranked = await capitalPositionRows(connection, { chainId, snapshotBlock: '3', limit: 10, offset: 0 })
 		expect(ranked.map((row: Record<string, unknown>) => [row['owner_address'], row['block_number'], row['total']])).toEqual([
-			[lower(alice), '3', 4],
-			[lower(bob), '3', 4],
-			[lower(carol), '2', 4],
-			[lower(dave), '3', 4],
+			[lower(alice), '3', 5],
+			[lower(bob), '3', 5],
+			[lower(carol), '2', 5],
+			[lower(dave), '3', 5],
+			[lower(dave), null, 5],
 		])
 		const classified = (await capitalRiskOverview(connection, chainId, '3')).capitalPositions
 		expect(classified.map((position: Record<string, unknown>) => [position['protocol_state'], position['scanner_severity'], position['universe_id']])).toEqual([
@@ -161,10 +162,15 @@ test.skipIf(url === undefined)('capital positions rank by health, attribute liqu
 			['healthy', 'warning', '0'],
 			['uncommitted', 'healthy', '0'],
 			['unavailable', 'unavailable', undefined],
+			['unavailable', 'unavailable', undefined],
 		])
 		// At block 1 only Alice had been read, with her earlier health.
 		const earlier = await capitalPositionRows(connection, { chainId, snapshotBlock: '1', limit: 10, offset: 0 })
-		expect(earlier.map((row: Record<string, unknown>) => [row['owner_address'], row['block_number']])).toEqual([[lower(alice), '1']])
+		expect(earlier.map((row: Record<string, unknown>) => [row['owner_address'], row['block_number']])).toEqual([
+			[lower(alice), '1'],
+			[lower(bob), null],
+			[lower(carol), null],
+		])
 		expect((await capitalPositionRows(connection, { chainId, snapshotBlock: '3', owner: lower(bob), limit: 10, offset: 0 })).map((row: Record<string, unknown>) => row['owner_address'])).toEqual([lower(bob)])
 		expect((await capitalPositionRows(connection, { chainId, snapshotBlock: '3', limit: 2, offset: 2 })).map((row: Record<string, unknown>) => row['owner_address'])).toEqual([lower(carol), lower(dave)])
 
@@ -202,7 +208,7 @@ test.skipIf(url === undefined)('capital positions rank by health, attribute liqu
 		])
 
 		const overview = await capitalRiskOverview(connection, chainId, '3')
-		expect(overview.capitalPositionTotal).toBe(4)
+		expect(overview.capitalPositionTotal).toBe(5)
 		expect(overview.capitalPositions[0]).toMatchObject({ owner_address: lower(alice), protocol_state: 'takeover-preconditions-met' })
 		expect(overview.capitalLedgers[0]).toMatchObject({ ledger_address: lower(ledger), securityPool: lower(securityPool), universe_id: '0' })
 		expect(overview.recentLiquidations).toHaveLength(4)
@@ -276,7 +282,7 @@ test.skipIf(url === undefined)('capital positions rank by health, attribute liqu
 		const firstCatalog = (await (await api(`/api/v1/state/capital?chainId=${chainId}&limit=3`)).json()) as CatalogBody
 		expect(firstCatalog.asOf.blockNumber).toBe('3')
 		expect(firstCatalog.data.ledgers).toHaveLength(2)
-		expect(firstCatalog.data.positions).toMatchObject({ total: 4, hasMore: true })
+		expect(firstCatalog.data.positions).toMatchObject({ total: 5, hasMore: true })
 		expect(firstCatalog.data.positions.items.map(item => [item['owner_address'], item['protocol_state']])).toEqual([
 			[lower(alice), 'takeover-preconditions-met'],
 			[lower(bob), 'healthy'],
@@ -286,12 +292,15 @@ test.skipIf(url === undefined)('capital positions rank by health, attribute liqu
 		const secondResponse = await api(`/api/v1/state/capital?chainId=${chainId}&limit=3&cursor=${cursor}`)
 		const secondCatalog = (await secondResponse.json()) as CatalogBody
 		expect(secondResponse.status).toBe(200)
-		expect(secondCatalog.data.positions).toMatchObject({ total: 4, hasMore: false })
-		expect(secondCatalog.data.positions.items.map(item => item['owner_address'])).toEqual([lower(dave)])
+		expect(secondCatalog.data.positions).toMatchObject({ total: 5, hasMore: false })
+		expect(secondCatalog.data.positions.items.map(item => [item['ledger_address'], item['owner_address']])).toEqual([
+			[lower(ledger), lower(dave)],
+			[lower(otherLedger), lower(dave)],
+		])
 		// A cursor continues only the filter it was issued for.
 		expect((await api(`/api/v1/state/capital?chainId=${chainId}&limit=3&owner=${lower(bob)}&cursor=${cursor}`)).status).toBe(400)
 		expect(((await (await api(`/api/v1/state/capital?chainId=${chainId}&owner=${lower(bob)}`)).json()) as CatalogBody).data.positions.items.map(item => item['owner_address'])).toEqual([lower(bob)])
-		expect(((await (await api(`/api/v1/state/capital?chainId=${chainId}&ledger=${lower(otherLedger)}`)).json()) as CatalogBody).data).toMatchObject({ ledgers: [{ ledger_address: lower(otherLedger) }], positions: { total: 0 } })
+		expect(((await (await api(`/api/v1/state/capital?chainId=${chainId}&ledger=${lower(otherLedger)}`)).json()) as CatalogBody).data).toMatchObject({ ledgers: [{ ledger_address: lower(otherLedger) }], positions: { total: 1, items: [expect.objectContaining({ owner_address: lower(dave), read_status: 'unsampled' })] } })
 
 		type DetailBody = { data: Record<string, unknown> & { history: { snapshots: Record<string, unknown>[]; truncated: boolean }; events: { items: Record<string, unknown>[]; hasMore: boolean; nextCursor?: string } } }
 		const detailPath = `/api/v1/state/capital/${chainId}/${lower(ledger)}/${lower(alice)}`

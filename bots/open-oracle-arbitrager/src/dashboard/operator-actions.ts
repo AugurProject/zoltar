@@ -1,3 +1,4 @@
+import { CONFIGURATION_REQUEST_TIMEOUT_MS, requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { EXECUTOR_DEPLOYMENT_RECOVERY_REQUIRED } from '#state/executor-deployment-recovery'
 import { confirmOperatorAction } from '@zoltar/bot-shared/dashboard/confirmation'
@@ -35,7 +36,7 @@ export function registerPauseControls({ state, elements, controls, view, configu
 		state.pauseFailure = undefined
 		controls.syncControls()
 		try {
-			await sendJson('/api/paused', 'PUT', { paused })
+			await requestWithTimeout(signal => sendJson('/api/paused', 'PUT', { paused }, signal), CONFIGURATION_REQUEST_TIMEOUT_MS, 'Pause control timed out. Checking the current operator state.')
 			await refresh()
 			closeResumePreflight()
 			void configuration.refreshConfigurationView()
@@ -44,6 +45,7 @@ export function registerPauseControls({ state, elements, controls, view, configu
 			closeResumePreflight()
 			state.pauseFailure = { message: errorMessage(error), recoverySeen: false, requestedPaused: paused }
 			if (state.latestSnapshot !== undefined) view.renderOperatorNotice(state.latestSnapshot)
+			await refresh()
 		} finally {
 			state.pauseRequestPending = undefined
 			controls.syncControls()

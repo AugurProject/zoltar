@@ -10,7 +10,7 @@ const defaultSettingsPath = resolve(import.meta.dir, '..', '..', '.state', 'oper
 
 export async function loadSettings(path = resolve(process.env['ZOLTAR_LIQUIDATOR_CONFIG'] ?? defaultSettingsPath)) {
 	const contents = await readOwnerFileIfPresent(path, 'Liquidator configuration')
-	if (contents === undefined) throw new Error(`Missing liquidator configuration at ${path}. Create it with \`install -m 600 config/operator.example.json ${path}\` and edit it.`)
+	if (contents === undefined) throw new Error(`Missing liquidator configuration at ${path}. Create the parent directory with owner-only permissions (0700), then create the file with \`install -m 600 config/operator.example.json ${path}\` and edit it.`)
 	return { path, revision: contentRevision(contents), settings: parseSettings(JSON.parse(contents)) }
 }
 

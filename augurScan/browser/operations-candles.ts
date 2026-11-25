@@ -54,7 +54,7 @@ export const renderCandleContent = (candles: readonly JsonRecord[], operationRow
 		const disclosure = document.createElement('details')
 		disclosure.className = 'chart-data-disclosure'
 		const disclosureLabel = document.createElement('summary')
-		disclosureLabel.textContent = 'View exact candle data'
+		disclosureLabel.textContent = 'View candle prices (four decimal places)'
 		disclosure.append(disclosureLabel)
 		for (const candle of candles) {
 			const open = isPlainRecord(candle['open']) ? candle['open'] : {}

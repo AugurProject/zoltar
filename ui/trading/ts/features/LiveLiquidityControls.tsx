@@ -75,7 +75,7 @@ export function LiveLiquidityControls({
 	const asset = collateralAsset(market)
 	let gasReason: string | undefined
 	if (tokenFunded(market) && account !== undefined) {
-		if (walletEthAttoEth === undefined) gasReason = collateralCopy.loading
+		if (walletEthAttoEth === undefined) gasReason = walletEthStatus === 'error' ? collateralCopy.nativeBalanceUnavailable : collateralCopy.nativeBalanceLoading
 		else if (walletEthAttoEth < ETH_GAS_RESERVE_ATTO_ETH) gasReason = collateralCopy.gasRequired
 	}
 	const closedForAdding = !liquidityOperationAvailable('add', market, nowSeconds)
@@ -160,7 +160,7 @@ export function LiveLiquidityControls({
 					<FormInput id={probabilityId} name='probability' value={probability} disabled={inputsDisabled} inputMode='decimal' adornment={liquidityCopy.percent} error={probabilityError} onInput={event => updateProbability(event.currentTarget.value)} />
 				</FormField>
 			) : undefined}
-			<UserMessage className='detail' detail={operation === 'remove' ? liquidityCopy.formatRemovalGuidance(newRiskBlocker === undefined ? undefined : marketSettlementPath(market)) : liquidityCopy.additionGuidance} />
+			<UserMessage className='detail' detail={operation === 'remove' ? liquidityCopy.formatRemovalGuidance(newRiskBlocker === undefined ? undefined : marketSettlementPath(market), market.questionOutcome) : liquidityCopy.additionGuidance} />
 			{operation !== 'remove' ? (
 				<CollateralFundingControls
 					actionLabel={actionLabel}
@@ -197,7 +197,7 @@ function addOptionReason(initialized: boolean, newRiskBlocker: string | undefine
 function LiquidityPreviewSection({ preview, bounds, market, connected, protection }: { preview: LiquidityPreview; bounds: LiquidityBounds; market: LiveMarket; connected: boolean; protection: string }) {
 	let estimateNote = connected ? liquidityCopy.localEstimateNote : liquidityCopy.estimateNote
 	if (preview.operation === 'initialize') estimateNote = connected ? liquidityCopy.initializeLocalEstimateNote : liquidityCopy.initializeEstimateNote
-	const removalValue = preview.operation === 'remove' ? outcomeSharesValueAttoEth(market, preview.yesOut, preview.noOut) : undefined
+	const removalValue = preview.operation === 'remove' && market.questionOutcome === 3 ? outcomeSharesValueAttoEth(market, preview.yesOut, preview.noOut) : undefined
 	return (
 		<section className='trade-estimate' aria-label={liquidityCopy.estimateHeading}>
 			<div className='exchange-preview'>

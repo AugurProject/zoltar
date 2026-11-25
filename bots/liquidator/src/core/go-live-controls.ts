@@ -21,12 +21,13 @@ type GoLiveContext = {
 	persist: (update: (current: OperatorSettings) => OperatorSettings) => Promise<OperatorSettings>
 	/** Serializes dashboard mutations against the scan loop; emergency pause takes effect immediately before its queued save. */
 	runMutation: <T>(mutation: () => Promise<T>) => Promise<T>
+	settingsRevision: () => string
 	settings: () => OperatorSettings
 	state: RuntimeState
 }
 
 /** The Go live dashboard controls: the execution signer, transaction delivery, and the readiness-gated execution mode switch. */
-export function createGoLiveControls({ activePrivateKey, applySigner, locks, persist, runMutation, settings, state }: GoLiveContext) {
+export function createGoLiveControls({ activePrivateKey, applySigner, locks, persist, runMutation, settings, settingsRevision, state }: GoLiveContext) {
 	return {
 		setPaused: async (value: unknown) => {
 			if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -39,6 +40,7 @@ export function createGoLiveControls({ activePrivateKey, applySigner, locks, per
 				await runMutation(async () => persist(current => ({ ...current, paused: true })))
 			} else {
 				await runMutation(async () => {
+					if (settings().runtime.execute && Reflect.get(value, 'revision') !== settingsRevision()) throw new Error('Configuration changed. Review the live resume preflight again.')
 					if (!settings().networkConfigured) throw new Error('Configure the chain and RPC endpoints before resuming')
 					if (settings().runtime.execute) assertLiveExecutionReadiness(settings(), activePrivateKey())
 					await persist(current => ({ ...current, paused: false }))

@@ -28,6 +28,7 @@ const generatedFixtureFiles = [
 	'ui/zoltar/vendor/isows/native.js',
 	'ui/statoblast/vendor/isows/native.js',
 	'ui/trading/vendor/isows/native.js',
+	'ui/openoracle/vendor/isows/native.js',
 ]
 
 async function writeFixtureFile(repositoryRoot: string, relativePath: string, contents: string) {
@@ -76,6 +77,8 @@ async function createGeneratedArtifactFixture() {
 </script>`,
 	)
 
+	await writeFixtureFile(repositoryRoot, 'ui/openoracle/index.html', `<script type='importmap'>{"imports":{"isows":"./vendor/isows/native.js"}}</script>`)
+
 	for (const relativePath of generatedFixtureFiles) {
 		const contents = relativePath.endsWith('.json') ? '{}\n' : ''
 		await writeFixtureFile(repositoryRoot, relativePath, contents)
@@ -122,6 +125,28 @@ test('generated artifact checker rejects a tracked generated path missing from t
 
 	try {
 		await expect(assertGeneratedArtifactsClean({ repositoryRoot, runGit: trackedMissingPathGit })).rejects.toThrow('Generated artifacts must remain untracked')
+	} finally {
+		await rm(repositoryRoot, { force: true, recursive: true })
+	}
+})
+
+test('verifies OpenOracle vendor files after transfer', async () => {
+	const repositoryRoot = await createGeneratedArtifactFixture()
+	try {
+		await rm(path.join(repositoryRoot, 'ui/openoracle/vendor/isows/native.js'))
+		await expect(assertGeneratedArtifactsClean({ repositoryRoot, runGit: cleanGit })).rejects.toThrow('ui/openoracle/vendor/isows/native.js')
+	} finally {
+		await rm(repositoryRoot, { force: true, recursive: true })
+	}
+})
+
+test('rejects a directory in place of a generated binding', async () => {
+	const repositoryRoot = await createGeneratedArtifactFixture()
+	try {
+		const binding = path.join(repositoryRoot, 'ui/coreShared/ts/abis.ts')
+		await rm(binding)
+		await mkdir(binding)
+		await expect(assertGeneratedArtifactsClean({ repositoryRoot, runGit: cleanGit })).rejects.toThrow('ui/coreShared/ts/abis.ts')
 	} finally {
 		await rm(repositoryRoot, { force: true, recursive: true })
 	}

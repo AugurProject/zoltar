@@ -83,7 +83,7 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 		transactions.addEventListener('click', () => openAccountTransactions(item))
 		const positions = element('div', 'rich-count')
 		const capitalPositions = Array.isArray(item.capital_positions) ? item.capital_positions : []
-		positions.append(richFieldLabel('Protocol involvement'), element('strong', '', counted(item.pool_count, 'pool')), element('span', '', counted(capitalPositions.length, 'capital position')))
+		positions.append(richFieldLabel('Protocol involvement'), element('strong', '', counted(item.pool_count, 'pool')), element('span', '', capitalPositions.length === 100 ? '100+ capital positions' : counted(capitalPositions.length, 'capital position')))
 		const rep = element('div', 'rich-rep')
 		rep.append(richFieldLabel('REP tokens'))
 		if (repTokens.length === 0) rep.append(element('strong', '', 'REP pending'))
@@ -101,6 +101,8 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 			tokenLine.append(element('strong', '', exactUnit(token.balance, tokenDecimals(token.decimals), token.symbol ?? 'REP')), tokenIdentity)
 			rep.append(tokenLine)
 		}
+		if (item.rep_balances_truncated) rep.append(element('span', '', 'Showing the first 100 sampled REP tokens.'))
+		if (item.weth_balances_truncated) wallet.append(element('span', '', 'Showing the first 100 sampled wrapped native tokens.'))
 		if (!repComplete) rep.append(element('span', '', `${number(item.sampled_rep_token_count)} of ${number(item.rep_token_count)} REP tokens sampled`))
 		main.append(identity, rep, wallet, transactions, positions)
 		article.append(main)

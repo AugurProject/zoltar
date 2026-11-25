@@ -27,7 +27,7 @@ export const timelineCatalogResponse = async (sql: SQL, url: URL): Promise<Respo
 	const limit = Math.min(Math.max(requestedLimit, 1), 250)
 	const cursor = parseTimelineCatalogCursor(url.searchParams.get('cursor'), chainId, filterIdentity)
 	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 2 }])
-	const cursorBlock = cursor?.[8] ?? String(asOf['blockNumber'])
+	const cursorBlock = cursor?.[8] ?? (canonical === 'canonical' ? String(asOf['blockNumber']) : toBlock)
 	const cursorLog = cursor?.[9] ?? 2_147_483_647
 	const cursorTx = cursor?.[10] ?? `0x${'f'.repeat(64)}`
 	const cursorBlockHash = cursor?.[11] ?? `0x${'f'.repeat(64)}`

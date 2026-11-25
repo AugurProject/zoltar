@@ -35,7 +35,7 @@ function dedupeSearchAgainstPage(search: string, pageSearch = window.location.se
 	const pageParams = getPageSearchParams(pageSearch)
 	const params = new URLSearchParams(search)
 	for (const [key, value] of [...params.entries()]) {
-		if (!SHARED_ROUTE_QUERY_PARAMETERS.has(key)) continue
+		if (!SHARED_ROUTE_QUERY_PARAMETERS.has(key) || params.get(key) !== value) continue
 		if (shouldKeepHashQueryParam(key, value, pageParams)) continue
 		params.delete(key)
 	}

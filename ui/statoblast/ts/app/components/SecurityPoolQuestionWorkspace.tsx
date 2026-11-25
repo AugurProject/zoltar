@@ -56,7 +56,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 	const [loadError, setLoadError] = useState<string>()
 	const [refresh, setRefresh] = useState(0)
 	useBlockRefresh(event => {
-		if (event.reason === 'invalidate') setRefresh(value => value + 1)
+		if (event.reason === 'invalidate' || !loading) setRefresh(value => value + 1)
 	}, enabled)
 	const selected = questions.find(question => question.questionLedgerAddress.toLowerCase() === selectedAddress.toLowerCase())
 	const reporting = useReportingOperations({ ...parameters, selectedQuestionLedgerAddress: selectedAddress })

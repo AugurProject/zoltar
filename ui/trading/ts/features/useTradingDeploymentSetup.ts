@@ -152,6 +152,7 @@ export function useTradingDeploymentSetup({ currentConfiguration, onComplete, on
 		if (busy || coreDeployments.length === 0 || selectedCore !== undefined) return
 		inputRevision.current += 1
 		setChainId(coreDeployments[0]?.chainId.toString() ?? '')
+		setRpcOverride(false)
 	}, [busy, chainId, coreDeployments, selectedCore])
 	useEffect(() => {
 		if (busy || rpcOverride || selectedCore === undefined || rpcUrl === selectedCore.defaultRpcUrl) return

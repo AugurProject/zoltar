@@ -61,6 +61,7 @@ export async function verifyDegradedSubmissionReadiness(context: WorkflowRecover
 /** The resume dialog reports explicit and empty random-selection scope with an accessible action order. */
 export async function verifyResumeScope(context: WorkflowRecoveryContext, viewport: WorkflowViewport) {
 	const { accessibilityIdentity, cdp, dashboard, expectVisibleIdentifiers, fixture, waitFor } = context
+	fixture.executeMode = false
 	fixture.initialDashboardState = pausedWorkflowRenderingState
 	fixture.recoveredDashboardState = pausedWorkflowRenderingState
 	fixture.stateRequests = 0

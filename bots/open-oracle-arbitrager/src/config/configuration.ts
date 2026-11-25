@@ -73,7 +73,7 @@ export async function loadConfiguration(settingsFile = resolve(process.env['OPEN
 	if (arguments_.length > 0) throw new Error(`The arbitrager accepts no command-line arguments. Edit ${settingsFile} or use the operator UI.`)
 	const loaded = await loadOperatorSettingsWithRevision(settingsFile)
 	const saved = loaded?.settings
-	if (saved === undefined) throw new Error(`Missing operator configuration at ${settingsFile}. Create it with \`install -m 600 config/operator.example.json ${settingsFile}\`, edit it, and start the bot again.`)
+	if (saved === undefined) throw new Error(`Missing operator configuration at ${settingsFile}. Create the parent directory with owner-only permissions (0700), then create the file with \`install -m 600 config/operator.example.json ${settingsFile}\`, edit it, and start the bot again.`)
 	await assertOperatorProfileIsolation(settingsFile, saved)
 	const { deployment, network, quorumRpcUrls } = runnableOperatorSettings(settingsFile, saved)
 	return {

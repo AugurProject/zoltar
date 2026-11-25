@@ -532,17 +532,17 @@ test('bounds factory browsing, gates network setup, sanitizes failures, and prot
 	let fail = false
 	const pages: number[] = []
 	const searches: (string | undefined)[] = []
-	const scopes: (string | undefined)[] = []
+
 	const selections: unknown[] = []
 	const server = startDashboardServer(0, {
 		getConfiguration: () => ({}),
 		getState: () => ({}),
 		hostname: '127.0.0.1',
 		isNetworkConfigured: () => configured,
-		getPoolCatalog: async (page, address, scope) => {
+		getPoolCatalog: async (page, address) => {
 			pages.push(page)
 			searches.push(address)
-			scopes.push(scope)
+
 			if (fail) throw new Error('RPC secret at /protected/path')
 			return { chainId: 1, snapshotTimestamp: '1789560060', page, pageCount: '0', total: '0', pools: [] }
 		},
@@ -568,12 +568,12 @@ test('bounds factory browsing, gates network setup, sanitizes failures, and prot
 	expect((await fetch(new URL('/api/pool-catalog?address=0x1111111111111111111111111111111111111111', server.url))).status).toBe(200)
 	expect(searches).toEqual([undefined, '0x1111111111111111111111111111111111111111'])
 	expect((await fetch(new URL('/api/pool-catalog?scope=unknown', server.url))).status).toBe(400)
-	expect((await fetch(new URL('/api/pool-catalog?scope=monitored', server.url))).status).toBe(200)
-	expect(scopes).toEqual(['all', 'all', 'monitored'])
+	expect((await fetch(new URL('/api/pool-catalog?scope=monitored', server.url))).status).toBe(400)
+	expect(pages.length).toBe(2)
 	// Another site cannot start discovery through a subresource load; the dashboard's own requests and direct navigation can.
 	for (const site of ['cross-site', 'same-site']) expect((await fetch(catalog, { headers: { 'sec-fetch-site': site } })).status).toBe(403)
 	for (const site of ['same-origin', 'none']) expect((await fetch(catalog, { headers: { 'sec-fetch-site': site } })).status).toBe(200)
-	expect(scopes).toEqual(['all', 'all', 'monitored', 'all', 'all'])
+	expect(pages.length).toBe(4)
 	fail = true
 	const failed = await fetch(catalog)
 	expect(failed.status).toBe(503)

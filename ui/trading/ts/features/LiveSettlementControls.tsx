@@ -53,9 +53,9 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 	if (winningOutcome !== undefined) initialOperation = 'redeem-winning-shares'
 	else if (market.universeForkTime !== 0n) initialOperation = 'migrate-shares'
 	const [operation, setOperation] = useState<SettlementOperation>(initialOperation)
-	const [amount, setAmount] = useState('')
-	// Max fills a readable ETH amount but redeems the exact complete sets it was pressed for, so no remainder is left behind.
-	const [maxFill, setMaxFill] = useState<Readonly<{ text: string; completeSets: bigint }>>()
+	useEffect(() => setOperation(initialOperation), [initialOperation])
+	const [typedAmount, setAmount] = useState('')
+	const [maxSelected, setMaxSelected] = useState(false)
 	const [sourceOutcome, setSourceOutcome] = useState<ShareOutcome>('YES')
 	// The loaded context stays in view while it reloads (after a confirmed migration, for example) so the picker does not collapse.
 	const [forkContext, setForkContext] = useState<Readonly<{ key: string; context: ForkMigrationContext }>>()
@@ -70,10 +70,12 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 	const asset = collateralAsset(market)
 	const hasRecoveryRep = (market.settlementRecoveryAttoRep ?? 0n) > 0n
 	const inputDecimals = asset.decimals
+	const redeemableAttoEth = balanceState === 'ready' && balances !== undefined ? attoSharesToCollateralAttoEth(availability.completeSets, market) : undefined
+	const maxRedeemAmount = hasRecoveryRep ? availability.completeSets : redeemableAttoEth
+	const amount = maxSelected && maxRedeemAmount !== undefined ? formatCurrencyInputBalance(maxRedeemAmount, inputDecimals) : typedAmount
 	const parsedInputAmount = tryParseNonNegativeDecimalInput(amount, inputDecimals)
-	const maxFillCurrent = maxFill !== undefined && maxFill.text === amount && maxFill.completeSets === availability.completeSets
 	let parsedAmount = parsedInputAmount === undefined || hasRecoveryRep ? parsedInputAmount : collateralAttoEthToAttoShares(parsedInputAmount, market)
-	if (maxFillCurrent) parsedAmount = maxFill.completeSets
+	if (parsedInputAmount !== undefined && parsedInputAmount > 0n && parsedInputAmount === maxRedeemAmount) parsedAmount = availability.completeSets
 	const amountFormatError = operation === 'redeem-complete-set' ? getAmountInputErrorMessage(validateAmountInput(amount, { decimals: inputDecimals }), { decimals: inputDecimals }) : undefined
 	const targetOutcomeIndexes = useMemo(() => selectedForkTargets.map(target => target.outcomeIndex), [selectedForkTargets])
 	const targetOutcomeKey = targetOutcomeIndexes.map(target => target.toString()).join(',')
@@ -105,7 +107,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 		inputBlocker,
 		onRedemptionConfirmed: () => {
 			setAmount('')
-			setMaxFill(undefined)
+			setMaxSelected(false)
 		},
 		onMigrationConfirmed: () => {
 			// The confirmed migration changes what each child universe holds; the next migration needs a new acknowledgment.
@@ -189,11 +191,6 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 	]
 	// Shown before the action once there is a balance to mint and a selected child universe.
 	const migrationBalance = operation === 'migrate-shares' && balanceState === 'ready' && sourceBalance !== undefined && sourceBalance > 0n && selectedForkTargets.length > 0 ? formatOutcomeWithValue(sourceBalance, sourceOutcome, market, 4, 'nearest', { noteRedemption: false }) : undefined
-	const redeemableAttoEth = balanceState === 'ready' && balances !== undefined ? attoSharesToCollateralAttoEth(availability.completeSets, market) : undefined
-	// Cash-only Max uses six decimals rounded down; baskets use their exact share amount.
-	const maxFillStep = 10n ** BigInt(Math.max(0, asset.decimals - 6))
-	const maxRedeemableCollateral = redeemableAttoEth === undefined || redeemableAttoEth < maxFillStep ? redeemableAttoEth : redeemableAttoEth - (redeemableAttoEth % maxFillStep)
-	const maxRedeemAmount = hasRecoveryRep ? availability.completeSets : maxRedeemableCollateral
 	const completeSetHint = redeemableAttoEth === undefined ? undefined : settlementCopy.completeSetsHeld(formatCompleteSetQuantity(availability.completeSets, 4, 'down', market), formatCollateralEth(availability.completeSets, market, 'down'))
 	return (
 		<div className='settlement-controls'>
@@ -222,9 +219,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 												disabled={workflowLocked}
 												onClick={() => {
 													invalidateSettlementInputs()
-													const text = formatCurrencyInputBalance(maxRedeemAmount ?? redeemableAttoEth, inputDecimals)
-													setAmount(text)
-													setMaxFill({ text, completeSets: availability.completeSets })
+													setMaxSelected(true)
 												}}
 											>
 												{settlementCopy.max}
@@ -234,6 +229,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 									error={amountFieldError}
 									onInput={event => {
 										invalidateSettlementInputs()
+										setMaxSelected(false)
 										setAmount(event.currentTarget.value)
 									}}
 								/>
@@ -266,6 +262,11 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 						</div>
 						<UserMessage className='detail' detail={<>{settlementBalanceStatus(balanceState, sourceBalance, market, sourceOutcome, sourceLocked)}</>} />
 						{forkContextLoading && currentForkContext === undefined ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: settlementCopy.loadingForkDetails, detailIsLoading: true }} /> : undefined}
+						{currentForkContext?.availableTargets.some(target => !target.branchActive) && forkContextState === 'ready' ? (
+							<button type='button' className='secondary' disabled={workflowLocked} onClick={() => setForkContextNonce(current => current + 1)}>
+								{settlementCopy.refreshForkDetails}
+							</button>
+						) : undefined}
 						{forkContextState === 'error' ? (
 							<>
 								<ErrorNotice message={forkContextError ?? settlementCopy.forkDetailsUnavailable} />

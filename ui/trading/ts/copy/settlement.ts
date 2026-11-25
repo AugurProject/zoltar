@@ -47,6 +47,10 @@ export function formatCompleteSetLimit(available: string, completeSets: string) 
 	return `Enter no more than ${available} (your ${completeSets}).`
 }
 
+export function formatSetQuantityLimit(completeSets: string) {
+	return `Enter no more than ${completeSets}.`
+}
+
 export function formatZeroShareBalance(outcome: 'INVALID' | 'YES' | 'NO') {
 	return `Your ${outcomeLabel(outcome)} balance is zero.`
 }
@@ -89,3 +93,5 @@ export const sets = 'sets'
 export const estimateNote = `Estimate from the current collateral rate. ${recheckedBeforeWallet}`
 
 export const minimumRecoveryRep = 'Minimum recovery REP'
+
+export const refreshForkDetails = 'Refresh fork details'

@@ -5,7 +5,7 @@ import { inertDashboardControls } from '../support/dashboard-harness.ts'
 
 const wallet = `0x${'ab'.repeat(20)}`
 const profileId = `profile:v1:${'12'.repeat(32)}`
-const idleState = { activities: [], evaluations: [], inventory: { rep: [] }, obligations: [], paused: true, pendingTransactions: [], profileId }
+const idleState = { execute: false, activities: [], evaluations: [], inventory: { rep: [] }, obligations: [], paused: true, pendingTransactions: [], profileId }
 function pausedSepoliaConfiguration(revision: string) {
 	return { hasSigner: true, revision, settings: { network: { chainId: 11_155_111, name: 'sepolia' }, paused: true, runtime: { execute: false }, strategy: {} }, signerAddress: wallet }
 }

@@ -39,7 +39,7 @@ const tradingLegs = (sql: SQL, filter: TradingLegFilter) => {
 			WHERE market.chain_id = ${chainId} AND market.canonical AND market.block_number <= ${asOfBlock}
 				AND (${markets}::text IS NULL OR market.pair_address IN (SELECT jsonb_array_elements_text((${markets}::text)::jsonb)))
 			ORDER BY market.pair_address, market.block_number DESC, market.log_index DESC
-		), pool_events AS (
+		), raw_pool_events AS (
 			SELECT market.pair_address, market.share_token_address, market.universe_id, log.block_hash, log.tx_hash, log.block_number, log.log_index,
 				EXTRACT(EPOCH FROM block.timestamp)::bigint AS timestamp_seconds, log.event_name, payout.recipient AS payout_recipient, funding.mint_log_index,
 				CASE WHEN (tx.to_address = funding.emitter_address AND action.function_name IN ('createCompleteSet', 'createCompleteSetWithRecoveryRep'))
@@ -100,7 +100,11 @@ const tradingLegs = (sql: SQL, filter: TradingLegFilter) => {
 					)
 				ORDER BY exit.log_index LIMIT 1
 			) payout ON log.event_name = 'CompleteSetRedeemed'
-		), pair_events AS (
+		), pool_events AS (
+            SELECT event.*, lag(log_index) OVER leg_order AS previous_log, lead(log_index) OVER leg_order AS next_log
+            FROM raw_pool_events event
+            WINDOW leg_order AS (PARTITION BY pair_address, block_hash, tx_hash ORDER BY log_index)
+        ), pair_events AS (
 			SELECT market.pair_address, event.block_hash, event.tx_hash, event.block_number, event.log_index,
 				EXTRACT(EPOCH FROM block.timestamp)::bigint AS timestamp_seconds, event.event_name, event.event_data,
 				lower(COALESCE(event.event_data->>'sender', event.event_data->>'provider')) AS caller,
@@ -116,12 +120,15 @@ const tradingLegs = (sql: SQL, filter: TradingLegFilter) => {
 			LEFT JOIN LATERAL (
 				SELECT pair_event.event_name, pair_event.event_data, pair_event.log_index FROM pair_events pair_event
 				WHERE pair_event.pair_address = pool_event.pair_address AND pair_event.block_hash = pool_event.block_hash
-					AND pair_event.tx_hash = pool_event.tx_hash AND pair_event.caller = pool_event.actor AND (
+					AND pair_event.tx_hash = pool_event.tx_hash AND pair_event.caller = pool_event.actor
+                    AND CASE WHEN pool_event.event_name = 'CompleteSetCreated' THEN
+                        pair_event.log_index > pool_event.log_index AND (pool_event.next_log IS NULL OR pair_event.log_index < pool_event.next_log)
+                    ELSE pair_event.log_index < pool_event.log_index AND (pool_event.previous_log IS NULL OR pair_event.log_index > pool_event.previous_log) END AND (
 						(pool_event.event_name = 'CompleteSetCreated' AND pair_event.event_name IN ('LiquidityInitialized', 'LiquidityAdded'))
 						OR (pool_event.event_name = 'CompleteSetCreated' AND pair_event.event_name = 'Swap' AND pair_event.event_data->>'exactOutput' = 'false')
 						OR (pool_event.event_name = 'CompleteSetRedeemed' AND pair_event.event_name = 'Swap' AND pair_event.event_data->>'exactOutput' = 'true')
 					)
-				ORDER BY pair_event.event_name = 'Swap', abs(pair_event.log_index - pool_event.log_index), pair_event.log_index LIMIT 1
+				ORDER BY abs(pair_event.log_index - pool_event.log_index), pair_event.log_index LIMIT 1
 			) companion ON pool_event.event_name <> 'SharesRedeemed'
 			LEFT JOIN LATERAL (
 				WITH moves AS (
@@ -136,6 +143,9 @@ const tradingLegs = (sql: SQL, filter: TradingLegFilter) => {
 					) item
 					WHERE transfer.chain_id = ${chainId} AND transfer.block_hash = pool_event.block_hash AND transfer.tx_hash = pool_event.tx_hash
 						AND transfer.emitter_address = pool_event.share_token_address AND transfer.canonical
+                        AND (pool_event.next_log IS NULL OR transfer.log_index < pool_event.next_log)
+                        AND (pool_event.previous_log IS NULL OR transfer.log_index > pool_event.previous_log)
+                        AND (pool_event.event_name <> 'CompleteSetCreated' OR transfer.log_index >= pool_event.log_index)
 						AND transfer.event_name IN ('TransferSingle', 'TransferBatch')
 				), market_moves AS (
 					SELECT * FROM moves WHERE trunc(id / 256) = pool_event.universe_id AND sender <> receiver

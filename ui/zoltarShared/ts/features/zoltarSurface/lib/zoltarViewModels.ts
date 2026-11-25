@@ -140,6 +140,7 @@ export function deriveZoltarOverviewModel({ account, activeUniverseId, universe,
 	if (remainingByChild.length > 0) {
 		remainingPrepared = remainingByChild.some(value => value === undefined) ? undefined : remainingByChild.reduce<bigint>((maximum, value) => (value !== undefined && value > maximum ? value : maximum), 0n)
 	}
+	if (remainingPrepared === 0n && prepared !== undefined && prepared > 0n && loadedUniverse?.forkQuestionDetails?.marketType === 'scalar' && BigInt(loadedUniverse.childUniverses.length) < loadedUniverse.forkQuestionDetails.numTicks + 2n) remainingPrepared = undefined
 	const migratableRepAttoRep = wallet === 'connected' && status === 'forked' ? sumKnown([account.repBalanceAttoRep, remainingPrepared]) : undefined
 	const forkTime = status === 'forked' && loadedUniverse !== undefined && loadedUniverse.forkTime > 0n ? loadedUniverse.forkTime : undefined
 	return {

@@ -96,7 +96,10 @@ function getDraftInstant(localTime: string) {
 
 function restoreDraftLocalTime(localTime: string, storedInstant: unknown) {
 	if (typeof storedInstant !== 'string' || !UNIX_TIMESTAMP_PATTERN.test(storedInstant)) return localTime
-	return formatLocalDateTimeInput(BigInt(storedInstant)) ?? localTime
+	const timestamp = BigInt(storedInstant)
+	const local = formatLocalDateTimeInput(timestamp)
+	if (local === undefined) return localTime
+	return tryParseTimestampInput(local) === timestamp ? local : storedInstant
 }
 
 function readStoredQuestionDraft(storageKey: string | undefined, normalizeForm: NormalizeQuestionForm) {

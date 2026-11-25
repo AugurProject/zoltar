@@ -153,8 +153,7 @@ describe('settlement panel', () => {
 		})
 		try {
 			await act(() => buttonByLabel('Max').click())
-			// The field shows a readable amount; the redemption still covers every complete set held.
-			expect(amountInput().value).toBe('1.234567')
+			expect(amountInput().value).toBe('1.234567890123456789')
 			await act(async () => {
 				buttonByLabel('Redeem complete sets').click()
 				await Bun.sleep(10)

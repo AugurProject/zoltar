@@ -103,7 +103,6 @@ export const mountSearch = (api: (path: string) => Promise<unknown>, chainId: ()
 		input.dataset['searchTimer'] = String(window.setTimeout(() => void search(), 250))
 	})
 	const dismiss = () => {
-		if (results.hidden) return
 		generation++
 		clearTimer()
 		hide()

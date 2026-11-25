@@ -35,7 +35,7 @@ const REVERT_EXPLANATIONS: readonly RevertExplanation[] = [
 	{ reasons: ['Already initialized'], cause: 'Someone already added the first liquidity.', nextStep: 'Reload the market and add liquidity instead.' },
 ]
 
-const INSUFFICIENT_FUNDS: TransactionFailureExplanation = { cause: 'Your wallet does not have enough ETH for this amount plus gas.', nextStep: 'Lower the amount or add ETH to your wallet.' }
+const INSUFFICIENT_FUNDS: TransactionFailureExplanation = { cause: 'Your wallet has insufficient native funds for this transaction.', nextStep: 'Check the ETH available for gas and any ETH included in the payment.' }
 const WALLET_REJECTED: TransactionFailureExplanation = { cause: transactionErrorMessages.walletRejected, nextStep: 'Nothing was sent. Press the button again when ready.' }
 export const REVERTED_ON_CHAIN: TransactionFailureExplanation = { cause: 'The transaction reverted onchain; only the gas fee was spent.', nextStep: 'Check the market status and try again.' }
 

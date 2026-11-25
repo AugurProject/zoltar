@@ -113,6 +113,7 @@ export type Snapshot = {
 	execute?: boolean | undefined
 	inventory: { eth?: string | number | undefined; rep: RepBalance[]; weth?: string | number | undefined }
 	inventoryAvailable?: boolean | undefined
+	scanFresh?: boolean | undefined
 	lastScanAt?: string | undefined
 	lastDeploymentCheckedBlock?: string | number | undefined
 	lastDeploymentCheckAt?: string | undefined
@@ -337,6 +338,7 @@ export function parseSnapshot(value: unknown): Snapshot {
 			weth: scalarValue(inventory['weth']),
 		},
 		inventoryAvailable: booleanValue(source['inventoryAvailable']),
+		scanFresh: booleanValue(source['scanFresh']),
 		lastScanAt: stringValue(source['lastScanAt']),
 		lastDeploymentCheckedBlock: scalarValue(source['lastDeploymentCheckedBlock']),
 		lastDeploymentCheckAt: stringValue(source['lastDeploymentCheckAt']),

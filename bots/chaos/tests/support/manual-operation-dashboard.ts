@@ -9,7 +9,7 @@ import { inertDashboardControls } from './dashboard-harness.ts'
 export async function startManualOperationDashboardSession(fixture: ReturnType<typeof manualOperationFixture>) {
 	const dashboard = startDashboardServer(0, {
 		...inertDashboardControls,
-		getState: () => fixture.state,
+		getState: () => ({ ...fixture.state, execute: fixture.configuration.settings.runtime.execute, paused: fixture.configuration.settings.paused }),
 		getConfiguration: () => ({ hasSigner: true, revision: fixture.configuration.revision, settings: serializedSettings(fixture.configuration.settings, true), wallet: fixture.state.wallet }),
 		setOperation: value => fixture.controller.handle(value),
 	})

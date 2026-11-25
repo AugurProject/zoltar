@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import * as process from 'node:process'
+import { UI_APP_IDS } from '../ui/appIds.mts'
 import { type GitRunner, runGit as runRepositoryGit } from '../repo/git.mts'
 import { repositoryRoot as defaultRepositoryRoot } from '../repo/root.mts'
 import { untrackedGeneratedPathspecs } from '../repo/generated-artifacts.ts'
@@ -31,7 +32,8 @@ const generatedReviewPaths = [...untrackedGeneratedPathspecs(), ':(glob)**/*.tsb
 
 async function assertExists(repositoryRoot: string, relativePath: string) {
 	try {
-		await fs.stat(path.join(repositoryRoot, relativePath))
+		const stat = await fs.stat(path.join(repositoryRoot, relativePath))
+		if (!stat.isFile()) throw new Error(`Expected a generated file: ${relativePath}`)
 	} catch (error) {
 		if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
 			throw new Error(`Generated artifact is missing after generation: ${relativePath}`)
@@ -126,13 +128,7 @@ function assertNoTrackedGeneratedPaths(trackedGeneratedPaths: readonly string[])
 export async function assertGeneratedArtifactsClean(options: GeneratedArtifactCheckOptions = {}) {
 	const repositoryRoot = options.repositoryRoot ?? defaultRepositoryRoot
 	const runGit = options.runGit ?? ((args: string[]) => runRepositoryGit(args, { cwd: repositoryRoot }))
-	const requiredGeneratedOutputs = new Set([
-		...explicitlyRequiredGeneratedOutputs,
-		...(await getSharedPackageGeneratedOutputs(repositoryRoot)),
-		...(await getUiImportMapGeneratedOutputs(repositoryRoot, 'zoltar')),
-		...(await getUiImportMapGeneratedOutputs(repositoryRoot, 'statoblast')),
-		...(await getUiImportMapGeneratedOutputs(repositoryRoot, 'trading')),
-	])
+	const requiredGeneratedOutputs = new Set([...explicitlyRequiredGeneratedOutputs, ...(await getSharedPackageGeneratedOutputs(repositoryRoot)), ...(await Promise.all(UI_APP_IDS.map(appId => getUiImportMapGeneratedOutputs(repositoryRoot, appId)))).flat()])
 
 	for (const relativePath of requiredGeneratedOutputs) {
 		await assertExists(repositoryRoot, relativePath)

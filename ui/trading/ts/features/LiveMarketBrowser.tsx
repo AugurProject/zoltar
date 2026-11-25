@@ -33,7 +33,7 @@ const FILTER_OPTIONS: readonly { value: MarketFilter; label: string }[] = [
 
 const SORT_OPTIONS: readonly { value: MarketSort; label: string }[] = [
 	{ value: 'closing-soon', label: marketsCopy.closingSoon },
-	{ value: 'liquidity', label: marketsCopy.liquidity },
+	{ value: 'liquidity', label: marketsCopy.liquiditySort },
 	{ value: 'recent', label: marketsCopy.defaultOrder },
 ]
 

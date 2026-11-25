@@ -330,8 +330,8 @@ export function LiveTrading({
 					<ErrorNotice message={discoveryState === 'error' ? liveCopy.questionLedgerDiscoveryFailed(discoveryError) : undefined} />
 					{discoveryState === 'ready' && visibleMarkets.length === 0 ? (
 						<EmptyState
-							title={portfolioCopy.noFavoriteMarkets}
-							detail={portfolioCopy.favoriteGuidance}
+							title={account === undefined ? portfolioCopy.noFavoriteMarkets : portfolioCopy.noPositions}
+							detail={account === undefined ? portfolioCopy.favoriteGuidance : portfolioCopy.noPortfolioBalances}
 							actions={
 								<a className='button-link primary' href={getTradingRouteHref('#/market')}>
 									{portfolioCopy.browseMarkets}

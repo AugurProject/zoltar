@@ -1,3 +1,5 @@
+import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { TradingTransactionHash } from './LiveTradingTransactionUi.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
@@ -9,6 +11,8 @@ export function CollateralFundingControls({ funding, required, disabled, reason,
 	return (
 		<div className='collateral-funding'>
 			{funding.readError === undefined ? undefined : <RetryableNotice message={funding.readError} retryLabel={common.retry} onRetry={funding.retry} disabled={disabled} />}
+			<ErrorNotice message={funding.receiptWarning} />
+			{funding.transactionHash === undefined ? undefined : <TradingTransactionHash hash={funding.transactionHash} />}
 			<TokenApprovalControl
 				actionLabel={actionLabel}
 				allowanceError={funding.readError === undefined ? funding.error : undefined}

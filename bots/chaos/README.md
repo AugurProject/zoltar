@@ -140,7 +140,7 @@ State may contain a remembered key, signed transactions, and credentialed endpoi
 
 Drain & Retire is a durable, restart-safe retirement workflow for one deployment profile. It is different from pause: pause stops signing, while drain stops new random exposure but continues pending-transaction recovery, partial-workflow cleanup, matured lifecycle obligations, claims, withdrawals, redemptions, allowance revocation, and asset recovery. A safety pause always overrides drain. `SIGINT` and `SIGTERM` retain their normal graceful-boundary behavior.
 
-While the bot is running, use the dashboard for every action below. The CLI needs the bot's exclusive state lock and a signer key saved in settings, so stop the same bot first, run the command, and restart it afterwards:
+While the bot is running, use the dashboard for every action below. Stop the same bot before using the CLI so it can acquire the exclusive state lock. Requesting a drain requires a signer key saved in settings. Status, cancellation and residual acceptance use the local retirement journal. Restart the bot after the command.
 
 | Launcher | Stop first | Command prefix | Restart afterwards |
 | --- | --- | --- | --- |
@@ -158,7 +158,7 @@ The Compose prefix runs the command against the container's state volume. Append
 | Accept residuals | `--accept-residuals "$target_id" --reason "Reviewed current residuals and accepted replacement." --confirm "ACCEPT RESIDUALS FOR $target_id"` | See below. |
 | Register a V3 position | `--register-v3-position '<json>' --confirm "REGISTER V3 profile:id"` | See below. |
 
-A drain request accepts three optional flags: `--migrate-existing-claims`, `--exit-unmatched-shares=<maximum-loss-bps>` or `--exit-unmatched-shares <maximum-loss-bps>` (an integer from `0` through `10000`), and `--exit-after-completion`. Any other or repeated argument rejects the request without saving it.
+A drain request accepts three optional flags: `--migrate-existing-claims`, `--exit-unmatched-shares=<maximum-loss-bps>` or `--exit-unmatched-shares <maximum-loss-bps>` (an integer from `0` through `10000`), and `--exit-after-completion`. Any other or repeated argument rejects the request without saving it. For a Compose deployment that should stay stopped after completion, set the chaos service restart policy to `restart: "no"` and recreate the service before requesting the drain. Its default `unless-stopped` policy restarts a clean exit.
 
 For example, with direct Bun:
 

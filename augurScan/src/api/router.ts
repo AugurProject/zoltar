@@ -21,7 +21,7 @@ import { stateCatalog, timelineCatalogResponse, timelineResponse } from './timel
 import { tradingCatalogResponse } from './trading-catalog.ts'
 import { tradingDetailResponse } from './trading-detail.ts'
 
-export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs = 48_000, enabledChainIds?: readonly number[]): Promise<Response | undefined> => {
+export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs = 48_000, enabledChainIds?: readonly number[], networkSettings?: readonly { chainId: number; nativeSymbol: string; confirmationDepth: bigint }[]): Promise<Response | undefined> => {
 	const startedAt = performance.now()
 	const url = new URL(request.url)
 	if (request.method !== 'GET') return json({ error: 'Read-only API' }, 405)
@@ -29,7 +29,10 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 		if (url.pathname === '/api/v1/networks') {
 			const rows = await networkCatalog(sql)
 			const enabled = new Set(enabledChainIds)
-			const items = rows.map((row: Record<string, unknown>) => ({ ...row, enabled: enabledChainIds === undefined || enabled.has(Number(row['chain_id'])) }))
+			const items = rows.map((row: Record<string, unknown>) => {
+				const settings = networkSettings?.find(item => item.chainId === Number(row['chain_id']))
+				return { ...row, native_symbol: settings?.nativeSymbol, confirmation_depth: settings?.confirmationDepth.toString(), enabled: enabledChainIds === undefined || enabled.has(Number(row['chain_id'])) }
+			})
 			return json({ items, serverTime: new Date(), freshnessThresholdMs })
 		}
 		if (url.pathname === '/api/v1/contracts') {

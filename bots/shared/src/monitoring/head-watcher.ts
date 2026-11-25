@@ -22,8 +22,7 @@ function validatedInterval(value: number) {
 
 /**
  * Follows the chain head on a short interval so every new block is observed and reported promptly,
- * independently of how long the scan that consumes the head takes. Only `eth_blockNumber` is issued
- * on every tick; the block itself is read once per new height.
+ * independently of how long the scan that consumes the head takes. The hash distinguishes a replacement block at the same height.
  */
 export function createHeadWatcher(options: HeadWatcherOptions) {
 	const intervalMilliseconds = validatedInterval(options.intervalMilliseconds)
@@ -55,10 +54,10 @@ export function createHeadWatcher(options: HeadWatcherOptions) {
 			const blockNumber = await options.readBlockNumber()
 			if (blockNumber === undefined || stopping()) return
 			// A failover to a lagging endpoint can report a lower height; the watcher only ever moves forward.
-			if (latest !== undefined && blockNumber <= latest.number) return
+			if (latest !== undefined && blockNumber < latest.number) return
 			const head = await options.readBlock(blockNumber)
 			if (stopping()) return
-			if (latest !== undefined && head.number <= latest.number) return
+			if (latest !== undefined && (head.number < latest.number || (head.number === latest.number && head.hash === latest.hash))) return
 			const previous = latest
 			latest = head
 			options.onHead(head, previous)

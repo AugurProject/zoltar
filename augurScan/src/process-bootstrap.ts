@@ -55,8 +55,8 @@ export const assertDatabaseGenesisOutcome = async (transaction: SQL, outcome: Re
 
 export const initializeProcessContext = async (indexerEnabled: boolean): Promise<AugurScanProcessContext> => {
 	const database = new ScannerDatabase(runtimeConfig.postgresUrl)
-	await initializeSchema(database.sql)
 	const outcome = configuredGenesisOutcome()
+	await initializeSchema(database.sql, transaction => assertDatabaseGenesisOutcome(transaction, outcome))
 	const networks = await loadNetworks(outcome)
 	const [version, sourceHashes] = await Promise.all([packageVersion(), sourceProvenance()])
 	const runRows = await database.sql.begin(async transaction => {

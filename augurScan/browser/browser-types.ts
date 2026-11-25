@@ -38,6 +38,8 @@ declare global {
 export type StateTab = 'pools' | 'questions' | 'universes'
 
 export interface NetworkRecord {
+	native_symbol?: string
+	confirmation_depth?: string
 	chain_id: string
 	enabled?: boolean
 	id: string
