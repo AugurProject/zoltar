@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import ts from 'typescript'
 import { repositoryRoot } from './root.mts'
-import { appSharedPackages, sharedPackageClosure, sharedPackages } from './sharedPackages.ts'
+import { appSharedPackages, sharedPackageClosure, type SharedPackageId, sharedPackages } from './sharedPackages.ts'
 import { walkFiles } from './walk.mts'
 
 const uiSharedPackages = {
@@ -10,7 +10,7 @@ const uiSharedPackages = {
 	coreShared: ['shared-core'],
 	zoltarShared: ['shared-zoltar'],
 	statoblastShared: ['shared-zoltar', 'shared-open-oracle', 'shared-statoblast'],
-} as const
+} as const satisfies Record<string, readonly SharedPackageId[]>
 
 // The common shell, simulator and scalar picker consume these protocol exports.
 const coreUiProductImports = new Set(['@zoltar/zoltar-shared/deployment/genesisUniverses', '@zoltar/zoltar-shared/constants', '@zoltar/zoltar-shared/deployment/sepoliaRepAllocations', '@zoltar/zoltar-shared/questions/scalarOutcome'])
