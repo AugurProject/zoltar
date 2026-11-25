@@ -41,7 +41,7 @@ describe('application TypeScript process arguments', () => {
 			'--max-old-space-size=6144',
 			'C:\\projects\\zoltar\\node_modules\\typescript\\bin\\tsc',
 			'--project',
-			'ui/coreShared/tsconfig.json',
+			'ui/coreShared/tsconfig.typecheck.json',
 			'--noEmit',
 		])
 	})

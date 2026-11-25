@@ -41,6 +41,47 @@ function collectWatchBuilds(appId: UiAppId) {
 }
 
 describe('UI build dependency direction', () => {
+	test('shared package dependencies precede their consumers in build order', () => {
+		const earlier = new Set<string>()
+		for (const entry of sharedPackages) {
+			for (const dependency of entry.dependencies) expect(earlier.has(dependency), `${entry.id} requires ${dependency} earlier in the shared package registry`).toBe(true)
+			earlier.add(entry.id)
+		}
+	})
+
+	test('the root typecheck plan reads UI library signatures from current source', () => {
+		const fixture = fs.mkdtempSync(path.join(tmpdir(), 'ui-typecheck-'))
+		const { repositoryRoot } = getUiCoreSharedPaths()
+		try {
+			for (const config of ['shared/tsconfig.strict.json', 'ui/tsconfig.base.json', 'ui/statoblast/tsconfig.json', 'ui/statoblastShared/tsconfig.json', 'ui/statoblast/tsconfig.typecheck.json', 'shared/tsconfig.source-paths.json']) {
+				const source = path.join(repositoryRoot, config)
+				fs.mkdirSync(path.dirname(path.join(fixture, config)), { recursive: true })
+				fs.copyFileSync(source, path.join(fixture, config))
+			}
+			fs.symlinkSync(path.join(repositoryRoot, 'node_modules'), path.join(fixture, 'node_modules'), 'dir')
+			for (const pkg of ['statoblast', 'statoblastShared']) fs.mkdirSync(path.join(fixture, 'ui', pkg, 'ts'), { recursive: true })
+			const library = path.join(fixture, 'ui/statoblastShared/ts/value.ts')
+			const consumer = path.join(fixture, 'ui/statoblast/ts/use.ts')
+			fs.writeFileSync(library, 'export const value = (x: number) => x')
+			const build = Bun.spawnSync([process.execPath, 'x', 'tsc', '-p', 'ui/statoblastShared'], { cwd: fixture })
+			expect(build.exitCode, build.stdout.toString()).toBe(0)
+			fs.writeFileSync(library, 'export const value = (x: string) => x')
+			const check = createProjectTaskPlan('typecheck', ['ui-statoblast'])[0]
+			if (check === undefined) throw new Error('Missing Statoblast typecheck')
+			const run = (argument: string) => {
+				fs.writeFileSync(consumer, `import { value } from '@zoltar/ui-statoblast-shared/value.js'\nvalue(${argument})`)
+				return Bun.spawnSync([...check.command], { cwd: path.join(fixture, check.cwd) })
+			}
+			const current = run("'current'")
+			expect(current.exitCode, current.stdout.toString()).toBe(0)
+			const obsolete = run('1')
+			expect(obsolete.exitCode).toBe(2)
+			expect(obsolete.stdout.toString()).toContain('TS2345')
+		} finally {
+			fs.rmSync(fixture, { recursive: true, force: true })
+		}
+	})
+
 	test('the shared-build CLI compiles exactly the package closure for every application', async () => {
 		const fixtureRoot = fs.mkdtempSync(path.join(tmpdir(), 'app-shared-build-'))
 		const { repositoryRoot } = getUiCoreSharedPaths()
@@ -57,6 +98,13 @@ describe('UI build dependency direction', () => {
 				fs.writeFileSync(path.join(packageRoot, 'ts/value.ts'), 'export const value = 1\n')
 				fs.writeFileSync(path.join(packageRoot, 'tsconfig.json'), JSON.stringify({ compilerOptions: { types: [], rootDir: 'ts', outDir: 'js' }, include: ['ts/**/*.ts'] }))
 			}
+			const unknown = Bun.spawnSync([process.execPath, './tooling/repo/build-shared.mts', 'shared-typo'], { cwd: fixtureRoot })
+			expect(unknown.exitCode).toBe(1)
+			expect(unknown.stderr.toString()).toContain('Unknown shared build target: shared-typo')
+			fs.writeFileSync(path.join(fixtureRoot, 'invalid.ts'), "import { sharedPackageClosure } from './tooling/repo/sharedPackages'\nsharedPackageClosure(['shared-core', 'shared-typo'])")
+			const invalid = Bun.spawnSync([process.execPath, 'x', 'tsc', '--noEmit', '--skipLibCheck', '--target', 'esnext', '--moduleResolution', 'bundler', 'invalid.ts'], { cwd: fixtureRoot })
+			expect(invalid.exitCode).toBe(2)
+			expect(invalid.stdout.toString()).toContain('Type \'"shared-typo"\' is not assignable')
 			for (const appId of UI_APP_IDS) {
 				for (const entry of sharedPackages) fs.rmSync(path.join(fixtureRoot, entry.path, 'js'), { recursive: true, force: true })
 				const child = Bun.spawn([process.execPath, './tooling/repo/build-shared.mts', appId], { cwd: fixtureRoot, stdout: 'pipe', stderr: 'pipe' })
@@ -83,10 +131,10 @@ describe('UI build dependency direction', () => {
 		const commands = getAppBuildCommands(UI_APP_IDS)
 		expect(commands.filter(command => command[0] === 'x').map(command => command[3])).toEqual(['coreShared', 'zoltarShared', 'zoltar', 'statoblastShared', 'statoblast', 'trading', 'openoracle'].map(packageId => `ui/${packageId}/tsconfig.json`))
 		expect(commands.filter(command => command[0]?.endsWith('/vendor.mts') === true)).toEqual([
-			['./tooling/ui/vendor.mts', 'zoltar'],
-			['./tooling/ui/vendor.mts', 'statoblast'],
-			['./tooling/ui/vendor.mts', 'trading'],
-			['./tooling/ui/vendor.mts', 'openoracle'],
+			['./tooling/ui/vendor.mts', 'zoltar', '--artifacts-current'],
+			['./tooling/ui/vendor.mts', 'statoblast', '--artifacts-current'],
+			['./tooling/ui/vendor.mts', 'trading', '--artifacts-current'],
+			['./tooling/ui/vendor.mts', 'openoracle', '--artifacts-current'],
 		])
 		expect(commands.filter(command => command[0]?.endsWith('/workers.mts') === true).map(command => command[1])).toEqual([...UI_APP_IDS])
 		expect(commands.filter(command => command.includes('ensure-contract-artifacts'))).toHaveLength(0)

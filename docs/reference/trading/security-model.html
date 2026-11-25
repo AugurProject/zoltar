@@ -31,14 +31,14 @@
 			<section id="assumptions">
 				<h2>Assumptions</h2>
 				<ul>
-					<li>The configured Statoblast <code>SecurityPoolFactory</code>, question ledger, <code>ShareToken</code>, <a href="../glossary.html#question-forker">question forker</a>, question data, and universe state are canonical and behave as implemented in the matching core release.</li>
-					<li>Users set realistic slippage and deadlines and obtain a fresh simulation in the current block immediately before submission.</li>
-					<li>Wallets and RPC endpoints accurately report account, chain, balances, approvals, and receipts.</li>
+					<li>The configured Statoblast <code>SecurityPoolFactory</code>, question ledger, <code>ShareToken</code>, <a href="../glossary.html#question-forker">question forker</a>, question data, and universe state are canonical and behave as implemented in the matching core release. Pair registration authenticates the ledger within that factory. Verify the intended network and Yes or No genesis deployment under <a href="../security-model.html#assumption-a23">A23</a>.</li>
+					<li>Wallets and RPC endpoints accurately report account, chain, balances, approvals, and receipts, as described in <a href="../security-model.html#assumption-a24">A24</a>.</li>
 				</ul>
 			</section>
 			<section id="known-risks">
 				<h2>Known risks</h2>
-				<p>Spot prices are <a href="../../explanation/trading/pricing.html#not-an-oracle">not an oracle</a> and expose users to front-running and sandwiches. A lifecycle transition, fork, resolution, reserve donation, holding-fee refresh, or intervening trade can invalidate a quote; contract guards and slippage bounds make the transaction revert rather than promise execution. Initial liquidity determines the starting conditional price and should be initialized atomically. LP tokens cover only Yes/No reserves; separately held Invalid can be lost, transferred, or insufficient. A valid-resolution LP can suffer directional loss, and Yes/No reserves may have no redemption value after an Invalid result.</p>
+				<p>Before signing, set a limit on what you will pay or accept, choose the latest time the trade is still useful, simulate the transaction and record the block hash. For an <a href="./router.html#approval-free">insured exit</a>, check the minimum collateral (<code>minEthOut</code>) and any minimum recovery REP (<code>minRepOut</code>) separately.</p>
+				<p>Spot prices are <a href="../../explanation/trading/pricing.html#not-an-oracle">not an oracle</a> and expose users to front-running and sandwiches. A lifecycle transition, fork, resolution, reserve donation, holding-fee refresh, or intervening trade can invalidate a quote; a changed quote can execute within the signed bounds, while a breached minimum reverts the transaction. Initial liquidity determines the starting conditional price and should be initialized atomically. LP tokens cover only Yes/No reserves; separately held Invalid can be lost, transferred, or insufficient. A valid-resolution LP can suffer directional loss, and Yes/No reserves may have no redemption value after an Invalid result.</p>
 				<p>Other risks include recipient rejection of ETH or ERC-1155 transfers, core-contract bugs, and approval misuse. The immutable factory fee is a deployment choice, not a claim of economic optimality.</p>
 			</section>
 			<section id="reporting">

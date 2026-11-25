@@ -2,11 +2,12 @@ import { expect, test } from 'bun:test'
 import { parseAbi, zeroAddress, getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
-import { loadAllQuestionLedgers } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
+import { loadQuestionLedgerListing } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
 
 const abi = parseAbi([
 	'function securityPoolCustody() view returns (address)',
 	'function priceFeed() view returns (address)',
+	'function openOraclePriceCoordinator() view returns (address)',
 	'function totals() view returns (uint256 rep,uint256 commitment,uint256 healthy)',
 	'function aggregateExposureAttoEth() view returns (uint256)',
 	'function acceptedExposureLimitAttoEth() view returns (uint256)',
@@ -18,7 +19,7 @@ test(
 		const backend = await createBootstrappedSimulationBackendWithRetry('securitypoolx2', 1, 'statoblast')
 		try {
 			const client = backend.createReadClient()
-			const pools = await loadAllQuestionLedgers(client)
+			const { pools } = await loadQuestionLedgerListing(client)
 			let securityPoolQuestions = 0
 			for (const pool of pools) {
 				const capitalValue = await client.readContract({ address: pool.questionLedgerAddress, abi, functionName: 'securityPoolCustody' })
@@ -29,7 +30,8 @@ test(
 				const totals = await client.readContract({ address: capital, abi, functionName: 'totals' })
 				if (!Array.isArray(totals) || typeof totals[1] !== 'bigint') throw new Error('Invalid capital totals')
 				const commitment = totals[1]
-				const feedValue = await client.readContract({ address: pool.managerAddress, abi, functionName: 'priceFeed' })
+				const manager = getAddress(String(await client.readContract({ address: pool.questionLedgerAddress, abi, functionName: 'openOraclePriceCoordinator' })))
+				const feedValue = await client.readContract({ address: manager, abi, functionName: 'priceFeed' })
 				if (typeof feedValue !== 'string') throw new Error('Missing feed address')
 				const feed = getAddress(feedValue)
 				const limit = await client.readContract({ address: feed, abi, functionName: 'acceptedExposureLimitAttoEth' })

@@ -17,7 +17,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Bot QA and documentation capture scripts grew with every dashboard surface they exercise.', [['bots/chaos/scripts/capture-dashboard-qa.mts', 884]]),
 	...allowances('Documentation runtime bundles and Solidity-side TypeScript utilities still need responsibility extraction.', [
 		['docs/charts/chartRuntime.ts', 874],
-		['solidity/ts/testSupport/coverage/traceToSource.ts', 964],
+		['solidity/ts/testSupport/coverage/traceToSource.ts', 860],
 		['solidity/ts/testSupport/simulator/AnvilWindowEthereum.ts', 606],
 	]),
 ])
@@ -34,17 +34,17 @@ export const testSourceLineLimit = 1500
  */
 export const testSourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Split by behavior area into sibling test files that share a fixture module.', [
-		['augurScan/tests/replay/indexer-lifecycle.test.ts', 3434],
+		['augurScan/tests/replay/indexer-lifecycle.test.ts', 3130],
 		['bots/chaos/tests/execution/transaction-executor.test.ts', 1847],
-		['bots/chaos/tests/monitoring/discovery.test.ts', 1754],
+		['bots/chaos/tests/monitoring/discovery.test.ts', 1752],
 		['bots/chaos/tests/runtime/dashboard-controller.test.ts', 1665],
 		['bots/liquidator/tests/dashboard/dashboard-refresh.test.ts', 2088],
 		['bots/open-oracle-arbitrager/tests/dashboard/dashboard-refresh.test.ts', 1576],
-		['shared/core/ts/evm/ethereum.test.ts', 3826],
-		['solidity/ts/tests/coverageHelpers.test.ts', 1742],
+		['shared/core/ts/evm/ethereum.test.ts', 3118],
+		['solidity/ts/tests/coverageHelpers.test.ts', 1740],
 		['ui/coreShared/ts/tests/app/useOnchainState.integration.test.tsx', 2160],
 		['ui/openoracle/ts/tests/features/open-oracle/openOracleRouteSection.test.tsx', 1881],
 		['ui/statoblast/ts/tests/features/open-oracle/useOpenOracleOperations.test.tsx', 2371],
-		['ui/statoblast/ts/tests/features/reporting/reportingSection.test.tsx', 3021],
+		['ui/statoblast/ts/tests/features/reporting/reportingSection.test.tsx', 3018],
 	]),
 ])

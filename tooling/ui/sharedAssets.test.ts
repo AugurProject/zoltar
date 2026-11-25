@@ -4,7 +4,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import * as ts from 'typescript'
 import { getSharedBrowserImports, sharedBrowserArtifactRelativePaths } from './sharedBrowserArtifacts.ts'
-import { assertSuccessfulBuilds, assertVendorCommandArguments, clearVendorOutput, vendor } from './vendor.mts'
+import { assertVendorCommandArguments, clearVendorOutput, vendor } from './vendor.mts'
 import { UI_APP_IDS, getUiAppPaths, getUiCoreSharedPaths, getUiPackageRoot } from './appPaths.mts'
 import { copyProjectArtifacts, generateCanonicalProjectArtifacts, isCoreProjectContractPath, type ProjectArtifactPaths } from './projectArtifacts.mts'
 
@@ -31,19 +31,11 @@ const developmentImportMapRegressionEntries: Record<string, string> = {
 	'@zoltar/zoltar-shared/deployment/sepoliaRepAllocations': '../shared/zoltar/js/deployment/sepoliaRepAllocations.js',
 	'@zoltar/zoltar-shared/deployment/genesisUniverses': '../shared/zoltar/js/deployment/genesisUniverses.js',
 	'@zoltar/core-shared/serialization/sortStringArrayByKeccak': '../shared/core/js/serialization/sortStringArrayByKeccak.js',
-	abitype: './vendor/abitype/exports/index.js',
 	'micro-eth-signer': './vendor/micro-eth-signer/index.js',
 	'micro-eth-signer/advanced/abi.js': './vendor/micro-eth-signer/advanced/abi.js',
 	'micro-packed': './vendor/micro-packed/index.js',
 	'@scure/base': './vendor/@scure/base/index.js',
-	'@noble/hashes/sha2': './vendor/@noble/hashes/sha2.js',
-	'@noble/hashes/sha3': './vendor/@noble/hashes/sha3.js',
-	'@noble/curves/secp256k1': './vendor/@noble/curves/secp256k1.js',
 	'@noble/curves/utils.js': './vendor/@noble/curves/utils.js',
-	isows: './vendor/isows/native.js',
-	'ox/Ens': './vendor/ox/core/Ens.js',
-	'ox/erc6492': './vendor/ox/erc6492/index.js',
-	'ox/erc8010': './vendor/ox/erc8010/index.js',
 }
 
 type ImportMapFile = {
@@ -403,7 +395,6 @@ test('development import map maps browser dependency subpaths', () => {
 	expect(rootPackageJson.scripts?.['app:watch:statoblast']).toContain('tooling/ui/watch.mts statoblast')
 	expect(rootPackageJson.scripts?.['app:serve:zoltar']).toContain('dev-server.ts zoltar')
 	expect(rootPackageJson.scripts?.['app:serve:statoblast']).toContain('dev-server.ts statoblast')
-	expect(vendorBuildSource).toContain("{ packageName: 'isows', mainEntrypointFile: 'native.js'")
 	expect(vendorBuildSource).toContain("includeTrading: app === 'trading'")
 	expect(watchBuildSource).toContain('const VENDOR_INPUT_PATHS = [VENDOR_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH')
 	expect(watchBuildSource).toContain('const WORKER_INPUT_PATHS = [WORKER_BUILD_PATH, BUNDLER_PATHS_BUILD_PATH]')
@@ -433,9 +424,6 @@ test('vendor build clears generated output before rebuilding assets', async () =
 		clearVendorOutput: async () => {
 			completedSteps.push('clearVendorOutput')
 		},
-		bundleTevm: async () => {
-			completedSteps.push('bundleTevm')
-		},
 		vendorDependencies: async () => {
 			completedSteps.push('vendorDependencies')
 		},
@@ -447,18 +435,14 @@ test('vendor build clears generated output before rebuilding assets', async () =
 		},
 	})
 
-	expect(completedSteps).toEqual(['clearVendorOutput', 'bundleTevm', 'vendorDependencies', 'vendorFonts', 'copyProjectArtifacts'])
-})
-
-test('vendor build failures cannot be silently ignored', () => {
-	expect(() => assertSuccessfulBuilds([{ success: true, logs: [] }], 'test bundle')).not.toThrow()
-	expect(() => assertSuccessfulBuilds([{ success: false, logs: [{ message: 'unresolved import' }] }], 'test bundle')).toThrow('test bundle failed:\nunresolved import')
+	expect(completedSteps).toEqual(['clearVendorOutput', 'vendorDependencies', 'vendorFonts', 'copyProjectArtifacts'])
 })
 
 test('vendor command rejects obsolete or unknown options, including every package-local generate script', () => {
 	expect(() => assertVendorCommandArguments([])).not.toThrow()
 	expect(() => assertVendorCommandArguments(['zoltar'])).not.toThrow()
-	expect(() => assertVendorCommandArguments(['zoltar', '--scoped-artifacts'])).toThrow('unexpected argument(s): --scoped-artifacts')
+	expect(() => assertVendorCommandArguments(['zoltar', '--artifacts-current'])).not.toThrow()
+	expect(() => assertVendorCommandArguments(['zoltar', '--scoped-artifacts'])).toThrow('Unexpected vendor build argument(s): --scoped-artifacts')
 	expect(() => assertVendorCommandArguments(['--scoped-artifacts'])).toThrow('unexpected option: --scoped-artifacts')
 	for (const app of UI_APP_IDS) {
 		const manifest: unknown = JSON.parse(fs.readFileSync(path.join(repositoryRootPath, 'ui', app, 'package.json'), 'utf8'))
@@ -492,7 +476,13 @@ test('project artifact generation writes Trading output only when explicitly req
 			JSON.stringify({
 				contracts: {
 					'contracts/Zoltar.sol': { Zoltar: { abi: [] } },
-					'contracts/statoblast/QuestionLedger.sol': { QuestionLedger: { abi: [] } },
+					'contracts/statoblast/QuestionLedger.sol': {
+						QuestionLedger: {
+							abi: [],
+							evm: { bytecode: { object: '6010', sourceMap: '1:2:3' }, deployedBytecode: { object: '6011', immutableReferences: { '7': [{ start: 1, length: 32 }] } } },
+							storageLayout: { storage: [] },
+						},
+					},
 					'contracts/statoblast/openOracle/OpenOracle.sol': { OpenOracle: { abi: [] } },
 					'contracts/test/Mock.sol': { Mock: { abi: [] } },
 					'contracts/trading/Router.sol': {
@@ -514,6 +504,8 @@ test('project artifact generation writes Trading output only when explicitly req
 		const statoblastOutput = fs.readFileSync(artifactPaths.statoblastContractArtifactOutputPath, 'utf8')
 		expect(statoblastOutput).toContain('QuestionLedger')
 		expect(statoblastOutput).toContain('OpenOracle')
+		for (const retained of ['6010', '6011', 'immutableReferences']) expect(statoblastOutput).toContain(retained)
+		for (const excluded of ['sourceMap', 'storageLayout']) expect(statoblastOutput).not.toContain(excluded)
 		for (const excluded of ['Zoltar_Zoltar', 'Mock', 'Router']) expect(statoblastOutput).not.toContain(excluded)
 		expect(fs.readFileSync(artifactPaths.contractArtifactOutputPath, 'utf8')).toContain('Zoltar_Zoltar')
 		expect(fs.readFileSync(artifactPaths.contractArtifactOutputPath, 'utf8')).not.toContain('Router_Router')

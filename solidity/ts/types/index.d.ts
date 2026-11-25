@@ -28,7 +28,6 @@ declare module 'solc' {
 	}
 	interface CompilerOutputEvmBytecode {
 		readonly object: string
-		readonly opcodes?: string
 		readonly sourceMap?: string
 		readonly immutableReferences?: {
 			readonly [astId: string]: readonly { readonly start: number; readonly length: number }[]

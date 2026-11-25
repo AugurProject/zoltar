@@ -47,18 +47,10 @@ function createSelectedPool(overrides: Partial<ListedQuestionLedger> = {}): List
 		securityPoolAddress: zeroAddress,
 		settlementCollateralAttoEth: 0n,
 		feeEligibleUnderwritingLimitAttoEth: overrides.totalUnderwritingLimitAttoEth ?? 5n * 10n ** 18n,
-		hasForkActivity: false,
-		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
-		lastOraclePrice: 10n ** 18n,
-		lastOracleSettlementTimestamp: 1n,
-		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
-		hasForkContinuationEscalationGame: false,
-		ordinaryEscalationGameStarted: false,
-		parent: zeroAddress,
 		questionOutcome: 'none',
 		questionId: '0x01',
-		statoblastSecurityMultiplierBps: 20_000n,
+		hasEscalationGame: false,
 		questionLedgerAddress: zeroAddress,
 		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
@@ -71,7 +63,6 @@ function createSelectedPool(overrides: Partial<ListedQuestionLedger> = {}): List
 	}
 	return {
 		...selectedPool,
-		hasForkActivity: overrides.hasForkActivity ?? selectedPool.hasForkActivity,
 	}
 }
 
@@ -140,7 +131,6 @@ function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {})
 		},
 
 		accountState: createAccountState(),
-		embedInCard: true,
 		loadingTradingForkUniverse: false,
 		loadingTradingDetails: false,
 		onCreateCompleteSet: () => undefined,
@@ -148,12 +138,7 @@ function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {})
 		onRedeemCompleteSet: () => undefined,
 		onRedeemShares: () => undefined,
 		onTradingFormChange: () => undefined,
-		repPerEthPrice: 10n ** 18n,
-		repPerEthSource: undefined,
-		repPerEthSourceUrl: undefined,
 		selectedPool: createSelectedPool(),
-		showHeader: false,
-		showQuestionLedgerAddressInput: false,
 		tradingActiveAction: undefined,
 		tradingDetails: createTradingDetails(),
 		tradingError: undefined,
@@ -456,8 +441,8 @@ void describe('TradingSection', () => {
 		expect(Array.from(outcomeRows.querySelectorAll('.currency-value')).filter(element => element.getAttribute('title') === '3')).toHaveLength(1)
 	})
 
-	void test('renders trading content without the workflow strip and launches complete-set actions from the share summary', async () => {
-		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ embedInCard: false, showHeader: false })} />)
+	void test('renders the Shares panel and launches complete-set actions from the share summary', async () => {
+		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps()} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
@@ -726,7 +711,7 @@ void describe('TradingSection', () => {
 	})
 
 	void test('uses standing commitments when the optional UI price is unavailable', async () => {
-		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ repPerEthPrice: undefined })} />)
+		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({})} />)
 		cleanupRenderedComponent = rendered.cleanup
 		expect(document.body.textContent).not.toContain('Unavailable (no price)')
 		expect(document.body.textContent).not.toContain('Loading mint capacity…')
@@ -736,7 +721,7 @@ void describe('TradingSection', () => {
 	})
 
 	void test('keeps mint submission independent of the UI price setting', async () => {
-		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ repPerEthPrice: undefined, tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })} />)
+		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		await act(() => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
@@ -746,7 +731,7 @@ void describe('TradingSection', () => {
 	})
 
 	void test('shows zero mint capacity without waiting for an unavailable price', async () => {
-		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ repPerEthPrice: undefined, selectedPool: createSelectedPool({ totalUnderwritingLimitAttoEth: 0n, feeEligibleUnderwritingLimitAttoEth: 0n }) })} />)
+		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ totalUnderwritingLimitAttoEth: 0n, feeEligibleUnderwritingLimitAttoEth: 0n }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		expect(document.body.textContent).toContain('No mint capacity remaining.')
 		expect(document.body.textContent).not.toContain('Loading mint capacity…')
@@ -761,8 +746,7 @@ void describe('TradingSection', () => {
 					onTradingFormChange: ({ completeSetAmount }) => {
 						if (completeSetAmount !== undefined) mintedAmount = completeSetAmount
 					},
-					repPerEthPrice: 10n * 10n ** 18n,
-					selectedPool: createSelectedPool({ lastOraclePrice: 10n ** 18n, settlementCollateralAttoEth: 0n, totalUnderwritingLimitAttoEth: 10n * 10n ** 18n }),
+					selectedPool: createSelectedPool({ settlementCollateralAttoEth: 0n, totalUnderwritingLimitAttoEth: 10n * 10n ** 18n }),
 				})}
 			/>,
 		)
@@ -942,7 +926,7 @@ void describe('TradingSection', () => {
 
 	test('keeps finalized parent winning-share redemption available after an unrelated fork', async () => {
 		const redeem = mock(() => undefined)
-		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ questionOutcome: 'yes', universeHasForked: true, hasForkActivity: true }), onRedeemShares: redeem })} />)
+		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ questionOutcome: 'yes', universeHasForked: true }), onRedeemShares: redeem })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		const queries = within(document.body)
 		const redeemButton = queries.getByRole('button', { name: 'Redeem resolved shares' })
@@ -1012,7 +996,7 @@ void describe('TradingSection', () => {
 	})
 
 	void test('explains that an escalation game pauses minting instead of reporting missing capacity', async () => {
-		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ ordinaryEscalationGameStarted: true, totalPoolHeldAttoRep: 10n ** 18n }) })} />)
+		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ hasEscalationGame: true, totalPoolHeldAttoRep: 10n ** 18n }) })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(getTransactionButtonState(document.body, 'Mint complete sets').reason).toBe('Minting is closed for this question once reporting starts.')
@@ -1020,7 +1004,7 @@ void describe('TradingSection', () => {
 
 	void test('does not call minting paused for a forked pool whose escalation game has ended', async () => {
 		// The escalation flag stays set after the game, but a fork has closed minting for good.
-		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ ordinaryEscalationGameStarted: true, systemState: 'forkMigration', totalPoolHeldAttoRep: 10n ** 18n }) })} />)
+		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ hasEscalationGame: true, systemState: 'forkMigration', totalPoolHeldAttoRep: 10n ** 18n }) })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const mintState = getTransactionButtonState(document.body, 'Mint complete sets')
@@ -1198,32 +1182,6 @@ void describe('TradingSection', () => {
 			await renderedComponent.cleanup()
 			cleanupRenderedComponent = undefined
 		}
-	})
-
-	void test('renders question ledger address input when enabled and updates it through onTradingFormChange', async () => {
-		let nextQuestionLedgerAddress: string | undefined
-		const renderedComponent = await renderIntoDocument(
-			<TradingSection
-				{...createTradingSectionProps({
-					onTradingFormChange: ({ questionLedgerAddress }) => {
-						if (questionLedgerAddress !== undefined) {
-							nextQuestionLedgerAddress = questionLedgerAddress
-						}
-					},
-					showQuestionLedgerAddressInput: true,
-				})}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		const input = documentQueries.getByPlaceholderText('0x...')
-		expect(input).not.toBeNull()
-
-		await act(() => {
-			fireEvent.input(input, { target: { value: '0xabc' } })
-		})
-		expect(nextQuestionLedgerAddress).toBe('0xabc')
 	})
 
 	void test('fills the redeem amount from the max helper in the redeem modal', async () => {

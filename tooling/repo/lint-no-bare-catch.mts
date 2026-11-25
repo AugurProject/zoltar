@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import * as ts from 'typescript'
 import { repositoryRoot as projectRoot } from './root.mts'
-import { walkFiles } from './walk.mts'
+import { listRepositoryFiles } from './git.mts'
 
 export type CatchFinding = {
 	file: string
@@ -12,44 +12,6 @@ export type CatchFinding = {
 }
 
 const sourceFileExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts'])
-const ignoredPathPrefixes = [
-	'.git',
-	'node_modules',
-	'ui/coreShared/node_modules',
-	'ui/zoltar/node_modules',
-	'ui/statoblast/node_modules',
-	'ui/zoltar/dist',
-	'ui/statoblast/dist',
-	'ui/zoltar/vendor',
-	'ui/statoblast/vendor',
-	'ui/trading/vendor',
-	'ui/openoracle/vendor',
-	'ui/zoltar/js',
-	'ui/statoblast/js',
-	'ui/trading/js',
-	'ui/openoracle/js',
-	...['core', 'zoltar', 'openOracle', 'statoblast', 'trading'].map(name => `shared/${name}/js`),
-	'solidity/artifacts',
-	'solidity/js',
-	'solidity/node_modules',
-	'ui/trading/dist',
-	'ui/openoracle/dist',
-	'ui/trading/ts/generated',
-	'augurScan/public',
-	'augurScan/qa',
-	'coverage',
-]
-
-function shouldIgnore(relativePath: string): boolean {
-	if (relativePath.split('/').includes('node_modules')) return true
-	for (const prefix of ignoredPathPrefixes) {
-		if (relativePath === prefix || relativePath.startsWith(`${prefix}/`)) return true
-	}
-	return false
-}
-
-const isIgnoredPath = (filePath: string) => shouldIgnore(path.relative(projectRoot, filePath).replaceAll('\\', '/'))
-
 function catchBindingIsReferenced(block: ts.Block, bindingName: string) {
 	let referenced = false
 	const visit = (node: ts.Node): void => {
@@ -141,11 +103,19 @@ function findCatchFindings(sourceFile: ts.SourceFile): CatchFinding[] {
 }
 
 async function main(): Promise<void> {
-	const files = await walkFiles(projectRoot, { descend: directory => !isIgnoredPath(directory), include: filePath => sourceFileExtensions.has(path.extname(filePath)) && !isIgnoredPath(filePath) })
+	const files = listRepositoryFiles({ cwd: projectRoot, untracked: true }).filter(file => sourceFileExtensions.has(path.extname(file)) && !file.startsWith('augurScan/public/') && !file.startsWith('augurScan/qa/') && !file.startsWith('ui/trading/ts/generated/'))
 	const catchFindings: CatchFinding[] = []
 
 	for (const filePath of files) {
-		catchFindings.push(...findCatchFindingsInSource(filePath, await fs.readFile(filePath, 'utf8')))
+		const absolutePath = path.join(projectRoot, filePath)
+		try {
+			if (!(await fs.lstat(absolutePath)).isFile()) continue
+			catchFindings.push(...findCatchFindingsInSource(absolutePath, await fs.readFile(absolutePath, 'utf8')))
+		} catch (error) {
+			// Git still lists unstaged deletions.
+			if (error instanceof Error && 'code' in error && error.code === 'ENOENT') continue
+			throw error
+		}
 	}
 
 	if (catchFindings.length === 0) return

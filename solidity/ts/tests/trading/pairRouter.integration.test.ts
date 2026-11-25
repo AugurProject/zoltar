@@ -58,8 +58,7 @@ describe('factory, pair, and router integration', () => {
 	async function measuredTransaction(label: string, execute: () => Promise<Hex>) {
 		const hash = await writeContractAndWait(client, execute)
 		const receipt = await client.getTransactionReceipt({ hash })
-		if (process.env['TRADING_REPORT_GAS'] === '1') console.log(`gas:${label}=${receipt.gasUsed}`)
-		return receipt.gasUsed
+		console.log(`gas:${label}=${receipt.gasUsed}`)
 	}
 
 	beforeAll(async () => {
@@ -684,7 +683,7 @@ describe('factory, pair, and router integration', () => {
 		})
 	}
 
-	test('benchmarks every hot operation against a funded pool fixture', async () => {
+	test.skipIf(process.env['TRADING_REPORT_GAS'] !== '1')('benchmarks every hot operation against a funded pool fixture', async () => {
 		await initialize()
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
 		await measuredTransaction('exact-input-swap', () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 100n * rate, 1n, account, NO_DEADLINE] }))

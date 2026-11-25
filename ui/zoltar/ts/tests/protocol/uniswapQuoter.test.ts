@@ -18,8 +18,6 @@ afterEach(() => resetActiveEnvironmentForTesting())
 const REP_ADDRESS = getAddress(MAINNET_NETWORK_PROFILE.genesisRepTokenAddress)
 const WETH_ADDRESS = MAINNET_NETWORK_PROFILE.wethAddress
 const UNISWAP_V4_QUOTER_ADDRESS = MAINNET_NETWORK_PROFILE.uniswapV4QuoterAddress
-// The quoter defaults to the 0.30% / 60-tick Uniswap V4 pool.
-const DEFAULT_POOL_CONFIG = { fee: 3000, tickSpacing: 60 }
 type SimulateArgs = Parameters<ReadClient['simulateContract']>[0]
 type RawSimulateParam = {
 	poolKey: {
@@ -202,12 +200,6 @@ void describe('quoteExactInput', () => {
 		await quoteSinglePool(client, ETH_ADDRESS, REP_ADDRESS, amountIn)
 		expect(captured.exactAmount).toBe(amountIn)
 	})
-	void test('uses DEFAULT_POOL_CONFIG when no pool config is provided', async () => {
-		const { client, captured } = createCapturingClient(1n)
-		await quoteSinglePool(client, ETH_ADDRESS, REP_ADDRESS, 1n)
-		expect(captured.fee).toBe(DEFAULT_POOL_CONFIG.fee)
-		expect(captured.tickSpacing).toBe(DEFAULT_POOL_CONFIG.tickSpacing)
-	})
 })
 void describe('quoteBestExactInput', () => {
 	void test('returns the best successful quote across tested V4 pool configs', async () => {
@@ -368,36 +360,6 @@ void describe('quoteBestV3ExactInputWithSource', () => {
 				tokenB: REP_ADDRESS,
 			},
 		])
-	})
-})
-void describe('quoteTokenForEth', () => {
-	void test('returns ETH amount out for the given token amount', async () => {
-		const { client } = createCapturingClient(400000000000000000n)
-		const result = await quoteSinglePool(client, REP_ADDRESS, ETH_ADDRESS, 1000000000000000000n)
-		expect(result).toBe(400000000000000000n)
-	})
-	void test('routes token → ETH (zeroForOne = false for REP)', async () => {
-		const { client, captured } = createCapturingClient(1n)
-		await quoteSinglePool(client, REP_ADDRESS, ETH_ADDRESS, 1n)
-		expect(captured.zeroForOne).toBe(false)
-	})
-	void test('uses the provided token as currency1 when it is numerically higher than ETH', async () => {
-		const { client, captured } = createCapturingClient(1n)
-		await quoteSinglePool(client, REP_ADDRESS, ETH_ADDRESS, 1n)
-		expect(captured.currency1).toBe(REP_ADDRESS)
-		expect(captured.currency0).toBe(ETH_ADDRESS)
-	})
-})
-void describe('quoteEthForToken', () => {
-	void test('returns token amount out for the given ETH amount', async () => {
-		const { client } = createCapturingClient(12000000000000000000n)
-		const result = await quoteSinglePool(client, ETH_ADDRESS, REP_ADDRESS, 1000000000000000000n)
-		expect(result).toBe(12000000000000000000n)
-	})
-	void test('routes ETH → token (zeroForOne = true for REP)', async () => {
-		const { client, captured } = createCapturingClient(1n)
-		await quoteSinglePool(client, ETH_ADDRESS, REP_ADDRESS, 1n)
-		expect(captured.zeroForOne).toBe(true)
 	})
 })
 void describe('quoteRepForEth', () => {

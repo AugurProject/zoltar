@@ -26,9 +26,9 @@ export const tradingActivityPage = async (sql: SQL, url: URL, query: { readonly 
 		chainId,
 		market,
 		asOfBlock: String(asOf['blockNumber']),
-		cursorBlock: page.cursor?.[9] ?? String(asOf['blockNumber']),
-		cursorTx: page.cursor?.[10] ?? `0x${'f'.repeat(64)}`,
-		cursorLog: page.cursor?.[11] ?? 2_147_483_647,
+		cursorBlock: page.position.block,
+		cursorTx: page.position.tx,
+		cursorLog: page.position.log,
 		queryLimit: page.queryLimit,
 	})
 	return paged(rows, page.limit, row => protocolCursorFor(chainId, 'trading-activity', market, asOf, row))

@@ -56,7 +56,7 @@ Run `bun run tsc` when any of these change:
 UI app-only exception: when changes are limited to one app's `ui/<app>/ts/**/*.ts(x)` sources outside its tests and do not touch contracts, `tooling/ui`, generated artifacts, or consumers of refreshed contract output, run:
 
 ```bash
-cd ui/zoltar && bun x tsc --project tsconfig.json
+cd ui/zoltar && bun x tsc --project tsconfig.typecheck.json
 ```
 
 (or the matching `ui/statoblast`, `ui/trading`, or `ui/openoracle` project). Use full `bun run tsc` for UI tests, UI build scripts under `tooling/ui`, any UI tsconfig, package scripts, mixed UI/non-UI TypeScript, contracts, or generated contract output.

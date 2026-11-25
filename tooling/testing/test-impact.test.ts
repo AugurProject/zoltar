@@ -86,9 +86,9 @@ describe('test impact recommendations', () => {
 		])
 	})
 
-	test('maps developer documentation asserted by the UI split workflow test to that test', () => {
-		expect(commandsFor(['docs/how-to/trading-set-up-development.html'])).toEqual(['bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts tooling/ui/ui-split-workflows.test.ts'])
-		expect(commandsFor(['testnetwork/README.md'])).toEqual(['bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts tooling/ui/ui-split-workflows.test.ts', 'bun ./tooling/testing/bun-test.mts tooling/testing/testnetwork.test.ts'])
+	test('maps developer launch instructions to the documentation content check', () => {
+		expect(commandsFor(['docs/how-to/trading-set-up-development.html'])).toEqual(['bun run docs:check-content'])
+		expect(commandsFor(['testnetwork/README.md'])).toEqual(['bun ./tooling/testing/bun-test.mts tooling/testing/testnetwork.test.ts', 'bun run docs:check-content'])
 	})
 
 	test('maps documentation read or executed by tests or checks to those tests and checks', () => {
@@ -175,6 +175,32 @@ describe('test impact recommendations', () => {
 				reason: 'import graph; test infrastructure',
 			},
 		])
+	})
+
+	test('keeps browser prerequisites through fixture imports while offline tests use plain Bun', async () => {
+		const root = await mkdtemp(join(tmpdir(), 'browser-runner-'))
+		try {
+			const browser = join(root, 'augurScan/tests/browser')
+			await mkdir(browser, { recursive: true })
+			for (const [name, source] of Object.entries({
+				'browser-test.ts': 'export const browser = true; export type Browser = boolean',
+				'support.ts': "import './cycle.ts'\nexport { browser } from './browser-test.ts'",
+				'cycle.ts': "import './support.ts'",
+				'value.ts': 'export const value = 1',
+				'direct.test.ts': "import './value.ts'\nimport { browser } from './browser-test.ts'",
+				'indirect.test.ts': "import './value.ts'\nimport { browser } from './support.ts'",
+				'offline.test.ts': "import './value.ts'\nimport type { Browser } from './browser-test.ts'",
+			}))
+				await writeFile(join(browser, name), source)
+			const changedTests = ['direct', 'indirect', 'offline'].map(name => `augurScan/tests/browser/${name}.test.ts`)
+			const directCommands = deduplicateTestRecommendations(getTestImpactRecommendations(changedTests, root)).map(entry => entry.command)
+			const commands = (await getImportGraphTestRecommendations(['augurScan/tests/browser/value.ts'], root)).map(entry => entry.command)
+			expect(directCommands).toEqual(commands)
+			expect(commands).toContain('cd augurScan && AUGURSCAN_BROWSER_URL="${AUGURSCAN_BROWSER_URL:?set-AUGURSCAN_BROWSER_URL}" bun test tests/browser/direct.test.ts tests/browser/indirect.test.ts')
+			expect(commands).toContain('cd augurScan && bun test tests/browser/offline.test.ts')
+		} finally {
+			await rm(root, { recursive: true, force: true })
+		}
 	})
 
 	test('traces changed production modules through transitive imports to owning tests', async () => {
