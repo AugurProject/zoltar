@@ -37,33 +37,33 @@ const PROFILE_INDEPENDENT_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Rec
 export const EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<BootstrapDescendantHashProfile, Readonly<Record<string, Hash>>>> = {
 	sepolia: {
 		...PROFILE_INDEPENDENT_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES,
-		questionLedgerDeployer: '0xf1769d76630fad399fbb72b77d280ac92f341816ef3ce3402d65a52ee8a4e486',
-		questionLedgerDeploymentWorker: '0x9b7ab1c71be44fe5fe415d4f60d79c8d90135887a757aac954245d5027273bec',
+		questionLedgerDeployer: '0x18e6de1b974dff26b7fcae131fad22714e90f2d12d9867a3bb2beed0985cf91c',
+		questionLedgerDeploymentWorker: '0xe3b0118d0a56e5ec84258a9373767f314507ff730cc5ec9afcfe26af538164ea',
 	},
 	deterministic: {
 		...PROFILE_INDEPENDENT_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES,
-		questionLedgerDeployer: '0x609304ae73a8360c4d6a70438bb1edfdd3246603e270f6840b112b16e78100d1',
-		questionLedgerDeploymentWorker: '0xec7a14dbdac9ba87e77dc847a1a67831f24afc0f4d33801f857f377782dacb5b',
+		questionLedgerDeployer: '0xb73eab776a7ba3b8431976b0f2604a866f7e231e7dec815428bbd47a1e1abf8e',
+		questionLedgerDeploymentWorker: '0x11ae33724425def26bbc28d00ce0e8809b8e670ab1167d1b7b7546789a264fc3',
 	},
 	mainnet: {
 		...PROFILE_INDEPENDENT_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES,
-		questionLedgerDeployer: '0x608e0af9fd2be7cbeb33f38fc902891b6b4d85b028d20c81ca9eae426a0db417',
-		questionLedgerDeploymentWorker: '0x42822291763597cdc0293c927da13711ab1aa98d8eb59ee4d7ea46f56d16278d',
+		questionLedgerDeployer: '0x858e46cae8b7e30a74b45ef06a0d24754c9129b532f0b1902ff45a6b9ed93b13',
+		questionLedgerDeploymentWorker: '0xc3d60194027da78f55f7561803709b14303efaa31b4f255397ee39960e8573b2',
 	},
 }
 
 // Only descendants that embed a selected Zoltar address differ between the two genesis deployments.
 export const EXPECTED_NO_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES: Readonly<Record<BootstrapDescendantHashProfile, Readonly<Record<string, Hash>>>> = {
 	sepolia: {
-		questionLedgerDeployer: '0x6d52403dfaa9597f9e03afce282e54b49015c3a9e18785c02c681de8d5fb89dc',
-		questionLedgerDeploymentWorker: '0x2b58c9aa6554965e3a4c1be9e57e36d9488f71672628e323687a41295e5a5eef',
+		questionLedgerDeployer: '0x6831f73664a80fabae4f019661a36853deaed2155eb0ee5f209e7ef33da99ff4',
+		questionLedgerDeploymentWorker: '0x467a39d94adb015bd075378939156cf22224a7e7b24c973d381641701e789344',
 	},
 	deterministic: {
-		questionLedgerDeployer: '0x786342a67ab18709b565ace012124e03b4e68d84d193d61198b5659c54ec0f80',
-		questionLedgerDeploymentWorker: '0xb6506fd44c4a10f521e9cc50f650faf8fc6ce85bee060502a90a66cddaf9b36c',
+		questionLedgerDeployer: '0xadad344ec48f45aab22c14748a8064310ac189b661cd68d7a2939c2328af0214',
+		questionLedgerDeploymentWorker: '0xca4eb4420ebe23a998a976c4156a6b26f0add1b21105cb43ad6de62db3c70d32',
 	},
 	mainnet: {
-		questionLedgerDeployer: '0x6c6a567ea137312f8e92559a628778e9793889b1472c6f67bbaaaffd9c0e61ac',
-		questionLedgerDeploymentWorker: '0xc2e3ac252956186c8a16b3b4ad845f6db1dac62c04c5aa8e96eabb285af867d7',
+		questionLedgerDeployer: '0xe1f5f583257900d82e2778c28528af39abea5757f07542399aaedf68560fb659',
+		questionLedgerDeploymentWorker: '0x2d9bdffbdcf6d28772d3f38eca29a4e93e27c8e8f7d09208c0024f8a7a2e56b5',
 	},
 }

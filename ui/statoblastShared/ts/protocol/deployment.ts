@@ -43,18 +43,18 @@ export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonl
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
 	sharedPoolPriceFeedFactory: '0xda97ea97286d4a3e6d17d85de3149c545e85135f5b49694e5e7a5506572dd7c9',
 	questionLedgerEventEmitter: '0x7cc076e2822ad2187a680ab7b091a7a93963fa5c07bf31be029b9ea90dcd5b46',
-	securityPoolFactory: '0x833a35d7fb78787e75f9b8d2c792ac1ecab8210d19cd494f718b2b2b2a441096',
-	questionForker: '0xa8f5dd7bbff3bd21d994f5f29d1fa8e5bf59c689bd01b4a254167d19b140b5ce',
+	securityPoolFactory: '0x2fffae5e1bf7f05a679d4daf699e0e94849f9ab40a79241d881d816099d9b2c7',
+	questionForker: '0x84536255924d1f32a0c4920cda41b08904299affe807b9b1d2187ae3583590b9',
 	questionLedgerOperationsDelegate: '0x70efd3ecf075e48d3f86f51d9b7480e6512d8d034f016a0f50b72223ad820d1c',
-	shareTokenFactory: '0x0162cac38fed27cd31bf07f99bf25d64eb00da71767a58031bb30071b83c8016',
+	shareTokenFactory: '0x089a5dab4a1c2d40708c99377b268198df60c88997c30697ca30af544ca638ff',
 	sharedPoolPriceFeedDeploymentWorker: '0x981ed15a29deef8f62c034ffad1f209310551f75ce565f7e87960225fd68c117',
 }
 
 const EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0xf8a5199c4a87d6756be5f2da5b7c41cf9f207534bb40f938da11a7562ac4a7a3',
-	questionForker: '0xdd07c37f4c22075a3c475329e73c890e528498fdaf37f42b46e8a9a10a265278',
-	shareTokenFactory: '0x57c6b60e55a71a3431da3d4db66483f56ea65cc7018e4b69320d8d543dbd054e',
+	securityPoolFactory: '0xdd03a3fe5e20626be30d26377739b28921a0cf7ae31dfd46fdf2e7816eca600b',
+	questionForker: '0x5b5cdd4cec2648bebf930504a762ffcc36aef8b0c28a85e9e1c983a9c38a402c',
+	shareTokenFactory: '0x1b808215bdd549826201607b4f027bbc2b93385050c84bf1ee7fee8e0f427059',
 }
 
 function runtimeWithAddresses(artifact: { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } }, addresses: readonly Address[]) {
@@ -125,18 +125,18 @@ const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentSt
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
 	sharedPoolPriceFeedFactory: '0x40305ebc3097ec02388f4c05a12fa248462aa44c2de0c2d7eb3d05e60da2c9ec',
 	questionLedgerEventEmitter: '0x7cc076e2822ad2187a680ab7b091a7a93963fa5c07bf31be029b9ea90dcd5b46',
-	securityPoolFactory: '0x8d001ff88eb1c87b4de12d2189dcf686924112ff972ae38b41f1c8a5c0795a75',
-	questionForker: '0x6512465f531042b6c07329e2ba2f31df5d02df9c25d17ee2df63ba386702ab11',
+	securityPoolFactory: '0xc2e2ce5eddb4d967e3b6265fbf2e673794f2e3c4816619940208b8c7dfcb79f4',
+	questionForker: '0x3fd789996485b7706466177f1adcca40433218f60d96450991d81810d0da3fb5',
 	questionLedgerOperationsDelegate: '0x70efd3ecf075e48d3f86f51d9b7480e6512d8d034f016a0f50b72223ad820d1c',
-	shareTokenFactory: '0x37365891adc20f8d1e8469131cefa8a188c90ea1b93cec3981eae68a9aca4751',
+	shareTokenFactory: '0x8325a085bc2cdc9b1645bd1a3adc60e432c58fbd81b81e072c599c75e9c757bb',
 	sharedPoolPriceFeedDeploymentWorker: '0x981ed15a29deef8f62c034ffad1f209310551f75ce565f7e87960225fd68c117',
 }
 
 const EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_MAINNET_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0xdc715d54ae001c79d1f2d1c07c89ae49f68e2abee8ce156ab5359799155b6911',
-	questionForker: '0xf69d1b1ba928e6b0609d91579fa1ba9d1f36ebfbff789ce2d4ae5d4841ba785c',
-	shareTokenFactory: '0x409ed0e9dbe9fc6277b1bc9c6653bbce9ddd75f4b33a3722520e65583fd3e3a7',
+	securityPoolFactory: '0x1ca89a2bc41f79065291a2281ead4e181ff0e59be0149c22b92a7def03cd6d60',
+	questionForker: '0x1e0b257177f5b2bbe62c2848c968138eb9113b7f49c70e4876994d3e62c3ad3e',
+	shareTokenFactory: '0x015de109f5c2301c2a78f433bfde2c6724d59d5a09faffa305930e19d8a670cf',
 }
 const EXPECTED_PUBLIC_RUNTIME_CODE_HASHES = {
 	mainnet: { yes: EXPECTED_MAINNET_RUNTIME_CODE_HASHES, no: EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES },
