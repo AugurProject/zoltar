@@ -103,7 +103,6 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 			rep.append(tokenLine)
 		}
 		if (item.rep_balances_truncated) rep.append(element('span', '', `Showing ${number(repTokens.length)} of ${number(item.sampled_rep_token_count)} sampled REP tokens`))
-		if (item.weth_balances_truncated) wallet.append(element('span', '', 'Showing the first 100 sampled wrapped native tokens.'))
 		if (!repComplete) rep.append(element('span', '', `${number(item.sampled_rep_token_count)} of ${number(item.rep_token_count)} REP tokens sampled`))
 		main.append(identity, rep, wallet, transactions, positions)
 		article.append(main)
