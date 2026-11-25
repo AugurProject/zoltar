@@ -1,6 +1,6 @@
 export const securityPoolTerm = 'Security pool'
 export const securityPoolDefinition = 'Shared REP backing for one or more questions in one universe, in the configured collateral token. Each registered question keeps its own settlement and reporting state inside the security pool.'
-export const securityMultiplierDefinition = 'The REP backing required per unit of collateral commitment, expressed as a percentage. A 250% multiplier requires 2.5 units of REP value per unit committed.'
+export const securityMultiplierDefinition = 'The REP backing required per unit of collateral commitment, expressed as a percentage.'
 export const openInterestFeeTerm = 'Open interest fee'
 export const openInterestFeeDefinition = 'The security pool’s fixed annual holding-fee rate on collateral behind outstanding shares. Healthy capital commitments earn the fees.'
 export const nonDecisionThresholdTerm = 'Non-decision threshold'

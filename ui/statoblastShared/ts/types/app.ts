@@ -5,6 +5,8 @@ export type { AccountState, WriteOperationsParameters } from '@zoltar/ui-core-sh
 
 export type TradingFormState = {
 	completeSetAmount: string
+	mintMaximumFee?: string
+	mintMinimumShares?: string
 	redeemAmount: string
 	questionLedgerAddress: string
 	selectedShareOutcome: ReportingOutcomeKey

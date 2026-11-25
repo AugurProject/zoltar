@@ -2713,6 +2713,23 @@ span.rep-price-status.stale,
 	margin-block-start: var(--space-2);
 }
 
+@media (max-width: 40rem) {
+	.statoblast-watchlist-history > li {
+		grid-template-columns: auto minmax(0, 1fr);
+	}
+
+	.statoblast-watchlist-history .statoblast-outlined-link {
+		grid-column: 2;
+		justify-self: end;
+	}
+
+	.statoblast-history-identity > small .address-copy-control {
+		display: flex;
+		width: fit-content;
+		max-width: 100%;
+	}
+}
+
 @media (width < 64rem) {
 	.statoblast-watchlist-table,
 	.statoblast-watchlist-table tbody {
@@ -3159,6 +3176,7 @@ span.rep-price-status.stale,
 }
 
 :root[data-product="statoblast"] .header-toolbar-controls {
+	flex-wrap: wrap;
 	min-width: 0;
 }
 
@@ -3614,10 +3632,6 @@ span.rep-price-status.stale,
 }
 
 @media (min-width: 80rem) {
-	.header-toolbar-controls:not(:has(.wallet-network-switch)) .statoblast-header-controls {
-		flex-wrap: nowrap;
-	}
-
 	.statoblast-header-controls button,
 	.statoblast-auto-desktop {
 		min-height: 2rem;
@@ -3625,10 +3639,6 @@ span.rep-price-status.stale,
 }
 
 @media (width > 40rem) {
-	:root[data-product="statoblast"] .header-toolbar-controls:has(.wallet-network-switch) {
-		flex-wrap: wrap;
-	}
-
 	:root[data-product="statoblast"] .header-toolbar-controls:has(.wallet-network-switch) .toolbar-field.universe,
 	:root[data-product="statoblast"] .header-toolbar-controls:has(.wallet-network-switch) .toolbar-field-value {
 		min-width: 0;
@@ -3701,7 +3711,7 @@ span.rep-price-status.stale,
 	}
 }
 
-@container statoblast-header-controls (max-width: 21rem) {
+@container statoblast-header-controls (max-width: 23rem) {
 	:root[data-product="statoblast"] .header-toolbar-controls > .account-menu {
 		grid-column: 1 / -1;
 		grid-row: 3;
@@ -4704,5 +4714,99 @@ span.rep-price-status.stale,
 	.statoblast-auction-bid-table td:first-child,
 	.statoblast-auction-bid-table td:nth-child(6) {
 		overflow-wrap: anywhere;
+	}
+}
+
+.statoblast-share-action-form {
+	display: grid;
+	gap: var(--space-3);
+	margin-block-start: var(--space-4);
+}
+
+.statoblast-share-action-reasons {
+	display: grid;
+	gap: var(--space-1);
+	margin-block: var(--space-2) 0;
+	padding-inline-start: var(--space-4);
+	font-size: var(--font-caption);
+	color: var(--text-secondary);
+}
+
+.statoblast-share-mint-glyph {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--space-2);
+}
+
+.statoblast-share-mint-glyph .currency-value {
+	padding: var(--space-1) var(--space-2);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-control);
+}
+
+.statoblast-share-mint-limits,
+.statoblast-share-mint-rows {
+	border-block-start: 1px solid var(--border-subtle);
+	padding-block-start: var(--space-3);
+}
+
+.statoblast-share-mint-details,
+.statoblast-share-mint-limits-fields {
+	display: grid;
+	gap: var(--space-3);
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+}
+
+.statoblast-share-mint-limits-fields {
+	margin-block: var(--space-3);
+}
+
+.statoblast-share-mint-rows {
+	display: grid;
+	gap: var(--space-2);
+	align-content: start;
+	margin: 0;
+}
+
+.statoblast-share-mint-rows > div {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--space-2);
+}
+
+.statoblast-share-mint-rows dd {
+	margin: 0;
+	text-align: end;
+}
+
+:root[data-product="statoblast"] input.form-input:not(:focus) {
+	text-overflow: ellipsis;
+}
+
+.statoblast-share-action-form > .amount-field .form-input-adornment {
+	min-inline-size: calc(11ch + 2 * var(--space-3));
+	justify-content: end;
+}
+
+:root[data-product="statoblast"] .wallet-chip .address-value-long-abbreviation {
+	inline-size: 42ch;
+}
+
+@media (max-width: 40rem) {
+	:root[data-product="statoblast"] .wallet-chip .address-value-long-abbreviation {
+		inline-size: 26ch;
+	}
+}
+
+@container statoblast-header-controls (max-width: 18rem) {
+	:root[data-product="statoblast"] .wallet-chip {
+		gap: 0;
+		padding-inline: 0;
+	}
+
+	:root[data-product="statoblast"] .wallet-chip-dot {
+		display: none;
 	}
 }

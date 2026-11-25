@@ -321,7 +321,7 @@ void describe('trading helpers', () => {
 				totalPoolHeldAttoRep: 20n * 10n ** 18n,
 				mintingCapacityAttoEth: 0n,
 			}),
-		).toBe('No mint capacity. No vault has an active commitment.')
+		).toBe('No mint capacity. No position has an active commitment.')
 
 		expect(
 			getTradingMintGuardMessage({

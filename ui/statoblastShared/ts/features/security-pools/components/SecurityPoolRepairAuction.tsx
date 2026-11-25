@@ -8,15 +8,19 @@ import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.j
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
+import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import { SecurityPoolButton, SecurityPoolInput } from './SecurityPoolControls.js'
 import { useSecurityPoolAuction, type SecurityPoolAuctionParameters } from '../hooks/useSecurityPoolAuction.js'
+import { useSecurityPoolDeadline } from '../hooks/useSecurityPoolDeadline.js'
 import { useEffect, useId } from 'preact/hooks'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import type { SecurityPoolAuctionBid } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import * as copy from '../../../copy/securityPoolRepairAuction.js'
+import { deadlineChecking } from '../../../copy/questionPage.js'
+import { tryAgain } from '../../../copy/securityPoolPage.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import { useOldActionDataNotice } from '../../useStatoblastPageRefresh.js'
@@ -26,7 +30,7 @@ type AuctionModel = ReturnType<typeof useSecurityPoolAuction>
 type Auction = NonNullable<NonNullable<AuctionModel['snapshot']>['auction']>
 type Collateral = Pick<NonNullable<AuctionModel['snapshot']>['collateral'], 'symbol' | 'decimals'>
 
-export function SecurityPoolRepairAuction({ onAuctionFinalized, sharedDeadline = false, ...parameters }: SecurityPoolAuctionParameters & { onAuctionFinalized?: ((universeId: bigint) => void) | undefined; sharedDeadline?: boolean }) {
+export function SecurityPoolRepairAuction({ onAuctionFinalized, sharedDeadline = false, sharedDeadlineChecking = false, ...parameters }: SecurityPoolAuctionParameters & { onAuctionFinalized?: ((universeId: bigint) => void) | undefined; sharedDeadline?: boolean; sharedDeadlineChecking?: boolean }) {
 	const model = useSecurityPoolAuction(parameters)
 	const snapshot = model.snapshot
 	const actionDataNotice = useOldActionDataNotice(sharedDeadline ? model.displayedAt : undefined)
@@ -39,7 +43,21 @@ export function SecurityPoolRepairAuction({ onAuctionFinalized, sharedDeadline =
 	const disabled = parameters.actions.busy !== undefined
 	const deadline = parameters.fork?.activationDeadline
 	const closesAt = deadline !== undefined && deadline > 0n ? deadline : auction?.closesAt
-	const isOpen = auction?.opened === true && !auction.finalized && snapshot !== undefined && snapshot.timestamp < (closesAt ?? auction.closesAt)
+	const check = useSecurityPoolDeadline({
+		scope: `${parameters.fork?.chainId}:${auction?.address}:${parameters.bidder}`,
+		deadline: sharedDeadline || auction === undefined || auction.finalized ? undefined : closesAt,
+		timestamp: snapshot?.timestamp,
+		readAt: model.displayedAt,
+		reading: model.loading || parameters.fork?.branch === undefined || parameters.bidder === undefined,
+		refresh: model.refresh,
+	})
+	const checking = sharedDeadlineChecking || check.checking
+	let checkedTime = snapshot?.timestamp
+	if (sharedDeadline && parameters.fork !== undefined && (checkedTime === undefined || parameters.fork.timestamp > checkedTime)) checkedTime = parameters.fork.timestamp
+	const closed = checkedTime !== undefined && closesAt !== undefined && checkedTime >= closesAt
+	let deadlineReason = closed ? copy.closed : undefined
+	if (checking) deadlineReason = deadlineChecking
+	const isOpen = !checking && !closed && auction?.opened === true && !auction.finalized && snapshot !== undefined
 	const noSale = auction?.finalized === true && auction.shortfallAttoEth > 0n && (!auction.opened || auction.clearing?.filledLots === 0n)
 	const highest = isOpen && auction.maximumAdmissibleBidAttoRepPerLot >= auction.minimumCollateralAttoRepPerLot ? auction.maximumAdmissibleBidAttoRepPerLot : undefined
 	let askHint = copy.priceHint(auction?.repGrid)
@@ -48,14 +66,15 @@ export function SecurityPoolRepairAuction({ onAuctionFinalized, sharedDeadline =
 	const collateralAmount = (amount: bigint | undefined) => <CurrencyValue value={amount} suffix={collateral.symbol} units={collateral.decimals} />
 	let status = copy.states.unopened
 	if (auction?.opened) status = copy.states.bidding
-	if (snapshot !== undefined && closesAt !== undefined && snapshot.timestamp >= closesAt) status = copy.states.waiting
+	if (closed) status = copy.states.waiting
+	if (checking) status = deadlineChecking
 	if (auction?.finalized) status = copy.states.finalized
 	const refreshReason = (disabled ? copy.busy : undefined) ?? (model.loading ? copy.loading : undefined) ?? (parameters.bidder === undefined ? copy.connect : undefined) ?? (parameters.fork?.branch === undefined ? copy.selectBranch : undefined)
 	return (
 		<WorkflowSubsection title={copy.title}>
 			{actionDataNotice !== undefined && <p className='detail'>{actionDataNotice}</p>}
 			<UserMessage detail={copy.description} />
-			{model.error === undefined ? undefined : <UserMessage tone='error' detail={model.error} />}
+			<RetryableNotice message={model.error ?? (check.failed ? deadlineChecking : undefined)} retryLabel={tryAgain} onRetry={check.failed ? check.retry : model.refresh} />
 			{model.savedAt !== undefined && (
 				<p className='detail'>
 					{copy.savedBids} <UpdatedAgo updatedAt={model.savedAt} />
@@ -77,7 +96,7 @@ export function SecurityPoolRepairAuction({ onAuctionFinalized, sharedDeadline =
 					{collateralAmount(auction?.shortfallAttoEth)}
 				</MetricField>
 			</MetricGrid>
-			<SecurityPoolButton model={parameters.actions} action='openSecurityPoolAuction' label={copy.open} pendingLabel={copy.opening} reason={model.openReason} onClick={model.open} />
+			<SecurityPoolButton model={parameters.actions} action='openSecurityPoolAuction' label={copy.open} pendingLabel={copy.opening} reason={deadlineReason ?? model.openReason} onClick={model.open} />
 			{auction !== undefined && auction.shortfallAttoEth > 0n && auction.lotAttoEth > 0n && <AuctionLots auction={auction} lots={model.lots} collateral={collateral} />}
 			{auction?.finalized === true && (
 				<MetricGrid>
@@ -109,7 +128,7 @@ export function SecurityPoolRepairAuction({ onAuctionFinalized, sharedDeadline =
 				allowanceLoading={model.loading}
 				approvedAmount={snapshot?.collateralAllowance}
 				disabled={disabled}
-				guardMessage={model.fundingReason}
+				guardMessage={deadlineReason ?? model.fundingReason}
 				onApprove={amount => {
 					if (amount !== undefined) void model.approve(amount)
 				}}
@@ -120,7 +139,7 @@ export function SecurityPoolRepairAuction({ onAuctionFinalized, sharedDeadline =
 				tokenSymbol={snapshot?.collateral.symbol ?? collateralCopy.fallback}
 				tokenUnits={snapshot?.collateral.decimals ?? 18}
 			/>
-			<SecurityPoolButton model={parameters.actions} action='bidSecurityPoolAuction' label={copy.bid} pendingLabel={copy.bidding} reason={model.bidReason} onClick={model.bid} />
+			<SecurityPoolButton model={parameters.actions} action='bidSecurityPoolAuction' label={copy.bid} pendingLabel={copy.bidding} reason={deadlineReason ?? model.bidReason} onClick={model.bid} />
 			<h4>{copy.yourBids}</h4>
 			{auction?.bids.length === 0 && !model.loading ? <EmptyState title={copy.noBids} /> : undefined}
 			{snapshot !== undefined && auction !== undefined && auction.bids.length > 0 && (

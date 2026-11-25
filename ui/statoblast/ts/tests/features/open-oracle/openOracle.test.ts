@@ -583,7 +583,7 @@ describe('OpenOracle helpers', () => {
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, disputeDelay: (1n << 24n).toString() } }).message).toBe('Dispute delay exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, settlementTime: (1n << 48n).toString() } }).message).toBe('Settlement delay exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, exactToken1Report: (1n << 128n).toString() }, token1Decimals: 18 }).message).toBe('Base token amount exceeds the contract maximum.')
-		expect(getOpenOracleCreateValidation({ form: { ...baseForm, escalationHalt: (1n << 128n).toString() }, token1Decimals: 18 }).message).toBe('Escalation halt exceeds the contract maximum.')
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, escalationHalt: (1n << 128n).toString() }, token1Decimals: 18 }).message).toBe('Dispute growth cutoff exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, settlerRewardEthAmount: (1n << 96n).toString() } }).message).toBe('Settler reward exceeds the contract maximum.')
 	})
 
@@ -794,7 +794,7 @@ describe('OpenOracle helpers', () => {
 		const gasFailure = 'Transaction failed after using its full gas limit. Open the transaction details before retrying.'
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error(gasFailure))).toBe(gasFailure)
 		expect(formatOpenOracleDisputeWriteErrorMessage(new Error(gasFailure))).toBe(gasFailure)
-		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: 0x98bdb2e0'))).toBe('Settlement did not leave enough gas for this report’s settlement callback. Retry settling and keep the gas limit the wallet suggests; do not lower it.')
+		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: 0x98bdb2e0'))).toBe('The settlement contract ran out of gas. Retry using the gas limit suggested by your wallet.')
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: SettleTooEarly()'))).toBe('This report is not ready to settle.')
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: 0x3edf6050'))).toBe('This report is not ready to settle.')
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: settlement callback failed'))).toBe('Transaction failed while settling the report. Reason: settlement callback failed.')

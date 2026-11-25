@@ -251,6 +251,7 @@ export function App() {
 								universeRepBalanceAttoRep={operations.zoltarForkRepBalanceAttoRep}
 								isLoadingUniverseRepBalance={operations.loadingZoltarForkAccess}
 								onGoToGenesisUniverse={() => setUniverse(0n)}
+								longWalletAbbreviation
 								showWethBalance
 								universeControl={
 									<div className='statoblast-header-controls'>
@@ -344,7 +345,7 @@ export function App() {
 						universeState: resolveLoadableValueState({ isLoading: operations.loadingZoltarUniverse, isMissing: operations.zoltarUniverseMissing, value: zoltarUniverse }),
 					}}
 				/>
-				<TransactionStepsModal contextKey={`${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}`} finalActionLabel={pageCopy.continueInWallet} />
+				<TransactionStepsModal contextKey={`${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}`} finalActionLabel={pageCopy.continueInWallet} keepConfirmed={page.kind === 'question' && page.tab === 'shares'} />
 			</ProtocolAppFrame>
 		</UniverseNamesProvider>
 	)

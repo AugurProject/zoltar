@@ -2,6 +2,7 @@ import { OPEN_ORACLE_MAX_UI_SETTLEMENT_SECONDS } from './openOracleSettlementSaf
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { disputeGrowthCutoffMaximum, disputeGrowthCutoffNegative } from '../copy/openOracle.js'
 
 export const OPEN_ORACLE_PERCENTAGE_PRECISION = 10n ** 7n
 export const OPEN_ORACLE_MULTIPLIER_PRECISION = 100n
@@ -42,8 +43,8 @@ export function getOpenOracleCreateParameterValidation(
 	if (!skipToken1MagnitudeValidation && exactToken1Report > OPEN_ORACLE_UINT128_MAX) return { field: 'exactToken1Report', message: 'Base token amount exceeds the contract maximum.' }
 	if (initialToken2Amount <= 0n) return { field: 'initialToken2Amount', message: undefined }
 	if (initialToken2Amount > OPEN_ORACLE_UINT128_MAX) return { field: 'initialToken2Amount', message: 'Quote token amount exceeds the contract maximum.' }
-	if (escalationHalt < 0n) return { field: 'escalationHalt', message: 'Escalation halt must be non-negative.' }
-	if (!skipToken1MagnitudeValidation && escalationHalt > OPEN_ORACLE_UINT128_MAX) return { field: 'escalationHalt', message: 'Escalation halt exceeds the contract maximum.' }
+	if (escalationHalt < 0n) return { field: 'escalationHalt', message: disputeGrowthCutoffNegative }
+	if (!skipToken1MagnitudeValidation && escalationHalt > OPEN_ORACLE_UINT128_MAX) return { field: 'escalationHalt', message: disputeGrowthCutoffMaximum }
 	if (settlerRewardAttoEth < 0n) return { field: 'settlerRewardAttoEth', message: 'Settler reward must be non-negative.' }
 	if (settlerRewardAttoEth > OPEN_ORACLE_UINT96_MAX) return { field: 'settlerRewardAttoEth', message: 'Settler reward exceeds the contract maximum.' }
 	if (ethValueAttoEth < 0n) return { field: 'ethValueAttoEth', message: 'ETH sent must be non-negative.' }

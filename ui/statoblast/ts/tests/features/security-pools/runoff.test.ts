@@ -52,14 +52,14 @@ test('all owner principal backs authorization and a pending retirement locks the
 
 test('a funded report permits growth only with its conservative collateral price', () => {
 	const snapshot = capitalSnapshot({ oracleExposureLimitAttoEth: 1n, ownerPrincipalAttoRep: 40n * unit })
-	expect(capitalAuthorizationReason(snapshot, 10n * unit)).toContain('funded')
+	expect(capitalAuthorizationReason(snapshot, 10n * unit)).toContain('Fund a REP price report')
 	expect(capitalAuthorizationReason(snapshot, 10n * unit, 3n * unit)).toBeUndefined()
 	expect(capitalAuthorizationReason({ ...snapshot, ownerPrincipalAttoRep: 30n * unit }, 10n * unit, 3n * unit)).toContain('Collateral')
 	expect(requiredSecurityPoolCollateral(snapshot, 10n * unit, 3n * unit)).toBe(37_800_000_000_000_000_000n)
 })
 test('unfunded authorization cannot ignore demand above nominal commitment', () => {
 	const snapshot = capitalSnapshot({ demandAttoEth: 101n * unit })
-	expect(capitalAuthorizationReason(snapshot, 10n * unit)).toContain('funded')
+	expect(capitalAuthorizationReason(snapshot, 10n * unit)).toContain('Fund a REP price report')
 })
 
 test('collateral-backed authorization needs no separate ETH execution budget', () => {

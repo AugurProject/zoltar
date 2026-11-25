@@ -68,6 +68,15 @@ test('stake found on chain without a located deposit is not marked saved', async
 	expect(Boolean(within(result.container).queryByRole('img', { name: 'Deposit saved on this device' }))).toBe(false)
 })
 
+test('a forked parent with a live response window points to recovery instead of offering another report', async () => {
+	const view = decodeReportingOverview(reportingOverview(details({ settlementState: 'migration-required' }), Date.now()))
+	if (view === undefined) throw new Error('Expected the Reporting snapshot to round-trip')
+	const result = lifecycle.trackRendered(await renderIntoDocument(<StatoblastReportingOverview view={view} now={150n} autoRefresh={false} onTakeLead={() => undefined} />))
+	const queries = within(result.container)
+	expect(Boolean(queries.queryByRole('button', { name: /^Report.*on Yes/ }))).toBe(false)
+	expect(queries.getByText(/Your deposits carry over/)).toBeDefined()
+})
+
 test('the reporting banner distinguishes open without reports, an empty game and tied outcomes', async () => {
 	const notStarted = reportingOverview({ ...details(), status: 'not-started' }, Date.now())
 	const noReports = lifecycle.trackRendered(await renderIntoDocument(<StatoblastReportingOverview view={notStarted} now={150n} autoRefresh={false} />))

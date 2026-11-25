@@ -36,7 +36,7 @@ type ScopeCopy = {
 export const scopes: Record<SecurityPoolPriceScope, ScopeCopy> = {
 	branch: {
 		title: 'Branch price report',
-		description: 'Fund a challenged REP price for this branch. Reports accepted before branch activation do not start provider fees.',
+		description: 'Report a REP price for this branch. Price reports can be disputed. Position fees begin only after branch activation.',
 		missingTarget: 'Select a fork branch first.',
 		waitForStart: 'Start branch migration before funding its price report.',
 		loading: 'Checking branch price requirements…',
@@ -51,9 +51,9 @@ export const scopes: Record<SecurityPoolPriceScope, ScopeCopy> = {
 		requestWarning: 'Your collateral and branch REP fund a two-sided oracle quote. Disputes can trade against that quote; the returned token amounts can change. Disputes may delay settlement beyond the reporting window. Security pool collateral does not fund this report.',
 		reportLoading: 'Loading this branch report…',
 		releasedRep: 'Released branch REP',
-		formatApprovalReview: (feed, amount, token, collateral) => `Allow branch price feed ${feed} to spend up to ${amount} ${token === 'weth' ? collateral : 'branch REP'} from your wallet. This sets the total allowance; it does not request a price report.`,
+		formatApprovalReview: (feed, amount, token, collateral) => `Allow branch price feed ${feed} to spend up to ${amount} ${token === 'weth' ? collateral : 'branch REP'} from your wallet. This sets the total allowance for reporting.`,
 		formatRequestReview: (weth, rep, bounty, collateral) =>
-			`Fund this branch price report with ${weth} ${collateral}, ${rep} branch REP and ${bounty} ETH bounty. Whoever settles earns the bounty as withdrawable OpenOracle credit. Disputes may change the token amounts returned to your wallet. This does not activate the branch. Accepted prices can enable provider fees once the branch is active.`,
+			`Fund this branch price report with ${weth} ${collateral}, ${rep} branch REP and ${bounty} ETH bounty. Whoever settles earns the bounty as withdrawable OpenOracle credit. Disputes may change the token amounts returned to your wallet. This does not activate the branch. An accepted price can enable position fees once the branch is active.`,
 	},
 	universe: {
 		title: 'Shared REP price',
@@ -73,7 +73,7 @@ export const scopes: Record<SecurityPoolPriceScope, ScopeCopy> = {
 		requestWarning: 'Your collateral and REP fund a two-sided oracle quote. Disputes can trade against that quote; the returned token amounts can change. Security pool collateral does not fund this report.',
 		reportLoading: 'Loading this report…',
 		releasedRep: 'Released REP',
-		formatApprovalReview: (feed, amount, token, collateral) => `Allow this universe’s price feed ${feed} to spend up to ${amount} ${token === 'weth' ? collateral : 'REP'} from your wallet. This sets the total allowance; it does not request a price report.`,
+		formatApprovalReview: (feed, amount, token, collateral) => `Allow this universe’s price feed ${feed} to spend up to ${amount} ${token === 'weth' ? collateral : 'REP'} from your wallet. This sets the total allowance for reporting.`,
 		formatRequestReview: (weth, rep, bounty, collateral) =>
 			`Fund this REP price report with ${weth} ${collateral}, ${rep} REP and ${bounty} ETH bounty. Whoever settles earns the bounty as withdrawable OpenOracle credit. Disputes may change the token amounts returned to your wallet. An accepted price renews the shared price for this universe.`,
 	},
@@ -84,7 +84,7 @@ export const noPreparationSource = 'No registered origin question is available t
 export const tooLate = 'Too little time remains to challenge and accept a new report before the preparation reporting window closes.'
 export const reportingDeadline = 'Preparation reporting closes'
 export const earliestSettlement = 'New report can settle from'
-export const price = (collateral: string) => `Proposed price (REP per ${collateral})`
+export const price = (collateral: string) => `REP price (REP per ${collateral})`
 export const priceInvalid = 'Enter a positive REP price.'
 export const wethHint = 'Leave blank to use the suggested stake shown below.'
 export const wethInvalid = 'Enter a nonnegative collateral amount in the token’s precision.'

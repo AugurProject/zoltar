@@ -145,6 +145,19 @@ test('confirmed activation keeps the locked deployment available after remount',
 function useSecurityPoolActionsWrapper(props: { model: ReturnType<typeof model>; parameters?: Parameters<typeof useSecurityPoolActions>[1]; deploying?: boolean }) {
 	return useSecurityPoolActions(props.model, props.parameters ?? parameters, props.deploying)
 }
+
+test('the deployment form reads the proposed origin universe while Capital omits the read', async () => {
+	const source = capitalClient()
+	source.setRead('getForkTime', 1n)
+	source.install()
+	const base = model()
+	const hook = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolActionsWrapper, { model: base, deploying: false }))
+	expect(source.reads.filter(read => read.name === 'getForkTime')).toHaveLength(0)
+	await hook.setProps({ deploying: true })
+	await waitFor(() => expect(hook.state().originForked).toBe(true))
+	expect(source.reads.filter(read => read.name === 'getForkTime')).toHaveLength(1)
+})
+
 test('a winning vault is controlled by its bidder before and after automatic materialization', async () => {
 	capitalClient().install()
 	const snapshot = auctionCapitalSnapshot()
@@ -299,10 +312,10 @@ test('setup advances one explicit stage and rejects a stale stage before wallet 
 	source.setSetupStage(1n)
 	source.setRead('getForkTime', 900n)
 	await act(() => hook.state().prepare(2))
-	expect(hook.state().error).toContain('Origin universe forked')
+	expect(hook.state().error).toContain('The origin universe has forked')
 	expect(requests).toHaveLength(1)
 	await hook.setProps({ model: { ...base, snapshot: undefined, setup: { ...setup, originForkTime: 900n } } })
-	expect(hook.state().preparationReason(2)).toContain('Origin universe forked')
+	expect(hook.state().preparationReason(2)).toContain('The origin universe has forked')
 
 	const watchlist = localEntityScopeForNetwork(MAINNET_NETWORK_PROFILE, 'statoblast', 'pool')
 	expect(readFavoriteEntries(watchlist)).toEqual([])
@@ -319,7 +332,7 @@ test('presentation-only accounts explain refresh without enabling writes or repl
 	const base = { ...model(), snapshot: undefined, presentationSnapshot: capitalSnapshot() }
 	const hook = await renderHookWithProps(useSecurityPoolActionsWrapper, { model: base, parameters })
 	lifecycle.trackRendered(hook)
-	expect(hook.state().ownerReason).toBe('Account refresh pending.')
+	expect(hook.state().ownerReason).toBe('Position refresh pending.')
 	await hook.setProps({ parameters: { ...parameters, accountAddress: undefined } })
 	expect(hook.state().ownerReason).toBe('Connect a wallet before sending transactions.')
 })
@@ -350,7 +363,7 @@ test('USDC creation validates the configured oracle floor in six-decimal collate
 	})
 	expect(hook.state().deployReason).toContain('question rules first')
 	await act(() => hook.state().setReportFloor('0'))
-	expect(hook.state().deployReason).toContain('positive report stake floor')
+	expect(hook.state().deployReason).toContain('positive minimum report stake with up to 6 decimal places')
 })
 test('the origin universe follows the selected universe until the user edits it', async () => {
 	capitalClient().install()
@@ -367,7 +380,7 @@ test('the origin universe follows the selected universe until the user edits it'
 test('a forked origin stops creation before the paid admission deployment', async () => {
 	const source = capitalClient()
 	source.setRead('getForkTime', 1n)
-	const { hook, requests } = await renderWithDeploymentWallet(source)
+	const { hook, requests } = await renderWithDeploymentWallet(source, true)
 	await waitFor(() => expect(hook.state().originForked).toBe(true))
 	expect(hook.state().creationError).toBeUndefined()
 	expect(hook.state().admissionDeployReason).toContain('has forked')
@@ -379,7 +392,7 @@ test('a forked origin stops creation before the paid admission deployment', asyn
 
 test('a universe that forks after the form checked it still stops at submission', async () => {
 	const source = capitalClient()
-	const { hook, requests } = await renderWithDeploymentWallet(source)
+	const { hook, requests } = await renderWithDeploymentWallet(source, true)
 	await waitFor(() => expect(hook.state().admissionDeployReason).toBeUndefined())
 	source.setRead('getForkTime', 1n)
 	await act(() => hook.state().deployAdmission())
@@ -394,7 +407,7 @@ test('a fork seen on one network does not block the same universe ID on another'
 	const forkedNetwork = capitalClient()
 	forkedNetwork.setRead('getForkTime', 1n)
 	forkedNetwork.install()
-	const hook = await renderHookWithProps(useSecurityPoolActionsWrapper, { model: model() })
+	const hook = await renderHookWithProps(useSecurityPoolActionsWrapper, { model: model(), deploying: true })
 	lifecycle.trackRendered(hook)
 	await waitFor(() => expect(hook.state().originForked).toBe(true))
 	const unforkedNetwork = capitalClient()

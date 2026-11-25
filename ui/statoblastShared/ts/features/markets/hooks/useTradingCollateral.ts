@@ -7,10 +7,12 @@ import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as collateralCopy from '../../../copy/collateral.js'
+import { insufficientMintCapacity, maximumMintAmountNotFunded, maximumMintAmountUnavailable } from '../../../copy/securityPool.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { parseCompleteSetAmountInput } from '../lib/trading.js'
-import { loadTradingCollateral, quoteTradingCollateral } from '../../../protocol/trading.js'
+import { loadMaximumTradingMintAmount, loadTradingCollateral, quoteTradingCollateral } from '../../../protocol/trading.js'
+import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
 import type { WriteOperationsParameters } from '../../../types/app.js'
 
 export function useTradingCollateral({ pool, amountInput, ...parameters }: WriteOperationsParameters & { pool: string | undefined; amountInput: string; enabled: boolean }) {
@@ -19,6 +21,8 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 	const collateralLoaded = useSignal<{ key: string; collateral?: Awaited<ReturnType<typeof loadTradingCollateral>>; quoteInput?: string; quote?: Awaited<ReturnType<typeof quoteTradingCollateral>> | undefined; error?: string }>()
 	const recoveryKnowledge = useSignal<{ key: string; applicable: boolean }>()
 	const approvalPending = useSignal<'collateral' | 'recovery' | undefined>(undefined)
+	const maximumSearch = useSignal<{ key: string; abort: AbortController }>()
+	const maximumError = useSignal<{ key: string; message: string }>()
 	const collateralVersion = useSignal(0)
 	const backend = getActiveBackend()
 	const collateralPool = pool !== undefined && isAddress(pool) ? getAddress(pool) : undefined
@@ -27,6 +31,23 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 	useEffect(() => {
 		recoveryKnowledge.value = undefined
 	}, [recoverySelection])
+	useEffect(() => {
+		const cancelSearch = () => {
+			const search = maximumSearch.peek()
+			if (search?.key !== collateralKey) return
+			search.abort.abort()
+			maximumSearch.value = undefined
+		}
+		const onVisibility = () => {
+			if (document.hidden) cancelSearch()
+		}
+		document.addEventListener('visibilitychange', onVisibility)
+		return () => {
+			document.removeEventListener('visibilitychange', onVisibility)
+			cancelSearch()
+			if (maximumError.peek()?.key === collateralKey) maximumError.value = undefined
+		}
+	}, [backend, collateralKey, enabled])
 	const currentAmount = useRef(amountInput)
 	currentAmount.current = amountInput
 	const refreshCollateral = useRef<(() => void) | undefined>(undefined)
@@ -52,7 +73,7 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 				const amount = parseCompleteSetAmountInput(quoteInput, collateral.decimals)
 				const quote =
 					amount !== undefined && amount > 0n
-						? await quoteTradingCollateral(client, collateral, amount, required => {
+						? await quoteTradingCollateral(client, collateral, collateralPool, amount, required => {
 								if (active && getActiveBackend() === backend && currentAmount.current === quoteInput) recoveryKnowledge.value = { key: `${collateralKey}:${quoteInput}`, applicable: required > 0n }
 							})
 						: undefined
@@ -97,11 +118,31 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 	const collateral = selectedCollateral?.collateral
 	const collateralQuote = selectedCollateral?.quoteInput === amountInput ? selectedCollateral.quote : undefined
 	const requiredCollateral = collateralQuote === undefined ? undefined : collateralQuote.amount + collateralQuote.fee
+	const findMaximumMintAmount = async () => {
+		if (!enabled || collateralPool === undefined || collateral === undefined || document.hidden || maximumSearch.peek()?.key === collateralKey) return undefined
+		const abort = new AbortController()
+		const search = { key: collateralKey, abort }
+		maximumSearch.value = search
+		maximumError.value = undefined
+		try {
+			const client = withStatoblastRequestTimeout(createConnectedReadClient(), maximumMintAmountUnavailable, abort.signal)
+			const maximum = await loadMaximumTradingMintAmount(client, collateral, collateralPool)
+			if (abort.signal.aborted || getActiveBackend() !== backend) return undefined
+			if (maximum === undefined) maximumError.value = { key: collateralKey, message: maximumMintAmountNotFunded }
+			return maximum
+		} catch {
+			if (!abort.signal.aborted && getActiveBackend() === backend) maximumError.value = { key: collateralKey, message: maximumMintAmountUnavailable }
+			return undefined
+		} finally {
+			if (maximumSearch.peek() === search) maximumSearch.value = undefined
+		}
+	}
 	let collateralReason: string | undefined
 	if (accountAddress === undefined) collateralReason = commonCopy.walletConnectionRequired
 	else if (selectedCollateral?.error !== undefined) collateralReason = selectedCollateral.error
 	else if (collateral === undefined) collateralReason = collateralCopy.fundingLoading
 	else if (requiredCollateral === undefined) collateralReason = (parseCompleteSetAmountInput(amountInput, collateral.decimals) ?? 0n) > 0n ? 'Updating collateral quote.' : 'Enter a positive collateral amount.'
+	else if (collateralQuote !== undefined && collateralQuote.amount > collateralQuote.capacity) collateralReason = insufficientMintCapacity
 	else if (collateral.balance < requiredCollateral) collateralReason = collateralCopy.formatInsufficientBalance(collateral.symbol)
 	else if (collateral.allowance < requiredCollateral) collateralReason = collateralCopy.approvalRequired
 	else if (collateralQuote !== undefined && collateralQuote.recovery.balance < collateralQuote.recovery.maximum) collateralReason = collateralCopy.insufficientRecoveryRep
@@ -135,6 +176,14 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 	}
 	if (approvalPending.value !== undefined) collateralReason = collateralCopy.approvalPending
 	return {
+		...(collateralQuote === undefined ? {} : { mintQuote: collateralQuote }),
+		...(enabled && collateral !== undefined
+			? {
+					findMaximumMintAmount,
+					findingMaximumMintAmount: maximumSearch.value?.key === collateralKey,
+					maximumMintAmountError: maximumError.value?.key === collateralKey ? maximumError.value.message : undefined,
+				}
+			: {}),
 		recoveryApplicable: recoveryKnowledge.value?.key === recoverySelection && recoveryKnowledge.value.applicable,
 		recovery: collateralQuote?.recovery,
 		approve: (amount: bigint) => approve(amount, false),

@@ -1,3 +1,4 @@
+import { capital } from '../../../copy/securityPoolTransactions.js'
 import { depositLiquidating } from '../../../copy/securityPoolCapital.js'
 import type { SecurityPoolCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
 
@@ -61,7 +62,7 @@ export function capitalAuthorizationReason(snapshot: SecurityPoolCapitalSnapshot
 	if (active !== undefined && active.batch !== 0n) return 'Your commitment is locked until the reduction is released.'
 	if (active !== undefined && commitment < active.commitment) return 'Use Reduce commitment to lower an existing commitment.'
 	const totalCommitment = snapshot.totalCommitmentAttoEth - snapshot.ownerCommitmentAttoEth + commitment
-	if (proofPrice === undefined && (totalCommitment > snapshot.oracleExposureLimitAttoEth || snapshot.demandAttoEth > snapshot.oracleExposureLimitAttoEth)) return 'Request a price report funded for this larger commitment.'
+	if (proofPrice === undefined && (totalCommitment > snapshot.oracleExposureLimitAttoEth || snapshot.demandAttoEth > snapshot.oracleExposureLimitAttoEth)) return capital.priceForLargerCommitment
 	if (snapshot.ownerPrincipalAttoRep < requiredSecurityPoolCollateral(snapshot, commitment, proofPrice)) return 'Collateral is below your saved health target.'
 	return undefined
 }

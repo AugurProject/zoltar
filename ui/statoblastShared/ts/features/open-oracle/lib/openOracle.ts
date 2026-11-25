@@ -66,7 +66,7 @@ export function formatOpenOracleSettleWriteErrorMessage(error: unknown, fallback
 	if (detail === undefined) return 'Transaction failed while settling the report. Try again; the latest report state will be checked automatically.'
 	const normalizedDetail = detail.toLowerCase()
 	// Match only OpenOracle custom error names and their selectors.
-	if (normalizedDetail.includes('invalidgaslimit') || normalizedDetail.includes('0x98bdb2e0')) return 'Settlement did not leave enough gas for this report’s settlement callback. Retry settling and keep the gas limit the wallet suggests; do not lower it.'
+	if (normalizedDetail.includes('invalidgaslimit') || normalizedDetail.includes('0x98bdb2e0')) return openOracleCopy.settlementContractNeedsGas
 	if (normalizedDetail.includes('settletooearly') || normalizedDetail.includes('0x3edf6050')) return 'This report is not ready to settle.'
 	if (normalizedDetail.includes('alreadysettled') || normalizedDetail.includes('0x560ff900')) return openOracleCopy.reportAlreadySettled
 	if (normalizedDetail.includes('noreportyet') || normalizedDetail.includes('0x15c7bbe9')) return openOracleCopy.reportMissingInitialReport
@@ -200,7 +200,7 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 					const validationMessage = getOpenOracleUnknownScaleDecimalValidationMessage({
 						input: form.escalationHalt,
 						invalidMessage: 'Enter a valid escalation halt.',
-						negativeMessage: 'Escalation halt must be non-negative.',
+						negativeMessage: openOracleCopy.disputeGrowthCutoffNegative,
 					})
 					setOpenOracleCreateFieldError(fieldErrors, 'escalationHalt', validationMessage)
 					if (validationMessage !== undefined) return undefined
@@ -468,7 +468,7 @@ export function parseOpenOracleCreateFormSubmission({ form, token1Decimals, toke
 	if (!validation.isValid) throw new Error(validation.message ?? 'Invalid oracle report parameters.')
 	return {
 		disputeDelay: bigintToSafeNumber(parseBigIntInput(form.disputeDelay, 'Dispute delay'), 'Dispute delay'),
-		escalationHalt: parseDecimalInput(form.escalationHalt, 'Escalation halt', token1Decimals),
+		escalationHalt: parseDecimalInput(form.escalationHalt, openOracleCopy.escalationHalt, token1Decimals),
 		exactToken1Report: parseDecimalInput(form.exactToken1Report, 'Base token amount', token1Decimals),
 		initialToken2Amount: parseDecimalInput(form.initialToken2Amount, 'Quote token amount', token2Decimals),
 		ethValueAttoEth: parseDecimalInput(form.settlerRewardEthAmount, 'Settler reward'),

@@ -2,6 +2,7 @@ import { serializeStoredValue } from '@zoltar/ui-core-shared/lib/localEntityStor
 import type { ReadClient, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import * as pageCopy from '../../../copy/reportingDeposits.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
 import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import * as copy from '../../../copy/reporting.js'
@@ -32,10 +33,10 @@ type Props = {
 	onRefresh: () => Promise<unknown>
 }
 
-async function loadClaims(active: ActiveReportingDetails, wallet: Address, signal?: AbortSignal, preparation?: ParentClaimPreparation) {
+async function loadClaims(active: ActiveReportingDetails, wallet: Address, signal?: AbortSignal, preparation?: ParentClaimPreparation, singleFlight = { pending: false }) {
 	const parent = active.parentQuestionLedgerAddress
 	if (parent === undefined || parent === zeroAddress || active.forkContinuation !== true) return []
-	const client = withStatoblastRequestTimeout(createConnectedReadClient(), pageCopy.inheritedClaimTimeout, signal)
+	const client = withStatoblastRequestTimeout(createConnectedReadClient(), pageCopy.inheritedClaimTimeout, signal, singleFlight)
 	let queued = Promise.resolve()
 	const readContract: typeof client.readContract = parameters => {
 		const read = queued.then(async () => {
@@ -52,13 +53,13 @@ async function loadClaims(active: ActiveReportingDetails, wallet: Address, signa
 		)
 		return read
 	}
-	const claims = await Promise.all(
-		active.sides.map(async side => {
-			const deposits = await loadForkCarriedEscalationDepositsFromParentSnapshot({ ...client, readContract }, active.escalationGameAddress, parent, side.key, wallet, preparation)
-			return deposits.map(deposit => ({ side, deposit }))
-		}),
-	)
-	return claims.flat()
+	const reads = { ...client, readContract }
+	const claims = []
+	for (const side of active.sides) {
+		const deposits = await loadForkCarriedEscalationDepositsFromParentSnapshot(reads, active.escalationGameAddress, parent, side.key, wallet, preparation)
+		claims.push(...deposits.map(deposit => ({ side, deposit })))
+	}
+	return claims
 }
 
 function createClaimCheckpoint() {
@@ -105,6 +106,7 @@ export function InheritedReporterClaims({ actionDataReadAt, parameters, accountS
 	const [retry, setRetry] = useState(0)
 	const [progress, setProgress] = useState<ReadonlyMap<ReportingOutcomeKey, { done: bigint; total: bigint }>>(new Map())
 	const checkpoint = useRef<{ selection: string; read: ReturnType<typeof createClaimCheckpoint> }>()
+	const singleFlight = useRef({ pending: false })
 	const [loaded, setLoaded] = useState<{ selection: string; claims: Awaited<ReturnType<typeof loadClaims>> }>()
 	const visible = usePageVisible()
 	const oldActionData = useOldActionDataNotice(active?.settlementState === 'resolved' ? actionDataReadAt : undefined)
@@ -124,12 +126,18 @@ export function InheritedReporterClaims({ actionDataReadAt, parameters, accountS
 			abort.signal.addEventListener('abort', () => job.abort(), { once: true })
 			setLoading(true)
 			error.value = undefined
-			void loadClaims(active, wallet, job.signal, {
-				read,
-				onProgress: (outcome, done, total) => {
-					if (!job.signal.aborted) setProgress(previous => new Map([...previous, [outcome, { done, total }]]))
+			void loadClaims(
+				active,
+				wallet,
+				job.signal,
+				{
+					read,
+					onProgress: (outcome, done, total) => {
+						if (!job.signal.aborted) setProgress(previous => new Map([...previous, [outcome, { done, total }]]))
+					},
 				},
-			}).then(
+				singleFlight.current,
+			).then(
 				claims => {
 					if (abort.signal.aborted) return
 					setLoaded({ selection, claims })
@@ -213,6 +221,9 @@ export function InheritedReporterClaims({ actionDataReadAt, parameters, accountS
 	const allClaims = winners.flatMap(({ deposit }) => (deposit.claimIdentity === undefined ? [] : [deposit.claimIdentity]))
 	const totalPayout = winners.reduce((sum, { side, deposit }) => sum + (getImportedEscalationDepositClaimAmount(active, side.key, deposit) ?? 0n), 0n)
 	const claimDataNotice = allClaims.length > 0 ? oldActionData : undefined
+	const inspected = [...progress.values()].reduce((sum, item) => sum + item.done, 0n)
+	const total = [...progress.values()].reduce((sum, item) => sum + item.total, 0n)
+	const progressLabel = total > 0n ? pageCopy.formatInheritedClaimProgress(inspected, total) : undefined
 
 	return (
 		<SectionBlock title={copy.inheritedClaims} description={claimDataNotice ?? copy.inheritedClaimsDescription}>
@@ -223,14 +234,10 @@ export function InheritedReporterClaims({ actionDataReadAt, parameters, accountS
 				</button>
 			)}
 			{loading && (
-				<p role='status'>
-					{pageCopy.preparingInheritedClaims}{' '}
-					{progress.size > 0 &&
-						pageCopy.formatInheritedClaimProgress(
-							[...progress.values()].reduce((sum, item) => sum + item.done, 0n),
-							[...progress.values()].reduce((sum, item) => sum + item.total, 0n),
-						)}
-				</p>
+				<div role='status'>
+					<progress max={1} aria-label={copy.inheritedClaims} aria-valuetext={progressLabel} value={getVisualRatio({ value: inspected, maxValue: total })} />
+					<p>{progressLabel === undefined ? pageCopy.preparingInheritedClaims : `${pageCopy.preparingInheritedClaims} ${progressLabel}`}</p>
+				</div>
 			)}
 			{open && !loading && loaded?.selection === selection && claims.length === 0 && <p>{pageCopy.emptyInheritedClaimsDetail}</p>}
 			{open && !loading && error.value !== undefined && (

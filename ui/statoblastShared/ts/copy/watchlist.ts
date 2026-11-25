@@ -50,6 +50,7 @@ export const sets = 'sets'
 export const unstarPositionConfirmation = 'Remove this item from your Watchlist? You have a position here.'
 export const collateralUnits = 'Collateral units'
 export const refreshTimeoutError = 'Watchlist refresh timed out.'
+export const importTimeoutError = 'Watchlist import timed out. Try again.'
 export const refreshFailedError = 'Saved items are temporarily unavailable.'
 export const tryAgain = 'Try again'
 export const formatRefreshProgress = (batch: number, total: number) => `Refreshing… ${batch} of ${total}`

@@ -65,6 +65,7 @@ export async function searchReportingDepositsPage(client: Pick<ReadClient, 'getB
 	const safeIndex = safeCount.status === 'success' && safeCount.result < nextIndex ? safeCount.result : nextIndex
 	return {
 		matches,
+		restarted: position !== undefined && !isContinuation,
 		totalDeposits: totalDeposits.status === 'success' ? totalDeposits.result : undefined,
 		end: second.length < Number(pageSize),
 		position: { block: blockNumber, hash: head.hash, nextIndex },

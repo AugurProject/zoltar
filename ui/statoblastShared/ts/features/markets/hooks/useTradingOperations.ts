@@ -1,7 +1,7 @@
 import { useTradingCollateral } from './useTradingCollateral.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
-import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { maxUint256, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import { createCompleteSetInQuestionLedger, loadQuestionLedgerMintCapacity, loadShareMigrationTargets, loadTradingDetails as loadTradingDetailsForPool, migrateSharesFromUniverse, redeemCompleteSetInQuestionLedger, redeemSharesInQuestionLedger } from '../../../protocol/trading.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
@@ -35,6 +35,7 @@ import type { ShareMigrationTargetsState, TradingActionResult, TradingDetails } 
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as tradingCopy from '../../../copy/trading.js'
+import { invalidMaximumMintFee, invalidMinimumMintShares, mintAmountTooLow, mintFeeAboveLimit, mintSharesBelowLimit } from '../../../copy/securityPool.js'
 import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
 
 type UseTradingOperationsParameters = WriteOperationsParameters & {
@@ -44,7 +45,7 @@ type UseTradingOperationsParameters = WriteOperationsParameters & {
 }
 
 export type UseTradingOperationsDependencies = {
-	createCompleteSetInQuestionLedger: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], questionLedgerAddress: Address, amount: bigint) => ReturnType<typeof createCompleteSetInQuestionLedger>
+	createCompleteSetInQuestionLedger: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], questionLedgerAddress: Address, amount: bigint, limits?: Parameters<typeof createCompleteSetInQuestionLedger>[3]) => ReturnType<typeof createCompleteSetInQuestionLedger>
 	getWalletEthBalance: (walletAddress: Address) => Promise<bigint>
 	loadQuestionLedgerMintCapacity: (questionLedgerAddress: Address) => ReturnType<typeof loadQuestionLedgerMintCapacity>
 	loadShareMigrationTargets: (source: Pick<TradingDetails, 'shareTokenAddress' | 'universeId'>, childUniverses: ZoltarUniverseSummary['childUniverses'], accountAddress: Address | undefined) => ReturnType<typeof loadShareMigrationTargets>
@@ -58,7 +59,7 @@ export type UseTradingOperationsDependencies = {
 const createTradingReadClient = () => withStatoblastRequestTimeout(createConnectedReadClient(), 'Shares refresh timed out.')
 
 const defaultUseTradingOperationsDependencies: UseTradingOperationsDependencies = {
-	createCompleteSetInQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress, amount) => await createCompleteSetInQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, amount),
+	createCompleteSetInQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress, amount, limits) => await createCompleteSetInQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, amount, limits),
 	getWalletEthBalance: async walletAddress => await createTradingReadClient().getBalance({ address: walletAddress }),
 	loadQuestionLedgerMintCapacity: async questionLedgerAddress => await loadQuestionLedgerMintCapacity(createTradingReadClient(), questionLedgerAddress),
 	loadShareMigrationTargets: async (source, childUniverses, accountAddress) => await loadShareMigrationTargets(createTradingReadClient(), source, childUniverses, accountAddress),
@@ -67,6 +68,22 @@ const defaultUseTradingOperationsDependencies: UseTradingOperationsDependencies 
 	migrateSharesFromUniverse: async (accountAddress, callbacks, questionLedgerAddress, outcome, targetOutcomeIndexes, migratedAttoShares) => await migrateSharesFromUniverse(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, outcome, targetOutcomeIndexes, migratedAttoShares),
 	redeemCompleteSetInQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress, amount) => await redeemCompleteSetInQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, amount),
 	redeemSharesInQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress) => await redeemSharesInQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress),
+}
+
+function resolveMintLimits(form: TradingFormState, funding: ReturnType<typeof useTradingCollateral>) {
+	const { collateral, mintQuote } = funding
+	const maximumFeeInput = form.mintMaximumFee?.trim() ?? ''
+	const minimumSharesInput = form.mintMinimumShares?.trim() ?? ''
+	const decimals = collateral?.decimals
+	const maximumFee = maximumFeeInput === '' ? mintQuote?.maximumFee : decimals === undefined ? undefined : parseCompleteSetAmountInput(maximumFeeInput, decimals)
+	const minimumShares = minimumSharesInput === '' ? mintQuote?.minimumShares : decimals === undefined ? undefined : parseCompleteSetAmountInput(minimumSharesInput, decimals)
+	let reason: string | undefined
+	if (decimals !== undefined && maximumFeeInput !== '' && (maximumFee === undefined || maximumFee < 0n || maximumFee > maxUint256)) reason = invalidMaximumMintFee
+	else if (decimals !== undefined && minimumSharesInput !== '' && (minimumShares === undefined || minimumShares < 0n || minimumShares > maxUint256)) reason = invalidMinimumMintShares
+	else if (mintQuote !== undefined && maximumFee !== undefined && mintQuote.fee > maximumFee) reason = mintFeeAboveLimit
+	else if (mintQuote?.shares === 0n) reason = mintAmountTooLow
+	else if (mintQuote !== undefined && minimumShares !== undefined && mintQuote.shares < minimumShares) reason = mintSharesBelowLimit
+	return { maximumFee, minimumShares, reason }
 }
 
 export function useTradingOperations(parameters: UseTradingOperationsParameters, dependencies: UseTradingOperationsDependencies = defaultUseTradingOperationsDependencies) {
@@ -80,6 +97,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 	const tradingError = useSignal<string | undefined>(undefined)
 	const tradingForm = useSignal<TradingFormState>(getDefaultTradingFormState())
 	const collateralFunding = useTradingCollateral({ ...parameters, pool: selectedQuestionLedgerAddress, amountInput: tradingForm.value.completeSetAmount })
+	const mintLimits = resolveMintLimits(tradingForm.value, collateralFunding)
 	const tradingActiveAction = useSignal<TradingActionResult['action'] | undefined>(undefined)
 	const tradingFeedback = useSignal<ActionFeedback<TradingActionResult['action']> | undefined>(undefined)
 	const tradingResult = useSignal<TradingActionResult | undefined>(undefined)
@@ -358,7 +376,9 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 			'createCompleteSet',
 			async (walletAddress, questionLedgerAddress, currentForm, isCurrentSelection, context) => {
 				if (!isCurrentSelection()) return undefined
-				return await dependencies.createCompleteSetInQuestionLedger(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, questionLedgerAddress, parseCollateralAmount(currentForm.completeSetAmount) ?? 0n)
+				const { maximumFee, minimumShares, reason } = resolveMintLimits(currentForm, collateralFunding)
+				if (reason !== undefined) throw new Error(reason)
+				return await dependencies.createCompleteSetInQuestionLedger(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, questionLedgerAddress, parseCollateralAmount(currentForm.completeSetAmount) ?? 0n, { maximumFee, minimumShares })
 			},
 			'Failed to mint complete sets.',
 		)
@@ -472,6 +492,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 
 	return {
 		collateralFunding,
+		mintLimits,
 		createCompleteSet,
 		loadingTradingForkUniverse: tradingDetailsLoad.isLoading.value,
 		loadingTradingDetails: tradingDetailsLoad.isLoading.value,

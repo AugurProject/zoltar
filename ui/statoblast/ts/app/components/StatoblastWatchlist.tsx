@@ -213,7 +213,8 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 		setImporting(true)
 		setTransferMessage(undefined)
 		try {
-			const result = await importStatoblastWatchlist(createConnectedReadClient(), profile, universe, await file.text(), guard.isCurrent)
+			const client = withStatoblastRequestTimeout(createConnectedReadClient(), pageCopy.importTimeoutError)
+			const result = await importStatoblastWatchlist(client, profile, universe, await file.text(), guard.isCurrent)
 			setTransferMessage(result.skipped === 0 ? 'Watchlist imported.' : `Watchlist imported. Skipped ${result.skipped} entries.`)
 		} catch (error) {
 			setTransferMessage(error instanceof Error ? error.message : 'Could not import this watchlist.')
@@ -524,13 +525,13 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 								<li key={`${item.hash}:${item.universe}`}>
 									{row?.status === 'unprepared-question' ? pageCopy.saved : star(entity, starLabel, row, savedRow)}
 									<div className='statoblast-history-identity'>
-										{page.kind === 'pool' ? <AddressValue address={page.pool} /> : questionTitle}
+										{page.kind === 'pool' ? <AddressValue longAbbreviation address={page.pool} /> : questionTitle}
 										<small>
 											{pageCopy.securityPool}
 											{page.kind === 'question' && (
 												<>
 													{' '}
-													<AddressValue address={page.pool} />
+													<AddressValue longAbbreviation address={page.pool} />
 												</>
 											)}
 											{page.kind === 'pool' && row?.collateral !== undefined ? `, ${row.collateral}` : undefined}

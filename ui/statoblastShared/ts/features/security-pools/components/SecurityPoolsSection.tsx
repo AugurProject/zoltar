@@ -84,7 +84,7 @@ export function SecurityPoolsSection({
 	}, [model.displayedAt, onReadStatus, page?.tab])
 	const reportPriceReadStatus = useCallback<ReportStatoblastReadStatus>((readAt, progress) => onReadStatus?.(readAt ?? model.displayedAt, progress), [model.displayedAt, onReadStatus])
 	const wrongNetwork = walletConnected && parameters.accountAddress === undefined ? getWrongNetworkReason() : undefined
-	const actions = useSecurityPoolActions(model, parameters, deploying, wrongNetwork)
+	const actions = useSecurityPoolActions(model, parameters, deploying, wrongNetwork, deploying || page === undefined)
 	const openChildPosition = (universeId: bigint, owner: Address | undefined) => {
 		if (page === undefined) {
 			if (owner !== undefined) model.setOwnerInput(owner)

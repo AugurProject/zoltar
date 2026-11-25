@@ -9,7 +9,7 @@ import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients
 import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
-import { formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalanceWithUnit, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
 import type { ActiveReportingDetails } from '../../../types/contracts.js'
 import { locatedDepositKey, reportingDepositStore } from '../../../protocol/reportingDeposits.js'
@@ -28,6 +28,7 @@ export function LocateReportingDeposits({ details, wallet, refresh, openOnEntry 
 	const [indexError, setIndexError] = useState<string>()
 	const [searchError, setSearchError] = useState<string>()
 	const singleFlight = useRef({ pending: false })
+	const publishing = useRef<Promise<void>>()
 	const indexInputId = useId()
 	const visible = usePageVisible()
 	const { escalationGameAddress, reportingDepositPool, reportingQuestionId, universeId } = details
@@ -35,6 +36,9 @@ export function LocateReportingDeposits({ details, wallet, refresh, openOnEntry 
 	const outcome = missing?.key
 	const total = missing?.localPrincipalAttoRep
 	const locatedPrincipal = missing?.userDeposits.reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n) ?? 0n
+	// Publishing a page updates the located stake. Keep the live cursor across those updates.
+	const latest = useRef({ missing, locatedPrincipal, refresh })
+	latest.current = { missing, locatedPrincipal, refresh }
 	useEffect(() => {
 		if (!open || !visible || checkingIndex || reportingDepositPool === undefined || reportingQuestionId === undefined || outcome === undefined || total === undefined) return
 		const side = { pool: reportingDepositPool, questionId: reportingQuestionId, universeId, depositor: wallet, outcome }
@@ -44,41 +48,60 @@ export function LocateReportingDeposits({ details, wallet, refresh, openOnEntry 
 		const client = withStatoblastRequestTimeout(createConnectedReadClient(), 'Deposit search timed out.', abort.signal, singleFlight.current)
 		const deposits = reportingDepositStore(profile)
 		const cursors = reportingDepositCursorStore(profile, side)
-		const known = new Set((missing?.userDeposits ?? []).map(deposit => locatedDepositKey({ ...side, index: deposit.depositIndex })))
+		const initial = latest.current
+		const known = new Set((initial.missing?.userDeposits ?? []).map(deposit => locatedDepositKey({ ...side, index: deposit.depositIndex })))
 		let current = true
 		let timeout: ReturnType<typeof setTimeout> | undefined
 		let cursor = cursors.read()
-		const startIndex = cursor?.nextIndex ?? 0n
-		const startedAt = Date.now()
+		let startIndex = cursor?.nextIndex ?? 0n
+		let startedAt = Date.now()
 		setInspected(startIndex)
-		let found = locatedPrincipal
+		let found = initial.locatedPrincipal
 		let failures = 0
 		const active = () => current && !document.hidden && guard.isCurrent()
 		const work = async () => {
+			if (publishing.current !== undefined) await publishing.current
 			if (!active()) return
 			setStatus('searching')
 			try {
+				const pageStartedAt = Date.now()
 				const result = await searchReportingDepositsPage(client, escalationGameAddress, side, cursor)
 				if (!active()) return
+				if (result.restarted) {
+					// Deposits located on the old chain cannot count toward completion on the new chain.
+					known.clear()
+					found = 0n
+					startIndex = 0n
+					startedAt = pageStartedAt
+					setProgress(undefined)
+				}
 				deposits.add(result.matches.map(match => match.deposit))
 				cursors.write(result.confirmed)
 				cursor = result.position
 				setInspected(cursor.nextIndex)
 				const count = result.totalDeposits
-				const scanned = cursor.nextIndex - (cursor.nextIndex >= startIndex ? startIndex : 0n)
+				const scanned = cursor.nextIndex - startIndex
 				if (count !== undefined && scanned > 0n && count >= cursor.nextIndex) {
 					const elapsed = BigInt(Math.max(1, Date.now() - startedAt))
 					setProgress({ count, seconds: ((count - cursor.nextIndex) * elapsed + scanned * 1000n - 1n) / (scanned * 1000n) })
 				}
+				let foundNewDeposits = false
 				for (const { deposit, principal } of result.matches) {
 					const key = locatedDepositKey(deposit)
 					if (known.has(key)) continue
 					known.add(key)
 					found += principal
+					foundNewDeposits = true
+				}
+				if (foundNewDeposits || result.restarted || result.end) {
+					const publication = latest.current.refresh().catch(() => undefined)
+					publishing.current = publication
+					await publication
+					if (publishing.current === publication) publishing.current = undefined
+					if (!active()) return
 				}
 				if (found >= total || result.end) {
 					setStatus(found >= total ? 'idle' : 'exhausted')
-					void refresh().catch(() => undefined)
 					return
 				}
 				failures = 0
@@ -98,7 +121,7 @@ export function LocateReportingDeposits({ details, wallet, refresh, openOnEntry 
 			abort.abort()
 			clearTimeout(timeout)
 		}
-	}, [attempt, open, visible, checkingIndex, wallet, reportingDepositPool, reportingQuestionId, universeId, outcome, total, locatedPrincipal, escalationGameAddress])
+	}, [attempt, open, visible, checkingIndex, wallet, reportingDepositPool, reportingQuestionId, universeId, outcome, total, escalationGameAddress])
 	if (missing === undefined || total === undefined || reportingDepositPool === undefined || reportingQuestionId === undefined) return undefined
 	const missingOutcome = missing.key
 	const checkIndex = async () => {
@@ -113,6 +136,8 @@ export function LocateReportingDeposits({ details, wallet, refresh, openOnEntry 
 		setCheckingIndex(true)
 		setIndexError(undefined)
 		try {
+			if (publishing.current !== undefined) await publishing.current
+			if (!guard.isCurrent()) return
 			const client = withStatoblastRequestTimeout(createConnectedReadClient(), 'Deposit check timed out.', undefined, singleFlight.current)
 			const [deposit] = await client.readContract(reportingDepositRead(escalationGameAddress, missingOutcome, index, 1n))
 			if (!guard.isCurrent()) return
@@ -194,7 +219,7 @@ export function LocateReportingDeposits({ details, wallet, refresh, openOnEntry 
 			</details>
 			{(status === 'exhausted' || status === 'failed') && (
 				<>
-					<p role='status'>{status === 'failed' ? (searchError ?? pageCopy.searchFailedError) : pageCopy.missingDepositsDetail}</p>
+					<p role='status'>{status === 'failed' ? (searchError ?? pageCopy.searchFailedError) : pageCopy.formatMissingDepositsDetail(formatCurrencyBalanceWithUnit(total - locatedPrincipal, pageCopy.rep))}</p>
 					<button type='button' onClick={searchAgain}>
 						{pageCopy.searchAgain}
 					</button>

@@ -584,16 +584,22 @@ test(
 			`${baseUrl}/statoblast/#/watchlist?simulate=1&genesis=yes&simScenario=securitypoolx2`,
 			{ height: 900, width: 1440 },
 			async driver => {
+				await driver.waitForBodyText('Saved questions')
+				await driver.waitForBodyWithoutText('Refreshing saved items…')
+				await driver.waitForButtonEnabled('Refresh')
 				await openSavedStatoblastItem(driver, 'pool')
 				await driver.waitForBodyText(capitalCopy.priceValid.toUpperCase())
 				expect(await securityPoolMetric(driver, capitalCopy.principalRep)).toBe('5000REP')
 				expect(await securityPoolMetric(driver, capitalCopy.commitment)).toBe('10WETH')
+				await driver.waitForExpression('Object.keys(sessionStorage).some(key => key.startsWith("zoltar-ui:statoblast:reads:"))')
+				await driver.waitForButtonEnabled('Refresh')
 				await Bun.sleep(500)
 				await driver.evaluate('window.__statoblastRpcMethods.length = 0')
 				await driver.clickButton('Refresh')
-				await Bun.sleep(1500)
+				await driver.waitForExpression('window.__statoblastRpcMethods.length > 0')
+				await driver.waitForButtonEnabled('Refresh')
 				const methods = await driver.evaluate('window.__statoblastRpcMethods.slice()')
-				expect(Array.isArray(methods) && methods.length > 0 && methods.length <= 4).toBe(true)
+				if (!Array.isArray(methods) || methods.length === 0 || methods.length > 4) throw new Error(`Expected one to four RPCs for a warm Capital refresh, received ${JSON.stringify(methods)}`)
 				await Bun.sleep(35_000)
 				expect(await driver.evaluate('window.__statoblastRpcMethods.slice()')).toEqual(methods)
 			},
@@ -635,11 +641,14 @@ test(
 				expect(await driver.evaluate('window.__statoblastRpcMethods.slice()')).toEqual(await driver.evaluate('window.__delayedRpcMethods.slice()'))
 
 				await driver.navigate(href)
-				await driver.waitForButtonEnabled('Redeem complete sets')
-				await driver.clickButton('Redeem complete sets')
+				await driver.waitForButtonEnabled('Redeem sets')
+				await driver.clickButton('Redeem sets')
+				const redeemInputBounds = '(() => { const {width, height} = document.querySelector(".statoblast-share-action-form input").getBoundingClientRect(); return [width, height] })()'
+				const beforeRedeem = await driver.evaluate(redeemInputBounds)
 				await driver.setInputByLabel('Complete sets to redeem', '0.01')
-				await driver.waitForButtonEnabled('Redeem complete sets', 1)
-				await driver.clickButton('Redeem complete sets', 1)
+				await driver.waitForButtonEnabled('Redeem complete sets')
+				expect(await driver.evaluate(redeemInputBounds)).toEqual(beforeRedeem)
+				await driver.clickButton('Redeem complete sets')
 				await driver.waitForButtonEnabled('Continue in wallet')
 				await driver.evaluate('window.__statoblastRpcMethods.length = 0; window.__rpcDelay = 10000')
 				await driver.clickButton('Continue in wallet')
@@ -699,6 +708,31 @@ test(
 	},
 	SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS,
 )
+
+productionBrowserTest('Statoblast Watchlist refresh keeps every header control reachable on desktop and phone', async () => {
+	if (server === undefined) throw new Error('Production test server did not start')
+	const baseUrl = server.url.toString().replace(/\/$/, '')
+	await loadProductionDocumentInChromium(`${baseUrl}/statoblast/#/watchlist?simulate=1&genesis=yes&simScenario=securitypoolx2`, { height: 900, width: 1440 }, async driver => {
+		await driver.waitForBodyText('Saved questions')
+		for (const viewport of [
+			{ height: 900, width: 1440 },
+			{ height: 844, width: 390 },
+		]) {
+			await driver.resize(viewport)
+			await driver.waitForButtonEnabled('Refresh')
+			await driver.evaluate('window.__rpcDelay = 1000')
+			await driver.clickButton('Refresh')
+			await driver.waitForBodyText('Refreshing saved items…')
+			expect(
+				await driver.evaluate(`(() => {
+					const controls = Array.from(document.querySelectorAll('.statoblast-universe-menu button, .header-toolbar-controls .account-menu, .header-toolbar-settings button')).map(control => control.getBoundingClientRect());
+					return controls.every((control, index) => controls.slice(index + 1).every(next => control.right <= next.left || control.left >= next.right || control.bottom <= next.top || control.top >= next.bottom));
+				})()`),
+			).toBe(true)
+			await driver.evaluate('window.__rpcDelay = 0')
+		}
+	})
+})
 
 productionBrowserTest('Statoblast mobile universe sheet traps focus, restores it on Escape, and closes on its scrim', async () => {
 	if (server === undefined) throw new Error('Production test server did not start')
@@ -819,18 +853,31 @@ productionInteractionTest('capital-recovery', '#/watchlist?simulate=1&genesis=ye
 
 productionInteractionTest('portfolio-purchase', '#/watchlist?simulate=1&genesis=yes&simScenario=securitypoolx2', { height: 900, width: 1440 }, async driver => {
 	await openSavedStatoblastItem(driver, 'question')
+	await driver.waitForButtonEnabled('Mint sets')
+	await driver.clickButton('Mint sets')
+	const mintInputSize = '(() => { const {width, height} = document.querySelector(".statoblast-share-action-form input").getBoundingClientRect(); return [width, height] })()'
+	const beforeMint = await driver.evaluate(mintInputSize)
+	await driver.waitForButtonEnabled('Max')
+	await driver.clickButton('Max')
+	await driver.waitForExpression('Number(document.querySelector(".statoblast-share-action-form > .amount-field input").value) > 0')
+	await driver.setInputByLabel('Collateral amount', '0.01')
+	await driver.waitForButtonEnabled('Mint complete sets')
+	expect(await driver.evaluate(mintInputSize)).toEqual(beforeMint)
+	await driver.waitForBodyText('You pay')
+	await driver.evaluate('document.querySelector(".statoblast-share-mint-limits").open = true')
+	await driver.setInputByLabel('Min complete sets', '1')
+	await driver.waitForExpression('document.querySelector(".statoblast-share-action-form .tx-action-button")?.disabled === true')
+	await driver.setInputByLabel('Min complete sets', '0.0099')
 	await driver.waitForButtonEnabled('Mint complete sets')
 	await driver.clickButton('Mint complete sets')
-	await driver.setInputByLabel('Collateral amount', '0.01')
-	await driver.waitForButtonEnabled('Mint complete sets', 1)
-	await driver.clickButton('Mint complete sets', 1)
 	await driver.waitForButtonEnabled('Continue in wallet')
 	const review = await driver.evaluate('document.querySelector(".transaction-step-content")?.innerText')
 	expect(review).toContain('Yes shares')
 	expect(review).toContain('No shares')
 	expect(review).toContain('Invalid shares')
-	await createWorkflowActions(driver).completeTransactionReview()
+	await driver.clickButton('Continue in wallet')
 	await driver.waitForBodyText('1.01 sets')
+	await driver.waitForExpression('Array.from(document.querySelectorAll("[role=dialog]")).some(dialog => dialog.innerText.includes("Confirmed"))')
 })
 
 productionInteractionTest('deployment', '#/watchlist?simulate=1&genesis=yes&simScenario=baseline', { height: 900, width: 1440 }, async driver => {

@@ -50,9 +50,11 @@ export const leadHoldingCapital = 'Amount needed to hold the lead'
 export const loadingPoolHeldVaultRepBacking = 'Loading the position’s pledged REP…'
 export const loadingWalletRepBalance = 'Loading wallet REP balance…'
 export const loadingReportingDetails = 'Loading reporting details…'
-export const maxProfitPrestartReason = 'Full bonus share becomes available after the first report.'
-export const maxProfitForkReason = 'Full bonus share is unavailable because matching the other side would trigger the universe fork.'
-export const maxProfitWindowFilledReason = 'Full bonus share is unavailable because the reward window is already filled on the selected side.'
+export const maxProfitPrestartReason = 'Full reward share becomes available after the first report.'
+export const maxProfitForkReason = 'Full reward share is unavailable because matching the other side would end reporting without a decision.'
+export const maxProfitWindowFilledReason = 'Full reward share is unavailable because the reward window is already filled on the selected side.'
+export const maxProfitUnavailable = 'Full reward share is unavailable.'
+export const maxProfitOutsideCapacity = 'Full reward share is unavailable because the selected side cannot fill the reward window within its remaining capacity.'
 export const selectedSideLeadsReason = 'Selected side already leads.'
 export const loadingEscalation = 'Loading reporting…'
 export const retryReporting = 'Retry reporting'
@@ -71,6 +73,7 @@ export const openForkAndMigration = 'Open Fork & recovery'
 export const managePoolPrice = 'Manage security pool price'
 export const currentOraclePriceRequired = 'A current security pool oracle price is required before reporting.'
 export const forkMigrationRequiredDetail = 'Set up the child questions in Fork & recovery. Your deposits carry over. Claim winning deposits after the child question resolves.'
+export const parentUniverseForked = 'Universe forked'
 export const submittingReportTitle = 'Submitting report'
 export const approvingRepTitle = 'Approving REP'
 export const settlingEscalationDepositsTitle = 'Claiming reporting deposits'
@@ -121,10 +124,10 @@ export const startsWithFirstReport = 'After the first report'
 export const progressToFork = (secondLargest: string, threshold: string, percent: string) => `Progress to fork: second side at ${secondLargest} / ${threshold} REP (${percent}%)`
 export const forkProgressHelp = 'A fork needs two sides at this threshold, so progress follows the second-largest side.'
 export const bindingCapitalHelp = 'The second-largest side balance; exceed it to hold the lead.'
-const minimumPresetLabels = { fork: 'Fill side & trigger fork', lead: 'Min to lead', start: 'Minimum report' } as const
-/** The minimum preset fills the minimum first report before the game starts, the smallest lead afterwards, or, when no lead is possible, the amount that triggers the fork. */
+const minimumPresetLabels = { fork: 'Reach non-decision', lead: 'Min to lead', start: 'Minimum report' } as const
+/** The minimum preset fills the minimum first report, the smallest lead, or the amount that ends reporting without a decision. */
 export const minimumPreset = <Amount>(kind: keyof typeof minimumPresetLabels, amount?: Amount): CopyParts<Amount> => (amount === undefined ? [minimumPresetLabels[kind]] : [minimumPresetLabels[kind], ' (', amount, ')'])
-export const rewardPreset = <Amount>(amount?: Amount): CopyParts<Amount> => (amount === undefined ? ['Full bonus share'] : ['Full bonus share (', amount, ')'])
+export const rewardPreset = <Amount>(amount?: Amount): CopyParts<Amount> => (amount === undefined ? ['Full reward share'] : ['Full reward share (', amount, ')'])
 export const reportAmountPlaceholder = '0'
 export const reportAmountLabel = (outcome: string, amount: string) => `Report ${outcome} · ${amount} REP`
 export const paidFromWallet = 'Paid from: wallet REP'
@@ -188,22 +191,21 @@ export const zeroBalanceStatusDetail = 'If all balances stay at zero, the timeou
 export const noVaultRepSelectWallet = 'Select Wallet REP to report. This position has no REP available.'
 
 export const depositTriggersFork = 'This report reaches the non-decision threshold: the game ends and a universe fork can be triggered.'
-export const forkTriggerWarningTitle = 'This report triggers a universe fork'
-export const forkTriggerWarning = (outcome: string, threshold: string) => `Another side already holds ${threshold} REP. Filling ${outcome} to the same threshold ends reporting without a decision: deposits lock, and the question can only resolve by forking the universe into Yes, No, and Invalid. This can’t be undone.`
+export const forkTriggerWarningTitle = 'This report ends reporting without a decision'
+export const forkTriggerWarning = (outcome: string, threshold: string) => `Another side already holds ${threshold} REP. Filling ${outcome} to the same threshold locks deposits. Anyone can then trigger the irreversible universe fork. Your deposits carry over to the child universes.`
 export const forkTriggerConfirmation = 'I understand this report ends reporting and allows the universe to fork.'
-export const forkTriggerConfirmationRequired = 'Confirm that this report triggers the universe fork.'
+export const forkTriggerConfirmationRequired = 'Confirm that this report ends reporting without a decision.'
 export const reportingRepApprovalRequired = 'Approve REP for this question before reporting.'
 export const reportingApprovalAction = 'reporting'
 export const reportAmountRequired = 'Enter a report amount.'
-export const forkTriggerConfirmationAndApprovalRequired = 'Confirm that this report triggers the universe fork and approve REP for this question before reporting.'
-export const maxBelowForkHint = <Amount>(amount: Amount): CopyParts<Amount> => ['Max stops at ', amount, ', just below the non-decision threshold. Confirm the fork warning to fill the side.']
-export const maxBelowForkReason = 'Max stops below the non-decision threshold, which leaves less than the minimum first report. Enter an amount to fill the side and trigger the fork.'
-export const reportAndTriggerForkLabel = (outcome: string, amount: string) => `Report ${outcome} & trigger fork · ${amount} REP`
-export const reportingAndTriggeringFork = (outcome: string, amount: string) => `Reporting ${outcome} & triggering fork · ${amount} REP…`
-export const reportForkReviewTitle = (outcome: string, amount: string) => `Report ${outcome} & trigger fork · ${amount}\u00a0REP`
+export const forkTriggerConfirmationAndApprovalRequired = 'Confirm the non-decision warning and approve REP for this question before reporting.'
+export const maxBelowForkHint = <Amount>(amount: Amount): CopyParts<Amount> => ['Max stops at ', amount, ', just below the non-decision threshold. Confirm the warning to fill the side.']
+export const maxBelowForkReason = 'Max stops below the non-decision threshold, which leaves less than the minimum first report. Enter the amount that ends reporting without a decision.'
+export const reportAndEndReportingLabel = (outcome: string, amount: string) => `Report ${outcome} & end reporting · ${amount} REP`
+export const reportForkReviewTitle = (outcome: string, amount: string) => `Report ${outcome} & end reporting · ${amount}\u00a0REP`
 export const reportForkReviewDescription = (outcome: string) => `Fills ${outcome} to the non-decision threshold while another side is already there. Reporting ends without a decision, deposits lock, and the question can only resolve through a universe fork. This can’t be undone.`
 export const reportReviewDescription = (outcome: string) => `Deposits REP on ${outcome}. If ${outcome} loses, this REP is lost; if it wins, it returns with any earned reward.`
-export const forkTriggerChangedSinceReview = 'This report would now trigger the universe fork. Review the fork warning and confirm before reporting.'
+export const forkTriggerChangedSinceReview = 'This report would now end reporting without a decision. Review the warning and confirm before reporting.'
 export const depositDeadlinePreview = (deadline: string, extension: string, unchanged: boolean) => `After this report, check back before ${deadline}. ${unchanged ? 'This report does not extend the response window.' : `Response window extended by ${extension}.`} Other reports can change when it ends.`
 
 export const dismissReminderUpdate = 'Dismiss'

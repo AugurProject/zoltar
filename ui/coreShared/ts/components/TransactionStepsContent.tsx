@@ -113,6 +113,15 @@ function TransactionStepLifecycle({ current, detail, close }: { current: Workflo
 			</div>
 		)
 	}
+	if (current.phase === 'confirmed' && hash !== undefined) {
+		return (
+			<div className='transaction-step-content transaction-lifecycle-state' ref={stateRef} tabIndex={-1}>
+				<UserMessage placement='section' tone='success' announcement='polite' detail={transactionCopy.confirmed} />
+				<TransactionHashLink hash={hash} />
+				<TransactionObjectContext items={current.reviewRows?.map(row => ({ ...row, value: <TransactionDetailText value={row.value} longAbbreviation /> })) ?? []} />
+			</div>
+		)
+	}
 	const canceled = current.failure?.kind === 'rejected'
 	const replaced = current.failure?.kind === 'replaced'
 	let reason = detail ?? transactionCopy.failureReasonUnavailable
@@ -327,10 +336,10 @@ type TransactionStepsContentProps = TransactionStepsActionsProps & {
 export function TransactionStepsContent({ actionsFirst = false, cancelable = true, contextKey, includeWrapAction = false, finalActionLabel, focusOnMount = false, heading, keepActionsVisible = false, onClose, retainedWorkflow, retryAction }: TransactionStepsContentProps) {
 	const { current, error, presentation, workflow } = useTransactionStepsState(retainedWorkflow)
 	if (workflow === undefined || current === undefined) return undefined
-	if (workflow.showLifecycle && (current.phase === 'wallet' || current.phase === 'pending' || current.phase === 'failed')) {
+	const completed = workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
+	if (workflow.showLifecycle && (current.phase === 'wallet' || current.phase === 'pending' || current.phase === 'failed' || (completed && current.phase === 'confirmed'))) {
 		return <TransactionStepLifecycle current={current} detail={current.phase === 'wallet' && presentation?.tone === 'awaiting-wallet' && typeof presentation.detail === 'string' ? presentation.detail : error} close={onClose ?? workflow.cancel} />
 	}
-	const completed = workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
 	const funding = workflow.steps.flatMap(step => step.tokenFunding ?? [])
 	const outcome = workflow.steps.find(step => step.oracleOutcome !== undefined)?.oracleOutcome
 	const totalEth = workflow.steps.reduce((sum, step) => sum + (step.phase === 'skipped' ? 0n : (step.ethValueAttoEth ?? 0n)), 0n)

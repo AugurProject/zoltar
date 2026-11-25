@@ -132,7 +132,7 @@ export function ReportingSection({
 	const withdrawEscalationEnabled = isWithdrawEscalationEnabled(reportingStageKey)
 	let reportLifecycleReason: string | undefined
 	if (reportingStageKey === 'forkTriggered') {
-		reportLifecycleReason = forkAlreadyTriggered ? reportingCopy.forkAlreadyTriggeredReportReason : reportingCopy.forkTriggerInstruction
+		reportLifecycleReason = activeReportingDetails?.settlementState === 'migration-required' ? reportingCopy.forkMigrationRequiredDetail : forkAlreadyTriggered ? reportingCopy.forkAlreadyTriggeredReportReason : reportingCopy.forkTriggerInstruction
 	} else if (reportingStageKey === 'timedOut') {
 		reportLifecycleReason = reportingCopy.refreshFinalizedOutcomeReason
 	} else if (reportingStageKey === 'resolved') {
@@ -143,7 +143,7 @@ export function ReportingSection({
 	const reportControlsLocked = !reportOutcomeEnabled || reportControlsLockedReason !== undefined
 	let settlementLifecycleReason: string | undefined
 	if (reportingStageKey === 'forkTriggered') {
-		settlementLifecycleReason = forkAlreadyTriggered ? reportingCopy.forkAlreadyTriggeredSettlementReason : reportingCopy.forkRequiredSettlementReason
+		settlementLifecycleReason = activeReportingDetails?.settlementState === 'migration-required' ? reportingCopy.forkMigrationRequiredDetail : forkAlreadyTriggered ? reportingCopy.forkAlreadyTriggeredSettlementReason : reportingCopy.forkRequiredSettlementReason
 	} else if (reportingStageKey === 'timedOut') {
 		settlementLifecycleReason = reportingCopy.refreshFinalizedOutcomeReason
 	} else if (activeReportingDetails?.settlementState === 'migration-required') {
@@ -181,7 +181,7 @@ export function ReportingSection({
 	// A confirmation covers one exact fork-triggering report; any change to the pool, side, or amount asks again.
 	const forkConfirmation = useKeyedConfirmation(reportTriggersFork ? `${effectiveReportingDetails?.questionLedgerAddress ?? ''}:${selectedOutcome ?? ''}:${selectedAmount?.toString() ?? ''}` : undefined)
 	const reportDisplayAmount = formatCurrencyBalance(actualReportDepositAmount ?? selectedAmount ?? 0n)
-	const reportButtonLabel = selectedOutcome === undefined ? reportingCopy.reportOnSelectedSide : commonCopy.launchAction((reportTriggersFork ? reportingCopy.reportAndTriggerForkLabel : reportingCopy.reportAmountLabel)(selectedOutcomeLabel, reportDisplayAmount))
+	const reportButtonLabel = selectedOutcome === undefined ? reportingCopy.reportOnSelectedSide : commonCopy.launchAction((reportTriggersFork ? reportingCopy.reportAndEndReportingLabel : reportingCopy.reportAmountLabel)(selectedOutcomeLabel, reportDisplayAmount))
 	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(effectiveReportingDetails, selectedOutcome)
 	const minimumPresetAmount = minimumOutcomeChangeContribution.amountAttoRep ?? (effectiveReportingDetails?.status === 'not-started' ? effectiveReportingDetails.startBondAttoRep : undefined)
 	let minimumPresetKind: Parameters<typeof reportingCopy.minimumPreset>[0] = reportingStatus === 'active' ? 'lead' : 'start'
@@ -238,7 +238,7 @@ export function ReportingSection({
 	}
 	const reportOutcomeSelectionMessage = showFullReporting && reportingStatus !== 'missing' && selectedOutcome === undefined && !reportControlsLocked && reportActionDisabledReason === reportingCopy.reportOutcomeSelectionRequired ? SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE : undefined
 	const showForkWorkflowAction = reportingStageKey === 'forkTriggered' && forkAlreadyTriggered && onOpenForkWorkflow !== undefined
-	const showTriggerZoltarForkAction = reportingStageKey === 'forkTriggered' && !forkAlreadyTriggered && onTriggerZoltarFork !== undefined
+	const showTriggerZoltarForkAction = reportingStageKey === 'forkTriggered' && activeReportingDetails?.hasReachedNonDecision === true && !forkAlreadyTriggered && onTriggerZoltarFork !== undefined
 	// Zoltar rejects a fork until the parent fork response period ends; equal timestamps are allowed.
 	const parentForkResponseReason =
 		activeReportingDetails !== undefined && effectiveCurrentTimestamp !== undefined && effectiveCurrentTimestamp < activeReportingDetails.earliestForkTime
@@ -301,7 +301,7 @@ export function ReportingSection({
 	const reportActionButton = (
 		<TransactionActionButton
 			idleLabel={reportButtonLabel}
-			pendingLabel={(reportTriggersFork ? reportingCopy.reportingAndTriggeringFork : reportingCopy.reportingAmount)(selectedOutcomeLabel, reportDisplayAmount)}
+			pendingLabel={reportingCopy.reportingAmount(selectedOutcomeLabel, reportDisplayAmount)}
 			onClick={onReportOutcome}
 			pending={reportingActiveAction === 'reportOutcome'}
 			actionButtonRef={reportActionButtonRef}

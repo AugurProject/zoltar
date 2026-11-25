@@ -12,10 +12,12 @@ import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
 import { decodeStoredValue, isStoredRecord } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
 import type { ListedQuestionLedger, ReportingDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import * as copy from '@zoltar/ui-statoblast-shared/copy/questionPage.js'
+import { forkMigrationRequiredDetail, parentUniverseForked } from '@zoltar/ui-statoblast-shared/copy/reporting.js'
 
 type ReportingOverview = {
 	active: boolean
 	fork: boolean
+	migrationRequired?: boolean | undefined
 	resolved: boolean
 	resolvedAs?: string | undefined
 	claimAttoRep?: bigint | undefined
@@ -30,13 +32,14 @@ type ReportingOverview = {
 }
 
 export function reportingOverview(details: ReportingDetails, checkedAt: number): ReportingOverview {
+	const migrationRequired = details.settlementState === 'migration-required'
 	const sides =
 		details.status === 'active'
 			? ['yes', 'no', 'invalid'].flatMap(outcome => {
 					const side = details.sides.find(candidate => candidate.key === outcome)
 					if (side === undefined) return []
 					const yours = side.localPrincipalAttoRep ?? side.userDeposits.reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n)
-					const minimum = getReportingMinimumOutcomeChangeContribution(details, side.key).amountAttoRep
+					const minimum = migrationRequired ? undefined : getReportingMinimumOutcomeChangeContribution(details, side.key).amountAttoRep
 					const preview = yours > 0n && minimum !== undefined ? previewReportingDeadline(details, side.key, minimum) : undefined
 					const moreToLead = preview?.reachesNonDecision === false ? minimum : undefined
 					return [{ name: side.label, total: side.balance, yours, moreToLead, saved: side.userDeposits.length > 0, projectedEnd: moreToLead === undefined ? undefined : preview?.deadline }]
@@ -45,6 +48,7 @@ export function reportingOverview(details: ReportingDetails, checkedAt: number):
 	return {
 		active: details.status === 'active',
 		fork: details.status === 'active' && details.hasReachedNonDecision,
+		migrationRequired,
 		resolved: details.settlementState === 'resolved',
 		resolvedAs: details.questionOutcome === 'none' ? undefined : getReportingOutcomeLabel(details.questionOutcome),
 		claimAttoRep: getKnownReportingClaimAmount(details),
@@ -70,6 +74,7 @@ export function decodeReportingOverview(value: unknown) {
 		(read): ReportingOverview => ({
 			active: read.boolean('active'),
 			fork: read.boolean('fork'),
+			migrationRequired: read.optional('migrationRequired', read.boolean),
 			resolved: read.boolean('resolved'),
 			resolvedAs: read.optional('resolvedAs', read.string),
 			claimAttoRep: read.optional('claimAttoRep', read.bigint),
@@ -140,7 +145,8 @@ export function StatoblastReportingOverview({
 	onTakeLead?: (outcome: string, amount: bigint) => void
 }) {
 	const greatest = view.sides.reduce((maximum, side) => (side.total > maximum ? side.total : maximum), 0n)
-	const canChangeLeader = !checkingDeadline && !view.resolved && !view.fork && greatest > 0n && (now === undefined || view.ends === undefined || now <= view.ends)
+	const forkClosesReporting = view.fork || view.migrationRequired === true
+	const canChangeLeader = !checkingDeadline && !view.resolved && !forkClosesReporting && greatest > 0n && (now === undefined || view.ends === undefined || now <= view.ends)
 	const leaders = view.sides.filter(side => side.total === greatest)
 	const tied = canChangeLeader && leaders.length > 1
 	const behind = canChangeLeader && !tied ? view.sides.find(side => side.yours > 0n && side.total < greatest) : undefined
@@ -157,6 +163,9 @@ export function StatoblastReportingOverview({
 		if (view.resolvedAs !== undefined && winningShares !== undefined && winningShares.amount > 0n) {
 			consequence = copy.winningSharesToRedeem(view.resolvedAs, <CurrencyValue value={winningShares.amount} units={winningShares.decimals} />, <a href={winningShares.href}>{copy.shares}</a>)
 		}
+	} else if (view.migrationRequired) {
+		status = parentUniverseForked
+		consequence = forkMigrationRequiredDetail
 	} else if (view.fork) {
 		status = copy.endedUndecided
 	} else if (checkingDeadline || pastDeadline) {
@@ -182,8 +191,8 @@ export function StatoblastReportingOverview({
 		const calendar = buildStatoblastCalendarEvent({ id: `${target.questionLedgerAddress}-${deadline}`, generatedAt: BigInt(Math.floor(Date.now() / 1000)), startsAt: deadline, title, description: location.href })
 		downloadStatoblastCalendarEvent(calendar, 'statoblast-reporting.ics')
 	}
-	const canRemind = question !== undefined && !question.universeHasForked && !view.resolved && !view.fork && futureDeadline !== undefined && now !== undefined
-	const showDeadline = futureDeadline !== undefined && !view.resolved && !view.fork && !checkingDeadline && instruction === undefined
+	const canRemind = question !== undefined && !question.universeHasForked && !view.resolved && !forkClosesReporting && futureDeadline !== undefined && now !== undefined
+	const showDeadline = futureDeadline !== undefined && !view.resolved && !forkClosesReporting && !checkingDeadline && instruction === undefined
 	const showTakeLead = behind?.moreToLead !== undefined && onTakeLead !== undefined && futureDeadline !== undefined
 	return (
 		<>
@@ -223,7 +232,7 @@ export function StatoblastReportingOverview({
 			{!view.resolved && view.sides.length > 0 && (
 				<SectionBlock
 					title={copy.stakedPerOutcome}
-					description={[age >= 1 ? copy.asOfMinutes(age) : undefined, !autoRefresh && view.active && !view.fork ? copy.followWithAutoRefresh : undefined].filter(text => text !== undefined).join(' · ') || undefined}
+					description={[age >= 1 ? copy.asOfMinutes(age) : undefined, !autoRefresh && view.active && !forkClosesReporting ? copy.followWithAutoRefresh : undefined].filter(text => text !== undefined).join(' · ') || undefined}
 					badge={
 						<div className='statoblast-report-legend'>
 							<span>{copy.othersStake}</span>
@@ -269,9 +278,9 @@ export function StatoblastReportingOverview({
 								)
 							})}
 						</ul>
-						{!view.fork && view.ends !== undefined && view.ends > view.opens && view.ends <= LAST_CALENDAR_START && <ResponseTimeline opens={view.opens} ends={view.ends} now={now} estimatedEnd={canChangeLeader ? view.estimatedEndIfLeading : undefined} latestEnd={view.latestEnd} />}
+						{!forkClosesReporting && view.ends !== undefined && view.ends > view.opens && view.ends <= LAST_CALENDAR_START && <ResponseTimeline opens={view.opens} ends={view.ends} now={now} estimatedEnd={canChangeLeader ? view.estimatedEndIfLeading : undefined} latestEnd={view.latestEnd} />}
 					</div>
-					{view.firstReportMinimum !== undefined && view.nonDecisionThreshold !== undefined && !view.fork && <EscalationExplainer firstReportMinimum={view.firstReportMinimum} nonDecisionThreshold={view.nonDecisionThreshold} />}
+					{view.firstReportMinimum !== undefined && view.nonDecisionThreshold !== undefined && !forkClosesReporting && <EscalationExplainer firstReportMinimum={view.firstReportMinimum} nonDecisionThreshold={view.nonDecisionThreshold} />}
 				</SectionBlock>
 			)}
 		</>

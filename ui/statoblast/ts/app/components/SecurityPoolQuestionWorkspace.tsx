@@ -77,7 +77,13 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 	const ledgerAddress = selected?.questionLedgerAddress
 	const reporting = useReportingOperations({ ...parameters, selectedQuestionLedgerAddress: ledgerAddress ?? '', includeSchedule: entry.tab === 'reporting' })
 	const reportingDetails = reporting.reportingDetails?.questionLedgerAddress === ledgerAddress ? reporting.reportingDetails : undefined
-	const trading = useTradingOperations({ ...parameters, deploymentStatuses, enabled: enabled && selected !== undefined, selectedQuestionLedgerAddress: ledgerAddress ?? '' })
+	const trading = useTradingOperations({
+		...parameters,
+		deploymentStatuses,
+		enabled: enabled && selected !== undefined,
+		selectedQuestionLedgerAddress: ledgerAddress ?? '',
+		onTransactionPresented: presentation => parameters.onTransactionPresented({ ...presentation, showStatusDialog: false }),
+	})
 	useEffect(() => {
 		const page = displayCache.read()
 		setCachedHeading(page === undefined ? undefined : { scope: cacheScope, page })
@@ -345,6 +351,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 					loadingTradingDetails={trading.loadingTradingDetails}
 					loadingTradingForkUniverse={trading.loadingTradingForkUniverse}
 					collateralFunding={trading.collateralFunding}
+					mintLimits={trading.mintLimits}
 					onCreateCompleteSet={trading.createCompleteSet}
 					onMigrateShares={trading.migrateShares}
 					onRedeemCompleteSet={trading.redeemCompleteSet}

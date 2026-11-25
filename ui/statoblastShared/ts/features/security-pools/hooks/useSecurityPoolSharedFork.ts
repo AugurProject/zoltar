@@ -1,3 +1,4 @@
+import { fork as transactionCopy } from '../../../copy/securityPoolTransactions.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useMemo, useRef } from 'preact/hooks'
 import { formatUnits, getAddress, isAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
@@ -180,27 +181,27 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 		return () => abort.abort()
 	}, [backend, recoveryScope, recoveryKey, recoveryCache])
 	const recovery = recoveryState?.source
-	const pendingReason = universeId === undefined ? 'Enter a valid source universe.' : 'Checking fork status…'
+	const pendingReason = universeId === undefined ? transactionCopy.sourceRequired : transactionCopy.checkingStatus
 	const walletReason = bidder === undefined ? connect : undefined
 	const ownerReason = walletReason ?? actions.ownerReason
 	const baseReason = current?.error ?? (state === undefined ? pendingReason : undefined)
-	const forkReason = baseReason ?? (state?.forkTime === 0n ? 'This source universe has not forked.' : undefined)
-	const branchReason = forkReason ?? (state?.branch === undefined || current?.outcome?.outcomeLabel === undefined ? 'Enter a valid fork outcome.' : undefined)
+	const forkReason = baseReason ?? (state?.forkTime === 0n ? copy.noFork : undefined)
+	const branchReason = forkReason ?? (state?.branch === undefined || current?.outcome?.outcomeLabel === undefined ? transactionCopy.chooseOutcome : undefined)
 	const publicBranchReason = walletReason ?? branchReason
 	const chooseReason =
 		ownerReason ??
 		branchReason ??
-		(state?.choice.recorded ? 'Your irreversible branch choice is already recorded.' : undefined) ??
-		(state !== undefined && state.timestamp >= state.choiceDeadline ? 'The fork choice window has closed.' : undefined) ??
-		(securityPool !== undefined && universeId === securityPool.universeId && !securityPool.positions.some(position => position.rep > 0n && position.commitment > 0n) ? 'No pledged REP to move.' : undefined)
-	const custodyPreparationReason = (selected: SecurityPoolForkSnapshot) => (selected.branch?.prepared ? 'This branch capital is already prepared.' : undefined)
+		(state?.choice.recorded ? transactionCopy.choiceRecorded : undefined) ??
+		(state !== undefined && state.timestamp >= state.choiceDeadline ? transactionCopy.choiceWindowClosed : undefined) ??
+		(securityPool !== undefined && universeId === securityPool.universeId && !securityPool.positions.some(position => position.rep > 0n && position.commitment > 0n) ? transactionCopy.noPledgedRep : undefined)
+	const custodyPreparationReason = (selected: SecurityPoolForkSnapshot) => (selected.branch?.prepared ? transactionCopy.capitalPrepared : undefined)
 	const migrationReason = (selected: SecurityPoolForkSnapshot) => {
-		if (selected.timestamp < selected.choiceDeadline) return 'Wait until the choice deadline.'
-		return selected.branch?.started ? 'This branch migration is already started.' : undefined
+		if (selected.timestamp < selected.choiceDeadline) return transactionCopy.waitForChoiceDeadline
+		return selected.branch?.started ? transactionCopy.migrationStarted : undefined
 	}
 	const prepareBranchReason = publicBranchReason ?? (state && custodyPreparationReason(state))
 	const recheckStage = (reasonFor: (latest: SecurityPoolForkSnapshot) => string | undefined, after: string) => async (latest: SecurityPoolForkSnapshot) => {
-		const reason = latest.forkTime === 0n || latest.branch === undefined ? 'Fork context changed. Review again.' : reasonFor(latest)
+		const reason = latest.forkTime === 0n || latest.branch === undefined ? transactionCopy.contextChanged : reasonFor(latest)
 		if (reason !== undefined) throw new Error(reason)
 		const branch = latest.branch
 		let before: string = copy.branchStates.unprepared
@@ -210,9 +211,9 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 	}
 	const startReason = publicBranchReason ?? (state && migrationReason(state))
 	const activationReason = (selected: SecurityPoolForkSnapshot) => {
-		if (!selected.branch?.prepared) return 'Prepare branch capital first.'
-		if (selected.timestamp < selected.activationDeadline) return 'Wait until the earliest activation time.'
-		return selected.branch.ready ? 'This branch is already active.' : undefined
+		if (!selected.branch?.prepared) return transactionCopy.prepareCapitalFirst
+		if (selected.timestamp < selected.activationDeadline) return transactionCopy.waitUntilActivation
+		return selected.branch.ready ? transactionCopy.branchActive : undefined
 	}
 	const finalizeReason = publicBranchReason ?? (state && activationReason(state))
 	const sourceReason =
@@ -239,7 +240,7 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 
 	const run = (action: string, title: string, reason: string | undefined, build: (selected: SecurityPoolForkSnapshot) => SecurityPoolTransaction, check?: (latest: SecurityPoolForkSnapshot, client: ReadClient) => Promise<readonly ReviewRow[] | void>) =>
 		actions.runSecurityPoolAction(action, title, () => {
-			if (reason !== undefined || state === undefined) throw new Error(reason ?? 'Fork state unavailable.')
+			if (reason !== undefined || state === undefined) throw new Error(reason ?? transactionCopy.stateUnavailable)
 			const selected = state
 			const request = build(selected)
 			let reviewRows: readonly ReviewRow[] = []
@@ -247,10 +248,10 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 				...request,
 				readReviewRows: () => reviewRows,
 				validateBeforeSubmit: async () => {
-					if (getActiveBackend() !== backend) throw new Error('Wallet environment changed. Review again.')
+					if (getActiveBackend() !== backend) throw new Error(transactionCopy.walletChanged)
 					const client = withStatoblastRequestTimeout(createConnectedReadClient(), currentStateCheckFailed)
 					const latest = await loadSecurityPoolForkSnapshot({ client: securityPoolReadClient(client), securityPool: selected.securityPool, owner: selected.owner, universeId: selected.universeId, ...(selected.branch === undefined ? {} : { outcomeIndex: selected.branch.outcomeIndex }) })
-					if (latest.chainId !== selected.chainId || latest.controller !== selected.controller) throw new Error('Fork context changed. Review again.')
+					if (latest.chainId !== selected.chainId || latest.controller !== selected.controller) throw new Error(transactionCopy.contextChanged)
 					reviewRows = (await check?.(latest, client)) ?? []
 				},
 			}
@@ -322,18 +323,18 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 		choose: () =>
 			run(
 				'chooseSecurityPoolFork',
-				'Commit fork branch',
+				transactionCopy.commitBranch,
 				chooseReason,
 				selected => {
 					const outcomeLabel = current?.outcome?.outcomeLabel
-					if (selected.branch === undefined || outcomeLabel === undefined) throw new Error('Select a branch.')
+					if (selected.branch === undefined || outcomeLabel === undefined) throw new Error(transactionCopy.selectBranch)
 					return {
 						...buildSecurityPoolForkChoiceRequest({ ...base(selected), outcomeIndex: selected.branch.outcomeIndex }),
 						reviewDescription: copy.choiceReview(outcomeLabel),
 					}
 				},
 				async latest => {
-					if (latest.forkTime === 0n || latest.branch === undefined || latest.choice.recorded || latest.timestamp >= latest.choiceDeadline) throw new Error('Fork choice is no longer available.')
+					if (latest.forkTime === 0n || latest.branch === undefined || latest.choice.recorded || latest.timestamp >= latest.choiceDeadline) throw new Error(transactionCopy.choiceUnavailable)
 					const outcomeLabel = current?.outcome?.outcomeLabel
 					if (outcomeLabel === undefined) throw new Error(copy.forkReadFailed)
 					return [{ label: copy.yourBranch, value: `${copy.unchosen} → ${outcomeLabel}` }]
@@ -342,33 +343,33 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 		prepareBranch: () =>
 			run(
 				'prepareSecurityPoolFork',
-				'Prepare branch capital',
+				copy.prepareBranch,
 				prepareBranchReason,
 				selected => {
-					if (selected.branch === undefined) throw new Error('Select a branch.')
-					return { ...buildSecurityPoolForkPreparationRequest({ ...publicBase(selected), outcomeIndex: selected.branch.outcomeIndex }), reviewDescription: 'Create this branch’s REP token and shared capital contracts when needed.' }
+					if (selected.branch === undefined) throw new Error(transactionCopy.selectBranch)
+					return { ...buildSecurityPoolForkPreparationRequest({ ...publicBase(selected), outcomeIndex: selected.branch.outcomeIndex }), reviewDescription: transactionCopy.prepareReview }
 				},
 				recheckStage(custodyPreparationReason, copy.branchStates.chosen),
 			),
 		start: () =>
 			run(
 				'startSecurityPoolFork',
-				'Start branch migration',
+				copy.start,
 				startReason,
 				selected => {
-					if (selected.branch === undefined) throw new Error('Select a branch.')
-					return { ...buildSecurityPoolForkStartRequest({ ...publicBase(selected), outcomeIndex: selected.branch.outcomeIndex }), reviewDescription: 'Prepare this branch if needed, migrate its shared REP, and set up its collateral repair auction.' }
+					if (selected.branch === undefined) throw new Error(transactionCopy.selectBranch)
+					return { ...buildSecurityPoolForkStartRequest({ ...publicBase(selected), outcomeIndex: selected.branch.outcomeIndex }), reviewDescription: transactionCopy.startReview }
 				},
 				recheckStage(migrationReason, copy.branchStates.waiting),
 			),
 		finalize: () =>
 			run(
 				'finalizeSecurityPoolFork',
-				'Activate fork branch',
+				copy.finalize,
 				finalizeReason,
 				selected => {
-					if (selected.branch === undefined) throw new Error('Select a branch.')
-					return { ...buildSecurityPoolForkFinalizeRequest({ ...publicBase(selected), universeId: selected.branch.universeId }), reviewDescription: 'Start migration if needed, then activate this branch’s collateral and REP claim basket and chosen underwriting positions.' }
+					if (selected.branch === undefined) throw new Error(transactionCopy.selectBranch)
+					return { ...buildSecurityPoolForkFinalizeRequest({ ...publicBase(selected), universeId: selected.branch.universeId }), reviewDescription: transactionCopy.activateReview }
 				},
 				recheckStage(activationReason, copy.branchStates.active),
 			),

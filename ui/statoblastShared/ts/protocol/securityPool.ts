@@ -38,6 +38,7 @@ import {
 } from '../contractArtifact.js'
 import { getInfraContractAddresses, getSecurityPoolCreationCode, getSecurityPoolRuntimeCode } from './deploymentHelpers.js'
 import { invalidPool, missingPoolContract } from '../copy/watchlist.js'
+import { positionNeedsConfirmedBlock, transactionOwnerRequired } from '../copy/securityPool.js'
 import { requireAddressValue, requireBigintValue, requireIntegerLikeValue } from './decoders.js'
 import { readRequiredMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { loadSecurityPoolAdmission } from './securityPoolAdmission.js'
@@ -163,7 +164,7 @@ export async function isUniverseForked(client: Pick<ReadClient, 'readContract'>,
 export async function loadSecurityPoolAccount(client: ReadClient, securityPool: Address, owner: Address | undefined, universeId: bigint, questionStart = 0n, admissionStart = 0n, includeQuestions = true) {
 	const anchor = await client.getBlock()
 	const blockNumber = anchor.number
-	if (blockNumber === undefined || anchor.hash === undefined) throw new Error('Security pool account requires a mined block.')
+	if (blockNumber === undefined || anchor.hash === undefined) throw new Error(positionNeedsConfirmedBlock)
 	await requireCanonicalSecurityPool(client, securityPool, blockNumber)
 	const snapshot = await loadSecurityPoolCapitalSnapshot({ client: securityPoolReadClient(client), securityPool, owner, universeId, blockNumber })
 	if (snapshot.blockHash !== anchor.hash) throw new Error('Chain changed while reading the security pool. Refresh and try again.')
@@ -290,7 +291,7 @@ export function securityPoolContractRequest(account: Address, to: Address, funct
 
 export async function sendSecurityPoolTransaction(client: WriteClient, request: SecurityPoolTransaction, title: string, validate: () => Promise<void> = async () => undefined) {
 	const captured = { ...request }
-	if (getAddress(captured.account) !== getAddress(client.account.address)) throw new Error('Connect the transaction owner account.')
+	if (getAddress(captured.account) !== getAddress(client.account.address)) throw new Error(transactionOwnerRequired)
 	const validateCaptured = async () => {
 		await validate()
 		await captured.validateBeforeSubmit?.()

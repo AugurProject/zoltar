@@ -122,7 +122,7 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 		callbackContract: game.callbackContract,
 		trustedSettlementCallback,
 		numReports: storedState.reportCount,
-		callbackGasLimit: bigintToSafeNumber(game.callbackGasLimit, 'Callback gas limit'),
+		callbackGasLimit: bigintToSafeNumber(game.callbackGasLimit, openOracleCopy.callbackGasLimit),
 		protocolFeeRecipient: game.protocolFeeRecipient,
 		trackDisputes: hasOpenOracleFlag(game, OPEN_ORACLE_FLAG_TRACK_DISPUTES),
 		feesOnlyAtHalt: hasOpenOracleFlag(game, OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT),

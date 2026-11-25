@@ -350,6 +350,41 @@ test('mint validation requires the fresh actual fee while preserving its signed 
 	await expect(validate()).rejects.toThrow('Purchase fee changed')
 })
 
+test('mint binds chosen limits and rejects worse fees or shares before review and before sending', async () => {
+	let fee = 10n
+	let shares = 95n
+	let validate: TransactionPlanStep['validateBeforeSubmit']
+	const send = mock((request: MockSentTransaction) => {
+		if (request.data === undefined) throw new Error('Missing mint calldata')
+		expect(decodeFunctionData({ abi: securityPoolMintAbi, data: request.data }).args?.slice(4)).toEqual([90n, 20n])
+	})
+	const base = mintClient(send, 1n, 100n)
+	const client = {
+		...base,
+		readContract: createReadContractStub(async request => {
+			if (request.functionName === 'purchaseQuote') return [fee, 0n]
+			if (request.functionName === 'attoEthToAttoShares') return shares
+			return base.readContract(request)
+		}),
+		onTransactionPlan: (steps: readonly TransactionPlanStep[]) => {
+			validate = steps[0]?.validateBeforeSubmit
+		},
+	}
+	const limits = { maximumFee: 20n, minimumShares: 90n }
+	await expect(createCompleteSetInQuestionLedger(client, pool, 100n, { ...limits, maximumFee: 9n })).rejects.toThrow('Purchase fee changed')
+	await expect(createCompleteSetInQuestionLedger(client, pool, 100n, { ...limits, minimumShares: 96n })).rejects.toThrow('The shares received changed')
+	expect(send).not.toHaveBeenCalled()
+	await createCompleteSetInQuestionLedger(client, pool, 100n, limits)
+	if (validate === undefined) throw new Error('Missing mint validation')
+	await expect(validate()).resolves.toBeUndefined()
+	fee = 21n
+	await expect(validate()).rejects.toThrow('Purchase fee changed')
+	fee = 20n
+	shares = 89n
+	await expect(validate()).rejects.toThrow('The shares received changed')
+	expect(send).toHaveBeenCalledTimes(1)
+})
+
 test('USDC share migration reviews the amount at six decimal precision', async () => {
 	let review: TransactionRequestPreview | undefined
 	const send = mock(() => undefined)

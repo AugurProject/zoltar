@@ -3,7 +3,7 @@ import { createPublicClient, custom, encodeAbiParameters, keccak256, parseAbi, p
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import { statoblastPageCache } from '@zoltar/ui-statoblast-shared/protocol/statoblastPageCache.js'
+import { statoblastDisplayCache, statoblastPageCache } from '@zoltar/ui-statoblast-shared/protocol/statoblastPageCache.js'
 
 installDomTestLifecycle()
 
@@ -55,4 +55,21 @@ test('replays saved display data without RPC and batches verified warm reads at 
 	currentValue = 22n
 	await expect(mounted.refresh(client, multicall, read)).resolves.toEqual({ value: 22n, code: '0x6000' })
 	expect(methods).toEqual(['eth_getBlockByNumber', 'eth_call', 'eth_call', 'eth_getBlockByNumber'])
+})
+
+test('saved display data uses the matching wallet and universe and evicts the least recently used page', () => {
+	const anchor = { number: 10n, timestamp: 20n }
+	const display = (page: string, wallet = owner, universeId = 0n) => statoblastDisplayCache(MAINNET_NETWORK_PROFILE, { universeId, owner: wallet, page }, value => (typeof value === 'string' ? value : undefined))
+	const first = display('first')
+	const second = display('second')
+	const large = 'a'.repeat(1_000_000)
+	first.write(large, anchor)
+	second.write(large, anchor)
+	expect(display('first', pool).read()).toBeUndefined()
+	expect(display('first', owner, 1n).read()).toBeUndefined()
+	expect(first.read()).toMatchObject({ value: large, timestamp: 20n })
+	display('third').write(large, anchor)
+	expect(second.read()).toBeUndefined()
+	expect(first.read()?.value).toBe(large)
+	expect(display('third').read()?.value).toBe(large)
 })

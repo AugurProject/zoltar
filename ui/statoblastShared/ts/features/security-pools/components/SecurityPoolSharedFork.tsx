@@ -5,7 +5,7 @@ import { ScalarOutcomePicker } from '@zoltar/ui-core-shared/components/ScalarOut
 import type { ComponentChildren } from 'preact'
 import type { MarketDetails, ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import * as pageCopy from '../../../copy/forkRecovery.js'
-import { addToCalendar } from '../../../copy/questionPage.js'
+import { addToCalendar, deadlineChecking } from '../../../copy/questionPage.js'
 import { buildStatoblastCalendarEvent, downloadStatoblastCalendarEvent, LAST_CALENDAR_START } from '../../reporting/lib/escalationReminder.js'
 import { useOldActionDataNotice, useStatoblastRefreshError, type RegisterStatoblastPageRefresh } from '../../useStatoblastPageRefresh.js'
 import { tryAgain } from '../../../copy/securityPoolPage.js'
@@ -24,6 +24,7 @@ import { OnChainText } from '@zoltar/ui-core-shared/components/OnChainText.js'
 import { OutcomeIdentity } from '@zoltar/ui-core-shared/components/OutcomeIdentity.js'
 import { SecurityPoolButton, SecurityPoolInput } from './SecurityPoolControls.js'
 import { useSecurityPoolSharedFork, type SecurityPoolSharedForkParameters } from '../hooks/useSecurityPoolSharedFork.js'
+import { useSecurityPoolDeadline } from '../hooks/useSecurityPoolDeadline.js'
 import { SecurityPoolShareRecovery } from './SecurityPoolShareRecovery.js'
 import { SecurityPoolForkDiagram } from './SecurityPoolForkDiagram.js'
 import { SecurityPoolPriceReport } from './SecurityPoolPriceReport.js'
@@ -67,8 +68,23 @@ export function SecurityPoolSharedFork({
 	const activationAt = display?.activationDeadline ?? forkRecapitalizationDeadline
 	const choiceTime = display?.timestamp ?? shownPool?.timestamp
 	const forkTime = display?.forkTime ?? shownPool?.forkTime ?? 0n
-	const canChooseByDeadline = choiceAt !== undefined && choiceTime !== undefined && choiceTime < choiceAt
+	const nextDeadline = forkTime === 0n || choiceTime === undefined ? undefined : [choiceAt, activationAt].find(deadline => deadline !== undefined && deadline > choiceTime)
+	const check = useSecurityPoolDeadline({
+		scope: `${shownPool?.chainId}:${shownPool?.securityPool}:${shownPool?.owner}:${model.sourceInput}`,
+		deadline: redesigned ? nextDeadline : undefined,
+		timestamp: choiceTime,
+		readAt: model.displayedAt,
+		reading: model.loading,
+		refresh: model.retryFork,
+	})
+	const choiceChecking = choiceAt !== undefined && choiceTime !== undefined && choiceTime < choiceAt && check.checking
+	const approximateTime = check.now
+	const activationChecking = redesigned && activationAt !== undefined && choiceTime !== undefined && choiceTime < activationAt && ((approximateTime !== undefined && approximateTime >= activationAt) || (nextDeadline === activationAt && check.checking))
+	const canChooseByDeadline = !choiceChecking && choiceAt !== undefined && approximateTime !== undefined && approximateTime < choiceAt
 	const choiceDate = choiceAt === undefined ? undefined : formatTimestamp(choiceAt)
+	let choiceTitle = pageCopy.choiceExpired
+	if (choiceChecking) choiceTitle = deadlineChecking
+	else if (canChooseByDeadline && choiceDate !== undefined) choiceTitle = pageCopy.chooseBy(choiceDate)
 	const showReminder = !branchDone && canChooseByDeadline && choiceAt !== undefined && choiceAt <= LAST_CALENDAR_START
 	const addReminder = () => {
 		const source = display ?? shownPool
@@ -120,7 +136,7 @@ export function SecurityPoolSharedFork({
 	useEffect(() => {
 		if (state !== undefined && parameters.bidder !== undefined && sameAddress(state.owner, parameters.bidder)) onBranchCommitted?.(state.choice.recorded)
 	}, [state?.choice.recorded, state?.owner, parameters.bidder, onBranchCommitted])
-	const chooseReason = model.chooseReason ?? (redesigned && !confirmedChoice ? pageCopy.branchConfirmationReason : undefined)
+	const chooseReason = (choiceChecking ? deadlineChecking : undefined) ?? model.chooseReason ?? (redesigned && !confirmedChoice ? pageCopy.branchConfirmationReason : undefined)
 	const committedMessage = copy.chosen(state?.choice.outcomeIndex ?? 0n)
 	let branchState = copy.branchStates.choose
 	if (branch !== undefined) {
@@ -145,6 +161,7 @@ export function SecurityPoolSharedFork({
 					displayTarget={priceTarget ?? model.savedBranch}
 					actions={parameters.actions}
 					bidder={parameters.bidder}
+					returnFundsOnly={activationChecking || (redesigned && activationAt !== undefined && choiceTime !== undefined && choiceTime >= activationAt)}
 					referencePrice={shownPool?.acceptedPrice}
 					onPriceAccepted={setPricedBranch}
 					autoRefresh={autoRefresh ?? false}
@@ -155,7 +172,7 @@ export function SecurityPoolSharedFork({
 	const auctionPanel =
 		!redesigned || migrationStarted ? (
 			<div ref={auctionSection} tabIndex={-1} className={redesigned ? 'statoblast-fork-step-body' : undefined} hidden={redesigned && auctionReason !== undefined}>
-				<SecurityPoolRepairAuction fork={state} savedBranch={model.savedBranch} actions={parameters.actions} bidder={parameters.bidder} openVault={parameters.openVault} onAuctionFinalized={setFinalizedAuctionBranch} sharedDeadline={redesigned} />
+				<SecurityPoolRepairAuction fork={state} savedBranch={model.savedBranch} actions={parameters.actions} bidder={parameters.bidder} openVault={parameters.openVault} onAuctionFinalized={setFinalizedAuctionBranch} sharedDeadline={redesigned} sharedDeadlineChecking={activationChecking} />
 			</div>
 		) : undefined
 	return (
@@ -163,9 +180,9 @@ export function SecurityPoolSharedFork({
 			{redesigned && forkTime > 0n && !branchDone && choiceAt !== undefined && choiceAt > 0n && choiceDate !== undefined && (
 				<div className='statoblast-fork-choice-deadline'>
 					<div>
-						<strong>{canChooseByDeadline ? pageCopy.chooseBy(choiceDate) : pageCopy.choiceExpired}</strong>
-						{canChooseByDeadline && <span className='statoblast-fork-choice-countdown'>{pageCopy.choiceTimeLeft(formatDuration(choiceAt - choiceTime))}</span>}
-						<p>{canChooseByDeadline ? pageCopy.choiceForfeit : pageCopy.noChoiceAfterDeadline}</p>
+						<strong>{choiceTitle}</strong>
+						{canChooseByDeadline && <span className='statoblast-fork-choice-countdown'>{pageCopy.choiceTimeLeft(formatDuration(choiceAt - approximateTime))}</span>}
+						<p>{canChooseByDeadline || choiceChecking ? pageCopy.choiceForfeit : pageCopy.noChoiceAfterDeadline}</p>
 					</div>
 					{showReminder && (
 						<button className='secondary' type='button' onClick={addReminder}>
@@ -184,7 +201,7 @@ export function SecurityPoolSharedFork({
 						<SecurityPoolInput label={copy.outcome} hint={copy.outcomeHint} value={model.outcomeInput} onChange={model.setOutcome} disabled={disabled} />
 					</MetricGrid>
 				)}
-				<RetryableNotice message={refreshError} retryLabel={tryAgain} onRetry={model.retryFork} />
+				<RetryableNotice message={refreshError ?? (check.failed ? deadlineChecking : undefined)} retryLabel={tryAgain} onRetry={check.failed ? check.retry : model.retryFork} />
 				{state?.forkTime === 0n ? <UserMessage detail={copy.noFork} /> : undefined}
 				{model.outcome?.outcomeLabel === undefined ? undefined : (
 					<UserMessage
@@ -203,6 +220,7 @@ export function SecurityPoolSharedFork({
 						{activationAt !== undefined && activationAt > 0n && (
 							<div className='statoblast-branch-recapitalization'>
 								<strong>{pageCopy.recapitalizationDeadline}</strong> <span>{formatTimestamp(activationAt)}</span>
+								{activationChecking && <UserMessage announcement='polite' detail={deadlineChecking} />}
 								<p className='detail'>{pageCopy.recapitalizationHint}</p>
 							</div>
 						)}

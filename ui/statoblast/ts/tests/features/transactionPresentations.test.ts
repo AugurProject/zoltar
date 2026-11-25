@@ -39,7 +39,7 @@ describe('transaction presentations', () => {
 		expect(unconfirmed.tone).toBe('warning')
 		expect(unconfirmed.title).toBe('Report settled; price acceptance unconfirmed')
 		const rejected = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { status: 'rejected', reason: 'Report uneconomic' } })
-		expect(rejected.detail).toBe('Security pool rejected this price: Report uneconomic. Request a new price.')
+		expect(rejected.detail).toBe('Security pool rejected this price: Report uneconomic. Report a new price.')
 		const deferred = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { status: 'deferred', maxSettlementBaseFee: 33n * 10n ** 9n } })
 		expect(deferred.tone).toBe('warning')
 		expect(deferred.title).toBe('Report settled; price pending recovery')
@@ -48,14 +48,14 @@ describe('transaction presentations', () => {
 
 	test.each(['Security pool reporting window closed', 'Report timestamp not newer'])('does not recommend another request for %s', reason => {
 		const presentation = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { status: 'rejected', reason } })
-		expect(presentation.detail).not.toContain('Request a new price')
+		expect(presentation.detail).not.toContain('Report a new price')
 	})
 
 	test('shows a stale coordinator rejection as a warning after successful report settlement', () => {
 		const presentation = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { status: 'rejected', reason: 'Report stale' } })
 		expect(presentation.tone).toBe('warning')
 		expect(presentation.title).toBe('Report settled; price rejected')
-		expect(presentation.detail).toBe('Price expired before settlement. Request a new price.')
+		expect(presentation.detail).toBe('Price expired before settlement. Report a new price.')
 	})
 
 	test('describes OpenOracle settlement as a report lifecycle action', () => {

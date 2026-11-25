@@ -1,3 +1,5 @@
+import { deployment as deploymentCopy } from '../../../copy/securityPoolTransactions.js'
+import { prepareStages } from '../../../copy/securityPoolCapital.js'
 import { invalidateStatoblastEntries } from '../../../protocol/statoblastEntries.js'
 import { securityPoolCollateral, type CollateralSymbol } from '../../../protocol/collateral.js'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
@@ -24,6 +26,8 @@ import { authenticateSecurityPoolAuctionVault } from '../../../protocol/security
 import { deploymentProgressStore, type DeploymentDraft } from '../lib/deploymentProgress.js'
 import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
 
+const MINIMUM_SECURITY_MULTIPLIER_BPS = 10_500n
+
 const createReviewReadClient = () => withStatoblastRequestTimeout(createConnectedReadClient(), currentStateCheckFailed)
 
 function initialDeploymentDraft(originInput: string): DeploymentDraft {
@@ -40,7 +44,7 @@ function initialDeploymentDraft(originInput: string): DeploymentDraft {
 	}
 }
 
-export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>, parameters: WriteOperationsParameters, deploying = false, walletUnavailableReason?: string) {
+export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>, parameters: WriteOperationsParameters, deploying = false, walletUnavailableReason?: string, checkDeploymentOrigin = deploying) {
 	const backend = getActiveBackend()
 	const wallet = parameters.accountAddress
 	const journal = useMemo(() => {
@@ -102,6 +106,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 	}, [savedPool, completedPool, journal, backend])
 	const originForkKey = draft.originInput.trim()
 	useEffect(() => {
+		if (!checkDeploymentOrigin) return
 		let current = true
 		const originUniverse = securityPoolUnsignedId(draft.originInput, 248)
 		// A failed read leaves the check to submission, which repeats it for a universe that forks after this one.
@@ -114,7 +119,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		return () => {
 			current = false
 		}
-	}, [backend, originForkKey])
+	}, [backend, checkDeploymentOrigin, originForkKey])
 	const run = async (action: string, label: string, build: () => Promise<SecurityPoolTransaction> | SecurityPoolTransaction, validate: () => Promise<void> = async () => undefined, onConfirmed?: (result: Awaited<ReturnType<typeof sendSecurityPoolTransaction>>) => Promise<void>) => {
 		if (busy.value !== undefined) return
 		busy.value = action
@@ -139,13 +144,13 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 						request = {
 							...original,
 							...buildSecurityPoolAuctionVaultExecuteRequest({ bidder: selectedVault.bidder, vault: selectedVault.vault, request: { account: original.account, to: request.to, value: original.value ?? 0n, data: original.data }, sweep: { repToken: snapshot.repToken, recipient: selectedVault.bidder } }),
-							reviewDescription: `${original.reviewDescription ?? label} This operation uses your independent auction vault ${selectedVault.vault}. Returned collateral, ETH and REP are sent to your wallet ${selectedVault.bidder}.`,
+							reviewDescription: deploymentCopy.positionReview(original.reviewDescription ?? label, selectedVault.vault, selectedVault.bidder),
 							validateBeforeSubmit: async () => {
 								const client = createReviewReadClient()
 								const block = await client.getBlock()
-								if (block.number === undefined) throw new Error('A confirmed block is required to authenticate this vault.')
+								if (block.number === undefined) throw new Error(deploymentCopy.positionBlockRequired)
 								const fresh = await authenticateSecurityPoolAuctionVault(client, snapshot.securityPool, selectedVault.vault, block.number)
-								if (fresh.bidder !== selectedVault.bidder || fresh.auction !== selectedVault.auction || fresh.bidId !== selectedVault.bidId) throw new Error('Auction vault authority changed. Review again.')
+								if (fresh.bidder !== selectedVault.bidder || fresh.auction !== selectedVault.auction || fresh.bidId !== selectedVault.bidId) throw new Error(deploymentCopy.positionAuthorityChanged)
 								await original.validateBeforeSubmit?.()
 							},
 						}
@@ -188,12 +193,12 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		if (originUniverse === undefined) throw new Error(copy.enterOrigin)
 		const securityMultiplierBps = parseUnits(draft.multiplierInput, 2)
 		const reportPriorityFeeAttoEthPerGas = parseUnits(draft.priorityFeeInput, 9)
-		if (securityMultiplierBps < 10_500n) throw new Error('Security multiplier must be at least 105%.')
-		if (reportPriorityFeeAttoEthPerGas <= 0n) throw new Error('Oracle priority fee must be positive.')
-		if (reportPriorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) throw new Error('Oracle priority fee exceeds the report funding limit.')
-		if (collateral.address === undefined) throw new Error('This collateral token is unavailable on the selected network.')
+		if (securityMultiplierBps < MINIMUM_SECURITY_MULTIPLIER_BPS) throw new Error(deploymentCopy.securityMultiplierTooLow)
+		if (reportPriorityFeeAttoEthPerGas <= 0n) throw new Error(deploymentCopy.priorityFeeRequired)
+		if (reportPriorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) throw new Error(deploymentCopy.priorityFeeAboveLimit)
+		if (collateral.address === undefined) throw new Error(deploymentCopy.collateralUnavailable)
 		const minimumReportCollateral = securityPoolAmountOrUndefined(draft.reportFloor, collateral.decimals)
-		if (minimumReportCollateral === undefined || minimumReportCollateral === 0n) throw new Error(`Enter a positive report stake floor with up to ${collateral.decimals} decimal places.`)
+		if (minimumReportCollateral === undefined || minimumReportCollateral === 0n) throw new Error(deploymentCopy.reportStakeRequired(collateral.decimals))
 		origin = { collateralToken: collateral.address, minimumReportCollateral, universeId: originUniverse, securityMultiplierBps, reportPriorityFeeAttoEthPerGas }
 		if (fixedQuestionError !== undefined) throw new Error(fixedQuestionError)
 		economics = parseSecurityPoolCreationEconomics(draft.economicsDraft, collateral.decimals)
@@ -349,7 +354,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 				},
 				requireUnforkedOrigin,
 				async result => {
-					if (parameters.accountAddress === undefined) throw new Error('Security pool deployment address unavailable.')
+					if (parameters.accountAddress === undefined) throw new Error(deploymentCopy.poolAddressUnavailable)
 					const securityPool = securityPoolAddressFromCreationReceipt(result.receipt)
 					if (progress !== undefined) saveProgress({ ...progress, pool: securityPool })
 					await model.load(securityPool, parameters.accountAddress, admission?.universeId.toString())
@@ -364,25 +369,25 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 				return model.loading ? copy.checkingSetupProgress : copy.retrySavedSetup
 			}
 			if (model.loading) return copy.checkingSetupProgress
-			if (setup.originForkTime !== 0n) return 'Origin universe forked; setup is permanently closed.'
-			if (setup.stage >= stage) return 'This setup stage is complete.'
-			return setup.stage === stage - 1 ? undefined : 'Complete the previous setup stage first.'
+			if (setup.originForkTime !== 0n) return deploymentCopy.setupClosed
+			if (setup.stage >= stage) return deploymentCopy.stageComplete
+			return setup.stage === stage - 1 ? undefined : deploymentCopy.previousStageRequired
 		},
 		prepare: (stage: number) => {
 			const selected = verifiedSetup
 			return run(
 				`prepareSecurityPool${stage}`,
-				'Prepare security pool modules',
+				deploymentCopy.prepareModules,
 				() => {
-					if (selected === undefined || selected.stage !== stage - 1 || parameters.accountAddress === undefined) throw new Error('Refresh and select the next setup stage.')
-					if (selected.originForkTime !== 0n) throw new Error('Origin universe forked; setup is permanently closed.')
+					if (selected === undefined || selected.stage !== stage - 1 || parameters.accountAddress === undefined) throw new Error(deploymentCopy.nextStageRequired)
+					if (selected.originForkTime !== 0n) throw new Error(deploymentCopy.setupClosed)
 					return {
 						...securityPoolPreparationRequest(parameters.accountAddress, selected.securityPool),
-						reviewDescription: `Complete setup stage ${stage} of 4. This deploys the next bounded group of custody modules. No REP or trader ETH is deposited.`,
+						reviewDescription: deploymentCopy.prepareModulesReview(stage, prepareStages.length),
 						validateBeforeSubmit: async () => {
 							const latest = await loadSecurityPoolSetup(createReviewReadClient(), selected.securityPool, selected.owner)
-							if (latest.chainId !== selected.chainId || latest.stage !== selected.stage) throw new Error('Setup advanced. Refresh before sending another preparation transaction.')
-							if (latest.originForkTime !== 0n) throw new Error('Origin universe forked; setup is permanently closed.')
+							if (latest.chainId !== selected.chainId || latest.stage !== selected.stage) throw new Error(deploymentCopy.stageChanged)
+							if (latest.originForkTime !== 0n) throw new Error(deploymentCopy.setupClosed)
 						},
 					}
 				},

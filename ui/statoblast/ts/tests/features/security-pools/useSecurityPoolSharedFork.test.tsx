@@ -187,6 +187,20 @@ test('the choice page states that missing the deadline ends the commitment', asy
 	expect(view.container.textContent).toContain('claimants in every branch')
 })
 
+test('a fork choice becomes neutral at the deadline and closes after verifying the block', async () => {
+	const fixture = await setup()
+	const nearDeadline = { ...fixture.snapshot, timestamp: 1_999n }
+	fixture.source.setSnapshot(nearDeadline)
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolSharedFork {...fixture.parameters} snapshot={nearDeadline} redesigned />))
+	await waitFor(() => expect(view.container.textContent).toContain('1s left'))
+	fixture.source.setSnapshot({ ...nearDeadline, timestamp: 2_000n })
+	fixture.setReadDelay(250)
+	await waitFor(() => expect(view.container.textContent).toContain('Ended · checking…'), { timeout: 3_000 })
+	expect(view.container.textContent).not.toContain('1s left')
+	await waitFor(() => expect(view.container.textContent).toContain('Branch choice closed'))
+	expect(view.container.textContent).not.toContain('Ended · checking…')
+})
+
 test('a failed fork refresh retains the completed steps and visibly retries the verified read', async () => {
 	const { hook, snapshot, setForkReadError } = await setup()
 	expect(hook.state().displayedState?.branch?.prepared).toBe(true)
@@ -298,7 +312,7 @@ test('fork drafts survive a transient snapshot reload so a prepared branch can b
 	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'55'.repeat(32)}` } })
 	await waitFor(() => expect(hook.state().state?.branch?.started).toBe(true))
 	expect(hook.state()).toMatchObject(draft)
-	expect(hook.state().startReason).toBe('This branch migration is already started.')
+	expect(hook.state().startReason).toBe('Migration has already started for this branch.')
 	expect(hook.state().finalizeReason).toBeUndefined()
 	await act(() => hook.state().finalize())
 	expect(requests).toHaveLength(2)

@@ -143,6 +143,9 @@ describe('useTradingOperations', () => {
 			source.setRead('securityPoolOf', securityPool)
 			source.setRead('questionId', zeroHash)
 			source.setRead('purchaseQuote', [0n])
+			source.setRead('quoteMintRecoveryRep', 0n)
+			source.setRead('attoEthToAttoShares', 10n ** BigInt(collateralDecimals))
+			source.setRead('availableMintCapacity', 10_000_000n * 10n ** BigInt(collateralDecimals))
 			replaceEnvironment({ ...getActiveBackend(), createReadClient: () => source.client })
 		}
 		const onTransactionFailed = mock((_message: string, _details?: unknown) => undefined)
@@ -227,6 +230,26 @@ describe('useTradingOperations', () => {
 		expect(redeemed).toEqual([5_000_000n])
 	})
 
+	test('mint uses shown defaults or edited limits in collateral decimals and blocks out-of-range edits', async () => {
+		const createMint = mock(async (_account: Address, _callbacks: unknown, questionLedgerAddress: Address, _amount: bigint, _limits?: Parameters<UseTradingOperationsDependencies['createCompleteSetInQuestionLedger']>[4]) => ({
+			action: 'createCompleteSet' as const,
+			hash: zeroHash,
+			questionLedgerAddress,
+			universeId: 1n,
+		}))
+		const hook = await renderTradingHook(createMintDependencies({ createCompleteSetInQuestionLedger: createMint }), {}, {}, true, 6)
+		await hook.setForm({ completeSetAmount: '1', mintMaximumFee: '0.0000001' })
+		await waitFor(() => expect(hook.state().mintLimits.reason).toBe('Enter a valid maximum fee.'))
+		await act(() => hook.state().createCompleteSet())
+		expect(createMint).not.toHaveBeenCalled()
+		await hook.setForm({ mintMaximumFee: '0.042', mintMinimumShares: '1.000001' })
+		await waitFor(() => expect(hook.state().mintLimits.reason).toBe('The quote is below your minimum complete sets.'))
+		await hook.setForm({ mintMinimumShares: '' })
+		expect(hook.state().mintLimits).toEqual({ maximumFee: 42_000n, minimumShares: 990_000n, reason: undefined })
+		await act(() => hook.state().createCompleteSet())
+		expect(createMint.mock.calls[0]?.[4]).toEqual({ maximumFee: 42_000n, minimumShares: 990_000n })
+	})
+
 	test('disabling pool reads clears stale errors and discards an outstanding decode failure', async () => {
 		const pendingDetails = createDeferred<TradingDetails>()
 		const loadTradingDetails = mock(async () => await pendingDetails.promise)
@@ -251,7 +274,7 @@ describe('useTradingOperations', () => {
 		},
 		{
 			capacity: createMintCapacity({ settlementCollateralAttoEth: 0n, feeEligibleUnderwritingLimitAttoEth: 0n, mintingCapacityAttoEth: 0n, shareTokenSupplyAttoShares: 0n }),
-			expectedMessage: 'No mint capacity. No vault has an active commitment.',
+			expectedMessage: 'No mint capacity. No position has an active commitment.',
 			name: 'total underwriting commitments exists but none is fee eligible',
 		},
 		{

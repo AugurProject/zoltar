@@ -439,7 +439,7 @@ describe('ReportingSection', () => {
 	})
 
 	describe('fork-triggering reports', () => {
-		// Yes already sits at the 20 REP threshold, so filling No (12 REP) with 8 REP ends escalation and triggers the fork.
+		// Yes already sits at the 20 REP threshold, so filling No (12 REP) with 8 REP ends reporting without a decision.
 		const forkReadyDetails = () =>
 			createDynamicReportingDetails({
 				sides: [
@@ -454,7 +454,7 @@ describe('ReportingSection', () => {
 			return input
 		}
 
-		test('Max stops below the fork and presets name the fork instead of a lead', async () => {
+		test('Max stops below non-decision and the preset names that outcome instead of a lead', async () => {
 			const rendered = await renderIntoDocument(<ReportingSectionHarness initialProps={{ reportingDetails: forkReadyDetails(), reportingForm: createReportingForm({ reportAmount: '', selectedOutcome: 'no' }) }} />)
 			cleanupRenderedComponent = rendered.cleanup
 			const queries = within(document.body)
@@ -468,32 +468,32 @@ describe('ReportingSection', () => {
 			expect(reportingButtonLabel('No')).toBe('Report No · 7.999999999999999999 REP…')
 			// No can never lead Yes at the threshold, so the minimum preset is not a "Min to lead".
 			expect(queries.queryByRole('button', { name: /^Min to lead/ })).toBeNull()
-			expect(queries.getByRole('button', { name: 'Fill side & trigger fork (8.00 REP)' })).not.toBeNull()
-			const maxReward = requireButton(queries.getByRole('button', { name: /^Full bonus share/ }))
+			expect(queries.getByRole('button', { name: 'Reach non-decision (8.00 REP)' })).not.toBeNull()
+			const maxReward = requireButton(queries.getByRole('button', { name: /^Full reward share/ }))
 			expect(maxReward.disabled).toBe(true)
-			expect(maxReward.title).toBe('Full bonus share is unavailable because matching the other side would trigger the universe fork.')
+			expect(maxReward.title).toBe('Full reward share is unavailable because matching the other side would end reporting without a decision.')
 		})
 
-		test('a fork-triggering amount needs an explicit confirmation and names the fork on the action', async () => {
+		test('a report that ends without a decision needs explicit confirmation', async () => {
 			const rendered = await renderIntoDocument(<ReportingSectionHarness initialProps={{ reportingDetails: forkReadyDetails(), reportingForm: createReportingForm({ reportAmount: '', selectedOutcome: 'no' }) }} />)
 			cleanupRenderedComponent = rendered.cleanup
 			const queries = within(document.body)
 			await act(() => {
-				fireEvent.click(queries.getByRole('button', { name: 'Fill side & trigger fork (8.00 REP)' }))
+				fireEvent.click(queries.getByRole('button', { name: 'Reach non-decision (8.00 REP)' }))
 			})
 			expect(amountInput().value).toBe('8')
 			const warning = document.querySelector('.reporting-fork-trigger-warning')
 			expect(warning?.classList.contains('warning-surface')).toBe(true)
-			expect(warning?.textContent).toContain('This report triggers a universe fork')
+			expect(warning?.textContent).toContain('This report ends reporting without a decision')
 			expect(document.body.textContent).not.toContain('This deposit reaches the non-decision threshold')
-			const label = 'Report No & trigger fork · 8 REP…'
-			expectTransactionButtonDisabled(document.body, label, 'Confirm that this report triggers the universe fork.')
+			const label = 'Report No & end reporting · 8 REP…'
+			expectTransactionButtonDisabled(document.body, label, 'Confirm that this report ends reporting without a decision.')
 			const confirmation = queries.getByRole('checkbox', { name: 'I understand this report ends reporting and allows the universe to fork.' })
 			await act(() => {
 				fireEvent.click(confirmation)
 			})
 			expectTransactionButtonEnabled(document.body, label)
-			// Once the fork is confirmed, Max may fill the side to the threshold.
+			// Max can reach the threshold after the user confirms the non-decision warning.
 			await act(() => {
 				fireEvent.input(amountInput(), { target: { value: '1' } })
 			})
@@ -521,14 +521,14 @@ describe('ReportingSection', () => {
 			cleanupRenderedComponent = rendered.cleanup
 			const queries = within(document.body)
 			await act(() => {
-				fireEvent.click(queries.getByRole('button', { name: 'Fill side & trigger fork (225 000.00 REP)' }))
+				fireEvent.click(queries.getByRole('button', { name: 'Reach non-decision (225 000.00 REP)' }))
 			})
 			expect(amountInput().value).toBe('225000')
 			expect(document.querySelector('.reporting-fork-trigger-warning')?.textContent).toContain('225\u00a0000 REP')
 			// The shared approval control abbreviates large approvals and keeps the exact amount in the button title.
 			expectTransactionButtonEnabled(document.body, 'Approve 225k REP')
-			const label = 'Report No & trigger fork · 225 000 REP…'
-			expectTransactionButtonDisabled(document.body, label, 'Confirm that this report triggers the universe fork and approve REP for this question before reporting.')
+			const label = 'Report No & end reporting · 225 000 REP…'
+			expectTransactionButtonDisabled(document.body, label, 'Confirm the non-decision warning and approve REP for this question before reporting.')
 			await act(() => {
 				fireEvent.click(queries.getByRole('checkbox', { name: 'I understand this report ends reporting and allows the universe to fork.' }))
 			})
@@ -574,7 +574,7 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Active' })).toBeNull()
 		expect(document.body.querySelector('[aria-current=step]')?.textContent).toBe('Response window')
 		expect(documentQueries.getByRole('button', { name: /^(Min to lead|Minimum report)/ })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: /^Full bonus share/ })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: /^Full reward share/ })).not.toBeNull()
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
 		expect((documentQueries.getByRole('radio', { name: /^Yes/ }) as HTMLButtonElement).textContent?.includes('Selected')).toBe(true)
 		expect(document.body.textContent?.includes('Your positions')).toBe(true)
@@ -1424,7 +1424,7 @@ describe('ReportingSection', () => {
 		expect((documentQueries.getByRole('textbox', { name: /^Report amount/ }) as HTMLInputElement).disabled).toBe(true)
 		expect((documentQueries.getByRole('button', { name: 'Max' }) as HTMLButtonElement).disabled).toBe(true)
 		expect(requireButton(documentQueries.getByRole('button', { name: /^(Min to lead|Minimum report)/ })).disabled).toBe(true)
-		expect(requireButton(documentQueries.getByRole('button', { name: /^Full bonus share/ })).disabled).toBe(true)
+		expect(requireButton(documentQueries.getByRole('button', { name: /^Full reward share/ })).disabled).toBe(true)
 		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'))
 	})
 
@@ -1822,7 +1822,7 @@ describe('ReportingSection', () => {
 		if (!(amountInput instanceof HTMLInputElement)) throw new Error('Contribution input is unavailable')
 		expect(amountInput.value).toBe('1.100000000000000001')
 		await act(() => {
-			fireEvent.click(queries.getByRole('button', { name: 'Full bonus share (1.65 REP)' }))
+			fireEvent.click(queries.getByRole('button', { name: 'Full reward share (1.65 REP)' }))
 		})
 		expect(amountInput.value).toBe('1.65')
 	})
@@ -1832,7 +1832,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Full bonus share (7.00 REP)' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Full reward share (7.00 REP)' }))
 		})
 
 		const amountInput = within(document.body).getByRole('textbox', { name: /^Report amount/ })
@@ -1933,7 +1933,7 @@ describe('ReportingSection', () => {
 		expect((amountInput as HTMLInputElement).value).toBe('3')
 	})
 
-	test('disables Full bonus share before the escalation game exists', async () => {
+	test('disables Full reward share before the escalation game exists', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -1947,10 +1947,10 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const maxProfitButton = requireButton(within(document.body).getByRole('button', { name: /^Full bonus share/ }))
+		const maxProfitButton = requireButton(within(document.body).getByRole('button', { name: /^Full reward share/ }))
 		expect(maxProfitButton.disabled).toBe(true)
-		expect(maxProfitButton.title).toBe('Full bonus share becomes available after the first report.')
-		expect(document.body.textContent?.includes('Full bonus share becomes available after the first report.')).toBe(true)
+		expect(maxProfitButton.title).toBe('Full reward share becomes available after the first report.')
+		expect(document.body.textContent?.includes('Full reward share becomes available after the first report.')).toBe(true)
 	})
 
 	test('disables pre-start report submission when the contribution would exceed the remaining selected-side threshold capacity', async () => {
@@ -2287,7 +2287,7 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(requireButton(documentQueries.getByRole('button', { name: /^(Min to lead|Minimum report)/ })).disabled).toBe(true)
-		expect(requireButton(documentQueries.getByRole('button', { name: /^Full bonus share/ })).disabled).toBe(true)
+		expect(requireButton(documentQueries.getByRole('button', { name: /^Full reward share/ })).disabled).toBe(true)
 		expect(document.body.textContent?.includes('Load reporting details before using presets.')).toBe(false)
 	})
 
@@ -2316,7 +2316,7 @@ describe('ReportingSection', () => {
 		const documentQueries = within(document.body)
 		const blocker = documentQueries.getByText('The selected side has no remaining capacity.')
 		const minimumButton = requireButton(documentQueries.getByRole('button', { name: /^(Min to lead|Minimum report)/ }))
-		const maxProfitButton = requireButton(documentQueries.getByRole('button', { name: /^Full bonus share/ }))
+		const maxProfitButton = requireButton(documentQueries.getByRole('button', { name: /^Full reward share/ }))
 		expect(minimumButton.disabled).toBe(true)
 		expect(maxProfitButton.disabled).toBe(true)
 		expect(blocker.id).not.toBe('')
@@ -2525,7 +2525,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: /^Full bonus share/ }))
+			fireEvent.click(within(document.body).getByRole('button', { name: /^Full reward share/ }))
 		})
 
 		const amountInput = within(document.body).getByRole('textbox', { name: /^Report amount/ })
@@ -2579,10 +2579,10 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const maxProfitButton = requireButton(within(document.body).getByRole('button', { name: /^Full bonus share/ }))
+		const maxProfitButton = requireButton(within(document.body).getByRole('button', { name: /^Full reward share/ }))
 		expect(maxProfitButton.disabled).toBe(true)
-		expect(maxProfitButton.title).toBe('Full bonus share is unavailable because the reward window is already filled on the selected side.')
-		expect(document.body.textContent?.includes('Full bonus share is unavailable because the reward window is already filled on the selected side.')).toBe(true)
+		expect(maxProfitButton.title).toBe('Full reward share is unavailable because the reward window is already filled on the selected side.')
+		expect(document.body.textContent?.includes('Full reward share is unavailable because the reward window is already filled on the selected side.')).toBe(true)
 	})
 
 	test('lets users select an outcome side from the outcome cards and updates the report button label', async () => {

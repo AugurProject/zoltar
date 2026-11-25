@@ -65,7 +65,7 @@ export async function seedSecurityPoolAuctionScenario(parameters: ScenarioSeedPa
 	// More purchased claims, within the seeded healthy commitment, leave the chosen branch an ETH shortfall of several lots.
 	for (let round = 0; round < 6; round++) {
 		await sendSecurityPoolTransaction(ownerClient, await prepareSeededSecurityPoolMint(reader, owner, securityPool, questionId, unit, 1_000n), 'Mint security pool complete sets')
-		await reportStep(`Minted claim ${round + 1} of 6 the branch must repair`)
+		await reportStep(`Minted claim ${round + 1} of 6 the branch must back`)
 	}
 
 	// A larger challenged report budget admits a second underwriter's commitment once the seeded price expires.
@@ -136,11 +136,11 @@ export async function seedSecurityPoolAuctionScenario(parameters: ScenarioSeedPa
 	await reportStep('Settled the branch REP price')
 
 	const auctionFor = (bidder: Address) => loadSecurityPoolAuctionSnapshot({ client: reader, securityPool, bidder, universeId: child })
-	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolAuctionOpenRequest(await auctionFor(owner)), 'Open the branch collateral repair auction')
-	await reportStep('Opened the branch collateral repair auction')
+	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolAuctionOpenRequest(await auctionFor(owner)), 'Open the recapitalization auction')
+	await reportStep('Opened the recapitalization auction')
 	let snapshot = await auctionFor(owner)
 	const auction = snapshot.auction
-	if (auction === undefined) throw new Error('Expected the opened branch collateral repair auction')
+	if (auction === undefined) throw new Error('Expected the open recapitalization auction')
 	if (auction.targetLots <= 2n) throw new Error('Expected room for both the owner and rival auction bids')
 	const minimum = auction.minimumCollateralAttoRepPerLot
 	for (const [account, client] of [

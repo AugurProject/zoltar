@@ -94,11 +94,12 @@ test('import verifies the pool, question, game and depositor in order and skips 
 		],
 		deposits: [
 			{ ...deposit, pool: foreign },
+			{ ...deposit, questionId: '9' },
 			{ ...deposit, ledger: foreign, game: foreign },
 			{ ...deposit, depositor: foreign },
 		],
 	})
-	await expect(importStatoblastWatchlist(client, MAINNET_NETWORK_PROFILE, 0n, file)).resolves.toEqual({ skipped: 4 })
+	await expect(importStatoblastWatchlist(client, MAINNET_NETWORK_PROFILE, 0n, file)).resolves.toEqual({ skipped: 5 })
 	expect(calls.some(call => call.target === foreign)).toBe(false)
 	expect(JSON.parse(exportStatoblastWatchlist(MAINNET_NETWORK_PROFILE))).toMatchObject({ saved: [], deposits: [deposit] })
 })

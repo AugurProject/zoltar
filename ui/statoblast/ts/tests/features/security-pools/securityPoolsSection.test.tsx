@@ -280,7 +280,7 @@ test('an unforked security pool with an expired price can fund a new report from
 	expect(report.querySelector('h4') === null).toBe(true)
 	await waitFor(() => expect(report.textContent).toContain('Wallet WETH'))
 	const input = [...report.querySelectorAll('input')].find(candidate => candidate.closest('.field')?.querySelector('label')?.textContent?.includes(priceCopy.price('WETH')))
-	if (input === undefined) throw new Error('Missing proposed price input')
+	if (input === undefined) throw new Error('Missing REP price input')
 	await act(() => {
 		input.value = '2'
 		input.dispatchEvent(new Event('input', { bubbles: true }))
@@ -403,7 +403,7 @@ test('the price report keeps its drafts when folded and through a failed account
 	await waitFor(() => expect(report()?.textContent).toContain('Wallet WETH'))
 	await act(() => {
 		const input = priceInput()
-		if (input === undefined) throw new Error('Missing proposed price input')
+		if (input === undefined) throw new Error('Missing REP price input')
 		input.value = '2'
 		input.dispatchEvent(new Event('input', { bubbles: true }))
 	})
@@ -421,7 +421,7 @@ test('the price report keeps its drafts when folded and through a failed account
 	// One failed account read clears the shown account; the report and its draft must outlive it.
 	fixture.source.setRead('getForkTime', 'not a time')
 	await act(() => invalidateAppData())
-	await waitFor(() => expect(view.container.textContent).toContain('Unable to load the security pool account'))
+	await waitFor(() => expect(view.container.textContent).toContain('Unable to load this security pool position'))
 	expect(priceInput()?.value).toBe('2')
 	fixture.source.setRead('getForkTime', 0n)
 	await act(() => invalidateAppData())

@@ -9,7 +9,7 @@ import { unscopedTransaction } from '@zoltar/ui-core-shared/transactions/transac
 import { SecurityPoolRepairAuction } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolRepairAuction.js'
 import type { SecurityPoolAuctionParameters } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolAuction.js'
 import { auctionFixture, auctionVault } from './auctionFixture.js'
-import { owner, unit } from './capitalFixture.js'
+import { capitalSnapshot, owner, unit } from './capitalFixture.js'
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 const actions: SecurityPoolAuctionParameters['actions'] = { scope: unscopedTransaction, busy: undefined, ownerReason: undefined, runSecurityPoolAction: async () => undefined }
 function button(container: HTMLElement, text: string) {
@@ -38,6 +38,26 @@ test('the auction shows its recapitalization deadline, lot layout, and the curre
 	expect(scale?.textContent).toContain('Your lowest')
 	expect(scale?.textContent).toContain('4.80')
 	expect(scale?.textContent).toContain('Highest now')
+})
+
+test('an auction deadline stops live bidding and rechecks the last observed block', async () => {
+	const fixture = await auctionFixture()
+	const nearDeadline = capitalSnapshot({ timestamp: 2_999n })
+	fixture.source.setSnapshot(nearDeadline)
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolRepairAuction fork={fixture.fork} bidder={owner} actions={actions} />))
+	await waitFor(() => expect(metric(view.container, 'Auction state')).toBe('Accepting bids'))
+	const pending = createDeferred<bigint>()
+	fixture.values['repGrid'] = pending.promise
+	fixture.source.setSnapshot({ ...nearDeadline, timestamp: 3_000n })
+	try {
+		await waitFor(() => expect(metric(view.container, 'Auction state')).toBe('Ended · checking…'), { timeout: 3_000 })
+		expect(view.container.querySelector('.statoblast-auction-ask-scale')).toBeNull()
+		expect(button(view.container, 'Submit funded bid').disabled).toBe(true)
+	} finally {
+		fixture.values['repGrid'] = 2n
+		await act(() => pending.resolve(2n))
+	}
+	await waitFor(() => expect(metric(view.container, 'Auction state')).toBe('Awaiting branch activation'))
 })
 
 test('an open bid shows the lower-ask reason only when the verified limit proves strictly better bids', async () => {
@@ -79,7 +99,7 @@ test('auction funding controls and bid rows stay in place through reload and fai
 	await waitFor(() => expect(view.container.textContent).toContain('Bid 1'))
 	expect(view.container.querySelectorAll('.card .card')).toHaveLength(0)
 	const original = Array.from(view.container.querySelectorAll('button'))
-	for (const name of ['Open collateral repair auction', 'Submit funded bid', 'Credit this bid’s refunds', 'Credit and withdraw refunds', 'Activate position controls', 'Manage position', 'Withdraw credited refunds', 'Refresh auction']) expect(original.some(node => node.textContent === name)).toBe(true)
+	for (const name of ['Open recapitalization auction', 'Submit funded bid', 'Credit this bid’s refunds', 'Credit and withdraw refunds', 'Activate position controls', 'Manage position', 'Withdraw credited refunds', 'Refresh auction']) expect(original.some(node => node.textContent === name)).toBe(true)
 	await act(() => {
 		for (const [name, value] of [
 			['Number of lots', '2'],

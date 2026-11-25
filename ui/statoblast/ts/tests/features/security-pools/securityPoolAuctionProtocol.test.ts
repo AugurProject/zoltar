@@ -141,7 +141,7 @@ test('branch auction loading authenticates the adapter, engine, implementation a
 	source.values['bidderBidId'] = 3n
 	expect((await loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).auction?.bids.map(bid => bid.vault)).toEqual([vault])
 	source.source.codes.set(vault, auctionVaultRuntimeCode({ ...bindings, implementation: token }))
-	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('auction vault runtime')
+	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('auction position runtime')
 	source.source.codes.set(vault, auctionVaultRuntimeCode(bindings))
 	source.source.codes.set(implementation, '0x6000')
 	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('implementation runtime')

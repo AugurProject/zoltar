@@ -26,4 +26,4 @@ export const recoveryBudgetRequired = 'Set a maximum REP contribution that cover
 export const recoveryFundingLoading = 'Loading recovery REP funding.'
 export const recoveryContributionHint = 'These complete sets include inherited REP. Your proportional contribution preserves existing holders’ backing.'
 export const approvalPending = 'Wait for the current approval to finish.'
-export const recoveryBudgetHint = 'The default includes 1% headroom and rounding for holding fees until inclusion. Only the current proportional REP contribution is transferred.'
+export const recoveryBudgetHint = 'The default allows for holding fees and rounding before confirmation. You pay the current proportional REP contribution.'

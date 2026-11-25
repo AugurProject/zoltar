@@ -9,8 +9,8 @@ export const redeemSetsReview = 'Redeem the selected complete sets for collatera
 export const redemptionNeedsBlock = 'Couldn’t check the redemption at a confirmed block. Try again.'
 export const redemptionInsufficientShares = 'Your balance is too low for this redemption. Review the available shares and try again.'
 export const redemptionEstimate = (shares: string, collateral: string, rep: string) => `Redeem ${shares} for approximately ${collateral} and ${rep} in this universe.`
-export const childDeployed = 'Child deployed'
-export const childNotDeployed = 'Child not deployed'
+export const childDeployed = 'Created'
+export const childNotDeployed = 'Not created yet'
 export const clear = 'Clear'
 export const loadingForkQuestionDetails = 'Loading fork question details…'
 export const loadingForkTargetUniverses = 'Loading child universes…'
@@ -90,3 +90,23 @@ export const sharedPoolCapacityAtReview = 'Quoted before submission'
 export const sharedPoolPurchaseDetail = 'Purchases use shared REP backing. The transaction includes the quoted purchase fee in addition to this mint amount.'
 
 export const mintingClosedAtQuestionEnd = 'Minting closed when the question ended.'
+
+export const shareActions = 'Share actions'
+export const mintSets = 'Mint sets'
+export const redeemSets = 'Redeem sets'
+export const onlyWinningOutcome = 'Only one outcome wins.'
+export const howSharesWork = 'How shares work'
+export const shareBasics = 'Mint a set with collateral. Redeem a complete set for collateral minus holding fees. After resolution, only winning shares pay.'
+
+export const limits = 'Limits'
+export const maximumMintFee = 'Max fee'
+export const minimumMintShares = 'Min complete sets'
+export const mintCollateral = 'Collateral'
+export const mintFee = 'Fee'
+export const youPay = 'You pay'
+export const sharesOfEachOutcome = 'Your shares of each outcome'
+export const freeMintCapacity = 'Free capacity'
+export const formatMintWallet = (symbol: string) => `Wallet ${symbol}`
+export const formatMintLimits = (fee: string, symbol: string, shares: string) => `Pay at most ${fee} ${symbol} in fees and receive at least ${shares} sets`
+
+export const checkingMintMaximum = 'Checking the maximum collateral amount…'

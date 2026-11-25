@@ -18,9 +18,9 @@ export const STATOBLAST_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		scenario: 'securitypoolx2',
 		route: '#/watchlist',
 		viewport: { width: 800, height: 1000 },
-		steps: [{ waitForText: 'Saved questions' }, { click: 'Open' }, { waitForEnabled: 'Mint complete sets' }, { click: 'Mint complete sets' }],
-		expectText: ['Mint complete sets', 'Collateral amount'],
-		crop: { selector: '[role="dialog"]', containing: 'Mint complete sets', scrollIntoView: true },
+		steps: [{ waitForText: 'Saved questions' }, { click: 'Open' }, { waitForEnabled: 'Mint sets' }, { click: 'Mint sets' }, { fill: 'Collateral amount', value: '0.01' }, { waitForEnabled: 'Mint complete sets' }],
+		expectText: ['Mint complete sets', 'Collateral amount', 'You pay', 'Limits'],
+		crop: { selector: '[role="tabpanel"]', containing: 'Mint complete sets', scrollIntoView: true },
 		usedBy: ['tutorials/statoblast-first-pool.html'],
 	},
 ]

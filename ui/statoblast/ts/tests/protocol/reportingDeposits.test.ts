@@ -61,6 +61,7 @@ test('search restarts at zero when the stored block was reorganized and does not
 		{ start: 30n, blockNumber: 10n },
 	])
 	expect(result.matches).toEqual([{ deposit: { ...side, index: 0n, originalAttoRep: 10n }, principal: 10n }])
+	expect(result.restarted).toBe(true)
 	expect(result.confirmed).toEqual({ block: 7n, hash: currentHash, nextIndex: 0n })
 	expect(result.position.nextIndex).toBe(1n)
 	expect(result.end).toBe(true)
@@ -87,6 +88,7 @@ test('a fresh device finds a wallet deposit on the second page and Search again 
 	const cursor = reportingDepositCursorStore(MAINNET_NETWORK_PROFILE, side)
 	expect(cursor.read()).toBeUndefined()
 	const first = await searchReportingDepositsPage(client, game, side, cursor.read())
+	expect(first.restarted).toBe(false)
 	expect(first.totalDeposits).toBe(31n)
 	expect(first.matches.map(match => match.deposit.index)).toEqual([30n])
 	cursor.write(first.confirmed)

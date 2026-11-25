@@ -26,6 +26,7 @@ type TradingRouteContentProps = {
 }
 
 export type TradingSectionProps = TradingRouteContentProps & {
+	mintLimits?: ReturnType<typeof import('./markets/hooks/useTradingOperations.js').useTradingOperations>['mintLimits']
 	actionDataReadAt?: number | undefined
 	savedHoldings?: ComponentChildren
 	requestedSharesAction?: 'mint' | 'redeem' | undefined

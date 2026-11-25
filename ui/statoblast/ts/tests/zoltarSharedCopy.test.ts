@@ -38,3 +38,10 @@ test('transaction actions and pending labels use sentence case independently of 
 test('the Statoblast question address label uses the glossary', () => {
 	expect(commonCopy.questionLedgerAddress).toBe('Question contract address')
 })
+
+test('shared OpenOracle labels describe what the price report changes', () => {
+	expect(openOracleCopy.callbackContract).toBe('Settlement contract')
+	expect(openOracleCopy.callbackGasLimit).toBe('Settlement contract gas limit')
+	expect(openOracleCopy.proposedPrice).toBe('New price')
+	expect(openOracleCopy.staleSettledReportWarning).toBe('Report a new price.')
+})

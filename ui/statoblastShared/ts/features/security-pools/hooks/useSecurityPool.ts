@@ -6,11 +6,12 @@ import { getAddress, isAddress, zeroAddress, type Address } from '@zoltar/core-s
 import { createActiveEnvironmentGuard, getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
-import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
 import { loadSecurityPoolAccount, loadSecurityPoolSetup, requireCanonicalSecurityPool, type SecurityPoolSetupSnapshot, type SecurityPoolAccountSnapshot } from '../../../protocol/securityPool.js'
 import { securityPoolUnsignedId } from '../lib/draft.js'
+import { loadPoolFailed } from '../../../copy/securityPoolTransactions.js'
 
 function securityPoolStorageKey(chainId: number) {
 	const backend = getActiveBackend()
@@ -79,6 +80,7 @@ export function useSecurityPool({
 	const generation = useRef(0)
 	const active = useRef(true)
 	const inFlight = useRef<number | undefined>(undefined)
+	const lastStartedGeneration = useRef<number | undefined>(undefined)
 	const selectedNetwork = useRef<string | undefined>(undefined)
 	useEffect(
 		() => () => {
@@ -91,6 +93,7 @@ export function useSecurityPool({
 		if (!securityPoolBackendReady(getActiveBackend())) return
 		const id = ++generation.current
 		inFlight.current = id
+		lastStartedGeneration.current = id
 		const environment = createActiveEnvironmentGuard()
 		const current = () => active.current && id === generation.current && environment.isCurrent() && securityPoolBackendReady(getActiveBackend())
 		const previous = snapshot.value
@@ -116,7 +119,7 @@ export function useSecurityPool({
 				return { preparation, next }
 			}
 			const read = async () => {
-				if (!cacheReads) return await readPage(client)
+				if (!cacheReads) return await readPage(withStatoblastRequestTimeout(client, 'Security pool read timed out.'))
 				const cachePage = `${owner === undefined ? 'capital-public' : 'capital'}:${questionPage}:${admissionPage}`
 				const cacheKey = `${environmentKey}:${securityPool}:${cacheOwner}:${universeId}:${cachePage}`
 				if (pageCache.current?.key !== cacheKey) {
@@ -129,8 +132,7 @@ export function useSecurityPool({
 
 				return await cache.refresh(client, getMulticall3Address(), readPage, () => inFlight.current === id && current())
 			}
-			const result = read()
-			const { preparation, next } = cacheReads ? await result : await withTimeout(result, 15_000, 'Security pool read timed out.')
+			const { preparation, next } = await read()
 			if (!current()) return
 			setup.value = preparation
 			snapshot.value = next
@@ -154,7 +156,7 @@ export function useSecurityPool({
 		} catch (failure) {
 			if (current()) {
 				setup.value = loadedSetup ?? setup.value
-				error.value = getErrorMessage(failure, 'Unable to load the security pool account.')
+				error.value = getErrorMessage(failure, loadPoolFailed)
 			}
 		} finally {
 			if (current()) loading.value = false
@@ -162,7 +164,7 @@ export function useSecurityPool({
 		}
 	}
 	const refresh = async () => {
-		if (!enabled || !securityPoolBackendReady(getActiveBackend()) || inFlight.current === generation.current || !isAddress(managerInput.value) || !canReadOwner(ownerInput.value)) return
+		if (!enabled || document.hidden || !securityPoolBackendReady(getActiveBackend()) || inFlight.current === generation.current || !isAddress(managerInput.value) || !canReadOwner(ownerInput.value)) return
 		await load()
 	}
 	const invalidate = (preservePresentation = false) => {
@@ -258,7 +260,7 @@ export function useSecurityPool({
 	useEffect(() => {
 		if (!enabled) return
 		const timer = setTimeout(() => {
-			void refresh()
+			if (lastStartedGeneration.current !== generation.current) void refresh()
 		}, 250)
 		return () => clearTimeout(timer)
 	}, [enabled, managerInput.value, ownerInput.value, universeInput.value])

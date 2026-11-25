@@ -108,6 +108,15 @@ function createDependencies(initial: OwnForkAdmission) {
 describe('redesigned question report', () => {
 	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: zeroAddress, installActiveEnvironment: installActiveEnvironmentForTesting })
 
+	test('does not offer a new universe fork for a parent whose question has not reached non-decision', async () => {
+		const { dependencies } = createDependencies({ shortfallAttoRep: 0n, allowanceAttoRep: 0n, recommendedApprovalAttoRep: 0n })
+		const view = await renderIntoDocument(<Harness dependencies={dependencies} details={{ ...reportingDetails, hasReachedNonDecision: false, settlementState: 'migration-required' }} />)
+		trackCleanup(view.cleanup)
+		const queries = within(view.container)
+		expect(Boolean(queries.queryByRole('heading', { name: securityPoolCopy.forkAdmission }))).toBe(false)
+		expect(Boolean(queries.queryByRole('button', { name: /Trigger universe fork|Checking/ }))).toBe(false)
+	})
+
 	test('previews the wallet payout, accepted stake, new leader, and response deadline', async () => {
 		const { dependencies } = createDependencies({ allowanceAttoRep: 0n, recommendedApprovalAttoRep: 0n, shortfallAttoRep: 0n })
 		const details: ActiveReportingDetails = {

@@ -5,7 +5,9 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 export const disputeAndSwap = 'Dispute & swap'
 export const disputeDelay = 'Dispute delay'
 export const disputeDelaySeconds = 'Dispute delay (seconds)'
-export const escalationHalt = 'Escalation halt'
+export const escalationHalt = 'Dispute growth cutoff'
+export const disputeGrowthCutoffNegative = 'Dispute growth cutoff must be non-negative.'
+export const disputeGrowthCutoffMaximum = 'Dispute growth cutoff exceeds the contract maximum.'
 export const disputeFeePercentage = 'Dispute fee (%)'
 export const disputeFeeRate = 'Dispute fee'
 export const price = 'Price'
@@ -25,9 +27,11 @@ export const reportDirectory = 'Report directory'
 export const browseReportsDescription = 'Search favorite reports or open a report by ID.'
 export const selectedReportDescription = 'Review the selected report’s current stage, balances, and available settlement or dispute actions.'
 export const formatReportsShownSummary = (shownCount: CopyTemplateValue, totalCount: CopyTemplateValue) => `${shownCount} of ${totalCount} reports shown.`
-export const callbackContract = 'Callback contract'
-export const callbackExtra = 'Callback / extra'
-export const callbackGasLimit = 'Callback gas limit'
+export const callbackContract = 'Settlement contract'
+export const callbackExtra = 'Settlement add-ons'
+export const callbackGasLimit = 'Settlement contract gas limit'
+export const settlementContractNeedsGas = 'The settlement contract ran out of gas. Retry using the gas limit suggested by your wallet.'
+export const priceReportActionTitles = { failure: 'Price report failed', pending: 'Reporting price', success: 'Price reported' }
 export const formatCurrentAmount1Label = (tokenSymbol: string) => `Current base amount (${tokenSymbol})`
 export const formatCurrentAmount2Label = (tokenSymbol: string) => `Current quote amount (${tokenSymbol})`
 export const formatTokenPairSuffix = (token1Symbol: string, token2Symbol: string) => `${token1Symbol} / ${token2Symbol}`
@@ -63,7 +67,7 @@ export const formatInsufficientEthToWrap = (required: string, available: string)
 export const formatWrapEthFirst = (amount: string) => `Wrap ${amount} ETH to WETH first.`
 export const wrapEthFailed = 'Failed to wrap ETH'
 export const wrapEthDisputeOnly = 'ETH can only be wrapped for a report that is open to disputes.'
-export const disputeEscalationStopAmountHelpText = 'Base token amount that ends escalation.'
+export const disputeEscalationStopAmountHelpText = 'Base token amount at which disputes stop multiplying the stake.'
 export const ethSent = 'ETH sent'
 export const formatInitialTokenReportLabel = (tokenSymbol: string) => `Initial ${tokenSymbol} report deposit`
 export const exactToken1Report = 'Base token amount'
@@ -72,11 +76,11 @@ export const identity = 'Identity'
 export const initialEconomics = 'Initial economics'
 export const lastReportOpportunity = 'Last report on opposite clock'
 export const reportLoadRequired = 'Select a report first.'
-export const escalationMultiplierHelpText = 'Below the escalation halt, each dispute multiplies the base amount by this factor. At or above the halt, it adds one raw base-token unit. A zero halt uses that increment from the first dispute.'
+export const escalationMultiplierHelpText = 'Below the cutoff, each dispute multiplies the base stake by this factor. At or above the cutoff, it adds one raw base-token unit. A zero cutoff uses that increment from the first dispute.'
 export const formatNewAmountMustBeExactDetail = (tokenSymbol: string, amount: string) => `New ${tokenSymbol} amount must be exactly ${amount} for this dispute.`
 export const formatNewAmountRangeDetail = (tokenSymbol: string, minimumAmount: string, maximumAmount: string) => `New ${tokenSymbol} amount must be between ${minimumAmount} and ${maximumAmount} for this dispute.`
 export const oracleBalances = 'Your oracle balances'
-export const oracleBalancesDetail = 'Settlement rewards, returned report liquidity, and dispute proceeds stay in the oracle until the credited account withdraws them.'
+export const oracleBalancesDetail = 'Settlement rewards, returned report liquidity, and dispute proceeds stay in the oracle until the credited wallet withdraws them.'
 export const noOracleBalances = 'No withdrawable oracle balances are available for this token pair.'
 export const noWithdrawableBalanceForAsset = 'No withdrawable balance is available for this asset.'
 export const loadingOracleBalances = 'Loading oracle balances…'
@@ -125,7 +129,7 @@ export const reportFiltersEmpty = 'No favorite reports match the current search 
 export const refreshReport = 'Refresh report'
 export const reportAmounts = 'Report amounts'
 export const openOracleReportDetails = 'OpenOracle report details'
-export const standaloneOracleWarningDetail = 'Standalone only. Start security-pool-managed requests from the security pool price panel.'
+export const standaloneOracleWarningDetail = 'Standalone only. To report a security pool price, use its REP price tab.'
 export const advancedDisputeAndTimingSettings = 'Advanced dispute & timing settings'
 export const advancedDisputeAndTimingSettingsDetail = 'These values control how challenges escalate and when settlement becomes available. Keep the defaults unless your report requires different economics.'
 export const secondsAbbreviation = 's'
@@ -140,7 +144,7 @@ export const trackDisputes = 'Track disputes'
 export const formatNewTokenAmountFieldLabel = (tokenSymbol: string) => `New ${tokenSymbol} amount`
 export const reporter = 'Reporter'
 export const parameterDetails = 'Parameter details'
-export const standaloneParameterDetails = 'Base token amount and escalation halt use the base token’s decimals.'
+export const standaloneParameterDetails = 'Base token amount and dispute growth cutoff use the base token’s decimals.'
 
 export const formatSettledReportNumber = (id: string) => `Report #${id} settled`
 
@@ -164,10 +168,10 @@ export const disputeFee = 'Dispute fee (to current reporter)'
 export const feesIncludedInPayment = 'Fees are included in the amounts you pay.'
 export const creditedToOracleBalance = 'Credited to your oracle balance'
 export const yourNewReport = 'Your new report'
-export const proposedPrice = 'Proposed price'
-export const newBaseAmountFixedHint = 'Set by the report’s escalation rules.'
+export const proposedPrice = 'New price'
+export const newBaseAmountFixedHint = 'Set by the report’s dispute rules.'
 export const newQuoteAmountHint = 'The quote amount sets the price you propose.'
-export const disputeSwapTokenPending = 'Determined by the proposed price'
+export const disputeSwapTokenPending = 'Determined by the new price'
 export const formatReportCreatedDetail = (reportId: CopyTemplateValue) => `Report #${reportId} is live. Open it to track disputes and settlement.`
 export const reportCreatedWithoutIdDetail = 'Your report is live. Find it in the report directory.'
 export const multiplierUnit = '×'
@@ -176,7 +180,7 @@ export const formatDisputeSwapTokenChanged = (newTokenSymbol: CopyTemplateValue,
 export const priceExpired = 'Price expired'
 export const settledAfterPriceExpired = 'Settled after price expired'
 export const staleSettlementWarning = 'Settlement will clear this report, but the security pool will reject its price.'
-export const staleSettledReportWarning = 'Request a new price.'
+export const staleSettledReportWarning = 'Report a new price.'
 export const expiredReportPrice = 'This report’s price has expired.'
 export const reportPriceRejected = 'Report settled; price rejected'
 export const poolPriceAccepted = 'Security pool accepted this price.'
@@ -184,7 +188,7 @@ export const poolPriceAccepted = 'Security pool accepted this price.'
 export function formatPriceSettlementRejection(reason: string) {
 	if (reason === 'Security pool reporting window closed') return 'Reporting is closed in this security pool universe. Check its fork and branch status.'
 	if (reason === 'Report timestamp not newer') return 'This report did not replace the newer accepted price. Check the accepted price and any attached operation results.'
-	return reason === 'Report stale' ? 'Price expired before settlement. Request a new price.' : `Security pool rejected this price: ${reason}. Request a new price.`
+	return reason === 'Report stale' ? 'Price expired before settlement. Report a new price.' : `Security pool rejected this price: ${reason}. Report a new price.`
 }
 
 export const reportPriceDeferred = 'Report settled; price pending recovery'

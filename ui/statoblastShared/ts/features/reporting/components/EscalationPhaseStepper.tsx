@@ -20,7 +20,7 @@ export function EscalationPhaseStepper({ details, forkAlreadyTriggered, detailId
 	let next = copy.loadingReportingDetails
 	if (details !== undefined) {
 		if (stage === 'resolved' && details.questionOutcome !== 'none') next = hasUnsettledDeposits ? copy.resolvedNext : copy.resolvedNoDepositsNext
-		else if (fork) next = forkAlreadyTriggered ? copy.forkAlreadyTriggeredReportReason : copy.forkTriggerInstruction
+		else if (fork) next = details.settlementState === 'migration-required' ? copy.forkMigrationRequiredDetail : forkAlreadyTriggered ? copy.forkAlreadyTriggeredReportReason : copy.forkTriggerInstruction
 		else if (details.status === 'not-started') next = copy.firstReportNext(formatCurrencyBalance(details.startBondAttoRep))
 		else if (phase === 'Timed Out') next = copy.timeoutResolutionDetail
 		else if (leadingOutcome === undefined) next = copy.tieStatusLead

@@ -467,7 +467,7 @@ describe('useReportingOperations', () => {
 		} else {
 			// The user never saw or confirmed the fork warning, so the report stops and shows the updated state.
 			expect(reportOutcomeInQuestionLedger).not.toHaveBeenCalled()
-			expect(state().reportingFeedback?.status.detail).toBe('This report would now trigger the universe fork. Review the fork warning and confirm before reporting.')
+			expect(state().reportingFeedback?.status.detail).toBe('This report would now end reporting without a decision. Review the warning and confirm before reporting.')
 			expect(state().reportingDetails).toBe(latestDetails)
 			expect(state().reportingForm.reportAmount).toBe('0.000000000000000018')
 		}

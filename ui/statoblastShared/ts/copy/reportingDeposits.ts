@@ -19,7 +19,7 @@ export const depositNumber = 'Deposit number'
 export const checking = 'Checking…'
 export const checkDeposit = 'Check deposit'
 export const searchFailedError = 'Deposit search could not finish.'
-export const missingDepositsDetail = 'Some deposits are still missing from this device.'
+export const formatMissingDepositsDetail = (remaining: string) => `Couldn't find deposits for ${remaining}. Your REP is safe.`
 export const searchAgain = 'Search again'
 
 export const keepTabOpen = 'Keep this tab open.'

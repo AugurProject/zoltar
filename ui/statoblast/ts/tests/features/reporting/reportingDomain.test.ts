@@ -171,7 +171,7 @@ describe('reportingDomain', () => {
 		})
 		expect(getReportingMinimumOutcomeChangeContribution(details, 'no')).toEqual({ amountAttoRep: rep(11n) / 10n, reason: undefined })
 		// Yes already sits at the threshold, so filling No would trigger the fork rather than earn a reward.
-		expect(getReportingMaxProfitContribution(details, 'no')).toEqual({ amountAttoRep: undefined, reason: 'Full bonus share is unavailable because matching the other side would trigger the universe fork.' })
+		expect(getReportingMaxProfitContribution(details, 'no')).toEqual({ amountAttoRep: undefined, reason: 'Full reward share is unavailable because matching the other side would end reporting without a decision.' })
 	})
 
 	test('getReportingMinimumOutcomeChangeContribution respects startBondAttoRep when the lead delta is smaller than the minimum report', () => {
@@ -263,7 +263,7 @@ describe('reportingDomain', () => {
 
 		expect(getReportingMaxProfitContribution(details, 'yes')).toEqual({
 			amountAttoRep: undefined,
-			reason: 'Full bonus share is unavailable because the reward window is already filled on the selected side.',
+			reason: 'Full reward share is unavailable because the reward window is already filled on the selected side.',
 		})
 	})
 
@@ -305,7 +305,7 @@ describe('reportingDomain', () => {
 	test('getReportingMaxProfitContribution is unavailable before the escalation game exists', () => {
 		expect(getReportingMaxProfitContribution(createNotStartedReportingDetails(), 'yes')).toEqual({
 			amountAttoRep: undefined,
-			reason: 'Full bonus share becomes available after the first report.',
+			reason: 'Full reward share becomes available after the first report.',
 		})
 	})
 
@@ -555,8 +555,8 @@ describe('fork-triggering reports', () => {
 		expect(getReportingForkTriggerAmount(createNotStartedReportingDetails(), 'yes')).toBeUndefined()
 		expect(getReportingForkTriggerAmount({ ...forkReadyDetails(), hasReachedNonDecision: true }, 'no')).toBeUndefined()
 	})
-	test('Full bonus share never fills a fork-triggering amount', () => {
-		expect(getReportingMaxProfitContribution(forkReadyDetails(), 'no')).toEqual({ amountAttoRep: undefined, reason: 'Full bonus share is unavailable because matching the other side would trigger the universe fork.' })
+	test('Full reward share never fills a fork-triggering amount', () => {
+		expect(getReportingMaxProfitContribution(forkReadyDetails(), 'no')).toEqual({ amountAttoRep: undefined, reason: 'Full reward share is unavailable because matching the other side would end reporting without a decision.' })
 	})
 	test('fork progress follows the second-largest side', () => {
 		expect(getSecondLargestEscalationBalance([side('invalid', rep(1n)), side('yes', rep(5n)), side('no', rep(8n))])).toBe(rep(5n))

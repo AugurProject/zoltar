@@ -100,6 +100,27 @@ test('closes a confirmed transaction review without another dialog', async () =>
 	}
 })
 
+test('retains a confirmed lifecycle review when the form moves inline', async () => {
+	const dom = installDomEnvironment()
+	const controller = createTransactionStepController(undefined, true, true)
+	controller.setPlan([{ title: 'Mint complete sets', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+	controller.startWithoutReview(0)
+	const hash = '0x1111111111111111111111111111111111111111111111111111111111111111'
+	controller.submitted(hash)
+	controller.receipt(hash, 'success')
+	const rendered = await renderIntoDocument(<TransactionStepsModal contextKey='inline' keepConfirmed />)
+	try {
+		const dialog = within(within(rendered.container).getByRole('dialog'))
+		expect(dialog.getByText('Confirmed')).toBeTruthy()
+		await act(() => fireEvent.click(dialog.getByRole('button', { name: 'Close' })))
+		expect(transactionSteps.value).toBeUndefined()
+	} finally {
+		transactionSteps.value?.cancel()
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
 test('shows a fixed review placeholder with an available retry after a check fails', async () => {
 	const dom = installDomEnvironment()
 	const controller = createTransactionStepController(undefined, true, true)

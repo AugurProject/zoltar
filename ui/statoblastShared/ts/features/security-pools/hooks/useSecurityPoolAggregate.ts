@@ -1,3 +1,5 @@
+import { capital as transactionCopy, newPriceRequired, poolChanged, refreshingBalances } from '../../../copy/securityPoolTransactions.js'
+import { unsupportedAdmission } from '../../../copy/securityPool.js'
 import { formatCurrencyBalance, formatRoundedCurrencyBalance, formatUnitSuffix } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
@@ -88,11 +90,11 @@ export function useSecurityPoolAggregate(
 	let stateReason: string | undefined
 	if (model.snapshot === undefined) {
 		if (showingPreviousSnapshot) stateReason = capitalCopy.readUnavailable
-		else stateReason = model.loading ? 'Refreshing security pool balances.' : 'Load a security pool account first.'
+		else stateReason = model.loading ? refreshingBalances : transactionCopy.positionRequired
 	}
 	const ownerReason = actions.ownerReason ?? stateReason
-	const inactiveReason = snapshot !== undefined && (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing) ? 'This universe is closed to new commitments.' : undefined
-	const admissionReason = snapshot?.admission.mode === 'custom' ? 'This interface supports open or fixed question policies.' : undefined
+	const inactiveReason = snapshot !== undefined && (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing) ? transactionCopy.newCommitmentsClosed : undefined
+	const admissionReason = snapshot?.admission.mode === 'custom' ? unsupportedAdmission : undefined
 	const depositAttoRep = securityPoolAmountOrUndefined(depositAmount.value)
 	const withdrawAttoRep = securityPoolAmountOrUndefined(withdrawalAmount.value)
 	const healthBps = securityPoolBasisPointsOrUndefined(healthPercent.value)
@@ -153,10 +155,10 @@ export function useSecurityPoolAggregate(
 		remainingCommitmentAmount.value = '0'
 		reportInput.value = ''
 	}, [snapshot?.chainId, snapshot?.securityPool, snapshot?.owner, snapshot?.universeId, snapshot?.ownerAccount.targetHealthFactorBps])
-	const positive = (value: bigint | undefined) => (value === undefined || value === 0n ? 'Enter a positive amount.' : undefined)
+	const positive = (value: bigint | undefined) => (value === undefined || value === 0n ? transactionCopy.positiveAmountRequired : undefined)
 	const topUpReason = snapshot === undefined ? undefined : capitalDepositReason(snapshot)
-	const fundingReason = ownerReason ?? inactiveReason ?? admissionReason ?? topUpReason ?? positive(depositAttoRep) ?? (snapshot !== undefined && depositAttoRep !== undefined && depositAttoRep > snapshot.walletAttoRep ? 'Insufficient wallet REP.' : undefined)
-	const depositReason = fundingReason ?? (snapshot !== undefined && depositAttoRep !== undefined && depositAttoRep > snapshot.allowanceAttoRep ? 'Approve REP before depositing.' : undefined)
+	const fundingReason = ownerReason ?? inactiveReason ?? admissionReason ?? topUpReason ?? positive(depositAttoRep) ?? (snapshot !== undefined && depositAttoRep !== undefined && depositAttoRep > snapshot.walletAttoRep ? transactionCopy.insufficientRep : undefined)
+	const depositReason = fundingReason ?? (snapshot !== undefined && depositAttoRep !== undefined && depositAttoRep > snapshot.allowanceAttoRep ? transactionCopy.approveBeforeDeposit : undefined)
 	const withdrawReason = ownerReason ?? (snapshot === undefined ? undefined : capitalWithdrawalReason(snapshot, withdrawAttoRep))
 	const healthReason = ownerReason ?? (snapshot === undefined ? undefined : capitalHealthReason(snapshot, healthBps))
 	const healthFundingReason =
@@ -165,17 +167,17 @@ export function useSecurityPoolAggregate(
 		admissionReason ??
 		topUpReason ??
 		positive(healthDepositAttoRep) ??
-		(snapshot !== undefined && healthDepositAttoRep !== undefined && healthDepositAttoRep > snapshot.walletAttoRep ? 'Insufficient wallet REP.' : undefined) ??
+		(snapshot !== undefined && healthDepositAttoRep !== undefined && healthDepositAttoRep > snapshot.walletAttoRep ? transactionCopy.insufficientRep : undefined) ??
 		(snapshot === undefined ? undefined : capitalHealthReason(snapshot, healthBps, healthDepositAttoRep))
-	const healthDepositReason = healthFundingReason ?? (snapshot !== undefined && healthDepositAttoRep !== undefined && healthDepositAttoRep > snapshot.allowanceAttoRep ? 'Approve REP before depositing.' : undefined)
-	const unsavedTargetReason = snapshot !== undefined && healthBps !== (snapshot.ownerAccount.targetHealthFactorBps || 10_000n) ? 'Save your health target before authorizing this commitment.' : undefined
+	const healthDepositReason = healthFundingReason ?? (snapshot !== undefined && healthDepositAttoRep !== undefined && healthDepositAttoRep > snapshot.allowanceAttoRep ? transactionCopy.approveBeforeDeposit : undefined)
+	const unsavedTargetReason = snapshot !== undefined && healthBps !== (snapshot.ownerAccount.targetHealthFactorBps || 10_000n) ? transactionCopy.saveTargetBeforeCommitment : undefined
 	const authorizeReason = ownerReason ?? admissionReason ?? unsavedTargetReason ?? proofReason ?? (snapshot === undefined ? undefined : capitalAuthorizationReason(snapshot, commitmentAttoEth, proofPrice))
 	const livePositions = snapshot?.positions.filter(position => position.commitment > 0n) ?? []
 	const pendingRetirement = livePositions.find(position => position.batch !== 0n)
 	const claimReason = ownerReason
 	const retirementReadinessReason = () => {
-		if (pendingRetirement === undefined) return 'No reduction in queue.'
-		if (snapshot?.priceValid === false) return 'A new accepted REP price is required.'
+		if (pendingRetirement === undefined) return transactionCopy.reductionRequired
+		if (snapshot?.priceValid === false) return newPriceRequired
 		const preview = pendingRetirement.retirementPreview
 		if (preview !== undefined && preview.status !== 'ready') return capitalCopy.waitingForFreeCapacity
 		return undefined
@@ -183,7 +185,7 @@ export function useSecurityPoolAggregate(
 	const serveReason = ownerReason ?? inactiveReason ?? retirementReadinessReason()
 	const requireSnapshot = () => {
 		const current = model.snapshot
-		if (current === undefined || accountAddress === undefined || accountAddress.toLowerCase() !== (current.auctionVault?.bidder ?? current.owner).toLowerCase()) throw new Error('Connect the selected owner account.')
+		if (current === undefined || accountAddress === undefined || accountAddress.toLowerCase() !== (current.auctionVault?.bidder ?? current.owner).toLowerCase()) throw new Error(transactionCopy.connectPositionWallet)
 		return current
 	}
 	const run = (
@@ -221,7 +223,7 @@ export function useSecurityPoolAggregate(
 					validateBeforeSubmit: async () => {
 						const reader = withStatoblastRequestTimeout(createConnectedReadClient(), currentStateCheckFailed)
 						const latest = await loadSecurityPoolCapitalSnapshot({ client: securityPoolReadClient(reader), securityPool: selected.securityPool, owner: selected.owner, universeId: selected.universeId })
-						if (latest.chainId !== selected.chainId || latest.capitalLedger !== selected.capitalLedger) throw new Error('Security pool context changed. Review the transaction again.')
+						if (latest.chainId !== selected.chainId || latest.capitalLedger !== selected.capitalLedger) throw new Error(poolChanged)
 						if (['depositSecurityPoolRep', 'depositSecurityPoolHealthRep', 'approveSecurityPoolRep', 'approveSecurityPoolHealthRep'].includes(action)) {
 							const reason = capitalDepositReason(latest)
 							if (reason !== undefined) throw new Error(reason)
@@ -301,46 +303,46 @@ export function useSecurityPoolAggregate(
 		serveReason,
 		positionReasons: (id: bigint, requestedCommitment = remainingCommitment) => {
 			const position = livePositions.find(item => item.id === id)
-			const common = ownerReason ?? inactiveReason ?? (position === undefined ? 'Position is no longer live.' : undefined)
+			const common = ownerReason ?? inactiveReason ?? (position === undefined ? transactionCopy.positionInactive : undefined)
 			return {
 				retire: common ?? (snapshot === undefined ? undefined : capitalRetirementReason(snapshot, id, requestedCommitment)),
 			}
 		},
 		approve: (amount: bigint) =>
-			run('approveSecurityPoolRep', 'Approve REP deposit', fundingReason, selected => ({
+			run('approveSecurityPoolRep', transactionCopy.approveDeposit, fundingReason, selected => ({
 				account: selected.auctionVault?.bidder ?? selected.owner,
 				to: selected.repToken,
 				value: 0n,
 				data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [selected.auctionVault?.vault ?? selected.capitalLedger, amount] }),
-				reviewDescription: `Allow ${selected.auctionVault?.vault ?? selected.capitalLedger} to transfer up to ${formatCurrencyBalance(amount)} REP from your wallet. This does not deposit or pledge REP.`,
+				reviewDescription: transactionCopy.reviewDepositApproval(selected.auctionVault?.vault ?? selected.capitalLedger, formatCurrencyBalance(amount)),
 			})),
 		approveHealthDeposit: (amount: bigint) =>
-			run('approveSecurityPoolHealthRep', 'Approve REP for health target', healthFundingReason, selected => ({
+			run('approveSecurityPoolHealthRep', transactionCopy.approveHealthDeposit, healthFundingReason, selected => ({
 				account: selected.auctionVault?.bidder ?? selected.owner,
 				to: selected.repToken,
 				value: 0n,
 				data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [selected.auctionVault?.vault ?? selected.capitalLedger, amount] }),
-				reviewDescription: `Allow ${selected.auctionVault?.vault ?? selected.capitalLedger} to transfer up to ${formatCurrencyBalance(amount)} REP. Depositing and saving your target is a separate transaction.`,
+				reviewDescription: transactionCopy.reviewDepositApproval(selected.auctionVault?.vault ?? selected.capitalLedger, formatCurrencyBalance(amount)),
 			})),
 		deposit: () =>
-			run('depositSecurityPoolRep', 'Deposit REP', depositReason, selected => {
-				if (depositAttoRep === undefined) throw new Error('Enter a deposit amount.')
+			run('depositSecurityPoolRep', capitalCopy.deposit, depositReason, selected => {
+				if (depositAttoRep === undefined) throw new Error(transactionCopy.depositRequired)
 				const request =
 					selected.auctionVault === undefined
 						? buildSecurityPoolCapitalDepositRequest({ ...base(selected), amountAttoRep: depositAttoRep })
 						: buildSecurityPoolAuctionVaultDepositRequest({ bidder: selected.auctionVault.bidder, vault: selected.owner, capitalLedger: selected.capitalLedger, amountAttoRep: depositAttoRep, targetHealthFactorBps: selected.ownerAccount.targetHealthFactorBps || 10_000n })
-				return { ...request, reviewDescription: `Deposit exactly ${formatCurrencyBalance(depositAttoRep)} REP into your account. It immediately backs any existing commitment without increasing it. Authorizing capacity is a separate transaction.` }
+				return { ...request, reviewDescription: transactionCopy.reviewDeposit(formatCurrencyBalance(depositAttoRep)) }
 			}),
 		withdraw: () =>
 			run(
 				'withdrawSecurityPoolRep',
-				'Withdraw REP',
+				capitalCopy.withdraw,
 				withdrawReason,
 				selected => {
-					if (withdrawAttoRep === undefined) throw new Error('Enter a withdrawal amount.')
+					if (withdrawAttoRep === undefined) throw new Error(transactionCopy.withdrawalRequired)
 					return {
 						...buildSecurityPoolCapitalWithdrawPrincipalRequest({ ...base(selected), amountAttoRep: withdrawAttoRep }),
-						reviewDescription: `Withdraw ${formatCurrencyBalance(withdrawAttoRep)} REP to ${selected.owner}. Any remaining commitment must retain your saved ${formatCurrencyBalance(selected.ownerAccount.targetHealthFactorBps || 10_000n, 2)}% health target.`,
+						reviewDescription: transactionCopy.reviewWithdrawal(formatCurrencyBalance(withdrawAttoRep), selected.owner, formatCurrencyBalance(selected.ownerAccount.targetHealthFactorBps || 10_000n, 2)),
 					}
 				},
 				latest => {
@@ -351,13 +353,13 @@ export function useSecurityPoolAggregate(
 		setHealth: () =>
 			run(
 				'setSecurityPoolHealth',
-				'Save health target',
+				capitalCopy.saveHealth,
 				healthReason,
 				selected => {
-					if (healthBps === undefined) throw new Error('Enter your health target.')
+					if (healthBps === undefined) throw new Error(transactionCopy.targetRequired)
 					return {
 						...buildSecurityPoolCapitalSetHealthRequest({ ...base(selected), targetHealthFactorBps: healthBps }),
-						reviewDescription: `Save a ${formatCurrencyBalance(healthBps, 2)}% target for withdrawals and authorizations. Raising the target requires enough REP now. This does not change your commitment or the protocol liquidation threshold.`,
+						reviewDescription: transactionCopy.reviewTarget(formatCurrencyBalance(healthBps, 2)),
 					}
 				},
 				latest => {
@@ -368,10 +370,10 @@ export function useSecurityPoolAggregate(
 		depositAndSetHealth: () =>
 			run(
 				'depositSecurityPoolHealthRep',
-				'Deposit REP and save target',
+				capitalCopy.depositHealth,
 				healthDepositReason,
 				selected => {
-					if (healthDepositAttoRep === undefined || healthBps === undefined) throw new Error('Enter a deposit and health target.')
+					if (healthDepositAttoRep === undefined || healthBps === undefined) throw new Error(transactionCopy.depositAndTargetRequired)
 					return {
 						...(selected.auctionVault === undefined
 							? buildSecurityPoolCapitalDepositAndSetHealthRequest({ ...base(selected), amountAttoRep: healthDepositAttoRep, targetHealthFactorBps: healthBps })
@@ -382,14 +384,14 @@ export function useSecurityPoolAggregate(
 				async latest => {
 					const reason = capitalHealthReason(latest, healthBps, healthDepositAttoRep)
 					if (reason !== undefined) throw new Error(reason)
-					if (healthDepositAttoRep === undefined) throw new Error('Enter a REP deposit.')
+					if (healthDepositAttoRep === undefined) throw new Error(transactionCopy.repDepositRequired)
 					const client = withStatoblastRequestTimeout(createConnectedReadClient(), currentStateCheckFailed)
 					const [balance, allowance] = await Promise.all([
 						client.readContract({ address: latest.repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [snapshot?.auctionVault?.bidder ?? latest.owner] }),
 						client.readContract({ address: latest.repToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [snapshot?.auctionVault?.bidder ?? latest.owner, snapshot?.auctionVault?.vault ?? latest.capitalLedger] }),
 					])
-					if (balance < healthDepositAttoRep) throw new Error('Insufficient wallet REP.')
-					if (allowance < healthDepositAttoRep) throw new Error('Approve REP before depositing.')
+					if (balance < healthDepositAttoRep) throw new Error(transactionCopy.insufficientRep)
+					if (allowance < healthDepositAttoRep) throw new Error(transactionCopy.approveBeforeDeposit)
 				},
 				undefined,
 				redesigned
@@ -401,18 +403,18 @@ export function useSecurityPoolAggregate(
 		authorize: () =>
 			run(
 				'authorizeSecurityPoolCommitment',
-				'Authorize commitment',
+				capitalCopy.authorize,
 				authorizeReason,
 				selected => {
-					if (commitmentAttoEth === undefined) throw new Error('Enter a commitment.')
+					if (commitmentAttoEth === undefined) throw new Error(transactionCopy.commitmentRequired)
 					return {
 						...buildSecurityPoolCapitalSetCommitmentRequest({ ...base(selected), commitment: commitmentAttoEth, ...(reportId === undefined ? {} : { reportId }) }),
-						reviewDescription: `Authorize ${formatCurrencyBalance(commitmentAttoEth, selected.collateral.decimals)} ${selected.collateral.symbol} commitment backed by all ${formatCurrencyBalance(selected.ownerPrincipalAttoRep)} REP in your position at your saved ${formatCurrencyBalance(selected.ownerAccount.targetHealthFactorBps || 10_000n, 2)}% health target. All eligible questions share this capacity. Your position bears its own liquidation losses. Reductions wait for free capacity.${reportId === undefined ? '' : ` Report ${reportId} sets a collateral price floor until a later canonical report covers the full pool commitment.`}`,
+						reviewDescription: transactionCopy.reviewCommitment(`${formatCurrencyBalance(commitmentAttoEth, selected.collateral.decimals)} ${selected.collateral.symbol}`, formatCurrencyBalance(selected.ownerPrincipalAttoRep), formatCurrencyBalance(selected.ownerAccount.targetHealthFactorBps || 10_000n, 2), reportId),
 					}
 				},
 				async latest => {
-					if (latest.ownerAccount.targetHealthFactorBps !== snapshot?.ownerAccount.targetHealthFactorBps) throw new Error('Your health target changed. Review the commitment again.')
-					if (latest.ownerPrincipalAttoRep !== snapshot?.ownerPrincipalAttoRep) throw new Error('Your pledged REP changed. Review the commitment again.')
+					if (latest.ownerAccount.targetHealthFactorBps !== snapshot?.ownerAccount.targetHealthFactorBps) throw new Error(transactionCopy.targetChanged)
+					if (latest.ownerPrincipalAttoRep !== snapshot?.ownerPrincipalAttoRep) throw new Error(transactionCopy.pledgedRepChanged)
 					const freshProofPrice = reportId !== undefined && commitmentAttoEth !== undefined ? await readAuthorizationProof(latest, reportId, commitmentAttoEth) : undefined
 					if (freshProofPrice !== proofPrice) throw new Error(capitalCopy.reportChanged)
 					const reason = capitalAuthorizationReason(latest, commitmentAttoEth, freshProofPrice)
@@ -420,9 +422,9 @@ export function useSecurityPoolAggregate(
 				},
 			),
 		claim: () =>
-			run('claimSecurityPoolEarnings', 'Claim earnings', claimReason, selected => ({
+			run('claimSecurityPoolEarnings', capitalCopy.claim, claimReason, selected => ({
 				...buildSecurityPoolCapitalClaimEarningsRequest(base(selected)),
-				reviewDescription: `Checkpoint and collect your earned ${selected.collateral.symbol} and REP. Future vesting rewards stay in the security pool. Your pledged REP stays in the position.`,
+				reviewDescription: transactionCopy.reviewClaim(selected.collateral.symbol),
 			})),
 		serve: () =>
 			run(
@@ -430,19 +432,19 @@ export function useSecurityPoolAggregate(
 				capitalCopy.releaseReduction,
 				serveReason,
 				selected => {
-					if (pendingRetirement === undefined) throw new Error('No reduction in queue.')
+					if (pendingRetirement === undefined) throw new Error(transactionCopy.reductionRequired)
 					return {
 						...buildSecurityPoolCapitalServeRetirementRequest({ ...base(selected), positionId: pendingRetirement.id }),
 						reviewDescription: capitalCopy.releaseReductionReview,
 					}
 				},
 				latest => {
-					if (!latest.priceValid) throw new Error('A new accepted REP price is required.')
-					if (latest.forkTime > 0n || latest.frozen || latest.importing) throw new Error('This universe is closed to commitment reductions.')
-					if (pendingRetirement === undefined) throw new Error('No reduction in queue.')
+					if (!latest.priceValid) throw new Error(newPriceRequired)
+					if (latest.forkTime > 0n || latest.frozen || latest.importing) throw new Error(transactionCopy.reductionsClosed)
+					if (pendingRetirement === undefined) throw new Error(transactionCopy.reductionRequired)
 					const current = latest.positions.find(position => position.id === pendingRetirement.id && position.commitment > 0n && position.batch !== 0n)
-					if (current === undefined || current.remainingCommitment !== pendingRetirement.remainingCommitment) throw new Error('Commitment reduction changed. Review the transaction again.')
-					if (pendingRetirement.retirementPreview?.status === 'ready' && current.retirementPreview?.status !== 'ready') throw new Error('Free capacity changed. Refresh the preview and review the transaction again.')
+					if (current === undefined || current.remainingCommitment !== pendingRetirement.remainingCommitment) throw new Error(transactionCopy.reductionChanged)
+					if (pendingRetirement.retirementPreview?.status === 'ready' && current.retirementPreview?.status !== 'ready') throw new Error(transactionCopy.freeCapacityChanged)
 				},
 				(latest, collateral) => {
 					const current = latest.positions.find(position => position.id === pendingRetirement?.id)
@@ -456,7 +458,7 @@ export function useSecurityPoolAggregate(
 				ownerReason ?? inactiveReason,
 				selected => {
 					const reason = capitalRetirementReason(selected, id, requestedCommitment)
-					if (reason !== undefined || requestedCommitment === undefined) throw new Error(reason ?? 'Enter a remaining commitment.')
+					if (reason !== undefined || requestedCommitment === undefined) throw new Error(reason ?? transactionCopy.remainingCommitmentRequired)
 					const position = selected.positions.find(item => item.id === id && item.commitment > 0n)
 					const covered = position === undefined ? undefined : coveredUnderwaterCommitment(selected, position)
 					const queuesWithoutCure = position !== undefined && covered !== undefined && position.commitment - covered < selected.economics.minimumCommitmentAttoEth

@@ -1098,6 +1098,21 @@ void describe('TradingSection', () => {
 		expect(queries.getByRole('button', { name: 'Mint complete sets' })).not.toBeNull()
 	})
 
+	test('keeps all four Share actions visible and switches forms inline', async () => {
+		const props = createTradingSectionProps()
+		const rendered = await renderIntoDocument(<TradingSection {...props} embedInCard />)
+		cleanupRenderedComponent = rendered.cleanup
+		const query = within(rendered.container)
+		const actions = within(query.getByRole('tablist', { name: 'Share actions' }))
+		expect(actions.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['Mint sets', 'Redeem sets', 'Migrate shares', 'Redeem winning shares'])
+		expect(query.getByLabelText('Collateral amount')).toBeTruthy()
+		expect(query.queryByRole('dialog')).toBeNull()
+		await act(() => fireEvent.click(actions.getByRole('tab', { name: 'Redeem sets' })))
+		expect(query.getByLabelText('Complete sets to redeem')).toBeTruthy()
+		expect(query.queryByRole('tabpanel', { name: 'Mint sets' })).toBeNull()
+		expect(query.queryByRole('dialog')).toBeNull()
+	})
+
 	void test('replaces empty holdings with one line once balances load as zero', async () => {
 		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ tradingDetails: createTradingDetails({ maxRedeemableCompleteSetsAttoShares: 0n, shareBalances: createShareBalances({ invalidAttoShares: 0n, noAttoShares: 0n, yesAttoShares: 0n }) }) })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup

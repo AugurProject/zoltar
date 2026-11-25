@@ -64,8 +64,8 @@ test('branch report keeps preparation, wrap, editable approvals and recovery con
 	const normalize = (values: string[]) => values.map(value => value.replace(/^(Approve|Return released) (Collateral|WETH)$/, '$1 collateral'))
 	expect(normalize(labels().filter(label => !label.includes('Wrap ETH for report')))).toEqual(normalize(initial))
 	expect(view.container.querySelectorAll('.card .card')).toHaveLength(0)
-	const input = Array.from(view.container.querySelectorAll('input')).find(input => input.closest('.field')?.querySelector('label')?.textContent?.includes('Proposed price'))
-	if (input === undefined) throw new Error('Missing proposed price input')
+	const input = Array.from(view.container.querySelectorAll('input')).find(input => input.closest('.field')?.querySelector('label')?.textContent?.includes('REP price (REP per'))
+	if (input === undefined) throw new Error('Missing REP price input')
 	await act(() => {
 		input.value = '2'
 		input.dispatchEvent(new Event('input', { bubbles: true }))
@@ -116,7 +116,7 @@ test('six-decimal reports label released collateral accurately and omit native w
 	const view = await renderIntoDocument(<SecurityPoolPriceReport scope='branch' target={branchPriceTarget(fork)} actions={actions} />)
 	lifecycle.trackRendered(view)
 	await waitFor(() => expect(view.container.textContent).toContain('Released USDC'))
-	expect(view.container.textContent).toContain('Proposed price (REP per USDC)')
+	expect(view.container.textContent).toContain('REP price (REP per USDC)')
 	expect(view.container.textContent).toContain('Last accepted price (REP per USDC)')
 	const credit = Array.from(view.container.querySelectorAll('.metric-label')).find(label => label.textContent === 'Released USDC')?.parentElement
 	await waitFor(() => expect(credit?.textContent).toContain('2.00 USDC'))
@@ -134,8 +134,8 @@ async function renderReportWithPrice(fixture: ReturnType<typeof priceFixture>, p
 	const view = await renderIntoDocument(<SecurityPoolPriceReport scope='branch' target={branchPriceTarget(fork)} actions={actions} referencePrice={referencePrice} />)
 	lifecycle.trackRendered(view)
 	await waitFor(() => expect(view.container.textContent).toContain('already prepared'))
-	const input = Array.from(view.container.querySelectorAll('input')).find(input => input.closest('.field')?.querySelector('label')?.textContent?.includes('Proposed price'))
-	if (input === undefined) throw new Error('Missing proposed price input')
+	const input = Array.from(view.container.querySelectorAll('input')).find(input => input.closest('.field')?.querySelector('label')?.textContent?.includes('REP price (REP per'))
+	if (input === undefined) throw new Error('Missing REP price input')
 	await act(() => {
 		input.value = price
 		input.dispatchEvent(new Event('input', { bubbles: true }))
@@ -186,8 +186,8 @@ test('a branch reload keeps comparing against the feed price, never the security
 	const view = await renderIntoDocument(<SecurityPoolPriceReport scope='branch' target={branchPriceTarget(fork)} actions={actions} referencePrice={referencePrice} />)
 	lifecycle.trackRendered(view)
 	await waitFor(() => expect(view.container.textContent).toContain('already prepared'))
-	const input = Array.from(view.container.querySelectorAll('input')).find(input => input.closest('.field')?.querySelector('label')?.textContent?.includes('Proposed price'))
-	if (input === undefined) throw new Error('Missing proposed price input')
+	const input = Array.from(view.container.querySelectorAll('input')).find(input => input.closest('.field')?.querySelector('label')?.textContent?.includes('REP price (REP per'))
+	if (input === undefined) throw new Error('Missing REP price input')
 	const propose = async (price: string) => {
 		await act(() => {
 			input.value = price

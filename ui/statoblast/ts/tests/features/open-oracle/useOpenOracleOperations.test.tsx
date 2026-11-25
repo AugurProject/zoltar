@@ -1040,7 +1040,7 @@ describe('useOpenOracleOperations', () => {
 		})
 		expect(presentedTone).toBe('warning')
 		expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('warning')
-		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Price expired before settlement. Request a new price.')
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Price expired before settlement. Report a new price.')
 	})
 
 	test('settleReport ignores a stale post-success refresh after the selected report changes', async () => {

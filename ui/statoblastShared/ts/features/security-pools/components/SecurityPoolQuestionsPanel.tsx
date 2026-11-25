@@ -1,3 +1,4 @@
+import { relatedLinkSeparator } from '../../../copy/securityPoolTransactions.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import * as pageCopy from '../../../copy/securityPoolPage.js'
 import * as watchlistCopy from '../../../copy/watchlist.js'
@@ -189,8 +190,8 @@ export function SecurityPoolQuestionsPanel({
 						<a href={statoblastPageHref({ kind: 'question', pool, questionId: selected.id, tab: 'shares' }, universeId)}>{pageCopy.openShares}</a>
 						{selected.mint && (
 							<>
-								{' '}
-								· <a href={statoblastPageHref({ kind: 'question', pool, questionId: selected.id, tab: 'shares', sharesAction: 'mint' }, universeId)}>{pageCopy.mintShares}</a>
+								{relatedLinkSeparator}
+								<a href={statoblastPageHref({ kind: 'question', pool, questionId: selected.id, tab: 'shares', sharesAction: 'mint' }, universeId)}>{pageCopy.mintShares}</a>
 							</>
 						)}
 					</p>

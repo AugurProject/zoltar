@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { expect, spyOn, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -29,6 +29,21 @@ test('the bare simulation route opens the seeded security pool without querying 
 	await waitFor(() => expect(hook.state().snapshot?.securityPool).toBe(securityPool))
 	expect(logRequests).toBe(0)
 })
+
+test('a completed page open is not repeated by the draft debounce', async () => {
+	const source = capitalClient()
+	source.install()
+	const hook = await mount()
+	const setupReads = () => source.reads.filter(read => read.name === 'setupStage').length
+	await waitFor(() => expect(hook.state().snapshot).toBeDefined())
+	const readsOnOpen = setupReads()
+	expect(readsOnOpen).toBeGreaterThan(0)
+	await act(async () => await Bun.sleep(350))
+	expect(setupReads()).toBe(readsOnOpen)
+	await act(() => hook.state().refresh())
+	expect(setupReads()).toBeGreaterThan(readsOnOpen)
+})
+
 test('a wallet switch updates an automatic owner and preserves an explicit selection', async () => {
 	window.history.replaceState({}, '', '#/security-pools')
 	capitalClient().install()
@@ -169,6 +184,54 @@ test('partial setup loads without touching undeployed capital and resumes on ref
 	source.setSetupStage(4n)
 	await act(() => hook.state().refresh())
 	expect(hook.state().snapshot?.capitalLedger).toBeDefined()
+})
+
+test('a hidden tab skips pool refresh and keeps the last setup state', async () => {
+	const source = capitalClient()
+	source.setSetupStage(1n)
+	source.install()
+	const hook = await mount()
+	await waitFor(() => expect(hook.state().setup?.stage).toBe(1))
+	source.setSetupStage(2n)
+	Object.defineProperty(document, 'hidden', { configurable: true, value: true })
+	try {
+		await act(() => hook.state().refresh())
+		expect(hook.state().setup?.stage).toBe(1)
+	} finally {
+		Reflect.deleteProperty(document, 'hidden')
+	}
+	await act(() => hook.state().refresh())
+	expect(hook.state().setup?.stage).toBe(2)
+})
+
+test('setup reads each have a timeout without imposing a deadline on the whole refresh', async () => {
+	const source = capitalClient()
+	source.setSetupStage(1n)
+	let slow = false
+	const client = source.client.extend(() => ({
+		getChainId: async () => {
+			if (slow) await Bun.sleep(120)
+			return 1
+		},
+	}))
+	installActiveEnvironmentForTesting({ ...source.backend, createReadClient: () => client })
+	const hook = await mount()
+	await waitFor(() => expect(hook.state().setup?.stage).toBe(1))
+	source.setSetupStage(2n)
+	slow = true
+	const shortened = new Proxy(globalThis.setTimeout, {
+		apply(schedule, receiver, [handler, delay, ...args]) {
+			return Reflect.apply(schedule, receiver, [handler, delay === 15_000 ? 200 : delay, ...args])
+		},
+	})
+	const timer = spyOn(globalThis, 'setTimeout').mockImplementation(shortened)
+	try {
+		await act(() => hook.state().refresh())
+		expect(hook.state().error).toBeUndefined()
+		expect(hook.state().setup?.stage).toBe(2)
+	} finally {
+		timer.mockRestore()
+	}
 })
 
 test('reopening Deploy shows saved setup progress while the live read is pending', async () => {

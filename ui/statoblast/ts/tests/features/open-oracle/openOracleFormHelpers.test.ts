@@ -95,7 +95,7 @@ describe('OpenOracle create form helpers', () => {
 		expect(getOpenOracleCreateValidation({ form: createValidForm({ exactToken1Report: '1.5' }) }).fieldErrors.exactToken1Report).toBeUndefined()
 		expect(getOpenOracleCreateValidation({ form: createValidForm({ exactToken1Report: '0' }) }).fieldErrors.exactToken1Report).toBeUndefined()
 		expect(getOpenOracleCreateValidation({ form: createValidForm({ exactToken1Report: '0' }) }).isValid).toBe(false)
-		expect(getOpenOracleCreateValidation({ form: createValidForm({ escalationHalt: '-1' }) }).fieldErrors.escalationHalt).toBe('Escalation halt must be non-negative.')
+		expect(getOpenOracleCreateValidation({ form: createValidForm({ escalationHalt: '-1' }) }).fieldErrors.escalationHalt).toBe('Dispute growth cutoff must be non-negative.')
 	})
 
 	test('derives the implied initial price from the entered amounts', () => {

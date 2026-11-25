@@ -1,6 +1,7 @@
+import { newPriceRequired, poolChanged, purchase as copy, refreshingBalances } from '../../../copy/securityPoolTransactions.js'
 import { loadRecoveryMintFunding } from '../../../protocol/recoveryMintFunding.js'
 import * as collateralCopy from '../../../copy/collateral.js'
-import { mintReview } from '../../../copy/securityPool.js'
+import { enterSecurityPool, mintReview, unsupportedAdmission } from '../../../copy/securityPool.js'
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { encodeFunctionData, formatUnits, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -54,7 +55,7 @@ export function useSecurityPoolPurchase(model: Pick<ReturnType<typeof useSecurit
 					loaded.value = { key, quote, question, recovery, readAt: Date.now() }
 				}
 			})().catch(failure => {
-				if (current) loaded.value = { key, error: getErrorMessage(failure, 'Unable to quote this purchase.') }
+				if (current) loaded.value = { key, error: getErrorMessage(failure, copy.quoteFailed) }
 			})
 		}
 		return () => {
@@ -72,19 +73,19 @@ export function useSecurityPoolPurchase(model: Pick<ReturnType<typeof useSecurit
 	const recoveryBudget = quote?.recoveryAttoRep === 0n ? 0n : parsedRecoveryBudget
 	// The contract pulls the collateral plus the fee it computes, never the unused part of the fee cap.
 	const requiredCollateral = amount === undefined || quote === undefined ? undefined : amount + quote.purchaseFeeAttoEth
-	let reason = actions.ownerReason ?? (model.loading ? 'Refreshing security pool balances.' : undefined)
+	let reason = actions.ownerReason ?? (model.loading ? refreshingBalances : undefined)
 	if (reason === undefined) {
-		if (snapshot === undefined) reason = 'Load a security pool first.'
-		else if (snapshot.admission.mode === 'custom') reason = 'This interface supports open or fixed question policies.'
-		else if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing) reason = 'Purchases are closed in this universe.'
-		else if (!snapshot.priceValid) reason = 'A new accepted REP price is required.'
-		else if (questionId === undefined || amount === undefined || amount === 0n || minimum === undefined) reason = 'Enter a question, positive purchase amount and minimum shares.'
+		if (snapshot === undefined) reason = enterSecurityPool
+		else if (snapshot.admission.mode === 'custom') reason = unsupportedAdmission
+		else if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing) reason = copy.closed
+		else if (!snapshot.priceValid) reason = newPriceRequired
+		else if (questionId === undefined || amount === undefined || amount === 0n || minimum === undefined) reason = copy.detailsRequired
 		else if (current?.error !== undefined) reason = current.error
-		else if (quote === undefined || current?.question === undefined) reason = 'Loading the purchase quote.'
-		else if (current.question.escalationGame !== zeroAddress || current.question.systemState !== 0n || snapshot.timestamp >= current.question.questionEndTime) reason = 'Question minting has closed.'
-		else if (amount > quote.availableCommitmentAttoEth) reason = 'Insufficient backing after queued reductions.'
-		else if (fee === undefined || fee < quote.purchaseFeeAttoEth) reason = 'Set a maximum fee that covers the quote.'
-		else if (minimum > quote.shares) reason = 'Minimum shares exceed the current quote.'
+		else if (quote === undefined || current?.question === undefined) reason = copy.loadingQuote
+		else if (current.question.escalationGame !== zeroAddress || current.question.systemState !== 0n || snapshot.timestamp >= current.question.questionEndTime) reason = copy.mintingClosed
+		else if (amount > quote.availableCommitmentAttoEth) reason = copy.insufficientBacking
+		else if (fee === undefined || fee < quote.purchaseFeeAttoEth) reason = copy.feeBelowQuote
+		else if (minimum > quote.shares) reason = copy.minimumSharesAboveQuote
 		else if (amount + quote.purchaseFeeAttoEth > snapshot.walletCollateral) reason = collateralCopy.formatInsufficientBalance(snapshot.collateral.symbol)
 		else if (snapshot.collateralAllowance < amount + quote.purchaseFeeAttoEth) reason = collateralCopy.approvalRequired
 		else if (recoveryBudget === undefined || recoveryBudget < quote.recoveryAttoRep) reason = collateralCopy.recoveryBudgetRequired
@@ -95,8 +96,8 @@ export function useSecurityPoolPurchase(model: Pick<ReturnType<typeof useSecurit
 	return {
 		requiredCollateral,
 		approve: (approvalAmount: bigint) =>
-			actions.runSecurityPoolAction('approvePurchaseCollateral', 'Approve purchase collateral', () => {
-				if (snapshot === undefined) throw new Error('Security pool unavailable.')
+			actions.runSecurityPoolAction('approvePurchaseCollateral', copy.approveCollateral, () => {
+				if (snapshot === undefined) throw new Error(enterSecurityPool)
 				const account = snapshot.auctionVault?.bidder ?? snapshot.owner
 				return {
 					account,
@@ -114,8 +115,8 @@ export function useSecurityPoolPurchase(model: Pick<ReturnType<typeof useSecurit
 			maximumRecoveryRep.value = value
 		},
 		approveRecoveryRep: (approvalAmount: bigint) =>
-			actions.runSecurityPoolAction('approvePurchaseRecoveryRep', 'Approve recovery REP', () => {
-				if (snapshot === undefined || current?.recovery?.token === undefined || current.recovery.spender === undefined) throw new Error('Recovery REP funding is unavailable.')
+			actions.runSecurityPoolAction('approvePurchaseRecoveryRep', copy.approveRecoveryRep, () => {
+				if (snapshot === undefined || current?.recovery?.token === undefined || current.recovery.spender === undefined) throw new Error(copy.recoveryFundingUnavailable)
 				return { account: snapshot.auctionVault?.bidder ?? snapshot.owner, to: current.recovery.token, value: 0n, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [current.recovery.spender, approvalAmount] }) }
 			}),
 		questionInput: questionInput.value,
@@ -140,8 +141,8 @@ export function useSecurityPoolPurchase(model: Pick<ReturnType<typeof useSecurit
 		quoteLoading: current === undefined && amount !== undefined && amount > 0n,
 		reason,
 		buy: () =>
-			actions.runSecurityPoolAction('mintSecurityPoolCompleteSets', 'Buy complete sets', () => {
-				if (reason !== undefined || snapshot === undefined || questionId === undefined || amount === undefined || fee === undefined || minimum === undefined || quote === undefined || recoveryBudget === undefined) throw new Error(reason ?? 'Purchase quote unavailable.')
+			actions.runSecurityPoolAction('mintSecurityPoolCompleteSets', copy.buyCompleteSets, () => {
+				if (reason !== undefined || snapshot === undefined || questionId === undefined || amount === undefined || fee === undefined || minimum === undefined || quote === undefined || recoveryBudget === undefined) throw new Error(reason ?? copy.quoteUnavailable)
 				const selected = snapshot
 				const buyer = selected.auctionVault?.bidder ?? selected.owner
 				const captured = { questionId, mintAttoEth: amount, maximumPurchaseFeeAttoEth: fee, minimumShares: minimum, maximumRecoveryAttoRep: recoveryBudget }
@@ -160,9 +161,9 @@ export function useSecurityPoolPurchase(model: Pick<ReturnType<typeof useSecurit
 					validateBeforeSubmit: async () => {
 						const client = withStatoblastRequestTimeout(createConnectedReadClient(), currentStateCheckFailed)
 						const latest = await loadSecurityPoolAccount(client, selected.securityPool, selected.owner, selected.universeId)
-						if (latest.chainId !== selected.chainId || latest.capitalLedger !== selected.capitalLedger) throw new Error('Security pool context changed. Review again.')
+						if (latest.chainId !== selected.chainId || latest.capitalLedger !== selected.capitalLedger) throw new Error(poolChanged)
 						const question = await loadSecurityPoolMintQuestion(client, latest, captured.questionId)
-						if (question === undefined || question.escalationGame !== zeroAddress || question.systemState !== 0n || latest.timestamp >= question.questionEndTime) throw new Error('Question minting has closed.')
+						if (question === undefined || question.escalationGame !== zeroAddress || question.systemState !== 0n || latest.timestamp >= question.questionEndTime) throw new Error(copy.mintingClosed)
 						const fresh = await loadSecurityPoolMintQuote({ client: securityPoolReadClient(client), securityPool: selected.securityPool, universeId: selected.universeId, questionId: captured.questionId, mintAttoEth: captured.mintAttoEth, blockNumber: latest.blockNumber })
 						const funding = await loadRecoveryMintFunding(client, selected.securityPool, selected.universeId, buyer, fresh.recoveryAttoRep, latest.blockNumber)
 						if (
@@ -176,7 +177,7 @@ export function useSecurityPoolPurchase(model: Pick<ReturnType<typeof useSecurit
 							latest.walletCollateral < captured.mintAttoEth + fresh.purchaseFeeAttoEth ||
 							latest.collateralAllowance < captured.mintAttoEth + fresh.purchaseFeeAttoEth
 						)
-							throw new Error('Purchase prerequisites changed. Refresh and review again.')
+							throw new Error(copy.prerequisitesChanged)
 						const { symbol } = latest.collateral
 						reviewRows = [
 							reviewBalance(collateralCopy.walletBalance(symbol), latest.walletCollateral, latest.walletCollateral - captured.mintAttoEth - fresh.purchaseFeeAttoEth, decimals, symbol),

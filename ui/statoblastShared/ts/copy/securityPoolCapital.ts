@@ -16,7 +16,7 @@ export const priceExpiry = 'Price valid until'
 export const snapshotTime = 'Balances observed at'
 export const noPrice = 'No accepted price'
 export const forked = 'Universe forked'
-export const importing = 'Child preparation in progress'
+export const importing = 'Branch preparation in progress'
 export const earnings = 'Your earnings'
 export const earningsHint = 'Claiming checkpoints newly earned fees. Prepaid rewards vest over the security pool’s configured duration.'
 export const ethEarnings = 'Accrued collateral earnings'
@@ -31,7 +31,7 @@ export const approving = 'Approving REP…'
 export const repAmount = 'REP amount'
 export const withdraw = 'Withdraw REP'
 export const withdrawing = 'Withdrawing REP…'
-export const withdrawHint = 'Withdraw surplus while preserving your saved health target. Live commitments require a current price; idle REP can be withdrawn without one.'
+export const withdrawHint = 'Withdraw surplus while keeping your health target. A current REP price is required for active commitments.'
 export const authorize = 'Authorize commitment'
 export const authorizing = 'Authorizing commitment…'
 export const authorizationHint = 'Your REP and chosen target size the commitment below. You can choose less capacity. Complete the pending commitment reduction before increasing it.'
@@ -84,10 +84,10 @@ export const liquidationSince = 'Below liquidation since'
 export const noLiquidationInterval = 'No observed adverse interval'
 export const liquidationTimingHint = 'This marks the accepted adverse price observation, not a guaranteed grace period.'
 export const healthUnknown = 'Price unavailable'
-export const retire = 'Request commitment reduction'
-export const retiring = 'Requesting commitment reduction…'
+export const retire = 'Reduce commitment'
+export const retiring = 'Reducing commitment…'
 export const remainingCommitment = 'Commitment to keep (collateral)'
-export const remainingCommitmentHint = 'Zero releases the full commitment. A partial request stops at this amount and keeps your REP pledged.'
+export const remainingCommitmentHint = 'Zero releases the full commitment. A partial reduction keeps your REP pledged to the remaining commitment.'
 export const queuedRemainingCommitment = 'Queued commitment to keep'
 export const retireToTarget = 'Size reduction for chosen target'
 export const retirementTargetHint = 'This amount stays fixed while queued. If raising your health target, save it separately after the reduction completes.'
@@ -100,15 +100,15 @@ export const retirementPreviewClosed = 'Universe closed to commitment reductions
 export const retirementPreviewHint = 'Free capacity can change before confirmation. An attempt may spend gas without reducing commitment.'
 export const retirementPreviewStatus = {
 	'not-retiring': 'No pending reduction',
-	'imports-open': 'Child preparation in progress',
+	'imports-open': 'Branch preparation in progress',
 	'demand-exceeds-healthy': 'Capacity in use exceeds available backing',
-	'earlier-requests': 'Capacity reserved for earlier requests',
+	'earlier-requests': 'Capacity reserved for earlier reductions',
 	'insufficient-spare': 'Waiting for free capacity',
 	ready: 'Enough free capacity now',
 }
 export const reductionFreeCapacity = 'Free capacity for reductions'
-export const retirementAhead = 'Reserved for earlier requests'
-export const retirementReduction = 'Your requested reduction'
+export const retirementAhead = 'Reserved for earlier reductions'
+export const retirementReduction = 'Your reduction'
 export const reductionWaits = 'The reduction waits for free capacity in queue order.'
 export const reductionWithCure = (covered: string, keepsCoveredCommitment: boolean) => {
 	const coverage = `Your REP covers only ${covered} at the current price.`
@@ -117,9 +117,9 @@ export const reductionWithCure = (covered: string, keepsCoveredCommitment: boole
 }
 export const requestReductionReview = (positionId: bigint, releasesPledgedRep: boolean, queue: string) => {
 	const consequence = releasesPledgedRep ? 'Reducing to zero releases its pledged REP.' : 'REP stays pledged to the remaining commitment.'
-	return `Position ${positionId}. ${consequence} ${queue} The request cannot be changed or cancelled. Your saved health target stays unchanged.`
+	return `Position ${positionId}. ${consequence} ${queue} You can’t change or cancel the queued reduction. Your saved health target stays unchanged.`
 }
-export const releaseReductionReview = `Earlier requests keep their place in queue. ${retirementPreviewHint}`
+export const releaseReductionReview = `Earlier reductions keep their place in queue. ${retirementPreviewHint}`
 export const rewardVesting = 'Reward vesting (hours)'
 export const outcomeRate = 'Minimum collateral reserved per share'
 export const outcomeRateHint = 'Holding fees stop before reducing backing below this rate. Fixed at creation; fork recovery can pay less.'
@@ -128,27 +128,27 @@ export const prepareTitle = 'Complete security pool setup'
 export const prepareHint = 'Each stage is one transaction with bounded deployment work. Until the origin universe forks, anyone can resume setup before deposits and purchases open.'
 export const prepareStages = ['Set up claims & redemption', 'Set up reporting & forks', 'Set up capital', 'Activate security pool']
 export const prepareProgress = (stage: number) => `${stage} of 4 setup stages complete`
-export const prepareProgressUnknown = 'Setup progress appears once the security pool account loads.'
+export const prepareProgressUnknown = 'Loading security pool setup progress…'
 export const preparing = 'Preparing modules…'
 
 export const annualFee = 'Annual holding fee (%)'
 export const annualFeeHint = 'Fixed for this security pool. Accrues over time against question backing while the price is fresh and settlement is fully funded.'
 
 export const reportId = 'Funded report ID (optional)'
-export const reportHint = 'Use a finalized, funded report for this security pool when the current report cannot cover your larger commitment. Its conservative price remains your collateral floor until the next fully funded security pool report.'
+export const reportHint = 'Use a finalized, funded report if the current report cannot back your larger commitment. Its REP price sets your collateral floor until the next fully funded report.'
 export const reportUnavailable = 'This report cannot secure the requested commitment.'
 export const reportInvalid = 'Enter a positive report ID, or leave blank to use the current security pool report.'
 export const reportChecking = 'Checking report funding and freshness.'
 export const reportChanged = 'Report terms changed. Review the commitment again.'
 
 export { readUnavailable } from './securityPool.js'
-export const lastConfirmed = 'Last confirmed balances. Account refresh pending.'
+export const lastConfirmed = 'Last confirmed balances. Position refresh pending.'
 export const auctionVaultOwnership = 'This auction position has separate collateral. Your wallet controls it and receives withdrawals.'
 
 export const depositLiquidating = 'This position is liquidating. REP top-ups are unavailable.'
 
-export const resubmitRetirement = 'Resubmit the reduction request'
-export const resubmittingRetirement = 'Resubmitting the reduction…'
+export const resubmitRetirement = 'Retry reduction'
+export const resubmittingRetirement = 'Retrying reduction…'
 export const preview = 'Preview'
 export const adjustApproval = 'Adjust approval amount'
 export const previewBacking = 'REP needed for target'
@@ -159,7 +159,7 @@ export const queueHint = "Reductions release in full, in queue order. A queued r
 export const queueCommitment = 'Your commitment'
 export const queueAhead = 'Ahead of you'
 export const queueYourReduction = 'Your reduction'
-export const requestReduction = 'Request reduction'
+export const requestReduction = 'Queue reduction'
 export const readyToRelease = 'Ready to release'
 export const queueFreeNow = (amount: string, total: string | undefined) => (total === undefined ? `${amount} free now` : `${amount} free now, covers all ${total}`)
 export const releaseKeeping = (amount: string) => `Release reduction (keep ${amount})`
