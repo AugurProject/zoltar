@@ -239,7 +239,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 	}, [shareBalances, shareDecimals, snapshot, cacheScope])
 	useEffect(() => {
 		if (selected === undefined) return
-		openHistory(profile).add({ ...entry, tab: 'shares', sharesAction: undefined }, selected.marketDetails.title, universeId)
+		openHistory(profile).updateTitle(entry, selected.marketDetails.title, universeId)
 	}, [profile, selectionKey, selected?.marketDetails.title])
 	const availableClaim = reportingDetails?.settlementState === 'resolved' && activeReporting?.sides.some(side => side.key === reportingDetails.questionOutcome && side.userDeposits.some(deposit => deposit.amountAttoRep > 0n))
 	const tabLabels = { shares: pageCopy.shares, reporting: pageCopy.reporting, claims: pageCopy.inheritedClaims }

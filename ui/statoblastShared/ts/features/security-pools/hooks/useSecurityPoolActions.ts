@@ -7,6 +7,7 @@ import { getAddress, parseUnits, type Address } from '@zoltar/core-shared/evm/et
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { createTransactionScope, mergeTransactionScopes } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
+import { localEntityScopeForNetwork, setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { getErrorDetail, getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { getActiveBackend, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -336,21 +337,30 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 			if (setup.stage >= stage) return 'This setup stage is complete.'
 			return setup.stage === stage - 1 ? undefined : 'Complete the previous setup stage first.'
 		},
-		prepare: (stage: number) =>
-			run(`prepareSecurityPool${stage}`, 'Prepare security pool modules', () => {
-				const selected = model.setup
-				if (selected === undefined || selected.stage !== stage - 1 || parameters.accountAddress === undefined) throw new Error('Refresh and select the next setup stage.')
-				if (selected.originForkTime !== 0n) throw new Error('Origin universe forked; setup is permanently closed.')
-				return {
-					...securityPoolPreparationRequest(parameters.accountAddress, selected.securityPool),
-					reviewDescription: `Complete setup stage ${stage} of 4. This deploys the next bounded group of custody modules. No REP or trader ETH is deposited.`,
-					validateBeforeSubmit: async () => {
-						const latest = await loadSecurityPoolSetup(createConnectedReadClient(), selected.securityPool, selected.owner)
-						if (latest.chainId !== selected.chainId || latest.stage !== selected.stage) throw new Error('Setup advanced. Refresh before sending another preparation transaction.')
-						if (latest.originForkTime !== 0n) throw new Error('Origin universe forked; setup is permanently closed.')
-					},
-				}
-			}),
+		prepare: (stage: number) => {
+			const selected = model.setup
+			return run(
+				`prepareSecurityPool${stage}`,
+				'Prepare security pool modules',
+				() => {
+					if (selected === undefined || selected.stage !== stage - 1 || parameters.accountAddress === undefined) throw new Error('Refresh and select the next setup stage.')
+					if (selected.originForkTime !== 0n) throw new Error('Origin universe forked; setup is permanently closed.')
+					return {
+						...securityPoolPreparationRequest(parameters.accountAddress, selected.securityPool),
+						reviewDescription: `Complete setup stage ${stage} of 4. This deploys the next bounded group of custody modules. No REP or trader ETH is deposited.`,
+						validateBeforeSubmit: async () => {
+							const latest = await loadSecurityPoolSetup(createConnectedReadClient(), selected.securityPool, selected.owner)
+							if (latest.chainId !== selected.chainId || latest.stage !== selected.stage) throw new Error('Setup advanced. Refresh before sending another preparation transaction.')
+							if (latest.originForkTime !== 0n) throw new Error('Origin universe forked; setup is permanently closed.')
+						},
+					}
+				},
+				undefined,
+				async () => {
+					if (stage === 4 && selected !== undefined) setEntityFavorite(localEntityScopeForNetwork(backend.profile, 'statoblast', 'pool'), selected.securityPool, true)
+				},
+			)
+		},
 		questionInput: questionInput.value,
 		setQuestionInput: (value: string) => {
 			questionInput.value = value

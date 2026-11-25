@@ -31,13 +31,14 @@ test('saved pools batch at most 25 verified items together at the same block', a
 		multicall: createMulticallStub(({ blockNumber, contracts }) => {
 			expect(blockNumber).toBe(15n)
 			batches.push(contracts.length)
-			if (contracts.length === 6 && failSecondChunk) {
+			if (contracts.length === 7 && failSecondChunk) {
 				failSecondChunk = false
 				throw new Error('RPC unavailable')
 			}
 			return contracts.map(call => {
 				if (call.functionName === 'isSecurityPool') return { status: 'success', result: true }
 				if (call.functionName === 'annualFeeBps') return { status: 'success', result: 15n }
+				if (call.functionName === 'universes') return { status: 'success', result: [0n, 0n] }
 				return { status: 'success', result: '0x0000000000000000000000000000000000000000' }
 			})
 		}),
@@ -46,15 +47,19 @@ test('saved pools batch at most 25 verified items together at the same block', a
 	const load = () => loadWatchlistRows(client, entries, 0n, undefined, MAINNET_NETWORK_PROFILE, { checkpoint, onChunk: (_rows, finished) => progress.push(finished) })
 	await expect(load()).rejects.toThrow('RPC unavailable')
 	const rows = await load()
-	expect(batches).toEqual([25, 150, 1, 6, 6])
+	expect(batches).toEqual([25, 151, 1, 7, 7])
 	expect(progress).toEqual([25, 26])
 	expect(rows.map(row => row.annualFee)).toEqual(entries.map(() => 15n))
 })
 
 test('import verifies the pool, question, game and depositor in order and skips foreign references', async () => {
 	const calls: { target: Address; functionName: string }[] = []
-	const client = testDouble<Parameters<typeof importStatoblastWatchlist>[0]>({
+	const client = testDouble<Parameters<typeof importStatoblastWatchlist>[0] & { getCode: (input: { address: Address }) => Promise<undefined> }>({
 		getBlock: async () => ({ ...createBlockWithTimestamp(10n), number: 1n, hash }),
+		getCode: async ({ address }: { address: Address }) => {
+			calls.push({ target: address, functionName: 'getCode' })
+			return undefined
+		},
 		multicall: createMulticallStub(request => {
 			expect(request.blockNumber).toBe(1n)
 			return request.contracts.map(call => {

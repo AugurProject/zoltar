@@ -12,6 +12,7 @@ import {
 	statoblast_SecurityPool_SecurityPool,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex,
+	statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator,
 	statoblast_tokens_ShareToken_ShareToken,
 } from '../contractArtifact.js'
 import { checkStatoblastEntries, type StatoblastEntryResult } from './statoblastEntries.js'
@@ -50,6 +51,14 @@ export type WatchlistRow = {
 	demand?: bigint
 	pledged?: bigint
 	healthBps?: bigint
+	forkedAt?: bigint
+	forkQuestionId?: bigint
+	forkChoiceDeadline?: bigint
+	forkChoiceRecorded?: boolean
+	forkChoiceOutcome?: string
+	forkChildUniverse?: bigint
+	forkBranchStarted?: boolean
+	forkBranchReady?: boolean
 }
 
 export function parseWatchlistEntity(id: string, kind: WatchlistEntity['kind']): WatchlistEntity | undefined {
@@ -68,11 +77,11 @@ function decodeWatchlistRow(value: unknown): WatchlistRow | undefined {
 		if (entity === undefined) return undefined
 		const status = read.oneOf('status', ['pool', 'question', 'failed', 'invalid-pool', 'non-statoblast-contract', 'unregistered-question', 'unprepared-question'])
 		const row: WatchlistRow = { entity, status }
-		for (const key of ['missingDeposits', 'reportingPrincipal', 'escalationEnd', 'earnedCollateral', 'earnedRep', 'annualFee', 'purchaseFee', 'minimumFee', 'observedAt', 'capacity', 'commitment', 'demand', 'pledged', 'healthBps'] as const) {
+		for (const key of ['missingDeposits', 'reportingPrincipal', 'escalationEnd', 'earnedCollateral', 'earnedRep', 'annualFee', 'purchaseFee', 'minimumFee', 'observedAt', 'capacity', 'commitment', 'demand', 'pledged', 'healthBps', 'forkedAt', 'forkQuestionId', 'forkChoiceDeadline', 'forkChildUniverse'] as const) {
 			const amount = read.optional(key, read.bigint)
 			if (amount !== undefined && amount >= 0n) row[key] = amount
 		}
-		const optional = <K extends 'collateralDecimals' | 'priceValid' | 'collateral' | 'shares' | 'question' | 'admission' | 'nonDecision'>(key: K, reader: (key: string) => NonNullable<WatchlistRow[K]>) => {
+		const optional = <K extends 'collateralDecimals' | 'priceValid' | 'collateral' | 'shares' | 'question' | 'admission' | 'nonDecision' | 'forkChoiceOutcome' | 'forkChoiceRecorded' | 'forkBranchStarted' | 'forkBranchReady'>(key: K, reader: (key: string) => NonNullable<WatchlistRow[K]>) => {
 			const value = read.optional(key, reader)
 			if (value !== undefined) row[key] = value
 		}
@@ -80,6 +89,10 @@ function decodeWatchlistRow(value: unknown): WatchlistRow | undefined {
 		optional('collateral', read.string)
 		optional('priceValid', read.boolean)
 		optional('nonDecision', read.boolean)
+		optional('forkChoiceOutcome', read.string)
+		optional('forkChoiceRecorded', read.boolean)
+		optional('forkBranchStarted', read.boolean)
+		optional('forkBranchReady', read.boolean)
 		optional('admission', key => read.oneOf(key, ['open', 'fixed', 'custom'] as const))
 		optional('shares', key => {
 			const shares = read.record(key)
@@ -110,6 +123,7 @@ export function decodeWatchlistRows(value: unknown): WatchlistRow[] | undefined 
 
 const poolAbi = statoblast_SecurityPool_SecurityPool.abi
 const capitalAbi = statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger.abi
+const forkAbi = statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinator.abi
 const reportingSides: readonly ReportingOutcomeKey[] = ['invalid', 'yes', 'no']
 
 type ReadWatchlistBatch = <const Calls extends readonly unknown[]>(calls: Calls) => ReturnType<typeof readOptionalMulticall<Calls>>
@@ -147,6 +161,55 @@ function watchlistBatch(client: ReadClient, block: bigint): ReadWatchlistBatch {
 
 function rowCollateral(profile: NetworkProfile, address: Address) {
 	return (['WETH', 'USDC'] as const).map(symbol => securityPoolCollateral(profile, symbol)).find(token => token.address.toLowerCase() === address.toLowerCase())
+}
+
+function watchlistForkReads(read: ReadWatchlistBatch, profile: NetworkProfile, universeId: bigint) {
+	const { zoltar } = getInfraContractAddresses(profile)
+	const { zoltarQuestionData } = getZoltarContractAddresses(profile)
+	const universeContract = { abi: Zoltar_Zoltar.abi, address: zoltar } as const
+	let universe: Promise<{ forkedAt: bigint; forkQuestionId: bigint } | undefined> | undefined
+	let deadline: Promise<bigint | undefined> | undefined
+	return {
+		universe: () =>
+			(universe ??= read([{ ...universeContract, functionName: 'universes', args: [universeId] }]).then(([value]) => {
+				if (value.status !== 'success') return undefined
+				const [forkedAt, forkQuestionId] = value.result
+				return { forkedAt, forkQuestionId }
+			})),
+		deadline: () => (deadline ??= read([{ ...universeContract, functionName: 'getForkChoiceDeadline', args: [universeId] }]).then(([value]) => (value.status === 'success' ? value.result : undefined))),
+		universeContract,
+		zoltarQuestionData,
+	}
+}
+
+async function readPoolFork(read: ReadWatchlistBatch, fork: ReturnType<typeof watchlistForkReads>, pool: Address, owner: Address | undefined, universeId: bigint) {
+	const universe = await fork.universe()
+	if (universe === undefined || universe.forkedAt === 0n) return universe
+	if (owner === undefined || owner === zeroAddress) return universe
+	const [deadline, [controller]] = await Promise.all([fork.deadline(), read([{ abi: poolAbi, address: pool, functionName: 'forkController' }])])
+	const fields: Partial<WatchlistRow> = { ...universe }
+	if (deadline !== undefined && deadline > 0n) fields.forkChoiceDeadline = deadline
+	if (controller.status !== 'success' || controller.result === zeroAddress) return fields
+	const coordinator = { abi: forkAbi, address: controller.result } as const
+	const [choice] = await read([{ ...coordinator, functionName: 'choices', args: [universeId, owner] }])
+	if (choice.status !== 'success') return fields
+	const [outcome, recorded] = choice.result
+	fields.forkChoiceRecorded = recorded
+	if (!recorded) return fields
+	const [label, child] = await read([
+		{ abi: ZoltarQuestionData_ZoltarQuestionData.abi, address: fork.zoltarQuestionData, functionName: 'getAnswerOptionName', args: [universe.forkQuestionId, outcome] },
+		{ ...fork.universeContract, functionName: 'getChildUniverseId', args: [universeId, outcome] },
+	])
+	if (label.status === 'success' && label.result !== '') fields.forkChoiceOutcome = label.result
+	if (child.status === 'success') {
+		fields.forkChildUniverse = child.result
+		const [branch] = await read([{ ...coordinator, functionName: 'branches', args: [child.result] }])
+		if (branch.status === 'success' && branch.result[0] === universeId && branch.result[1] === outcome && branch.result[6]) {
+			fields.forkBranchStarted = branch.result[7]
+			fields.forkBranchReady = branch.result[8]
+		}
+	}
+	return fields
 }
 
 async function readPoolRow(read: ReadWatchlistBatch, client: ReadClient, block: bigint, entity: WatchlistEntity, owner: Address | undefined, universeId: bigint, profile: NetworkProfile): Promise<WatchlistRow> {
@@ -212,20 +275,23 @@ async function readPoolRow(read: ReadWatchlistBatch, client: ReadClient, block: 
 	return row
 }
 
-async function readQuestionRow(read: ReadWatchlistBatch, entity: Extract<WatchlistEntity, { kind: 'question' }>, ledger: Address, owner: Address | undefined, universeId: bigint, profile: NetworkProfile, includeDeposits: boolean): Promise<WatchlistRow> {
+async function readQuestionRow(read: ReadWatchlistBatch, fork: ReturnType<typeof watchlistForkReads>, entity: Extract<WatchlistEntity, { kind: 'question' }>, ledger: Address, owner: Address | undefined, universeId: bigint, profile: NetworkProfile, includeDeposits: boolean): Promise<WatchlistRow> {
 	const infrastructure = getInfraContractAddresses(profile)
 	const questionData = getZoltarContractAddresses(profile).zoltarQuestionData
 	const ledgerAbi = statoblast_QuestionLedger_QuestionLedger.abi
 	const gameAbi = statoblast_EscalationGame_EscalationGame.abi
-	const [token, game, collateral, market, outcome, fork] = await read([
-		{ abi: ledgerAbi, address: ledger, functionName: 'shareToken' },
-		{ abi: ledgerAbi, address: ledger, functionName: 'escalationGame' },
-		{ abi: poolAbi, address: entity.pool, functionName: 'collateralToken' },
-		{ abi: ZoltarQuestionData_ZoltarQuestionData.abi, address: questionData, functionName: 'questions', args: [entity.questionId] },
-		{ abi: QUESTION_LEDGER_QUESTION_OUTCOME_ABI, address: infrastructure.questionForker, functionName: 'getQuestionOutcome', args: [ledger] },
-		{ abi: Zoltar_Zoltar.abi, address: infrastructure.zoltar, functionName: 'getForkTime', args: [universeId] },
+	const [reads, universe] = await Promise.all([
+		read([
+			{ abi: ledgerAbi, address: ledger, functionName: 'shareToken' },
+			{ abi: ledgerAbi, address: ledger, functionName: 'escalationGame' },
+			{ abi: poolAbi, address: entity.pool, functionName: 'collateralToken' },
+			{ abi: ZoltarQuestionData_ZoltarQuestionData.abi, address: questionData, functionName: 'questions', args: [entity.questionId] },
+			{ abi: QUESTION_LEDGER_QUESTION_OUTCOME_ABI, address: infrastructure.questionForker, functionName: 'getQuestionOutcome', args: [ledger] },
+		]),
+		fork.universe(),
 	])
-	const row: WatchlistRow = { entity, status: 'question' }
+	const [token, game, collateral, market, outcome] = reads
+	const row: WatchlistRow = { entity, status: 'question', ...universe }
 	if (collateral.status === 'success') {
 		const knownToken = rowCollateral(profile, collateral.result)
 		row.collateral = knownToken?.symbol ?? copy.collateralUnits
@@ -246,11 +312,11 @@ async function readQuestionRow(read: ReadWatchlistBatch, entity: Extract<Watchli
 	const [deadline, continuation, nonDecision] = gameResult ?? []
 	if (nonDecision?.status === 'success') row.nonDecision = nonDecision.result
 	if (deadline?.status === 'success') row.escalationEnd = deadline.result
-	if (market.status === 'success' && outcome.status === 'success' && fork.status === 'success' && game.status === 'success') {
+	if (market.status === 'success' && outcome.status === 'success' && universe !== undefined && game.status === 'success') {
 		row.question = {
 			marketDetails: { title: market.result[0], endTime: market.result[3] },
 			ordinaryEscalationGameStarted: gameAddress !== undefined && continuation?.status === 'success' && !continuation.result,
-			universeHasForked: fork.result > 0n,
+			universeHasForked: universe.forkedAt > 0n,
 			questionOutcome: getReportingOutcomeKey(outcome.result),
 		}
 	}
@@ -307,12 +373,16 @@ export async function loadWatchlistRows(client: ReadClient, entries: readonly Wa
 			true,
 		)
 		const read = watchlistBatch(client, block)
+		const fork = watchlistForkReads(read, profile, universeId)
 		const batch = await Promise.all(
 			chunk.map(async (entry, index): Promise<WatchlistRow> => {
 				const result = checks[index]
 				if (result?.status === 'failed') throw result.error
-				if (result?.status === 'pool') return await readPoolRow(read, client, block, entry, owner, universeId, profile)
-				if (result?.status === 'question' && entry.kind === 'question') return { ...(await readQuestionRow(read, entry, result.ledger, owner, universeId, profile, includeDeposits)), observedAt: head.timestamp }
+				if (result?.status === 'pool') {
+					const [row, forkStage] = await Promise.all([readPoolRow(read, client, block, entry, owner, universeId, profile), readPoolFork(read, fork, entry.pool, owner, universeId)])
+					return { ...row, ...forkStage, observedAt: head.timestamp }
+				}
+				if (result?.status === 'question' && entry.kind === 'question') return { ...(await readQuestionRow(read, fork, entry, result.ledger, owner, universeId, profile, includeDeposits)), observedAt: head.timestamp }
 				return { entity: entry, status: result?.status ?? 'failed' }
 			}),
 		)

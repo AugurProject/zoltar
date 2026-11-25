@@ -7,6 +7,7 @@ import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } 
 import { asWriteClient, createMockWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { localEntityScopeForNetwork, readFavoriteEntries } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { useSecurityPoolActions } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolActions.js'
 import { decodeFunctionData, encodeAbiParameters, encodeFunctionData, parseAbi, parseAbiItem, parseAbiParameters, toEventSelector, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
@@ -286,6 +287,15 @@ test('setup advances one explicit stage and rejects a stale stage before wallet 
 	expect(requests).toHaveLength(1)
 	await hook.setProps({ model: { ...base, snapshot: undefined, setup: { ...setup, originForkTime: 900n } } })
 	expect(hook.state().preparationReason(2)).toContain('Origin universe forked')
+
+	const watchlist = localEntityScopeForNetwork(MAINNET_NETWORK_PROFILE, 'statoblast', 'pool')
+	expect(readFavoriteEntries(watchlist)).toEqual([])
+	source.setRead('getForkTime', 0n)
+	source.setSetupStage(3n)
+	await hook.setProps({ deploying: true, model: { ...base, snapshot: undefined, setup: { ...setup, stage: 3 } } })
+	await act(() => hook.state().prepare(4))
+	expect(hook.state().error).toBeUndefined()
+	expect(readFavoriteEntries(watchlist).map(entry => entry.id)).toEqual([securityPool.toLowerCase()])
 })
 
 test('presentation-only accounts explain refresh without enabling writes or replacing the wallet guard', async () => {

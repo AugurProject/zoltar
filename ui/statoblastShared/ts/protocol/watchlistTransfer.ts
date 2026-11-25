@@ -63,6 +63,8 @@ export async function importStatoblastWatchlist(client: Pick<ReadClient, 'getBlo
 	const block = await client.getBlock()
 	if (block.number === undefined || block.hash === undefined) throw new Error('Watchlist import requires a mined block.')
 	const blockNumber = block.number
+	// Import checks factory membership before calling a pool. It never needs bytecode from a rejected address.
+	const entryClient: Pick<ReadClient, 'multicall'> = { multicall: request => client.multicall(request) }
 	const requireEnvironment = () => {
 		if (!isCurrent()) throw new Error('The network changed during watchlist import. Try again.')
 	}
@@ -71,7 +73,7 @@ export async function importStatoblastWatchlist(client: Pick<ReadClient, 'getBlo
 		requireEnvironment()
 		const page = saved.slice(start, start + 25)
 		const states = await checkStatoblastEntries(
-			client,
+			entryClient,
 			page.map(entry => ({ ...entry, universeId: activeUniverseId })),
 			blockNumber,
 		)
@@ -84,7 +86,7 @@ export async function importStatoblastWatchlist(client: Pick<ReadClient, 'getBlo
 	for (let start = 0; start < deposits.length; start += 25) {
 		requireEnvironment()
 		const page = deposits.slice(start, start + 25)
-		const states = await checkStatoblastEntries(client, page, blockNumber)
+		const states = await checkStatoblastEntries(entryClient, page, blockNumber)
 		const located = page.flatMap((deposit, index) => {
 			const state = states[index]
 			if (state?.status === 'failed') throw state.error

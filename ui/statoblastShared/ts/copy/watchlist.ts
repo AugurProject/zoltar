@@ -38,10 +38,11 @@ export const exportWatchlist = 'Export watchlist'
 export const importWatchlist = 'Import watchlist'
 export const importing = 'Importing…'
 export const recentlyOpened = 'Recently opened'
+export const recentlyOpenedLimit = 'Last 20 opened'
+export const formatOpened = (age: string) => `, opened ${age}`
+export const questionInPool = (title: string, pool: string) => `${title} in security pool ${pool}`
 export const clearHistory = 'Clear history'
 export const checking = 'Checking…'
-export const resolved = 'Resolved'
-export const forked = 'Forked'
 export const reporting = 'Reporting'
 export const trading = 'Trading'
 export const reportingOpensLead = 'Reporting opens '
@@ -64,3 +65,30 @@ export const missingPoolContract = 'No contract exists at this address.'
 export const reportingOpen = 'Reporting open'
 export const poolPolicy = { open: ' · Open questions', fixed: ' · Fixed question list', custom: ' · Custom question rules' }
 export const formatPurchaseFee = (percent: string) => ` · ${percent}% purchase fee`
+export const capacitySeparator = ' of '
+
+export const afterTheFork = 'After the fork'
+export const frozen = 'Frozen'
+export const forkQuestion = 'Fork question'
+export const forkQuestionResolution = 'Each child universe resolves it to its own answer.'
+export const migrateShares = 'Migrate your shares to a child universe'
+export const migrateSharesHint = 'Migrate shares on each question’s Shares tab.'
+export const depositsCarryOver = 'REP deposits carry over.'
+export const wasTrading = 'Was trading'
+export const wasInResponseWindow = 'Was in response window'
+export const endedUndecided = 'Ended undecided'
+export const responseWindow = 'Response window'
+export const formatResolvedAs = (outcome: string) => `Resolved as ${outcome}`
+export const sharesRedeemable = 'Your shares are redeemable.'
+export const chooseChildUniverse = 'Choose a child universe'
+export const choiceWindowClosed = 'Choice window closed'
+export const forkChoiceByLead = 'By '
+export const forkChoiceConsequenceLead = 'If you don’t choose, your '
+export const forkChoiceConsequenceTail = ' pledged to this pool goes to claimants in every child universe and your commitment ends.'
+export const branchChosen = 'Branch chosen'
+export const branchActive = 'Branch active'
+export const branchRecapitalizing = 'Recapitalizing'
+export const formatMovingTo = (outcome: string) => `Moving to ${outcome}`
+export const formatBranchActive = (outcome: string) => `${outcome} active`
+export const formatBranchRecapitalizing = (outcome: string) => `Recapitalizing ${outcome}`
+export const migrationOpensLead = 'Migration opens '
