@@ -85,6 +85,7 @@ export const formatOutcomeShares = (outcomeLabel: string) => `${outcomeLabel} sh
 export const formatMigrateSharesReviewDescription = (outcomeLabel: string) => `Creates your whole ${outcomeLabel} balance in each selected child universe and keeps the source balance locked. ${shareMigrationIrreversible}`
 export const mintAmountRequired = 'Enter a mint amount.'
 export const redeemAmountRequired = 'Enter a redeem amount.'
+export const redeemCollateralLoading = 'Loading collateral details…'
 
 export const sharedPoolCapacityAtReview = 'Quoted before submission'
 export const sharedPoolPurchaseDetail = 'Purchases use shared REP backing. The transaction includes the quoted purchase fee in addition to this mint amount.'

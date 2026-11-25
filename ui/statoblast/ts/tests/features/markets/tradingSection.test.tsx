@@ -303,6 +303,18 @@ void describe('TradingSection', () => {
 		expect(within(dialog).queryByText(/Checked again before sending/)).toBeNull()
 	})
 
+	test('redemption waits for the collateral precision even after the balances render', async () => {
+		const props = createTradingSectionProps({ embedInCard: true })
+		const funding = props.collateralFunding
+		if (funding === undefined) throw new Error('Missing collateral funding fixture')
+		const rendered = await renderIntoDocument(<TradingSection {...props} collateralFunding={{ ...funding, collateral: undefined, loading: true }} />)
+		cleanupRenderedComponent = rendered.cleanup
+		fireEvent.click(within(document.body).getByRole('tab', { name: 'Redeem sets' }))
+		expect(getTransactionButtonState(document.body, 'Redeem complete sets')).toMatchObject({ disabled: true, reason: 'Loading collateral details…' })
+		await act(() => render(<TradingSection {...props} />, rendered.container))
+		expect(getTransactionButtonState(document.body, 'Redeem complete sets').disabled).toBe(false)
+	})
+
 	test.each([false, true])('recovery purchases show their REP contribution and separate approval (pending: %s)', async pending => {
 		const props = createTradingSectionProps()
 		const funding = props.collateralFunding

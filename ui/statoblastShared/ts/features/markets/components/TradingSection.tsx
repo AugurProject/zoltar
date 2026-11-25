@@ -153,6 +153,7 @@ export function TradingSection({
 		shareTokenSupplyAttoShares: selectedPool?.shareTokenSupplyAttoShares,
 		totalPoolHeldAttoRep: selectedPool?.totalPoolHeldAttoRep,
 	})
+	const redeemCollateralReason = collateralFunding !== undefined && collateralFunding.collateral === undefined ? (collateralFunding.error ?? tradingCopy.redeemCollateralLoading) : undefined
 	const redeemCompleteSetGuardMessage = getTradingRedeemCompleteSetGuardMessage({
 		accountAddress: accountState.address,
 		settlementCollateralAttoEth: selectedPool?.settlementCollateralAttoEth,
@@ -452,7 +453,7 @@ export function TradingSection({
 						pendingLabel={tradingCopy.redeemingCompleteSets}
 						onClick={onRedeemCompleteSet}
 						pending={tradingActiveAction === 'redeemCompleteSet'}
-						availability={getModalActionAvailability(redeemCompleteSetsEnabled, redeemCompleteSetGuardMessage, (parseCompleteSetAmountInput(tradingForm.redeemAmount, collateralDecimals) ?? 0n) > 0n)}
+						availability={getModalActionAvailability(redeemCompleteSetsEnabled, redeemCollateralReason ?? redeemCompleteSetGuardMessage, (parseCompleteSetAmountInput(tradingForm.redeemAmount, collateralDecimals) ?? 0n) > 0n)}
 					/>
 				</div>
 			</ShareActionForm>

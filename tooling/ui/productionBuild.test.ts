@@ -640,6 +640,25 @@ test(
 				expect(coldMethods).toContain('eth_call')
 				expect(await driver.evaluate('JSON.stringify(window.__statoblastRpcMethods) === JSON.stringify(window.__delayedRpcMethods)')).toBe(true)
 
+				await driver.waitForButtonEnabled('Redeem sets', 0, 180_000)
+				await driver.clickButton('Redeem sets')
+				const redeemInputBounds = '(() => { const {width, height} = document.querySelector(".statoblast-share-action-form input").getBoundingClientRect(); return [width, height] })()'
+				const beforeRedeem = await driver.evaluate(redeemInputBounds)
+				await driver.setInputByLabel('Complete sets to redeem', '0.01')
+				await driver.waitForButtonEnabled('Redeem complete sets', 0, 120_000)
+				expect(await driver.evaluate(redeemInputBounds)).toEqual(beforeRedeem)
+				await driver.clickButton('Redeem complete sets')
+				await driver.waitForButtonEnabled('Continue in wallet', 0, 120_000)
+				await driver.evaluate('window.__statoblastRpcMethods.length = 0; window.__delayedRpcMethods.length = 0')
+				await driver.clickButton('Continue in wallet')
+				await driver.waitForBodyText('0.99 sets', 240_000)
+				const delayed = await driver.evaluate('window.__delayedRpcMethods.slice()')
+				expect(delayed).toContain('eth_sendTransaction')
+				expect(await driver.evaluate('JSON.stringify(window.__statoblastRpcMethods) === JSON.stringify(window.__delayedRpcMethods)')).toBe(true)
+
+				await driver.waitForExpression('Array.from(document.querySelectorAll("[role=dialog]")).some(dialog => dialog.innerText.includes("Confirmed"))')
+				await driver.pressEscape()
+
 				await driver.navigate(`?rpcDelay=10000${watchlist}`)
 				await driver.waitForBodyText('Saved security pools')
 				await driver.waitForBodyText('Refreshing saved items…')
@@ -650,23 +669,6 @@ test(
 				await driver.waitForExpression('window.__delayedRpcMethods.includes("eth_getBlockByNumber")')
 				await driver.waitForButtonEnabled('Refresh', 0, 120_000)
 				expect(await driver.evaluate('document.body.innerText')).not.toContain('Couldn’t refresh')
-				expect(await driver.evaluate('JSON.stringify(window.__statoblastRpcMethods) === JSON.stringify(window.__delayedRpcMethods)')).toBe(true)
-
-				await driver.navigate(coldQuestion.href)
-				await driver.waitForButtonEnabled('Redeem sets', 0, 180_000)
-				await driver.clickButton('Redeem sets')
-				const redeemInputBounds = '(() => { const {width, height} = document.querySelector(".statoblast-share-action-form input").getBoundingClientRect(); return [width, height] })()'
-				const beforeRedeem = await driver.evaluate(redeemInputBounds)
-				await driver.setInputByLabel('Complete sets to redeem', '0.01')
-				await driver.waitForButtonEnabled('Redeem complete sets')
-				expect(await driver.evaluate(redeemInputBounds)).toEqual(beforeRedeem)
-				await driver.clickButton('Redeem complete sets')
-				await driver.waitForButtonEnabled('Continue in wallet', 0, 120_000)
-				await driver.evaluate('window.__statoblastRpcMethods.length = 0; window.__delayedRpcMethods.length = 0')
-				await driver.clickButton('Continue in wallet')
-				await driver.waitForBodyText('0.99 sets', 240_000)
-				const delayed = await driver.evaluate('window.__delayedRpcMethods.slice()')
-				expect(delayed).toContain('eth_sendTransaction')
 				expect(await driver.evaluate('JSON.stringify(window.__statoblastRpcMethods) === JSON.stringify(window.__delayedRpcMethods)')).toBe(true)
 			},
 			SECURITY_POOL_BROWSER_TIMEOUT_MILLISECONDS - PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS,

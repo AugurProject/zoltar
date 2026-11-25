@@ -111,6 +111,7 @@ test('walletless fork page shows public context and keeps personal reads and tra
 	)
 	await waitFor(() => expect(view.container.querySelector('.statoblast-fork-diagram')).not.toBeNull())
 	expect(view.container.querySelector('.statoblast-fork-diagram-stays .statoblast-fork-diagram-amounts')?.textContent).toBeUndefined()
+	expect([...view.container.querySelectorAll('.statoblast-fork-diagram-branches li > strong')].map(node => node.textContent)).toEqual(['Yes', 'No', 'Invalid'])
 	expect(view.container.querySelector('.statoblast-fork-choice-deadline')?.textContent).toContain('Choose a branch by')
 	expect(view.container.querySelectorAll('.statoblast-branch-recapitalization')).toHaveLength(1)
 	expect(view.container.querySelector('.statoblast-branch-recapitalization')?.textContent).toContain('Recapitalization deadline')

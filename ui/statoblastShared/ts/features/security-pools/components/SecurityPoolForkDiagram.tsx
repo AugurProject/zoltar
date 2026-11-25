@@ -75,16 +75,21 @@ function BranchNodes({ question, selected, confirmed, knownChildren, branch, ver
 	const [page, setPage] = useState<{ start: bigint; selected: bigint | undefined }>()
 	const scalar = question.marketType === 'scalar'
 	const total = scalar ? question.numTicks + 2n : BigInt(question.outcomeLabels.length + 1)
-	let selectedOffset = selected ?? 0n
-	if (scalar && selected !== undefined) {
-		const outcome = getScalarOutcomeIndexDescriptor(question, selected)
-		selectedOffset = outcome.kind === 'tick' ? outcome.tickIndex + 1n : 0n
+	let selectedOffset = 0n
+	if (selected === 0n) selectedOffset = total - 1n
+	else if (selected !== undefined) {
+		selectedOffset = selected - 1n
+		if (scalar) {
+			const outcome = getScalarOutcomeIndexDescriptor(question, selected)
+			if (outcome.kind === 'tick') selectedOffset = outcome.tickIndex
+		}
 	}
 	const initialStart = selectedOffset < total ? (selectedOffset / branchPageSize) * branchPageSize : 0n
 	const start = page !== undefined && page.selected === selected ? page.start : initialStart
 	const choices: BranchChoice[] = []
 	for (let index = start; index < start + branchPageSize && index < total; index++) {
-		const outcomeIndex = scalar && index > 0n ? getScalarOutcomeIndex(question, index - 1n) : index
+		let outcomeIndex = 0n
+		if (index < total - 1n) outcomeIndex = scalar ? getScalarOutcomeIndex(question, index) : index + 1n
 		const label = branchLabel(question, outcomeIndex)
 		if (label !== undefined) choices.push({ outcomeIndex, label })
 	}

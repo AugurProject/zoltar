@@ -1,3 +1,4 @@
+import type { WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { expect, test } from 'bun:test'
@@ -56,7 +57,7 @@ async function renderWithDeploymentWallet(source: ReturnType<typeof capitalClien
 	const receipt = () => (requests.length === 1 ? { from: owner, to: undefined, status: 'success' as const, contractAddress: token, logs: [] } : { from: owner, to: factory(), status: 'success' as const, contractAddress: undefined, logs: [deployedPoolLog()] })
 	const writer = asWriteClient({
 		...createMockWriteClient(request => requests.push(request)),
-		waitForTransactionReceipt: async ({ onReplaced }) => {
+		waitForTransactionReceipt: async ({ onReplaced }: Parameters<WriteClient['waitForTransactionReceipt']>[0]) => {
 			if (delays.unrelatedReplacement !== undefined) {
 				onReplaced?.({ reason: 'replaced', transaction: { hash: replacementHash }, replacedTransaction: { hash: mockTransactionHash }, transactionReceipt: { ...receipt(), transactionHash: replacementHash, blockHash: mockTransactionHash, blockNumber: 1n, cumulativeGasUsed: 1n, gasUsed: 1n, transactionIndex: 0n } })
 				delays.unrelatedReplacement()
