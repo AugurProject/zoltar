@@ -363,7 +363,7 @@ export const projects: readonly Project[] = [
 			lint: packageTask('augurScan', 'check'),
 			typecheck: packageTask('augurScan', 'typecheck'),
 			audit: packageAuditTask('augurScan'),
-			integration: { ...packageTask('augurScan', 'test:integration'), inputs: ['shared/**', 'augurScan/schema.sql', 'augurScan/migrations/**', 'augurScan/config/**', 'augurScan/src/**', 'augurScan/tests/**', 'augurScan/scripts/**', 'augurScan/package.json', 'bun.lock', 'augurScan/tsconfig.json'] },
+			integration: { ...packageTask('augurScan', 'test:integration'), inputs: ['shared/**', 'augurScan/schema.sql', 'augurScan/config/**', 'augurScan/src/**', 'augurScan/tests/**', 'augurScan/scripts/**', 'augurScan/package.json', 'bun.lock', 'augurScan/tsconfig.json'] },
 		},
 		generatedDirectories: [],
 		generatedFiles: [...augurScanMetadataOutputs, 'augurScan/public/app.js'],

@@ -241,7 +241,7 @@ describe('fork migration strategy', () => {
 				minimumTotalSourceCount: 3,
 			},
 		}
-		const snapshot = operatorSnapshot(state, false, centralizedMarkets)
+		const snapshot = operatorSnapshot(state, false, [centralizedMarkets])
 		expect(snapshot.pools.find(candidate => candidate.address === rootPool.address)?.centralizedPriceAllowed).toBe(true)
 		expect(snapshot.pools.find(candidate => candidate.address === childPool.address)?.centralizedPriceAllowed).toBe(false)
 		expect(snapshot.pools.find(candidate => candidate.address === childPool.address)?.centralizedPriceDeviationBps).toBeUndefined()
@@ -264,7 +264,7 @@ describe('fork migration strategy', () => {
 		expect(missingChildSnapshot.alerts.some(alert => alert.message.includes('0x0000…0099'))).toBe(false)
 		state.marketConsensus = { ...state.marketConsensus, cex: { ...state.marketConsensus.cex, reliable: false } }
 		state.activities.push({ at: new Date().toISOString(), kind: 'scan', message: 'DEX market evidence reset after canonical head replacement', status: 'info' }, { at: new Date().toISOString(), kind: 'scan', message: 'DEX market evidence reset after canonical head replacement', status: 'info' })
-		const warningSnapshot = operatorSnapshot(state, false, centralizedMarkets)
+		const warningSnapshot = operatorSnapshot(state, false, [centralizedMarkets])
 		expect(warningSnapshot.alerts.some(alert => alert.message.includes('single-group fallback'))).toBe(true)
 		expect(warningSnapshot.alerts.some(alert => alert.message.includes('2 canonical market-evidence resets'))).toBe(true)
 
@@ -290,7 +290,7 @@ describe('fork migration strategy', () => {
 			cex: { ...state.marketConsensus.cex, observations: state.marketConsensus.cex.observations.filter(observation => observation.sourceId !== 'alpha') },
 			dex: { ...state.marketConsensus.dex, observations: state.marketConsensus.dex.observations.filter(observation => observation.sourceId !== 'one') },
 		}
-		const persistenceSnapshot = operatorSnapshot(state, false, centralizedMarkets)
+		const persistenceSnapshot = operatorSnapshot(state, false, [centralizedMarkets])
 		expect(persistenceSnapshot.marketSources.find(source => source.id === 'alpha')).toMatchObject({ reason: 'Observed but excluded by persistence, depth, or dispersion policy', status: 'excluded' })
 		expect(persistenceSnapshot.marketSources.find(source => source.id === 'one')).toMatchObject({ reason: 'Observed but excluded by persistence, depth, or dispersion policy', status: 'excluded' })
 	})

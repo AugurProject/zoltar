@@ -27,11 +27,8 @@ export interface TokenInventory {
 	openOracleCredit: string
 	/**
 	 * Anchored OpenOracle internal allowance from this wallet to itself.
-	 *
-	 * Optionality preserves compatibility with snapshots produced before the
-	 * allowance was discovered. The planner fails closed when it is absent.
 	 */
-	openOracleInternalAllowanceToSelf?: string
+	openOracleInternalAllowanceToSelf: string
 }
 
 export interface ShareInventory {

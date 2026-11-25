@@ -1,6 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA pg_catalog;
 -- Authoritative augurScan schema for a new, empty PostgreSQL database.
--- Forward migrations for retained databases live under migrations/.
+-- Historical schemas are rejected; initialize an empty database from this file.
 
 
 -- Dumped from database version 17.11 (Debian 17.11-1.pgdg12+2)

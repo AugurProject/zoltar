@@ -11,7 +11,7 @@ export const parseScenarioSnapshot = (scenario: SimulationScenario, genesisOutco
 		if (bundledKey !== undefined && scenarioSnapshotKey !== undefined && bundledKey !== scenarioSnapshotKey) throw new Error('The prepared state was generated for other sources')
 		const envelope = parseSavedSimulationStateEnvelope(serialized)
 		if (envelope.baseScenario !== scenario) throw new Error(`The prepared state belongs to the ${envelope.baseScenario} scenario`)
-		if ((envelope.genesisOutcome ?? 'yes') !== genesisOutcome) throw new Error('The prepared state belongs to another genesis universe')
+		if (envelope.genesisOutcome !== genesisOutcome) throw new Error('The prepared state belongs to another genesis universe')
 		return envelope
 	} catch (error) {
 		console.warn(`[simulation] Ignoring the prepared ${scenario} state: ${error instanceof Error ? error.message : String(error)}`)

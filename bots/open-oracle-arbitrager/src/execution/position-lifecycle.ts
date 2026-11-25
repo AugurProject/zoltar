@@ -270,8 +270,6 @@ export async function processPositionLifecycle(
 		lifecycleTransactionNonce: startingNonce.toString(),
 		lifecycleTransactionHashes: [signed.hash],
 		lifecycleUpdatedAt: new Date().toISOString(),
-		lifecycleWalletTokenBefore: undefined,
-		lifecycleWalletWethBefore: undefined,
 		replacementCreditAmount: replacementAmount?.toString(),
 		replacementCreditToken: replacementToken,
 		replacementResidualTokenAmount: residualTokenAmount === 0n ? undefined : residualTokenAmount.toString(),

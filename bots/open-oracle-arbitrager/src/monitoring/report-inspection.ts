@@ -145,7 +145,6 @@ export async function inspectReport(
 		...(wethCollateral ? {} : { collateralSymbol: collateral.symbol }),
 		decision,
 		direction: best.quote.direction,
-		estimatedNetProfitEth: decimalSignedEth(best.quote.netProfitAttoWeth),
 		estimatedNetProfitWeth: decimalSignedEth(best.quote.netProfitAttoWeth),
 		executablePriceRepPerEth: decimalSignedEth(executablePriceRepPerEth),
 		hasRequiredInventory,

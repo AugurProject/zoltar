@@ -1,3 +1,4 @@
+import { parseRetirementState } from '../../src/state/retirement.ts'
 import { abandonRetryableSelectableFailure } from '../../src/runtime/workflow-repair.ts'
 import { evaluatePolicySafeContinuation } from '../../src/runtime/workflow-continuation.ts'
 import { executeScheduledOperation } from '../../src/runtime/scheduled-operation.ts'
@@ -411,7 +412,7 @@ describe('Drain & Retire planning', () => {
 
 	test('does not equate an empty plan with completion when approvals remain', () => {
 		const snapshot = drainedWalletSnapshotFixture()
-		snapshot.wallet.tokens = [{ address: address(40), allowances: { [address(41)]: '1' }, balance: '0', openOracleCredit: '0', symbol: 'TEST' }]
+		snapshot.wallet.tokens = [{ address: address(40), allowances: { [address(41)]: '1' }, balance: '0', openOracleInternalAllowanceToSelf: '0', openOracleCredit: '0', symbol: 'TEST' }]
 		const state = initialDurableState(31337)
 		const result = assessRetirement({ blockHash: hash(1), blockNumber: 1n, canonicalScanComplete: true, evaluations: [], retirement: request(), snapshot, state, v3: [] })
 		expect(result.status).toBe('draining')
@@ -443,7 +444,7 @@ describe('Drain & Retire planning', () => {
 		const snapshot = drainedWalletSnapshotFixture()
 		snapshot.wallet.tokens = [{ address: address(40), allowances: {}, balance: '0', openOracleCredit: '0', openOracleInternalAllowanceToSelf: '1', symbol: 'TEST' }]
 		expect(buildAllowanceRevocationPlan(snapshot, 1)?.definitionId).toBe('retirement.allowance.revoke-open-oracle-internal')
-		snapshot.wallet.tokens = [{ address: address(40), allowances: { [address(41)]: '1' }, balance: '0', openOracleCredit: '0', symbol: 'TEST' }]
+		snapshot.wallet.tokens = [{ address: address(40), allowances: { [address(41)]: '1' }, balance: '0', openOracleInternalAllowanceToSelf: '0', openOracleCredit: '0', symbol: 'TEST' }]
 		expect(buildAllowanceRevocationPlan(snapshot, 1)?.definitionId).toBe('retirement.allowance.revoke-erc20')
 		snapshot.wallet.tokens = []
 		snapshot.wallet.shares = [{ invalid: '0', isApprovedForAll: { [address(42)]: true }, migrationProgressByRoute: {}, no: '0', shareToken: address(43), universeId: '1', yes: '0' }]
@@ -499,7 +500,7 @@ describe('Drain & Retire planning', () => {
 
 	test('does not hide retained WETH or pending V3 verification in a drained proof', () => {
 		const snapshot = drainedWalletSnapshotFixture()
-		snapshot.wallet.tokens = [{ address: snapshot.deployments.weth, allowances: {}, balance: '3', openOracleCredit: '0', symbol: 'WETH' }]
+		snapshot.wallet.tokens = [{ address: snapshot.deployments.weth, allowances: {}, balance: '3', openOracleInternalAllowanceToSelf: '0', openOracleCredit: '0', symbol: 'WETH' }]
 		const retirement = request()
 		retirement.policies.unwrapWeth = false
 		retirement.positions = [position('pending-confirmation')]
@@ -543,9 +544,9 @@ describe('Drain & Retire planning', () => {
 		const snapshot = drainedWalletSnapshotFixture()
 		const retirement = request()
 		const limits = { maximumEthAttoEth: 10n, maximumGasCostAttoEth: 1n, maximumRepAttoRep: 5n, minimumEthReserveAttoEth: 3n }
-		snapshot.wallet.tokens = [{ address: snapshot.deployments.weth, allowances: {}, balance: '12', openOracleCredit: '0', symbol: 'WETH' }]
+		snapshot.wallet.tokens = [{ address: snapshot.deployments.weth, allowances: {}, balance: '12', openOracleInternalAllowanceToSelf: '0', openOracleCredit: '0', symbol: 'WETH' }]
 		expect(buildAssetSweepPlan(snapshot, retirement, 1, limits)).toMatchObject({ definitionId: 'retirement.sweep.unwrap-weth', metadata: { amount: '10' } })
-		snapshot.wallet.tokens = [{ address: snapshot.universes[0]?.repToken ?? address(10), allowances: {}, balance: '12', openOracleCredit: '0', symbol: 'REP' }]
+		snapshot.wallet.tokens = [{ address: snapshot.universes[0]?.repToken ?? address(10), allowances: {}, balance: '12', openOracleInternalAllowanceToSelf: '0', openOracleCredit: '0', symbol: 'REP' }]
 		expect(buildAssetSweepPlan(snapshot, retirement, 1, limits)).toBeUndefined()
 		snapshot.wallet.tokens = []
 		snapshot.wallet.ethBalanceAttoEth = '20'
@@ -557,7 +558,7 @@ describe('Drain & Retire planning', () => {
 		const retirement = request()
 		const limits = { maximumEthAttoEth: 100n, maximumGasCostAttoEth: 4n, maximumRepAttoRep: 5n, minimumEthReserveAttoEth: 3n }
 		snapshot.wallet.ethBalanceAttoEth = '20'
-		snapshot.wallet.tokens = [{ address: snapshot.universes[0]?.repToken ?? address(10), allowances: {}, balance: '12', openOracleCredit: '0', symbol: 'REP' }]
+		snapshot.wallet.tokens = [{ address: snapshot.universes[0]?.repToken ?? address(10), allowances: {}, balance: '12', openOracleInternalAllowanceToSelf: '0', openOracleCredit: '0', symbol: 'REP' }]
 		expect(buildAssetSweepPlan(snapshot, retirement, 1, limits)).toBeUndefined()
 		const assessment = assessRetirement({ blockHash: hash(1), blockNumber: 1n, canonicalScanComplete: true, evaluations: [], retirement, snapshot, state: initialDurableState(31337), v3: [], sweepLimits: limits })
 		expect(assessment.status).toBe('drained')
@@ -570,7 +571,7 @@ describe('Drain & Retire planning', () => {
 
 	test('does not execute retirement actions until canonical lifecycle discovery is complete', async () => {
 		const snapshot = drainedWalletSnapshotFixture()
-		snapshot.wallet.tokens = [{ address: address(40), allowances: { [address(41)]: '1' }, balance: '0', openOracleCredit: '0', symbol: 'TEST' }]
+		snapshot.wallet.tokens = [{ address: address(40), allowances: { [address(41)]: '1' }, balance: '0', openOracleInternalAllowanceToSelf: '0', openOracleCredit: '0', symbol: 'TEST' }]
 		const state = initialRuntimeState(false, snapshot.wallet.address, snapshot.chainId)
 		request(state.retirement)
 		const settings = parseSettings(example)
@@ -757,7 +758,7 @@ describe('Drain & Retire planning', () => {
 	test('persists cumulative canonical balance increases across recovery and sweeping', () => {
 		const snapshot = drainedWalletSnapshotFixture()
 		snapshot.wallet.ethBalanceAttoEth = '10'
-		snapshot.wallet.tokens = [{ address: address(40), allowances: {}, balance: '3', openOracleCredit: '0', symbol: 'REP' }]
+		snapshot.wallet.tokens = [{ address: address(40), allowances: {}, balance: '3', openOracleInternalAllowanceToSelf: '0', openOracleCredit: '0', symbol: 'REP' }]
 		snapshot.wallet.lpTokens = [{ allowanceToRouter: '0', balance: '2', pair: address(41) }]
 		const retirement = initialRetirementState()
 		recordCanonicalRecoveredBalances(retirement, snapshot)
@@ -944,7 +945,7 @@ test('V3 retirement continuation rebuilds collect after confirmed burn', () => {
 test('a locally rejected sweep dispatch leaves retirement cancellable', async () => {
 	const snapshot = drainedWalletSnapshotFixture()
 	snapshot.wallet.ethBalanceAttoEth = '0'
-	snapshot.wallet.tokens = [{ address: snapshot.deployments.weth, allowances: {}, balance: '7', openOracleCredit: '0', symbol: 'WETH' }]
+	snapshot.wallet.tokens = [{ address: snapshot.deployments.weth, allowances: {}, balance: '7', openOracleInternalAllowanceToSelf: '0', openOracleCredit: '0', symbol: 'WETH' }]
 	const settings = parseSettings(example)
 	settings.paused = false
 	settings.runtime.execute = true
@@ -966,4 +967,9 @@ test('a locally rejected sweep dispatch leaves retirement cancellable', async ()
 	expect(state.retirement.finalSweepStartedAt).toBeUndefined()
 	cancelRetirement(state.retirement, 'CANCEL DRAIN')
 	expect(state.retirement.status).toBe('inactive')
+})
+
+test('rejects obsolete retirement overrides without completion evidence', () => {
+	const retirement = request()
+	expect(() => parseRetirementState({ ...retirement, profileReplacementOverride: { acceptedAt: now, reason: 'Old development override', targetProfileId: 'other' } }, address(1))).toThrow()
 })

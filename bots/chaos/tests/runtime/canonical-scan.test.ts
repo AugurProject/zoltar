@@ -82,16 +82,7 @@ const auction = getAddress('0x0000000000000000000000000000000000000005')
 function settings() {
 	return parseSettings({
 		connectivity: null,
-		deployment: {
-			openOracle: oracle,
-			questionData: wallet,
-			securityPoolFactory: wallet,
-			questionForker: wallet,
-			tradingFactory: wallet,
-			tradingRouter: wallet,
-			weth,
-			zoltar: wallet,
-		},
+
 		discovery: {
 			maxPools: 100,
 			maxQuestions: 100,
@@ -164,8 +155,8 @@ function snapshot(): EcosystemSnapshot {
 			openOracleEthCredit: '0',
 			shares: [],
 			tokens: [
-				{ address: weth, allowances: {}, balance: '7', openOracleCredit: '0', symbol: 'WETH' },
-				{ address: rep, allowances: {}, balance: '9', openOracleCredit: '0', symbol: 'REP' },
+				{ address: weth, allowances: {}, balance: '7', openOracleInternalAllowanceToSelf: '0', openOracleCredit: '0', symbol: 'WETH' },
+				{ address: rep, allowances: {}, balance: '9', openOracleInternalAllowanceToSelf: '0', openOracleCredit: '0', symbol: 'REP' },
 			],
 		},
 		discoveryIssues: [],

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { pathExists } from '../repo/fs.mts'
 import { projectDependencyClosure } from '../repo/projects.ts'
-import { getContractFreshnessInputRelativePaths, getRequiredContractArtifactRelativePaths, getRequiredSharedOutputRelativePaths, removeDeprecatedContractArtifactOutputs, removeUnexpectedSharedSourceOutputs } from './ensure-contract-artifacts.mts'
+import { getContractFreshnessInputRelativePaths, getRequiredContractArtifactRelativePaths, getRequiredSharedOutputRelativePaths, removeUnexpectedSharedSourceOutputs } from './ensure-contract-artifacts.mts'
 
 test('ensure-contract-artifacts requires shared package export outputs', async () => {
 	const requiredSharedOutputs = await getRequiredSharedOutputRelativePaths()
@@ -20,25 +20,6 @@ test('core contract artifact preparation does not require Trading UI output', ()
 
 	expect(requiredOutputs).toContain('ui/coreShared/ts/contractArtifact.ts')
 	expect(requiredOutputs).not.toContain('ui/trading/ts/generated/contractArtifact.ts')
-})
-
-test('ensure-contract-artifacts removes the deprecated cached contract artifact', async () => {
-	const repositoryRoot = await mkdtemp(path.join(tmpdir(), 'zoltar-contract-artifacts-'))
-	const deprecatedArtifactPath = path.join(repositoryRoot, 'solidity/types/contractArtifact.ts')
-	const currentArtifactPath = path.join(repositoryRoot, 'solidity/ts/types/contractArtifact.ts')
-	try {
-		await mkdir(path.dirname(deprecatedArtifactPath), { recursive: true })
-		await mkdir(path.dirname(currentArtifactPath), { recursive: true })
-		await writeFile(deprecatedArtifactPath, 'deprecated')
-		await writeFile(currentArtifactPath, 'current')
-
-		await removeDeprecatedContractArtifactOutputs(repositoryRoot)
-
-		expect(await pathExists(deprecatedArtifactPath)).toBe(false)
-		expect(await pathExists(currentArtifactPath)).toBe(true)
-	} finally {
-		await rm(repositoryRoot, { force: true, recursive: true })
-	}
 })
 
 test('ensure-contract-artifacts removes compiled outputs that can shadow shared TypeScript sources', async () => {
