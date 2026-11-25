@@ -19,14 +19,15 @@ describe('creation bytecode storage (#1505)', () => {
 	})
 	for (const length of [1, 2, 3, 47_999, 48_000, 49_150]) {
 		test(`reassembles ${length} bytes exactly with inert bounded carriers`, async () => {
-			const code: Hex = `0x${'ef'.repeat(length)}`
+			const code: Hex = `0x${Buffer.from(Array.from({ length }, (_, i) => (i * 137 + 19) % 256)).toString('hex')}`
 			await writeContractAndWait(client, () => client.writeContract({ abi: artifact.abi, address, functionName: 'store', args: [code], gas: 16_777_216n }))
 			expect(await client.readContract({ abi: artifact.abi, address, functionName: 'load' })).toBe(code)
 			for (const functionName of ['first', 'second'] as const) {
 				const carrier = await client.readContract({ abi: artifact.abi, address, functionName })
 				const runtime = await client.getCode({ address: carrier })
 				if (runtime === undefined) throw new Error('Missing bytecode carrier')
-				expect(runtime.startsWith('0x00')).toBe(true)
+				const split = 2 + 2 * Math.floor(length / 2)
+				expect(runtime).toBe(`0x00${functionName === 'first' ? code.slice(2, split) : code.slice(split)}`)
 				expect((runtime.length - 2) / 2).toBeLessThanOrEqual(24_576)
 			}
 		})
