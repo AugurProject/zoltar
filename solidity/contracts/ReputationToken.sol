@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { DecimalStrings } from './DecimalStrings.sol';
 import { Constants } from './Constants.sol';
 import { ERC20 } from './ERC20.sol';
 import { ERC20Authorization } from './vendor/authorization/ERC20Authorization.sol';
@@ -33,7 +34,7 @@ contract ReputationToken is ERC20Authorization {
 		require(totalTheoreticalSupplyAttoRep_ != 0, 'Theoretical supply must be non-zero');
 		universeId = universeId_;
 		repNumber = repNumber_;
-		string memory number = _toString(repNumber_);
+		string memory number = DecimalStrings.toString(repNumber_);
 		_name = string.concat('Augur Reputation ', number);
 		_symbol = string.concat('REP', number);
 		totalTheoreticalSupplyAttoRep = totalTheoreticalSupplyAttoRep_;
@@ -57,21 +58,5 @@ contract ReputationToken is ERC20Authorization {
 
 	function getTotalTheoreticalSupply() external view returns (uint256) {
 		return totalTheoreticalSupplyAttoRep;
-	}
-
-	function _toString(uint256 value) private pure returns (string memory) {
-		uint256 digits = 1;
-		uint256 remaining = value;
-		while (remaining >= 10) {
-			remaining /= 10;
-			digits++;
-		}
-		bytes memory buffer = new bytes(digits);
-		while (value != 0) {
-			digits--;
-			buffer[digits] = bytes1(uint8(48 + (value % 10)));
-			value /= 10;
-		}
-		return string(buffer);
 	}
 }

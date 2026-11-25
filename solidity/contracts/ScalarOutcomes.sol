@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { DecimalStrings } from './DecimalStrings.sol';
+
 library ScalarOutcomes {
 	uint256 internal constant DECIMALS = 18;
 
@@ -20,7 +22,7 @@ library ScalarOutcomes {
 		// displayed value. Name every such inexact tick by its index so distinct
 		// answers never share a label; exact values are already unique.
 		if (diffU < numTicks && mulmod(payout, diffU, numTicks) != 0) {
-			label = string.concat(label, ' (tick ', uintToString(payout), ' of ', uintToString(numTicks), ')');
+			label = string.concat(label, ' (tick ', DecimalStrings.toString(payout), ' of ', DecimalStrings.toString(numTicks), ')');
 		}
 		return label;
 	}
@@ -100,9 +102,9 @@ library ScalarOutcomes {
 		uint256 base = 10 ** decimals;
 		uint256 integerPart = absoluteValue / base;
 		uint256 fractionalPart = absoluteValue % base;
-		string memory integerString = uintToString(integerPart);
+		string memory integerString = DecimalStrings.toString(integerPart);
 		if (fractionalPart == 0) return isNegative ? string.concat('-', integerString) : integerString;
-		bytes memory fractionalBytes = bytes(zeroPadLeft(uintToString(fractionalPart), decimals));
+		bytes memory fractionalBytes = bytes(zeroPadLeft(DecimalStrings.toString(fractionalPart), decimals));
 		uint256 trimIndex = fractionalBytes.length;
 		while (trimIndex > 0 && fractionalBytes[trimIndex - 1] == bytes1('0')) {
 			trimIndex--;
@@ -127,22 +129,5 @@ library ScalarOutcomes {
 			padded[paddingLength + index] = valueBytes[index];
 		}
 		return string(padded);
-	}
-
-	function uintToString(uint256 absoluteValue) internal pure returns (string memory) {
-		if (absoluteValue == 0) return '0';
-		uint256 tempValue = absoluteValue;
-		uint256 digits;
-		while (tempValue != 0) {
-			digits++;
-			tempValue /= 10;
-		}
-		bytes memory buffer = new bytes(digits);
-		while (absoluteValue != 0) {
-			digits--;
-			buffer[digits] = bytes1(uint8(48 + uint8(absoluteValue % 10)));
-			absoluteValue /= 10;
-		}
-		return string(buffer);
 	}
 }
