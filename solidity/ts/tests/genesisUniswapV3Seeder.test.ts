@@ -41,6 +41,25 @@ describe('GenesisUniswapV3Seeder', () => {
 			await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, args: [client.account.address, 100n], functionName: 'mint' }))
 			await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, args: [seeder, 100n], functionName: 'approve' }))
 		}
+		for (const [maximum0, maximum1] of [
+			[59n, 80n],
+			[60n, 79n],
+		] as const) {
+			await assert.rejects(
+				writeContractAndWait(client, () => client.writeContract({ abi: seederArtifact.abi, address: seeder, args: [pool, token0, token1, -887_200, 887_200, 50n, maximum0, maximum1, client.account.address], functionName: 'seed' })),
+				/Seed maximum/,
+			)
+			for (const token of [token0, token1]) {
+				for (const [holder, balance] of [
+					[pool, 0n],
+					[seeder, 7n],
+					[client.account.address, 100n],
+				] as const) {
+					assert.strictEqual(await client.readContract({ abi: tokenArtifact.abi, address: token, args: [holder], functionName: 'balanceOf' }), balance)
+				}
+			}
+			await checkIdle()
+		}
 		await writeContractAndWait(client, () => client.writeContract({ abi: seederArtifact.abi, address: seeder, args: [pool, token0, token1, -887_200, 887_200, 50n, 100n, 100n, client.account.address], functionName: 'seed' }))
 		await checkIdle()
 		assert.strictEqual(await client.readContract({ abi: tokenArtifact.abi, address: token0, args: [pool], functionName: 'balanceOf' }), 60n)

@@ -10,7 +10,6 @@ import {
 	statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule,
 	statoblast_QuestionForker_QuestionForker,
 	statoblast_SecurityPool_SecurityPool,
-	statoblast_QuestionForkerDelegate_QuestionForkerDelegate,
 	statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalLedgerDeployer,
 	statoblast_SecurityPoolModuleDeployers_SecurityPoolCommitmentIndexDeployer,
 	statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalFeeStreamsDeployer,
@@ -43,7 +42,6 @@ const statoblastInitCodes = createStatoblastInitCodes(
 		securityPoolFactory: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 		securityPool: statoblast_SecurityPool_SecurityPool,
 		questionForker: statoblast_QuestionForker_QuestionForker,
-		questionForkerDelegate: statoblast_QuestionForkerDelegate_QuestionForkerDelegate,
 		securityPoolCapitalLedgerDeployer: statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalLedgerDeployer,
 		securityPoolCommitmentIndexDeployer: statoblast_SecurityPoolModuleDeployers_SecurityPoolCommitmentIndexDeployer,
 		securityPoolCapitalFeeStreamsDeployer: statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalFeeStreamsDeployer,
@@ -66,7 +64,6 @@ const {
 	getSharedPoolPriceFeedDeploymentWorkerByteCode,
 	getSecurityPoolFactoryByteCode,
 	getQuestionForkerByteCode,
-	getQuestionForkerDelegateByteCode,
 	getSecurityPoolCapitalLedgerDeployerByteCode,
 	getSecurityPoolCommitmentIndexDeployerByteCode,
 	getSecurityPoolCapitalFeeStreamsDeployerByteCode,
@@ -81,17 +78,7 @@ const {
 	getShareTokenFactoryByteCode,
 } = statoblastInitCodes
 
-export {
-	getEscalationGameFactoryByteCode,
-	getSharedPoolPriceFeedFactoryByteCode,
-	getSharedPoolPriceFeedDeploymentWorkerByteCode,
-	getSecurityPoolFactoryByteCode,
-	getQuestionForkerByteCode,
-	getQuestionForkerDelegateByteCode,
-	getQuestionLedgerOperationsDelegateByteCode,
-	getQuestionLedgerAccountingModuleByteCode,
-	getShareTokenFactoryByteCode,
-}
+export { getEscalationGameFactoryByteCode, getSharedPoolPriceFeedFactoryByteCode, getSharedPoolPriceFeedDeploymentWorkerByteCode, getSecurityPoolFactoryByteCode, getQuestionForkerByteCode, getQuestionLedgerOperationsDelegateByteCode, getQuestionLedgerAccountingModuleByteCode, getShareTokenFactoryByteCode }
 
 /** The linked creation code the canonical factory pins by hash and deploys for every security pool. */
 export const getSecurityPoolCreationCode = statoblastInitCodes.getSecurityPoolCreationCode
@@ -121,7 +108,6 @@ export function getInfraStepConstructorArguments(profile: NetworkProfile = getRu
 		sharedPoolPriceFeedDeploymentWorker: '',
 		shareTokenFactory: constructorArgumentsFromInitCode(getShareTokenFactoryByteCode(addresses.zoltar), statoblast_factories_ShareTokenFactory_ShareTokenFactory.evm.bytecode.object),
 		sharedPoolPriceFeedFactory: constructorArgumentsFromInitCode(getSharedPoolPriceFeedFactoryByteCode(profile.wethAddress), statoblast_factories_SharedPoolPriceFeedFactory_SharedPoolPriceFeedFactory.evm.bytecode.object),
-		questionForkerDelegate: constructorArgumentsFromInitCode(getQuestionForkerDelegateByteCode(addresses.zoltar), statoblast_QuestionForkerDelegate_QuestionForkerDelegate.evm.bytecode.object),
 		securityPoolCapitalLedgerDeployer: constructorArgumentsFromInitCode(getSecurityPoolCapitalLedgerDeployerByteCode(), statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalLedgerDeployer.evm.bytecode.object),
 		securityPoolCommitmentIndexDeployer: constructorArgumentsFromInitCode(getSecurityPoolCommitmentIndexDeployerByteCode(), statoblast_SecurityPoolModuleDeployers_SecurityPoolCommitmentIndexDeployer.evm.bytecode.object),
 		securityPoolCapitalFeeStreamsDeployer: constructorArgumentsFromInitCode(getSecurityPoolCapitalFeeStreamsDeployerByteCode(), statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalFeeStreamsDeployer.evm.bytecode.object),

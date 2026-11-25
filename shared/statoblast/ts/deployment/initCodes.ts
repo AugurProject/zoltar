@@ -47,7 +47,6 @@ type StatoblastInfrastructureArtifacts = {
 	securityPoolFactory: ContractArtifact
 	securityPool: BytecodeArtifact
 	questionForker: ContractArtifact
-	questionForkerDelegate: ContractArtifact
 	questionLedgerOperationsDelegate: BytecodeArtifact
 	questionLedgerEventEmitter: BytecodeArtifact
 	securityPoolCapitalLedgerDeployer: BytecodeArtifact
@@ -95,10 +94,8 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 	const getShareTokenFactoryByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.shareTokenFactory.abi, bytecode: bytecodeOf(artifacts.shareTokenFactory), args: [zoltar] })
 	const getEscalationGameFactoryByteCode = (depositDelegate: Address) => encodeDeployData({ abi: artifacts.escalationGameFactory.abi, bytecode: bytecodeOf(artifacts.escalationGameFactory), args: [depositDelegate] })
 	const getSharedPoolPriceFeedDeploymentWorkerByteCode = (): Hex => `0x${artifacts.sharedPoolPriceFeedDeploymentWorker.evm.bytecode.object}`
-	const getWorkerAddress = (bytecode: Hex) => getCreate2Address({ bytecode, from: proxyDeployerAddress, salt: zeroSalt })
-	const getSharedPoolPriceFeedFactoryByteCode = (weth: Address) => concatHex([`0x${artifacts.sharedPoolPriceFeedFactory.evm.bytecode.object}`, encodeSharedPoolPriceFeedFactoryArguments(weth, getWorkerAddress(getSharedPoolPriceFeedDeploymentWorkerByteCode()))])
-	const getQuestionForkerDelegateByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.questionForkerDelegate.abi, bytecode: `0x${artifacts.questionForkerDelegate.evm.bytecode.object}`, args: [zoltar] })
-	const getQuestionForkerByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.questionForker.abi, bytecode: `0x${artifacts.questionForker.evm.bytecode.object}`, args: [zoltar, getWorkerAddress(getQuestionForkerDelegateByteCode(zoltar))] })
+	const getSharedPoolPriceFeedFactoryByteCode = (weth: Address) => concatHex([bytecodeOf(artifacts.sharedPoolPriceFeedFactory), encodeSharedPoolPriceFeedFactoryArguments(weth, getCreate2Address({ bytecode: getSharedPoolPriceFeedDeploymentWorkerByteCode(), from: proxyDeployerAddress, salt: zeroSalt }))])
+	const getQuestionForkerByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.questionForker.abi, bytecode: bytecodeOf(artifacts.questionForker), args: [zoltar] })
 	const getQuestionLedgerAccountingModuleByteCode = (): Hex => `0x${artifacts.questionLedgerEventEmitter.evm.bytecode.object}`
 	const getQuestionLedgerOperationsDelegateByteCode = (): Hex => `0x${artifacts.questionLedgerOperationsDelegate.evm.bytecode.object}`
 	const getSecurityPoolCapitalLedgerDeployerByteCode = (): Hex => `0x${artifacts.securityPoolCapitalLedgerDeployer.evm.bytecode.object}`
@@ -149,7 +146,6 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 			getEscalationGameFactoryByteCode,
 			getSecurityPoolFactoryByteCode,
 			getQuestionForkerByteCode,
-			getQuestionForkerDelegateByteCode,
 			getShareTokenFactoryByteCode,
 			getZoltarAddress: zoltar.getZoltarAddress,
 			getZoltarQuestionDataAddress: zoltar.getZoltarQuestionDataAddress,
@@ -180,7 +176,6 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 		getSecurityPoolFactoryByteCode,
 		getSecurityPoolCreationCode,
 		getQuestionForkerByteCode,
-		getQuestionForkerDelegateByteCode,
 		getQuestionLedgerOperationsDelegateByteCode,
 		getQuestionLedgerAccountingModuleByteCode,
 		getSecurityPoolCapitalLedgerDeployerByteCode,

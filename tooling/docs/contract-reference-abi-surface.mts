@@ -62,7 +62,7 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 	},
 	'solidity/contracts/statoblast/QuestionForker.sol': {
 		prepareSecurityPoolQuestion: ['external(IQuestionLedger,uint248)'],
-		materializeSecurityPoolQuestion: ['external(IQuestionLedger,uint248)'],
+		materializeSecurityPoolQuestion: ['public(IQuestionLedger,uint248)'],
 		initiateQuestionLedgerFork: ['external(IQuestionLedger)'],
 		forkZoltarWithOwnEscalationGame: ['external(IQuestionLedger)'],
 		createChildUniverse: ['external(IQuestionLedger,uint256)'],
@@ -137,7 +137,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/SharedPoolPriceFeed.sol': 'f36b4f222b2e9bcbcbe25e4e417433ece937f640fdbae3c51d04396d33bd1729',
 	'solidity/contracts/statoblast/QuestionLedger.sol': 'd5ee68293a6702fd7c319a15eb2eae627d384ae7bf178eb3fb9bf472021b4dd4',
-	'solidity/contracts/statoblast/QuestionForker.sol': '706506c8a6f3b9cab5022f10c037b1ed96e240b4b5f3b0a3100448ad3b586567',
+	'solidity/contracts/statoblast/QuestionForker.sol': '04e488e9cd2e23d2a7b9a0a052180fdd7ec2dfa1cded5445bf142ae78e8af15b',
 	'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol': '24a5c8cc53cbe4c2c3a9ad75e52d462010f1f91f40172fd416a2d3573849aa18',
 	'solidity/contracts/statoblast/tokens/ERC1155.sol': '7bb87695bc3df8fa177c545209ed58d2e4571c19c869b5598bb0a829e764b218',
 	'solidity/contracts/statoblast/tokens/ShareToken.sol': 'e1eb94e04ee65aa3f3f1147cdf1be9a855e30e7ba5900e6f8e048107d92cc400',

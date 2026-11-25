@@ -55,6 +55,10 @@ export const timelineCatalogRows = async (sql: SQL, filters: TimelineFilters) =>
 				invalidation.causes AS invalidation_causes, invalidation.detected_at AS invalidated_at,
 				-- Auction amounts are in the auction's collateral token, which its tagged reads sample.
 				CASE WHEN timeline.entity_type = 'auction' THEN ${latestAuctionCollateral(sql, chainId, asOfBlock, sql`timeline.entity_identity`)}
+				WHEN timeline.entity_type = 'price-feed' THEN (
+					SELECT ledger.read_result->'collateral' FROM ledgers ledger
+					WHERE ledger.read_result->>'priceFeed' = lower(timeline.entity_identity)
+					LIMIT 1)
 				-- SecurityPool amounts are in the securityPool's collateral token, which its capital ledgers' tagged reads sample.
 				-- Each of these identities starts with the ledger, securityPool, services or settlement-book address.
 				WHEN timeline.entity_type IN ('pool', 'price-coordinator') AND timeline.canonical THEN (

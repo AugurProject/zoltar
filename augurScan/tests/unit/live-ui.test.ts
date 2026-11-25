@@ -338,7 +338,7 @@ test('presents every timeline entity type as a human-facing label', () => {
 		'reputation-token': 'Reputation token',
 		'share-token': 'Share token',
 		'open-oracle-report': 'OpenOracle report',
-		'price-coordinator': 'Price coordinator',
+		'price-feed': 'Price feed',
 		escalation: 'Escalation game',
 		auction: 'Collateral repair auction',
 		pool: 'Question ledger',

@@ -309,4 +309,26 @@ describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 		expect(minimum).toBe(200n * unit)
 		await expect(context.report(unit / 10n, 10n * unit)).rejects.toThrow('Report funding below minimum')
 	})
+	test('the feed quote has an exact unrounded two-asset security frontier', async () => {
+		const c = await prepare()
+		const cash = await c.owner.readContract({ abi: feedArtifact.abi, address: c.feed, functionName: 'minimumToken1ReportAttoEth' }),
+			rep = await c.owner.readContract({ abi: feedArtifact.abi, address: c.feed, functionName: 'minimumToken2ReportAttoRep' })
+		expect(cash > 0n && rep > 0n).toBe(true)
+		let last,
+			repBound = 0,
+			cashBound = 0,
+			dust = 0
+		const switchPrice = (rep * unit + cash - 1n) / cash
+		for (const p of [...new Set([1n, 13n, 997n, unit / 5n, unit - 1n, unit, unit + 1n, switchPrice - 1n, switchPrice, switchPrice + 1n, 10n ** 27n].filter(p => p > 0n))].sort((a, b) => (a < b ? -1 : 1))) {
+			const needed = await c.owner.readContract({ abi: feedArtifact.abi, address: c.feed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [p] })
+			expect(needed >= cash && needed * p >= rep * unit).toBe(true)
+			expect(needed - 1n < cash || (needed - 1n) * p < rep * unit).toBe(true)
+			if (last !== undefined) expect(needed <= last).toBe(true)
+			if (needed === cash) cashBound++
+			else repBound++
+			if (needed > cash && ((needed - 1n) * p + unit - 1n) / unit >= rep) dust++
+			last = needed
+		}
+		expect(Math.min(cashBound, repBound, dust)).toBeGreaterThan(0)
+	})
 })
