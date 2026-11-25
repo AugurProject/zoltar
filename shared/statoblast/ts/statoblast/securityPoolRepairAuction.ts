@@ -63,6 +63,14 @@ export function buildSecurityPoolAuctionOpenRequest(snapshot: SecurityPoolAuctio
 	return { account: snapshot.bidder, to: requireAuction(snapshot).address, value: 0n, data: encodeFunctionData({ abi, functionName: 'open' }) }
 }
 type SecurityPoolAuctionBidTerms = { lots: bigint; minimumAttoRepPerLot: bigint; targetHealthFactorBps: bigint }
+
+/** Minimum grid-aligned ask for the chosen health target, using the price fixed when bidding opened. */
+export function minimumSecurityPoolAuctionRepPerLot(auction: Pick<NonNullable<SecurityPoolAuctionSnapshot['auction']>, 'lotAttoEth' | 'openingConservativePrice' | 'securityMultiplierBps' | 'repGrid'>, targetHealthFactorBps: bigint) {
+	const requiredBase = ceilDiv(auction.lotAttoEth * auction.openingConservativePrice, ATTO_UNITS)
+	const requiredSecurity = ceilDiv(requiredBase * auction.securityMultiplierBps, BPS)
+	return ceilDiv(ceilDiv(requiredSecurity * targetHealthFactorBps, BPS), auction.repGrid) * auction.repGrid
+}
+
 /** Every bid funds only the exact collateral lots. */
 export function quoteSecurityPoolAuctionBid(snapshot: SecurityPoolAuctionSnapshot, terms: SecurityPoolAuctionBidTerms) {
 	const auction = requireAuction(snapshot)
@@ -73,9 +81,7 @@ export function quoteSecurityPoolAuctionBid(snapshot: SecurityPoolAuctionSnapsho
 	if (lots === 0n || minimumAttoRepPerLot === 0n || minimumAttoRepPerLot % auction.repGrid !== 0n) throw new Error('Use positive whole lots and an exact REP price-grid multiple.')
 	if (minimumAttoRepPerLot > auction.maximumBidAttoRepPerLot) throw new Error('The minimum REP per lot exceeds the auction inventory.')
 	if (targetHealthFactorBps < BPS) throw new Error('The chosen health target must be at least 100%.')
-	const requiredBase = ceilDiv(auction.lotAttoEth * auction.openingConservativePrice, ATTO_UNITS)
-	const requiredSecurity = ceilDiv(requiredBase * auction.securityMultiplierBps, BPS)
-	const requiredPrincipalPerLotAttoRep = uint(ceilDiv(ceilDiv(requiredSecurity * targetHealthFactorBps, BPS), auction.repGrid) * auction.repGrid, 'Required REP per lot')
+	const requiredPrincipalPerLotAttoRep = uint(minimumSecurityPoolAuctionRepPerLot(auction, targetHealthFactorBps), 'Required REP per lot')
 	if (auction.maximumAdmissibleBidAttoRepPerLot < auction.minimumCollateralAttoRepPerLot) throw new Error('Better funded bids leave no admissible new limit.')
 	if (minimumAttoRepPerLot < requiredPrincipalPerLotAttoRep) throw new Error(`Increase the minimum REP per lot to at least ${formatEther(requiredPrincipalPerLotAttoRep)} REP for the chosen health target.`)
 	if (minimumAttoRepPerLot > auction.maximumAdmissibleBidAttoRepPerLot) throw new Error(auction.maximumAdmissibleBidAttoRepPerLot === 0n ? 'Better funded bids leave no admissible new limit.' : `Better funded bids exclude this limit. Use at most ${formatEther(auction.maximumAdmissibleBidAttoRepPerLot)} REP per lot.`)

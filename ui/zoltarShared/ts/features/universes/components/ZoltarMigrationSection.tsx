@@ -46,6 +46,7 @@ function getChildDeploymentAvailabilityReason({ accountAddress, exists, hasForke
 
 type ZoltarMigrationSectionProps = {
 	universeBrowserHref?: string | undefined
+	singleForm?: boolean
 	onScalarOutcomesChange?: ((indexes: readonly bigint[]) => void) | undefined
 	onDeployChildUniverse: (outcomeIndex: bigint) => void
 	pendingChildUniverseOutcomeIndex: bigint | undefined
@@ -86,6 +87,7 @@ function formatRep(value: bigint) {
  */
 export function ZoltarMigrationSection({
 	universeBrowserHref,
+	singleForm = false,
 	onScalarOutcomesChange,
 	onDeployChildUniverse,
 	pendingChildUniverseOutcomeIndex,
@@ -159,6 +161,10 @@ export function ZoltarMigrationSection({
 	}, [currentStepId, requestedStepId])
 	const navigationHintId = useId()
 	const previewReasonId = useId()
+	const [confirmedBurn, setConfirmedBurn] = useState<string>()
+	const burnAmount = wizard.walletRepToBurnAttoRep ?? 0n
+	const burnContext = `${accountAddress}:${rootUniverse?.universeId}:${zoltarMigrationForm.outcomeIndexes.join(',')}:${wizard.amountAttoRep}:${burnAmount}`
+	useEffect(() => setConfirmedBurn(undefined), [burnContext])
 
 	// A retained overview summary is useful context, but its omitted children are not an empty migration.
 	if (rootUniverse?.relatedUniversesLoaded === false) {
@@ -196,14 +202,16 @@ export function ZoltarMigrationSection({
 		outcomes: selectedOutcomeNames,
 		...(amount === undefined ? {} : { amount: formatRep(amount) }),
 	}
-	const onReviewStep = currentStepId === 'review'
+	const onReviewStep = singleForm || currentStepId === 'review'
 	// Migrate REP stays in place on every step; it only sends from the review step, after the user has seen what migrating does.
 	const migrateReason = (() => {
 		if (guardMessage !== undefined) return guardMessage
 		if (!hasForked) return zoltarCopy.migrationForkRequired
 		if (loadingZoltarUniverse || loadingZoltarForkAccess) return zoltarCopy.outcomeBalancesLoading
 		if (!onReviewStep) return currentStepSatisfied ? zoltarCopy.migrationReviewRequired : (currentStep?.reason ?? zoltarCopy.migrationReviewRequired)
-		return wizard.steps[3]?.reason
+		const reviewReason = wizard.steps[3]?.reason
+		if (singleForm && reviewReason === undefined && burnAmount > 0n && confirmedBurn !== burnContext) return zoltarCopy.migrationConfirmationRequired
+		return reviewReason
 	})()
 	const canMigrate = migrateReason === undefined && onReviewStep && isOnActiveAppChain && wizard.steps[3]?.status === 'ready' && !zoltarMigrationPending && wizard.walletRepToBurnAttoRep !== undefined
 	const migrateHint = isOnActiveAppChain ? migrateReason : getWrongNetworkReason()
@@ -232,20 +240,20 @@ export function ZoltarMigrationSection({
 		</button>
 	) : undefined
 
-	const renderStepBody = () => {
+	const renderStepBody = (step: MigrationWizardStepId) => {
 		if (isPreview)
 			return (
 				<p className='detail' id={previewReasonId}>
 					{zoltarCopy.migrationForkRequired}
 				</p>
 			)
-		switch (currentStepId) {
+		switch (step) {
 			case 'outcomes':
 				return (
 					<>
 						{zoltarUniverseError !== undefined && !loadingZoltarUniverse ? <RetryableNotice message={zoltarUniverseError} onRetry={onRetryUniverse} retryLabel={commonCopy.retry} /> : undefined}
-						{rootUniverse?.forkQuestionDetails === undefined ? undefined : <ForkQuestion question={rootUniverse.forkQuestionDetails} />}
-						<p className='detail'>{zoltarCopy.selectOutcomesDetail}</p>
+						{!singleForm && rootUniverse?.forkQuestionDetails !== undefined && <ForkQuestion question={rootUniverse.forkQuestionDetails} />}
+						{!singleForm && <p className='detail'>{zoltarCopy.selectOutcomesDetail}</p>}
 						<MigrationOutcomeUniversesSection
 							universeBrowserHref={universeBrowserHref}
 							key={rootUniverse?.universeId.toString()}
@@ -255,6 +263,7 @@ export function ZoltarMigrationSection({
 							deploymentDisabledReason={deploymentDisabledReason}
 							disabled={zoltarMigrationPending}
 							loadingBalances={loadingZoltarForkAccess}
+							selectionOnly={singleForm}
 							onDeployChildUniverse={onDeployChildUniverse}
 							onToggleOutcomeIndex={outcomeIndex => onZoltarMigrationFormChange({ outcomeIndexes: toggleMigrationOutcome(zoltarMigrationForm.outcomeIndexes, outcomeIndex) })}
 							outcomes={wizard.outcomes}
@@ -290,14 +299,16 @@ export function ZoltarMigrationSection({
 							</div>
 							{zoltarMigrationPreparedRepBalanceAttoRep === undefined || zoltarMigrationPreparedRepBalanceAttoRep === 0n ? undefined : <p className='detail'>{zoltarCopy.migrationBalanceExplainer}</p>}
 						</div>
-						<DataGrid dense>
-							<MetricField label={zoltarCopy.migrationFromBalance}>
-								<CurrencyValue value={showBreakdown ? wizard.fromMigrationBalanceAttoRep : undefined} suffix={commonCopy.rep} />
-							</MetricField>
-							<MetricField label={zoltarCopy.migrationFromWallet}>
-								<CurrencyValue value={showBreakdown ? wizard.walletRepToBurnAttoRep : undefined} suffix={commonCopy.rep} />
-							</MetricField>
-						</DataGrid>
+						{!singleForm && (
+							<DataGrid dense>
+								<MetricField label={zoltarCopy.migrationFromBalance}>
+									<CurrencyValue value={showBreakdown ? wizard.fromMigrationBalanceAttoRep : undefined} suffix={commonCopy.rep} />
+								</MetricField>
+								<MetricField label={zoltarCopy.migrationFromWallet}>
+									<CurrencyValue value={showBreakdown ? wizard.walletRepToBurnAttoRep : undefined} suffix={commonCopy.rep} />
+								</MetricField>
+							</DataGrid>
+						)}
 					</>
 				)
 			}
@@ -307,6 +318,7 @@ export function ZoltarMigrationSection({
 				return (
 					<TokenApprovalControl
 						actionLabel={zoltarCopy.migrationApprovalActionLabel}
+						compact={singleForm}
 						allowanceError={zoltarForkApproval.error}
 						allowanceLoading={zoltarForkApproval.loading}
 						approvedAmount={zoltarForkApproval.value}
@@ -350,8 +362,50 @@ export function ZoltarMigrationSection({
 					</>
 				)
 			default:
-				return assertNever(currentStepId)
+				return assertNever(step)
 		}
+	}
+	if (singleForm) {
+		const walletBalance = zoltarForkRepBalanceAttoRep
+		const amountReady = amount !== undefined && wizard.steps[1]?.status === 'complete'
+		const balanceChange = (before: bigint | undefined, after: bigint | undefined) => (
+			<dd>
+				<CurrencyValue value={before} suffix={commonCopy.rep} /> <span aria-hidden='true'>→</span> <CurrencyValue value={after} suffix={commonCopy.rep} />
+			</dd>
+		)
+		return (
+			<SectionBlock title={zoltarCopy.migrateRep} className='migration-single-form' description={zoltarCopy.migrationIntro}>
+				{renderStepBody('outcomes')}
+				{hasForked && renderStepBody('amount')}
+				{amountReady && (
+					<dl className='migration-balance-preview'>
+						<div>
+							<dt>{zoltarCopy.migrationSourceBalance}</dt>
+							{balanceChange(walletBalance, walletBalance === undefined || burnAmount > walletBalance ? undefined : walletBalance - burnAmount)}
+						</div>
+						{wizard.selectedOutcomes.map(outcome => (
+							<div key={String(outcome.outcomeIndex)}>
+								<dt>
+									<OnChainText text={outcome.label} /> <OutcomeIdentity label={outcome.label} outcomeIndex={outcome.outcomeIndex} universeId={outcome.universeId} />
+								</dt>
+								{balanceChange(outcome.heldAttoRep, outcome.heldAttoRep === undefined ? undefined : outcome.heldAttoRep + amount)}
+							</div>
+						))}
+					</dl>
+				)}
+				{hasForked && <p className='detail'>{zoltarCopy.migrationReuseHint}</p>}
+				{hasForked && wizard.steps[2]?.status !== 'notNeeded' && renderStepBody('approve')}
+				{burnAmount > 0n && amountReady && (
+					<label className='migration-burn-confirmation'>
+						<input type='checkbox' checked={confirmedBurn === burnContext} onChange={event => setConfirmedBurn(event.currentTarget.checked ? burnContext : undefined)} disabled={zoltarMigrationPending} />
+						{zoltarCopy.migrationBurnConfirmation(formatRep(burnAmount))}
+					</label>
+				)}
+				<TransactionActionButton idleLabel={zoltarCopy.migrateRep} pendingLabel={zoltarCopy.migratingRepPending} onClick={() => onMigrateInternalRep(burnAmount)} pending={zoltarMigrationActiveAction === 'split'} availability={migrateAvailability} />
+				{retryButton}
+				<ErrorNotice message={zoltarMigrationError} />
+			</SectionBlock>
+		)
 	}
 
 	return (
@@ -379,7 +433,7 @@ export function ZoltarMigrationSection({
 							summaries={isPreview ? {} : summaries}
 						/>
 						<WorkflowSubsection className='migration-wizard-panel' title={getMigrationStepTitle(currentStepId)}>
-							{renderStepBody()}
+							{renderStepBody(currentStepId)}
 							<div className='migration-wizard-nav'>
 								{previousStepId === undefined ? undefined : (
 									<button className='quiet' type='button' onClick={() => setRequestedStepId(previousStepId)} disabled={zoltarMigrationPending}>

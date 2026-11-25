@@ -98,6 +98,21 @@ describe('ZoltarMigrationSection', () => {
 		},
 	})
 
+	test('the single migration form shows outcomes and amount together and confirms an irreversible burn', async () => {
+		const sends: bigint[] = []
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, { ...createProps({ zoltarMigrationForm: createForm({ amount: '15' }), onMigrateInternalRep: amount => sends.push(amount) }), singleForm: true }))
+		cleanupRenderedComponent = rendered.cleanup
+		const queries = within(document.body)
+		expect(queries.getByRole('checkbox', { name: /Yes/ })).toBeTruthy()
+		expect(queries.getByLabelText('Amount to migrate')).toBeTruthy()
+		expect(document.body.querySelector('.migration-wizard-steps')).toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Migrate REP')
+		await act(() => queries.getByRole('checkbox', { name: /Burn .*irreversible/ }).click())
+		expectTransactionButtonEnabled(document.body, 'Migrate REP')
+		await act(() => queries.getByRole('button', { name: 'Migrate REP' }).click())
+		expect(sends).toEqual([5n * ATTO_REP])
+	})
+
 	test('explains why eight undeployed outcomes block moving past selection (#1369)', async () => {
 		const childUniverses = Array.from({ length: 8 }, (_, index) => ({ ...noChild, outcomeIndex: BigInt(index), outcomeLabel: `Outcome ${index + 1}`, universeId: BigInt(10 + index) }))
 		const rendered = await renderIntoDocument(

@@ -155,6 +155,7 @@ export {
 export {
 	loadSecurityPoolAuctionSnapshot,
 	securityPoolAuctionOpeningReason,
+	minimumSecurityPoolAuctionRepPerLot,
 	quoteSecurityPoolAuctionBid,
 	buildSecurityPoolAuctionOpenRequest,
 	buildSecurityPoolAuctionBidRequest,

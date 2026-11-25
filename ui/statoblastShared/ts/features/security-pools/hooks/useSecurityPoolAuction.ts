@@ -12,6 +12,7 @@ import {
 	quoteSecurityPoolAuctionRefundClaim,
 	buildSecurityPoolAuctionMaterializeRequest,
 	securityPoolAuctionOpeningReason,
+	minimumSecurityPoolAuctionRepPerLot,
 	quoteSecurityPoolAuctionBid,
 	type SecurityPoolAuctionBid,
 	type SecurityPoolForkSnapshot,
@@ -87,6 +88,7 @@ export function useSecurityPoolAuction({ fork, savedBranch, bidder, actions, ope
 	const lots = securityPoolUnsignedId(lotsInput.value)
 	const minimumAttoRepPerLot = securityPoolAmountOrUndefined(repInput.value)
 	const targetHealthFactorBps = /^\d+(\.\d{0,2})?$/.test(healthInput.value.trim()) ? parseUnits(healthInput.value.trim(), 2) : undefined
+	const minimumAsk = auction?.opened && targetHealthFactorBps !== undefined && targetHealthFactorBps >= 10_000n && targetHealthFactorBps < 1n << 256n ? minimumSecurityPoolAuctionRepPerLot(auction, targetHealthFactorBps) : undefined
 	const inputReason = (lots === undefined || lots === 0n ? copy.lotsInvalid : undefined) ?? (minimumAttoRepPerLot === undefined || minimumAttoRepPerLot === 0n ? copy.repInvalid : undefined) ?? (targetHealthFactorBps === undefined || targetHealthFactorBps < 10_000n ? copy.healthInvalid : undefined)
 	let quote: ReturnType<typeof quoteSecurityPoolAuctionBid> | undefined
 	let quoteError: string | undefined
@@ -192,6 +194,9 @@ export function useSecurityPoolAuction({ fork, savedBranch, bidder, actions, ope
 		lotsInput: lotsInput.value,
 		repInput: repInput.value,
 		healthInput: healthInput.value,
+		lots,
+		ask: minimumAttoRepPerLot,
+		minimumAsk,
 		setLots: (value: string) => {
 			lotsInput.value = value
 		},

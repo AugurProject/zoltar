@@ -396,7 +396,7 @@ export function SecurityPoolPriceReport({
 						{priceBand !== undefined && accepted !== undefined && priceBand.health > 0n && <PriceBand accepted={accepted} health={priceBand.health} liquidation={priceBand.liquidation} units={priceUnits} />}
 					</div>
 				</SectionBlock>
-				<div className='statoblast-price-layout' data-funding={!returnFundsOnly}>
+				<div className='statoblast-price-layout' data-funding={!branch && !returnFundsOnly}>
 					{!returnFundsOnly && (
 						<SectionBlock title={copy.reportNewPrice} description={acceptedPriceAge > 60n ? formatOldDataCheck(formatDuration(acceptedPriceAge)) : undefined}>
 							{compactFunding}

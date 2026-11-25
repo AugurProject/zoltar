@@ -7,6 +7,7 @@ import { decodeFunctionData, parseAbi, zeroAddress } from '@zoltar/core-shared/e
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { getActiveBackend, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createMockReadClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { localEntityScopeForNetwork, setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { unscopedTransaction } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
@@ -24,8 +25,10 @@ async function setup() {
 	let prepared = true
 	let started = false
 	let ready = false
+	let forkReadError: Error | undefined
 	const client = source.client.extend(() =>
 		createMockReadClient(async request => {
+			if (request.functionName === 'getForkChoiceDeadline' && forkReadError !== undefined) throw forkReadError
 			const values: Record<string, unknown> = {
 				getForkChoiceDeadline: 2_000n,
 				getForkRecapitalizationDeadline: 3_000n,
@@ -72,6 +75,9 @@ async function setup() {
 		source,
 		snapshot,
 		opened,
+		setForkReadError: (error: Error | undefined) => {
+			forkReadError = error
+		},
 		setChosen: (v: boolean) => {
 			chosen = v
 		},
@@ -132,6 +138,55 @@ test('a failed fork question read keeps the chooser visible with a retry', async
 	const retry = [...view.container.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Try again')
 	await act(() => retry?.click())
 	expect(retries).toBe(1)
+})
+
+test('the scalar fork diagram exposes every valid outcome in bounded pages', async () => {
+	const fixture = await setup()
+	const question = { title: 'Scalar fork', description: '', marketType: 'scalar' as const, outcomeLabels: [], questionId: '0x7', createdAt: 1n, exists: true, startTime: 1n, endTime: 800n, displayValueMin: -2n * unit, displayValueMax: 5n * unit, numTicks: 7n, answerUnit: '' }
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolSharedFork {...fixture.parameters} redesigned forkQuestion={question} />))
+	const figure = () => view.container.querySelector('figure.statoblast-fork-diagram')
+	const labels = () => [...(figure()?.querySelectorAll('li strong') ?? [])].map(label => label.textContent)
+	await waitFor(() => expect(labels()).toEqual(['Invalid', '-2', '-1', '0', '1', '2']))
+	const next = [...(figure()?.querySelectorAll('button') ?? [])].find(button => button.textContent === 'Next page')
+	await act(() => next?.click())
+	expect(labels()).toEqual(['3', '4', '5'])
+	expect(next?.getAttribute('aria-disabled') === 'true' || next?.disabled).toBe(true)
+})
+
+test('redesigned branch steps keep seven rows and show confirmed progress after reloading', async () => {
+	const fixture = await setup()
+	fixture.setChosen(true)
+	fixture.setStarted(true)
+	fixture.setReady(true)
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolSharedFork {...fixture.parameters} redesigned />))
+	const steps = () => [...view.container.querySelectorAll('.statoblast-fork-workflow > li')]
+	await waitFor(() => expect(steps().filter(step => step.getAttribute('data-done') === 'true')).toHaveLength(4))
+	expect(steps()).toHaveLength(7)
+	for (const index of [0, 1, 2, 5]) expect(steps()[index]?.textContent).toContain('Done')
+	expect(view.container.textContent?.match(/Recapitalization deadline/g)).toHaveLength(1)
+})
+
+test('the choice page states that missing the deadline ends the commitment', async () => {
+	const fixture = await setup()
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolSharedFork {...fixture.parameters} redesigned />))
+	await waitFor(() => expect(view.container.textContent).toContain('your commitment ends'))
+	expect(view.container.textContent).toContain('claimants in every branch')
+})
+
+test('a failed fork refresh retains the completed steps and visibly retries the verified read', async () => {
+	const { hook, snapshot, setForkReadError } = await setup()
+	expect(hook.state().displayedState?.branch?.prepared).toBe(true)
+	setForkReadError(new Error('Fork data unavailable'))
+	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'21'.repeat(32)}` } })
+	await waitFor(() => expect(hook.state().forkError).toContain('Fork data unavailable'))
+	expect(hook.state().displayedState?.branch?.prepared).toBe(true)
+	expect(hook.state().state).toBeUndefined()
+	setForkReadError(undefined)
+	await act(() => {
+		hook.state().retryFork()
+	})
+	await waitFor(() => expect(hook.state().state?.branch?.prepared).toBe(true))
+	expect(hook.state().forkError).toBeUndefined()
 })
 
 test('one irreversible choice has an explicit review and rechecks the strict native cutoff', async () => {
@@ -282,6 +337,90 @@ async function recoverySetup() {
 	await waitFor(() => expect(fixture.hook.state().recovery?.availableShares).toBe(3n * unit))
 	return fixture
 }
+
+test('share recovery opens saved questions or a submitted decimal or hexadecimal question ID', async () => {
+	const fixture = await recoverySetup()
+	const scope = localEntityScopeForNetwork(getActiveBackend().profile, 'statoblast', 'question')
+	setEntityFavorite(scope, `${fixture.snapshot.securityPool}:0x7`, true)
+	setEntityFavorite(scope, `${capital}:0x8`, true)
+	const view = await renderIntoDocument(<SecurityPoolSharedFork {...fixture.parameters} redesigned />)
+	lifecycle.trackRendered(view)
+	const recovery = [...view.container.querySelectorAll('section')].find(section => section.querySelector('h3')?.textContent === 'Recovery for share holders')
+	const picker = recovery?.querySelector('select')
+	if (picker === undefined || picker === null) throw new Error('Recovery question picker missing')
+	expect([...picker.options].map(option => option.value)).toContain('0x7')
+	expect([...picker.options].map(option => option.value)).not.toContain('0x8')
+	await act(() => {
+		picker.value = '0x7'
+		picker.dispatchEvent(new Event('change', { bubbles: true }))
+	})
+	await waitFor(() => expect(recovery?.querySelector('.statoblast-recovery-rights')?.textContent).toContain('Yes'))
+	const openById = [...picker.options].find(option => option.textContent === 'Use a question ID')
+	if (openById === undefined) throw new Error('Open by ID option missing')
+	await act(() => {
+		picker.value = openById.value
+		picker.dispatchEvent(new Event('change', { bubbles: true }))
+	})
+	const input = [...(recovery?.querySelectorAll('input') ?? [])].find(field => field.labels?.[0]?.textContent === 'Question ID')
+	const form = input?.form
+	if (input === undefined || form === undefined || form === null) throw new Error('Open by ID input missing')
+	for (const [entered, id] of [
+		['8', 8n],
+		['0xf', 15n],
+	] as const) {
+		await act(() => {
+			input.value = entered
+			input.dispatchEvent(new Event('input', { bubbles: true }))
+		})
+		const readId = () => fixture.source.reads.some(read => read.name === 'questionOriginIds' && read.args?.[0] === id)
+		expect(readId()).toBe(false)
+		expect(recovery?.querySelector('.statoblast-recovery-rights')).toBeNull()
+		await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+		await waitFor(() => expect(readId()).toBe(true))
+	}
+})
+
+test('selecting a different question clears amounts drafted against previous recovery rights', async () => {
+	const { hook } = await recoverySetup()
+	await act(() => fillMigrationDraft(hook))
+	await act(() => hook.state().setQuestion('0x7'))
+	expect(hook.state().sharesInput).toBe('2')
+	await act(() => hook.state().setQuestion('8'))
+	expect(hook.state()).toMatchObject({ sharesInput: '', recipientInput: '', invalidRightsInput: '0', yesRightsInput: '0', noRightsInput: '0' })
+})
+
+test('a failed recovery refresh keeps the selected question rights visible and blocks sends until retry', async () => {
+	const { hook, source, snapshot } = await recoverySetup()
+	await act(() => {
+		hook.state().setRecipient(capital)
+		hook.state().setYesRights('1')
+	})
+	expect(hook.state().transferReason).toBeUndefined()
+	source.setRead('balanceOfSecurityPoolRecoveryRights', 'invalid')
+	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'44'.repeat(32)}` } })
+	await waitFor(() => expect(hook.state().recoveryError).toContain('source recovery rights'))
+	expect(hook.state().recovery?.availableShares).toBe(3n * unit)
+	await expect(hook.state().transfer()).rejects.toThrow('source recovery rights')
+	source.setRead('balanceOfSecurityPoolRecoveryRights', [2n * unit, 5n * unit, 4n * unit])
+	await act(() => hook.state().retryRecovery())
+	await waitFor(() => expect(hook.state().recovery?.availableShares).toBe(2n * unit))
+	expect(hook.state().transferReason).toBeUndefined()
+})
+
+test('preparing recovery rechecks that the specific question still needs preparation', async () => {
+	const { hook, source, snapshot, requests } = await recoverySetup()
+	const factory = getInfraContractAddresses().securityPoolFactory
+	source.setRead('getQuestionLedger', zeroAddress, factory)
+	source.setSnapshot({ ...snapshot, timestamp: 2_000n })
+	await hook.setProps({ snapshot: { ...snapshot, blockHash: `0x${'45'.repeat(32)}` } })
+	await waitFor(() => expect(hook.state().prepareReason).toBeUndefined())
+	await act(() => hook.state().prepare())
+	const request = requests[0]
+	if (request?.validateBeforeSubmit === undefined) throw new Error('Recovery preparation request missing')
+	await expect(request.validateBeforeSubmit()).resolves.toBeUndefined()
+	source.setRead('getQuestionLedger', token, factory)
+	await expect(request.validateBeforeSubmit()).rejects.toThrow('recovery status changed')
+})
 test('outcome recovery transfer reviews one exact transaction before the choice deadline and rechecks each right', async () => {
 	const { hook, source, requests } = await recoverySetup()
 	expect(hook.state().recoverReason).toContain('choice deadline')
@@ -326,7 +465,7 @@ test('recovery transfer blocks invalid recipients, zero amounts, per-outcome ove
 	source.setRead('getQuestionLedger', zeroAddress, getInfraContractAddresses().securityPoolFactory)
 	await act(() => hook.state().setQuestion('8'))
 	await waitFor(() => expect(hook.state().recovery?.pool).toBe(zeroAddress))
-	expect(hook.state().transferReason).toBe('Prepare the source question first.')
+	expect(hook.state().transferReason).toBe('Prepare this question first.')
 })
 test('received recovery sets can be redeemed independently of source balances and preserve exact review context', async () => {
 	const { hook, source, snapshot, requests } = await recoverySetup()
@@ -335,7 +474,7 @@ test('received recovery sets can be redeemed independently of source balances an
 	await waitFor(() => expect(hook.state().state?.timestamp).toBe(2_000n))
 	await waitFor(() => expect(hook.state().recovery?.availableShares).toBe(3n * unit))
 	await act(() => hook.state().setShares('3'))
-	expect(hook.state().recoverReason).toBeUndefined()
+	await waitFor(() => expect(hook.state().recoverReason).toBeUndefined())
 	await act(() => hook.state().recover())
 	const request = requests[0]
 	if (request === undefined) throw new Error('Recovery request missing')

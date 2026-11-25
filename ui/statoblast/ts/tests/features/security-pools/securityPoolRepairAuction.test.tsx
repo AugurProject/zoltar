@@ -28,6 +28,30 @@ function metric(container: HTMLElement, text: string) {
 		?.parentElement?.querySelector('.metric-field-value')?.textContent
 }
 
+test('the auction shows its recapitalization deadline, lot layout, and the current ask range', async () => {
+	const fixture = await auctionFixture()
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolRepairAuction fork={{ ...fixture.fork, activationDeadline: 3_600n }} bidder={owner} actions={actions} />))
+	await waitFor(() => expect(view.container.textContent).toContain('Bid 1'))
+	expect(view.container.querySelector('time')?.dateTime).toBe('1970-01-01T01:00:00.000Z')
+	expect(view.container.querySelector('[role="img"][aria-label*="10 lots"]')).not.toBeNull()
+	const scale = view.container.querySelector('.statoblast-auction-ask-scale')
+	expect(scale?.textContent).toContain('Your lowest')
+	expect(scale?.textContent).toContain('4.80')
+	expect(scale?.textContent).toContain('Highest now')
+})
+
+test('an open bid shows the lower-ask reason only when the verified limit proves strictly better bids', async () => {
+	const fixture = await auctionFixture()
+	fixture.values['maximumAdmissibleBidAttoRepPerLot'] = 50n * unit
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolRepairAuction fork={fixture.fork} bidder={owner} actions={actions} />))
+	await waitFor(() => expect(view.container.textContent).toContain('In contention'))
+	expect(view.container.textContent).not.toContain('Lower asks already fill the auction')
+	fixture.values['earlyRefundAttoEth'] = 2n * unit
+	await act(() => button(view.container, 'Refresh auction').click())
+	await waitFor(() => expect(view.container.textContent).toContain('Lower asks already fill the auction'))
+	expect(view.container.textContent).toContain('Outbid')
+})
+
 test('#1371 a full book displays no admissible limit rather than a price below the backing floor', async () => {
 	const fixture = await auctionFixture()
 	fixture.values['maximumAdmissibleBidAttoRepPerLot'] = 3n * unit
@@ -48,7 +72,7 @@ test('auction funding controls and bid rows stay in place through reload and fai
 	await act(() => {
 		for (const [name, value] of [
 			['Number of lots', '2'],
-			['Minimum REP purchased per lot', '5'],
+			['REP you want per lot, at least', '5'],
 		] as const) {
 			const input = field(view.container, name)
 			input.value = value
@@ -59,7 +83,7 @@ test('auction funding controls and bid rows stay in place through reload and fai
 	expect(view.container.textContent).not.toContain('Approve REP')
 	expect(view.container.textContent).not.toContain('REP top-up')
 	expect(view.container.textContent).not.toContain('Execution reserve')
-	expect(metric(view.container, 'collateral bid')).toContain('2.00')
+	expect(metric(view.container, 'You lock until the auction closes')).toContain('2.00')
 	expect(view.container.textContent).not.toContain('Credited REP refund')
 	const pending = createDeferred<bigint>()
 	fixture.values['repGrid'] = pending.promise
@@ -117,8 +141,8 @@ test('early refund status enables only crediting then a separate unrestricted wi
 	await act(() => button(view.container, 'Refresh auction').click())
 	await waitFor(() => expect(credit.disabled).toBe(false))
 	expect(claim.disabled).toBe(false)
-	expect(view.container.textContent).toContain('Better funded bids rule out this bid')
-	expect(metric(view.container, 'Unused bid collateral')).toContain('2.00')
+	expect(view.container.textContent).toContain('Better asks or earlier bids at the same ask take the available lots')
+	expect(view.container.querySelector('[data-label="WETH refundable"]')?.textContent).toContain('2.00')
 	expect(withdraw.disabled).toBe(true)
 	fixture.values['earlyRefundAttoEth'] = 0n
 	fixture.values['bids'] = [owner, auctionVault, 12_000n, 2n, 60n * unit, true, false]
@@ -154,7 +178,7 @@ test.each([
 	await act(() => {
 		for (const [name, value] of [
 			['Number of lots', '2'],
-			['Minimum REP purchased per lot', '5'],
+			['REP you want per lot, at least', '5'],
 		] as const) {
 			const input = field(view.container, name)
 			input.value = value

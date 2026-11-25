@@ -38,7 +38,7 @@ export function AppRouteContent({ page, registerPageRefresh, contractsMissing, d
 		case 'deploy-pool':
 			return <SecurityPoolsSection key='deploy-pool' {...securityPools} deploying />
 		case 'migrate-rep':
-			return <ZoltarMigrationWorkflow {...migration} />
+			return <ZoltarMigrationWorkflow {...migration} singleForm />
 		default:
 			return <NotFoundSection links={[{ href: statoblastPageHref({ kind: 'watchlist' }), label: pageCopy.watchlist }]} />
 	}

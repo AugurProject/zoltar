@@ -1,14 +1,15 @@
-import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { MarketDetails, ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import * as pageCopy from '../../../copy/securityPoolPage.js'
 import { useStatoblastPageRefresh, useStatoblastRefreshError, type RegisterStatoblastPageRefresh, type ReportStatoblastReadStatus } from '../../useStatoblastPageRefresh.js'
 import { SecurityPoolQuestionsPanel } from './SecurityPoolQuestionsPanel.js'
 import { StatoblastPoolHead } from './StatoblastPoolHead.js'
-import type { StatoblastPoolPage } from '../../../lib/routing.js'
+import { statoblastPageHref, type StatoblastPoolPage } from '../../../lib/routing.js'
+import { buildRouteHref, parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { useSecurityPoolPriceDeadline } from '../hooks/useSecurityPoolPriceDeadline.js'
 import { useSecurityPoolPriceFunds } from '../hooks/useSecurityPoolPriceFunds.js'
 import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import { useEffect, useId, useRef } from 'preact/hooks'
-import { isAddress } from '@zoltar/core-shared/evm/ethereum'
+import { isAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
@@ -43,6 +44,7 @@ export function SecurityPoolsSection({
 	deploying = false,
 	forkQuestion,
 	forkQuestionRead,
+	forkChildren,
 	onBranchCommitted,
 	onSelectUniverse,
 	openOracleHref,
@@ -56,6 +58,7 @@ export function SecurityPoolsSection({
 	cacheReads?: boolean
 	forkQuestion?: MarketDetails | undefined
 	forkQuestionRead?: ForkQuestionRead | undefined
+	forkChildren?: readonly ZoltarChildUniverseSummary[] | undefined
 	onBranchCommitted?: ((committed: boolean) => void) | undefined
 	onSelectUniverse?: ((id: bigint) => void) | undefined
 	openOracleHref?: string | undefined
@@ -74,6 +77,19 @@ export function SecurityPoolsSection({
 		if (page?.tab !== 'price') onReadStatus?.(model.displayedAt, undefined)
 	}, [model.displayedAt, onReadStatus, page?.tab])
 	const actions = useSecurityPoolActions(model, parameters, deploying)
+	const openChildPosition = (universeId: bigint, owner: Address | undefined) => {
+		if (page === undefined) {
+			if (owner !== undefined) model.setOwnerInput(owner)
+			model.setUniverseInput(universeId.toString())
+			onSelectUniverse?.(universeId)
+			return
+		}
+		const { routeHash, search } = parseRouteHash(statoblastPageHref({ kind: 'pool', pool: page.pool, tab: 'capital' }, universeId))
+		const query = new URLSearchParams(search)
+		if (owner === undefined) query.delete('owner')
+		else query.set('owner', owner)
+		window.location.hash = buildRouteHref(routeHash, `?${query}`)
+	}
 	const shownSetupStage = model.setup?.stage ?? model.savedSetupStage
 	const setupVerificationReasonId = useId()
 	const setupVerificationReason = model.setup === undefined && model.savedSetupStage !== undefined ? actions.preparationReason(1) : undefined
@@ -222,19 +238,16 @@ export function SecurityPoolsSection({
 							redesigned={page !== undefined}
 							forkQuestion={forkQuestion}
 							forkQuestionRead={forkQuestionRead}
+							childUniverses={forkChildren}
+							autoRefresh={autoRefresh}
+							registerPageRefresh={registerPageRefresh}
 							onBranchCommitted={onBranchCommitted}
 							snapshot={model.snapshot}
 							presentationSnapshot={shown}
 							actions={actions}
 							bidder={parameters.accountAddress}
-							openUniverse={universeId => {
-								model.setUniverseInput(universeId.toString())
-								onSelectUniverse?.(universeId)
-							}}
-							openVault={(vault, universeId) => {
-								model.setOwnerInput(vault)
-								model.setUniverseInput(universeId.toString())
-							}}
+							openUniverse={universeId => openChildPosition(universeId, shown?.owner)}
+							openVault={(vault, universeId) => openChildPosition(universeId, vault)}
 						/>
 					)}
 				</TransactionScopeProvider>

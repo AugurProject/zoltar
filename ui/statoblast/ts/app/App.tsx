@@ -203,8 +203,7 @@ export function App() {
 		[branchScope],
 	)
 	const branchAlreadyCommitted = branchScope !== undefined && (branchScope === committedBranch || readPreference(branchScope) === 'committed')
-	const forkAction = page.kind === 'pool' ? statoblastPageHref({ ...page, tab: 'fork' }) : statoblastPageHref({ kind: 'migrate-rep' })
-	const forkActionLabel = page.kind === 'pool' ? pageCopy.chooseBranchAction : pageCopy.migrateRepAction
+	const forkAction = page.kind === 'pool' && page.tab !== 'fork' && !branchAlreadyCommitted ? statoblastPageHref({ ...page, tab: 'fork' }) : undefined
 	const repToEth = repPrices.repPerEthPrice
 	const repPrice = repToEth === undefined || repToEth === 0n ? undefined : formatUnits(10n ** 36n / repToEth, 18)
 	const routeKey = parseRouteHash(window.location.hash).routeHash
@@ -293,7 +292,8 @@ export function App() {
 							<div className='statoblast-fork-banner'>
 								<strong>{pageCopy.universeForked}</strong>
 								<a href='../docs/explanation/statoblast.html#forks-migration'>{pageCopy.forkHelp}</a>
-								{page.kind !== 'migrate-rep' && !branchAlreadyCommitted && !(page.kind === 'pool' && page.tab === 'fork') && <a href={forkAction}>{forkActionLabel}</a>}
+								{forkAction !== undefined && <a href={forkAction}>{pageCopy.chooseBranchAction}</a>}
+								{page.kind !== 'migrate-rep' && <a href={statoblastPageHref({ kind: 'migrate-rep' })}>{pageCopy.migrateRepAction}</a>}
 							</div>
 						)}
 					</>
@@ -318,6 +318,7 @@ export function App() {
 						environmentKey: activeEnvironmentNonce,
 						activeUniverseId,
 						forkQuestion: selectedUniverse?.forkQuestionDetails,
+						forkChildren: selectedUniverse?.childUniverses,
 						forkQuestionRead: { loading: operations.loadingZoltarUniverse, error: zoltarUniverseError, retry: () => void operations.loadZoltarUniverse({ clearCurrentState: false }) },
 						onSelectUniverse: setUniverse,
 						onBranchCommitted,
