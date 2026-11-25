@@ -13,7 +13,7 @@
 			<header>
 				<p class="kicker">Explanation</p>
 				<h1>Trading architecture decisions and limitations</h1>
-				<p>Trading is deliberately small. This page records why each decision was made and which features are out of scope, so that future work does not weaken the pair's one hard invariant.</p>
+				<p>Trading uses a small, immutable pair. Each design choice keeps market identity, collateral accounting, or migration explicit.</p>
 			</header>
 			<section id="decisions">
 				<h2>Decisions</h2>
@@ -31,9 +31,7 @@
 			</section>
 			<section id="limitations">
 				<h2>Limitations and non-goals</h2>
-				<p>The MVP intentionally does not implement a three-way invariant, Invalid-share trading, an invalidity-probability oracle, weighted reserves, quadratic solvers, flash swaps, a protocol fee, governance controls, upgradeable proxies, automatic branch selection, automatic LP migration, an insured-position NFT, or per-user on-chain position accounting.</p>
-				<p>It also has no TWAP, routing across markets, guaranteed deep liquidity, or mechanism to withdraw more early ETH than complete-set insurance and reserves permit. The <a href="../../reference/trading/security-model.html">Trading security model</a> states what it defends against and what it assumes.</p>
-				<p>Future work may add separate Invalid markets, safer oracle observations, routing, or bounded convenience flows. Those are distinct designs and must not weaken the invariant that this pair never accepts or holds Invalid shares.</p>
+				<p>The <a href="../../reference/trading/security-model.html">Trading security model</a> lists its defenses and assumptions.</p>
 			</section>
 		</main>
 		<script src="../../assets/js/responsiveDocs.js"></script>

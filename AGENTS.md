@@ -211,7 +211,7 @@ Supply the standard handoff plus every visual-review field required by the revie
 
 For every task that changes code, tests, configuration, agent definitions, or repository instructions, the main agent must spawn the project-scoped reviewer from `.codex/agents/reviewer.toml` after validation, any branch synchronization, and any specialized review gates. Supply every handoff field required by the review contract, including the exact baseline and task paths, and summarize material specialized-review results. The reviewer must not modify files.
 
-Disposition every finding using the contract. After material fixes, rerun affected checks and repeat the reviewer. Completion requires no valid High or Medium findings and an explicit disposition for every Low finding.
+Follow the review contract’s closure rules for findings, validation reruns, and re-review.
 
 ### Documentation reviewer
 

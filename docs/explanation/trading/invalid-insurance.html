@@ -13,12 +13,12 @@
 			<header>
 				<p class="kicker">Explanation</p>
 				<h1>Invalid insurance</h1>
-				<p><a href="../../reference/glossary.html#invalid">Invalid</a> shares are held, not traded. This page explains what that buys a trader and what it cannot tell them.</p>
+				<p>An <a href="../../reference/glossary.html#invalid">Invalid</a> share can pay out when neither directional outcome wins.</p>
 			</header>
 			<section id="how-it-works">
 				<h2>How it works</h2>
 				<p>Each ordinary ETH entry returns one Invalid share for each <a href="../../reference/glossary.html#complete-set">complete set</a> created. If the question resolves Invalid, the holder redeems those shares with the <a href="../../reference/glossary.html#question-ledger">question ledger</a>'s <code>redeemShares()</code> at the current collateral value.</p>
-				<p>Keeping Invalid shares out of the <a href="../../reference/glossary.html#trading-pool">pair</a> removes the on-chain three-reserve quadratic and makes an ordinary entry insured against an Invalid result. The cost is that nothing in the AMM can detect a suspicious market from an Invalid price, because no such price exists.</p>
+				<p>The <a href="./architecture-decisions.html#decisions">two-reserve design</a> keeps Invalid in the holder’s wallet. The pair therefore supplies no price for Invalid that a trader could use to judge the risk of that result.</p>
 			</section>
 			<section id="worked-example">
 				<h2>A worked Invalid result</h2>

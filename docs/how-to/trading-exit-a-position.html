@@ -15,7 +15,7 @@
 				<h1>Exit an insured position</h1>
 				<p>Use this guide to turn Yes or No shares back into ETH while the market's <a href="../reference/glossary.html#trading-pool">trading pool</a> is open. The exit spends one <a href="../reference/glossary.html#invalid">Invalid</a> share for each complete set it redeems, so your Invalid balance limits it.</p>
 			</header>
-			<p>Connect your wallet and open <strong>Portfolio</strong> to discover Yes, No, Invalid and LP holdings across registered questions in the selected universe, including questions never opened in this browser. Discovery covers the configured deployment; switch universes to inspect other branches. A failed balance read remains visible as unavailable rather than being counted as zero.</p>
+			<p>Connect your wallet and find the market in <strong>Portfolio</strong>. Switch universes if the holding is in another branch.</p>
 			<section id="in-the-ui">
 				<h2>Exit in the UI</h2>
 				<ol>
@@ -33,14 +33,14 @@
 			<section id="through-the-sdk">
 				<h2>Exit through the SDK</h2>
 				<ol>
-					<li>Call <code>maximumInsuredExit</code> from the <a href="../reference/trading/sdk.html#positions">SDK</a>, a private workspace package in this repository, with your wallet balances and the trading pool's reserves and fee. It returns the largest number of complete sets <code>q</code> that your Invalid, your <a href="../reference/glossary.html#long-shares">long shares</a>, and the opposite reserve all allow. For a Yes position, <code>q</code> complete sets need <code>q</code> Invalid, <code>q</code> Yes to redeem, and enough extra Yes to buy exactly <code>q</code> No.</li>
+					<li>Call <code>maximumInsuredExit</code> from the <a href="../reference/trading/sdk.html#positions">SDK</a> with your balances, the reserves, and the trading fee. It returns the maximum number of complete sets <code>q</code> you can redeem.</li>
 					<li>
 						Choose <code>maxLongSharesIn</code>, <code>minEthOut</code>, <code>minRepOut</code> (the least recovery REP you accept; zero where complete sets pay none), <code>payoutRecipient</code>, <code>refundRecipient</code>, and <code>deadline</code> explicitly, and encode the request with <a href="../reference/trading/sdk.html#receive-request"><code>encodeReceiveRequest</code></a
 						>.
 					</li>
 					<li>Send a ShareToken <code>safeBatchTransferFrom</code> to the router carrying <code>q</code> Invalid and <code>maxLongSharesIn</code> long shares with the encoded request. Simulate it, simulate again immediately before submission, and submit only if the result still satisfies <code>maxLongSharesIn</code>, <code>minEthOut</code>, and <code>minRepOut</code>.</li>
 				</ol>
-				<p>The <a href="../reference/trading/router.html#approval-free">router reference</a> lists the request fields, their constraints, and what the router delivers. A successful exit emits <code>PositionExitedByTransfer</code> with the long shares used and refunded.</p>
+				<p>The <a href="../reference/trading/router.html#approval-free">router reference</a> describes the request constraints and exit outputs.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>
