@@ -3480,37 +3480,19 @@ body.paper-zoltar .footer-note {
 		gap: 1px;
 	}
 
-	body.docs-shell-page .mmr-proof-profile .mmr-proof-length,
-	body.docs-shell-page .oracle-threshold-grid > div {
+	body.docs-shell-page .mmr-proof-profile .mmr-proof-length {
 		grid-column: 1 / -1;
 	}
 
-	body.docs-shell-page :is(.auction-allocation, .mmr-proof-length, .censorship-result-grid > div:nth-child(-n + 2), .oracle-threshold-grid > div) {
+	body.docs-shell-page .mmr-proof-length {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
 		gap: 0.4rem;
 		align-items: end;
 	}
 
-	body.docs-shell-page :is(.auction-allocation, .mmr-proof-length, .censorship-result-grid > div:nth-child(-n + 2), .oracle-threshold-grid > div) output {
+	body.docs-shell-page .mmr-proof-length output {
 		text-align: right;
-	}
-
-	body.doc-openoracle.docs-shell-page #initial-report-estimator-example .example-output-grid {
-		grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
-	}
-
-	body.doc-openoracle.docs-shell-page #initial-report-estimator-example .example-output-grid output {
-		word-break: normal;
-		overflow-wrap: normal;
-	}
-
-	body.doc-openoracle.docs-shell-page #initial-report-estimator-example[data-widget-state="unsafe"] .oracle-threshold-grid > div {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
-	body.doc-openoracle.docs-shell-page #initial-report-estimator-example[data-widget-state="unsafe"] .oracle-threshold-grid output {
-		text-align: start;
 	}
 
 	body.docs-shell-page .deployment-bit-grid {

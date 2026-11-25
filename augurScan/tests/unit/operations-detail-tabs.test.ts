@@ -58,7 +58,7 @@ function withDetail(kind: OperationsDetailRoute['kind'], tab: string, run: (harn
 					loadOperations: load,
 					components: createOperationsComponents(),
 				},
-				{ chainId: '1', asOf: {}, data },
+				{ chainId: '1', asOf: { blockNumber: '10', blockHash: `0x${'1'.repeat(64)}`, invalidationId: '0', abiSourceHash: 'abi', applicationSourceHash: 'app', projectionSourceHash: 'projection' }, data },
 				{ kind, identity: ['0x01', '1'] },
 				undefined,
 				live,

@@ -17,8 +17,8 @@
 			</header>
 			<section id="mental-model">
 				<h2>Mental model</h2>
-				<p>A <a href="../../reference/glossary.html#question-ledger">question ledger</a> is the Statoblast contract that exposes shares and reporting for one <a href="../../reference/glossary.html#question">question</a> and <a href="../../reference/glossary.html#universe">universe</a> in one security pool. The security pool settlement contract holds the collateral. The question ledger’s canonical <a href="../../reference/glossary.html#outcome-share">ShareToken</a> uses ERC-1155. Creating a <a href="../../reference/glossary.html#complete-set">complete set</a> mints equal Invalid, Yes, and No shares for that question ledger's universe-specific token IDs. Redeeming a complete set burns those shares and returns collateral at the question ledger's current rate.</p>
-				<p>The Trading factory maps the exact question ledger address to one immutable-fee <a href="../../reference/glossary.html#trading-pool">pair</a>. The pair is both the Yes/No constant-product reserve and the transferable LP token; it never accepts Invalid shares. The <a href="../../reference/glossary.html#trading-router">router</a>, which holds no balances or positions between calls, coordinates complete-set creation or redemption, pair swaps, and bounded asset delivery. Users and liquidity providers keep Invalid shares separately in their wallets. The invariant to remember is:</p>
+				<p>A <a href="../../reference/glossary.html#question-ledger">question ledger</a> exposes the outcome shares for one question and universe. Creating a <a href="../../reference/glossary.html#complete-set">complete set</a> mints equal Invalid, Yes, and No shares. Redeeming a set burns those shares and returns collateral at the question ledger’s current rate.</p>
+				<p>The <a href="../../reference/glossary.html#trading-pool">pair</a> holds Yes and No reserves. The <a href="../../reference/glossary.html#trading-router">router</a> combines complete-set creation or redemption with a swap, then delivers the resulting assets to the user. The pair’s Invalid balance stays zero:</p>
 				<div class="equation" id="eq-trading-zero-invalid">
 					<math display="block" aria-label="the pair's Invalid share balance is always zero" data-source="shareToken.balanceOf(pair, invalidTokenId) == 0"
 						><mrow><mi>shareToken.balanceOf</mi><mo>(</mo><mi>pair</mi><mo>,</mo><mi>invalidTokenId</mi><mo>)</mo><mo>=</mo><mn>0</mn></mrow></math
@@ -40,7 +40,7 @@
 					</ol>
 					<figcaption id="fig-trading-enter-position-caption"><span class="figure-label">Entering a Yes position.</span> The trader ends up holding the Invalid shares from the complete set; the pair never sees them.</figcaption>
 				</figure>
-				<p>Suppose the reserves are 1,000 Yes and 1,000 No, the fee is zero, and 100 complete-set shares are created. This example uses 18-decimal collateral, so one displayed share is 10<sup>18</sup> raw share units. Share precision follows the collateral token: USDC shares use 10<sup>6</sup> units per displayed share. Swapping 100 No therefore yields 90.909090909090909090 Yes after flooring to a whole number of raw share units. The wallet receives 190.909090909090909090 Yes and 100 Invalid; the reserves become 909.090909090909090910 Yes and 1,100 No. Flooring the output favors existing liquidity providers.</p>
+				<p>Suppose the reserves are 1,000 Yes and 1,000 No, the fee is zero, and the trader mints 100 complete sets. Swapping 100 No yields about 90.909 Yes. The wallet receives about 190.909 Yes and exactly 100 Invalid; the reserves become about 909.091 Yes and exactly 1,100 No. See <a href="../../reference/trading/units-and-rounding.html">units and rounding</a> for raw precision.</p>
 				<p>A No purchase simply reverses the reserves. No position record is created anywhere: wallet Yes, No, Invalid, and LP balances are the complete accounting state.</p>
 			</section>
 		</main>

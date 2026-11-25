@@ -79,30 +79,7 @@ network's default without changing code:
 
 ## Sepolia
 
-Open the application with `?network=sepolia` in either the page query or route
-query (for example, `#/deploy?network=sepolia`). The application then uses
-Sepolia chain ID `11155111`, its configured public RPC, Sepolia Etherscan links,
-and Sepolia-specific deterministic contract addresses.
-
-The app deployment flow installs the selected Yes or No genesis deployment. Each
-uses its own REP token and Zoltar contract; later forks use universe IDs within
-that deployment. On mainnet the two tokens are Augur V2's REP Yes and REP No.
-Sepolia installs the selected genesis REP token before its dependent contracts;
-WETH is Uniswap's published Sepolia contract. Initial Sepolia REP
-holders and exact 18-decimal balances are defined in
-[`shared/zoltar/ts/deployment/sepoliaRepAllocations.ts`](./shared/zoltar/ts/deployment/sepoliaRepAllocations.ts).
-Changing that list also changes the deterministic genesis REP address and every
-dependent deployment address for both outcomes. Both tokens mint the same
-allocations, with the constructor lists reversed for No to give it a distinct
-CREATE2 address through the existing zero-salt proxy.
-
-Zoltar, Statoblast, and Trading require a truthful universe choice; OpenOracle
-does not. Use `?genesis=yes` or
-`?genesis=no` (also accepted in the route query). Without a valid choice the app
-shows the Augur V2 fork question and asks for Yes or No before starting. The
-selected root's Parent universe link returns to the Augur v2 universe, where users can
-open either child using the same outcome controls as later forks. Descendants
-keep their ordinary parent and child navigation.
+Open the app with `?network=sepolia` in the page or route query, for example `#/deploy?network=sepolia`. The app uses chain ID `11155111`. For Zoltar, Statoblast, or Trading, choose the truthful Augur V2 fork outcome in the app, or pass `genesis=yes` or `genesis=no` in the same query. OpenOracle needs only the network setting.
 
 ## Testnet deployment
 
@@ -120,19 +97,14 @@ While a dev server is running, `UI_DEV_SERVER_URL=http://localhost:4153 bun run 
 
 `bun run ui:layout-scan -- --app <apps>` builds and serves the named apps (one or more, comma separated; `--app` is required), then walks every route, view tab, disclosure, and dialog launcher it can reach in each simulation scenario at five viewport sizes, and reports content that is cut off, runs off the screen, overlaps, or is squeezed. Each finding explains the measured problem, the likely cause and fix, the source files involved, and links a highlighted screenshot; `--help` lists the options for narrowing the scan or scanning a running server.
 
-This mode does not require a wallet extension or `anvil`. Instead, it boots a Tevm-backed in-browser chain and seeds the QA accounts with ETH, WETH, and REP. Zoltar and Statoblast scenarios control whether application contracts are already deployed. In Trading, `simScenario=deployed` deploys a seeded QuestionLedger plus the Trading factory and router so its market routes are immediately usable, and the default `simScenario=trading-funded` additionally initializes pair liquidity and funds the simulation wallet with Yes, No, Invalid, and LP shares. `simScenario=trading-forked` starts from that funded market and forks its universe directly through Zoltar, so Settlement offers Fork migration for the wallet's parent-universe shares.
+Simulation uses a browser-local chain with funded test accounts. You can use it on production app URLs as a demo. Simulated balances and transactions describe that tab’s sandbox. Save from the simulation banner to persist a state in browser storage.
 
-Simulation mode details:
+- All apps support `simScenario=baseline` and `simScenario=deployed`.
+- Zoltar adds `two-questions` and `forked-categorical`.
+- Statoblast and OpenOracle add `portfolio-auction`, `security-pool`, and `securitypoolx2`.
+- Trading defaults to `trading-funded` and also supports `trading-usdc` and `trading-forked`. The forked fixture exposes migration from the funded parent market.
 
-- The activation flag is `?simulate=1`
-- The flag is intentionally not restricted to localhost or development builds; production deployments may expose it as a browser-local demo and manual-QA path
-- Production users should treat any `?simulate=1` URL as a local sandbox. Simulated balances, deployments, blocks, quotes, and transactions are local to the browser and are not evidence of mainnet state.
-- Every app supports `simScenario=baseline` and `simScenario=deployed`. The other seeded scenarios are app-specific:
-  - Zoltar: `two-questions` and `forked-categorical`
-  - Statoblast and OpenOracle: `portfolio-auction`, `security-pool`, and `securitypoolx2`
-  - Trading: `trading-funded`, `trading-usdc`, and `trading-forked`
-- The live simulation chain is ephemeral and exists only in the current browser tab session; only states explicitly saved from the simulation banner persist in browser storage
-- Serve commands prepare a Yes-genesis snapshot of every scenario (`bun run ui:snapshots <app>` does it on its own, `bun run ui:snapshots:check` reports whether they are current), so opening a Yes-genesis scenario restores its seeded chain in about a second instead of replaying the seeding. No-genesis scenarios seed live. The watch rebuild removes the snapshots whenever a source behind the simulation changes, the serve and watch commands regenerate stale ones before serving, and the production build ships only snapshots that match the current sources; without them the app seeds live
+Serve commands prepare Yes-genesis scenario snapshots. To rebuild or check them directly, use `bun run ui:snapshots <app>` or `bun run ui:snapshots:check`.
 
 ## Common Commands
 
@@ -182,7 +154,7 @@ A `:current` suffix runs the same work as the unsuffixed script against the work
 
 Changes to global, unowned, CI, or repository-tooling paths make `check:affected` select the full registered check set. Project-owned changes select the owning project and its registry dependents. When a package's canonical `check` command already covers its typecheck, lint, or tests, affected validation runs the composite. The root composite includes documentation checks. Documentation-only plans can run `docs:check` directly.
 
-`bun run validate` runs the root and AugurScan test suites, the registered composite checks for the repository and independent packages, and browser smoke. The root composite includes formatting, documentation and repository checks, dead-code analysis, and generated-output freshness. CI component selection, dependency expansion, cache inputs, generated outputs, and local component commands come from `tooling/repo/projects.ts`. A CI failure names the same root or component command used locally. Contract-size and delegate-layout failures reproduce with `bun run check:contract-safety`; source-size failures reproduce with `bun run check:source-size`.
+CI and local validation share the component registry in `tooling/repo/projects.ts`. Reproduce contract-size and delegate-layout failures with `bun run check:contract-safety` and source-size failures with `bun run check:source-size`.
 
 - `bun run tsc` prepares missing or stale contract artifacts and shared build outputs, then runs the registered project typechecks. `bun run tsc:app` refreshes Trading vendor inputs and then typechecks the UI apps. Both commands can write generated files.
 - `bun run test:launch-invariants` runs the launch-focused fork, auction, and exit invariant gate.

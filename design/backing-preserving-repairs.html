@@ -39,10 +39,9 @@
 		<main>
 			<h1>Backing-preserving commitment repairs</h1>
 			<p><strong>Historical design:</strong> This page records PR #1358. The current <a href="../docs/explanation/liquidations.html">liquidation auction</a> replaces its zero-award rule with a one-hour takeover reward, taken from the provider’s pledged REP and credited to the receiver’s vault.</p>
-			<p>This audit explains the replacement for principal-seizing takeovers and identifies which reported oracle risks remain. It is intended for protocol reviewers who understand portfolio commitments and the shared REP price feed.</p>
 			<h2>Implemented ownership and funding</h2>
 			<p>A repair transfers unsupported commitment, never the original provider’s REP or past earnings. The receiver supplies its own REP and earns future fees on its commitment. The requested transfer is an upper bound: after the unpaid cure, the contract stops at the source’s conservative-price repair limit and retains at least its minimum commitment. Repeated operations cannot keep taking commitment from a recovered source.</p>
-			<p>Time no longer increases an award. The existing minimum-award argument must be zero; requests for principal compensation revert. Receiver health, funding consent, cohort, price-epoch and resulting exposure checks remain atomic. Auction repairs materialize only the selected winner.</p>
+			<p>The minimum-award argument must be zero. Receiver health, funding consent, cohort, price epoch, and resulting exposure checks remain atomic. An auction repair materializes only the selected winner.</p>
 			<p>When healthy commitment is below demand, withdrawals cannot consume pledged principal. Previously free principal and earned fees remain separate. Retirement may release backing when demand has sufficient healthy coverage. These checks use the accepted oracle price; they do not prove market value.</p>
 			<h2>Issue audit</h2>
 			<table>
@@ -87,7 +86,7 @@
 			<p>The liquidator requires an explicit income horizon before automating repairs. It projects fees from current demand and the configured annual rate; future demand, fee eligibility and income are not guaranteed. Source principal is neither profit nor gas funding. Existing capital, commitment and wallet budgets still apply.</p>
 			<p>The aggregate withdrawal guard trades independent surplus access for backing preservation while healthy capacity is insufficient. It does not lock previously free deposits, settle oracle truth or guarantee a willing replacement provider. There is no new shared loss pool or redistribution of other providers’ REP.</p>
 			<h2>Executable evidence and review scope</h2>
-			<p><a href="../solidity/ts/tests/statoblast/securityPoolBackingPreservation.test.ts">Backing-preservation regressions</a> cover the failing baseline, capped full requests, original ownership, chained biased observations, time-independent compensation, withdrawal blocking and subsequent receiver fees. The <a href="../solidity/ts/tests/statoblast/securityPoolPriceRiskAudit.test.ts">accepted-price audit cases</a> reproduce the remaining wrong-low withdrawal and wrong-high auction allocation through the real feed. Existing cure, retirement, cohort, bounded-consent, auction-winner, report-callback, custody and fork tests cover affected integration boundaries.</p>
+			<p>The <a href="../solidity/ts/tests/statoblast/securityPoolBackingPreservation.test.ts">backing-preservation regressions</a> cover ownership and capped repairs. The <a href="../solidity/ts/tests/statoblast/securityPoolPriceRiskAudit.test.ts">accepted-price audit cases</a> reproduce the remaining wrong-low withdrawal and wrong-high auction allocation through the real feed.</p>
 			<p>The implementation is in <a href="../solidity/contracts/statoblast/SecurityPoolCapitalLedger.sol">the capital ledger</a>, <a href="../solidity/contracts/statoblast/SecurityPoolCommitmentIndex.sol">the commitment index</a> and the ledger’s lifecycle and auction delegates. This audit does not certify the oracle or close every scenario in #1343 or #1344.</p>
 		</main>
 	</body>

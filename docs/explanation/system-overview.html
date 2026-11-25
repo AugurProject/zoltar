@@ -13,21 +13,17 @@
 			<header>
 				<p class="kicker">Start here</p>
 				<h1>System overview</h1>
-				<p>Zoltar and Statoblast are Ethereum protocols for prediction markets, designed to make outcome manipulation costly. This page assumes you know what Ethereum and an ERC-20 token are, and nothing else. It states the problem, defines the vocabulary you will meet on every other page, introduces the four components, and follows one market from start to finish.</p>
+				<p>Zoltar and Statoblast are Ethereum protocols for prediction markets, designed to make outcome manipulation costly.</p>
 			</header>
 			<section id="problem">
 				<h2>The problem</h2>
 				<p>A prediction market lets people trade on a question such as “Will the fictional Aurora spacecraft launch before 31 December 2030?” Its shares are worth something only after someone decides what actually happened. That decision is the weak point: whoever controls it controls the money.</p>
-				<p>Zoltar and Statoblast make the decision expensive to corrupt in two ways. First, anyone who reports an outcome must stake REP, the protocol's reputation token, behind it, and the contracts settle in favour of the outcome with the most REP staked. Reporters whose outcome loses forfeit their stake, so backing an answer the rest of the market will not support is costly. Whether that pressure keeps reports honest depends on the <a href="../reference/security-model.html#assumptions-participation">participation assumptions</a> in the security model.</p>
-				<p>Second, when reporters cannot agree, the system does not pick a side. Its ledger, called a universe, splits into child universes, one per possible answer, and the market decides which child stays valuable. A dishonest majority of REP cannot stop honest participants from moving their REP into the child that records the honest answer; <a href="./zoltar.html#non-guarantees">what that does and does not guarantee</a> is covered with Zoltar.</p>
+				<p>Zoltar and Statoblast make the decision expensive to corrupt in two ways. First, anyone who reports an outcome must stake <a href="../reference/glossary.html#rep">REP</a>, the protocol’s reputation token, behind it. A report can win when it has the strongest backing at settlement. Reporters whose outcome loses forfeit their stake. Whether that pressure keeps reports honest depends on the <a href="../reference/security-model.html#assumptions-participation">participation assumptions</a>.</p>
+				<p>Second, when reporters cannot agree, the <a href="../reference/glossary.html#universe">universe</a>, the ledger that holds REP balances and the markets that use them, can fork into one child per possible answer. Even a dishonest REP majority cannot stop others from moving REP to a child that records the honest answer. See <a href="./zoltar.html#non-guarantees">the limits of a fork</a>.</p>
 			</section>
 			<section id="vocabulary">
-				<h2>Four words you will see everywhere</h2>
+				<h2>How markets are backed</h2>
 				<dl>
-					<dt>REP</dt>
-					<dd>The <a href="../reference/glossary.html#rep">Reputation token</a>. Holding REP lets you report outcomes and underwrite markets. It is also what you risk: a reporter loses REP when the outcome they supported loses.</dd>
-					<dt>Universe</dt>
-					<dd>A <a href="../reference/glossary.html#universe">ledger that can branch</a>. Markets and REP balances belong to a particular universe. Questions are registered globally, so the same question can have markets in multiple universes. When reporters split irreconcilably, the universe forks into children, one per possible answer, each with its own REP.</dd>
 					<dt>Security pool</dt>
 					<dd>A <a href="../reference/glossary.html#security-pool">shared capital and settlement system</a> that backs admitted questions. Each owner keeps an individual REP account and commitment; each question keeps separate outcome shares and accounting. A security pool can hold one fixed question or many.</dd>
 					<dt>Question ledger</dt>
@@ -64,10 +60,10 @@
 						<li>Repair missing collateral through a <a href="../reference/glossary.html#collateral-repair-auction">Collateral Repair Auction</a></li>
 						<li>Redeem</li>
 					</ol>
-					<figcaption id="market-lifecycle-caption"><span class="figure-label">Market lifecycle.</span> The ordinary path resolves locally and skips the migration and repair steps. The fork path creates one child universe per answer; each child security pool branch uses shared repair accounting and a branch auction, and child question ledgers are prepared when used.</figcaption>
+					<figcaption id="market-lifecycle-caption"><span class="figure-label">Market lifecycle.</span> Local resolution skips migration and collateral repair.</figcaption>
 				</figure>
 				<p>Reporters stake REP behind an answer in the question ledger's <a href="./escalation-game.html">Escalation Game</a>, a dispute round whose deadline moves later as the contested amount grows. When the deadline finally passes, the market resolves if exactly one answer holds more REP than every other, and winning shares redeem the question’s backing from central settlement custody. Usually that is the end of the story.</p>
-				<p>If two answers reach the <a href="../reference/glossary.html#non-decision-threshold">non-decision threshold</a>, the universe can split into Invalid, Yes and No children. Owners record their branch choices before the security pool’s cutoff. Shared branch accounting migrates their capital without requiring a separate owner claim for every question. Shareholders can materialize claims in multiple children, while each branch receives only the collateral allocated to it. Each security pool branch repairs its shortfall through a shared <a href="../reference/glossary.html#collateral-repair-auction">Collateral Repair Auction</a>; winning bidders become capital owners. <a href="./statoblast.html#forks-migration">Forks and migration</a> explains the process, and <a href="./zoltar.html#non-guarantees">what a fork does and does not promise</a> describes its limits.</p>
+				<p>If two Aurora answers reach the <a href="../reference/glossary.html#non-decision-threshold">non-decision threshold</a>, the universe can split into Invalid, Yes, and No children. Each child receives only the collateral allocated to it. <a href="./statoblast.html#forks-migration">Forks and migration</a> explains branch choices, claim preparation, and repair.</p>
 			</section>
 			<nav aria-label="Continue reading"><a href="./statoblast.html">Follow a market through Statoblast</a> · <a href="./zoltar.html">Understand branching universes</a> · <a href="../reference/glossary.html">Look up a term</a></nav>
 		</main>

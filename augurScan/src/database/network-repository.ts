@@ -4,8 +4,90 @@ import { type Address, getAddress } from '../ethereum.ts'
 import { normalizeSnapshotTarget, type StateSnapshotTarget } from '../snapshots.ts'
 import type { ContractMetadata, NetworkConfig, TokenMetadata } from '../types.ts'
 import { captureHistoryInvalidation, clearInvalidatedDerivedProjections, type IndexerLease, invalidateCanonicalHistory, recordChainReorganization, type SeedNetworkOptions, type SourceReplayPlan, withIndexerLease, withOptionalIndexerLease } from './history.ts'
-import { assertStartBlockCompatible, contractMetadataFromRow, DatabaseConsistencyError, type HistoryInvalidationReason, type InterpretationSourceHashes, type LogScanCursor, lockLiveEventWriter, manifestContractSetChanged, type RichListBalanceTargets } from './records.ts'
+import { assertStartBlockCompatible, contractMetadataFromRow, DatabaseConsistencyError, type EvidenceProvenance, type HistoryInvalidationReason, type InterpretationSourceHashes, type LogScanCursor, lockLiveEventWriter, manifestContractSetChanged, type RichListBalanceTargets } from './records.ts'
 import type { ScannerDatabase } from './block-persistence.ts'
+
+type HistoryReset = { reason: HistoryInvalidationReason; causes: readonly HistoryInvalidationReason[] }
+
+function planHistoryReset(resetForManifestChange: boolean, sourceReplayPlan: SourceReplayPlan | undefined): HistoryReset | undefined {
+	const manifestResetReason: HistoryInvalidationReason | undefined = resetForManifestChange ? 'manifest-reset' : undefined
+	const resetReason = sourceReplayPlan?.reason ?? manifestResetReason
+	if (resetReason === undefined) return undefined
+	const resetCauses = [...new Set([resetReason, ...(sourceReplayPlan?.causes ?? []), manifestResetReason].filter(reason => reason !== undefined))]
+	return { reason: resetReason, causes: resetCauses }
+}
+
+async function reconcileManifestContracts(database: ScannerDatabase, transaction: SQL, network: NetworkConfig) {
+	await transaction`UPDATE contracts SET canonical = false WHERE chain_id = ${network.chainId} AND provenance = 'manifest'`
+	for (const [address, label, kind, configuredDeploymentBlock] of network.contracts) {
+		await database.upsertContract(network.chainId, { address, label, kind, provenance: 'manifest', ...(configuredDeploymentBlock === undefined ? {} : { configuredDeploymentBlock }) }, transaction)
+	}
+	await transaction`
+			UPDATE contracts AS contract SET
+				label = discovery.label,
+				kind = discovery.kind,
+				provenance = discovery.provenance,
+				discovery_block = discovery.block_number,
+				discovery_tx_hash = discovery.tx_hash,
+				canonical = true
+			FROM (
+				SELECT DISTINCT ON (address) address, label, kind, provenance, block_number, tx_hash
+				FROM contract_discoveries
+				WHERE chain_id = ${network.chainId} AND canonical
+				ORDER BY address, block_number DESC
+			) AS discovery
+			WHERE contract.chain_id = ${network.chainId}
+				AND contract.address = discovery.address
+				AND NOT contract.canonical
+		`
+	await transaction`
+			UPDATE contracts AS contract SET
+				label = discovery.label,
+				kind = discovery.kind,
+				provenance = discovery.provenance,
+				canonical = true
+			FROM (
+				SELECT DISTINCT ON (candidate.address)
+					candidate.address, candidate.label, candidate.kind, candidate.provenance
+				FROM contract_discoveries AS candidate
+				JOIN contracts AS retained
+					ON retained.chain_id = candidate.chain_id
+					AND retained.address = candidate.address
+					AND retained.discovery_block = candidate.block_number
+					AND retained.discovery_tx_hash = candidate.tx_hash
+				JOIN networks AS network ON network.chain_id = candidate.chain_id
+				WHERE candidate.chain_id = ${network.chainId} AND candidate.block_number < network.start_block
+				ORDER BY candidate.address, candidate.canonical DESC, candidate.block_hash
+			) AS discovery
+			WHERE contract.chain_id = ${network.chainId}
+				AND contract.address = discovery.address
+				AND contract.provenance = 'manifest'
+				AND NOT contract.canonical
+		`
+	await transaction`
+			UPDATE contracts SET provenance = 'retired-manifest'
+			WHERE chain_id = ${network.chainId} AND provenance = 'manifest' AND NOT canonical
+		`
+}
+
+async function applyHistoryReset(transaction: SQL, network: NetworkConfig, reset: HistoryReset, indexedBlock: bigint, indexedHash: string | undefined, appliedSourceHashes: EvidenceProvenance | undefined) {
+	const { reason: resetReason, causes: resetCauses } = reset
+	const depth = indexedBlock - network.startBlock + 1n
+	const invalidationId = await recordChainReorganization(transaction, network.chainId, indexedBlock, indexedHash, -1n, undefined, depth, resetReason, resetCauses, appliedSourceHashes)
+	await captureHistoryInvalidation(transaction, invalidationId, network.chainId)
+	await invalidateCanonicalHistory(transaction, network.chainId)
+	if (resetReason === 'manifest-reset' || resetReason === 'abi-redecode' || resetReason === 'projection-rebuild') await clearInvalidatedDerivedProjections(transaction, invalidationId)
+	await transaction`
+			UPDATE networks SET indexed_block = NULL, indexed_hash = NULL, indexed_timestamp = NULL, finalized_block = NULL, phase = 'backfilling',
+				last_reorg_at = now(), last_reorg_depth = ${depth.toString()}, updated_at = now()
+			WHERE chain_id = ${network.chainId}
+		`
+	await lockLiveEventWriter(transaction)
+	await transaction`
+			INSERT INTO live_events (event, payload)
+			VALUES ('reorg', (${databaseJsonText({ chainId: network.chainId, previousBlock: indexedBlock.toString(), ancestor: '-1', depth: depth.toString(), reason: resetReason, reasons: resetCauses })}::text)::jsonb)
+		`
+}
 
 export async function seedNetwork(this: ScannerDatabase, network: NetworkConfig, options: SeedNetworkOptions = {}): Promise<boolean> {
 	const { lease, resetCanonicalHistoryOnManifestChange = false, preserveStoredStart = false, sourceReplayPlan, appliedSourceHashes } = options
@@ -60,78 +142,12 @@ export async function seedNetwork(this: ScannerDatabase, network: NetworkConfig,
 					applied_projection_source_hash = COALESCE(EXCLUDED.applied_projection_source_hash, networks.applied_projection_source_hash),
 					updated_at = now()
 			`
-		await transaction`UPDATE contracts SET canonical = false WHERE chain_id = ${network.chainId} AND provenance = 'manifest'`
-		for (const [address, label, kind, configuredDeploymentBlock] of network.contracts) {
-			await this.upsertContract(network.chainId, { address, label, kind, provenance: 'manifest', ...(configuredDeploymentBlock === undefined ? {} : { configuredDeploymentBlock }) }, transaction)
+		await reconcileManifestContracts(this, transaction, network)
+		const reset = planHistoryReset(manifestChanged && resetCanonicalHistoryOnManifestChange, sourceReplayPlan)
+		if (reset !== undefined && existing?.['indexed_block'] !== null && existing?.['indexed_block'] !== undefined) {
+			await applyHistoryReset(transaction, network, reset, BigInt(String(existing['indexed_block'])), typeof existing['indexed_hash'] === 'string' ? existing['indexed_hash'] : undefined, appliedSourceHashes)
 		}
-		await transaction`
-				UPDATE contracts AS contract SET
-					label = discovery.label,
-					kind = discovery.kind,
-					provenance = discovery.provenance,
-					discovery_block = discovery.block_number,
-					discovery_tx_hash = discovery.tx_hash,
-					canonical = true
-				FROM (
-					SELECT DISTINCT ON (address) address, label, kind, provenance, block_number, tx_hash
-					FROM contract_discoveries
-					WHERE chain_id = ${network.chainId} AND canonical
-					ORDER BY address, block_number DESC
-				) AS discovery
-				WHERE contract.chain_id = ${network.chainId}
-					AND contract.address = discovery.address
-					AND NOT contract.canonical
-			`
-		await transaction`
-				UPDATE contracts AS contract SET
-					label = discovery.label,
-					kind = discovery.kind,
-					provenance = discovery.provenance,
-					canonical = true
-				FROM (
-					SELECT DISTINCT ON (candidate.address)
-						candidate.address, candidate.label, candidate.kind, candidate.provenance
-					FROM contract_discoveries AS candidate
-					JOIN contracts AS retained
-						ON retained.chain_id = candidate.chain_id
-						AND retained.address = candidate.address
-						AND retained.discovery_block = candidate.block_number
-						AND retained.discovery_tx_hash = candidate.tx_hash
-					JOIN networks AS network ON network.chain_id = candidate.chain_id
-					WHERE candidate.chain_id = ${network.chainId} AND candidate.block_number < network.start_block
-					ORDER BY candidate.address, candidate.canonical DESC, candidate.block_hash
-				) AS discovery
-				WHERE contract.chain_id = ${network.chainId}
-					AND contract.address = discovery.address
-					AND contract.provenance = 'manifest'
-					AND NOT contract.canonical
-			`
-		await transaction`
-				UPDATE contracts SET provenance = 'retired-manifest'
-				WHERE chain_id = ${network.chainId} AND provenance = 'manifest' AND NOT canonical
-			`
-		const manifestResetReason = manifestChanged && resetCanonicalHistoryOnManifestChange ? ('manifest-reset' as const) : undefined
-		const resetReason = sourceReplayPlan?.reason ?? manifestResetReason
-		const resetCauses = resetReason === undefined ? [] : [...new Set([resetReason, ...(sourceReplayPlan?.causes ?? []), manifestResetReason].filter(reason => reason !== undefined))]
-		if (resetReason !== undefined && existing?.['indexed_block'] !== null && existing?.['indexed_block'] !== undefined) {
-			const previousBlock = BigInt(String(existing['indexed_block']))
-			const depth = previousBlock - network.startBlock + 1n
-			const invalidationId = await recordChainReorganization(transaction, network.chainId, previousBlock, typeof existing['indexed_hash'] === 'string' ? existing['indexed_hash'] : undefined, -1n, undefined, depth, resetReason, resetCauses, appliedSourceHashes)
-			await captureHistoryInvalidation(transaction, invalidationId, network.chainId)
-			await invalidateCanonicalHistory(transaction, network.chainId)
-			if (resetReason === 'manifest-reset' || resetReason === 'abi-redecode' || resetReason === 'projection-rebuild') await clearInvalidatedDerivedProjections(transaction, invalidationId)
-			await transaction`
-					UPDATE networks SET indexed_block = NULL, indexed_hash = NULL, indexed_timestamp = NULL, finalized_block = NULL, phase = 'backfilling',
-						last_reorg_at = now(), last_reorg_depth = ${depth.toString()}, updated_at = now()
-					WHERE chain_id = ${network.chainId}
-				`
-			await lockLiveEventWriter(transaction)
-			await transaction`
-					INSERT INTO live_events (event, payload)
-					VALUES ('reorg', (${databaseJsonText({ chainId: network.chainId, previousBlock: previousBlock.toString(), ancestor: '-1', depth: depth.toString(), reason: resetReason, reasons: resetCauses })}::text)::jsonb)
-				`
-		}
-		return manifestChanged || resetReason !== undefined
+		return manifestChanged || reset !== undefined
 	}
 	if (lease === undefined) return await this.sql.begin(operation)
 	return await withIndexerLease(lease, operation)

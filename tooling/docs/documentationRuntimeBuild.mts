@@ -1,6 +1,6 @@
 import path from 'node:path'
 
-export const documentationRuntimeNames = ['deploymentMaskDecoder', 'docsShell', 'interactiveTools', 'invariantExplorer', 'mmrProofPlanner', 'openOracleTools', 'responsiveDocs'] as const
+export const documentationRuntimeNames = ['deploymentMaskDecoder', 'docsShell', 'interactiveTools', 'invariantExplorer', 'mmrProofPlanner', 'responsiveDocs'] as const
 
 export type DocumentationRuntimeName = (typeof documentationRuntimeNames)[number]
 
