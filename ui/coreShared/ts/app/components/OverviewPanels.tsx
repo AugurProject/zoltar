@@ -33,10 +33,7 @@ export type OverviewRepPricesProps = {
 	repPerEthFailure: RepPriceFailure | undefined
 	repPerEthPrice: bigint | undefined
 	repPerEthSource: RepPriceSource | undefined
-	repPerEthSourceLabel?: ComponentChildren
 	repPerEthSourceUrl: string | undefined
-	/** Why REP / ETH has no price when the reason is not a quote failure, such as a price that needs a selected pool. */
-	repPerEthUnavailableLabel?: ComponentChildren
 	repUsdcFailure: RepPriceFailure | undefined
 	repUsdcPrice: bigint | undefined
 	repUsdcSource: RepPriceSource | undefined
@@ -104,7 +101,7 @@ function renderRepPriceFailure(failure: RepPriceFailure | undefined, unavailable
 	return renderRepPriceUnavailable(failure === 'rpc-error' ? appCopy.repPriceRequestFailed : unavailableLabel)
 }
 
-function RepPriceGroup({ isLoading, isRefreshing, onRefresh, repPerEthFailure, repPerEthPrice, repPerEthSource, repPerEthSourceLabel, repPerEthSourceUrl, repPerEthUnavailableLabel, repUsdcFailure, repUsdcPrice, repUsdcSource, repUsdcSourceUrl }: OverviewRepPricesProps) {
+function RepPriceGroup({ isLoading, isRefreshing, onRefresh, repPerEthFailure, repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcFailure, repUsdcPrice, repUsdcSource, repUsdcSourceUrl }: OverviewRepPricesProps) {
 	const activeNetworkProfile = getActiveNetworkProfile()
 	const isRepPricingUnavailable = activeNetworkProfile.repPricingMode === 'unavailable'
 	const repPricingUnavailableLabel = appCopy.formatRepPricingUnavailable(activeNetworkProfile.displayName)
@@ -122,13 +119,12 @@ function RepPriceGroup({ isLoading, isRefreshing, onRefresh, repPerEthFailure, r
 			<MetricField
 				label={
 					<>
-						{appCopy.repPerEthCompact} {repPerEthSourceLabel ?? renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
+						{appCopy.repPerEthCompact} {renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
 					</>
 				}
 			>
 				{(() => {
 					if (isRepPricingUnavailable) return repPricingUnavailableLabel
-					if (repPerEthPrice === undefined && repPerEthUnavailableLabel !== undefined) return renderRepPriceUnavailable(repPerEthUnavailableLabel)
 					return renderRepPriceFailure(repPerEthPrice === undefined && !isLoading ? repPerEthFailure : undefined) ?? <CurrencyValue value={repPerEthPrice} loading={isLoading && repPerEthPrice === undefined} notation='compact' />
 				})()}
 			</MetricField>

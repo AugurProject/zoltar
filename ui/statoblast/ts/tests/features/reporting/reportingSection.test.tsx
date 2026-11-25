@@ -210,7 +210,6 @@ function createProps(overrides: Partial<ReportingSectionProps> = {}): ReportingS
 	return {
 		accountState: createAccountState(),
 		currentTimestamp: 150n,
-		embedInCard: false,
 		loadingReportingDetails: false,
 		onApproveReportingRep: () => undefined,
 		onLoadReporting: () => undefined,
@@ -223,8 +222,6 @@ function createProps(overrides: Partial<ReportingSectionProps> = {}): ReportingS
 		reportingError: undefined,
 		reportingForm: createReportingForm(),
 		reportingResult: undefined,
-		showHeader: false,
-		showQuestionLedgerAddressInput: false,
 		...overrides,
 	}
 }
@@ -545,7 +542,7 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Active' })).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Reporting workflow' })).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Reporting workflow' })).not.toBeNull()
 		expect(document.body.querySelector('.reporting-workflow-section')).toBeNull()
 		expect(document.body.querySelector('.workflow-summary-strip')).toBeNull()
 		expect(document.body.textContent?.includes('Current guidance')).toBe(false)

@@ -47,7 +47,7 @@ test(
 				return await client.readContract(request)
 			}
 			const multicall: typeof client.multicall = async request => {
-				if (request.contracts.some(call => call.functionName === 'initialReportPriorityFeeAttoEthPerGas')) {
+				if (request.contracts.some(call => call.functionName === 'initialReportingResponseWindow')) {
 					if (offline) throw new Error('Temporary question read failure.')
 					if (boundaryBlockTime !== undefined) boundaryReads++
 				}

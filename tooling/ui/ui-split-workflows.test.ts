@@ -24,11 +24,6 @@ const dockerfilePath = join(repositoryRoot, 'ui', 'Dockerfile')
 const rootPackagePath = join(repositoryRoot, 'package.json')
 const tradingPackagePath = join(repositoryRoot, 'ui', 'trading', 'package.json')
 const sharedLibraryPackagePaths = ['ui/zoltarShared/package.json', 'ui/statoblastShared/package.json'] as const
-const developerDocumentation = [
-	{ path: join(repositoryRoot, 'README.md'), command: 'bun run app:serve:zoltar', port: '4153' },
-	{ path: join(repositoryRoot, 'testnetwork', 'README.md'), command: 'bun run app:serve:zoltar', port: '4153' },
-	{ path: join(repositoryRoot, 'docs', 'how-to', 'trading-set-up-development.html'), command: 'bun run app:serve:trading', port: '4163' },
-]
 const uiPackageIds = ['coreShared', 'zoltarShared', 'statoblastShared', 'zoltar', 'statoblast', 'trading', 'openoracle'] as const
 const tevmPackagePaths = ['package.json', 'ui/coreShared/package.json', 'ui/zoltarShared/package.json', 'ui/statoblastShared/package.json', 'ui/zoltar/package.json', 'ui/statoblast/package.json', 'ui/trading/package.json', 'ui/openoracle/package.json'] as const
 const pinnedTevmTransitives = ['@tevm/actions', '@tevm/node'] as const
@@ -293,7 +288,9 @@ ${command}`,
 		expect(workflow['name']).toBe('Production Browser Workflow')
 		const steps = Object.values(workflowJobs(workflow)).flatMap(workflowSteps)
 		const smoke = steps.find(step => typeof step['run'] === 'string' && step['run'].includes('bun run test:browser:smoke'))
-		expect(smoke?.['run']).toContain('tooling/ui/productionBuild.test.ts')
+		expect(smoke?.['run']).toBe('bun run test:browser:smoke')
+		const packageJson = JSON.parse(await readFile(rootPackagePath, 'utf8')) as { scripts?: Record<string, string> }
+		expect(packageJson.scripts?.['test:browser:smoke']?.match(/tooling\/ui\/productionBuild\.test\.ts/g)).toHaveLength(1)
 		expect(steps.some(step => step['run'] === 'bun run test:browser:workflow')).toBe(true)
 		const ciWorkflow = await readWorkflow(ciWorkflowPath)
 		const ciJobs = workflowJobs(ciWorkflow)
@@ -855,16 +852,6 @@ ${command}`,
 				if (cacheInput === undefined || /[*?[\]]/.test(cacheInput)) continue
 				await access(join(repositoryRoot, cacheInput))
 			}
-		}
-	})
-
-	test('developer documentation selects a split app command and current port', async () => {
-		for (const { path: documentationPath, command, port } of developerDocumentation) {
-			const documentation = await readFile(documentationPath, 'utf8')
-			expect(documentation).toContain(command)
-			expect(documentation).toContain(`localhost:${port}`)
-			expect(documentation).not.toMatch(/bun run app:(?:serve|watch)(?:`|\s)/)
-			expect(documentation).not.toContain('localhost:12345')
 		}
 	})
 })

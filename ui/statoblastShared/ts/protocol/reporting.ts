@@ -173,7 +173,7 @@ export async function loadReportingDetails(client: ReadClient, questionLedgerAdd
 			])
 		: undefined
 	const walletReportingStatePromise = loadViewerReportingWalletState(client, questionLedgerAddress, accountAddress)
-	const [startBondAttoRep, nonDecisionThresholdAttoRep, activationTime, totalCostAttoRep, bindingCapital, invalidOutcomeState, yesOutcomeState, noOutcomeState, escalationEndTime, _questionOutcome, universeForkTime, earliestForkTime, hasReachedNonDecision, walletReportingState] = await Promise.all([
+	const [startBondAttoRep, nonDecisionThresholdAttoRep, activationTime, totalCostAttoRep, bindingCapital, invalidOutcomeState, yesOutcomeState, noOutcomeState, escalationEndTime, universeForkTime, earliestForkTime, hasReachedNonDecision, walletReportingState] = await Promise.all([
 		client.readContract({
 			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'startBondAttoRep',
@@ -212,12 +212,6 @@ export async function loadReportingDetails(client: ReadClient, questionLedgerAdd
 			functionName: 'getEscalationGameEndDate',
 			address: escalationGameAddress,
 			args: [],
-		}),
-		client.readContract({
-			abi: QUESTION_LEDGER_QUESTION_OUTCOME_ABI,
-			functionName: 'getQuestionOutcome',
-			address: getInfraContractAddresses().questionForker,
-			args: [questionLedgerAddress],
 		}),
 		client.readContract({
 			abi: Zoltar_Zoltar.abi,

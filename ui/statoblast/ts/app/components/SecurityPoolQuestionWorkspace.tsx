@@ -322,10 +322,6 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 					tradingForkUniverse={trading.tradingForkUniverse}
 					tradingForm={trading.tradingForm}
 					tradingResult={trading.tradingResult}
-					repPerEthPrice={selected.lastOraclePrice}
-					repPerEthSource={selected.lastOraclePrice === undefined ? undefined : 'open-oracle'}
-					repPerEthSourceUrl={undefined}
-					showQuestionLedgerAddressInput={false}
 					embedInCard
 				/>
 			)}
@@ -382,7 +378,6 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 					triggerZoltarForkApproval={ownFork.approval}
 					triggerZoltarForkAvailability={ownFork.triggerForkAvailability}
 					triggerZoltarForkPending={ownFork.forkPending}
-					showQuestionLedgerAddressInput={false}
 				/>
 			)}
 			{entry.tab === 'reporting' && reportingDetails?.status === 'active' && accountState.address !== undefined && <LocateReportingDeposits key={reportingDetails.escalationGameAddress} details={reportingDetails} wallet={accountState.address} refresh={reporting.loadReporting} openOnEntry={openDepositSearch} />}

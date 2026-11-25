@@ -50,7 +50,6 @@ export const submittingDispute = 'Submitting dispute…'
 export const disputingTheReport = 'disputing the report'
 export const disputeOccurred = 'Dispute occurred'
 export const disputeWalletRequiredReason = commonCopy.formatConnectWalletBefore(disputingTheReport)
-export const settlementWalletRequiredReason = commonCopy.formatConnectWalletBefore('settling the report')
 export const economics = 'Economics'
 export const formatDisputeAmountsInvalidReason = (tokenSymbol: string) => `Enter valid dispute amounts before approving ${tokenSymbol}.`
 export const wrapEth = 'Wrap ETH'
@@ -112,10 +111,8 @@ export const settlingReport = 'Settling report…'
 export const settlingReportTitle = 'Settling report'
 export const reportSettled = 'Report settled'
 export const settlerRewardHelpText = 'ETH credited to the settler’s internal OpenOracle balance, sent with the create transaction. The settler withdraws it separately.'
-export const settlementSummary = 'Settlement summary'
 export const settlementTimestamp = 'Settlement timestamp'
 export const settlementBlock = 'Settlement block'
-export const settlementTimestampOnConfirmation = 'Recorded on confirmation'
 export const notSettled = 'Not settled'
 export const stateHash = 'State hash'
 export const allStatuses = 'All statuses'
@@ -144,8 +141,6 @@ export const formatNewTokenAmountFieldLabel = (tokenSymbol: string) => `New ${to
 export const reporter = 'Reporter'
 export const parameterDetails = 'Parameter details'
 export const standaloneParameterDetails = 'Base token amount and escalation halt use the base token’s decimals.'
-
-export const settleReportTitle = (id: bigint) => `Settle report #${id}`
 
 export const formatSettledReportNumber = (id: string) => `Report #${id} settled`
 

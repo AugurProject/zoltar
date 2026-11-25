@@ -1,7 +1,7 @@
-import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { readOptionalMulticall, readRequiredMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { readOptionalMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import { statoblast_QuestionLedger_QuestionLedger, statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
+import { statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
 import { checkStatoblastEntries } from './statoblastEntries.js'
 import { loadQuestionLedgerDetails } from './questionLedgerSnapshot.js'
 
@@ -10,7 +10,7 @@ type DeploymentRegistryAnchor = Readonly<{ blockHash: `0x${string}`; blockNumber
 export type QuestionReadCheckpoint = {
 	anchor?: DeploymentRegistryAnchor
 	ledger?: Address
-	question?: Awaited<ReturnType<typeof loadCheckedQuestionLedger>>
+	question?: Awaited<ReturnType<typeof loadQuestionLedgerDetails>>
 	sharesFacts?: Awaited<ReturnType<typeof readSharesFacts>>
 }
 
@@ -50,7 +50,7 @@ export async function loadStatoblastQuestion(client: ReadClient, pool: Address, 
 	}
 	const ledger = checkpoint.ledger
 	const [question, sharesFacts] = await Promise.all([
-		checkpoint.question ?? loadCheckedQuestionLedger(client, ledger, universeId, anchor.blockNumber).then(result => (checkpoint.question = result)),
+		checkpoint.question ?? loadQuestionLedgerDetails(client, ledger, questionId, universeId, anchor.blockNumber).then(result => (checkpoint.question = result)),
 		includeSharesFacts
 			? (checkpoint.sharesFacts ??
 				readSharesFacts(client, pool, universeId, anchor.blockNumber)
@@ -82,21 +82,4 @@ async function readSharesFacts(client: ReadClient, pool: Address, universeId: bi
 		purchaseFeeBps: purchase.status === 'success' ? purchase.result : undefined,
 		minimumPurchaseFee: minimum.status === 'success' ? minimum.result : undefined,
 	}
-}
-
-async function loadCheckedQuestionLedger(client: ReadClient, questionLedger: Address, universeId: bigint, blockNumber: bigint) {
-	const pool = { abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedger }
-	const [manager, parent, questionId, multiplier, initialReportingResponseWindow] = await readRequiredMulticall(
-		client,
-		[
-			{ ...pool, functionName: 'openOraclePriceCoordinator' },
-			{ ...pool, functionName: 'parent' },
-			{ ...pool, functionName: 'questionId' },
-			{ ...pool, functionName: 'statoblastSecurityMultiplierBps' },
-			{ ...pool, functionName: 'initialReportingResponseWindow' },
-		],
-		blockNumber,
-	)
-	const details = await loadQuestionLedgerDetails(client, { questionLedger, openOraclePriceCoordinator: getAddress(manager), parent: getAddress(parent), universeId, questionId, statoblastSecurityMultiplierBps: multiplier }, blockNumber)
-	return { ...details, initialReportingResponseWindow }
 }

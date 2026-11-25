@@ -1,0 +1,28 @@
+name: Set up component CI
+description: Install one component from its lockfile and restore its local cache
+
+inputs:
+  directory:
+    description: Component package directory
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Setup Bun
+      uses: ./.github/actions/setup-bun
+
+    - name: Read canonical project metadata
+      id: projects
+      shell: bash
+      run: bun ./tooling/repo/query-projects.mts --github-output --cache-profile=dependencies
+
+    - name: Cache component dependencies
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      with:
+        path: ~/.bun/install/cache
+        key: ${{ runner.os }}-component-${{ inputs.directory }}-${{ env.BUN_VERSION }}-${{ steps.projects.outputs.dependency_cache_key }}
+
+    - name: Install local dependency inputs
+      shell: bash
+      # One plan, so the root workspace install shared by the repository and the component closure runs once.
+      run: bun ./tooling/repo/run-project-tasks.mts setup repository --project-path "${{ inputs.directory }}" --dependencies

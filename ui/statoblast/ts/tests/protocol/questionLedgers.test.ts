@@ -6,7 +6,7 @@ import { createMockLoaderClient, createMulticallStub } from '@zoltar/ui-core-sha
 import { centralSecurityPoolRead, owner, securityPool, capital, token } from '../features/security-pools/capitalFixture.js'
 
 const block = { hash: `0x${'11'.repeat(32)}`, number: 99n, timestamp: 1000n } as const
-const deployment = { questionLedger: owner, parent: zeroAddress, universeId: 42n, questionId: 7n, initialReportPriorityFeeAttoEthPerGas: 1n, openOraclePriceCoordinator: token, statoblastSecurityMultiplierBps: 20000n }
+const deployment = { universeId: 42n, questionId: 7n }
 function fixture({ forked = false, reporting = false, missingSecurityPool = false, reorg = false } = {}) {
 	const reads: string[] = []
 	let headReads = 0
@@ -21,8 +21,6 @@ function fixture({ forked = false, reporting = false, missingSecurityPool = fals
 			switch (request.functionName) {
 				case 'shareToken':
 					return token
-				case 'initialReportPriorityFeeAttoEthPerGas':
-					return 1n
 				case 'securityPoolCustody':
 					return missingSecurityPool ? zeroAddress : capital
 				case 'securityPoolOf':
@@ -37,10 +35,6 @@ function fixture({ forked = false, reporting = false, missingSecurityPool = fals
 					return 3n
 				case 'getForkTime':
 					return forked ? 900n : 0n
-				case 'lastPrice':
-					return 10n
-				case 'lastSettlementTimestamp':
-					return 950n
 				case 'priceValidUntil':
 					return 1200n
 				case 'questions':
@@ -58,9 +52,7 @@ function fixture({ forked = false, reporting = false, missingSecurityPool = fals
 				if (call.functionName === 'isSecurityPool') return { status: 'success', result: true }
 				if (call.functionName === 'getQuestionLedger') return { status: 'success', result: owner }
 				if (call.functionName === 'openOraclePriceCoordinator') return token
-				if (call.functionName === 'parent') return zeroAddress
 				if (call.functionName === 'questionId') return deployment.questionId
-				if (call.functionName === 'statoblastSecurityMultiplierBps') return deployment.statoblastSecurityMultiplierBps
 				if (call.functionName === 'initialReportingResponseWindow') return 172_800n
 				if (call.functionName === 'questions') return ['Question', 'Description', 1n, 2000n, 2n, 0n, 2000n, '']
 				if (call.functionName === 'questionCreatedTimestamp') return 1n
@@ -70,10 +62,6 @@ function fixture({ forked = false, reporting = false, missingSecurityPool = fals
 				if (call.functionName === 'systemState') return 0n
 				if (call.functionName === 'getQuestionOutcome') return 3n
 				if (call.functionName === 'getForkTime') return forked ? 900n : 0n
-				if (call.functionName === 'lastPrice') return 10n
-				if (call.functionName === 'lastSettlementTimestamp') return 950n
-				if (call.functionName === 'priceValidUntil') return 1200n
-				if (call.functionName === 'initialReportPriorityFeeAttoEthPerGas') return 1n
 				return centralSecurityPoolRead(call.functionName, 'active')
 			})
 		},
@@ -134,7 +122,6 @@ test('retry starts from a new head when the question was missing at the previous
 test('reflects a forked universe without per-question vault scans', async () => {
 	const { question } = await loadStatoblastQuestion(fixture({ forked: true }).client, securityPool, deployment.questionId, deployment.universeId, false)
 	expect(question.universeHasForked).toBe(true)
-	expect(question.hasForkActivity).toBe(true)
 })
 test.each([false, true])('mint capacity uses central fees and closes when reporting starts (%s)', async reporting => {
 	const capacity = await loadQuestionLedgerMintCapacity(fixture({ reporting }).client, owner)
@@ -145,7 +132,7 @@ test.each([false, true])('mint capacity uses central fees and closes when report
 test('direct question loading never enumerates other deployments', async () => {
 	const { client, reads } = fixture()
 	expect((await loadStatoblastQuestion(client, securityPool, deployment.questionId, deployment.universeId, false)).question.questionLedgerAddress).toBe(owner)
-	expect(reads.slice(0, 3)).toEqual(['isSecurityPool', 'getQuestionLedger', 'openOraclePriceCoordinator'])
+	expect(reads.slice(0, 3)).toEqual(['isSecurityPool', 'getQuestionLedger', 'questionId'])
 	expect(reads).not.toContain('questionLedgerDeploymentCount')
 	expect(reads).not.toContain('questionLedgerDeploymentsRange')
 })

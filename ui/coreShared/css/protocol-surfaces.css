@@ -55,45 +55,7 @@
 	gap: 1rem;
 }
 
-.entity-metric-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-	gap: 0.75rem;
-}
-
-.entity-metric {
-	min-width: 0;
-	padding: 0.7rem 0 0;
-	border: 0;
-	border-top: 1px solid var(--divider-subtle);
-	background: transparent;
-	box-shadow: none;
-}
-
-.entity-metric .metric-field-value {
-	display: block;
-	margin-top: 0.15rem;
-	overflow-wrap: anywhere;
-}
-
-.entity-metric strong.metric-field-value {
-	font-family: var(--font-family-mono);
-	font-size: var(--font-value);
-	font-weight: 600;
-	font-variant-numeric: tabular-nums;
-	color: var(--value);
-}
-
-.entity-metric strong.metric-value-success {
-	color: var(--success);
-}
-
-.entity-metric strong.metric-value-danger {
-	color: var(--danger);
-}
-
-strong.metric-value-warning,
-.entity-metric strong.metric-value-warning {
+strong.metric-value-warning {
 	color: var(--warning);
 }
 
@@ -424,11 +386,6 @@ body:has(.global-transaction-dialog) .operation-modal-panel {
 		grid-template-columns: minmax(0, 1fr);
 		gap: 0.15rem;
 	}
-
-	.market-linked-pool {
-		align-items: stretch;
-		grid-template-columns: 1fr;
-	}
 }
 
 .form-grid {
@@ -478,8 +435,7 @@ body:has(.global-transaction-dialog) .operation-modal-panel {
 .environment-gate,
 .sticky-object-context,
 .lifecycle-stage-banner,
-.result-banner,
-.workflow-summary-strip {
+.result-banner {
 	border: 1px solid var(--border-default);
 	border-radius: var(--radius-section);
 	background: linear-gradient(180deg, var(--surface-raised) 0%, var(--surface-page) 100%);
@@ -488,18 +444,8 @@ body:has(.global-transaction-dialog) .operation-modal-panel {
 
 .environment-gate,
 .lifecycle-stage-banner,
-.result-banner,
-.workflow-summary-strip {
+.result-banner {
 	padding: 1rem 1.1rem;
-}
-
-.workflow-summary-strip {
-	padding: 1rem 0;
-	border-width: 1px 0;
-	border-color: var(--divider-subtle);
-	border-radius: 0;
-	background: transparent;
-	box-shadow: none;
 }
 
 .environment-gate.critical,
@@ -577,27 +523,6 @@ body:has(.global-transaction-dialog) .operation-modal-panel {
 	z-index: auto;
 }
 
-.selected-fork-question-summary {
-	display: grid;
-	gap: var(--space-3);
-	margin-top: var(--space-3);
-	padding-top: var(--space-3);
-	border-top: 1px solid var(--divider-subtle);
-}
-
-.selected-fork-question-summary > .panel-label {
-	margin: 0;
-}
-
-.selected-fork-question-summary .question-preview-meta {
-	grid-template-columns: minmax(0, 1fr);
-}
-
-.selected-fork-question-summary .question-preview-meta-item {
-	display: grid;
-	align-items: start;
-}
-
 /* The context title can take programmatic focus after a route change; it shows the shared focus ring so keyboard and screen-reader users see where focus landed. */
 .sticky-object-context h3:focus-visible {
 	outline: 2px solid var(--accent);
@@ -640,8 +565,7 @@ body:has(.global-transaction-dialog) .operation-modal-panel {
 
 .sticky-object-context-items,
 .action-readiness-grid,
-.vault-action-launcher-grid,
-.workflow-summary-strip-steps {
+.vault-action-launcher-grid {
 	display: grid;
 	gap: 0.75rem;
 }
@@ -1311,55 +1235,6 @@ html:has(.global-transaction-dialog-nonblocking) {
 	box-shadow: none;
 }
 
-.workflow-summary-strip-steps {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
-	margin-top: 0.75rem;
-	gap: 0.65rem;
-}
-
-.workflow-summary-strip-steps span {
-	border: 1px solid var(--border-subtle);
-	border-radius: var(--radius-pill);
-	padding: 0.45rem 0.7rem;
-	text-align: center;
-	color: var(--text-secondary);
-}
-
-.workflow-summary-strip-steps span.current {
-	border-color: var(--interactive-border-hover);
-	background: var(--interactive-bg);
-	color: var(--text);
-}
-
-.workflow-guide {
-	display: grid;
-	gap: 0.9rem;
-	padding: 1rem 1.1rem;
-}
-
-.section-block.plain > .section-block-body > .workflow-guide {
-	padding: 0 0 var(--space-3);
-	border: 0;
-	border-bottom: 1px solid var(--divider-subtle);
-	border-radius: 0;
-	background: transparent;
-}
-
-.workflow-guide-compact {
-	padding: 0;
-}
-
-.workflow-guide-intro {
-	display: grid;
-	gap: 0.35rem;
-}
-
-.workflow-guide-intro strong {
-	font-size: var(--font-body);
-	line-height: var(--line-height-snug);
-}
-
 .filter-toolbar {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
@@ -1411,14 +1286,6 @@ html:has(.global-transaction-dialog-nonblocking) {
 	.global-transaction-notice {
 		align-items: flex-start;
 		padding: 0.7rem 0.8rem;
-	}
-
-	.workflow-guide {
-		padding: 0.9rem;
-	}
-
-	.workflow-guide.workflow-guide-compact {
-		padding: 0;
 	}
 }
 
@@ -1496,15 +1363,6 @@ html:has(.global-transaction-dialog-nonblocking) {
 	flex: 0 0 auto;
 	color: var(--muted);
 	font-size: var(--font-label);
-}
-
-.loaded-question-preview {
-	padding: 1rem 0;
-	border: 0;
-	border-top: 1px solid var(--divider-subtle);
-	border-bottom: 1px solid var(--divider-subtle);
-	border-radius: 0;
-	background: transparent;
 }
 
 .field-inline {
@@ -1591,7 +1449,6 @@ html:has(.global-transaction-dialog-nonblocking) {
 	font-size: inherit;
 }
 
-.field-help,
 .field-hint {
 	display: block;
 	margin: -0.15rem 0 0;
@@ -2012,12 +1869,6 @@ html:has(.global-transaction-dialog-nonblocking) {
 	font-weight: 600;
 	line-height: var(--line-height-snug);
 	overflow-wrap: anywhere;
-}
-.inline-facts {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--space-2) var(--space-4);
-	color: var(--muted);
 }
 .decision-card-list {
 	display: grid;

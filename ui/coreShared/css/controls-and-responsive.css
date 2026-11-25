@@ -316,21 +316,6 @@ button.tx-action-button[aria-disabled="true"]:hover {
 	cursor: not-allowed;
 }
 
-.overview-panel {
-	padding: var(--space-4) var(--space-5);
-	border: 1px solid var(--divider-strong);
-	border-radius: var(--radius-shell);
-	background: var(--surface-page);
-	box-shadow: none;
-}
-
-.overview-panel .route-header {
-	padding: 0 0 var(--space-2);
-	border: 0;
-	background: transparent;
-	box-shadow: none;
-}
-
 .workflow-stack,
 .route-workflow-stack,
 .market-panel,
@@ -424,26 +409,6 @@ button.tx-action-button[aria-disabled="true"]:hover {
 
 .metric-field-value.metric-value-danger {
 	color: var(--danger);
-}
-
-.metric-inline-value {
-	display: inline-flex;
-	flex-wrap: wrap;
-	align-items: baseline;
-	gap: 0.45rem;
-}
-
-.metric-inline-status {
-	display: inline-flex;
-	align-items: center;
-	padding: 0.12rem 0.46rem;
-	border: 1px solid currentColor;
-	border-radius: var(--radius-pill);
-	font-size: var(--font-label);
-	font-weight: 700;
-	letter-spacing: 0.08em;
-	line-height: var(--line-height-tight);
-	text-transform: uppercase;
 }
 
 .selected-pool-context-grid .address-value {
@@ -608,8 +573,7 @@ button.tx-action-button[aria-disabled="true"]:hover {
 		grid-template-columns: 1fr;
 	}
 
-	.section-block,
-	.overview-panel {
+	.section-block {
 		padding: var(--space-4);
 	}
 
@@ -663,29 +627,7 @@ button.tx-action-button[aria-disabled="true"]:hover {
 		padding: 0.75rem 0.65rem 2.5rem;
 	}
 
-	.market-task-context {
-		gap: var(--space-2);
-	}
-
-	.market-task-context > .section-block-header {
-		display: none;
-	}
-
-	.market-task-context .data-grid {
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: var(--space-2);
-	}
-
-	.market-task-context .data-grid > div {
-		padding-top: var(--space-2);
-	}
-
-	.market-task-context .data-grid strong {
-		font-size: var(--font-caption);
-	}
-
-	.section-block,
-	.overview-panel {
+	.section-block {
 		padding: var(--space-3);
 	}
 
@@ -1710,13 +1652,4 @@ button.tx-action-button[aria-disabled="true"]:hover {
 
 :is([data-message-placement="field"], [data-message-placement="inline"], [data-message-placement="section"])[data-message-tone="success"] {
 	color: var(--success);
-}
-
-.transaction-form-fields {
-	display: grid;
-	gap: var(--space-4);
-	border: 0;
-	padding: 0;
-	margin: 0;
-	min-inline-size: 0;
 }

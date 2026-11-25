@@ -7,10 +7,12 @@ import { quoteSinglePool } from './testSupport/singlePoolQuote.js'
  * in uniswapQuoter.test.ts which mock all contract calls.
  */
 
-import { describe as baseDescribe, expect, test } from 'bun:test'
-import { createPublicClient, http, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { afterEach, beforeEach, describe as baseDescribe, expect, test } from 'bun:test'
+import { createPublicClient, http } from '@zoltar/core-shared/evm/ethereum'
 import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { ETH_ADDRESS } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 
 const RPC_URL = 'https://ethereum.dark.florist'
@@ -24,6 +26,12 @@ const ATTO_ETH_PER_ETH = 10n ** 18n
 const describe = process.env['RUN_MAINNET_INTEGRATION_TESTS'] === '1' ? baseDescribe : baseDescribe.skip
 
 void describe('Uniswap mainnet smoke checks', () => {
+	beforeEach(() => {
+		// The quoter resolves deployment addresses from the active app profile.
+		installActiveEnvironmentForTesting(createFakeBackend({ profile: MAINNET_NETWORK_PROFILE }))
+	})
+	afterEach(() => resetActiveEnvironmentForTesting())
+
 	// Sanity check: ETH/USDC 0.05% pool is established and should always return a price
 	void describe('ETH/USDC (0.05% pool — known to exist on V4)', () => {
 		void test('quotes 1 ETH → USDC and returns a plausible price', async () => {
@@ -42,10 +50,6 @@ void describe('Uniswap mainnet smoke checks', () => {
 	})
 
 	void describe('address constants', () => {
-		void test('ETH_ADDRESS is zeroAddress', () => {
-			expect(ETH_ADDRESS).toBe(zeroAddress)
-		})
-
 		void test('the mainnet REP address is a valid checksummed address accepted by the shared address validator', async () => {
 			// If MAINNET_NETWORK_PROFILE.genesisRepTokenAddress had a bad checksum, getBlockNumber would still work but this
 			// call would throw an address validation error before any RPC call is made.

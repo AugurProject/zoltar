@@ -229,7 +229,7 @@ export function SecurityPoolDeployment({ actions, model }: { actions: SecurityPo
 	const activeStep = selectedStep ?? (actions.deploymentLocked ? 3 : 0)
 	const currentDeployment = actions.deploymentPool !== undefined && actions.deploymentPool === model.managerInput
 	const verifiedSetupStage = model.setup?.securityPool === actions.deploymentPool ? model.setup?.stage : undefined
-	const setupStage = actions.deploymentActivated ? 4 : currentDeployment ? (verifiedSetupStage ?? model.savedSetupStage) : undefined
+	const setupStage = verifiedSetupStage ?? (actions.deploymentActivated ? 4 : currentDeployment ? model.savedSetupStage : undefined)
 	const completedCount = Number(actions.admissionAddress !== undefined) + Number(actions.deploymentPool !== undefined) + (setupStage ?? 0)
 	const transactionProgress = completedCount === 0 && activeStep < 3 ? pageCopy.deployTransactionCount : completedCount === 6 ? pageCopy.deployAllTransactionsDone : pageCopy.deployTransactionProgress(completedCount)
 	const questionList = actions.admissionMode === 'open' ? copy.admissionOpen : actions.fixedQuestionCount === undefined ? copy.admissionFixed : pageCopy.deployQuestionListCount(actions.fixedQuestionCount)
@@ -238,7 +238,7 @@ export function SecurityPoolDeployment({ actions, model }: { actions: SecurityPo
 	const showLockedEconomics = actions.deploymentLocked && activeStep >= 2
 	const leftStep = activeStep === 3 ? 2 : activeStep
 	const previousPool = actions.deploymentPool === undefined && (model.setup?.stage ?? model.savedSetupStage ?? 4) < 4 && isAddress(model.managerInput) ? getAddress(model.managerInput) : undefined
-	const openPool = actions.deploymentActivated ? actions.deploymentPool : undefined
+	const openPool = setupStage === 4 ? actions.deploymentPool : undefined
 	return (
 		<>
 			<nav className='statoblast-breadcrumbs' aria-label={pageCopy.breadcrumbs}>

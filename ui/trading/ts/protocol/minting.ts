@@ -34,7 +34,7 @@ export function estimateBudgetMint(market: Pick<LiveMarket, 'mintFees' | 'settle
 	return mintWithMargin(budget, { ...market.mintFees, cashAttoEth: market.settlementCollateralAttoEth, outcomeSupplyAttoShares: market.shareTokenSupplyAttoShares })
 }
 
-export async function loadBudgetMint(client: PublicClient, market: LiveMarket, budget: bigint, blockNumber: bigint) {
+export async function loadBudgetMintState(client: PublicClient, market: LiveMarket, budget: bigint, blockNumber: bigint) {
 	const capital = await client.readContract({ abi: poolArtifact.abi, address: market.pool, functionName: 'securityPoolCustody', blockNumber })
 	const central = await loadCentralSecurityPoolQuestion(client, market.pool, capital, blockNumber)
 	if (central.settlementRecoveryAttoRep > 0n) throw new Error(recoveryRepPurchase)
@@ -43,5 +43,9 @@ export async function loadBudgetMint(client: PublicClient, market: LiveMarket, b
 	if (cash === 0n) throw new Error('ETH budget is too small to cover the security pool purchase fee')
 	const recovery = await client.readContract({ abi: securityPoolArtifact.abi, address: central.securityPoolAddress, functionName: 'quoteMintRecoveryRep', args: [market.universeId, market.questionId, cash], blockNumber })
 	if (recovery > 0n) throw new Error(recoveryRepPurchase)
-	return cash
+	return { cash, central }
+}
+
+export async function loadBudgetMint(client: PublicClient, market: LiveMarket, budget: bigint, blockNumber: bigint) {
+	return (await loadBudgetMintState(client, market, budget, blockNumber)).cash
 }

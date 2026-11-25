@@ -108,7 +108,6 @@ a.secondary-action,
 
 .section,
 .section-block,
-.overview-panel,
 .route-workflow-panel {
 	border-radius: var(--radius-section);
 	box-shadow: none;

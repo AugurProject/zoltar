@@ -25,7 +25,6 @@ function fixture(definitionId: string) {
 	const pool = snapshot.pools[0]
 	const universe = snapshot.universes[0]
 	if (pool === undefined || universe === undefined) throw new Error('Missing fixtures')
-	pool.oraclePriceValid = definitionId !== 'statoblast.oracle.request-price'
 	if (definitionId === 'statoblast.oracle.request-price') {
 		snapshot.anchor.baseFeePerGas = '1'
 		pool.oracleRequestFunding = {

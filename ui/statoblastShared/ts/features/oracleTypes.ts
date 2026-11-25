@@ -61,8 +61,6 @@ export type ReportingSectionProps = ReportingRouteContentProps & {
 	onTriggerZoltarFork?: (() => void) | undefined
 	previewMarketDetails?: MarketDetails | undefined
 	reportActionGuardMessage?: string | undefined
-	showHeader?: boolean
-	showQuestionLedgerAddressInput?: boolean
 	triggerZoltarForkApproval?: ForkAdmissionApproval | undefined
 	triggerZoltarForkAvailability?: ActionAvailability | undefined
 	triggerZoltarForkPending?: boolean | undefined

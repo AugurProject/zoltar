@@ -80,8 +80,6 @@ function Harness({ dependencies, details = reportingDetails, reportAmount = '5' 
 			reportingError={undefined}
 			reportingForm={{ reportAmount, questionLedgerAddress: pool, selectedOutcome: 'yes', selectedWithdrawDepositIndexesByOutcome: { invalid: [], no: [], yes: [] } }}
 			reportingResult={undefined}
-			showHeader={false}
-			showQuestionLedgerAddressInput={false}
 			triggerZoltarForkApproval={ownFork.approval}
 			triggerZoltarForkAvailability={ownFork.triggerForkAvailability}
 			triggerZoltarForkPending={ownFork.forkPending}

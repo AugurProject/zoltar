@@ -38,7 +38,19 @@ export async function demoTransactionRoute(env: DemoEnvironment, path: string): 
 			receipt:
 				env.context.pageUrl.searchParams.get('traceStatus') === 'not-requested'
 					? { selectionSource: 'protocol-log', callTraceStatus: 'not-requested' }
-					: { callTraceStatus: 'available', callTrace: { type: 'CALL', from: log.origin_address, to: log.emitter_address, value: '0xde0b6b3a7640001', calls: [{ type: 'CALL', from: log.emitter_address, to: demoAddress('7'), value: '0x1', error: 'execution reverted' }] } },
+					: {
+							callTraceStatus: 'available',
+							callTrace: {
+								type: 'CALL',
+								from: log.origin_address,
+								to: log.emitter_address,
+								value: '0xde0b6b3a7640001',
+								calls: [
+									{ type: 'DELEGATECALL', from: log.emitter_address, to: demoAddress('6'), value: '0xde0b6b3a7640001' },
+									{ type: 'CALL', from: log.emitter_address, to: demoAddress('7'), value: '0x1', error: 'execution reverted' },
+								],
+							},
+						},
 			gas_used: '184220',
 			action_summary: log.action_summary,
 			explorer_base_url: 'https://etherscan.io',

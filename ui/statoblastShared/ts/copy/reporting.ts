@@ -54,7 +54,6 @@ export const maxProfitForkReason = 'Full bonus share is unavailable because matc
 export const maxProfitWindowFilledReason = 'Full bonus share is unavailable because the reward window is already filled on the selected side.'
 export const selectedSideLeadsReason = 'Selected side already leads.'
 export const loadingEscalation = 'Loading reporting…'
-export const refreshReporting = 'Refresh reporting'
 export const retryReporting = 'Retry reporting'
 export const selectedSideCapacityEmpty = 'The selected side has no remaining capacity.'
 export const poolHeldVaultRepBackingEmpty = 'This position has no pledged REP available for reporting.'

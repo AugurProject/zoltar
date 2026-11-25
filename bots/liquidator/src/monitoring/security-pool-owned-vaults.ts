@@ -45,8 +45,7 @@ export async function loadOwnedSecurityPoolVaults(client: ReadClient, snapshot: 
 		const account = await loadSecurityPoolCapitalSnapshot({ client, securityPool: snapshot.securityPool, universeId: snapshot.universeId, owner: vault, blockNumber })
 		accounts.push(account)
 		if (account.exported) {
-			const fork = await client.readContract({ address: snapshot.capitalLedger, abi: capitalAbi, functionName: 'forkAuthority', blockNumber })
-			const choice = await client.readContract({ address: fork, abi: forkAbi, functionName: 'choices', args: [snapshot.universeId, vault], blockNumber })
+			const choice = await client.readContract({ address: controller, abi: forkAbi, functionName: 'choices', args: [snapshot.universeId, vault], blockNumber })
 			if (!choice[1]) throw new Error('Exported vault has no fork choice')
 			// Child identity is read by the caller's ordinary universe discovery;
 			// preserve the outcome until it is mapped through native Zoltar.

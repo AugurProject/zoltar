@@ -33,16 +33,18 @@ export async function generatedCacheKey(profile: 'full' | 'contracts', root = re
 	return digestInputs([...inputs, ...producerInputs], root)
 }
 
-export async function projectQuery() {
+type CacheProfile = 'paths' | 'dependencies' | 'contracts' | 'full'
+
+export async function projectQuery(cacheProfile: CacheProfile = 'full') {
 	validateProjectRegistryFiles(repositoryRoot)
 	const generatedCachePaths = [...new Set(['shared/.freshness-hash', ...generatedOutputsForTaskGroup('build', 'generated'), ...taskProjects('vendor').flatMap(project => project.tasks.vendor?.outputs ?? [])])]
 	const componentArtifactOutputs = ['shared/.freshness-hash', ...generatedOutputsForTaskGroup('build', 'component-artifacts')]
 	return {
 		componentArtifactOutputs,
 		fullOnlyCachePaths: generatedCachePaths.filter(output => !componentArtifactOutputs.includes(output)),
-		dependencyCacheKey: await digestInputs(taskCacheInputs(['setup'])),
-		generatedCacheKey: await generatedCacheKey('full'),
-		contractCacheKey: await generatedCacheKey('contracts'),
+		dependencyCacheKey: cacheProfile === 'paths' ? '' : await digestInputs(taskCacheInputs(['setup'])),
+		generatedCacheKey: cacheProfile === 'full' ? await generatedCacheKey('full') : '',
+		contractCacheKey: cacheProfile === 'contracts' || cacheProfile === 'full' ? await generatedCacheKey('contracts') : '',
 		generatedCachePaths,
 		setupProjectPaths: taskProjects('setup').map(project => project.path),
 		uiArtifactOutputs: uiArtifactOutputs(),
@@ -50,7 +52,9 @@ export async function projectQuery() {
 }
 
 if (import.meta.main) {
-	const result = await projectQuery()
+	const profileArgument = process.argv.find(argument => argument.startsWith('--cache-profile='))?.slice('--cache-profile='.length) ?? 'full'
+	if (profileArgument !== 'paths' && profileArgument !== 'dependencies' && profileArgument !== 'contracts' && profileArgument !== 'full') throw new Error('Unknown cache profile')
+	const result = await projectQuery(profileArgument)
 	if (process.argv.includes('--github-output')) {
 		const outputPath = process.env['GITHUB_OUTPUT']
 		if (outputPath === undefined) throw new Error('GITHUB_OUTPUT is required with --github-output')

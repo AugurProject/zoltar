@@ -35,7 +35,7 @@ export function startLiquidatorDashboard(runtime: LiquidatorRuntime, deps: Liqui
 	if (!runtime.settings.runtime.ui) return undefined
 	return startDashboardServer(runtime.settings.runtime.uiPort, {
 		getConfiguration: () => ({ ...serializedSettings(runtime.settings, true), savedSigner: runtime.settings.privateKey === undefined ? undefined : privateKeyToAccount(runtime.settings.privateKey).address }),
-		getPoolCatalog: (page, address, scope) => loadPoolCatalog(runtime.client, runtime.settings.deployment.securityPoolFactory, runtime.settings.network.chainId, page, address, scope === 'monitored' ? state.pools.map(pool => pool.address) : undefined, deps.poolDeploymentDates),
+		getPoolCatalog: (page, address, scope) => loadPoolCatalog(runtime.client, runtime.settings.deployment.securityPoolFactory, runtime.settings.network.chainId, page, address, scope === 'monitored' ? [] : undefined, deps.poolDeploymentDates),
 		getState: () => {
 			state.rpcEndpointHealth = runtime.readPool.snapshot()
 			const snapshot = operatorSnapshot(state, runtime.settings.runtime.execute, marketConfigurations(runtime.settings))
