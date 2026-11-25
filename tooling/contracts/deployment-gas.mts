@@ -34,7 +34,6 @@ export const CONSERVATIVE_DEPLOYMENT_GAS: Readonly<Record<string, bigint>> = {
 	shareTokenFactory: 6_500_000n,
 	sharedPoolPriceFeedFactory: 4_500_000n,
 	sharedPoolPriceFeedDeploymentWorker: 7_750_000n,
-	questionForkerDelegate: 8_000_000n,
 	questionForker: 16_250_000n,
 	escalationGameDepositDelegate: 7_000_000n,
 	escalationGameFactory: 15_500_000n,

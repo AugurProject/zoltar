@@ -8,7 +8,6 @@ type ZoltarDeploymentStepId = 'proxyDeployer' | 'deploymentStatusOracle' | 'repu
 
 export type DeploymentStepId =
 	| ZoltarDeploymentStepId
-	| 'priceCoordinatorDeploymentWorker'
 	| 'sharedPoolPriceFeedDeploymentWorker'
 	| 'questionForker'
 	| 'questionLedgerOperationsDelegate'
@@ -16,7 +15,6 @@ export type DeploymentStepId =
 	| 'escalationGameDepositDelegate'
 	| 'escalationGameFactory'
 	| 'securityPoolFactory'
-	| 'questionForkerDelegate'
 	| 'securityPoolCapitalLedgerDeployer'
 	| 'securityPoolCommitmentIndexDeployer'
 	| 'securityPoolCapitalFeeStreamsDeployer'
