@@ -36,7 +36,7 @@ test.each([
 	const f = securityPoolClient({
 		sponsorOperationReport: 7n,
 		reportOutcome: 0n,
-		reportCandidates: [targetAddress, ownerAddress, zeroAddress, 10n],
+		reportCandidates: [targetAddress, ownerAddress, 10n],
 		baseFeePerGas: baseFee,
 		openOracle: targetAddress,
 		storedGame: pending.game,
@@ -56,7 +56,7 @@ test.each([
 		}),
 	})
 	// The approved owner must match the indexed report sponsor.
-	f.values['reportCandidates'] = [targetAddress, account.address, zeroAddress, 10n]
+	f.values['reportCandidates'] = [targetAddress, account.address, 10n]
 	const state = initialRuntimeState(false, account.address, 1)
 	state.securityPoolScopes = [f.observation.nextScope]
 	f.observation.pendingOperationReport = pending

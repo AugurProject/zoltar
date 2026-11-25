@@ -25,14 +25,10 @@ import {
 	OPEN_ORACLE_FLAG_TRACK_DISPUTES,
 	OPEN_ORACLE_FLAG_STORE_ALL,
 	IStoredOpenOracleGame
-} from './OpenOraclePriceCoordinatorTypes.sol';
+} from './OraclePriceTypes.sol';
 
-interface ISharedPoolPriceCoordinator {
-	function questionLedger() external view returns (IQuestionLedger);
-	function reputationToken() external view returns (ReputationToken);
-	function openOracle() external view returns (OpenOracle);
+interface ISharedPoolPriceFeedConfig {
 	function weth() external view returns (IWeth9);
-	function initialReportPriorityFeeAttoEthPerGas() external view returns (uint256);
 	function targetPriceErrorForDispute() external view returns (uint256);
 	function settlementTime() external view returns (uint48);
 	function disputeDelay() external view returns (uint24);
@@ -94,7 +90,6 @@ contract SharedPoolPriceFeed {
 	uint256 public immutable maxSettlementBaseFeeMultiplierBps;
 	uint256 public pendingReportId;
 	address public pendingReportSponsor;
-	address public pendingCoordinator;
 	uint256 public pendingReportMaxSettlementBaseFeeAttoEthPerGas;
 	uint256 public pendingExposureLimitAttoEth;
 	uint256 public acceptedExposureLimitAttoEth;
@@ -114,7 +109,6 @@ contract SharedPoolPriceFeed {
 	struct ReportCandidate {
 		SharedPoolReportEscrow escrow;
 		address sponsor;
-		address coordinator;
 		uint8 outcome;
 		uint256 maxSettlementBaseFee;
 	}
@@ -125,24 +119,18 @@ contract SharedPoolPriceFeed {
 	uint256 public lastPrice;
 	uint256 public lastSettlementTimestamp;
 	uint256 private checkpointedExposureAttoEth;
-	mapping(address => bool) public registeredCoordinators;
-	function reportCandidates(uint256 reportId)
-		external
-		view
-		returns (SharedPoolReportEscrow escrow, address sponsor, address coordinator, uint256 maxSettlementBaseFee)
-	{
+	function reportCandidates(uint256 reportId) external view returns (SharedPoolReportEscrow escrow, address sponsor, uint256 maxSettlementBaseFee) {
 		ReportCandidate storage candidate = reports[reportId];
-		return (candidate.escrow, candidate.sponsor, candidate.coordinator, candidate.maxSettlementBaseFee);
+		return (candidate.escrow, candidate.sponsor, candidate.maxSettlementBaseFee);
 	}
 	/// @dev 0 = unknown or pending, 1 = accepted, 2 = rejected. Recovery can produce either final outcome.
 	function reportOutcome(uint256 reportId) external view returns (uint8) {
 		return reports[reportId].outcome;
 	}
 
-	event CoordinatorRegistered(address indexed coordinator, address indexed questionLedger);
-	event ExposureCheckpoint(address indexed coordinator, uint256 aggregateExposureAttoEth);
+	event ExposureCheckpoint(address indexed questionLedger, uint256 aggregateExposureAttoEth);
 	event PriceRequested(uint256 indexed reportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas);
-	event ReportFundingAssigned(uint256 indexed reportId, address indexed coordinator, address indexed sponsor);
+	event ReportFundingAssigned(uint256 indexed reportId, address indexed sponsor);
 	event PriceReported(uint256 indexed reportId, uint256 price, uint256 lastSettlementTimestamp);
 	event PriceReportRejected(uint256 indexed reportId, string reason, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp);
 	/// @notice The report settled in a block above its base-fee ceiling. It stays pending
@@ -150,16 +138,16 @@ contract SharedPoolPriceFeed {
 	event PriceReportDeferred(uint256 indexed reportId, uint256 baseFee, uint256 maxSettlementBaseFee);
 	event PendingReportRecovered(uint256 indexed reportId, uint256 settlementTimestamp, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp);
 
-	constructor(ISharedPoolPriceCoordinator config, address _securityPoolFactory, address _securityPool) {
+	constructor(ISharedPoolPriceFeedConfig config, OpenOracle _openOracle, uint256 priorityFee, address _securityPoolFactory, address _securityPool) {
 		require(_securityPoolFactory != address(0), 'Security pool factory zero');
 		securityPoolFactory = _securityPoolFactory;
 		require(_securityPool != address(0), 'Security pool zero');
 		securityPool = _securityPool;
-		openOracle = config.openOracle();
+		openOracle = _openOracle;
 		weth = config.weth();
 		collateralToken = ICollateralConfig(_securityPool).collateralToken();
 		minimumReportCollateral = ICollateralConfig(_securityPool).minimumReportCollateral();
-		initialReportPriorityFeeAttoEthPerGas = config.initialReportPriorityFeeAttoEthPerGas();
+		initialReportPriorityFeeAttoEthPerGas = priorityFee;
 		targetPriceErrorForDispute = config.targetPriceErrorForDispute();
 		require(targetPriceErrorForDispute < OPEN_ORACLE_PERCENTAGE_PRECISION, 'Oracle uncertainty reaches one hundred percent');
 		settlementTime = config.settlementTime();
@@ -170,6 +158,8 @@ contract SharedPoolPriceFeed {
 		protocolFeeRecipient = config.protocolFeeRecipient();
 		escalationHaltMultiplierBps = config.escalationHaltMultiplierBps();
 		maxSettlementBaseFeeMultiplierBps = config.maxSettlementBaseFeeMultiplierBps();
+		require(priorityFee > 0, 'Initial priority fee zero');
+		require(priorityFee <= OraclePriceMath.maximumPriorityFee(targetPriceErrorForDispute, protocolFee, feePercentage, escalationHaltMultiplierBps), 'Initial report priority fee exceeds OpenOracle limits');
 	}
 
 	function universeId() public view returns (uint248 universe) {
@@ -180,38 +170,19 @@ contract SharedPoolPriceFeed {
 		return ReputationToken(token);
 	}
 
-	/// @notice Factory-only registration after the coordinator and ledger have been atomically linked.
-	function registerCoordinator(address coordinatorAddress) external {
-		require(msg.sender == securityPoolFactory, 'Only security pool factory');
-		require(!registeredCoordinators[coordinatorAddress], 'Coordinator already registered');
-		(uint248 universe, address token) = SecurityPoolBoundClones.universeBindings();
-		ISharedPoolPriceCoordinator coordinator = ISharedPoolPriceCoordinator(coordinatorAddress);
-		IQuestionLedger pool = coordinator.questionLedger();
-		require(address(pool) != address(0) && address(pool.securityPoolFactory()) == securityPoolFactory, 'Wrong security pool factory');
-		require(address(pool.openOraclePriceCoordinator()) == coordinatorAddress, 'Wrong pool coordinator');
-		require(address(coordinator.reputationToken()) == token && address(pool.repToken()) == token, 'Wrong REP token');
-		require(address(coordinator.openOracle()) == address(openOracle) && address(coordinator.weth()) == address(weth), 'Wrong oracle tokens');
-		require(coordinator.initialReportPriorityFeeAttoEthPerGas() == initialReportPriorityFeeAttoEthPerGas, 'Feed priority fee mismatch');
-		require(pool.universeId() == universe, 'Wrong pool universe');
-		require(ISecurityPoolFactory(securityPoolFactory).securityPoolOf(pool) == securityPool, 'Wrong pool security pool');
-		require(ISecurityPoolFactory(securityPoolFactory).sharedPriceFeeds(securityPool, universe) == address(this), 'Feed is not canonical');
-		registeredCoordinators[coordinatorAddress] = true;
-		_syncExposure(coordinatorAddress, pool);
-		emit CoordinatorRegistered(coordinatorAddress, address(pool));
-	}
-
-	/// @notice Emits a changed aggregate exposure after an authenticated question checkpoint.
-	function syncExposure(address coordinatorAddress) external {
-		require(registeredCoordinators[coordinatorAddress], 'Unregistered coordinator');
-		_syncExposure(coordinatorAddress, ISharedPoolPriceCoordinator(coordinatorAddress).questionLedger());
-	}
-
-	function _syncExposure(address coordinatorAddress, IQuestionLedger pool) private {
-		require(pool.universeId() == universeId(), 'Wrong exposure universe');
+	/// @notice Checkpoint only a canonical ledger bound to this pool, universe and feed.
+	function syncExposure() external {
+		IQuestionLedger ledger = IQuestionLedger(payable(msg.sender));
+		ISecurityPoolFactory factory = ISecurityPoolFactory(securityPoolFactory);
+		require(factory.securityPoolOf(ledger) == securityPool, 'Wrong exposure security pool');
+		require(address(ledger.securityPoolFactory()) == securityPoolFactory, 'Wrong security pool factory');
+		require(ledger.universeId() == universeId(), 'Wrong exposure universe');
+		require(address(ledger.repToken()) == address(reputationToken()), 'Wrong REP token');
+		require(address(ledger.priceFeed()) == address(this) && factory.sharedPriceFeeds(securityPool, universeId()) == address(this), 'Feed is not canonical');
 		uint256 exposureAttoEth = aggregateExposureAttoEth();
 		if (exposureAttoEth == checkpointedExposureAttoEth) return;
 		checkpointedExposureAttoEth = exposureAttoEth;
-		emit ExposureCheckpoint(coordinatorAddress, exposureAttoEth);
+		emit ExposureCheckpoint(msg.sender, exposureAttoEth);
 	}
 
 	function aggregateExposureAttoEth() public view returns (uint256) {
@@ -274,19 +245,12 @@ contract SharedPoolPriceFeed {
 			REQUEST_BOUNTY_OFFSET_ATTO_ETH;
 	}
 
-	/// @notice A registered coordinator authenticates the sponsor and forwards the report's exact token funding.
-	function requestPrice(address sponsor, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) external payable returns (uint256 reportId) {
-		require(registeredCoordinators[msg.sender], 'Unregistered coordinator');
-		return
-			_requestPrice(msg.sender, sponsor, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth, getSettlementCallbackGasLimit());
-	}
-
 	/// @notice Fund a shared observation without first deploying a child question.
 	/// The caller approves this feed for the configured collateral and the branch's REP; only that caller
 	/// receives the candidate's returned funding. No pool collateral funds reports.
 	function requestSecurityPoolPrice(uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) external payable returns (uint256 reportId) {
-		return
-			_requestPrice(address(this), msg.sender, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth, getSettlementCallbackGasLimit());
+		reportId = _requestPrice(msg.sender, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth, getSettlementCallbackGasLimit());
+		_refundExcessBounty(bountyAttoEth);
 	}
 
 	/// @notice Anyone may settle, but these ordered operations retain the funding sponsor.
@@ -304,7 +268,7 @@ contract SharedPoolPriceFeed {
 		require(requiredGas <= batch.gasLimit, 'Operation gas budget insufficient');
 		uint256 callbackGas = uint256(getSettlementCallbackGasLimit()) + batch.gasLimit;
 		require(callbackGas <= MAXIMUM_REPORT_CALLBACK_GAS, 'Callback gas exceeds limit');
-		reportId = _requestPrice(address(this), msg.sender, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth, uint32(callbackGas));
+		reportId = _requestPrice(msg.sender, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth, uint32(callbackGas));
 		IReportOperations.Batch storage stored = operationBatches[reportId];
 		stored.gasLimit = batch.gasLimit;
 		stored.minimumPrice = batch.minimumPrice;
@@ -313,25 +277,33 @@ contract SharedPoolPriceFeed {
 		for (uint256 index = 0; index < batch.operations.length; index++)
 			stored.operations.push(batch.operations[index]);
 		sponsorOperationReport[msg.sender] = reportId;
+		_refundExcessBounty(bountyAttoEth);
 	}
 
-	function _requestPrice(address coordinator, address sponsor, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth, uint32 callbackGasLimit) private returns (uint256 reportId) {
+	/// @dev Complete candidate and operation storage before invoking a sponsor callback.
+	function _refundExcessBounty(uint256 bountyAttoEth) private {
+		uint256 excess = msg.value - bountyAttoEth;
+		if (excess == 0) return;
+		(bool sent, ) = payable(msg.sender).call{value: excess}('');
+		require(sent, 'Oracle feed failed to refund excess ETH bounty');
+	}
+
+	function _requestPrice(address sponsor, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth, uint32 callbackGasLimit) private returns (uint256 reportId) {
 		require(ISharedPoolSecurityPoolPriceCheckpoint(securityPool).isPriceReportingOpen(universeId()), 'Security pool reporting window closed');
 		require(sponsor != address(0), 'Report sponsor zero');
 		require(proposedRepPerEthPrice > 0, 'Initial oracle price zero');
 		require(bountyAttoEth >= _minimumSettlementBounty(callbackGasLimit), 'Oracle bounty too small');
-		require(msg.value == bountyAttoEth, 'Incorrect oracle bounty');
+		require(msg.value >= bountyAttoEth, 'Not enough ETH for oracle bounty');
 		ReportFundingQuote memory quote = _quoteReportFunding(proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth);
 		pendingExposureLimitAttoEth = quote.exposureLimitAttoEth;
 		pendingReportMaxSettlementBaseFeeAttoEthPerGas = quote.maxSettlementBaseFeeAttoEthPerGas;
 		pendingReportSponsor = sponsor;
-		pendingCoordinator = coordinator;
 		SharedPoolReportEscrow escrow;
 		(reportId, escrow) = this.createReportEscrow(msg.sender, sponsor, quote.collateralAmount, quote.repAttoRep, quote.haltAttoEth, bountyAttoEth, callbackGasLimit);
 		pendingReportId = reportId;
-		reports[reportId] = ReportCandidate({escrow: escrow, sponsor: sponsor, coordinator: coordinator, outcome: REPORT_PENDING, maxSettlementBaseFee: pendingReportMaxSettlementBaseFeeAttoEthPerGas});
+		reports[reportId] = ReportCandidate({escrow: escrow, sponsor: sponsor, outcome: REPORT_PENDING, maxSettlementBaseFee: pendingReportMaxSettlementBaseFeeAttoEthPerGas});
 		emit PriceRequested(pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas);
-		emit ReportFundingAssigned(pendingReportId, coordinator, sponsor);
+		emit ReportFundingAssigned(pendingReportId, sponsor);
 	}
 
 	/// @dev Quote first; custody changes and the self-only escrow call stay in the request path.
@@ -502,7 +474,6 @@ contract SharedPoolPriceFeed {
 		if (reportId != pendingReportId) return;
 		pendingReportId = 0;
 		pendingReportSponsor = address(0);
-		pendingCoordinator = address(0);
 		pendingReportMaxSettlementBaseFeeAttoEthPerGas = 0;
 		pendingExposureLimitAttoEth = 0;
 	}

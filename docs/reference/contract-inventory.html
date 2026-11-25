@@ -146,12 +146,12 @@
 							</tr>
 
 							<tr>
-								<td><code>OpenOraclePriceCoordinatorFactory</code></td>
-								<td>Anyone can call <code>deployOpenOraclePriceCoordinator</code> under a caller-namespaced salt with caller-supplied OpenOracle, REP token, and positive <code>initialReportPriorityFeeAttoEthPerGas</code>; coordinator construction rejects zero and values that would consume the reserved OpenOracle <code>uint128</code> report and escalation-halt capacity. The caller therefore chooses this immutable gas-price assumption within that bound.</td>
-								<td>A question ledger coordinator is the instance named by canonical <code>DeployQuestionLedger</code>; <code>SecurityPoolFactory</code> atomically binds it to that question ledger before returning, and canonical child deployment inherits the value from the parent coordinator.</td>
+								<td><code>SharedPoolPriceFeedFactory</code></td>
+								<td>The factory deploys a shared feed implementation per caller and security pool, then universe-bound clones. The canonical security pool factory supplies OpenOracle, the positive report priority fee, and the universe REP token. Feed construction validates the fee against report and escalation limits.</td>
+								<td>The canonical feed is recorded in <code>SecurityPoolFactory.sharedPriceFeeds(securityPool, universeId)</code> and referenced by each ledger in <code>DeployQuestionLedger</code>. Child feeds inherit the security pool’s immutable report configuration.</td>
 							</tr>
 							<tr>
-								<td><code>PriceCoordinatorDeploymentWorker</code> and <code>QuestionLedgerDeploymentWorker</code></td>
+								<td><code>SharedPoolPriceFeedDeploymentWorker</code> and <code>QuestionLedgerDeploymentWorker</code></td>
 								<td>Deployment workers split large creation code into deployable modules and bind the calling factory.</td>
 								<td>Use canonical factory registration and module bindings; code presence alone is insufficient.</td>
 							</tr>
@@ -253,10 +253,8 @@
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameTypes.sol"><code>EscalationGameTypes.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/MerkleMountainRange.sol"><code>MerkleMountainRange.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/Multicall3.sol"><code>Multicall3.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>OpenOraclePriceCoordinator.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinatorTypes.sol"><code>OpenOraclePriceCoordinatorTypes.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceSource.sol"><code>OpenOraclePriceSource.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOracleReportDelegate.sol"><code>OpenOracleReportDelegate.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SharedPoolPriceFeed.sol"><code>SharedPoolPriceFeed.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OraclePriceTypes.sol"><code>OraclePriceTypes.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/QuestionLedger.sol"><code>QuestionLedger.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolRepairAuctionVault.sol"><code>SecurityPoolRepairAuctionVault.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolBoundClones.sol"><code>SecurityPoolBoundClones.sol</code></a
@@ -301,7 +299,6 @@
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/QuestionLedgerStorage.sol"><code>QuestionLedgerStorage.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolUniformPriceRepairAuction.sol"><code>SecurityPoolUniformPriceRepairAuction.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolUtils.sol"><code>SecurityPoolUtils.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SharedPoolPriceFeed.sol"><code>SharedPoolPriceFeed.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SharedPoolReportEscrow.sol"><code>SharedPoolReportEscrow.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/WETH9.sol"><code>WETH9.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/tokens/ERC1155.sol"><code>ERC1155.sol</code></a
@@ -314,7 +311,7 @@
 								<td>
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/Create2Deployment.sol"><code>Create2Deployment.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/EscalationGameFactory.sol"><code>EscalationGameFactory.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol"><code>OpenOraclePriceCoordinatorFactory.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/SharedPoolPriceFeedFactory.sol"><code>SharedPoolPriceFeedFactory.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/QuestionLedgerDeployer.sol"><code>QuestionLedgerDeployer.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/SecurityPoolFactory.sol"><code>SecurityPoolFactory.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/ShareTokenFactory.sol"><code>ShareTokenFactory.sol</code></a>

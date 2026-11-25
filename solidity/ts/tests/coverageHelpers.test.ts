@@ -21,16 +21,12 @@ import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilN
 import assert from '../testSupport/simulator/utils/assert'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES, MAX_UINT256 } from '../testSupport/simulator/utils/constants'
-import { ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
 	ReputationToken_ReputationToken,
 	statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate,
 	statoblast_factories_EscalationGameFactory_EscalationGameFactory,
-	statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory,
-	statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker,
-	statoblast_factories_OpenOraclePriceCoordinatorFactory_SharedPoolPriceFeedDeploymentWorker,
 	statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeployer,
 	statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
@@ -1648,25 +1644,6 @@ describe('Solidity bytecode coverage helpers', () => {
 			await assert.rejects(transact(unboundPool, data), /Reporter security pool required/)
 		}
 
-		const coordinatorWorker = await deployContract(client, encodeDeployData({ abi: statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker.abi, bytecode: `0x${statoblast_factories_OpenOraclePriceCoordinatorFactory_PriceCoordinatorDeploymentWorker.evm.bytecode.object}` }))
-		const feedWorker = await deployContract(client, encodeDeployData({ abi: statoblast_factories_OpenOraclePriceCoordinatorFactory_SharedPoolPriceFeedDeploymentWorker.abi, bytecode: `0x${statoblast_factories_OpenOraclePriceCoordinatorFactory_SharedPoolPriceFeedDeploymentWorker.evm.bytecode.object}` }))
-		const priceOracleFactoryAddress = await deployContract(
-			client,
-			encodeDeployData({
-				abi: statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory.abi,
-				bytecode: `0x${statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory.evm.bytecode.object}`,
-				args: [zeroAddress, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, 480, 0, 100000, 10000, 115, client.account.address, 100000n, 30000n, 1000n, coordinatorWorker, feedWorker],
-			}),
-		)
-		const deployPriceCoordinatorData = encodeFunctionData({
-			abi: statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory.abi,
-			functionName: 'deployOpenOraclePriceCoordinator',
-			args: [zeroAddress, reputationTokenAddress, 10n * 10n ** 9n, ZERO_BYTES32],
-		})
-		await transact(priceOracleFactoryAddress, deployPriceCoordinatorData)
-		// Reusing the sender and salt collides with the existing CREATE2 address, which fails without constructor revert data.
-		await assert.rejects(transact(priceOracleFactoryAddress, deployPriceCoordinatorData), /Price coordinator deployment failed/)
-
 		const fakeZoltar = await deployContract(
 			client,
 			encodeDeployData({
@@ -1687,7 +1664,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker.abi,
 				address: deploymentWorkerAddress,
 				functionName: 'deploy',
-				args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, openOraclePriceCoordinator: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
+				args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, priceFeed: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
 			}),
 			/Only QuestionLedgerDeployer can use the deployment worker/,
 		)
@@ -1698,7 +1675,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					data: encodeFunctionData({
 						abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeploymentWorker.abi,
 						functionName: 'deploy',
-						args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, openOraclePriceCoordinator: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
+						args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, priceFeed: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
 					}),
 					gas: 10_000_000n,
 				}),
@@ -1718,7 +1695,7 @@ describe('Solidity bytecode coverage helpers', () => {
 				abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeployer.abi,
 				address: questionLedgerDeployerAddress,
 				functionName: 'deploy',
-				args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, openOraclePriceCoordinator: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
+				args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, priceFeed: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
 			}),
 			/Only SecurityPoolFactory can use the deployer/,
 		)
@@ -1729,7 +1706,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					data: encodeFunctionData({
 						abi: statoblast_factories_QuestionLedgerDeployer_QuestionLedgerDeployer.abi,
 						functionName: 'deploy',
-						args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, openOraclePriceCoordinator: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
+						args: [{ questionForker: zeroAddress, questionData: zeroAddress, escalationGameFactory: zeroAddress, priceFeed: zeroAddress, shareToken: zeroAddress, openOracle: zeroAddress, parent: zeroAddress, zoltar: fakeZoltar, universeId: 0n, questionId: 0n, statoblastSecurityMultiplierBps: 2n }],
 					}),
 					gas: 10_000_000n,
 				}),

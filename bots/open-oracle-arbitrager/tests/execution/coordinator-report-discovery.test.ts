@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { bytesToHex, mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { createPublicClient, decodeFunctionData, encodeAbiParameters, getAddress, hexToBytes, isHex, type EIP1193Provider, type Hex } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
-import { openOracleAbi, openOraclePriceCoordinatorAbi } from '#contracts/abi'
+import { openOracleAbi, sharedPoolPriceFeedAbi } from '#contracts/abi'
 import { pendingCoordinatorReports, pendingCoordinatorReportsWithQuorum, replacementDisputeAmountsWithQuorum } from '#execution/recovery-support'
 import { applyCoordinatorReports, type ActiveReport } from '#monitoring/oracle-log-state'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
@@ -107,7 +107,7 @@ describe('configured coordinator report discovery', () => {
 			blockTags.push(blockTag)
 			const target = to.toLowerCase()
 			if (target === activeCoordinator.toLowerCase() || target === idleCoordinator.toLowerCase()) {
-				const decoded = decodeFunctionData({ abi: openOraclePriceCoordinatorAbi, data: requiredHex(data) })
+				const decoded = decodeFunctionData({ abi: sharedPoolPriceFeedAbi, data: requiredHex(data) })
 				if (decoded.functionName !== 'pendingReportId') throw new Error(`Unexpected coordinator read ${decoded.functionName}`)
 				contractReads.push(decoded.functionName)
 				return encodeAbiParameters([{ type: 'uint256' }], [target === activeCoordinator.toLowerCase() ? 7n : 0n])
@@ -173,7 +173,7 @@ describe('configured coordinator report discovery', () => {
 				({ data, to }) => {
 					const target = to.toLowerCase()
 					if (target === activeCoordinator.toLowerCase()) {
-						const decoded = decodeFunctionData({ abi: openOraclePriceCoordinatorAbi, data: requiredHex(data) })
+						const decoded = decodeFunctionData({ abi: sharedPoolPriceFeedAbi, data: requiredHex(data) })
 						if (decoded.functionName !== 'pendingReportId') throw new Error(`Unexpected coordinator read ${decoded.functionName}`)
 						return encodeAbiParameters([{ type: 'uint256' }], [reportId])
 					}

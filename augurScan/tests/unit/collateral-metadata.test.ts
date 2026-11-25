@@ -8,7 +8,7 @@ const securityPool = getAddress('0x2222222222222222222222222222222222222222')
 const factory = getAddress('0x3333333333333333333333333333333333333333')
 const token = getAddress('0x4444444444444444444444444444444444444444')
 
-for (const kind of ['questionLedger', 'securityPool', 'sharedPoolPriceFeed', 'priceCoordinator', 'ammPair', 'securityPoolServices'])
+for (const kind of ['questionLedger', 'securityPool', 'sharedPoolPriceFeed', 'ammPair', 'securityPoolServices'])
 	test(`${kind} resolves pool collateral through its authenticated dependencies`, async () => {
 		const calls: string[] = []
 		const read: StateRead = async (_address, _abi, name) => {
@@ -40,7 +40,7 @@ for (const kind of ['questionLedger', 'securityPool', 'sharedPoolPriceFeed', 'pr
 	})
 
 test('collateral units apply to the contract kinds the generated configuration produces', () => {
-	for (const kind of ['questionLedger', 'securityPoolCapitalLedger', 'sharedPoolPriceFeed', 'priceCoordinator', 'ammFactory', 'ammPair', 'ammRouter']) expect(usesCollateralUnits(kind)).toBe(true)
+	for (const kind of ['questionLedger', 'securityPoolCapitalLedger', 'sharedPoolPriceFeed', 'ammFactory', 'ammPair', 'ammRouter']) expect(usesCollateralUnits(kind)).toBe(true)
 	for (const kind of [undefined, 'weth', 'reputationToken', 'openOracle', 'zoltar', 'uniswapV2Pair']) expect(usesCollateralUnits(kind)).toBe(false)
 })
 
