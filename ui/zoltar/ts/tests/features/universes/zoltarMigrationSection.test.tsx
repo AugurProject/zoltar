@@ -119,8 +119,9 @@ describe('ZoltarMigrationSection', () => {
 		cleanupRenderedComponent = rendered.cleanup
 		const queries = within(document.body)
 		const amount = queries.getByLabelText('Amount to migrate')
-		const max = queries.getByRole('button', { name: /^Use all .*REP$/ })
+		const max = queries.getByRole('button', { name: 'Max' })
 		expect(amount.closest('.field-inline')?.contains(max)).toBe(false)
+		expect(document.body.textContent).toContain('Available to migrate')
 		const approval = queries.getByRole('button', { name: /^Approve .*REP/ })
 		expect(approval.getAttribute('disabled')).not.toBeNull()
 		expect(document.body.textContent).toContain('no wallet REP needs approval')

@@ -279,7 +279,7 @@ export function ZoltarMigrationSection({
 				const showBreakdown = amountStep?.status === 'complete'
 				const maximumShortcut = (
 					<button className={singleForm ? 'quiet' : 'quiet field-inline-action'} type='button' onClick={() => (maxAmount === undefined ? undefined : onZoltarMigrationFormChange({ amount: formatCurrencyInputBalance(maxAmount) }))} disabled={zoltarMigrationPending || maxAmount === undefined || maxAmount <= 0n}>
-						{maxAmount === undefined ? commonCopy.max : zoltarCopy.formatUseAllRep(formatCurrencyBalance(maxAmount))}
+						{singleForm || maxAmount === undefined ? commonCopy.max : zoltarCopy.formatUseAllRep(formatCurrencyBalance(maxAmount))}
 					</button>
 				)
 				return (
@@ -300,7 +300,16 @@ export function ZoltarMigrationSection({
 								/>
 								{!singleForm && maximumShortcut}
 							</div>
-							{singleForm && <div className='actions'>{maximumShortcut}</div>}
+							{singleForm && (
+								<div className='actions'>
+									{maximumShortcut}
+									{maxAmount !== undefined && (
+										<p className='detail'>
+											{zoltarCopy.migrationAvailable} <CurrencyValue value={maxAmount} suffix={commonCopy.rep} />
+										</p>
+									)}
+								</div>
+							)}
 							{zoltarMigrationPreparedRepBalanceAttoRep === undefined || zoltarMigrationPreparedRepBalanceAttoRep === 0n ? undefined : <p className='detail'>{zoltarCopy.migrationBalanceExplainer}</p>}
 						</div>
 						{!singleForm && (
