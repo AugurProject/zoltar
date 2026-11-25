@@ -1,8 +1,8 @@
 import { invalidateStatoblastEntries } from '../../../protocol/statoblastEntries.js'
 import { securityPoolCollateral, type CollateralSymbol } from '../../../protocol/collateral.js'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
-import { useSignal } from '@preact/signals'
-import { useEffect, useRef } from 'preact/hooks'
+import { signal, useSignal } from '@preact/signals'
+import { useEffect, useMemo, useRef } from 'preact/hooks'
 import { getAddress, parseUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
@@ -19,20 +19,38 @@ import { defaultSecurityPoolCreationDraft, parseFixedSecurityPoolQuestions, pars
 import { loadSecurityPoolAdmission, securityPoolAdmissionCreationRequest, requireSecurityPoolQuestionAdmission, requireSecurityPoolQuestionHorizon, requireSecurityPoolQuestionEligibility } from '../../../protocol/securityPoolAdmission.js'
 import { buildSecurityPoolAuctionVaultExecuteRequest } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { authenticateSecurityPoolAuctionVault } from '../../../protocol/securityPoolRepairAuction.js'
+import { deploymentProgressStore, type DeploymentDraft } from '../lib/deploymentProgress.js'
 
-export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>, parameters: WriteOperationsParameters) {
-	const collateralSymbol = useSignal<CollateralSymbol>('WETH')
-	const reportFloor = useSignal('0.01')
-	const collateral = securityPoolCollateral(getActiveNetworkProfile(), collateralSymbol.value)
-	const originInput = useSignal(model.universeInput)
+export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>, parameters: WriteOperationsParameters, deploying = false) {
+	const backend = getActiveBackend()
+	const wallet = parameters.accountAddress
+	const journal = useMemo(() => {
+		const store = deploymentProgressStore(backend.profile, deploying ? wallet : undefined)
+		return { store, current: signal(store.read()) }
+	}, [backend, wallet, deploying])
+	const progress = journal.current.value
+	const saveProgress = (next: typeof progress) => {
+		journal.store.write(next)
+		journal.current.value = next
+	}
 	const originEdited = useRef(false)
 	const originForkState = useSignal<{ backend: ReturnType<typeof getActiveBackend>; key: string; forked: boolean } | undefined>(undefined)
-	const multiplierInput = useSignal('200')
-	const priorityFeeInput = useSignal((DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 9n).toString())
-	const horizonDays = useSignal('30')
-	const admissionMode = useSignal<CuratedAdmissionMode>('open')
-	const fixedQuestions = useSignal('')
-	const economicsDraft = useSignal(defaultSecurityPoolCreationDraft())
+	const draftInput = useSignal<DeploymentDraft>({
+		collateralSymbol: 'WETH',
+		reportFloor: '0.01',
+		originInput: model.universeInput,
+		multiplierInput: '200',
+		priorityFeeInput: (DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 9n).toString(),
+		horizonDays: '30',
+		admissionMode: 'open',
+		fixedQuestions: '',
+		economicsDraft: defaultSecurityPoolCreationDraft(),
+	})
+	const draft = progress?.draft ?? draftInput.value
+	const updateDraft = (patch: Partial<DeploymentDraft>) => {
+		if (journal.current.value === undefined) draftInput.value = { ...draftInput.value, ...patch }
+	}
+	const collateral = securityPoolCollateral(getActiveNetworkProfile(), draft.collateralSymbol)
 	const deployedAdmission = useSignal<{ address: Address; key: string; universeId: bigint; backend: ReturnType<typeof getActiveBackend> } | undefined>(undefined)
 	const questionInput = useSignal('')
 	const busy = useSignal<string | undefined>(undefined)
@@ -40,7 +58,6 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 	const lastFailedAction = useSignal<string | undefined>(undefined)
 	const feedback = useSignal<string | undefined>(undefined)
 	const snapshot = model.snapshot
-	const backend = getActiveBackend()
 	const universeId = snapshot?.universeId ?? securityPoolUnsignedId(model.universeInput, 248) ?? 0n
 	const scope = mergeTransactionScopes(createTransactionScope('securityPool', snapshot?.securityPool ?? model.setup?.securityPool), createTransactionScope('security-pool-capital', snapshot?.capitalLedger))
 	const walletReason = parameters.accountAddress === undefined ? copy.connect : undefined
@@ -56,12 +73,20 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 	}, [backend, model.managerInput, model.ownerInput, universeId])
 	// A forked universe cannot be an origin, so a fixed genesis default would fail once genesis forks.
 	useEffect(() => {
-		if (!originEdited.current) originInput.value = model.universeInput
+		if (!originEdited.current) updateDraft({ originInput: model.universeInput })
 	}, [model.universeInput])
-	const originForkKey = originInput.value.trim()
+	const savedPool = progress?.pool
+	useEffect(() => {
+		if (savedPool !== undefined && wallet !== undefined && savedPool.toLowerCase() !== model.managerInput.toLowerCase()) void model.load(savedPool, wallet, draft.originInput)
+	}, [savedPool, wallet, backend])
+	const completedPool = model.setup?.stage === 4 ? model.setup.securityPool : undefined
+	useEffect(() => {
+		if (savedPool !== undefined && savedPool.toLowerCase() === completedPool?.toLowerCase()) saveProgress(undefined)
+	}, [savedPool, completedPool, journal])
+	const originForkKey = draft.originInput.trim()
 	useEffect(() => {
 		let current = true
-		const originUniverse = securityPoolUnsignedId(originInput.value, 248)
+		const originUniverse = securityPoolUnsignedId(draft.originInput, 248)
 		// A failed read leaves the check to submission, which repeats it for a universe that forks after this one.
 		const load = async () => {
 			if (originUniverse === undefined) return
@@ -133,21 +158,21 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 	let horizon: bigint | undefined
 	let origin: import('@zoltar/statoblast-shared/statoblast/securityPool').SecurityPoolOriginConfig | undefined
 	try {
-		const originUniverse = securityPoolUnsignedId(originInput.value, 248)
+		const originUniverse = securityPoolUnsignedId(draft.originInput, 248)
 		if (originUniverse === undefined) throw new Error(copy.enterOrigin)
-		const securityMultiplierBps = parseUnits(multiplierInput.value, 2)
-		const reportPriorityFeeAttoEthPerGas = parseUnits(priorityFeeInput.value, 9)
+		const securityMultiplierBps = parseUnits(draft.multiplierInput, 2)
+		const reportPriorityFeeAttoEthPerGas = parseUnits(draft.priorityFeeInput, 9)
 		if (securityMultiplierBps < 10_500n) throw new Error('Security multiplier must be at least 105%.')
 		if (reportPriorityFeeAttoEthPerGas <= 0n) throw new Error('Oracle priority fee must be positive.')
 		if (reportPriorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) throw new Error('Oracle priority fee exceeds the report funding limit.')
 		if (collateral.address === undefined) throw new Error('This collateral token is unavailable on the selected network.')
-		const minimumReportCollateral = securityPoolAmountOrUndefined(reportFloor.value, collateral.decimals)
+		const minimumReportCollateral = securityPoolAmountOrUndefined(draft.reportFloor, collateral.decimals)
 		if (minimumReportCollateral === undefined || minimumReportCollateral === 0n) throw new Error(`Enter a positive report stake floor with up to ${collateral.decimals} decimal places.`)
 		origin = { collateralToken: collateral.address, minimumReportCollateral, universeId: originUniverse, securityMultiplierBps, reportPriorityFeeAttoEthPerGas }
-		if (admissionMode.value === 'fixed') fixedQuestionIds = parseFixedSecurityPoolQuestions(fixedQuestions.value)
-		economics = parseSecurityPoolCreationEconomics(economicsDraft.value, collateral.decimals)
-		if (!/^\d+$/.test(horizonDays.value)) throw new Error(copy.horizonInvalid)
-		horizon = BigInt(horizonDays.value) * 86400n
+		if (draft.admissionMode === 'fixed') fixedQuestionIds = parseFixedSecurityPoolQuestions(draft.fixedQuestions)
+		economics = parseSecurityPoolCreationEconomics(draft.economicsDraft, collateral.decimals)
+		if (!/^\d+$/.test(draft.horizonDays)) throw new Error(copy.horizonInvalid)
+		horizon = BigInt(draft.horizonDays) * 86400n
 		if (horizon === 0n || horizon >= 1n << 48n) throw new Error(copy.horizonInvalid)
 	} catch (failure) {
 		creationError = getErrorMessage(failure, copy.creationInvalid)
@@ -160,8 +185,11 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		originForkState.value = { backend, key: originForkKey, forked: true }
 		throw new Error(copy.originForked)
 	}
-	const admissionKey = `${originInput.value.trim().toLowerCase()}:${admissionMode.value}:${fixedQuestionIds.join(',')}`
-	const admission = deployedAdmission.value?.key === admissionKey && deployedAdmission.value.backend === backend ? deployedAdmission.value : undefined
+	const admissionKey = `${draft.originInput.trim().toLowerCase()}:${draft.admissionMode}:${fixedQuestionIds.join(',')}`
+	const previousAdmission = deployedAdmission.value
+	const liveAdmission = previousAdmission?.key === admissionKey && previousAdmission.backend === backend ? previousAdmission : undefined
+	const admission = progress !== undefined && origin !== undefined ? { address: progress.rules, universeId: origin.universeId } : liveAdmission
+	const deploymentStatus = (savedPool === undefined ? undefined : copy.poolAlreadyDeployed) ?? (admission === undefined ? copy.deployAdmissionFirst : undefined)
 	const questionId = securityPoolUnsignedId(questionInput.value)
 	const admissionAllowed = snapshot?.admission.mode !== 'custom'
 	const registration = useSignal<{ key: string; reason?: string } | undefined>(undefined)
@@ -201,52 +229,30 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		feedback: feedback.value,
 		scope,
 		ownerReason,
-		multiplierInput: multiplierInput.value,
-		setMultiplierInput: (value: string) => {
-			multiplierInput.value = value
-		},
-		priorityFeeInput: priorityFeeInput.value,
-		setPriorityFeeInput: (value: string) => {
-			priorityFeeInput.value = value
-		},
-		originInput: originInput.value,
+		...draft,
 		originForked,
-		setOriginInput: (value: string) => {
+		deploymentLocked: progress !== undefined,
+		setMultiplierInput: (multiplierInput: string) => updateDraft({ multiplierInput }),
+		setPriorityFeeInput: (priorityFeeInput: string) => updateDraft({ priorityFeeInput }),
+		setOriginInput: (originInput: string) => {
+			if (journal.current.value !== undefined) return
 			originEdited.current = true
-			originInput.value = value
+			updateDraft({ originInput })
 		},
-		horizonDays: horizonDays.value,
-		setHorizonDays: (value: string) => {
-			horizonDays.value = value
-		},
-		admissionMode: admissionMode.value,
-		setAdmissionMode: (value: CuratedAdmissionMode) => {
-			admissionMode.value = value
-		},
-		fixedQuestions: fixedQuestions.value,
-		setFixedQuestions: (value: string) => {
-			fixedQuestions.value = value
-		},
-		collateralSymbol: collateralSymbol.value,
-		setCollateralSymbol: (value: CollateralSymbol) => {
-			if (collateralSymbol.value === value) return
-			collateralSymbol.value = value
-			reportFloor.value = ''
-			economicsDraft.value = { ...economicsDraft.value, minimumCommitment: '', minimumPurchaseFee: '' }
+		setHorizonDays: (horizonDays: string) => updateDraft({ horizonDays }),
+		setAdmissionMode: (admissionMode: CuratedAdmissionMode) => updateDraft({ admissionMode }),
+		setFixedQuestions: (fixedQuestions: string) => updateDraft({ fixedQuestions }),
+		setCollateralSymbol: (collateralSymbol: CollateralSymbol) => {
+			if (draft.collateralSymbol === collateralSymbol) return
+			updateDraft({ collateralSymbol, reportFloor: '', economicsDraft: { ...draft.economicsDraft, minimumCommitment: '', minimumPurchaseFee: '' } })
 		},
 		collateral,
-		reportFloor: reportFloor.value,
-		setReportFloor: (value: string) => {
-			reportFloor.value = value
-		},
-		economicsDraft: economicsDraft.value,
-		setEconomicsField: (field: keyof SecurityPoolCreationDraft, value: string) => {
-			economicsDraft.value = { ...economicsDraft.value, [field]: value }
-		},
+		setReportFloor: (reportFloor: string) => updateDraft({ reportFloor }),
+		setEconomicsField: (field: keyof SecurityPoolCreationDraft, value: string) => updateDraft({ economicsDraft: { ...draftInput.value.economicsDraft, [field]: value } }),
 		admissionAddress: admission?.address,
 		creationError,
 		admissionDeployReason: walletReason ?? creationError ?? (origin === undefined ? copy.enterOrigin : undefined) ?? originForkReason ?? (admission !== undefined ? copy.admissionDeployed : undefined),
-		deployReason: walletReason ?? creationError ?? (origin === undefined ? copy.enterOrigin : undefined) ?? originForkReason ?? (admission === undefined ? copy.deployAdmissionFirst : undefined),
+		deployReason: walletReason ?? creationError ?? (origin === undefined ? copy.enterOrigin : undefined) ?? originForkReason ?? deploymentStatus,
 		deployAdmission: async () => {
 			let captured: { key: string; universeId: bigint } | undefined
 			await run(
@@ -255,8 +261,9 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 				async () => {
 					if (parameters.accountAddress === undefined) throw new Error(copy.connect)
 					if (creationError !== undefined) throw new Error(creationError)
+					if (journal.current.value !== undefined) throw new Error(copy.admissionDeployed)
 					const key = admissionKey
-					const mode = admissionMode.value
+					const mode = draft.admissionMode
 					const ids = [...fixedQuestionIds]
 					if (origin === undefined) throw new Error(copy.enterOrigin)
 					const originUniverse = origin.universeId
@@ -267,7 +274,8 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 				async result => {
 					const address = result.receipt.contractAddress
 					if (address === null || address === undefined || captured === undefined) throw new Error(copy.admissionAddressMissing)
-					deployedAdmission.value = { ...captured, address, backend }
+					if (deploying) saveProgress({ rules: address, draft })
+					else deployedAdmission.value = { ...captured, address, backend }
 				},
 			)
 		},
@@ -277,14 +285,24 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 				copy.deploy,
 				async () => {
 					if (parameters.accountAddress === undefined) throw new Error(copy.connect)
+					if (journal.current.value?.pool !== undefined) throw new Error(copy.poolAlreadyDeployed)
 					if (creationError !== undefined || economics === undefined || admission === undefined || horizon === undefined || origin === undefined) throw new Error(creationError ?? copy.deployAdmissionFirst)
 					const chosen = admission
-					const mode = admissionMode.value
+					const mode = draft.admissionMode
 					const config = { ...economics }
 					const originConfig = { ...origin }
 					const validateAdmission = async () => {
-						const verified = await loadSecurityPoolAdmission(createConnectedReadClient(), chosen.address, chosen.universeId)
+						const client = createConnectedReadClient()
+						const verified = await loadSecurityPoolAdmission(client, chosen.address, chosen.universeId)
 						if (verified.mode !== mode) throw new Error(copy.unsupportedAdmission)
+						if (verified.mode === 'fixed') {
+							if (verified.questionCount !== BigInt(fixedQuestionIds.length) || verified.questions.length !== Math.min(64, fixedQuestionIds.length) || verified.questions.some((id, index) => id !== fixedQuestionIds[index])) throw new Error(copy.unsupportedAdmission)
+							for (let offset = verified.questions.length; offset < fixedQuestionIds.length; offset += 64) {
+								const page = await loadSecurityPoolAdmission(client, chosen.address, chosen.universeId, undefined, BigInt(offset))
+								const expected = fixedQuestionIds.slice(offset, offset + 64)
+								if (page.mode !== 'fixed' || page.questions.length !== expected.length || page.questions.some((id, index) => id !== expected[index])) throw new Error(copy.unsupportedAdmission)
+							}
+						}
 					}
 					await validateAdmission()
 					return {
@@ -297,6 +315,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 				async result => {
 					if (parameters.accountAddress === undefined) throw new Error('Security pool deployment address unavailable.')
 					const securityPool = securityPoolAddressFromCreationReceipt(result.receipt)
+					if (progress !== undefined) saveProgress({ ...progress, pool: securityPool })
 					await model.load(securityPool, parameters.accountAddress, admission?.universeId.toString())
 				},
 			),

@@ -68,13 +68,14 @@ export function SecurityPoolsSection({
 	activeUniverseId: bigint
 }) {
 	const [fundsRemain, setFundsRemain] = useState(false)
-	const [deployStep, setDeployStep] = useState(0)
+	const [selectedDeployStep, setDeployStep] = useState<number>()
 	const deploySteps = [pageCopy.deployCollateralAndPrice, pageCopy.deployQuestionsSection, pageCopy.deployEconomicsSection, pageCopy.deployAndSetup]
 	const model = useSecurityPool({ accountAddress: parameters.accountAddress, enabled, environmentKey, activeUniverseId, cacheReads: cacheReads && !deploying, resumeSetup: deploying, securityPoolAddress: page?.pool })
 	const refreshError = useStatoblastRefreshError(model.error, model.displayedAt)
 	useStatoblastPageRefresh(registerPageRefresh, model.refresh)
 	useEffect(() => onReadStatus?.(model.displayedAt, undefined), [model.displayedAt, onReadStatus])
-	const actions = useSecurityPoolActions(model, parameters)
+	const actions = useSecurityPoolActions(model, parameters, deploying)
+	const deployStep = selectedDeployStep ?? (actions.deploymentLocked ? 3 : 0)
 	const shownSetupStage = model.setup?.stage ?? model.savedSetupStage
 	const setupVerificationReasonId = useId()
 	const setupVerificationReason = model.setup === undefined && model.savedSetupStage !== undefined ? actions.preparationReason(1) : undefined
@@ -87,6 +88,7 @@ export function SecurityPoolsSection({
 	// Only a visitor with no wallet at all is asked to connect one; a wallet on another network is flagged in the header.
 	if (ownerMissing) ownerMessage = walletConnected ? copy.ownerAddressNeeded : copy.ownerNeeded
 	const disabled = actions.busy !== undefined
+	const draftDisabled = disabled || actions.deploymentLocked
 	const shown = model.presentationSnapshot
 	const deployReasonId = useId()
 	// Once an account has been shown, its price report stays mounted through a failed refresh so typed drafts survive;
@@ -120,17 +122,17 @@ export function SecurityPoolsSection({
 									value={actions.collateralSymbol}
 									onChange={actions.setCollateralSymbol}
 									options={[
-										{ value: collateralCopy.weth, label: collateralCopy.weth, disabled },
-										{ value: collateralCopy.usdc, label: collateralCopy.usdc, disabled },
+										{ value: collateralCopy.weth, label: collateralCopy.weth, disabled: draftDisabled },
+										{ value: collateralCopy.usdc, label: collateralCopy.usdc, disabled: draftDisabled },
 									]}
 								/>
-								<SecurityPoolInput label={copy.originPool} hint={copy.originPoolHint} value={actions.originInput} onChange={actions.setOriginInput} disabled={disabled} error={actions.originForked ? copy.originForked : undefined} liveError />
+								<SecurityPoolInput label={copy.originPool} hint={copy.originPoolHint} value={actions.originInput} onChange={actions.setOriginInput} disabled={draftDisabled} error={actions.originForked ? copy.originForked : undefined} liveError />
 							</fieldset>
 							<fieldset className='statoblast-deploy-section'>
 								<legend>{pageCopy.deployPriceSection}</legend>
 
-								<SecurityPoolInput label={collateralCopy.oracleStake(actions.collateral.symbol)} hint={collateralCopy.floorHint} value={actions.reportFloor} onChange={actions.setReportFloor} disabled={disabled} numeric />
-								<SecurityPoolInput label={copy.oraclePriorityFee} value={actions.priorityFeeInput} onChange={actions.setPriorityFeeInput} disabled={disabled} />
+								<SecurityPoolInput label={collateralCopy.oracleStake(actions.collateral.symbol)} hint={collateralCopy.floorHint} value={actions.reportFloor} onChange={actions.setReportFloor} disabled={draftDisabled} numeric />
+								<SecurityPoolInput label={copy.oraclePriorityFee} value={actions.priorityFeeInput} onChange={actions.setPriorityFeeInput} disabled={draftDisabled} />
 							</fieldset>
 						</>
 					)}
@@ -144,27 +146,27 @@ export function SecurityPoolsSection({
 								value={actions.admissionMode}
 								onChange={actions.setAdmissionMode}
 								options={[
-									{ value: 'open', label: copy.admissionOpen },
-									{ value: 'fixed', label: copy.admissionFixed },
+									{ value: 'open', label: copy.admissionOpen, disabled: draftDisabled },
+									{ value: 'fixed', label: copy.admissionFixed, disabled: draftDisabled },
 								]}
 							/>
 							<UserMessage detail={actions.admissionMode === 'open' ? copy.admissionOpenHint : copy.admissionFixedHint} />
-							{actions.admissionMode === 'fixed' ? <SecurityPoolInput label={copy.fixedQuestionIds} hint={copy.fixedQuestionIdsHint} value={actions.fixedQuestions} onChange={actions.setFixedQuestions} disabled={disabled} /> : undefined}
-							<SecurityPoolInput label={copy.horizon} hint={copy.horizonHint} value={actions.horizonDays} onChange={actions.setHorizonDays} disabled={disabled} numeric />
+							{actions.admissionMode === 'fixed' ? <SecurityPoolInput label={copy.fixedQuestionIds} hint={copy.fixedQuestionIdsHint} value={actions.fixedQuestions} onChange={actions.setFixedQuestions} disabled={draftDisabled} /> : undefined}
+							<SecurityPoolInput label={copy.horizon} hint={copy.horizonHint} value={actions.horizonDays} onChange={actions.setHorizonDays} disabled={draftDisabled} numeric />
 						</fieldset>
 					)}
 					{(!deploying || deployStep === 2) && (
 						<fieldset className='statoblast-deploy-section'>
 							<legend>{pageCopy.deployEconomicsSection}</legend>
 
-							<SecurityPoolInput label={copy.securityMultiplier} hint={copy.securityMultiplierHint} value={actions.multiplierInput} onChange={actions.setMultiplierInput} disabled={disabled} />
+							<SecurityPoolInput label={copy.securityMultiplier} hint={copy.securityMultiplierHint} value={actions.multiplierInput} onChange={actions.setMultiplierInput} disabled={draftDisabled} />
 							<MetricGrid>
-								<SecurityPoolInput label={copy.purchaseFeePercent} value={actions.economicsDraft.purchaseFeePercent} onChange={value => actions.setEconomicsField('purchaseFeePercent', value)} disabled={disabled} numeric />
-								<SecurityPoolInput label={collateralCopy.purchaseFee(actions.collateral.symbol)} value={actions.economicsDraft.minimumPurchaseFee} onChange={value => actions.setEconomicsField('minimumPurchaseFee', value)} disabled={disabled} numeric />
-								<SecurityPoolInput label={collateralCopy.commitment(actions.collateral.symbol)} hint={capitalCopy.minimumCommitmentHint} value={actions.economicsDraft.minimumCommitment} onChange={value => actions.setEconomicsField('minimumCommitment', value)} disabled={disabled} numeric />
-								<SecurityPoolInput label={capitalCopy.rewardVesting} value={actions.economicsDraft.rewardVestingHours} onChange={value => actions.setEconomicsField('rewardVestingHours', value)} disabled={disabled} numeric />
-								<SecurityPoolInput label={capitalCopy.annualFee} hint={capitalCopy.annualFeeHint} value={actions.economicsDraft.annualFeePercent} onChange={value => actions.setEconomicsField('annualFeePercent', value)} disabled={disabled} numeric />
-								<SecurityPoolInput label={capitalCopy.outcomeRate} hint={capitalCopy.outcomeRateHint} value={actions.economicsDraft.minimumOutcomeRate} onChange={value => actions.setEconomicsField('minimumOutcomeRate', value)} disabled={disabled} numeric />
+								<SecurityPoolInput label={copy.purchaseFeePercent} value={actions.economicsDraft.purchaseFeePercent} onChange={value => actions.setEconomicsField('purchaseFeePercent', value)} disabled={draftDisabled} numeric />
+								<SecurityPoolInput label={collateralCopy.purchaseFee(actions.collateral.symbol)} value={actions.economicsDraft.minimumPurchaseFee} onChange={value => actions.setEconomicsField('minimumPurchaseFee', value)} disabled={draftDisabled} numeric />
+								<SecurityPoolInput label={collateralCopy.commitment(actions.collateral.symbol)} hint={capitalCopy.minimumCommitmentHint} value={actions.economicsDraft.minimumCommitment} onChange={value => actions.setEconomicsField('minimumCommitment', value)} disabled={draftDisabled} numeric />
+								<SecurityPoolInput label={capitalCopy.rewardVesting} value={actions.economicsDraft.rewardVestingHours} onChange={value => actions.setEconomicsField('rewardVestingHours', value)} disabled={draftDisabled} numeric />
+								<SecurityPoolInput label={capitalCopy.annualFee} hint={capitalCopy.annualFeeHint} value={actions.economicsDraft.annualFeePercent} onChange={value => actions.setEconomicsField('annualFeePercent', value)} disabled={draftDisabled} numeric />
+								<SecurityPoolInput label={capitalCopy.outcomeRate} hint={capitalCopy.outcomeRateHint} value={actions.economicsDraft.minimumOutcomeRate} onChange={value => actions.setEconomicsField('minimumOutcomeRate', value)} disabled={draftDisabled} numeric />
 							</MetricGrid>
 						</fieldset>
 					)}
@@ -208,9 +210,12 @@ export function SecurityPoolsSection({
 				{deploying && (
 					<aside className='statoblast-deploy-summary' aria-label={pageCopy.deploySummary}>
 						<h3>{pageCopy.deploySummary}</h3>
+						{actions.deploymentLocked && <UserMessage detail={pageCopy.deploySettingsLocked} />}
 						<MetricGrid>
 							<MetricField label={pageCopy.deployCollateralSection}>{actions.collateral.symbol}</MetricField>
 							<MetricField label={copy.originPool}>{actions.originInput || undefined}</MetricField>
+							<MetricField label={collateralCopy.oracleStake(actions.collateral.symbol)}>{actions.reportFloor || undefined}</MetricField>
+							<MetricField label={collateralCopy.commitment(actions.collateral.symbol)}>{actions.economicsDraft.minimumCommitment || undefined}</MetricField>
 							<MetricField label={pageCopy.deployQuestionsSection}>{actions.admissionMode === 'open' ? copy.admissionOpen : copy.admissionFixed}</MetricField>
 							<MetricField label={copy.securityMultiplier}>{actions.multiplierInput ? pageCopy.formatMultiplier(actions.multiplierInput) : undefined}</MetricField>
 							<MetricField label={capitalCopy.annualFee}>{actions.economicsDraft.annualFeePercent ? pageCopy.formatMultiplier(actions.economicsDraft.annualFeePercent) : undefined}</MetricField>

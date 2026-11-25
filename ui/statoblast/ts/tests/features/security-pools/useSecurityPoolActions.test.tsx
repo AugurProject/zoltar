@@ -42,7 +42,7 @@ function model(): Parameters<typeof useSecurityPoolActions>[0] {
 	}
 }
 /** Renders the actions over `source` with an owner wallet that records each transaction, reports `token` as the first deployed contract and the factory's deployment event for `securityPool` after it. */
-async function renderWithDeploymentWallet(source: ReturnType<typeof capitalClient>) {
+async function renderWithDeploymentWallet(source: ReturnType<typeof capitalClient>, deploying = false) {
 	// The factory creates the security pool, so the receipt carries no contract address for it: only the factory's event names it.
 	const topic = (value: Address) => encodeAbiParameters(parseAbiParameters('address'), [value])
 	const deployed = () => ({ address: getInfraContractAddresses().securityPoolFactory, data: '0x' as const, topics: [toEventSelector(parseAbiItem('event SecurityPoolDeployed(address indexed securityPool, address indexed creator)')), topic(securityPool), topic(owner)] })
@@ -51,6 +51,7 @@ async function renderWithDeploymentWallet(source: ReturnType<typeof capitalClien
 	const writer = asWriteClient({ ...createMockWriteClient(request => requests.push(request)), waitForTransactionReceipt: async () => (requests.length === 1 ? { status: 'success' as const, contractAddress: token, logs: [] } : { status: 'success' as const, contractAddress: undefined, logs: [deployed()] }) })
 	installActiveEnvironmentForTesting({ ...source.backend, createWriteClient: () => ({ ...writer, account: { address: owner, type: 'json-rpc' }, chain: MAINNET_NETWORK_PROFILE.chain, call: async () => ({ data: undefined }) }) })
 	const hook = await renderHookWithProps(useSecurityPoolActionsWrapper, {
+		deploying,
 		model: {
 			...model(),
 			load: async address => {
@@ -83,8 +84,34 @@ test('creation uses an explicit admission transaction before deployment and inva
 	expect(hook.state().admissionAddress).toBeUndefined()
 	expect(hook.state().deployReason).toContain('question rules first')
 })
-function useSecurityPoolActionsWrapper(props: { model: ReturnType<typeof model>; parameters?: Parameters<typeof useSecurityPoolActions>[1] }) {
-	return useSecurityPoolActions(props.model, props.parameters ?? parameters)
+test('prepared question rules and locked deployment inputs survive remount for the same wallet', async () => {
+	const { hook, requests } = await renderWithDeploymentWallet(capitalClient(), true)
+	await act(() => {
+		hook.state().setOriginInput('7')
+		hook.state().setHorizonDays('40')
+		hook.state().setEconomicsField('minimumCommitment', '2')
+	})
+	await act(() => hook.state().deployAdmission())
+	expect(hook.state().error).toBeUndefined()
+	await act(() => hook.cleanup())
+	const resumed = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolActionsWrapper, { model: model(), deploying: true }))
+	expect(resumed.state().admissionAddress).toBe(token)
+	expect(resumed.state().originInput).toBe('7')
+	expect(resumed.state().horizonDays).toBe('40')
+	expect(resumed.state().economicsDraft.minimumCommitment).toBe('2')
+	await act(() => resumed.state().setOriginInput('8'))
+	expect(resumed.state().originInput).toBe('7')
+	await act(() => resumed.state().deploy())
+	expect(requests).toHaveLength(2)
+	await act(() => resumed.cleanup())
+	const deployed = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolActionsWrapper, { model: model(), deploying: true }))
+	expect(deployed.state().deployReason).toBeDefined()
+	await act(() => deployed.state().deploy())
+	expect(requests).toHaveLength(2)
+})
+
+function useSecurityPoolActionsWrapper(props: { model: ReturnType<typeof model>; parameters?: Parameters<typeof useSecurityPoolActions>[1]; deploying?: boolean }) {
+	return useSecurityPoolActions(props.model, props.parameters ?? parameters, props.deploying)
 }
 test('a winning vault is controlled by its bidder before and after automatic materialization', async () => {
 	capitalClient().install()

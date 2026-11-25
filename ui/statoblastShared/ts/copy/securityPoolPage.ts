@@ -87,6 +87,7 @@ export const deployProgress = 'Deployment steps'
 export const deployBack = 'Back'
 export const deployContinue = (step: string) => `Continue to ${step.toLowerCase()}`
 export const deploySummary = 'Pool summary'
+export const deploySettingsLocked = 'Settings locked after preparing question rules. Progress is saved on this device.'
 export const formatMultiplier = (value: string) => `${value}%`
 
 export const limitedCapital = 'Limited'
