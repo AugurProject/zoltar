@@ -30,8 +30,8 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('system', 'token-authorization', ['AuthorizationUsed', 'AuthorizationCanceled']),
 	...definitions('system', 'weth', ['Deposit', 'Withdrawal']),
 	...definitions('report', 'open-oracle-report', ['ReportSubmitted', 'ReportDisputed', 'ReportSettled'], ['reportId']),
-	...definitions('oracle', 'price-coordinator', ['PendingReportRecovered', 'PriceReportDeferred', 'PriceReportRejected', 'PriceReported', 'PriceRequested', 'QuestionLedgerSet', 'SharedPriceFeedSet', 'InternalApproval']),
-	...definitions('oracle', 'price-feed', ['CoordinatorRegistered', 'ExposureCheckpoint', 'ReportFundingAssigned', 'ReportOperationAttempted']),
+	...definitions('oracle', 'price-coordinator', ['PendingReportRecovered', 'PriceReportDeferred', 'PriceReportRejected', 'PriceReported', 'PriceRequested', 'InternalApproval']),
+	...definitions('oracle', 'price-feed', ['ExposureCheckpoint', 'ReportFundingAssigned', 'ReportOperationAttempted']),
 	...definitions('escalation', 'escalation', [
 		'CarryDepositConsumed',
 		'ClaimDeposit',
@@ -94,7 +94,6 @@ const listedTaxonomyContractKinds: readonly SystemContractKind[] = [
 	'escalationGame',
 	'escalationGameDepositDelegate',
 	'openOracle',
-	'priceCoordinator',
 	'reputationToken',
 	'questionLedger',
 	'securityPoolCapitalRepairAuctionDelegate',

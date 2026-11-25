@@ -1,10 +1,10 @@
 import type { EcosystemSnapshot, OperationContinuationContext, OperationDefinition, OperationPlan, PlanningOptions, PoolSnapshot } from '../types.ts'
 
-import { approveCoordinatorToken, exactTokenTransferToCoordinatorEvidence, operationalPools, oracleRequestInventoryIsFunded, oracleRequestPreparation, type PreparedOracleRequest } from './planning.ts'
+import { approveCoordinatorToken, exactOracleFundingTransferEvidence, operationalPools, oracleRequestInventoryIsFunded, oracleRequestPreparation, type PreparedOracleRequest } from './planning.ts'
 
 import { ONE_TOKEN, allowance, amount, choose, eligible, encodeStep, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, mixSeed, optionAmount, planBase, tokenInventory } from '../planning.ts'
 
-import { openOraclePriceCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
+import { sharedPoolPriceFeedAbi } from '@zoltar/bot-shared/contracts/abi'
 
 import { assertOracleRequestFundingEnvelope, isOracleRequestFundingError, poolOracleExposure, type OracleRequestFundingBounds } from '../oracle-request-funding.ts'
 
@@ -51,16 +51,16 @@ function oracleRequestSteps(snapshot: EcosystemSnapshot, coordinator: `0x${strin
 	}
 	steps.push(
 		encodeStep({
-			abi: openOraclePriceCoordinatorAbi,
+			abi: sharedPoolPriceFeedAbi,
 			args: [prepared.price, initialWethAttoEth, requestCostAttoEth],
 			evidence: [
 				eventEvidence(priceFeed, 'PriceRequested(uint256,uint256)'),
-				exactTokenTransferToCoordinatorEvidence(snapshot, weth, coordinator, initialWethAttoEth),
-				exactTokenTransferToCoordinatorEvidence(snapshot, repToken, coordinator, initialRepAttoRep),
+				exactOracleFundingTransferEvidence(snapshot, weth, initialWethAttoEth),
+				exactOracleFundingTransferEvidence(snapshot, repToken, initialRepAttoRep),
 				...(allowance(tokenInventory(snapshot, weth), coordinator) <= initialWethAttoEth ? [erc20AllowanceEvidence(weth, snapshot.wallet.address, coordinator, 0n)] : []),
 				...(allowance(tokenInventory(snapshot, repToken), coordinator) <= initialRepAttoRep ? [erc20AllowanceEvidence(repToken, snapshot.wallet.address, coordinator, 0n)] : []),
 			],
-			functionName: 'requestPrice',
+			functionName: 'requestSecurityPoolPrice',
 			id: 'request-price',
 			label: 'Request REP/ETH price',
 			to: coordinator,
@@ -233,7 +233,7 @@ export const requestOraclePrice: OperationDefinition = {
 		return buildPreparedOracleRequestPlan(snapshot, pool, persisted.prepared, context.previousPlan.metadata, confirmedOracleApprovalRequirements(snapshot, context, persisted).length)
 	},
 	classification: 'selectable',
-	contract: 'OpenOraclePriceCoordinator',
+	contract: 'SharedPoolPriceFeed',
 	description: 'Sponsors a bounded REP/ETH report for a stale pool or renews a shared security pool price before expiry when no report is pending.',
 	discoveryInputs: ['oracle freshness/pending report', 'request cost', 'WETH and REP balances/allowances'],
 	ecosystem: 'statoblast',
@@ -262,7 +262,7 @@ function recoverSettledReportPlan(snapshot: EcosystemSnapshot, pool: PoolSnapsho
 		priority: 'urgent',
 		risk: 'low',
 		snapshot,
-		steps: [encodeStep({ abi: openOraclePriceCoordinatorAbi, evidence: [eventEvidence(pool.priceFeed, 'PendingReportRecovered(uint256,uint256,uint256,uint256,uint256,uint256)')], functionName: 'recoverSettledPendingReport', id: 'recover-report', label: 'Recover settled pending report', to: pool.coordinator })],
+		steps: [encodeStep({ abi: sharedPoolPriceFeedAbi, evidence: [eventEvidence(pool.priceFeed, 'PendingReportRecovered(uint256,uint256,uint256,uint256,uint256,uint256)')], functionName: 'recoverSettledPendingReport', id: 'recover-report', label: 'Recover settled pending report', to: pool.coordinator })],
 	})
 }
 
@@ -282,7 +282,7 @@ export const recoverSettledReport: OperationDefinition = {
 		return snapshot.pools.filter(hasSettledPendingReport).map(pool => ({ coordinator: pool.coordinator, reportId: pool.pendingReportId }))
 	},
 	classification: 'lifecycle-obligation',
-	contract: 'OpenOraclePriceCoordinator',
+	contract: 'SharedPoolPriceFeed',
 	description: 'Recovers a settled stored OpenOracle report whose callback did not clear the coordinator slot.',
 	discoveryInputs: ['coordinator pending report', 'OpenOracle storedGame settlement timestamp'],
 	ecosystem: 'statoblast',

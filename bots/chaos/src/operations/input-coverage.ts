@@ -12,7 +12,6 @@ const bindings: Record<string, Abi> = {
 	ReputationToken: abis.genesisReputationTokenAbi,
 	SecurityPoolFactory: abis.securityPoolFactoryAbi,
 	QuestionLedger: abis.questionLedgerAbi,
-	OpenOraclePriceCoordinator: abis.openOraclePriceCoordinatorAbi,
 	QuestionForker: abis.questionForkerAbi,
 	SecurityPoolRepairAuction: abis.securityPoolRepairAuctionAbi,
 	SecurityPool: abis.securityPoolAbi,

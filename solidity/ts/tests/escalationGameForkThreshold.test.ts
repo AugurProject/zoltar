@@ -38,7 +38,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 	let questionLedgerAddresses: {
 		questionLedger: Address
 		escalationGame: Address
-		openOraclePriceCoordinator: Address
+		priceFeed: Address
 	}
 	let questionId: bigint
 

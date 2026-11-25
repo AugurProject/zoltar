@@ -60,7 +60,7 @@ test('a settled report registers its escrow and stores the completion from the s
 		spyOn(indexer.providers.client, 'readContract').mockImplementation(async request => {
 			expect(request.blockNumber).toBe(10n)
 			if (request.functionName !== 'reportCandidates' && request.functionName !== 'feed') throw new Error(`Unexpected read ${request.functionName}`)
-			const data = request.functionName === 'feed' ? encodeAbiParameters([{ type: 'address' }], [feed]) : encodeAbiParameters([{ type: 'address' }, { type: 'address' }, { type: 'address' }, { type: 'uint256' }], [escrow, sponsor, sponsor, 1n])
+			const data = request.functionName === 'feed' ? encodeAbiParameters([{ type: 'address' }], [feed]) : encodeAbiParameters([{ type: 'address' }, { type: 'address' }, { type: 'uint256' }], [escrow, sponsor, 1n])
 			return decodeFunctionResult({ abi: request.abi, functionName: request.functionName, data })
 		}),
 	]

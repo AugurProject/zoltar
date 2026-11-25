@@ -28,8 +28,7 @@ export async function discoverChildPoolPreparations(client: ChaosReadClient, fac
 		await Promise.all(
 			outcomes.map(async outcome => {
 				const childUniverseId = await client.readContract({ abi: zoltarAbi, address: zoltar, blockNumber, functionName: 'getChildUniverseId', args: [parentUniverseId, BigInt(outcome)] })
-				const [coordinator, childPool, feed] = await Promise.all([
-					client.readContract({ abi: securityPoolFactoryAbi, address: factory, blockNumber, functionName: 'getChildQuestionLedgerCoordinator', args: [parent, BigInt(outcome)] }),
+				const [childPool, feed] = await Promise.all([
 					client.readContract({ abi: securityPoolFactoryAbi, address: factory, blockNumber, functionName: 'getQuestionLedger', args: [originId, childUniverseId] }),
 					securityPool === zeroAddress ? Promise.resolve(undefined) : client.readContract({ abi: securityPoolFactoryAbi, address: factory, blockNumber, functionName: 'sharedPriceFeeds', args: [securityPool, childUniverseId] }),
 				])
@@ -43,7 +42,7 @@ export async function discoverChildPoolPreparations(client: ChaosReadClient, fac
 					!bound || ((await client.readContract({ abi: securityPoolClockAbi, address: securityPool, blockNumber, functionName: 'clocks', args: [childUniverseId] }))[3] && (await client.readContract({ abi: zoltarAbi, address: zoltar, blockNumber, functionName: 'getForkTime', args: [childUniverseId] })) === 0n)
 				const sourceGame = questionId === undefined || !branchReady ? zeroAddress : await client.readContract({ abi: securityPoolSourceAbi, address: securityPool, blockNumber, functionName: 'sourceGame', args: [childUniverseId, questionId] })
 				const sourcePool = sourceGame === zeroAddress ? parent : await client.readContract({ abi: escalationGameAbi, address: sourceGame, blockNumber, functionName: 'questionLedger' })
-				return [outcome, { securityPool, branchReady, sourcePool, sourceGame, game, historyOutcomesInitialized, historyReady, childUniverseId: childUniverseId.toString(), childPool, feedRequired: !bound && feed === zeroAddress, dependenciesRequired: !bound && coordinator === zeroAddress }]
+				return [outcome, { securityPool, branchReady, sourcePool, sourceGame, game, historyOutcomesInitialized, historyReady, childUniverseId: childUniverseId.toString(), childPool, feedRequired: !bound && feed === zeroAddress, dependenciesRequired: false }]
 			}),
 		),
 	)

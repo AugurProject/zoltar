@@ -37,7 +37,7 @@
 						<dt>Corrector</dt>
 						<dd>An account that disputes an incorrect OpenOracle report; see <a href="../reference/security-model.html#assumption-a17">A17</a>.</dd>
 						<dt>Callback-recovery candidate</dt>
-						<dd>A <a href="../reference/glossary.html#price-coordinator">price coordinator</a> whose pending report OpenOracle has already settled; see <a href="../reference/open-oracle.html#callback-rejection-and-recovery">settlement recovery</a>.</dd>
+						<dd>A <a href="../reference/glossary.html#shared-price-feed">shared price feed</a> whose pending report OpenOracle has already settled; see <a href="../reference/open-oracle.html#callback-rejection-and-recovery">settlement recovery</a>.</dd>
 					</dl>
 				</section>
 				<section id="assumption-monitoring">
@@ -60,8 +60,8 @@
 										<li>Security pool exposure, distressed positions and takeover blockers: liquidator bot dashboard</li>
 										<li>Dispute opportunities and net reward: OpenOracle arbitrager dashboard</li>
 										<li>Active reporters, correctors, escalation depositors, and Collateral Repair Auction bidders: augurScan <code>/operations/reports</code>, <code>/operations/escalations</code>, <code>/operations/auctions</code></li>
-										<li>Callback-recovery candidates: coordinator <code>pendingReportId</code> and the report IDs in <code>PriceReportDeferred</code> events, then the settlement timestamp in OpenOracle <code>storedGame(reportId)</code></li>
-										<li>Callback recovery: anyone can clear the latest candidate with the coordinator’s <code>recoverSettledPendingReport()</code>, or any candidate with the shared feed’s <code>recoverReport(reportId)</code> (coordinator <code>priceFeed()</code>); a deferred report follows the <a href="../reference/open-oracle.html#settlement-base-fee-cap">settlement base-fee cap</a> rules</li>
+										<li>Callback-recovery candidates: shared feed <code>pendingReportId</code> and the report IDs in <code>PriceReportDeferred</code> events, then the settlement timestamp in OpenOracle <code>storedGame(reportId)</code></li>
+										<li>Callback recovery: anyone can clear the latest candidate with the shared feed’s <code>recoverSettledPendingReport()</code>, or any candidate with its <code>recoverReport(reportId)</code>; a deferred report follows the <a href="../reference/open-oracle.html#settlement-base-fee-cap">settlement base-fee cap</a> rules</li>
 									</ul>
 								</td>
 								<td>Continuously for deadline-bearing flows; before launch and after parameter or gas-regime changes</td>
@@ -87,7 +87,7 @@
 										<li><a href="../reference/glossary.html#theoretical-rep-supply">Theoretical REP supply</a>: Zoltar <code>getUniverseTheoreticalSupplyAttoRep(universeId)</code></li>
 										<li>Question <a href="../reference/glossary.html#open-interest">open interest</a>: question ledger <code>settlementCollateralAttoEth()</code></li>
 										<li>REP deposited as underwriting capital: security pool <code>capitalLedger(universeId)</code>, then the <code>rep</code> value from that ledger's <code>totals()</code></li>
-										<li>Cached REP price: coordinator <code>lastPrice</code>, the accepted report's REP base units × 10<sup>18</sup> ÷ its collateral base units. It counts REP per unit of security pool collateral, so invert it before valuing REP in collateral</li>
+										<li>Cached REP price: shared feed <code>lastPrice</code>, the accepted report's REP base units × 10<sup>18</sup> ÷ its collateral base units. It counts REP per unit of security pool collateral, so invert it before valuing REP in collateral</li>
 										<li>REP depth and price impact: arbitrager Uniswap venue quotes</li>
 										<li>Security pool and vault risk: augurScan <code>/operations/risk</code></li>
 										<li>REP discounted cash flow: off-chain valuation (no on-chain read)</li>
@@ -142,8 +142,8 @@
 								<td>REP/collateral price correction — A17, A18, A19</td>
 								<td>
 									<ul>
-										<li>Pending report: coordinator <code>pendingReportId</code>, then OpenOracle <code>storedGame(reportId)</code></li>
-										<li>Report outcomes: <code>PriceRequested</code>, <code>PriceReported</code>, <code>PriceReportDeferred</code>, and <code>PriceReportRejected</code> events from the shared feed at coordinator <code>priceFeed()</code>, or augurScan <code>/operations/reports</code></li>
+										<li>Pending report: shared feed <code>pendingReportId</code>, then OpenOracle <code>storedGame(reportId)</code></li>
+										<li>Report outcomes: <code>PriceRequested</code>, <code>PriceReported</code>, <code>PriceReportDeferred</code>, and <code>PriceReportRejected</code> events from the canonical shared feed returned by <code>QuestionLedger.priceFeed()</code>, or augurScan <code>/operations/reports</code></li>
 										<li>Independent correctors: whether any, such as an operator running the <a href="https://github.com/AugurProject/zoltar/blob/main/bots/open-oracle-arbitrager/README.md">OpenOracle arbitrager</a>, reports disputes profitable after fees, gas, and price impact</li>
 										<li>Creation-time floor: security pool <code>minimumReportCollateral</code> and the selected collateral token’s units and current ETH value</li>
 										<li>Correction economics: compare obtainable correction gains with OpenOracle fees, current ETH gas costs including approvals and recovery, price impact, and capital lockup under <a href="../reference/security-model.html#assumption-a18">A18</a>; do not compare the whole stake with gas alone</li>
@@ -201,7 +201,7 @@
 									<ul>
 										<li>Deployed configuration: manifest <code>protocolConfig</code></li>
 										<li>Fork and non-decision thresholds: Zoltar <code>getForkThresholdAttoRep(universeId)</code> and <code>getNonDecisionThresholdAttoRep(universeId)</code></li>
-										<li>Oracle costs: coordinator <code>getRequestPriceCostAttoEth()</code> and <code>getSettlementCallbackGasLimit()</code></li>
+										<li>Oracle costs: shared feed <code>getRequestPriceCostAttoEth()</code> and <code>getSettlementCallbackGasLimit()</code></li>
 										<li>Required relationships: <a href="../reference/security-model.html#assumption-a25">A25</a></li>
 									</ul>
 								</td>

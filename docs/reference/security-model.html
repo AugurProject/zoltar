@@ -34,7 +34,7 @@
 					<tbody>
 						<tr>
 							<td>Trusted protocol components</td>
-							<td>Zoltar, <a href="./glossary.html#question-ledger">question ledgers</a>, share tokens, <a href="./glossary.html#price-coordinator">price coordinators</a>, <a href="./glossary.html#question-forker">question forkers</a>, and their configured delegates.</td>
+							<td>Zoltar, <a href="./glossary.html#question-ledger">question ledgers</a>, share tokens, <a href="./glossary.html#shared-price-feed">shared price feeds</a>, <a href="./glossary.html#question-forker">question forkers</a>, and their configured delegates.</td>
 						</tr>
 						<tr>
 							<td>External dependencies</td>
@@ -239,7 +239,7 @@
 					</li>
 					<li id="assumption-a18" value="18">
 						<h3><span class="assumption-id">A18</span> At least one available corrector has an independent net incentive</h3>
-						<p>At least one participant satisfying <a href="#assumption-a17">A17</a> is not under common control with the sponsor-funded coordinator reporting path, does not share the manipulation payoff, and is not compensated to leave a harmful report uncorrected. The participant's net payoff from correcting is strictly greater than its net payoff from leaving the harmful report uncorrected. Two external submissions are not required for every request.</p>
+						<p>At least one participant satisfying <a href="#assumption-a17">A17</a> is not under common control with the sponsor-funded shared-feed reporting path, does not share the manipulation payoff, and is not compensated to leave a harmful report uncorrected. The participant's net payoff from correcting is strictly greater than its net payoff from leaving the harmful report uncorrected. Two external submissions are not required for every request.</p>
 						<p>The creator must choose <code>minimumReportCollateral</code> at security pool creation so that the floor alone makes correcting a security-relevant price error profitable, even at zero aggregate exposure. We assume this remains true throughout every report's dispute window, after accounting for the collateral's prevailing ETH value, OpenOracle fees, transaction gas including required approvals and recovery, price impact, and capital lockup costs. A stake worth more than the gas bill is not sufficient by itself: the gain available from the correction must exceed those costs.</p>
 						<p>The contracts enforce a positive, immutable creation-time floor and the additional exposure-based stake. They do not verify the floor's ETH value or its gas-cost adequacy, and they query no collateral/ETH feed. Child universes inherit the floor; raising it requires a new security pool. Participants must reassess this assumption as gas fees and collateral value change.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> An undersized floor, higher gas fees, or falling collateral value can leave a wrong REP/collateral price uneconomic to dispute. It may settle unchallenged and authorize unsafe price-sensitive actions even when every onchain funding check passes. A sponsor-controlled, bribed, or economically indifferent corrector can cause the same failure.</p>

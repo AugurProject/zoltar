@@ -25,7 +25,7 @@ for (const [entityType, contractKind] of [
 			finalized: [false],
 		}
 		const read: StateRead = async (address, abi, functionName, args = []) => {
-			const kind = address === coordinator ? 'priceCoordinator' : contractKind
+			const kind = address === coordinator ? 'sharedPoolPriceFeed' : contractKind
 			const compiled = abiForKind(kind)
 			if (compiled === undefined) throw new Error(`Missing compiled ABI ${kind}`)
 			for (const item of abi) {
@@ -178,5 +178,5 @@ test('attributes a member ledger snapshot to its shared pool price feed', async 
 	}
 	const snapshot = await sampleEntityStateWithRead({ entityType: 'pool', entityIdentity: pool, address: pool, coordinatorAddress: coordinator }, read)
 	expect(snapshot.readStatus).toBe('success')
-	expect(snapshot.readResult?.['price']).toEqual({ repPerEth1e18: '1', settlementTimestamp: '1', protocolValid: true, sourceContract: feed.toLowerCase() })
+	expect(snapshot.readResult?.['price']).toEqual({ repPerEth1e18: '1', settlementTimestamp: '1', protocolValid: true, sourceContract: coordinator.toLowerCase() })
 })

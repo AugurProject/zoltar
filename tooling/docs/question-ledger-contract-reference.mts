@@ -1,13 +1,13 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const questionLedgerContractReference: ContractReference = {
-	compiledAbiFingerprint: '6dd230ec2cb0e2b84124e14d1fd7366f13831e330e59de692928c0a61475e131',
+	compiledAbiFingerprint: 'd443a80dbd3ed5f58e802be1bf58d8f1ead6096ef01e5fe6c90e859fbebaea7d',
 	name: 'QuestionLedger',
 	interactionNotes:
 		'All deployed question ledgers belong to a security pool. Providers use its capital ledger for deposits, commitments, health targets, retirement and liquidation. Reporters fund separate reporter custody with wallet REP. Purchases use the registered security pool route; traders redeem through the question ledger. There is no standalone vault, tick auction or operation queue.',
 	purpose: 'Question ledger for one shared security pool, question and universe. Shares and reporting are question-specific; provider capital, settlement cash and fees are accounted centrally.',
-	readAbiFingerprint: '07a97b87dbad3594890c90d42a6ad7c7d703a1d9f0ec83d34efbdff63c5393d5',
+	readAbiFingerprint: '345c9328a593ad73dfaf56593ce2a0e4d482f7c891fda926c11edaf10cf072b7',
 	readSurface:
-		'Read security pool owner positions from the capital ledger and question fee streams from the settlement book. Amounts named `AttoEth` use raw units of the security pool collateral token; no token metadata is required. After security pool binding, question storage mirrors settlement cash, share supply and `lastSettlementSecurityPoolTime`, the security pool time of its last checkpoint. Fee stream deadlines use native time; question storage does not enumerate owners. `additionalMintCapacityAttoEth` is zero once the question ends or reporting starts; otherwise it returns available shared capacity, excluding existing question collateral. `attoSharesToAttoEth`, `attoSharesToAttoRep` and `attoEthToAttoShares` quote central settlement including fork recovery rights. `isEscalationResolved` recognizes inherited final outcomes and locally finalized reports. The settlement book tracks each question’s fee stream. An unreported question can continue paying fees after its calendar end until reporting starts. Additional validated configuration and accounting getters: `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `openOraclePriceCoordinator`, `openOracle`, `escalationGameFactory`, `accountingModule`, `escalationGame`, `questionData`, `questionForker`, `securityPoolFactory`, `settlementCollateralAttoEth`, `statoblastSecurityMultiplierBps`, `shareTokenSupplyAttoShares`, `lastSettlementSecurityPoolTime`, `awaitingForkContinuation`, `systemState`, `securityPoolCustody`.',
+		'Read security pool owner positions from the capital ledger and question fee streams from the settlement book. Amounts named `AttoEth` use raw units of the security pool collateral token; no token metadata is required. After security pool binding, question storage mirrors settlement cash, share supply and `lastSettlementSecurityPoolTime`, the security pool time of its last checkpoint. Fee stream deadlines use native time; question storage does not enumerate owners. `additionalMintCapacityAttoEth` is zero once the question ends or reporting starts; otherwise it returns available shared capacity, excluding existing question collateral. `attoSharesToAttoEth`, `attoSharesToAttoRep` and `attoEthToAttoShares` quote central settlement including fork recovery rights. `isEscalationResolved` recognizes inherited final outcomes and locally finalized reports. The settlement book tracks each question’s fee stream. An unreported question can continue paying fees after its calendar end until reporting starts. Additional validated configuration and accounting getters: `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceFeed`, `openOracle`, `escalationGameFactory`, `accountingModule`, `escalationGame`, `questionData`, `questionForker`, `securityPoolFactory`, `settlementCollateralAttoEth`, `statoblastSecurityMultiplierBps`, `shareTokenSupplyAttoShares`, `lastSettlementSecurityPoolTime`, `awaitingForkContinuation`, `systemState`, `securityPoolCustody`.',
 	securityBoundary:
 		'Price-sensitive withdrawal, commitment-increase, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A21 REP and selected collateral behavior](./security-model.html#assumption-a21), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated question ledger calls additionally depend on [A28 account authority](./security-model.html#assumption-a28).',
 	readDeclarations: [
@@ -50,7 +50,7 @@ export const questionLedgerContractReference: ContractReference = {
 			name: 'repToken',
 		},
 		{
-			name: 'openOraclePriceCoordinator',
+			name: 'priceFeed',
 		},
 		{
 			name: 'openOracle',

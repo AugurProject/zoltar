@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
-import { openOraclePriceCoordinatorAbi, genesisReputationTokenAbi } from '@zoltar/bot-shared/contracts/abi'
+import { sharedPoolPriceFeedAbi, genesisReputationTokenAbi } from '@zoltar/bot-shared/contracts/abi'
 import { assertOperationEthFunding } from '../../src/execution/safety.ts'
 import { assertAnchoredOracleRequestFunding, assertOracleRequestFundingEnvelope, oracleRequestFundingEnvelope } from '../../src/operations/oracle-request-funding.ts'
 import { reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
@@ -225,8 +225,8 @@ describe('oracle request funding bounds', () => {
 		expect(plan.maximumCleanupTransactionCount).toBeUndefined()
 		const request = plan.steps[0]
 		if (request === undefined) throw new Error('Request-price step missing')
-		const decoded = decodeFunctionData({ abi: openOraclePriceCoordinatorAbi, data: request.data })
-		expect(decoded.functionName).toBe('requestPrice')
+		const decoded = decodeFunctionData({ abi: sharedPoolPriceFeedAbi, data: request.data })
+		expect(decoded.functionName).toBe('requestSecurityPoolPrice')
 		expect(decoded.args[1]).toBe(6n)
 		expect(request.value).toBe('999999999922756')
 		expect(plan.lastValidBlockNumber).toBeUndefined()
@@ -248,8 +248,8 @@ describe('oracle request funding bounds', () => {
 		)
 		expect(request.evidence).toEqual(
 			expect.arrayContaining([
-				expect.objectContaining({ emitter: snapshot.deployments.weth, equals: '6', field: 'value', indexed: { from: snapshot.wallet.address, to: pool.coordinator }, kind: 'decoded-event-field' }),
-				expect.objectContaining({ emitter: pool.repToken, equals: '6', field: 'value', indexed: { from: snapshot.wallet.address, to: pool.coordinator }, kind: 'decoded-event-field' }),
+				expect.objectContaining({ emitter: snapshot.deployments.weth, equals: '6', field: 'value', indexed: { from: snapshot.wallet.address }, kind: 'decoded-event-field' }),
+				expect.objectContaining({ emitter: pool.repToken, equals: '6', field: 'value', indexed: { from: snapshot.wallet.address }, kind: 'decoded-event-field' }),
 			]),
 		)
 		expect(request.evidence.some(item => item.kind === 'storage-postcondition' && item.functionName === 'allowance')).toBe(false)

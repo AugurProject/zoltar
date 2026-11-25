@@ -3,7 +3,7 @@ pragma solidity 0.8.35;
 
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
-import { OPEN_ORACLE_PERCENTAGE_PRECISION } from './OpenOraclePriceCoordinatorTypes.sol';
+import { OPEN_ORACLE_PERCENTAGE_PRECISION } from './OraclePriceTypes.sol';
 
 library OraclePriceMath {
 	uint256 internal constant DISPUTE_GAS_UNITS = 300_000;

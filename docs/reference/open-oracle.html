@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="Funding, report sizing, settlement validation, recovery, and parameters of Statoblast's OpenOracle price coordinator." />
+		<meta name="description" content="Funding, report sizing, settlement validation, recovery, and parameters of Statoblast's OpenOracle price feed." />
 		<title>OpenOracle integration reference · Augur documentation</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
@@ -13,7 +13,7 @@
 			<header>
 				<h1>OpenOracle integration reference</h1>
 				<p><a href="https://ethresear.ch/t/proposal-for-a-trust-minimized-price-oracle/22971">OpenOracle</a> supplies a fresh REP/collateral price for Statoblast's solvency-sensitive operations. It does not decide market truth; local Escalation Games and Zoltar remain responsible for truth and branching.</p>
-				<p>The <a href="../explanation/open-oracle.html">OpenOracle explanation</a> covers why Statoblast uses a contestable price and which operations depend on it. This page specifies the integration: formulas, parameters, and settlement-callback behavior. Per-function callers, preconditions, and events are in the <a href="./contracts/openoraclepricecoordinator.html">coordinator contract reference</a>.</p>
+				<p>The <a href="../explanation/open-oracle.html">OpenOracle explanation</a> covers why Statoblast uses a contestable price and which operations depend on it. This page specifies the integration: formulas, parameters, and settlement-callback behavior. Per-function callers, preconditions, and events are in the <a href="./contracts/sharedpoolpricefeed.html">feed contract reference</a>.</p>
 			</header>
 			<section id="openoracle-role">
 				<h2>Token pair and cached price</h2>
@@ -39,7 +39,7 @@
 				<p>The price is raw REP units per raw collateral unit, scaled by 10<sup>18</sup>. The callback does not normalize decimals. For six-decimal USDC, one REP per whole collateral token is encoded as 10<sup>30</sup>; for 18-decimal WETH it is 10<sup>18</sup>.</p>
 				<p id="reference-bot-collateral">The reference OpenOracle arbitrager always supports WETH collateral. It disputes and settles reports for USDC, USDT or another non-WETH security pool only when its operator allowlists that collateral token; it skips every other collateral. For an allowlisted token it hedges REP against that token and values profit and risk in WETH through the token's Uniswap V3 WETH pool. Security pools whose collateral no running bot allowlists still require an independent corrector and settler.</p>
 
-				<p id="integration-terms">An accepted report with a strictly newer eligibility timestamp becomes the coordinator's cached REP/collateral price. <code>lastSettlementTimestamp</code> records settlement eligibility: the final report timestamp plus <code>settlementTime</code>. The freshness window starts there, so settling late cannot extend it. The shared feed freshness window is <code>settlementTime</code> plus one hour on Sepolia or five minutes on other chains. With the mainnet eight-minute challenge period, a shared price is usable for 780 seconds after eligibility, or at most 21 minutes after the final report. <code>priceValidUntil()</code> returns the canonical expiry; a price is stale at that timestamp. The coordinator does not meter operation volume during the window. Independently challenged candidates with equal eligibility timestamps may each be accepted and execute their own authorized operation batches; equality alone is not a rejection reason. Only a strictly newer eligibility timestamp replaces the shared price, exposure limits and epoch. For equal timestamps, the first accepted report supplies those shared values; settlement ordering can therefore influence the initial choice, but later equal-time settlements cannot overwrite it.</p>
+				<p id="integration-terms">An accepted report with a strictly newer eligibility timestamp becomes the feed's cached REP/collateral price. <code>lastSettlementTimestamp</code> records settlement eligibility: the final report timestamp plus <code>settlementTime</code>. The freshness window starts there, so settling late cannot extend it. The shared feed freshness window is <code>settlementTime</code> plus one hour on Sepolia or five minutes on other chains. With the mainnet eight-minute challenge period, a shared price is usable for 780 seconds after eligibility, or at most 21 minutes after the final report. <code>priceValidUntil()</code> returns the canonical expiry; a price is stale at that timestamp. The feed does not meter operation volume during the window. Independently challenged candidates with equal eligibility timestamps may each be accepted and execute their own authorized operation batches; equality alone is not a rejection reason. Only a strictly newer eligibility timestamp replaces the shared price, exposure limits and epoch. For equal timestamps, the first accepted report supplies those shared values; settlement ordering can therefore influence the initial choice, but later equal-time settlements cannot overwrite it.</p>
 				<p id="shared-feed-rules">A shared feed's aggregate exposure is the largest of current security pool commitment, backing demand and the maximum commitment a preparing branch auction can add to chosen backing. The feed reads these aggregates without scanning questions or bidders. Escalation halts use aggregate exposure.</p>
 				<p>A shared feed permits concurrent candidates, including renewal before the accepted price expires. Each candidate has its own <code>SharedPoolReportEscrow</code>, which holds its reporter identity and funding credits. <code>pendingReportId</code> and the associated pending getters identify only the latest candidate; they do not enumerate or exclude other pending candidates. A pending, disputed or rejected report never extends accepted-price freshness.</p>
 				<p>Accepting a strictly newer shared observation atomically checkpoints security pool fees under the previous price and updates capital eligibility. A failed mandatory checkpoint rolls back that acceptance. Ordinary capital operations execute separately and recheck current safety constraints against the accepted price. An optional batch of sponsor-authorized capital operations is attempted immediately after acceptance.</p>
@@ -49,7 +49,7 @@
 				<p><code>SecurityPoolFactory.prepareSecurityPoolPriceFeed(source, universeId)</code> prepares the canonical child feed without deploying a child question. <code>source</code> must be a canonical question ledger already admitted to this security pool, with its security pool binding recorded by the factory. Security pool configuration is supplied directly at deployment; preparing its initial shared feed does not require a seed question. <code>SecurityPool.isPriceReportingOpen(universeId)</code> permits requests and acceptance after <code>startBranch</code>, until the fixed native recapitalization deadline at week nine. From that deadline until activation, the accepted observation is frozen. Reporting reopens on activation if the child universe has not forked; a forked universe rejects new prices. Late branch preparation does not extend the window.</p>
 				<p>A strictly newer accepted preparation report caches the price and funded exposure; it does not activate trading, start holding fees or start imported positions’ liquidation history. Activation uses the cached price only while it remains fresh. A stale or absent price does not block branch activation. Callbacks during a closed window reject the candidate price while preserving <a href="#callback-rejection-and-recovery">report funding recovery</a>.</p>
 				<h3 id="shared-report-coverage">Shared report coverage and capital prices</h3>
-				<p><code>minimumToken2ReportAttoRep()</code> requires one hundredth of pledged underwriting REP plus any fresh fork-auction sale inventory, rounded up. Pledged REP is included because a liquidation auction can transfer all of it. <code>minimumToken1ReportAttoEthForPrice(price)</code> also raises the collateral minimum enough to fund that REP amount at the proposed price. The feed and coordinator reject a signed collateral budget below the required amount. Acceptance checks both sides: <code>acceptedRepExposureLimitAttoRep</code> is final REP funding times 100. An arbitrarily cheap proposed REP price therefore cannot remove the REP inventory challenge requirement.</p>
+				<p><code>minimumToken2ReportAttoRep()</code> requires one hundredth of pledged underwriting REP plus any fresh fork-auction sale inventory, rounded up. Pledged REP is included because a liquidation auction can transfer all of it. <code>minimumToken1ReportAttoEthForPrice(price)</code> also raises the collateral minimum enough to fund that REP amount at the proposed price. The shared feed rejects a signed collateral budget below the required amount. Acceptance checks both sides: <code>acceptedRepExposureLimitAttoRep</code> is final REP funding times 100. An arbitrarily cheap proposed REP price therefore cannot remove the REP inventory challenge requirement.</p>
 				<p>A canonical acceptance sets <code>acceptedExposureLimitAttoEth</code> to <code>(final collateral − configured collateral stake floor) × 100</code> and increments <code>acceptedEpoch</code>. An ordinary <code>setCommitment</code> raise cannot lift aggregate exposure above that accepted limit. An owner can also call <code>setCommitmentWithReport(reportId, commitment)</code> using a fresh report the shared feed accepted whose final funding covers the projected exposure. <code>reportAuthorization(reportId, newExposure)</code> validates that proof even if a newer, smaller canonical report superseded it.</p>
 				<p>For accepted price <code>q</code>, target error <code>e</code>, and percentage precision <code>P = 10,000,000</code>, the upper bound is <code>q × P / (P − e)</code>, rounded up, and the liquidation bound is <code>q × P / (P + e)</code>, rounded down. Capital entry, withdrawals, capacity and fee eligibility use the conservative upper bound; rewarded adverse actions use the lower bound. Proof authorization also retains the higher of the owner’s current conservative price and the proof’s upper bound for that owner’s collateral checks until a later canonical epoch covers the enlarged live exposure. Selecting a smaller report cannot remove this owner-specific floor.</p>
 			</section>
@@ -57,19 +57,19 @@
 			<section id="optional-upstream-capabilities">
 				<h2>Report flags</h2>
 
-				<p>The coordinator always submits flags <code>7</code>: <code>FLAG_TIME_TYPE</code> (<code>1</code>, a timestamp clock), <code>FLAG_TRACK_DISPUTES</code> (<code>2</code>, per-dispute history), and <code>FLAG_STORE_ALL</code> (<code>4</code>, the complete report state in storage). It never sets the optional flags <code>8</code>, <code>16</code>, <code>32</code>, or <code>64</code>; <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/UPSTREAM.md">the OpenOracle provenance record</a> identifies the vendored source and build profile.</p>
+				<p>The feed always submits flags <code>7</code>: <code>FLAG_TIME_TYPE</code> (<code>1</code>, a timestamp clock), <code>FLAG_TRACK_DISPUTES</code> (<code>2</code>, per-dispute history), and <code>FLAG_STORE_ALL</code> (<code>4</code>, the complete report state in storage). It never sets the optional flags <code>8</code>, <code>16</code>, <code>32</code>, or <code>64</code>; <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/UPSTREAM.md">the OpenOracle provenance record</a> identifies the vendored source and build profile.</p>
 			</section>
 
 			<section id="statoblast-integration">
 				<h2>Integration architecture</h2>
-				<p>Each question has an <code>OpenOraclePriceCoordinator</code> adapter attached to one <code>SharedPoolPriceFeed</code> per security pool and universe. The feed owns the accepted REP/collateral price and freshness clock. Every candidate has its own escrow. The factory authenticates coordinator creation and binds each question once.</p>
+				<p>Each question references the canonical <code>SharedPoolPriceFeed</code> for its security pool and universe. The feed owns the accepted REP/collateral price and freshness clock. Every candidate has its own escrow. The factory binds each question to its canonical feed; exposure checkpoints authenticate the calling ledger against factory records.</p>
 				<p>A child universe gets a new feed for its own REP token, initially with no accepted price. Adding a question does not reset an existing feed. Capital deposits, commitments and retirement use the security pool directly. Capital operations may also execute through an ordered sponsor-authorized batch attached to a shared report.</p>
 			</section>
 
 			<section id="report-lifecycle">
 				<h2>Price request lifecycle</h2>
 				<ol>
-					<li>The sponsor approves collateral and universe REP, chooses a candidate price and report budget, and opens a report through a question coordinator or the shared feed.</li>
+					<li>The sponsor approves collateral and universe REP, chooses a candidate price and report budget, and opens a report directly through the shared feed.</li>
 					<li>OpenOracle accepts valid corrections during the challenge window. A correction replaces the current reporter and restarts settlement timing.</li>
 					<li>After the challenge window, anyone can settle the report. Its isolated escrow validates the result and offers it to the shared feed.</li>
 					<li>The feed accepts only a qualifying, fresh observation with sufficient economic coverage. Rejected candidates cannot invalidate the previously accepted observation.</li>
@@ -84,7 +84,7 @@
 				<p id="settlement-incentive">A negligible bounty leaves settlement largely to sponsors. A sponsor can wait after a candidate becomes eligible and accept its older price only when that price favours a withdrawal or takeover. The gas-funded minimum encourages independent settlers to accept eligible reports promptly, reducing that timing advantage. It does not guarantee a settler, timely inclusion, or a current market price.</p>
 				<p>The minimum bounty is the callback gas budget, plus its EIP-150 forwarding allowance and <code>310,000 gas</code> for settlement overhead and reward collection, padded by 20% plus 20,000 gas for the two transaction margins, multiplied by the configured settlement fee allowance, plus <code>101 attoETH</code>. The fee allowance uses the request block's base fee plus the configured priority fee, multiplied by the settlement base-fee multiplier. The ordinary callback budget is <code>4,000,000 gas</code>; attached operation batches add their declared gas budget. Sponsors can offer more. A rising inclusion-time base fee can require a new quote; the contract rejects an insufficient bounty instead of charging more silently.</p>
 				<p><code>requestSecurityPoolPrice(proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth)</code> transfers exactly the reviewed collateral budget and its corresponding REP from the caller. It rejects a budget below the inclusion-time minimum instead of silently increasing it. Security pool settlement collateral does not fund reports.</p>
-				<p id="refund-callback">A coordinator request forwards the specified bounty and refunds excess native ETH to the caller. Rejecting that refund reverts the whole request. A direct feed request requires exactly its specified bounty.</p>
+				<p id="refund-callback">Both shared-feed request methods commit the specified bounty and refund excess native ETH to the caller after storing the candidate and any operation batch. Rejecting that refund reverts the whole request.</p>
 				<h3 id="sponsor-takeover">Sponsor-authorized operation batches</h3>
 				<p><code>requestSecurityPoolPriceWithOperations(price, wethBudget, bounty, batch)</code> funds a direct report and records ordered capital-ledger calls. The funding caller supplies the owner authority for every call; withdrawal and earnings recipients remain explicit in the signed calldata. A batch fixes accepted-price bounds, an expiry, a total gas allowance, and an array of operations containing calldata and individual gas limits. There is no fixed operation-count cap; each operation's calldata is at most <code>MAXIMUM_REPORT_OPERATION_DATA_BYTES</code> (512 bytes).</p>
 				<p>The ledger supports <code>takeOver</code>, <code>takeOverWithBounds</code>, <code>takeOverRepairAuctionBid</code>, <code>depositFor</code>, <code>depositAndSetHealthTarget</code>, <code>withdrawPrincipal</code>, <code>setHealthTarget</code>, <code>setCommitment</code>, <code>setCommitmentWithReport</code>, <code>claimEarnings</code>, <code>serveRetirement</code> and <code>materializeRepairAuctionBid</code>. Privileged accounting and fork entrypoints are excluded. Each call retains its ordinary owner, collateral, cohort, funding and reentrancy checks. A report-bound takeover may use zero for <code>expectedAcceptedPriceEpoch</code> to accept the settlement epoch; direct takeovers retain exact epoch checks. Funding can be deposited beforehand or by an earlier batch operation with the required REP approval.</p>
@@ -109,7 +109,7 @@
 				</div>
 				<p>The creator must size this floor to satisfy <a href="./security-model.html#assumption-a18">A18: independent, gas-economic correction</a> throughout the security pool’s use, including at low exposure. This is a system assumption, not an onchain gas-cost guarantee. No collateral/ETH feed is queried, and a higher floor requires a new security pool.</p>
 
-				<p>The coordinator requires <code>requestedInitialAttoWeth</code> to meet <code>minimumToken1ReportAttoEthForPrice(proposedRepPerEthPrice)</code> at inclusion. It uses the signed collateral amount as OpenOracle's <code>currentAmount1</code> and derives <code>amount2 = ⌈currentAmount1 × proposedRepPerEthPrice / 1e18⌉</code>.</p>
+				<p>The feed requires <code>requestedInitialAttoWeth</code> to meet <code>minimumToken1ReportAttoEthForPrice(proposedRepPerEthPrice)</code> at inclusion. It uses the signed collateral amount as OpenOracle's <code>currentAmount1</code> and derives <code>amount2 = ⌈currentAmount1 × proposedRepPerEthPrice / 1e18⌉</code>.</p>
 
 				<h3 id="formula-inputs">Report configuration</h3>
 				<p>Default report configuration comes from <code>shared/statoblast/ts/initialReport/oracleInitialReport.ts</code> and is copied into the shared feed configuration.</p>
@@ -140,7 +140,7 @@
 						<tr>
 							<td><code>OPEN_INTEREST_DIVIDER</code></td>
 							<td><code>100</code> (a <code>1%</code> floor)</td>
-							<td>Coordinator constant</td>
+							<td>Feed constant</td>
 						</tr>
 						<tr>
 							<td><code>OraclePriceMath.DISPUTE_GAS_UNITS</code></td>
@@ -177,22 +177,21 @@
 				<p>The fixed dispute-gas and report-security factors bound the maximum priority fee; they do not size current report stakes. The configured priority fee sets the settlement base-fee acceptance cap. OpenOracle’s protocol and reporter fees still apply to corrections.</p>
 				<h3>Construction bounds and parameter effects</h3>
 
-				<p>Coordinator construction requires:</p>
+				<p>Feed factory construction requires:</p>
 				<ol>
-					<li>a deployed report delegate</li>
-					<li>a nonzero <code>initialReportPriorityFeeAttoEthPerGas</code>, no greater than <code>OraclePriceMath.maximumPriorityFee(...)</code></li>
+					<li>a deployed shared-feed deployment worker</li>
 					<li>a target error strictly below 100%, with combined OpenOracle fees below that error</li>
 					<li>a nonzero <code>escalationHaltMultiplierBps</code></li>
 					<li><code>settlementTime</code> greater than <code>disputeDelay</code>, and a dispute <code>multiplier</code> of at least <code>100</code></li>
 					<li><code>maxSettlementBaseFeeMultiplierBps</code> of at least <code>1x</code></li>
 					<li><code>minLiquidationPriceDistanceBps</code> no greater than <code>100%</code></li>
 				</ol>
-				<p>The priority-fee bound uses the fixed gas and security factors above and half the smaller of the maximum report amount and the escalation-halt capacity. A larger fee reverts with <code>Initial report priority fee exceeds OpenOracle limits</code>. <code>OpenOraclePriceCoordinatorFactory</code> validates its deployment workers but stores economic configuration without validating it; invalid economic settings can deploy the factory successfully and make later coordinator deployments revert.</p>
+				<p>The priority-fee bound uses the fixed gas and security factors above and half the smaller of the maximum report amount and the escalation-halt capacity. A larger fee reverts with <code>Initial report priority fee exceeds OpenOracle limits</code>. <code>SharedPoolPriceFeedFactory</code> validates report timing, fees and risk configuration at construction. Each feed implementation validates its positive priority fee against that configuration.</p>
 
 				<p>For comparison only, under the former WETH gas-sizing model, at a <code>30 nanoETH</code> base fee, a configured <code>10 nanoETH</code> priority fee, and <code>100 WETH</code> of aggregate exposure, the modeled gas cost of one dispute is <code>0.012 ETH</code>, the minimum report is <code>3.230769230769230770 WETH</code>, and the escalation halt is <code>32.307692307692307700 WETH</code>.</p>
 				<details class="interactive-example" id="initial-report-estimator-example" open="">
 					<summary>WETH dispute-gas comparison model</summary>
-					<p>This calculator illustrates the former WETH gas-sizing model. It does not calculate the current protocol minimum, which uses the configured collateral stake floor above. It excludes the separate REP exposure minimum. The deployment parameters and caller-selected amount are shown as adjustable inputs to make their effect explicit. For a deployed coordinator, the base fee and aggregate exposure can change from one request block to another.</p>
+					<p>This calculator illustrates the former WETH gas-sizing model. It does not calculate the current protocol minimum, which uses the configured collateral stake floor above. It excludes the separate REP exposure minimum. The deployment parameters and caller-selected amount are shown as adjustable inputs to make their effect explicit. For a deployed feed, the base fee and aggregate exposure can change from one request block to another.</p>
 					<div class="tool-outcome-strip">
 						<div data-primary-output><span>Selected initial WETH</span><output data-example-output="selectedInitialWethReport">3.2308 WETH</output></div>
 						<div data-primary-output><span>Fee bound</span><output data-example-output="estimatorSafetyState">fees below target error</output></div>
@@ -255,7 +254,7 @@
 								</div>
 							</details>
 							<details class="tool-control-group" data-group-tone="system">
-								<summary>Coordinator policy</summary>
+								<summary>Feed policy</summary>
 								<div class="example-grid">
 									<label>
 										Escalation halt multiplier
@@ -297,7 +296,7 @@
 
 				<p>OpenOracle invokes the price source through a low-level callback whose success is intentionally neither stored nor emitted. A failed callback does not automatically undo an otherwise valid OpenOracle settlement. A shared escrow authenticates OpenOracle and its own report ID; the feed accepts settlement only from that candidate’s registered escrow. Failure can leave an individually settled candidate unprocessed without blocking other candidates.</p>
 
-				<p id="callback-gas">If the settlement transaction cannot retain enough gas headroom after the callback attempt, OpenOracle reverts settlement with <code>InvalidGasLimit</code>. In that case, the report has not settled and coordinator recovery is not yet available. A shared report escrow enforces this for an under-funded settlement: when its callback is entered with less than the report's callback budget minus 100,000 gas, it consumes all the gas it was given, so the settlement reverts with <code>InvalidGasLimit</code> instead of settling without accepting the price.</p>
+				<p id="callback-gas">If the settlement transaction cannot retain enough gas headroom after the callback attempt, OpenOracle reverts settlement with <code>InvalidGasLimit</code>. In that case, the report has not settled and feed recovery is not yet available. A shared report escrow enforces this for an under-funded settlement: when its callback is entered with less than the report's callback budget minus 100,000 gas, it consumes all the gas it was given, so the settlement reverts with <code>InvalidGasLimit</code> instead of settling without accepting the price.</p>
 
 				<h3 id="settlement-validation-scope">Price-source settlement validation</h3>
 
@@ -345,7 +344,7 @@
 			<section id="parameters">
 				<h2>OpenOracle parameters used</h2>
 
-				<p>A source constant is fixed in the Solidity source. Deployment configuration is the shared configuration that the deployment passes to the coordinator factory, named by its constant in <code>shared/statoblast/ts/initialReport/oracleInitialReport.ts</code>; the coordinator exposes its configured values through public getters. Fixed feed flags and internal math constants are identified separately. The line under each value says where it is set.</p>
+				<p>A source constant is fixed in the Solidity source. Deployment configuration is the shared configuration that the deployment passes to the feed factory, named by its constant in <code>shared/statoblast/ts/initialReport/oracleInitialReport.ts</code>; the feed exposes its configured values through public getters. Fixed feed flags and internal math constants are identified separately. The line under each value says where it is set.</p>
 				<table>
 					<thead>
 						<tr>
@@ -363,7 +362,7 @@
 						<tr>
 							<td><code>minimumToken1ReportAttoEth()</code></td>
 							<td>See <a href="#security-guarantee">Report sizing and correction incentives</a>.<br />Configured collateral floor plus one hundredth of the aggregate exposure</td>
-							<td>Minimum initial collateral position for a coordinator report.</td>
+							<td>Minimum initial collateral position for a feed report.</td>
 						</tr>
 						<tr>
 							<td>OpenOracle initial <code>currentAmount1</code></td>
@@ -405,7 +404,7 @@
 						<tr>
 							<td><code>settlementTime</code></td>
 							<td><code>480 seconds</code><br />Deployment configuration <code>ORACLE_SETTLEMENT_TIME</code></td>
-							<td>Report settlement delay on the timestamp clock. The coordinator constructor requires it to exceed <code>disputeDelay</code>.</td>
+							<td>Report settlement delay on the timestamp clock. The feed factory constructor requires it to exceed <code>disputeDelay</code>.</td>
 						</tr>
 						<tr>
 							<td><code>disputeDelay</code></td>
@@ -415,17 +414,17 @@
 						<tr>
 							<td><code>multiplier</code></td>
 							<td><code>115</code> (<code>1.15x</code>)<br />Deployment configuration <code>ORACLE_MULTIPLIER</code></td>
-							<td>Growth of the collateral amount per dispute before the halt; see <a href="#dispute-escalation">Dispute escalation amounts</a>. The coordinator constructor requires at least <code>100</code>.</td>
+							<td>Growth of the collateral amount per dispute before the halt; see <a href="#dispute-escalation">Dispute escalation amounts</a>. The feed factory constructor requires at least <code>100</code>.</td>
 						</tr>
 						<tr>
 							<td><code>protocolFeeRecipient</code></td>
 							<td><code>0x000000000000000000000000000000000000dEaD</code><br />Deployment configuration <code>ORACLE_PROTOCOL_FEE_RECIPIENT</code></td>
-							<td>Receives OpenOracle protocol fees for coordinator-created reports.</td>
+							<td>Receives OpenOracle protocol fees for feed-created reports.</td>
 						</tr>
 						<tr>
 							<td><code>timeType</code> / <code>trackDisputes</code></td>
 							<td><code>true</code> / <code>true</code><br />Fixed <code>SharedPoolPriceFeed</code> constants</td>
-							<td>Timestamps let the coordinator measure freshness from settlement eligibility; dispute history preserves the correction sequence.</td>
+							<td>Timestamps let the feed measure freshness from settlement eligibility; dispute history preserves the correction sequence.</td>
 						</tr>
 						<tr>
 							<td><code>callbackContract</code></td>

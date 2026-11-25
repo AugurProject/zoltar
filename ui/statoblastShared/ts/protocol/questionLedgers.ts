@@ -1,5 +1,5 @@
 import { createRegistryIndex, readIncrementalRegistry, type RegistryIndex } from '@zoltar/ui-core-shared/lib/incrementalRegistry.js'
-import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool, statoblast_QuestionLedger_QuestionLedger, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../contractArtifact.js'
+import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool, statoblast_QuestionLedger_QuestionLedger, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed } from '../contractArtifact.js'
 
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { errorChain } from '@zoltar/core-shared/errors/errorChain'
@@ -128,13 +128,13 @@ export async function loadSelectedQuestionLedger(client: ReadClient, questionLed
 	const registered = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'getQuestionLedger', args: [originId, universeId], blockNumber })
 	if (!sameAddress(registered, questionLedger)) throw new Error('This question is not registered with the configured factory.')
 	const [manager, parent, questionId, multiplier] = await Promise.all([
-		client.readContract({ ...pool, functionName: 'openOraclePriceCoordinator' }),
+		client.readContract({ ...pool, functionName: 'priceFeed' }),
 		client.readContract({ ...pool, functionName: 'parent' }),
 		client.readContract({ ...pool, functionName: 'questionId' }),
 		client.readContract({ ...pool, functionName: 'statoblastSecurityMultiplierBps' }),
 	])
-	const priorityFee = await client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: getAddress(manager), functionName: 'initialReportPriorityFeeAttoEthPerGas', blockNumber })
-	const details = await loadQuestionLedgerDetails(client, { questionLedger, openOraclePriceCoordinator: getAddress(manager), parent: getAddress(parent), universeId, questionId, statoblastSecurityMultiplierBps: multiplier, initialReportPriorityFeeAttoEthPerGas: priorityFee }, blockNumber)
+	const priorityFee = await client.readContract({ abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, address: getAddress(manager), functionName: 'initialReportPriorityFeeAttoEthPerGas', blockNumber })
+	const details = await loadQuestionLedgerDetails(client, { questionLedger, priceFeed: getAddress(manager), parent: getAddress(parent), universeId, questionId, statoblastSecurityMultiplierBps: multiplier, initialReportPriorityFeeAttoEthPerGas: priorityFee }, blockNumber)
 	await requireDeploymentRegistryAnchor(client, anchor)
 	return details
 }
