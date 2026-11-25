@@ -1,3 +1,4 @@
+import { isCoverageBytecodeCompatible, resolveCoverageBytecodeCandidateForTest, resolveCoverageCreationCandidateForTest } from '../testSupport/coverage/bytecodeMatching'
 import { getSolidityBytecodeCoverageConfig } from '../testSupport/coverage/coverageConfig'
 import { type Address, encodeDeployData, encodeFunctionData, type Hash, type Hex, privateKeyToAccount, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { beforeEach, describe, test } from 'bun:test'
@@ -11,10 +12,7 @@ import {
 	getKnownSourceMapCoverageGapRuleMatchCountsForTest,
 	getSolidityBytecodeCoverageProfileHitCountForTest,
 	getSolidityCoverableLineNumbersForTest,
-	isCoverageBytecodeCompatibleForTest,
 	resetSolidityBytecodeCoverageAddressCache,
-	resolveCoverageBytecodeCandidateForTest,
-	resolveCoverageCreationCandidateForTest,
 	resolveTraceStepAddressesForTest,
 } from '../testSupport/coverage/traceToSource'
 import { deployContract } from '../testSupport/deployContract'
@@ -120,7 +118,7 @@ test('coverage runtime matching preserves linked PCs and masks generated mutable
 	for (const range of ranges) {
 		for (let index = range.start * 2; index < (range.start + range.length) * 2; index++) runtimeCharacters[index] = runtimeCharacters[index] === 'f' ? '0' : 'f'
 	}
-	assert.ok(isCoverageBytecodeCompatibleForTest(bytecode, runtimeCharacters.join(''), ranges), 'runtime matching must ignore constructor-populated immutable bytes')
+	assert.ok(isCoverageBytecodeCompatible(bytecode, runtimeCharacters.join(''), ranges), 'runtime matching must ignore constructor-populated immutable bytes')
 	assert.ok(buildCoveragePcToSourceMapForTest(bytecode, sourceMap, linkRanges).size > 0, 'Unlinked production bytecode retains its source map')
 	// Linking remains an input supported by the generic coverage parser; exercise it without a production library dependency.
 	const placeholder = '__$' + '11'.repeat(17) + '$__'
@@ -130,7 +128,7 @@ test('coverage runtime matching preserves linked PCs and masks generated mutable
 		[...pcToSource.keys()].some(pc => pc > 21),
 		'PC parsing must retain source-mapped instructions after a library placeholder',
 	)
-	assert.ok(!isCoverageBytecodeCompatibleForTest('6000', '6100', []), 'runtime matching must reject changes outside declared ranges')
+	assert.ok(!isCoverageBytecodeCompatible('6000', '6100', []), 'runtime matching must reject changes outside declared ranges')
 	assert.strictEqual(
 		resolveCoverageBytecodeCandidateForTest(
 			[
