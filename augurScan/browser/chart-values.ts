@@ -37,10 +37,14 @@ export interface ChartDefinition {
 
 export const chartValueBounds = (values: readonly number[], sharedRange: readonly [number, number] | undefined, zeroBaseline = false): { minimum: number; maximum: number } => {
 	if (sharedRange !== undefined) return { minimum: sharedRange[0], maximum: sharedRange[1] }
-	const finiteValues = values.filter(Number.isFinite)
-	if (finiteValues.length === 0) return { minimum: 0, maximum: 1 }
-	const minimum = zeroBaseline ? Math.min(0, ...finiteValues) : Math.min(...finiteValues)
-	const maximum = Math.max(...finiteValues)
+	let minimum = zeroBaseline ? 0 : Infinity
+	let maximum = -Infinity
+	for (const value of values) {
+		if (!Number.isFinite(value)) continue
+		minimum = Math.min(minimum, value)
+		maximum = Math.max(maximum, value)
+	}
+	if (maximum === -Infinity) return { minimum: 0, maximum: 1 }
 	if (maximum !== minimum) return { minimum, maximum }
 	if (maximum === 0) return { minimum: 0, maximum: 1 }
 	const padding = Math.abs(maximum) * 0.05

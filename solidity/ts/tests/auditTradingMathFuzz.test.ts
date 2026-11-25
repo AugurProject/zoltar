@@ -309,6 +309,10 @@ describe('audit fuzz: constant-product trading math and pair', () => {
 			}
 			// Value per liquidity token never decreases: k1 * s0^2 >= k0 * s1^2.
 			const assertNoDilution = (label: string, before: { yes: bigint; no: bigint; supply: bigint }) => {
+				if (supply !== before.supply) {
+					expect(yes * before.supply).toBeGreaterThanOrEqual(before.yes * supply)
+					expect(no * before.supply).toBeGreaterThanOrEqual(before.no * supply)
+				}
 				if (yes * no * before.supply * before.supply < before.yes * before.no * supply * supply) throw new Error(`${label}: liquidity value fell from ${before.yes}/${before.no}/${before.supply} to ${context()}`)
 			}
 			await assertState('initialize')

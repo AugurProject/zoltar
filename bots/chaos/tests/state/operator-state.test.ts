@@ -322,16 +322,14 @@ describe('chaos-bot durable state', () => {
 		await expect(loadDurableState(path, 1)).rejects.toThrow('version is unsupported')
 	})
 
-	test('migrates version 3 state to an inactive retirement journal', async () => {
+	test('rejects obsolete version 3 state', async () => {
 		const path = await statePath()
 		await saveDurableState(path, initialDurableState(1))
 		const stored = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
 		stored['version'] = 3
 		delete stored['retirement']
 		await writeFile(path, `${JSON.stringify(stored)}\n`)
-		const restored = await loadDurableState(path, 1)
-		expect(restored.version).toBe(4)
-		expect(restored.retirement).toMatchObject({ blockers: [], lastObservedBalances: {}, positions: [], status: 'inactive' })
+		await expect(loadDurableState(path, 1)).rejects.toThrow('state version is unsupported')
 	})
 
 	test('migrates balance evidence and restarts durably from every retirement phase', async () => {
@@ -379,7 +377,7 @@ describe('chaos-bot durable state', () => {
 		expect((await loadDurableState(path, 1)).retirement.recipient).toBe(signer)
 	})
 
-	test('persists proof-bound residual replacement acceptance and discards the legacy unbound shape', async () => {
+	test('persists proof-bound residual replacement acceptance and rejects the obsolete unbound shape', async () => {
 		const path = await statePath()
 		const signer = getAddress('0x0000000000000000000000000000000000000021')
 		const state = initialDurableState(1, true, 'profile:test', signer)
@@ -408,7 +406,7 @@ describe('chaos-bot durable state', () => {
 
 		stored.retirement['profileReplacementOverride'] = { acceptedAt: createdAt, reason: 'Legacy unbound acceptance.', targetProfileId: 'profile:next' }
 		await writeFile(path, `${JSON.stringify(stored)}\n`)
-		expect((await loadDurableState(path, 1)).retirement.profileReplacementOverride).toBeUndefined()
+		await expect(loadDurableState(path, 1)).rejects.toThrow('retirement.profileReplacementOverride')
 	})
 
 	test('rejects retirement completion states whose canonical evidence is missing or inconsistent', async () => {

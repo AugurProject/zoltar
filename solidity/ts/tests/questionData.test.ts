@@ -575,11 +575,16 @@ describe('Question Data', () => {
 			address: getInfraContractAddresses().zoltarQuestionData,
 			args: [firstQuestionId, 1n, MAX_UINT256],
 		})
-		const questionPage = rawQuestionPage.filter((questionId: bigint) => questionId !== 0n)
-		const outcomePage = rawOutcomePage.filter((label: string) => label !== '')
+		const firstPage = await client.readContract({
+			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+			functionName: 'getQuestions',
+			address: getInfraContractAddresses().zoltarQuestionData,
+			args: [0n, 1n],
+		})
+		assert.deepStrictEqual([...firstPage, ...rawQuestionPage], maxCountQuestionPage, 'adjacent pages must reconstruct the registry')
 
-		assert.deepStrictEqual(questionPage.length, 1, 'question paging should return only the remaining ids')
-		assert.deepStrictEqual(outcomePage, [firstOutcomes[1], firstOutcomes[2]], 'outcome paging should return only the remaining labels')
+		assert.deepStrictEqual(rawQuestionPage, [secondQuestionId], 'question paging should return only the remaining ids')
+		assert.deepStrictEqual(rawOutcomePage, [firstOutcomes[1], firstOutcomes[2]], 'outcome paging should return only the remaining labels')
 		assert.deepStrictEqual(maxCountQuestionPage, [firstQuestionId, secondQuestionId], 'question paging should clamp max count to available ids')
 		assert.deepStrictEqual(maxCountOutcomePage, [firstOutcomes[1], firstOutcomes[2]], 'outcome paging should clamp max count to available labels')
 	})

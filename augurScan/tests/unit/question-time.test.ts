@@ -3,7 +3,8 @@ import { questionAnswerType, questionDateLabel, questionStartLabel, questionStat
 
 test('formats representable question dates and retains exact out-of-range values', () => {
 	expect(questionDateLabel('1767225600')).toBe('2026-01-01 00:00:00 UTC')
-	expect(questionDateLabel('8640000000000')).not.toContain('out of range')
+	expect(questionDateLabel('253402300800')).toBe('10000-01-01 00:00:00 UTC')
+	expect(questionDateLabel('8640000000000')).toBe('275760-09-13 00:00:00 UTC')
 	for (const seconds of ['8640000000001', '281474976710655']) expect(questionDateLabel(seconds)).toBe(`Date out of range (${seconds} Unix seconds)`)
 })
 

@@ -258,6 +258,39 @@ describe('Statoblast: central internal settlement units', () => {
 		expect((await question(1n, 1n))[0].outcomeSupplyAttoShares).toBe(100n)
 	})
 
+	test('an underfunded fork chain preserves the funding target through zero and partially funded descendants', async () => {
+		await mint(1n, 17n, 12347n)
+		await mint(1n, 18n, 1251n)
+		const fundingTarget = await client.readContract({ ...target(), functionName: 'requiredCash', args: [1n] })
+		expect(fundingTarget).toBe(13598n)
+		let parent = 1n
+		for (const funding of [fundingTarget - 1n, 0n, fundingTarget / 2n, 1n, 0n, fundingTarget - 1n, fundingTarget]) {
+			expect(await client.readContract({ ...target(), functionName: 'requiredForkCash', args: [parent] })).toBe(fundingTarget)
+			await seal(parent)
+			await child(parent, funding, 37n)
+			const id = parent + 1n
+			expect(await client.readContract({ ...target(), functionName: 'requiredCash', args: [id] })).toBe(fundingTarget)
+			expect(await client.readContract({ ...target(), functionName: 'isCashFunded', args: [id] })).toBe(funding === fundingTarget)
+			expect((await client.readContract({ ...target(), functionName: 'scaledQuestion', args: [id, 17n] }))[0].outcomeSupplyAttoShares).toBe(12347n)
+			parent = id
+		}
+	})
+	test('sole-question recovery funding is exactly minimal pro-rata REP and depends on issued shares', async () => {
+		await mint(1n, 1n, 17n)
+		await seal(1n)
+		let id = 1n
+		for (const backing of [1n, 3n, 13n, 17n, 103n]) {
+			await child(1n, 17n, backing)
+			id++
+			for (const deposit of [1n, 2n, 7n, 17n, 19n, 113n]) {
+				const added = await client.readContract({ ...target(), functionName: 'quoteMint', args: [id, 1n, deposit] })
+				const req = await client.readContract({ ...target(), functionName: 'quoteMintRecoveryRep', args: [id, 1n, deposit] })
+				expect(req * 17n >= added * backing).toBe(true)
+				expect((req - 1n) * 17n < added * backing).toBe(true)
+				expect(await client.readContract({ ...target(), functionName: 'quoteMintRecoveryRep', args: [id, 2n, deposit] })).toBe(0n)
+			}
+		}
+	})
 	test('last redemption pays the exact residual across partial burns and zero-funded descendants', async () => {
 		await mint(1n, 1n, 7n)
 		await mint(1n, 2n, 4n)
@@ -1042,6 +1075,8 @@ describe('Statoblast: immutable settlement Patricia roots', () => {
 			const timestamp = (prior.at(-1)?.timestamp ?? 0) + 1 + Number(seed % 13n)
 			const value = (1n << 248n) + BigInt(index)
 			const hash = await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'appendFrozen', args: [BigInt(parent), timestamp, value] }))
+			await set(BigInt(parent), BigInt(timestamp), value, 1n)
+			expect(await client.readContract({ ...target(), functionName: 'frozenRoots', args: [BigInt(index)] })).toBe(BigInt(index))
 			const gas = (await client.waitForTransactionReceipt({ hash })).gasUsed
 			if (gas > maximumGas) maximumGas = gas
 			const entries = [...prior, { timestamp, value }]
@@ -1051,6 +1086,7 @@ describe('Statoblast: immutable settlement Patricia roots', () => {
 				if (model === undefined) throw new Error('Missing frozen fork model')
 				for (const cutoff of [0, timestamp, timestamp + 1, Number(seed % BigInt(timestamp + 1))]) {
 					const expected = model.find(entry => entry.timestamp >= cutoff)?.value ?? 0n
+					expect(await client.readContract({ ...target(), functionName: 'floor', args: [BigInt(root), BigInt(cutoff)] })).toBe(model.filter(entry => entry.timestamp <= cutoff).at(-1)?.value ?? 0n)
 					expect(await client.readContract({ ...target(), functionName: 'frozenCeiling', args: [BigInt(root), cutoff] })).toBe(expected)
 				}
 			}

@@ -1,4 +1,4 @@
-import { beforeEach, describe, test } from 'bun:test'
+import { beforeEach, describe, test, expect } from 'bun:test'
 import { encodeDeployData, getAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import assert from '../testSupport/simulator/utils/assert'
 import type { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
@@ -176,5 +176,33 @@ describe('REP token authorizations', () => {
 		assert.strictEqual(await relayer.readContract({ abi, address: token, functionName: 'authorizationState', args: [owner, canceledNonce] }), true)
 		await assert.rejects(relayer.writeContract({ abi, address: token, functionName: 'transferWithAuthorization', args: [owner, recipient, 3n, 0n, 9_000_000_000n, canceledNonce, transfer.v, transfer.r, transfer.s] }), /already used|reverted/i)
 		await assert.rejects(relayer.writeContract({ abi, address: token, functionName: 'cancelAuthorization', args: [owner, canceledNonce, cancellation.v, cancellation.r, cancellation.s] }), /already used|reverted/i)
+	})
+	test('burns and transfers preserve unused child mint capacity', async () => {
+		const minted = 1000n
+		const surplus = 300n
+		const deployment = await relayer.waitForTransactionReceipt({ hash: await relayer.sendTransaction({ data: encodeDeployData({ abi, bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`, args: [relayer.account.address] }) }) })
+		if (!deployment.contractAddress) throw new Error('Missing child REP deployment')
+		const target = { abi, address: deployment.contractAddress }
+		const headroom = async () => (await relayer.readContract({ ...target, functionName: 'getTotalTheoreticalSupply' })) - (await relayer.readContract({ ...target, functionName: 'totalSupply' }))
+		await writeContractAndWait(relayer, () => relayer.writeContract({ ...target, functionName: 'initialize', args: [1n, minted + surplus, 1n] }))
+		await writeContractAndWait(relayer, () => relayer.writeContract({ ...target, functionName: 'mint', args: [relayer.account.address, minted] }))
+		expect(await headroom()).toBe(surplus)
+		await writeContractAndWait(relayer, () => relayer.writeContract({ ...target, functionName: 'transfer', args: [other, 37n] }))
+		await writeContractAndWait(relayer, () => relayer.writeContract({ ...target, functionName: 'burn', args: [other, 37n] }))
+		expect(await headroom()).toBe(surplus)
+		await writeContractAndWait(relayer, () => relayer.writeContract({ ...target, functionName: 'mint', args: [owner, surplus] }))
+		expect(await headroom()).toBe(0n)
+	})
+	test('cancelling one signer’s authorization leaves both permit counters and the other signer’s matching ID usable', async () => {
+		const nonce = repeatedNonce('15')
+		const cancel = await signTypedData({ domain: domain(), primaryType: 'CancelAuthorization', types: CANCEL_AUTHORIZATION_TYPES, message: { authorizer: other, nonce } }, other)
+		await writeContractAndWait(relayer, () => relayer.writeContract({ abi, address: token, functionName: 'cancelAuthorization', args: [other, nonce, cancel.v, cancel.r, cancel.s] }))
+		const validBefore = 9000000000n
+		const sig = await signTransfer({ nonce, to: other, value: 7n, validBefore })
+		await writeContractAndWait(relayer, () => relayer.writeContract({ abi, address: token, functionName: 'transferWithAuthorization', args: [owner, other, 7n, 0n, validBefore, nonce, sig.v, sig.r, sig.s] }))
+		for (const signer of [other, owner]) {
+			expect(await relayer.readContract({ abi, address: token, functionName: 'authorizationState', args: [signer, nonce] })).toBe(true)
+			expect(await relayer.readContract({ abi, address: token, functionName: 'nonces', args: [signer] })).toBe(0n)
+		}
 	})
 })

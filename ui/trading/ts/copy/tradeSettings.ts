@@ -10,7 +10,7 @@ export const customValidity = 'Custom validity, minutes'
 export { percent } from './outcomes.js'
 export const minutes = 'min'
 export const validityValidation = 'Enter a whole number from 1 to 1440 minutes.'
-export const settingsHelp = 'Transactions revert if the price moves beyond the slippage tolerance or they confirm after the validity window.'
+export const settingsHelp = 'Quoted bounds round outward to whole token base units. Trades and liquidity operations revert outside their signed bounds or after their deadline.'
 
 export function minutesLabel(minutes: bigint) {
 	return `${minutes.toString()} min`

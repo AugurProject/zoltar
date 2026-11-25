@@ -161,8 +161,9 @@ export const renderOperationsTimelineFilters = (pageUrl: URL, chainId: string, i
 	const canonicalLabel = document.createElement('label')
 	const canonical = document.createElement('select')
 	canonical.name = 'canonical'
-	canonical.append(new Option('Canonical only', 'canonical'), new Option('Canonical and superseded', 'all'))
-	canonical.value = pageUrl.searchParams.get('canonical') === 'all' ? 'all' : 'canonical'
+	canonical.append(new Option('Canonical only', 'canonical'), new Option('Canonical and superseded', 'all'), new Option('Superseded only', 'orphaned'))
+	const selectedScope = pageUrl.searchParams.get('canonical')
+	canonical.value = selectedScope === 'all' || selectedScope === 'orphaned' ? selectedScope : 'canonical'
 	canonicalLabel.append(element('span', '', 'Evidence'), canonical)
 	for (const [name, value] of [['chainId', chainId], ...(isDemo ? [['demo', '1']] : [])] as const) {
 		const input = document.createElement('input')

@@ -17,6 +17,6 @@ export async function api(path: string, init?: RequestInit) {
 }
 
 /** Sends `body` as JSON with the given method. */
-export async function sendJson(path: string, method: 'POST' | 'PUT', body: unknown) {
-	return await api(path, { body: JSON.stringify(body), headers: { 'content-type': 'application/json' }, method })
+export async function sendJson(path: string, method: 'POST' | 'PUT', body: unknown, signal?: AbortSignal) {
+	return await api(path, { ...(signal === undefined ? {} : { signal }), body: JSON.stringify(body), headers: { 'content-type': 'application/json' }, method })
 }

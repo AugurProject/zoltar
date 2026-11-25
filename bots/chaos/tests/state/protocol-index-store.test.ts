@@ -6,6 +6,7 @@ import { encodeAbiParameters, getAddress, keccak256 } from '@zoltar/bot-shared/e
 import type { ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
 import { loadDurableState, saveDurableState, type StateFilesystem } from '../../src/state/operator-state.ts'
 import { initialDurableState } from '../../src/state/initial-state.ts'
+import { parseProtocolIndex } from '../../src/state/protocol-index-schema.ts'
 import { snapshotProtocolIndex } from '../../src/state/protocol-index-store.ts'
 import { protocolIndexSidecarDirectory } from '../support/state-sidecars.ts'
 
@@ -395,17 +396,14 @@ describe('protocol-index sidecar generations', () => {
 		await expect(stat(partial)).rejects.toMatchObject({ code: 'ENOENT' })
 	})
 
-	test('loads the current inline index schema and migrates it on the next save', async () => {
+	test('rejects obsolete inline indexes', async () => {
 		const path = await statePath()
 		const state = initialDurableState(1, true, 'profile:inline', address(22))
 		await saveDurableState(path, state)
 		const persisted: unknown = JSON.parse(await readFile(path, 'utf8'))
 		if (typeof persisted !== 'object' || persisted === null) throw new Error('Expected a persisted durable state object')
 		await writeFile(path, `${JSON.stringify({ ...persisted, protocolIndex: protocolIndex() }, undefined, 2)}\n`, { mode: 0o600 })
-		const loaded = await loadDurableState(path, 1)
-		expect(loaded.protocolIndex?.cursor.blockNumber).toBe('50')
-		await saveDurableState(path, loaded)
-		expect((await storedReference(path)).kind).toBe('protocol-index-sidecar')
+		await expect(loadDurableState(path, 1)).rejects.toThrow()
 	})
 
 	test('binds a persisted index to its durable chain and signer identities', async () => {
@@ -423,18 +421,9 @@ describe('protocol-index sidecar generations', () => {
 	})
 
 	test('rejects duplicate canonical records and an oversized aggregate index', async () => {
-		const path = await statePath()
-		const persistInlineIndex = async (inlineIndex: unknown) => {
-			await saveDurableState(path, initialDurableState(1, true, 'profile:inline', address(22)))
-			const persisted: unknown = JSON.parse(await readFile(path, 'utf8'))
-			if (typeof persisted !== 'object' || persisted === null) throw new Error('Expected a persisted durable state object')
-			await writeFile(path, `${JSON.stringify({ ...persisted, protocolIndex: inlineIndex }, undefined, 2)}\n`, { mode: 0o600 })
-		}
-		await persistInlineIndex({ ...protocolIndex(), schemaVersion: 2 })
-		await expect(loadDurableState(path, 1)).rejects.toThrow('schemaVersion is unsupported')
+		expect(() => parseProtocolIndex({ ...protocolIndex(), schemaVersion: 2 }, 1)).toThrow('schemaVersion is unsupported')
 		const { auctionRefunds: _missingRefundEpisodes, ...missingRefundEpisodes } = protocolIndex()
-		await persistInlineIndex(missingRefundEpisodes)
-		await expect(loadDurableState(path, 1)).rejects.toThrow('missing auctionRefunds')
+		expect(() => parseProtocolIndex(missingRefundEpisodes, 1)).toThrow('missing auctionRefunds')
 
 		const duplicateBid = protocolIndex()
 		const key = duplicateBid.openOracle.toLowerCase()

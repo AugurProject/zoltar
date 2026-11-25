@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createPublicClient, createWalletClient, getAddress, parseTransaction, privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, createWalletClient, getAddress, http, parseTransaction, privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import type { OperatorSettings } from '../../src/config/settings.ts'
 import { recoverPendingTransactions } from '../../src/execution/recovery.ts'
 import { TransactionAwaitingRecovery, executeOperationPlan } from '../../src/execution/transaction-executor.ts'
@@ -181,6 +181,47 @@ async function executeCanonicalOperation(context: ReturnType<typeof runtimeConte
 }
 
 describe('real ecosystem workflows through the production chaos runtime', () => {
+	test('pending gas estimates and mined blocks use the same advancing fixture clock', async () => {
+		const current = requiredFixture()
+		await current.restoreBaseline()
+		const client = createPublicClient({ transport: http(current.node.rpcUrl) })
+		for (let block = 0; block < 3; block += 1) {
+			const latest = await client.getBlock()
+			const pending = await current.node.anvilWindowEthereum.requestRaw({ method: 'eth_getBlockByNumber', params: ['pending', false] })
+			if (typeof pending !== 'object' || pending === null || !('timestamp' in pending) || typeof pending.timestamp !== 'string') throw new Error('Pending fixture block has no timestamp')
+			const pendingTimestamp = BigInt(pending.timestamp)
+			expect(pendingTimestamp).toBe(latest.timestamp + 1n)
+			await current.node.anvilWindowEthereum.requestRaw({ method: 'evm_mine', params: [] })
+			expect((await client.getBlock()).timestamp).toBe(pendingTimestamp)
+		}
+	})
+
+	test('confirms direct shared-feed report funding through the production receipt validator', async () => {
+		const current = requiredFixture()
+		await current.restoreBaseline()
+		const proxy = current.createRpcProxy()
+		const relay = current.createPrivateRelay()
+		const stateFile = await temporaryStateFile()
+		try {
+			const settings = settingsFor(current, proxy, stateFile.path)
+			settings.strategy.selectableOperationAllowlist = [...settings.strategy.selectableOperationAllowlist, 'statoblast.oracle.request-price']
+			settings.strategy.maximumEthPerOperationAttoEth = ONE_TOKEN
+			settings.submission = { minimumBundleRelaySuccesses: 1, mode: 'private', relayUrls: [relay.relayUrl] }
+			const context = runtimeContext(settings)
+			const initial = await canonicalRescan(context)
+			const wrap = requiredPlan(evaluateOperationCatalog(initial.snapshot, { ...planningOptions(settings, SCAN_SEED), operationInputs: { amount: ONE_TOKEN.toString() } }), 'open-oracle.weth.wrap')
+			expect((await executeOperationPlan(context.environment, wrap)).status).toBe('completed')
+			const funded = await canonicalRescan(context, initial)
+			const requested = await executeCanonicalOperation(context, funded, 'statoblast.oracle.request-price')
+			expect(requested.workflow.steps.find(step => step.id === 'request-price')?.status).toBe('confirmed')
+			expect(requested.scan.snapshot.pools.some(pool => pool.pendingReportId !== '0')).toBeTrue()
+		} finally {
+			relay.dispose()
+			proxy.dispose()
+			await stateFile.dispose()
+		}
+	})
+
 	test('preflights canonical pool deployment before random selection or signing', async () => {
 		const current = requiredFixture()
 		await current.restoreBaseline()
@@ -441,7 +482,14 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 			expect(BigInt(mintedShares?.yes ?? '0')).toBeGreaterThan(0n)
 			expect(BigInt(mintedShares?.no ?? '0')).toBeGreaterThan(0n)
 
+			// Cross a fee-clock second even when the host runs the whole operation within one tick.
+			context.environment.beforeBroadcast = async () => {
+				const readClient = createPublicClient({ chain: context.chain, transport: context.pool.transport })
+				const block = await readClient.getBlock()
+				await current.node.anvilWindowEthereum.requestRaw({ method: 'evm_setNextBlockTimestamp', params: [`0x${(block.timestamp + 1n).toString(16)}`] })
+			}
 			await execute('statoblast.complete-set.redeem')
+			context.environment.beforeBroadcast = undefined
 			const redeemedShares = scan.snapshot.wallet.shares.find(shares => shares.universeId === '0')
 			expect(redeemedShares).toMatchObject({ invalid: '0', no: '0', yes: '0' })
 

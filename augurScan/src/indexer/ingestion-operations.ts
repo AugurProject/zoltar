@@ -188,6 +188,15 @@ export async function indexBlock(
 		const decoded = decodeAction(contract, pair.transaction.input, labels, tokenMetadata, contractKinds)
 		for (const candidate of tokenAddressesFrom(contract?.kind, decoded, pair.transaction.to, contractKinds)) tokenCandidates.add(candidate)
 	}
+	for (const candidate of tokenCandidates) {
+		const address = candidate.toLowerCase()
+		const contract = contracts.get(address)
+		const deployment = contract?.configuredDeploymentBlock ?? (contract?.deploymentBlockExact ? contract.deploymentBlock : undefined)
+		if (deployment === undefined) continue
+		if (number < deployment) tokenCandidates.delete(candidate)
+		const prior = tokenMetadata.get(address)
+		if (prior !== undefined && prior.readBlock < deployment && prior.decimals === undefined) tokenMetadata.delete(address)
+	}
 	const tokenMetadataReads = await mapLimit(tokenMetadataReadCandidates([...tokenCandidates], tokenMetadata, number, state.stateBoundary.startBlock), 4, candidate => readTokenMetadata(state.providers, candidate, number))
 	if (tokenMetadataReads.some(metadata => metadata.readError === prunedTokenMetadataError)) await discoverStateStartBlock(state, observedHead, number, true)
 	for (const metadata of tokenMetadataReads) tokenMetadata.set(metadata.address.toLowerCase(), metadata)
@@ -307,7 +316,7 @@ function assertSelectedLogEvidence(known: Log, receipt: TransactionReceipt): voi
 
 export async function refreshRichListBalances(state: NetworkIndexerState, blockNumber: bigint, blockHash: Hash): Promise<void> {
 	if (blockNumber < state.stateBoundary.startBlock) return
-	const targets = await state.database.richListBalanceTargets(state.network.chainId, 10, requireLease(state))
+	const targets = await state.database.richListBalanceTargets(state.network.chainId, 10, requireLease(state), blockHash)
 	if (targets.addresses.length === 0) return
 	try {
 		await commitCanonicalRead(
@@ -315,17 +324,21 @@ export async function refreshRichListBalances(state: NetworkIndexerState, blockN
 			blockHash,
 			async () => {
 				const balances: RichListBalance[] = []
-				const nativeBalances = await mapLimit(targets.addresses, 8, async owner =>
-					readRichListBalance(
-						{ owner, assetAddress: zeroAddress, assetKind: 'native' },
-						() => state.providers.client.getBalance({ address: owner, blockNumber }),
-						error => {
-							if (isPrunedHistoricalStateError(error)) throw error
-						},
-					),
+				const needsRead = (owner: Address, asset: Address) => !targets.completed?.has(`${owner.toLowerCase()}:${asset.toLowerCase()}`)
+				const nativeBalances = await mapLimit(
+					targets.addresses.filter(owner => needsRead(owner, zeroAddress)),
+					8,
+					async owner =>
+						readRichListBalance(
+							{ owner, assetAddress: zeroAddress, assetKind: 'native' },
+							() => state.providers.client.getBalance({ address: owner, blockNumber }),
+							error => {
+								if (isPrunedHistoricalStateError(error)) throw error
+							},
+						),
 				)
 				balances.push(...nativeBalances)
-				const tokenRequests = targets.addresses.flatMap(owner => targets.assets.map(asset => ({ owner, asset })))
+				const tokenRequests = targets.addresses.flatMap(owner => targets.assets.filter(asset => needsRead(owner, asset.address)).map(asset => ({ owner, asset })))
 				balances.push(
 					...(await mapLimit(tokenRequests, 8, async ({ owner, asset }) =>
 						readRichListBalance(

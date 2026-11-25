@@ -163,7 +163,7 @@ const universeFees = async (ledger: Address, state: LedgerState, read: StateRead
 				purchaseFeeBps: quantity(purchaseFeeBps, 'purchaseFeeBps').toString(),
 				feeStreams: streams.toLowerCase(),
 				services: address(rawServices, 'services').toLowerCase(),
-				// Funded earnings still vesting to underwriters, and elapsed stale income awaiting its burn.
+				// Funded fees awaiting release at a checkpoint and deferred stale income awaiting burn.
 				vestingOutstandingAttoEth: quantity(outstandingEth, 'outstandingEth').toString(),
 				vestingOutstandingAttoRep: quantity(outstandingRep, 'outstandingRep').toString(),
 				deferredAttoEth: quantity(deferredEth, 'deferredEth').toString(),
@@ -245,7 +245,8 @@ export const capitalOwnerSnapshot = async (ledger: Address, owner: Address, read
 	const cohort = tuple(rawCohort, 5, 'repairAuctionCohort')
 	// The auction adapter owns the cohort's aggregate position in the index, but the ledger keeps its id in
 	// `repairAuctionCohort` and reports zero principal and commitment for the adapter itself.
-	const cohortId = address(cohort[0], 'repairAuctionCohort.adapter') === owner ? quantity(cohort[1], 'repairAuctionCohort.positionId') : 0n
+	const adapter = address(cohort[0], 'repairAuctionCohort.adapter')
+	const cohortId = adapter === owner ? quantity(cohort[1], 'repairAuctionCohort.positionId') : 0n
 	const positionId = cohortId === 0n ? quantity(account['positionId'], 'ownerAccount.positionId') : cohortId
 	const freeAttoRep = quantity(account['freeAttoRep'], 'ownerAccount.freeAttoRep')
 	let principal = quantity(collateral[0], 'ownerCollateral.principal')
@@ -276,10 +277,20 @@ export const capitalOwnerSnapshot = async (ledger: Address, owner: Address, read
 			remainingCommitmentAttoEth: quantity(indexed['remainingCommitment'], 'accountOf.remainingCommitment').toString(),
 			liquidationStartedAt: liquidationStartedAt.toString(),
 			belowLiquidationPrice,
-			// What a take-over needs before the ledger cures: a fresh price, an open universe (`_requireOpen`) and an adverse observation.
+			// What a take-over needs before the ledger cures: an open universe (`_requireOpen`) and an adverse observation.
 			// The ledger first attempts an unpaid cure; if it restores health, the call succeeds with zero transfer.
 			// Cure eligibility also uses the public minimum commitment. A cohort is taken over per bid, never as a whole.
-			takeoverPreconditionsMet: cohortId === 0n && belowLiquidationPrice && liquidationStartedAt !== 0n && state.priceValid && !state.frozen && !state.importing && !state.universeForked,
+			takeoverPreconditionsMet: cohortId === 0n && belowLiquidationPrice && liquidationStartedAt !== 0n && !state.frozen && !state.importing && !state.universeForked,
+		}
+	} else if (adapter !== zeroAddress && commitment !== 0n) {
+		// Before materialization the cohort holds the bid's commitment and shares out indexed fees per vault.
+		const bidId = quantity(await call(adapter, 'securityPoolRepairAuction', 'bidIdForVault', [owner]), 'bidIdForVault')
+		if (bidId !== 0n) {
+			const bid = struct(await call(ledger, kind, 'repairAuctionPosition', [bidId]), 'repairAuctionPosition')
+			if (address(bid['vault'], 'repairAuctionPosition.vault') !== owner) throw new Error('Auction bid vault does not match capital owner')
+			unclaimedEth = quantity(bid['earnedAttoEth'], 'repairAuctionPosition.earnedAttoEth')
+			unclaimedRep = quantity(bid['earnedAttoRep'], 'repairAuctionPosition.earnedAttoRep')
+			position['liquidationStartedAt'] = quantity(bid['liquidationStarted'], 'repairAuctionPosition.liquidationStarted').toString()
 		}
 	}
 	// The pure index formula at the protocol health floor; it rejects a zero price, so it is read only once a price exists.

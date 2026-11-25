@@ -13,7 +13,9 @@ function positiveInteger(name: string) {
 	return BigInt(value)
 }
 
-if (process.argv.includes('--help')) {
+const args = process.argv.slice(2)
+if (args.length > 0 && (args.length !== 1 || args[0] !== '--help')) throw new Error('Expected no arguments or --help')
+if (args[0] === '--help') {
 	console.log(`Settlement finalizer: scan a Statoblast security pool once for funded final questions.
 Set SETTLEMENT_RPC_URL, SETTLEMENT_CHAIN_ID, SETTLEMENT_SECURITY_POOL and
 SETTLEMENT_MINIMUM_CASH (raw collateral units).

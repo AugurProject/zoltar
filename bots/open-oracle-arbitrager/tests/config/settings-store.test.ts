@@ -106,95 +106,16 @@ function settings(privateKeyValue: Hex | undefined) {
 	}
 }
 
-const version4Runtime = {
-	execute: false,
-	historyFile: '.state/history-mainnet.jsonl',
-	lookbackBlocks: '128',
-	maxHedgeSlippageBps: '75',
-	once: false,
-	positionFile: '.state/positions-mainnet.json',
-	priceHistoryFile: '.state/prices-mainnet.jsonl',
-	riskLimits: { lifecycleGasReserveWeth: '0.01', maxConcurrentPositions: 1, maxDailyGasSpendWeth: '0.05', maxPositionNotionalWeth: '5', maxTotalLockedWeth: '10' },
-	ui: true,
-	uiHost: '127.0.0.1',
-	uiPort: 4173,
-}
-
-/** A complete version 4 operator file as earlier releases and the dashboard saved it. */
-function version4Document(overrides: { connectivity?: unknown; rpcQuorum?: unknown } = {}) {
-	return {
-		...example,
-		connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' },
-		deployment: { quorumRpcUrls: ['https://second.example', 'https://third.example'], uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: false },
-		network: 'mainnet',
-		networkConfigured: true,
-		rpcQuorum: 2,
-		runtime: version4Runtime,
-		strategy: { maxSpotTwapTicks: '100', minimumProfitBps: '150', minimumProfitWeth: '0.01', minimumRemainingBlocks: '3', minimumRemainingSeconds: '36', pollMilliseconds: 15_000, twapSeconds: 1_800 },
-		version: 4,
-		...overrides,
-	}
-}
-
-describe('operator settings version 4 migration', () => {
-	test('moves RPC quorum into connectivity, the poll interval into runtime, and stores numeric lookback and basis points', () => {
-		const parsed = parseOperatorSettings(version4Document())
-		expect(parsed.connectivity).toEqual({ publicRpcUrls: ['https://submit.example/'], quorumRpcUrls: ['https://second.example/', 'https://third.example/'], readRpcUrl: 'https://read.example/', rpcQuorum: 2 })
-		expect(parsed.runtime).toMatchObject({ logLookbackBlocks: 128n, maxHedgeSlippageBps: 75n, pollMilliseconds: 15_000 })
-		expect(parsed.strategy.minimumProfitBps).toBe(150n)
-		const serialized = serializeOperatorSettings(parsed)
-		expect(serialized.version).toBe(5)
-		expect(serialized).not.toHaveProperty('rpcQuorum')
-		expect(serialized.connectivity).toEqual({ publicRpcUrls: ['https://submit.example/'], quorumRpcUrls: ['https://second.example/', 'https://third.example/'], readRpcUrl: 'https://read.example/', rpcQuorum: 2 })
-		expect(serialized.deployment).toEqual({ uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: false })
-		expect(serialized.runtime).toMatchObject({ logLookbackBlocks: 128, maxHedgeSlippageBps: 75, pollMilliseconds: 15_000 })
-		expect(serialized.runtime).not.toHaveProperty('lookbackBlocks')
-		expect(serialized.strategy).toMatchObject({ minimumProfitBps: 150 })
-		expect(serialized.strategy).not.toHaveProperty('pollMilliseconds')
-		expect(parseOperatorSettings(serialized)).toEqual(parsed)
-	})
-
-	test('keeps the version 4 lookback repair and the environment RPC policy default', () => {
-		expect(parseOperatorSettings({ ...version4Document(), runtime: { ...version4Runtime, lookbackBlocks: '50000' } }).runtime.logLookbackBlocks).toBe(256n)
-		const { rpcQuorum: _rpcQuorum, ...withoutPolicy } = version4Document()
-		const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
-		try {
-			process.env['ZOLTAR_BOT_RPC_QUORUM'] = '2'
-			expect(parseOperatorSettings(withoutPolicy).connectivity.rpcQuorum).toBe(2)
-		} finally {
-			if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
-			else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
-		}
-	})
-
-	test('drops quorum readers and policy that an unconfigured version 4 profile could not use', () => {
-		const { connectivity: _connectivity, ...unconfigured } = version4Document({ rpcQuorum: 1 })
-		const parsed = parseOperatorSettings({ ...unconfigured, networkConfigured: false, paused: true, runtime: { ...unconfigured.runtime, execute: false } })
-		expect(parsed.networkConfigured).toBeFalse()
-		expect(parsed.connectivity.quorumRpcUrls).toEqual([])
-		expect(serializeOperatorSettings(parsed).connectivity).toBeUndefined()
-	})
-
-	test('loads a saved version 4 file from disk', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-v4-migration-'))
-		temporaryDirectories.push(directory)
-		const path = join(directory, 'operator.json')
-		const document = version4Document()
-		await writeFile(path, JSON.stringify({ ...document, runtime: { ...document.runtime, historyFile: join(directory, 'history.jsonl'), positionFile: join(directory, 'positions.json'), priceHistoryFile: join(directory, 'prices.jsonl') } }), { mode: 0o600 })
-		expect((await loadOperatorSettings(path))?.connectivity.rpcQuorum).toBe(2)
-	})
-
-	test('rejects the version 4 keys in a version 5 file', () => {
-		const current = serializeOperatorSettings(parseOperatorSettings(version4Document()))
-		expect(() => parseOperatorSettings({ ...current, rpcQuorum: 2 })).toThrow('Unknown operator configuration field: rpcQuorum')
-		expect(() => parseOperatorSettings({ ...current, deployment: { ...current.deployment, quorumRpcUrls: [] } })).toThrow('Deployment settings require the supported core deployment fields')
-		expect(() => parseOperatorSettings({ ...current, runtime: { ...current.runtime, lookbackBlocks: '256' } })).toThrow('Runtime settings require exactly the supported runtime fields')
-		expect(() => parseOperatorSettings({ ...current, runtime: { ...current.runtime, maxHedgeSlippageBps: '50' } })).toThrow('Runtime maxHedgeSlippageBps must be an integer from 0 to 1000')
-		expect(() => parseOperatorSettings({ ...current, runtime: { ...current.runtime, logLookbackBlocks: '256' } })).toThrow('Runtime logLookbackBlocks must be an integer from 0 to 256')
-		expect(() => parseOperatorSettings({ ...current, strategy: { ...current.strategy, minimumProfitBps: '100' } })).toThrow('Minimum return must be an integer from 0 to 100000')
-		expect(() => parseOperatorSettings({ ...current, strategy: { ...current.strategy, pollMilliseconds: 1_000 } })).toThrow('Unknown strategy setting: pollMilliseconds')
-		for (const version of [3, 6, '5']) expect(() => parseOperatorSettings({ ...current, version })).toThrow('unsupported version')
-	})
+test('rejects the version 4 keys in a version 5 file', () => {
+	const current = serializeOperatorSettings(settings(undefined))
+	expect(() => parseOperatorSettings({ ...current, rpcQuorum: 2 })).toThrow('Unknown operator configuration field: rpcQuorum')
+	expect(() => parseOperatorSettings({ ...current, deployment: { ...current.deployment, quorumRpcUrls: [] } })).toThrow('Deployment settings require the supported core deployment fields')
+	expect(() => parseOperatorSettings({ ...current, runtime: { ...current.runtime, lookbackBlocks: '256' } })).toThrow('Runtime settings require exactly the supported runtime fields')
+	expect(() => parseOperatorSettings({ ...current, runtime: { ...current.runtime, maxHedgeSlippageBps: '50' } })).toThrow('Runtime maxHedgeSlippageBps must be an integer from 0 to 1000')
+	expect(() => parseOperatorSettings({ ...current, runtime: { ...current.runtime, logLookbackBlocks: '256' } })).toThrow('Runtime logLookbackBlocks must be an integer from 0 to 256')
+	expect(() => parseOperatorSettings({ ...current, strategy: { ...current.strategy, minimumProfitBps: '100' } })).toThrow('Minimum return must be an integer from 0 to 100000')
+	expect(() => parseOperatorSettings({ ...current, strategy: { ...current.strategy, pollMilliseconds: 1_000 } })).toThrow('Unknown strategy setting: pollMilliseconds')
+	for (const version of [2, 3, 4, 6, '5']) expect(() => parseOperatorSettings({ ...current, version })).toThrow('unsupported version')
 })
 
 describe('#1274: allowlisted non-WETH collateral settings', () => {

@@ -1,3 +1,5 @@
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
+import { questionFeeStreamSummary } from './capital-presentation.ts'
 import type { OperationsResponse } from './api-validation.ts'
 
 interface OperationsRenderInputs {
@@ -19,5 +21,10 @@ export const operationsRenderSignature = (response: OperationsResponse, inputs: 
 	const historical = asOf['historical'] === true || asOf['phase'] === 'historical'
 	const url = new URL(inputs.url)
 	url.searchParams.delete('tab')
-	return JSON.stringify([inputs.chainId, url.pathname, url.search, inputs.networkName, historical ? { asOf, liveConnected: inputs.liveConnected } : false, data], withoutCursorValues)
+	const risk = data['risk']
+	const streams = isPlainRecord(risk) ? risk['questionFeeStreams'] : undefined
+	const time = asOf['blockTimestamp']
+	const seconds = typeof time === 'string' && /^\d+$/.test(time) ? BigInt(time) : undefined
+	const feeStatuses = Array.isArray(streams) ? streams.filter(isPlainRecord).map(stream => questionFeeStreamSummary(stream, seconds)) : undefined
+	return JSON.stringify([feeStatuses, inputs.chainId, url.pathname, url.search, inputs.networkName, historical ? { asOf, liveConnected: inputs.liveConnected } : false, data], withoutCursorValues)
 }

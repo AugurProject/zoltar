@@ -9,7 +9,7 @@ import { forkParticipationUniverse } from './operations-presentation.ts'
 import { short, shortIdentifier } from './identifier-format.ts'
 import { type SecurityPoolKind, SECURITY_POOL_KIND_LABELS, securityPoolItems, securityPoolPage } from './security-pool-helpers.ts'
 import type { createOperationsComponents } from './operations-components.ts'
-import { sharePositionSummary, tradingPnlPanel } from './trading-panels.ts'
+import { lpBalanceSummary, sharePositionSummary, tradingPnlPanel } from './trading-panels.ts'
 import { captureViewState, restoreViewState } from './view-state.ts'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
@@ -103,6 +103,8 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		balanceGrid.append(card)
 	}
 	balances.append(balanceGrid)
+	if (item.rep_balances_truncated) balances.append(element('p', '', 'Showing the first 100 sampled REP tokens.'))
+	if (item.weth_balances_truncated) balances.append(element('p', '', 'Showing the first 100 sampled wrapped native tokens.'))
 	setLiveRecord(balances, 'balances', {
 		native: item.native_balance_detail,
 		weth: item.weth_balances,
@@ -164,7 +166,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		}),
 		'No sampled payout positions for this depositor.',
 		{
-			label: `Tagged claim-bundle amounts, not wallet transfer quotes. Refresh proofs after any settlement. Chain sampling: ${String(payouts['unavailable_games'] ?? '0')} games unavailable; ${String(payouts['truncated_games'] ?? '0')} games truncated.${payouts['truncated'] === true ? ' First 250 address positions shown.' : ''}`,
+			label: `Tagged REP payouts to the depositor’s wallet. Refresh proofs after any settlement. Chain sampling: ${String(payouts['unavailable_games'] ?? '0')} games unavailable; ${String(payouts['truncated_games'] ?? '0')} games truncated.${payouts['truncated'] === true ? ' First 250 address positions shown.' : ''}`,
 		},
 	)
 	const refundPanel = operationsPanel(
@@ -196,7 +198,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		operationRecords(item['lp_positions']).map(position =>
 			operationRow(
 				String(position['question_title'] ?? 'Augur AMM market'),
-				`${exactUnit(String(position['balance'] ?? '0'), 18, 'LP tokens')} · ${operationCounted(position['transfer_count'], 'transfer')}`,
+				`${lpBalanceSummary(position['balance'], position['observed_balance_delta'], 'LP tokens')} · ${operationCounted(position['transfer_count'], 'transfer')}`,
 				String(position['market_address'] ?? ''),
 				undefined,
 				operationsHref(`/operations/trading/${encodeURIComponent(String(position['market_address'] ?? ''))}`),
@@ -207,22 +209,29 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	const tradingPnl = tradingPnlPanel(item.trading_pnl, { operationRow, operationsPanel, operationsHref, element, nativeSymbol: itemNativeSymbol })
 	const forkParticipation = operationsPanel(
 		'Fork and migration participation',
-		operationRecords(item['fork_participation']).map(event =>
-			operationRow(String(event['event_name'] ?? 'Fork migration'), 'Canonical event evidence naming this address as migrator, branch owner, or recipient', String(event['universe_identity'] ?? ''), event['block_number'], operationsHref(`/operations/fork/${encodeURIComponent(forkParticipationUniverse(event))}`)),
-		),
+		operationRecords(item['fork_participation']).map(event => {
+			const eventData = isPlainRecord(event['event_data']) ? event['event_data'] : {}
+			const initialCredit = eventData['migrationRepBalanceAttoRep']
+			let detail = 'Canonical event evidence naming this address as migrator, branch owner, or recipient'
+			if (event['event_name'] === 'UniverseForked') detail = typeof initialCredit === 'string' ? `${exactUnit(initialCredit, 18, 'REP')} initial migration credit` : 'Fork initiated by this address'
+			return operationRow(String(event['event_name'] ?? 'Fork migration'), detail, String(event['universe_identity'] ?? ''), event['block_number'], operationsHref(`/operations/fork/${encodeURIComponent(forkParticipationUniverse(event))}`))
+		}),
 		'No fork or migration participation matches this view.',
 	)
 	const reportParticipation = operationsPanel(
 		'OpenOracle reporting participation',
-		operationRecords(item['report_participation']).map(event =>
-			operationRow(
+		operationRecords(item['report_participation']).map(event => {
+			const reportData = isPlainRecord(event['report_data']) ? event['report_data'] : {}
+			const tracksDisputes = (Number(reportData['flags'] ?? 0) & 2) !== 0
+			const roundLabel = event['round_number'] === '0' && !tracksDisputes ? 'Observed round' : `Round ${String(event['round_number'] ?? '—')}`
+			return operationRow(
 				`${String(event['event_name'] ?? 'Report')} · report ${String(event['report_id'] ?? '—')}`,
-				`Round ${String(event['round_number'] ?? '—')} · canonical reporter evidence`,
+				`${roundLabel} · canonical reporter evidence`,
 				String(event['open_oracle_address'] ?? ''),
 				event['block_number'],
 				operationsHref(`/operations/report/${encodeURIComponent(String(event['open_oracle_address'] ?? ''))}/${encodeURIComponent(String(event['report_id'] ?? ''))}`),
-			),
-		),
+			)
+		}),
 		'No OpenOracle rounds identify this address as the current reporter.',
 	)
 	const appendSecurityPoolPagination = (kind: SecurityPoolKind, panel: HTMLElement) => {

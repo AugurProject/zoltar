@@ -1,3 +1,4 @@
+import { getSimulationStateId } from '../lib/activeEnvironment.js'
 import * as appCopy from '../copy/app.js'
 import * as commonCopy from '../copy/common.js'
 import * as simulationCopy from '../copy/simulation.js'
@@ -5,7 +6,7 @@ import { useSignal } from '@preact/signals'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { getErrorMessage } from '../lib/errors.js'
 import type { SimulationController } from '../simulation/controller.js'
-import { getBuiltInScenarioLocation, getSavedSimulationStateLocation, hasSavedSimulationStateRoute, refreshEnvironmentAtSimulationLocation } from '../simulation/scenarioNavigation.js'
+import { getBuiltInScenarioLocation, getSavedSimulationStateLocation, refreshEnvironmentAtSimulationLocation } from '../simulation/scenarioNavigation.js'
 import { tryParseDecimalInput } from '../forms/decimal.js'
 import { formatCurrencyInputBalance, formatTimestampWithRelative } from '../lib/formatters.js'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
@@ -580,10 +581,10 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							closeModal()
 							savedStateStorageWarning.value = undefined
 							void runNavigationControl('cleanup', async () => {
-								const removedCount = removeCorruptedSavedSimulationStates(savedStateStorage)
-								if (removedCount === 0) throw new Error(simulationCopy.corruptedSavesEmptyError)
+								if (removeCorruptedSavedSimulationStates(savedStateStorage) === 0) throw new Error(simulationCopy.corruptedSavesEmptyError)
 								clearSavedStateStorageWarning()
-								if (hasSavedSimulationStateRoute()) {
+								const selectedId = getSimulationStateId(window.location)
+								if (selectedId !== undefined && !savedStateRecords.value.some(record => record.id === selectedId)) {
 									await refreshEnvironmentAtLocation(getBuiltInScenarioLocation(currentScenario.value))
 									return
 								}

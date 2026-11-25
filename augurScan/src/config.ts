@@ -1,6 +1,5 @@
 import path from 'node:path'
 import { getUniswapNetworkDeployment } from '@zoltar/core-shared/deployment/uniswapDeployments'
-import { assertAbiCoverage } from './abi-catalog.ts'
 import { blockExplorerUrl, getAddress, isAddress } from './ethereum.ts'
 import { parseTrustedProxies } from './http.ts'
 import { parseManifestValue } from './manifest.ts'
@@ -70,6 +69,7 @@ const parseNetworkFiles = (value: unknown): readonly NetworkFile[] => {
 	if (!Array.isArray(value) || value.length === 0) throw new Error('At least one network must be configured')
 	const definitions = value.map(parseNetworkFile)
 	if (new Set(definitions.map(({ id }) => id)).size !== definitions.length) throw new Error('networks.json network ids must be unique')
+	if (new Set(definitions.map(({ chainId }) => chainId)).size !== definitions.length) throw new Error('networks.json chain IDs must be unique')
 	return definitions
 }
 
@@ -103,6 +103,7 @@ export const configuredGenesisOutcome = () => {
 }
 
 export const loadNetworks = async (outcome = configuredGenesisOutcome()): Promise<readonly NetworkConfig[]> => {
+	const { assertAbiCoverage } = await import('./abi-catalog.ts')
 	const definitions = parseNetworkFiles(await Bun.file(path.join(configRoot, 'networks.json')).json())
 	const enabled = new Set((process.env['NETWORKS'] || definitions.map(({ id }) => id).join(',')).split(',').map((value: string) => value.trim()))
 	const configuredIds = new Set(definitions.map(({ id }) => id))

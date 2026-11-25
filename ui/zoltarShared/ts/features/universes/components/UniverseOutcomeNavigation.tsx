@@ -2,7 +2,7 @@ import { describeUniverseReadError } from '../lib/universeReadError.js'
 import { ForkUniverseNavigation } from '@zoltar/ui-core-shared/components/ForkUniverseNavigation.js'
 import { OutcomeUniverseList } from '@zoltar/ui-core-shared/components/OutcomeUniverseList.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
@@ -39,6 +39,7 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 	const backend = getActiveBackend()
 	const [start, setStart] = useState(0n)
 	const [retry, setRetry] = useState(0)
+	const reading = useRef(false)
 	const [refresh, setRefresh] = useState(0)
 	const [snapshot, setSnapshot] = useState<{ backend: typeof backend; loadPage: LoadUniverseOutcomes; start: bigint; retry: number; pageStart?: bigint | undefined; page?: UniverseOutcomePage | undefined; error?: string }>()
 	const current = snapshot?.backend === backend && snapshot.loadPage === loadPage && snapshot.start === start && snapshot.retry === retry ? snapshot : undefined
@@ -46,8 +47,11 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 	const page = current?.error !== undefined && current.pageStart !== start ? undefined : (current?.page ?? retained)
 	const loading = current === undefined
 	const scalarQuestion = getScalarQuestion(page?.question)
-	useBlockRefresh(() => setRefresh(count => count + 1), scalarQuestion === undefined)
+	useBlockRefresh(() => {
+		if (!reading.current) setRefresh(count => count + 1)
+	}, scalarQuestion === undefined)
 	useEffect(() => {
+		reading.current = true
 		let active = true
 		const guard = createActiveEnvironmentGuard()
 		void (async () => {
@@ -65,9 +69,12 @@ function OutcomeSelector({ address, universeId, loadPage, loadOutcome }: { addre
 						page: previous?.backend === backend && previous.loadPage === loadPage ? previous.page : undefined,
 						error: describeUniverseReadError(error, copy.childUniversesLoadError),
 					}))
+			} finally {
+				if (active) reading.current = false
 			}
 		})()
 		return () => {
+			reading.current = false
 			active = false
 		}
 	}, [address, backend, loadPage, refresh, retry, start, universeId])

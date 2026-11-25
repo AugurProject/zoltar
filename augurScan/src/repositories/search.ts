@@ -22,7 +22,6 @@ export const searchItems = async (sql: SQL, chainId: number, query: string, limi
 	const lower = query.toLowerCase()
 	const items: SearchItem[] = []
 	if (addressPattern.test(lower)) {
-		items.push({ type: 'address', label: lower, href: `/address/${lower}?chainId=${chainId}` })
 		const pools = await sql`SELECT p.pool_address, q.title FROM pools p LEFT JOIN questions q ON q.chain_id = p.chain_id AND q.question_id = p.question_id AND q.canonical WHERE p.chain_id = ${chainId} AND p.pool_address = ${lower} AND p.canonical LIMIT 1`
 		for (const pool of pools) items.unshift({ type: 'pool', label: String(pool['title'] ?? pool['pool_address']), href: `/pool/${lower}?chainId=${chainId}`, detail: lower })
 	}
@@ -40,7 +39,7 @@ export const searchItems = async (sql: SQL, chainId: number, query: string, limi
 	if (questionId !== undefined) {
 		const questions = await sql`SELECT question_id::text, title FROM questions WHERE chain_id = ${chainId} AND question_id = ${questionId}::numeric AND canonical LIMIT 1`
 		for (const question of questions) items.push({ type: 'question', label: String(question['title']), href: `/question/${question['question_id']}?chainId=${chainId}`, detail: `Question #${query}` })
-		const reports = await sql`SELECT DISTINCT open_oracle_address, report_id::text FROM open_oracle_report_events WHERE chain_id = ${chainId} AND report_id = ${questionId}::numeric AND canonical LIMIT ${limit}`
+		const reports = await sql`SELECT DISTINCT open_oracle_address, report_id::text FROM open_oracle_report_events WHERE chain_id = ${chainId} AND report_id = ${questionId}::numeric AND canonical ORDER BY open_oracle_address LIMIT ${limit}`
 		for (const report of reports) items.push({ type: 'report', label: `Report #${report['report_id']}`, href: `/report/${report['open_oracle_address']}/${report['report_id']}?chainId=${chainId}`, detail: String(report['open_oracle_address']) })
 	}
 	if (query.length >= 2 && !hashPattern.test(query)) {
@@ -48,6 +47,7 @@ export const searchItems = async (sql: SQL, chainId: number, query: string, limi
 		const questions = await sql`SELECT question_id::text, title FROM questions WHERE chain_id = ${chainId} AND title ILIKE ${pattern} AND canonical AND question_id IS DISTINCT FROM ${questionId ?? null}::numeric ORDER BY created_timestamp DESC LIMIT ${limit}`
 		for (const question of questions) items.push({ type: 'question', label: String(question['title']), href: `/question/${question['question_id']}?chainId=${chainId}` })
 	}
+	if (addressPattern.test(lower)) items.push({ type: 'address', label: lower, href: `/address/${lower}?chainId=${chainId}` })
 	return items.slice(0, limit)
 }
 

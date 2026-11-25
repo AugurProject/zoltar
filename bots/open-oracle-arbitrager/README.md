@@ -96,7 +96,7 @@ The [shared bot guide](../README.md) owns the behaviour this service has in comm
 
 ## Monitor without trading
 
-Set `runtime.execute` to `false`. Set `runtime.once` to `true` for one scan, or set `runtime.ui` to `true` for continuous monitoring with the local dashboard:
+Set `runtime.execute` to `false`. Set `runtime.once` to `true` and `runtime.ui` to `false` for one headless scan, or set `runtime.once` to `false` and `runtime.ui` to `true` for continuous monitoring with the local dashboard:
 
 ```bash
 bun run run

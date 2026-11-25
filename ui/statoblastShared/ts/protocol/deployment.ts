@@ -22,7 +22,6 @@ import {
 	getSharedPoolPriceFeedDeploymentWorkerByteCode,
 	getSecurityPoolFactoryByteCode,
 	getQuestionForkerByteCode,
-	getQuestionForkerDelegateByteCode,
 	securityPoolModuleDeployments,
 	getQuestionLedgerOperationsDelegateByteCode,
 	getQuestionLedgerOperationsDelegateRuntimeCode,
@@ -31,7 +30,7 @@ import {
 	getShareTokenFactoryByteCode,
 } from './deploymentHelpers.js'
 import { DeploymentStatusOracle_DeploymentStatusOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate, statoblast_QuestionForkerDelegate_QuestionForkerDelegate as nativeSecurityPoolForkArtifact, statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
+import { statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate, statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
 import { constructorArgumentsFromInitCode, createDeploymentStatusOracleAddressHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from './deploymentHelpers.js'
 
@@ -41,19 +40,19 @@ export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonl
 	escalationGameDepositDelegate: '0x64c4eaa617bc1ae029805c959024ae025386fdfbcd09dc0d74011990c203f9ec',
 	escalationGameFactory: '0xf710c067640e4c7f706bea4ecb4874b46be648a6d720be3f327d3441f4729b43',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	sharedPoolPriceFeedFactory: '0xda97ea97286d4a3e6d17d85de3149c545e85135f5b49694e5e7a5506572dd7c9',
+	sharedPoolPriceFeedFactory: '0xa7a196851b5a3d1ea31ad8bb1cecfa5aa5d96ecce18f595e9a3468d4728f97d2',
 	questionLedgerEventEmitter: '0x7cc076e2822ad2187a680ab7b091a7a93963fa5c07bf31be029b9ea90dcd5b46',
-	securityPoolFactory: '0x1c00877dbd807f722e26e8b7c3a4e5714875dd1e14190728ad8dabfa6342fd1b',
-	questionForker: '0x84536255924d1f32a0c4920cda41b08904299affe807b9b1d2187ae3583590b9',
+	securityPoolFactory: '0x75fb7aa0e7a1502d12be8cf15185d488d3cef5c76c4df8475c414187a8b559a9',
+	questionForker: '0xdbda564ee210faa59b6c560007ebf746200d925872b66370f3d886b58c2e580f',
 	questionLedgerOperationsDelegate: '0x70efd3ecf075e48d3f86f51d9b7480e6512d8d034f016a0f50b72223ad820d1c',
 	shareTokenFactory: '0x089a5dab4a1c2d40708c99377b268198df60c88997c30697ca30af544ca638ff',
-	sharedPoolPriceFeedDeploymentWorker: '0x981ed15a29deef8f62c034ffad1f209310551f75ce565f7e87960225fd68c117',
+	sharedPoolPriceFeedDeploymentWorker: '0x7ac8b37749ae70c9b68310b44cf06df2e78f1eeff5d0b5074c108b8dc5bc2571',
 }
 
 const EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0x8308a845addd2fabda47be502b0dde963c66fd88528af6cea474ee696775fd43',
-	questionForker: '0x5b5cdd4cec2648bebf930504a762ffcc36aef8b0c28a85e9e1c983a9c38a402c',
+	securityPoolFactory: '0x334af6d561bbc85e0b71431ca56d8b1890171078d70065fac3a9cf1e545d8302',
+	questionForker: '0x297b4ffe0e4dec3a131c530712f0b6b512086785ed95d27692ddba82ea26ea5a',
 	shareTokenFactory: '0x1b808215bdd549826201607b4f027bbc2b93385050c84bf1ee7fee8e0f427059',
 }
 
@@ -123,19 +122,19 @@ const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentSt
 	escalationGameDepositDelegate: '0x64c4eaa617bc1ae029805c959024ae025386fdfbcd09dc0d74011990c203f9ec',
 	escalationGameFactory: '0xf710c067640e4c7f706bea4ecb4874b46be648a6d720be3f327d3441f4729b43',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	sharedPoolPriceFeedFactory: '0x40305ebc3097ec02388f4c05a12fa248462aa44c2de0c2d7eb3d05e60da2c9ec',
+	sharedPoolPriceFeedFactory: '0xf29cec57195acdaa5473b1ea115739ccf880f7058748e5f46799e6b92e6a5ff2',
 	questionLedgerEventEmitter: '0x7cc076e2822ad2187a680ab7b091a7a93963fa5c07bf31be029b9ea90dcd5b46',
-	securityPoolFactory: '0xcead49374be12f5a9231275a72bd5c73cc795c30a6f046b51f0551cf51d471fe',
-	questionForker: '0x3fd789996485b7706466177f1adcca40433218f60d96450991d81810d0da3fb5',
+	securityPoolFactory: '0x5e58647429632702e379e0b494150fb9f0bea6f4881d2e0a3c7b634a511d60ca',
+	questionForker: '0x939b31e1335bb9c5678533a848f5f9b657d85bde85ce9719145ee0c79a2bc10f',
 	questionLedgerOperationsDelegate: '0x70efd3ecf075e48d3f86f51d9b7480e6512d8d034f016a0f50b72223ad820d1c',
 	shareTokenFactory: '0x8325a085bc2cdc9b1645bd1a3adc60e432c58fbd81b81e072c599c75e9c757bb',
-	sharedPoolPriceFeedDeploymentWorker: '0x981ed15a29deef8f62c034ffad1f209310551f75ce565f7e87960225fd68c117',
+	sharedPoolPriceFeedDeploymentWorker: '0x7ac8b37749ae70c9b68310b44cf06df2e78f1eeff5d0b5074c108b8dc5bc2571',
 }
 
 const EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_MAINNET_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0xc444659ecd71c00dbebbfb09c0b6a8597fde427048fa4f4b5daee0f651d80609',
-	questionForker: '0x1e0b257177f5b2bbe62c2848c968138eb9113b7f49c70e4876994d3e62c3ad3e',
+	securityPoolFactory: '0xa2471a5983f4d8b7df787500923833e08e157f0d078556a6b0b3f42aeed9f119',
+	questionForker: '0xea60e3dab10e3c08c98da5f8fcdd031ae6e09b8589c1f53bd3769fdd96c67e75',
 	shareTokenFactory: '0x015de109f5c2301c2a78f433bfde2c6724d59d5a09faffa305930e19d8a670cf',
 }
 const EXPECTED_PUBLIC_RUNTIME_CODE_HASHES = {
@@ -203,18 +202,10 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 			deploy: async client => await deployViaProxy(client, getSharedPoolPriceFeedFactoryByteCode(profile.wethAddress)),
 		},
 		{
-			id: 'questionForkerDelegate',
-			label: 'QuestionForkerDelegate',
-			address: addresses.questionForkerDelegate,
-			dependencies: ['proxyDeployer', 'zoltar'],
-			deploy: async client => await deployViaProxy(client, getQuestionForkerDelegateByteCode(addresses.zoltar)),
-			expectedRuntimeCodeHash: keccak256(runtimeWithAddresses(nativeSecurityPoolForkArtifact, [addresses.zoltar])),
-		},
-		{
 			id: 'questionForker',
 			label: 'QuestionForker',
 			address: addresses.questionForker,
-			dependencies: ['proxyDeployer', 'zoltar', 'questionForkerDelegate'],
+			dependencies: ['proxyDeployer', 'zoltar'],
 			deploy: async client => await deployViaProxy(client, getQuestionForkerByteCode(addresses.zoltar)),
 		},
 		{
@@ -282,7 +273,6 @@ function getStatoblastDeploymentStatusOracleStepAddresses(profile = getRuntimeNe
 		addresses.shareTokenFactory,
 		addresses.sharedPoolPriceFeedDeploymentWorker,
 		addresses.sharedPoolPriceFeedFactory,
-		addresses.questionForkerDelegate,
 		addresses.questionForker,
 		addresses.escalationGameDepositDelegate,
 		addresses.escalationGameFactory,

@@ -11,7 +11,20 @@ export const knownNetworkName = (chainId: string): string => {
 export const unavailableNetworkNotice = (requestedChainId: string, shownNetworkName: string): string => `Chain ${requestedChainId} is not indexed by this scanner. Showing ${shownNetworkName} instead.`
 
 /** Native currency symbol shown for a chain; only Ethereum mainnet is labelled plain ETH. */
-export const nativeSymbolFor = (chainId: string | number): string => (String(chainId) === '1' ? 'ETH' : 'SepoliaETH')
+const chainSettings = new Map<string, { native_symbol?: string; confirmation_depth?: string }>()
+export function setNetworkDisplaySettings(networks: readonly { chain_id: string | number; native_symbol?: string; confirmation_depth?: string }[]) {
+	chainSettings.clear()
+	for (const network of networks) chainSettings.set(String(network.chain_id), network)
+}
+const defaultNativeSymbols = new Map([
+	['1', 'ETH'],
+	['11155111', 'SepoliaETH'],
+])
+export const nativeSymbolFor = (chainId: string | number): string => chainSettings.get(String(chainId))?.native_symbol ?? defaultNativeSymbols.get(String(chainId)) ?? 'native'
+export const depthConfirmedLabel = (chainId: string | number): string => {
+	const depth = chainSettings.get(String(chainId))?.confirmation_depth
+	return depth === undefined ? 'Depth confirmed' : `Depth confirmed (${depth} blocks)`
+}
 
 interface NetworkStatusPresentation {
 	readonly chain_id?: string

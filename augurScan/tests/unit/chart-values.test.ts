@@ -143,3 +143,9 @@ test('anchors stock and balance charts at zero without imposing an arbitrary max
 	expect(chartValueBounds([-1, 20], undefined, true)).toEqual({ minimum: -1, maximum: 20 })
 	expect(chartValueBounds([48, 52], [0, 100], true)).toEqual({ minimum: 0, maximum: 100 })
 })
+
+test('bounds extended histories without exceeding the function argument limit', () => {
+	const observations = new Array<number>(500_000).fill(5)
+	observations.push(Number.NaN, -1, 19)
+	expect(chartValueBounds(observations, undefined)).toEqual({ minimum: -1, maximum: 19 })
+})

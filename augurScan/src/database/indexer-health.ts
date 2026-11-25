@@ -30,7 +30,7 @@ export const readIndexerHealth = async (
 		sql`
 			SELECT objid::bigint AS chain_id, pid AS backend_pid
 			FROM pg_locks
-			WHERE locktype = 'advisory' AND classid::bigint = 92138472 AND objsubid = 2 AND granted
+			WHERE database = (SELECT oid FROM pg_database WHERE datname = current_database()) AND locktype = 'advisory' AND classid::bigint = 92138472 AND objsubid = 2 AND granted
 			ORDER BY objid, pid
 		`,
 		auditIntegrity(sql, chainIds),

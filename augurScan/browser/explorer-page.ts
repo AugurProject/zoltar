@@ -2,7 +2,7 @@ import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { callTraceRows } from './call-trace.ts'
 import { exactNumber, exactUnit, utcDateTime } from './format.ts'
 import { short } from './identifier-format.ts'
-import { nativeSymbolFor } from './network-freshness.ts'
+import { depthConfirmedLabel, nativeSymbolFor } from './network-freshness.ts'
 import { captureViewState, restoreViewState } from './view-state.ts'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
@@ -94,7 +94,7 @@ export const renderExplorerPage = async (path: string, chainId: string, api: (pa
 				field('Gas used', exactNumber(string(record, 'gas_used'))),
 			)
 		} else {
-			summary.append(field('Hash', string(record, 'hash')), field('Time', utcDateTime(string(record, 'timestamp'))), field('Parent', string(record, 'parent_hash')), field('Finalized', record['finalized'] === true ? 'Yes' : 'No'))
+			summary.append(field('Hash', string(record, 'hash')), field('Time', utcDateTime(string(record, 'timestamp'))), field('Parent', string(record, 'parent_hash')), field(depthConfirmedLabel(chainId), record['finalized'] === true ? 'Yes' : 'No'))
 		}
 		if (kind === 'tx') {
 			const receipt = isPlainRecord(record['receipt']) ? record['receipt'] : {}

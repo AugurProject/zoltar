@@ -56,6 +56,8 @@ From the repository root, install the pinned dependencies once. Then work inside
 
 ```bash
 bun install --frozen-lockfile
+bun run --cwd shared/core build
+bun run --cwd shared/statoblast build
 cd augurScan
 bun run typecheck
 bun test
@@ -80,7 +82,7 @@ bun run dev
 
 ### Tests
 
-`bun test` runs every suite under `tests/`. None needs infrastructure except the PostgreSQL integration tests, which are skipped unless `POSTGRES_TEST_URL` is set.
+`bun test` runs every suite under `tests/`. PostgreSQL integration cases require `POSTGRES_TEST_URL`. Chromium cases require a browser fixture. Run `bun run test:browser:chromium` with Chromium installed to start the fixture and exercise those cases.
 
 | Command | Scope |
 | --- | --- |
@@ -88,7 +90,8 @@ bun run dev
 | `bun run test:api` | Routes, response contracts, and the export scripts. |
 | `bun run test:replay` | Indexer and replay behavior. |
 | `bun run test:integration` | Real PostgreSQL transaction, lease, reorganization, and API boundaries. |
-| `bun run test:browser` | Browser application modules and browser tests. |
+| `bun run test:browser` | Browser application modules and tests with any configured fixture. |
+| `bun run test:browser:chromium` | Browser workflows against a local fixture using Chromium. |
 | `bun run test:ci` | Unit, API, replay, and browser tests. |
 | `bun run test` | `test:ci` plus integration. |
 
@@ -112,7 +115,7 @@ docker stop augurscan-test-postgres
 | --- | --- |
 | `bun run check` | Metadata build, import-boundary check, restricted-import check, metadata check, and Biome. |
 | `bun run format`, `bun run format:check` | Biome formatting. |
-| `bun run schema:init` | Initializes or migrates the schema in the `POSTGRES_URL` database and exits. |
+| `bun run schema:init` | Initializes an empty `POSTGRES_URL` database or validates the current schema, then exits. Historical schemas are rejected. |
 | `bun run qa:serve` | Builds the demo browser bundle and serves it against fixture data on port `3001` (or `PORT`), without a database. |
 | `bun run build:demo` | Builds only that demo bundle. |
 | `bun run metadata:snapshot` | Writes the generated scanner metadata from the already compiled contract artifacts. `metadata:build` compiles the contracts first and then runs it. |

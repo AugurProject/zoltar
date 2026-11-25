@@ -68,7 +68,7 @@ export function MarketCard({ listKind, lookupRoute, market, nowSeconds, fetchedA
 	// The outcome buttons replace the generic trade link on the trade landing whenever the pair can take a trade.
 	const outcomeButtons = listKind === 'markets' && lookupRoute === 'market' && open && livePairInitialized(market)
 	let liquidity: string | undefined
-	if (listKind === 'markets') liquidity = market.cachedCollateralMissing ? marketsCopy.liquidityUnavailable : formatMarketLiquidity(market)
+	if (listKind === 'markets') liquidity = formatMarketLiquidity(market)
 	const upcoming = market.endTime > nowSeconds
 	return (
 		<EntityCard

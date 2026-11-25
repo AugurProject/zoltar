@@ -186,7 +186,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	})
 	const timelineRows = timeline.map(item => {
 		const rawEvidenceStatus = item['evidence_status'] ?? (item['canonical'] === false ? 'noncanonical' : 'canonical')
-		const invalidation = item['invalidation_reason'] === undefined ? '' : ` · ${historyInvalidationReasonLabel(item['invalidation_reason'])}`
+		const invalidation = item['invalidation_reason'] == null ? '' : ` · ${historyInvalidationReasonLabel(item['invalidation_reason'])}`
 		const row = exactEvidenceRow(String(item['semantic_event_kind'] ?? 'Protocol transition'), `${timelineEntityTypeLabel(item['entity_type'])} · ${evidenceStatusLabel(rawEvidenceStatus)}${invalidation}`, [
 			...timelineOccurrenceFields(item),
 			['Evidence status code', rawEvidenceStatus],
@@ -194,11 +194,12 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 			['Transition', timelineTransitionSummary(item, nativeSymbol)],
 			['Related entities', Array.isArray(item['related_entities']) ? item['related_entities'].join(' · ') : undefined],
 		])
+		const retained = item['canonical'] === false && typeof item['block_hash'] === 'string' && typeof item['tx_hash'] === 'string' && item['log_index'] != null
 		const path = timelineEntityPath(item)
-		if (path !== undefined) {
+		if (retained || path !== undefined) {
 			const link = document.createElement('a')
-			link.href = operationsHref(path)
-			link.textContent = 'View entity'
+			link.href = retained ? `/api/v1/logs/${requiredChainId()}/${encodeURIComponent(String(item['block_hash']))}/${encodeURIComponent(String(item['tx_hash']))}/${encodeURIComponent(String(item['log_index']))}?canonical=all` : operationsHref(path ?? '')
+			link.textContent = retained ? 'View retained log' : 'View entity'
 			row.append(link)
 		}
 		return row

@@ -35,7 +35,7 @@ export function recordScanDecision(state: OperatorState, opportunity: Opportunit
 	if (opportunity.decision === 'skipped') return
 	recordOperation(state, {
 		category: 'decision',
-		details: `direction=${opportunity.direction} estimatedProfitEth=${opportunity.estimatedNetProfitEth}`,
+		details: `direction=${opportunity.direction} estimatedProfitEth=${opportunity.estimatedNetProfitWeth}`,
 		level: opportunity.decision === 'execution-failed' ? 'error' : 'info',
 		message: `Decision: ${opportunity.decision}`,
 		reason: `Profit and inventory gates evaluated for report ${opportunity.reportId}`,

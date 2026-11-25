@@ -359,7 +359,7 @@ export const initialIndexStartBlock = async (
 	observedHead: bigint,
 	findDeployment: (address: Address, startBlock: bigint, checkpoint: bigint, startBlockKnownAbsent: boolean) => Promise<{ readonly block: bigint; readonly exact: boolean } | undefined>,
 ): Promise<bigint> => {
-	if (observedHead < configuredStartBlock) return configuredStartBlock
+	if (observedHead <= configuredStartBlock) return configuredStartBlock
 	const deployments = await mapLimit(manifestContracts, 4, async ([address, label, kind, configuredDeploymentBlock]) => {
 		if (!requiresManifestHistoryCoverage({ address, label, kind, provenance: 'manifest' })) return undefined
 		if (configuredDeploymentBlock !== undefined) return configuredDeploymentBlock <= observedHead ? configuredDeploymentBlock : undefined

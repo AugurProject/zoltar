@@ -1,5 +1,4 @@
 import { estimateBudgetMint } from '../../protocol/minting.js'
-import { conditionalYesBps } from '@zoltar/trading-shared/trading/math'
 import { attoSharesToCollateralAttoEth, collateralAttoEthToAttoShares } from '../../lib/shareValue.js'
 import type { LiquidityOperation, LiveMarket } from '../../protocol/live.js'
 
@@ -69,6 +68,6 @@ export function estimateLiquidity(market: PoolState, operation: LiquidityOperati
  */
 export function outcomeSharesValueAttoEth(market: PoolState, yes: bigint, no: bigint) {
 	if (market.yesReserve + market.noReserve === 0n) return undefined
-	const yesBps = conditionalYesBps(market.yesReserve, market.noReserve)
-	return attoSharesToCollateralAttoEth((yes * yesBps + no * (BPS - yesBps)) / BPS, market)
+	const weighted = yes * market.noReserve + no * market.yesReserve
+	return attoSharesToCollateralAttoEth(weighted / (market.yesReserve + market.noReserve), market)
 }

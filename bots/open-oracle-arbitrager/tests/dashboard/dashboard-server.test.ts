@@ -1,3 +1,4 @@
+import { validateDeploymentSettings } from '#config/deployment-settings'
 import { afterEach, expect, test } from 'bun:test'
 import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
@@ -67,9 +68,9 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	let submissionFailure: Error | undefined
 	let queuedSigner: QueuedSigner | undefined
 	let savedWallet: Address | undefined
-	let deployment = operatorSnapshot(state, strategy, submission, connectivity, { execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedSigner, savedWallet, wallet: undefined }).deployment
+	let deployment = validateDeploymentSettings({ uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: false })
 	const { origin } = startServer({
-		getSnapshot: () => operatorSnapshot(state, strategy, submission, connectivity, { deployment, execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedSigner, savedWallet, wallet: undefined }),
+		getSnapshot: () => operatorSnapshot(state, strategy, submission, connectivity, { deployment, networkConfigured: true, execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedSigner, savedWallet, wallet: undefined }),
 		isNetworkConfigured: () => true,
 		setPaused: paused => {
 			state.paused = paused
@@ -416,7 +417,6 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 			capitalAtRiskWeth: '1',
 			direction: 'buy-rep',
 			entryTransactionHash: transactionHash,
-			entryTransactionHashes: [transactionHash],
 			entryTransactionIntent: { data: entryCalldataMarker, to: address, value: '0' },
 			gasExpenditures: [],
 			hedgeAmountToken: '1',
@@ -429,8 +429,6 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 			lifecycleTransactionHashes: [transactionHash],
 			lifecycleTransactionIntent: { data: lifecycleCalldataMarker, to: address, value: '0' },
 			lifecycleUpdatedAt: new Date(0).toISOString(),
-			lifecycleWalletTokenBefore: '1',
-			lifecycleWalletWethBefore: '1',
 			lockedToken: '1',
 			openedAt: new Date(0).toISOString(),
 			reportId: '1',

@@ -120,7 +120,7 @@ export function createUniverseExplorer(host: HTMLElement, options: { onChange: (
 			if (revision !== networkRevision) return
 			if (!lineage.some(universe => universe.id === id)) throw new Error('Universe lookup did not return the requested universe')
 			for (const universe of lineage) lookedUp.set(universe.id, universe)
-			tree = indexUniverseTree([...new Map([...state.universes, ...lookedUp.values()].map(universe => [universe.id, universe])).values()])
+			tree = indexUniverseTree([...new Map([...lookedUp.values(), ...state.universes].map(universe => [universe.id, universe])).values()])
 			reveal(id)
 			lookupStatus.textContent = 'Universe found. Review its lineage before approving.'
 		} catch (error) {
@@ -320,7 +320,7 @@ export function createUniverseExplorer(host: HTMLElement, options: { onChange: (
 				status.textContent = ''
 			}
 			state = pending && !networkChanged ? { ...next, approved: state.approved } : next
-			tree = indexUniverseTree([...new Map([...next.universes, ...lookedUp.values()].map(universe => [universe.id, universe])).values()])
+			tree = indexUniverseTree([...new Map([...lookedUp.values(), ...next.universes].map(universe => [universe.id, universe])).values()])
 			if (focused === undefined || !tree.byId.has(focused)) {
 				focused = tree.roots[0]?.id
 				for (const root of tree.roots) expanded.add(root.id)

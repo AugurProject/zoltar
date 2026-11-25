@@ -10,6 +10,7 @@ services:
     image: zoltar-open-oracle-arbitrager
     environment:
       ZOLTAR_BOT_VERIFIED_MARKETS: ${ZOLTAR_BOT_VERIFIED_MARKETS-}
+      ZOLTAR_BOT_RPC_QUORUM: ${ZOLTAR_BOT_RPC_QUORUM-1}
       ZOLTAR_BOT_COMPOSE_UI_PORT: "4173"
       # Keep this assertion paired with the host-loopback port mapping below.
       ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: "true"

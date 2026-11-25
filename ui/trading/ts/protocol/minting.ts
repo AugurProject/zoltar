@@ -30,7 +30,7 @@ export function recoveryMintBlocker(market: Pick<LiveMarket, 'settlementRecovery
 }
 
 export function estimateBudgetMint(market: Pick<LiveMarket, 'mintFees' | 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares' | 'settlementRecoveryAttoRep'>, budget: bigint) {
-	if (market.mintFees === undefined || recoveryMintBlocker(market) !== undefined) return undefined
+	if (market.mintFees === undefined || recoveryMintBlocker(market) !== undefined || (market.shareTokenSupplyAttoShares > 0n && market.settlementCollateralAttoEth === 0n)) return undefined
 	return mintWithMargin(budget, { ...market.mintFees, cashAttoEth: market.settlementCollateralAttoEth, outcomeSupplyAttoShares: market.shareTokenSupplyAttoShares })
 }
 

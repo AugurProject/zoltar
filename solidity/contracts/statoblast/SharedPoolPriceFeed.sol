@@ -132,6 +132,8 @@ contract SharedPoolPriceFeed {
 	event PriceRequested(uint256 indexed reportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas);
 	event ReportFundingAssigned(uint256 indexed reportId, address indexed sponsor);
 	event PriceReported(uint256 indexed reportId, uint256 price, uint256 lastSettlementTimestamp);
+	/// @notice The settled candidate and the canonical feed observation after accepting it.
+	event PriceCandidateAccepted(uint256 indexed reportId, uint256 candidatePrice, uint256 canonicalPrice, uint256 observationTimestamp, bool canonicalUpdated);
 	event PriceReportRejected(uint256 indexed reportId, string reason, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp);
 	/// @notice The report settled in a block above its base-fee ceiling. It stays pending
 	/// so `recoverReport` can complete it at or below the ceiling while it is fresh.
@@ -381,25 +383,27 @@ contract SharedPoolPriceFeed {
 		processingReport = true;
 		reports[reportId].outcome = accepted ? REPORT_ACCEPTED : REPORT_REJECTED;
 		_clearLatestReport(reportId);
-		// Equal-time reports retain operation authority without replacing shared values.
-		if (accepted && priceTimestamp > lastSettlementTimestamp) {
-			uint256 nextPrice = Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1);
-			uint256 validForSeconds = priceValidityWindowSeconds();
-			require(priceTimestamp + validForSeconds <= type(uint48).max, 'Price clock overflow');
-			// Final report collateral may increase during disputes. Only its actually
-			// challenged final amount grants capacity, never a pending candidate.
-			acceptedExposureLimitAttoEth = (amount1 - minimumReportCollateral) * OPEN_INTEREST_DIVIDER;
-			acceptedRepExposureLimitAttoRep = amount2 * OPEN_INTEREST_DIVIDER;
-			acceptedEpoch++;
-			lastSettlementTimestamp = priceTimestamp;
-			lastPrice = nextPrice;
-			ISharedPoolSecurityPoolPriceCheckpoint(securityPool).onSharedPriceAccepted(universeId(), nextPrice, uint48(priceTimestamp + validForSeconds));
-		} else if (!accepted) {
+		if (accepted) {
+			uint256 candidatePrice = Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1);
+			// Equal-time reports retain operation authority without replacing shared values.
+			bool canonicalUpdated = priceTimestamp > lastSettlementTimestamp;
+			if (canonicalUpdated) {
+				uint256 validForSeconds = priceValidityWindowSeconds();
+				require(priceTimestamp + validForSeconds <= type(uint48).max, 'Price clock overflow');
+				// Final report collateral may increase during disputes. Only its actually
+				// challenged final amount grants capacity, never a pending candidate.
+				acceptedExposureLimitAttoEth = (amount1 - minimumReportCollateral) * OPEN_INTEREST_DIVIDER;
+				acceptedRepExposureLimitAttoRep = amount2 * OPEN_INTEREST_DIVIDER;
+				acceptedEpoch++;
+				lastSettlementTimestamp = priceTimestamp;
+				lastPrice = candidatePrice;
+				ISharedPoolSecurityPoolPriceCheckpoint(securityPool).onSharedPriceAccepted(universeId(), candidatePrice, uint48(priceTimestamp + validForSeconds));
+			}
+			emit PriceReported(reportId, lastPrice, lastSettlementTimestamp);
+			emit PriceCandidateAccepted(reportId, candidatePrice, lastPrice, priceTimestamp, canonicalUpdated);
+		} else {
 			emit PriceReportRejected(reportId, reason, pendingReportId, pendingReportMaxSettlementBaseFeeAttoEthPerGas, lastPrice, lastSettlementTimestamp);
 		}
-		// Every accepted report remains observable to receipt consumers, even
-		// when the canonical observation was already accepted at this timestamp.
-		if (accepted) emit PriceReported(reportId, lastPrice, lastSettlementTimestamp);
 		// Rejection grants no price authority. Independently secured canonical
 		// prices can still satisfy the sponsor's signed operation bounds.
 		if (accepted || canonicalOperations) _executeReportOperations(reportId, candidate.sponsor);

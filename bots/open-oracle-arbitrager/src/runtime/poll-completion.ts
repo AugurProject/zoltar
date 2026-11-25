@@ -21,8 +21,8 @@ export function completeSuccessfulPoll(state: SuccessfulPollState, nextError: st
 	return stopAfterPoll
 }
 
-export function completeUnconfiguredPoll(state: SuccessfulPollState) {
-	const stop = completeSuccessfulPoll(state, undefined, false)
+export function completeUnconfiguredPoll(state: SuccessfulPollState, once = false) {
+	const stop = completeSuccessfulPoll(state, undefined, once)
 	state.status = 'paused'
 	return stop
 }

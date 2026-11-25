@@ -1,7 +1,7 @@
 import { parseSecurityPoolInstructions, serializeSecurityPoolInstructions, type SecurityPoolInstruction } from './security-pool-instructions.ts'
 import { parseSecurityPoolPolicy, parseSecurityPoolSelections, serializeSecurityPoolPolicy, type SecurityPoolPolicy, type SecurityPoolSelection } from './security-pool-policy.ts'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
-import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
+import { privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 import { boolean, formatDecimalAmount, integer, parseDecimalAmount, record, nonemptyString as string } from '@zoltar/bot-shared/infrastructure/json-validation'
@@ -176,6 +176,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 export function serializedSettings(settings: OperatorSettings, redactPrivateKey = false) {
 	const { assetAddress: _assetAddress, assetChainId: _assetChainId, ...centralizedMarkets } = serializeCentralizedMarketSettings(settings.centralizedMarkets)
 	return {
+		...(redactPrivateKey ? { effectiveRpcQuorum: settings.connectivity.rpcQuorum, savedSigner: settings.privateKey === undefined ? undefined : privateKeyToAccount(settings.privateKey).address } : {}),
 		approvedUniverses: settings.approvedUniverses.map(value => value.toString()),
 		childMarketConfigurations: settings.childMarketConfigurations.map(serializeCentralizedMarketSettings),
 		centralizedMarkets,

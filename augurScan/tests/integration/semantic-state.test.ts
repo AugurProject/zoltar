@@ -6,6 +6,7 @@ import { escalationCatalogData } from '../../src/repositories/operations.ts'
 import { auctionCollateral } from '../../src/repositories/auction-collateral.ts'
 import { timelineCatalogRows } from '../../src/repositories/timeline.ts'
 import { chainDecodeCoverage } from '../../src/abi-coverage-report.ts'
+import { timelineTransitionSummary } from '../../browser/semantic-evidence.ts'
 
 const url = process.env['POSTGRES_TEST_URL']
 test.skipIf(url === undefined)('canonical semantic state respects snapshots, migrations, claims and refund boundaries', async () => {
@@ -62,8 +63,8 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 		// BidSettled credits a refund and RefundWithdrawn pays the bidder's whole credit, as the auction contract does.
 		const auctionEvents = [
 			['BidSettled', { bidId: '1', bidder: owner, filledLots: '2', refundAttoEth: '12' }, 1],
-			['BidSettled', { bidId: '2', bidder: owner, filledLots: '0', refundAttoEth: '5' }, 1],
 			['RefundWithdrawn', { bidder: owner, recipient: otherBidder, amountAttoEth: '12' }, 1],
+			['BidSettled', { bidId: '2', bidder: owner, filledLots: '0', refundAttoEth: '5' }, 1],
 			['BidSettled', { bidId: '3', bidder: otherBidder, filledLots: '0', refundAttoEth: '99' }, 1],
 			['RefundWithdrawn', { bidder: owner, recipient: owner, amountAttoEth: '5' }, 2],
 		] as const
@@ -72,6 +73,12 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 		// Without a sampled auction snapshot the refund carries no collateral metadata and the browser keeps raw collateral units.
 		expect(await pendingAuctionRefunds(connection, 1, '1', owner)).toEqual([expect.objectContaining({ auction_address: token, pending_atto_eth: '5', collateral: null })])
 		expect(await pendingAuctionRefunds(connection, 1, '2', owner)).toEqual([])
+		await connection`INSERT INTO collateral_repair_auction_events (chain_id, block_number, block_hash, tx_hash, log_index, auction_address, event_name, event_data, canonical)
+			VALUES (1, 3, ${hash}, ${hash}, 8, ${token}, 'RefundWithdrawn', ${JSON.stringify({ bidder: owner, amountAttoEth: '10' })}::text::jsonb, true)`
+		expect(await pendingAuctionRefunds(connection, 1, '3', owner)).toEqual([])
+		await connection`INSERT INTO collateral_repair_auction_events (chain_id, block_number, block_hash, tx_hash, log_index, auction_address, event_name, event_data, canonical)
+			VALUES (1, 3, ${hash}, ${hash}, 9, ${token}, 'BidSettled', ${JSON.stringify({ bidder: owner, refundAttoEth: '4' })}::text::jsonb, true)`
+		expect(await pendingAuctionRefunds(connection, 1, '3', owner)).toEqual([expect.objectContaining({ pending_atto_eth: '4' })])
 		const usdc = { address: `0x${'5'.repeat(40)}`, symbol: 'USDC', decimals: 6 }
 		expect(await auctionCollateral(connection, 1, '1', token)).toBeUndefined()
 		// Temporary copies drop the observed_at default, so each read states when it was observed: the failed read is the later one.
@@ -80,17 +87,24 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 		// A later failed read does not hide the immutable collateral token sampled earlier.
 		expect(await pendingAuctionRefunds(connection, 1, '1', owner)).toEqual([expect.objectContaining({ auction_address: token, pending_atto_eth: '5', collateral: usdc })])
 		expect(await auctionCollateral(connection, 1, '1', token)).toEqual(usdc)
-		// Timeline auction entries carry the same collateral token, security pool entries the collateral their capital ledger samples; other entities carry none.
+		// Timeline auctions use their sampled collateral; security pool and feed entries use the capital ledger's snapshot.
 		const ledger = `0x${'6'.repeat(40)}`
 		const services = `0x${'7'.repeat(40)}`
+		const priceFeed = `0x${'b'.repeat(40)}`
+		const untaggedFeed = `0x${'c'.repeat(40)}`
 		await connection`INSERT INTO contracts (chain_id, address, kind, canonical) VALUES (1, ${ledger}, 'securityPoolCapitalLedger', true)`
-		await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, read_status, read_result, canonical, observed_at) VALUES (1, 'capital-ledger', ${ledger}, 1, ${hash}, 'success', ${JSON.stringify({ securityPool: `0x${'8'.repeat(40)}`, universeId: '0', fees: { services }, collateral: usdc })}::text::jsonb, true, '2026-01-01T00:00:00Z')`
+		const ledgerRead = { securityPool: `0x${'8'.repeat(40)}`, universeId: '0', priceFeed, fees: { services }, collateral: usdc }
+		await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, read_status, read_result, canonical, observed_at) VALUES (1, 'capital-ledger', ${ledger}, 1, ${hash}, 'success', ${JSON.stringify(ledgerRead)}::text::jsonb, true, '2026-01-01T00:00:00Z')`
+		// Later token metadata must not leak into a timeline requested at block 1.
+		await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, read_status, read_result, canonical, observed_at) VALUES (1, 'capital-ledger', ${ledger}, 3, ${recoveryHash}, 'success', ${JSON.stringify({ ...ledgerRead, collateral: { ...usdc, symbol: 'LATER' } })}::text::jsonb, true, '2026-01-03T00:00:00Z')`
 		for (const [index, [entityType, eventName, identity]] of [
 			['auction', 'BidSettled', token],
 			['pool', 'SystemStateSet', token],
 			['security-pool-services', 'PremiumFunded', `${services}:0`],
+			['price-feed', 'PriceReported', priceFeed],
+			['price-feed', 'PriceReported', untaggedFeed],
 		].entries())
-			await connection`INSERT INTO protocol_timeline_entries (chain_id, block_hash, tx_hash, log_index, block_number, entity_type, entity_identity, semantic_event_kind, summary_data, source_contract, source_event, canonical) VALUES (1, ${hash}, ${hash}, ${index}, 1, ${entityType}, ${identity}, ${eventName}, '{}'::jsonb, ${token}, ${eventName}, true)`
+			await connection`INSERT INTO protocol_timeline_entries (chain_id, block_hash, tx_hash, log_index, block_number, entity_type, entity_identity, semantic_event_kind, summary_data, source_contract, source_event, canonical) VALUES (1, ${hash}, ${hash}, ${index}, 1, ${entityType}, ${identity}, ${eventName}, ${JSON.stringify(eventName === 'PriceReported' ? { price: (2n * 10n ** 30n).toString() } : {})}::text::jsonb, ${token}, ${eventName}, true)`
 		const timeline = await timelineCatalogRows(connection, {
 			chainId: 1,
 			fromBlock: '0',
@@ -101,10 +115,18 @@ test.skipIf(url === undefined)('canonical semantic state respects snapshots, mig
 			limit: 10,
 		})
 		expect(timeline.rows.map((row: Record<string, unknown>) => [row['entity_type'], row['collateral']])).toEqual([
+			['price-feed', null],
+			['price-feed', usdc],
 			['security-pool-services', usdc],
 			['pool', null],
 			['auction', usdc],
 		])
+		const feed = timeline.rows.find((row: Record<string, unknown>) => row['entity_type'] === 'price-feed' && row['entity_identity'] === priceFeed)
+		if (feed === undefined) throw new Error('Missing price feed timeline row')
+		expect(timelineTransitionSummary(feed, 'ETH')).toBe('Canonical Price: 2 REP/USDC')
+		const unsampledFeed = timeline.rows.find((row: Record<string, unknown>) => row['entity_type'] === 'price-feed' && row['entity_identity'] === untaggedFeed)
+		if (unsampledFeed === undefined) throw new Error('Missing unsampled feed timeline row')
+		expect(timelineTransitionSummary(unsampledFeed, 'ETH')).toBe('Canonical Price: 2,000,000,000,000,000,000,000,000,000,000 raw price units')
 		// Outcome shares carry the collateral token a pool on their share token and universe samples.
 		const pool = `0x${'9'.repeat(40)}`
 		await connection`INSERT INTO pools (chain_id, block_number, pool_address, share_token_address, universe_id, canonical) VALUES (1, 1, ${pool}, ${token}, 0, true)`

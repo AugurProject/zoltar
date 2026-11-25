@@ -24,14 +24,14 @@ export async function recordIndexerOwnership(this: ScannerDatabase, chainId: num
 				INSERT INTO indexer_ownership (chain_id, network_id, state, backend_pid, owner_run_id, heartbeat_at, updated_at)
 				SELECT ${chainId}, ${networkId}, ${state}, ${backendPid}, ${ownerRunId ?? null}, now(), now()
 				WHERE EXISTS (
-					SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND classid::bigint = 92138472
+					SELECT 1 FROM pg_locks WHERE database = (SELECT oid FROM pg_database WHERE datname = current_database()) AND locktype = 'advisory' AND classid::bigint = 92138472
 						AND objid::bigint = ${chainId} AND objsubid = 2 AND pid = ${backendPid} AND granted
 				)
 				ON CONFLICT (chain_id) DO UPDATE SET network_id = EXCLUDED.network_id, state = EXCLUDED.state,
 					backend_pid = EXCLUDED.backend_pid, owner_run_id = EXCLUDED.owner_run_id,
 					heartbeat_at = EXCLUDED.heartbeat_at, updated_at = now()
 				WHERE EXISTS (
-					SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND classid::bigint = 92138472
+					SELECT 1 FROM pg_locks WHERE database = (SELECT oid FROM pg_database WHERE datname = current_database()) AND locktype = 'advisory' AND classid::bigint = 92138472
 						AND objid::bigint = ${chainId} AND objsubid = 2 AND pid = ${backendPid} AND granted
 				)
 			`
@@ -42,14 +42,14 @@ export async function recordIndexerOwnership(this: ScannerDatabase, chainId: num
 				INSERT INTO indexer_ownership (chain_id, network_id, state, backend_pid, owner_run_id, heartbeat_at, updated_at)
 				SELECT ${chainId}, ${networkId}, ${state}, ${backendPid ?? null}, ${ownerRunId ?? null}, now(), now()
 				WHERE NOT EXISTS (
-					SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND classid::bigint = 92138472
+					SELECT 1 FROM pg_locks WHERE database = (SELECT oid FROM pg_database WHERE datname = current_database()) AND locktype = 'advisory' AND classid::bigint = 92138472
 						AND objid::bigint = ${chainId} AND objsubid = 2 AND granted
 				)
 				ON CONFLICT (chain_id) DO UPDATE SET network_id = EXCLUDED.network_id, state = EXCLUDED.state,
 					backend_pid = EXCLUDED.backend_pid, owner_run_id = EXCLUDED.owner_run_id,
 					heartbeat_at = EXCLUDED.heartbeat_at, updated_at = now()
 				WHERE NOT EXISTS (
-					SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND classid::bigint = 92138472
+					SELECT 1 FROM pg_locks WHERE database = (SELECT oid FROM pg_database WHERE datname = current_database()) AND locktype = 'advisory' AND classid::bigint = 92138472
 						AND objid::bigint = ${chainId} AND objsubid = 2 AND granted
 				)
 			`
@@ -59,7 +59,7 @@ export async function recordIndexerOwnership(this: ScannerDatabase, chainId: num
 			INSERT INTO indexer_ownership (chain_id, network_id, state, backend_pid, owner_run_id, heartbeat_at, updated_at)
 			SELECT ${chainId}, ${networkId}, ${state}, ${backendPid ?? null}, ${ownerRunId ?? null}, now(), now()
 			WHERE NOT EXISTS (
-				SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND classid::bigint = 92138472
+				SELECT 1 FROM pg_locks WHERE database = (SELECT oid FROM pg_database WHERE datname = current_database()) AND locktype = 'advisory' AND classid::bigint = 92138472
 					AND objid::bigint = ${chainId} AND objsubid = 2 AND pid IS DISTINCT FROM ${backendPid ?? null} AND granted
 			)
 			ON CONFLICT (chain_id) DO UPDATE SET network_id = EXCLUDED.network_id, state = EXCLUDED.state,
@@ -67,7 +67,7 @@ export async function recordIndexerOwnership(this: ScannerDatabase, chainId: num
 				heartbeat_at = EXCLUDED.heartbeat_at, updated_at = now()
 			WHERE indexer_ownership.backend_pid IS NOT DISTINCT FROM ${backendPid ?? null}
 				AND NOT EXISTS (
-					SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND classid::bigint = 92138472
+					SELECT 1 FROM pg_locks WHERE database = (SELECT oid FROM pg_database WHERE datname = current_database()) AND locktype = 'advisory' AND classid::bigint = 92138472
 						AND objid::bigint = ${chainId} AND objsubid = 2 AND pid IS DISTINCT FROM ${backendPid ?? null} AND granted
 				)
 		`
@@ -162,7 +162,7 @@ export async function expectedLeaseReleased(this: ScannerDatabase, chainId: numb
 	const held = async (): Promise<boolean> => {
 		const rows = await this.sql`
 				SELECT EXISTS (
-					SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND classid::bigint = 92138472
+					SELECT 1 FROM pg_locks WHERE database = (SELECT oid FROM pg_database WHERE datname = current_database()) AND locktype = 'advisory' AND classid::bigint = 92138472
 						AND objid::bigint = ${chainId} AND objsubid = 2 AND pid = ${backendPid} AND granted
 				) AS held
 			`
@@ -174,7 +174,7 @@ export async function expectedLeaseReleased(this: ScannerDatabase, chainId: numb
 	const terminated = await this.sql`
 			SELECT pg_terminate_backend(${backendPid}, ${LEASE_HOLDER_TERMINATION_TIMEOUT_MILLISECONDS}) AS terminated
 			WHERE EXISTS (
-				SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND classid::bigint = 92138472
+				SELECT 1 FROM pg_locks WHERE database = (SELECT oid FROM pg_database WHERE datname = current_database()) AND locktype = 'advisory' AND classid::bigint = 92138472
 					AND objid::bigint = ${chainId} AND objsubid = 2 AND pid = ${backendPid} AND granted
 			)
 		`
@@ -215,7 +215,7 @@ export async function tryAcquireIndexerLock(this: ScannerDatabase, chainId: numb
 				const leaseRows = await sql`
 						SELECT pg_backend_pid() AS backend_pid, EXISTS (
 							SELECT 1 FROM pg_locks
-							WHERE locktype = 'advisory'
+							WHERE database = (SELECT oid FROM pg_database WHERE datname = current_database()) AND locktype = 'advisory'
 								AND pid = pg_backend_pid()
 								AND classid::bigint = 92138472
 								AND objid::bigint = ${chainId}

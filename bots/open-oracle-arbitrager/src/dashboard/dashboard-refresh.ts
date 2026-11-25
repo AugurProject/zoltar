@@ -22,11 +22,16 @@ export function createStateRefresh({ state, controls, view }: StateRefreshContex
 			const value: unknown = await requestWithTimeout(signal => api('/api/state', { signal }), STATE_REQUEST_TIMEOUT_MS)
 			if (requestEpoch !== state.profileRequestEpoch) return
 			if (!isSnapshot(value)) throw new Error('Bot returned an invalid state snapshot')
-			if (state.pendingNetworkProfile !== undefined && value.network !== state.pendingNetworkProfile) return
+			if (state.pendingNetworkProfile !== undefined && value.network !== state.pendingNetworkProfile) {
+				if (!state.profileSwitchTimedOut) return
+				state.pendingNetworkProfile = value.network
+				state.pendingProfileStateConfirmed = false
+				state.configurationLoaded = false
+			}
 			view.render(value)
 			if (state.pendingNetworkProfile !== undefined) {
 				state.pendingProfileStateConfirmed = true
-				controls.finishPendingProfileIfReady(value.network)
+				if (state.configurationLoaded) controls.finishPendingProfileIfReady(value.network)
 			}
 		} catch (error) {
 			if (requestEpoch !== state.profileRequestEpoch) return

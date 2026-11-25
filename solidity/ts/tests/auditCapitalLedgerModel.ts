@@ -471,6 +471,7 @@ const takeover = (m: Model, o: number, id: bigint, k: bigint, minimumTakeoverRew
 	const penaltyPaid = source.penaltyStarted === start ? (source.penaltyPaid ?? 0n) : 0n
 	// A cure limited by nominal spare continues into a receiver-funded repair.
 	if (cure(m, id, 0n, false, m.cons) !== 0n && (!inTree(source) || source.price >= m.cons)) {
+		requireModel(minimumTakeoverReward === 0n, 'Takeover reward below minimum')
 		return { cured: true, full: false, merged: false, takeoverReward: 0n, debit: 0n, sourceOwner: source.owner, sourceBatch: source.batch, receiverPrincipal: 0n, receiverCommitment: 0n }
 	}
 	requireModel(start !== 0n, 'Adverse observation missing')

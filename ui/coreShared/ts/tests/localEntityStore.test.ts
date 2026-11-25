@@ -223,6 +223,18 @@ void describe('browser storage', () => {
 		expect(window.localStorage.getItem(getDownloadedStorageKey(scope))).toContain('"$bigint":"1"')
 	})
 
+	void test('keeps the current registry page visible when favorites fill the persistent cache', () => {
+		const store = createDownloadedEntityStore(decodeNumberRecord, 1)
+		setEntityFavorite(scope, 'kept', true, 1)
+		store.record(scope, [{ data: { amount: 1n }, id: 'kept' }], 1)
+		for (const id of ['second', 'third']) {
+			store.recordRegistryPage(scope, { ids: [id], startIndex: 1, totalCount: 2n }, [{ id, registryIndex: 1, data: { amount: 2n } }], 2)
+			expect(store.read(scope).map(entry => entry.id)).toEqual([id, 'kept'])
+		}
+		resetLocalEntityStoreForTesting()
+		expect(store.read(scope).map(entry => entry.id)).toEqual(['kept'])
+	})
+
 	void test('ignores corrupted storage', () => {
 		window.localStorage.setItem(getFavoritesStorageKey(scope), '{not json')
 		expect(readFavoriteEntries(scope)).toEqual([])

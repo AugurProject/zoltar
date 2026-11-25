@@ -251,6 +251,7 @@ test('rejects inherited snapshots larger than the operator leaf budget', async (
 test('authenticated claims need no ancestor preparation', async () => {
 	const result = await sampleClaimPositions(child, fixtureRead(), state)
 	expect(result.positions).toHaveLength(3)
+	expect(result.basis).toContain('Payouts transfer REP to the depositor’s wallet')
 	for (const position of result.positions) {
 		expect(position['status']).toBe('claimable')
 		expect(position['source_principal_atto_rep']).toBe(position['principal_atto_rep'])

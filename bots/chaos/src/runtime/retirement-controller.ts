@@ -1,6 +1,6 @@
 import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { recordActivity, type RuntimeState } from '../state/operator-state.ts'
-import { acceptResidualProfileReplacement, cancelRetirement, registerV3Position, requestRetirement, type RetirementPolicies } from '../state/retirement.ts'
+import { acceptResidualProfileReplacement, cancelRetirement, registerV3Position, requestRetirement, parseRetirementPolicies } from '../state/retirement.ts'
 import { dashboardRecord as record, exactDashboardKeys as exactKeys } from './dashboard-input.ts'
 
 type RetirementControllerOptions = {
@@ -18,17 +18,7 @@ export function createRetirementController(options: RetirementControllerOptions)
 			if (action === 'request') {
 				exactKeys(body, ['action', 'confirmation', 'policies', 'profileId'], 'Retirement update')
 				if (body['profileId'] !== options.state.profileId) throw new Error('Retirement deployment profile does not match the active durable profile')
-				const rawPolicies = record(body['policies'], 'Retirement policies')
-				exactKeys(rawPolicies, ['exitAfterCompletion', 'exitUnmatchedShares', 'maximumExitLossBps', 'migrateExistingClaims', 'sweepAssets', 'unwrapWeth'], 'Retirement policies')
-				const policies: RetirementPolicies = {
-					exitAfterCompletion: rawPolicies['exitAfterCompletion'] === true,
-					exitUnmatchedShares: rawPolicies['exitUnmatchedShares'] === true,
-					maximumExitLossBps: typeof rawPolicies['maximumExitLossBps'] === 'number' ? rawPolicies['maximumExitLossBps'] : -1,
-					migrateExistingClaims: rawPolicies['migrateExistingClaims'] === true,
-					sweepAssets: rawPolicies['sweepAssets'] === true,
-					unwrapWeth: rawPolicies['unwrapWeth'] === true,
-				}
-				if (!Number.isSafeInteger(policies.maximumExitLossBps) || policies.maximumExitLossBps < 0 || policies.maximumExitLossBps > 10_000) throw new Error('maximumExitLossBps must be an integer from 0 through 10000')
+				const policies = parseRetirementPolicies(body['policies'])
 				if (options.state.signerAddress === undefined) throw new Error('Retirement requires a bound signer')
 				requestRetirement(candidateState.retirement, options.state.profileId, options.state.signerAddress, policies, String(body['confirmation']), options.state.signerAddress)
 				recordActivity(candidateState, { message: `Drain & Retire requested for ${options.state.profileId}`, status: 'info', type: 'configuration' })
@@ -37,7 +27,22 @@ export function createRetirementController(options: RetirementControllerOptions)
 				cancelRetirement(candidateState.retirement, String(body['confirmation']))
 				recordActivity(candidateState, { message: 'Drain & Retire request cancelled before final sweeping', status: 'info', type: 'configuration' })
 			} else if (action === 'accept-residuals') {
-				exactKeys(body, ['action', 'confirmation', 'reason', 'targetProfileId'], 'Retirement update')
+				exactKeys(body, ['action', 'confirmation', 'evidence', 'reason', 'targetProfileId'], 'Retirement update')
+				const current = candidateState.retirement.completionEvidence
+				const reviewed = record(body['evidence'], 'Reviewed completion evidence')
+				if (
+					current === undefined ||
+					reviewed['blockHash'] !== current.blockHash ||
+					reviewed['blockNumber'] !== current.blockNumber ||
+					!Array.isArray(reviewed['residuals']) ||
+					reviewed['residuals'].length !== current.residuals.length ||
+					!reviewed['residuals'].every((item, index) => {
+						const residual = record(item, 'Reviewed residual')
+						const actual = current.residuals[index]
+						return actual !== undefined && actual.amount === residual['amount'] && actual.asset === residual['asset'] && actual.category === residual['category'] && actual.reason === residual['reason']
+					})
+				)
+					throw new Error('Completion evidence changed. Review the current residuals before accepting.')
 				acceptResidualProfileReplacement(candidateState.retirement, options.state.profileId, String(body['targetProfileId']), String(body['reason']), String(body['confirmation']))
 				recordActivity(candidateState, { details: String(body['reason']), message: `Residual profile replacement accepted for ${String(body['targetProfileId'])}`, status: 'info', type: 'configuration' })
 			} else if (action === 'register-v3-position') {

@@ -135,10 +135,11 @@
 		"validateExposure": "validateExposure()",
 		"weth": "weth()"
 	},
-	"events": ["ExposureCheckpoint", "PendingReportRecovered", "PriceReportDeferred", "PriceReportRejected", "PriceReported", "PriceRequested", "ReportFundingAssigned", "ReportOperationAttempted"],
+	"events": ["ExposureCheckpoint", "PendingReportRecovered", "PriceCandidateAccepted", "PriceReportDeferred", "PriceReportRejected", "PriceReported", "PriceRequested", "ReportFundingAssigned", "ReportOperationAttempted"],
 	"eventDeclarations": {
 		"ExposureCheckpoint": "ExposureCheckpoint(address indexed questionLedger, uint256 aggregateExposureAttoEth)",
 		"PendingReportRecovered": "PendingReportRecovered(uint256 indexed reportId, uint256 settlementTimestamp, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp)",
+		"PriceCandidateAccepted": "PriceCandidateAccepted(uint256 indexed reportId, uint256 candidatePrice, uint256 canonicalPrice, uint256 observationTimestamp, bool canonicalUpdated)",
 		"PriceReportDeferred": "PriceReportDeferred(uint256 indexed reportId, uint256 baseFee, uint256 maxSettlementBaseFee)",
 		"PriceReportRejected": "PriceReportRejected(uint256 indexed reportId, string reason, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp)",
 		"PriceReported": "PriceReported(uint256 indexed reportId, uint256 price, uint256 lastSettlementTimestamp)",

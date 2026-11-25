@@ -25,7 +25,6 @@ import {
 	statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule,
 	statoblast_SecurityPool_SecurityPool,
 	statoblast_QuestionForker_QuestionForker,
-	statoblast_QuestionForkerDelegate_QuestionForkerDelegate,
 	statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalLedgerDeployer,
 	statoblast_SecurityPoolModuleDeployers_SecurityPoolCommitmentIndexDeployer,
 	statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalFeeStreamsDeployer,
@@ -59,7 +58,6 @@ const statoblastInitCodes = createStatoblastInitCodes(
 		securityPoolFactory: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 		securityPool: statoblast_SecurityPool_SecurityPool,
 		questionForker: statoblast_QuestionForker_QuestionForker,
-		questionForkerDelegate: statoblast_QuestionForkerDelegate_QuestionForkerDelegate,
 		questionLedgerOperationsDelegate: statoblast_QuestionLedgerOperationsDelegate_QuestionLedgerOperationsDelegate,
 		questionLedgerEventEmitter: statoblast_QuestionLedgerAccountingModule_QuestionLedgerAccountingModule,
 		securityPoolCapitalLedgerDeployer: statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalLedgerDeployer,
@@ -82,7 +80,6 @@ const {
 	getSharedPoolPriceFeedDeploymentWorkerByteCode,
 	getSecurityPoolFactoryByteCode,
 	getQuestionForkerByteCode,
-	getQuestionForkerDelegateByteCode,
 	getQuestionLedgerOperationsDelegateByteCode,
 	getQuestionLedgerAccountingModuleByteCode,
 	getSecurityPoolCapitalLedgerDeployerByteCode,
@@ -208,7 +205,6 @@ function getDeploymentStatusOracleSteps() {
 		{ id: 'shareTokenFactory', address: infraContracts.shareTokenFactory },
 		{ id: 'sharedPoolPriceFeedDeploymentWorker', address: infraContracts.sharedPoolPriceFeedDeploymentWorker },
 		{ id: 'sharedPoolPriceFeedFactory', address: infraContracts.sharedPoolPriceFeedFactory },
-		{ id: 'questionForkerDelegate', address: infraContracts.questionForkerDelegate },
 		{ id: 'questionForker', address: infraContracts.questionForker },
 		{ id: 'escalationGameDepositDelegate', address: infraContracts.escalationGameDepositDelegate },
 		{ id: 'escalationGameFactory', address: infraContracts.escalationGameFactory },
@@ -244,7 +240,6 @@ async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key 
 		shareTokenFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'shareTokenFactory'),
 		sharedPoolPriceFeedDeploymentWorker: isDeploymentStatusOracleStepDeployed(deploymentMask, 'sharedPoolPriceFeedDeploymentWorker'),
 		sharedPoolPriceFeedFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'sharedPoolPriceFeedFactory'),
-		questionForkerDelegate: isDeploymentStatusOracleStepDeployed(deploymentMask, 'questionForkerDelegate'),
 		questionForker: isDeploymentStatusOracleStepDeployed(deploymentMask, 'questionForker'),
 		escalationGameFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameFactory'),
 		escalationGameProofVerifier: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameFactory'),
@@ -290,7 +285,6 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	if (!existence['shareTokenFactory']) await deployBytecode('shareTokenFactory', getShareTokenFactoryByteCode(getZoltarAddress()))
 	if (!existence['sharedPoolPriceFeedDeploymentWorker']) await deployBytecode('sharedPoolPriceFeedDeploymentWorker', getSharedPoolPriceFeedDeploymentWorkerByteCode())
 	if (!existence['sharedPoolPriceFeedFactory']) await deployBytecode('sharedPoolPriceFeedFactory', getSharedPoolPriceFeedFactoryByteCode(MAINNET_WETH_ADDRESS))
-	if (!existence['questionForkerDelegate']) await deployBytecode('questionForkerDelegate', getQuestionForkerDelegateByteCode(contractAddresses.zoltar))
 	if (!existence['questionForker']) await deployBytecode('questionForker', getQuestionForkerByteCode(contractAddresses.zoltar))
 	if (!existence['escalationGameDepositDelegate']) await deployBytecode('escalationGameDepositDelegate', `0x${statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.evm.bytecode.object}`)
 	if (!existence['escalationGameFactory']) await deployBytecode('escalationGameFactory', getEscalationGameFactoryByteCode(contractAddresses.escalationGameDepositDelegate))

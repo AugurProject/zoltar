@@ -82,7 +82,9 @@ export const tradingDetailData = async (sql: SQL, query: TradingDetailQuery) => 
 			FROM transfers WHERE from_address NOT IN ('0x0000000000000000000000000000000000000000', '0x0000000000000000000000000000000000000001')
 		)
 		SELECT delta.address, sum(delta.received_liquidity)::text AS received_liquidity,
-			sum(delta.sent_liquidity)::text AS sent_liquidity, sum(delta.balance_delta)::text AS balance
+			sum(delta.sent_liquidity)::text AS sent_liquidity,
+			CASE WHEN sum(delta.balance_delta) >= 0 THEN sum(delta.balance_delta)::text END AS balance,
+			sum(delta.balance_delta)::text AS observed_balance_delta
 		FROM deltas delta
 		GROUP BY delta.address
 		HAVING sum(delta.balance_delta) <> 0

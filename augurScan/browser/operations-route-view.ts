@@ -164,19 +164,26 @@ export const createOperationsRouteView = (deps: OperationsRouteViewDeps) => {
 			const values = data['currentAmount1'] === undefined && data['currentAmount2'] === undefined ? 'No round amounts' : `${operationNumber(data['currentAmount1'])} ${shortIdentifier(token1)} · ${operationNumber(data['currentAmount2'])} ${shortIdentifier(token2)}`
 			const comparison = isPlainRecord(item['comparison']) ? item['comparison'] : {}
 			const changes = operationRecords(comparison['changes'])
-			const row = operationRow(`${String(item['event_name'] ?? 'Report round')} · round ${String(item['round_number'] ?? '—')}`, `${values} · reporter ${shortIdentifier(String(data['currentReporter'] ?? 'unknown'))}`, String(item['tx_hash'] ?? ''), item['block_number'])
+			const observedRound = item['observed_round_number']
+			const roundLabel = typeof observedRound === 'string' ? `observed round ${observedRound}` : `round ${String(item['round_number'] ?? '—')}`
+			const row = operationRow(`${String(item['event_name'] ?? 'Report round')} · ${roundLabel}`, `${values} · reporter ${shortIdentifier(String(data['currentReporter'] ?? 'unknown'))}`, String(item['tx_hash'] ?? ''), item['block_number'])
 			const changeDetails = document.createElement('details')
 			changeDetails.className = 'operations-round-changes'
 			const changeDetailsKey = evidenceDisclosureKey('changes', item)
 			if (changeDetailsKey !== undefined) changeDetails.dataset['detailKey'] = changeDetailsKey
-			changeDetails.append(element('summary', '', comparison['state'] === 'initial' ? `Initial values (${changes.length})` : `Changes from round ${String(comparison['previousRoundNumber'] ?? '—')} (${changes.length})`))
+			const previousObservedRound = comparison['previousObservedRoundNumber']
+			const previousRoundLabel = typeof previousObservedRound === 'string' ? `observed round ${previousObservedRound}` : `round ${String(comparison['previousRoundNumber'] ?? '—')}`
+			let comparisonLabel = `Changes from ${previousRoundLabel} (${changes.length})`
+			if (comparison['state'] === 'initial') comparisonLabel = `Initial values (${changes.length})`
+			if (comparison['state'] === 'unavailable') comparisonLabel = 'Previous round unavailable'
+			changeDetails.append(element('summary', '', comparisonLabel))
 			const changeList = document.createElement('ul')
 			for (const change of changes) {
 				const before = change['before'] === undefined ? 'not set' : JSON.stringify(change['before'])
 				const after = change['after'] === undefined ? 'not set' : JSON.stringify(change['after'])
 				changeList.append(element('li', '', `${String(change['field'] ?? 'field')}: ${before ?? 'unavailable'} → ${after ?? 'unavailable'}`))
 			}
-			if (changes.length === 0) changeList.append(element('li', '', 'No report fields changed.'))
+			if (changes.length === 0 && comparison['state'] !== 'unavailable') changeList.append(element('li', '', 'No report fields changed.'))
 			changeDetails.append(changeList)
 			row.append(changeDetails)
 			row.append(rawEvidence(item))

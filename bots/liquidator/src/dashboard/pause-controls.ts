@@ -1,4 +1,3 @@
-import { shorten } from '@zoltar/bot-shared/dashboard/dom'
 import { formIsDirty } from '@zoltar/bot-shared/dashboard/form-state'
 import { closeResumePreflight, openResumePreflight } from '@zoltar/bot-shared/dashboard/resume-preflight'
 import type { Snapshot } from './api-validation.ts'
@@ -28,16 +27,24 @@ export function registerPauseControls({ state, elements, controls, refresh }: Pa
 		return formIsDirty('strategy-form') ? `${summary} · unsaved strategy edits are not applied` : summary
 	}
 
-	function openResumeConfirmation(snapshot: Snapshot) {
+	let reviewedRevision: string | undefined
+	let reviewedRows: string | undefined
+	function resumeRows(snapshot: Snapshot) {
 		const recoveryWork = snapshot.pendingTransactions.length
-		openResumePreflight([
-			['Mode', 'Live execution'],
+		return [
+			['Mode', snapshot.execute ? 'Live execution' : 'Dry run'],
 			['Recovery work', recoveryWork === 0 ? 'Clear' : `${recoveryWork.toString()} unresolved`],
 			['Market evidence', snapshot.marketConsensus?.reliable === true ? 'Reliable' : 'Guarded / unavailable'],
 			['Eligible pools', snapshot.metrics.eligiblePoolCount.toString()],
-			['Execution signer', snapshot.wallet === undefined ? 'Missing' : shorten(snapshot.wallet)],
+			['Execution signer', snapshot.wallet ?? 'Missing'],
 			['Automatic actions enabled', automaticActionsSummary()],
-		])
+		] as const
+	}
+	function openResumeConfirmation(snapshot: Snapshot) {
+		const rows = resumeRows(snapshot)
+		reviewedRevision = snapshot.configurationRevision
+		reviewedRows = JSON.stringify(rows)
+		openResumePreflight(rows)
 	}
 
 	async function changePaused(paused: boolean) {
@@ -46,7 +53,7 @@ export function registerPauseControls({ state, elements, controls, refresh }: Pa
 		controls.syncControls()
 		actionStatus(pauseStatus, '')
 		try {
-			await put('/api/paused', { paused })
+			await put('/api/paused', paused || !state.snapshot.execute ? { paused } : { paused, revision: reviewedRevision })
 			await refresh()
 			actionStatus(pauseStatus, '')
 		} catch (error) {
@@ -67,6 +74,25 @@ export function registerPauseControls({ state, elements, controls, refresh }: Pa
 		void changePaused(!state.snapshot.paused)
 	})
 	elements.cancelResume.addEventListener('click', closeResumePreflight)
-	elements.confirmResume.addEventListener('click', () => void changePaused(false))
+	elements.confirmResume.addEventListener('click', () => {
+		const snapshot = state.snapshot
+		if (snapshot === undefined) return
+		if (!snapshot.execute || !snapshot.paused) {
+			closeResumePreflight()
+			return
+		}
+		if (reviewedRevision === undefined || state.configurationRevision !== snapshot.configurationRevision) {
+			actionStatus(pauseStatus, 'Waiting for current configuration. Review the preflight after it loads.')
+			void refresh()
+			return
+		}
+		if (snapshot.configurationRevision !== reviewedRevision || JSON.stringify(resumeRows(snapshot)) !== reviewedRows) {
+			closeResumePreflight()
+			openResumeConfirmation(snapshot)
+			actionStatus(pauseStatus, 'The resume preflight changed. Review the updated values and confirm again.')
+			return
+		}
+		void changePaused(false)
+	})
 	elements.resumeDialog.addEventListener('cancel', () => actionStatus(pauseStatus, ''))
 }

@@ -2,7 +2,7 @@ import { capitalPositionSummary, capitalSummarizedFields, capitalSummaryMetrics 
 import { poolSummaryMetrics } from './pool-metrics.ts'
 import { claimProofDisclosure, escalationPayoutSummary, escalationPayoutTitle } from './escalation-payouts.ts'
 import { collateralUnit, type CollateralUnit } from '../src/collateral.ts'
-import { semanticFields } from './semantic-evidence.ts'
+import { priceDecisionSummary, semanticFields } from './semantic-evidence.ts'
 import { identifierCopyButton } from './identifier-copy.ts'
 import { shortIdentifier } from './identifier-format.ts'
 import type { OperationsDetailRoute, OperationsRenderContext } from './browser-types.ts'
@@ -13,7 +13,7 @@ import { exactUnit } from './format.ts'
 import { nativeSymbolFor } from './network-freshness.ts'
 import { renderCandleContent } from './operations-candles.ts'
 import type { createOperationsComponents } from './operations-components.ts'
-import { sharePositionSummary, tradingActivityPanel, tradingVolumeRows } from './trading-panels.ts'
+import { lpBalanceSummary, sharePositionSummary, tradingActivityPanel, tradingVolumeRows } from './trading-panels.ts'
 import { captureViewState, restoreViewState } from './view-state.ts'
 import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 
@@ -234,7 +234,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 		addPanel(
 			'evidence',
 			operationsPanel('Escalation payouts', rows, claims['status'] === 'available' ? 'No unconsumed deposits at this tagged block.' : `Payout evidence unavailable: ${String(claims['reason'] ?? 'Awaiting claim sampling')}`, {
-				label: `Tagged claim-bundle payouts; proofs must be refreshed after settlement.${claims['truncated'] === true ? ' First 250 positions shown.' : ''}`,
+				label: `Tagged REP payouts to the depositor’s wallet. Refresh proofs after settlement.${claims['truncated'] === true ? ' First 250 positions shown.' : ''}`,
 			}),
 		)
 	}
@@ -277,8 +277,8 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 				[
 					operationRow('24-hour activity', `${operationCounted(tradingSummary['swaps_24h'], 'swap')} · ${exactUnit(String(tradingSummary['input_volume_24h'] ?? '0'), shareDecimals, 'input shares')} · ${exactUnit(String(tradingSummary['fees_24h'] ?? '0'), shareDecimals, 'fee shares')}`, undefined, undefined),
 					operationRow('Seven-day activity', `${operationCounted(tradingSummary['swaps_7d'], 'swap')} · ${exactUnit(String(tradingSummary['input_volume_7d'] ?? '0'), shareDecimals, 'input shares')} · ${exactUnit(String(tradingSummary['fees_7d'] ?? '0'), shareDecimals, 'fee shares')}`, undefined, undefined),
-					operationRow('24-hour TWAP', `${String(twap24h['state'] ?? 'Unavailable')} · ${operationRatio(twap24h['numerator'], twap24h['denominator'])} NO per YES · ${operationNumber(twap24h['coverageSeconds'])} covered seconds`, 'NO per YES', undefined),
-					operationRow('Seven-day TWAP', `${String(twap7d['state'] ?? 'Unavailable')} · ${operationRatio(twap7d['numerator'], twap7d['denominator'])} NO per YES · ${operationNumber(twap7d['coverageSeconds'])} covered seconds`, 'NO per YES', undefined),
+					operationRow('24-hour TWAP', `${String(twap24h['state'] ?? 'Unavailable')} · ${operationRatio(twap24h['numerator'], twap24h['denominator'])} NO per YES · ${operationNumber(twap24h['coverageSeconds'])} covered seconds`, 'Pair Sync observations', undefined),
+					operationRow('Seven-day TWAP', `${String(twap7d['state'] ?? 'Unavailable')} · ${operationRatio(twap7d['numerator'], twap7d['denominator'])} NO per YES · ${operationNumber(twap7d['coverageSeconds'])} covered seconds`, 'Pair Sync observations', undefined),
 				],
 				'No trading observations are available.',
 			),
@@ -314,12 +314,17 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			operationsPanel(
 				'Current LP-share ownership',
 				lpPositions.map(position =>
-					operationRow('LP holder', `${exactUnit(String(position['balance'] ?? '0'), 18, 'LP shares')} current · ${exactUnit(String(position['received_liquidity'] ?? '0'), 18, '')} received · ${exactUnit(String(position['sent_liquidity'] ?? '0'), 18, '')} sent`, String(position['address'] ?? ''), undefined),
+					operationRow(
+						position['balance'] === null ? 'LP transfer history' : 'LP holder',
+						`${lpBalanceSummary(position['balance'], position['observed_balance_delta'], 'LP shares')} · ${exactUnit(String(position['received_liquidity'] ?? '0'), 18, '')} received · ${exactUnit(String(position['sent_liquidity'] ?? '0'), 18, '')} sent`,
+						String(position['address'] ?? ''),
+						undefined,
+					),
 				),
 				'No LP-share ownership records match this view. Transfer history begins when this scanner started indexing the pair.',
 			),
 		)
-		addPanel('history', operationsPanel('Hourly NO-per-YES candles', renderCandleContent(operationRecords(data['candles']), operationRow), 'No reserve observations are available for candles.'))
+		addPanel('history', operationsPanel('Hourly NO-per-YES candles', renderCandleContent(operationRecords(data['candles']), operationRow), 'No reserve observations are available for candles.', { label: 'Pair Sync observations' }))
 	}
 	if (route.kind === 'report') {
 		const decisionPanel = operationsPanel(
@@ -328,7 +333,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 				const argumentsValue = isPlainRecord(decision['arguments']) ? decision['arguments'] : {}
 				// The report's escrow runs every settlement callback and records the feed's outcome afterwards.
 				const completion = decision['event_name'] === 'ReportCompleted' ? reportCompletionSummary(argumentsValue['outcome']) : undefined
-				return operationRow(String(decision['event_name'] ?? 'Coordinator decision'), String(argumentsValue['reason'] ?? completion ?? decision['summary'] ?? 'Linked coordinator evidence'), String(decision['emitter_address'] ?? ''), decision['block_number'])
+				return operationRow(String(decision['event_name'] ?? 'Coordinator decision'), String(argumentsValue['reason'] ?? completion ?? priceDecisionSummary(decision, nativeSymbol) ?? decision['summary'] ?? 'Linked coordinator evidence'), String(decision['emitter_address'] ?? ''), decision['block_number'])
 			}),
 			'No coordinator decision could be linked to this report.',
 		)

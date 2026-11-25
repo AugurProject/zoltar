@@ -28,7 +28,6 @@ import {
 	validateLoadedCollectionOrder,
 	manifestPayload,
 	PROTOCOL_INDEX_REFERENCE_VERSION,
-	isReference,
 	parseProtocolIndexReference,
 } from './protocol-index-format.ts'
 import { isValidatedProtocolIndex, parseProtocolIndex, immutableProtocolIndex, type AuctionBidRecord, type AuctionRefundRecord, auctionBidRecord, auctionRefundRecord, type ProtocolIndexIdentity } from './protocol-index-schema.ts'
@@ -286,10 +285,6 @@ export async function persistProtocolIndexGeneration(statePath: string, index: C
 
 export async function loadPersistedProtocolIndex(value: unknown, statePath: string, expectedChainId: number, filesystem: ProtocolIndexFilesystem) {
 	if (value === null) return undefined
-	if (!isReference(value)) {
-		const inline = parseProtocolIndex(value, expectedChainId)
-		return inline === undefined ? undefined : immutableProtocolIndex(inline)
-	}
 	const reference = parseProtocolIndexReference(value)
 	return loadProtocolIndexGeneration(statePath, reference, expectedChainId, filesystem)
 }

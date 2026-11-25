@@ -21,18 +21,21 @@ export function useTransactionWorkflow({
 	chainId,
 	market,
 	marketTitle,
+	amountUnit,
 	walletClient,
 }: {
 	onWorkflowLockChange(locked: boolean): void
 	account: Address | undefined
 	chainId: number | undefined
 	market: Address | undefined
+	amountUnit: string | undefined
 	marketTitle?: string | undefined
 	walletClient: WalletClient | undefined
 }) {
 	const currentMarket = transactionMarketKey(market)
 	const [ticketInputs, setTicketInputs] = useState<Readonly<Record<string, TicketInputs>>>({})
-	const inputs = ticketInputs[currentMarket] ?? emptyTicketInputs
+	const draft = ticketInputs[currentMarket] ?? emptyTicketInputs
+	const inputs = draft.amountUnit === amountUnit ? draft : { ...draft, amount: '', acknowledgedImpactBps: undefined, requoteNotice: undefined }
 	const updateInputs = (target: string, update: Partial<TicketInputs>) => setTicketInputs(current => ({ ...current, [target]: { ...(current[target] ?? emptyTicketInputs), ...update } }))
 	const selectTrade = (selection: Partial<Pick<TicketInputs, 'mode' | 'side'>>) =>
 		setTicketInputs(current => {
@@ -45,8 +48,13 @@ export function useTransactionWorkflow({
 	// The ref answers synchronous checks inside callbacks; the state re-renders the tickets when a lock changes.
 	const positionLockedMarketsRef = useRef(new Set<string>()).current
 	const [positionLockedMarkets, setPositionLockedMarkets] = useState<readonly string[]>([])
-	const [liquidityWorkflowLocked, setLiquidityWorkflowLocked] = useState(false)
-	const reportLock = useCallback(() => onWorkflowLockChange(positionLockedMarketsRef.size > 0 || liquidityWorkflowLockedRef.current), [onWorkflowLockChange])
+	const panelLocks = useRef(new Set<string>()).current
+	const [lockedPanelMarkets, setLockedPanelMarkets] = useState<readonly string[]>([])
+	const liquidityWorkflowLocked = lockedPanelMarkets.includes(currentMarket)
+	const currentMarketRef = useRef(currentMarket)
+	currentMarketRef.current = currentMarket
+	liquidityWorkflowLockedRef.current = panelLocks.has(currentMarket)
+	const reportLock = useCallback(() => onWorkflowLockChange(positionLockedMarketsRef.size > 0 || panelLocks.size > 0), [onWorkflowLockChange])
 	const updatePositionWorkflowLock = useCallback(
 		(locked: boolean, lockedMarket: string) => {
 			if (locked) positionLockedMarketsRef.add(lockedMarket)
@@ -57,9 +65,11 @@ export function useTransactionWorkflow({
 		[reportLock],
 	)
 	const updateLiquidityWorkflowLock = useCallback(
-		(locked: boolean) => {
-			liquidityWorkflowLockedRef.current = locked
-			setLiquidityWorkflowLocked(locked)
+		(locked: boolean, marketKey = currentMarketRef.current) => {
+			if (locked) panelLocks.add(marketKey)
+			else panelLocks.delete(marketKey)
+			liquidityWorkflowLockedRef.current = panelLocks.has(currentMarketRef.current)
+			setLockedPanelMarkets([...panelLocks])
 			reportLock()
 		},
 		[reportLock],
@@ -83,7 +93,7 @@ export function useTransactionWorkflow({
 		...inputs,
 		setMode: (mode: TradeMode) => selectTrade({ mode }),
 		setSide: (side: 'YES' | 'NO') => selectTrade({ side }),
-		setAmount: (amount: string) => updateInputs(currentMarket, { amount }),
+		setAmount: (amount: string) => updateInputs(currentMarket, { amount, amountUnit }),
 		setAcknowledgedImpactBps: (acknowledgedImpactBps: bigint | undefined) => updateInputs(currentMarket, { acknowledgedImpactBps }),
 		/** Clears the amount a confirmed trade used on its own market, whichever market is on screen by then. */
 		clearConfirmedAmount: (confirmedMarket: Address) => updateInputs(transactionMarketKey(confirmedMarket), { amount: '', acknowledgedImpactBps: undefined }),
@@ -100,11 +110,11 @@ export function useTransactionWorkflow({
 		/** True while a trade on the given market holds its lock. */
 		isPositionLocked: (target: Address | undefined) => positionLockedMarketsRef.has(transactionMarketKey(target)),
 		/** True while any trade or the liquidity or settlement panel on screen holds a lock (wallet changes wait for all). */
-		anyWorkflowLocked: () => positionLockedMarketsRef.size > 0 || liquidityWorkflowLockedRef.current,
+		anyWorkflowLocked: () => positionLockedMarketsRef.size > 0 || panelLocks.size > 0,
 		liquidityWorkflowLockedRef,
 		knownReceiptRef,
 		/** Any lock at all: wallet connection and network switching wait for every running transaction. */
-		workflowLocked: positionLockedMarkets.length > 0 || liquidityWorkflowLocked,
+		workflowLocked: positionLockedMarkets.length > 0 || lockedPanelMarkets.length > 0,
 		/** Whether the market on screen has its own trade or panel lock. */
 		marketWorkflowLocked: positionLockedMarkets.includes(currentMarket) || liquidityWorkflowLocked,
 		updateLiquidityWorkflowLock,

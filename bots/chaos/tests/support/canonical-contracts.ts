@@ -44,7 +44,6 @@ export const CANONICAL_MUTATING_CONTRACT_MANIFEST: readonly CanonicalMutatingCon
 	{ artifactSource: 'contracts/statoblast/SecurityPoolCapitalLedger.sol', contract: 'SecurityPoolCapitalLedger', exposure: 'dynamic-endpoint' },
 	{ artifactSource: 'contracts/statoblast/SecurityPoolCapitalLifecycleDelegate.sol', contract: 'SecurityPoolCapitalLifecycleDelegate', exposure: 'delegate-module' },
 	{ artifactSource: 'contracts/statoblast/SecurityPoolCommitmentIndex.sol', contract: 'SecurityPoolCommitmentIndex', exposure: 'dynamic-endpoint' },
-	{ artifactSource: 'contracts/statoblast/QuestionForkerDelegate.sol', contract: 'QuestionForkerDelegate', exposure: 'delegate-module' },
 	{ artifactSource: 'contracts/statoblast/SecurityPool.sol', contract: 'SecurityPool', exposure: 'dynamic-endpoint' },
 	{ artifactSource: 'contracts/statoblast/SecurityPoolRepairAuction.sol', contract: 'SecurityPoolRepairAuction', exposure: 'dynamic-endpoint' },
 	{ artifactSource: 'contracts/statoblast/SecurityPoolRepairAuction.sol', contract: 'SecurityPoolRepairAuctionDeployer', exposure: 'deployment-helper' },

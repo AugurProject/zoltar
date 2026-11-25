@@ -5,6 +5,7 @@ import { getERC20Balance } from '../testSupport/simulator/utils/utilities'
 import { writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import {
 	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
+	statoblast_tokens_ShareToken_ShareToken as shareArtifact,
 	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
 	statoblast_SecurityPoolSettlement_SecurityPoolSettlement as settlementArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
@@ -17,6 +18,25 @@ import { unit, useSecurityPoolFixture } from './statoblast/securityPoolFixture'
 // question boundary without reproducing the implementation's settlement book.
 describe('Security pool cross-question conservation model', () => {
 	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n, minimumPurchaseFeeAttoEth: 0n })
+	test('two questions share the last unit of underwriting capacity', async () => {
+		await fixture.prepare(1_000n * unit, unit)
+		const buyer = fixture.other()
+		const capacity = () => buyer.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'availableMintCapacity', args: [fixture.base.genesisUniverse] })
+		await fixture.mint(unit - 1n, fixture.base.questionId)
+		expect(await capacity()).toBe(1n)
+		await fixture.mint(1n, fixture.secondQuestionId)
+		expect(await capacity()).toBe(0n)
+		for (const id of [fixture.base.questionId, fixture.secondQuestionId]) {
+			await expect(fixture.mint(1n, id)).rejects.toThrow('Purchase exceeds healthy capacity')
+			const outstanding = id === fixture.base.questionId ? unit - 1n : 1n
+			expect(await balanceOfShares(buyer, fixture.poolFor(id).shareToken, fixture.base.genesisUniverse, buyer.account.address)).toEqual([outstanding, outstanding, outstanding])
+		}
+		const second = fixture.poolFor(fixture.secondQuestionId)
+		await writeContractAndWait(buyer, () => buyer.writeContract({ abi: poolArtifact.abi, address: second.questionLedger, functionName: 'redeemCompleteSet', args: [1n] }))
+		expect(await capacity()).toBe(1n)
+		await fixture.mint(1n, fixture.base.questionId)
+		expect(await capacity()).toBe(0n)
+	})
 	const seeds = [0x51a2e5n, 0x1164n, 0xc0ffeen]
 	for (const initialSeed of seeds) {
 		test(`mint, partial return, and final exit preserve cash and isolate donations (seed ${initialSeed})`, async () => {
@@ -39,6 +59,8 @@ describe('Security pool cross-question conservation model', () => {
 					const snapshot = await owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'snapshotQuestion', args: [question.questionLedger] })
 					expect(snapshot.questionCashAttoEth).toBe(question.cash)
 					expect(snapshot.outcomeSupplyAttoShares).toBe(question.cash)
+					const supplies = await Promise.all([0, 1, 2].map(outcome => owner.readContract({ abi: shareArtifact.abi, address: question.shareToken, functionName: 'totalSupplyForOutcome', args: [fixture.base.genesisUniverse, outcome] })))
+					expect(supplies).toEqual([question.cash, question.cash, question.cash])
 					expect(snapshot.demandAttoEth).toBe(questions.reduce((sum, item) => sum + item.cash, 0n))
 					expect(snapshot.questionRecoveryAttoRep).toBe(0n)
 					expect(await balanceOfShares(owner, question.shareToken, fixture.base.genesisUniverse, trader.account.address)).toEqual([question.cash, question.cash, question.cash])

@@ -37,14 +37,16 @@ const shareUnit = (item: JsonRecord): string => {
 }
 
 /** @internal Exported for presentation unit tests. */
-export const tradingActivitySummary = (item: JsonRecord, _nativeSymbol: string): string => {
-	const asset = collateralUnit(item)
-	const parts = [exactUnit(text(item['shares']) ?? '0', shareUnit(item) === 'LP tokens' ? 18 : asset.decimals, shareUnit(item))]
+export const tradingActivitySummary = (item: JsonRecord, nativeSymbol: string): string => {
+	const collateral = item['native_collateral'] === true ? { decimals: 18, symbol: nativeSymbol } : collateralUnit(item)
+	const parts = [exactUnit(text(item['shares']) ?? '0', shareUnit(item) === 'LP tokens' ? 18 : collateral.decimals, shareUnit(item))]
 	const ethIn = text(item['eth_in_atto_eth'])
 	const ethOut = text(item['eth_out_atto_eth'])
-	if (ethIn !== undefined && ethIn !== '0') parts.push(`${exactUnit(ethIn, asset.decimals, asset.symbol)} paid`)
-	else if (ethOut !== undefined && ethOut !== '0') parts.push(`${exactUnit(ethOut, asset.decimals, asset.symbol)} received`)
-	else parts.push(`No ${asset.symbol} moved`)
+	const rep = text(item['recovery_rep_atto_rep'])
+	if (ethIn !== undefined && ethIn !== '0') parts.push(`${exactUnit(ethIn, collateral.decimals, collateral.symbol)} paid`)
+	else if (ethOut !== undefined && ethOut !== '0') parts.push(`${exactUnit(ethOut, collateral.decimals, collateral.symbol)} received`)
+	else if (rep === undefined || rep === '0') parts.push(`No ${collateral.symbol} moved`)
+	if (rep !== undefined && rep !== '0') parts.push(`${exactUnit(rep, 18, 'REP')} received`)
 	const seconds = text(item['timestamp_seconds'])
 	if (seconds !== undefined) parts.push(utcDateTime(Number(seconds) * 1000))
 	return parts.join(' · ')
@@ -83,13 +85,23 @@ const signedEth = (value: unknown, asset: ReturnType<typeof collateralUnit>): st
 export const tradingPnlSummary = (item: JsonRecord, _nativeSymbol: string): string => {
 	const asset = collateralUnit(item)
 	const valuation = isPlainRecord(item['valuation']) ? item['valuation'] : {}
-	const exitValue = `${exactUnit(text(item['holdings_value_atto_eth']) ?? '0', asset.decimals, asset.symbol)} ${valuation['method'] === 'winning-share-settlement' ? 'settlement value' : 'exit value'}${valuation['partial'] === true ? ' (partial, some shares unvalued)' : ''}`
+	let valueLabel = 'exit value'
+	if (valuation['method'] === 'winning-share-settlement') valueLabel = 'settlement value'
+	else if (valuation['method'] === 'complete-set-redemption') valueLabel = 'complete-set redemption value'
+	const exitValue = `${exactUnit(text(item['holdings_value_atto_eth']) ?? '0', asset.decimals, asset.symbol)} ${valueLabel}${valuation['partial'] === true ? ' (partial, some shares unvalued)' : ''}`
 	const reason = String(valuation['reason'] ?? 'no valuation')
 	const holdings = valuation['status'] === 'available' ? exitValue : `holdings value unavailable (${reason.charAt(0).toLowerCase()}${reason.slice(1)})`
 	const unknownBasis = item['cost_basis_status'] === 'unknown'
 	const paidIn = exactUnit(text(item[unknownBasis ? 'known_cost_atto_eth' : 'cost_basis_atto_eth']) ?? '0', asset.decimals, asset.symbol)
 	const profit = unknownBasis ? ['Profit unavailable'] : [`realized ${signedEth(item['realized_pnl_atto_eth'], asset)}`, `unrealized ${signedEth(item['unrealized_pnl_atto_eth'], asset)}`, `net ${signedEth(item['net_pnl_atto_eth'], asset)}`]
 	return [unknownBasis ? `Unknown cost basis (${paidIn} indexed payments)` : `${paidIn} paid in`, `${exactUnit(text(item['proceeds_atto_eth']) ?? '0', asset.decimals, asset.symbol)} received`, holdings, ...profit].join(' · ')
+}
+
+export const lpBalanceSummary = (balance: unknown, observedDelta: unknown, unit: string): string => {
+	const amount = text(balance)
+	if (amount !== undefined) return exactUnit(amount, 18, unit)
+	const delta = text(observedDelta)
+	return delta === undefined ? 'LP balance unavailable' : `LP balance unavailable · ${exactUnit(delta, 18, unit)} observed change`
 }
 
 /** One share-token position: outcome shares in the collateral token's precision, raw units when its metadata is unsampled. */
@@ -102,7 +114,9 @@ export const sharePositionSummary = (position: JsonRecord): string => {
 /** @internal Exported for presentation unit tests. */
 export const tradingPnlHoldings = (item: JsonRecord): string => {
 	const asset = collateralUnit(item)
-	const holdings = `${exactUnit(text(item['invalid_atto_shares']) ?? '0', asset.decimals, 'INVALID')} · ${exactUnit(text(item['yes_atto_shares']) ?? '0', asset.decimals, 'YES')} · ${exactUnit(text(item['no_atto_shares']) ?? '0', asset.decimals, 'NO')} · ${exactUnit(text(item['lp_tokens']) ?? '0', 18, 'LP tokens')}`
+	const lpPositions = operationRecords(item['lp_token_positions'])
+	const lpSummary = lpPositions.length > 1 ? `LP tokens across ${lpPositions.length} pairs` : lpBalanceSummary(item['lp_tokens'], item['observed_lp_delta'], 'LP tokens')
+	const holdings = `${exactUnit(text(item['invalid_atto_shares']) ?? '0', asset.decimals, 'INVALID')} · ${exactUnit(text(item['yes_atto_shares']) ?? '0', asset.decimals, 'YES')} · ${exactUnit(text(item['no_atto_shares']) ?? '0', asset.decimals, 'NO')} · ${lpSummary}`
 	return item['open'] === true ? `Open · ${holdings}` : 'Closed position'
 }
 

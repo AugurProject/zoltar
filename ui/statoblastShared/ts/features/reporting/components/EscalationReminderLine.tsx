@@ -19,6 +19,7 @@ export function EscalationReminderLine({ details }: { details: ActiveReportingDe
 		else if (previousDeadline <= LAST_CALENDAR_DEADLINE && details.escalationEndTime !== previousDeadline) setMovedDeadline(details.escalationEndTime)
 	}, [details.escalationEndTime, previousDeadline, open])
 	if (!open) return undefined
+	const alarmInFuture = details.currentTime + 75n * 60n < details.escalationEndTime
 	const deadline = formatReportingDeadline(details.escalationEndTime, details.currentTime)
 	const download = () => {
 		const calendar = buildEscalationReminder({ questionLedgerAddress: details.questionLedgerAddress, escalationEndTime: details.escalationEndTime, generatedAt: BigInt(Math.floor(Date.now() / 1000)), questionTitle: details.marketDetails.title, status: getViewerStatusSentence(details), pageUrl: location.href })
@@ -37,9 +38,11 @@ export function EscalationReminderLine({ details }: { details: ActiveReportingDe
 					detail={copy.deadlineMoved(formatReportingDeadline(movedDeadline, details.currentTime))}
 					actions={
 						<>
-							<button className='quiet' type='button' onClick={download}>
-								{copy.updateReminder}
-							</button>
+							{alarmInFuture ? (
+								<button className='quiet' type='button' onClick={download}>
+									{copy.updateReminder}
+								</button>
+							) : undefined}
 							<button className='quiet' type='button' aria-label={copy.dismissDeadlineNotice} onClick={() => setMovedDeadline(undefined)}>
 								{copy.dismissReminderUpdate}
 							</button>
@@ -51,9 +54,11 @@ export function EscalationReminderLine({ details }: { details: ActiveReportingDe
 				<UserMessage
 					detail={copy.checkBack(deadline)}
 					actions={
-						<button className='quiet' type='button' onClick={download}>
-							{copy.addReminder}
-						</button>
+						alarmInFuture ? (
+							<button className='quiet' type='button' onClick={download}>
+								{copy.addReminder}
+							</button>
+						) : undefined
 					}
 				/>
 			) : undefined}

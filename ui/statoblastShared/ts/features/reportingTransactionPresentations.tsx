@@ -60,6 +60,7 @@ export function createReportingWarningPresentation(result: ReportingActionResult
 }
 
 type OpenOracleTransactionContext = {
+	priceUnits?: { decimals: number; label: string } | undefined
 	openOracleAddress?: string | undefined
 	reportId?: string | undefined
 	token1Symbol?: string | undefined
@@ -104,6 +105,13 @@ export function createOpenOracleTransactionIntent(actionName: OpenOracleActionRe
 	})
 }
 
+function formatAcceptedPrice(price: bigint, units: OpenOracleTransactionContext['priceUnits']) {
+	const { decimals, label } = units ?? { decimals: 0, label: openOracleCopy.rawPriceUnits }
+	// Feed prices use an extra 1e18 scale over the two atomic token amounts.
+	const formatted = decimals < 0 ? (price * 10n ** BigInt(-decimals)).toString() : formatUnits(price, decimals)
+	return <span className='open-oracle-receipt-price'>{`${formatted} ${label}`}</span>
+}
+
 export function createOpenOracleSuccessPresentation(result: OpenOracleActionResult, context?: OpenOracleTransactionContext) {
 	if (result.priceSettlement?.status === 'unconfirmed') return buildPresentation({ hash: result.hash, rows: getOpenOracleTransactionRows(context), title: openOracleCopy.priceSettlementUnconfirmed, detail: openOracleCopy.priceSettlementUnconfirmedDetail, tone: 'warning' })
 	if (result.priceSettlement?.status === 'deferred')
@@ -122,11 +130,21 @@ export function createOpenOracleSuccessPresentation(result: OpenOracleActionResu
 			detail: openOracleCopy.formatPriceSettlementRejection(result.priceSettlement.reason),
 			tone: 'warning',
 		})
+	let rows = getOpenOracleTransactionRows(context)
+	let detail: string | undefined
+	if (result.priceSettlement?.status === 'accepted') {
+		const { candidate } = result.priceSettlement
+		detail = openOracleCopy.poolPriceAccepted
+		if (candidate !== undefined) {
+			detail = candidate.canonicalUpdated ? openOracleCopy.poolPriceObservationUpdated : openOracleCopy.poolPriceObservationRetained
+			rows = [...(rows ?? []), { label: openOracleCopy.candidatePrice, value: formatAcceptedPrice(candidate.candidatePrice, context?.priceUnits) }, { label: openOracleCopy.canonicalPrice, value: formatAcceptedPrice(candidate.canonicalPrice, context?.priceUnits) }]
+		}
+	}
 	return buildPresentation({
 		hash: result.hash,
-		rows: getOpenOracleTransactionRows(context),
+		rows,
 		title: getOpenOracleSuccessPresentationTitle(result.action, context),
-		detail: result.priceSettlement?.status === 'accepted' ? openOracleCopy.poolPriceAccepted : undefined,
+		detail,
 		tone: 'success',
 	})
 }

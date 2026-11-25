@@ -2,28 +2,9 @@ import path from 'node:path'
 import { SQL } from 'bun'
 import { runtimeConfig } from './config.ts'
 import { actualSchemaLayout, expectedSchemaLayout, schemaLayoutDifferences } from './schema-layout.ts'
-import {
-	assertSupportedPostgresVersion,
-	CURRENT_SCHEMA_VERSION,
-	ACCOUNTING_CLOCK_SCHEMA_VERSION,
-	BOUNDED_READ_SCHEMA_VERSION,
-	HISTORICAL_INTEGRITY_SCHEMA_VERSION,
-	INITIAL_MIGRATABLE_SCHEMA_VERSION,
-	INDEXER_OWNERSHIP_SCHEMA_VERSION,
-	QUESTION_SECONDS_SCHEMA_VERSION,
-	INVALIDATION_COUNTS_SCHEMA_VERSION,
-	COLLATERAL_REPAIR_AUCTIONS_SCHEMA_VERSION,
-	CURRENT_CONTRACT_EVENTS_SCHEMA_VERSION,
-	STALE_CONTRACT_VALUES_SCHEMA_VERSION,
-	pendingSchemaMigrations,
-	runSchemaTransaction,
-	type SupportedSchemaVersion,
-	schemaInitializationAction,
-	UNSUPPORTED_SCHEMA_MESSAGE,
-} from './schema-policy.ts'
-
-const assertSchemaLayout = async (connection: Awaited<ReturnType<SQL['reserve']>>, schema: string, version: SupportedSchemaVersion): Promise<void> => {
-	const differences = schemaLayoutDifferences(expectedSchemaLayout(schema, version), await actualSchemaLayout(connection))
+import { assertSupportedPostgresVersion, CURRENT_SCHEMA_VERSION, runSchemaTransaction, schemaInitializationAction, UNSUPPORTED_SCHEMA_MESSAGE } from './schema-policy.ts'
+const assertSchemaLayout = async (connection: Awaited<ReturnType<SQL['reserve']>>, schema: string): Promise<void> => {
+	const differences = schemaLayoutDifferences(expectedSchemaLayout(schema), await actualSchemaLayout(connection))
 	if (Object.keys(differences).length > 0) throw new Error(`${UNSUPPORTED_SCHEMA_MESSAGE} Differences: ${JSON.stringify(differences)}`)
 }
 
@@ -75,41 +56,7 @@ export const initializeSchema = async (sql: SQL): Promise<void> => {
 		const publicObjects = objects.flatMap((row: { object_name?: unknown }) => (typeof row.object_name === 'string' ? [row.object_name] : []))
 		const action = schemaInitializationAction(markerVersion, publicObjects)
 		if (action === 'current') {
-			await assertSchemaLayout(connection, schema, CURRENT_SCHEMA_VERSION)
-			return
-		}
-		if (action === 'migrate-from-1' || action === 'migrate-from-2' || action === 'migrate-from-3' || action === 'migrate-from-4' || action === 'migrate-from-5' || action === 'migrate-from-6' || action === 'migrate-from-7' || action === 'migrate-from-8' || action === 'migrate-from-9' || action === 'migrate-from-10') {
-			const migrationVersions: Record<typeof action, SupportedSchemaVersion> = {
-				'migrate-from-1': INITIAL_MIGRATABLE_SCHEMA_VERSION,
-				'migrate-from-2': HISTORICAL_INTEGRITY_SCHEMA_VERSION,
-				'migrate-from-3': INDEXER_OWNERSHIP_SCHEMA_VERSION,
-				'migrate-from-4': QUESTION_SECONDS_SCHEMA_VERSION,
-				'migrate-from-5': INVALIDATION_COUNTS_SCHEMA_VERSION,
-				'migrate-from-6': COLLATERAL_REPAIR_AUCTIONS_SCHEMA_VERSION,
-				'migrate-from-7': CURRENT_CONTRACT_EVENTS_SCHEMA_VERSION,
-				'migrate-from-8': STALE_CONTRACT_VALUES_SCHEMA_VERSION,
-				'migrate-from-9': BOUNDED_READ_SCHEMA_VERSION,
-				'migrate-from-10': ACCOUNTING_CLOCK_SCHEMA_VERSION,
-			}
-			const startingVersion = migrationVersions[action]
-			await assertSchemaLayout(connection, schema, startingVersion)
-			const migrations = await Promise.all(pendingSchemaMigrations(startingVersion).map(async migration => ({ ...migration, sql: await Bun.file(path.resolve(import.meta.dir, '../migrations', migration.file)).text() })))
-			await runSchemaTransaction(
-				async () => await connection.unsafe('BEGIN'),
-				async () => await connection.unsafe('COMMIT'),
-				async () => await connection.unsafe('ROLLBACK'),
-				async () => {
-					for (const migration of migrations) await connection.unsafe(migration.sql)
-					await assertSchemaLayout(connection, schema, CURRENT_SCHEMA_VERSION)
-					for (const migration of migrations)
-						await connection`
-							INSERT INTO public.augurscan_schema_migrations (schema_version, description)
-							VALUES (${migration.version}, ${migration.description})
-							ON CONFLICT (schema_version) DO NOTHING
-						`
-					await connection`UPDATE public.augurscan_schema SET schema_version = ${CURRENT_SCHEMA_VERSION} WHERE singleton`
-				},
-			)
+			await assertSchemaLayout(connection, schema)
 			return
 		}
 
@@ -134,7 +81,7 @@ export const initializeSchema = async (sql: SQL): Promise<void> => {
 					INSERT INTO public.augurscan_schema_migrations (schema_version, description)
 					VALUES (${CURRENT_SCHEMA_VERSION}, ${'Current schema initialization'})
 				`
-				await assertSchemaLayout(connection, schema, CURRENT_SCHEMA_VERSION)
+				await assertSchemaLayout(connection, schema)
 			},
 		)
 	} finally {

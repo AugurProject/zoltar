@@ -27,7 +27,7 @@ export function useCollateralFunding(market: LiveMarket, required: bigint | unde
 		market: market.pool,
 		walletClient: context?.walletClient,
 		externallyLocked: context?.externallyLocked ?? false,
-		onWorkflowLockChange: locked => context?.onWorkflowLockChange(locked),
+		onWorkflowLockChange: (locked, key) => context?.onWorkflowLockChange(locked, key),
 		onKnownReceipt: () => context?.onKnownReceipt(),
 		failureFallback: copy.failed,
 	})
@@ -69,8 +69,10 @@ export function useCollateralFunding(market: LiveMarket, required: bigint | unde
 		reason,
 		error: transaction.error ?? selected?.error,
 		readError: selected?.error,
+		receiptWarning: transaction.receiptWarning,
+		transactionHash: transaction.transactionHash,
 		retry: () => setVersion(value => value + 1),
-		pending: transaction.state === 'preparing' || transaction.state === 'submitting' || transaction.state === 'pending',
+		pending: transaction.receiptWarning !== undefined || transaction.state === 'preparing' || transaction.state === 'submitting' || transaction.state === 'pending',
 		approve: async (amount: bigint) => {
 			if (context?.account === undefined || context.walletClient === undefined || !applicable || !enabled || transaction.workflowLocked) return
 			const capturedKey = key

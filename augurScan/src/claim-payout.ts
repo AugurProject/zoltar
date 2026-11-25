@@ -1,3 +1,5 @@
+export const claimPayoutDestination = 'Payouts transfer REP to the depositor’s wallet on a successful claim.'
+
 // Mirrors EscalationGameProofVerifier.computeAllocatedWinningWithdrawal. Preserve
 // each Solidity division: combining them changes one-atto rounding and haircuts.
 export const allocatedWinningPayout = (input: { principal: bigint; rewardAmount: bigint; rewardCumulative: bigint; binding: bigint; winningBalance: bigint; forkThreshold: bigint; nonDecisionThreshold: bigint }) => {

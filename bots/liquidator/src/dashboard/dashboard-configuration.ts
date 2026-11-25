@@ -56,7 +56,7 @@ export function createConfigurationLoader({ state, elements, controls, header, v
 		readRpcUrl.value = connectivity?.readRpcUrl ?? ''
 		publicRpcUrls.value = connectivity?.publicRpcUrls.join('\n') ?? ''
 		quorumRpcUrls.value = connectivity?.quorumRpcUrls.join('\n') ?? ''
-		rpcQuorum.value = connectivity?.rpcQuorum?.toString() ?? '1'
+		rpcQuorum.value = (connectivity?.rpcQuorum ?? configuration.effectiveRpcQuorum ?? 1).toString()
 	}
 
 	/**

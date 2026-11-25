@@ -222,7 +222,9 @@ const expectSnapshotsAndIndexedPlans = async ({ database, operationsChainId, ora
 	expect(plans).toHaveLength(7)
 	for (const plan of plans) expect(JSON.stringify(plan)).toContain('Plan')
 	const paginationPlans = await database.sql.begin(async transaction => {
+		// Exercise ordered index pagination even when this small fixture fits in a single bitmap page.
 		await transaction.unsafe('SET LOCAL enable_seqscan = off')
+		await transaction.unsafe('SET LOCAL enable_bitmapscan = off')
 		return {
 			balance: await transaction`EXPLAIN (FORMAT JSON) SELECT * FROM address_balance_observations
 						WHERE chain_id = ${operationsChainId} ORDER BY observed_at DESC, id DESC LIMIT 100`,
@@ -330,6 +332,7 @@ postgresTest(
 			await expectUniqueEscalationCollections(context)
 			await expectManifestResetRetention(context)
 		} finally {
+			await database.sql.unsafe('TRUNCATE TABLE networks CASCADE')
 			await database.close()
 		}
 	},

@@ -2,6 +2,8 @@ import { expect, mock, test } from 'bun:test'
 import { Window } from 'happy-dom'
 import type { JsonRecord, OperationsResponse } from '../../browser/api-validation.ts'
 import { createOperationsComponents, renderOperationsTimelineFilters } from '../../browser/operations-components.ts'
+import { escalationPayoutSummary } from '../../browser/escalation-payouts.ts'
+import { timelineEntityTypeLabel } from '../../browser/history-evidence.ts'
 import { createOperationsData } from '../../browser/operations-data.ts'
 import { createOperationsLoader } from '../../browser/operations-loader.ts'
 import { renderOperationsOverview } from '../../browser/operations-overview.ts'
@@ -165,6 +167,32 @@ test('AMM LP transfer and approval evidence shows the ERC-20 value argument', as
 		// Anchor the whole summary so a wrong value such as 11 or 0.1 LP shares cannot satisfy the assertion.
 		expect(rows.map(row => row.textContent)).toEqual([expect.stringMatching(/^Transfer2\.5 LP shares · 0x111111…111111 → 0x222222…222222/), expect.stringMatching(/^Approval1 LP shares · 0x111111…111111 approved 0x222222…222222/)])
 	})
+})
+
+test('report detail distinguishes observed untracked rounds and their comparison labels', async () => {
+	await withOperationsPage('http://localhost/operations/report/0x01/7?chainId=1', () => {
+		const { routeView } = createRouteView()
+		const rows = routeView.detailEvidenceRowsFor('report', [
+			{ event_name: 'ReportDisputed', round_number: '0', observed_round_number: '3', comparison: { state: 'compared', previousRoundNumber: '0', previousObservedRoundNumber: '2' } },
+			{ event_name: 'ReportSubmitted', round_number: '1', observed_round_number: null, comparison: { state: 'initial' } },
+			{ event_name: 'ReportDisputed', round_number: '4', comparison: { state: 'unavailable' } },
+		])
+		expect(rows[0]?.textContent).toContain('ReportDisputed · observed round 3')
+		expect(rows[0]?.textContent).toContain('Changes from observed round 2')
+		expect(rows[1]?.textContent).toContain('ReportSubmitted · round 1')
+		expect(rows[2]?.textContent).toContain('Previous round unavailable')
+		expect(rows[2]?.textContent).not.toContain('No report fields changed.')
+	})
+})
+
+test('shows the escalation depositor’s wallet as the recipient of payable REP', () => {
+	expect(escalationPayoutSummary({ payout_atto_rep: '142000000000000000000', burn_atto_rep: '2000000000000000000' })).toContain('142 REP payable to the depositor’s wallet · 2 REP protocol burn allocation')
+	expect(escalationPayoutSummary({ status: 'pending' })).not.toContain('payable')
+})
+
+test('labels the OpenOracle approval entity separately from a price coordinator', () => {
+	expect(timelineEntityTypeLabel('open-oracle')).toBe('OpenOracle')
+	expect(timelineEntityTypeLabel('price-coordinator')).toBe('Price coordinator')
 })
 
 test('the render signature ignores per-block freshness, cursors, and the detail tab but not displayed evidence', () => {

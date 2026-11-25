@@ -1,9 +1,10 @@
+import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
 import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { describe, expect, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, type Address, type Hash, type WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { LiveTrading as ProductionLiveTrading } from '../../features/LiveTrading.js'
 import { liveLiquidityServices } from '../../features/LiveLiquidityControls.js'
@@ -89,7 +90,7 @@ describe('live workflow safety boundary', () => {
 		const recordWalletSummary = (summary: WalletSummaryState) => walletSummaries.push(summary)
 		const walletListeners = new Map<string, (...args: unknown[]) => void>()
 		const injectedProvider = {
-			request: async () => undefined,
+			request: async ({ method }: { method: string }) => (method === 'eth_accounts' ? [connectedAccount] : undefined),
 			on: (eventName: string, listener: (...args: unknown[]) => void) => walletListeners.set(eventName, listener),
 			removeListener: (eventName: string) => walletListeners.delete(eventName),
 		}
@@ -117,6 +118,7 @@ describe('live workflow safety boundary', () => {
 		let discoveredLoadError: string | undefined
 		let rejectDiscovery = false
 		const market = etherScaleMarketFixture({
+			collateral: { token: getActiveNetworkProfile().wethAddress, symbol: 'ETH', decimals: 18, native: true },
 			pool,
 			shareToken,
 			title: 'Rendered workflow market',
@@ -272,7 +274,7 @@ describe('live workflow safety boundary', () => {
 		// Keep the wallet-uncertainty exercise outside the bounded submission cutoff.
 		discoveredEndTime = now + 600n
 
-		const unmountedConnectionChainRead = await startWalletChainRead(() => buttonByLabel('Connect wallet').click())
+		const unmountedConnectionChainRead = await startWalletChainRead(() => buttonByLabel('Change wallet').click())
 		const summariesBeforeUnmountedConnectionResolution = walletSummaries.length
 		await rendered.cleanup()
 		cleanupRendered = undefined
@@ -340,7 +342,7 @@ describe('live workflow safety boundary', () => {
 		expect(discoveredUniverseIds).toContain(2n)
 		expect(balancedPools).toContain(childPool)
 		expect(document.body.textContent).toContain(childPool)
-		connectedAccount = `0x${'9b'.repeat(20)}` as Address
+		connectedAccount = getAddress(`0x${'9b'.repeat(20)}`)
 		const universeTwoDiscoveryCount = discoveredUniverseIds.length
 		await act(async () => {
 			await walletListeners.get('accountsChanged')?.([connectedAccount])
@@ -356,7 +358,7 @@ describe('live workflow safety boundary', () => {
 		deferChildDiscovery = false
 		await show('portfolio')
 		await flush()
-		connectedAccount = `0x${'9c'.repeat(20)}` as Address
+		connectedAccount = getAddress(`0x${'9c'.repeat(20)}`)
 		const discoveriesBeforeMidEventUniverseChange = discoveredUniverseIds.length
 		const midEventChainRead = await startWalletChainRead(() => walletListeners.get('accountsChanged')?.([connectedAccount]))
 		await show('portfolio', { selectedUniverseId: '2' })
@@ -376,7 +378,7 @@ describe('live workflow safety boundary', () => {
 		await rerouteForRefresh('portfolio')
 		await show(marketRoute)
 		await flush()
-		connectedAccount = `0x${'9a'.repeat(20)}` as Address
+		connectedAccount = getAddress(`0x${'9a'.repeat(20)}`)
 		await act(async () => {
 			await walletListeners.get('accountsChanged')?.([connectedAccount])
 		})
@@ -579,7 +581,7 @@ describe('live workflow safety boundary', () => {
 		// A universe without pools shows the route-level empty state once; the portfolio list does not add a second one.
 		await show('portfolio', { selectedUniverseId: '3' })
 		await settleAsyncWorkflow()
-		await waitForDom(() => document.body.textContent?.includes('No favorite markets in this universe') === true, 'empty universe portfolio')
+		await waitForDom(() => document.body.textContent?.includes('No positions') === true, 'empty universe portfolio')
 		expect(document.querySelectorAll('.empty-state')).toHaveLength(1)
 		expect(document.querySelector('.portfolio-positions')).toBeNull()
 	})

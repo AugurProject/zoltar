@@ -94,7 +94,7 @@ browserTest(
 		}
 		activities[5] = { at: '2026-09-17T13:35:00.000Z', label: 'Confirmed: Initialize REP/WETH pool', status: 'confirmed', txHash: activityHash }
 		const dashboard = startDashboardServer(0, {
-			getConfiguration: () => ({ network: { explorerUrl } }),
+			getConfiguration: () => ({ settings: { network: { explorerUrl }, paused: true, runtime: { execute: false } } }),
 			getState: () => state({ activities }),
 			...inertDashboardControls,
 		})
