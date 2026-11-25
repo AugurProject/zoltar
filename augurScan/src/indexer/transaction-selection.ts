@@ -1,5 +1,10 @@
 import { requestRpc, type PublicClient } from '../ethereum.ts'
 
+// Shared destinations can carry arbitrary ecosystem-external traffic even when a protocol transaction uses them.
+const sharedDestinations = new Set(['weth', 'usdc', 'multicall3', 'proxyDeployer', 'delegationManager', 'uniswapV2Factory', 'uniswapV3Factory', 'uniswapV4PoolManager'])
+
+export const isDirectCallDestination = (kind: string) => !sharedDestinations.has(kind)
+
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
 
 export const transactionCallTrace = async (client: PublicClient, hash: string): Promise<Record<string, unknown>> => {

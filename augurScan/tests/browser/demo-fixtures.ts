@@ -140,6 +140,18 @@ export const demoTradingPnl = (market: string) => ({
 	items: [
 		demoPnlPosition(market, 'Will the 2030 global mean temperature anomaly exceed 1.5°C?', ['1800000000000000000', '4600000000000000000', '0'], ['5000000000000000000', '3100000000000000000', '1650000000000000000', '0', '-250000000000000000', '-250000000000000000']),
 		demoPnlPosition('0xa7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7', 'Will the protocol meet its launch reliability target?', ['0', '0', '0'], ['2000000000000000000', '2640000000000000000', '0', '640000000000000000', '0', '640000000000000000']),
+		{
+			market_address: '0x7474747474747474747474747474747474747474',
+			question_title: 'Will the settlement proposal pass?',
+			collateral: { symbol: 'USDC', decimals: 6 },
+			cost_basis_status: 'unknown',
+			known_cost_atto_eth: '0',
+			proceeds_atto_eth: '0',
+			holdings_value_atto_eth: '2250000',
+			yes_atto_shares: '3000000',
+			open: true,
+			valuation: { status: 'available', method: 'winning-share-settlement', winning_outcome: '1', partial: false },
+		},
 	],
 	truncated: false,
 	basis: TRADING_PNL_BASIS,

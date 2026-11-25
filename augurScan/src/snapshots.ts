@@ -1,4 +1,5 @@
 import { readCollateralMetadata } from './collateral-metadata.ts'
+import { isPlainRecord } from '@zoltar/core-shared/validation/guards'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { abiForKind } from './abi-catalog.ts'
 import { capitalLedgerSnapshot, capitalOwnerSnapshot, capitalPositionSnapshot } from './capital-snapshots.ts'
@@ -61,6 +62,39 @@ const failureReason = (error: unknown): string => {
 	return raw.replace(/\s+/gu, ' ').trim().slice(0, 500) || 'Tagged contract read failed'
 }
 
+// Sample the source book used by SecurityPoolSettlementBook._quoteRedemption. A matured question with no
+// frozen book yet reserves its full-question cash first. In either case the wallet quote then uses two floors.
+const settledClaimSnapshot = async (pool: Address, securityPool: Address, shareSupply: string, fullQuote: string, read: StateRead) => {
+	const call = (target: Address, kind: SystemContractKind, name: string, args?: readonly AbiValue[]) => read(target, snapshotAbi(kind), name, args)
+	const forker = getAddress(String(await read(pool, poolAbi, 'questionForker')))
+	const outcome = exact(await call(forker, 'questionForker', 'getQuestionOutcome', [pool]), 'getQuestionOutcome')
+	if (!['0', '1', '2'].includes(outcome)) return undefined
+	const [rawSettlement, rawUniverse, rawQuestion] = await Promise.all([call(securityPool, 'securityPool', 'settlement'), read(pool, poolAbi, 'universeId'), read(pool, poolAbi, 'questionId')])
+	const settlement = getAddress(String(rawSettlement))
+	const universe = BigInt(exact(rawUniverse, 'universeId'))
+	const question = BigInt(exact(rawQuestion, 'questionId'))
+	const [rawBook, rawId] = await Promise.all([call(settlement, 'securityPoolSettlement', 'ledger'), call(settlement, 'securityPoolSettlement', 'bookIds', [universe])])
+	const book = getAddress(String(rawBook))
+	const bookId = BigInt(exact(rawId, 'bookIds'))
+	const [rawState, rawFrozen] = tuple(await call(book, 'securityPoolSettlementBook', 'scaledQuestion', [bookId, question]), 2, 'scaledQuestion')
+	if (!isPlainRecord(rawState)) throw new Error('scaledQuestion returned an invalid question')
+	const questionUnits = exact(rawState['units'], 'question.units')
+	const supply = exact(rawState['outcomeSupplyAttoShares'], 'question.supply')
+	if (supply !== shareSupply) return undefined
+	const frozen = BigInt(exact(rawFrozen, 'scaledQuestion.frozenBookId'))
+	if (frozen !== 0n) {
+		const [cash, units, source] = tuple(await call(book, 'securityPoolSettlementBook', 'frozenBooks', [frozen]), 4, 'frozenBooks')
+		if (source !== bookId) return undefined
+		return { outcome, supply, questionUnits, bookUnits: exact(units, 'frozenBook.units'), bookCash: exact(cash, 'frozenBook.cash') }
+	}
+	const [rawBookState, rawClock] = await Promise.all([call(book, 'securityPoolSettlementBook', 'books', [bookId]), call(securityPool, 'securityPool', 'securityPoolTime', [universe])])
+	const bookState = tuple(rawBookState, 16, 'books')
+	const clock = BigInt(exact(rawClock, 'securityPoolTime'))
+	const deadline = BigInt(exact(rawState['finalAfter'], 'question.finalAfter'))
+	if (bookState[7] !== false || deadline === 0n || deadline >= clock || BigInt(exact(bookState[12], 'book.minimumFinalAfter')) >= clock) return undefined
+	return { outcome, supply, questionUnits, bookUnits: questionUnits, bookCash: fullQuote }
+}
+
 const poolSnapshot = async (target: StateSnapshotTarget, read: StateRead): Promise<Readonly<Record<string, unknown>>> => {
 	const address = target.address
 	const values = await Promise.all([
@@ -88,6 +122,14 @@ const poolSnapshot = async (target: StateSnapshotTarget, read: StateRead): Promi
 	try {
 		const factory = getAddress(String(await read(address, poolAbi, 'securityPoolFactory')))
 		const securityPool = getAddress(String(await read(factory, snapshotAbi('securityPoolFactory'), 'securityPoolOf', [address])))
+		if (values[3] === true && result['systemState'] === '0') {
+			try {
+				const claim = await settledClaimSnapshot(address, securityPool, supply, settlement, read)
+				if (claim !== undefined) result['settlementClaim'] = claim
+			} catch (error) {
+				result['settlementClaimError'] = errorMessage(error)
+			}
+		}
 		const token = getAddress(String(await read(securityPool, snapshotAbi('securityPool'), 'collateralToken')))
 		try {
 			const metadata = await readCollateralMetadata(token, read)

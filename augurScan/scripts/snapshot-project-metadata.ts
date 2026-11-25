@@ -1,3 +1,4 @@
+import { executorArtifact } from '../../bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts'
 import { mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { projectDeploymentIds, projectManifests } from './project-manifests.ts'
@@ -76,6 +77,8 @@ for (const [source, name] of [
 	contracts[name] = { source, abi: canonicalizeAbi(artifact.abi) }
 }
 
+contracts['OpenOracleArbitrageExecutor'] = { source: 'bots/open-oracle-arbitrager/contracts/OpenOracleArbitrageExecutor.sol', abi: canonicalizeAbi(executorArtifact.abi) }
+
 const payload = {
 	sourceHash: contractSourceHash(sources),
 	contracts,
@@ -86,6 +89,6 @@ const mappings = systemContractMappings(Object.keys(contracts), await projectDep
 const manifests = await projectManifests(projectRoot, mappings.deploymentKinds)
 await Bun.write(outputPath, `${JSON.stringify(payload, undefined, 2)}\n`)
 await Bun.write(path.join(configOutputRoot, 'system-contracts.generated.ts'), serializeSystemContracts(mappings))
-await Promise.all((['mainnet', 'sepolia'] as const).map(async networkId => await Bun.write(path.join(manifestsRoot, `${networkId}.json`), manifests[networkId])))
+await Promise.all(Object.entries(manifests).map(async ([id, manifest]) => await Bun.write(path.join(manifestsRoot, `${id}.json`), manifest)))
 
 console.log(`Wrote ${Object.keys(contracts).length} ABIs and refreshed mainnet/Sepolia manifests`)

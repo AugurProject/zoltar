@@ -107,3 +107,37 @@ postgresTest('the universe catalog counts only universes it can list and names t
 		])
 	})
 })
+
+postgresTest('direct native OpenOracle custody pages identify the funding wallet, ledger owner and payout wallet', async () => {
+	await withExplorerTables(['contracts', 'actions', 'transactions'], async connection => {
+		await connection`INSERT INTO contracts (chain_id, address, label, kind, provenance) VALUES (${chainId}, ${oracle}, 'Oracle', 'openOracle', 'manifest')`
+		const sender = game
+		const owner = auction
+		const recipient = `0x${'4'.repeat(40)}`
+		const native = `0x${'0'.repeat(40)}`
+		const add = async (number: number, from: string, name: string, args: Record<string, string>, value: string, receipt: Record<string, unknown>) => {
+			await connection`INSERT INTO transactions (chain_id, block_hash, block_number, transaction_index, hash, from_address, to_address, value, input, status, receipt)
+				VALUES (${chainId}, ${blockHash(number)}, ${number}, 0, ${txHash(number)}, ${from}, ${oracle}, ${value}, '0x', 'success', ${JSON.stringify(receipt)}::text::jsonb)`
+			await connection`INSERT INTO actions (chain_id, block_hash, tx_hash, function_name, arguments, decode_status, summary)
+				VALUES (${chainId}, ${blockHash(number)}, ${txHash(number)}, ${name}, ${JSON.stringify(args)}::text::jsonb, 'decoded', ${name})`
+		}
+		await add(1, sender, 'deposit', { token: native, amount: '17', beneficiary: owner }, '17', {})
+		await add(2, owner, 'withdrawTo', { tokenToGet: native, amount: '100', to: recipient }, '0', { callTraceStatus: 'available', callTrace: { output: '0x' + '11'.padStart(64, '0') } })
+		await add(3, owner, 'withdraw', { tokenToGet: native, amount: '100' }, '0', {})
+		await add(4, owner, 'deposit', { token: oracle, amount: '17', beneficiary: owner }, '0', {})
+		await add(5, owner, 'withdraw', { tokenToGet: native, amount: '3' }, '0', { selectionSource: 'protocol-call' })
+		await connection`UPDATE transactions SET status = 'reverted' WHERE hash = ${txHash(5)}`
+		await add(6, owner, 'withdraw', { tokenToGet: native, amount: '8' }, '0', {})
+		await connection`UPDATE transactions SET canonical = false WHERE hash = ${txHash(6)}`
+		const path = (address: string) => `/api/v1/address-open-oracle-custody?chainId=${chainId}&address=${address}`
+		expect(await (await request(connection, path(sender))).json()).toMatchObject({ total: 1, items: [{ function_name: 'deposit', owner_address: owner, wallet_address: sender, amount_wei: '17' }] })
+		expect(await (await request(connection, path(recipient))).json()).toMatchObject({ total: 1, items: [{ function_name: 'withdrawTo', owner_address: owner, wallet_address: recipient, requested_wei: '100', amount_wei: '17' }] })
+		const page: unknown = await (await request(connection, path(owner) + '&limit=1')).json()
+		const cursor = /"nextCursor":"([^"]+)"/u.exec(JSON.stringify(page) ?? '')?.[1]
+		if (cursor === undefined) throw new Error('Expected a custody history cursor')
+		expect(page).toMatchObject({ total: 3, items: [{ function_name: 'withdraw', wallet_address: owner, requested_wei: '100', amount_wei: null, amount_basis: 'unavailable' }], nextCursor: expect.any(String) })
+		const next = await request(connection, path(owner) + '&limit=1&cursor=' + encodeURIComponent(cursor))
+		expect(await next.json()).toMatchObject({ total: 3, items: [{ function_name: 'withdrawTo' }] })
+		expect((await request(connection, path(sender) + '&cursor=' + encodeURIComponent(cursor))).status).toBe(400)
+	})
+})

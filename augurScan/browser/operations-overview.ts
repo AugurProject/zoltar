@@ -295,7 +295,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 			'integrity',
 			() => [
 				operationsPanel('Call trace coverage', [operationRow('Selected transaction traces', `${String(coverage['traced_transactions'] ?? 'Unavailable')} traced / ${String(coverage['selected_transactions'] ?? 'Unavailable')} selected transactions`, undefined, undefined)], '', {
-					label: 'Event-first indexing excludes failed and eventless calls. Optional traces enrich selected transactions; counts include retained evidence.',
+					label: 'Direct-call mode also captures failed and eventless calls to tracked protocol contracts. Trace counts cover selected transactions.',
 				}),
 				operationsPanel(
 					'Recent reverted transactions',

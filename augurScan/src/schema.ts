@@ -5,6 +5,7 @@ import { actualSchemaLayout, expectedSchemaLayout, schemaLayoutDifferences } fro
 import {
 	assertSupportedPostgresVersion,
 	CURRENT_SCHEMA_VERSION,
+	ACCOUNTING_CLOCK_SCHEMA_VERSION,
 	BOUNDED_READ_SCHEMA_VERSION,
 	HISTORICAL_INTEGRITY_SCHEMA_VERSION,
 	INITIAL_MIGRATABLE_SCHEMA_VERSION,
@@ -77,7 +78,7 @@ export const initializeSchema = async (sql: SQL): Promise<void> => {
 			await assertSchemaLayout(connection, schema, CURRENT_SCHEMA_VERSION)
 			return
 		}
-		if (action === 'migrate-from-1' || action === 'migrate-from-2' || action === 'migrate-from-3' || action === 'migrate-from-4' || action === 'migrate-from-5' || action === 'migrate-from-6' || action === 'migrate-from-7' || action === 'migrate-from-8' || action === 'migrate-from-9') {
+		if (action === 'migrate-from-1' || action === 'migrate-from-2' || action === 'migrate-from-3' || action === 'migrate-from-4' || action === 'migrate-from-5' || action === 'migrate-from-6' || action === 'migrate-from-7' || action === 'migrate-from-8' || action === 'migrate-from-9' || action === 'migrate-from-10') {
 			const migrationVersions: Record<typeof action, SupportedSchemaVersion> = {
 				'migrate-from-1': INITIAL_MIGRATABLE_SCHEMA_VERSION,
 				'migrate-from-2': HISTORICAL_INTEGRITY_SCHEMA_VERSION,
@@ -88,6 +89,7 @@ export const initializeSchema = async (sql: SQL): Promise<void> => {
 				'migrate-from-7': CURRENT_CONTRACT_EVENTS_SCHEMA_VERSION,
 				'migrate-from-8': STALE_CONTRACT_VALUES_SCHEMA_VERSION,
 				'migrate-from-9': BOUNDED_READ_SCHEMA_VERSION,
+				'migrate-from-10': ACCOUNTING_CLOCK_SCHEMA_VERSION,
 			}
 			const startingVersion = migrationVersions[action]
 			await assertSchemaLayout(connection, schema, startingVersion)
