@@ -309,7 +309,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		require(repOut >= request.minRepOut, 'Minimum REP output');
 		if (repOut != 0) rep.safeTransfer(request.payoutRecipient, repOut);
 		if (collateralOut != 0) {
-			if (address(collateral) == address(request.questionLedger.openOraclePriceCoordinator().weth())) {
+			if (address(collateral) == address(request.questionLedger.priceFeed().weth())) {
 				callbackSettlement = address(collateral);
 				ethCallbackActive = true;
 				IWeth9(address(collateral)).withdraw(collateralOut);
@@ -424,7 +424,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		if (funding.mode == FundingMode.CollateralToken) {
 			Collateral.pull(collateral, msg.sender, address(this), spent);
 		} else {
-			require(address(collateral) == address(pool.openOraclePriceCoordinator().weth()), 'Use collateral token entry');
+			require(address(collateral) == address(pool.priceFeed().weth()), 'Use collateral token entry');
 			IWeth9(address(collateral)).deposit{value: spent}();
 		}
 		collateral.safeApprove(securityPool.services(), spent);

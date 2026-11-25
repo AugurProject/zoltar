@@ -116,12 +116,12 @@
 			"keywords": ["escalation", "dispute", "deposit", "non-decision"]
 		},
 		{
-			"path": "reference/contracts/openoraclepricecoordinator.html",
-			"title": "OpenOraclePriceCoordinator",
-			"summary": "Shared security pool price adapter reads, report requests, recovery, and exposure checkpoints.",
+			"path": "reference/contracts/sharedpoolpricefeed.html",
+			"title": "SharedPoolPriceFeed",
+			"summary": "Shared universe price reads, sponsor-funded report requests, recovery, and authenticated exposure checkpoints.",
 			"section": "reference",
 			"topic": "Contracts",
-			"keywords": ["OpenOracle", "price", "coordinator", "shared feed"]
+			"keywords": ["OpenOracle", "price", "shared feed"]
 		},
 		{
 			"path": "reference/contracts/sharetoken.html",

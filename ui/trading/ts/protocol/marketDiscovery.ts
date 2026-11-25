@@ -1,6 +1,6 @@
 import { readOperationClient, runReadOperation } from '@zoltar/ui-core-shared/lib/readOperation.js'
 import { getAddress, zeroAddress, type Address, type Hash, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_QuestionLedger_QuestionLedger, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_QuestionLedger_QuestionLedger, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { DeploymentConfiguration } from './config.js'
 import { shareTokenAbi } from './authorization.js'
@@ -62,9 +62,9 @@ async function loadCanonicalPoolDeployment(client: PublicClient, configuration: 
 	const [questionId, statoblastSecurityMultiplierBps, manager] = await Promise.all([
 		client.readContract({ abi: poolAbi, address: pool, functionName: 'questionId' }),
 		client.readContract({ abi: poolAbi, address: pool, functionName: 'statoblastSecurityMultiplierBps' }),
-		client.readContract({ abi: poolAbi, address: pool, functionName: 'openOraclePriceCoordinator' }),
+		client.readContract({ abi: poolAbi, address: pool, functionName: 'priceFeed' }),
 	])
-	const initialReportPriorityFeeAttoEthPerGas = await client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: getAddress(manager), functionName: 'initialReportPriorityFeeAttoEthPerGas' })
+	const initialReportPriorityFeeAttoEthPerGas = await client.readContract({ abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, address: getAddress(manager), functionName: 'initialReportPriorityFeeAttoEthPerGas' })
 	return { questionLedger: pool, shareToken: getAddress(shareToken), universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas }
 }
 

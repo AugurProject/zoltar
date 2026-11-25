@@ -149,7 +149,6 @@ export type CoordinatorReportReplay = {
 }
 
 export type CoordinatorReplay = {
-	questionLedger?: Address
 	lastPrice: bigint
 	lastSettlementTimestamp: bigint
 	pendingReportId: bigint
@@ -648,7 +647,7 @@ export function reducePoolFactoryEvent(state: ReplayState, log: ReplayLog) {
 		parent,
 		universeId: requireBigInt(log.args, 'universeId'),
 		questionId: requireBigInt(log.args, 'questionId'),
-		coordinator: requireAddress(log.args, 'openOraclePriceCoordinator'),
+		coordinator: requireAddress(log.args, 'priceFeed'),
 		shareToken: requireAddress(log.args, 'shareToken'),
 		statoblastSecurityMultiplierBps: requireBigInt(log.args, 'statoblastSecurityMultiplierBps'),
 		initialReportPriorityFeeAttoEthPerGas: requireBigInt(log.args, 'initialReportPriorityFeeAttoEthPerGas'),
@@ -1080,7 +1079,7 @@ export function reduceAuctionEvent(state: ReplayState, log: ReplayLog) {
 }
 
 export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
-	const coordinatorEventNames = new Set(['QuestionLedgerSet', 'PriceRequested', 'PriceReported', 'PriceReportRejected', 'PendingReportRecovered'])
+	const coordinatorEventNames = new Set(['PriceRequested', 'PriceReported', 'PriceReportRejected', 'PendingReportRecovered'])
 	if (!coordinatorEventNames.has(log.eventName)) return
 	let coordinator = state.coordinators.get(log.emitter)
 	if (coordinator === undefined) {
@@ -1092,10 +1091,6 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 			reports: new Map(),
 		}
 		state.coordinators.set(log.emitter, coordinator)
-	}
-	if (log.eventName === 'QuestionLedgerSet') {
-		coordinator.questionLedger = requireAddress(log.args, 'questionLedger')
-		return
 	}
 	if (log.eventName === 'PriceRequested') {
 		const reportId = requireBigInt(log.args, 'reportId')
@@ -1216,7 +1211,7 @@ export function replayZoltarEvents(logs: readonly ReplayLog[], orphanedBlockHash
 			reducePoolFactoryEvent(state, log)
 			pools.add(requireAddress(log.args, 'questionLedger'))
 			shareTokens.add(requireAddress(log.args, 'shareToken'))
-			coordinators.add(requireAddress(log.args, 'openOraclePriceCoordinator'))
+			coordinators.add(requireAddress(log.args, 'priceFeed'))
 		}
 		for (const log of orderedLogs) {
 			if (log.eventName !== 'EscalationGameSet' || !pools.has(getAddress(log.emitter))) continue

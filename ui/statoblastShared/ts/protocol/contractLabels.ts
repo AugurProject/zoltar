@@ -1,5 +1,5 @@
 import {
-	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
+	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed,
 	statoblast_QuestionForker_QuestionForker,
 	statoblast_QuestionLedger_QuestionLedger,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
@@ -9,7 +9,7 @@ import {
 import { installAppContractLabelResolver } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 
 const CONTRACT_LABEL_BY_ABI = new Map<readonly unknown[], string>([
-	[statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, 'OpenOraclePriceCoordinator'],
+	[statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, 'SharedPoolPriceFeed'],
 	[statoblast_QuestionForker_QuestionForker.abi, 'QuestionForker'],
 	[statoblast_QuestionLedger_QuestionLedger.abi, 'QuestionLedger'],
 	[statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 'SecurityPoolFactory'],

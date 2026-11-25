@@ -34,7 +34,7 @@
 					<tbody>
 						<tr>
 							<td>Trusted protocol components</td>
-							<td>Zoltar, <a href="./glossary.html#question-ledger">question ledgers</a>, share tokens, <a href="./glossary.html#price-coordinator">price coordinators</a>, <a href="./glossary.html#question-forker">question forkers</a>, and their configured delegates.</td>
+							<td>Zoltar, <a href="./glossary.html#question-ledger">question ledgers</a>, share tokens, <a href="./glossary.html#shared-price-feed">shared price feeds</a>, <a href="./glossary.html#question-forker">question forkers</a>, and their configured delegates.</td>
 						</tr>
 						<tr>
 							<td>External dependencies</td>
@@ -221,7 +221,7 @@
 					</li>
 					<li id="assumption-a18" value="18">
 						<h3><span class="assumption-id">A18</span> At least one available corrector has an independent net incentive</h3>
-						<p>At least one participant satisfying <a href="#assumption-a17">A17</a> is not under common control with the sponsor-funded coordinator reporting path, does not share the manipulation payoff, and is not compensated to leave a harmful report uncorrected. The participant's net payoff from correcting is strictly greater than its net payoff from leaving the harmful report uncorrected. Two external submissions are not required for every request.</p>
+						<p>At least one participant satisfying <a href="#assumption-a17">A17</a> is not under common control with the sponsor-funded shared-feed reporting path, does not share the manipulation payoff, and is not compensated to leave a harmful report uncorrected. The participant's net payoff from correcting is strictly greater than its net payoff from leaving the harmful report uncorrected. Two external submissions are not required for every request.</p>
 						<p>The <a href="./open-oracle.html#security-guarantee">creation-time collateral floor</a> must sustain that incentive even at zero aggregate exposure, after fees, gas, price impact and capital lockup.</p>
 						<p class="assumption-failure"><strong>Failure boundary:</strong> An undersized floor, higher gas fees, or falling collateral value can leave a wrong REP/collateral price uneconomic to dispute. It may settle unchallenged and authorize unsafe price-sensitive actions even when every onchain funding check passes. A sponsor-controlled, bribed, or economically indifferent corrector can cause the same failure.</p>
 						<p class="assumption-links"><a href="../how-to/monitor-security-assumptions.html#check-correction">Monitoring checks</a>. Mechanics: <a href="./open-oracle.html#settlement-validation-scope">settlement validation scope</a>, <a href="./open-oracle.html#intentional-economic-tradeoffs">economic tradeoffs</a>, and <a href="./invariants.html#oracle">oracle invariants</a>.</p>

@@ -138,7 +138,7 @@
 								<td>REP/collateral price correction — A17, A18, A19</td>
 								<td>
 									<ul>
-										<li>Read <code>PriceRequested</code> events from the shared feed at <code>priceFeed()</code> starting at feed deployment. For each report ID, read the feed’s <code>reportOutcome(reportId)</code>. For a requested ID, 1 means accepted, 2 means rejected, and 0 needs follow-up.</li>
+										<li>Read <code>PriceRequested</code> events from the shared feed returned by <code>SecurityPool.priceFeed(universeId)</code>, including a prepared branch with no question ledger yet, starting at feed deployment. For each report ID, read the feed’s <code>reportOutcome(reportId)</code>. For a requested ID, 1 means accepted, 2 means rejected, and 0 needs follow-up.</li>
 										<li>For each unresolved ID, check OpenOracle <code>storedGame(reportId)</code> and follow <a href="../reference/open-oracle.html#callback-rejection-and-recovery">settlement recovery</a> if already settled. <code>pendingReportId</code> identifies only the latest candidate and can be zero while older candidates remain unresolved. For the active price, check the feed epoch and expiry. Acceptance at the same eligibility timestamp need not replace the cached price.</li>
 										<li>For each candidate, verify an executing signer on this network, universe and collateral, its approvals and its remaining position capacity. The reference bot can run in dry-run mode and defaults to one open position.</li>
 										<li>Creation-time floor: security pool <code>minimumReportCollateral</code> and the selected collateral token’s units and current ETH value</li>
@@ -197,7 +197,7 @@
 									<ul>
 										<li>Deployed configuration: manifest <code>protocolConfig</code></li>
 										<li>Fork and non-decision thresholds: Zoltar <code>getForkThresholdAttoRep(universeId)</code> and <code>getNonDecisionThresholdAttoRep(universeId)</code></li>
-										<li>Oracle costs: coordinator <code>getRequestPriceCostAttoEth()</code> and <code>getSettlementCallbackGasLimit()</code></li>
+										<li>Oracle costs: shared feed <code>getRequestPriceCostAttoEth()</code> and <code>getSettlementCallbackGasLimit()</code></li>
 										<li>Compare the fork threshold with minted child <code>totalSupply()</code>, then with REP willing holders can mobilize. A 50 REP threshold with 40 REP minted requires further migration before a fork is reachable.</li>
 									</ul>
 								</td>

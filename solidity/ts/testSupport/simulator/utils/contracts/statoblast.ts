@@ -13,7 +13,7 @@ import {
 } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { type ReadClient, type WriteClient, writeContractAndWait } from '../clients'
 import { WETH_ADDRESS } from '../constants'
-import { statoblast_openOracle_OpenOracle_OpenOracle, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed, statoblast_tokens_ShareToken_ShareToken } from '../../../../types/contractArtifact'
+import { statoblast_openOracle_OpenOracle_OpenOracle, statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed, statoblast_tokens_ShareToken_ShareToken } from '../../../../types/contractArtifact'
 import type { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployStatoblast'
 import { HIGH_GAS_SIMULATOR_WRITE_GAS } from '../constants'
@@ -39,25 +39,14 @@ const ERC20_APPROVE_ABI = [
 	},
 ] as const
 
-export const getDefaultInitialReportPrice = async (client: ReadClient, openOraclePriceCoordinator: Address) => {
-	const lastPrice = await getLastPrice(client, openOraclePriceCoordinator)
+export const getDefaultInitialReportPrice = async (client: ReadClient, priceFeed: Address) => {
+	const lastPrice = await getLastPrice(client, priceFeed)
 	return lastPrice > 0n ? lastPrice : PRICE_PRECISION
 }
 
-export const fundCoordinatorInitialReport = async (client: WriteClient, openOraclePriceCoordinator: Address, proposedRepPerEthPrice: bigint, requestedInitialAttoWeth = 0n) => {
-	const [feed, rawReputationTokenAddress] = await Promise.all([
-		client.readContract({
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'priceFeed',
-			address: openOraclePriceCoordinator,
-		}),
-		client.readContract({
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'reputationToken',
-			address: openOraclePriceCoordinator,
-			args: [],
-		}),
-	])
+export const fundCoordinatorInitialReport = async (client: WriteClient, priceFeed: Address, proposedRepPerEthPrice: bigint, requestedInitialAttoWeth = 0n) => {
+	const feed = priceFeed
+	const rawReputationTokenAddress = await client.readContract({ abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, functionName: 'reputationToken', address: priceFeed })
 	const minimumToken1ReportAttoEth = await client.readContract({
 		abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 		functionName: 'minimumToken1ReportAttoEthForPrice',
@@ -82,7 +71,7 @@ export const fundCoordinatorInitialReport = async (client: WriteClient, openOrac
 			abi: ERC20_APPROVE_ABI,
 			functionName: 'approve',
 			address: WETH_ADDRESS,
-			args: [openOraclePriceCoordinator, maximumInitialAttoWeth],
+			args: [priceFeed, maximumInitialAttoWeth],
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
@@ -91,27 +80,27 @@ export const fundCoordinatorInitialReport = async (client: WriteClient, openOrac
 			abi: ERC20_APPROVE_ABI,
 			functionName: 'approve',
 			address: reputationTokenAddress,
-			args: [openOraclePriceCoordinator, maximumAmount2],
+			args: [priceFeed, maximumAmount2],
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 	return { maximumAmount2, maximumInitialAttoWeth, minimumToken1ReportAttoEth, proposedRepPerEthPrice, requestedInitialAttoWeth }
 }
 
-export const requestPrice = async (client: WriteClient, openOraclePriceCoordinator: Address) => {
-	const costAttoEth = await getRequestPriceCostAttoEth(client, openOraclePriceCoordinator)
-	return await requestPriceWithValue(client, openOraclePriceCoordinator, costAttoEth, await getDefaultInitialReportPrice(client, openOraclePriceCoordinator))
+export const requestPrice = async (client: WriteClient, priceFeed: Address) => {
+	const costAttoEth = await getRequestPriceCostAttoEth(client, priceFeed)
+	return await requestPriceWithValue(client, priceFeed, costAttoEth, await getDefaultInitialReportPrice(client, priceFeed))
 }
 
-export const requestPriceWithValue = async (client: WriteClient, openOraclePriceCoordinator: Address, value: bigint, proposedRepPerEthPrice?: bigint, requestedInitialAttoWeth = 0n, bountyAttoEth = value) => {
-	const resolvedInitialReportPrice = proposedRepPerEthPrice ?? (await getDefaultInitialReportPrice(client, openOraclePriceCoordinator))
-	const { minimumToken1ReportAttoEth } = await fundCoordinatorInitialReport(client, openOraclePriceCoordinator, resolvedInitialReportPrice, requestedInitialAttoWeth)
+export const requestPriceWithValue = async (client: WriteClient, priceFeed: Address, value: bigint, proposedRepPerEthPrice?: bigint, requestedInitialAttoWeth = 0n, bountyAttoEth = value) => {
+	const resolvedInitialReportPrice = proposedRepPerEthPrice ?? (await getDefaultInitialReportPrice(client, priceFeed))
+	const { minimumToken1ReportAttoEth } = await fundCoordinatorInitialReport(client, priceFeed, resolvedInitialReportPrice, requestedInitialAttoWeth)
 	const budget = requestedInitialAttoWeth > minimumToken1ReportAttoEth ? requestedInitialAttoWeth : minimumToken1ReportAttoEth
 	return await writeContractAndWait(client, () =>
 		client.writeContract({
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'requestPrice',
-			address: openOraclePriceCoordinator,
+			abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
+			functionName: 'requestSecurityPoolPrice',
+			address: priceFeed,
 			args: [resolvedInitialReportPrice, budget, bountyAttoEth],
 			value,
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
@@ -119,38 +108,38 @@ export const requestPriceWithValue = async (client: WriteClient, openOraclePrice
 	)
 }
 
-export const recoverSettledPendingReport = async (client: WriteClient, openOraclePriceCoordinator: Address) =>
+export const recoverSettledPendingReport = async (client: WriteClient, priceFeed: Address) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 			functionName: 'recoverSettledPendingReport',
-			address: openOraclePriceCoordinator,
+			address: priceFeed,
 			args: [],
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
 
-export const getPendingReportId = async (client: ReadClient, openOraclePriceCoordinator: Address) =>
+export const getPendingReportId = async (client: ReadClient, priceFeed: Address) =>
 	await client.readContract({
-		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 		functionName: 'pendingReportId',
-		address: openOraclePriceCoordinator,
+		address: priceFeed,
 		args: [],
 	})
 
-export const getPendingReportMaxSettlementBaseFee = async (client: ReadClient, openOraclePriceCoordinator: Address) =>
+export const getPendingReportMaxSettlementBaseFee = async (client: ReadClient, priceFeed: Address) =>
 	await client.readContract({
-		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 		functionName: 'pendingReportMaxSettlementBaseFeeAttoEthPerGas',
-		address: openOraclePriceCoordinator,
+		address: priceFeed,
 		args: [],
 	})
 
-export const getIsPriceValid = async (client: ReadClient, openOraclePriceCoordinator: Address) =>
+export const getIsPriceValid = async (client: ReadClient, priceFeed: Address) =>
 	await client.readContract({
-		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 		functionName: 'isPriceValid',
-		address: openOraclePriceCoordinator,
+		address: priceFeed,
 		args: [],
 	})
 
@@ -272,11 +261,11 @@ export const openOracleSettleWithGasPrice = async (client: WriteClient, reportId
 	)
 }
 
-export const getRequestPriceCostAttoEth = async (client: ReadClient, openOraclePriceCoordinator: Address) =>
+export const getRequestPriceCostAttoEth = async (client: ReadClient, priceFeed: Address) =>
 	await client.readContract({
-		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 		functionName: 'getRequestPriceCostAttoEth',
-		address: openOraclePriceCoordinator,
+		address: priceFeed,
 		args: [],
 	})
 
@@ -334,11 +323,11 @@ export const getOpenOracleReportMeta = async (client: ReadClient, reportId: bigi
 	}
 }
 
-export const getLastPrice = async (client: ReadClient, openOraclePriceCoordinator: Address) =>
+export const getLastPrice = async (client: ReadClient, priceFeed: Address) =>
 	await client.readContract({
-		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi,
 		functionName: 'lastPrice',
-		address: openOraclePriceCoordinator,
+		address: priceFeed,
 		args: [],
 	})
 

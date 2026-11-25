@@ -46,7 +46,7 @@ export function priceFixture(account = capitalSnapshot({ forkTime: 100n })) {
 		priceValidityWindowSeconds: 600n,
 		settlementTime: 300n,
 		pendingReportId: 0n,
-		reportCandidates: [priceEscrow, owner, priceFeed, 1n],
+		reportCandidates: [priceEscrow, owner, 1n],
 		reportOutcome: 0n,
 		feed: priceFeed,
 		sponsor: owner,

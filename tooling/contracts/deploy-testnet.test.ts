@@ -522,8 +522,7 @@ describe('testnet deployment plan', () => {
 			infrastructure.escalationGameFactory,
 			infrastructure.multicall3,
 			infrastructure.openOracle,
-			infrastructure.openOraclePriceCoordinatorFactory,
-			infrastructure.priceCoordinatorDeploymentWorker,
+			infrastructure.sharedPoolPriceFeedFactory,
 			infrastructure.sharedPoolPriceFeedDeploymentWorker,
 			infrastructure.securityPoolFactory,
 			infrastructure.questionForkerDelegate,
@@ -557,13 +556,10 @@ describe('testnet deployment plan', () => {
 		const publishedAddresses = [SEPOLIA_NETWORK_PROFILE.wethAddress, uniswap.addresses.uniswapV3FactoryAddress, uniswap.addresses.uniswapV3QuoterAddress, uniswap.addresses.uniswapV4PoolManagerAddress, uniswap.addresses.uniswapV4QuoterAddress]
 		expect(uniswap.publishedContracts.map(contract => contract.address)).toEqual(publishedAddresses)
 		for (const address of publishedAddresses) expect(addressSet.has(address)).toBe(false)
-		expect(Object.keys(bootstrapDescendants)).toHaveLength(27)
-		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(27)
+		expect(Object.keys(bootstrapDescendants)).toHaveLength(24)
+		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(24)
 		for (const address of Object.values(bootstrapDescendants)) expect(addressSet.has(address)).toBe(false)
 		expect(bootstrapDescendants.escalationGameProofVerifier).toBe(infrastructure.escalationGameProofVerifier)
-		expect(bootstrapDescendants.oracleReportDelegate).toBe(getCreateAddress({ from: infrastructure.priceCoordinatorDeploymentWorker, nonce: 3n }))
-		expect(bootstrapDescendants.priceCoordinatorCreationCodeFirstChunk).toBe(getCreateAddress({ from: infrastructure.priceCoordinatorDeploymentWorker, nonce: 1n }))
-		expect(bootstrapDescendants.priceCoordinatorCreationCodeSecondChunk).toBe(getCreateAddress({ from: infrastructure.priceCoordinatorDeploymentWorker, nonce: 2n }))
 		expect(bootstrapDescendants.sharedPoolPriceFeedCreationCodeFirstChunk).toBe(getCreateAddress({ from: infrastructure.sharedPoolPriceFeedDeploymentWorker, nonce: 1n }))
 		expect(bootstrapDescendants.sharedPoolPriceFeedCreationCodeSecondChunk).toBe(getCreateAddress({ from: infrastructure.sharedPoolPriceFeedDeploymentWorker, nonce: 2n }))
 		expect(bootstrapDescendants.securityPoolCommitmentIndexImplementation).toBe(getCreateAddress({ from: infrastructure.securityPoolCommitmentIndexDeployer, nonce: 1n }))
@@ -586,12 +582,12 @@ describe('testnet deployment plan', () => {
 		expect(bootstrapDescendants['securityPoolForkCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolForkCoordinatorDeployer, nonce: 2n }))
 		expect(bootstrapDescendants['securityPoolAuctionCreationCodeSecondChunk']).toBe(getCreateAddress({ from: infrastructure.securityPoolRepairAuctionDeployer, nonce: 2n }))
 		expect(plan.some(step => step.id === 'escalationGameFactory')).toBe(true)
-		expect(plan).toHaveLength(33)
+		expect(plan).toHaveLength(32)
 		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)
 		expect(new Set(plan.map(step => step.address)).size).toBe(plan.length)
 		for (const step of plan) expect(CONSERVATIVE_DEPLOYMENT_GAS[step.id]).toBeGreaterThan(0n)
 		const deterministicPlan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, await getUniswapDeployment(31_337))
-		expect(deterministicPlan).toHaveLength(38)
+		expect(deterministicPlan).toHaveLength(37)
 		expect(Object.keys(CONSERVATIVE_DEPLOYMENT_GAS).sort()).toEqual(deterministicPlan.map(step => step.id).sort())
 		const indexById = new Map(plan.map((step, index) => [step.id, index]))
 		for (const [index, step] of plan.entries()) {
@@ -771,8 +767,6 @@ describe('testnet deployment plan', () => {
 		const descendants = getBootstrapDescendantAddresses(SEPOLIA_NETWORK_PROFILE)
 		const expectedRuntimeCodeHashes = Object.fromEntries(Object.keys(descendants).map(id => [id, keccak256('0x01')]))
 		for (const id of [
-			'priceCoordinatorCreationCodeFirstChunk',
-			'priceCoordinatorCreationCodeSecondChunk',
 			'questionLedgerCreationCodeFirstChunk',
 			'questionLedgerCreationCodeSecondChunk',
 			'securityPoolCapitalCreationCodeFirstChunk',
