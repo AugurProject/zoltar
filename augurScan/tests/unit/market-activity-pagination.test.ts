@@ -101,3 +101,22 @@ test('deduplicates overlapping pages with one key lookup per fetched row', async
 	expect(result.items).toEqual(Array.from({ length: 1050 }, (_, index) => index))
 	expect(keyCalls).toBeLessThan(1070)
 })
+
+test.each(['invalidationId', 'abiSourceHash', 'applicationSourceHash', 'projectionSourceHash'] as const)('rejects a risk catalog continuation after %s changes at the same block', async field => {
+	const data = createOperationsData(
+		async path => {
+			const continuation = new URL(path, 'http://localhost').searchParams.has('poolCursor')
+			return {
+				chainId: 1,
+				asOf: continuation ? { ...asOf, [field]: '1' } : asOf,
+				data: {
+					pools: [{ pool_address: continuation ? '0x2222222222222222222222222222222222222222' : '0x1111111111111111111111111111111111111111' }],
+					pagination: { poolTotal: 2, poolHasMore: !continuation, ...(continuation ? {} : { poolNextCursor: 'next' }) },
+				},
+			}
+		},
+		() => '1',
+		() => new URL('http://localhost/operations'),
+	)
+	await expect(data.loadOperationsRiskCatalog(2)).rejects.toThrow('Risk catalog changed')
+})

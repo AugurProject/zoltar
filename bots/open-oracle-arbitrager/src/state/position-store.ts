@@ -4,6 +4,7 @@ import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { parsePositionCollateral, type PositionCollateral } from '#state/position-collateral'
 import { formatDecimalAmount, hash32, parseDecimalAmount, parseSignedDecimalAmount, record as validateRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { parseExecutionIntentFields, parseExecutionRecord, type ExecutionIntent, type ExecutionRecord } from '#state/execution-record'
+import { normalizeJournalPosition } from '#state/position-journal-format'
 
 /** The position journal writer's filesystem; tests substitute one to observe the durable write order. */
 export type PositionJournalFilesystem = RevisionedFileFilesystem
@@ -219,8 +220,7 @@ function parseExecutionIntent(value: unknown): ExecutionIntent | undefined {
 	return intent
 }
 
-function parsePosition(value: unknown): PositionRecord {
-	const record = validateRecord(value, 'Position journal value', 'Position journal record must be an object')
+function parsePosition(record: Record<string, unknown>): PositionRecord {
 	if (typeof record['account'] !== 'string') throw new Error('Position journal account is invalid')
 	const account = getAddress(record['account'])
 	if (typeof record['reportId'] !== 'string' || !/^(?:0|[1-9]\d*)$/.test(record['reportId'])) throw new Error('Position journal report id is invalid')
@@ -240,9 +240,8 @@ function parsePosition(value: unknown): PositionRecord {
 	const gasTransactionHashes = new Set<string>()
 	const parsedGasExpenditures = gasExpenditures.map(value => {
 		const expenditure = validateRecord(value, 'Position journal value', 'Position journal gas expenditure is invalid')
-		if (Object.keys(expenditure).length !== 3 || !('costEth' in expenditure) || !('includedAt' in expenditure || 'minedAt' in expenditure) || !('transactionHash' in expenditure)) throw new Error('Position journal gas expenditure fields are invalid')
-		// Normalize receipt timestamps from version 2/3 journals before validating accounting.
-		const includedAt = 'includedAt' in expenditure ? expenditure['includedAt'] : expenditure['minedAt']
+		if (Object.keys(expenditure).length !== 3 || !('costEth' in expenditure) || !('includedAt' in expenditure) || !('transactionHash' in expenditure)) throw new Error('Position journal gas expenditure fields are invalid')
+		const includedAt = expenditure['includedAt']
 		const costEth = decimalField(expenditure, 'costEth')
 		if (typeof includedAt !== 'string' || !Number.isFinite(Date.parse(includedAt)) || new Date(includedAt).toISOString() !== includedAt) {
 			throw new Error('Position journal gas expenditure includedAt must be canonical UTC ISO')
@@ -552,7 +551,7 @@ export async function loadPositionJournalState(path: string, expectedChainId: nu
 	const root = validateRecord(parsed, 'Position journal value', 'Invalid position journal root')
 	if ((root['version'] !== 2 && root['version'] !== 3 && root['version'] !== 4) || !Array.isArray(root['positions'])) throw new Error('Invalid position journal schema')
 	if (root['chainId'] !== expectedChainId) throw new Error(`Position journal belongs to chain ${String(root['chainId'])}, expected chain ${expectedChainId.toString()}`)
-	const positions = root['positions'].map(parsePosition)
+	const positions = root['positions'].map(value => parsePosition(normalizeJournalPosition(value)))
 	const ids = new Set<string>()
 	for (const position of positions) {
 		const key = positionJournalKey(position)

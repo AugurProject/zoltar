@@ -690,13 +690,17 @@ describe('Statoblast: central internal settlement units', () => {
 		await child(1n, 2n)
 		const cutoff = 3 * 86_400 + 2
 		await schedule(2n, 1n, cutoff - 1)
-		const preview = (timestamp: number) => client.readContract({ ...target(), functionName: 'quoteRedemptionAt', args: [2n, 1n, 2n, timestamp] })
-		expect((await preview(cutoff - 1))[0]).toBe(1n)
-		expect((await preview(cutoff))[0]).toBe(0n)
-		await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'checkpointFees', args: [2n, cutoff] }))
+		for (const timestamp of [cutoff - 1, cutoff]) {
+			await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'checkpointFees', args: [2n, timestamp] }))
+			for (const shares of [1n, 2n, 3n]) {
+				const preview = await client.readContract({ ...target(), functionName: 'quoteRedemptionAt', args: [2n, 1n, shares, timestamp] })
+				const { result } = await client.simulateContract({ ...target(), functionName: 'redeem', args: [2n, 1n, shares, 0n, timestamp] })
+				expect([...preview]).toEqual(result.slice(0, 2))
+				if (shares === 2n) expect(preview[0]).toBe(timestamp < cutoff ? 1n : 0n)
+			}
+		}
 		const [cash] = await client.readContract({ ...target(), functionName: 'quoteRedemption', args: [2n, 1n, 2n] })
-		const close = await client.simulateContract({ ...target(), functionName: 'redeem', args: [2n, 1n, 2n, 0n, cutoff] })
-		expect(cash).toBe(close.result[0])
+		expect(cash).toBe(0n)
 		await redeem(2n, 1n, 2n, cutoff)
 		const [residual] = await client.readContract({ ...target(), functionName: 'quoteRedemption', args: [2n, 1n, 1n] })
 		const [remainingCash] = await book(2n)

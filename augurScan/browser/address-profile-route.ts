@@ -1,7 +1,7 @@
 import type { AccountTransaction, LoadOptions, NetworkRecord, RichListRecord } from './browser-types.ts'
 import type { CanonicalState } from './canonical-state.ts'
 import type { RefreshGate } from './live-refresh.ts'
-import { decodeOperationsResponseValue, type OperationsResponse } from './api-validation.ts'
+import { decodeOperationsResponseValue, operationsSnapshotIdentity, type OperationsResponse } from './api-validation.ts'
 import { decodeItemsPage, decodeValue, isAccountTransaction, isAddressIdentity, isRichListRecord } from './api-decoding.ts'
 import { mergeUniqueRecords } from './canonical-pagination.ts'
 import { isCurrentCanonicalGeneration, isCurrentContextRequest } from './live-refresh.ts'
@@ -42,7 +42,7 @@ export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 	const loadAddressSecurityPoolSnapshot = async (address: string, targets: Readonly<Record<SecurityPoolKind, number>>): Promise<OperationsResponse> => {
 		const initialQuery = new URLSearchParams({ chainId: requiredChainId(), address, limit: '100' })
 		const first = decodeOperationsResponse(await api(`/api/v1/state/address-security-pool?${initialQuery.toString()}`))
-		const snapshotIdentity = `${first.chainId}:${String(first.asOf['blockNumber'] ?? '')}:${String(first.asOf['blockHash'] ?? '')}`
+		const snapshotIdentity = operationsSnapshotIdentity(first)
 		const collections = mapSecurityPoolKinds(kind => securityPoolItems(first.data, kind))
 		const pages = mapSecurityPoolKinds(kind => securityPoolPage(first.data, kind))
 		for (const kind of ['lp', 'forks', 'reports', 'refunds', 'positions'] as const) {
@@ -50,7 +50,7 @@ export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 				const query = new URLSearchParams({ chainId: requiredChainId(), address, limit: '100' })
 				query.set(SECURITY_POOL_KIND_LABELS[kind].cursorParameter, pages[kind]['nextCursor'])
 				const response = decodeOperationsResponse(await api(`/api/v1/state/address-security-pool?${query.toString()}`))
-				const responseIdentity = `${response.chainId}:${String(response.asOf['blockNumber'] ?? '')}:${String(response.asOf['blockHash'] ?? '')}`
+				const responseIdentity = operationsSnapshotIdentity(response)
 				if (responseIdentity !== snapshotIdentity) throw new Error('Security pool history changed while older evidence was loading; retry from the latest available block')
 				collections[kind] = mergeUniqueRecords(collections[kind], securityPoolItems(response.data, kind), item => securityPoolItemKey(kind, item))
 				pages[kind] = securityPoolPage(response.data, kind)

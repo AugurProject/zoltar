@@ -13,21 +13,19 @@
 			<header>
 				<p class="kicker">How-to guide</p>
 				<h1>Set up Trading development</h1>
-				<p>Use this guide to get the Trading contracts, SDK, and UI compiled and running on your machine.</p>
 			</header>
 			<section id="build-and-run">
 				<h2>Build and run</h2>
 				<ol>
-					<li>From the repository root, confirm dependencies with <code>test -d node_modules</code>. If they are missing, run <code>bun install --frozen-lockfile &amp;&amp; bun run setup</code>; <code>setup</code> installs every project from its lockfile, compiles the contracts, and builds the UI apps and UI tests.</li>
-					<li>Run <code>bun run trading:compile</code>. It compiles the contracts, builds the shared packages, and runs the Trading vendor build, which generates <code>ui/trading/ts/generated/contractArtifact.ts</code>. Never edit generated files.</li>
-					<li>Run <code>bun run trading:test</code>, which runs the SDK, contract-facing, and UI Trading tests, and <code>bun run trading:ui:build</code>.</li>
+					<li>From the repository root, confirm dependencies with <code>test -d node_modules</code>. If they are missing, run <code>bun install --frozen-lockfile &amp;&amp; bun run setup</code>.</li>
+					<li>Run <code>bun run trading:compile</code>, <code>bun run trading:test</code>, and <code>bun run trading:ui:build</code>.</li>
 					<li>Start <code>bun run app:serve:trading</code>, then open <code>http://localhost:4163/?simulate=1&amp;genesis=yes</code> for the browser-local simulator. <a href="./trading-configure-ui.html#modes">Configure the Trading UI</a> lists the Trading scenarios. The setup works when the tests pass and the simulator page loads.</li>
 				</ol>
 				<p>To run the standalone UI in Docker instead, complete the repository-root setup first, then from <code>ui/trading</code>:</p>
 				<pre class="code-scroll" tabindex="0"><code>docker network inspect zoltar &gt;/dev/null 2&gt;&amp;1 \
   || docker network create zoltar
 docker compose up --build --force-recreate</code></pre>
-				<p>Then open <code>http://localhost:4163/#/market</code>. On Windows, <code>ui/trading/start.bat</code> runs the same Compose command. The final image runs as an unprivileged user and exposes a health check at <code>/</code>. The Docker image copies all four core deployment manifests: the Yes and No deployments on Mainnet and Sepolia. See <a href="../reference/trading/configuration.html">configuration</a> for their paths.</p>
+				<p>Open <code>http://localhost:4163/#/market</code>. On Windows, use <code>ui/trading/start.bat</code> to start Compose.</p>
 			</section>
 			<section id="external-node">
 				<h2>Test transactions against an external node</h2>
@@ -35,12 +33,7 @@ docker compose up --build --force-recreate</code></pre>
 			</section>
 			<section id="commands">
 				<h2>Other commands</h2>
-				<ul>
-					<li><code>bun run trading:check</code> runs the tests plus the bigint-number-cast guard.</li>
-					<li><code>bun run trading:coverage:contracts</code> traces Solidity execution and requires at least 99% production-contract line coverage.</li>
-					<li><code>bun run trading:gas-costs</code> reports bytecode sizes and funded-fixture operation gas.</li>
-					<li><code>cd ui/trading &amp;&amp; bun run docker:build</code> and <code>docker:run</code> build and run the standalone UI container without Compose.</li>
-				</ul>
+				<p>See the <a href="https://github.com/AugurProject/zoltar/blob/main/package.json">root package scripts</a> for the Trading check, contract coverage, and gas report commands.</p>
 				<p>After a change that alters what the UI shows, run <code>bun run docs:screenshots -- --app trading</code> to recapture the documentation screenshots.</p>
 			</section>
 		</main>
