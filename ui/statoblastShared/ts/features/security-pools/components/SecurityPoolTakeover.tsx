@@ -36,7 +36,7 @@ function LiquidationTime({ timestamp }: { timestamp: bigint }) {
 	if (dateTime === undefined) return undefined
 	return (
 		<time dateTime={dateTime} title={formatTimestamp(timestamp)}>
-			{dateTime.slice(11, 16)} UTC
+			{copy.formatUtcTime(dateTime.slice(11, 16))}
 		</time>
 	)
 }

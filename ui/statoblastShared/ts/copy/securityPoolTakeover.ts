@@ -66,6 +66,7 @@ export const nowPoint = 'Now'
 export const fullRewardPoint = 'Full reward'
 export const formatRewardGrowth = (duration: string) => `The takeover reward and the amount you can take grow for ${duration}.`
 export const formatDataAge = (age: string) => `as of ${age} ago`
+export const formatUtcTime = (time: string) => `${time} UTC`
 export const takeoverOnly = 'Takeover only'
 export const limits = 'Your limits'
 export const limitsHint = 'The takeover is cancelled if it would exceed any of these.'
