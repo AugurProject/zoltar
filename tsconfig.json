@@ -1,5 +1,5 @@
 {
-	"extends": ["./shared/tsconfig.strict.json", "./shared/tsconfig.source-paths.json"],
+	"extends": "./shared/tsconfig.source-paths.json",
 	"compilerOptions": {
 		"target": "ESNext",
 		"module": "ESNext",
