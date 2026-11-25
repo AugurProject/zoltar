@@ -29,10 +29,6 @@
 			"bun": "./ts/copy/app.ts",
 			"default": "./js/copy/app.js"
 		},
-		"./copy/forkAuction.js": {
-			"bun": "./ts/copy/forkAuction.ts",
-			"default": "./js/copy/forkAuction.js"
-		},
 		"./copy/questionLedger.js": {
 			"bun": "./ts/copy/questionLedger.ts",
 			"default": "./js/copy/questionLedger.js"
