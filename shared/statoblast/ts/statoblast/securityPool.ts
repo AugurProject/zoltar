@@ -126,7 +126,7 @@ export {
 export { buildSecurityPoolCapitalTakeOverRequest } from './securityPoolCapital.js'
 export { buildSecurityPoolCapitalTakeOverWithBoundsRequest } from './securityPoolCapital.js'
 export { buildSecurityPoolCapitalCureRequest } from './securityPoolCapital.js'
-export { buildSecurityPoolMintRequest, loadSecurityPoolMintQuote, securityPoolRecoveryMintBudget, type SecurityPoolMintQuote } from './securityPoolMint.js'
+export { buildSecurityPoolMintRequest, loadSecurityPoolMintQuote, securityPoolRecoveryMintBudget } from './securityPoolMint.js'
 /** @public External clients can register an admitted question independently of purchasing shares. */
 export { buildSecurityPoolAddQuestionRequest } from './securityPoolMint.js'
 export {

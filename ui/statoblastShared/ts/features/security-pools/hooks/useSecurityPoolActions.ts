@@ -5,7 +5,7 @@ import { securityPoolCollateral, type CollateralSymbol } from '../../../protocol
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { signal, useSignal } from '@preact/signals'
 import { useEffect, useMemo, useRef } from 'preact/hooks'
-import { getAddress, parseUnits, TransactionLookupNotFoundError, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, parseUnits, TransactionLookupNotFoundError, type Address, type Hash, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { createTransactionScope, mergeTransactionScopes } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
@@ -207,6 +207,10 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 					if (!deploying || deploymentStep === undefined) return await sendSecurityPoolTransaction(createWalletWriteClient(account, commonCallbacks), request, label, validate)
 
 					const id = crypto.randomUUID()
+					const saveHash = (hash: Hash) => {
+						const latest = journal.store.read() ?? journal.current.value
+						if (latest?.pending?.id === id) saveProgress({ ...latest, pending: { ...latest.pending, hash } })
+					}
 					const client = createWalletWriteClient(account, {
 						...commonCallbacks,
 						assertBeforeSubmit: () => {
@@ -222,13 +226,17 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 							saveProgress({ ...latest, draft, pending: { id, step: deploymentStep } }, true)
 						},
 						onTransactionSubmitted: (hash, status, replacedHash) => {
-							const latest = journal.store.read() ?? journal.current.value
-							if (latest?.pending?.id === id) saveProgress({ ...latest, pending: { ...latest.pending, hash } })
+							if (replacedHash === undefined) saveHash(hash)
 							parameters.onTransactionSubmitted(hash, status, replacedHash)
 						},
 					})
 					try {
-						const result = await sendSecurityPoolTransaction(client, request, label, validate)
+						const result = await sendSecurityPoolTransaction(client, request, label, validate, {
+							onTransactionReplaced: (hash, reason) => {
+								if (reason === 'repriced') saveHash(hash)
+								else settleDeployment(id)
+							},
+						})
 						const pool = settleDeployment(id, result.receipt)
 						if (pool !== undefined) await model.load(pool, account, draft.originInput)
 						return result

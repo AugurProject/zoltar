@@ -42,12 +42,13 @@ function model(): Parameters<typeof useSecurityPoolActions>[0] {
 		nextApprovedQuestionPage: async () => undefined,
 	}
 }
+const replacementHash: Hash = `0x${'2'.repeat(64)}`
 const factory = () => getInfraContractAddresses().securityPoolFactory
 const deploymentTopic = (value: Address) => encodeAbiParameters(parseAbiParameters('address'), [value])
 const deployedPoolLog = () => ({ address: factory(), data: '0x' as const, topics: [toEventSelector(parseAbiItem('event SecurityPoolDeployed(address indexed securityPool, address indexed creator)')), deploymentTopic(securityPool), deploymentTopic(owner)] })
 
 /** Renders the actions over `source` with an owner wallet that records each transaction, reports `token` as the first deployed contract and the factory's deployment event for `securityPool` after it. */
-async function renderWithDeploymentWallet(source: ReturnType<typeof capitalClient>, deploying = false, delays: { wallet?: Promise<void>; receipt?: Promise<void>; confirmed?: () => boolean } = {}) {
+async function renderWithDeploymentWallet(source: ReturnType<typeof capitalClient>, deploying = false, delays: { wallet?: Promise<void>; receipt?: Promise<void>; confirmed?: () => boolean; unrelatedReplacement?: () => void } = {}) {
 	// The factory creates the security pool, so the receipt carries no contract address for it: only the factory's event names it.
 	const requests: { to?: Address | null | undefined; data?: Hex | undefined }[] = []
 	const receiptHashes: Hash[] = []
@@ -55,7 +56,11 @@ async function renderWithDeploymentWallet(source: ReturnType<typeof capitalClien
 	const receipt = () => (requests.length === 1 ? { from: owner, to: undefined, status: 'success' as const, contractAddress: token, logs: [] } : { from: owner, to: factory(), status: 'success' as const, contractAddress: undefined, logs: [deployedPoolLog()] })
 	const writer = asWriteClient({
 		...createMockWriteClient(request => requests.push(request)),
-		waitForTransactionReceipt: async () => {
+		waitForTransactionReceipt: async ({ onReplaced }) => {
+			if (delays.unrelatedReplacement !== undefined) {
+				onReplaced?.({ reason: 'replaced', transaction: { hash: replacementHash }, replacedTransaction: { hash: mockTransactionHash }, transactionReceipt: { ...receipt(), transactionHash: replacementHash, blockHash: mockTransactionHash, blockNumber: 1n, cumulativeGasUsed: 1n, gasUsed: 1n, transactionIndex: 0n } })
+				delays.unrelatedReplacement()
+			}
 			if (requests.length !== 1 || delays.wallet === undefined) await delays.receipt
 			return receipt()
 		},
@@ -75,6 +80,7 @@ async function renderWithDeploymentWallet(source: ReturnType<typeof capitalClien
 			account: { address: owner, type: 'json-rpc' },
 			chain: MAINNET_NETWORK_PROFILE.chain,
 			call: async () => ({ data: undefined }),
+			onTransactionSubmitted: callbacks?.onTransactionSubmitted,
 			sendTransaction: async request => {
 				callbacks?.assertBeforeSubmit?.()
 				const hash = await writer.sendTransaction(request)
@@ -213,6 +219,27 @@ test('an explicit wallet rejection unlocks the rules deployment again', async ()
 	expect(requests).toHaveLength(1)
 })
 
+test('a different transaction replacing the rules send is never adopted on reload', async () => {
+	const receipt = createDeferred<void>()
+	const replaced = createDeferred<void>()
+	const { hook, receiptHashes } = await renderWithDeploymentWallet(capitalClient(), true, { receipt: receipt.promise, confirmed: () => true, unrelatedReplacement: () => replaced.resolve() })
+	let sending: Promise<void> | undefined
+	try {
+		await act(() => {
+			sending = hook.state().deployAdmission()
+		})
+		await replaced.promise
+		await act(() => hook.cleanup())
+		const restored = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolActionsWrapper, { model: model(), deploying: true }))
+		expect(restored.state().admissionAddress).toBeUndefined()
+		expect(restored.state().pendingDeployment).toBeUndefined()
+		expect(receiptHashes).not.toContain(replacementHash)
+	} finally {
+		receipt.resolve()
+		await sending
+	}
+})
+
 for (const step of ['rules', 'pool'] as const) {
 	test(`the deployment wizard verifies the pending ${step} receipt on reload before unlocking the next step`, async () => {
 		const receipt = createDeferred<void>()
@@ -248,7 +275,9 @@ test('starting a new deployment unlocks a discarded rules-only draft', async () 
 	await act(() => hook.state().setHorizonDays('45'))
 	await act(() => hook.state().deployAdmission())
 	expect(hook.state().deploymentLocked).toBe(true)
-	await act(() => hook.state().startNewDeployment())
+	await act(() => {
+		hook.state().startNewDeployment()
+	})
 	expect(hook.state().deploymentLocked).toBe(false)
 	expect(hook.state().admissionAddress).toBeUndefined()
 	expect(hook.state().horizonDays).toBe('30')
@@ -266,7 +295,9 @@ test('a prior fork closes setup and allows a new deployment', async () => {
 	await hook.setProps({ model: closed })
 	expect(hook.state().preparationReason(3)).toContain('Setup is closed')
 	expect(hook.state().canStartNewDeployment).toBe(true)
-	await act(() => hook.state().startNewDeployment())
+	await act(() => {
+		hook.state().startNewDeployment()
+	})
 	expect(hook.state().deploymentLocked).toBe(false)
 	expect(hook.state().deploymentPool).toBeUndefined()
 })

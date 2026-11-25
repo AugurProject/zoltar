@@ -136,7 +136,7 @@ export function App() {
 			invalidateAppData()
 		},
 		onTransactionSubmitted: (...submission: Parameters<typeof walletScopedHookConfig.onTransactionSubmitted>) => {
-			if (transactionEnvironment.isCurrent()) {
+			if (submission[2] === undefined && transactionEnvironment.isCurrent()) {
 				if (page.kind === 'pool') setEntityFavorite(localEntityScopeForNetwork(profile, 'statoblast', 'pool'), page.pool, true)
 				if (page.kind === 'question') setEntityFavorite(localEntityScopeForNetwork(profile, 'statoblast', 'question'), `${page.pool}:${formatQuestionIdHex(page.questionId)}`, true)
 			}

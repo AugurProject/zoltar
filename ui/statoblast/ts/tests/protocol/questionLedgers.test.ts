@@ -143,7 +143,7 @@ test.each(['expired', 'historical read failed'] as const)('question retries from
 		const getBlock = client.getBlock
 		client.getBlock = async request => {
 			if (request?.blockNumber === 98n) {
-				if (condition === 'expired') return { ...block, number: 98n }
+				if (condition === 'expired') return { ...block, number: 98n, transactions: [] }
 				throw new Error('Historical block unavailable')
 			}
 			return getBlock(request)

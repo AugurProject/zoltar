@@ -132,7 +132,7 @@ test.each(['expired', 'historical read failed'] as const)('watchlist retries fro
 		const checkpoint: WatchlistReadCheckpoint = { rows: [{ entity: entry, status: 'pool', annualFee: 15n }], anchor: { number: 1n, timestamp: 10n, hash, observedAt: 1_000 } }
 		if (condition === 'expired') clock.mockReturnValue(61_001)
 		const client = testDouble<Parameters<typeof loadWatchlistRows>[0]>({
-			getBlock: async request => ({ ...createBlockWithTimestamp(11n), number: request?.blockNumber ?? 2n, hash }),
+			getBlock: async ({ blockNumber = 2n }: Parameters<Parameters<typeof loadWatchlistRows>[0]['getBlock']>[0] = {}) => ({ ...createBlockWithTimestamp(11n), number: blockNumber, hash }),
 			multicall: createMulticallStub(({ blockNumber, contracts }) => {
 				if (blockNumber === 1n) throw new Error('Historical state unavailable')
 				return contracts.map(({ functionName }) => {

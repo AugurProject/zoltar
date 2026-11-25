@@ -31,6 +31,7 @@ export const capacityInUse = 'Capacity in use'
 export const yourPosition = 'Your position'
 export const formatAnnualFee = (detail: string) => ` · ${detail}% annual fee`
 export const unavailable = 'Unavailable'
+export const emptyCell = '—'
 export const repPriceCurrent = 'REP price current'
 export const repPriceDue = 'REP price due'
 export const pledgedTail = ' pledged'

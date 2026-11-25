@@ -114,10 +114,14 @@ test(
 			let hidden = true
 			Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden })
 			try {
-				await act(() => document.dispatchEvent(new Event('visibilitychange')))
+				await act(() => {
+					document.dispatchEvent(new Event('visibilitychange'))
+				})
 				expect(headReads).toBe(beforeVisibilityRefresh)
 				hidden = false
-				await act(() => document.dispatchEvent(new Event('visibilitychange')))
+				await act(() => {
+					document.dispatchEvent(new Event('visibilitychange'))
+				})
 				await waitFor(() => expect(view.container.textContent).toContain('Mint complete sets'), simulationWaitOptions)
 				expect(headReads).toBe(beforeVisibilityRefresh + 1)
 			} finally {

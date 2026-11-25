@@ -408,7 +408,7 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 								let open = entityLink(entity, entity.pool)
 								if (frozen && row?.forkBranchReady && row.forkChildUniverse !== undefined) open = entityLink(entity, entity.pool, undefined, row.forkChildUniverse)
 								else if (frozen) open = entityLink(entity, entity.pool, { kind: 'pool', pool: entity.pool, tab: 'fork' }, universe, row?.forkChoiceRecorded ? pageCopy.open : pageCopy.forkRecovery)
-								const placeholder = row === undefined && loading ? <span className='skeleton-line' aria-hidden='true' /> : '—'
+								const placeholder = row === undefined && loading ? <span className='skeleton-line' aria-hidden='true' /> : pageCopy.emptyCell
 								const used = getVisualRatio({ value: row?.demand, maxValue: row?.capacity })
 								return (
 									<tr role='row' key={entity.id}>

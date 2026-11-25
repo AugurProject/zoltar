@@ -330,7 +330,9 @@ test('manual deposit lookup can finish while the background search RPC is still 
 			input.value = '5'
 			input.dispatchEvent(new Event('input', { bubbles: true }))
 		})
-		await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+		await act(() => {
+			form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+		})
 		await waitFor(() =>
 			expect(
 				reportingDepositStore(backend.profile)

@@ -20,7 +20,7 @@ import {
 } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
+import { waitForSubmittedTransactionReceipt, type SubmittedTransactionReceiptOptions } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
 import {
 	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
@@ -289,7 +289,7 @@ export function securityPoolContractRequest(account: Address, to: Address, funct
 	return { account, to, value: 0n, data: encodeFunctionData({ abi: securityPoolArtifact.abi, functionName, args }) }
 }
 
-export async function sendSecurityPoolTransaction(client: WriteClient, request: SecurityPoolTransaction, title: string, validate: () => Promise<void> = async () => undefined) {
+export async function sendSecurityPoolTransaction(client: WriteClient, request: SecurityPoolTransaction, title: string, validate: () => Promise<void> = async () => undefined, receiptOptions?: SubmittedTransactionReceiptOptions) {
 	const captured = { ...request }
 	if (getAddress(captured.account) !== getAddress(client.account.address)) throw new Error(transactionOwnerRequired)
 	const validateCaptured = async () => {
@@ -319,7 +319,7 @@ export async function sendSecurityPoolTransaction(client: WriteClient, request: 
 	])
 	client.onTransactionPrepared?.({ ...review, args: undefined, chainName: client.chain.name, account: client.account })
 	const hash = await client.sendTransaction({ to: captured.to, data: captured.data, value: captured.value, ...gas })
-	const result = await waitForSubmittedTransactionReceipt(client, hash)
+	const result = await waitForSubmittedTransactionReceipt(client, hash, receiptOptions)
 	return { hash: result.hash, receipt: result.receipt }
 }
 
