@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
 import { repositoryRoot } from '../repo/root.mts'
 import { basename, dirname, join, posix, relative, resolve } from 'node:path'
 import { dockerInstructions, parseDockerfile, requireDockerStage, shellCommandSegments } from '../testing/packaging-parsers.ts'
@@ -11,10 +10,7 @@ import { isUiAppId, UI_APP_IDS } from './appIds.mts'
 
 const dockerfile = join(repositoryRoot, 'ui', 'Dockerfile')
 const dockerignore = join(repositoryRoot, '.dockerignore')
-const workflowDefinitionPath = (name: string) => {
-	const pendingPath = join(repositoryRoot, 'workflow', name)
-	return existsSync(pendingPath) ? pendingPath : join(repositoryRoot, '.github', 'workflows', name)
-}
+const workflowDefinitionPath = (name: string) => join(repositoryRoot, '.github', 'workflows', name)
 const ipfsDeployWorkflow = workflowDefinitionPath('ipfs-deploy.yml')
 const versionDeployWorkflow = workflowDefinitionPath('version-deploy.yml')
 const publisherEntrypoint = join(repositoryRoot, 'tooling', 'ui', 'docker-publisher-entrypoint.sh')
