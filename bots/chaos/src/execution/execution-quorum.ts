@@ -267,19 +267,26 @@ export async function agreedExactCall(environment: ExecutionEnvironment, label: 
 	return quorumValue(label, observations, requiredConnectivity(environment.settings).rpcQuorum)
 }
 
-export async function agreedMaximumGasEstimate(environment: ExecutionEnvironment, label: string, transaction: ExactRpcTransaction, anchor: CanonicalCallAnchor) {
-	const blockTag = toHex(anchor.number)
+export async function agreedMaximumGasEstimate(environment: ExecutionEnvironment, label: string, transaction: ExactRpcTransaction, anchor: CanonicalCallAnchor, options: { includePending?: boolean } = {}) {
+	// Submission can accrue a new second of protocol fees. Recovery stays pinned:
+	// its own transaction may already be reflected in the pending state.
+	const blockTags = options.includePending ? [toHex(anchor.number), 'pending'] : [toHex(anchor.number)]
 	const estimates = await everyCanonicalAttester(environment, label, anchor.attestingRpcUrls, async ({ endpoint, rpcUrl }) => {
-		const result = await requestTransport<unknown>(environment.pool.transportFor(rpcUrl), {
-			method: 'eth_estimateGas',
-			params: [transaction, blockTag],
-		})
-		if (typeof result !== 'string' || !/^0x[0-9a-fA-F]+$/.test(result)) {
-			throw new Error(`${label} RPC returned an invalid gas estimate`)
-		}
-		const value = BigInt(result)
-		if (value === 0n) throw new Error(`${label} RPC returned a zero gas estimate`)
-		return { endpoint, value }
+		const values = await Promise.all(
+			blockTags.map(async blockTag => {
+				const result = await requestTransport<unknown>(environment.pool.transportFor(rpcUrl), {
+					method: 'eth_estimateGas',
+					params: [transaction, blockTag],
+				})
+				if (typeof result !== 'string' || !/^0x[0-9a-fA-F]+$/.test(result)) {
+					throw new Error(`${label} RPC returned an invalid gas estimate`)
+				}
+				const value = BigInt(result)
+				if (value === 0n) throw new Error(`${label} RPC returned a zero gas estimate`)
+				return value
+			}),
+		)
+		return { endpoint, value: values.reduce((maximum, value) => (value > maximum ? value : maximum), 0n) }
 	})
 	return estimates.reduce((maximum, estimate) => (estimate.value > maximum ? estimate.value : maximum), 0n)
 }

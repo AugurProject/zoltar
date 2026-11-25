@@ -4,7 +4,8 @@ pragma solidity 0.8.35;
 import {
 	ICapitalFeeStreams,
 	ICapitalPriceExposure,
-	ICapitalLedgerAccounting
+	ICapitalLedgerAccounting,
+	ICapitalServiceAccounting
 } from './interfaces/ICapitalAccounting.sol';
 import { CheckedCast } from '../CheckedCast.sol';
 import { Collateral } from '../Collateral.sol';
@@ -324,7 +325,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 		uint48 effective = effectiveTime();
 		uint48 through = uint48(Math.min(effective, priceValidUntil));
 		// The canonical book pauses cash-funded fees at stale-price boundaries.
-		ICapitalLedgerAccounting(securityPool).checkpointCapitalFees(universeId(), through);
+		ICapitalServiceAccounting(services).checkpointCapitalFees(universeId(), through);
 		// Prepaid rewards keep their original vesting dates after a fork. Their
 		// old commitments and eligibility are immutable, and parent earnings stay
 		// separately claimable even after the owner has selected a child.
