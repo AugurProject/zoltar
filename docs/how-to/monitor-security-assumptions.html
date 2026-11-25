@@ -21,7 +21,7 @@
 					<ol>
 						<li>List the assumptions the action depends on. The <a href="../reference/security-model.html">security model</a> lists which assumptions protect which mechanism.</li>
 						<li>Find the rows for those assumptions in the <a href="#assumption-monitoring">table below</a>.</li>
-						<li>Take each row's reads for the same <a href="../reference/glossary.html#lineage">lineage</a>, question ledger, and block as the action. Express the values in one <a href="#terms">numeraire</a> and cover the <a href="#terms">action horizon</a>.</li>
+						<li>Take each row’s reads for the same <a href="../reference/glossary.html#lineage">lineage</a>, question ledger, and block as the action. Compare values in one unit of account, such as ETH, and cover the period through the last deadline.</li>
 						<li>If a read is weak or unavailable, apply the row's response before proceeding.</li>
 						<li>Repeat the reads on the row's cadence until the action's last deadline has passed.</li>
 					</ol>
@@ -30,10 +30,6 @@
 				<section id="terms">
 					<h2>Terms used in the table</h2>
 					<dl>
-						<dt>Numeraire</dt>
-						<dd>The one unit of account, such as ETH, in which you express every value you compare.</dd>
-						<dt>Action horizon</dt>
-						<dd>The period until the action's last deadline.</dd>
 						<dt>Corrector</dt>
 						<dd>An account that disputes an incorrect OpenOracle report; see <a href="../reference/security-model.html#assumption-a17">A17</a>.</dd>
 						<dt>Callback-recovery candidate</dt>
@@ -60,8 +56,7 @@
 										<li>Security pool exposure, distressed positions and takeover blockers: liquidator bot dashboard</li>
 										<li>Dispute opportunities and net reward: OpenOracle arbitrager dashboard</li>
 										<li>Active reporters, correctors, escalation depositors, and Collateral Repair Auction bidders: augurScan <code>/operations/reports</code>, <code>/operations/escalations</code>, <code>/operations/auctions</code></li>
-										<li>Callback-recovery candidates: coordinator <code>pendingReportId</code> and the report IDs in <code>PriceReportDeferred</code> events, then the settlement timestamp in OpenOracle <code>storedGame(reportId)</code></li>
-										<li>Callback recovery: anyone can clear the latest candidate with the coordinator’s <code>recoverSettledPendingReport()</code>, or any candidate with the shared feed’s <code>recoverReport(reportId)</code> (coordinator <code>priceFeed()</code>); a deferred report follows the <a href="../reference/open-oracle.html#settlement-base-fee-cap">settlement base-fee cap</a> rules</li>
+										<li>For a settled report whose callback failed or was deferred, follow <a href="../reference/open-oracle.html#callback-rejection-and-recovery">settlement recovery</a>.</li>
 									</ul>
 								</td>
 								<td>Continuously for deadline-bearing flows; before launch and after parameter or gas-regime changes</td>
@@ -73,7 +68,7 @@
 									<ul>
 										<li>Fork start: Zoltar <code>getForkTime(universeId)</code></li>
 										<li>Migration progress: augurScan <code>/operations/forks</code></li>
-										<li>Parent and <a href="../reference/glossary.html#child-rep">child REP</a> prices: market quotes in one numeraire</li>
+										<li>Parent and <a href="../reference/glossary.html#child-rep">child REP</a> prices: market quotes in the same unit of account</li>
 										<li>Custodian, exchange, interface, and proof-tool readiness: each party's published support statement (no on-chain read)</li>
 									</ul>
 								</td>
