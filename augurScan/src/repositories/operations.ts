@@ -297,8 +297,9 @@ export const forkCatalogTotal = async (sql: SQL, chainId: number, snapshotBlock:
 // and ReporterChildCreated as sourceUniverseId) or one of its child universes (BranchStarted, BranchActivated).
 // A child's start and activation belong to its parent's fork, so they join only through the child's universe
 // record and never through their own universeId.
-export const forkCatalogData = async (sql: SQL, chainId: number, cursorBlock: string, cursorTx = `0x${'f'.repeat(64)}`, cursorLog = 2_147_483_647, queryLimit = 100, snapshotBlock = cursorBlock) =>
-	await sql`
+export const forkCatalogData = async (sql: SQL, { chainId, snapshotBlock, position, limit = 100 }: { chainId: number; snapshotBlock: string; position?: { block: string; tx: string; log: number } | undefined; limit?: number }) => {
+	const { block, tx, log } = position ?? { block: snapshotBlock, tx: `0x${'f'.repeat(64)}`, log: 2_147_483_647 }
+	return await sql`
 		WITH roots AS (
 			SELECT DISTINCT ON (universe_identity) * FROM fork_migration_events
 			WHERE chain_id = ${chainId} AND canonical AND event_name = 'UniverseForked'
@@ -324,8 +325,9 @@ export const forkCatalogData = async (sql: SQL, chainId: number, cursorBlock: st
 					AND child.block_number <= ${snapshotBlock} AND child.parent_universe_id::text = root.universe_identity
 					AND child.universe_id <> child.parent_universe_id AND child.universe_id::text = related.event_data->>'universeId'))
 		)
-		WHERE (root.block_number, root.log_index, root.tx_hash) < (${cursorBlock}::bigint, ${cursorLog}::integer, ${cursorTx})
+		WHERE (root.block_number, root.log_index, root.tx_hash) < (${block}::bigint, ${log}::integer, ${tx})
 		GROUP BY root.chain_id, root.universe_identity, root.event_name, root.event_data, root.block_number,
 			root.block_hash, root.tx_hash, root.log_index
-		ORDER BY root.block_number DESC, root.log_index DESC, root.tx_hash DESC LIMIT ${queryLimit}
+		ORDER BY root.block_number DESC, root.log_index DESC, root.tx_hash DESC LIMIT ${limit}
 	`
+}

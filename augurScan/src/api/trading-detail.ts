@@ -16,12 +16,12 @@ export const tradingDetailResponse = async (sql: SQL, parts: readonly string[], 
 	const asOf = await operationsAsOfForContinuations(
 		sql,
 		chainId,
-		[cursor, activityCursor].flatMap(item => (item === undefined ? [] : [{ parts: item, offset: 3 }])),
+		[cursor, activityCursor].flatMap(item => (item === undefined ? [] : [item.snapshot])),
 	)
 	const page = detailPage(url, chainId, 'trading', market, asOf, cursor)
-	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
-	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
-	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
+	const cursorBlock = page.position.block
+	const cursorTx = page.position.tx
+	const cursorLog = page.position.log
 	const {
 		events: rows,
 		observations,
