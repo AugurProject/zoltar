@@ -4,7 +4,7 @@ import { getContractOutput, getRecord, getString, loadContractsJson } from './co
 
 const eip3860InitcodeLimitBytes = 49_152
 const eip170RuntimeCodeLimitBytes = 24_576
-const questionForkerConstructorArgumentBytes = 64
+const questionForkerConstructorArgumentBytes = 32
 
 function getBytecodeBytes(kind: 'bytecode' | 'deployedBytecode') {
 	const artifacts = loadContractsJson(import.meta.dir)

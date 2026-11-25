@@ -27,7 +27,6 @@ type InfraContractAddressConfig = {
 	getEscalationGameFactoryByteCode: (depositDelegate: Address) => Hex
 	getSecurityPoolFactoryByteCode: (inputs: SecurityPoolFactoryAddressInputs) => Hex
 	getQuestionForkerByteCode: (zoltarAddress: Address) => Hex
-	getQuestionForkerDelegateByteCode: (zoltarAddress: Address) => Hex
 	getShareTokenFactoryByteCode: (zoltarAddress: Address) => Hex
 	multicall3Bytecode: Hex
 	openOracleBytecode: Hex
@@ -60,7 +59,6 @@ type InfraContractAddresses = {
 	sharedPoolPriceFeedDeploymentWorker: Address
 	securityPoolFactory: Address
 	questionForker: Address
-	questionForkerDelegate: Address
 	questionLedgerOperationsDelegate: Address
 	questionLedgerEventEmitter: Address
 	securityPoolCapitalLedgerDeployer: Address
@@ -96,7 +94,6 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 			shareTokenFactory: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getShareTokenFactoryByteCode(config.getZoltarAddress())),
 			sharedPoolPriceFeedDeploymentWorker: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.sharedPoolPriceFeedDeploymentWorkerBytecode),
 			sharedPoolPriceFeedFactory: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.sharedPoolPriceFeedFactoryBytecode()),
-			questionForkerDelegate: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getQuestionForkerDelegateByteCode(config.getZoltarAddress())),
 			questionForker: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getQuestionForkerByteCode(config.getZoltarAddress())),
 			escalationGameDepositDelegate: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.escalationGameDepositDelegateBytecode),
 		}

@@ -7,6 +7,7 @@ const outcomes = ['INVALID', 'YES', 'NO', 'None']
 const capitalPriceKeys: ReadonlySet<string> = new Set(['acceptedPrice', 'conservativePrice', 'liquidationPrice', 'ownerConservativePrice', 'maxHealthyPrice'])
 const MAX_UINT256 = 2n ** 256n - 1n
 const label = (key: string): string => {
+	if (key === 'repPerEth1e18') return 'Price'
 	const words = key
 		.replace(/Bps$/i, '')
 		.replace(/Atto(?:Rep|Eth|Shares)|_atto_(?:rep|eth|shares)/gi, '')
@@ -71,7 +72,7 @@ export const semanticSummary = (record: Readonly<Record<string, unknown>>, nativ
 					last_settlement_security_pool_time: record['last_settlement_portfolio_time'],
 				}
 	const data = record['event_data'] ?? record['summary_data'] ?? record['arguments'] ?? record['read_result'] ?? accounting
-	const displayData = record['entity_type'] === 'price-coordinator' && isPlainRecord(data) ? Object.fromEntries(Object.entries(data).map(([key, value]) => [key === 'price' ? 'repPerEth1e18' : key, value])) : data
+	const displayData = record['entity_type'] === 'price-feed' && isPlainRecord(data) ? Object.fromEntries(Object.entries(data).map(([key, value]) => [key === 'price' ? 'repPerEth1e18' : key, value])) : data
 	return isPlainRecord(displayData)
 		? semanticFields(displayData, nativeSymbol, collateral)
 				.map(([name, value]) => `${name}: ${value}`)
@@ -80,7 +81,7 @@ export const semanticSummary = (record: Readonly<Record<string, unknown>>, nativ
 }
 
 /** Timeline entities whose attoETH-named amounts are in an auction's or security pool's collateral token, never the chain's native currency. */
-const collateralDenominatedEntityTypes: ReadonlySet<string> = new Set(['price-coordinator', 'pool', 'security-pool-settlement', 'security-pool-auction', 'auction', 'vault', 'capital-position', 'security-pool', 'security-pool-services', 'settlement-book'])
+const collateralDenominatedEntityTypes: ReadonlySet<string> = new Set(['price-feed', 'pool', 'security-pool-settlement', 'security-pool-auction', 'auction', 'vault', 'capital-position', 'security-pool', 'security-pool-services', 'settlement-book'])
 
 /** A timeline entry's payload; collateral amounts use the entry's sampled `collateral` token, or raw collateral units without one. */
 export const timelineTransitionSummary = (record: Readonly<Record<string, unknown>>, nativeSymbol: string): string => semanticSummary(record, nativeSymbol, collateralDenominatedEntityTypes.has(String(record['entity_type'])) ? collateralUnit(record) : undefined)

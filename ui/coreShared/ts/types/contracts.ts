@@ -15,7 +15,6 @@ export type DeploymentStepId =
 	| 'escalationGameDepositDelegate'
 	| 'escalationGameFactory'
 	| 'securityPoolFactory'
-	| 'questionForkerDelegate'
 	| 'securityPoolCapitalLedgerDeployer'
 	| 'securityPoolCommitmentIndexDeployer'
 	| 'securityPoolCapitalFeeStreamsDeployer'

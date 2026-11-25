@@ -52,7 +52,6 @@ describe('statoblast deployment steps', () => {
 				'securityPoolReporterLedgerDeployer',
 				'securityPoolForkCoordinatorDeployer',
 				'securityPoolRepairAuctionDeployer',
-				'questionForkerDelegate',
 			]) {
 				expect(steps.find(step => step.id === id)?.expectedRuntimeCodeHash).toMatch(/^0x[0-9a-f]{64}$/)
 			}
@@ -77,7 +76,6 @@ describe('statoblast deployment steps', () => {
 			if (oracleStep === undefined) throw new Error(`Missing deployment status oracle step for ${profile.id}`)
 			const statoblastStepIds = [
 				'questionForker',
-				'questionForkerDelegate',
 				'escalationGameDepositDelegate',
 				'escalationGameFactory',
 				'securityPoolFactory',
