@@ -154,10 +154,6 @@
 		border-top: 0;
 		border-left: 1px solid var(--divider-subtle);
 	}
-
-	.question-create-form.has-extra-fields .question-create-preview {
-		grid-row: 1 / span 3;
-	}
 }
 
 /* In an action row the reason wraps onto its own line under the buttons, so "Use for fork" stays beside the other actions. */

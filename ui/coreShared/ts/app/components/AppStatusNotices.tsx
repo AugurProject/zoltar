@@ -10,8 +10,6 @@ type AppStatusNoticesProps = {
 	errorMessages?: readonly string[]
 	/** The deployment route is where missing contracts get deployed, so its setup notice informs instead of alarming. */
 	isDeploymentRoute?: boolean
-	loadingZoltarUniverse?: boolean
-	onRetryZoltarUniverse?: (() => void) | undefined
 	/** Validates an unreachable read RPC again now; without it the notice relies on the automatic retries. */
 	onRetryReadBackend?: (() => void) | undefined
 	readBackendMessage: string | undefined
@@ -97,7 +95,7 @@ function buildRpcOverrideNotice(readBackendStatus: ReadBackendStatus | undefined
 	}
 }
 
-export function AppStatusNotices({ errorMessage, errorMessages = [], isDeploymentRoute = false, loadingZoltarUniverse = false, onRetryReadBackend, onRetryZoltarUniverse, readBackendMessage, readBackendStatus, simulationBootstrapError, showApplicationDeploymentWarning, zoltarUniverseError }: AppStatusNoticesProps) {
+export function AppStatusNotices({ errorMessage, errorMessages = [], isDeploymentRoute = false, onRetryReadBackend, readBackendMessage, readBackendStatus, simulationBootstrapError, showApplicationDeploymentWarning, zoltarUniverseError }: AppStatusNoticesProps) {
 	const items: NoticeItem[] = []
 	const distinctErrorMessages = [...new Set([errorMessage, ...errorMessages].filter((message): message is string => message !== undefined))]
 	// Error reports (a failed wallet request, a refresh that did not load) can be closed; one reappears only after it clears and recurs.
@@ -117,18 +115,7 @@ export function AppStatusNotices({ errorMessage, errorMessages = [], isDeploymen
 	if (readBackendMessage !== undefined) items.push(buildReadBackendNotice(readBackendMessage, readBackendStatus, onRetryReadBackend))
 	if (zoltarUniverseError !== undefined)
 		items.push({
-			detail: (
-				<>
-					<p>{zoltarUniverseError}</p>
-					{onRetryZoltarUniverse === undefined ? undefined : (
-						<div className='actions'>
-							<button type='button' className='secondary' disabled={loadingZoltarUniverse} onClick={onRetryZoltarUniverse}>
-								{loadingZoltarUniverse ? commonCopy.retrying : commonCopy.retry}
-							</button>
-						</div>
-					)}
-				</>
-			),
+			detail: <p>{zoltarUniverseError}</p>,
 			id: 'zoltar-universe-error',
 			tone: 'blocking',
 			title: commonCopy.error,

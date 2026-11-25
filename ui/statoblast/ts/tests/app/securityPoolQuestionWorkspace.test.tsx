@@ -9,7 +9,7 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs, simulationWaitOptions } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
-import { loadAllQuestionLedgers } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
+import { loadQuestionLedgerListing } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
 import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
@@ -33,7 +33,7 @@ test(
 			installActiveEnvironmentForTesting({ ...backend, createReadClient: () => client.extend(() => ({ readContract })) })
 			const [owner] = await backend.getAccounts()
 			if (owner === undefined) throw new Error('Missing scenario owner')
-			const pools = await loadAllQuestionLedgers(backend.createReadClient())
+			const { pools } = await loadQuestionLedgerListing(backend.createReadClient())
 			const first = pools[0]
 			if (first === undefined) throw new Error('Missing seeded question')
 			const selected: string[] = []

@@ -61,7 +61,7 @@ describe('SectionBlock', () => {
 		const cssSource = readCoreSharedCssSource()
 		const compactRuleIndex = cssSource.indexOf('.section-block.density-compact {')
 		const compactEmbeddedRuleIndex = cssSource.indexOf('.section-block.embedded.density-compact {')
-		const mobileSectionRuleIndex = cssSource.indexOf('\t.section-block,\n\t.overview-panel {')
+		const mobileSectionRuleIndex = cssSource.indexOf('\t.section-block {', compactEmbeddedRuleIndex)
 		const mobileEmbeddedRuleIndex = cssSource.indexOf('.section-block.embedded {', mobileSectionRuleIndex)
 
 		expect(compactRuleIndex).toBeGreaterThanOrEqual(0)

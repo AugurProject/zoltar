@@ -91,10 +91,10 @@ describe('UI build dependency direction', () => {
 		const commands = getAppBuildCommands(UI_APP_IDS)
 		expect(commands.filter(command => command[0] === 'x').map(command => command[3])).toEqual(['coreShared', 'zoltarShared', 'zoltar', 'statoblastShared', 'statoblast', 'trading', 'openoracle'].map(packageId => `ui/${packageId}/tsconfig.json`))
 		expect(commands.filter(command => command[0]?.endsWith('/vendor.mts') === true)).toEqual([
-			['./tooling/ui/vendor.mts', 'zoltar'],
-			['./tooling/ui/vendor.mts', 'statoblast'],
-			['./tooling/ui/vendor.mts', 'trading'],
-			['./tooling/ui/vendor.mts', 'openoracle'],
+			['./tooling/ui/vendor.mts', 'zoltar', '--artifacts-current'],
+			['./tooling/ui/vendor.mts', 'statoblast', '--artifacts-current'],
+			['./tooling/ui/vendor.mts', 'trading', '--artifacts-current'],
+			['./tooling/ui/vendor.mts', 'openoracle', '--artifacts-current'],
 		])
 		expect(commands.filter(command => command[0]?.endsWith('/workers.mts') === true).map(command => command[1])).toEqual([...UI_APP_IDS])
 		expect(commands.filter(command => command.includes('ensure-contract-artifacts'))).toHaveLength(0)

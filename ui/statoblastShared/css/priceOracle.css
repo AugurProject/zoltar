@@ -1,35 +1,3 @@
-.oracle-price-value {
-	display: inline-flex;
-	flex-direction: column;
-	align-items: flex-start;
-	gap: var(--space-1);
-	font-family: var(--font-family-mono);
-	font-size: var(--font-value);
-	font-weight: 600;
-	font-variant-numeric: tabular-nums;
-	line-height: var(--line-height-tight);
-	color: var(--value);
-}
-
-.oracle-price-validity {
-	font-family: var(--font-family-sans);
-	font-size: var(--font-caption);
-	font-weight: 500;
-	letter-spacing: normal;
-}
-
-.oracle-price-validity.success {
-	color: var(--success);
-}
-
-.oracle-price-validity.danger {
-	color: var(--danger);
-}
-
-.oracle-price-validity.warning {
-	color: var(--warning);
-}
-
 .operation-modal-body:has(> .request-price-fields) .transaction-step-actions .tx-action-group,
 .operation-modal-body:has(> .request-price-fields) .transaction-step-actions .tx-action-group:has(.tx-action-feedback:empty) {
 	gap: var(--space-2);
@@ -45,11 +13,6 @@
 	display: grid;
 	gap: var(--space-1);
 	min-width: 0;
-}
-
-.price-request-estimate-prompt {
-	min-block-size: 1lh;
-	margin: 0;
 }
 
 .request-price-fields .lookup-field-controls.has-action {
@@ -80,10 +43,6 @@
 
 .operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final .tx-action-button {
 	min-block-size: 4rem;
-}
-
-.price-request-preview .tx-action-group > .actions {
-	margin-block-start: 0;
 }
 
 .operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final > .tx-action-feedback {
