@@ -2,7 +2,7 @@ import { tokenDisplayText } from '../token-metadata-limits.ts'
 import { errorChainIncludes } from '../error-chain.ts'
 import { type CollateralIdentityCache, readContractCollateral, usesCollateralUnits, withCollateralIdentityCache } from '../collateral-metadata.ts'
 import { discoverSecurityPoolEventDependencies } from './security-pool-discovery.ts'
-import { transactionCallTrace, unsupportedTraceError } from './transaction-selection.ts'
+import { isDirectCallDestination, transactionCallTrace, unsupportedTraceError } from './transaction-selection.ts'
 import { canonicalBlockLogs, type IndexedBlock, type RichListBalance, type StoredTransaction } from '../database.ts'
 import { readRichListBalance } from '../direct-observations.ts'
 import { type Address, getAddress, type Hash, type Log, type BlockTransaction, type TransactionReceipt, type PublicClient, zeroAddress } from '../ethereum.ts'
@@ -18,7 +18,7 @@ import { assertLease, type NetworkIndexerState, type ProviderState, requireLease
 type SelectedTransactionTrace = { readonly status: 'available'; readonly trace: Record<string, unknown> } | { readonly status: 'not-requested' | 'unavailable' | 'unavailable-historical-state' }
 
 export async function indexBlock(
-	state: HistoricalStateContext & Pick<NetworkIndexerState, 'traceSelectedTransactions'>,
+	state: HistoricalStateContext & Pick<NetworkIndexerState, 'traceSelectedTransactions' | 'scanDirectCalls'>,
 	number: bigint,
 	observedHead: bigint,
 	currentContracts: ReadonlyMap<string, ContractMetadata>,
@@ -54,8 +54,41 @@ export async function indexBlock(
 		contractDeploymentObservations: [],
 		logScanCursors: [],
 	}
-	if (knownLogs.length === 0) return { block: emptyBlock, contracts, tokenMetadata: new Map(currentTokenMetadata) }
-	const relevantHashes = new Set<Hash>(knownLogs.map(log => requireLogPosition(log).transactionHash))
+	const logHashes = new Set<Hash>(knownLogs.map(log => requireLogPosition(log).transactionHash))
+	const relevantHashes = new Set(logHashes)
+	const fullBlock = state.scanDirectCalls ? await state.providers.client.getBlock({ blockNumber: number, includeTransactions: true }) : undefined
+	if (fullBlock !== undefined && (fullBlock.hash !== block.hash || fullBlock.number !== number)) throw new ChainContinuityError(`Full block changed while selecting transactions at ${number}`)
+	const directTransactions = new Map<Hash, BlockTransaction>()
+	const priorCode = new Map<Address, boolean>()
+	const existedBeforeCall = async (destination: ContractMetadata, transaction: BlockTransaction) => {
+		const registered = destination.discoveryBlock ?? (destination.deploymentBlockExact ? destination.deploymentBlock : undefined)
+		if (registered !== undefined && registered !== number) return registered < number
+		const index = transaction.transactionIndex
+		// A discovery transaction or earlier log proves that code existed before a later call in this block.
+		if (index !== undefined) {
+			const discovery = destination.discoveryTxHash === undefined ? undefined : fullBlock?.transactions.find(item => typeof item !== 'string' && item.hash === destination.discoveryTxHash)
+			if (typeof discovery === 'object' && discovery.transactionIndex !== undefined && discovery.transactionIndex < index) return true
+			if (knownLogs.some(log => log.address.toLowerCase() === destination.address.toLowerCase() && requireLogPosition(log).transactionIndex < index)) return true
+		}
+		if (registered === number || number === 0n) return false
+		const cached = priorCode.get(destination.address)
+		if (cached !== undefined) return cached
+		const code = await state.providers.client.getBytecode({ address: destination.address, blockNumber: number - 1n })
+		const deployed = code !== undefined && code !== '0x'
+		priorCode.set(destination.address, deployed)
+		return deployed
+	}
+	const selectDirectCalls = async () => {
+		for (const transaction of fullBlock?.transactions ?? []) {
+			if (typeof transaction === 'string') throw new Error('Full block response is missing transaction bodies')
+			const destination = transaction.to == null ? undefined : contracts.get(transaction.to.toLowerCase())
+			if (destination === undefined || !isDirectCallDestination(destination.kind) || !(await existedBeforeCall(destination, transaction))) continue
+			directTransactions.set(transaction.hash, transaction)
+			relevantHashes.add(transaction.hash)
+		}
+	}
+	await selectDirectCalls()
+	if (relevantHashes.size === 0) return { block: emptyBlock, contracts, tokenMetadata: new Map(currentTokenMetadata) }
 	const transactionByHash = new Map<Hash, { transaction: BlockTransaction; index: number }>()
 
 	const receipts: TransactionReceipt[] = []
@@ -63,7 +96,7 @@ export async function indexBlock(
 	const fetchMissingEvidence = async (): Promise<void> => {
 		const missing = [...relevantHashes].filter(hash => !receiptByHash.has(hash))
 		for (const { receipt, transaction } of await mapLimit(missing, 8, async hash => {
-			const [receipt, transaction] = await Promise.all([state.providers.client.getTransactionReceipt({ hash }), state.providers.client.getTransaction({ hash })])
+			const [receipt, transaction] = await Promise.all([state.providers.client.getTransactionReceipt({ hash }), directTransactions.get(hash) ?? state.providers.client.getTransaction({ hash })])
 			if (transaction.hash !== hash || transaction.blockHash !== block.hash || transaction.blockNumber !== number || transaction.transactionIndex === undefined) throw new ChainContinuityError(`Transaction ${hash} no longer belongs to block ${number}`)
 			return { receipt, transaction }
 		})) {
@@ -125,8 +158,10 @@ export async function indexBlock(
 			const existingReceipt = receiptByHash.get(position.transactionHash)
 			if (existingReceipt !== undefined) assertSelectedLogEvidence(log, existingReceipt)
 			knownLogs.push(log)
+			logHashes.add(position.transactionHash)
 			relevantHashes.add(position.transactionHash)
 		}
+		await selectDirectCalls()
 		await fetchMissingEvidence()
 	}
 
@@ -231,7 +266,7 @@ export async function indexBlock(
 			input: pair.transaction.input,
 			status: receipt.status,
 			gasUsed: receipt.gasUsed,
-			receipt: jsonEvidence({ ...receipt, selectionSource: 'protocol-log', callTraceStatus: trace.status, ...('trace' in trace ? { callTrace: trace.trace } : {}) }),
+			receipt: jsonEvidence({ ...receipt, selectionSource: logHashes.has(hash) ? 'protocol-log' : 'protocol-call', callTraceStatus: trace.status, ...('trace' in trace ? { callTrace: trace.trace } : {}) }),
 			decoded: decodeAction(to === null ? undefined : contracts.get(to.toLowerCase()), pair.transaction.input, displayLabels, tokenMetadata, contractKinds, displayContext),
 		})
 	}

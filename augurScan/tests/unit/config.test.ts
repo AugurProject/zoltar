@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import path from 'node:path'
 import mainnetDeployment from '../../../docs/mainnet-deployment-addresses.json'
+import mainnetNoDeployment from '../../../docs/mainnet-no-deployment-addresses.json'
+import sepoliaNoDeployment from '../../../docs/sepolia-no-deployment-addresses.json'
 import sepoliaDeployment from '../../../docs/sepolia-deployment-addresses.json'
 import mainnetManifest from '../../config/manifests/mainnet.json'
 import sepoliaManifest from '../../config/manifests/sepolia.json'
@@ -37,6 +39,22 @@ afterEach(() => {
 	else process.env['MAINNET_UNISWAP_V2_FACTORY_ADDRESS'] = originalV2Factory
 	if (originalV4Manager === undefined) delete process.env['SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS']
 	else process.env['SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS'] = originalV4Manager
+})
+
+test('registers configured arbitrage executors once and rejects address collisions', async () => {
+	const previous = process.env['MAINNET_OPEN_ORACLE_EXECUTORS']
+	try {
+		process.env['NETWORKS'] = 'mainnet'
+		const address = '0x1111111111111111111111111111111111111111'
+		process.env['MAINNET_OPEN_ORACLE_EXECUTORS'] = `${address}, ${address}`
+		const [network] = await loadNetworks()
+		expect(network?.contracts.filter(contract => contract[2] === 'openOracleArbitrageExecutor')).toEqual([[address, 'OpenOracle arbitrage executor', 'openOracleArbitrageExecutor']])
+		process.env['MAINNET_OPEN_ORACLE_EXECUTORS'] = mainnetDeployment.network.wethAddress
+		await expect(loadNetworks()).rejects.toThrow('conflicts')
+	} finally {
+		if (previous === undefined) delete process.env['MAINNET_OPEN_ORACLE_EXECUTORS']
+		else process.env['MAINNET_OPEN_ORACLE_EXECUTORS'] = previous
+	}
 })
 
 describe('network configuration', () => {
@@ -83,6 +101,13 @@ describe('network configuration', () => {
 		expect(await startupConfig({ API_RATE_LIMIT_PER_MINUTE: '0' })).toMatchObject({ status: 0, stdout: '[0,3000,12000]\n' })
 	})
 
+	test('bounds operator-selected claim reconstruction budgets', async () => {
+		expect((await startupConfig({ CLAIM_MAX_READS: '16385' })).stderr).toContain('CLAIM_MAX_READS must not exceed 16384')
+		expect((await startupConfig({ CLAIM_MAX_GENERATIONS: '0' })).stderr).toContain('CLAIM_MAX_GENERATIONS must be a positive safe integer')
+		expect((await startupConfig({ CLAIM_MAX_LEAVES: '2049' })).stderr).toContain('CLAIM_MAX_LEAVES must not exceed 2048')
+		expect((await startupConfig({ CLAIM_MAX_READS: '16384', CLAIM_MAX_GENERATIONS: '128', CLAIM_MAX_LEAVES: '2048' })).status).toBe(0)
+	})
+
 	test('accepts only valid TCP ports', async () => {
 		expect(await startupConfig({ PORT: '65535' })).toMatchObject({ status: 0, stdout: '[600,65535,12000]\n' })
 		expect((await startupConfig({ PORT: '65536' })).stderr).toContain('PORT must not exceed 65535')
@@ -97,6 +122,26 @@ describe('network configuration', () => {
 			const child = Bun.spawn([process.execPath, '-e', "const { runtimeConfig } = await import('./src/config.ts'); console.log(runtimeConfig.traceSelectedTransactions)"], { cwd: projectRoot, env: environment, stdout: 'pipe', stderr: 'pipe' })
 			expect(await child.exited).toBe(0)
 			expect(await new Response(child.stdout).text()).toBe(`${configured === '1'}\n`)
+		}
+	})
+
+	test('selects the No-genesis root on both real chains', async () => {
+		const originalOutcome = process.env['GENESIS_OUTCOME']
+		try {
+			process.env['GENESIS_OUTCOME'] = 'no'
+			process.env['NETWORKS'] = 'mainnet,sepolia'
+			const networks = await loadNetworks()
+			for (const deployment of [mainnetNoDeployment, sepoliaNoDeployment]) {
+				const network = networks.find(candidate => candidate.id === deployment.network.id)
+				expect(network?.name).toContain('No genesis')
+				expect(network?.contracts.filter(([, , kind]) => kind === 'reputationToken').map(([address]) => address)).toEqual([getAddress(deployment.network.genesisRepTokenAddress)])
+				expect(deployment.deploymentSteps.find(step => step.id === 'zoltar')?.address).toEqual(network?.contracts.find(([, , kind]) => kind === 'zoltar')?.[0])
+			}
+			process.env['GENESIS_OUTCOME'] = 'unknown'
+			await expect(loadNetworks()).rejects.toThrow('GENESIS_OUTCOME must be yes or no')
+		} finally {
+			if (originalOutcome === undefined) delete process.env['GENESIS_OUTCOME']
+			else process.env['GENESIS_OUTCOME'] = originalOutcome
 		}
 	})
 
