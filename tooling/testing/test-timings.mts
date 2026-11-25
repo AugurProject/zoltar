@@ -49,6 +49,7 @@ export type TestTimingReport = {
 	executedFileCount?: number
 	runnerOverheadSeconds?: number
 	regressions: TestTimingRegression[]
+	timingWarnings: (TestTimingRegression & { historicalMaximumSeconds: number })[]
 	shardBalance?: { fastestSeconds: number; imbalanceRatio: number; slowestSeconds: number }
 	slowestFiles: { filePath: string; seconds: number }[]
 	unstableFiles: { filePath: string; maximumSeconds: number; minimumSeconds: number; spreadRatio: number }[]
@@ -307,6 +308,7 @@ export function createTestTimingReport(history: TestTimingHistory | undefined, o
 		.sort((left, right) => right.seconds - left.seconds || left.filePath.localeCompare(right.filePath))
 		.slice(0, maximumSlowFiles)
 	const regressions: TestTimingRegression[] = []
+	const timingWarnings: TestTimingReport['timingWarnings'] = []
 	for (const [filePath, currentSeconds] of currentSecondsByFile) {
 		const samples = currentHistory?.samplesByFile[filePath] ?? []
 		if (samples.length < minimumHistorySamples) continue
@@ -318,7 +320,15 @@ export function createTestTimingReport(history: TestTimingHistory | undefined, o
 			increaseRatio = Number.POSITIVE_INFINITY
 			if (currentSeconds === 0) increaseRatio = 0
 		}
-		if (increaseSeconds > minimumIncreaseSeconds && increaseRatio > maximumIncreaseRatio) regressions.push({ baselineSeconds, currentSeconds, filePath, increaseRatio, increaseSeconds })
+		if (increaseSeconds <= minimumIncreaseSeconds || increaseRatio <= maximumIncreaseRatio) continue
+		const slowdown = { baselineSeconds, currentSeconds, filePath, increaseRatio, increaseSeconds }
+		const historicalMaximumSeconds = Math.max(...samples)
+		// Require a material increase beyond the slowest observed run as well as the median budget.
+		if (currentSeconds - historicalMaximumSeconds <= minimumIncreaseSeconds) {
+			timingWarnings.push({ ...slowdown, historicalMaximumSeconds })
+		} else {
+			regressions.push(slowdown)
+		}
 	}
 	regressions.sort((left, right) => right.increaseSeconds - left.increaseSeconds || left.filePath.localeCompare(right.filePath))
 	const elapsedSeconds = observations.map(observation => observation.elapsedSeconds).filter(seconds => seconds > 0)
@@ -341,7 +351,7 @@ export function createTestTimingReport(history: TestTimingHistory | undefined, o
 	const selectedFileCount = new Set(observations.flatMap(observation => observation.testFiles)).size
 	const executedFileCount = new Set(observations.flatMap(observation => observation.executedTestFiles ?? observation.testFiles)).size
 	const runnerOverheadSeconds = observations.every(observation => observation.runnerOverheadSeconds !== undefined) ? observations.reduce((total, observation) => total + (observation.runnerOverheadSeconds ?? 0), 0) : undefined
-	return { currentSecondsByFile, skippedOnlyTestFiles, selectedFileCount, executedFileCount, ...(runnerOverheadSeconds === undefined ? {} : { runnerOverheadSeconds }), regressions, ...(shardBalance === undefined ? {} : { shardBalance }), slowestFiles, unstableFiles }
+	return { currentSecondsByFile, skippedOnlyTestFiles, selectedFileCount, executedFileCount, ...(runnerOverheadSeconds === undefined ? {} : { runnerOverheadSeconds }), regressions, timingWarnings, ...(shardBalance === undefined ? {} : { shardBalance }), slowestFiles, unstableFiles }
 }
 
 const formatSeconds = (seconds: number) => `${seconds.toFixed(1)}s`
@@ -353,6 +363,9 @@ export function renderTestTimingMarkdown(report: TestTimingReport) {
 	if (report.skippedOnlyTestFiles?.length) lines.push('', '## Skipped-only test files', '', ...report.skippedOnlyTestFiles.map(file => `- \`${file}\``))
 	if (report.shardBalance !== undefined) lines.push('', `Shard balance: ${formatSeconds(report.shardBalance.fastestSeconds)} fastest, ${formatSeconds(report.shardBalance.slowestSeconds)} slowest (${report.shardBalance.imbalanceRatio.toFixed(2)}x)`)
 	if (report.unstableFiles.length > 0) lines.push('', '## Unstable test durations', '', ...report.unstableFiles.map(file => `- \`${file.filePath}\`: ${formatSeconds(file.minimumSeconds)}–${formatSeconds(file.maximumSeconds)} (${file.spreadRatio.toFixed(2)}x spread)`))
+	if (report.timingWarnings.length > 0) {
+		lines.push('', '## Above median budget, within historical timing tolerance', '', ...report.timingWarnings.map(file => `- \`${file.filePath}\`: ${formatSeconds(file.currentSeconds)} versus ${formatSeconds(file.baselineSeconds)} median and ${formatSeconds(file.historicalMaximumSeconds)} historical maximum`))
+	}
 	if (report.regressions.length === 0) {
 		lines.push('', 'Timing regression budget: passed')
 	} else {
