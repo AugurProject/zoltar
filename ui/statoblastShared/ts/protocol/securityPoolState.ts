@@ -88,7 +88,7 @@ export async function loadCentralSecurityPoolQuestion(client: Pick<ReadClient, '
 		securityPoolAddress: securityPool,
 		feePrincipalAttoEth: requireBigintValue(Reflect.get(stream, 'feePrincipalAttoEth'), 'holding fee base amount'),
 		centralSettlement: true as const,
-		centralCheckpointTimestamp: requireBigintValue(checkpointValue, 'snapshot block timestamp'),
+		centralCheckpointTimestamp: requireBigintValue(checkpointValue, 'time of the payout read'),
 		settlementCollateralAttoEth: cash,
 		settlementRecoveryAttoRep: requireBigintValue(Reflect.get(snapshot, 'questionRecoveryAttoRep'), 'question recovery REP'),
 		shareTokenSupplyAttoShares: requireBigintValue(Reflect.get(snapshot, 'outcomeSupplyAttoShares'), 'shares outstanding'),

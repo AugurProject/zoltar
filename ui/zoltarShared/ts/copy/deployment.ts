@@ -20,5 +20,5 @@ export const deploymentBlocked = 'Deployment blocked'
 export const formatDeployPrerequisiteFirstError = (prerequisiteLabel: string) => `Deploy ${prerequisiteLabel} first.`
 export const deploymentVerificationFailedError = 'Deployment verification failed: no contract code was found at the expected address. Check the selected network and retry.'
 export const formatDeploymentUnverifiableError = (contractLabel: string) => `${contractLabel} cannot be verified on this network, so it cannot be deployed from this app.`
-export const formatUnexpectedProxyDeployerCode = (address: string) => `Unexpected code at the proxy deployer ${address}.`
-export const proxyDeployerSendWithoutHash = 'The proxy deployer send returned no transaction hash.'
+export const formatUnexpectedProxyDeployerCode = (address: string) => `Unexpected code at the shared proxy ${address}.`
+export const proxyDeployerSendWithoutHash = 'The shared proxy deployment returned no transaction hash.'

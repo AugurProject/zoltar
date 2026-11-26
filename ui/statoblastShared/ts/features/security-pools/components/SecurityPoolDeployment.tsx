@@ -225,7 +225,7 @@ export function SecurityPoolDeployment({ actions, model }: { actions: SecurityPo
 	const savedSetupStage = actions.deploymentActivated ? 4 : cachedSetupStage
 	const setupStage = verifiedSetupStage ?? savedSetupStage
 	const setupDataNotice = useOldActionDataNotice(currentDeployment && verifiedSetupStage !== undefined && verifiedSetupStage < 4 ? model.displayedAt : undefined)
-	const progressNotice = actions.deploymentProgressPersistent ? pageCopy.deployProgressSaved : deploymentCopy.progressUnavailable
+	const progressNotice = actions.deploymentPersistenceWarning ?? (actions.deploymentProgressPersistent ? pageCopy.deployProgressSaved : deploymentCopy.progressUnavailable)
 	const completedCount = Number(actions.admissionAddress !== undefined) + Number(actions.deploymentPool !== undefined) + (setupStage ?? 0)
 	let transactionProgress = pageCopy.deployTransactionProgress(completedCount)
 	if (completedCount === 0 && activeStep < 3) transactionProgress = pageCopy.deployTransactionCount
@@ -239,7 +239,7 @@ export function SecurityPoolDeployment({ actions, model }: { actions: SecurityPo
 	const pending = actions.pendingDeployment
 	const canCheckPending = pending !== undefined && actions.busy === undefined
 	let restartConfirmation = pageCopy.deployDiscardConfirmation
-	if (pending !== undefined) restartConfirmation = pending.step === 'pool' ? pageCopy.deployRetryConfirmation : pageCopy.deployRecoveryConfirmation
+	if (pending !== undefined) restartConfirmation = pending.step === 'pool' ? pageCopy.deployRetryConfirmation(actions.restartConfirmationWarning) : pageCopy.deployRecoveryConfirmation(actions.restartConfirmationWarning)
 	return (
 		<>
 			<nav className='statoblast-breadcrumbs' aria-label={pageCopy.breadcrumbs}>

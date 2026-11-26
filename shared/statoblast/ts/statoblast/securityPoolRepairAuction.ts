@@ -24,7 +24,7 @@ function address(value: Address, label: string) {
 	return getAddress(value)
 }
 function uint(value: bigint, label: string, bits = 256) {
-	if (typeof value !== 'bigint' || value < 0n || value >= 1n << BigInt(bits)) throw new Error(`${label} must fit uint${bits}.`)
+	if (typeof value !== 'bigint' || value < 0n || value >= 1n << BigInt(bits)) throw new Error(`${label} is out of range.`)
 	return value
 }
 function requireAuction(snapshot: SecurityPoolAuctionSnapshot) {

@@ -63,7 +63,7 @@ export const shareErrors = {
 	recoveryFundsUnavailable: 'Recovery REP funding is unavailable.',
 	mintCapacityBlock: 'Mint capacity requires a mined block.',
 	balancesResponse: 'Could not read the share balances.',
-	mintPoolUnverified: 'Market security pool was not created by the expected factory.',
+	mintPoolUnverified: 'Could not verify how this market’s security pool was created.',
 	feeQuote: 'Could not read the collateral fee quote.',
 	mintingClosed: 'Minting closed when the question ended.',
 	purchaseQuote: 'Could not read the REP purchase quote.',
@@ -92,10 +92,10 @@ export const reportErrors = {
 
 export const poolErrors = {
 	deploymentCode: 'Could not verify the deployment code.',
-	poolUnverified: 'Security pool was not created by the expected factory.',
+	poolUnverified: 'Could not verify how this security pool was created.',
 	setupBlock: 'Security pool setup requires a mined block.',
 	protocolMismatch: 'Security pool uses unrecognized protocol contracts.',
-	auctionContractMismatch: 'Security pool uses an unrecognized auction deployer.',
+	auctionContractMismatch: 'Could not verify the auction setup contract for this security pool.',
 	setupStage: 'Invalid security pool setup stage.',
 	setupChanged: 'Security pool setup changed. Refresh and retry.',
 	poolChanged: 'Chain changed while reading the security pool. Refresh and try again.',

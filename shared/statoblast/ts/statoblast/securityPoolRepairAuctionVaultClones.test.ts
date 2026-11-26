@@ -18,7 +18,7 @@ describe('auction vault clones', () => {
 	test('the predicted address uses the auction as deployer and the bid as salt', () => {
 		expect(predictAuctionVaultAddress(bindings)).toBe(getCreate2Address({ from: auction, salt: `0x${'0'.repeat(63)}7`, bytecode: auctionVaultCreationCode(bindings) }))
 		expect(predictAuctionVaultAddress({ ...bindings, bidId: 8n })).not.toBe(predictAuctionVaultAddress(bindings))
-		expect(() => predictAuctionVaultAddress({ ...bindings, bidId: -1n })).toThrow('uint256')
+		expect(() => predictAuctionVaultAddress({ ...bindings, bidId: -1n })).toThrow('Auction bid ID is out of range.')
 	})
 	test('decoding accepts only exact clones and verification rejects every counterfeit', () => {
 		const runtime = auctionVaultRuntimeCode(bindings)
@@ -28,7 +28,7 @@ describe('auction vault clones', () => {
 		expect(() => verifyAuctionVaultCode(runtime, bindings)).not.toThrow()
 		for (const code of [undefined, '0x', `0x${runtime.slice(2)}00`, `0x00${runtime.slice(4)}`, auctionVaultRuntimeCode({ ...bindings, implementation: owner }), auctionVaultRuntimeCode({ ...bindings, bidId: 8n }), auctionVaultRuntimeCode({ ...bindings, owner: capital })] as const) {
 			expect(decodeAuctionVaultBindings(code)).not.toEqual(bindings)
-			expect(() => verifyAuctionVaultCode(code, bindings, 'position vault')).toThrow('Unrecognized position vault runtime code.')
+			expect(() => verifyAuctionVaultCode(code, bindings, 'auction position')).toThrow('Could not verify the code or linked addresses for the auction position.')
 		}
 		expect(decodeAuctionVaultBindings(`0x00${runtime.slice(4)}`)).toBeUndefined()
 		expect(decodeAuctionVaultBindings(auctionVaultRuntimeCode({ ...bindings, bidId: 8n }))).toEqual({ ...bindings, bidId: 8n })

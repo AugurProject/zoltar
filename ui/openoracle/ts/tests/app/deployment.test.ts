@@ -100,7 +100,7 @@ describe('OpenOracle deployment boundary', () => {
 			const step = onchainStateDependencies.getDeploymentSteps().find(candidate => candidate.id === id)
 			if (step === undefined) throw new Error(`Missing ${id} step`)
 			client.codes.set(step.address, '0x00')
-			await expect(onchainStateDependencies.loadDeploymentStatusOracleSnapshot(client)).rejects.toThrow(`Unexpected runtime code for ${id}`)
+			await expect(onchainStateDependencies.loadDeploymentStatusOracleSnapshot(client)).rejects.toThrow(`Unexpected contract code for ${id}`)
 		} finally {
 			restore()
 		}

@@ -57,7 +57,7 @@ describe('shared capital security pool deployment', () => {
 		expect(() => validateSecurityPoolEconomics({ ...economics, annualFeeBps: 10_001n })).toThrow('100%')
 		expect(() => validateSecurityPoolEconomics({ ...economics, annualFeeBps: 0n })).not.toThrow()
 		expect(() => validateSecurityPoolEconomics({ ...economics, minimumOutcomeRate: 10n ** 18n + 1n })).toThrow('exchange rate')
-		expect(() => validateSecurityPoolEconomics({ ...economics, rewardVestingSeconds: 2n ** 48n })).toThrow('uint48')
+		expect(() => validateSecurityPoolEconomics({ ...economics, rewardVestingSeconds: 2n ** 48n })).toThrow('Fee vesting duration is out of range.')
 		expect(() => buildSecurityPoolDeploymentRequest({ ...base, maximumQuestionHorizonSeconds: 0n })).toThrow('positive')
 	})
 

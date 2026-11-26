@@ -112,13 +112,13 @@ test('vault binding rejects another owner, fork route, initial ledger, bid or co
 	for (const address of [vault, auction, engine, capital, modules.capitalImplementation, implementation, modules.fork, modules.lifecycle, modules.repairAuctionDelegate, index, modules.indexImplementation, modules.fees, modules.feesImplementation, modules.services]) {
 		const source = fixture()
 		source.source.codes.set(address, '0x6000')
-		await expect(authenticateSecurityPoolAuctionVault(source.client, securityPool, vault, 10n)).rejects.toThrow(/^(?:Could not verify the .* code\.|Could not verify the auction position contract\.|Unrecognized .* runtime code\.|Could not verify the code or linked addresses for the .*\.)$/)
+		await expect(authenticateSecurityPoolAuctionVault(source.client, securityPool, vault, 10n)).rejects.toThrow(/^(?:Could not verify the .* code\.|Could not verify the auction position contract\.|Could not verify the code or linked addresses for the .*\.)$/)
 	}
 	// Counterfeit clones: another implementation, foreign bindings, or a clone at the wrong address.
 	for (const [code, reason] of [
 		[auctionVaultRuntimeCode({ ...bindings, implementation: token }), 'address does not match'],
-		[auctionVaultRuntimeCode({ ...bindings, bidId: 4n }), 'runtime'],
-		[auctionVaultRuntimeCode({ ...bindings, owner: token }), 'runtime'],
+		[auctionVaultRuntimeCode({ ...bindings, bidId: 4n }), 'Could not verify the code or linked addresses for the auction position.'],
+		[auctionVaultRuntimeCode({ ...bindings, owner: token }), 'Could not verify the code or linked addresses for the auction position.'],
 	] as const) {
 		const source = fixture()
 		source.source.codes.set(vault, code)
@@ -141,7 +141,7 @@ test('branch auction loading authenticates the adapter, engine, implementation a
 	source.values['bidderBidId'] = 3n
 	expect((await loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).auction?.bids.map(bid => bid.vault)).toEqual([vault])
 	source.source.codes.set(vault, auctionVaultRuntimeCode({ ...bindings, implementation: token }))
-	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('auction position runtime')
+	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('Could not verify the code or linked addresses for the auction position.')
 	source.source.codes.set(vault, auctionVaultRuntimeCode(bindings))
 	source.source.codes.set(implementation, '0x6000')
 	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('Could not verify the auction position contract code.')

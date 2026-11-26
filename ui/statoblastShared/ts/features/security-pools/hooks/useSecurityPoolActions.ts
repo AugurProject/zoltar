@@ -50,7 +50,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 	const questionInput = useSignal('')
 	const busy = useSignal<string | undefined>(undefined)
 	const checkingDeploymentReceipt = useMemo(() => signal(false), [journal])
-	const restartProof = useMemo(() => signal<PendingDeployment | undefined>(undefined), [journal])
+	const restartProof = useMemo(() => signal<{ pending: PendingDeployment | undefined; confirmationWarning: string } | undefined>(undefined), [journal])
 	const deploymentRecoveryDetail = useMemo(() => signal<string | undefined>(undefined), [journal])
 	const error = useSignal<string | undefined>(undefined)
 	const lastFailedAction = useSignal<string | undefined>(undefined)
@@ -158,7 +158,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 			} else {
 				deploymentRecoveryDetail.value = result.detail
 				if (result.kind === 'restart') {
-					restartProof.value = verified.pending
+					restartProof.value = { pending: verified.pending, confirmationWarning: result.confirmationWarning }
 					return verified
 				}
 			}
@@ -319,7 +319,8 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 	const previousAdmission = deployedAdmission.value
 	const liveAdmission = previousAdmission?.key === admissionKey && previousAdmission.backend === backend ? previousAdmission : undefined
 	const admission = progress?.rules !== undefined && origin !== undefined ? { address: progress.rules, universeId: origin.universeId } : liveAdmission
-	const restartReady = progress?.pending !== undefined && samePendingDeployment(progress.pending, restartProof.value)
+	const proof = restartProof.value
+	const restartReady = progress?.pending !== undefined && proof !== undefined && samePendingDeployment(progress.pending, proof.pending)
 	const pendingDeploymentReason = progress?.pending === undefined ? undefined : (deploymentRecoveryDetail.value ?? (progress.pending.hash === undefined ? deploymentCopy.walletSendUncertain : deploymentCopy.receiptPending))
 	const canStartNewDeployment = progress !== undefined && (progress.pending === undefined || restartReady) && (progress.activated === true || progress.pool === undefined || originForked || (verifiedSetup?.originForkTime ?? 0n) !== 0n)
 	const deploymentStatus = (savedPool === undefined ? undefined : copy.poolAlreadyDeployed) ?? (admission === undefined ? copy.deployAdmissionFirst : undefined)
@@ -367,6 +368,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		originForked,
 		deploymentLocked: progress !== undefined,
 		deploymentProgressPersistent: wallet === undefined || !journal.persistenceUnavailable.value,
+		deploymentPersistenceWarning: journal.persistenceWarning.value ? deploymentCopy.progressUpdateFailed : undefined,
 		deploymentPool: savedPool,
 		deploymentActivated: progress?.activated === true,
 		pendingDeployment: progress?.pending,
@@ -379,10 +381,12 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 			await refreshDeploymentProgress(true)
 		},
 		canStartNewDeployment,
+		restartConfirmationWarning: restartReady ? proof?.confirmationWarning : undefined,
 		startNewDeployment: async () => {
 			if (!canStartNewDeployment || progress === undefined || busy.value !== undefined || checkingDeploymentReceipt.value) return false
 			const current = progress.pending === undefined ? progress : await refreshDeploymentProgress()
 			if (current === undefined || !currentContext() || !samePendingDeployment(current.pending, progress.pending)) return false
+			if (progress.pending !== undefined && restartProof.value?.confirmationWarning !== proof?.confirmationWarning) return false
 			try {
 				if (!(await journal.restart(current))) {
 					journal.current.value = readProgress()

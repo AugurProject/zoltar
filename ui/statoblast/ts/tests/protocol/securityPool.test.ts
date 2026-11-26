@@ -39,8 +39,8 @@ test('an auction delegate whose implementation getter points elsewhere fails aut
 test('setup and account authentication reject an unrecognized future auction deployer', async () => {
 	const fixture = capitalClient()
 	fixture.setRead('repairAuctionDeployer', modules.engine)
-	await expect(loadSecurityPoolSetup(fixture.client, securityPool, owner)).rejects.toThrow('unrecognized auction deployer')
-	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('unrecognized auction deployer')
+	await expect(loadSecurityPoolSetup(fixture.client, securityPool, owner)).rejects.toThrow('Could not verify the auction setup contract for this security pool.')
+	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('Could not verify the auction setup contract for this security pool.')
 })
 test('genuine runtime code the canonical factory did not deploy fails setup and account authentication', async () => {
 	// Runtime code and getters match a real security pool; only the factory record separates it from one built with other module deployers.
@@ -53,8 +53,8 @@ test('genuine runtime code the canonical factory did not deploy fails setup and 
 			return await fixture.client.getCode(request)
 		},
 	}))
-	await expect(loadSecurityPoolSetup(client, securityPool, owner)).rejects.toThrow('not created by the expected factory')
-	await expect(loadSecurityPoolAccount(client, securityPool, owner, 0n)).rejects.toThrow('not created by the expected factory')
+	await expect(loadSecurityPoolSetup(client, securityPool, owner)).rejects.toThrow('Could not verify how this security pool was created.')
+	await expect(loadSecurityPoolAccount(client, securityPool, owner, 0n)).rejects.toThrow('Could not verify how this security pool was created.')
 	expect(codeTargets).toEqual([])
 	expect(fixture.reads.map(read => read.name)).toEqual(['isSecurityPool', 'isSecurityPool'])
 	expect(fixture.reads.filter(read => read.name === 'isSecurityPool').map(read => [read.args, read.blockNumber])).toEqual([

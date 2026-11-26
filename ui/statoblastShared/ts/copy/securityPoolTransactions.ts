@@ -4,6 +4,7 @@ export const loadPoolFailed = 'Unable to load this security pool position.'
 export const poolChanged = 'Security pool context changed. Review again.'
 export const relatedLinkSeparator = ' · '
 export const openDeploymentPromptWarning = 'If a deployment request is still open in your wallet, reject it there before starting a new deployment.'
+export const pendingDeploymentTransactionWarning = 'This transaction may still be pending in your wallet. Cancel it there before starting a new deployment.'
 
 export const deployment = {
 	positionReview: (description: string, position: string, wallet: string) => `${description} The auction position is ${position}. Returned collateral, ETH and REP go to ${wallet}.`,
@@ -25,13 +26,14 @@ export const deployment = {
 	walletNonceUnavailable: 'Check your wallet activity. This older deployment was saved before Statoblast could track its progress.',
 	walletRecoveryUnsupported: 'Statoblast can’t tell whether your wallet sent the earlier transaction. Check your wallet activity before starting a new deployment.',
 	missingDeploymentTransaction: 'No deployment transaction or receipt was found. Check your wallet activity before starting a new deployment.',
-	droppedDeploymentTransaction: (nonce: bigint) => `If your wallet no longer shows this transaction, send or cancel a transaction with nonce ${nonce}, then check again.`,
+	droppedDeploymentTransaction: (nonce: bigint, estimated: boolean) => `If your wallet no longer shows this transaction, send or cancel a transaction with nonce ${nonce}${estimated ? ' (or the nonce your wallet shows for it)' : ''}, then check again.`,
 	walletFinalityPending: `Earlier transactions from this wallet are still pending or not yet final. Speed up or cancel them in your wallet, or wait about ${15} minutes, then check again.`,
 	rulesNonceScanLimit: 'Statoblast checked a limited range of wallet transactions. Check your wallet activity before starting a new deployment.',
 	rulesRecoveryIncomplete: 'Statoblast checked a limited range of wallet transactions. Check your wallet activity, then check again.',
 	transactionDidNotDeploy: 'The earlier transaction did not deploy this step. Start a new deployment to continue.',
 	coordinationUnavailable: 'This browser cannot coordinate deployment across tabs. Open this page in a browser that supports Web Locks.',
 	progressWriteFailed: 'Could not save deployment progress. Free up browser storage or check its permissions, then try again.',
+	progressUpdateFailed: "Progress couldn't be saved. Keep this tab open until setup finishes, and don't deploy from another tab.",
 	factoryCountUnavailable: 'Could not check previous security pool deployments. Try the deployment again.',
 	walletRejected: 'I rejected it in my wallet',
 	confirmWalletRejection: 'Did you reject this transaction in your wallet? Statoblast will check the chain before unlocking this step.',
@@ -50,7 +52,7 @@ export const deployment = {
 	purchaseFee: 'Purchase fee',
 	fixedQuestionsRequired: 'Enter at least one approved question ID.',
 	invalidQuestionList: 'Use decimal or hexadecimal question IDs separated by commas or spaces.',
-	questionIdTooLarge: 'Question ID must fit uint256.',
+	questionIdTooLarge: 'Question ID is out of range.',
 	reviewOrigin: (universeId: bigint, collateral: string, rules: string) => `Origin universe ${universeId}. Collateral token ${collateral}. Question rules contract ${rules}.`,
 	reviewQuestionRules: (mode: 'open' | 'fixed', horizon: string) => `${mode === 'open' ? 'Any eligible question may be registered.' : 'Only questions on the fixed list may be registered.'} Maximum time to the question close is ${horizon}.`,
 	reviewFees: (annual: string, purchase: string, floor: string) => `Annual holding fee ${annual}%. Purchase fee ${purchase}% of required backing value, minimum ${floor}.`,

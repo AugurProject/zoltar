@@ -15,7 +15,7 @@
 	"deploymentSteps": [
 		{
 			"id": "proxyDeployer",
-			"label": "Proxy Deployer",
+			"label": "Shared proxy",
 			"address": "0x7A0D94F55792C434d74a40883C6ed8545E406D12"
 		},
 		{

@@ -3,8 +3,8 @@ import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 import { MissingSecurityPoolDeploymentEventError } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import type { ReadClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { deployment as copy } from '../../../copy/securityPoolTransactions.js'
-import { DeploymentHistoryUnavailableError, readDeploymentNonce, readDeploymentRecoveryHead, readDeploymentTransaction, recoverQuestionRules, recoverSecurityPoolDeployment } from '../../../protocol/deploymentRecovery.js'
+import { deployment as copy, openDeploymentPromptWarning, pendingDeploymentTransactionWarning } from '../../../copy/securityPoolTransactions.js'
+import { DeploymentHistoryUnavailableError, readDeploymentRecoveryHead, readDeploymentTransaction, recoverQuestionRules, recoverSecurityPoolDeployment } from '../../../protocol/deploymentRecovery.js'
 import { securityPoolAddressFromCreationReceipt, securityPoolCreationRequest } from '../../../protocol/securityPool.js'
 import { parseDeploymentDraft } from './creation.js'
 import type { DeploymentProgress, PendingDeployment } from './deploymentProgress.js'
@@ -33,12 +33,13 @@ async function readDeploymentWalletState(client: ReadClient, address: Address) {
 	return { blockNumber: head.number, confirmed, idle: pending === confirmed }
 }
 
-type DeploymentRecovery = ({ kind: 'recovered'; rules?: Address | undefined; pool?: Address | undefined } | { kind: 'restart' | 'waiting'; detail: string } | { kind: 'rejected' }) & { transactionNonce?: string | undefined }
+type DeploymentRecovery = ({ kind: 'recovered'; rules?: Address | undefined; pool?: Address | undefined } | { kind: 'waiting'; detail: string } | { kind: 'restart'; detail: string; confirmationWarning: string } | { kind: 'rejected' }) & { transactionNonce?: string | undefined }
 
 export async function readPendingDeploymentRecovery(client: ReadClient, wallet: Address, progress: DeploymentProgress & { pending: PendingDeployment }, profile: NetworkProfile, walletRejected: boolean): Promise<DeploymentRecovery> {
 	const { pending } = progress
 	const waiting = (detail: string) => ({ kind: 'waiting' as const, detail })
-	const restart = (detail: string) => ({ kind: 'restart' as const, detail })
+	const restart = (detail: string, confirmationWarning = openDeploymentPromptWarning) => ({ kind: 'restart' as const, detail, confirmationWarning })
+	const restartPendingTransaction = () => restart(pendingDeploymentTransactionWarning, pendingDeploymentTransactionWarning)
 	const receipt =
 		pending.hash === undefined
 			? undefined
@@ -60,7 +61,8 @@ export async function readPendingDeploymentRecovery(client: ReadClient, wallet: 
 	if (!(await supportsDeploymentNonce(client, wallet))) {
 		if (receipt === undefined) {
 			const transaction = pending.hash === undefined ? undefined : await readDeploymentTransaction(client, pending.hash)
-			return transaction === undefined ? restart(copy.walletRecoveryUnsupported) : waiting(copy.walletTransactionPending)
+			if (transaction !== undefined) return waiting(copy.walletTransactionPending)
+			return pending.hash === undefined ? restart(copy.walletRecoveryUnsupported) : restartPendingTransaction()
 		}
 		const head = await readDeploymentRecoveryHead(client)
 		if (head?.number === undefined || head.hash === undefined) return waiting(copy.receiptCheckFailed)
@@ -76,24 +78,26 @@ export async function readPendingDeploymentRecovery(client: ReadClient, wallet: 
 		return restart(deploymentConfirmed ? copy.missingDeploymentTransaction : copy.transactionDidNotDeploy)
 	}
 
-	const transactionNonce = pending.hash === undefined ? undefined : await readDeploymentNonce(client, wallet, pending.hash)
+	const transaction = pending.hash === undefined ? undefined : await readDeploymentTransaction(client, pending.hash)
+	const transactionNonce = transaction?.from.toLowerCase() === wallet.toLowerCase() ? transaction.nonce.toString() : undefined
 	const nonceValue = transactionNonce ?? pending.nonce
 	if (nonceValue === undefined) {
 		if (!state.idle) return waiting(copy.walletFinalityPending)
-		return pending.hash === undefined ? restart(copy.walletNonceUnavailable) : waiting(copy.receiptPending)
+		if (pending.hash === undefined) return restart(copy.walletNonceUnavailable)
+		return transaction === undefined ? restartPendingTransaction() : waiting(copy.walletTransactionPending)
 	}
 	const nonce = BigInt(nonceValue)
+	const estimatedNonce = transactionNonce === undefined && pending.nonceVerified !== true
 	if (walletRejected && pending.hash === undefined && state.idle && state.confirmed <= nonce) return { kind: 'rejected' }
 	if (state.confirmed <= nonce) {
 		if (!state.idle) return { ...waiting(copy.walletFinalityPending), transactionNonce }
 		if (pending.hash === undefined) return { ...waiting(copy.walletSendUncertain), transactionNonce }
-		return { ...waiting(transactionNonce === undefined && pending.nonceVerified === true ? copy.droppedDeploymentTransaction(nonce) : copy.receiptPending), transactionNonce }
+		return { ...waiting(transaction === undefined ? copy.droppedDeploymentTransaction(nonce, estimatedNonce) : copy.receiptPending), transactionNonce }
 	}
 
 	const draft = parseDeploymentDraft(progress.draft, profile)
 	if (draft.creationError !== undefined) throw new Error(draft.creationError)
 	if (draft.origin === undefined) return waiting(copy.receiptCheckFailed)
-	const estimatedNonce = transactionNonce === undefined && pending.nonceVerified !== true
 	try {
 		if (pending.step === 'rules') {
 			const result = await recoverQuestionRules(client, wallet, nonce, progress.draft.admissionMode, draft.origin.universeId, draft.approvedQuestions, estimatedNonce)
@@ -113,5 +117,6 @@ export async function readPendingDeploymentRecovery(client: ReadClient, wallet: 
 		if (!state.idle) return { ...waiting(copy.walletFinalityPending), transactionNonce }
 		return { ...(pending.hash !== undefined && estimatedNonce ? waiting(copy.historyUnavailable) : restart(copy.historyUnavailable)), transactionNonce }
 	}
-	return { ...(state.idle ? restart(copy.restartAvailable) : waiting(copy.walletFinalityPending)), transactionNonce }
+	if (!state.idle) return { ...waiting(copy.walletFinalityPending), transactionNonce }
+	return { ...(pending.hash !== undefined && estimatedNonce ? restartPendingTransaction() : restart(copy.restartAvailable)), transactionNonce }
 }

@@ -13,7 +13,7 @@ describe('shared capital complete-set purchases', () => {
 		const request = buildSecurityPoolMintRequest({ trader, securityPool, universeId: 7n, questionId: 13n, mintAttoEth: 100n, recipient: trader, minimumShares: 99n, maximumPurchaseFeeAttoEth: 2n })
 		expect(request).toMatchObject({ account: trader, to: securityPool, value: 0n })
 		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'createCompleteSet', args: [7n, 13n, 100n, trader, 99n, 2n] })
-		expect(() => buildSecurityPoolMintRequest({ trader, securityPool, universeId: 2n ** 248n, questionId: 13n, mintAttoEth: 100n, recipient: trader, minimumShares: 99n, maximumPurchaseFeeAttoEth: 2n })).toThrow('uint248')
+		expect(() => buildSecurityPoolMintRequest({ trader, securityPool, universeId: 2n ** 248n, questionId: 13n, mintAttoEth: 100n, recipient: trader, minimumShares: 99n, maximumPurchaseFeeAttoEth: 2n })).toThrow('Universe ID is out of range.')
 	})
 
 	test('recovery-bearing mint requests bind an explicit REP budget', () => {

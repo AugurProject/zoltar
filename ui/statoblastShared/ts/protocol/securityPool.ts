@@ -157,8 +157,8 @@ export async function loadSecurityPoolSetup(client: ReadClient, securityPool: Ad
 		client.readContract({ address: securityPool, abi: linksAbi, functionName: 'repairAuctionDeployer', blockNumber }),
 	])
 	const infrastructure = getInfraContractAddresses()
-	if (getAddress(requireAddressValue(factoryValue, 'security pool factory')) !== getAddress(infrastructure.securityPoolFactory) || getAddress(requireAddressValue(zoltarValue, 'security pool protocol')) !== getAddress(infrastructure.zoltar)) throw new Error(poolErrors.protocolMismatch)
-	if (getAddress(requireAddressValue(auctionDeployerValue, 'auction deployer')) !== getAddress(infrastructure.securityPoolRepairAuctionDeployer)) throw new Error(poolErrors.auctionContractMismatch)
+	if (getAddress(requireAddressValue(factoryValue, 'security pool deployment contract')) !== getAddress(infrastructure.securityPoolFactory) || getAddress(requireAddressValue(zoltarValue, 'security pool protocol')) !== getAddress(infrastructure.zoltar)) throw new Error(poolErrors.protocolMismatch)
+	if (getAddress(requireAddressValue(auctionDeployerValue, 'auction setup contract')) !== getAddress(infrastructure.securityPoolRepairAuctionDeployer)) throw new Error(poolErrors.auctionContractMismatch)
 	const stage = Number(requireIntegerLikeValue(stageValue, 'setup stage'))
 	if (stage < 0 || stage > 4) throw new Error(poolErrors.setupStage)
 	const originUniverseId = requireBigintValue(originValue, 'origin universe')
@@ -219,7 +219,7 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 	const repairAuctionDelegate = requireAddressValue(auctionDelegateValue, 'pool auction contract')
 	const infrastructure = getInfraContractAddresses()
 	if (getAddress(factory) !== getAddress(infrastructure.securityPoolFactory) || getAddress(zoltar) !== getAddress(infrastructure.zoltar)) throw new Error(poolErrors.protocolMismatch)
-	if (getAddress(requireAddressValue(auctionDeployerValue, 'auction deployer')) !== getAddress(infrastructure.securityPoolRepairAuctionDeployer)) throw new Error(poolErrors.auctionContractMismatch)
+	if (getAddress(requireAddressValue(auctionDeployerValue, 'auction setup contract')) !== getAddress(infrastructure.securityPoolRepairAuctionDeployer)) throw new Error(poolErrors.auctionContractMismatch)
 	if (requireAddressValue(capitalServicesValue, 'pool operations address') !== getAddress(services)) throw new Error(poolErrors.poolServicesMismatch)
 	if (requireAddressValue(capitalForkValue, 'fork settings for pool capital') !== getAddress(forkController)) throw new Error(poolErrors.poolForkMismatch)
 	const start = questionStart > questionCount ? 0n : questionStart

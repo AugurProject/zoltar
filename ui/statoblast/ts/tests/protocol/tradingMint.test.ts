@@ -273,8 +273,8 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 			// A security pool the factory did not deploy is rejected before its collateral token or spender is read.
 			game = zeroAddress
 			canonicalSecurityPool = false
-			await expect(validate()).rejects.toThrow('not created by the expected factory')
-			await expect(createCompleteSetInQuestionLedger(client, pool, 100n)).rejects.toThrow('not created by the expected factory')
+			await expect(validate()).rejects.toThrow('Could not verify how this market’s security pool was created.')
+			await expect(createCompleteSetInQuestionLedger(client, pool, 100n)).rejects.toThrow('Could not verify how this market’s security pool was created.')
 			expect(send).toHaveBeenCalledTimes(1)
 		} else {
 			await expect(createCompleteSetInQuestionLedger(client, pool, 100n)).rejects.toThrow('Insufficient shared REP')
@@ -318,7 +318,7 @@ test('a funded recovery purchase binds REP and rechecks funding before submissio
 test('a pool security pool is trusted only when the factory that registered the pool deployed it, at the requested block', async () => {
 	for (const scenario of [
 		{ recorded: securityPool, deployed: true, failure: undefined },
-		{ recorded: securityPool, deployed: false, failure: 'not created by the expected factory' },
+		{ recorded: securityPool, deployed: false, failure: 'Could not verify how this market’s security pool was created.' },
 		{ recorded: zeroAddress, deployed: true, failure: 'Question has no security pool' },
 	]) {
 		const reads: unknown[] = []

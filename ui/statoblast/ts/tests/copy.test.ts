@@ -129,6 +129,12 @@ test.each([
 	'Clone code',
 	'Price epochs',
 	'Token bindings',
+	'Factory mismatch',
+	'Factories did not match',
+	'Auction deployer',
+	'Unrecognized runtime code',
+	'Input must fit uint256.',
+	'Input must fit uint.',
 ])('rejects the glossary term in %s', message => {
 	expect(glossaryViolation(message)).toBe(true)
 })
@@ -141,7 +147,7 @@ const obsoleteCopy =
 	/\bheadrooms?\b|\bdispute growth cutoffs?\b|adds 1 REP|settlement demands?|healthy capacit(?:y|ies)|spare healthy commitments?|(?:above|below|liquidation) boundar(?:y|ies)|conservative (?:health|prices?)|funding recipients?|clear(?:s|ed|ing)? (?:no )?deposits?|settled records?|capital services|commitment index(?:es|ices)?|report candidates?|escrow funders?|admission polic(?:y|ies)|question admissions?|base purchase fees?|resolution premiums?|idle REP|proposed prices?|prices? you propose|requested commitments?|source universes?|source-backed rights?|source recover(?:y|ies)|child preparations?|committed REP|REP\s*\/\s*WETH|\bgwei\b|max rewards?|not deployed|\bcarry (?:lea(?:f|ves)|pages?|nodes?|snapshots?)\b|\b(?:premiums?|books?|bonus(?:es)?|vaults?|repairs?|principals?|sponsors?|callbacks?|charged|retire(?:s|d|ments?)?|retiring|scanners?|liquidators?|escalations?|cohorts?|underwriters?|keepers?)\b/i
 const generalWords = /\b(?:accounts?|requests?|providers?|engines?|ledgers?)\b/i
 const requiredDeploymentPromptWarning = 'If a deployment request is still open in your wallet, reject it there before starting a new deployment.'
-const internalTerms = /\b(?:authorit(?:y|ies)|canonical|custody|coordinators?|bootstrap(?:ped|ping|s)?|accruals?|settlement engines?|auction engines?|question ledgers?|controllers?|escrows?|modules?|services|clones?|epochs?|bindings?)\b/i
+const internalTerms = /\b(?:authorit(?:y|ies)|canonical|custody|coordinators?|bootstrap(?:ped|ping|s)?|accruals?|settlement engines?|auction engines?|question ledgers?|controllers?|escrows?|modules?|services|clones?|epochs?|bindings?|factor(?:y|ies)|deployers?|runtime|uint\d*)\b/i
 const fixedMagnitude = /\b(?:\d+(?:[.,]\d+)?|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?:\s*%|[ -]+(?:percent|seconds?|minutes?|hours?|days?|weeks?|months?|years?)\b)/i
 
 function glossaryViolation(text: string, banGeneralWords = true) {
@@ -158,7 +164,7 @@ test('keeps the approved deployment warning while banning other uses of request'
 })
 
 const machineFields = new Set(['abi', 'className', 'data-testid', 'download', 'errorName', 'eventName', 'functionName', 'href', 'id', 'key', 'kind', 'method', 'role', 'style', 'testId', 'transportMode', 'type'])
-const abiBuilders = new Set(['parseAbi', 'parseAbiItem', 'parseAbiParameters'])
+const abiBuilders = new Set(['keccak256', 'parseAbi', 'parseAbiItem', 'parseAbiParameters'])
 const comparisonOperators = new Set([ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken, ts.SyntaxKind.InKeyword])
 const machineArguments = new Map([
 	['Reflect.get', 1],
@@ -205,13 +211,14 @@ function propertyName(node: ts.PropertyName) {
 	return ts.isIdentifier(node) || ts.isStringLiteralLike(node) ? node.text : undefined
 }
 
-function isAbiName(property: ts.PropertyAssignment) {
-	if (propertyName(property.name) !== 'name' || !ts.isObjectLiteralExpression(property.parent)) return false
+function isAbiDeclarationField(property: ts.PropertyAssignment) {
+	const name = propertyName(property.name)
+	if ((name !== 'name' && name !== 'internalType') || !ts.isObjectLiteralExpression(property.parent)) return false
 	const fields = property.parent.properties.filter(ts.isPropertyAssignment)
 	const type = fields.find(field => propertyName(field.name) === 'type')?.initializer
 	if (type === undefined || !ts.isStringLiteralLike(type)) return false
 	if (abiParameterType.test(type.text)) return true
-	return /^(?:function|event|error|constructor)$/.test(type.text) && fields.some(field => propertyName(field.name) === 'inputs' && ts.isArrayLiteralExpression(field.initializer))
+	return name === 'name' && /^(?:function|event|error|constructor)$/.test(type.text) && fields.some(field => propertyName(field.name) === 'inputs' && ts.isArrayLiteralExpression(field.initializer))
 }
 
 // Strings are product text unless syntax fixes their role as code, such as a lookup key or an ABI name.
@@ -226,7 +233,9 @@ function isMachineText(node: ts.Node, file: string) {
 			const name = propertyName(parent.name) ?? ''
 			if (machineFields.has(name) || name.startsWith('--')) return true
 			if (name === 'verb' && file.endsWith('/transactionActionTenses.ts')) return true
-			if (isAbiName(parent)) return true
+			if (isAbiDeclarationField(parent)) return true
+			// Canonical signer funding uses this argument to compose a transaction action key, which has its own display copy.
+			if (name === 'label' && ts.isCallExpression(parent.parent.parent) && parent.parent.parent.expression.getText() === 'fundCanonicalDeployerSigner') return true
 		}
 		if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) {
 			if (sharedCopyRenderedUnchangedByDesign.get(file)?.has(parent.name.text) === true) return true
@@ -238,6 +247,7 @@ function isMachineText(node: ts.Node, file: string) {
 		if (ts.isCaseClause(parent) && current === parent.expression) return true
 		if (ts.isBinaryExpression(parent) && comparisonOperators.has(parent.operatorToken.kind)) return true
 		if (ts.isReturnStatement(parent) && ts.isStringLiteralLike(node) && /^[a-z]+(?:-[a-z]+)+$/.test(node.text)) return true
+		if (ts.isReturnStatement(parent) && file.endsWith('/ethereum/abi/parser.ts') && ts.isStringLiteralLike(node) && abiParameterType.test(node.text)) return true
 		if (ts.isCallExpression(parent)) {
 			const expression = parent.expression.getText()
 			const name = ts.isPropertyAccessExpression(parent.expression) ? parent.expression.name.text : expression
@@ -265,18 +275,39 @@ function priorConstInitializer(node: ts.Identifier): ts.Expression | undefined {
 			const { declarations, flags } = statement.declarationList
 			const declaration = declarations.find(({ name }) => ts.isIdentifier(name) && name.text === node.text)
 			if (declaration === undefined) continue
-			if ((flags & ts.NodeFlags.Const) === 0 || statement.pos >= node.pos) return undefined
+			if ((flags & ts.NodeFlags.Const) === 0 || declaration.pos >= node.pos) return undefined
 			return declaration.initializer
 		}
 	}
 	return undefined
 }
 
+function constantArray(node: ts.Node, seen: Set<ts.Node>): ts.ArrayLiteralExpression | undefined {
+	if (seen.has(node)) return undefined
+	if (ts.isArrayLiteralExpression(node)) return node
+	const next = new Set(seen).add(node)
+	if (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isSatisfiesExpression(node) || ts.isTypeAssertionExpression(node)) return constantArray(node.expression, next)
+	if (!ts.isIdentifier(node)) return undefined
+	const initializer = priorConstInitializer(node)
+	return initializer === undefined ? undefined : constantArray(initializer, next)
+}
+
+function templateText(node: ts.TemplateExpression, seen: Set<ts.Node>, allowUnresolved = false): string | undefined {
+	let text = node.head.text
+	for (const span of node.templateSpans) {
+		const value = compoundText(span.expression, seen)
+		if (value === undefined && !allowUnresolved) return undefined
+		text += (value ?? ' ') + span.literal.text
+	}
+	return text
+}
+
 function compoundText(node: ts.Node, seen = new Set<ts.Node>()): string | undefined {
 	if (seen.has(node)) return undefined
 	const next = new Set(seen).add(node)
 	if (ts.isStringLiteralLike(node)) return node.text
-	if (ts.isParenthesizedExpression(node)) return compoundText(node.expression, next)
+	if (ts.isTemplateExpression(node)) return templateText(node, next)
+	if (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isSatisfiesExpression(node) || ts.isTypeAssertionExpression(node)) return compoundText(node.expression, next)
 	if (ts.isIdentifier(node)) {
 		const initializer = priorConstInitializer(node)
 		return initializer === undefined ? undefined : compoundText(initializer, next)
@@ -292,10 +323,12 @@ function compoundText(node: ts.Node, seen = new Set<ts.Node>()): string | undefi
 		const parts = [receiver, ...node.arguments].map(part => compoundText(part, next))
 		return parts.some(part => part === undefined) ? undefined : parts.join('')
 	}
-	if (name.text !== 'join' || !ts.isArrayLiteralExpression(receiver) || node.arguments.length > 1) return undefined
+	if (name.text !== 'join' || node.arguments.length > 1) return undefined
+	const array = constantArray(receiver, next)
+	if (array === undefined) return undefined
 	const separatorArg = node.arguments[0]
 	const separator = separatorArg === undefined ? ',' : compoundText(separatorArg, next)
-	const parts = receiver.elements.map(part => compoundText(part, next))
+	const parts = array.elements.map(part => compoundText(part, next))
 	return separator === undefined || parts.some(part => part === undefined) ? undefined : parts.join(separator)
 }
 
@@ -310,15 +343,16 @@ function isResponseLabel(node: ts.Node) {
 function findViolations(source: ts.SourceFile, file = source.fileName) {
 	const violations: string[] = []
 	const visit = (node: ts.Node) => {
-		const joined = ts.isBinaryExpression(node) || ts.isCallExpression(node) ? compoundText(node) : undefined
+		const joined = ts.isBinaryExpression(node) || ts.isCallExpression(node) || ts.isTemplateExpression(node) ? compoundText(node) : undefined
 		const responseLabel = isResponseLabel(node)
 		// Check static fragments together and visit template substitutions independently.
 		let text = joined
-		if (ts.isTemplateExpression(node)) text = [node.head.text, ...node.templateSpans.map(span => span.literal.text)].join(' ')
-		else if (ts.isStringLiteralLike(node) || ts.isJsxText(node)) text = node.text
-		else if (responseLabel && text === undefined) text = compoundText(node)
-		const capitalizedLabel = responseLabel && text !== undefined && /^[A-Z][a-z]/.test(text.trimStart())
-		if (text !== undefined && !isMachineText(node, file) && (capitalizedLabel || glossaryViolation(text, appliesGeneralWordBan(node, file)))) {
+		if (ts.isStringLiteralLike(node) || ts.isJsxText(node)) text = node.text
+		else if (text === undefined && ts.isTemplateExpression(node)) text = templateText(node, new Set([node]), true)
+		else if (text === undefined && responseLabel) text = compoundText(node)
+		const label = text?.trimStart() ?? ''
+		const capitalizedLabel = responseLabel && /^[A-Z][a-z]/.test(label) && !/^(?:OpenOracle|Zoltar|Statoblast|REP|ETH|WETH)\b/.test(label)
+		if (text !== undefined && (responseLabel || !isMachineText(node, file)) && (capitalizedLabel || glossaryViolation(text, appliesGeneralWordBan(node, file)))) {
 			const { line } = source.getLineAndCharacterOfPosition(node.getStart(source))
 			violations.push(`${file}:${line + 1} ${text.replace(/\s+/g, ' ').trim()}`)
 		}
@@ -357,11 +391,18 @@ test.each([
 	["const message = ('Set' + 'tle ') + ('depos' + 'its')", 'Settle deposits'],
 	["const message = ['Settle', 'deposits'].join(' ')", 'Settle deposits'],
 	["const message = ['Set', 'tle ', 'deposits'].join('')", 'Settle deposits'],
+	["const parts = ['Settle', 'deposits']; const message = parts.join(' ')", 'Settle deposits'],
+	["const left = ['Set', 'tle ', 'deposits'] as const; const parts = left; const message = parts.join('')", 'Settle deposits'],
 	["const message = 'Set'.concat('tle ', 'deposits')", 'Settle deposits'],
 	["const prefix = 'Settle '; const message = prefix + 'deposits'", 'Settle deposits'],
+	["const prefix = 'Settle '; const message = `${prefix}deposits`", 'Settle deposits'],
+	["const prefix = 'run'; const message = `${prefix}time mismatch`", 'runtime mismatch'],
 	["requireAddressValue(value, 'Collateral token')", 'Collateral token'],
 	["requireTupleValue(value, 2, 'Mint capacity')", 'Mint capacity'],
 	["const head = 'Collateral'; requireAddressValue(value, head + ' token')", 'Collateral token'],
+	["requireBigintValue(value, 'OpenOracle runtime code')", 'OpenOracle runtime code'],
+	["requireBigintValue(value, 'OpenOracles token balance')", 'OpenOracles token balance'],
+	["if (getAddress(requireAddressValue(value, 'auction deployer')) !== expected) throw reason", 'auction deployer'],
 	['const message = `The ${type} ledger failed`', 'The ledger failed'],
 ])('finds reserved product wording in %s', (fixture, message) => {
 	const file = 'ui/statoblast/ts/fixtures/copy.tsx'
@@ -372,6 +413,11 @@ test.each([
 test('allows lower-case response labels and protocol acronyms', () => {
 	const fixture = "requireAddressValue(value, 'collateral token'); requireBigintValue(value, 'REP balance'); requireTupleValue(value, 2, 'mint capacity')"
 	const source = ts.createSourceFile('ui/statoblastShared/ts/protocol/fixture.ts', fixture, ts.ScriptTarget.Latest, true)
+	expect(findViolations(source)).toEqual([])
+})
+
+test.each(['OpenOracle token balance', 'Zoltar universe details', 'Statoblast pool balance', 'REP balance', 'ETH balance', 'WETH balance'])('allows the leading product name in %s', label => {
+	const source = ts.createSourceFile('ui/statoblastShared/ts/protocol/fixture.ts', `requireBigintValue(value, ${JSON.stringify(label)})`, ts.ScriptTarget.Latest, true)
 	expect(findViolations(source)).toEqual([])
 })
 
@@ -399,10 +445,19 @@ test('keeps a shared wording exception specific to its export', () => {
 	expect(findViolations(source)).toEqual(['ui/coreShared/ts/copy/common.ts:2 Question ledger address'])
 })
 
+test('checks the label shown for the registered proxy contract', () => {
+	const file = 'ui/zoltarShared/ts/protocol/deployment.ts'
+	const fixture = "const step = { id: 'proxyDeployer', label: 'Proxy Deployer' }"
+	const source = ts.createSourceFile(file, fixture, ts.ScriptTarget.Latest, true)
+	expect(findViolations(source)).toEqual([`${file}:1 Proxy Deployer`])
+})
+
 test('leaves non-text ABI names, CSS, lookup keys and discriminants alone', () => {
 	const fixture = [
 		"import { a } from './settlement-engine.js'",
-		"const abi = [{ name: 'ledger', type: 'function', inputs: [{ name: 'account', type: 'address' }] }]",
+		"const abi = [{ name: 'ledger', type: 'function', inputs: [{ name: 'account', type: 'uint256', internalType: 'uint256' }] }]",
+		"const topic = keccak256('ReportSubmitted(uint256,bytes)')",
+		"fundCanonicalDeployerSigner(client, { label: 'deterministic proxy deployer' })",
 		"const request = { functionName: 'provider' }",
 		"const byStatus = { 'Settlement engine': { kind: 'ledger' } }",
 		"const find = (value: string) => value === 'account' ? byStatus['Settlement engine'] : undefined",

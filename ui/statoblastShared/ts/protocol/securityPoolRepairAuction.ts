@@ -183,7 +183,7 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 	const controller = requireAddressValue(controllerValue, 'fork contract')
 	const zoltar = requireAddressValue(protocolValue, 'security pool protocol')
 	const infrastructure = getInfraContractAddresses()
-	if (getAddress(requireAddressValue(factoryValue, 'security pool factory')) !== getAddress(infrastructure.securityPoolFactory) || getAddress(zoltar) !== getAddress(infrastructure.zoltar) || bidId <= 0n) throw new Error(auctionErrors.positionPool)
+	if (getAddress(requireAddressValue(factoryValue, 'security pool deployment contract')) !== getAddress(infrastructure.securityPoolFactory) || getAddress(zoltar) !== getAddress(infrastructure.zoltar) || bidId <= 0n) throw new Error(auctionErrors.positionPool)
 	const [universeValue, capitalRoot, capitalProtocol, auctionRoot, auctionCapital, auctionFork, auctionUniverse, engineValue, controllerRoot, implementationValue] = await Promise.all([
 		read(initialCapital, 'universeId'),
 		read(initialCapital, 'securityPool'),
@@ -257,7 +257,7 @@ async function verifyAuctionCapitalCustody(client: ReadClient, securityPool: Add
 		read(securityPool, 'services'),
 		read(securityPool, 'repairAuctionDeployer'),
 	])
-	if (getAddress(requireAddressValue(capitalServices, 'pool operations address')) !== getAddress(requireAddressValue(securityPoolServices, 'pool operations contract')) || getAddress(requireAddressValue(deployer, 'auction deployer')) !== getAddress(getInfraContractAddresses().securityPoolRepairAuctionDeployer))
+	if (getAddress(requireAddressValue(capitalServices, 'pool operations address')) !== getAddress(requireAddressValue(securityPoolServices, 'pool operations contract')) || getAddress(requireAddressValue(deployer, 'auction setup contract')) !== getAddress(getInfraContractAddresses().securityPoolRepairAuctionDeployer))
 		throw new Error(auctionErrors.collateralContractMismatch)
 	const modules = [
 		{ value: lifecycle, artifact: lifecycleArtifact, label: 'pool setup contract', getter: 'implementation', authority: undefined },

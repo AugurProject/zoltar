@@ -96,11 +96,11 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 	])
 	const controller = decodeAddress(controllerValue, 'Fork contract')
 	const zoltar = decodeAddress(protocolValue, 'Protocol')
-	const factory = decodeAddress(factoryValue, 'Factory')
+	const factory = decodeAddress(factoryValue, 'Security pool deployment contract')
 	const capitalLedger = decodeAddress(capitalValue, 'Capital contract', true)
 	const priceFeed = decodeAddress(feedValue, 'Price feed', true)
 	const [authorityValue, controllerProtocol, auctionValue, tokenValue, forkTimeValue] = await Promise.all([read(controller, 'securityPool'), read(controller, 'zoltar'), read(controller, 'repairAuctions', [universeId]), read(zoltar, 'getRepToken', [universeId]), read(zoltar, 'getForkTime', [universeId])])
-	if (decodeAddress(authorityValue, 'Security pool linked to the fork') !== securityPool || decodeAddress(controllerProtocol, 'Fork protocol') !== zoltar) throw new Error('The fork contract for this auction belongs to another security pool.')
+	if (decodeAddress(authorityValue, 'Security pool linked to the fork') !== securityPool || decodeAddress(controllerProtocol, 'Zoltar contract for the fork') !== zoltar) throw new Error('The fork contract for this auction belongs to another security pool.')
 	const auctionAddress = decodeAddress(auctionValue, 'Auction', true)
 	const repToken = decodeAddress(tokenValue, 'Branch REP', true)
 	const collateralToken = decodeAddress(collateralValue, 'Collateral token')
@@ -166,7 +166,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			decodeAddress(token, 'Auction REP') !== repToken ||
 			decodeUint(child, 'Auction universe', 248) !== universeId ||
 			decodeAddress(capitalRoot, 'Capital security pool') !== securityPool ||
-			decodeAddress(capitalProtocol, 'Capital protocol') !== zoltar ||
+			decodeAddress(capitalProtocol, 'Zoltar contract for pool capital') !== zoltar ||
 			decodeUint(capitalChild, 'Capital universe', 248) !== universeId ||
 			decodeAddress(capitalToken, 'Capital REP') !== repToken ||
 			decodeAddress(capitalFork, 'Fork contract for pool capital') !== controller

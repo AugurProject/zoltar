@@ -30,7 +30,7 @@ function combineUint256FromTwoWithInvalid(invalid: boolean, firstPart: bigint, s
 
 function validateTickIndex(question: ScalarQuestionDetails, tickIndex: bigint) {
 	if (question.numTicks <= 0n) throw new Error('Scalar question numTicks must be positive')
-	if (question.numTicks > SCALAR_PART_MASK) throw new Error('Scalar question numTicks exceeds uint120')
+	if (question.numTicks > SCALAR_PART_MASK) throw new Error('The number of scalar ticks is out of range.')
 	if (tickIndex < 0n || tickIndex > question.numTicks) throw new Error('Tick index is out of range')
 }
 

@@ -66,13 +66,13 @@ export async function loadSecurityPoolPriceSnapshot(parameters: { client: PriceR
 		read(securityPool, 'isPriceReportingOpen', [universeId]),
 		client.getBalance({ address: owner, blockNumber }),
 	])
-	const factory = decodeAddress(factoryValue, 'Security pool factory')
+	const factory = decodeAddress(factoryValue, 'Security pool deployment contract')
 	const originUniverseId = decodeUint(originUniverseValue, 'Origin universe', 248)
-	const zoltar = decodeAddress(protocolValue, 'Security pool protocol')
+	const zoltar = decodeAddress(protocolValue, 'Zoltar contract for the security pool')
 	const feed = decodeAddress(feedValue, 'Security pool price feed', true)
 	const reportingOpen = decodeBool(openValue, 'Reporting window must be a boolean.')
 	const [questionPage, factoryProtocol, registeredFeed, repValue] = await Promise.all([read(securityPool, 'getQuestions', [0n, 1n]), read(factory, 'zoltar'), read(factory, 'sharedPriceFeeds', [securityPool, universeId]), read(zoltar, 'getRepToken', [universeId])])
-	if (decodeAddress(factoryProtocol, 'Pool factory’s protocol address') !== zoltar || decodeAddress(registeredFeed, 'Registered price feed', true) !== feed) throw new Error('Security pool price identities do not match.')
+	if (decodeAddress(factoryProtocol, 'Zoltar contract for pool deployment') !== zoltar || decodeAddress(registeredFeed, 'Registered price feed', true) !== feed) throw new Error('Security pool price identities do not match.')
 	if (!Array.isArray(questionPage) || questionPage.length > 1) throw new Error('Invalid security pool preparation source page.')
 	let sourcePool: Address | undefined
 	if (questionPage.length === 1) {

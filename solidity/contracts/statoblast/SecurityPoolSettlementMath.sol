@@ -44,6 +44,9 @@ library SecurityPoolSettlementMath {
 	}
 	/// @dev Round the target allocation up before converting scaled cash to raw units.
 	/// Keep both ceiling steps and include the carried fee remainder.
+	/// Domain: denominator > 0 and ceil(units * numerator / denominator) + remainder fits uint256.
+	/// A representable raw result alone is insufficient. Production targets bound the allocation
+	/// by (2^128 - 1) * SCALE, and fee carry is below SCALE; see INV-04.
 	function requiredCash(uint256 units, uint256 numerator, uint256 denominator, uint256 remainder) internal pure returns (uint256) {
 		return Math.ceilDiv(Math.mulDiv(units, numerator, denominator, Math.Rounding.Ceil) + remainder, SCALE);
 	}

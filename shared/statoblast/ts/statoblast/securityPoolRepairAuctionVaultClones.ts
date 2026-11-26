@@ -1,4 +1,5 @@
 import { concatHex, getAddress, getCreate2Address, isAddress, toHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { verifyBoundCloneCode } from './securityPoolBoundClone.js'
 
 /**
  * Every auction vault is a minimal proxy (EIP-1167) to one shared implementation, followed by the vault's four immutable
@@ -18,7 +19,7 @@ function address(value: Address, label: string): Hex {
 	return `0x${getAddress(value).slice(2).toLowerCase()}`
 }
 function word(value: bigint, label: string) {
-	if (typeof value !== 'bigint' || value < 0n || value >= 1n << 256n) throw new Error(`${label} must fit uint256.`)
+	if (typeof value !== 'bigint' || value < 0n || value >= 1n << 256n) throw new Error(`${label} is out of range.`)
 	return toHex(value, { size: 32 })
 }
 
@@ -50,5 +51,5 @@ export function decodeAuctionVaultBindings(code: Hex | undefined): AuctionVaultB
 }
 /** Accept only the exact clone the auction would have created for these bindings. */
 export function verifyAuctionVaultCode(code: Hex | undefined, bindings: AuctionVaultBindings, label = 'auction position') {
-	if (code === undefined || code.toLowerCase() !== auctionVaultRuntimeCode(bindings).toLowerCase()) throw new Error(`Unrecognized ${label} runtime code.`)
+	verifyBoundCloneCode(code, auctionVaultRuntimeCode(bindings), label)
 }

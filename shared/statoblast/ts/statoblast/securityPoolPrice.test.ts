@@ -197,8 +197,8 @@ describe('security pool branch price SDK', () => {
 	})
 	test('rejects prices and amounts outside the feed range', async () => {
 		const snapshot = await load(fixture().client)
-		expect(() => quoteSecurityPoolPriceFunding(snapshot, 1n << 255n)).toThrow('uint128')
-		expect(() => quoteSecurityPoolPriceFunding(snapshot, unit, 1n << 128n)).toThrow('uint128')
+		expect(() => quoteSecurityPoolPriceFunding(snapshot, 1n << 255n)).toThrow('Initial REP report is out of range.')
+		expect(() => quoteSecurityPoolPriceFunding(snapshot, unit, 1n << 128n)).toThrow('WETH for the report is out of range.')
 	})
 	test('request, wrapping and editable approvals are distinct bounded transactions', async () => {
 		const snapshot = await load(fixture().client)
@@ -251,12 +251,12 @@ test('#1756 report funding enforces the oracle dispute limit uint128 bound', asy
 	const snapshot = await load(fixture({ escalationHaltMultiplierBps: 30000n }).client)
 	const maximum = ((1n << 128n) - 1n) / 3n
 	expect(quoteSecurityPoolPriceFunding(snapshot, unit, maximum).weth).toBe(maximum)
-	expect(() => quoteSecurityPoolPriceFunding(snapshot, unit, maximum + 1n)).toThrow('Dispute limit must fit uint128.')
+	expect(() => quoteSecurityPoolPriceFunding(snapshot, unit, maximum + 1n)).toThrow('Dispute limit is out of range.')
 })
 
 test('#1756 an operations bounty must also fit the oracle uint96 domain', async () => {
 	const snapshot = await load(fixture().client)
 	if (snapshot.observation === undefined) throw new Error('Expected feed')
 	snapshot.observation.nextBlockBounty = ((1n << 96n) - 1n) / 2n
-	expect(() => quoteSecurityPoolPriceFunding(snapshot, unit, 2n * unit, 6000000n)).toThrow('uint96')
+	expect(() => quoteSecurityPoolPriceFunding(snapshot, unit, 2n * unit, 6000000n)).toThrow('Settlement bounty is out of range.')
 })

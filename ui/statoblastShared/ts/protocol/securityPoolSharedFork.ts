@@ -32,7 +32,7 @@ export async function loadSecurityPoolSourceRecovery(client: ReadClient, snapsho
 		client.readContract({ address: snapshot.securityPool, abi, functionName: 'originUniverseId', blockNumber }),
 		client.readContract({ address: snapshot.securityPool, abi, functionName: 'sourceGame', args: [snapshot.universeId, questionId], blockNumber }),
 	])
-	const factory = requireAddressValue(factoryValue, 'security pool factory')
+	const factory = requireAddressValue(factoryValue, 'security pool deployment contract')
 	if (typeof originId !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(originId) || BigInt(originId) === 0n) throw new Error(forkErrors.questionUnregistered)
 	const pool = requireAddressValue(await client.readContract({ address: factory, abi, functionName: 'getQuestionLedger', args: [originId, snapshot.universeId], blockNumber }), 'parent question contract')
 	const origin = requireBigintValue(originValue, 'origin universe')

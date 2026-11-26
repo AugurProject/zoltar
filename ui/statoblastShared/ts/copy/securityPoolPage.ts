@@ -127,8 +127,8 @@ export const deployReady = 'Security pool ready'
 export const deployLocked = 'Locked'
 export const deployAnother = 'Start a new deployment'
 export const deployDiscardConfirmation = 'Start a new deployment? This clears the saved setup from this device. Transactions already confirmed stay on chain.'
-export const deployRetryConfirmation = `Start a new deployment? Check your wallet activity first. ${openDeploymentPromptWarning} Your saved settings and question rules will stay.`
-export const deployRecoveryConfirmation = `Start a new deployment? Check your wallet activity first. ${openDeploymentPromptWarning} Transactions already confirmed stay on chain.`
+export const deployRetryConfirmation = (warning = openDeploymentPromptWarning) => `Start a new deployment? Check your wallet activity first. ${warning} Your saved settings and question rules will stay.`
+export const deployRecoveryConfirmation = (warning = openDeploymentPromptWarning) => `Start a new deployment? Check your wallet activity first. ${warning} Transactions already confirmed stay on chain.`
 export const deployCheckAgain = 'Check again'
 export const deployCheckingReceipt = 'Checking deployment receipt…'
 export const resumePreviousSetup = 'Resume previous pool setup'

@@ -75,6 +75,9 @@ export function deploymentProgressJournal(profile: NetworkProfile, owner: Addres
 	const discardedKey = `${key}:discarded`
 	const current = memoryJournals.get(key) ?? signal<DeploymentProgress | undefined>(undefined)
 	const persistenceUnavailable = signal(storage === undefined || memoryJournals.has(key))
+	const persistenceWarning = signal(false)
+	let storedRaw: string | undefined
+	let storageWasReadable = false
 	const rememberInTab = () => {
 		if (owner !== undefined && !memoryJournals.has(key)) memoryJournals.set(key, current)
 		persistenceUnavailable.value = true
@@ -87,6 +90,10 @@ export function deploymentProgressJournal(profile: NetworkProfile, owner: Addres
 	const readStored = () => {
 		try {
 			const raw = readRaw()
+			storageWasReadable = true
+			if (persistenceWarning.value && raw === storedRaw) return current.value
+			storedRaw = raw
+			persistenceWarning.value = false
 			return raw === undefined ? undefined : decodeProgress(raw)
 		} catch (error) {
 			if (error instanceof SyntaxError) return undefined
@@ -99,7 +106,7 @@ export function deploymentProgressJournal(profile: NetworkProfile, owner: Addres
 			return readStored()
 		} catch (error) {
 			if (!(error instanceof DOMException)) throw error
-			rememberInTab()
+			if (!storageWasReadable) rememberInTab()
 			return current.value
 		}
 	}
@@ -108,11 +115,19 @@ export function deploymentProgressJournal(profile: NetworkProfile, owner: Addres
 	const write = (progress: DeploymentProgress | undefined) => {
 		if (!memoryJournals.has(key) && storage !== undefined) {
 			try {
-				if (progress === undefined) storage.removeItem(key)
-				else storage.setItem(key, JSON.stringify(progress))
+				if (readRaw() !== storedRaw) {
+					current.value = readStored()
+					return
+				}
+				const raw = progress === undefined ? undefined : JSON.stringify(progress)
+				if (raw === undefined) storage.removeItem(key)
+				else storage.setItem(key, raw)
+				persistenceWarning.value = readRaw() !== raw
+				if (!persistenceWarning.value) storedRaw = raw
 			} catch (error) {
 				if (!(error instanceof DOMException)) throw error
-				rememberInTab()
+				// Retain the last durable claim so every other tab still sees it.
+				persistenceWarning.value = true
 			}
 		}
 		const memory = memoryJournals.get(key)
@@ -139,6 +154,7 @@ export function deploymentProgressJournal(profile: NetworkProfile, owner: Addres
 		current,
 		restored,
 		persistenceUnavailable,
+		persistenceWarning,
 		read,
 		coordinationReason,
 		claim: (create: (latest: DeploymentProgress | undefined) => DeploymentProgress) => {
@@ -156,6 +172,8 @@ export function deploymentProgressJournal(profile: NetworkProfile, owner: Addres
 					durableStorage.setItem(key, raw)
 					if (readRaw() !== raw) throw new Error(copy.progressWriteFailed)
 				})
+				storedRaw = raw
+				persistenceWarning.value = false
 				current.value = progress
 			})
 		},
@@ -171,22 +189,21 @@ export function deploymentProgressJournal(profile: NetworkProfile, owner: Addres
 				try {
 					const raw = readRaw()
 					if (raw === undefined) return false
-					const saved = decodeProgress(raw)
+					const saved = persistenceWarning.value && raw === storedRaw ? current.value : decodeProgress(raw)
 					if (saved === undefined || saved.rules !== expected.rules || saved.pool !== expected.pool || saved.activated !== expected.activated) return false
 					if (!samePendingDeployment(saved.pending, expected.pending)) return false
+					if (replacement !== undefined) {
+						const updated = JSON.stringify(replacement)
+						storage.setItem(key, updated)
+						return readRaw() === updated
+					}
 					// Retire only this exact revision. A concurrent write can still save its newer progress.
 					storage.setItem(discardedKey, raw)
-					if (readRaw() !== undefined) return false
-					if (replacement === undefined) return true
-					const updated = JSON.stringify(replacement)
-					storage.setItem(key, updated)
-					return readRaw() === updated
+					return readRaw() === undefined
 				} catch (error) {
 					if (error instanceof SyntaxError) return false
 					if (!(error instanceof DOMException)) throw error
-					rememberInTab()
-					current.value = replacement
-					return true
+					throw new Error(copy.progressWriteFailed, { cause: error })
 				}
 			}),
 		write,

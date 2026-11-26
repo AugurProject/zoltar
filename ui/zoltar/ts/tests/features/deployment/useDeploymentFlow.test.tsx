@@ -191,6 +191,6 @@ describe('useDeploymentFlow', () => {
 		expect(onTransactionFailed).toHaveBeenCalledTimes(1)
 		expect(deploy).toHaveBeenCalledTimes(1)
 		expect(setDeploymentStatuses).not.toHaveBeenCalled()
-		expect(hookState.errorMessage).toContain('Unexpected runtime code for zoltar')
+		expect(hookState.errorMessage).toContain('Unexpected contract code for zoltar')
 	})
 })

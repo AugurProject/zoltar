@@ -56,7 +56,7 @@ function ApplicationErrorBoundary({ root, genesisOutcome }: ApplicationProps) {
 export async function mountApp(options: MountAppOptions) {
 	const initialize = options.initialize ?? initializeActiveEnvironment
 	const rootOption = options.root
-	if (rootOption === undefined) throw new Error('mountApp requires a root component factory')
+	if (rootOption === undefined) throw new Error('mountApp requires a function that renders the root component')
 	const root = rootOption
 	const target = options.target ?? document.body
 	// Only capture the static fallback, the page's top-level frame, on startup; later mounts must leave Preact's frame alone.

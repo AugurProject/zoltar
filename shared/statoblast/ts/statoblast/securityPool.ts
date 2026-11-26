@@ -19,7 +19,7 @@ export type SecurityPoolEconomicsConfig = {
 }
 
 function uint(value: bigint, bits: number, label: string) {
-	if (value < 0n || value >= 1n << BigInt(bits)) throw new Error(`${label} must fit uint${bits}.`)
+	if (value < 0n || value >= 1n << BigInt(bits)) throw new Error(`${label} is out of range.`)
 }
 function address(value: Address, label: string) {
 	if (!isAddress(value) || value.toLowerCase() === zeroAddress) throw new Error(`${label} must be a nonzero address.`)
@@ -30,7 +30,12 @@ const secondsPerDay = 86_400n
 const maximumVestingDays = 3650n
 
 export function validateSecurityPoolEconomics(config: SecurityPoolEconomicsConfig) {
-	for (const [name, value] of Object.entries(config)) uint(value, name === 'rewardVestingSeconds' ? 48 : 256, name)
+	uint(config.purchaseFeeBps, 256, 'Purchase fee')
+	uint(config.annualFeeBps, 256, 'Annual fee')
+	uint(config.minimumPurchaseFeeAttoEth, 256, 'Minimum purchase fee')
+	uint(config.minimumCommitmentAttoEth, 256, 'Minimum commitment')
+	uint(config.minimumOutcomeRate, 256, 'Minimum outcome exchange rate')
+	uint(config.rewardVestingSeconds, 48, 'Fee vesting duration')
 	if (config.purchaseFeeBps > maximumFeeBps) throw new Error(`Purchase fee cannot exceed ${formatUnits(maximumFeeBps, 2)}%.`)
 	if (config.annualFeeBps > maximumFeeBps) throw new Error(`Annual fee cannot exceed ${formatUnits(maximumFeeBps, 2)}%.`)
 	if (config.minimumCommitmentAttoEth === 0n || config.rewardVestingSeconds === 0n) throw new Error('Minimum commitment and fee vesting duration must be positive.')
@@ -53,7 +58,7 @@ export function buildSecurityPoolDeploymentRequest(parameters: { owner: Address;
 	uint(parameters.origin.minimumReportCollateral, 128, 'Report collateral floor')
 	if (parameters.origin.minimumReportCollateral === 0n) throw new Error('Report collateral floor must be positive.')
 	address(parameters.owner, 'Owner')
-	address(parameters.factory, 'Factory')
+	address(parameters.factory, 'Security pool deployment contract')
 	uint(parameters.origin.universeId, 248, 'Origin universe')
 	uint(parameters.origin.securityMultiplierBps, 256, 'Security multiplier')
 	uint(parameters.origin.reportPriorityFeeAttoEthPerGas, 256, 'Report priority fee')

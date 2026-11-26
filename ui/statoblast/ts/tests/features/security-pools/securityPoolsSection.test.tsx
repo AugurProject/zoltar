@@ -1,11 +1,11 @@
-import { expect, test } from 'bun:test'
+import { expect, mock, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { createMulticallStub, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { getAddress, TransactionLookupNotFoundError, zeroAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { createMulticallStub, getContractFunctionName, mockTransactionHash } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { getOpenOracleGameTuple } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { resetRoutingForTesting } from '@zoltar/ui-core-shared/navigation/routing.js'
@@ -181,6 +181,54 @@ test('a hashless deployment offers a way to check the wallet again', async () =>
 	const checksBeforeClick = nonceChecks
 	await act(() => findCheck()?.click())
 	await waitFor(() => expect(nonceChecks).toBeGreaterThan(checksBeforeClick))
+})
+
+test('Check again rereads a dropped transaction estimate and restart asks the wallet to cancel it', async () => {
+	installStatoblastRouting()
+	window.history.replaceState({}, '', '#/deploy-pool')
+	const source = capitalClient()
+	const { network, persistence } = localEntityScopeForNetwork(source.backend.profile, 'statoblast', 'pool')
+	const storage = persistence === 'session' ? window.sessionStorage : window.localStorage
+	storage.setItem(`zoltar-ui:statoblast:deployment:v1:${network}:${owner.toLowerCase()}`, JSON.stringify({ draft: initialDeploymentDraft('0'), pending: { id: 'waiting-deployment', step: 'rules', nonce: '0', hash: mockTransactionHash } }))
+	let confirmed = 0n
+	let hashChecks = 0
+	installActiveEnvironmentForTesting({
+		...source.backend,
+		createReadClient: () =>
+			source.client.extend(() => ({
+				getTransactionCount: async () => confirmed,
+				getTransaction: async ({ hash }: { hash: Hash }) => {
+					hashChecks++
+					throw new TransactionLookupNotFoundError('transaction', hash)
+				},
+				getTransactionReceipt: async ({ hash }: { hash: Hash }) => {
+					throw new TransactionLookupNotFoundError('receipt', hash)
+				},
+			})),
+	})
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolsSection deploying parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />))
+	const findButton = (label: string) => [...view.container.querySelectorAll('button')].find(button => button.textContent === label && !button.disabled)
+	const waiting = 'If your wallet no longer shows this transaction, send or cancel a transaction with nonce 0 (or the nonce your wallet shows for it), then check again.'
+	const cancelWarning = 'This transaction may still be pending in your wallet. Cancel it there before starting a new deployment.'
+	await waitFor(() => expect(view.container.textContent).toContain(waiting))
+	expect(findButton('Start a new deployment')).toBeUndefined()
+	const checksBeforeClick = hashChecks
+	confirmed = 1n
+	await act(() => findButton('Check again')?.click())
+	await waitFor(() => expect(view.container.textContent).toContain(cancelWarning))
+	expect(hashChecks).toBeGreaterThan(checksBeforeClick)
+	await waitFor(() => expect(findButton('Start a new deployment')).toBeDefined(), { timeout: 1000 })
+	const originalConfirm = Object.getOwnPropertyDescriptor(window, 'confirm')
+	const confirmation = mock((_message: string) => false)
+	Object.defineProperty(window, 'confirm', { configurable: true, value: confirmation })
+	try {
+		await act(() => findButton('Start a new deployment')?.click())
+		expect(confirmation).toHaveBeenCalledWith(expect.stringContaining(cancelWarning))
+		expect(confirmation.mock.calls[0]?.[0]).not.toContain('reject it')
+	} finally {
+		if (originalConfirm === undefined) Reflect.deleteProperty(window, 'confirm')
+		else Object.defineProperty(window, 'confirm', originalConfirm)
+	}
 })
 
 test('completed setup preserves the four transaction controls in their original order with completion reasons', async () => {
