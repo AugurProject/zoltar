@@ -104,7 +104,7 @@ describe('Statoblast setup-incomplete notice', () => {
 		await renderApp('#/deploy')
 		const query = within(document.body)
 		await waitFor(() => expect(query.getByRole('heading', { level: 1, name: 'Deploy contracts' })).toBeTruthy())
-		expect(document.body.textContent).toContain('SecurityPoolFactory')
+		expect(document.body.textContent).toContain('Security pool deployment contract')
 		// Assert on text, not on a queried element: Bun stalls formatting an element attached to a
 		// whole-app DOM and can then let a failed toBeNull() pass.
 		expect(document.body.textContent).not.toContain(appCopy.setupIncomplete)
@@ -116,7 +116,7 @@ describe('Statoblast setup-incomplete notice', () => {
 		const query = within(document.body)
 		await waitFor(() => expect(query.getByRole('heading', { level: 1, name: 'Deploy contracts' })).toBeTruthy())
 		expect(window.location.hash).toBe('#/deploy?openOracleView=create')
-		expect(document.body.textContent).toContain('SecurityPoolFactory')
+		expect(document.body.textContent).toContain('Security pool deployment contract')
 	})
 
 	test('shows not found on a removed route once contracts are available', async () => {

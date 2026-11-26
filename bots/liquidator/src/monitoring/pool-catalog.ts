@@ -13,7 +13,7 @@ type CatalogPool = {
 	multiplierBps: string
 	deploymentDate?: string
 	questionDates?: { startTime: string; endTime: string }
-	metrics?: { systemState: string; securityPool: string; sharedCommittedRep: string; sharedCommitmentEth: string }
+	metrics?: { systemState: string; securityPool: string; sharedCommittedRep: string; collateralToken: string; sharedCommitmentRaw: string }
 }
 
 export type PoolCatalogPage = {
@@ -26,7 +26,10 @@ export type PoolCatalogPage = {
 }
 
 const PAGE_SIZE = 12n
-const securityPoolAbi = [{ type: 'function', name: 'capitalLedger', stateMutability: 'view', inputs: [{ name: 'universeId', type: 'uint248' }], outputs: [{ type: 'address' }] }] as const
+const securityPoolAbi = [
+	{ type: 'function', name: 'collateralToken', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+	{ type: 'function', name: 'capitalLedger', stateMutability: 'view', inputs: [{ name: 'universeId', type: 'uint248' }], outputs: [{ type: 'address' }] },
+] as const
 
 async function findPoolDeployment(client: ReadClient, factory: Address, address: Address, blockNumber: bigint) {
 	const originId = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'getQuestionLedgerOriginId', args: [address], blockNumber })
@@ -79,11 +82,12 @@ export async function loadPoolCatalog(client: ReadClient, factory: Address, chai
 				if (securityPool === zeroAddress) throw new Error('Question has no backing security pool')
 				const capital = await client.readContract({ abi: securityPoolAbi, address: securityPool, functionName: 'capitalLedger', args: [deployment.universeId], blockNumber })
 				if (capital === zeroAddress) throw new Error('Security pool universe has no capital ledger')
-				const [systemState, [rep, commitment]] = await Promise.all([
+				const [systemState, [rep, commitment], collateralToken] = await Promise.all([
 					client.readContract({ abi: questionLedgerAbi, address: deployment.questionLedger, functionName: 'systemState', args: [], blockNumber }),
 					client.readContract({ abi: securityPoolCapitalLedgerAbi, address: capital, functionName: 'totals', args: [], blockNumber }),
+					client.readContract({ abi: securityPoolAbi, address: securityPool, functionName: 'collateralToken', args: [], blockNumber }),
 				])
-				pool.metrics = { systemState: systemState.toString(), securityPool, sharedCommittedRep: formatDecimalAmount(rep), sharedCommitmentEth: formatDecimalAmount(commitment) }
+				pool.metrics = { systemState: systemState.toString(), securityPool, sharedCommittedRep: formatDecimalAmount(rep), collateralToken, sharedCommitmentRaw: commitment.toString() }
 			} catch (error) {
 				// Keep discovery available and retain the failure in protected operator logs.
 				console.warn(`Pool catalog metrics unavailable for ${pool.address}: ${errorMessage(error)}`)

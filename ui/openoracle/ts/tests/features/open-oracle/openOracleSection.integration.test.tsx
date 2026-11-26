@@ -189,7 +189,7 @@ async function fillOpenOracleCreateForm() {
 	await setInputValue('Settlement delay (seconds)', openOracleCreateParameters.settlementTime.toString())
 	await setInputValue('Dispute limit', formatCurrencyInputBalance(openOracleCreateParameters.escalationHalt))
 	await setInputValue('Dispute delay (seconds)', openOracleCreateParameters.disputeDelay.toString())
-	await setInputValue('Protocol fee (%)', formatFeePercentageInput(openOracleCreateParameters.protocolFee))
+	await setInputValue('OpenOracle fee (%)', formatFeePercentageInput(openOracleCreateParameters.protocolFee))
 }
 
 async function loadSelectedReportInUi() {

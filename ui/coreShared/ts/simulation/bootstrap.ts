@@ -9,6 +9,7 @@ import type { SimulationScenario } from './scenarios.js'
 import { withTimeout } from '../lib/promise.js'
 import { MAX_ATTO_REP, REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
 import type { GenesisOutcome } from '@zoltar/zoltar-shared/deployment/genesisUniverses'
+import { formatGenesisRepTokenUpdateFailed } from '../copy/simulation.js'
 
 export type TevmLikeClient = ReturnType<typeof createMemoryClient>
 
@@ -153,7 +154,7 @@ export async function updateZoltarGenesisRepToken({ createWriteClient, memoryCli
 		args: [GENESIS_UNIVERSE_ID],
 	})
 	if (patchedRepToken.toLowerCase() !== repAddress.toLowerCase()) {
-		throw new Error(`Failed to patch simulation Zoltar genesis REP token. Expected ${repAddress}, received ${patchedRepToken}.`)
+		throw new Error(formatGenesisRepTokenUpdateFailed(repAddress, patchedRepToken))
 	}
 }
 

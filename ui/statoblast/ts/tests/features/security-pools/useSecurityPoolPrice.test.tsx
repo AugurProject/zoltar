@@ -301,7 +301,7 @@ test('high-base-fee recovery follows the exact candidate simulation and rechecks
 	await act(() => state.hook.state().recover())
 	const transaction = lastRequest(state.requests)
 	await expect(transaction.validateBeforeSubmit?.()).resolves.toBeUndefined()
-	expect(state.recoveryCalls).toContainEqual(expect.objectContaining({ address: priceFeed, blockNumber: 10n }))
+	expect(state.recoveryCalls).toContainEqual(expect.objectContaining({ address: priceFeed, blockNumber: 10n, gasPrice: 2n }))
 	state.setRecoveryCallFailure(new Error('execution reverted: Base fee too high'))
 	await expect(transaction.validateBeforeSubmit?.()).rejects.toThrow('ceiling')
 	await act(() => state.hook.state().refresh())

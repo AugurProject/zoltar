@@ -12,8 +12,8 @@ export const disputeGrowthCutoffMaximum = 'Dispute limit exceeds the contract ma
 export const disputeFeePercentage = 'Dispute fee (%)'
 export const disputeFeeRate = 'Dispute fee'
 export const price = 'Price'
-export const protocolFee = 'Protocol fee'
-export const protocolFeePercentage = 'Protocol fee (%)'
+export const protocolFee = 'OpenOracle fee'
+export const protocolFeePercentage = 'OpenOracle fee (%)'
 export const reportId = 'Report ID'
 export const settlementDelay = 'Settlement delay'
 export const settlementDelaySeconds = 'Settlement delay (seconds)'
@@ -96,7 +96,7 @@ export const numberOfReports = 'Number of reports'
 export const openReport = 'Open report'
 export const formatOpenReportLabel = (reportTitle: string) => `Open report: ${reportTitle}`
 export const oracleAddress = 'Oracle address'
-export const protocolFeeRecipient = 'Protocol fee recipient'
+export const protocolFeeRecipient = 'OpenOracle fee recipient'
 export const report = 'Report'
 export const formatReportNumberTitle = (reportId: string) => `Report #${reportId}`
 export const reportTimestamp = 'Report timestamp'
@@ -306,7 +306,7 @@ export const validSettlementDelayRequired = 'Enter a valid settlement delay.'
 export const validDisputeDelayRequired = 'Enter a valid dispute delay.'
 export const validMultiplierRequired = 'Enter a valid multiplier, such as 1.5.'
 export const validDisputeFeeRequired = 'Enter a valid dispute fee.'
-export const validProtocolFeeRequired = 'Enter a valid protocol fee.'
+export const validProtocolFeeRequired = 'Enter a valid OpenOracle fee.'
 export const baseTokenAmount = 'Base token amount'
 export const quoteTokenAmount = 'Quote token amount'
 export const multiplier = 'Multiplier'
@@ -340,10 +340,10 @@ export const settlementDelayMustExceedDisputeDelay = 'Settlement delay must be g
 export const multiplierTooSmall = 'Multiplier must be at least 1×.'
 export const disputeFeeNegative = 'Dispute fee must be non-negative.'
 export const disputeFeeTooLarge = 'Dispute fee exceeds the contract maximum.'
-export const protocolFeeNegative = 'Protocol fee must be non-negative.'
-export const protocolFeeTooLarge = 'Protocol fee exceeds the contract maximum.'
+export const protocolFeeNegative = 'OpenOracle fee must be non-negative.'
+export const protocolFeeTooLarge = 'OpenOracle fee exceeds the contract maximum.'
 export const multiplierMaximum = (maximum: string) => `Multiplier must be at most ${maximum}.`
-export const reportFeeTotalMaximum = (maximum: string) => `Dispute fee plus protocol fee must not exceed ${maximum}%.`
+export const reportFeeTotalMaximum = (maximum: string) => `Dispute fee plus OpenOracle fee must not exceed ${maximum}%.`
 export const disputeWindowTooShort = 'Dispute window ends too soon. Wait to settle this report.'
 
 export const repQuoteTimeout = (version: 'V3' | 'V4') => `RPC timeout while loading the Uniswap ${version} REP price.`

@@ -91,6 +91,7 @@ export function priceFixture(account = capitalSnapshot({ forkTime: 100n })) {
 			if (scoped.has(override)) return scoped.get(override)
 			if (request.functionName === 'securityPoolFactory') return source.client.readContract({ ...request, address: securityPool, functionName: 'factory' })
 			if (request.functionName === 'universeId') return request.address === priceFeed ? 42n : 0n
+			if (request.functionName === 'balanceOf' && request.args?.[0] === priceEscrow) return 0n
 			if (request.functionName === 'balanceOf' && request.address === priceWeth) return wethBalanceAttoEth
 			if (request.functionName === 'allowance') return request.address === priceWeth ? wethAllowanceAttoEth : repAllowanceAttoRep
 			if (request.functionName === 'reportId') return 9n

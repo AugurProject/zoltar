@@ -1,4 +1,7 @@
 import { questionErrors, shareErrors } from '../copy/protocolErrors.js'
+import { loadCompleteSetRedemptionQuote } from './redemptionQuote.js'
+export { loadCompleteSetRedemptionQuote } from './redemptionQuote.js'
+import { securityPoolRecoveryMintBudget } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { loadRecoveryMintFunding } from './recoveryMintFunding.js'
 import { collateralPresentation } from './collateral.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
@@ -158,6 +161,7 @@ export async function quoteTradingCollateral(client: ReadClient, collateral: Tra
 	const { securityPool, universeId } = collateral
 	const [, result, recoveryValue, shares, capacity] = await readRequiredMulticall(client, [mintFeeCheckpoint(questionLedger), ...mintQuoteCalls(collateral, questionLedger, amount), mintCapacityCall(collateral)] as const)
 	const required = requireBigintValue(recoveryValue, 'recovery REP contribution')
+	securityPoolRecoveryMintBudget(required)
 	onRecoveryRequirement?.(required)
 	const recovery = await loadRecoveryMintFunding(client, securityPool, universeId, collateral.owner, required)
 	if (!Array.isArray(result) || typeof result[0] !== 'bigint') throw new Error(shareErrors.feeQuote)
@@ -525,15 +529,10 @@ export async function redeemCompleteSetInQuestionLedger(client: WriteClient, que
 	} satisfies TradingActionResult
 }
 
-async function readRedemptionQuote(client: Pick<ReadClient, 'readContract'>, pool: Address, shares: bigint, blockNumber: bigint | undefined) {
+async function readRedemptionQuote(client: Pick<ReadClient, 'readContract' | 'multicall'>, pool: Address, shares: bigint, blockNumber: bigint | undefined) {
 	const collateral = await loadTradingCollateralIdentity(client, pool, blockNumber)
-	const recoveryAbi = parseAbi(['function attoSharesToAttoRep(uint256 amountAttoShares) view returns (uint256)'])
-	const [cash, rep] = await Promise.all([
-		client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool, functionName: 'attoSharesToAttoEth', args: [shares], blockNumber }),
-		client.readContract({ abi: recoveryAbi, address: pool, functionName: 'attoSharesToAttoRep', args: [shares], blockNumber }),
-	])
+	const { cash, rep: recovery } = await loadCompleteSetRedemptionQuote(client, pool, shares, blockNumber)
 	const collateralAmount = formatCurrencyBalanceWithUnit(cash, collateral.symbol, collateral.decimals)
-	const recovery = requireBigintValue(rep, 'recovery REP quote')
 	const repAmount = formatCurrencyBalanceWithUnit(recovery, commonCopy.rep)
 	return { collateralAmount, repAmount, recovery, decimals: collateral.decimals, description: tradingCopy.redemptionEstimate(formatCurrencyBalanceWithUnit(shares, 'shares', collateral.decimals), collateralAmount, repAmount) }
 }

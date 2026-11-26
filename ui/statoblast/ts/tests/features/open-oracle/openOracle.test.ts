@@ -565,7 +565,7 @@ describe('OpenOracle helpers', () => {
 
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, token2Address: token1Address } }).message).toBe('Base and quote tokens must use different addresses.')
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, settlementTime: '9' } }).message).toBe('Settlement delay must be greater than dispute delay.')
-		expect(getOpenOracleCreateValidation({ form: { ...baseForm, feePercentage: '60', protocolFee: '50.00001' } }).message).toBe('Dispute fee plus protocol fee must not exceed 100%.')
+		expect(getOpenOracleCreateValidation({ form: { ...baseForm, feePercentage: '60', protocolFee: '50.00001' } }).message).toBe('Dispute fee plus OpenOracle fee must not exceed 100%.')
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, multiplier: '0.99' } }).message).toBe('Multiplier must be at least 1×.')
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, multiplier: '2' } }).message).toBeUndefined()
 		expect(getOpenOracleCreateValidation({ form: { ...baseForm, multiplier: '1.5' } }).message).toBeUndefined()
@@ -628,9 +628,9 @@ describe('OpenOracle helpers', () => {
 		const parse = (protocolFee: string) => parseOpenOracleCreateFormSubmission({ form: { ...validForm, protocolFee }, token1Decimals: 18, token2Decimals: 18 })
 		expect(parse('0.001').protocolFee).toBe(100)
 		expect(parse('1').protocolFee).toBe(100_000)
-		expect(() => parse('')).toThrow('Enter a valid protocol fee.')
-		expect(() => parse('-0.1')).toThrow('Protocol fee must be non-negative')
-		expect(() => parse('0.000001')).toThrow('Enter a valid protocol fee.')
+		expect(() => parse('')).toThrow('Enter a valid OpenOracle fee.')
+		expect(() => parse('-0.1')).toThrow('OpenOracle fee must be non-negative')
+		expect(() => parse('0.000001')).toThrow('Enter a valid OpenOracle fee.')
 	})
 
 	test('open oracle create parser throws invariant validation messages before preparing a write', () => {
@@ -652,7 +652,7 @@ describe('OpenOracle helpers', () => {
 				token1Decimals: 18,
 				token2Decimals: 18,
 			}),
-		).toThrow('Dispute fee plus protocol fee must not exceed 100%.')
+		).toThrow('Dispute fee plus OpenOracle fee must not exceed 100%.')
 		expect(() =>
 			parseOpenOracleCreateFormSubmission({
 				form: {

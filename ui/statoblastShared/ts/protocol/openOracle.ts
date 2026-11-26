@@ -263,7 +263,7 @@ export async function createOpenOracleReportInstance(
 	assertSafeInteger(parameters.disputeDelay, 'Dispute delay')
 	assertSafeInteger(parameters.feePercentage, 'Dispute fee')
 	assertSafeInteger(parameters.multiplier, 'Multiplier')
-	assertSafeInteger(parameters.protocolFee, 'Protocol fee')
+	assertSafeInteger(parameters.protocolFee, 'OpenOracle fee')
 	assertSafeInteger(parameters.settlementTime, 'Settlement delay')
 	const parameterValidation = getOpenOracleCreateParameterValidation({
 		disputeDelay: BigInt(parameters.disputeDelay),

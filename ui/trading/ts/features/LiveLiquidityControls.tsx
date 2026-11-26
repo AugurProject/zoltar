@@ -1,4 +1,3 @@
-import { estimateBudgetSpend } from '../protocol/minting.js'
 import { ETH_GAS_RESERVE_ATTO_ETH } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 import * as collateralCopy from '../copy/collateral.js'
 import { walletConnectionRequired } from '@zoltar/ui-core-shared/copy/common.js'
@@ -72,7 +71,7 @@ export function LiveLiquidityControls({
 	const { operation, amount, probability, parsed, conditionalBps, estimate, bounds, previewBlocker, transaction, selectOperation, updateAmount, updateProbability, submit } = controller
 	const { state, workflowLocked } = transaction
 	let required = parsed
-	if (parsed !== undefined && operation !== 'remove' && tokenFunded(market)) required = estimateBudgetSpend(market, parsed)
+	if (parsed !== undefined && operation !== 'remove' && tokenFunded(market)) required = controller.requiredSpend
 	const funding = useCollateralFunding(market, required, { ...context, nowSeconds }, operation !== 'remove')
 	const fundingBalance = tokenFunded(market) ? funding.balance : walletEthAttoEth
 	const asset = collateralAsset(market)

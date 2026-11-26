@@ -103,14 +103,20 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 				pinned.push(request.blockNumber)
 				if (request.functionName === 'balanceOfShares') return balances
 				if (request.functionName === 'getQuestionOutcome') return 2n
-				expect(request.args).toEqual([balances[2]])
-				if (request.functionName === 'attoSharesToAttoEth') return unit
-				if (request.functionName === 'attoSharesToAttoRep') return 2n * unit
 				throw new Error(`Unexpected redemption read ${request.functionName}`)
 			}),
 		),
 		account: { address: pool, type: 'json-rpc' as const },
 		getBlock: async () => ({ ...createBlockWithTimestamp(100n), number: 99n }),
+		multicall: createMulticallStub(request => {
+			pinned.push(request.blockNumber)
+			expect(request.contracts.map(contract => ({ address: contract.address, functionName: contract.functionName, args: contract.args }))).toEqual([
+				{ address: pool, functionName: 'refreshSecurityPoolFees', args: [] },
+				{ address: pool, functionName: 'attoSharesToAttoEth', args: [balances[2]] },
+				{ address: pool, functionName: 'attoSharesToAttoRep', args: [balances[2]] },
+			])
+			return [undefined, unit, 2n * unit]
+		}),
 		onTransactionPrepared: (value: TransactionRequestPreview) => {
 			review = value
 		},
@@ -119,7 +125,7 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 		},
 	}
 	await redeemSharesInQuestionLedger(client, pool)
-	expect(pinned).toEqual([99n, 99n, 99n, 99n])
+	expect(pinned).toEqual([99n, 99n, 99n])
 	expect(review?.reviewDescription).toMatch(/1\sWETH/)
 	expect(review?.reviewDescription).toMatch(/2\sREP/)
 	expect(send).toHaveBeenCalledTimes(1)
@@ -146,9 +152,11 @@ test('complete-set redemption refreshes all three share balances and its payout 
 		...base,
 		readContract: createReadContractStub(async request => {
 			if (request.functionName === 'balanceOfShares') return holdings
-			if (request.functionName === 'attoSharesToAttoEth') return cash
-			if (request.functionName === 'attoSharesToAttoRep') return 0n
 			return base.readContract(request)
+		}),
+		multicall: createMulticallStub(request => {
+			expect(request.contracts.map(contract => contract.functionName)).toEqual(['refreshSecurityPoolFees', 'attoSharesToAttoEth', 'attoSharesToAttoRep'])
+			return [undefined, cash, 0n]
 		}),
 		onTransactionPlan: (next: readonly TransactionPlanStep[]) => {
 			plan = next

@@ -25,6 +25,7 @@ function address(value: Address, label: string) {
 	if (!isAddress(value) || value.toLowerCase() === zeroAddress) throw new Error(`${label} must be a nonzero address.`)
 }
 
+export const minimumSecurityMultiplierBps = 10_500n
 const maximumFeeBps = 10_000n
 const secondsPerDay = 86_400n
 const maximumVestingDays = 3650n
@@ -62,7 +63,7 @@ export function buildSecurityPoolDeploymentRequest(parameters: { owner: Address;
 	uint(parameters.origin.universeId, 248, 'Origin universe')
 	uint(parameters.origin.securityMultiplierBps, 256, 'Security multiplier')
 	uint(parameters.origin.reportPriorityFeeAttoEthPerGas, 256, 'Report priority fee')
-	if (parameters.origin.securityMultiplierBps < 10_500n) throw new Error('Security multiplier must be at least 10500 BPS.')
+	if (parameters.origin.securityMultiplierBps < minimumSecurityMultiplierBps) throw new Error(`Security multiplier must be at least ${formatUnits(minimumSecurityMultiplierBps, 2)}%.`)
 	if (parameters.origin.reportPriorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) throw new Error('Initial report priority fee exceeds OpenOracle limits.')
 	if (parameters.origin.reportPriorityFeeAttoEthPerGas === 0n) throw new Error('Report priority fee must be positive.')
 	address(parameters.questionAdmissionPolicy, 'Question rules')
@@ -116,7 +117,7 @@ export function buildSecurityPoolPrepareNextRequest(parameters: { caller: Addres
 
 /** @public Unsigned transaction export for external smart-account execution flows. */
 export function exportSecurityPoolTransaction(parameters: { chainId: number; request: { account: Address; to: Address; data: Hex; value: bigint } }) {
-	if (!Number.isSafeInteger(parameters.chainId) || parameters.chainId <= 0) throw new Error('Choose a valid chain id.')
+	if (!Number.isSafeInteger(parameters.chainId) || parameters.chainId <= 0) throw new Error('Choose a valid chain ID.')
 	address(parameters.request.account, 'Owner')
 	address(parameters.request.to, 'Transaction target')
 	uint(parameters.request.value, 256, 'Transaction value')

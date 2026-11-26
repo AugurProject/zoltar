@@ -135,6 +135,10 @@ test.each([
 	'Unrecognized runtime code',
 	'Input must fit uint256.',
 	'Input must fit uint.',
+	'Zoltar',
+	'Protocol mismatch',
+	'Queue group ID',
+	'Proofs did not match',
 ])('rejects the glossary term in %s', message => {
 	expect(glossaryViolation(message)).toBe(true)
 })
@@ -145,14 +149,16 @@ test.each(['Claim deposits', 'Lost, no action needed', 'Full reward share', 'Rep
 
 const obsoleteCopy =
 	/\bheadrooms?\b|\bdispute growth cutoffs?\b|adds 1 REP|settlement demands?|healthy capacit(?:y|ies)|spare healthy commitments?|(?:above|below|liquidation) boundar(?:y|ies)|conservative (?:health|prices?)|funding recipients?|clear(?:s|ed|ing)? (?:no )?deposits?|settled records?|capital services|commitment index(?:es|ices)?|report candidates?|escrow funders?|admission polic(?:y|ies)|question admissions?|base purchase fees?|resolution premiums?|idle REP|proposed prices?|prices? you propose|requested commitments?|source universes?|source-backed rights?|source recover(?:y|ies)|child preparations?|committed REP|REP\s*\/\s*WETH|\bgwei\b|max rewards?|not deployed|\bcarry (?:lea(?:f|ves)|pages?|nodes?|snapshots?)\b|\b(?:premiums?|books?|bonus(?:es)?|vaults?|repairs?|principals?|sponsors?|callbacks?|charged|retire(?:s|d|ments?)?|retiring|scanners?|liquidators?|escalations?|cohorts?|underwriters?|keepers?)\b/i
-const generalWords = /\b(?:accounts?|requests?|providers?|engines?|ledgers?)\b/i
+const generalWords = /\b(?:accounts?|requests?|providers?|engines?|ledgers?|zoltar)\b/i
 const requiredDeploymentPromptWarning = 'If a deployment request is still open in your wallet, reject it there before starting a new deployment.'
 const internalTerms = /\b(?:authorit(?:y|ies)|canonical|custody|coordinators?|bootstrap(?:ped|ping|s)?|accruals?|settlement engines?|auction engines?|question ledgers?|controllers?|escrows?|modules?|services|clones?|epochs?|bindings?|factor(?:y|ies)|deployers?|runtime|uint\d*)\b/i
+const statoblastInternalTerms = /\b(?:protocols?|queue groups?|proofs?)\b/i
 const fixedMagnitude = /\b(?:\d+(?:[.,]\d+)?|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?:\s*%|[ -]+(?:percent|seconds?|minutes?|hours?|days?|weeks?|months?|years?)\b)/i
 
-function glossaryViolation(text: string, banGeneralWords = true) {
+function glossaryViolation(text: string, banStatoblastTerms = true) {
 	const depositSettlement = /\bdeposits?\b/i.test(text) && depositSettlementWord.test(text)
-	return obsoleteCopy.test(text.replace(/\brepair auction\b/gi, '')) || internalTerms.test(text) || (banGeneralWords && generalWords.test(text.replace(requiredDeploymentPromptWarning, ''))) || depositSettlement || fixedMagnitude.test(text)
+	const statoblastTerm = banStatoblastTerms && (generalWords.test(text.replace(requiredDeploymentPromptWarning, '')) || statoblastInternalTerms.test(text))
+	return obsoleteCopy.test(text.replace(/\brepair auction\b/gi, '')) || internalTerms.test(text) || statoblastTerm || depositSettlement || fixedMagnitude.test(text)
 }
 
 test('keeps the approved deployment warning while banning other uses of request', () => {
@@ -163,7 +169,8 @@ test('keeps the approved deployment warning while banning other uses of request'
 	expect(findViolations(source)).toEqual([])
 })
 
-const machineFields = new Set(['abi', 'className', 'data-testid', 'download', 'errorName', 'eventName', 'functionName', 'href', 'id', 'key', 'kind', 'method', 'role', 'style', 'testId', 'transportMode', 'type'])
+const machineFields = new Set(['abi', 'className', 'data-testid', 'dependencies', 'download', 'errorName', 'eventName', 'functionName', 'href', 'id', 'key', 'kind', 'method', 'role', 'style', 'testId', 'transportMode', 'type'])
+const storageKeyPrefix = /^zoltar-ui:[a-z0-9-]+:/
 const abiBuilders = new Set(['keccak256', 'parseAbi', 'parseAbiItem', 'parseAbiParameters'])
 const comparisonOperators = new Set([ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken, ts.SyntaxKind.InKeyword])
 const machineArguments = new Map([
@@ -184,12 +191,12 @@ const sharedCopyRenderedUnchangedByDesign = new Map([
 	['ui/coreShared/ts/copy/userMessages.ts', new Set(['missingUniverseDetail'])],
 ])
 
-// Shared modules can serve several products. The general-word rule covers the copy
-// used by the Statoblast shell, plus explicitly named copy used by its feature views.
+// Shared modules can serve several products. The Statoblast wording rules cover its own
+// packages and explicitly named exports shared with its shell and feature views.
 const sharedCopyUsingStatoblastTerminology = new Map([
 	['ui/coreShared/ts/copy/app.ts', new Set(['formatAccountMenuLabel', 'qaAccountDisconnected', 'qaWalletDisconnectedDetail', 'walletConnectionFailed', 'deploymentIncompleteReason'])],
 	['ui/coreShared/ts/copy/common.ts', new Set(['connectWallet', 'walletConnectionRequired', 'formatConnectWalletBefore'])],
-	['ui/coreShared/ts/copy/simulation.ts', new Set(['formatQaAccountNumber', 'qaAccount', 'simulationQaAccount'])],
+	['ui/coreShared/ts/copy/simulation.ts', new Set(['formatQaAccountNumber', 'formatGenesisRepTokenUpdateFailed', 'qaAccount', 'simulationQaAccount'])],
 	['ui/coreShared/ts/copy/transaction.ts', new Set(['currentStateCheckFailed', 'formatOldDataCheck'])],
 	['ui/coreShared/ts/copy/userMessages.ts', new Set(['walletAddressChanged', 'walletDisconnected', 'walletInstallationRequired'])],
 	['ui/zoltarShared/ts/copy/forkTargets.ts', new Set(['targetChildUniverses'])],
@@ -197,8 +204,8 @@ const sharedCopyUsingStatoblastTerminology = new Map([
 	['ui/zoltarShared/ts/protocol/helpers.ts', new Set(['getEscalationSideLabel'])],
 ])
 
-function appliesGeneralWordBan(node: ts.Node, file: string) {
-	if (/^ui\/(?:statoblast|statoblastShared)\//.test(file)) return true
+function appliesStatoblastWordingBan(node: ts.Node, file: string) {
+	if (/^(?:ui\/(?:statoblast|statoblastShared)|shared\/statoblast)\//.test(file)) return true
 	const names = sharedCopyUsingStatoblastTerminology.get(file)
 	if (names === undefined) return false
 	for (let parent = node.parent; parent !== undefined; parent = parent.parent) {
@@ -223,6 +230,8 @@ function isAbiDeclarationField(property: ts.PropertyAssignment) {
 
 // Strings are product text unless syntax fixes their role as code, such as a lookup key or an ABI name.
 function isMachineText(node: ts.Node, file: string) {
+	if (ts.isStringLiteralLike(node) && storageKeyPrefix.test(node.text)) return true
+	if (ts.isTemplateExpression(node) && storageKeyPrefix.test(node.head.text)) return true
 	let current = node
 	for (let parent = current.parent; parent !== undefined; current = parent, parent = current.parent) {
 		if (ts.isLiteralTypeNode(parent) || ts.isTemplateLiteralTypeNode(parent) || ts.isImportDeclaration(parent) || ts.isExportDeclaration(parent) || ts.isImportTypeNode(parent)) return true
@@ -248,13 +257,14 @@ function isMachineText(node: ts.Node, file: string) {
 		if (ts.isBinaryExpression(parent) && comparisonOperators.has(parent.operatorToken.kind)) return true
 		if (ts.isReturnStatement(parent) && ts.isStringLiteralLike(node) && /^[a-z]+(?:-[a-z]+)+$/.test(node.text)) return true
 		if (ts.isReturnStatement(parent) && file.endsWith('/ethereum/abi/parser.ts') && ts.isStringLiteralLike(node) && abiParameterType.test(node.text)) return true
-		if (ts.isCallExpression(parent)) {
+		if (ts.isCallExpression(parent) || ts.isNewExpression(parent)) {
 			const expression = parent.expression.getText()
 			const name = ts.isPropertyAccessExpression(parent.expression) ? parent.expression.name.text : expression
 			if (abiBuilders.has(expression) || expression === 'Symbol' || /^console\.(?:debug|error|info|log|warn)$/.test(expression) || parent.expression.kind === ts.SyntaxKind.ImportKeyword) return true
-			if (matchOperations.has(name) && parent.arguments[0] === current) return true
-			if (parent.arguments[machineArguments.get(expression) ?? machineArguments.get(name) ?? -1] === current) return true
-			if (storedRecordReaders.has(name) && parent.arguments[0] === current) {
+			if (ts.isNewExpression(parent) && expression === 'Set' && parent.typeArguments?.[0]?.getText() === "DeploymentStatus['id']" && parent.arguments?.[0] === current) return true
+			if (matchOperations.has(name) && parent.arguments?.[0] === current) return true
+			if (parent.arguments?.[machineArguments.get(expression) ?? machineArguments.get(name) ?? -1] === current) return true
+			if (storedRecordReaders.has(name) && parent.arguments?.[0] === current) {
 				if (expression.startsWith('read.')) return true
 				if (ts.findAncestor(parent, ancestor => ts.isCallExpression(ancestor) && ancestor.expression.getText() === 'decodeStoredValue') !== undefined) return true
 			}
@@ -332,27 +342,45 @@ function compoundText(node: ts.Node, seen = new Set<ts.Node>()): string | undefi
 	return separator === undefined || parts.some(part => part === undefined) ? undefined : parts.join(separator)
 }
 
-function isResponseLabel(node: ts.Node) {
-	const call = node.parent
-	if (!ts.isCallExpression(call) || call.arguments.at(-1) !== node) return false
+const decoderTextArguments = new Map<string, readonly number[]>([
+	['address', [1]],
+	['decodeAddress', [1]],
+	['decodeBool', [1]],
+	['decodeFields', [2]],
+	['decodeUint', [1]],
+	['positive', [1]],
+	['uint', [1, 2]],
+])
+
+function decoderTextKind(node: ts.Node) {
+	let argument = node
+	let call = argument.parent
+	while (ts.isParenthesizedExpression(call) || (ts.isConditionalExpression(call) && (argument === call.whenTrue || argument === call.whenFalse))) {
+		argument = call
+		call = argument.parent
+	}
+	if (!ts.isCallExpression(call)) return undefined
 	const target = call.expression
 	const name = ts.isPropertyAccessExpression(target) ? target.name : target
-	return ts.isIdentifier(name) && /^require(?:(?:Address|Array|Bigint|Boolean|IntegerLike|Object|Tuple)Value|BigintArray)$/.test(name.text)
+	if (!ts.isIdentifier(name)) return undefined
+	if (/^require(?:(?:Address|Array|Bigint|Boolean|IntegerLike|Object|Tuple)Value|BigintArray)$/.test(name.text) && call.arguments.at(-1) === argument) return 'response-label'
+	if (decoderTextArguments.get(name.text)?.some(index => call.arguments[index] === argument)) return 'error-text'
+	return undefined
 }
 
 function findViolations(source: ts.SourceFile, file = source.fileName) {
 	const violations: string[] = []
 	const visit = (node: ts.Node) => {
 		const joined = ts.isBinaryExpression(node) || ts.isCallExpression(node) || ts.isTemplateExpression(node) ? compoundText(node) : undefined
-		const responseLabel = isResponseLabel(node)
+		const textKind = ts.isParenthesizedExpression(node) ? undefined : decoderTextKind(node)
 		// Check static fragments together and visit template substitutions independently.
 		let text = joined
 		if (ts.isStringLiteralLike(node) || ts.isJsxText(node)) text = node.text
 		else if (text === undefined && ts.isTemplateExpression(node)) text = templateText(node, new Set([node]), true)
-		else if (text === undefined && responseLabel) text = compoundText(node)
+		else if (text === undefined && textKind !== undefined) text = compoundText(node)
 		const label = text?.trimStart() ?? ''
-		const capitalizedLabel = responseLabel && /^[A-Z][a-z]/.test(label) && !/^(?:OpenOracle|Zoltar|Statoblast|REP|ETH|WETH)\b/.test(label)
-		if (text !== undefined && (responseLabel || !isMachineText(node, file)) && (capitalizedLabel || glossaryViolation(text, appliesGeneralWordBan(node, file)))) {
+		const capitalizedLabel = textKind === 'response-label' && /^[A-Z][a-z]/.test(label) && !/^(?:OpenOracle|REP|ETH|WETH)\b/.test(label)
+		if (text !== undefined && (textKind !== undefined || !isMachineText(node, file)) && (capitalizedLabel || glossaryViolation(text, appliesStatoblastWordingBan(node, file)))) {
 			const { line } = source.getLineAndCharacterOfPosition(node.getStart(source))
 			violations.push(`${file}:${line + 1} ${text.replace(/\s+/g, ' ').trim()}`)
 		}
@@ -403,6 +431,14 @@ test.each([
 	["requireBigintValue(value, 'OpenOracle runtime code')", 'OpenOracle runtime code'],
 	["requireBigintValue(value, 'OpenOracles token balance')", 'OpenOracles token balance'],
 	["if (getAddress(requireAddressValue(value, 'auction deployer')) !== expected) throw reason", 'auction deployer'],
+	["if (decodeAddress(value, 'pool factory', true) !== expected) throw reason", 'pool factory'],
+	["if (decodeUint(value, 'auction controller', 48) === expected) throw reason", 'auction controller'],
+	["if (address(value, 'report module') !== expected) throw reason", 'report module'],
+	["if (uint(value, 256, 'price epoch') === expected) throw reason", 'price epoch'],
+	["if (positive(value, 'bid escrow', 48) === expected) throw reason", 'bid escrow'],
+	["if (decodeAddress(value, byPool ? ('pool factory') : 'pool address') !== expected) throw reason", 'pool factory'],
+	["const labels = new Set(['pool factory'])", 'pool factory'],
+	["requireAddressValue(value, 'Zoltar universe details')", 'Zoltar universe details'],
 	['const message = `The ${type} ledger failed`', 'The ledger failed'],
 ])('finds reserved product wording in %s', (fixture, message) => {
 	const file = 'ui/statoblast/ts/fixtures/copy.tsx'
@@ -416,7 +452,7 @@ test('allows lower-case response labels and protocol acronyms', () => {
 	expect(findViolations(source)).toEqual([])
 })
 
-test.each(['OpenOracle token balance', 'Zoltar universe details', 'Statoblast pool balance', 'REP balance', 'ETH balance', 'WETH balance'])('allows the leading product name in %s', label => {
+test.each(['OpenOracle token balance', 'REP balance', 'ETH balance', 'WETH balance'])('allows the leading product name in %s', label => {
 	const source = ts.createSourceFile('ui/statoblastShared/ts/protocol/fixture.ts', `requireBigintValue(value, ${JSON.stringify(label)})`, ts.ScriptTarget.Latest, true)
 	expect(findViolations(source)).toEqual([])
 })
@@ -428,9 +464,16 @@ test('resolves a const prefix within its own scope', () => {
 })
 
 test('allows Zoltar-only general wording while keeping shared internal terms banned', () => {
-	const fixture = "export const requestSent = 'Request sent'\nexport const status = 'Settlement for your deposits'\nexport const label = 'Question ledger'"
+	const fixture = "export const requestSent = 'Request sent'\nexport const status = 'Settlement for your deposits'\nexport const label = 'Question ledger'\nexport const title = 'Zoltar protocol queue group'"
 	const source = ts.createSourceFile('ui/zoltarShared/ts/copy/example.ts', fixture, ts.ScriptTarget.Latest, true)
 	expect(findViolations(source)).toEqual(['ui/zoltarShared/ts/copy/example.ts:2 Settlement for your deposits', 'ui/zoltarShared/ts/copy/example.ts:3 Question ledger'])
+})
+
+test('applies the Statoblast wording ban to error labels in its shared package', () => {
+	const file = 'shared/statoblast/ts/statoblast/fixture.ts'
+	const fixture = "const universe = decodeAddress(value, 'Zoltar')\nconst group = decodeUint(value, 'Price protocol queue group')"
+	const source = ts.createSourceFile(file, fixture, ts.ScriptTarget.Latest, true)
+	expect(findViolations(source)).toEqual([`${file}:1 Zoltar`, `${file}:2 Price protocol queue group`])
 })
 
 test('applies the general-word ban to selected shared exports rendered in Statoblast', () => {
@@ -459,6 +502,9 @@ test('leaves non-text ABI names, CSS, lookup keys and discriminants alone', () =
 		"const topic = keccak256('ReportSubmitted(uint256,bytes)')",
 		"fundCanonicalDeployerSigner(client, { label: 'deterministic proxy deployer' })",
 		"const request = { functionName: 'provider' }",
+		"const step = { dependencies: ['zoltar'] }",
+		"const steps = new Set<DeploymentStatus['id']>(['zoltar'])",
+		'const key = `zoltar-ui:statoblast:reads:${chainId}`',
 		"const byStatus = { 'Settlement engine': { kind: 'ledger' } }",
 		"const find = (value: string) => value === 'account' ? byStatus['Settlement engine'] : undefined",
 		"const element = <p className='settlement-engine' data-testid='ledger' />",

@@ -1,5 +1,5 @@
 import { formatUnits, parseUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { validateSecurityPoolEconomics, type SecurityPoolOriginConfig } from '@zoltar/statoblast-shared/statoblast/securityPool'
+import { minimumSecurityMultiplierBps, validateSecurityPoolEconomics, type SecurityPoolOriginConfig } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
@@ -30,8 +30,6 @@ export type DeploymentDraft = {
 	fixedQuestions: string
 	economicsDraft: SecurityPoolCreationDraft
 }
-
-const MINIMUM_SECURITY_MULTIPLIER_BPS = 10_500n
 
 const defaultSecurityPoolCreationDraft = (): SecurityPoolCreationDraft => ({
 	annualFeePercent: '10',
@@ -133,7 +131,7 @@ export function parseDeploymentDraft(draft: DeploymentDraft, profile: NetworkPro
 		if (originUniverse === undefined) throw new Error(enterOrigin)
 		const securityMultiplierBps = parseUnits(draft.multiplierInput, 2)
 		const reportPriorityFeeAttoEthPerGas = parseUnits(draft.priorityFeeInput, 9)
-		if (securityMultiplierBps < MINIMUM_SECURITY_MULTIPLIER_BPS) throw new Error(copy.securityMultiplierTooLow)
+		if (securityMultiplierBps < minimumSecurityMultiplierBps) throw new Error(copy.securityMultiplierTooLow)
 		if (reportPriorityFeeAttoEthPerGas <= 0n) throw new Error(copy.priorityFeeRequired)
 		if (reportPriorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) throw new Error(copy.priorityFeeAboveLimit)
 		if (collateral.address === undefined) throw new Error(copy.collateralUnavailable)

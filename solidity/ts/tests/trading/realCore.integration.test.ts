@@ -1,3 +1,4 @@
+import { loadLiveMarket } from '../../../../ui/trading/ts/protocol/live.js'
 import { encodeReceiveBasedRedeemRequest } from '../../../../ui/trading/ts/protocol/authorization.js'
 import { encodeReceiveRequest } from '@zoltar/trading-shared/trading/receiveRequest'
 import { getZoltarAddress, forkUniverse } from '../../testSupport/simulator/utils/contracts/zoltar'
@@ -65,6 +66,17 @@ describe('trading against authoritative Zoltar contracts', () => {
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'createPair', args: [native().questionLedger] }))
 		pair = await fixture.client.readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'getPair', args: [native().questionLedger] })
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: native().shareToken, functionName: 'setApprovalForAll', args: [router, true] }))
+	})
+
+	test('#1773 loaded markets retain the public quote validation requirement', async () => {
+		const infrastructure = getInfraContractAddresses()
+		const market = await loadLiveMarket(
+			fixture.client,
+			{ chainId: 1, chainName: 'test', rpcUrl: 'http://localhost', securityPoolFactory: infrastructure.securityPoolFactory, zoltar: getZoltarAddress(), factory, router, feeBps: 30 },
+			{ questionLedger: native().questionLedger, shareToken: native().shareToken, universeId: fixture.genesisUniverse, questionId: fixture.questionId, statoblastSecurityMultiplierBps: 10500n, initialReportPriorityFeeAttoEthPerGas: 1n },
+		)
+		expect(market.requiresMintQuote).toBe(true)
+		expect(market.mintQuoteEpoch).toBeDefined()
 	})
 
 	test('uses the real dynamic complete-set scale and leaves no INVALID or router residue', async () => {

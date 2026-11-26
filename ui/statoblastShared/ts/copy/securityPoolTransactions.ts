@@ -1,3 +1,6 @@
+import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
+import { minimumSecurityMultiplierBps } from '@zoltar/statoblast-shared/statoblast/securityPool'
+
 export const refreshingBalances = 'Refreshing security pool balances.'
 export const newPriceRequired = 'A new accepted REP price is required.'
 export const loadPoolFailed = 'Unable to load this security pool position.'
@@ -10,7 +13,7 @@ export const deployment = {
 	positionReview: (description: string, position: string, wallet: string) => `${description} The auction position is ${position}. Returned collateral, ETH and REP go to ${wallet}.`,
 	positionBlockRequired: 'Wait for a confirmed block to check this auction position.',
 	positionAuthorityChanged: 'Control of this auction position changed. Review again.',
-	securityMultiplierTooLow: 'The security multiplier is below the protocol minimum.',
+	securityMultiplierTooLow: `Security multiplier must be at least ${formatUnits(minimumSecurityMultiplierBps, 2)}%.`,
 	priorityFeeRequired: 'Enter a positive oracle priority fee.',
 	priorityFeeAboveLimit: 'Oracle priority fee exceeds the report funding limit.',
 	originValidationUnavailable: 'Could not check the origin universe. Try again.',
@@ -23,13 +26,13 @@ export const deployment = {
 	historyUnavailable: 'This RPC can’t check older blocks. Switch to an archive RPC or check your wallet activity.',
 	walletSendUncertain: 'Waiting for the wallet. The deployment may still be open in your wallet. Open your wallet to confirm or reject it, then check again.',
 	walletTransactionPending: 'The earlier transaction is still pending. Check your wallet activity, then check again.',
-	walletNonceUnavailable: 'Check your wallet activity. This older deployment was saved before Statoblast could track its progress.',
+	walletNonceUnavailable: 'No transaction nonce was saved. Check your wallet activity before starting a new deployment.',
+	transactionWaitingForEarlierNonce: (nonce: bigint) => `This transaction (nonce ${nonce}) is waiting behind an earlier one. Speed up or cancel the earlier transaction in your wallet, then check again.`,
 	walletRecoveryUnsupported: 'Statoblast can’t tell whether your wallet sent the earlier transaction. Check your wallet activity before starting a new deployment.',
 	missingDeploymentTransaction: 'No deployment transaction or receipt was found. Check your wallet activity before starting a new deployment.',
 	droppedDeploymentTransaction: (nonce: bigint, estimated: boolean) => `If your wallet no longer shows this transaction, send or cancel a transaction with nonce ${nonce}${estimated ? ' (or the nonce your wallet shows for it)' : ''}, then check again.`,
 	walletFinalityPending: `Earlier transactions from this wallet are still pending or not yet final. Speed up or cancel them in your wallet, or wait about ${15} minutes, then check again.`,
 	rulesNonceScanLimit: 'Statoblast checked a limited range of wallet transactions. Check your wallet activity before starting a new deployment.',
-	rulesRecoveryIncomplete: 'Statoblast checked a limited range of wallet transactions. Check your wallet activity, then check again.',
 	transactionDidNotDeploy: 'The earlier transaction did not deploy this step. Start a new deployment to continue.',
 	coordinationUnavailable: 'This browser cannot coordinate deployment across tabs. Open this page in a browser that supports Web Locks.',
 	progressWriteFailed: 'Could not save deployment progress. Free up browser storage or check its permissions, then try again.',

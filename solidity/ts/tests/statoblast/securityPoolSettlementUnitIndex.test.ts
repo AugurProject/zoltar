@@ -1,3 +1,4 @@
+import { securityPoolMintForQuotedBudget } from '@zoltar/trading-shared/trading/securityPoolMint'
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { encodeDeployData, parseAbi, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as artifact } from '../../types/contractArtifact'
@@ -93,6 +94,15 @@ describe('Statoblast: settlement cash per claim unit', () => {
 		await expect(validate(300_000_000n)).rejects.toThrow('Fee precision')
 		await expect(validate(600_000_000n)).rejects.toThrow('Fee precision')
 		await expect(validate(315_360_000n)).resolves.toBeUndefined()
+		// #1773: an estimate is publishable only after this input-specific precision check.
+		const quote = (cash: bigint) =>
+			securityPoolMintForQuotedBudget(cash, cash, async amount => {
+				await validate(amount)
+				return 0n
+			})
+		await expect(quote(300_000_000n)).rejects.toThrow('Fee precision')
+		await expect(quote(600_000_000n)).rejects.toThrow('Fee precision')
+		await expect(quote(315_360_000n)).resolves.toEqual({ cash: 315_360_000n, fee: 0n })
 		await expect(validate(300_000_000n, 0n)).resolves.toBeUndefined()
 	})
 

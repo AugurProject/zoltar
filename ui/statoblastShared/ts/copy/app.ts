@@ -12,3 +12,6 @@ export const approvalInBaseUnits = (amount: bigint) => `${amount} token base uni
 export const transferEthTitle = 'Transfer ETH'
 export const contractTransactionTitle = 'Contract transaction'
 export const deployContractTitle = 'Deploy contract'
+export const universeDeploymentSection = 'Universe contracts'
+export const universeContract = 'Universe contract'
+export const questionDataContract = 'Question data contract'

@@ -8,6 +8,7 @@ import { getDeploymentSteps as getZoltarSteps } from '../../ui/zoltarShared/ts/p
 import { getBootstrapDescendantAddresses } from '../../ui/statoblastShared/ts/protocol/deploymentHelpers.ts'
 import { EXPECTED_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES, EXPECTED_NO_BOOTSTRAP_DESCENDANT_RUNTIME_CODE_HASHES } from './bootstrap-descendant-hashes.mts'
 import { getPinnedTradingDeploymentSteps } from './deployment-plan.mts'
+import { PERMIT2_ADDRESS } from './uniswap-deployment.mts'
 import { repositoryRoot } from '../repo/root.mts'
 
 function isHash(value: unknown): value is Hex {
@@ -37,6 +38,7 @@ export function mainnetTargets(genesis: 'yes' | 'no', pins: unknown): Target[] {
 		...Object.entries(getBootstrapDescendantAddresses(profile)).map(([id, address]) => ({ id, address, expectedRuntimeCodeHash: hashes[id], source: 'repository bootstrap descendant pins' })),
 		externalToken('genesisRep', profile.genesisRepTokenAddress, pins),
 		externalToken('weth', profile.wethAddress, pins),
+		externalToken('permit2', PERMIT2_ADDRESS, pins),
 	]
 }
 

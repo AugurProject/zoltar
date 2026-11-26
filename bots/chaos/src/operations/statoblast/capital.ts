@@ -2,7 +2,7 @@ import { erc20Abi, securityPoolCapitalLedgerAbi } from '@zoltar/bot-shared/contr
 import { getAddress } from '@zoltar/bot-shared/ethereum'
 import type { SecurityPoolCapitalSnapshot } from '../security-pool-types.ts'
 import type { EcosystemSnapshot, OperationContinuationContext, OperationDefinition, PlanningOptions } from '../types.ts'
-import { allowance, amount, choose, eligible, encodePreflightCall, encodeStep, erc20AllowanceEvidence, erc20WalletDebit, mixSeed, ONE_TOKEN, optionAmount, planBase, tokenInventory } from '../planning.ts'
+import { allowance, amount, choose, eligible, eventEvidence, encodePreflightCall, encodeStep, erc20AllowanceEvidence, erc20WalletDebit, mixSeed, ONE_TOKEN, optionAmount, planBase, tokenInventory } from '../planning.ts'
 import { repSpend } from '../input-funding.ts'
 import { inputInteger, inputMatches } from '../input-values.ts'
 import { requiredVaultMetadataAmount, requiredVaultMetadataString } from './planning.ts'
@@ -162,7 +162,7 @@ export function capitalAction(kind: CapitalAction): OperationDefinition {
 			if (kind === 'withdraw') return amount(capital.withdrawableAttoRep) > 0n
 			if (kind === 'claim') return amount(capital.feesAttoEth) + amount(capital.feesAttoRep) > 0n
 			if (kind === 'retire') return amount(capital.commitmentAttoEth) > 0n && !capital.retirementPending
-			return capital.retirementReady
+			return capital.retirementReady && capital.priceValid && amount(capital.priceValidUntil) > amount(snapshot.anchor.timestamp)
 		})
 	}
 	function build(snapshot: EcosystemSnapshot, capital: SecurityPoolCapitalSnapshot) {
@@ -179,7 +179,7 @@ export function capitalAction(kind: CapitalAction): OperationDefinition {
 			postconditions: [label],
 			risk: 'medium',
 			snapshot,
-			steps: [encodeStep({ abi: securityPoolCapitalLedgerAbi, args, functionName: method, id: kind, label, to: capital.capitalLedger })],
+			steps: [encodeStep({ abi: securityPoolCapitalLedgerAbi, args, functionName: method, id: kind, label, to: capital.capitalLedger, ...(kind === 'serve-retirement' ? { evidence: [eventEvidence(capital.capitalLedger, 'RetirementServed(uint256,uint256)')] } : {}) })],
 		})
 	}
 	return {

@@ -31,6 +31,21 @@ describe('statoblast deployment steps', () => {
 		expect(assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()).toEqual(['escalationGameDepositDelegate', 'openOracle', 'questionLedgerEventEmitter', 'questionLedgerOperationsDelegate'])
 	})
 
+	test('uses plain labels for the universe deployment steps', () => {
+		const steps = getDeploymentSteps(simulationProfile)
+		expect(steps.find(step => step.id === 'zoltar')?.label).toBe('Universe contract')
+		expect(steps.find(step => step.id === 'zoltarQuestionData')?.label).toBe('Question data contract')
+	})
+
+	test('deployment labels use product wording even for individual contracts', () => {
+		const internalLabels = /(?:zoltar|ledger|proof|cohort|callback|admission|factory|deployer|module|index|book|coordinator|services)/i
+		expect(
+			getDeploymentSteps(simulationProfile)
+				.filter(step => internalLabels.test(step.label))
+				.map(step => step.label),
+		).toEqual([])
+	})
+
 	test('deploys independent fork and auction modules with verified runtime code', async () => {
 		const publicProfiles = [MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE].flatMap(profile => (['yes', 'no'] as const).map(outcome => getGenesisNetworkProfile(profile, outcome)))
 		for (const profile of [...publicProfiles, simulationProfile]) {

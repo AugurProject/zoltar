@@ -191,3 +191,14 @@ test('#1252 the UI security pool adapter preserves the base fee for bounty quote
 	const snapshot = await loadSecurityPoolBranchPrice(fixture.client, securityPool, owner, 42n)
 	expect(snapshot.observation?.bounty).toBe(15_804_573n * (10_000_000_000n + 7n) + 101n)
 })
+
+test('#1650 direct escrow tokens remain withdrawable with only oracle sentinels', async () => {
+	const fixture = priceFixture()
+	const snapshot = await loadSecurityPoolBranchPrice(fixture.client, securityPool, owner, 42n)
+	fixture.set(priceOracle, 'tokenHolder', 1n)
+	fixture.set(priceWeth, 'balanceOf', 7n)
+	fixture.set(token, 'balanceOf', 9n)
+	const report = await loadSecurityPoolPriceReport(fixture.client, snapshot, 9n)
+	expect(report).toMatchObject({ wethCredit: 7n, repCredit: 9n })
+	expect(buildSecurityPoolPriceTokenWithdrawal(snapshot, report, 'rep', owner).to).toBe(priceEscrow)
+})

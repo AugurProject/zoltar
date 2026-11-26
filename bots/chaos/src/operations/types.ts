@@ -139,6 +139,7 @@ export interface PoolSnapshot {
 	projectedSettlementRecoveryAttoRep: CanonicalUintString
 	shareTokenSupplyAttoShares: CanonicalUintString
 	additionalMintCapacityAttoEth: CanonicalUintString
+	securityPoolTime: string
 	lastSettlementSecurityPoolTime: string
 	escalationRepBalanceAttoRep: CanonicalUintString
 	escalationResidualSweepExpectedSuccess: boolean

@@ -92,7 +92,8 @@ export async function readPendingDeploymentRecovery(client: ReadClient, wallet: 
 	if (state.confirmed <= nonce) {
 		if (!state.idle) return { ...waiting(copy.walletFinalityPending), transactionNonce }
 		if (pending.hash === undefined) return { ...waiting(copy.walletSendUncertain), transactionNonce }
-		return { ...waiting(transaction === undefined ? copy.droppedDeploymentTransaction(nonce, estimatedNonce) : copy.receiptPending), transactionNonce }
+		if (transaction === undefined) return { ...waiting(copy.droppedDeploymentTransaction(nonce, estimatedNonce)), transactionNonce }
+		return { ...waiting(transactionNonce !== undefined && state.confirmed < nonce ? copy.transactionWaitingForEarlierNonce(nonce) : copy.receiptPending), transactionNonce }
 	}
 
 	const draft = parseDeploymentDraft(progress.draft, profile)
@@ -103,7 +104,7 @@ export async function readPendingDeploymentRecovery(client: ReadClient, wallet: 
 			const result = await recoverQuestionRules(client, wallet, nonce, progress.draft.admissionMode, draft.origin.universeId, draft.approvedQuestions, estimatedNonce)
 			if (result?.rules !== undefined) return { kind: 'recovered', rules: result.rules }
 			if (result === undefined) return { ...waiting(state.idle ? copy.receiptCheckFailed : copy.walletFinalityPending), transactionNonce }
-			if (result.scanLimitReached && state.idle) return { ...(pending.hash === undefined ? restart(copy.rulesNonceScanLimit) : waiting(copy.rulesRecoveryIncomplete)), transactionNonce }
+			if (result.scanLimitReached && state.idle) return { ...(pending.hash === undefined ? restart(copy.rulesNonceScanLimit) : restartPendingTransaction()), transactionNonce }
 		} else {
 			if (progress.rules === undefined || draft.horizon === undefined || draft.economics === undefined) return waiting(copy.receiptCheckFailed)
 			const request = securityPoolCreationRequest(wallet, draft.origin, draft.horizon, progress.rules, draft.economics)

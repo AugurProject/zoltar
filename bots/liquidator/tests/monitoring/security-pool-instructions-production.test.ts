@@ -73,12 +73,13 @@ describe('explicit security pool instruction lifecycle', () => {
 			expect(await executeSecurityPoolInstruction(wallet, settings, state, pool, bid, async () => true)).toBe(false)
 			await expect(executeSecurityPoolInstruction(wallet, settings, state, pool, { ...bid, lots: bidLots + 1n }, async () => true)).rejects.toThrow('cannot be reused')
 			const pending = await loadSecurityPoolObservation(client, settings, account.address, scope, await client.getBlockNumber())
-			// #1635: one auction's full inventory is already reserved, so another bid adds no REP exposure.
+			// #1704 (also #1635): one auction's full inventory is already reserved, so another bid adds no REP exposure.
 			const managed = pending.managedPrincipalAttoRep
 			if (managed === undefined || pending.pendingAuction === undefined) throw new Error('Missing pending auction exposure')
 			settings.securityPoolPolicy.maximumPrincipalAttoRep = managed
 			const instructionContext = { client, settings, observation: pending, totalPrincipal: managed, blockNumber: pending.snapshot.blockNumber }
 			expect(await buildSecurityPoolInstructionRequest(instructionContext, bid)).toHaveProperty('request')
+			expect(await buildSecurityPoolInstructionRequest({ ...instructionContext, observation: { ...pending, pendingAuction: { ...pending.pendingAuction, address: account.address } } }, bid)).toMatchObject({ disposition: 'retry', reason: 'Auction award could exceed managed REP exposure limits' })
 			settings.securityPoolPolicy.maximumPrincipalAttoRep = managed - 1n
 			expect(await buildSecurityPoolInstructionRequest(instructionContext, bid)).toMatchObject({ disposition: 'retry', reason: 'Auction award could exceed managed REP exposure limits' })
 			settings.securityPoolPolicy.maximumPrincipalAttoRep = 1_000_000n * unit

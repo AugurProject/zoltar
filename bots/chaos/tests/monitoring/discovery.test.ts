@@ -474,7 +474,6 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 	})
 	return { balanceAddresses, client, contractReads, pinnedReads, requested: () => requestedBlock }
 }
-
 interface RefundBackfillOverrides {
 	auctionRefundAttoEth?: bigint
 	auctionOpened?: boolean
@@ -519,6 +518,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 		},
 		async readContract(parameters: { abi: Abi; address: Address; args?: readonly AbiValue[]; blockNumber?: bigint; functionName: string; gasPrice?: bigint }) {
 			contractReads.push(parameters.functionName)
+			if (parameters.functionName === 'securityPoolTime') return 2000000000n
 			// Geth evaluates BASEFEE as zero for eth_call without a nonzero fee.
 			const callBaseFee = (parameters.gasPrice ?? 0n) === 0n ? 0n : baseFeePerGas
 			switch (parameters.functionName) {

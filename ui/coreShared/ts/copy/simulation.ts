@@ -24,6 +24,7 @@ export const bootstrapping = 'Starting'
 export const startingSimulation = 'Starting simulation'
 export const loadingSavedSimulationState = 'Loading saved simulation state'
 export const scenarioSetupFailed = 'Could not prepare the simulation scenario.'
+export const formatGenesisRepTokenUpdateFailed = (expected: CopyTemplateValue, actual: CopyTemplateValue) => `Could not update the simulation genesis REP token. Expected ${expected}, received ${actual}.`
 export const exportBeforeScenarioReady = 'Wait for the simulation to finish starting before exporting its state.'
 export const mintBeforeScenarioReady = 'Wait for the simulation to finish starting before minting REP.'
 export const formatBlockOutsideActiveChain = (hash: string) => `Block ${hash} is no longer on the active chain.`

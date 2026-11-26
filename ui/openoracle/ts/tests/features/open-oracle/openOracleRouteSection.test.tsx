@@ -1156,7 +1156,7 @@ describe('OpenOracleSection route create view', () => {
 		const documentQueries = within(document.body)
 		await waitFor(() => expectTransactionButtonEnabled(document.body, 'Create standalone OpenOracle report'))
 		expect(documentQueries.queryByRole('heading', { name: 'Transaction review' })).toBeNull()
-		for (const label of ['Settlement delay (seconds)', 'Dispute delay (seconds)', 'Dispute fee (%)', 'Multiplier', 'Dispute limit', 'Protocol fee (%)']) {
+		for (const label of ['Settlement delay (seconds)', 'Dispute delay (seconds)', 'Dispute fee (%)', 'Multiplier', 'Dispute limit', 'OpenOracle fee (%)']) {
 			expect(documentQueries.getByLabelText(label)).not.toBeNull()
 		}
 		expect((documentQueries.getByLabelText('Settlement delay (seconds)') as HTMLInputElement).value).toBe(defaultForm.settlementTime)
@@ -1186,7 +1186,7 @@ describe('OpenOracleSection route create view', () => {
 		const settlementTimeInput = documentQueries.getByLabelText('Settlement delay (seconds)')
 		const escalationHaltInput = documentQueries.getByLabelText('Dispute limit')
 		const disputeDelayInput = documentQueries.getByLabelText('Dispute delay (seconds)')
-		const protocolFeeInput = documentQueries.getByLabelText('Protocol fee (%)')
+		const protocolFeeInput = documentQueries.getByLabelText('OpenOracle fee (%)')
 
 		expect(getDescriptionTexts(exactToken1ReportInput)).toEqual([])
 		expect(getDescriptionTexts(initialToken2AmountInput)).toEqual([])
@@ -1234,7 +1234,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.getByText('Disputes can continue past this limit. The multiplier stops applying, and each dispute adds only the smallest unit of the base token to the bond.')).not.toBeNull()
 		expect(documentQueries.getByText('Parameter details')).not.toBeNull()
 		expect(documentQueries.queryByText('Delay in seconds after the initial report before disputes can begin.')).toBeNull()
-		expect(documentQueries.queryByText('Protocol fee charged during disputes, entered as a percentage.')).toBeNull()
+		expect(documentQueries.queryByText('OpenOracle fee charged during disputes, entered as a percentage.')).toBeNull()
 	})
 
 	test('associates progressive amount, timing, and cross-field create errors with their inputs', async () => {
@@ -1257,7 +1257,7 @@ describe('OpenOracleSection route create view', () => {
 		const baseTokenAmountInput = documentQueries.getByLabelText('Base token amount')
 		const settlementTimeInput = documentQueries.getByLabelText('Settlement delay (seconds)')
 		const feePercentageInput = documentQueries.getByLabelText('Dispute fee (%)')
-		const protocolFeeInput = documentQueries.getByLabelText('Protocol fee (%)')
+		const protocolFeeInput = documentQueries.getByLabelText('OpenOracle fee (%)')
 
 		await act(() => {
 			fireEvent.input(baseTokenAmountInput, { target: { value: '.' } })
@@ -1303,7 +1303,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(settlementTimeInput.hasAttribute('aria-invalid')).toBe(false)
 		expect(protocolFeeInput.getAttribute('aria-invalid')).toBe('true')
 		expect(protocolFeeInput.getAttribute('aria-describedby')).toBe('open-oracle-protocol-fee-error')
-		expectPoliteFieldError('Dispute fee plus protocol fee must not exceed 100%.')
+		expectPoliteFieldError('Dispute fee plus OpenOracle fee must not exceed 100%.')
 		expect(documentQueries.getByRole('button', { name: 'Create standalone OpenOracle report' }).getAttribute('aria-describedby')).toBe('open-oracle-protocol-fee-error')
 	})
 

@@ -1,4 +1,6 @@
+import * as deploymentCopy from '../copy/deployment.js'
 import { deploymentErrors } from '../copy/protocolErrors.js'
+import { questionDataContract, universeContract } from '../copy/app.js'
 import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { getRuntimeNetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { bytesToHex, encodeDeployData, getCreateAddress, hexToBytes, keccak256, toHex, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
@@ -150,26 +152,27 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 		// Statoblast replaces the deployment status oracle step: the statoblast oracle
 		// must monitor additional Statoblast contracts, so it is deployed with
 		// a different constructor argument list (and therefore a different address).
-		...getZoltarDeploymentSteps(profile, wait).map(step =>
-			step.id === 'deploymentStatusOracle'
-				? {
-						...step,
-						address: getDeploymentStatusOracleAddress(profile),
-						deploy: async (client: WriteClient) => await deployViaProxy(client, getDeploymentStatusOracleByteCode(profile)),
-					}
-				: step,
-		),
+		...getZoltarDeploymentSteps(profile, wait).map(step => {
+			if (step.id === 'zoltar') return { ...step, label: universeContract }
+			if (step.id === 'zoltarQuestionData') return { ...step, label: questionDataContract }
+			if (step.id !== 'deploymentStatusOracle') return step
+			return {
+				...step,
+				address: getDeploymentStatusOracleAddress(profile),
+				deploy: async (client: WriteClient) => await deployViaProxy(client, getDeploymentStatusOracleByteCode(profile)),
+			}
+		}),
 
 		{
 			id: 'questionLedgerOperationsDelegate',
-			label: 'QuestionLedgerOperationsDelegate',
+			label: deploymentCopy.questionActionsContract,
 			address: addresses.questionLedgerOperationsDelegate,
 			dependencies: ['proxyDeployer'],
 			deploy: async client => await deployViaProxy(client, getQuestionLedgerOperationsDelegateByteCode()),
 		},
 		{
 			id: 'questionLedgerEventEmitter',
-			label: 'QuestionLedgerAccountingModule',
+			label: deploymentCopy.questionBalancesContract,
 			address: addresses.questionLedgerEventEmitter,
 			dependencies: ['proxyDeployer'],
 			deploy: async client => await deployViaProxy(client, getQuestionLedgerAccountingModuleByteCode()),
@@ -183,49 +186,49 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 		},
 		{
 			id: 'shareTokenFactory',
-			label: 'ShareTokenFactory',
+			label: deploymentCopy.shareTokenDeploymentContract,
 			address: addresses.shareTokenFactory,
 			dependencies: ['proxyDeployer', 'zoltar'],
 			deploy: async client => await deployViaProxy(client, getShareTokenFactoryByteCode(addresses.zoltar)),
 		},
 		{
 			id: 'sharedPoolPriceFeedDeploymentWorker',
-			label: 'SharedPoolPriceFeedDeploymentWorker',
+			label: deploymentCopy.priceFeedDeploymentSupport,
 			address: addresses.sharedPoolPriceFeedDeploymentWorker,
 			dependencies: ['proxyDeployer'],
 			deploy: async client => await deployViaProxy(client, getSharedPoolPriceFeedDeploymentWorkerByteCode()),
 		},
 		{
 			id: 'sharedPoolPriceFeedFactory',
-			label: 'SharedPoolPriceFeedFactory',
+			label: deploymentCopy.priceFeedDeploymentContract,
 			address: addresses.sharedPoolPriceFeedFactory,
 			dependencies: ['proxyDeployer', 'sharedPoolPriceFeedDeploymentWorker'],
 			deploy: async client => await deployViaProxy(client, getSharedPoolPriceFeedFactoryByteCode(profile.wethAddress)),
 		},
 		{
 			id: 'questionForker',
-			label: 'QuestionForker',
+			label: deploymentCopy.forkContract,
 			address: addresses.questionForker,
 			dependencies: ['proxyDeployer', 'zoltar'],
 			deploy: async client => await deployViaProxy(client, getQuestionForkerByteCode(addresses.zoltar)),
 		},
 		{
 			id: 'escalationGameDepositDelegate',
-			label: 'EscalationGameDepositDelegate',
+			label: deploymentCopy.reportingDepositsContract,
 			address: addresses.escalationGameDepositDelegate,
 			dependencies: ['proxyDeployer'],
 			deploy: async client => await deployViaProxy(client, `0x${statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.evm.bytecode.object}`),
 		},
 		{
 			id: 'escalationGameFactory',
-			label: 'EscalationGameFactory',
+			label: deploymentCopy.reportingGameDeploymentContract,
 			address: addresses.escalationGameFactory,
 			dependencies: ['proxyDeployer', 'escalationGameDepositDelegate'],
 			deploy: async client => await deployViaProxy(client, getEscalationGameFactoryByteCode(addresses.escalationGameDepositDelegate)),
 		},
 		{
 			id: 'securityPoolFactory',
-			label: 'SecurityPoolFactory',
+			label: deploymentCopy.poolDeploymentContract,
 			address: addresses.securityPoolFactory,
 			dependencies: ['proxyDeployer', 'questionForker', 'questionLedgerOperationsDelegate', 'questionLedgerEventEmitter', 'zoltarQuestionData', 'escalationGameFactory', 'openOracle', 'zoltar', 'shareTokenFactory', 'sharedPoolPriceFeedFactory'],
 			deploy: async client => await deployViaProxy(client, getSecurityPoolFactoryByteCode(addresses)),

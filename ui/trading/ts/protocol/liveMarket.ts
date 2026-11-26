@@ -6,6 +6,10 @@ import type { FeeAccounting } from './holdingFees.js'
 import * as blockerCopy from '../copy/marketBlockers.js'
 
 export type LiveMarket = Readonly<{
+	requiresMintQuote?: boolean
+	mintQuoteEpoch?: string
+	mintQuoteError?: string | undefined
+	mintQuote?: { budget: bigint; cash: bigint; fee: bigint } | undefined
 	collateral?: TradingCollateral | undefined
 	mintFees?: Omit<SecurityPoolMintFees, 'cashAttoEth' | 'outcomeSupplyAttoShares'>
 	loadError?: string

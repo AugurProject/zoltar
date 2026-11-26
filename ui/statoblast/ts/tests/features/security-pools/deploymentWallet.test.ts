@@ -70,9 +70,19 @@ test('a reload adopts question rules from an invisible replacement at a later co
 	expect(await check(withHash)).toEqual({ kind: 'recovered', rules })
 })
 
-test('a bounded rules scan cannot clear an invisible known hash if there are later nonces left to check', async () => {
+test('an exhausted rules scan offers a confirmed restart with the known-transaction warning', async () => {
 	const { check } = fixture({ confirmed: 23n })
-	expect(await check(withHash)).toMatchObject({ kind: 'waiting', detail: expect.stringMatching(/limited range.*check again/i) })
+	expect(await check(withHash)).toMatchObject({ kind: 'restart', detail: pendingTransactionWarning, confirmationWarning: pendingTransactionWarning })
+})
+
+test('an exhausted rules scan keeps waiting when the wallet is not idle', async () => {
+	const { check } = fixture({ confirmed: 23n, pending: 24n })
+	expect(await check(withHash)).toMatchObject({ kind: 'waiting', detail: expect.stringMatching(/earlier transactions.*still pending/i) })
+})
+
+test('a hashless marker without a saved nonce asks the user to check their wallet', async () => {
+	const { check } = fixture({ confirmed: 7n })
+	expect(await check({ id: 'saved', step: 'rules' })).toMatchObject({ kind: 'restart', detail: 'No transaction nonce was saved. Check your wallet activity before starting a new deployment.', confirmationWarning: openPromptWarning })
 })
 
 test('each new check retries the nonce lookup and uses the nonce when the transaction is visible', async () => {
@@ -81,7 +91,11 @@ test('each new check retries the nonce lookup and uses the nonce when the transa
 	const { check } = fixture({ confirmed: 6n, getTransaction: lookup })
 	expect(await check(withHash)).toMatchObject({ kind: 'waiting' })
 	visible = true
-	expect(await check(withHash)).toMatchObject({ kind: 'waiting', transactionNonce: '7' })
+	expect(await check(withHash)).toMatchObject({
+		kind: 'waiting',
+		detail: 'This transaction (nonce 7) is waiting behind an earlier one. Speed up or cancel the earlier transaction in your wallet, then check again.',
+		transactionNonce: '7',
+	})
 	expect(lookup).toHaveBeenCalledTimes(2)
 })
 

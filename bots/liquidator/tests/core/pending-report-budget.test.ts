@@ -39,6 +39,7 @@ test.each([
 		helper: Object.assign([targetAddress, 0n, 0n] as const, { creator: targetAddress, blockTimestamp: 0n, blockNumber: 0n }),
 	}
 	const f = securityPoolClient({
+		recoveryAllowed: stale,
 		sponsorOperationReport: 7n,
 		reportOutcome: 0n,
 		reportCandidates: [targetAddress, ownerAddress, 10n],
@@ -75,7 +76,7 @@ test.each([
 		async (_wallet, _settings, _state, _pool, call) => {
 			submitted = true
 			// Recovery may execute canonical operations, including for rejected stale candidates.
-			expect(call.maxFeePerGasCap).toBe(10n)
+			expect(call.maxFeePerGasCap).toBe(stale ? undefined : 10n)
 			const settledLabel = 'Recover settled sponsored report'
 			expect(call.label).toBe(settledAt === 0n ? 'Settle sponsored takeover report' : settledLabel)
 			if (stale) expect(call.data).toBe(encodeFunctionData({ abi: sharedPoolPriceFeedAbi, functionName: 'recoverReport', args: [7n] }))
@@ -84,7 +85,7 @@ test.each([
 		},
 		[{ endpoint: 'https://read.example', client: f.client }],
 	)
-	if (baseFee > 10n) {
+	if (baseFee > 10n && !stale) {
 		expect(await execution).toBe('waiting')
 		expect(submitted).toBe(false)
 	} else {
@@ -121,4 +122,48 @@ test('#1645 unpriced first-report WETH makes aggregate exposure unknown and bloc
 	f.observation.pendingOperationReport = await loadSponsoredOperationReport(f.client, f.observation.snapshot)
 	expect(f.observation.pendingOperationReport?.reservedRep).toBeGreaterThan(0n)
 	expect(totalManagedPrincipalAttoRep([f.observation, other])).toBeDefined()
+})
+
+test.each([0n, 99n])('#1631 counts live stakes once and excludes settled history (%s)', async settledAt => {
+	const gameAbi = openOracleAbi.find(item => item.type === 'function' && item.name === 'storedGame')
+	if (gameAbi === undefined || gameAbi.type !== 'function') throw new Error('Stored game ABI missing')
+	const f = securityPoolClient({
+		sponsorOperationReport: 7n,
+		reportOutcome: 0n,
+		reportCandidates: [targetAddress, ownerAddress, 10n],
+		openOracle: targetAddress,
+		storedGame: decodeFunctionResult({ abi: openOracleAbi, functionName: 'storedGame', data: encodeAbiParameters(gameAbi.outputs, [10n, 20n, targetAddress, 1n, settledAt, ownerAddress, 0n, 480n, 0n, zeroAddress, 101n, targetAddress, 1n, 0n, 0n, 100n, targetAddress, 7_000_000n, 0n, 1n]) }),
+		storedHelper: Object.assign([targetAddress, 0n, 0n] as const, { creator: targetAddress, blockTimestamp: 0n, blockNumber: 0n }),
+		tokenHolder: settledAt === 0n ? 1n : 21n,
+		priceValidityWindowSeconds: 10000n,
+	})
+	f.observation.snapshot.acceptedPrice = 0n
+	const report = await loadSponsoredOperationReport(f.client, f.observation.snapshot)
+	expect(report?.reservedRep).toBe(20n)
+	f.values['tokenHolder'] = 1n
+	if (settledAt !== 0n) expect((await loadSponsoredOperationReport(f.client, f.observation.snapshot))?.reservedRep).toBe(0n)
+})
+
+test.each([7n, 8n])('#1632 discovers older sponsored reports when report %s completes first', async completed => {
+	const gameAbi = openOracleAbi.find(item => item.type === 'function' && item.name === 'storedGame')
+	if (gameAbi === undefined || gameAbi.type !== 'function') throw new Error('Stored game ABI missing')
+	const f = securityPoolClient({
+		sponsorOperationReport: 8n,
+		reportOutcome: ([id]: readonly bigint[]) => (id === completed ? 1n : 0n),
+		reportCandidates: [targetAddress, ownerAddress, 10n],
+		openOracle: targetAddress,
+		reportLogs: [7n, 8n].map(reportId => ({ args: { reportId, sponsor: ownerAddress } })),
+		storedGame: decodeFunctionResult({ abi: openOracleAbi, functionName: 'storedGame', data: encodeAbiParameters(gameAbi.outputs, [10n, 20n, targetAddress, 1n, 0n, ownerAddress, 0n, 480n, 0n, zeroAddress, 101n, targetAddress, 1n, 0n, 0n, 100n, targetAddress, 7_000_000n, 0n, 1n]) }),
+		storedHelper: Object.assign([targetAddress, 0n, 0n] as const, { creator: targetAddress, blockTimestamp: 0n, blockNumber: 0n }),
+		tokenHolder: 1n,
+		priceValidityWindowSeconds: 10000n,
+	})
+	f.observation.snapshot.acceptedPrice = 0n
+	const cursor = { nextBlock: 0n, reportIds: Array<bigint>() }
+	expect((await loadSponsoredOperationReport(f.client, f.observation.snapshot, cursor))?.id).toBe(completed === 7n ? 8n : 7n)
+	f.values['reportLogs'] = []
+	expect((await loadSponsoredOperationReport(f.client, f.observation.snapshot, cursor))?.id).toBe(completed === 7n ? 8n : 7n)
+	f.values['reportLogs'] = [7n, 8n].map(reportId => ({ args: { reportId, sponsor: ownerAddress } }))
+	f.values['reportOutcome'] = 0n
+	expect((await loadSponsoredOperationReport(f.client, f.observation.snapshot))?.reservedRep).toBe(40n)
 })

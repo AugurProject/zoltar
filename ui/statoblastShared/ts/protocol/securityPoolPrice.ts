@@ -25,6 +25,7 @@ const abi = parseAbi([
 	'function reportId() view returns (uint256)',
 	'function sponsor() view returns (address)',
 	'function openOracle() view returns (address)',
+	'function balanceOf(address owner) view returns (uint256)',
 	'function tokenHolder(address owner,address token) view returns (uint256)',
 	'function recoverReport(uint256 id)',
 	'function withdrawFunding()',
@@ -69,7 +70,7 @@ export async function loadSecurityPoolPriceReport(client: ReadClient, snapshot: 
 	const maxSettlementBaseFee = requireBigintValue(tuple[2], 'report settlement base-fee ceiling')
 	if (escrow === zeroAddress) throw new Error(priceErrors.reportNotFromFeed)
 	const pinned: Pick<ReadClient, 'readContract'> = { readContract: parameters => client.readContract({ ...parameters, blockNumber }) }
-	const [escrowFeed, escrowId, escrowSponsor, escrowOracle, state, wethCredit, repCredit] = await Promise.all([
+	const [escrowFeed, escrowId, escrowSponsor, escrowOracle, state, wethCredit, repCredit, directWeth, directRep] = await Promise.all([
 		client.readContract({ abi, address: escrow, functionName: 'feed', blockNumber }),
 		client.readContract({ abi, address: escrow, functionName: 'reportId', blockNumber }),
 		client.readContract({ abi, address: escrow, functionName: 'sponsor', blockNumber }),
@@ -77,6 +78,8 @@ export async function loadSecurityPoolPriceReport(client: ReadClient, snapshot: 
 		loadOpenOracleStoredState(pinned, observation.openOracle, reportId),
 		client.readContract({ abi, address: observation.openOracle, functionName: 'tokenHolder', args: [escrow, observation.weth], blockNumber }),
 		client.readContract({ abi, address: observation.openOracle, functionName: 'tokenHolder', args: [escrow, snapshot.repToken], blockNumber }),
+		client.readContract({ abi, address: observation.weth, functionName: 'balanceOf', args: [escrow], blockNumber }),
+		client.readContract({ abi, address: snapshot.repToken, functionName: 'balanceOf', args: [escrow], blockNumber }),
 	])
 	const game = state.latest.game
 	if (
@@ -97,8 +100,9 @@ export async function loadSecurityPoolPriceReport(client: ReadClient, snapshot: 
 	if (state.settled && reportOutcome === 0n && block.baseFeePerGas !== undefined && block.baseFeePerGas > maxSettlementBaseFee) {
 		// Only the feed can determine whether rejection retires this candidate or
 		// executes canonical-price operations, which still enforce its fee ceiling.
+		// Pass gasPrice so Geth eth_call preserves the pinned BASEFEE.
 		try {
-			await client.simulateContract({ account: snapshot.owner, address: snapshot.feed, abi, functionName: 'recoverReport', args: [reportId], blockNumber })
+			await client.simulateContract({ account: snapshot.owner, address: snapshot.feed, abi, functionName: 'recoverReport', args: [reportId], blockNumber, gasPrice: block.baseFeePerGas })
 		} catch (error) {
 			if (getErrorDetail(error)?.includes('Base fee too high')) recoveryBaseFeeBlocked = true
 			else throw error
@@ -118,8 +122,8 @@ export async function loadSecurityPoolPriceReport(client: ReadClient, snapshot: 
 		baseFeePerGas: block.baseFeePerGas,
 		maxSettlementBaseFee,
 		recoveryBaseFeeBlocked,
-		wethCredit: releasedCredit(wethCredit),
-		repCredit: releasedCredit(repCredit),
+		wethCredit: releasedCredit(wethCredit) + requireBigintValue(directWeth, 'collateral held for the report'),
+		repCredit: releasedCredit(repCredit) + requireBigintValue(directRep, 'REP held for the report'),
 	}
 }
 function releasedCredit(value: unknown) {

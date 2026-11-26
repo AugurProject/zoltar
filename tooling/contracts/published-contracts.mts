@@ -43,7 +43,10 @@ async function isDevelopmentNode(rpc: DevelopmentNodeRpc) {
 async function sendFromImpersonatedAccount(client: Pick<WriteClient, 'waitForTransactionReceipt'>, rpc: DevelopmentNodeRpc, creator: Address, nonce: bigint | undefined, transaction: { data: Hex; to?: Address }) {
 	await rpc('anvil_impersonateAccount', [creator])
 	try {
-		await rpc('anvil_setBalance', [creator, `0x${DEVELOPMENT_NODE_CREATOR_BALANCE.toString(16)}`])
+		const balance = await rpc('eth_getBalance', [creator, 'latest'])
+		if (typeof balance !== 'string' || !/^0x[0-9a-fA-F]+$/.test(balance)) throw new Error('Development node returned an invalid creator balance')
+		// Funding remains available after failure; retries never reduce existing funds.
+		if (BigInt(balance) < DEVELOPMENT_NODE_CREATOR_BALANCE) await rpc('anvil_setBalance', [creator, `0x${DEVELOPMENT_NODE_CREATOR_BALANCE.toString(16)}`])
 		if (nonce !== undefined) await rpc('anvil_setNonce', [creator, `0x${nonce.toString(16)}`])
 		const hash = await rpc('eth_sendTransaction', [{ ...transaction, from: creator }])
 		if (typeof hash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error('Development node returned an invalid transaction hash')

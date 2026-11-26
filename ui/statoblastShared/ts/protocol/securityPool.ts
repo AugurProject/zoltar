@@ -157,7 +157,7 @@ export async function loadSecurityPoolSetup(client: ReadClient, securityPool: Ad
 		client.readContract({ address: securityPool, abi: linksAbi, functionName: 'repairAuctionDeployer', blockNumber }),
 	])
 	const infrastructure = getInfraContractAddresses()
-	if (getAddress(requireAddressValue(factoryValue, 'security pool deployment contract')) !== getAddress(infrastructure.securityPoolFactory) || getAddress(requireAddressValue(zoltarValue, 'security pool protocol')) !== getAddress(infrastructure.zoltar)) throw new Error(poolErrors.protocolMismatch)
+	if (getAddress(requireAddressValue(factoryValue, 'security pool deployment contract')) !== getAddress(infrastructure.securityPoolFactory) || getAddress(requireAddressValue(zoltarValue, 'universe contract for the security pool')) !== getAddress(infrastructure.zoltar)) throw new Error(poolErrors.protocolMismatch)
 	if (getAddress(requireAddressValue(auctionDeployerValue, 'auction setup contract')) !== getAddress(infrastructure.securityPoolRepairAuctionDeployer)) throw new Error(poolErrors.auctionContractMismatch)
 	const stage = Number(requireIntegerLikeValue(stageValue, 'setup stage'))
 	if (stage < 0 || stage > 4) throw new Error(poolErrors.setupStage)
@@ -268,7 +268,7 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 		client.readContract({ address: forkController, abi: linksAbi, functionName: 'zoltar', blockNumber }),
 		client.readContract({ address: zoltar, abi: linksAbi, functionName: 'getRepToken', args: [universeId], blockNumber }),
 	])
-	if (requireBigintValue(capitalUniverse, 'capital universe') !== universeId || requireAddressValue(canonicalRep, 'universe REP token') !== snapshot.repToken || [capitalProtocol, reporterProtocol, forkProtocol].some(value => requireAddressValue(value, 'linked protocol contract') !== getAddress(zoltar)))
+	if (requireBigintValue(capitalUniverse, 'capital universe') !== universeId || requireAddressValue(canonicalRep, 'universe REP token') !== snapshot.repToken || [capitalProtocol, reporterProtocol, forkProtocol].some(value => requireAddressValue(value, 'linked universe contract') !== getAddress(zoltar)))
 		throw new Error(poolErrors.modulesMismatch)
 
 	const [block, chainId] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
@@ -354,6 +354,7 @@ export function securityPoolReadClient(client: ReadClient): SecurityPoolReadClie
 	return {
 		multicall: parameters => client.multicall({ ...parameters, multicallAddress: getMulticall3Address() }),
 		getChainId: () => client.getChainId(),
+		getCode: parameters => client.getCode(parameters),
 		readContract: parameters => client.readContract(parameters),
 		getBlock: async parameters => {
 			const block = await client.getBlock(parameters)

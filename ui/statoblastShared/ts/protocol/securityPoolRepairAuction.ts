@@ -181,7 +181,7 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 	verifyAuctionVaultCode(vaultCode, { implementation: bindings.implementation, owner: bidder, capital: initialCapital, auction, bidId }, 'auction position')
 	if (predictAuctionVaultAddress({ implementation: bindings.implementation, owner: bidder, capital: initialCapital, auction, bidId }) !== getAddress(vault)) throw new Error(auctionErrors.positionAddress)
 	const controller = requireAddressValue(controllerValue, 'fork contract')
-	const zoltar = requireAddressValue(protocolValue, 'security pool protocol')
+	const zoltar = requireAddressValue(protocolValue, 'universe contract for the security pool')
 	const infrastructure = getInfraContractAddresses()
 	if (getAddress(requireAddressValue(factoryValue, 'security pool deployment contract')) !== getAddress(infrastructure.securityPoolFactory) || getAddress(zoltar) !== getAddress(infrastructure.zoltar) || bidId <= 0n) throw new Error(auctionErrors.positionPool)
 	const [universeValue, capitalRoot, capitalProtocol, auctionRoot, auctionCapital, auctionFork, auctionUniverse, engineValue, controllerRoot, implementationValue] = await Promise.all([
@@ -203,7 +203,7 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 	const bid = requireTupleValue(bidValue, 7, 'auction bid')
 	if (
 		[capitalRoot, auctionRoot, controllerRoot].some(value => getAddress(requireAddressValue(value, 'security pool linked to the auction')) !== getAddress(securityPool)) ||
-		getAddress(requireAddressValue(capitalProtocol, 'protocol linked to pool capital')) !== getAddress(zoltar) ||
+		getAddress(requireAddressValue(capitalProtocol, 'universe contract linked to pool capital')) !== getAddress(zoltar) ||
 		getAddress(requireAddressValue(auctionCapital, 'auction capital')) !== getAddress(initialCapital) ||
 		getAddress(requireAddressValue(auctionFork, 'auction fork contract')) !== getAddress(controller) ||
 		requireBigintValue(auctionUniverse, 'auction universe') !== initialUniverse ||

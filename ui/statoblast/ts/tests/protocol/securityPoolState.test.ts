@@ -17,6 +17,7 @@ test.each<CentralSecurityPoolMode>(['active', 'stale', 'runoff', 'sealed', 'disa
 	})
 	expect(await loadCentralSecurityPoolQuestion(client, owner, capital, 99n)).toEqual({
 		centralSettlement: true,
+		priceValidUntil: 6000n,
 		centralCheckpointTimestamp: 5_000n,
 		securityPoolAddress: securityPool,
 		feePrincipalAttoEth: 100n,
