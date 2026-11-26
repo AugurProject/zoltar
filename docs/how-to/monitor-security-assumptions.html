@@ -156,11 +156,11 @@
 										<li>Sepolia genesis REP code: keccak-256 of <code>eth_getCode</code> against <code>reputationToken</code> in <code>EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES</code> (<code>ui/zoltarShared/ts/protocol/deployment.ts</code>)</li>
 										<li>Sepolia WETH code: the same against <code>sepoliaPublished.weth.runtimeCodeHash</code> in <code>scripts/artifacts/uniswap-deployment.json</code></li>
 										<li>Mainnet genesis REP (Augur V2 REP Yes and REP No fork child tokens) and WETH code: an externally sourced reference hash (no repository pin)</li>
-										<li>Sepolia genesis REP supply: <code>shared/zoltar/ts/deployment/sepoliaRepAllocations.ts</code> against <code>getTotalTheoreticalSupply()</code></li>
+										<li>Before the first genesis fork, monitor the external token’s gross <code>getTotalTheoreticalSupply()</code> separately from Zoltar’s net <code>getUniverseTheoreticalSupplyAttoRep(0)</code>. Compare the gross value with the <a href="../reference/contracts/zoltar.html#read-surface">pre-fork supply bounds</a>. For Sepolia, also compare it with <code>shared/zoltar/ts/deployment/sepoliaRepAllocations.ts</code></li>
 										<li>From a disposable sender, simulate a withdrawal to check WETH redemption. Exercise the intended recipient’s native-ETH receive path or ERC-1155 callback for the actual delivery.</li>
 									</ul>
 								</td>
-								<td>At deployment verification and before first use of a new recipient or integration</td>
+								<td>Supply: continuously until the first genesis fork, and before genesis fork or burn actions. Token and recipient checks: at deployment verification and before first use of a new recipient or integration</td>
 								<td>Reject the deployment or incompatible recipient; do not rely on redirected recovery</td>
 							</tr>
 							<tr id="check-deployment">

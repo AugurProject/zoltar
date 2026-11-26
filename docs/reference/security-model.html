@@ -249,7 +249,7 @@
 						<h3><span class="assumption-id">A21</span> REP and selected collateral obey the required accounting model</h3>
 						<p>The accounting assumptions depend on the asset and the path using it.</p>
 						<ul>
-							<li><strong>Genesis REP.</strong> The theoretical supply is accurate, transfers deliver the requested 18-decimal units, and the burn sink remains inaccessible. Sepolia uses the reviewed genesis token once its deployment is verified under <a href="#assumption-a23">A23</a>.</li>
+							<li><strong>Genesis REP.</strong> The theoretical supply is accurate and stays within the <a href="./contracts/zoltar.html">pre-fork gross supply bounds</a>. Transfers deliver the requested 18-decimal units, and the burn sink remains inaccessible. Sepolia uses the reviewed genesis token once its deployment is verified under <a href="#assumption-a23">A23</a>.</li>
 							<li><strong>Child REP.</strong> Canonical children use the reviewed <code>ReputationToken</code> implementation.</li>
 							<li><strong>Selected collateral.</strong> Transfers deliver exactly the raw units requested. The token supports the integration’s return-value and allowance conventions, including nonzero allowance changes where required. Rebases, fees, unexpected callbacks, blacklisting, pauses or unauthorized minting can break accounting or block delivery. Pools reject their deployment’s canonical REP as collateral.</li>
 							<li><strong>WETH collateral.</strong> Holders can redeem WETH for ETH at parity. The Sepolia deployment checks the published WETH runtime hash.</li>

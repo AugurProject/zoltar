@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, test } from 'bun:test'
+import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import type { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient } from '../testSupport/simulator/utils/clients'
@@ -26,6 +26,7 @@ import {
 	getScalarParityQuestion,
 	isScalarParityMalformedOutcomeIndex,
 } from '@zoltar/zoltar-shared/testing/scalarOutcomeParityFixtures'
+import { formatScalarOutcomeIndexLabel, isValidScalarOutcomeIndex } from '@zoltar/zoltar-shared/questions/scalarOutcome'
 import type { ScalarParityQuestion } from '@zoltar/zoltar-shared/testing/scalarOutcomeParityFixtures'
 const SCALAR_ENCODING_FUZZ_SAMPLE_COUNT = 12
 const SCALAR_ENCODING_FUZZ_STATE_MASK = (1n << 128n) - 1n
@@ -398,10 +399,16 @@ describe('Question Data', () => {
 		assert.deepStrictEqual(unitLabels, ['0 km', '0 km (tick 1 of 3)', '0.000000000000000001 km (tick 2 of 3)', '0.000000000000000002 km'])
 	})
 
-	test('the validity and name getters agree that an unregistered question has no valid scalar answer (#1391)', async () => {
+	test('unregistered questions accept only Invalid and agree with TypeScript (#1391, #1755)', async () => {
 		const question = await futureQuestion({ title: 'Unregistered scalar getter fixture', numTicks: 2n, displayValueMax: 10n })
 		const questionId = getQuestionId(question, [])
 		const highBitOnly = 1n << 255n
+		const unregistered = { answerUnit: '', displayValueMin: 0n, displayValueMax: 0n, numTicks: 0n }
+		for (const answer of [0n, highBitOnly, 1n, 1n << 240n]) {
+			assert.strictEqual(isValidScalarOutcomeIndex(unregistered, answer), !(await isMalformedAnswerOption(client, questionId, answer)))
+			if (answer === 0n) assert.strictEqual(formatScalarOutcomeIndexLabel(unregistered, answer), await getAnswerOptionName(client, questionId, answer))
+			else expect(() => formatScalarOutcomeIndexLabel(unregistered, answer)).toThrow('malformed')
+		}
 		assert.strictEqual(await isMalformedAnswerOption(client, questionId, highBitOnly), true)
 		assert.strictEqual(await getAnswerOptionName(client, questionId, highBitOnly), 'Malformed')
 		assert.strictEqual(await isMalformedAnswerOption(client, questionId, combineUint256FromTwoWithInvalid(false, 1n, 1n)), true)

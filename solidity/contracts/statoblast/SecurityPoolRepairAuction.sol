@@ -177,8 +177,8 @@ contract SecurityPoolRepairAuction is ISecurityPoolRepairAuctionCapital {
 			}
 			Collateral.send(collateral, forkAuthority, result.raisedAttoEth);
 		} else engine.finalizeUnopened();
-		// All sold inventory enters capital custody. Any indivisible remainder is
-		// owned only by winning bids through the auction's initial REP fee credits.
+		// Sold inventory enters capital custody for winning bids. Unsold inventory,
+		// including any indivisible remainder, returns to the fork authority.
 		if (result.soldAttoRep != 0) repToken.safeTransfer(address(capital), result.soldAttoRep);
 		uint256 remaining = inventoryAttoRep - result.soldAttoRep;
 		if (remaining != 0) repToken.safeTransfer(forkAuthority, remaining);

@@ -50,6 +50,14 @@ describe('portfolio overview', () => {
 		url: 'http://localhost/#/portfolio',
 	})
 
+	test('#1662 labels recovery-locked shares before migration without marking received-only credits', async () => {
+		const balances = { scope: scope(resolvedPool), yes: SET, no: SET, invalid: SET, lp: 0n, migrated: { invalid: 0n, yes: 0n, no: 0n }, sourceLocks: { invalid: false, yes: true, no: false } }
+		const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market: forkedMarket, balances, error: undefined }]} balanceState='ready' balanceError={undefined} retryBalances={async () => undefined} nowSeconds={NOW} settings={DEFAULT_TRADE_SETTINGS} />)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.querySelectorAll('.holding-locked').length).toBe(1)
+		expect(rendered.container.querySelector('.holding-locked')?.textContent).toBe('Transfers locked')
+	})
+
 	test('caps insured exits at the ticket impact limit, applies selected slippage, and hides them after closing', async () => {
 		const balances = { scope: scope(openPool), yes: 100n * SET, no: 0n, invalid: 100n * SET, lp: 0n }
 		const view = (selected: LiveMarket, slippageBps = 50n, yes = balances.yes) => (
