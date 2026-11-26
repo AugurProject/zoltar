@@ -268,7 +268,7 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 		client.readContract({ address: forkController, abi: linksAbi, functionName: 'zoltar', blockNumber }),
 		client.readContract({ address: zoltar, abi: linksAbi, functionName: 'getRepToken', args: [universeId], blockNumber }),
 	])
-	if (requireBigintValue(capitalUniverse, 'capital universe') !== universeId || requireAddressValue(canonicalRep, 'pool REP token') !== snapshot.repToken || [capitalProtocol, reporterProtocol, forkProtocol].some(value => requireAddressValue(value, 'linked protocol contract') !== getAddress(zoltar)))
+	if (requireBigintValue(capitalUniverse, 'capital universe') !== universeId || requireAddressValue(canonicalRep, 'universe REP token') !== snapshot.repToken || [capitalProtocol, reporterProtocol, forkProtocol].some(value => requireAddressValue(value, 'linked protocol contract') !== getAddress(zoltar)))
 		throw new Error(poolErrors.modulesMismatch)
 
 	const [block, chainId] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
