@@ -53,8 +53,8 @@ test('genuine runtime code the canonical factory did not deploy fails setup and 
 			return await fixture.client.getCode(request)
 		},
 	}))
-	await expect(loadSecurityPoolSetup(client, securityPool, owner)).rejects.toThrow('not created by the canonical factory')
-	await expect(loadSecurityPoolAccount(client, securityPool, owner, 0n)).rejects.toThrow('not created by the canonical factory')
+	await expect(loadSecurityPoolSetup(client, securityPool, owner)).rejects.toThrow('not created by the expected factory')
+	await expect(loadSecurityPoolAccount(client, securityPool, owner, 0n)).rejects.toThrow('not created by the expected factory')
 	expect(codeTargets).toEqual([])
 	expect(fixture.reads.map(read => read.name)).toEqual(['isSecurityPool', 'isSecurityPool'])
 	expect(fixture.reads.filter(read => read.name === 'isSecurityPool').map(read => [read.args, read.blockNumber])).toEqual([
