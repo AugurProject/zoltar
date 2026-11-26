@@ -7,14 +7,13 @@ import { useSecurityPoolFixture, unit } from '../../../../solidity/ts/tests/stat
 import { getInfraContractAddresses } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
 import { getRepTokenAddress, getZoltarAddress } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients'
-import { DAY } from '../../../../solidity/ts/testSupport/simulator/utils/constants'
 import { loadSecurityPoolObservation } from '../../src/monitoring/security-pool-monitor.ts'
 import { executeSecurityPoolEarnings } from '../../src/execution/security-pool-earnings.ts'
 import { securityPoolSettings } from '../support/security-pool-observation.ts'
 import { serveMockChainRpc } from '../support/mock-chain-rpc.ts'
 
 describe('security pool operator earnings integration', () => {
-	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n, purchaseFeeBps: 1000n })
 	test('the keeper collects its own vested purchase fees through the live capital ledger', async () => {
 		const { base } = fixture
 		const mock = base.mockWindow
@@ -28,11 +27,8 @@ describe('security pool operator earnings integration', () => {
 		await fixture.refreshPrice()
 		await fixture.authorize(100n * unit, keeper)
 		await fixture.mint(100n * unit)
-		await mock.advanceTime(DAY + 1n)
-		await fixture.refreshPrice()
+		await mock.advanceTime(1000n)
 		const capital = await fixture.capitalFor()
-		// Owner-scoped mutations settle the position's vested fees into the owner's claimable account, which the keeper reads.
-		await writeContractAndWait(keeper, () => keeper.writeContract({ address: capital, abi: capitalAbi, functionName: 'setHealthTarget', args: [15_000n] }))
 		const reader = createPublicClient({ chain: mainnet, transport: custom(mock) })
 		const wallet = createWalletClient({ account, chain: mainnet, transport: custom(mock) })
 		const settings = securityPoolSettings()
@@ -47,7 +43,8 @@ describe('security pool operator earnings integration', () => {
 		const { pool, state, stop } = await serveMockChainRpc(mock, settings, account.address, scope)
 		try {
 			const observation = await loadSecurityPoolObservation(reader, settings, account.address, scope, await reader.getBlockNumber())
-			expect(observation.snapshot.ownerAccount.feesAttoEth).toBeGreaterThan(settings.strategy.maximumGasCostAttoEth)
+			expect(observation.snapshot.ownerAccount.feesAttoEth).toBe(0n)
+			expect(observation.snapshot.accruedFeesAttoEth).toBeGreaterThan(settings.strategy.maximumGasCostAttoEth)
 			const collateralBefore = await reader.readContract({ address: settings.deployment.weth, abi: erc20Abi, functionName: 'balanceOf', args: [account.address] })
 			await executeSecurityPoolEarnings(wallet, settings, state, pool, observation, async () => true)
 			const claim = state.activities.find(activity => activity.status === 'confirmed')

@@ -43,6 +43,7 @@ async function vaultInstructionRequest(context: Context, instruction: VaultInstr
 	if (instruction.action === 'vault-deposit') {
 		if (
 			(observation.managedPrincipalAttoRep ?? snapshot.ownerPrincipalAttoRep) + instruction.amountAttoRep > settings.securityPoolPolicy.maximumPrincipalAttoRep ||
+			totalPrincipal === undefined ||
 			totalPrincipal + instruction.amountAttoRep > settings.securityPoolPolicy.maximumTotalPrincipalAttoRep ||
 			observation.walletRep < instruction.amountAttoRep + settings.strategy.walletAttoRepReserve
 		)
@@ -89,7 +90,7 @@ async function auctionInstructionRequest({ client, settings, observation, totalP
 		// Reserve the full possible award once per auction, including additional bids.
 		const reserved = observation.pendingAuction?.address === auction.address ? observation.pendingAuction.principal : 0n
 		const incrementalPrincipal = auction.inventoryAttoRep > reserved ? auction.inventoryAttoRep - reserved : 0n
-		if (totalPrincipal + incrementalPrincipal > settings.securityPoolPolicy.maximumTotalPrincipalAttoRep || (observation.managedPrincipalAttoRep ?? snapshot.ownerPrincipalAttoRep) + incrementalPrincipal > settings.securityPoolPolicy.maximumPrincipalAttoRep)
+		if (totalPrincipal === undefined || totalPrincipal + incrementalPrincipal > settings.securityPoolPolicy.maximumTotalPrincipalAttoRep || (observation.managedPrincipalAttoRep ?? snapshot.ownerPrincipalAttoRep) + incrementalPrincipal > settings.securityPoolPolicy.maximumPrincipalAttoRep)
 			return { disposition: 'retry', reason: 'Auction award could exceed managed REP exposure limits' }
 		if (quote.bidAttoEth > instruction.maximumValueAttoEth || (observation.managedCommitmentAttoEth ?? snapshot.ownerCommitmentAttoEth) + quote.bidAttoEth > settings.securityPoolPolicy.maximumCommitmentAttoEth) return { disposition: 'retry', reason: 'Auction bid exceeds collateral or commitment limits' }
 		if (auctionSnapshot.walletCollateral < quote.bidAttoEth) return { disposition: 'retry', reason: 'Insufficient wallet collateral for the bid' }
@@ -101,6 +102,14 @@ async function auctionInstructionRequest({ client, settings, observation, totalP
 		const auction = auctionSnapshot.auction
 		if (auction === undefined || auction.bidStart + 64n >= auction.totalBidCount) throw new Error('Instruction bid does not belong to this operator')
 		auctionSnapshot = await loadSecurityPoolAuctionSnapshot({ client: pinnedClient, securityPool: instruction.securityPool, universeId: instruction.universeId, bidder: snapshot.owner, bidStart: auction.bidStart + 64n, bidCount: 64 })
+	}
+	if (instruction.action === 'auction-activate') {
+		const auction = auctionSnapshot.auction
+		const bid = auction?.bids.find(candidate => candidate.id === instruction.bidId)
+		if (auction === undefined || bid === undefined) throw new Error('Authenticated auction bid is missing')
+		if (!auction.finalized) return { disposition: 'retry', reason: 'Auction is still open' }
+		if (bid.fill === undefined || bid.fill.filledLots === 0n) return { disposition: 'skip', reason: 'Finalized auction bid has no winning fill' }
+		if (bid.materialized) return { disposition: 'skip', reason: 'Winning auction vault is already active' }
 	}
 	const request = instruction.action === 'auction-activate' ? buildSecurityPoolAuctionMaterializeRequest(auctionSnapshot, instruction.bidId) : buildSecurityPoolAuctionRefundClaimRequest(auctionSnapshot, instruction.bidId, snapshot.owner)
 	return { request, completes: true }
