@@ -73,8 +73,9 @@ export async function loadSecurityPoolPriceReport(client: ReadClient, snapshot: 
 	if (state.settled && reportOutcome === 0n && block.baseFeePerGas !== undefined && block.baseFeePerGas > maxSettlementBaseFee) {
 		// Only the feed can determine whether rejection retires this candidate or
 		// executes canonical-price operations, which still enforce its fee ceiling.
+		// Pass gasPrice so Geth eth_call preserves the pinned BASEFEE.
 		try {
-			await client.simulateContract({ account: snapshot.owner, address: snapshot.feed, abi, functionName: 'recoverReport', args: [reportId], blockNumber })
+			await client.simulateContract({ account: snapshot.owner, address: snapshot.feed, abi, functionName: 'recoverReport', args: [reportId], blockNumber, gasPrice: block.baseFeePerGas })
 		} catch (error) {
 			if (getErrorDetail(error)?.includes('Base fee too high')) recoveryBaseFeeBlocked = true
 			else throw error

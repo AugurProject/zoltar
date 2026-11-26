@@ -145,8 +145,9 @@ export function securityPoolClient(overrides: Record<string, unknown> = {}) {
 					})
 				}
 			if (property === 'simulateContract')
-				return async () => {
+				return async (parameters: { gasPrice?: bigint }) => {
 					if (values['recoveryAllowed'] !== true) throw new Error('Base fee too high')
+					if (parameters.gasPrice !== values['baseFeePerGas']) throw new Error('Recovery simulation lost the pinned BASEFEE')
 					return { result: undefined }
 				}
 			if (property === 'getLogs') return async () => values['reportLogs'] ?? []

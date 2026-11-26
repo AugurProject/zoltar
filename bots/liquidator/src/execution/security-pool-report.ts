@@ -28,7 +28,8 @@ export async function executePendingSecurityPoolReport(wallet: Wallet, settings:
 				let terminalRecovery = false
 				if (pending !== undefined && pending.game[4] !== 0n && block.baseFeePerGas > pending.maxSettlementBaseFee) {
 					try {
-						await client.simulateContract({ account: wallet.account.address, abi: sharedPoolPriceFeedAbi, address: observation.snapshot.priceFeed, functionName: 'recoverReport', args: [pending.id], blockNumber })
+						// Geth can zero BASEFEE in eth_call unless a nonzero gas price is supplied.
+						await client.simulateContract({ account: wallet.account.address, abi: sharedPoolPriceFeedAbi, address: observation.snapshot.priceFeed, functionName: 'recoverReport', args: [pending.id], blockNumber, gasPrice: block.baseFeePerGas })
 						terminalRecovery = true
 					} catch (error) {
 						if (!errorMessage(error).includes('Base fee too high')) throw error
