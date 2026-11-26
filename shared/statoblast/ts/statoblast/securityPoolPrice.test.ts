@@ -55,6 +55,7 @@ function fixture(overrides: Record<string, unknown> = {}) {
 		lastSettlementTimestamp: 800n,
 		priceValidityWindowSeconds: 600n,
 		settlementTime: 300n,
+		escalationHaltMultiplierBps: 30000n,
 		pendingReportId: 9n,
 		balanceOf: 20n * unit,
 		allowance: 10n * unit,
@@ -244,4 +245,18 @@ test('#1637 explicit funding below the minimum is rejected by both request build
 test('#1705 unsupported sponsored operations are rejected before funding', async () => {
 	const snapshot = await load(fixture().client)
 	expect(() => buildSecurityPoolPriceOperationsRequest(snapshot, unit, 2n * unit, { gasLimit: 200_000n, minimumPrice: unit, maximumPrice: unit, deadline: 2000n, operations: [{ gasLimit: 100_000n, data: '0x12345678' }] })).toThrow('Unsupported report operation')
+})
+
+test('#1756 report funding enforces the oracle escalation halt uint128 limit', async () => {
+	const snapshot = await load(fixture({ escalationHaltMultiplierBps: 30000n }).client)
+	const maximum = ((1n << 128n) - 1n) / 3n
+	expect(quoteSecurityPoolPriceFunding(snapshot, unit, maximum).weth).toBe(maximum)
+	expect(() => quoteSecurityPoolPriceFunding(snapshot, unit, maximum + 1n)).toThrow('uint128')
+})
+
+test('#1756 an operations bounty must also fit the oracle uint96 domain', async () => {
+	const snapshot = await load(fixture().client)
+	if (snapshot.observation === undefined) throw new Error('Expected feed')
+	snapshot.observation.nextBlockBounty = ((1n << 96n) - 1n) / 2n
+	expect(() => quoteSecurityPoolPriceFunding(snapshot, unit, 2n * unit, 6000000n)).toThrow('uint96')
 })

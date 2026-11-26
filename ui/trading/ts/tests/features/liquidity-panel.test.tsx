@@ -1,3 +1,4 @@
+import { approximateRemovalValue } from '../../copy/liquidity.js'
 import { describe, expect, test } from 'bun:test'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
@@ -411,4 +412,9 @@ test('recovery REP blocks cash-only liquidity funding but preserves LP removal',
 	expect(estimateLiquidity(recovered, 'add', 10n ** 18n, undefined)).toBeUndefined()
 	expect(estimateLiquidity({ ...recovered, yesReserve: 0n, noReserve: 0n, lpTotalSupply: 0n }, 'initialize', 10n ** 18n, 5000n)).toBeUndefined()
 	expect(estimateLiquidity(recovered, 'remove', 10n ** 18n, undefined)).toBeDefined()
+})
+
+test('#1765 collateral-only LP marks explicitly exclude recovery REP', () => {
+	expect(approximateRemovalValue('0 WETH', false, true)).toContain('Excludes recovery REP')
+	expect(approximateRemovalValue('1 WETH', false, false)).not.toContain('Excludes')
 })

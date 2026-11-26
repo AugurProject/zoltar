@@ -1103,8 +1103,10 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 		const reportId = requireBigInt(log.args, 'reportId')
 		const price = requireBigInt(log.args, 'price')
 		const settlementTimestamp = requireBigInt(log.args, 'lastSettlementTimestamp')
-		coordinator.pendingReportId = 0n
-		coordinator.pendingReportMaxSettlementBaseFeeAttoEthPerGas = 0n
+		if (coordinator.pendingReportId === reportId) {
+			coordinator.pendingReportId = 0n
+			coordinator.pendingReportMaxSettlementBaseFeeAttoEthPerGas = 0n
+		}
 		coordinator.lastPrice = price
 		coordinator.lastSettlementTimestamp = settlementTimestamp
 		coordinator.reports.set(reportId, { status: 'Reported', price, settlementTimestamp })

@@ -37,14 +37,14 @@ export async function loadOpenOracleStoredState(client: Pick<ReadClient, 'readCo
 		},
 		helper: { creator, blockTimestamp: BigInt(blockTimestamp), blockNumber: BigInt(blockNumber), reportId },
 	} satisfies OpenOracleStatePreimage
-	if (!hasOpenOracleFlag(latest.game, OPEN_ORACLE_FLAG_STORE_ALL) || !hasOpenOracleFlag(latest.game, OPEN_ORACLE_FLAG_TRACK_DISPUTES)) {
-		const error = new Error(`OpenOracle report #${reportId} is unavailable: it was created without stored state and dispute history.`)
+	if (!hasOpenOracleFlag(latest.game, OPEN_ORACLE_FLAG_STORE_ALL)) {
+		const error = new Error(`OpenOracle report #${reportId} is unavailable: it was created without stored state.`)
 		error.name = 'OpenOracleStateUnavailableError'
 		throw error
 	}
 	if (hashOpenOracleStatePreimage(latest).toLowerCase() !== stateHash.toLowerCase()) throw new Error(`OpenOracle report #${reportId} stored state does not match its onchain state hash. Retry to load the latest state.`)
-	const initial = await client.readContract({ abi, address, functionName: 'disputeHistory', args: [reportId, 0n] })
-	return { latest, stateHash, initialAmount1: initial[0], initialReporter: latest.game.numReports === 1n ? currentReporter : undefined, reportCount: latest.game.numReports, settled: latest.game.settlementTimestamp !== 0n }
+	const initial = hasOpenOracleFlag(latest.game, OPEN_ORACLE_FLAG_TRACK_DISPUTES) ? await client.readContract({ abi, address, functionName: 'disputeHistory', args: [reportId, 0n] }) : undefined
+	return { latest, stateHash, initialAmount1: initial?.[0] ?? (latest.game.numReports === 1n ? currentAmount1 : undefined), initialReporter: latest.game.numReports === 1n ? currentReporter : undefined, reportCount: latest.game.numReports, settled: latest.game.settlementTimestamp !== 0n }
 }
 
 export function isOpenOracleStateUnavailable(error: unknown): error is Error {

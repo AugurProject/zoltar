@@ -40,6 +40,20 @@ export async function loadRedemptionPayout(client: WalletClient, market: LiveMar
 	return payout
 }
 
+/** The size-specific REP quote retains fractional recovery precision through the chosen burn. */
+export async function loadRedemptionRecoveryPayout(client: WalletClient, market: LiveMarket, amount: bigint, blockNumber: bigint) {
+	const abi = statoblast_QuestionLedger_QuestionLedger.abi
+	const [, payout] = await readRequiredMulticall(
+		client,
+		[
+			{ address: market.pool, abi, functionName: 'refreshSecurityPoolFees' },
+			{ address: market.pool, abi, functionName: 'attoSharesToAttoRep', args: [amount] },
+		] as const,
+		blockNumber,
+	)
+	return payout
+}
+
 export function projectTransactionFeeMarket(market: LiveMarket, central: Awaited<ReturnType<typeof loadCentralSecurityPoolQuestion>>, timestamp: bigint): LiveMarket {
 	const feeEndTime = central.feeEndTimestamp
 	const recovery = central.settlementRecoveryAttoRep
@@ -65,13 +79,13 @@ function projectedCollateral(market: LiveMarket, deadline: bigint) {
 }
 
 /** A minimum approved today must remain payable through the signed transaction's validity, without other state changes. */
-export function sellHoldingFeeBlocker(market: LiveMarket, completeSets: bigint, minimumAttoEth: bigint, deadline: bigint, currentPayoutAttoEth?: bigint) {
+export function sellHoldingFeeBlocker(market: LiveMarket, completeSets: bigint, minimumAttoEth: bigint, deadline: bigint, currentPayoutAttoEth?: bigint, currentRecoveryAttoRep?: bigint) {
 	const collateral = projectedCollateral(market, deadline)
 	if (collateral === undefined) return copy.holdingFeesUnavailableReason
 	const feeLoss = market.settlementCollateralAttoEth > collateral && market.shareTokenSupplyAttoShares > 0n ? ((market.settlementCollateralAttoEth - collateral) * completeSets + market.shareTokenSupplyAttoShares - 1n) / market.shareTokenSupplyAttoShares : 0n
 	let payout = market.shareTokenSupplyAttoShares === 0n ? completeSets : (completeSets * collateral) / market.shareTokenSupplyAttoShares
 	if (currentPayoutAttoEth !== undefined) payout = currentPayoutAttoEth > feeLoss ? currentPayoutAttoEth - feeLoss : 0n
-	return (payout === 0n && attoSharesToRecoveryAttoRep(completeSets, market) === 0n) || payout < minimumAttoEth ? copy.holdingFeesBoundsReason : undefined
+	return (payout === 0n && (currentRecoveryAttoRep ?? attoSharesToRecoveryAttoRep(completeSets, market)) === 0n) || payout < minimumAttoEth ? copy.holdingFeesBoundsReason : undefined
 }
 
 /** Fee accrual increases complete sets minted per ETH, so both directional deposit ceilings need time coverage. */

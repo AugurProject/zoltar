@@ -34,13 +34,13 @@ function ScalarOutcomePickerHarness() {
 
 const UNSAFE_TICK_COUNT = BigInt(Number.MAX_SAFE_INTEGER) + 10n
 
-function ExactScalarOutcomePickerHarness() {
+function ExactScalarOutcomePickerHarness({ dense = false }: { dense?: boolean } = {}) {
 	const [selectedTick, setSelectedTick] = useState(UNSAFE_TICK_COUNT.toString())
 	const selectedTickValue = BigInt(selectedTick)
 
 	return (
 		<ScalarOutcomePicker
-			details={{ answerUnit: '', displayValueMax: UNSAFE_TICK_COUNT * 10n ** 18n, displayValueMin: 0n, maxValueLabel: 'Max', minValueLabel: 'Min', numTicks: UNSAFE_TICK_COUNT }}
+			details={{ answerUnit: '', displayValueMax: dense ? 1n : UNSAFE_TICK_COUNT * 10n ** 18n, displayValueMin: 0n, maxValueLabel: 'Max', minValueLabel: 'Min', numTicks: UNSAFE_TICK_COUNT }}
 			isInvalid={false}
 			label='Select exact scalar target'
 			onInvalidChange={() => undefined}
@@ -61,6 +61,13 @@ describe('ScalarOutcomePicker', () => {
 		},
 	})
 
+	test('#1657 exact tick entry distinguishes dense outcomes with equal display values', async () => {
+		const rendered = await renderIntoDocument(<ExactScalarOutcomePickerHarness dense />)
+		cleanupRenderedComponent = rendered.cleanup
+		const tick = within(document.body).getByRole('textbox', { name: 'Exact tick index' })
+		await act(() => fireEvent.input(tick, { target: { value: '1' } }))
+		expect(within(document.body).getByRole('textbox', { name: 'Exact tick index' }).getAttribute('value') ?? Reflect.get(tick, 'value')).toBe('1')
+	})
 	test('updates the controlled tick, toggles invalid mode, and renders min/max metrics', async () => {
 		const renderedComponent = await renderIntoDocument(<ScalarOutcomePickerHarness />)
 		cleanupRenderedComponent = renderedComponent.cleanup

@@ -1,3 +1,4 @@
+import { settingsHelp } from '../../copy/tradeSettings.js'
 import { protectionSummary } from '../../copy/tradeSettings.js'
 import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
@@ -78,4 +79,9 @@ describe('trade settings storage', () => {
 		expect(Array.from(document.querySelectorAll('[aria-label="Slippage presets"] button')).map(button => button.textContent)).toEqual(['0.1%', '0.5%', '1%', '3%'])
 		await rendered.cleanup()
 	})
+})
+
+test('#1763 settings expiry help is scoped to signed trade and liquidity operations', () => {
+	expect(settingsHelp).toContain('Trades and liquidity operations')
+	expect(settingsHelp).not.toContain('All transactions')
 })

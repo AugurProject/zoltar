@@ -9,7 +9,7 @@ function revertError(reason: string) {
 
 describe('transaction failure explanations', () => {
 	test.each([
-		['Purchase fee exceeds budget', 'The price moved past your slippage limit.'],
+		['Purchase fee exceeds budget', 'The purchase fee exceeded your funding budget.'],
 		['Minimum REP output', 'The price moved past your slippage limit.'],
 		['Exchange rate undefined', 'The amount is too small to trade.'],
 		['Minimum long shares', 'The price moved past your slippage limit.'],
@@ -55,4 +55,11 @@ describe('transaction failure explanations', () => {
 		expect(describeTransactionFailure(new Error(`call args: 0x${'11'.repeat(20)}`), 'Trade failed')).toBe('Trade failed.')
 		expect(describeTransactionFailure('not an error', 'Trade failed')).toBe('Trade failed.')
 	})
+})
+
+test('#1759 purchase fee funding failure recommends a fresh quote without changing slippage', () => {
+	const message = describeTransactionFailure(revertError('Purchase fee exceeds budget'), 'Trade failed')
+	expect(message).toContain('purchase fee')
+	expect(message.toLowerCase()).not.toContain('slippage')
+	expect(message).toContain('Try again')
 })

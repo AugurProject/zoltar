@@ -1,3 +1,4 @@
+import { estimateBudgetSpend } from '../protocol/minting.js'
 import { collateralAsset, formatCollateralAmount } from '../protocol/collateral.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { formatCurrencyInputBalance, formatScaledPercentage, formatTrimmedUnits, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -140,7 +141,7 @@ export function TradeEstimatePanel({
 					// A fork-child pool also pays recovery REP for the burned complete sets; the wallet signs its minimum too.
 					...(estimate.receiveAttoRep === 0n ? [] : [{ label: ticketCopy.recoveryRep, value: formatValueWithUnit(formatCurrencyInputBalance(estimate.receiveAttoRep), commonCopy.rep) }]),
 				]
-	const average = averagePriceBps(estimate.kind === 'entry' ? estimate.payAttoEth : estimate.receiveAttoEth, quote.totalLongShares, market)
+	const average = averagePriceBps(estimate.kind === 'entry' ? (estimateBudgetSpend(market, estimate.payAttoEth) ?? estimate.payAttoEth) : estimate.receiveAttoEth, quote.totalLongShares, market)
 	const holdingAfter = holdingAfterTrade(estimate, balances)
 	const impactRow = { label: ticketCopy.priceImpact, value: <span className={`trade-impact-value trade-impact-value--${impactTier}`}>{formatImpactPercent(estimate.impactBps)}%</span> }
 	const protection = settingsCopy.protectionTitle(formatSlippagePercent(settings.slippageBps), settings.validityMinutes)

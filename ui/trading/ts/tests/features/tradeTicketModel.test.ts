@@ -1,3 +1,4 @@
+import { estimateBudgetSpend } from '../../protocol/minting.js'
 import { describe, expect, test } from 'bun:test'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { quoteEnterPosition } from '@zoltar/trading-shared/trading/positions'
@@ -431,4 +432,14 @@ test('token entry needs expected spend rather than the unused budget ceiling (#1
 	const tokenMarket = { ...market, collateral, mintFees: { ...market.mintFees, securityMultiplierBps: 20_000n, purchaseFeeBps: 100n, minimumPurchaseFeeAttoEth: 0n, annualFeeBps: 0n, feePrincipalAttoEth: 0n } }
 	const result = tradeTicketModel({ ...ready, amount: '1', market: tokenMarket, walletEthAttoEth: 999_950n })
 	expect(result.insufficientReason).toBeUndefined()
+})
+
+test('#1757 buy economics use expected spend while retaining the funding ceiling', () => {
+	const chargedMarket = { ...market, mintFees: { ...market.mintFees, securityMultiplierBps: market.statoblastSecurityMultiplierBps, purchaseFeeBps: 1000n, annualFeeBps: 0n, minimumPurchaseFeeAttoEth: 1n, feePrincipalAttoEth: 0n, feeEndTimestamp: market.endTime, currentTimestamp: 1n } }
+	const estimate = ticketEstimateFor(chargedMarket, 'entry', '1')
+	if (estimate.kind !== 'entry') throw new Error('Expected buy')
+	const spend = estimateBudgetSpend(chargedMarket, estimate.payAttoEth)
+	if (spend === undefined) throw new Error('Expected spend')
+	expect(spend).toBeLessThan(estimate.payAttoEth)
+	expect(buyReturn(estimate, chargedMarket).profitAttoEth).toBe(buyReturn(estimate, chargedMarket).payoutAttoEth - spend)
 })
