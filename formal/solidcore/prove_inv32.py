@@ -1,4 +1,4 @@
-"""Rebuild the INV-32 theorem from a checked source model produced by check_contracts.py."""
+"""Rebuild the INV-32 and INV-33 trading quote theorems from a checked source model produced by check_contracts.py."""
 
 import argparse
 from graphlib import TopologicalSorter
@@ -21,6 +21,8 @@ def prove(models, solidcore):
             raise FileNotFoundError(sources / 'Inv32Proved.lean')
         for source in sources.glob('*.lean'):
             shutil.copyfile(source, work / source.name)
+        # INV-33 composes the forward execution theorem for three generated calls.
+        shutil.copyfile(sources.parent / 'inv33/Inv33Proved.lean', work / 'Inv33Proved.lean')
         modules = {source.stem: source for source in work.glob('*.lean')}
         deps = TopologicalSorter()
         for name, source in modules.items():
