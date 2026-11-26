@@ -5681,10 +5681,10 @@ index 0000000000000000000000000000000000000000..64101f6490dd93bf33ec381693dfc213
 +    run(args.repo, args.oracle_solc, 'cancun', args.anvil)
 diff --git a/prototypes/source/maturity_map.py b/prototypes/source/maturity_map.py
 new file mode 100644
-index 0000000000000000000000000000000000000000..629795e299f44bfd3de985d7ce2d270194be1201
+index 0000000000000000000000000000000000000000..87abfad3ab9b2be3d7ce3d0728b8fcf3d931f558
 --- /dev/null
 +++ b/prototypes/source/maturity_map.py
-@@ -0,0 +1,177 @@
+@@ -0,0 +1,181 @@
 +"""Replay updates and queries of the repository persistent maps from Solidity source."""
 +
 +import argparse
@@ -5830,6 +5830,10 @@ index 0000000000000000000000000000000000000000..629795e299f44bfd3de985d7ce2d2701
 +            ('prefix(uint256,uint48)', [2, 9], [130, 87]),
 +            ('total(uint256)', [2], [130]),
 +            ('total(uint256)', [1], [100]),
++            # INV-42: key zero is a sentinel, even for nonzero deltas.
++            ('add(uint256,uint48,uint256,uint256)', [2, 0, 12, 34], []),
++            ('get(uint256,uint48)', [3, 0], [0, 0]),
++            ('prefix(uint256,uint48)', [3, 9], [130, 87]),
 +        ],
 +    )
 +    run_harness(
