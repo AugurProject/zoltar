@@ -30,7 +30,7 @@ def prove(models, solidcore, with_pair=False, with_thresholds=False, with_index=
         if with_settlement:
             settlement = models / 'contracts/test/statoblast/InvariantMathHarness.sol/InvariantMathHarness.lean'
             shutil.copyfile(settlement, work / 'Inv27Generated.lean')
-            entries.extend([('03', 'Inv03Proved.lean'), ('04', 'Inv04Proved.lean'), (27, 'Inv27Counterexample.lean')])
+            entries.extend([('03', 'Inv03Proved.lean'), ('04', 'Inv04Proved.lean'), ('05', 'Inv05Proved.lean'), (27, 'Inv27Counterexample.lean')])
         for number, name in entries:
             proof_sources = here / f'inv{number}'
             if not (proof_sources / name).is_file():

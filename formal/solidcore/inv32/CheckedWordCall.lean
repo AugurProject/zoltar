@@ -60,4 +60,30 @@ theorem returnsWord (model : TypeCheck.CheckedContract) (fn : FunctionDef) (name
     | .returned _ [.word v] => some v | _ => none) = _
   rw [result]
 
+theorem reverts (model : TypeCheck.CheckedContract) (fn : FunctionDef) (name : String)
+    (s : State) (args : List Source.Value) (frame : Frame) (next : Runtime) (err : RevertData)
+    (found : model.core.findFunctionByName? name = some fn)
+    (frameOk : fn.initialFrame? args = some frame)
+    (accepts : fn.acceptsValue (ctx model).value = true)
+    (ev : let start := (initial (ctx model) s).withFrame frame
+          Source.Stmt.eval 50000 model.core.table (ctx model) start fn.body =
+            pure (.reverted next err)) : read model s name args = none := by
+  let c := ctx model
+  let start := (initial c s).withFrame frame
+  have enter : fn.evalBodyEntry 50000 model.core.table c s args =
+      some (Source.Stmt.eval 50000 model.core.table c start fn.body) := by
+    unfold FunctionDef.evalBodyEntry
+    rw [if_pos accepts,frameOk]; rfl
+  unfold read TypeCheck.CheckedContract.call? Source.ABI.Contract.callSelfDispatch?
+    Source.ABI.Contract.callWithSelfDispatch
+  rw [dispatch model fn name args frame found frameOk]
+  change (do let .returned _ [.word v] ← fn.call? 50000 model.core.table c s args
+               | none
+             return v) = _
+  unfold FunctionDef.call? FunctionDef.call
+  rw [enter]
+  change Source.Stmt.eval 50000 _ _ start fn.body = pure (.reverted next err) at ev
+  rw [ev]
+  rfl
+
 end CheckedWordCall

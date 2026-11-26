@@ -39,10 +39,10 @@ macro "store_code" : tactic => `(tactic|
   simp [saved,a,b,c',result,reason,Runtime.assignNamedValuesRef?,Runtime.assignLocalRefAware?,
     Runtime.pushScope,Runtime.declareLocal,Runtime.assignLocal?,Runtime.lookupLocal?,Runtime.withFrame,
     LocalEnv.declare,LocalEnv.lookup?,LocalEnv.assign?,Frame.lookup?,Frame.assign?,Value.coerceLike?])
-theorem chooseExec (n : Nat) (c : Context) (r : Runtime) (d : Nat) (hd : d<R) (D : locals r "denominator" = some d) :
-    Stmt.eval (n+16) Inv32Dispatch.model.core.table c (saved r 0) choose =
+theorem chooseExecAt (table : FunctionTable) (links : Inv32Rejection.Links table) (n : Nat) (c : Context) (r : Runtime) (d : Nat) (hd : d<R) (D : locals r "denominator" = some d) :
+    Stmt.eval (n+16) table c (saved r 0) choose =
       pure (.normal (saved r (Inv32PanicChoice.value (flag d)))) := by
-  let t := Inv32Dispatch.model.core.table
+  let t := table
   let yes := flag d
   let code := Inv32PanicChoice.value yes
   let start := (saved r 0).pushScope
@@ -58,7 +58,7 @@ theorem chooseExec (n : Nat) (c : Context) (r : Runtime) (d : Nat) (hd : d<R) (D
   have B := declareLiteral (n+14) t c x1 b 18 (by decide)
   have C := declareLiteral (n+14) t c x2 c' 17 (by decide)
   have Z := zero (n+14) t c x3 result
-  have call := Inv32TernaryCall.call n c (st 0 0) a b c' [result] yes rfl rfl rfl
+  have call := Inv32TernaryCall.callAt table links n c (st 0 0) a b c' [result] yes rfl rfl rfl
   have store : (st 0 0).assignNamedValuesRef? [result] [.word code] = some (st 0 code) := by dsimp [st]; store_code
   have ret : internalCallAssign (st 0 0) [result] [.word code] = pure (.normal (st 0 code)) := by simp [internalCallAssign,store]
   have cap := Inv32Internal.capture _ _ _ _ _ [result] _ (call.trans ret)
@@ -72,4 +72,6 @@ theorem chooseExec (n : Nat) (c : Context) (r : Runtime) (d : Nat) (hd : d<R) (D
     refine (seqStep _ _ _ _ _ _ _ cap).trans ?_
     exact (seqStep _ _ _ _ _ _ [] cp).trans (by rw [Stmt.evalList])
   unfold choose; rw [Stmt.eval]; dsimp only; rw [ls]; rfl
+
+abbrev chooseExec := chooseExecAt Inv32Dispatch.model.core.table Inv32Rejection.trading
 end Inv32OverflowBody

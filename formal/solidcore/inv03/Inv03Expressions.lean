@@ -42,14 +42,18 @@ private theorem mulWord (ch : Bool) (x y : Nat) (hx : x<R) (hy : y<R) (fits : x*
   simp [Source.BinaryOp.apply,Source.BinaryOp.applyWord,Source.BinaryOp.preservesFixedBytesWidth,
     Value.forceAbiLazy,Bind.bind,Except.bind,same,m]
 
+theorem scaleValue (term : Formula) (checked : Bool) (env : Env) (v : Nat) (hv : v<R) (fits : v*1000000000<R)
+    (read : term.run checked env = some v) :
+    (Inv32NewtonBody.twice (Inv32Product.mulF term scale)).run checked env = some (v*1000000000) := by
+  have op := mulWord checked v 1000000000 hv (by decide) fits
+  apply Inv32ProductValues.cleanup _ _ _ _ fits
+  apply Inv32ProductValues.cleanup _ _ _ _ fits
+  have factor : scale.run checked env = some (1000000000) := rfl
+  simp [Inv32Product.mulF,binary,read,factor,op,projectWord]
+
 theorem scaled (c : Context) (r : Runtime) (name : String) (v : Nat) (hv : v<R) (fits : v*1000000000<R)
     (V : locals r name = some v) : Expr.eval c r (Bodies.scaledUnits name).value =
       pure (.word (v*1000000000),r) := by
-  have op := mulWord c.checked v 1000000000 hv (by decide) fits
   apply evalFormula (product name) c r _ (of_decide_eq_true rfl)
-  apply Inv32ProductValues.cleanup _ _ _ _ fits
-  apply Inv32ProductValues.cleanup _ _ _ _ fits
-  have read := Inv32ProductValues.cleanup (localWord name) c.checked (locals r) _ hv V
-  have factor : scale.run c.checked (locals r) = some (1000000000) := rfl
-  simp [Inv32Product.mulF,binary,w,read,factor,op,projectWord]
+  exact scaleValue (w name) _ _ v hv fits (Inv32ProductValues.cleanup (localWord name) c.checked (locals r) _ hv V)
 end Inv03.Expressions

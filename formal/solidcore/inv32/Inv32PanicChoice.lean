@@ -1,3 +1,4 @@
+import Inv32RejectionLinks
 import Inv32FlagCalls
 import Inv32Revert
 open SolidCore.Solidity.Source Inv32Division Inv32Scalar Inv32Product Inv32Actions
@@ -46,16 +47,16 @@ macro "store_flag" : tactic => `(tactic|
   simp [saved,bodyFrame,frame,target,temp,outName,Runtime.assignNamedValuesRef?,Runtime.assignLocalRefAware?,
     Runtime.pushScope,Runtime.declareLocal,Runtime.assignLocal?,Runtime.lookupLocal?,Runtime.withFrame,
     LocalEnv.declare,LocalEnv.lookup?,LocalEnv.assign?,Frame.lookup?,Frame.assign?,Value.coerceLike?])
-theorem stageExec (n : Nat) (c : Context) (r : Runtime) (b : Bool) :
+theorem stageExecAt (table : FunctionTable) (links : Inv32Rejection.Links table) (n : Nat) (c : Context) (r : Runtime) (b : Bool) :
     let m := bodyFrame r b
-    Stmt.eval (n+9) Inv32Dispatch.model.core.table c (saved m 0) stage = pure (.normal (saved m (boolWord b))) := by
-  let t := Inv32Dispatch.model.core.table
+    Stmt.eval (n+9) table c (saved m 0) stage = pure (.normal (saved m (boolWord b))) := by
+  let t := table
   let root := bodyFrame r b
   let m := saved root 0
   let st := fun o v => (((saved root o).pushScope.declareLocal temp (.word (boolWord b))).declareLocal target (.word v))
   have d := declareFlag (n+7) t c m.pushScope temp "condition" b rfl
   have z := Inv32FloorStart.zero (n+7) t c (m.pushScope.declareLocal temp (.word (boolWord b))) target
-  have call := Inv32FlagCalls.toUint n c (st 0 0) temp [target] b rfl
+  have call := Inv32FlagCalls.toUintAt table links.uint n c (st 0 0) temp [target] b rfl
   have ass : internalCallAssign (st 0 0) [target] [.word (boolWord b)] = pure (.normal (st 0 (boolWord b))) := by
     unfold internalCallAssign; simp only [List.isEmpty_cons,Bool.false_eq_true,if_false]
     have upd : (st 0 0).assignNamedValuesRef? [target] [.word (boolWord b)] = some (st 0 (boolWord b)) := by
@@ -69,4 +70,6 @@ theorem stageExec (n : Nat) (c : Context) (r : Runtime) (b : Bool) :
   rw [Inv32FloorStart.seqStep _ _ _ _ _ _ _ d,Inv32FloorStart.seqStep _ _ _ _ _ _ _ z]
   have last := (Inv32FloorStart.seqStep _ _ _ _ _ _ _ cap).trans (Inv32FloorStart.seqStep _ _ _ _ _ _ [] cp)
   rw [last,Stmt.evalList]; rfl
+
+abbrev stageExec := stageExecAt Inv32Dispatch.model.core.table Inv32Rejection.trading
 end Inv32PanicChoice
