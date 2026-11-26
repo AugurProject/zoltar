@@ -106,7 +106,8 @@ export async function loadSecurityPoolPriceSnapshot(parameters: { client: PriceR
 		| undefined
 	if (feed !== zeroAddress) {
 		const [authority, feedFactory, feedUniverse, feedRep, wethValue, oracleValue] = await Promise.all([read(feed, 'securityPool'), read(feed, 'securityPoolFactory'), read(feed, 'universeId'), read(feed, 'reputationToken'), read(feed, 'collateralToken'), read(feed, 'openOracle')])
-		if (decodeAddress(authority, 'Feed security pool') !== securityPool || decodeAddress(feedFactory, 'Price feed’s pool factory') !== factory || decodeUint(feedUniverse, 'Feed universe', 248) !== universeId || decodeAddress(feedRep, 'Feed REP') !== repToken) throw new Error('Price feed belongs to another security pool or branch.')
+		if (decodeAddress(authority, 'Feed security pool') !== securityPool || decodeAddress(feedFactory, 'Price feed’s pool factory') !== factory || decodeUint(feedUniverse, 'Feed universe', 248) !== universeId || decodeAddress(feedRep, 'Feed REP') !== repToken)
+			throw new Error('Price feed belongs to another security pool or branch.')
 		const weth = decodeAddress(wethValue, 'Collateral')
 		const wrappedNative = decodeAddress(await read(feed, 'weth'), 'Wrapped native token')
 		const openOracle = decodeAddress(oracleValue, 'OpenOracle')
