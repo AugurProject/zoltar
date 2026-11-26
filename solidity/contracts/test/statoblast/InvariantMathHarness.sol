@@ -26,6 +26,14 @@ contract InvariantMathHarness {
 		return SecurityPoolSettlementMath.requiredCash(units, numerator, denominator, remainder);
 	}
 
+	function conservativePrice(uint256 price, uint256 uncertainty) external pure returns (uint256) {
+		return OraclePriceMath.conservativePrice(price, uncertainty);
+	}
+
+	function liquidationPrice(uint256 price, uint256 uncertainty) external pure returns (uint256) {
+		return OraclePriceMath.liquidationPrice(price, uncertainty);
+	}
+
 	function bounds(uint256 price, uint256 uncertainty) external pure returns (uint256, uint256) {
 		return (
 			OraclePriceMath.liquidationPrice(price, uncertainty),

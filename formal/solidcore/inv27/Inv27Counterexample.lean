@@ -2,14 +2,14 @@ import Inv27Generated
 
 /-! INV-27's conservative price needs a representable result. With 50% uncertainty,
 the upper bound is twice the raw price. The checked Solidity harness returns both
-bounds up to the last fitting price and panics at the next price. -/
+bounds up to the last fitting price and rejects the next price with the domain error. -/
 open SolidCore.Solidity SolidCore.Solidity.Source
 
 namespace Inv27Source
 
 private inductive Observation where
   | bounds (lower upper : Nat)
-  | panic (code : Nat)
+  | rejected (message : String)
   deriving DecidableEq
 
 private def boundsAt (price uncertainty : Nat) : Option Observation := do
@@ -18,14 +18,14 @@ private def boundsAt (price uncertainty : Nat) : Option Observation := do
     [.word price, .word uncertainty]
   match result with
   | .returned _ [.word lo, .word hi] => some (.bounds lo hi)
-  | .reverted _ (.panic code) => some (.panic code)
+  | .reverted _ (.error message) => some (.rejected message)
   | _ => none
 
 theorem conservativeOverflowBoundary :
     boundsAt (2^255 - 1) 5000000 =
       some (.bounds ((2^255 - 1) * 2 / 3) (2^256 - 2)) ∧
     boundsAt (2^255) 0 = some (.bounds (2^255) (2^255)) ∧
-    boundsAt (2^255) 5000000 = some (.panic 0x11) := by native_decide
+    boundsAt (2^255) 5000000 = some (.rejected "Conservative oracle price exceeds uint256") := by native_decide
 
 /-- A positive collateral denominator and a uint128 REP amount, as in a funded
 report, bound the raw price. Even the largest allowed uncertainty leaves a

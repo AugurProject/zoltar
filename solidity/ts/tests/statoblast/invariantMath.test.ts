@@ -99,13 +99,28 @@ test('settlement one-less/one-more bounds and oracle price brackets', async () =
 	}
 })
 
-test('INV-27 conservative price reaches the uint256 boundary at half uncertainty', async () => {
-	const firstOverflow = 1n << 255n
-	const bounds = (price: bigint, uncertainty: bigint) => client.readContract({ abi: artifact.abi, address, functionName: 'bounds', args: [price, uncertainty] })
-	const lastFit = firstOverflow - 1n
-	expect(await bounds(lastFit, 5000000n)).toEqual([(2n * lastFit) / 3n, 2n * lastFit])
-	expect(await bounds(firstOverflow, 0n)).toEqual([firstOverflow, firstOverflow])
-	await expect(bounds(firstOverflow, 5000000n)).rejects.toThrow(/overflow|0x11/i)
+test('oracle conservative bounds reject exactly unrepresentable prices', async () => {
+	const D = 10n ** 7n
+	const maximum = (1n << 256n) - 1n
+	for (const uncertainty of [1n, 13n, D / 2n, D - 1n]) {
+		const last = (maximum * (D - uncertainty)) / D
+		const [lo, hi] = await client.readContract({ abi: artifact.abi, address, functionName: 'bounds', args: [last, uncertainty] })
+		expect(lo).toBe((last * D) / (D + uncertainty))
+		expect(hi).toBe((last * D + D - uncertainty - 1n) / (D - uncertainty))
+		await expect(client.readContract({ abi: artifact.abi, address, functionName: 'bounds', args: [last + 1n, uncertainty] })).rejects.toThrow('Conservative oracle price exceeds uint256')
+	}
+	for (const price of [0n, (1n << 255n) - 1n, 1n << 255n, maximum]) {
+		expect(await client.readContract({ abi: artifact.abi, address, functionName: 'bounds', args: [price, 0n] })).toEqual([price, price])
+	}
+	for (const uncertainty of [1n, D / 2n, D - 1n]) {
+		expect(await client.readContract({ abi: artifact.abi, address, functionName: 'liquidationPrice', args: [maximum, uncertainty] })).toBe((maximum * D) / (D + uncertainty))
+	}
+	const fundedMaximum = ((1n << 128n) - 1n) * 10n ** 18n
+	const [, conservative] = await client.readContract({ abi: artifact.abi, address, functionName: 'bounds', args: [fundedMaximum, D - 1n] })
+	expect(conservative).toBe(fundedMaximum * D)
+	for (const uncertainty of [D, D + 1n, maximum]) {
+		for (const functionName of ['conservativePrice', 'liquidationPrice'] as const) await expect(client.readContract({ abi: artifact.abi, address, functionName, args: [1n, uncertainty] })).rejects.toThrow('Invalid oracle uncertainty')
+	}
 })
 
 test('INV-04 carry can change the minimum raw cash or overflow the scaled intermediate', async () => {
