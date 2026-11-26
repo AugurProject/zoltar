@@ -84,6 +84,25 @@ describe('UniverseBrowser', () => {
 		expect(selected).toBe(true)
 	})
 
+	test('marks bounded ancestry without inventing a genesis entry (#1750)', async () => {
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<UniverseBrowser
+					activeUniverseId={yesUniverseId}
+					universe={createUniverse({
+						lineage: [
+							{ universeId: 10n, outcomeLabel: 'Previous' },
+							{ universeId: yesUniverseId, outcomeLabel: 'Current' },
+						],
+					})}
+				/>,
+			)
+		).cleanup
+		const trail = document.querySelector('nav[aria-label="Universe lineage"]')
+		expect(trail?.querySelector('[aria-label="Earlier generations omitted"]')?.textContent).toBe('…')
+		expect(trail?.textContent).not.toContain('Genesis')
+	})
+
 	test('shows the lineage trail, fork status, and child universes with their deployment state', async () => {
 		cleanupRenderedComponent = (await renderIntoDocument(<UniverseBrowser activeUniverseId={yesUniverseId} universe={createUniverse()} actions={<button type='button'>Migrate REP</button>} />)).cleanup
 		const queries = within(document.body)

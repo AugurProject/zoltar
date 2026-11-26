@@ -70,6 +70,7 @@ function UniverseLineageTrail({ lineage }: { lineage: readonly UniverseLineageSt
 	return (
 		<nav aria-label={universeCopy.lineageAriaLabel} className='universe-lineage'>
 			<ol>
+				{lineage[0]?.universeId !== 0n ? <li aria-label={universeCopy.earlierGenerationsOmitted}>…</li> : undefined}
 				{lineage.map((step, index) => {
 					const name = formatUniverseStepName(step)
 					if (index === lineage.length - 1)

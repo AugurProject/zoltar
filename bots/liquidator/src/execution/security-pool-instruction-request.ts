@@ -41,7 +41,11 @@ async function vaultInstructionRequest(context: Context, instruction: VaultInstr
 	if (vault === undefined) throw new Error('Vault is missing from authenticated managed exposure')
 	const base = { owner: instruction.vault, capitalLedger: snapshot.capitalLedger }
 	if (instruction.action === 'vault-deposit') {
-		if (vault.ownerPrincipalAttoRep + instruction.amountAttoRep > settings.securityPoolPolicy.maximumPrincipalAttoRep || totalPrincipal + instruction.amountAttoRep > settings.securityPoolPolicy.maximumTotalPrincipalAttoRep || observation.walletRep < instruction.amountAttoRep + settings.strategy.walletAttoRepReserve)
+		if (
+			(observation.managedPrincipalAttoRep ?? snapshot.ownerPrincipalAttoRep) + instruction.amountAttoRep > settings.securityPoolPolicy.maximumPrincipalAttoRep ||
+			totalPrincipal + instruction.amountAttoRep > settings.securityPoolPolicy.maximumTotalPrincipalAttoRep ||
+			observation.walletRep < instruction.amountAttoRep + settings.strategy.walletAttoRepReserve
+		)
 			throw new SecurityPoolOpportunityExpired('Vault funding exceeds exposure or wallet reserve limits')
 		const allowance = await client.readContract({ address: snapshot.repToken, abi: erc20Abi, functionName: 'allowance', args: [owner, instruction.vault], blockNumber })
 		if (allowance < instruction.amountAttoRep) return { completes: false, request: { account: owner, to: snapshot.repToken, value: 0n, data: encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [instruction.vault, instruction.amountAttoRep] }) } }
@@ -82,8 +86,11 @@ async function auctionInstructionRequest({ client, settings, observation, totalP
 		if (auction === undefined || !auction.opened) return { disposition: 'retry', reason: 'The auction is not open yet' }
 		if (auction.maximumAdmissibleBidAttoRepPerLot < auction.minimumCollateralAttoRepPerLot || instruction.minimumAttoRepPerLot > auction.maximumAdmissibleBidAttoRepPerLot) return { disposition: 'retry', reason: 'Better funded bids currently exclude these terms' }
 		const quote = quoteSecurityPoolAuctionBid(auctionSnapshot, instruction)
-		// Reserve the full possible award even with weak demand, in addition to existing pending bids.
-		if (totalPrincipal + auction.inventoryAttoRep > settings.securityPoolPolicy.maximumTotalPrincipalAttoRep || auction.inventoryAttoRep > settings.securityPoolPolicy.maximumPrincipalAttoRep) return { disposition: 'retry', reason: 'Auction award could exceed managed REP exposure limits' }
+		// Reserve the full possible award once per auction, including additional bids.
+		const reserved = observation.pendingAuction?.address === auction.address ? observation.pendingAuction.principal : 0n
+		const incrementalPrincipal = auction.inventoryAttoRep > reserved ? auction.inventoryAttoRep - reserved : 0n
+		if (totalPrincipal + incrementalPrincipal > settings.securityPoolPolicy.maximumTotalPrincipalAttoRep || (observation.managedPrincipalAttoRep ?? snapshot.ownerPrincipalAttoRep) + incrementalPrincipal > settings.securityPoolPolicy.maximumPrincipalAttoRep)
+			return { disposition: 'retry', reason: 'Auction award could exceed managed REP exposure limits' }
 		if (quote.bidAttoEth > instruction.maximumValueAttoEth || (observation.managedCommitmentAttoEth ?? snapshot.ownerCommitmentAttoEth) + quote.bidAttoEth > settings.securityPoolPolicy.maximumCommitmentAttoEth) return { disposition: 'retry', reason: 'Auction bid exceeds collateral or commitment limits' }
 		if (auctionSnapshot.walletCollateral < quote.bidAttoEth) return { disposition: 'retry', reason: 'Insufficient wallet collateral for the bid' }
 		if (auctionSnapshot.collateralAllowance < quote.bidAttoEth)

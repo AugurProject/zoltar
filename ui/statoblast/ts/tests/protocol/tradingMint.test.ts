@@ -319,3 +319,28 @@ test('USDC share migration reviews the amount at six decimal precision', async (
 	expect(review?.reviewAmount).toMatch(/2[.,]5/)
 	expect(send).toHaveBeenCalledTimes(1)
 })
+
+test('exact recovery funds keep an affordable signed maximum and simulate final calldata (#1694)', async () => {
+	const recovery = { required: 100n, balance: 100n, allowance: 100n }
+	const recoveryAbi = parseAbi(['function createCompleteSetWithRecoveryRep(uint248,uint256,uint256,address,uint256,uint256,uint256)'])
+	let validate: TransactionPlanStep['validateBeforeSubmit']
+	let simulations = 0
+	const client = {
+		...mintClient(() => undefined, 10n, 100n, recovery),
+		estimateGas: async (request: { data?: `0x${string}` | undefined }) => {
+			if (request.data === undefined) throw new Error('Missing final calldata')
+			expect(decodeFunctionData({ abi: recoveryAbi, data: request.data }).args?.[6]).toBe(100n)
+			simulations++
+			return 100_000n
+		},
+		onTransactionPlan: (steps: readonly TransactionPlanStep[]) => {
+			validate = steps[0]?.validateBeforeSubmit
+		},
+	}
+	await createCompleteSetInQuestionLedger(client, pool, 10n ** 18n)
+	if (validate === undefined) throw new Error('Missing mint validation')
+	await expect(validate()).resolves.toBeUndefined()
+	expect(simulations).toBe(1)
+	recovery.required = 101n
+	await expect(validate()).rejects.toThrow('Recovery REP quote changed')
+})

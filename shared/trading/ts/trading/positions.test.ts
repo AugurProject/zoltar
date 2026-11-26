@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { maximumInsuredExit } from './positions.js'
+import { largestExitForLongShares, quoteExitPosition, maximumInsuredExit } from './positions.js'
 import { quoteExactOutput } from './math.js'
 
 // Long shares an exit consumes: the complete sets plus the long shares swapped for the opposite side.
@@ -30,4 +30,12 @@ describe('maximum insured exit', () => {
 		const reserveBound = maximumInsuredExit({ longOutcome: 'NO', longBalance: 10n ** 30n, invalidBalance: 10n ** 30n, yesReserve: 100n, noReserve: 200n, feeBps: 0n })
 		expect(reserveBound).toBe(99n)
 	})
+})
+
+test('exit sizing searches below unrepresentable exact-output candidates (#1724)', () => {
+	const maximum = (1n << 256n) - 1n
+	const parameters = { longOutcome: 'YES' as const, yesReserve: maximum, noReserve: maximum, feeBps: 30n, longShares: maximum }
+	const result = largestExitForLongShares(parameters)
+	expect(result).toBeGreaterThan(0n)
+	expect(quoteExitPosition('YES', result, parameters).totalLongShares).toBeLessThanOrEqual(maximum)
 })

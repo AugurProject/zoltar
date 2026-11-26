@@ -1,4 +1,5 @@
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
+const MAX_UINT256 = (1n << 256n) - 1n
 const BPS_DENOMINATOR = 10_000n
 
 export type SwapQuote = Readonly<{ amountIn: bigint; amountOut: bigint; netInput: bigint; feeAmount: bigint }>
@@ -14,6 +15,7 @@ export function quoteExactOutput(reserveIn: bigint, reserveOut: bigint, amountOu
 	if (feeBps < 0n || feeBps >= BPS_DENOMINATOR) throw new Error('feeBps is out of range')
 	const netInput = ceilDiv(reserveIn * amountOut, reserveOut - amountOut)
 	const amountIn = ceilDiv(netInput * BPS_DENOMINATOR, BPS_DENOMINATOR - feeBps)
+	if (netInput > MAX_UINT256 || amountIn > MAX_UINT256) throw new RangeError('Swap input exceeds uint256')
 	return { amountIn, amountOut, netInput, feeAmount: amountIn - netInput }
 }
 
@@ -27,6 +29,7 @@ export function quoteExactInput(reserveIn: bigint, reserveOut: bigint, amountIn:
 	requirePositive(netInput, 'netInput')
 	const amountOut = (reserveOut * netInput) / (reserveIn + netInput)
 	if (amountOut <= 0n || amountOut >= reserveOut) throw new Error('amountOut is out of range')
+	if (netInput > MAX_UINT256 || amountIn > MAX_UINT256) throw new RangeError('Swap input exceeds uint256')
 	return { amountIn, amountOut, netInput, feeAmount: amountIn - netInput }
 }
 
