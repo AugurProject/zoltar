@@ -2,7 +2,7 @@ import { encodeAbiParameters, getAddress, keccak256, type Address, type Hex, zer
 import { uniswapV3FactoryAbi, uniswapV3QuoterAbi, uniswapV4QuoterAbi } from '@zoltar/core-shared/evm/uniswapAbis'
 import type { ReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getActiveNetworkProfile, getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { isRecoverableContractReadError, isRecoverableQuoteError } from '@zoltar/ui-core-shared/lib/errors.js'
+import { isRecoverableContractReadError, isRecoverableQuoteError, RecoverableQuoteError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getGenesisReputationTokenAddress, getWethAddress } from './activeProtocolAddresses.js'
 
 export { getWethAddress }
@@ -170,7 +170,7 @@ async function assertMockPairSupported(client: ReadClient, tokenIn: Address, tok
 	if (!isMockRepPricingEnabled()) return undefined
 	const mockResult = await maybeQuoteMockRepPair(client, tokenIn, tokenOut, amountIn)
 	if (mockResult !== undefined) return mockResult
-	throw new Error('Simulation pricing supports REP paired with ETH, WETH, or USDC.')
+	throw new RecoverableQuoteError('Simulation pricing supports REP paired with ETH, WETH, or USDC.')
 }
 
 function buildUniswapV4PoolId(tokenA: Address, tokenB: Address, poolConfig: PoolConfig): Hex {
