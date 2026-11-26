@@ -257,8 +257,7 @@ function AuctionBid({ auction, bid, model, parameters, collateral, universeId, i
 	else if (bid.fill !== undefined) bidStatus = standing === copy.noFill ? undefined : copy.noFill
 	else if (isOpen && excluded && bid.minimumAttoRepPerLot > auction.maximumAdmissibleBidAttoRepPerLot + auction.repGrid) bidStatus = copy.lowerAsksFill
 	else if (excluded) bidStatus = copy.earlierBidsFill
-	let creditStatus: string | undefined
-	if (!auction.finalized && bid.refundSettled) creditStatus = auction.refundAttoEth === 0n ? copy.earlyRefundWithdrawn : copy.earlyRefundCredited
+	const creditStatus = !auction.finalized && bid.refundSettled ? copy.earlyRefundSettled : undefined
 	let refund: bigint | undefined
 	if (excluded) refund = escrow
 	if (bid.fill !== undefined) refund = bid.fill.refundAttoEth

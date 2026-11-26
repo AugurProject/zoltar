@@ -116,6 +116,7 @@ export function buildSecurityPoolAuctionRefundCreditRequest(snapshot: SecurityPo
 	const bid = auction.bids.find(candidate => candidate.id === uint(bidId, 'Bid ID'))
 	if (bid === undefined || bid.refundSettled) throw new Error('Choose an unsettled bid from this auction page.')
 	if (!auction.finalized && bid.earlyRefundAttoEth === 0n) throw new Error('This bid may still win. Its collateral remains committed until closing.')
+	if (auction.finalized && (bid.fill?.refundAttoEth ?? 0n) === 0n) throw new Error('This bid has no unused collateral to refund.')
 	return { account: snapshot.bidder, to: auction.address, value: 0n, data: encodeFunctionData({ abi, functionName: 'settleRefund', args: [bidId] }) }
 }
 export function buildSecurityPoolAuctionRefundWithdrawRequest(snapshot: SecurityPoolAuctionSnapshot, recipient: Address) {
@@ -136,7 +137,6 @@ export function quoteSecurityPoolAuctionRefundClaim(snapshot: SecurityPoolAuctio
 		if (auction.finalized) bidRefundAttoEth = bid.fill?.refundAttoEth ?? 0n
 		else if (bid.earlyRefundAttoEth === 0n) throw new Error('This bid may still win. Its collateral remains committed until closing.')
 		else bidRefundAttoEth = bid.earlyRefundAttoEth
-		if (bidRefundAttoEth === 0n) throw new Error('This bid has no unused collateral to refund.')
 	}
 	const creditedAttoEth = auction.refundAttoEth
 	const totalAttoEth = creditedAttoEth + bidRefundAttoEth

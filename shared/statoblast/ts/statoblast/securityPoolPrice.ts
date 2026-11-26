@@ -35,6 +35,7 @@ const abi = parseAbi([
 	'function lastSettlementTimestamp() view returns (uint256)',
 	'function priceValidityWindowSeconds() view returns (uint256)',
 	'function pendingReportId() view returns (uint256)',
+	'function escalationHaltMultiplierBps() view returns (uint256)',
 	'function settlementTime() view returns (uint48)',
 	'function balanceOf(address owner) view returns (uint256)',
 	'function allowance(address owner,address spender) view returns (uint256)',
@@ -86,6 +87,7 @@ export async function loadSecurityPoolPriceSnapshot(parameters: { client: PriceR
 		| {
 				weth: Address
 				wrappedNative: Address
+				escalationHaltMultiplierBps: bigint
 				openOracle: Address
 				minimumWethAttoEth: bigint | undefined
 				minimumRepAttoRep: bigint | undefined
@@ -111,7 +113,7 @@ export async function loadSecurityPoolPriceSnapshot(parameters: { client: PriceR
 		const weth = decodeAddress(wethValue, 'Collateral')
 		const wrappedNative = decodeAddress(await read(feed, 'weth'), 'Wrapped native token')
 		const openOracle = decodeAddress(oracleValue, 'OpenOracle')
-		const [exposure, reportCollateral, minimum, minimumRep, priority, callbackGas, multiplier, price, settled, validity, settlement, pending, wethBalanceAttoEth, repBalanceAttoRep, wethAllowanceAttoEth, repAllowanceAttoRep] = await Promise.all([
+		const [exposure, reportCollateral, minimum, minimumRep, priority, callbackGas, multiplier, price, settled, validity, settlement, pending, wethBalanceAttoEth, repBalanceAttoRep, wethAllowanceAttoEth, repAllowanceAttoRep, haltMultiplier] = await Promise.all([
 			read(securityPool, 'oracleExposure', [universeId]),
 			read(feed, 'minimumReportCollateral'),
 			reportingOpen ? read(feed, 'minimumToken1ReportAttoEth') : undefined,
@@ -128,6 +130,7 @@ export async function loadSecurityPoolPriceSnapshot(parameters: { client: PriceR
 			read(repToken, 'balanceOf', [owner]),
 			read(weth, 'allowance', [owner, feed]),
 			read(repToken, 'allowance', [owner, feed]),
+			read(feed, 'escalationHaltMultiplierBps'),
 		])
 		// Fee-priced eth_call can fail for an unfunded caller. Derive the exact
 		// contract quote from immutable settings and the pinned block instead.
@@ -142,6 +145,7 @@ export async function loadSecurityPoolPriceSnapshot(parameters: { client: PriceR
 		const bountyAt = (baseFeePerGas: bigint) => decodeUint(calculateOracleSettlementBountyAttoEth({ ...settlementSettings, baseFeePerGas }), 'Settlement bounty', 96)
 		observation = {
 			wrappedNative,
+			escalationHaltMultiplierBps: decodeUint(haltMultiplier, 'Dispute limit multiplier'),
 			currentExposureAttoEth: decodeUint(exposure, 'Current exposure'),
 			minimumReportCollateral: decodeUint(reportCollateral, 'Report collateral offset'),
 			weth,
@@ -184,6 +188,7 @@ export function quoteSecurityPoolPriceFunding(snapshot: SecurityPoolPriceSnapsho
 	const suggested = requestedWeth === 0n ? required + required / SECURITY_POOL_REPORT_FUNDING_HEADROOM_DIVISOR : requestedWeth
 	const weth = decodeUint(suggested > required ? suggested : required, 'Initial WETH report', 128)
 	const rep = decodeUint((weth * price + 10n ** 18n - 1n) / 10n ** 18n, 'Initial REP report', 128)
+	decodeUint((weth * observation.escalationHaltMultiplierBps) / 10_000n, 'Dispute limit', 128)
 	const wrap = observation.weth === observation.wrappedNative && weth > observation.wethBalanceAttoEth ? weth - observation.wethBalanceAttoEth : 0n
 	const coveredExposureAttoEth = weth > observation.minimumReportCollateral ? (weth - observation.minimumReportCollateral) * 100n : 0n
 	const growthHeadroomAttoEth = coveredExposureAttoEth > observation.currentExposureAttoEth ? coveredExposureAttoEth - observation.currentExposureAttoEth : 0n
@@ -192,6 +197,7 @@ export function quoteSecurityPoolPriceFunding(snapshot: SecurityPoolPriceSnapsho
 	const paddedGas = (callback: bigint) => ((callback + callback / 63n + 310_000n) * 12_000n + 9_999n) / 10_000n + 20_000n
 	const baseGas = paddedGas(SECURITY_POOL_REPORT_SETTLEMENT_CALLBACK_GAS)
 	const bounty = operationsGas === 0n ? observation.nextBlockBounty : ((observation.nextBlockBounty - 101n) * paddedGas(callbackGas) + baseGas - 1n) / baseGas + 101n
+	decodeUint(bounty, 'Settlement bounty', 96)
 	return { price, weth, minimumWeth: required, rep, wrap, bounty, requiredEth: wrap + bounty, coveredExposureAttoEth, growthHeadroomAttoEth }
 }
 export function buildSecurityPoolPricePreparationRequest(snapshot: SecurityPoolPriceSnapshot) {

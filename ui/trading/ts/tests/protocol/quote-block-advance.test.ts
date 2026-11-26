@@ -39,7 +39,7 @@ function transactionOf(params: unknown) {
 
 // A chain whose head advances on demand; `longSharesOut` lets a test move the price between blocks.
 function createAdvancingChain() {
-	const chain: { redemptionAttoEth?: bigint; head: bigint; feeMarket: LiveMarket; longSharesOut: bigint; sends: Hex[]; simulatedBlocks: unknown[]; blockRequests: unknown[]; transactionSimulations: string[] } = {
+	const chain: { redemptionAttoEth?: bigint; redemptionAttoRep?: bigint; head: bigint; feeMarket: LiveMarket; longSharesOut: bigint; sends: Hex[]; simulatedBlocks: unknown[]; blockRequests: unknown[]; transactionSimulations: string[] } = {
 		head: 2n,
 		feeMarket: market,
 		longSharesOut: 10n,
@@ -80,7 +80,8 @@ function createAdvancingChain() {
 				}
 				throw new Error(`Unexpected share token simulation ${decoded.functionName}`)
 			}
-			const feeResponse = feeAccountingRpcResult(transaction.data, chain.feeMarket, chain.head, chain.redemptionAttoEth)
+
+			const feeResponse = feeAccountingRpcResult(transaction.data, chain.feeMarket, chain.head, chain.redemptionAttoEth, chain.redemptionAttoRep)
 			if (feeResponse !== undefined) return feeResponse
 			const decoded = decodeFunctionData({ abi: routerAbi, data: transaction.data })
 			chain.transactionSimulations.push(decoded.functionName)
@@ -384,4 +385,16 @@ test('partial cash redemption uses the size-specific ledger quote (#1729)', asyn
 	const quote = await simulateSettlement(client, configuration, market, account, 'redeem-complete-set', { amount: 2n })
 	expect(quote.expectedAttoEth).toBe(1n)
 	expect(await submitFreshSettlement(client, configuration, account, quote, async send => await send())).toBe(transactionHash)
+})
+
+test.each([
+	{ amount: 2n, payout: 1n },
+	{ amount: 3n, payout: 2n },
+])('#1673 recovery redemption uses the size-specific REP quote, including the final claim ($amount)', async ({ amount, payout }) => {
+	const { chain, client } = createAdvancingChain()
+	chain.redemptionAttoEth = 0n
+	chain.redemptionAttoRep = payout
+	chain.feeMarket = { ...market, settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 3n, settlementRecoveryAttoRep: 1n }
+	const quote = await simulateSettlement(client, configuration, chain.feeMarket, account, 'redeem-complete-set', { amount })
+	expect(quote.expectedAttoRep).toBe(payout)
 })

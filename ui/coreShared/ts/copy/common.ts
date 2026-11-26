@@ -165,3 +165,6 @@ export const formatLocalTimeLabel = (localTimestamp: CopyTemplateValue) => `Loca
 export const notNeeded = 'Not needed.'
 
 export const immediatelyAfterCreation = 'Immediately after creation'
+
+export const exactTickIndex = 'Exact tick index'
+export const exactTickRange = (maximum: bigint) => `0–${maximum.toString()}`

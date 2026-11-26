@@ -165,6 +165,6 @@ export const unexpectedResponse = (label: string) => `Unexpected ${label} respon
 export const contractCodeUnverified = (label: string) => `Could not verify the ${label} code.`
 export const contractSettingsMismatch = (label: string) => `The ${label} has unexpected settings.`
 export const contractLinkMismatch = (label: string) => `The ${label} is linked to a different contract.`
-export const reportMissingHistory = (id: bigint) => `OpenOracle report #${id} is unavailable: it was created without stored state and dispute history.`
+export const reportMissingStoredState = (id: bigint) => `OpenOracle report #${id} is unavailable: it was created without stored state.`
 export const reportStateMismatch = (id: bigint) => `OpenOracle report #${id} stored state does not match its onchain state hash. Retry to load the latest state.`
 export const safeIntegerRangeExceeded = (label: string) => `${label} exceeds the maximum safe integer range`

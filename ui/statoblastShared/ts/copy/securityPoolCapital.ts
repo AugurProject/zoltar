@@ -4,6 +4,7 @@ import { minimumSecurityPoolHealthFactorBps } from '@zoltar/statoblast-shared/st
 export const withdrawableRep = 'Withdrawable REP'
 export const principalRep = 'Your REP deposited'
 export const commitment = 'Your commitment'
+export const positionCommitment = 'Position commitment'
 export const savedHealth = 'Health target'
 export const availableCapacity = 'Free capacity'
 export const priceValid = 'Price current'
@@ -73,7 +74,7 @@ export const requestReductionReview = (positionId: bigint, releasesPledgedRep: b
 	const consequence = releasesPledgedRep ? 'Reducing to zero releases its pledged REP.' : 'REP stays pledged to the remaining commitment.'
 	return `Position ${positionId}. ${consequence} ${queue} You can’t change or cancel the queued reduction. Your saved health target stays unchanged.`
 }
-export const releaseReductionReview = 'Earlier reductions keep their place in queue. Free capacity can change before confirmation. An attempt may spend gas without reducing commitment.'
+export const releaseReductionReview = (owner: string) => `Release the commitment reduction for ${owner}. Earlier reductions keep their place in queue. Free capacity can change before confirmation. An attempt may spend gas without reducing commitment.`
 export const rewardVesting = 'Reward vesting (hours)'
 export const outcomeRate = 'Minimum collateral reserved per share'
 export const outcomeRateHint = 'Holding fees stop before reducing backing below this rate. Fixed at creation; fork recovery can pay less.'

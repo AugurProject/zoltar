@@ -67,7 +67,7 @@ export type OpenOracleReportSummary = {
 	currentAmount2: bigint
 	currentReporter: Address
 	disputeOccurred: boolean
-	exactToken1Report: bigint
+	exactToken1Report: bigint | undefined
 	isDistributed: boolean
 	price: bigint
 	reportId: bigint

@@ -113,7 +113,16 @@ export function useSecurityPoolAuction({ fork, savedBranch, bidder, actions, ope
 	}
 	if (bidReason === undefined && snapshot !== undefined && quote !== undefined && snapshot.collateralAllowance < quote.bidAttoEth) bidReason = collateralCopy.approvalRequired
 	const withdrawalReason = auctionReason ?? (auction?.refundAttoEth === 0n ? copy.noRefund : undefined)
-	const refundReason = (bid: SecurityPoolAuctionBid) => auctionReason ?? (bid.refundSettled ? copy.credited : undefined) ?? (!auction?.finalized && bid.earlyRefundAttoEth === 0n ? copy.bidMayStillWin : undefined)
+	const refundReason = (bid: SecurityPoolAuctionBid) => {
+		const reason = auctionReason ?? (bid.refundSettled ? copy.credited : undefined) ?? (!auction?.finalized && bid.earlyRefundAttoEth === 0n ? copy.bidMayStillWin : undefined)
+		if (reason !== undefined || snapshot === undefined) return reason ?? copy.loading
+		try {
+			buildSecurityPoolAuctionRefundCreditRequest(snapshot, bid.id)
+			return undefined
+		} catch (error) {
+			return getErrorMessage(error, copy.quoteError)
+		}
+	}
 	const claimQuote = (selected: Awaited<ReturnType<typeof loadSecurityPoolBranchAuction>>, bid: SecurityPoolAuctionBid) => quoteSecurityPoolAuctionRefundClaim(selected, bid.id)
 	const claimReason = (bid: SecurityPoolAuctionBid) => {
 		if (auctionReason !== undefined || snapshot === undefined) return auctionReason ?? copy.loading

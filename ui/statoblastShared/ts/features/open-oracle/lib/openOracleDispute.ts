@@ -166,7 +166,9 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 	const chargeFees = reportDetails === undefined || !reportDetails.feesOnlyAtHalt || reportDetails.currentAmount1 >= reportDetails.escalationHalt
 	const amount1Allowed = reportDetails !== undefined && expectedNewAmount1 !== undefined && newAmount1 !== undefined && isOpenOracleDisputeAmount1Allowed(reportDetails, expectedNewAmount1, newAmount1)
 	// The proposed price decides which token is swapped out, so the disputer never chooses it separately.
-	const swapTokenKey = reportDetails === undefined || newAmount1 === undefined || newAmount2 === undefined || newAmount2 <= 0n || !amount1Allowed ? undefined : getOpenOracleDisputeSwapTokenKey({ currentAmount1: reportDetails.currentAmount1, currentAmount2: reportDetails.currentAmount2, newAmount1, newAmount2 })
+	const amountsFit = newAmount1 !== undefined && newAmount2 !== undefined && newAmount1 < 1n << 128n && newAmount2 < 1n << 128n
+	const swapTokenKey =
+		!amountsFit || reportDetails === undefined || newAmount1 === undefined || newAmount2 === undefined || newAmount2 <= 0n || !amount1Allowed ? undefined : getOpenOracleDisputeSwapTokenKey({ currentAmount1: reportDetails.currentAmount1, currentAmount2: reportDetails.currentAmount2, newAmount1, newAmount2 })
 	const flows =
 		reportDetails === undefined || newAmount1 === undefined || newAmount2 === undefined || swapTokenKey === undefined
 			? undefined
@@ -221,6 +223,8 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 		} else if (newAmount2 === undefined) {
 			if (disputeNewAmount2Input.trim() === '') setInputBlockMessage({ kind: 'incomplete', message: undefined })
 			else setInputBlockMessage(createVisibleGateMessage(openOracleCopy.formatInvalidNewDisputeAmount(token2Label)), 'disputeNewAmount2')
+		} else if (!amountsFit) {
+			setInputBlockMessage(createVisibleGateMessage(openOracleCopy.newReportAmountTooLarge))
 		} else if (newAmount2 <= 0n) {
 			setInputBlockMessage({ kind: 'incomplete', message: undefined })
 		} else if (expectedNewAmount1 === undefined) {

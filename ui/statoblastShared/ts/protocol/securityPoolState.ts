@@ -18,7 +18,7 @@ const abi = parseAbi([
 	'function securityPool() view returns (address)',
 	'function universeId() view returns (uint248)',
 	'function settlement() view returns (address)',
-	'function availableMintCapacity(uint248 universeId) view returns (uint256)',
+	'function additionalMintCapacityAttoEth() view returns (uint256)',
 	'function totals() view returns (uint256 rep,uint256 commitment,uint256 healthy)',
 	'function snapshotQuestion(address pool) view returns ((uint256 outcomeSupplyAttoShares,uint256 questionCashAttoEth,uint256 questionRecoveryAttoRep,uint256 demandAttoEth,uint256 earnedFeesAttoEth,uint48 timestamp) snapshot)',
 ])
@@ -59,7 +59,7 @@ export async function loadCentralSecurityPoolQuestion(client: Pick<ReadClient, '
 			{ address: settlement, abi, functionName: 'feeTimestamp', args: [universeId] },
 			{ address: capital, abi, functionName: 'isPriceValid', args: [] },
 			{ address: capital, abi, functionName: 'totals', args: [] },
-			{ address: securityPool, abi, functionName: 'availableMintCapacity', args: [universeId] },
+			{ address: pool, abi, functionName: 'additionalMintCapacityAttoEth', args: [] },
 			{ address: getMulticall3Address(), abi, functionName: 'getCurrentBlockTimestamp', args: [] },
 			{ address: book, abi, functionName: 'question', args: [bookId, questionId] },
 			{ address: book, abi, functionName: 'books', args: [bookId] },

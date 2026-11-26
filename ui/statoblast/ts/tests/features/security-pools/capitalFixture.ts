@@ -124,6 +124,7 @@ export function centralSecurityPoolRead(name: string, mode: CentralSecurityPoolM
 			return [mode === 'runoff' ? 50n : 100n, 100_000_000_000n, 0n, 1n, 0n, 0n, 123n, mode === 'sealed', 1n, 1n, 1n, mode !== 'disabled', 0n, 877n, 40n, mode === 'basket' ? 150n : 0n]
 		case 'settlement':
 			return token
+		case 'additionalMintCapacityAttoEth':
 		case 'availableMintCapacity':
 			return 20n
 		case 'snapshotQuestion':

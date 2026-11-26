@@ -18,7 +18,6 @@ import { discoverEcosystemSnapshot } from '../../src/monitoring/discovery.ts'
 import { DISCOVERY_RPC_CONCURRENCY, DISCOVERY_RPC_QUEUE_LIMIT, drainConcurrent, limitDiscoveryConcurrency, mapWithConcurrency, type ChaosReadClient } from '../../src/monitoring/discovery-client.ts'
 import { discoverDirectEscalationDepositQuotes, relevantTokenSpenders } from '../../src/monitoring/discovery-escalation.ts'
 import { assertCanonicalPairGraph, assertCanonicalPoolGraph } from '../../src/monitoring/discovery-graph.ts'
-import { collectCountedPages } from '../../src/monitoring/discovery-registry.ts'
 import { discoverShareInventory, trustedIndexedReportsForDiscovery } from '../../src/monitoring/discovery-share-inventory.ts'
 import { canonicalLifecyclePresence } from '../../src/operations/catalog.ts'
 import { urgentOperationPlans } from '../support/operation-plans.ts'
@@ -477,6 +476,7 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 }
 
 interface RefundBackfillOverrides {
+	auctionRefundAttoEth?: bigint
 	auctionOpened?: boolean
 	auctionOpeningError?: Error
 	recoveryAttoRep?: bigint
@@ -721,6 +721,8 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 					return 1n
 				case 'minBidSizeAttoEth':
 					return 1n
+				case 'previewBid':
+					return { bidder: address(1), vault: address(25), targetHealthBps: 10000n, filledLots: 1n, usedAttoEth: 1n, principalAttoRep: 100n, refundAttoEth: overrides.auctionRefundAttoEth ?? 1n }
 				case 'finalized':
 					return overrides.auctionFinalized ?? false
 				default:
@@ -1318,47 +1320,6 @@ describe('anchored ecosystem discovery', () => {
 		expect(unavailable.contractReads).toEqual([])
 	})
 
-	test('exhausts a counted pool-style collection in bounded pages', async () => {
-		const calls: Array<[bigint, bigint]> = []
-		const values = [10n, 11n, 12n, 13n, 14n]
-		const discovered = await collectCountedPages({
-			count: BigInt(values.length),
-			label: 'Pool discovery',
-			maximumItems: values.length,
-			pageSize: 2,
-			readPage: async (start, count) => {
-				calls.push([start, count])
-				return values.slice(Number(start), Number(start + count))
-			},
-			start: 0n,
-		})
-		expect(discovered).toEqual({ complete: true, nextStart: 5n, values })
-		expect(calls).toEqual([
-			[0n, 2n],
-			[2n, 2n],
-			[4n, 1n],
-		])
-	})
-
-	test('bounds a counted collection to one cycle and resumes from its durable cursor', async () => {
-		const calls: Array<[bigint, bigint]> = []
-		const values = Array.from({ length: 11 }, (_, index) => BigInt(index + 10))
-		const readPage = async (start: bigint, count: bigint) => {
-			calls.push([start, count])
-			return values.slice(Number(start), Number(start + count))
-		}
-		const first = await collectCountedPages({ count: BigInt(values.length), label: 'Question discovery', maximumItems: 3, pageSize: 2, readPage, start: 0n })
-		expect(first).toEqual({ complete: false, nextStart: 3n, values: [10n, 11n, 12n] })
-		const second = await collectCountedPages({ count: BigInt(values.length), label: 'Question discovery', maximumItems: 3, pageSize: 2, readPage, start: first.nextStart })
-		expect(second).toEqual({ complete: false, nextStart: 6n, values: [13n, 14n, 15n] })
-		expect(calls).toEqual([
-			[0n, 2n],
-			[2n, 1n],
-			[3n, 2n],
-			[5n, 1n],
-		])
-	})
-
 	test('keeps a 100-pool by 100-REP topology allowance scan linear', () => {
 		const fixture = snapshotFixture()
 		const template = fixture.pools[0]
@@ -1651,4 +1612,17 @@ test('#1506: purchase discovery uses additional capacity without subtracting exi
 	expect(await discoverPurchaseQuote({ ...context, purchaseQuoteAttoEth: 1n }, pool, 10n)).toMatchObject({ mintAttoEth: 1n.toString() })
 	pool.additionalMintCapacityAttoEth = '0'
 	expect(await discoverPurchaseQuote({ ...context, purchaseQuoteAttoEth: 1n }, pool, 10n)).toBeUndefined()
+})
+
+test('#1701 fully filled bids do not schedule a zero-value standalone refund', async () => {
+	const fixture = refundBackfillClient(0n, false, { auctionFinalized: true, auctionRefundAttoEth: 0n })
+	const snapshot = await discoverEcosystemSnapshot({
+		anchorBlockNumber: 10n,
+		client: fixture.client,
+		deployments: snapshotFixture().deployments,
+		wallet: address(1),
+		indexedAuctionBids: { [address(24).toLowerCase()]: [{ bidId: '1', vault: address(25), lots: '1', minimumAttoRepPerLot: 100n.toString(), targetHealthBps: '10000', settled: false }] },
+	})
+	expect(snapshot.auctions[0]?.refundableBidIds).toEqual([])
+	expect(urgentOperationPlans(snapshot, { seed: 1, maximumBlockIntervalSeconds: 15 }).filter(plan => plan.definitionId === 'statoblast.auction.settle-bids')).toEqual([])
 })

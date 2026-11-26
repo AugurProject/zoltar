@@ -185,17 +185,22 @@ test('early refund status enables only crediting then a separate unrestricted wi
 	expect(credit.disabled).toBe(true)
 	// The credited bid can still use the combined path, which only withdraws.
 	expect(claim.disabled).toBe(false)
-	expect(view.container.textContent).toContain('Its collateral refund has been credited for withdrawal')
+	expect(view.container.textContent).toContain('This bid’s refund was settled')
 	expect(view.container.textContent).not.toContain('credited and withdrawn')
 	expect(button(view.container, 'Credit this bid’s refunds')).toBe(credit)
 	expect(button(view.container, 'Credit and withdraw refunds')).toBe(claim)
 	expect(button(view.container, 'Withdraw credited refunds')).toBe(withdraw)
 	fixture.values['refundCreditAttoEth'] = 0n
 	await act(() => button(view.container, 'Refresh auction').click())
-	await waitFor(() => expect(view.container.textContent).toContain('credited and withdrawn'))
+	await waitFor(() => expect(view.container.textContent).toContain('No refund credit remains to withdraw.'))
+	expect(view.container.textContent).toContain('This bid’s refund was settled')
 	expect(withdraw.disabled).toBe(true)
 	expect(claim.disabled).toBe(true)
-	expect(view.container.textContent).toContain('No refund credit remains to withdraw.')
+	fixture.values['refundCreditAttoEth'] = unit
+	await act(() => button(view.container, 'Refresh auction').click())
+	await waitFor(() => expect(withdraw.disabled).toBe(false))
+	expect(view.container.textContent).toContain('This bid’s refund was settled')
+	expect(view.container.textContent).not.toContain('Its collateral refund has been credited for withdrawal')
 })
 
 test.each([

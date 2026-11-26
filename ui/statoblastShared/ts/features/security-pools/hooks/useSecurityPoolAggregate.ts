@@ -1,4 +1,5 @@
 import { capital as transactionCopy, newPriceRequired, poolChanged, refreshingBalances } from '../../../copy/securityPoolTransactions.js'
+import { connectWallet } from '@zoltar/ui-core-shared/copy/common.js'
 import { unsupportedAdmission } from '../../../copy/securityPool.js'
 import { formatCurrencyBalance, formatRoundedCurrencyBalance, formatUnitSuffix } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { useSignal } from '@preact/signals'
@@ -182,10 +183,10 @@ export function useSecurityPoolAggregate(
 		if (preview !== undefined && preview.status !== 'ready') return capitalCopy.waitingForFreeCapacity
 		return undefined
 	}
-	const serveReason = ownerReason ?? inactiveReason ?? retirementReadinessReason()
-	const requireSnapshot = () => {
+	const serveReason = (accountAddress === undefined ? connectWallet : undefined) ?? stateReason ?? inactiveReason ?? retirementReadinessReason()
+	const requireSnapshot = (permissionless = false) => {
 		const current = model.snapshot
-		if (current === undefined || accountAddress === undefined || accountAddress.toLowerCase() !== (current.auctionVault?.bidder ?? current.owner).toLowerCase()) throw new Error(transactionCopy.connectPositionWallet)
+		if (current === undefined || accountAddress === undefined || (!permissionless && accountAddress.toLowerCase() !== (current.auctionVault?.bidder ?? current.owner).toLowerCase())) throw new Error(transactionCopy.connectPositionWallet)
 		return current
 	}
 	const run = (
@@ -202,7 +203,7 @@ export function useSecurityPoolAggregate(
 			title,
 			() => {
 				if (reason !== undefined) throw new Error(reason)
-				const selected = requireSnapshot()
+				const selected = requireSnapshot(action === 'serveSecurityPoolRetirement')
 				const request = build(selected)
 				let freshReviewSnapshot: SecurityPoolCapitalSnapshot | undefined
 				return {
@@ -436,9 +437,10 @@ export function useSecurityPoolAggregate(
 				serveReason,
 				selected => {
 					if (pendingRetirement === undefined) throw new Error(transactionCopy.reductionRequired)
+					if (accountAddress === undefined) throw new Error(connectWallet)
 					return {
-						...buildSecurityPoolCapitalServeRetirementRequest({ ...base(selected), positionId: pendingRetirement.id }),
-						reviewDescription: capitalCopy.releaseReductionReview,
+						...buildSecurityPoolCapitalServeRetirementRequest({ owner: accountAddress, capitalLedger: selected.capitalLedger, positionId: pendingRetirement.id }),
+						reviewDescription: capitalCopy.releaseReductionReview(selected.owner),
 					}
 				},
 				latest => {
@@ -451,7 +453,8 @@ export function useSecurityPoolAggregate(
 				},
 				(latest, collateral) => {
 					const current = latest.positions.find(position => position.id === pendingRetirement?.id)
-					return current === undefined ? [] : [commitmentComparison(collateral, capitalCopy.commitment, current.commitment, current.remainingCommitment)]
+					const label = accountAddress?.toLowerCase() === (snapshot?.auctionVault?.bidder ?? latest.owner).toLowerCase() ? capitalCopy.commitment : capitalCopy.positionCommitment
+					return current === undefined ? [] : [commitmentComparison(collateral, label, current.commitment, current.remainingCommitment)]
 				},
 			),
 		retire: (id: bigint, requestedCommitment = remainingCommitment) =>

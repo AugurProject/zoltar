@@ -53,6 +53,7 @@ export type MigrationWizardInput = {
 	/** Parent-universe REP needs an ERC-20 approval; child-universe REP is burned directly. */
 	requiresApproval: boolean
 	selectedOutcomeIndexes: readonly bigint[]
+	maximumNewMigrationAttoRep?: bigint | undefined
 	walletRepAttoRep: bigint | undefined
 }
 
@@ -164,7 +165,8 @@ export function deriveMigrationWizard(input: MigrationWizardInput): MigrationWiz
 	const canSplitAmount = amountAttoRep !== undefined && reusable !== undefined
 	const walletRepToBurn = canSplitAmount ? maxBigInt(amountAttoRep - reusable, 0n) : undefined
 	const fromMigrationBalance = canSplitAmount ? minBigInt(amountAttoRep, reusable) : undefined
-	const maxAmount = reusable === undefined ? undefined : reusable + (input.walletRepAttoRep ?? 0n)
+	const walletCapacity = input.maximumNewMigrationAttoRep === undefined ? (input.walletRepAttoRep ?? 0n) : minBigInt(input.walletRepAttoRep ?? 0n, input.maximumNewMigrationAttoRep)
+	const maxAmount = reusable === undefined ? undefined : reusable + walletCapacity
 
 	const outcomesStep: MigrationWizardStep = { id: 'outcomes', reason: undefined, status: 'complete' }
 	if (selectedOutcomes.length === 0) {

@@ -48,11 +48,10 @@ export const credit = 'Credit this bid’s refunds'
 export const crediting = 'Crediting bid refunds…'
 export const credited = 'This bid’s refunds are already credited.'
 export const bidMayStillWin = 'This bid may still win. Its collateral remains committed until closing.'
-export const earlyRefundCredited = 'This bid cannot win. Its collateral refund has been credited for withdrawal.'
+export const earlyRefundSettled = 'This bid’s refund was settled. Check your wallet’s total refund credit below.'
 export const claim = 'Credit and withdraw refunds'
 export const claiming = 'Withdrawing bid refunds…'
 export const refundChanged = 'Your refund credit changed. Refresh and review the new amount.'
-export const earlyRefundWithdrawn = 'This bid cannot win. Its collateral refund has been credited and withdrawn.'
 export const claimReview = (quote: { settles: boolean; bidRefundAttoEth: bigint; creditedAttoEth: bigint; totalAttoEth: bigint }, decimals = 18, symbol = 'collateral') => {
 	if (quote.creditedAttoEth === 0n) return `Credit this bid’s ${formatUnits(quote.bidRefundAttoEth, decimals)} ${symbol} refund and withdraw it to your wallet.`
 	if (!quote.settles) return `This bid’s refund is already credited. Withdraw your entire ${formatUnits(quote.totalAttoEth, decimals)} ${symbol} auction refund credit, possibly including your other bids, to your wallet.`

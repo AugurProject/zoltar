@@ -238,6 +238,7 @@ export const invalidDisputeDetails = 'Invalid dispute submission details.'
 
 export const missingInitialReport = 'OpenOracle report is missing its initial report.'
 export const disputeNotReady = 'This report is not ready to dispute.'
+export const newReportAmountTooLarge = 'New report amount exceeds the contract maximum.'
 export const disputeWindowClosed = 'Dispute window closed. Settle report instead.'
 export const settlementCountdown = (duration: string) => `This report can be settled in ${duration} if no disputes occur.`
 export const requiredInput = (label: string) => `${label} is required`

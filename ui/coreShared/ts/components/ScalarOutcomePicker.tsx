@@ -99,6 +99,22 @@ export function ScalarOutcomePicker({ action, details, disabled = false, isInval
 					</label>
 				</div>
 			</div>
+			{!canUseNativeSlider || details.numTicks > details.displayValueMax - details.displayValueMin ? (
+				<label className='field'>
+					{commonCopy.exactTickIndex}
+					<FormInput
+						aria-label={commonCopy.exactTickIndex}
+						inputMode='numeric'
+						disabled={disabled || isInvalid}
+						value={selectedTick}
+						onInput={event => {
+							const tick = tryParseBigIntInput(event.currentTarget.value)
+							onSelectedTickChange(tick !== undefined && tick >= 0n && tick <= details.numTicks ? tick.toString() : '')
+						}}
+					/>
+					<UserMessage placement='field' detail={commonCopy.exactTickRange(details.numTicks)} />
+				</label>
+			) : undefined}
 			<DataGrid className='scalar-slider-stats'>
 				{showMinMax ? <MetricField label={commonCopy.minValue}>{details.minValueLabel}</MetricField> : undefined}
 				<MetricField label={showMinMax ? commonCopy.selectedOutcome : commonCopy.currentValue} valueTagName='span'>
