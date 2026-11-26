@@ -1,3 +1,4 @@
+import { requireCoreFactoryRuntime } from './core-runtime'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { encodeDeployData, keccak256, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
@@ -46,7 +47,7 @@ const chainId = BigInt(chainIdHex)
 requireMatchingChain(coreDeployment.chainId, chainId)
 const manifestChainId = requireSafeChainId(chainId)
 const code = await rpc('eth_getCode', [securityPoolFactory, 'latest'])
-if (typeof code !== 'string' || code === '0x') throw new Error('Configured SecurityPoolFactory has no code on the selected RPC chain')
+await requireCoreFactoryRuntime(coreManifest, code, securityPoolFactory, rpc)
 const accounts = await rpc('eth_accounts', [])
 if (!Array.isArray(accounts) || accounts.length === 0) throw new Error('RPC exposes no unlocked deployment account')
 const deployer = requireAddress(process.env.TRADING_DEPLOYER ?? accounts[0], 'TRADING_DEPLOYER')
@@ -61,7 +62,7 @@ const factoryDeployment = await deploy(deployer, encodeDeployData({ abi: factory
 const routerDeployment = await deploy(deployer, encodeDeployData({ abi: routerArtifact.abi, bytecode: routerArtifact.bytecode, args: [factoryDeployment.address] }))
 const compilerProfiles = isObjectRecord(artifactDocument) ? artifactDocument.compilerProfiles : undefined
 const manifest = {
-	network: { chainId: manifestChainId, chainIdHex, rpcUrl },
+	network: { chainId: manifestChainId, chainIdHex },
 	core: { securityPoolFactory, sourceManifest: path.resolve(coreManifestPath) },
 	trading: { factory: factoryDeployment.address, router: routerDeployment.address, feeBps: manifestFeeBps },
 	transactions: {

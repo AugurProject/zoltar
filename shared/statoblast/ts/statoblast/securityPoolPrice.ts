@@ -1,3 +1,4 @@
+import { toFunctionSelector } from '@zoltar/core-shared/evm/ethereum'
 import { calculateOracleSettlementBountyAttoEth } from '../initialReport/oracleInitialReport.js'
 import { encodeFunctionData, isHex, parseAbi, zeroAddress, type AbiValue, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { SecurityPoolReadClient } from './securityPoolRead.js'
@@ -178,6 +179,7 @@ export function quoteSecurityPoolPriceFunding(snapshot: SecurityPoolPriceSnapsho
 	const required = inventoryWeth > observation.minimumWethAttoEth ? inventoryWeth : observation.minimumWethAttoEth
 	// The feed judges the report against exposure at settlement. Its minimum covers
 	// current exposure; the margin tolerates small growth while independently accepted reports can secure later operations.
+	if (requestedWeth > 0n && requestedWeth < required) throw new Error(`Requested report funding is below the required minimum ${required.toString()}.`)
 	const suggested = requestedWeth === 0n ? required + required / SECURITY_POOL_REPORT_FUNDING_HEADROOM_DIVISOR : requestedWeth
 	const weth = decodeUint(suggested > required ? suggested : required, 'Initial WETH report', 128)
 	const rep = decodeUint((weth * price + 10n ** 18n - 1n) / 10n ** 18n, 'Initial REP report', 128)
@@ -227,9 +229,26 @@ export function buildSecurityPoolPriceOperationsRequest(snapshot: SecurityPoolPr
 	decodeUint(batch.maximumPrice, 'Maximum operation price')
 	decodeUint(batch.deadline, 'Operations deadline', 48)
 	if (batch.deadline <= snapshot.timestamp || batch.minimumPrice > batch.maximumPrice || batch.maximumPrice === 0n || batch.operations.length === 0) throw new Error('Invalid report operation batch.')
+	const supportedSelectors = new Set<string>(
+		parseAbi([
+			'function depositFor(address owner,uint256 amount)',
+			'function depositAndSetHealthTarget(uint256 amount,uint256 targetHealthFactorBps)',
+			'function withdrawPrincipal(uint256 amount,address recipient)',
+			'function setHealthTarget(uint256 targetHealthFactorBps)',
+			'function setCommitment(uint256 commitment) returns (uint96)',
+			'function setCommitmentWithReport(uint256 reportId,uint256 commitment) returns (uint96)',
+			'function serveRetirement(uint96 id)',
+			'function claimEarnings(address recipient)',
+			'function takeOver(uint96 id,uint256 commitment,uint256 minimumTakeoverReward,uint256 maximumOwnRep) returns (uint96)',
+			'function takeOverWithBounds(uint96 id,uint256 commitment,uint256 minimumTakeoverReward,uint256 maximumOwnRep,(uint256 maximumOwnerPrincipal,uint256 maximumOwnerCommitment,uint256 expectedTargetHealthFactorBps,uint256 expectedAcceptedPriceEpoch,uint96 expectedSourceBatch) bounds) returns (uint96)',
+			'function materializeRepairAuctionBid(uint256 bidId)',
+			'function takeOverRepairAuctionBid(uint256 bidId,uint256 commitment,uint256 minimumTakeoverReward,uint256 maximumOwnRep,(uint256 maximumOwnerPrincipal,uint256 maximumOwnerCommitment,uint256 expectedTargetHealthFactorBps,uint256 expectedAcceptedPriceEpoch,uint96 expectedSourceBatch) bounds)',
+		]).map(item => toFunctionSelector(item)),
+	)
 	let requiredGas = 0n
 	for (const operation of batch.operations) {
 		if (decodeUint(operation.gasLimit, 'Operation gas', 32) === 0n || !isHex(operation.data) || operation.data.length < 10 || operation.data.length % 2 !== 0) throw new Error('Invalid report operation.')
+		if (!supportedSelectors.has(operation.data.slice(0, 10).toLowerCase())) throw new Error('Unsupported report operation.')
 		if ((operation.data.length - 2) / 2 > 512) throw new Error('Operation data cannot exceed 512 bytes.')
 		requiredGas += operation.gasLimit + 100_000n
 	}

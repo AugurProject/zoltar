@@ -19,7 +19,7 @@ export async function settleSeededOracleReport({
 	onProgressStep,
 	poolLabel,
 	readClient,
-	requestedInitialAttoWeth = 0n,
+	minimumInitialAttoWeth = 0n,
 	repPerCollateralPrice,
 }: {
 	accountAddress: Address
@@ -28,7 +28,7 @@ export async function settleSeededOracleReport({
 	onProgressStep: (label: string) => Promise<void>
 	poolLabel: string
 	readClient: ReadClient
-	requestedInitialAttoWeth?: bigint
+	minimumInitialAttoWeth?: bigint
 	repPerCollateralPrice?: bigint
 }) {
 	const client = createWriteClient(accountAddress)
@@ -38,13 +38,15 @@ export async function settleSeededOracleReport({
 	if (price.observation === undefined) throw new Error(priceReport.collateralUnavailable)
 	const decimals = Number(await readClient.readContract({ address: price.observation.weth, abi: ABIS.mainnet.erc20, functionName: 'decimals' }))
 	const repPerEth = repPerCollateralPrice ?? (DEFAULT_SIMULATION_REP_PER_ETH_PRICE * 10n ** BigInt(36 - decimals)) / 10n ** 18n
-	const funding = quoteSecurityPoolPriceFunding(price, repPerEth, requestedInitialAttoWeth)
+	// Size the fixture's funding to cover both its scenario target and the current report minimum.
+	const automaticFunding = quoteSecurityPoolPriceFunding(price, repPerEth)
+	const funding = minimumInitialAttoWeth > automaticFunding.weth ? quoteSecurityPoolPriceFunding(price, repPerEth, minimumInitialAttoWeth) : automaticFunding
 	if (funding.wrap > 0n) await sendSecurityPoolTransaction(client, buildSecurityPoolPriceWrapRequest(price, funding.wrap), priceReport.wrapEth)
 	await sendSecurityPoolTransaction(client, buildSecurityPoolPriceApprovalRequest(price, 'weth', funding.weth), priceReport.approveWeth)
 	await onProgressStep(priceReport.funded(poolLabel))
 	await sendSecurityPoolTransaction(client, buildSecurityPoolPriceApprovalRequest(price, 'rep', funding.rep), priceReport.approveRep)
 	price = await load()
-	await sendSecurityPoolTransaction(client, buildSecurityPoolPriceRequest(price, repPerEth, requestedInitialAttoWeth), priceReport.reportPrice)
+	await sendSecurityPoolTransaction(client, buildSecurityPoolPriceRequest(price, repPerEth, funding.weth), priceReport.reportPrice)
 	await onProgressStep(priceReport.opened(poolLabel))
 	price = await load()
 	if (price.observation === undefined || price.observation.pendingReportId === 0n) throw new Error(priceReport.pendingReportUnavailable)

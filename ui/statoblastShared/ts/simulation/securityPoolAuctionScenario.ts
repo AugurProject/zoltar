@@ -78,7 +78,7 @@ export async function seedSecurityPoolAuctionScenario(parameters: ScenarioSeedPa
 	])
 	const now = await getSimulationChainTimestamp(memoryClient)
 	if (BigInt(validUntil) >= now) await advanceSimulationTime(memoryClient, BigInt(validUntil) - now + 1n)
-	const report = await settleSeededOracleReport({ accountAddress: owner, createWriteClient, securityPool, onProgressStep: reportStep, poolLabel: auctionSetup.poolName, readClient, requestedInitialAttoWeth: minimumReport + ceilDiv(4n * 10n * unit, exposureDivider) })
+	const report = await settleSeededOracleReport({ accountAddress: owner, createWriteClient, securityPool, onProgressStep: reportStep, poolLabel: auctionSetup.poolName, readClient, minimumInitialAttoWeth: minimumReport + ceilDiv(4n * 10n * unit, exposureDivider) })
 	await reportStep(auctionSetup.priceOpened)
 	await settleOracleReportIfNeeded({ memoryClient, readClient, writeClient: ownerClient, ...report })
 	await reportStep(auctionSetup.priceChallenged)

@@ -1,3 +1,7 @@
+import { scanExecutionSnapshot } from '../../src/runtime/scan-cycle.ts'
+import { initialRuntimeState } from '../../src/state/operator-state.ts'
+import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
+import { chainFor } from '../../src/monitoring/operator-chain.ts'
 import { expect, test } from 'bun:test'
 import { managedSecurityPoolScopes, securityPoolPositionPage, requireCompleteSecurityPoolExposure } from '../../src/monitoring/security-pool-monitor.ts'
 import { parseSecurityPoolScopes } from '../../src/state/security-pool-scopes.ts'
@@ -257,4 +261,32 @@ test('refuses automatic gas-profit estimates for non-WETH collateral', async () 
 	const fixture = securityPoolClient()
 	fixture.values['collateralToken'] = fixture.settings.deployment.zoltar
 	await expect(loadSecurityPoolObservation(fixture.client, fixture.settings, fixture.observation.snapshot.owner, fixture.observation.nextScope, 123n)).rejects.toThrow('require WETH collateral')
+})
+
+test('#1643 projects passive claimable earnings at the pinned execution block', async () => {
+	const f = securityPoolClient()
+	f.values['projected:ownerAccount'] = { ...f.observation.snapshot.ownerAccount, feesAttoEth: 10n ** 18n }
+	const result = await loadSecurityPoolObservation(f.client, f.settings, f.observation.snapshot.owner, f.observation.nextScope, 123n)
+	expect(result.snapshot.ownerAccount.feesAttoEth).toBe(0n)
+	expect(result.snapshot.accruedFeesAttoEth).toBe(10n ** 18n)
+	expect(f.reads.filter(read => read.functionName === 'checkpoint')).toHaveLength(1)
+	expect(f.reads.every(read => read.blockNumber === 123n)).toBe(true)
+})
+
+test('#1638 failed prospective selections never enter durable managed history', async () => {
+	const f = securityPoolClient()
+	const state = initialRuntimeState(false, f.observation.snapshot.owner, 1)
+	state.securityPoolScopes = [f.observation.nextScope]
+	const original = structuredClone(state.securityPoolScopes)
+	const unsupported = { address: getAddress('0x0000000000000000000000000000000000000099'), universeId: 0n }
+	f.settings.selectedSecurityPools.push(unsupported)
+	f.settings.runtime.execute = false
+	const runtime = { settings: f.settings, client: f.client, readPool: createRpcEndpointPool(['https://read.example']) }
+	await expect(scanExecutionSnapshot(runtime, { state, shutdown: { isRequested: () => false } }, chainFor(f.settings))).rejects.toThrow()
+	expect(state.securityPoolScopes).toEqual(original)
+	// The persisted restart set retains the healthy pool and cannot reintroduce the failed selection.
+	const restarted = parseSecurityPoolScopes(JSON.parse(JSON.stringify(state.securityPoolScopes, (_key, value) => (typeof value === 'bigint' ? value.toString() : value))))
+	f.settings.selectedSecurityPools = [selection]
+	expect(managedSecurityPoolScopes(restarted, f.settings.selectedSecurityPools).map(scope => scope.address)).toEqual([selection.address])
+	await expect(loadSecurityPoolObservation(f.client, f.settings, state.wallet, restarted[0] ?? f.observation.nextScope, 123n)).resolves.toHaveProperty('snapshot')
 })
