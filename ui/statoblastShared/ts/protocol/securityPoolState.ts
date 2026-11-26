@@ -72,8 +72,8 @@ export async function loadCentralSecurityPoolQuestion(client: Pick<ReadClient, '
 	const question = requireTupleValue(questionValue, 2, 'question fee details')
 	const stream = requireObjectValue(question[0], 'question fee state')
 	const state = requireTupleValue(bookStateValue, 16, 'payout status')
-	const feeTime = BigInt(requireIntegerLikeValue(feeTimestampValue, 'native fee timestamp'))
-	const feeEnd = BigInt(requireIntegerLikeValue(Reflect.get(stream, 'feeEnd'), 'native fee end'))
+	const feeTime = BigInt(requireIntegerLikeValue(feeTimestampValue, 'last fee update time'))
+	const feeEnd = BigInt(requireIntegerLikeValue(Reflect.get(stream, 'feeEnd'), 'fee end time'))
 	const feesActive =
 		requireBooleanValue(validValue, 'capital price validity') &&
 		requireBooleanValue(state[11], 'holding fee status') &&
@@ -91,7 +91,7 @@ export async function loadCentralSecurityPoolQuestion(client: Pick<ReadClient, '
 		centralCheckpointTimestamp: requireBigintValue(checkpointValue, 'snapshot block timestamp'),
 		settlementCollateralAttoEth: cash,
 		settlementRecoveryAttoRep: requireBigintValue(Reflect.get(snapshot, 'questionRecoveryAttoRep'), 'question recovery REP'),
-		shareTokenSupplyAttoShares: requireBigintValue(Reflect.get(snapshot, 'outcomeSupplyAttoShares'), 'economic outcome supply'),
+		shareTokenSupplyAttoShares: requireBigintValue(Reflect.get(snapshot, 'outcomeSupplyAttoShares'), 'shares outstanding'),
 		mintingCapacityAttoEth: cash + remainingCapacity,
 		totalPoolHeldAttoRep: requireBigintValue(totals[0], 'total REP'),
 		totalUnderwritingLimitAttoEth: requireBigintValue(totals[1], 'total commitment'),

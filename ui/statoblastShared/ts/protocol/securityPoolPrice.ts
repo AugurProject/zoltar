@@ -123,7 +123,7 @@ export async function loadSecurityPoolPriceReport(client: ReadClient, snapshot: 
 	}
 }
 function releasedCredit(value: unknown) {
-	const amount = requireBigintValue(value, 'report token credit')
+	const amount = requireBigintValue(value, 'report funds available to withdraw')
 	return amount > 1n ? amount - 1n : 0n
 }
 export type SecurityPoolPriceReport = Awaited<ReturnType<typeof loadSecurityPoolPriceReport>>
@@ -217,7 +217,7 @@ export async function loadSecurityPoolPriceFunds(client: Pick<ReadClient, 'multi
 		const collateral = releasedCredit(funding[index * 3 + 1])
 		const rep = releasedCredit(funding[index * 3 + 2])
 		const [amount1, amount2, reporter, , settled, token1, , , , , , token2, , , , , callback] = game
-		if (requireAddressValue(callback, 'report receiver') !== escrow || requireAddressValue(token1, 'report collateral') !== collateralToken || requireAddressValue(token2, 'report REP') !== repToken) throw new Error(priceErrors.reportFundingMismatch)
+		if (requireAddressValue(callback, 'report funding address') !== escrow || requireAddressValue(token1, 'report collateral') !== collateralToken || requireAddressValue(token2, 'report REP') !== repToken) throw new Error(priceErrors.reportFundingMismatch)
 		const locked = BigInt(requireIntegerLikeValue(settled, 'report settlement time')) === 0n && requireAddressValue(reporter, 'current reporter') === escrow && (requireBigintValue(amount1, 'locked collateral') > 0n || requireBigintValue(amount2, 'locked REP') > 0n)
 		return locked || collateral > 0n || rep > 0n ? [{ reportId: id, funder }] : []
 	})
@@ -269,7 +269,7 @@ export function submittedSecurityPoolPriceReport(receipt: Pick<TransactionReceip
 	for (const log of receipt.logs) {
 		if (getAddress(log.address) !== getAddress(feed) || log.topics[0] !== toEventSelector(parseAbiItem('event PriceRequested(uint256 indexed reportId,uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas)'))) continue
 		const decoded = decodeEventLog({ abi, data: log.data, topics: log.topics })
-		if (decoded.eventName === 'PriceRequested') return requireBigintValue(Array.isArray(decoded.args) ? decoded.args[0] : Reflect.get(requireObjectValue(decoded.args, 'price report event'), 'reportId'), 'created report ID')
+		if (decoded.eventName === 'PriceRequested') return requireBigintValue(Array.isArray(decoded.args) ? decoded.args[0] : Reflect.get(requireObjectValue(decoded.args, 'price report creation receipt'), 'reportId'), 'created report ID')
 	}
 	return undefined
 }

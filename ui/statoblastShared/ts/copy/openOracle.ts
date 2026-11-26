@@ -68,7 +68,7 @@ export const formatInsufficientEthToWrap = (required: string, available: string)
 export const formatWrapEthFirst = (amount: string) => `Wrap ${amount} ETH to WETH first.`
 export const wrapEthFailed = 'Failed to wrap ETH'
 export const wrapEthDisputeOnly = 'ETH can only be wrapped for a report that is open to disputes.'
-export const disputeEscalationStopAmountHelpText = 'At this token amount, disputes can continue without multiplying the stake.'
+export const disputeEscalationStopAmountHelpText = 'Disputes can continue past this limit. The multiplier stops applying, and each dispute adds only the smallest unit of the base token to the bond.'
 export const ethSent = 'ETH sent'
 export const formatInitialTokenReportLabel = (tokenSymbol: string) => `Initial ${tokenSymbol} report deposit`
 export const exactToken1Report = 'Base token amount'
@@ -77,7 +77,7 @@ export const identity = 'Identity'
 export const initialEconomics = 'Initial economics'
 export const lastReportOpportunity = 'Last report on opposite clock'
 export const reportLoadRequired = 'Select a report first.'
-export const escalationMultiplierHelpText = 'Below the dispute limit, each dispute multiplies the base stake by this factor. At or above the limit, it adds one raw base-token unit. A zero limit uses that increment from the first dispute.'
+export const escalationMultiplierHelpText = 'Below the dispute limit, each dispute multiplies the base bond by this factor. A zero limit uses the smallest unit of the base token as the increase from the first dispute.'
 export const formatNewAmountMustBeExactDetail = (tokenSymbol: string, amount: string) => `New ${tokenSymbol} amount must be exactly ${amount} for this dispute.`
 export const formatNewAmountRangeDetail = (tokenSymbol: string, minimumAmount: string, maximumAmount: string) => `New ${tokenSymbol} amount must be between ${minimumAmount} and ${maximumAmount} for this dispute.`
 export const oracleBalances = 'Your oracle balances'

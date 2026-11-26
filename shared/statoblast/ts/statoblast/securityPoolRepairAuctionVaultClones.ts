@@ -24,7 +24,7 @@ function word(value: bigint, label: string) {
 
 /** @public The exact code a vault clone carries; external verifiers and fixtures reproduce it from the bindings. */
 export function auctionVaultRuntimeCode(bindings: AuctionVaultBindings): Hex {
-	return concatHex([FORWARDER_PREFIX, address(bindings.implementation, 'Auction position implementation'), FORWARDER_SUFFIX, address(bindings.owner, 'Position owner'), address(bindings.capital, 'Position capital'), address(bindings.auction, 'Position auction'), word(bindings.bidId, 'Auction bid ID')])
+	return concatHex([FORWARDER_PREFIX, address(bindings.implementation, 'Auction position contract template'), FORWARDER_SUFFIX, address(bindings.owner, 'Position owner'), address(bindings.capital, 'Position capital'), address(bindings.auction, 'Position auction'), word(bindings.bidId, 'Auction bid ID')])
 }
 /** @public The CREATE2 init code the auction uses; external tooling derives vault addresses from it. */
 export function auctionVaultCreationCode(bindings: AuctionVaultBindings): Hex {

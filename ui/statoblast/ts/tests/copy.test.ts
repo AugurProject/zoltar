@@ -121,6 +121,14 @@ test.each([
 	'Unexpected fork coordinator response',
 	'Unexpected reporting bootstrap response',
 	'Unexpected fee accrual state response',
+	'Fork controller',
+	'Auction controllers',
+	'Bid escrow',
+	'Auction modules',
+	'Pool services',
+	'Clone code',
+	'Price epochs',
+	'Token bindings',
 ])('rejects the glossary term in %s', message => {
 	expect(glossaryViolation(message)).toBe(true)
 })
@@ -132,13 +140,22 @@ test.each(['Claim deposits', 'Lost, no action needed', 'Full reward share', 'Rep
 const obsoleteCopy =
 	/\bheadrooms?\b|\bdispute growth cutoffs?\b|adds 1 REP|settlement demands?|healthy capacit(?:y|ies)|spare healthy commitments?|(?:above|below|liquidation) boundar(?:y|ies)|conservative (?:health|prices?)|funding recipients?|clear(?:s|ed|ing)? (?:no )?deposits?|settled records?|capital services|commitment index(?:es|ices)?|report candidates?|escrow funders?|admission polic(?:y|ies)|question admissions?|base purchase fees?|resolution premiums?|idle REP|proposed prices?|prices? you propose|requested commitments?|source universes?|source-backed rights?|source recover(?:y|ies)|child preparations?|committed REP|REP\s*\/\s*WETH|\bgwei\b|max rewards?|not deployed|\bcarry (?:lea(?:f|ves)|pages?|nodes?|snapshots?)\b|\b(?:premiums?|books?|bonus(?:es)?|vaults?|repairs?|principals?|sponsors?|callbacks?|charged|retire(?:s|d|ments?)?|retiring|scanners?|liquidators?|escalations?|cohorts?|underwriters?|keepers?)\b/i
 const generalWords = /\b(?:accounts?|requests?|providers?|engines?|ledgers?)\b/i
-const internalTerms = /\b(?:authorit(?:y|ies)|canonical|custody|coordinators?|bootstrap(?:ped|ping|s)?|accruals?|settlement engines?|auction engines?|engine controllers?|question ledgers?)\b/i
+const requiredDeploymentPromptWarning = 'If a deployment request is still open in your wallet, reject it there before starting a new deployment.'
+const internalTerms = /\b(?:authorit(?:y|ies)|canonical|custody|coordinators?|bootstrap(?:ped|ping|s)?|accruals?|settlement engines?|auction engines?|question ledgers?|controllers?|escrows?|modules?|services|clones?|epochs?|bindings?)\b/i
 const fixedMagnitude = /\b(?:\d+(?:[.,]\d+)?|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?:\s*%|[ -]+(?:percent|seconds?|minutes?|hours?|days?|weeks?|months?|years?)\b)/i
 
 function glossaryViolation(text: string, banGeneralWords = true) {
 	const depositSettlement = /\bdeposits?\b/i.test(text) && depositSettlementWord.test(text)
-	return obsoleteCopy.test(text.replace(/\brepair auction\b/gi, '')) || internalTerms.test(text) || (banGeneralWords && generalWords.test(text)) || depositSettlement || fixedMagnitude.test(text)
+	return obsoleteCopy.test(text.replace(/\brepair auction\b/gi, '')) || internalTerms.test(text) || (banGeneralWords && generalWords.test(text.replace(requiredDeploymentPromptWarning, ''))) || depositSettlement || fixedMagnitude.test(text)
 }
+
+test('keeps the approved deployment warning while banning other uses of request', () => {
+	expect(glossaryViolation(`No deployment was found. ${requiredDeploymentPromptWarning}`)).toBe(false)
+	expect(glossaryViolation(`Send another request. ${requiredDeploymentPromptWarning}`)).toBe(true)
+	const file = 'ui/statoblastShared/ts/copy/securityPoolTransactions.ts'
+	const source = ts.createSourceFile(file, `const warning = ${JSON.stringify(requiredDeploymentPromptWarning)}`, ts.ScriptTarget.Latest, true)
+	expect(findViolations(source)).toEqual([])
+})
 
 const machineFields = new Set(['abi', 'className', 'data-testid', 'download', 'errorName', 'eventName', 'functionName', 'href', 'id', 'key', 'kind', 'method', 'role', 'style', 'testId', 'transportMode', 'type'])
 const abiBuilders = new Set(['parseAbi', 'parseAbiItem', 'parseAbiParameters'])
@@ -151,6 +168,7 @@ const machineArguments = new Map([
 	['securityPoolPriceAction', 1],
 	['read', 1],
 	['setReadTransportMode', 0],
+	['verifyModule', 6],
 ])
 const abiParameterType = /^(?:address|bool|bytes(?:[0-9]+)?|string|u?int(?:[0-9]+)?|tuple)(?:\[[0-9]*\])*$/
 const storedRecordReaders = new Set(['address', 'bigint', 'boolean', 'hex', 'number', 'optional', 'record', 'string'])
@@ -226,7 +244,10 @@ function isMachineText(node: ts.Node, file: string) {
 			if (abiBuilders.has(expression) || expression === 'Symbol' || /^console\.(?:debug|error|info|log|warn)$/.test(expression) || parent.expression.kind === ts.SyntaxKind.ImportKeyword) return true
 			if (matchOperations.has(name) && parent.arguments[0] === current) return true
 			if (parent.arguments[machineArguments.get(expression) ?? machineArguments.get(name) ?? -1] === current) return true
-			if (expression.startsWith('read.') && storedRecordReaders.has(name) && parent.arguments[0] === current) return true
+			if (storedRecordReaders.has(name) && parent.arguments[0] === current) {
+				if (expression.startsWith('read.')) return true
+				if (ts.findAncestor(parent, ancestor => ts.isCallExpression(ancestor) && ancestor.expression.getText() === 'decodeStoredValue') !== undefined) return true
+			}
 		}
 		if (ts.isStringLiteralLike(node) && (/^(?:PRODID:)/.test(node.text) || /^(?:[\w.-]+\/)*[\w.-]+\.(?:html|ics)$/.test(node.text))) return true
 		// Once a literal becomes a full expression, only its own role is relevant. For example, a literal in a JSX ternary still renders.
@@ -235,24 +256,69 @@ function isMachineText(node: ts.Node, file: string) {
 	return false
 }
 
-function concatenatedText(node: ts.Node): string | undefined {
+function priorConstInitializer(node: ts.Identifier): ts.Expression | undefined {
+	for (let scope = node.parent; scope !== undefined; scope = scope.parent) {
+		if (ts.isFunctionLike(scope) && scope.parameters.some(parameter => ts.isIdentifier(parameter.name) && parameter.name.text === node.text)) return undefined
+		if (!ts.isBlock(scope) && !ts.isSourceFile(scope) && !ts.isModuleBlock(scope)) continue
+		for (const statement of scope.statements) {
+			if (!ts.isVariableStatement(statement)) continue
+			const { declarations, flags } = statement.declarationList
+			const declaration = declarations.find(({ name }) => ts.isIdentifier(name) && name.text === node.text)
+			if (declaration === undefined) continue
+			if ((flags & ts.NodeFlags.Const) === 0 || statement.pos >= node.pos) return undefined
+			return declaration.initializer
+		}
+	}
+	return undefined
+}
+
+function compoundText(node: ts.Node, seen = new Set<ts.Node>()): string | undefined {
+	if (seen.has(node)) return undefined
+	const next = new Set(seen).add(node)
 	if (ts.isStringLiteralLike(node)) return node.text
-	if (ts.isParenthesizedExpression(node)) return concatenatedText(node.expression)
-	if (!ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.PlusToken) return undefined
-	const left = concatenatedText(node.left)
-	const right = concatenatedText(node.right)
-	return left === undefined || right === undefined ? undefined : left + right
+	if (ts.isParenthesizedExpression(node)) return compoundText(node.expression, next)
+	if (ts.isIdentifier(node)) {
+		const initializer = priorConstInitializer(node)
+		return initializer === undefined ? undefined : compoundText(initializer, next)
+	}
+	if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+		const left = compoundText(node.left, next)
+		const right = compoundText(node.right, next)
+		return left === undefined || right === undefined ? undefined : left + right
+	}
+	if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) return undefined
+	const { expression: receiver, name } = node.expression
+	if (name.text === 'concat') {
+		const parts = [receiver, ...node.arguments].map(part => compoundText(part, next))
+		return parts.some(part => part === undefined) ? undefined : parts.join('')
+	}
+	if (name.text !== 'join' || !ts.isArrayLiteralExpression(receiver) || node.arguments.length > 1) return undefined
+	const separatorArg = node.arguments[0]
+	const separator = separatorArg === undefined ? ',' : compoundText(separatorArg, next)
+	const parts = receiver.elements.map(part => compoundText(part, next))
+	return separator === undefined || parts.some(part => part === undefined) ? undefined : parts.join(separator)
+}
+
+function isResponseLabel(node: ts.Node) {
+	const call = node.parent
+	if (!ts.isCallExpression(call) || call.arguments.at(-1) !== node) return false
+	const target = call.expression
+	const name = ts.isPropertyAccessExpression(target) ? target.name : target
+	return ts.isIdentifier(name) && /^require(?:(?:Address|Array|Bigint|Boolean|IntegerLike|Object|Tuple)Value|BigintArray)$/.test(name.text)
 }
 
 function findViolations(source: ts.SourceFile, file = source.fileName) {
 	const violations: string[] = []
 	const visit = (node: ts.Node) => {
-		const joined = ts.isBinaryExpression(node) ? concatenatedText(node) : undefined
+		const joined = ts.isBinaryExpression(node) || ts.isCallExpression(node) ? compoundText(node) : undefined
+		const responseLabel = isResponseLabel(node)
 		// Check static fragments together and visit template substitutions independently.
 		let text = joined
 		if (ts.isTemplateExpression(node)) text = [node.head.text, ...node.templateSpans.map(span => span.literal.text)].join(' ')
 		else if (ts.isStringLiteralLike(node) || ts.isJsxText(node)) text = node.text
-		if (text !== undefined && !isMachineText(node, file) && glossaryViolation(text, appliesGeneralWordBan(node, file))) {
+		else if (responseLabel && text === undefined) text = compoundText(node)
+		const capitalizedLabel = responseLabel && text !== undefined && /^[A-Z][a-z]/.test(text.trimStart())
+		if (text !== undefined && !isMachineText(node, file) && (capitalizedLabel || glossaryViolation(text, appliesGeneralWordBan(node, file)))) {
 			const { line } = source.getLineAndCharacterOfPosition(node.getStart(source))
 			violations.push(`${file}:${line + 1} ${text.replace(/\s+/g, ' ').trim()}`)
 		}
@@ -289,11 +355,30 @@ test.each([
 	["formatOpenOracleSettleWriteErrorMessage(error, 'Settle deposits')", 'Settle deposits'],
 	["const message = 'Settle ' + 'deposits'", 'Settle deposits'],
 	["const message = ('Set' + 'tle ') + ('depos' + 'its')", 'Settle deposits'],
+	["const message = ['Settle', 'deposits'].join(' ')", 'Settle deposits'],
+	["const message = ['Set', 'tle ', 'deposits'].join('')", 'Settle deposits'],
+	["const message = 'Set'.concat('tle ', 'deposits')", 'Settle deposits'],
+	["const prefix = 'Settle '; const message = prefix + 'deposits'", 'Settle deposits'],
+	["requireAddressValue(value, 'Collateral token')", 'Collateral token'],
+	["requireTupleValue(value, 2, 'Mint capacity')", 'Mint capacity'],
+	["const head = 'Collateral'; requireAddressValue(value, head + ' token')", 'Collateral token'],
 	['const message = `The ${type} ledger failed`', 'The ledger failed'],
 ])('finds reserved product wording in %s', (fixture, message) => {
 	const file = 'ui/statoblast/ts/fixtures/copy.tsx'
 	const source = ts.createSourceFile(file, fixture, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
 	expect(findViolations(source)).toEqual([`${file}:1 ${message}`])
+})
+
+test('allows lower-case response labels and protocol acronyms', () => {
+	const fixture = "requireAddressValue(value, 'collateral token'); requireBigintValue(value, 'REP balance'); requireTupleValue(value, 2, 'mint capacity')"
+	const source = ts.createSourceFile('ui/statoblastShared/ts/protocol/fixture.ts', fixture, ts.ScriptTarget.Latest, true)
+	expect(findViolations(source)).toEqual([])
+})
+
+test('resolves a const prefix within its own scope', () => {
+	const fixture = "const prefix = 'Settle '; { const prefix = 'Claim '; publish(prefix + 'deposits') }"
+	const source = ts.createSourceFile('ui/statoblast/ts/fixtures/copy.tsx', fixture, ts.ScriptTarget.Latest, true)
+	expect(findViolations(source)).toEqual([])
 })
 
 test('allows Zoltar-only general wording while keeping shared internal terms banned', () => {

@@ -7,6 +7,8 @@ import * as common from '@zoltar/ui-core-shared/copy/common.js'
 import * as copy from '../../../copy/securityPoolTakeover.js'
 import type { LiquidationHealth, LiquidationTarget } from '../hooks/useLiquidationTarget.js'
 
+const fullHealthMeterScaleBps = 10_000n
+
 export type LiquidationPositionRow = {
 	id: string
 	position: Pick<LiquidationTarget['position'], 'owner' | 'rep' | 'commitment'> | undefined
@@ -36,7 +38,7 @@ export function LiquidationPositionsTable({ rows, selected, collateral, disabled
 					{rows.map(row => {
 						const selectedRow = selected?.toString() === row.id
 						const health = row.health
-						const scale = health !== undefined && health.threshold > 10_000n ? health.threshold : 10_000n
+						const scale = health !== undefined && health.threshold > fullHealthMeterScaleBps ? health.threshold : fullHealthMeterScaleBps
 						return (
 							<tr key={row.id} role='row' data-selected={selectedRow || undefined} tabIndex={-1}>
 								<th scope='row' role='rowheader'>

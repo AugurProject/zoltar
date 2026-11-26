@@ -55,6 +55,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 	const error = useSignal<string | undefined>(undefined)
 	const lastFailedAction = useSignal<string | undefined>(undefined)
 	const feedback = useSignal<string | undefined>(undefined)
+	const coordinationReason = journal.coordinationReason()
 	const snapshot = model.snapshot
 	const universeId = snapshot?.universeId ?? securityPoolUnsignedId(model.universeInput, 248) ?? 0n
 	const scope = mergeTransactionScopes(createTransactionScope('securityPool', snapshot?.securityPool ?? model.setup?.securityPool), createTransactionScope('security-pool-capital', snapshot?.capitalLedger))
@@ -224,8 +225,15 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 					const commonCallbacks = { reviewSignal: context.reviewSignal, onTransactionPrepared: parameters.onTransactionPrepared, onTransactionSubmitted: parameters.onTransactionSubmitted }
 					if (!deploying || deploymentStep === undefined) return await sendSecurityPoolTransaction(createWalletWriteClient(account, commonCallbacks), request, label, validate)
 
+					const coordinationReason = journal.coordinationReason()
+					if (coordinationReason !== undefined) throw new Error(coordinationReason)
 					const reader = createReviewReadClient()
-					const initialFactoryCount = deploymentStep === 'pool' ? await readSecurityPoolCreationCount(reader, account).catch(() => undefined) : undefined
+					const initialFactoryCount =
+						deploymentStep === 'pool'
+							? await readSecurityPoolCreationCount(reader, account).catch(cause => {
+									throw new Error(deploymentCopy.factoryCountUnavailable, { cause })
+								})
+							: undefined
 					const nonce = (await supportsDeploymentNonce(reader, account)) ? await reader.getTransactionCount({ address: account, blockTag: 'pending' }) : undefined
 					const validateDeployment = async () => {
 						await request.validateBeforeSubmit?.()
@@ -417,8 +425,8 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		setEconomicsField: (field: keyof SecurityPoolCreationDraft, value: string) => updateDraft({ economicsDraft: { ...draftInput.value.economicsDraft, [field]: value } }),
 		admissionAddress: admission?.address,
 		creationError,
-		admissionDeployReason: walletReason ?? (admission === undefined ? pendingDeploymentReason : undefined) ?? creationError ?? (origin === undefined ? copy.enterOrigin : undefined) ?? originForkReason ?? (admission !== undefined ? copy.admissionDeployed : undefined),
-		deployReason: walletReason ?? pendingDeploymentReason ?? creationError ?? (origin === undefined ? copy.enterOrigin : undefined) ?? originForkReason ?? deploymentStatus,
+		admissionDeployReason: walletReason ?? (admission === undefined ? (pendingDeploymentReason ?? coordinationReason) : undefined) ?? creationError ?? (origin === undefined ? copy.enterOrigin : undefined) ?? originForkReason ?? (admission !== undefined ? copy.admissionDeployed : undefined),
+		deployReason: walletReason ?? pendingDeploymentReason ?? coordinationReason ?? creationError ?? (origin === undefined ? copy.enterOrigin : undefined) ?? originForkReason ?? deploymentStatus,
 		deployAdmission: async () => {
 			let captured: { key: string; universeId: bigint } | undefined
 			await run(

@@ -147,7 +147,7 @@ export const withdrawToken = (symbol: string) => `Return released ${symbol}`
 export const withdrawingToken = (symbol: string) => `Returning released ${symbol}…`
 export const withdrawalRecipient = 'Single-token recipient'
 export const withdrawalRecipientHint = 'Leave blank to return funds to the original funder.'
-export const invalidWithdrawalRecipient = 'Enter a valid recipient address other than the report escrow.'
+export const invalidWithdrawalRecipient = 'Enter a valid recipient address other than the report funding address.'
 export const withdrawalRecipientRequiresFunder = 'Only the original funder can send funds to a different address.'
 export const reportFunderChanged = 'The report funder changed. Refresh and review it again.'
 export const tokenWithdrawalReview = (symbol: string, recipient: string) => `Send released ${symbol} to ${recipient}.`

@@ -56,13 +56,13 @@ type ReportingBootstrapReadResult = {
 function requireReportingBootstrapReadResult(value: unknown): ReportingBootstrapReadResult {
 	const [questionId, escalationGameAddress, settlementCollateralAttoEth, universeId, zoltarAddress, initialEscalationGameDepositAttoRep, systemStateValue, questionOutcomeValue, parentQuestionLedgerAddress] = requireTupleValue(value, 9, 'question reporting details')
 	return {
-		questionId: requireBigintValue(questionId, 'reporting question id'),
+		questionId: requireBigintValue(questionId, 'question ID'),
 		escalationGameAddress: requireAddressValue(escalationGameAddress, 'reporting game address'),
-		settlementCollateralAttoEth: requireBigintValue(settlementCollateralAttoEth, 'reporting complete set collateral amount'),
-		universeId: requireBigintValue(universeId, 'reporting universe id'),
-		zoltarAddress: requireAddressValue(zoltarAddress, 'reporting zoltar address'),
+		settlementCollateralAttoEth: requireBigintValue(settlementCollateralAttoEth, 'collateral held for this question'),
+		universeId: requireBigintValue(universeId, 'reporting universe ID'),
+		zoltarAddress: requireAddressValue(zoltarAddress, 'protocol contract for reporting'),
 		initialEscalationGameDepositAttoRep: requireBigintValue(initialEscalationGameDepositAttoRep, 'minimum first report'),
-		systemStateValue: requireIntegerLikeValue(systemStateValue, 'reporting system state'),
+		systemStateValue: requireIntegerLikeValue(systemStateValue, 'reporting status'),
 		questionOutcomeValue: requireIntegerLikeValue(questionOutcomeValue, 'reporting question outcome'),
 		parentQuestionLedgerAddress: requireAddressValue(parentQuestionLedgerAddress, 'parent question contract for reporting'),
 	}

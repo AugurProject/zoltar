@@ -125,9 +125,9 @@ export async function verifyCapitalModuleClone(client: ReadClient, address: Addr
 }
 
 export async function verifyCapitalLedgerClone(client: ReadClient, securityPool: Address, ledger: Address, universeId: bigint, repToken: Address, blockNumber: bigint) {
-	const implementation = requireAddressValue(await client.readContract({ address: securityPool, abi: linksAbi, functionName: 'capitalImplementation', blockNumber }), 'capital implementation')
+	const implementation = requireAddressValue(await client.readContract({ address: securityPool, abi: linksAbi, functionName: 'capitalImplementation', blockNumber }), 'capital contract template')
 	const expected = boundCloneRuntimeCode(implementation, universeCloneBindings(universeId, repToken))
-	await Promise.all([verifyModule(client, implementation, capitalArtifact, securityPool, 'capital implementation', blockNumber), client.getCode({ address: ledger, blockNumber }).then(code => verifyBoundCloneCode(code, expected, 'capital contract'))])
+	await Promise.all([verifyModule(client, implementation, capitalArtifact, securityPool, 'capital contract template', blockNumber), client.getCode({ address: ledger, blockNumber }).then(code => verifyBoundCloneCode(code, expected, 'capital contract'))])
 }
 
 /**
@@ -214,13 +214,13 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 		client.readContract({ address: snapshot.capitalLedger, abi: linksAbi, functionName: 'repairAuctionDelegate', blockNumber }),
 		client.readContract({ address: securityPool, abi: linksAbi, functionName: 'repairAuctionDeployer', blockNumber }),
 	])
-	const feeStreams = requireAddressValue(feeStreamsValue, 'fee streams')
+	const feeStreams = requireAddressValue(feeStreamsValue, 'pool fees contract')
 	const lifecycle = requireAddressValue(lifecycleValue, 'pool setup contract')
 	const repairAuctionDelegate = requireAddressValue(auctionDelegateValue, 'pool auction contract')
 	const infrastructure = getInfraContractAddresses()
 	if (getAddress(factory) !== getAddress(infrastructure.securityPoolFactory) || getAddress(zoltar) !== getAddress(infrastructure.zoltar)) throw new Error(poolErrors.protocolMismatch)
 	if (getAddress(requireAddressValue(auctionDeployerValue, 'auction deployer')) !== getAddress(infrastructure.securityPoolRepairAuctionDeployer)) throw new Error(poolErrors.auctionContractMismatch)
-	if (requireAddressValue(capitalServicesValue, 'pool service address') !== getAddress(services)) throw new Error(poolErrors.poolServicesMismatch)
+	if (requireAddressValue(capitalServicesValue, 'pool operations address') !== getAddress(services)) throw new Error(poolErrors.poolServicesMismatch)
 	if (requireAddressValue(capitalForkValue, 'fork settings for pool capital') !== getAddress(forkController)) throw new Error(poolErrors.poolForkMismatch)
 	const start = questionStart > questionCount ? 0n : questionStart
 	// Other contract accounts remain readable, but gain no auction-owner authority:
@@ -252,13 +252,13 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 		verifyModule(client, lifecycle, lifecycleArtifact, lifecycle, 'pool setup contract', blockNumber, 'implementation'),
 		verifyModule(client, repairAuctionDelegate, auctionDelegateArtifact, repairAuctionDelegate, 'pool auction contract', blockNumber, 'implementation'),
 		verifyCapitalModuleClone(client, snapshot.commitmentIndex, indexArtifact, snapshot.capitalLedger, 'pool capacity contract', blockNumber),
-		verifyCapitalModuleClone(client, feeStreams, feesArtifact, snapshot.capitalLedger, 'capital fee streams', blockNumber),
+		verifyCapitalModuleClone(client, feeStreams, feesArtifact, snapshot.capitalLedger, 'pool fees contract', blockNumber),
 		verifyModule(client, settlement, settlementArtifact, securityPool, 'payout contract', blockNumber),
 		verifyModule(client, book, bookArtifact, settlement, 'payout records', blockNumber),
 		verifyModule(client, reporters, reporterArtifact, securityPool, 'reporting contract', blockNumber),
 		verifyModule(client, quoteHelper, purchaseArtifact, securityPool, 'security pool purchase helper', blockNumber),
 		verifyModule(client, forkController, forkArtifact, securityPool, 'fork contract', blockNumber),
-		verifyModule(client, services, servicesArtifact, securityPool, 'security pool services', blockNumber),
+		verifyModule(client, services, servicesArtifact, securityPool, 'pool operations contract', blockNumber),
 		verifyModule(client, premium, premiumArtifact, services, 'reporting fees contract', blockNumber, 'services'),
 	])
 	const [capitalUniverse, capitalProtocol, reporterProtocol, forkProtocol, canonicalRep] = await Promise.all([
@@ -268,7 +268,7 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 		client.readContract({ address: forkController, abi: linksAbi, functionName: 'zoltar', blockNumber }),
 		client.readContract({ address: zoltar, abi: linksAbi, functionName: 'getRepToken', args: [universeId], blockNumber }),
 	])
-	if (requireBigintValue(capitalUniverse, 'capital universe') !== universeId || requireAddressValue(canonicalRep, 'REP token for this pool') !== snapshot.repToken || [capitalProtocol, reporterProtocol, forkProtocol].some(value => requireAddressValue(value, 'module protocol') !== getAddress(zoltar)))
+	if (requireBigintValue(capitalUniverse, 'capital universe') !== universeId || requireAddressValue(canonicalRep, 'pool REP token') !== snapshot.repToken || [capitalProtocol, reporterProtocol, forkProtocol].some(value => requireAddressValue(value, 'linked protocol contract') !== getAddress(zoltar)))
 		throw new Error(poolErrors.modulesMismatch)
 
 	const [block, chainId] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])

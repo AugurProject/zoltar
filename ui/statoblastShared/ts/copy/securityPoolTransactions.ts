@@ -3,6 +3,7 @@ export const newPriceRequired = 'A new accepted REP price is required.'
 export const loadPoolFailed = 'Unable to load this security pool position.'
 export const poolChanged = 'Security pool context changed. Review again.'
 export const relatedLinkSeparator = ' · '
+export const openDeploymentPromptWarning = 'If a deployment request is still open in your wallet, reject it there before starting a new deployment.'
 
 export const deployment = {
 	positionReview: (description: string, position: string, wallet: string) => `${description} The auction position is ${position}. Returned collateral, ETH and REP go to ${wallet}.`,
@@ -16,28 +17,32 @@ export const deployment = {
 	collateralUnavailable: 'This collateral token is unavailable on the selected network.',
 	reportStakeRequired: (decimals: number) => `Enter a positive minimum report stake with up to ${decimals} decimal places.`,
 	poolAddressUnavailable: 'Security pool deployment address unavailable.',
-	receiptPending: 'Check your wallet activity, then check for the deployment receipt again.',
+	receiptPending: 'Check your wallet activity, then check again for the deployment receipt.',
 	receiptCheckFailed: 'Could not check the deployment status. Try again.',
 	historyUnavailable: 'This RPC can’t check older blocks. Switch to an archive RPC or check your wallet activity.',
-	walletSendUncertain: 'Waiting for the wallet',
+	walletSendUncertain: 'Waiting for the wallet. The deployment may still be open in your wallet. Open your wallet to confirm or reject it, then check again.',
+	walletTransactionPending: 'The earlier transaction is still pending. Check your wallet activity, then check again.',
 	walletNonceUnavailable: 'Check your wallet activity. This older deployment was saved before Statoblast could track its progress.',
 	walletRecoveryUnsupported: 'Statoblast can’t tell whether your wallet sent the earlier transaction. Check your wallet activity before starting a new deployment.',
 	missingDeploymentTransaction: 'No deployment transaction or receipt was found. Check your wallet activity before starting a new deployment.',
 	droppedDeploymentTransaction: (nonce: bigint) => `If your wallet no longer shows this transaction, send or cancel a transaction with nonce ${nonce}, then check again.`,
 	walletFinalityPending: `Earlier transactions from this wallet are still pending or not yet final. Speed up or cancel them in your wallet, or wait about ${15} minutes, then check again.`,
 	rulesNonceScanLimit: 'Statoblast checked a limited range of wallet transactions. Check your wallet activity before starting a new deployment.',
+	rulesRecoveryIncomplete: 'Statoblast checked a limited range of wallet transactions. Check your wallet activity, then check again.',
 	transactionDidNotDeploy: 'The earlier transaction did not deploy this step. Start a new deployment to continue.',
 	coordinationUnavailable: 'This browser cannot coordinate deployment across tabs. Open this page in a browser that supports Web Locks.',
+	progressWriteFailed: 'Could not save deployment progress. Free up browser storage or check its permissions, then try again.',
+	factoryCountUnavailable: 'Could not check previous security pool deployments. Try the deployment again.',
 	walletRejected: 'I rejected it in my wallet',
 	confirmWalletRejection: 'Did you reject this transaction in your wallet? Statoblast will check the chain before unlocking this step.',
 	walletActivityChanged: 'Wallet activity changed. Close this review and start it again.',
-	restartAvailable: 'The previous deployment did not confirm. Start a new deployment to continue.',
+	restartAvailable: `No deployment was found. ${openDeploymentPromptWarning}`,
 	progressUnavailable: 'Keep this tab open. Your browser is blocking storage, so setup cannot resume after a reload.',
 	rulesChanged: 'The saved question rules changed. Reopen this page before deploying.',
 	setupClosed: 'The origin universe has forked. Setup is closed.',
 	stageComplete: 'This setup stage is complete.',
 	previousStageRequired: 'Complete the previous setup stage first.',
-	prepareModules: 'Prepare security pool modules',
+	prepareModules: 'Prepare security pool contracts',
 	nextStageRequired: 'Refresh and select the next setup stage.',
 	invalidPercentage: (label: string) => `${label} must be a nonnegative percentage with at most two decimal places.`,
 	invalidCollateral: (decimals: number) => `Enter a nonnegative amount with up to ${decimals} decimal places.`,
@@ -54,7 +59,7 @@ export const deployment = {
 	reviewDurationExact: (days: string, seconds: bigint) => `${days} (${seconds} seconds)`,
 	reviewBacking: (multiplier: string, minimumPerShare: string) => `Security multiplier ${multiplier}%. Minimum backing per share ${minimumPerShare}.`,
 	reviewPriceReport: (minimumStake: string, priorityFee: string) => `Minimum price-report stake ${minimumStake}. Price-report priority fee ${priorityFee} nanoETH/gas.`,
-	prepareModulesReview: (stage: number, total: number) => `Complete setup stage ${stage} of ${total}. This deploys more pool modules without moving funds.`,
+	prepareModulesReview: (stage: number, total: number) => `Complete setup stage ${stage} of ${total}. This deploys more pool contracts without moving funds.`,
 	stageChanged: 'Setup advanced. Refresh and review again.',
 }
 

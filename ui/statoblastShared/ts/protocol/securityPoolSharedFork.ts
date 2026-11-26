@@ -41,7 +41,7 @@ export async function loadSecurityPoolSourceRecovery(client: ReadClient, snapsho
 	const source = requireAddressValue(sourceValue, 'parent question contract used for reporting')
 	if (source === zeroAddress) throw new Error(forkErrors.questionUnregistered)
 	const shareTokenValue = await client.readContract({ address: source, abi, functionName: 'shareToken', blockNumber })
-	const shareToken = requireAddressValue(shareTokenValue, 'source shares')
+	const shareToken = requireAddressValue(shareTokenValue, 'parent universe shares')
 	const [rightsValue, eligibleValue] = await Promise.all([
 		client.readContract({ address: shareToken, abi, functionName: 'balanceOfSecurityPoolRecoveryRights', args: [snapshot.universeId, snapshot.owner], blockNumber }),
 		client.readContract({ address: shareToken, abi, functionName: 'isSecurityPoolRecoveryEligible', args: [snapshot.universeId], blockNumber }),

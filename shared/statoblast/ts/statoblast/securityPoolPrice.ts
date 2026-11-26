@@ -70,7 +70,7 @@ export async function loadSecurityPoolPriceSnapshot(parameters: { client: PriceR
 	const feed = decodeAddress(feedValue, 'Security pool price feed', true)
 	const reportingOpen = decodeBool(openValue, 'Reporting window must be a boolean.')
 	const [questionPage, factoryProtocol, registeredFeed, repValue] = await Promise.all([read(securityPool, 'getQuestions', [0n, 1n]), read(factory, 'zoltar'), read(factory, 'sharedPriceFeeds', [securityPool, universeId]), read(zoltar, 'getRepToken', [universeId])])
-	if (decodeAddress(factoryProtocol, 'Factory protocol') !== zoltar || decodeAddress(registeredFeed, 'Registered price feed', true) !== feed) throw new Error('Security pool price identities do not match.')
+	if (decodeAddress(factoryProtocol, 'Pool factory’s protocol address') !== zoltar || decodeAddress(registeredFeed, 'Registered price feed', true) !== feed) throw new Error('Security pool price identities do not match.')
 	if (!Array.isArray(questionPage) || questionPage.length > 1) throw new Error('Invalid security pool preparation source page.')
 	let sourcePool: Address | undefined
 	if (questionPage.length === 1) {
@@ -105,7 +105,7 @@ export async function loadSecurityPoolPriceSnapshot(parameters: { client: PriceR
 		| undefined
 	if (feed !== zeroAddress) {
 		const [authority, feedFactory, feedUniverse, feedRep, wethValue, oracleValue] = await Promise.all([read(feed, 'securityPool'), read(feed, 'securityPoolFactory'), read(feed, 'universeId'), read(feed, 'reputationToken'), read(feed, 'collateralToken'), read(feed, 'openOracle')])
-		if (decodeAddress(authority, 'Feed security pool') !== securityPool || decodeAddress(feedFactory, 'Feed factory') !== factory || decodeUint(feedUniverse, 'Feed universe', 248) !== universeId || decodeAddress(feedRep, 'Feed REP') !== repToken) throw new Error('Price feed belongs to another security pool or branch.')
+		if (decodeAddress(authority, 'Feed security pool') !== securityPool || decodeAddress(feedFactory, 'Price feed’s pool factory') !== factory || decodeUint(feedUniverse, 'Feed universe', 248) !== universeId || decodeAddress(feedRep, 'Feed REP') !== repToken) throw new Error('Price feed belongs to another security pool or branch.')
 		const weth = decodeAddress(wethValue, 'Collateral')
 		const wrappedNative = decodeAddress(await read(feed, 'weth'), 'Wrapped native token')
 		const openOracle = decodeAddress(oracleValue, 'OpenOracle')

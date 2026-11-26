@@ -54,7 +54,7 @@ test('encodes independent funding withdrawals to the sponsor or a sponsor-select
 	expect(decodeFunctionData({ abi, data: rep.data })).toEqual({ functionName: 'withdrawTokenFunding', args: [token, owner] })
 	expect(decodeFunctionData({ abi, data: collateral.data })).toEqual({ functionName: 'withdrawTokenFunding', args: [priceWeth, securityPool] })
 	expect(() => buildSecurityPoolPriceTokenWithdrawal({ ...snapshot, owner: securityPool }, report, 'rep', securityPool)).toThrow('Only the original funder can send funds to a different address.')
-	expect(() => buildSecurityPoolPriceTokenWithdrawal(snapshot, report, 'rep', priceEscrow)).toThrow('Enter a valid recipient address other than the report escrow.')
+	expect(() => buildSecurityPoolPriceTokenWithdrawal(snapshot, report, 'rep', priceEscrow)).toThrow('Enter a valid recipient address other than the report funding address.')
 })
 test.each(['escrow', 'token', 'callback', 'stored flags', 'time flag', 'state hash', 'block hash'])('report authentication rejects mismatched %s', async mismatch => {
 	const fixture = priceFixture()

@@ -276,7 +276,7 @@ test('the wizard checks the wallet nonce again before accepting a hashless rejec
 		const restored = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolActionsWrapper, { model: model(), deploying: true }))
 		await waitFor(() => expect(restored.state().checkingDeploymentReceipt).toBe(false))
 		expect(restored.state().pendingDeployment?.hash).toBeUndefined()
-		expect(restored.state().admissionDeployReason).toBe('Waiting for the wallet')
+		expect(restored.state().admissionDeployReason).toMatch(/^Waiting for the wallet\. .*confirm or reject/)
 		inMempool = true
 		await act(() => restored.state().confirmWalletRejection())
 		expect(restored.state().deploymentLocked).toBe(true)
@@ -366,7 +366,7 @@ test.each(['Hardware wallet disconnected', 'User rejected request'])('an ambiguo
 	})
 	expect(hook.state().pendingDeployment).toMatchObject({ step: 'rules', nonce: '0' })
 	expect(hook.state().pendingDeployment?.hash).toBeUndefined()
-	expect(hook.state().admissionDeployReason).toBe('Waiting for the wallet')
+	expect(hook.state().admissionDeployReason).toMatch(/^Waiting for the wallet\. .*confirm or reject/)
 	expect(hook.state().canStartNewDeployment).toBe(false)
 })
 
@@ -386,7 +386,7 @@ test('a spent nonce cannot unlock a restart or a rejection escape while the wall
 	outstanding = false
 	await act(() => hook.state().refreshDeploymentProgress())
 	expect(hook.state().canStartNewDeployment).toBe(true)
-	expect(hook.state().admissionDeployReason).toContain('Start a new deployment')
+	expect(hook.state().admissionDeployReason).toContain('reject it there before starting a new deployment.')
 	outstanding = true
 	await act(async () => expect(await hook.state().startNewDeployment()).toBe(false))
 	expect(hook.state().deploymentLocked).toBe(true)
@@ -419,14 +419,19 @@ test('a known deployment hash uses the nonce of its transaction instead of the s
 	expect(hook.state().canStartNewDeployment).toBe(true)
 })
 
-test('a known deployment hash with no receipt or transaction can restart after the wallet is idle', async () => {
+test('a known deployment hash with no receipt or transaction stays locked until the confirmed nonce is spent', async () => {
 	const source = capitalClient()
 	saveDeploymentMarker(source, { step: 'rules', hash: mockTransactionHash, nonce: '9' })
+	let count = 2n
 	const { hook } = await renderWithDeploymentWallet(source, true, {
-		chain: () => ({ getTransactionCount: async () => 2n }),
+		chain: () => ({ getTransactionCount: async () => count }),
 	})
-	await waitFor(() => expect(hook.state().canStartNewDeployment).toBe(true))
+	await waitFor(() => expect(hook.state().checkingDeploymentReceipt).toBe(false))
+	expect(hook.state().canStartNewDeployment).toBe(false)
 	expect(hook.state().admissionDeployReason).toContain('Check your wallet activity')
+	count = 10n
+	await act(() => hook.state().refreshDeploymentProgress())
+	expect(hook.state().canStartNewDeployment).toBe(true)
 	await act(async () => expect(await hook.state().startNewDeployment()).toBe(true))
 	expect(hook.state().deploymentLocked).toBe(false)
 })
@@ -562,6 +567,74 @@ test('two wizard tabs wait for the same deployment lock before either can send',
 	expect(requests).toHaveLength(1)
 })
 
+test.each(['quota', 'ignored'] as const)('readable storage must save the deployment marker before the wallet opens (%s)', async failure => {
+	const storage = window.localStorage
+	const descriptor = Object.getOwnPropertyDescriptor(window, 'localStorage')
+	let canWrite = false
+	Object.defineProperty(window, 'localStorage', {
+		configurable: true,
+		value: {
+			getItem: (key: string) => storage.getItem(key),
+			setItem: (key: string, value: string) => {
+				if (canWrite) storage.setItem(key, value)
+				else if (failure === 'quota') throw new DOMException('Storage quota exceeded', 'QuotaExceededError')
+			},
+			removeItem: (key: string) => storage.removeItem(key),
+		},
+	})
+	try {
+		const source = capitalClient()
+		const backend = failure === 'quota' ? { ...source.backend, profile: { ...source.backend.profile, genesisRepTokenAddress: capital } } : source.backend
+		const { hook, requests } = await renderWithDeploymentWallet({ ...source, backend }, true)
+		await act(() => hook.state().deployAdmission())
+		expect(requests).toHaveLength(0)
+		expect(hook.state().error).toBe('Could not save deployment progress. Free up browser storage or check its permissions, then try again.')
+		expect(hook.state().pendingDeployment).toBeUndefined()
+		expect(hook.state().deploymentProgressPersistent).toBe(true)
+		canWrite = true
+		await act(() => hook.state().deployAdmission())
+		expect(requests).toHaveLength(1)
+		expect(hook.state().admissionAddress).toBe(token)
+	} finally {
+		if (descriptor !== undefined) Object.defineProperty(window, 'localStorage', descriptor)
+		else Reflect.deleteProperty(window, 'localStorage')
+	}
+})
+
+test('a browser without Web Locks shows a deployment blocker before review', async () => {
+	Object.defineProperty(window.navigator, 'locks', { configurable: true, value: undefined })
+	const source = capitalClient()
+	const { hook, requests } = await renderWithDeploymentWallet(source, true)
+	const reason = 'This browser cannot coordinate deployment across tabs. Open this page in a browser that supports Web Locks.'
+	expect(hook.state().admissionDeployReason).toBe(reason)
+	expect(hook.state().deployReason).toBe(reason)
+	await act(() => hook.state().deployAdmission())
+	expect(hook.state().error).toBe(reason)
+	expect(requests).toHaveLength(0)
+})
+
+test('a failed deployment count read prevents a pool send and can be retried', async () => {
+	let canReadCount = false
+	const { hook, requests } = await renderWithDeploymentWallet(capitalClient(), true, {
+		chain: () => ({
+			getStorageAt: async () => {
+				if (!canReadCount) throw new Error('RPC unavailable')
+				return '0x0'
+			},
+		}),
+	})
+	await act(() => hook.state().deployAdmission())
+	expect(requests).toHaveLength(1)
+	await act(() => hook.state().deploy())
+	expect(requests).toHaveLength(1)
+	expect(hook.state().error).toBe('Could not check previous security pool deployments. Try the deployment again.')
+	expect(hook.state().pendingDeployment).toBeUndefined()
+	canReadCount = true
+	await act(() => hook.state().deploy())
+	expect(requests).toHaveLength(2)
+	expect(hook.state().error).toBeUndefined()
+})
+
 test('the wizard can finish deployment without persistent storage', async () => {
 	const descriptor = Object.getOwnPropertyDescriptor(window, 'localStorage')
 	const wallet = createDeferred<void>()
@@ -676,7 +749,7 @@ test('a saved deployment hash does not keep the wizard locked after a different 
 })
 
 for (const poolExists of [false, true]) {
-	test(`pool deployment recovery uses confirmed state when ${poolExists ? 'the pool exists' : 'no pool was created'}`, async () => {
+	test(`pool deployment recovery checks a hash invisible to the RPC when ${poolExists ? 'the replacement deployed the pool' : 'no pool was created'}`, async () => {
 		const receipt = createDeferred<void>()
 		let consumed = false
 		const source = capitalClient()
@@ -684,6 +757,9 @@ for (const poolExists of [false, true]) {
 			wallet: Promise.resolve(),
 			receipt: receipt.promise,
 			chain: () => ({
+				getTransaction: async ({ hash }) => {
+					throw new TransactionLookupNotFoundError('transaction', hash)
+				},
 				getTransactionCount: async () => (consumed ? 2n : 1n),
 				getStorageAt: async () => (consumed && poolExists ? '0x1' : '0x0'),
 			}),
@@ -695,6 +771,7 @@ for (const poolExists of [false, true]) {
 				sending = hook.state().deploy()
 			})
 			await waitFor(() => expect(hook.state().pendingDeployment?.hash).toBe(mockTransactionHash))
+			expect(hook.state().pendingDeployment?.nonceVerified).not.toBe(true)
 			await act(() => hook.cleanup())
 			const load = mock(async (_pool?: string) => undefined)
 			const restored = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolActionsWrapper, { model: { ...model(), load }, deploying: true }))

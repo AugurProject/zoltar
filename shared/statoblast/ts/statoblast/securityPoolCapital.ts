@@ -250,7 +250,7 @@ export function buildSecurityPoolCapitalTakeOverWithBoundsRequest(parameters: Ca
 		positive(parameters.commitment, 'Takeover commitment'),
 		decodeUint(parameters.minimumTakeoverReward, 'Minimum takeover reward'),
 		decodeUint(parameters.maximumOwnRep, 'Maximum own REP'),
-		[decodeUint(bounds.maximumOwnerPrincipal, 'Maximum pledged REP'), decodeUint(bounds.maximumOwnerCommitment, 'Maximum owner commitment'), expectedTargetHealthFactorBps, decodeUint(bounds.expectedAcceptedPriceEpoch, 'Expected price epoch'), decodeUint(bounds.expectedSourceBatch, 'Expected queue group', 96)],
+		[decodeUint(bounds.maximumOwnerPrincipal, 'Maximum pledged REP'), decodeUint(bounds.maximumOwnerCommitment, 'Maximum owner commitment'), expectedTargetHealthFactorBps, decodeUint(bounds.expectedAcceptedPriceEpoch, 'Expected price update ID'), decodeUint(bounds.expectedSourceBatch, 'Expected queue group', 96)],
 	])
 }
 
@@ -370,8 +370,8 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 	)
 	const forkTime = decodeUint(forkTimeValue, 'Fork time')
 	const forkChoiceDeadline = decodeUint(choiceDeadlineValue, 'Fork choice deadline')
-	const isExported = decodeBool(exported, 'Exported owner must be a boolean.')
-	const isImporting = decodeBool(importing, 'Import phase must be a boolean.')
+	const isExported = decodeBool(exported, 'Invalid position migration status.')
+	const isImporting = decodeBool(importing, 'Invalid incoming migration status.')
 	const [finalChain, finalBlock] = await Promise.all([client.getChainId(), client.getBlock({ blockNumber })])
 	if (finalChain !== chainId || finalBlock.hash !== block.hash) throw new Error('Chain changed while reading capital. Refresh and try again.')
 	return {
@@ -404,7 +404,7 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 		nextBatch: decodeUint(next, 'Next queue group', 96),
 		forkTime,
 		forkChoiceDeadline,
-		frozen: decodeBool(frozen, 'Frozen capital must be a boolean.'),
+		frozen: decodeBool(frozen, 'Invalid capital freeze status.'),
 		importing: isImporting,
 		exported: isExported,
 		ownerAccount: account,

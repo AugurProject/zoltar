@@ -985,7 +985,7 @@ describe('reporting protocol client', () => {
 			}),
 		})
 
-		await expect(buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [1n])).rejects.toThrow('Unexpected parent deposit index response')
+		await expect(buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [1n])).rejects.toThrow('Unexpected parent deposit ID response')
 	})
 
 	test('buildForkCarriedEscalationProofs requires the forkContinuation getter', async () => {

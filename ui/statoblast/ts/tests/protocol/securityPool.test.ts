@@ -77,14 +77,14 @@ test('a genuine capital ledger cannot nominate an unrelated fork authority', asy
 	fixture.setRead('forkAuthority', modules.engine)
 	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('The capital contract is linked to a different fork contract')
 })
-test('capital accounting must use the security pool services authority', async () => {
+test('capital accounting must use the pool operations contract', async () => {
 	const fixture = capitalClient()
 	fixture.setRead('services', modules.engine, capital)
-	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('The capital contract is linked to different pool services')
+	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('The capital contract is linked to a different pool operations contract')
 })
 
 for (const [module, label] of [
-	[modules.services, 'security pool services'],
+	[modules.services, 'pool operations contract'],
 	[modules.premium, 'reporting fees contract'],
 ] as const) {
 	test(`unrecognized ${label} code blocks security pool approval`, async () => {

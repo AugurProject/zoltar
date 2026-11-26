@@ -240,7 +240,6 @@ export function SecurityPoolDeployment({ actions, model }: { actions: SecurityPo
 	const canCheckPending = pending !== undefined && actions.busy === undefined
 	let restartConfirmation = pageCopy.deployDiscardConfirmation
 	if (pending !== undefined) restartConfirmation = pending.step === 'pool' ? pageCopy.deployRetryConfirmation : pageCopy.deployRecoveryConfirmation
-	const checkPendingLabel = pending?.hash === undefined ? pageCopy.deployCheckAgain : pageCopy.deployCheckReceipt
 	return (
 		<>
 			<nav className='statoblast-breadcrumbs' aria-label={pageCopy.breadcrumbs}>
@@ -285,7 +284,7 @@ export function SecurityPoolDeployment({ actions, model }: { actions: SecurityPo
 						{canCheckPending && (
 							<div className='actions'>
 								<button type='button' className='secondary' disabled={actions.checkingDeploymentReceipt} onClick={() => void actions.refreshDeploymentProgress()}>
-									{actions.checkingDeploymentReceipt ? pageCopy.deployCheckingReceipt : checkPendingLabel}
+									{actions.checkingDeploymentReceipt ? pageCopy.deployCheckingReceipt : pageCopy.deployCheckAgain}
 								</button>
 								{pending.hash === undefined && pending.nonce !== undefined && !actions.canStartNewDeployment && (
 									<button

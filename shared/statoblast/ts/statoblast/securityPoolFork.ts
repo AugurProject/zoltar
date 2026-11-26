@@ -84,7 +84,7 @@ export async function loadSecurityPoolForkSnapshot(parameters: { client: Securit
 		read(controller, 'forks', [universeId]),
 		read(controller, 'choices', [universeId, owner]),
 	])
-	if (address(authority) !== securityPool || address(protocol) !== zoltar) throw new Error('Fork controller belongs to a different security pool.')
+	if (address(authority) !== securityPool || address(protocol) !== zoltar) throw new Error('The fork contract belongs to a different security pool.')
 	const f = decodeFields(forkValue, ['backing', 'commitment', 'cash', 'units', 'recoveryAttoRep', 'assignedCash', 'neutralCash', 'recoveredUnits', 'frozen', 'recoveryFunded', 'migrationPrepared'], 'Invalid security pool fork response.')
 	const c = decodeFields(choiceValue, ['outcome', 'recorded'], 'Invalid security pool fork response.')
 	const fork = {

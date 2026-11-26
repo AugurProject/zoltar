@@ -101,7 +101,7 @@ export async function loadTradingDetails(client: ReadClient, questionLedgerAddre
  */
 export async function requireCanonicalSecurityPoolOf(client: Pick<ReadClient, 'readContract'>, factory: Address, pool: Address, blockNumber?: bigint) {
 	const block = blockNumber === undefined ? {} : { blockNumber }
-	const securityPool = getAddress(requireAddressValue(await client.readContract({ address: factory, abi: purchaseAbi, functionName: 'securityPoolOf', args: [pool], ...block }), 'SecurityPool'))
+	const securityPool = getAddress(requireAddressValue(await client.readContract({ address: factory, abi: purchaseAbi, functionName: 'securityPoolOf', args: [pool], ...block }), 'security pool'))
 	if (securityPool === zeroAddress) throw new Error(questionErrors.poolMissing)
 	if ((await client.readContract({ address: factory, abi: purchaseAbi, functionName: 'isSecurityPool', args: [securityPool], ...block })) !== true) throw new Error(shareErrors.mintPoolUnverified)
 	return securityPool
@@ -111,8 +111,8 @@ async function loadTradingCollateralIdentity(client: Pick<ReadClient, 'readContr
 	const factory = await client.readContract({ address: pool, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'securityPoolFactory', blockNumber })
 	const securityPool = await requireCanonicalSecurityPoolOf(client, factory, pool, blockNumber)
 	const [tokenValue, servicesValue] = await Promise.all([client.readContract({ address: securityPool, abi: purchaseAbi, functionName: 'collateralToken', blockNumber }), client.readContract({ address: securityPool, abi: purchaseAbi, functionName: 'services', blockNumber })])
-	const token = requireAddressValue(tokenValue, 'Collateral token')
-	const services = requireAddressValue(servicesValue, 'Collateral spender')
+	const token = requireAddressValue(tokenValue, 'collateral token')
+	const services = requireAddressValue(servicesValue, 'collateral approval address')
 	return { ...collateralPresentation(token), token, services, securityPool }
 }
 
@@ -143,7 +143,7 @@ function mintSharesCall(questionLedger: Address, amount: bigint) {
 
 async function readMintShares(client: Pick<ReadClient, 'multicall'>, questionLedger: Address, amount: bigint, blockNumber?: bigint) {
 	const [, shares] = await readRequiredMulticall(client, [mintFeeCheckpoint(questionLedger), mintSharesCall(questionLedger, amount)] as const, blockNumber)
-	return requireBigintValue(shares, 'Minted shares')
+	return requireBigintValue(shares, 'minted shares')
 }
 
 function mintQuoteCalls({ securityPool, universeId, questionId }: TradingCollateral, questionLedger: Address, amount: bigint) {
@@ -157,12 +157,12 @@ function mintCapacityCall({ securityPool, universeId }: TradingCollateral) {
 export async function quoteTradingCollateral(client: ReadClient, collateral: TradingCollateral, questionLedger: Address, amount: bigint, onRecoveryRequirement?: (required: bigint) => void) {
 	const { securityPool, universeId } = collateral
 	const [, result, recoveryValue, shares, capacity] = await readRequiredMulticall(client, [mintFeeCheckpoint(questionLedger), ...mintQuoteCalls(collateral, questionLedger, amount), mintCapacityCall(collateral)] as const)
-	const required = requireBigintValue(recoveryValue, 'Recovery REP contribution')
+	const required = requireBigintValue(recoveryValue, 'recovery REP contribution')
 	onRecoveryRequirement?.(required)
 	const recovery = await loadRecoveryMintFunding(client, securityPool, universeId, collateral.owner, required)
 	if (!Array.isArray(result) || typeof result[0] !== 'bigint') throw new Error(shareErrors.feeQuote)
 	const fee = result[0]
-	return { amount, fee, shares, capacity: requireBigintValue(capacity, 'Mint capacity'), recovery, ...defaultMintLimits(fee, shares) }
+	return { amount, fee, shares, capacity: requireBigintValue(capacity, 'mint capacity'), recovery, ...defaultMintLimits(fee, shares) }
 }
 
 type MintCandidate = { amount: bigint; fee: bigint; shares: bigint; recoveryAttoRep: bigint }
@@ -183,7 +183,7 @@ export async function loadMaximumTradingMintAmount(client: ReadClient, collatera
 	const blockNumber = (await client.getBlock()).number
 	if (blockNumber === undefined) throw new Error(maximumMintAmountUnavailable)
 	const [wallet, capacity] = await readRequiredMulticall(client, [{ address: collateral.token, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [collateral.owner] }, mintCapacityCall(collateral)] as const, blockNumber)
-	const maximum = getMinBigintValue([wallet, requireBigintValue(capacity, 'Mint capacity')]) ?? 0n
+	const maximum = getMinBigintValue([wallet, requireBigintValue(capacity, 'mint capacity')]) ?? 0n
 	if (maximum === 0n) return undefined
 	const quote = (amounts: bigint[]) => readMintCandidates(client, collateral, questionLedger, blockNumber, amounts)
 	const [initial] = await quote([maximum])
@@ -413,7 +413,7 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 		const fee = quoted[0]
 		if (typeof capacity !== 'bigint' || capacity < amount) throw new Error(insufficientMintCapacity)
 		if (typeof fee !== 'bigint' || fee < 0n) throw new Error(shareErrors.purchaseQuote)
-		return { fee, capacity, recoveryAttoRep: requireBigintValue(recoveryValue, 'Recovery REP contribution') }
+		return { fee, capacity, recoveryAttoRep: requireBigintValue(recoveryValue, 'recovery REP contribution') }
 	}
 	const collateral = await loadTradingCollateral(client, questionLedgerAddress, client.account.address)
 	const quoted = await quote()

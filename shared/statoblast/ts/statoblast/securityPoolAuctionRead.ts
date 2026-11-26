@@ -94,13 +94,13 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 		read(securityPool, 'priceFeed', [universeId]),
 		read(securityPool, 'collateralToken'),
 	])
-	const controller = decodeAddress(controllerValue, 'Fork controller')
+	const controller = decodeAddress(controllerValue, 'Fork contract')
 	const zoltar = decodeAddress(protocolValue, 'Protocol')
 	const factory = decodeAddress(factoryValue, 'Factory')
 	const capitalLedger = decodeAddress(capitalValue, 'Capital contract', true)
 	const priceFeed = decodeAddress(feedValue, 'Price feed', true)
 	const [authorityValue, controllerProtocol, auctionValue, tokenValue, forkTimeValue] = await Promise.all([read(controller, 'securityPool'), read(controller, 'zoltar'), read(controller, 'repairAuctions', [universeId]), read(zoltar, 'getRepToken', [universeId]), read(zoltar, 'getForkTime', [universeId])])
-	if (decodeAddress(authorityValue, 'Security pool linked to the fork') !== securityPool || decodeAddress(controllerProtocol, 'Fork protocol') !== zoltar) throw new Error('Auction fork controller belongs to another security pool.')
+	if (decodeAddress(authorityValue, 'Security pool linked to the fork') !== securityPool || decodeAddress(controllerProtocol, 'Fork protocol') !== zoltar) throw new Error('The fork contract for this auction belongs to another security pool.')
 	const auctionAddress = decodeAddress(auctionValue, 'Auction', true)
 	const repToken = decodeAddress(tokenValue, 'Branch REP', true)
 	const collateralToken = decodeAddress(collateralValue, 'Collateral token')
@@ -173,7 +173,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 		)
 			throw new Error('Auction identities do not match the selected branch.')
 		const engine = decodeAddress(engineValue, 'Auction bidding contract')
-		const vaultImplementation = decodeAddress(implementationValue, 'Auction position implementation')
+		const vaultImplementation = decodeAddress(implementationValue, 'Auction position contract template')
 		const opened = decodeBool(openedValue, 'Invalid auction state.')
 		const finalized = decodeBool(finalizedValue, 'Invalid auction state.')
 		const [engineController, initialized, engineFinalized, maximum, admissible, deposited, count, bidCredit] = await Promise.all([
@@ -186,7 +186,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			read(engine, 'bidderBidCount', [bidder]),
 			read(engine, 'refundCreditAttoEth', [bidder]),
 		])
-		if (decodeAddress(engineController, 'Auction controller address') !== auctionAddress || decodeBool(initialized, 'Invalid auction state.') !== opened || decodeBool(engineFinalized, 'Invalid auction state.') !== finalized) throw new Error('The auction status or contract address does not match this branch.')
+		if (decodeAddress(engineController, 'Auction contract address') !== auctionAddress || decodeBool(initialized, 'Invalid auction state.') !== opened || decodeBool(engineFinalized, 'Invalid auction state.') !== finalized) throw new Error('The auction status or contract address does not match this branch.')
 		const terms = {
 			address: auctionAddress,
 			engine,
@@ -204,7 +204,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			securityMultiplierBps: decodeUint(multiplier, 'Security multiplier'),
 			maximumBidAttoRepPerLot: decodeUint(maximum, 'Maximum bid REP per lot'),
 			maximumAdmissibleBidAttoRepPerLot: decodeUint(admissible, 'Highest admissible bid REP per lot'),
-			depositedAttoEth: decodeUint(deposited, 'Bid escrow'),
+			depositedAttoEth: decodeUint(deposited, 'Bid collateral'),
 			refundAttoEth: decodeUint(bidCredit, 'Bid refund'),
 		}
 		if (terms.lotAttoEth === 0n || terms.repGrid === 0n || terms.targetLots !== (terms.shortfallAttoEth + terms.lotAttoEth - 1n) / terms.lotAttoEth) throw new Error('Invalid auction lot configuration.')
@@ -224,7 +224,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 		const start = bidStart > totalBidCount ? totalBidCount : bidStart
 		const remaining = totalBidCount - start
 		const size = Number(remaining < BigInt(pageSize) ? remaining : BigInt(pageSize))
-		const bids = await Promise.all(Array.from({ length: size }, (_, offset) => readBid(decodeUint(start + BigInt(offset), 'Bid index'))))
+		const bids = await Promise.all(Array.from({ length: size }, (_, offset) => readBid(decodeUint(start + BigInt(offset), 'Bid ID'))))
 		let clearing: { attoRepPerLot: bigint; filledLots: bigint; raisedAttoEth: bigint; soldAttoRep: bigint; raiseLimitReached: boolean } | undefined
 		if (opened && finalized) {
 			const result = decodeFields(await read(engine, 'clearing'), ['attoRepPerLot', 'filledLots', 'raisedAttoEth', 'soldAttoRep', 'marginalMinimumAttoRepPerLot', 'marginalFillLots', 'marginalDemandLots', 'fullBeforeLots', 'raiseLimitReached'], 'Invalid auction response.')

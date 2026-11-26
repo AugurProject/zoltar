@@ -84,13 +84,20 @@ export function deploymentProgressJournal(profile: NetworkProfile, owner: Addres
 		const raw = storage?.getItem(key)
 		return raw === null || raw === storage?.getItem(discardedKey) ? undefined : raw
 	}
-	const read = () => {
-		if (memoryJournals.has(key)) return memoryJournals.get(key)?.value
+	const readStored = () => {
 		try {
 			const raw = readRaw()
 			return raw === undefined ? undefined : decodeProgress(raw)
 		} catch (error) {
 			if (error instanceof SyntaxError) return undefined
+			throw error
+		}
+	}
+	const read = () => {
+		if (memoryJournals.has(key)) return memoryJournals.get(key)?.value
+		try {
+			return readStored()
+		} catch (error) {
 			if (!(error instanceof DOMException)) throw error
 			rememberInTab()
 			return current.value
@@ -112,23 +119,46 @@ export function deploymentProgressJournal(profile: NetworkProfile, owner: Addres
 		if (memory !== undefined) memory.value = progress
 		current.value = progress
 	}
+	const canSkipCoordination = () => persistence === 'session' || storage === undefined || memoryJournals.has(key)
+	const coordinationReason = () => (!canSkipCoordination() && navigator.locks === undefined ? copy.coordinationUnavailable : undefined)
 	const coordinate = async <Result>(operation: () => Result): Promise<Result> => {
 		// Simulations run independently in separate tabs and use session storage.
-		if (persistence === 'session' || storage === undefined || memoryJournals.has(key)) return operation()
+		if (canSkipCoordination()) return operation()
 		if (navigator.locks === undefined) throw new Error(copy.coordinationUnavailable)
 		return await navigator.locks.request(key, operation)
+	}
+	const requireStorage = <Result>(operation: () => Result): Result => {
+		try {
+			return operation()
+		} catch (error) {
+			if (!(error instanceof DOMException)) throw error
+			throw new Error(copy.progressWriteFailed, { cause: error })
+		}
 	}
 	return {
 		current,
 		restored,
 		persistenceUnavailable,
 		read,
-		claim: (create: (latest: DeploymentProgress | undefined) => DeploymentProgress) =>
-			coordinate(() => {
-				const latest = read()
+		coordinationReason,
+		claim: (create: (latest: DeploymentProgress | undefined) => DeploymentProgress) => {
+			const durableStorage = memoryJournals.has(key) ? undefined : storage
+			return coordinate(() => {
+				const latest = durableStorage === undefined ? read() : requireStorage(readStored)
 				current.value = latest
-				write(create(latest))
-			}),
+				const progress = create(latest)
+				if (durableStorage === undefined) {
+					write(progress)
+					return
+				}
+				const raw = JSON.stringify(progress)
+				requireStorage(() => {
+					durableStorage.setItem(key, raw)
+					if (readRaw() !== raw) throw new Error(copy.progressWriteFailed)
+				})
+				current.value = progress
+			})
+		},
 		restart: (expected: DeploymentProgress) =>
 			coordinate(() => {
 				const replacement = expected.pending?.step === 'pool' && expected.rules !== undefined && expected.pool === undefined ? { ...expected, pending: undefined } : undefined

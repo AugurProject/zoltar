@@ -1231,7 +1231,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.getByText(openOracleCopy.settlerRewardHelpText)).not.toBeNull()
 		expect(documentQueries.queryByText('Fee charged during dispute economics, entered as a percentage.')).toBeNull()
 		expect(documentQueries.queryByText('Delay in seconds after the initial report before settlement can begin.')).toBeNull()
-		expect(documentQueries.getByText('At this token amount, disputes can continue without multiplying the stake.')).not.toBeNull()
+		expect(documentQueries.getByText('Disputes can continue past this limit. The multiplier stops applying, and each dispute adds only the smallest unit of the base token to the bond.')).not.toBeNull()
 		expect(documentQueries.getByText('Parameter details')).not.toBeNull()
 		expect(documentQueries.queryByText('Delay in seconds after the initial report before disputes can begin.')).toBeNull()
 		expect(documentQueries.queryByText('Protocol fee charged during disputes, entered as a percentage.')).toBeNull()

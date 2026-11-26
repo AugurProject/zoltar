@@ -408,7 +408,7 @@ export async function loadOpenOracleWithdrawableBalances(client: Pick<ReadClient
 				functionName: 'tokenHolder',
 				args: [holder, token],
 			}),
-			'OpenOracle token holder balance',
+			'token balance in OpenOracle',
 		)
 	const balances = new Map<string, Promise<bigint>>()
 	const uniqueBalance = (token: Address) => {

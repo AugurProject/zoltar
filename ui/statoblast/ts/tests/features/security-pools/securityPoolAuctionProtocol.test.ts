@@ -112,7 +112,7 @@ test('vault binding rejects another owner, fork route, initial ledger, bid or co
 	for (const address of [vault, auction, engine, capital, modules.capitalImplementation, implementation, modules.fork, modules.lifecycle, modules.repairAuctionDelegate, index, modules.indexImplementation, modules.fees, modules.feesImplementation, modules.services]) {
 		const source = fixture()
 		source.source.codes.set(address, '0x6000')
-		await expect(authenticateSecurityPoolAuctionVault(source.client, securityPool, vault, 10n)).rejects.toThrow(/^(?:Could not verify the .* code\.|Could not verify the auction position contract\.|Unrecognized .* (?:runtime code|clone runtime or bindings)\.)$/)
+		await expect(authenticateSecurityPoolAuctionVault(source.client, securityPool, vault, 10n)).rejects.toThrow(/^(?:Could not verify the .* code\.|Could not verify the auction position contract\.|Unrecognized .* runtime code\.|Could not verify the code or linked addresses for the .*\.)$/)
 	}
 	// Counterfeit clones: another implementation, foreign bindings, or a clone at the wrong address.
 	for (const [code, reason] of [

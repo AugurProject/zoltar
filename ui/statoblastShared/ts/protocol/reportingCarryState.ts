@@ -94,7 +94,7 @@ function requireHistoricalCarryNode(value: unknown, sourceNodeId: bigint, outcom
 			carryLeafIndex: requireBigintValue(carryLeafIndex, 'recorded deposit position'),
 			cumulativeAmountAttoRep: requireBigintValue(cumulativeAmountAttoRep, 'recorded deposit total'),
 			depositor: requireAddressValue(depositor, 'recorded deposit owner'),
-			parentDepositIndex: requireBigintValue(parentDepositIndex, 'parent deposit index'),
+			parentDepositIndex: requireBigintValue(parentDepositIndex, 'parent deposit ID'),
 			sourceNodeId,
 		},
 		parentNodeId: requireBigintValue(parentNodeId, 'previous deposit ID'),
@@ -172,8 +172,8 @@ async function loadProofConsumedCarriedDepositIndexes(client: Pick<ReadClient, '
 				functionName: 'getProofConsumedCarriedDepositIndexesByOutcome',
 				args: [getReportingOutcomeValue(outcome), startIndex, CONTRACT_PAGE_SIZE],
 			}),
-			'consumed carried deposit index page',
-		).map(item => requireBigintValue(item, 'claimed inherited deposit index'))
+			'claimed inherited deposit IDs',
+		).map(item => requireBigintValue(item, 'claimed inherited deposit ID'))
 		parentDepositIndexes.push(...page)
 		if (BigInt(page.length) !== CONTRACT_PAGE_SIZE) break
 		startIndex += CONTRACT_PAGE_SIZE
@@ -289,7 +289,7 @@ function decodeFrozenParent(value: unknown): FrozenParentSnapshot | undefined {
 				if (!isStoredRecord(entry) || typeof entry['leafHash'] !== 'string' || !isHex(entry['leafHash'], { strict: true }) || entry['leafHash'].length !== 66) throw new Error(reportErrors.invalidSavedDeposit)
 				return { leaf: requireCarryLeafView(entry['leaf'], 'saved parent history'), leafHash: `0x${entry['leafHash'].slice(2)}` as const }
 			}),
-			consumed: value['consumed'].map(index => requireBigintValue(index, 'saved claimed deposit index')),
+			consumed: value['consumed'].map(index => requireBigintValue(index, 'saved claimed deposit ID')),
 		}
 	} catch (error) {
 		if (error instanceof Error) return undefined

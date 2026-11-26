@@ -44,14 +44,19 @@ async function readSpentNonceHead(client: ConfirmationClient, owner: Address, no
 	return transactionCount > nonce ? { number: head.number, hash: head.hash, transactionCount } : undefined
 }
 
-export async function readDeploymentNonce(client: Pick<ReadClient, 'getTransaction'>, owner: Address, hash: Hash) {
+export async function readDeploymentTransaction(client: Pick<ReadClient, 'getTransaction'>, hash: Hash) {
 	try {
 		const transaction = await client.getTransaction({ hash })
-		if (transaction.hash.toLowerCase() === hash.toLowerCase() && transaction.from.toLowerCase() === owner.toLowerCase()) return transaction.nonce.toString()
+		return transaction.hash.toLowerCase() === hash.toLowerCase() ? transaction : undefined
 	} catch (error) {
 		if (!(error instanceof TransactionLookupNotFoundError) || error.kind !== 'transaction') throw error
 	}
 	return undefined
+}
+
+export async function readDeploymentNonce(client: Pick<ReadClient, 'getTransaction'>, owner: Address, hash: Hash) {
+	const transaction = await readDeploymentTransaction(client, hash)
+	return transaction?.from.toLowerCase() === owner.toLowerCase() ? transaction.nonce.toString() : undefined
 }
 
 export async function matchesQuestionRules(client: Pick<ReadClient, 'getCode' | 'readContract'>, address: Address, mode: CuratedAdmissionMode, universeId: bigint, ids: readonly bigint[], blockNumber?: bigint) {

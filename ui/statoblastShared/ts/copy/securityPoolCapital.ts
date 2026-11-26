@@ -82,7 +82,7 @@ export const prepareTitle = 'Complete security pool setup'
 export const prepareHint = 'Each stage is one transaction with bounded deployment work. Until the origin universe forks, anyone can resume setup before deposits and purchases open.'
 export const prepareStages = ['Set up claims & redemption', 'Set up reporting & forks', 'Set up capital', 'Activate security pool']
 export const prepareProgress = (stage: number) => `${stage} of 4 setup stages complete`
-export const preparing = 'Preparing modules…'
+export const preparing = 'Preparing contracts…'
 
 export const annualFee = 'Annual holding fee (%)'
 export const annualFeeHint = 'Fixed for this security pool. Accrues over time against question backing while the price is fresh and settlement is fully funded.'

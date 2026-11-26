@@ -37,7 +37,7 @@ export const poolSetup = {
 	deploy: 'Deploy security pool',
 	approveCollateral: 'Approve simulated collateral',
 	deployed: 'Deployed shared security pool',
-	prepareContracts: 'Prepare security pool modules',
+	prepareContracts: 'Prepare security pool contracts',
 	preparedStage: (stage: number) => `Prepared security pool stage ${stage} of 4`,
 	registerQuestion: 'Register question',
 	registeredQuestion: (index: number, total: number) => `Registered security pool question ${index} of ${total}`,

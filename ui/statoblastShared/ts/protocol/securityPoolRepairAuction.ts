@@ -198,18 +198,18 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 	])
 	const initialUniverse = requireBigintValue(universeValue, 'initial auction universe')
 	const engine = requireAddressValue(engineValue, 'auction bidding contract')
-	if (getAddress(requireAddressValue(implementationValue, 'position implementation')) !== bindings.implementation) throw new Error(auctionErrors.positionVersion)
+	if (getAddress(requireAddressValue(implementationValue, 'auction position contract template')) !== bindings.implementation) throw new Error(auctionErrors.positionVersion)
 	const [canonicalCapital, canonicalAuction, engineController, bidValue, registeredId] = await Promise.all([read(securityPool, 'capitalLedger', [initialUniverse]), read(controller, 'repairAuctions', [initialUniverse]), read(engine, 'controller'), read(engine, 'bids', [bidId]), read(auction, 'bidIdForVault', [vault])])
 	const bid = requireTupleValue(bidValue, 7, 'auction bid')
 	if (
-		[capitalRoot, auctionRoot, controllerRoot].some(value => getAddress(requireAddressValue(value, 'module security pool')) !== getAddress(securityPool)) ||
-		getAddress(requireAddressValue(capitalProtocol, 'capital protocol')) !== getAddress(zoltar) ||
+		[capitalRoot, auctionRoot, controllerRoot].some(value => getAddress(requireAddressValue(value, 'security pool linked to the auction')) !== getAddress(securityPool)) ||
+		getAddress(requireAddressValue(capitalProtocol, 'protocol linked to pool capital')) !== getAddress(zoltar) ||
 		getAddress(requireAddressValue(auctionCapital, 'auction capital')) !== getAddress(initialCapital) ||
 		getAddress(requireAddressValue(auctionFork, 'auction fork contract')) !== getAddress(controller) ||
 		requireBigintValue(auctionUniverse, 'auction universe') !== initialUniverse ||
 		getAddress(requireAddressValue(canonicalCapital, 'pool capital contract')) !== getAddress(initialCapital) ||
 		getAddress(requireAddressValue(canonicalAuction, 'pool auction')) !== getAddress(auction) ||
-		getAddress(requireAddressValue(engineController, 'auction controller address')) !== getAddress(auction) ||
+		getAddress(requireAddressValue(engineController, 'auction contract address')) !== getAddress(auction) ||
 		getAddress(requireAddressValue(bid[0], 'bid owner')) !== getAddress(bidder) ||
 		getAddress(requireAddressValue(bid[1], 'bid position')) !== getAddress(vault) ||
 		requireBigintValue(registeredId, 'registered bid') !== bidId
@@ -257,16 +257,16 @@ async function verifyAuctionCapitalCustody(client: ReadClient, securityPool: Add
 		read(securityPool, 'services'),
 		read(securityPool, 'repairAuctionDeployer'),
 	])
-	if (getAddress(requireAddressValue(capitalServices, 'pool service address')) !== getAddress(requireAddressValue(securityPoolServices, 'security pool services')) || getAddress(requireAddressValue(deployer, 'auction deployer')) !== getAddress(getInfraContractAddresses().securityPoolRepairAuctionDeployer))
+	if (getAddress(requireAddressValue(capitalServices, 'pool operations address')) !== getAddress(requireAddressValue(securityPoolServices, 'pool operations contract')) || getAddress(requireAddressValue(deployer, 'auction deployer')) !== getAddress(getInfraContractAddresses().securityPoolRepairAuctionDeployer))
 		throw new Error(auctionErrors.collateralContractMismatch)
 	const modules = [
 		{ value: lifecycle, artifact: lifecycleArtifact, label: 'pool setup contract', getter: 'implementation', authority: undefined },
 		{ value: repairAuctionDelegate, artifact: auctionDelegateArtifact, label: 'pool auction contract', getter: 'implementation', authority: undefined },
-		{ value: securityPoolServices, artifact: servicesArtifact, label: 'security pool services', getter: 'securityPool', authority: securityPool },
+		{ value: securityPoolServices, artifact: servicesArtifact, label: 'pool operations contract', getter: 'securityPool', authority: securityPool },
 	]
 	await Promise.all([
 		verifyCapitalModuleClone(client, requireAddressValue(index, 'pool capacity contract'), indexArtifact, capitalLedger, 'pool capacity contract', blockNumber),
-		verifyCapitalModuleClone(client, requireAddressValue(fees, 'capital fee streams'), feesArtifact, capitalLedger, 'capital fee streams', blockNumber),
+		verifyCapitalModuleClone(client, requireAddressValue(fees, 'pool fees contract'), feesArtifact, capitalLedger, 'pool fees contract', blockNumber),
 		...modules.map(async module => {
 			const address = requireAddressValue(module.value, module.label)
 			const [code, authority] = await Promise.all([client.getCode({ address, blockNumber }), client.readContract({ abi: module.artifact.abi, address, functionName: module.getter, blockNumber })])
