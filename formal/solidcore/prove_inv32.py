@@ -9,7 +9,8 @@ import subprocess
 from tempfile import TemporaryDirectory
 
 
-def prove(models, solidcore, with_pair=False, with_thresholds=False, with_index=False, with_settlement=False, with_streams=False):
+def prove(models, solidcore, with_pair=False, with_thresholds=False, with_index=False, with_settlement=False, with_streams=False, with_mask=False):
+    with_streams = with_streams or with_mask
     harness = 'TwoWayConstantProductMathHarness'
     model = models / 'contracts/trading/test' / (harness + '.sol') / (harness + '.lean')
     here = Path(__file__).parent
@@ -36,6 +37,10 @@ def prove(models, solidcore, with_pair=False, with_thresholds=False, with_index=
             stream_model = models / 'contracts/statoblast' / (streams + '.sol') / (streams + '.lean')
             shutil.copyfile(stream_model, work / 'Inv08Generated.lean')
             entries.append(('08', 'Inv08Proved.lean'))
+        if with_mask:
+            oracle = models / 'contracts/DeploymentStatusOracle.sol/DeploymentStatusOracle.lean'
+            shutil.copyfile(oracle, work / 'Inv44Generated.lean')
+            entries.append((44, 'Inv44Proved.lean'))
         for number, name in entries:
             proof_sources = here / f'inv{number}'
             if not (proof_sources / name).is_file():
@@ -79,5 +84,6 @@ if __name__ == '__main__':
     cli.add_argument('--with-index', action='store_true', help='also check the commitment-index price proofs')
     cli.add_argument('--with-settlement', action='store_true', help='also check the settlement and oracle math harness')
     cli.add_argument('--with-streams', action='store_true', help='also check the capital fee stream history proofs')
+    cli.add_argument('--with-mask', action='store_true', help='also check the deployment status oracle mask')
     args = cli.parse_args()
-    prove(args.models.resolve(), args.solidcore.resolve(), args.with_pair, args.with_thresholds, args.with_index, args.with_settlement, args.with_streams)
+    prove(args.models.resolve(), args.solidcore.resolve(), args.with_pair, args.with_thresholds, args.with_index, args.with_settlement, args.with_streams, args.with_mask)

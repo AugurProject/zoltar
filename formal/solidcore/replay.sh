@@ -15,7 +15,7 @@ override the respective binaries on PATH. Set SOLIDCORE_JOBS to limit parallel
 contract checks. Each run writes passing Lean modules under WORKDIR/models-*
 and coverage to WORKDIR/contracts.tsv, then proves INV-32 through INV-36 against the emitted
 harness, checks INV-37 backing inequalities and the generated pair reserve guard,
-checks INV-40 threshold arithmetic against the generated getters,
+checks INV-40 threshold arithmetic and INV-44 deployment mask bits against the generated getters,
 proves INV-08 checkpoint frequency and full vesting against the capital fee stream contract,
 proves the revised INV-27 oracle bounds for every uint256 input,
 and checks INV-01 and INV-04 at their numeric boundaries. A failed proof, build, test or source declaration check exits nonzero.
@@ -69,5 +69,5 @@ fi
   models=$(mktemp -d "$work/models-XXXXXX")
   echo "Writing checked Lean source modules to $models/contracts"
   python3 "$here/check_contracts.py" --models "$models/contracts" --solidcore "$sc" --solc "$solc35" --oracle-solc "$solc28" --forge "$forge" --jobs "${SOLIDCORE_JOBS:-3}" --report "$work/contracts.tsv"
-  python3 "$here/prove_inv32.py" "$models/contracts" "$sc" --with-pair --with-thresholds --with-index --with-settlement --with-streams
+  python3 "$here/prove_inv32.py" "$models/contracts" "$sc" --with-pair --with-thresholds --with-index --with-settlement --with-streams --with-mask
 )
