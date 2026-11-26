@@ -266,6 +266,28 @@ describe('liquidity panel', () => {
 		}
 	})
 
+	test('six-decimal collateral keeps LP Max and parsing at 18 decimals (#1716)', async () => {
+		const lp = 1_234_567_890_123_456_789n
+		const tokenMarket = { ...openMarket, collateral: { token: `0x${'55'.repeat(20)}` as const, symbol: 'USDC', decimals: 6, native: false } }
+		const rendered = await renderPanel(tokenMarket, true, { scope: shareBalanceScope(openMarket), invalid: 0n, yes: 0n, no: 0n, lp }, services, offlineWalletClient())
+		try {
+			await act(() => operationButton('Remove').click())
+			const max = Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Max')
+			if (max === undefined) throw new Error('Missing Max')
+			await act(() => max.click())
+			// The full-precision balance, not a rounded figure that would leave LP behind.
+			expect(amountInput().value).toBe('1.234567890123456789')
+			const removal = document.querySelector('section[aria-label="Liquidity estimate"]')
+			expect(removal?.textContent).toContain('You remove')
+			expect(removal?.textContent).not.toContain('You provide')
+			// The LP withdraws the same quantity of Yes and No; the 0.5% default slippage bounds each minimum, shown rounded down.
+			expect(removal?.textContent).toContain('1.2346 LP')
+			expect(Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Remove liquidity')?.disabled).toBe(false)
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
 	test('shows the minimum LP an addition signs for', async () => {
 		const rendered = await renderPanel(openMarket, true)
 		try {

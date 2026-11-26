@@ -139,7 +139,7 @@ describe('live portfolio scope', () => {
 		const valuedMarket = { ...market, shareTokenSupplyAttoShares: 10n ** 18n, settlementCollateralAttoEth: 984_200_000_000_000_000n }
 		for (const [questionOutcome, systemState, expected] of [
 			[3, 0, '0.9842 ETH if the question resolves Yes'],
-			[1, 0, '0.9842 ETH redeemable'],
+			[1, 0, '0.9842 WETH redeemable'],
 			[2, 0, '0 ETH · lost'],
 			[1, 1, 'winning payout; redemption unavailable'],
 		] as const) {

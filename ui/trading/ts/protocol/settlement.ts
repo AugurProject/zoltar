@@ -7,7 +7,7 @@ import type { DeploymentConfiguration } from './config.js'
 import type { LiveBalances, LiveMarket, MarketLifecycle } from './liveMarket.js'
 import { latestBlockIdentity, minimumAfterSlippage, retainApprovedMinimum, type GuardedWalletWrite, type TransactionExpiry } from './tradeQuote.js'
 import { encodeReceiveBasedRedeemRequest, shareOperationRouter, shareTokenAbi } from './authorization.js'
-import { loadTransactionFeeMarket, sellHoldingFeeBlocker } from './holdingFees.js'
+import { loadTransactionFeeMarket, loadRedemptionPayout, sellHoldingFeeBlocker } from './holdingFees.js'
 
 const questionLedgerAbi = statoblast_QuestionLedger_QuestionLedger.abi
 
@@ -92,7 +92,7 @@ export async function submitFreshSettlement(client: WalletClient, configuration:
 			if (block.blockTimestamp >= refreshed.deadline) throw new Error('Transaction deadline has passed; try again')
 			const feeMarket = await loadTransactionFeeMarket(client, quote.market, block.blockNumber, block.blockTimestamp)
 			retainApprovedMinimum(minimumRep, attoSharesToRecoveryAttoRep(quote.amount, feeMarket), 'REP output')
-			const feeBlocker = sellHoldingFeeBlocker(feeMarket, quote.amount, minimumEth, refreshed.deadline)
+			const feeBlocker = sellHoldingFeeBlocker(feeMarket, quote.amount, minimumEth, refreshed.deadline, await loadRedemptionPayout(client, quote.market, quote.amount, block.blockNumber))
 			if (feeBlocker !== undefined) throw new Error(feeBlocker)
 			return await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, shareOperationRouter(configuration), [invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n], [quote.amount, quote.amount, quote.amount], data] })
 		})

@@ -309,3 +309,26 @@ describe('zoltar contract helpers', () => {
 		expect(summary?.totalTheoreticalSupplyAttoRep).toBe(999n)
 	})
 })
+
+test('depth-65 ancestry does not prevent loading migration data (#1750)', async () => {
+	const client = createReadClient({
+		multicallResponses: [
+			[REP_TOKEN, [0n, 0n, 1n, REP_TOKEN, 64n], 0n, 100n, 10n],
+			['REP', 'REP', 18n],
+		],
+		readContractHandlers: {
+			getEarliestForkTime: async () => 0n,
+			getUniverseTheoreticalSupplyAttoRep: async () => 1000n,
+			universes: async request => {
+				const id = request.args?.[0]
+				if (typeof id !== 'bigint') throw new Error('Expected universe ID')
+				return [0n, 0n, 1n, REP_TOKEN, id > 0n ? id - 1n : 0n]
+			},
+		},
+	})
+	const summary = await loadZoltarUniverseSummary(client, 65n)
+	expect(summary?.universeId).toBe(65n)
+	expect(summary?.lineage?.at(-1)?.universeId).toBe(65n)
+	expect(summary?.lineage?.length).toBeLessThanOrEqual(64)
+	expect(summary?.lineage?.[0]?.universeId).not.toBe(0n)
+})

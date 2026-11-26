@@ -1,3 +1,4 @@
+import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { statoblast_SecurityPool_SecurityPool as securityPoolArtifact } from '../../types/contractArtifact'
 import { zeroAddress, zeroHash } from '@zoltar/core-shared/evm/ethereum'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
@@ -20,7 +21,7 @@ describe('Statoblast: central capital SDK against production contracts', () => {
 		await createQuestion(client, question, fixture.base.outcomes)
 		const questionId = getQuestionId(question, fixture.base.outcomes)
 		expect(await client.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'questionOriginIds', args: [questionId] })).toBe(zeroHash)
-		const quote = await loadSecurityPoolMintQuote({ client, securityPool: fixture.securityPool, universeId: fixture.base.genesisUniverse, questionId, mintAttoEth: 10n * unit })
+		const quote = await loadSecurityPoolMintQuote({ multicallAddress: getInfraContractAddresses().multicall3, client, securityPool: fixture.securityPool, universeId: fixture.base.genesisUniverse, questionId, mintAttoEth: 10n * unit })
 		expect(quote.pool).toBe(zeroAddress)
 		expect(quote.shares).toBe(10n * unit)
 		const collateral = await client.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'collateralToken' })
@@ -34,6 +35,22 @@ describe('Statoblast: central capital SDK against production contracts', () => {
 		expect(await client.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'questionOriginIds', args: [questionId] })).not.toBe(zeroHash)
 		const pool = fixture.poolFor(questionId)
 		expect(await balanceOfShares(client, pool.shareToken, fixture.base.genesisUniverse, client.account.address)).toEqual([quote.shares, quote.shares, quote.shares])
+	})
+
+	test('an accrued-fee purchase accepts a minimum between stored and checkpointed shares (#1733)', async () => {
+		const client = fixture.owner()
+		await fixture.prepare()
+		await fixture.mint(10n * unit, fixture.base.questionId, { sender: client })
+		await fixture.base.mockWindow.advanceTime(60n)
+		const pool = fixture.poolFor(fixture.base.questionId)
+		const stored = await client.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'quoteQuestionMint', args: [pool.questionLedger, unit] })
+		const quote = await loadSecurityPoolMintQuote({ multicallAddress: getInfraContractAddresses().multicall3, client, securityPool: fixture.securityPool, universeId: fixture.base.genesisUniverse, questionId: fixture.base.questionId, mintAttoEth: unit })
+		expect(quote.shares).toBeGreaterThan(stored + 1n)
+		const minimum = (stored + quote.shares) / 2n
+		const before = await balanceOfShares(client, pool.shareToken, fixture.base.genesisUniverse, client.account.address)
+		await fixture.mint(unit, fixture.base.questionId, { sender: client, minimumShares: minimum })
+		const after = await balanceOfShares(client, pool.shareToken, fixture.base.genesisUniverse, client.account.address)
+		expect(after[0] - before[0]).toBeGreaterThanOrEqual(minimum)
 	})
 
 	test('snapshot and request builders preserve individual principal through authorize, mint, return and retirement', async () => {
@@ -60,7 +77,7 @@ describe('Statoblast: central capital SDK against production contracts', () => {
 		const position = snapshot.positions[0]
 		if (position === undefined) throw new Error('SDK position missing')
 		expect(position).toMatchObject({ owner, rep: 1_000n * unit, commitment: 100n * unit })
-		const quote = await loadSecurityPoolMintQuote({ client, securityPool: fixture.securityPool, universeId: fixture.base.genesisUniverse, questionId: fixture.base.questionId, mintAttoEth: 10n * unit })
+		const quote = await loadSecurityPoolMintQuote({ multicallAddress: getInfraContractAddresses().multicall3, client, securityPool: fixture.securityPool, universeId: fixture.base.genesisUniverse, questionId: fixture.base.questionId, mintAttoEth: 10n * unit })
 		expect(quote.availableCommitmentAttoEth).toBe(100n * unit)
 		const collateral = await client.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'collateralToken' })
 		const services = await client.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'services' })

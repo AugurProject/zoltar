@@ -21,6 +21,7 @@ export function relevantTokenSpenders(deployments: EcosystemDeployments, pools: 
 		if (sameAddress(token, pool.repToken)) {
 			spenders.set(pool.address.toLowerCase(), pool.address)
 			if (pool.escalationGame !== zeroAddress) spenders.set(pool.escalationGame.toLowerCase(), pool.escalationGame)
+			if (pool.ownQuestionForkSpender !== zeroAddress && BigInt(pool.ownQuestionForkShortfallAttoRep) > 0n) spenders.set(pool.ownQuestionForkSpender.toLowerCase(), pool.ownQuestionForkSpender)
 		}
 	}
 	return [...spenders.values()].sort((left, right) => left.toLowerCase().localeCompare(right.toLowerCase()))

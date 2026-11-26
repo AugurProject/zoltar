@@ -257,8 +257,13 @@ export async function discoverPools({
 			client.readContract({ abi: abis.questionLedgerAbi, address, args: [shareTokenSupply], blockNumber, functionName: 'attoSharesToAttoRep' }),
 		])
 		let ownQuestionForkReady = false
+		let ownQuestionForkSpender = zeroAddress
+		let ownQuestionForkShortfallAttoRep = 0n
 		if (wallet !== undefined && universe.forkTime === '0' && escalationCanTriggerOwnFork) {
 			try {
+				const admission = await client.readContract({ abi: abis.questionForkerAbi, address: deployments.questionForker, functionName: 'getOwnForkAdmissionShortfall', args: [address], blockNumber })
+				ownQuestionForkSpender = admission[0]
+				ownQuestionForkShortfallAttoRep = admission[1]
 				await client.simulateContract({ abi: abis.questionForkerAbi, address: deployments.questionForker, account: wallet, functionName: 'forkZoltarWithOwnEscalationGame', args: [address], blockNumber })
 				ownQuestionForkReady = true
 			} catch (error) {
@@ -274,6 +279,8 @@ export async function discoverPools({
 			childPoolPreparations: await discoverChildPoolPreparations(client, deployments.securityPoolFactory, deployments.zoltar, address, universeId, securityPool, questionId, systemState === 1n ? validForkOutcomeRoutes(forkQuestion, universe.knownChildOutcomes) : [], blockNumber),
 			additionalMintCapacityAttoEth: currentMintingCapacity.toString(),
 			ownQuestionForkReady,
+			ownQuestionForkSpender,
+			ownQuestionForkShortfallAttoRep: ownQuestionForkShortfallAttoRep.toString(),
 			escalationCanTriggerOwnFork,
 			escalationForkContinuation,
 			escalationForkCarryFundingComplete,

@@ -1,7 +1,7 @@
 import { bigintToSafeNumber } from '@zoltar/core-shared/evm/ethereum'
 import { collateralAsset, tokenFunded, formatCollateralAmount } from '../../protocol/collateral.js'
 import * as collateralCopy from '../../copy/collateral.js'
-import { estimateBudgetMint, recoveryMintBlocker } from '../../protocol/minting.js'
+import { estimateBudgetMint, estimateBudgetSpend, recoveryMintBlocker } from '../../protocol/minting.js'
 import { capSubmissionDeadline, submissionWindowBlocker } from '../../protocol/submissionWindow.js'
 import { largestExitForLongShares, quoteEnterPosition, quoteExitPosition, type EnterPositionQuote, type ExitPositionQuote } from '@zoltar/trading-shared/trading/positions'
 import { getAmountInputErrorMessage, validateAmountInput } from '@zoltar/ui-core-shared/forms/amountInput.js'
@@ -412,7 +412,7 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 	let insufficient: string | undefined
 	if (mode === 'entry' && parsed.value !== undefined && inputs.walletEthAttoEth !== undefined) {
 		if (tokenFunded(market)) {
-			if (parsed.value > inputs.walletEthAttoEth) insufficient = collateralCopy.insufficient(collateralAsset(market).symbol)
+			if ((estimateBudgetSpend(market, parsed.value) ?? parsed.value) > inputs.walletEthAttoEth) insufficient = collateralCopy.insufficient(collateralAsset(market).symbol)
 		} else insufficient = insufficientEthReason(parsed.value, inputs.walletEthAttoEth)
 	}
 	if (mode === 'exit' && parsed.value !== undefined && longBalance !== undefined && parsed.value > longBalance) insufficient = availabilityCopy.formatInsufficientOutcomeReason(side)

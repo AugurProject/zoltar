@@ -239,3 +239,15 @@ test('a custom approval amount survives block reloads and a folded report', asyn
 	await waitFor(() => expect(view.container.textContent).toContain(copy.priceInvalid))
 	expect(approval()?.value).toBe('7')
 })
+
+test('report bounty displays the payable next-block budget (#1695)', async () => {
+	const fixture = priceFixture()
+	fixture.setBaseFee(1_000_000_000n)
+	const fork = await fixture.fork()
+	const actions: SecurityPoolPriceParameters['actions'] = { scope: unscopedTransaction, busy: undefined, ownerReason: undefined, runSecurityPoolAction: async () => undefined }
+	const view = await renderIntoDocument(<SecurityPoolPriceReport scope='branch' target={branchPriceTarget(fork)} actions={actions} />)
+	lifecycle.trackRendered(view)
+	await waitFor(() => expect(view.container.textContent).toContain('already prepared'))
+	const bounty = Array.from(view.container.querySelectorAll('.metric-label')).find(label => label.textContent === copy.bounty)?.parentElement?.textContent
+	expect(bounty).toContain('0.175825874625000101')
+})

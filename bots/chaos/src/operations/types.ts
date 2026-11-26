@@ -149,6 +149,8 @@ export interface PoolSnapshot {
 	pendingReportId: string
 	pendingReportSettled: boolean
 	ownQuestionForkReady: boolean
+	ownQuestionForkShortfallAttoRep: CanonicalUintString
+	ownQuestionForkSpender: Address
 	escalationCanTriggerOwnFork: boolean
 	escalationForkContinuation: boolean
 	escalationForkCarryFundingComplete: boolean

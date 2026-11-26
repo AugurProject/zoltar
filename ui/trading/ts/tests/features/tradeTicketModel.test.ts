@@ -425,3 +425,10 @@ test('an exhausted pool has no buy estimate or purchase shortcuts', () => {
 	expect(ticket.estimate).toBeUndefined()
 	expect(ticket.shortcuts).toEqual([])
 })
+
+test('token entry needs expected spend rather than the unused budget ceiling (#1768)', () => {
+	const collateral = { token: '0x00000000000000000000000000000000000000aa' as const, symbol: 'USDC', decimals: 6, native: false }
+	const tokenMarket = { ...market, collateral, mintFees: { ...market.mintFees, securityMultiplierBps: 20_000n, purchaseFeeBps: 100n, minimumPurchaseFeeAttoEth: 0n, annualFeeBps: 0n, feePrincipalAttoEth: 0n } }
+	const result = tradeTicketModel({ ...ready, amount: '1', market: tokenMarket, walletEthAttoEth: 999_950n })
+	expect(result.insufficientReason).toBeUndefined()
+})

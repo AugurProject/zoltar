@@ -32,8 +32,9 @@ export async function submissionDeadline(client: WalletClient, market: LiveMarke
 
 /** Repeat inside the wallet-context guard immediately before requesting the signature. */
 export async function requireFreshSubmissionWindow(client: WalletClient, market: LiveMarket, operation: SubmissionOperation, deadline: bigint) {
-	if (operation === 'remove') return
 	const block = await latestBlockIdentity(client)
+	if (deadline <= block.blockTimestamp) throw new Error('Transaction deadline expired; refresh the quote')
+	if (operation === 'remove') return
 	const refreshedDeadline = await submissionDeadline(client, market, operation, block, deadline)
 	if (refreshedDeadline < deadline || deadline <= block.blockTimestamp) throw new Error(copy.submissionTimingChangedReason)
 }

@@ -631,7 +631,7 @@ describe('useZoltarUniverse', () => {
 			await requireHookState(hookState).loadZoltarQuestion('0x02')
 		})
 
-		expect(loadMarketDetails).toHaveBeenCalledTimes(2)
+		expect(loadMarketDetails).toHaveBeenCalledTimes(3)
 		expect(requireHookState(hookState).loadingZoltarQuestion).toBe(false)
 		expect(requireHookState(hookState).zoltarQuestionLookupId).toBe('0x2')
 		expect(requireHookState(hookState).zoltarQuestionLookupError).toBeUndefined()

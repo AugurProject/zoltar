@@ -52,5 +52,5 @@ export async function loadOwnedSecurityPoolVaults(client: ReadClient, snapshot: 
 			chosenChildren.push(choice[0])
 		}
 	}
-	return { vaults: [...vaults].map(getAddress), accounts, pendingPrincipal, pendingCommitment, chosenOutcomes: chosenChildren }
+	return { vaults: [...vaults].map(getAddress), accounts, pendingPrincipal, pendingAuction: pendingPrincipal > 0n ? { address: auctionAddress, principal: pendingPrincipal } : undefined, pendingCommitment, chosenOutcomes: chosenChildren }
 }

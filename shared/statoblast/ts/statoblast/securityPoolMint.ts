@@ -1,4 +1,4 @@
-import { encodeFunctionData, parseAbi, zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, parseAbi, zeroAddress, zeroHash, type PublicClient, type Address } from '@zoltar/core-shared/evm/ethereum'
 import type { SecurityPoolReadClient } from './securityPoolRead.js'
 import { decodeAddress, decodeUint } from './securityPoolDecoding.js'
 
@@ -11,6 +11,7 @@ const abi = parseAbi([
 	'function originUniverseId() view returns (uint248)',
 	'function getQuestionLedger(uint256 questionId,uint248 universeId) view returns (address)',
 	'function quoteQuestionMint(address pool,uint256 cash) view returns (uint256)',
+	'function refreshSecurityPoolFees()',
 	'function purchaseQuote(uint248 universeId,uint256 questionId,uint256 mintAttoEth) view returns (uint256 fee,uint256 premium)',
 	'function capitalLedger(uint248 universeId) view returns (address)',
 	'function isPriceValid() view returns (bool)',
@@ -62,7 +63,7 @@ export type SecurityPoolMintQuote = {
 }
 
 /** Quotes units and fees at one block. The atomic purchase still checks available mint capacity, excluding queued retirement reductions. */
-export async function loadSecurityPoolMintQuote(parameters: { client: SecurityPoolReadClient; securityPool: Address; universeId: bigint; questionId: bigint; mintAttoEth: bigint; blockNumber?: bigint }): Promise<SecurityPoolMintQuote> {
+export async function loadSecurityPoolMintQuote(parameters: { client: SecurityPoolReadClient & Pick<PublicClient, 'multicall'>; multicallAddress: Address; securityPool: Address; universeId: bigint; questionId: bigint; mintAttoEth: bigint; blockNumber?: bigint }): Promise<SecurityPoolMintQuote> {
 	const securityPool = decodeAddress(parameters.securityPool, 'Security pool')
 	const universeId = decodeUint(parameters.universeId, 'Universe id', 248)
 	const questionId = decodeUint(parameters.questionId, 'Question id')
@@ -85,7 +86,23 @@ export async function loadSecurityPoolMintQuote(parameters: { client: SecurityPo
 	const fee = decodeUint(feeQuote[0], 'Purchase fee')
 	const pool = decodeAddress(poolValue, 'Question pool', !registered)
 	const capitalLedger = decodeAddress(capitalValue, 'Capital ledger')
-	const [shares, valid, capacity] = await Promise.all([registered ? read(securityPool, 'quoteQuestionMint', [pool, cash]) : cash, read(capitalLedger, 'isPriceValid'), read(securityPool, 'availableMintCapacity', [universeId])])
+	const [shares, valid, capacity] = await Promise.all([
+		registered
+			? parameters.client
+					.multicall({
+						allowFailure: false,
+						blockNumber,
+						multicallAddress: parameters.multicallAddress,
+						contracts: [
+							{ address: pool, abi, functionName: 'refreshSecurityPoolFees' },
+							{ address: securityPool, abi, functionName: 'quoteQuestionMint', args: [pool, cash] },
+						],
+					})
+					.then(results => results[1])
+			: cash,
+		read(capitalLedger, 'isPriceValid'),
+		read(securityPool, 'availableMintCapacity', [universeId]),
+	])
 	if (typeof valid !== 'boolean') throw new Error('Invalid capital price validity.')
 	const available = decodeUint(capacity, 'Available commitment')
 	return {
