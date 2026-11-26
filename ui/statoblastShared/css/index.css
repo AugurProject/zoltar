@@ -2008,6 +2008,8 @@ span.rep-price-status.stale,
 }
 
 .statoblast-rep-chip {
+	display: inline-flex;
+	align-items: center;
 	font-family: var(--font-family-mono);
 }
 
@@ -2715,7 +2717,17 @@ span.rep-price-status.stale,
 }
 
 :root[data-product="statoblast"] .header-toolbar {
+	/* The wallet's copy button and chip border set the minimum height for this row. */
+	--statoblast-header-control-height: calc(var(--touch-target-min) + 2px);
 	background: var(--surface-section-opaque);
+}
+
+:root[data-product="statoblast"] .header-toolbar :is(.statoblast-rep-chip, .statoblast-refresh, .statoblast-auto-desktop, .statoblast-universe-menu > button, .wallet-chip, .account-menu-trigger, .wallet-button, .app-settings-trigger) {
+	min-block-size: var(--statoblast-header-control-height);
+}
+
+:root[data-product="statoblast"] .header-toolbar .app-settings-trigger {
+	min-inline-size: var(--statoblast-header-control-height);
 }
 
 :root[data-product="statoblast"] .header-toolbar-controls {
@@ -2730,6 +2742,19 @@ span.rep-price-status.stale,
 .statoblast-header-controls button {
 	font-size: var(--font-caption);
 	padding-inline: var(--space-2);
+}
+
+.statoblast-refresh,
+.statoblast-universe-menu > button {
+	padding-block: var(--space-1);
+}
+
+.statoblast-auto-desktop > input {
+	flex: none;
+	inline-size: 1rem;
+	min-block-size: 1rem;
+	margin: 0;
+	padding: 0;
 }
 
 .statoblast-rep-chip,
@@ -3174,14 +3199,12 @@ span.rep-price-status.stale,
 	white-space: nowrap;
 }
 
-@media (min-width: 80rem) {
-	.statoblast-header-controls button,
-	.statoblast-auto-desktop {
-		min-height: 2rem;
-	}
-}
-
 @media (width > 40rem) {
+	:root[data-product="statoblast"] .header-toolbar :is(.header-toolbar-brand, .header-toolbar-settings) {
+		align-self: start;
+		min-block-size: var(--statoblast-header-control-height);
+	}
+
 	:root[data-product="statoblast"] .header-toolbar-controls:has(.wallet-network-switch) .toolbar-field.universe,
 	:root[data-product="statoblast"] .header-toolbar-controls:has(.wallet-network-switch) .toolbar-field-value {
 		min-width: 0;
@@ -3228,11 +3251,14 @@ span.rep-price-status.stale,
 	}
 
 	.statoblast-rep-chip {
+		align-self: stretch;
 		font-size: var(--font-label);
 	}
 
-	.statoblast-refresh {
+	.statoblast-header-controls > .statoblast-refresh {
+		align-self: stretch;
 		max-inline-size: 100%;
+		padding-block: 0;
 		justify-self: end;
 	}
 
@@ -3345,6 +3371,16 @@ span.rep-price-status.stale,
 	padding: var(--space-2) 0;
 	border: 0;
 	border-block-end: 1px solid var(--divider-strong);
+}
+.statoblast-deploy-section:has(> .workflow-metric-grid) {
+	container: statoblast-deploy-fees / inline-size;
+}
+/* The metric grid fits two fields once it can fit two 12rem columns and its gap. */
+@container statoblast-deploy-fees (min-width: 25.25rem) {
+	.statoblast-deploy-section > .workflow-metric-grid > .field {
+		grid-row: span 3;
+		grid-template-rows: subgrid;
+	}
 }
 .statoblast-deploy-summary {
 	min-inline-size: 0;
@@ -3808,6 +3844,11 @@ span.rep-price-status.stale,
 @media (min-width: 64rem) {
 	.statoblast-liquidation-limits .form-grid {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+
+	.statoblast-liquidation-limits .form-grid > .field {
+		grid-row: span 3;
+		grid-template-rows: subgrid;
 	}
 }
 .statoblast-liquidation-comparison dl {
