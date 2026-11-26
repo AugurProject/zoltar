@@ -14,7 +14,8 @@ Set SOLC_035 and SOLC_028 to the native solc executable paths. FORGE and ANVIL
 override the respective binaries on PATH. Set SOLIDCORE_JOBS to limit parallel
 contract checks. Each run writes passing Lean modules under WORKDIR/models-*
 and coverage to WORKDIR/contracts.tsv, then proves INV-32 through INV-36 against the emitted
-harness and checks INV-04 arithmetic and the INV-04 and INV-27 boundary witnesses. A failed proof, build, test or source declaration check exits nonzero.
+harness, checks INV-37 backing inequalities and the generated pair reserve guard,
+and checks INV-04 arithmetic and the INV-04 and INV-27 boundary witnesses. A failed proof, build, test or source declaration check exits nonzero.
 HELP
 }
 if [[ ${1:-} == --help ]]; then usage; exit 0; fi
@@ -72,5 +73,5 @@ fi
   for proof in inv04/Inv04RequiredCash.lean inv27/Inv27Counterexample.lean; do
     LEAN_PATH="$witness:$(lake env printenv LEAN_PATH)" lean "$here/$proof"
   done
-  python3 "$here/prove_inv32.py" "$models/contracts" "$sc"
+  python3 "$here/prove_inv32.py" "$models/contracts" "$sc" --with-pair
 )

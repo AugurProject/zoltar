@@ -188,6 +188,10 @@ def check(args, work):
                 'contracts/test/statoblast/InvariantMathHarness.sol', 'InvariantMathHarness',
             ):
                 ns = 'SolidCore.Solidity.Inv27Generated'
+            elif (path, name) == (
+                'contracts/trading/TwoWayConstantProductPair.sol', 'TwoWayConstantProductPair',
+            ):
+                ns = 'SolidCore.Solidity.Inv37PairGenerated'
             try:
                 selected = project(ast, name)
                 root = next(

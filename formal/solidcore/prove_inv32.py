@@ -1,4 +1,4 @@
-"""Rebuild the INV-32 through INV-36 trading quote theorems from a checked source model produced by check_contracts.py."""
+"""Rebuild trading quote theorems and the INV-37 backing inequalities from a checked source model produced by check_contracts.py."""
 
 import argparse
 from graphlib import TopologicalSorter
@@ -9,7 +9,7 @@ import subprocess
 from tempfile import TemporaryDirectory
 
 
-def prove(models, solidcore):
+def prove(models, solidcore, with_pair=False):
     harness = 'TwoWayConstantProductMathHarness'
     model = models / 'contracts/trading/test' / (harness + '.sol') / (harness + '.lean')
     here = Path(__file__).parent
@@ -17,13 +17,19 @@ def prove(models, solidcore):
         work = Path(directory)
         shutil.copyfile(model, work / 'Inv32Generated.lean')
         # Require each public proof even if its entry module is accidentally removed.
-        for number in (32, 33, 34, 35, 36):
-            name = f'Inv{number}Proved.lean'
+        entries = [(number, f'Inv{number}Proved.lean') for number in range(32, 37)]
+        entries.append((37, 'Inv37Backing.lean'))
+        for number, name in entries:
             proof_sources = here / f'inv{number}'
             if not (proof_sources / name).is_file():
                 raise FileNotFoundError(proof_sources / name)
             for source in proof_sources.glob('*.lean'):
                 shutil.copyfile(source, work / source.name)
+        if with_pair:
+            pair = 'TwoWayConstantProductPair'
+            pair_model = models / 'contracts/trading' / (pair + '.sol') / (pair + '.lean')
+            shutil.copyfile(pair_model, work / 'Inv37PairGenerated.lean')
+            shutil.copyfile(here / 'pair/Inv37PairGuard.lean', work / 'Inv37PairGuard.lean')
         modules = {source.stem: source for source in work.glob('*.lean')}
         deps = TopologicalSorter()
         for name, source in modules.items():
@@ -51,5 +57,6 @@ if __name__ == '__main__':
     cli = argparse.ArgumentParser(description=__doc__)
     cli.add_argument('models', type=Path, help='checked modules directory')
     cli.add_argument('solidcore', type=Path, help='patched SolidCore checkout')
+    cli.add_argument('--with-pair', action='store_true', help='also check the generated pair reserve guard')
     args = cli.parse_args()
-    prove(args.models.resolve(), args.solidcore.resolve())
+    prove(args.models.resolve(), args.solidcore.resolve(), args.with_pair)
