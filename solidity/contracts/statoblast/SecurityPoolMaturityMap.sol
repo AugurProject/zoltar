@@ -5,6 +5,7 @@ import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 /// @notice Exact uint48 deadline prefixes, with at most 24 branch levels and immutable fork roots.
 /// @dev Roots are uint48 node IDs carried in uint64 values; zero means no node.
+/// Positive uint48 keys are deadlines; key zero means unscheduled and updates are no-ops.
 /// Updates and aggregates are residues modulo 2^256: callers express removals as
 /// modular negative deltas and recover exact live amounts from prefix differences.
 library SecurityPoolMaturityMap {
