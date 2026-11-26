@@ -1325,7 +1325,12 @@
 						<summary><code>INV-01</code><span class="invariant-title">Healthy price boundary</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">For positive commitment <code>K</code>, multiplier <code>M</code>, price <code>p</code> and target health <code>H ≥ 10,000</code>, assume the rounded intermediate values and boundary returned by the public helpers fit in <code>uint256</code>. Backing <code>R</code> then suffices exactly when <code>p ≤ maximumHealthyPrice(⌊R × 10,000 / H⌋, K, M)</code>. If the boundary is below <code>2²⁵⁶ − 1</code>, the price immediately above it requires more backing (or the forward quote overflows). At <code>2²⁵⁶ − 1</code> there is no greater representable price. The inverse reverts on overflow; it does not saturate. An unbounded-natural source model must require representability before identifying its mathematical boundary with a successful Solidity return. The source-model results in <a href="https://github.com/AugurProject/zoltar/pull/1784">proof PR #1784</a> agree with this domain: <code>Inv01.unrestrictedBoundaryFails</code> verifies the overflowing boundary, while <code>Inv01.boundedInverseFits</code> proves inverse representability for backing at or below the protocol REP supply cap with positive commitment and multiplier.</div>
+							<div class="invariant-property">
+								<p>Backing <code>R</code> is sufficient exactly when price <code>p</code> is at or below the healthy-price boundary:</p>
+								<p><code>p ≤ maximumHealthyPrice(⌊R × 10,000 / H⌋, K, M)</code></p>
+								<p>Here <code>K</code> is commitment, <code>M</code> is the security multiplier, and <code>H ≥ 10,000</code> is target health. Commitment, multiplier and price must be positive; all helper results, including intermediate values, must fit in <code>uint256</code>.</p>
+								<p>The next price above the boundary requires more backing or overflows the forward quote. A boundary of <code>2²⁵⁶ − 1</code> has no next price. If the inverse boundary exceeds that limit, the helper reverts rather than saturating.</p>
+							</div>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -1338,7 +1343,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCommitmentIndex.test.ts"><code>securityPoolCommitmentIndex.test.ts</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCommitmentIndex.test.ts"><code>securityPoolCommitmentIndex.test.ts</code></a> · <a href="https://github.com/AugurProject/zoltar/pull/1784">Source-model boundary and supply-cap proofs</a>
 									</dd>
 								</div>
 							</dl>
