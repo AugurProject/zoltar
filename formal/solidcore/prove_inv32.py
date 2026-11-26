@@ -9,8 +9,8 @@ import subprocess
 from tempfile import TemporaryDirectory
 
 
-def prove(models, solidcore, with_pair=False, with_thresholds=False, with_index=False, with_settlement=False, with_streams=False, with_mask=False):
-    with_streams = with_streams or with_mask
+def prove(models, solidcore, with_pair=False, with_thresholds=False, with_index=False, with_settlement=False, with_streams=False, with_mask=False, with_labels=False):
+    with_streams = with_streams or with_mask or with_labels
     harness = 'TwoWayConstantProductMathHarness'
     model = models / 'contracts/trading/test' / (harness + '.sol') / (harness + '.lean')
     here = Path(__file__).parent
@@ -41,6 +41,10 @@ def prove(models, solidcore, with_pair=False, with_thresholds=False, with_index=
             oracle = models / 'contracts/DeploymentStatusOracle.sol/DeploymentStatusOracle.lean'
             shutil.copyfile(oracle, work / 'Inv44Generated.lean')
             entries.append((44, 'Inv44Proved.lean'))
+        if with_labels:
+            questions = models / 'contracts/ZoltarQuestionData.sol/ZoltarQuestionData.lean'
+            shutil.copyfile(questions, work / 'Inv45Generated.lean')
+            entries.append((45, 'Inv45Proved.lean'))
         for number, name in entries:
             proof_sources = here / f'inv{number}'
             if not (proof_sources / name).is_file():
@@ -85,5 +89,6 @@ if __name__ == '__main__':
     cli.add_argument('--with-settlement', action='store_true', help='also check the settlement and oracle math harness')
     cli.add_argument('--with-streams', action='store_true', help='also check the capital fee stream history proofs')
     cli.add_argument('--with-mask', action='store_true', help='also check the deployment status oracle mask')
+    cli.add_argument('--with-labels', action='store_true', help='also prove the scalar answer labels from the public getter')
     args = cli.parse_args()
-    prove(args.models.resolve(), args.solidcore.resolve(), args.with_pair, args.with_thresholds, args.with_index, args.with_settlement, args.with_streams, args.with_mask)
+    prove(args.models.resolve(), args.solidcore.resolve(), args.with_pair, args.with_thresholds, args.with_index, args.with_settlement, args.with_streams, args.with_mask, args.with_labels)
