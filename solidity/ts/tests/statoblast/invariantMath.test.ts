@@ -107,3 +107,13 @@ test('INV-27 conservative price reaches the uint256 boundary at half uncertainty
 	expect(await bounds(firstOverflow, 0n)).toEqual([firstOverflow, firstOverflow])
 	await expect(bounds(firstOverflow, 5000000n)).rejects.toThrow(/overflow|0x11/i)
 })
+
+test('INV-04 carry can change the minimum raw cash or overflow the scaled intermediate', async () => {
+	const quote = (units: bigint, remainder: bigint) => client.readContract({ abi: artifact.abi, address, functionName: 'requiredCash', args: [units, 1n, 1n, remainder] })
+	expect(await quote(unitScale, 0n)).toBe(1n)
+	expect(await quote(unitScale, 1n)).toBe(2n)
+
+	const maxWord = (1n << 256n) - 1n
+	expect(await quote(maxWord, 0n)).toBe((maxWord + unitScale - 1n) / unitScale)
+	await expect(quote(maxWord, 1n)).rejects.toThrow(/overflow|0x11/i)
+})

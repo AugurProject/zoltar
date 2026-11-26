@@ -14,7 +14,7 @@ Set SOLC_035 and SOLC_028 to the native solc executable paths. FORGE and ANVIL
 override the respective binaries on PATH. Set SOLIDCORE_JOBS to limit parallel
 contract checks. Each run writes passing Lean modules under WORKDIR/models-*
 and coverage to WORKDIR/contracts.tsv, then proves INV-32 through INV-36 against the emitted
-harness and checks the INV-27 counterexample. A failed proof, build, test or source declaration check exits nonzero.
+harness and checks INV-04 arithmetic and the INV-04 and INV-27 boundary witnesses. A failed proof, build, test or source declaration check exits nonzero.
 HELP
 }
 if [[ ${1:-} == --help ]]; then usage; exit 0; fi
@@ -65,10 +65,12 @@ fi
   models=$(mktemp -d "$work/models-XXXXXX")
   echo "Writing checked Lean source modules to $models/contracts"
   python3 "$here/check_contracts.py" --models "$models/contracts" --solidcore "$sc" --solc "$solc35" --oracle-solc "$solc28" --forge "$forge" --jobs "${SOLIDCORE_JOBS:-3}" --report "$work/contracts.tsv"
-  # Compile the boundary witness against the model emitted by this inventory run.
+  # Compile both settlement and oracle checks against the same generated math harness.
   witness=$(mktemp -d "$work/inv27-XXXXXX")
   cp "$models/contracts/contracts/test/statoblast/InvariantMathHarness.sol/InvariantMathHarness.lean" "$witness/Inv27Generated.lean"
   lake env lean --root="$witness" -o "$witness/Inv27Generated.olean" "$witness/Inv27Generated.lean"
-  LEAN_PATH="$witness:$(lake env printenv LEAN_PATH)" lean "$here/inv27/Inv27Counterexample.lean"
+  for proof in inv04/Inv04RequiredCash.lean inv27/Inv27Counterexample.lean; do
+    LEAN_PATH="$witness:$(lake env printenv LEAN_PATH)" lean "$here/$proof"
+  done
   python3 "$here/prove_inv32.py" "$models/contracts" "$sc"
 )
