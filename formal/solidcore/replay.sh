@@ -16,7 +16,7 @@ contract checks. Each run writes passing Lean modules under WORKDIR/models-*
 and coverage to WORKDIR/contracts.tsv, then proves INV-32 through INV-36 against the emitted
 harness, checks INV-37 backing inequalities and the generated pair reserve guard,
 checks INV-40 threshold arithmetic against the generated getters,
-and checks INV-04 arithmetic and the INV-04 and INV-27 boundary witnesses. A failed proof, build, test or source declaration check exits nonzero.
+and checks INV-01, INV-04 and INV-27 at their numeric boundaries. A failed proof, build, test or source declaration check exits nonzero.
 HELP
 }
 if [[ ${1:-} == --help ]]; then usage; exit 0; fi
@@ -74,5 +74,9 @@ fi
   for proof in inv04/Inv04RequiredCash.lean inv27/Inv27Counterexample.lean; do
     LEAN_PATH="$witness:$(lake env printenv LEAN_PATH)" lean "$here/$proof"
   done
+  index=$(mktemp -d "$work/inv01-XXXXXX")
+  cp "$models/contracts/contracts/statoblast/SecurityPoolCommitmentIndex.sol/SecurityPoolCommitmentIndex.lean" "$index/Inv01Generated.lean"
+  lake env lean --root="$index" -o "$index/Inv01Generated.olean" "$index/Inv01Generated.lean"
+  LEAN_PATH="$index:$(lake env printenv LEAN_PATH)" lean "$here/inv01/Inv01PriceBoundary.lean"
   python3 "$here/prove_inv32.py" "$models/contracts" "$sc" --with-pair --with-thresholds
 )

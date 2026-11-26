@@ -194,6 +194,10 @@ def check(args, work):
                 ns = 'SolidCore.Solidity.Inv37PairGenerated'
             elif (path, name) == ('contracts/Zoltar.sol', 'Zoltar'):
                 ns = 'SolidCore.Solidity.Inv40Generated'
+            elif (path, name) == (
+                'contracts/statoblast/SecurityPoolCommitmentIndex.sol', 'SecurityPoolCommitmentIndex',
+            ):
+                ns = 'SolidCore.Solidity.Inv01Generated'
             try:
                 selected = project(ast, name)
                 root = next(
