@@ -14,14 +14,14 @@ theorem args (c : Context) (r : Runtime) (x y : String) (a b : Nat)
   change Expr.evalRefArgListFuel (_+1) c r [.var x,.var y] = _
   simp only [Expr.orderFuel,Expr.listEvalFuel,Nat.reduceAdd,Expr.evalRefArgListFuel,wordArg _ _ _ _ ha,wordArg _ _ _ _ hb,pb]
 
-theorem evaluates (fuel : Nat) (c : Context) (r : Runtime) (x y : String)
+theorem evaluatesAt (table : FunctionTable) (linked : Inv32Internal.ProductLinked table) (fuel : Nat) (c : Context) (r : Runtime) (x y : String)
     (targets : List String) (a b : Nat) (ha : a < R) (hb : b < R)
     (ax : r.lookupLocal? x = some (.word a)) (by' : r.lookupLocal? y = some (.word b))
     (enough : 6 ≤ fuel) :
-    Stmt.eval (fuel+1) Inv32Dispatch.model.core.table c r
+    Stmt.eval (fuel+1) table c r
       (.internalCall targets Inv32Bodies.Mul512.key [.var x,.var y]) =
       internalCallAssign r targets [.word (a*b/R),.word (a*b%R)] := by
-  obtain ⟨fn,found,ps,rs,bd⟩ := signature
+  obtain ⟨fn,found,ps,rs,bd⟩ := linked
   let empty := {r with locals := []}
   let start := empty.withFrame (frame a b 0 0)
   let done' := empty.withFrame (frame a b (a*b/R) (a*b%R))
@@ -30,7 +30,7 @@ theorem evaluates (fuel : Nat) (c : Context) (r : Runtime) (x y : String)
     rw [ps,rs]
     simp [wordBindings,BindingDecl.bindArgsRef?,BindingDecl.bindArgRef?,BindingDecl.bindArg?,
       BindingDecl.defaultBinding,Ty.coerceValue?,Ty.defaultValue,start,empty,Runtime.withFrame,frame]
-  have eval : Stmt.eval fuel Inv32Dispatch.model.core.table {c with checked := true} start fn.body =
+  have eval : Stmt.eval fuel table {c with checked := true} start fn.body =
       pure (.normal done') := by
     rw [bd]; exact generatedExecution _ _ _ _ _ _ ha hb enough
   rw [call _ _ _ _ _ _ _ _ _ _ _ _ _ (args _ _ _ _ _ _ ax by') found enter eval]
@@ -38,4 +38,7 @@ theorem evaluates (fuel : Nat) (c : Context) (r : Runtime) (x y : String)
   simp [collectReturnBindingsRef,collectReturnBindingsRef.collect,wordBindings,done',empty,frame,
     Runtime.withFrame,Runtime.lookupLocal?,LocalEnv.lookup?,Frame.lookup?,Runtime.derefMemoryValueDeep,
     Runtime.derefMemoryValueWithFuel,Ty.coerceValue?,Bind.bind,Except.bind]
+
+abbrev evaluates := evaluatesAt Inv32Dispatch.model.core.table Inv32Internal.signature
+
 end Inv32ProductCall

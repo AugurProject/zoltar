@@ -43,19 +43,28 @@ theorem wordBindingsOf (ds : List BindingDecl) (ns : List String)
       subst ns
       rw [ih _ rest]; rfl
 
-theorem signature : ∃ fn, Inv32Dispatch.model.core.table.lookup? key = some fn ∧
-    fn.params = wordBindings ["a","b"] ∧ fn.returns = wordBindings ["high","low"] ∧ fn.body = body := by
-  have sig : ((Inv32Dispatch.model.core.table.lookup? key).bind fun f => do
-    let ps ← decode f.params
-    let rs ← decode f.returns
-    pure (ps,rs)) = some (["a","b"],["high","low"]) := by native_decide
-  have b := checkedBody
-  cases h : Inv32Dispatch.model.core.table.lookup? key with
-  | none => simp [h] at b
-  | some f =>
-    simp only [h,Option.bind_some] at sig
-    cases hp : decode f.params <;> simp [hp] at sig
-    cases hr : decode f.returns <;> simp [hr] at sig
-    obtain ⟨rfl,rfl⟩ := sig
-    exact ⟨f,rfl,wordBindingsOf _ _ hp,wordBindingsOf _ _ hr,by simpa [h] using b⟩
+def ProductLinked (table : FunctionTable) : Prop :=
+  ∃ fn, table.lookup? key = some fn ∧
+    fn.params = wordBindings ["a","b"] ∧ fn.returns = wordBindings ["high","low"] ∧ fn.body = body
+
+/-- Check the generated argument bindings, return bindings and complete executable body. -/
+def linked? (table : FunctionTable) (name : String) (ps rs : List String)
+    (shape : Inv32Shapes.Pattern Stmt) : Bool :=
+  match table.lookup? name with
+  | none => false
+  | some fn => decide (decode fn.params = some ps ∧ decode fn.returns = some rs) && shape.test fn.body
+
+theorem linkedOfCheck (table : FunctionTable) (name : String) (ps rs : List String)
+    (shape : Inv32Shapes.Pattern Stmt) (checked : linked? table name ps rs shape = true) :
+    ∃ fn, table.lookup? name = some fn ∧ fn.params = wordBindings ps ∧
+      fn.returns = wordBindings rs ∧ fn.body = shape.value := by
+  cases found : table.lookup? name with
+  | none => simp [linked?,found] at checked
+  | some fn =>
+    simp only [linked?,found,Bool.and_eq_true,decide_eq_true_eq] at checked
+    exact ⟨fn,rfl,wordBindingsOf _ _ checked.1.1,wordBindingsOf _ _ checked.1.2,
+      shape.sound _ checked.2⟩
+
+theorem signature : ProductLinked Inv32Dispatch.model.core.table :=
+  linkedOfCheck _ _ _ _ shape (by native_decide)
 end Inv32Internal

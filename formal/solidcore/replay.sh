@@ -74,9 +74,5 @@ fi
   for proof in inv04/Inv04RequiredCash.lean inv27/Inv27Counterexample.lean; do
     LEAN_PATH="$witness:$(lake env printenv LEAN_PATH)" lean "$here/$proof"
   done
-  index=$(mktemp -d "$work/inv01-XXXXXX")
-  cp "$models/contracts/contracts/statoblast/SecurityPoolCommitmentIndex.sol/SecurityPoolCommitmentIndex.lean" "$index/Inv01Generated.lean"
-  lake env lean --root="$index" -o "$index/Inv01Generated.olean" "$index/Inv01Generated.lean"
-  LEAN_PATH="$index:$(lake env printenv LEAN_PATH)" lean "$here/inv01/Inv01PriceBoundary.lean"
-  python3 "$here/prove_inv32.py" "$models/contracts" "$sc" --with-pair --with-thresholds
+  python3 "$here/prove_inv32.py" "$models/contracts" "$sc" --with-pair --with-thresholds --with-index
 )

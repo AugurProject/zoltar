@@ -1,4 +1,4 @@
-"""Rebuild trading quote theorems and the INV-37 backing and INV-40 threshold inequalities from a checked source model produced by check_contracts.py."""
+"""Replay the Lean invariant proofs against source models produced by check_contracts.py."""
 
 import argparse
 from graphlib import TopologicalSorter
@@ -9,7 +9,7 @@ import subprocess
 from tempfile import TemporaryDirectory
 
 
-def prove(models, solidcore, with_pair=False, with_thresholds=False):
+def prove(models, solidcore, with_pair=False, with_thresholds=False, with_index=False):
     harness = 'TwoWayConstantProductMathHarness'
     model = models / 'contracts/trading/test' / (harness + '.sol') / (harness + '.lean')
     here = Path(__file__).parent
@@ -23,6 +23,10 @@ def prove(models, solidcore, with_pair=False, with_thresholds=False):
             entries.append((40, 'Inv40GeneratedThresholds.lean'))
             zoltar = models / 'contracts/Zoltar.sol/Zoltar.lean'
             shutil.copyfile(zoltar, work / 'Inv40Generated.lean')
+        if with_index:
+            index = models / 'contracts/statoblast/SecurityPoolCommitmentIndex.sol/SecurityPoolCommitmentIndex.lean'
+            shutil.copyfile(index, work / 'Inv01Generated.lean')
+            entries.extend([('01', 'Inv01PriceBoundary.lean'), ('02', 'Inv02Proved.lean')])
         for number, name in entries:
             proof_sources = here / f'inv{number}'
             if not (proof_sources / name).is_file():
@@ -63,5 +67,6 @@ if __name__ == '__main__':
     cli.add_argument('solidcore', type=Path, help='patched SolidCore checkout')
     cli.add_argument('--with-pair', action='store_true', help='also check the generated pair reserve guard')
     cli.add_argument('--with-thresholds', action='store_true', help='also check the generated Zoltar threshold getters')
+    cli.add_argument('--with-index', action='store_true', help='also check the commitment-index price proofs')
     args = cli.parse_args()
-    prove(args.models.resolve(), args.solidcore.resolve(), args.with_pair, args.with_thresholds)
+    prove(args.models.resolve(), args.solidcore.resolve(), args.with_pair, args.with_thresholds, args.with_index)

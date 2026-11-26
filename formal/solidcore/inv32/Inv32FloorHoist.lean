@@ -32,15 +32,16 @@ macro "write_temps" : tactic => `(tactic|
   simp [state,st3,st2,st1,start,store,ret,a0,a1,a2,Runtime.assignLocal?,Runtime.lookupLocal?,
     Runtime.pushScope,Runtime.declareLocal,LocalEnv.declare,LocalEnv.lookup?,LocalEnv.assign?,
     Frame.lookup?,Frame.assign?,Value.coerceLike?, *])
-theorem success (n : Nat) (c : Context) (r : Runtime) (dst : String) (ex ey ed : Expr)
+theorem successAt (table : FunctionTable) (linked : Inv32Internal.ProductLinked table)
+    (floor : Inv32FloorCall.FloorLinked table) (n : Nat) (c : Context) (r : Runtime) (dst : String) (ex ey ed : Expr)
     (x y d : Nat) (hx : x<R) (hy : y<R) (hd : d<R) (hp : 0<d) (fits : x*y/d<R)
     (args : Inputs c r dst ex ey ed x y d) (n0 : a0 ≠ dst) (n1 : a1 ≠ dst) (n2 : a2 ≠ dst) (nr : ret ≠ dst) :
-    Stmt.eval (n+15) Inv32Dispatch.model.core.table c (store r dst 0) (code dst ex ey ed) =
+    Stmt.eval (n+15) table c (store r dst 0) (code dst ex ey ed) =
       pure (.normal (store r dst (x*y/d))) := by
-  let t := Inv32Dispatch.model.core.table
+  let t := table
   let st := state r dst
   let q := x*y/d
-  have C := Inv32FloorCall.success (n+12) c (st 0 x y d 0) a0 a1 a2 [ret] x y d hx hy hd hp fits rfl rfl rfl (by omega)
+  have C := Inv32FloorCall.successAt table linked floor (n+12) c (st 0 x y d 0) a0 a1 a2 [ret] x y d hx hy hd hp fits rfl rfl rfl (by omega)
   have U : (st 0 x y d 0).assignLocal? ret (.word q) = some (st 0 x y d q) := by
     cases eqn : r.locals <;> dsimp [st] <;> write_temps
   have cap := takeReturn _ _ _ _ _ _ _ _ _ C U
@@ -50,6 +51,9 @@ theorem success (n : Nat) (c : Context) (r : Runtime) (dst : String) (ex ey ed :
     all_goals cases eqn : r.locals <;> dsimp [st] <;> write_temps
   exact block _ _ _ _ _ _ ((bindArgs (n+13) _ _ _ _ _ _ _ _ _ _ _ args).trans
     ((seqStep _ _ _ _ _ _ _ cap).trans cp))
+
+abbrev success := successAt Inv32Dispatch.model.core.table Inv32Internal.signature Inv32FloorCall.sig
+
 theorem overflow (n : Nat) (c : Context) (r : Runtime) (dst : String) (ex ey ed : Expr)
     (x y d : Nat) (hx : x<R) (hy : y<R) (hd : d<R) (hp : 0<d) (large : R≤x*y/d)
     (args : Inputs c r dst ex ey ed x y d) :

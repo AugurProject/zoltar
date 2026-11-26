@@ -33,15 +33,16 @@ theorem temp (n : Nat) (t : FunctionTable) (c : Context) (r : Runtime) (name arg
     Inv32Guards.clean _ _ _ _ _ bound (Inv32Guards.readWord _ _ _ _ _ look)
   rw [Stmt.eval]; dsimp only; rw [h]; rfl
 
-theorem captured (n : Nat) (c : Context) (r next : Runtime) (x y hi lo : String)
+theorem capturedAt (table : FunctionTable) (linked : Inv32Internal.ProductLinked table) (n : Nat) (c : Context) (r next : Runtime) (x y hi lo : String)
     (a b : Nat) (ha : a < R) (hb : b < R) (ax : r.lookupLocal? x = some (.word a))
     (by' : r.lookupLocal? y = some (.word b))
     (store : r.assignNamedValuesRef? [hi,lo] [.word (a*b/R),.word (a*b%R)] = some next)
     (enough : 6 ≤ n) :
-    Stmt.eval (n+2) Inv32Dispatch.model.core.table c r
+    Stmt.eval (n+2) table c r
       (.captureReturn [hi,lo] (.internalCall [hi,lo] Inv32Bodies.Mul512.key [.var x,.var y])) =
       pure (.normal next) := by
   apply Inv32Internal.capture
-  rw [Inv32ProductCall.evaluates _ _ _ _ _ _ _ _ ha hb ax by' enough]
+  rw [Inv32ProductCall.evaluatesAt table linked _ _ _ _ _ _ _ _ ha hb ax by' enough]
   simp [internalCallAssign,store]
+abbrev captured := capturedAt Inv32Dispatch.model.core.table Inv32Internal.signature
 end Inv32Temps

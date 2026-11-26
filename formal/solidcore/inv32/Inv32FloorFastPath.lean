@@ -29,11 +29,11 @@ macro "write_param" : tactic => `(tactic|
  simp [scope,Runtime.withFrame,Runtime.pushScope,Runtime.assignLocal?,Runtime.lookupLocal?,LocalEnv.lookup?,
   LocalEnv.assign?,Frame.lookup?,Frame.assign?,Value.coerceLike?])
 
-theorem execution (n : Nat) (c : Context) (r : Runtime) (x y d : Nat)
+theorem executionAt (table : FunctionTable) (linked : Inv32Internal.ProductLinked table) (n : Nat) (c : Context) (r : Runtime) (x y d : Nat)
     (hx : x < R) (hy : y < R) (hd : d < R) (pos : 0 < d) (fits : x*y < R) :
-    Stmt.eval (n+12) Inv32Dispatch.model.core.table c (scope r x y d) Inv32Bodies.Floor.body =
+    Stmt.eval (n+12) table c (scope r x y d) Inv32Bodies.Floor.body =
       pure (.returned (scope r x y d) [.word (x*y/d)]) := by
-  let t := Inv32Dispatch.model.core.table
+  let t := table
   let outside := (scope r x y d).pushScope
   let inner := outside.pushScope
   let uncheckedCtx := {c with checked := false}
@@ -48,7 +48,7 @@ theorem execution (n : Nat) (c : Context) (r : Runtime) (x y d : Nat)
     · change some (x*y/R) = some 0; rw [hi]
   have ss : Stmt.evalList (n+8) t uncheckedCtx inner.pushScope (start ++ firstBranch :: rest) =
       pure (.returned finished vs) := by
-    rw [runPrefix (n+6) uncheckedCtx inner x y hx hy rfl rfl _ (by omega)]
+    rw [runPrefixAt table linked (n+6) uncheckedCtx inner x y hx hy rfl rfl _ (by omega)]
     exact stop _ _ _ _ _ _ _ _ branch
   have inside := blockReturned _ t uncheckedCtx inner finished _ vs ss
   have un : Stmt.eval (n+10) t c inner (.unchecked (.block (start ++ firstBranch :: rest))) =

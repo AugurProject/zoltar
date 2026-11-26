@@ -32,13 +32,13 @@ macro "store_temps" : tactic => `(tactic|
   simp [state,hi,lo,av,bv',Runtime.assignNamedValuesRef?,Runtime.assignLocalRefAware?,Runtime.assignLocal?, Runtime.lookupLocal?,
     Runtime.withFrame,Runtime.declareLocal,Runtime.pushScope,LocalEnv.declare,
     Frame.lookup?,Frame.assign?,LocalEnv.lookup?,LocalEnv.assign?,Value.coerceLike?])
-theorem runPrefix (n : Nat) (c : Context) (r : Runtime) (a b : Nat)
+theorem runPrefixAt (table : FunctionTable) (linked : Inv32Internal.ProductLinked table) (n : Nat) (c : Context) (r : Runtime) (a b : Nat)
     (ha : a < R) (hb : b < R) (x : r.lookupLocal? "x" = some (.word a))
     (y : r.lookupLocal? "y" = some (.word b)) (rest : List Stmt) (enough : 6 ≤ n) :
-    Stmt.evalList (n+2) Inv32Dispatch.model.core.table c r.pushScope (start ++ rest) =
-    Stmt.evalList (n+2) Inv32Dispatch.model.core.table c
+    Stmt.evalList (n+2) table c r.pushScope (start ++ rest) =
+    Stmt.evalList (n+2) table c
       (state r a b (a*b/R) (a*b%R) (a*b/R) (a*b%R)) rest := by
-  let t := Inv32Dispatch.model.core.table
+  let t := table
   let r1 := r.pushScope.declareLocal "high" (.word 0)
   let r2 := r1.declareLocal "low" (.word 0)
   let r3 := r2.declareLocal av (.word a)
@@ -49,7 +49,7 @@ theorem runPrefix (n : Nat) (c : Context) (r : Runtime) (a b : Nat)
   let l := a*b%R
   have X : r2.lookupLocal? "x" = some (.word a) := x
   have Y : r3.lookupLocal? "y" = some (.word b) := y
-  have cap := Inv32Temps.captured n c r6 (state r a b 0 0 h l) av bv' hi lo a b ha hb rfl rfl
+  have cap := Inv32Temps.capturedAt table linked n c r6 (state r a b 0 0 h l) av bv' hi lo a b ha hb rfl rfl
     (by dsimp [r6,r5,r4,r3,r2,r1,h,l]; store_temps) enough
   have H := Inv32Temps.copy (n+1) t c (state r a b 0 0 h l) (state r a b h 0 h l)
     "high" hi 0 h rfl rfl (by store_temps)
@@ -61,4 +61,7 @@ theorem runPrefix (n : Nat) (c : Context) (r : Runtime) (a b : Nat)
       seqStep _ _ _ _ _ _ _ (Inv32Temps.temp _ _ _ _ _ _ _ hb Y),
       seqStep _ _ _ _ _ _ _ (zero _ _ _ _ _),seqStep _ _ _ _ _ _ _ (zero _ _ _ _ _),
       seqStep _ _ _ _ _ _ _ cap,seqStep _ _ _ _ _ _ _ H,seqStep _ _ _ _ _ _ _ L]
+
+abbrev runPrefix := runPrefixAt Inv32Dispatch.model.core.table Inv32Internal.signature
+
 end Inv32FloorStart

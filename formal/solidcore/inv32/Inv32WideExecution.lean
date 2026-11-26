@@ -65,13 +65,13 @@ theorem steps (n : Nat) (t : FunctionTable) (c : Context) (r : Runtime) (x y d :
     refine (seqStep _ _ _ _ _ _ _ B7).trans ?_
     exact B8.trans B9
   exact ⟨final, fun _ => rfl, prog⟩
-theorem tail (n : Nat) (c : Context) (r : Runtime) (x y d : Nat)
+theorem tailAt (table : FunctionTable) (linked : Inv32Internal.ProductLinked table) (n : Nat) (c : Context) (r : Runtime) (x y d : Nat)
     (hx : x<R) (hy : y<R) (hd : d<R) (wide : 0<x*y/R) (fits : x*y/R<d) :
     ∃ next, sameEffects next r ∧
-      Stmt.evalList (n+8) Inv32Dispatch.model.core.table {c with checked := false}
+      Stmt.evalList (n+8) table {c with checked := false}
         (base r x y d).pushScope instructions = pure (.returned next [.word (productQuotient x y d)]) := by
-  obtain ⟨next,same,rest⟩ := steps n Inv32Dispatch.model.core.table c r x y d hx hy hd wide fits
+  obtain ⟨next,same,rest⟩ := steps n table c r x y d hx hy hd wide fits
   refine ⟨next,same,?_⟩
   change Stmt.evalList _ _ _ _ (start ++ instructions.drop 9) = _
-  exact (runPrefix (n+6) _ _ _ _ hx hy rfl rfl _ (by omega)).trans rest
+  exact (runPrefixAt table linked (n+6) _ _ _ _ hx hy rfl rfl _ (by omega)).trans rest
 end Inv32WideExecution
