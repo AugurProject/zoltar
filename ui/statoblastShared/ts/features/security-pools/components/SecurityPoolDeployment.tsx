@@ -115,7 +115,7 @@ function DeploymentActions({ actions, setupStage, setupVerificationPending }: { 
 		<>
 			<ol className='statoblast-deploy-transactions' aria-label={pageCopy.deployTransactions}>
 				{deployActions.map((stage, index) => (
-					<DeploymentTransaction key={stage.action} index={index} label={stage.label} done={stage.address !== undefined} current={stage.reason === undefined || actions.busy === stage.action} detail={stage.address === undefined ? undefined : <AddressValue address={stage.address} longAbbreviation />}>
+					<DeploymentTransaction key={stage.action} index={index} label={stage.label} done={stage.address !== undefined} current={stage.reason === undefined || actions.busy === stage.action} detail={stage.address === undefined ? undefined : <AddressValue address={stage.address} />}>
 						{deployButton(stage)}
 					</DeploymentTransaction>
 				))}
@@ -231,9 +231,8 @@ export function SecurityPoolDeployment({ actions, model }: { actions: SecurityPo
 	if (completedCount === 0 && activeStep < 3) transactionProgress = pageCopy.deployTransactionCount
 	if (completedCount === 6) transactionProgress = pageCopy.deployAllTransactionsDone
 	const progressLabels = [actions.collateral.symbol, deploymentQuestionsLabel(actions), activeStep > 2 ? pageCopy.deployReviewed : pageCopy.deployDefaults, transactionProgress]
-	const showTransactions = actions.deploymentLocked || activeStep === 3
-	const showLockedEconomics = actions.deploymentLocked && activeStep >= 2
-	const leftStep = activeStep === 3 ? 2 : activeStep
+	const isSetupStep = activeStep === 3
+	const showTransactions = actions.deploymentLocked || isSetupStep
 	const previousPool = actions.deploymentPool === undefined && (model.setup?.stage ?? model.savedSetupStage ?? 4) < 4 && isAddress(model.managerInput) ? getAddress(model.managerInput) : undefined
 	const openPool = setupStage === 4 ? actions.deploymentPool : undefined
 	const pending = actions.pendingDeployment
@@ -260,22 +259,25 @@ export function SecurityPoolDeployment({ actions, model }: { actions: SecurityPo
 			</ol>
 			{previousPool === undefined ? undefined : <a href={statoblastPageHref({ kind: 'pool', pool: previousPool, tab: 'capital' })}>{pageCopy.resumePreviousSetup}</a>}
 			<div className='statoblast-deploy-layout' data-transactions={showTransactions}>
-				<SectionBlock title={pageCopy.deployStepNumber(leftStep, deploySteps[leftStep] ?? '')} headingLevel={2} badge={actions.deploymentLocked ? <Badge>{pageCopy.deployLocked}</Badge> : undefined}>
-					{showLockedEconomics ? <DeploymentSummary actions={actions} economicsOnly /> : <DeploymentFields actions={actions} step={leftStep} />}
-					{actions.deploymentLocked && <UserMessage detail={pageCopy.deploySettingsLocked} />}
-					{!actions.deploymentLocked && activeStep < 3 && (
-						<div className='actions statoblast-deploy-navigation'>
-							{activeStep > 0 && (
-								<button type='button' className='secondary' onClick={() => selectStep(activeStep - 1)}>
-									{pageCopy.deployBack}
+				{!isSetupStep && (
+					<SectionBlock title={pageCopy.deployStepNumber(activeStep, deploySteps[activeStep] ?? '')} headingLevel={2} badge={actions.deploymentLocked ? <Badge>{pageCopy.deployLocked}</Badge> : undefined}>
+						{actions.deploymentLocked && activeStep === 2 ? <DeploymentSummary actions={actions} economicsOnly /> : <DeploymentFields actions={actions} step={activeStep} />}
+						{actions.deploymentLocked ? (
+							<UserMessage detail={pageCopy.deploySettingsLocked} />
+						) : (
+							<div className='actions statoblast-deploy-navigation'>
+								{activeStep > 0 && (
+									<button type='button' className='secondary' onClick={() => selectStep(activeStep - 1)}>
+										{pageCopy.deployBack}
+									</button>
+								)}
+								<button type='button' onClick={() => selectStep(activeStep + 1)}>
+									{pageCopy.deployContinue(deploySteps[activeStep + 1] ?? '')}
 								</button>
-							)}
-							<button type='button' onClick={() => selectStep(activeStep + 1)}>
-								{pageCopy.deployContinue(deploySteps[activeStep + 1] ?? '')}
-							</button>
-						</div>
-					)}
-				</SectionBlock>
+							</div>
+						)}
+					</SectionBlock>
+				)}
 				{showTransactions ? (
 					<SectionBlock title={pageCopy.deployStepNumber(3, pageCopy.deployAndSetup)} headingLevel={2} description={setupDataNotice ?? progressNotice} className='security-pool-creation-form'>
 						{setupDataNotice !== undefined && <p className='detail'>{progressNotice}</p>}
@@ -331,6 +333,11 @@ export function SecurityPoolDeployment({ actions, model }: { actions: SecurityPo
 					<SectionBlock title={pageCopy.deploySummary} className='statoblast-deploy-summary'>
 						<DeploymentSummary actions={actions} />
 						<p>{pageCopy.deploySummaryTransactionCount}</p>
+					</SectionBlock>
+				)}
+				{isSetupStep && (
+					<SectionBlock title={actions.deploymentLocked ? pageCopy.deployLockedEconomics : pageCopy.deployEconomicsSection} className='statoblast-deploy-summary' density='compact'>
+						<DeploymentSummary actions={actions} economicsOnly />
 					</SectionBlock>
 				)}
 			</div>

@@ -155,6 +155,14 @@ test('deploy and setup shows all six persistent transaction controls in the same
 	const transactions = [...(workflow?.querySelectorAll('button.tx-action-button') ?? [])]
 	expect(transactions.map(button => button.textContent)).toEqual(['Prepare question rules', 'Deploy security pool', ...copy.prepareStages])
 	expect(transactions.map(button => button.hasAttribute('disabled'))).toEqual([false, true, true, true, true, true])
+	const panelTitles = () => [...view.container.querySelectorAll('.statoblast-deploy-layout > section .section-block-title-row')].map(heading => heading.textContent)
+	expect(panelTitles()).toEqual(['4. Deploy and set up', 'Fees and limits'])
+	expect(view.container.querySelector('.statoblast-deploy-summary input')).toBeNull()
+	const fees = [...view.container.querySelectorAll<HTMLButtonElement>('.statoblast-deploy-progress button')].find(button => button.textContent?.includes('3. Fees and limits'))
+	if (fees === undefined) throw new Error('Missing fees and limits step')
+	await act(() => fees.click())
+	expect(panelTitles()).toEqual(['3. Fees and limits', 'Summary'])
+	expect(view.container.querySelector<HTMLInputElement>('.statoblast-deploy-section input')?.disabled).toBe(false)
 })
 
 test('a hashless deployment offers a way to check the wallet again', async () => {
@@ -178,6 +186,10 @@ test('a hashless deployment offers a way to check the wallet again', async () =>
 	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolsSection deploying parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />))
 	const findCheck = () => [...view.container.querySelectorAll('button')].find(button => button.textContent === 'Check again' && !button.disabled)
 	await waitFor(() => expect(findCheck()).toBeDefined(), { timeout: 1000 })
+	expect([...view.container.querySelectorAll('.statoblast-deploy-layout > section .section-block-title-row')].map(heading => heading.textContent)).toEqual(['4. Deploy and set up', 'Locked fees and limits'])
+	const lockedSummary = view.container.querySelector('.statoblast-deploy-summary')
+	expect(lockedSummary?.textContent).toContain('200%')
+	expect(lockedSummary?.querySelector('input')).toBeNull()
 	const checksBeforeClick = nonceChecks
 	await act(() => findCheck()?.click())
 	await waitFor(() => expect(nonceChecks).toBeGreaterThan(checksBeforeClick))
