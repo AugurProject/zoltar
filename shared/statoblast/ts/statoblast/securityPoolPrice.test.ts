@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, parseAbi, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { decodeFunctionData, encodeFunctionData, parseAbi, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { buildSecurityPoolPriceOperationsRequest, buildSecurityPoolPriceApprovalRequest, buildSecurityPoolPricePreparationRequest, buildSecurityPoolPriceRequest, buildSecurityPoolPriceWrapRequest, loadSecurityPoolPriceSnapshot, quoteSecurityPoolPriceFunding } from './securityPool.js'
 
 const owner: Address = '0x0000000000000000000000000000000000000001'
@@ -13,6 +13,7 @@ const weth: Address = '0x0000000000000000000000000000000000000008'
 const oracle: Address = '0x0000000000000000000000000000000000000009'
 const unit = 10n ** 18n
 const settlementBounty = 15_804_573n * 10_000_000_000n + 101n
+const supportedOperation = encodeFunctionData({ abi: parseAbi(['function setHealthTarget(uint256 target)']), functionName: 'setHealthTarget', args: [15000n] })
 const hash: Hex = `0x${'11'.repeat(32)}`
 const abi = parseAbi([
 	'function prepareSecurityPoolPriceFeed(address source,uint248 universeId) returns (address)',
@@ -88,17 +89,17 @@ describe('security pool branch price SDK', () => {
 		const quoted = quoteSecurityPoolPriceFunding(snapshot, unit, 2n * unit, 200_000n)
 		expect(quoted.bounty).toBeGreaterThan(1_000_000_101n)
 		expect(quoted.requiredEth).toBe(quoted.bounty)
-		const batch = { gasLimit: 200_000n, minimumPrice: unit, maximumPrice: unit, deadline: 2_000n, operations: [{ gasLimit: 100_000n, data: '0x12345678' as const }] }
+		const batch = { gasLimit: 200_000n, minimumPrice: unit, maximumPrice: unit, deadline: 2_000n, operations: [{ gasLimit: 100_000n, data: supportedOperation }] }
 		const request = buildSecurityPoolPriceOperationsRequest(snapshot, unit, 2n * unit, batch)
 		expect(request.value).toBeGreaterThan(1_000_000_101n)
 	})
 	test('operation batches are bounded by gas and preserve caller order without a count cap', async () => {
 		const snapshot = await load(fixture().client)
-		const operations = Array.from({ length: 32 }, () => ({ gasLimit: 80_000n, data: '0x12345678' as const }))
+		const operations = Array.from({ length: 32 }, () => ({ gasLimit: 80_000n, data: supportedOperation }))
 		const batch = { gasLimit: 5_760_000n, minimumPrice: unit, maximumPrice: unit, deadline: 2_000n, operations }
 		const request = buildSecurityPoolPriceOperationsRequest(snapshot, unit, 2n * unit, batch)
 		for (const bytes of [512, 513]) {
-			const data: Hex = `0x${'ab'.repeat(bytes)}`
+			const data: Hex = `0x${supportedOperation.slice(2, 10)}${'ab'.repeat(bytes - 4)}`
 			const build = () => buildSecurityPoolPriceOperationsRequest(snapshot, unit, 2n * unit, { ...batch, operations: [{ gasLimit: 80_000n, data }] })
 			if (bytes === 512) expect(build).not.toThrow()
 			else expect(build).toThrow('512 bytes')
@@ -231,4 +232,16 @@ test('a non-WETH collateral report uses raw-unit pricing and never adds token fu
 	expect(funding.requiredEth).toBe(funding.bounty)
 	expect(buildSecurityPoolPriceApprovalRequest(snapshot, 'weth', funding.weth).to).toBe(collateralToken)
 	expect(() => buildSecurityPoolPriceWrapRequest(snapshot, 1n)).toThrow()
+})
+
+test('#1637 explicit funding below the minimum is rejected by both request builders', async () => {
+	const snapshot = await load(fixture().client)
+	expect(() => buildSecurityPoolPriceRequest(snapshot, unit, unit)).toThrow('minimum')
+	expect(() => buildSecurityPoolPriceOperationsRequest(snapshot, unit, unit, { gasLimit: 200_000n, minimumPrice: unit, maximumPrice: unit, deadline: 2000n, operations: [{ gasLimit: 100_000n, data: '0x12345678' }] })).toThrow('minimum')
+	expect(quoteSecurityPoolPriceFunding(snapshot, unit, 0n).weth).toBeGreaterThan(2n * unit)
+	expect(quoteSecurityPoolPriceFunding(snapshot, unit, 2n * unit).weth).toBe(2n * unit)
+})
+test('#1705 unsupported sponsored operations are rejected before funding', async () => {
+	const snapshot = await load(fixture().client)
+	expect(() => buildSecurityPoolPriceOperationsRequest(snapshot, unit, 2n * unit, { gasLimit: 200_000n, minimumPrice: unit, maximumPrice: unit, deadline: 2000n, operations: [{ gasLimit: 100_000n, data: '0x12345678' }] })).toThrow('Unsupported report operation')
 })

@@ -24,9 +24,10 @@ import { runDryRunStep, runLiveExecutionStep } from './scan-execution.ts'
  * Scans the monitored pools. Live execution requires the RPC quorum to agree on one execution snapshot and adopts the
  * client that produced it as the primary client; dry runs scan through the primary read endpoint alone.
  */
-async function scanExecutionSnapshot(runtime: LiquidatorRuntime, deps: LiquidatorDeps, currentChain: LiquidatorRuntime['chain']) {
+/** @internal Tests verify failed prospective selections never enter durable exposure history. */
+export async function scanExecutionSnapshot(runtime: Pick<LiquidatorRuntime, 'client' | 'settings' | 'readPool'>, deps: Pick<LiquidatorDeps, 'state'> & { shutdown: Pick<LiquidatorDeps['shutdown'], 'isRequested'> }, currentChain: LiquidatorRuntime['chain']) {
 	const { shutdown, state } = deps
-	state.securityPoolScopes = managedSecurityPoolScopes(state.securityPoolScopes, runtime.settings.selectedSecurityPools)
+	const prospectiveScopes = managedSecurityPoolScopes(state.securityPoolScopes, runtime.settings.selectedSecurityPools)
 	const scanClient = async (client: typeof runtime.client, blockNumber?: bigint) => {
 		const scan = await scanSecurityPoolContext(client, runtime.settings, state.wallet, shutdown.isRequested, blockNumber)
 		if (shutdown.isRequested()) throw new OperatorStopping()
@@ -34,7 +35,7 @@ async function scanExecutionSnapshot(runtime: LiquidatorRuntime, deps: Liquidato
 			client,
 			runtime.settings,
 			state.wallet,
-			state.securityPoolScopes.map(scope => ({ scope })),
+			prospectiveScopes.map(scope => ({ scope })),
 			scan.block.number,
 		)
 		return { ...scan, securityPools }
