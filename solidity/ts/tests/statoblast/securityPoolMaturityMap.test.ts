@@ -59,6 +59,24 @@ describe('Statoblast maturity index', () => {
 		expect(await prefix(3n, maximumTime)).toEqual([0n, 5n])
 	})
 
+	test('INV-42 nonzero deltas at the zero sentinel preserve every query and historical root', async () => {
+		await add(0n, 5, 100n, 77n)
+		await add(1n, 9, 30n, 10n)
+		await add(2n, 0, 12n, 34n)
+		expect(await storedRoot(3n)).toBe(await storedRoot(2n))
+		expect(await get(3n, 0)).toEqual([0n, 0n])
+		expect(await prefix(3n, 9)).toEqual([130n, 87n])
+		for (const key of [0, 4, 5, 8, 9, maximumTime]) {
+			expect(await get(3n, key)).toEqual(await get(2n, key))
+			expect(await prefix(3n, key)).toEqual(await prefix(2n, key))
+		}
+		expect(await total(3n)).toBe(130n)
+		await add(3n, 5, 12n, 34n)
+		expect(await get(4n, 5)).toEqual([112n, 111n])
+		expect(await prefix(4n, 9)).toEqual([142n, 121n])
+		expect(await prefix(2n, 9)).toEqual([130n, 87n])
+	})
+
 	test('modular changes delete empty nodes without modifying parent or sibling roots', async () => {
 		await add(0n, 4, maximumWeight, 3n)
 		await add(1n, 5, 2n, maximumWeight)
