@@ -13,7 +13,7 @@ elan with Lean 4.28.0, Forge 1.5.1, Anvil 1.5.1 and native Solidity compilers.
 Set SOLC_035 and SOLC_028 to the native solc executable paths. FORGE and ANVIL
 override the respective binaries on PATH. Set SOLIDCORE_JOBS to limit parallel
 contract checks. Each run writes passing Lean modules under WORKDIR/models-*
-and coverage to WORKDIR/contracts.tsv, then proves INV-32 through INV-34 against the emitted
+and coverage to WORKDIR/contracts.tsv, then proves INV-32 through INV-35 against the emitted
 harness. A failed proof, build, test or source declaration check exits nonzero.
 HELP
 }

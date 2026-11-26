@@ -1,4 +1,4 @@
-"""Rebuild the INV-32 through INV-34 trading quote theorems from a checked source model produced by check_contracts.py."""
+"""Rebuild the INV-32 through INV-35 trading quote theorems from a checked source model produced by check_contracts.py."""
 
 import argparse
 from graphlib import TopologicalSorter
@@ -12,18 +12,18 @@ from tempfile import TemporaryDirectory
 def prove(models, solidcore):
     harness = 'TwoWayConstantProductMathHarness'
     model = models / 'contracts/trading/test' / (harness + '.sol') / (harness + '.lean')
-    sources = Path(__file__).with_name('inv32')
+    here = Path(__file__).parent
     with TemporaryDirectory(prefix='inv32-') as directory:
         work = Path(directory)
         shutil.copyfile(model, work / 'Inv32Generated.lean')
-        # Require the public theorem even if its file is accidentally deleted or renamed.
-        if not (sources / 'Inv32Proved.lean').is_file():
-            raise FileNotFoundError(sources / 'Inv32Proved.lean')
-        for source in sources.glob('*.lean'):
-            shutil.copyfile(source, work / source.name)
-        for number in (33, 34):
+        # Require each public proof even if its entry module is accidentally removed.
+        for number in (32, 33, 34, 35):
             name = f'Inv{number}Proved.lean'
-            shutil.copyfile(sources.parent / f'inv{number}' / name, work / name)
+            proof_sources = here / f'inv{number}'
+            if not (proof_sources / name).is_file():
+                raise FileNotFoundError(proof_sources / name)
+            for source in proof_sources.glob('*.lean'):
+                shutil.copyfile(source, work / source.name)
         modules = {source.stem: source for source in work.glob('*.lean')}
         deps = TopologicalSorter()
         for name, source in modules.items():
