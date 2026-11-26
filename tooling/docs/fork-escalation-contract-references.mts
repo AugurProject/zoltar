@@ -317,7 +317,7 @@ export const forkEscalationContractReferences: ContractReference[] = [
 					},
 				],
 				effect:
-					'Settles one local deposit after resolution. An ordinary first claim freezes the winning liability and burns terminal excess beyond the surplus already paid at source; ordinary losers retire together and a valid losing index returns zero repeatedly. A winner consumes its reserved payout and burn and pays the immutable depositor. Continuation losers still consume their individual escrow.',
+					'Settles one local deposit after resolution. An ordinary first claim freezes the winning liability but leaves terminal surplus for an explicit `settleOrdinaryGame()` or `sweepResidualRepToQuestionLedger()` call; ordinary losers retire together and a valid losing index returns zero repeatedly. A winner consumes its reserved payout and burn and pays the immutable depositor. Continuation losers still consume their individual escrow.',
 				preconditions: 'Explicit non-decision state is `None`; non-`None` supplied outcome; game final; game and question ledger final outcomes match; valid local deposit index, unsettled unless it is a retired ordinary loser.',
 				signals: '`OrdinarySettlementInitialized` on first ordinary settlement. Winners and continuation losers emit `CarryDepositConsumed` and `VaultEscrowUpdated`; winners also emit `ClaimDeposit` and positive payout or burn signals. Retired ordinary losers emit no per-deposit settlement event.',
 			},

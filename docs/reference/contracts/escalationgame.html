@@ -107,7 +107,7 @@
 							<td><code>withdrawDeposit(depositIndex, outcome)</code>, the <code>uint256</code> overload<wbr /></td>
 							<td>Owning <code>QuestionLedger</code> only (<code>Only pool</code>)</td>
 							<td>Explicit non-decision state is <code>None</code>; non-<code>None</code> supplied outcome; game final; game and question ledger final outcomes match; valid local deposit index, unsettled unless it is a retired ordinary loser.</td>
-							<td>Settles one local deposit after resolution. An ordinary first claim freezes the winning liability and burns terminal excess beyond the surplus already paid at source; ordinary losers retire together and a valid losing index returns zero repeatedly. A winner consumes its reserved payout and burn and pays the immutable depositor. Continuation losers still consume their individual escrow.</td>
+							<td>Settles one local deposit after resolution. An ordinary first claim freezes the winning liability but leaves terminal surplus for an explicit <code>settleOrdinaryGame()</code> or <code>sweepResidualRepToQuestionLedger()</code> call; ordinary losers retire together and a valid losing index returns zero repeatedly. A winner consumes its reserved payout and burn and pays the immutable depositor. Continuation losers still consume their individual escrow.</td>
 							<td><code>OrdinarySettlementInitialized</code> on first ordinary settlement. Winners and continuation losers emit <code>CarryDepositConsumed</code> and <code>VaultEscrowUpdated</code>; winners also emit <code>ClaimDeposit</code> and positive payout or burn signals. Retired ordinary losers emit no per-deposit settlement event.</td>
 						</tr>
 						<tr>
