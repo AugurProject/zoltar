@@ -19,7 +19,7 @@ private theorem netSuperadditive (a b fee : Nat) :
   exact Nat.add_le_add (Nat.div_mul_le_self _ _) (Nat.div_mul_le_self _ _)
 
 /-- A successful generated call supplies the floor inequality for its output. -/
-private theorem leg (x y gross fee out : Nat)
+theorem exactInputFloorBound (x y gross fee out : Nat)
     (hx : x < word) (hy : y < word) (hg : gross < word) (hf : fee < word)
     (success : returnsAmount "quoteExactInput" x y gross fee out) :
     0 < x ∧ 0 < out ∧ out < y ∧ fee < bps ∧
@@ -47,8 +47,8 @@ theorem splitExactInput (x y a b fee u v : Nat)
   let na := netInput a fee
   let nb := netInput b fee
   let n := netInput (a + b) fee
-  obtain ⟨xp, up, uy, fb, hu⟩ := leg _ _ _ _ _ (by omega) hy (by omega) hf first
-  obtain ⟨_, vp, vy, _, hv⟩ := leg _ _ _ _ _ hreserve (by omega) (by omega) hf second
+  obtain ⟨xp, up, uy, fb, hu⟩ := exactInputFloorBound _ _ _ _ _ (by omega) hy (by omega) hf first
+  obtain ⟨_, vp, vy, _, hv⟩ := exactInputFloorBound _ _ _ _ _ hreserve (by omega) (by omega) hf second
   change u * (x + na) ≤ y * na at hu
   change v * (x + a + nb) ≤ (y - u) * nb at hv
   have feeRetained := Nat.mul_le_mul_left v (Inv32ForwardSteps.netBound a fee)
