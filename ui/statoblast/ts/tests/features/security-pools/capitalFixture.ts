@@ -98,6 +98,8 @@ export function centralSecurityPoolRead(name: string, mode: CentralSecurityPoolM
 	switch (name) {
 		case 'refreshSecurityPoolFees':
 			return undefined
+		case 'priceValidUntil':
+			return 6000n
 		case 'getCurrentBlockTimestamp':
 			return 5_000n
 		case 'securityPool':

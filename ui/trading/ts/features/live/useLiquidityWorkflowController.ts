@@ -1,4 +1,5 @@
-import { estimateBudgetMint, recoveryMintBlocker } from '../../protocol/minting.js'
+import { useMintQuote } from './useMintQuote.js'
+import { estimateBudgetSpend, estimateBudgetMint, recoveryMintBlocker } from '../../protocol/minting.js'
 import { collateralAsset } from '../../protocol/collateral.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { capSubmissionDeadline } from '../../protocol/submissionWindow.js'
@@ -36,7 +37,7 @@ function liquidityExpectation(estimate: LiquidityPreview) {
 
 export function useLiquidityWorkflowController({
 	configuration,
-	market,
+	market: loadedMarket,
 	balanceState,
 	account,
 	walletClient,
@@ -56,10 +57,11 @@ export function useLiquidityWorkflowController({
 		services: LiveLiquidityServices
 		onMarketCreated?: ((pool: Address) => void) | undefined
 	}>) {
-	const [operation, setOperation] = useState<LiquidityOperation>(() => defaultLiquidityOperation(market, nowSeconds))
+	const [operation, setOperation] = useState<LiquidityOperation>(() => defaultLiquidityOperation(loadedMarket, nowSeconds))
 	const [amount, setAmount] = useState('')
 	const [probability, setProbability] = useState('50')
-	const parsed = tryParseNonNegativeDecimalInput(amount.trim(), operation === 'remove' ? 18 : collateralAsset(market).decimals)
+	const parsed = tryParseNonNegativeDecimalInput(amount.trim(), operation === 'remove' ? 18 : collateralAsset(loadedMarket).decimals)
+	const market = useMintQuote(loadedMarket, parsed, operation !== 'remove')
 	const parsedProbability = tryParseNonNegativeDecimalInput(probability.trim(), 2)
 	const conditionalBps = parsedProbability !== undefined && parsedProbability > 0n && parsedProbability < 10_000n ? parsedProbability : undefined
 	const operationAvailable = liquidityOperationAvailable(operation, market, nowSeconds)
@@ -149,6 +151,7 @@ export function useLiquidityWorkflowController({
 		estimate,
 		/** The minimums and maximums the transaction signs for this estimate, shown in the preview. */
 		bounds,
+		requiredSpend: parsed === undefined || operation === 'remove' ? parsed : estimateBudgetSpend(market, parsed),
 		previewBlocker,
 		transaction,
 		selectOperation(next: LiquidityOperation) {

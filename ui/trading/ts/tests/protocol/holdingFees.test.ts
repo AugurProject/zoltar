@@ -51,3 +51,9 @@ test('central snapshots project only future eligible time without charging past 
 	expect(sellHoldingFeeBlocker(central, unit, (unit * 8n) / 10n, 1_000n)).toBeUndefined()
 	expect(liquidityHoldingFeeBlocker(central, unit, unit, unit, 101n, { completeSetShares: unit, yesUsed: unit, noUsed: unit })).toContain('Holding fees')
 })
+
+test('#1675 passive projection stops at accepted price expiry before the signed deadline', () => {
+	const expiring = { ...market, valuation: { timestamp: 100n, feeEndTime: 1000n, projectedCollateralAttoEth: unit, feeAccounting: { ...accounting, centralSettlement: true, centralCheckpointTimestamp: 100n, priceValidUntil: 101n, linearFee: { rateAttoEthPerSecond: unit / 100n, endTime: 1000n } } } }
+	expect(sellHoldingFeeBlocker(expiring, unit, (unit * 99n) / 100n, 1000n)).toBeUndefined()
+	expect(sellHoldingFeeBlocker(expiring, unit, (unit * 99n) / 100n + 1n, 1000n)).toContain('Holding fees')
+})

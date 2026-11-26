@@ -1,3 +1,4 @@
+import { useMintQuote } from './live/useMintQuote.js'
 import { estimateBudgetSpend } from '../protocol/minting.js'
 import { submissionWindowBlocker } from '../protocol/submissionWindow.js'
 import { ETH_GAS_RESERVE_ATTO_ETH } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
@@ -145,10 +146,12 @@ export function LivePositionControls({
 	onOpenSettlement?: (() => void) | undefined
 }) {
 	const { mode, side, state } = ticket
+	const settledAmount = useDebouncedValue(ticket.amount, ESTIMATE_DEBOUNCE_MILLISECONDS)
+	const quotedMarket = useMintQuote(market, tryParseNonNegativeDecimalInput(settledAmount.trim(), collateralAsset(market).decimals), mode === 'entry')
 	const asset = collateralAsset(market)
 	const budget = mode === 'entry' ? tryParseNonNegativeDecimalInput(ticket.amount, asset.decimals) : undefined
 	let required = budget
-	if (budget !== undefined && tokenFunded(market)) required = estimateBudgetSpend(market, budget)
+	if (budget !== undefined && tokenFunded(market)) required = estimateBudgetSpend(quotedMarket, budget)
 	const canFund = mode === 'entry' && marketAcceptsNewRisk(market, nowSeconds) && submissionWindowBlocker(market, 'entry', nowSeconds) === undefined
 	const funding = useCollateralFunding(market, required, fundingContext, canFund)
 	let gasReason: string | undefined
@@ -157,11 +160,10 @@ export function LivePositionControls({
 		else if (wallet.walletEthAttoEth < ETH_GAS_RESERVE_ATTO_ETH) gasReason = collateralCopy.gasRequired
 	}
 	const fundingBalance = tokenFunded(market) ? funding.balance : wallet.walletEthAttoEth
-	const settledAmount = useDebouncedValue(ticket.amount, ESTIMATE_DEBOUNCE_MILLISECONDS)
 	const closed = !marketAcceptsNewRisk(market, nowSeconds)
 	const workflowLocked = externallyLocked || positionControlsWorkflowLocked(state, ticket.positionReceiptWarning)
 	const model = tradeTicketModel({
-		market,
+		market: quotedMarket,
 		mode,
 		side,
 		amount: settledAmount,

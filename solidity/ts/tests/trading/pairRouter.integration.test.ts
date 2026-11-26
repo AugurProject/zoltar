@@ -652,12 +652,15 @@ describe('factory, pair, and router integration', () => {
 		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'swapExactInput', args: [true, 2_000n, 1n, account, NO_DEADLINE] }))
 		const [yesReserve, noReserve] = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getReserves' })
 		expect(noReserve).toBeLessThan(1_001n)
-		const yesBefore = await tokenBalance(account, 1n)
-		const noBefore = await tokenBalance(account, 2n)
-		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'removeLiquidity', args: [1n, 0n, 0n, account, 10n ** 12n] }))
-		expect((await tokenBalance(account, 1n)) - yesBefore).toBe(yesReserve / 1_001n)
-		expect((await tokenBalance(account, 2n)) - noBefore).toBe(0n)
+		const recipient = createWriteClient(getAnvilWindowEthereum(), TEST_ADDRESSES[1]).account.address
+		const ownerBefore = await shareBalances(account)
+		const yesBefore = await tokenBalance(recipient, 1n)
+		const noBefore = await tokenBalance(recipient, 2n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'removeLiquidity', args: [1n, 0n, 0n, recipient, 10n ** 12n] }))
+		expect((await tokenBalance(recipient, 1n)) - yesBefore).toBe(yesReserve / 1_001n)
+		expect((await tokenBalance(recipient, 2n)) - noBefore).toBe(0n)
 		expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })).toBe(0n)
+		expect(await shareBalances(account)).toEqual(ownerBefore)
 		// The permanently locked minimum liquidity keeps both reserves positive.
 		const locked = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'getReserves' })
 		expect(locked[0]).toBeGreaterThan(0n)
@@ -719,6 +722,25 @@ describe('factory, pair, and router integration', () => {
 			expect(await tokenBalance(pair, 0n)).toBe(0n)
 		})
 	}
+
+	test('#1754 router returns actual complete sets when collateral and shares differ', async () => {
+		await initialize()
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionLedger.abi, address: pool, functionName: 'setSharesPerEth', args: [2n] }))
+		const request = { abi: routerArtifact.abi, address: router, functionName: 'enterPosition' as const, args: [pair, 1000n, 1, 1n, account, NO_DEADLINE] as const, value: 1000n }
+		const result = (await client.simulateContract(request)).result
+		expect(result.completeSetShares).toBe(2000n)
+		expect(result.invalidInsurance).toBe(2000n)
+		await writeContractAndWait(client, () => client.writeContract(request))
+	})
+
+	test('#1753 ended status precedes finalization and fork', async () => {
+		await initialize()
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockQuestionData.abi, address: questionData, functionName: 'setEndTime', args: [question, 1n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockForker.abi, address: forker, functionName: 'setQuestionOutcome', args: [pool, 2] }))
+		expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'tradingStatus' })).toBe(1n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockZoltar.abi, address: zoltar, functionName: 'setForkTime', args: [universe, 1n] }))
+		expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'tradingStatus' })).toBe(1n)
+	})
 
 	test.skipIf(process.env['TRADING_REPORT_GAS'] !== '1')('benchmarks every hot operation against a funded pool fixture', async () => {
 		await initialize()

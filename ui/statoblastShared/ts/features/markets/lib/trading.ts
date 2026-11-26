@@ -52,6 +52,7 @@ export function getMaximumMintAmount(walletEthBalanceAttoEth: bigint | undefined
 export function estimateMintCheckpoint({
 	centralSettlement,
 	centralCheckpointTimestamp,
+	priceValidUntil,
 	linearFee,
 	currentTimestamp,
 	feeEndTimestamp,
@@ -59,6 +60,7 @@ export function estimateMintCheckpoint({
 	settlementCollateralAttoEth,
 }: {
 	centralCheckpointTimestamp?: bigint | undefined
+	priceValidUntil?: bigint | undefined
 	centralSettlement?: boolean | undefined
 	linearFee?: LinearFeeState | undefined
 	currentTimestamp: bigint | undefined
@@ -71,7 +73,8 @@ export function estimateMintCheckpoint({
 		if (centralCheckpointTimestamp === undefined) return undefined
 		// The simulated checkpoint includes historical pauses. Only future elapsed time
 		// can accrue again, bounded by the stream's remaining duration in native time.
-		const elapsed = currentTimestamp > centralCheckpointTimestamp ? currentTimestamp - centralCheckpointTimestamp : 0n
+		const projectionEnd = priceValidUntil !== undefined && priceValidUntil < currentTimestamp ? priceValidUntil : currentTimestamp
+		const elapsed = projectionEnd > centralCheckpointTimestamp ? projectionEnd - centralCheckpointTimestamp : 0n
 		const remaining = linearFee.endTime > lastFeeCheckpointNativeTime ? linearFee.endTime - lastFeeCheckpointNativeTime : 0n
 		const scale = linearFee.rateScale ?? 1n
 		if (scale <= 0n) return undefined

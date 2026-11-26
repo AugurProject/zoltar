@@ -235,12 +235,19 @@ function largestTradableBuy(market: LiveMarket, side: Side, ceiling: bigint, sli
 	return low
 }
 
+function inputSizingMarket(market: LiveMarket): LiveMarket {
+	// Shortcuts suggest an input using local arithmetic. The chosen amount still
+	// needs its own authoritative quote before any output or transaction is offered.
+	return { ...market, requiresMintQuote: false, mintQuote: undefined, mintQuoteError: undefined }
+}
+
 /**
  * The 25%, 50%, and Max shortcuts for a buy, trimmed to eight decimals like the sell shortcuts. They divide what can be
  * bought now: the wallet's ETH less the gas reserve and the question ledger's remaining minting capacity, capped where the
  * price impact would pass the refused tier, so no shortcut fills an amount the ticket would then refuse.
  */
-function buyShortcuts(market: LiveMarket, side: Side, walletEthAttoEth: bigint | undefined, slippageBps: bigint) {
+function buyShortcuts(loadedMarket: LiveMarket, side: Side, walletEthAttoEth: bigint | undefined, slippageBps: bigint) {
+	const market = inputSizingMarket(loadedMarket)
 	if (walletEthAttoEth === undefined || recoveryMintBlocker(market) !== undefined) return []
 	const budget = tokenFunded(market) ? walletEthAttoEth : getSpendableEthBalance(walletEthAttoEth)
 	const buyable = largestTradableBuy(market, side, largestBudgetWithinMintingCapacity(market, budget), slippageBps)
@@ -285,7 +292,8 @@ function limitDigits(value: bigint, market: LiveMarket) {
 	return value > 0n && value < 10n ** BigInt(Math.max(0, decimals - LIMIT_DIGITS)) ? decimals : LIMIT_DIGITS
 }
 
-function mintingCapacityReason(payAttoEth: bigint, market: LiveMarket, side: Side, slippageBps: bigint) {
+function mintingCapacityReason(payAttoEth: bigint, loadedMarket: LiveMarket, side: Side, slippageBps: bigint) {
+	const market = inputSizingMarket(loadedMarket)
 	const capacity = market.availableMintingCapacityAttoEth
 	if ((estimateBudgetMint(market, payAttoEth) ?? payAttoEth) <= capacity) return undefined
 	if (capacity === 0n) return ticketCopy.mintingCapacityExhaustedReason
