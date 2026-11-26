@@ -489,13 +489,14 @@ export function withExpectedDeploymentRuntimeCodeHashes(steps: readonly Deployme
 	})
 }
 
-export function assertDeploymentStepRuntimeCode(step: Pick<DeploymentStep, 'address' | 'expectedRuntimeCodeHash' | 'id' | 'trustedSimulationCodePresence'>, code: Hex | undefined) {
+export function assertDeploymentStepRuntimeCode(step: Pick<DeploymentStep, 'address' | 'expectedRuntimeCodeHash' | 'id' | 'trustedSimulationCodePresence' | 'verificationLabel'>, code: Hex | undefined) {
 	if (code === undefined || code === '0x') return false
 	if (step.trustedSimulationCodePresence) return true
-	if (step.expectedRuntimeCodeHash === undefined) throw new Error(`Could not verify the contract code for deployment step ${step.id} on the active network`)
+	const label = step.verificationLabel ?? step.id
+	if (step.expectedRuntimeCodeHash === undefined) throw new Error(`Could not verify the contract code for deployment step ${label} on the active network`)
 	const actualRuntimeCodeHash = keccak256(code)
 	if (actualRuntimeCodeHash !== step.expectedRuntimeCodeHash) {
-		throw new Error(`Unexpected contract code for ${step.id} at ${step.address}: expected ${step.expectedRuntimeCodeHash}, received ${actualRuntimeCodeHash}`)
+		throw new Error(`Unexpected contract code for ${label} at ${step.address}: expected ${step.expectedRuntimeCodeHash}, received ${actualRuntimeCodeHash}`)
 	}
 	return true
 }

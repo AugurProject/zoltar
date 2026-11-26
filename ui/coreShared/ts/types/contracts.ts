@@ -77,6 +77,7 @@ export type ZoltarUniverseSummary = {
 export type DeploymentStep = {
 	id: DeploymentStepId
 	label: string
+	verificationLabel?: string
 	address: Address
 	dependencies: DeploymentStepId[]
 	deploy: (client: ClientsWriteClient) => Promise<Hash>

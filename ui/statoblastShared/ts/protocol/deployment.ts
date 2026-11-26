@@ -247,6 +247,7 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 	]
 	return withExpectedDeploymentRuntimeCodeHashes(steps, profile).map(step => ({
 		...step,
+		verificationLabel: step.label,
 		...(expectedRuntimeCodeHashes?.[step.id] === undefined ? {} : { expectedRuntimeCodeHash: expectedRuntimeCodeHashes[step.id] }),
 	}))
 }
