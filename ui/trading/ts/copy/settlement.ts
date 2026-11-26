@@ -69,7 +69,7 @@ export function migrationAmount(balance: string) {
 }
 
 export function acknowledgeMigration(balance: string, outcome: 'INVALID' | 'YES' | 'NO') {
-	return `I understand this mints ${balance} in each selected child universe and keeps the original shares in the parent universe, permanently locking my ${outcomeLabel(outcome)} transfers in the parent universe.`
+	return `I understand this tops up each selected child universe to ${balance}, subtracting shares already migrated there, and keeps the original shares in the parent universe, permanently locking my ${outcomeLabel(outcome)} transfers in the parent universe.`
 }
 
 /** `balance` is omitted until the wallet's balance is known, so the sentence never quotes a loading or missing state. */

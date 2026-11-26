@@ -6,10 +6,11 @@ export type TransactionFailureExplanation = Readonly<{ cause: string; nextStep: 
 
 type RevertExplanation = TransactionFailureExplanation & Readonly<{ reasons: readonly string[] }>
 
-const SLIPPAGE_REASONS = ['Purchase fee exceeds budget', 'Minimum REP output', 'Minimum long shares', 'Maximum long shares', 'Minimum ETH output', 'Swap slippage', 'Liquidity slippage', 'Liquidity price slippage', 'Minimum liquidity', 'Refreshed estimate no longer satisfies']
+const SLIPPAGE_REASONS = ['Minimum REP output', 'Minimum long shares', 'Maximum long shares', 'Minimum ETH output', 'Swap slippage', 'Liquidity slippage', 'Liquidity price slippage', 'Minimum liquidity', 'Refreshed estimate no longer satisfies']
 
 // Contracts revert with plain strings (see solidity/contracts/trading and QuestionLedger); each group shares one explanation.
 const REVERT_EXPLANATIONS: readonly RevertExplanation[] = [
+	{ reasons: ['Purchase fee exceeds budget'], cause: 'The purchase fee exceeded your funding budget.', nextStep: 'Try again with a fresh quote, or increase the funding budget.' },
 	{
 		// The last reason is the client-side check that the pre-signing simulation still meets the approved estimate bounds.
 		reasons: SLIPPAGE_REASONS,
@@ -83,5 +84,5 @@ export function describeTransactionFailure(error: unknown, fallback: string) {
 export function isSlippageFailure(error: unknown) {
 	if (isWalletRejection(error)) return false
 	const reason = knownRevertReason(error)
-	return reason !== undefined && SLIPPAGE_REASONS.includes(reason)
+	return reason !== undefined && (SLIPPAGE_REASONS.includes(reason) || reason === 'Purchase fee exceeds budget')
 }

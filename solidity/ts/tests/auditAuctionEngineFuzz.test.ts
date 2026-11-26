@@ -1,3 +1,4 @@
+import { waitForRawReceipt } from '../testSupport/waitForRawReceipt'
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { getContractOutput, loadContractsJson, normalizeStorageLayout } from './contractArtifactHelpers'
 import { keccak256, encodeAbiParameters, encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
@@ -183,16 +184,7 @@ describe('audit fuzz: uniform price auction engine versus a brute-force model', 
 		clock += 1n
 		await raw('evm_setNextBlockTimestamp', [`0x${clock.toString(16)}`])
 		const hash = await raw('eth_sendTransaction', [to === undefined ? { from, data, gas: '0x1000000' } : { from, to, data, gas: '0x1000000' }])
-		let receipt: unknown
-		for (let attempt = 0; attempt < 2000 && (typeof receipt !== 'object' || receipt === null); attempt++) {
-			try {
-				receipt = await raw('eth_getTransactionReceipt', [hash])
-			} catch (error) {
-				if (!(error instanceof Error) || !/receipt|transaction|not found/i.test(error.message)) throw error
-				receipt = undefined
-			}
-		}
-		if (typeof receipt !== 'object' || receipt === null || !('status' in receipt)) throw new Error('Transaction receipt missing')
+		const receipt = await waitForRawReceipt(hash, () => raw('eth_getTransactionReceipt', [hash]))
 		const created = 'contractAddress' in receipt && typeof receipt.contractAddress === 'string' ? receipt.contractAddress : undefined
 		return { succeeded: receipt.status === '0x1', created }
 	}

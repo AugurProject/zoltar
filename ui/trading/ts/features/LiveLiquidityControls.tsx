@@ -237,7 +237,7 @@ function LiquidityPreviewSection({ preview, bounds, market, connected, protectio
 					)}
 				</div>
 			</div>
-			{removalValue === undefined ? undefined : <p className='detail'>{liquidityCopy.approximateRemovalValue(formatCollateralAmount(removalValue, market), false)}</p>}
+			{removalValue === undefined ? undefined : <p className='detail'>{liquidityCopy.approximateRemovalValue(formatCollateralAmount(removalValue, market), false, (market.settlementRecoveryAttoRep ?? 0n) > 0n)}</p>}
 			<DataGrid dense>
 				<MetricField label={liquidityCopy.minimumReceived}>
 					{preview.operation === 'remove' ? (

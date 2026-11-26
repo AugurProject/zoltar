@@ -102,7 +102,7 @@ export function SecurityPoolRepairAuction(parameters: SecurityPoolAuctionParamet
 			{auction?.bids.map(bid => {
 				let bidStatus = copy.awaitingClose
 				if (bid.earlyRefundAttoEth > 0n) bidStatus = copy.earlyRefundAvailable
-				if (!auction.finalized && bid.refundSettled) bidStatus = auction.refundAttoEth === 0n ? copy.earlyRefundWithdrawn : copy.earlyRefundCredited
+				if (!auction.finalized && bid.refundSettled) bidStatus = copy.earlyRefundSettled
 				if (bid.fill !== undefined) bidStatus = bid.fill.filledLots > 0n ? copy.funded : copy.noFill
 				let refundAttoEth = bid.earlyRefundAttoEth > 0n ? bid.earlyRefundAttoEth : undefined
 				if (bid.refundSettled) refundAttoEth = bid.lots * auction.lotAttoEth

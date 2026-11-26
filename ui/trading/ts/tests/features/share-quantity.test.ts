@@ -1,3 +1,4 @@
+import { acknowledgeMigration } from '../../copy/settlement.js'
 import { estimateMintCheckpoint } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
 import { liveMarketFixture } from '../support/liveMarketFixture.js'
 import { expect, test } from 'bun:test'
@@ -49,4 +50,9 @@ test('values LP tokens from their reserve claims, including resolved and unavail
 	expect(formatLpWithValue(10n ** 18n, { ...market, questionOutcome: 2 })).toBe('1.00 LP (3.00 WETH winning payout)')
 	expect(formatLpWithValue(10n ** 18n, { ...market, questionOutcome: 0 })).toBe('1.00 LP (0.00 WETH winning payout)')
 	expect(formatLpWithValue(10n ** 18n, { ...market, loadError: 'offline' })).toBe('1.00 LP (Value unavailable)')
+})
+
+test('#1758 migration acknowledgment explains per-child top-ups', () => {
+	expect(acknowledgeMigration('10 YES', 'YES')).toContain('already migrated')
+	expect(acknowledgeMigration('10 YES', 'YES')).not.toContain('mints 10 YES in each')
 })

@@ -8,7 +8,7 @@ const address = { type: 'address' } as const
 const selector = (signature: string) => keccak256(stringToHex(signature)).slice(0, 10)
 
 /** One portfolio's checkpointed state, including Multicall3 reads pinned by transaction tests. */
-export function feeAccountingRpcResult(data: Hex, market: LiveMarket, timestamp: bigint, redemptionAttoEth?: bigint): Hex | undefined {
+export function feeAccountingRpcResult(data: Hex, market: LiveMarket, timestamp: bigint, redemptionAttoEth?: bigint, redemptionAttoRep?: bigint, questionCapacityAttoEth?: bigint): Hex | undefined {
 	const signature = data.slice(0, 10)
 	if (signature === selector('refreshSecurityPoolFees()')) return '0x'
 	if (signature === selector('redeemShares()')) return '0x'
@@ -21,7 +21,7 @@ export function feeAccountingRpcResult(data: Hex, market: LiveMarket, timestamp:
 			[
 				calls.map((call: unknown) => {
 					if (typeof call !== 'object' || call === null || !('callData' in call) || typeof call.callData !== 'string' || !/^0x[0-9a-fA-F]*$/.test(call.callData)) throw new Error('Invalid multicall call')
-					const result = feeAccountingRpcResult(`0x${call.callData.slice(2)}`, market, timestamp, redemptionAttoEth)
+					const result = feeAccountingRpcResult(`0x${call.callData.slice(2)}`, market, timestamp, redemptionAttoEth, redemptionAttoRep, questionCapacityAttoEth)
 					if (result === undefined) throw new Error(`Unexpected portfolio multicall ${call.callData}`)
 					return [true, result]
 				}),
@@ -43,7 +43,7 @@ export function feeAccountingRpcResult(data: Hex, market: LiveMarket, timestamp:
 		['questionId()', market.questionId],
 		['bookIds(uint248)', 1n],
 		['feeTimestamp(uint248)', timestamp],
-		['availableMintCapacity(uint248)', market.availableMintingCapacityAttoEth],
+		['additionalMintCapacityAttoEth()', questionCapacityAttoEth ?? market.availableMintingCapacityAttoEth],
 		['statoblastSecurityMultiplierBps()', market.statoblastSecurityMultiplierBps],
 		['purchaseFeeBps()', market.mintFees?.purchaseFeeBps ?? 0n],
 		['annualFeeBps()', market.mintFees?.annualFeeBps ?? 0n],
@@ -64,7 +64,7 @@ export function feeAccountingRpcResult(data: Hex, market: LiveMarket, timestamp:
 	}
 	if (signature === selector('attoSharesToAttoRep(uint256)')) {
 		const shares = BigInt(`0x${data.slice(10)}`)
-		return encodeAbiParameters([uint256], [supply === 0n ? 0n : (shares * (market.settlementRecoveryAttoRep ?? 0n)) / supply])
+		return encodeAbiParameters([uint256], [redemptionAttoRep ?? (supply === 0n ? 0n : (shares * (market.settlementRecoveryAttoRep ?? 0n)) / supply)])
 	}
 	return undefined
 }

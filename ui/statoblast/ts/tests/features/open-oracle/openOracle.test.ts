@@ -849,3 +849,14 @@ describe('OpenOracle dispute WETH wrap step', () => {
 		expect(createDisputeSubmissionPreview({ token2Balance: 0n, walletEthBalanceAttoEth: undefined, wethAddress }).wethWrap?.blockMessage).toEqual({ kind: 'hidden-loading', message: 'Loading ETH balance…' })
 	})
 })
+
+test('#1671 dispute funding is unavailable outside uint128, including automatic base escalation', () => {
+	const maximum = (1n << 128n) - 1n
+	const atBoundary = createDisputeSubmissionPreview({ disputeNewAmount2Input: maximum.toString() })
+	expect(atBoundary.inputBlockMessage).toBeUndefined()
+	const tooLarge = createDisputeSubmissionPreview({ disputeNewAmount2Input: (maximum + 1n).toString() })
+	expect(tooLarge.inputBlockMessage?.message).toContain('contract maximum')
+	expect(tooLarge.token2ContributionAmount).toBeUndefined()
+	const automatic = createDisputeSubmissionPreview({ reportDetails: { ...createDisputeSubmissionPreviewReport(), currentAmount1: maximum, escalationHalt: maximum } })
+	expect(automatic.inputBlockMessage?.message).toContain('contract maximum')
+})

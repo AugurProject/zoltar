@@ -1,4 +1,3 @@
-import { attoSharesToRecoveryAttoRep } from '../lib/shareValue.js'
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_QuestionLedger_QuestionLedger } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
@@ -6,7 +5,7 @@ import type { LiveMarket } from './liveMarket.js'
 import type { SettlementOperation, ShareOutcome } from './settlement.js'
 import { minimumAfterSlippage, requireTransactionSlippageBps, simulateWithDeadline, stableSimulation, UI_SLIPPAGE_BPS, type TransactionExpiry } from './tradeQuote.js'
 import { encodeReceiveBasedRedeemRequest, shareOperationRouter, shareTokenAbi } from './authorization.js'
-import { loadTransactionFeeMarket, loadRedemptionPayout, sellHoldingFeeBlocker } from './holdingFees.js'
+import { loadTransactionFeeMarket, loadRedemptionPayout, loadRedemptionRecoveryPayout, sellHoldingFeeBlocker } from './holdingFees.js'
 const questionLedgerAbi = statoblast_QuestionLedger_QuestionLedger.abi
 
 export function outcomeValue(outcome: ShareOutcome) {
@@ -53,8 +52,8 @@ export async function simulateSettlement(
 			const invalidTokenId = market.universeId << 8n
 			const estimatedEthOut = await loadRedemptionPayout(client, market, amount, block.blockNumber)
 			const minimumEth = minimumAfterSlippage(estimatedEthOut, slippageBps)
-			const expectedAttoRep = attoSharesToRecoveryAttoRep(amount, feeMarket)
-			const feeBlocker = sellHoldingFeeBlocker(feeMarket, amount, minimumEth, deadline, estimatedEthOut)
+			const expectedAttoRep = await loadRedemptionRecoveryPayout(client, market, amount, block.blockNumber)
+			const feeBlocker = sellHoldingFeeBlocker(feeMarket, amount, minimumEth, deadline, estimatedEthOut, expectedAttoRep)
 			if (feeBlocker !== undefined) throw new Error(feeBlocker)
 			const data = encodeReceiveBasedRedeemRequest(market, amount, minimumEth, account, deadline, minimumAfterSlippage(expectedAttoRep, slippageBps))
 			const simulation = await client.simulateContract({
