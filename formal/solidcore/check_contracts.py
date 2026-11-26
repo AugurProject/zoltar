@@ -192,6 +192,8 @@ def check(args, work):
                 'contracts/trading/TwoWayConstantProductPair.sol', 'TwoWayConstantProductPair',
             ):
                 ns = 'SolidCore.Solidity.Inv37PairGenerated'
+            elif (path, name) == ('contracts/Zoltar.sol', 'Zoltar'):
+                ns = 'SolidCore.Solidity.Inv40Generated'
             try:
                 selected = project(ast, name)
                 root = next(

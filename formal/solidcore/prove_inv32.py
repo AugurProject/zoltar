@@ -1,4 +1,4 @@
-"""Rebuild trading quote theorems and the INV-37 backing inequalities from a checked source model produced by check_contracts.py."""
+"""Rebuild trading quote theorems and the INV-37 backing and INV-40 threshold inequalities from a checked source model produced by check_contracts.py."""
 
 import argparse
 from graphlib import TopologicalSorter
@@ -9,7 +9,7 @@ import subprocess
 from tempfile import TemporaryDirectory
 
 
-def prove(models, solidcore, with_pair=False):
+def prove(models, solidcore, with_pair=False, with_thresholds=False):
     harness = 'TwoWayConstantProductMathHarness'
     model = models / 'contracts/trading/test' / (harness + '.sol') / (harness + '.lean')
     here = Path(__file__).parent
@@ -19,6 +19,10 @@ def prove(models, solidcore, with_pair=False):
         # Require each public proof even if its entry module is accidentally removed.
         entries = [(number, f'Inv{number}Proved.lean') for number in range(32, 37)]
         entries.append((37, 'Inv37Backing.lean'))
+        if with_thresholds:
+            entries.append((40, 'Inv40GeneratedThresholds.lean'))
+            zoltar = models / 'contracts/Zoltar.sol/Zoltar.lean'
+            shutil.copyfile(zoltar, work / 'Inv40Generated.lean')
         for number, name in entries:
             proof_sources = here / f'inv{number}'
             if not (proof_sources / name).is_file():
@@ -58,5 +62,6 @@ if __name__ == '__main__':
     cli.add_argument('models', type=Path, help='checked modules directory')
     cli.add_argument('solidcore', type=Path, help='patched SolidCore checkout')
     cli.add_argument('--with-pair', action='store_true', help='also check the generated pair reserve guard')
+    cli.add_argument('--with-thresholds', action='store_true', help='also check the generated Zoltar threshold getters')
     args = cli.parse_args()
-    prove(args.models.resolve(), args.solidcore.resolve(), args.with_pair)
+    prove(args.models.resolve(), args.solidcore.resolve(), args.with_pair, args.with_thresholds)

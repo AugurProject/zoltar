@@ -15,6 +15,7 @@ override the respective binaries on PATH. Set SOLIDCORE_JOBS to limit parallel
 contract checks. Each run writes passing Lean modules under WORKDIR/models-*
 and coverage to WORKDIR/contracts.tsv, then proves INV-32 through INV-36 against the emitted
 harness, checks INV-37 backing inequalities and the generated pair reserve guard,
+checks INV-40 threshold arithmetic against the generated getters,
 and checks INV-04 arithmetic and the INV-04 and INV-27 boundary witnesses. A failed proof, build, test or source declaration check exits nonzero.
 HELP
 }
@@ -73,5 +74,5 @@ fi
   for proof in inv04/Inv04RequiredCash.lean inv27/Inv27Counterexample.lean; do
     LEAN_PATH="$witness:$(lake env printenv LEAN_PATH)" lean "$here/$proof"
   done
-  python3 "$here/prove_inv32.py" "$models/contracts" "$sc" --with-pair
+  python3 "$here/prove_inv32.py" "$models/contracts" "$sc" --with-pair --with-thresholds
 )
