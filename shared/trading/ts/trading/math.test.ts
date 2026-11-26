@@ -22,3 +22,10 @@ describe('two-way constant-product math', () => {
 		expect(() => quoteExactOutput(1_000n, 1_000n, 10n, 10_000n)).toThrow('feeBps is out of range')
 	})
 })
+
+test('exact-output quotes reject rounded results outside uint256 (#1724)', () => {
+	const maximum = (1n << 256n) - 1n
+	expect(quoteExactOutput(maximum, 2n, 1n, 0n).amountIn).toBe(maximum)
+	expect(() => quoteExactOutput(maximum, 3n, 2n, 0n)).toThrow('uint256')
+	expect(() => quoteExactOutput(maximum, 2n, 1n, 1n)).toThrow('uint256')
+})

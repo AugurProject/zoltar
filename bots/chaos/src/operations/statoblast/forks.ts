@@ -1,6 +1,6 @@
 import type { EcosystemSnapshot, OperationDefinition, OperationEvidence, PlanningOptions, PoolSnapshot } from '../types.ts'
-import { choose, eligible, encodeStep, eventEvidence, mixSeed, planBase } from '../planning.ts'
-import { zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { allowance, amount, choose, eligible, encodePreflightCall, encodeStep, erc20WalletDebit, eventEvidence, mixSeed, ONE_TOKEN, optionAmount, planBase, tokenInventory } from '../planning.ts'
+import { encodeAbiParameters, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { questionLedgerAbi, questionForkerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { BINARY_OUTCOME_NONE, childRouteTopologyCapacityBlocker } from './planning.ts'
 
@@ -63,7 +63,14 @@ export function forkDefinition(kind: 'initiate' | 'create-child' | 'own-question
 			const universe = snapshot.universes.find(universe => universe.id === pool.universeId)
 			if (universe === undefined) return []
 			if (kind === 'initiate') return universe.forkTime !== '0' && pool.systemState === 0 && pool.questionOutcome === BINARY_OUTCOME_NONE ? [{ pool, outcome: '0', targetUniverse: '0' }] : []
-			if (kind === 'own-question') return pool.ownQuestionForkReady ? [{ pool, outcome: '0', targetUniverse: '0' }] : []
+			if (kind === 'own-question') {
+				if (!pool.ownQuestionForkReady || options === undefined) return []
+				const shortfall = amount(pool.ownQuestionForkShortfallAttoRep)
+				const inventory = tokenInventory(snapshot, universe.repToken)
+				if (shortfall > optionAmount(options, 'maxRepSpendAttoRep', ONE_TOKEN)) return []
+				if (shortfall > 0n && (inventory === undefined || amount(inventory.balance) < shortfall + optionAmount(options, 'minimumRepReserveAttoRep', ONE_TOKEN) || allowance(inventory, pool.ownQuestionForkSpender) < shortfall)) return []
+				return [{ pool, outcome: '0', targetUniverse: '0' }]
+			}
 			if (pool.systemState !== 1 || universe.forkTime === '0') return []
 			return Object.entries(pool.childPoolPreparations).flatMap(([outcome, preparation]) =>
 				(options === undefined || preparation.branchReady) && preparation.childPool === zeroAddress && (options === undefined || childRouteTopologyCapacityBlocker(snapshot, pool, outcome, options, 'Security pool question materialization') === undefined)
@@ -74,6 +81,23 @@ export function forkDefinition(kind: 'initiate' | 'create-child' | 'own-question
 	}
 	const metadata = (candidate: ReturnType<typeof candidates>[number]) => ({ pool: candidate.pool.address, outcome: candidate.outcome })
 	function build(snapshot: EcosystemSnapshot, candidate: ReturnType<typeof candidates>[number]) {
+		const universe = snapshot.universes.find(universe => universe.id === candidate.pool.universeId)
+		if (universe === undefined) throw new Error('Fork universe is missing')
+		const shortfall = kind === 'own-question' ? amount(candidate.pool.ownQuestionForkShortfallAttoRep) : 0n
+		const preflightCalls =
+			kind === 'own-question'
+				? [
+						encodePreflightCall({
+							abi: questionForkerAbi,
+							args: [candidate.pool.address],
+							caller: snapshot.wallet.address,
+							expectedResult: encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [candidate.pool.ownQuestionForkSpender, shortfall]),
+							functionName: 'getOwnForkAdmissionShortfall',
+							label: 'Own-question fork funding has not changed',
+							to: snapshot.deployments.questionForker,
+						}),
+					]
+				: []
 		const evidence: OperationEvidence[] =
 			kind === 'create-child'
 				? [{ kind: 'storage-postcondition', contract: candidate.pool.securityPool, abi: 'function getQuestionLedger(uint256,uint248) view returns (address)', functionName: 'getQuestionLedger', args: [candidate.pool.questionId, candidate.targetUniverse], relation: 'greater-than', expected: '0' }]
@@ -88,7 +112,20 @@ export function forkDefinition(kind: 'initiate' | 'create-child' | 'own-question
 			priority: kind === 'create-child' ? 'urgent' : 'random',
 			risk: 'irreversible',
 			snapshot,
-			steps: [encodeStep({ abi: questionForkerAbi, evidence, args: kind === 'create-child' ? [candidate.pool.address, BigInt(candidate.targetUniverse)] : [candidate.pool.address], functionName: method, id: method, label, to: snapshot.deployments.questionForker, gasLimit: 16_777_216n })],
+			steps: [
+				encodeStep({
+					abi: questionForkerAbi,
+					evidence,
+					args: kind === 'create-child' ? [candidate.pool.address, BigInt(candidate.targetUniverse)] : [candidate.pool.address],
+					functionName: method,
+					id: method,
+					label,
+					to: snapshot.deployments.questionForker,
+					gasLimit: 16_777_216n,
+					preflightCalls,
+					walletAssetDebits: shortfall > 0n ? [erc20WalletDebit(universe.repToken, shortfall, 'rep')] : [],
+				}),
+			],
 		})
 	}
 	return {

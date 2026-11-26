@@ -295,7 +295,7 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 	const collateral = await loadTradingCollateral(client, questionLedgerAddress, client.account.address)
 	const quoted = await quote()
 	const purchaseFee = quoted.fee
-	const maximumRecoveryAttoRep = securityPoolRecoveryMintBudget(quoted.recoveryAttoRep)
+	const maximumRecoveryAttoRep = (await loadRecoveryMintFunding(client, securityPool, universeId, client.account.address, quoted.recoveryAttoRep)).maximum
 	const maximumFee = (purchaseFee * 10_100n + 9_999n) / 10_000n
 	const minimumShares = await client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'attoEthToAttoShares', args: [amount] })
 	const args = [universeId, questionId, amount, client.account.address, minimumShares, maximumFee] as const
@@ -306,7 +306,7 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 		...mintCall,
 		value: 0n,
 		reviewTitle: 'Buy complete sets',
-		reviewDescription: `Estimated purchase fee: ${formatCurrencyBalanceWithUnit(purchaseFee, collateral.symbol, collateral.decimals)}. Includes 1% fee budget headroom; only the actual fee is transferred. Recovery contribution: ${formatCurrencyBalanceWithUnit(quoted.recoveryAttoRep, commonCopy.rep)}. Maximum recovery REP contribution: ${formatCurrencyBalanceWithUnit(maximumRecoveryAttoRep, commonCopy.rep)}, including 1% headroom and rounding; only the actual contribution is transferred.`,
+		reviewDescription: `Estimated purchase fee: ${formatCurrencyBalanceWithUnit(purchaseFee, collateral.symbol, collateral.decimals)}. Includes 1% fee budget headroom; only the actual fee is transferred. Recovery contribution: ${formatCurrencyBalanceWithUnit(quoted.recoveryAttoRep, commonCopy.rep)}. Maximum recovery REP contribution: ${formatCurrencyBalanceWithUnit(maximumRecoveryAttoRep, commonCopy.rep)}; only the actual contribution is transferred.`,
 	} as const
 	client.onTransactionPlan?.([
 		{
@@ -320,8 +320,8 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 				if (latest.balance < amount + fresh.fee) throw new Error('Insufficient collateral for minting and purchase fees.')
 				if (fresh.recoveryAttoRep > maximumRecoveryAttoRep) throw new Error('Recovery REP quote changed. Review the amount again.')
 				const recovery = await loadRecoveryMintFunding(client, securityPool, universeId, client.account.address, fresh.recoveryAttoRep)
-				if (recovery.balance < maximumRecoveryAttoRep) throw new Error(collateralCopy.insufficientRecoveryRep)
-				if (recovery.allowance < maximumRecoveryAttoRep) throw new Error(collateralCopy.recoveryApprovalRequired)
+				if (recovery.balance < fresh.recoveryAttoRep) throw new Error(collateralCopy.insufficientRecoveryRep)
+				if (recovery.allowance < fresh.recoveryAttoRep) throw new Error(collateralCopy.recoveryApprovalRequired)
 				await client.estimateGas({ account: client.account, to: callParams.address, data: encodeFunctionData(callParams), value: callParams.value })
 				await validateBeforeSubmit()
 			},

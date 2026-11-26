@@ -16,6 +16,7 @@ const abi = parseAbi(['function createCompleteSet(uint248 universeId,uint256 que
 async function setup(snapshot = capitalSnapshot(), recoveryAttoRep = 0n, recoveryToken = token) {
 	const source = capitalClient(snapshot)
 	const values = {
+		refreshSecurityPoolFees: undefined,
 		questionOriginIds: `0x${'11'.repeat(32)}`,
 		getQuestionLedger: capital,
 		questionId: 999n,

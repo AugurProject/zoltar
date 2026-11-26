@@ -1,3 +1,4 @@
+import { requireTokenMintFunding } from './minting.js'
 import { tokenFunded } from './collateral.js'
 import { simulateLiquidity, type LiquidityOperation } from './liquiditySimulation.js'
 import { requireFreshSubmissionWindow } from './submissionWindow.js'
@@ -57,6 +58,7 @@ export async function submitFreshLiquidity(client: WalletClient, configuration: 
 		return initializedPairAddress === undefined
 			? await guardedWrite(async () => {
 					await requireFreshSubmissionWindow(client, quote.market, quote.operation, refreshed.deadline)
+					await requireTokenMintFunding(client, configuration, quote.market, account, refreshed.mintAttoEth, quote.amount)
 					return tokenFunded(quote.market)
 						? await client.writeContract({
 								abi: router.abi,
@@ -76,6 +78,7 @@ export async function submitFreshLiquidity(client: WalletClient, configuration: 
 				})
 			: await guardedWrite(async () => {
 					await requireFreshSubmissionWindow(client, quote.market, quote.operation, refreshed.deadline)
+					await requireTokenMintFunding(client, configuration, quote.market, account, refreshed.mintAttoEth, quote.amount)
 					return tokenFunded(quote.market)
 						? await client.writeContract({
 								abi: router.abi,
@@ -108,6 +111,7 @@ export async function submitFreshLiquidity(client: WalletClient, configuration: 
 		if (feeBlocker !== undefined) throw new Error(feeBlocker)
 		return await guardedWrite(async () => {
 			await requireFreshSubmissionWindow(client, quote.market, quote.operation, refreshed.deadline)
+			await requireTokenMintFunding(client, configuration, quote.market, account, refreshed.mintAttoEth, quote.amount)
 			return tokenFunded(quote.market)
 				? await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithCollateral', account, args: [pairAddress, refreshed.mintAttoEth, maximumYes, maximumNo, minimumLiquidity, account, refreshed.deadline, quote.amount] })
 				: await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, refreshed.mintAttoEth, maximumYes, maximumNo, minimumLiquidity, account, refreshed.deadline], value: quote.amount })
@@ -115,5 +119,8 @@ export async function submitFreshLiquidity(client: WalletClient, configuration: 
 	}
 	const minimumYes = retainApprovedMinimum(bounds.minimumYes, refreshed.expectedYes, 'YES')
 	const minimumNo = retainApprovedMinimum(bounds.minimumNo, refreshed.expectedNo, 'NO')
-	return await guardedWrite(async () => await client.writeContract({ abi: pair.abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [quote.amount, minimumYes, minimumNo, account, refreshed.deadline] }))
+	return await guardedWrite(async () => {
+		await requireFreshSubmissionWindow(client, quote.market, quote.operation, refreshed.deadline)
+		return await client.writeContract({ abi: pair.abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [quote.amount, minimumYes, minimumNo, account, refreshed.deadline] })
+	})
 }

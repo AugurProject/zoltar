@@ -55,6 +55,8 @@ export function snapshotFixture(): EcosystemSnapshot {
 				oracleExposureAttoEth: (10n ** 18n).toString(),
 				additionalMintCapacityAttoEth: (10n ** 19n).toString(),
 				ownQuestionForkReady: false,
+				ownQuestionForkShortfallAttoRep: 0n.toString(),
+				ownQuestionForkSpender: address(50),
 				escalationCanTriggerOwnFork: false,
 				escalationForkContinuation: false,
 				escalationForkCarryFundingComplete: false,

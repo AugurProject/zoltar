@@ -117,7 +117,9 @@ function paidTakeoverPlan(observation: SecurityPoolObservation, position: Securi
 	const required = requiredFor(commitment)
 	const ownFunding = required > snapshot.ownerPrincipalAttoRep + takeoverReward ? required - snapshot.ownerPrincipalAttoRep - takeoverReward : 0n
 	if (ownFunding > 0n && receiver !== undefined && receiver.maxHealthyPrice < snapshot.liquidationPrice) return reject('Receiver position is liquidating; principal top-ups are unavailable')
-	const maximumOwnerPrincipal = policy.maximumPrincipalAttoRep < policy.maximumTotalPrincipalAttoRep - totalPrincipal + snapshot.ownerPrincipalAttoRep ? policy.maximumPrincipalAttoRep : policy.maximumTotalPrincipalAttoRep - totalPrincipal + snapshot.ownerPrincipalAttoRep
+	const poolPrincipalHeadroom = policy.maximumPrincipalAttoRep - (observation.managedPrincipalAttoRep ?? snapshot.ownerPrincipalAttoRep) + snapshot.ownerPrincipalAttoRep
+	const globalPrincipalHeadroom = policy.maximumTotalPrincipalAttoRep - totalPrincipal + snapshot.ownerPrincipalAttoRep
+	const maximumOwnerPrincipal = poolPrincipalHeadroom < globalPrincipalHeadroom ? poolPrincipalHeadroom : globalPrincipalHeadroom
 	// Both receiver-funded principal and the pledged takeover reward count toward exposure limits.
 	if (maximumOwnerPrincipal < snapshot.ownerPrincipalAttoRep + ownFunding + takeoverReward) return reject('Managed principal exposure limit would be exceeded')
 	if (ownFunding > policy.maximumOwnFundingAttoRep) return reject('Own REP funding limit would be exceeded')

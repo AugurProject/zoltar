@@ -83,8 +83,13 @@ export function largestExitForLongShares(parameters: LargestExitParameters) {
 	if (high < 0n) return 0n
 	while (low < high) {
 		const candidate = (low + high + 1n) / 2n
-		if (quoteExitPosition(parameters.longOutcome, candidate, parameters).totalLongShares <= parameters.longShares) low = candidate
-		else high = candidate - 1n
+		try {
+			if (quoteExitPosition(parameters.longOutcome, candidate, parameters).totalLongShares <= parameters.longShares) low = candidate
+			else high = candidate - 1n
+		} catch (error) {
+			if (!(error instanceof RangeError)) throw error
+			high = candidate - 1n
+		}
 	}
 	return low
 }

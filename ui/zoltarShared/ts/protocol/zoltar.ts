@@ -201,7 +201,7 @@ async function loadOutcomeDisplayName(client: ReadClient, questionDataAddress: A
 }
 
 /**
- * Walks a universe's ancestry to genesis and names each generation by the fork outcome that created it.
+ * Names up to 64 recent generations, reaching genesis when it is within that bound.
  * A child's `forkingOutcomeIndex` indexes its parent's fork question, which never changes once the parent has forked.
  */
 async function loadUniverseLineage(client: ReadClient, universeId: bigint, universe: UniverseTuple, zoltarAddress: Address): Promise<UniverseLineageStep[]> {
@@ -209,7 +209,7 @@ async function loadUniverseLineage(client: ReadClient, universeId: bigint, unive
 	let currentUniverseId = universeId
 	let currentUniverse = universe
 	while (currentUniverseId !== 0n) {
-		if (ancestry.length >= MAX_LINEAGE_DEPTH) throw new Error('Universe lineage is deeper than supported')
+		if (ancestry.length >= MAX_LINEAGE_DEPTH) return ancestry.reverse()
 		const [, , forkingOutcomeIndex, , parentUniverseId] = currentUniverse
 		const parentUniverse: UniverseTuple = await client.readContract({ abi: Zoltar_Zoltar.abi, functionName: 'universes', address: zoltarAddress, args: [parentUniverseId] })
 		const [, parentForkQuestionId] = parentUniverse

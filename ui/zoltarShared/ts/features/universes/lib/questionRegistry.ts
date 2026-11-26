@@ -28,6 +28,15 @@ export function mergeQuestionLists(existingQuestions: MarketDetails[], nextQuest
 	return [...questionsById.values()]
 }
 
+/** Replaces identities owned by a refreshed registry page while preserving other loaded pages. */
+export function reconcileQuestionPage(existingQuestions: MarketDetails[], previousPage: MarketDetailsPage | undefined, nextPage: MarketDetailsPage) {
+	const replaced = previousPage?.pageIndex === nextPage.pageIndex && previousPage.pageSize === nextPage.pageSize ? new Set(previousPage.questions.map(getQuestionKey)) : new Set<string>()
+	return mergeQuestionLists(
+		existingQuestions.filter(question => !replaced.has(getQuestionKey(question))),
+		nextPage.questions,
+	)
+}
+
 /**
  * Places the newest registry entry into the loaded state without rereading the registry.
  * The registry appends questions, so the created question sits at index `questionCount - 1`;

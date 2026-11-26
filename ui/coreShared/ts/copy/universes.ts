@@ -40,3 +40,5 @@ export const formatForkedSwitcherAriaLabel = (universeLabel: CopyTemplateValue) 
 export const forked = 'Forked'
 
 export const universeNotFoundTitle = 'Universe not found'
+
+export const earlierGenerationsOmitted = 'Earlier generations omitted'

@@ -81,7 +81,7 @@ export function SecurityPoolPriceReport(parameters: SecurityPoolPriceParameters)
 					<CurrencyValue value={model.funding?.growthHeadroomAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
 				</MetricField>
 				<MetricField label={copy.bounty} loading={model.loading}>
-					<CurrencyValue value={observation?.bounty} suffix={common.eth} />
+					<CurrencyValue value={model.funding?.bounty ?? observation?.nextBlockBounty} suffix={common.eth} />
 				</MetricField>
 				<MetricField label={collateralCopy.walletBalance(model.collateral.symbol)} loading={model.loading}>
 					<CurrencyValue value={observation?.wethBalanceAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />

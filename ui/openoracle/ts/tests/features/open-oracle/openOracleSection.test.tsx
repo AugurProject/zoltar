@@ -909,3 +909,16 @@ void describe('OpenOracleSection', () => {
 		expect(getButtonDisabledReason(disputeButton)).toBe('Connect a wallet before disputing the report.')
 	})
 })
+
+test('native report credit has one ETH row and withdrawal action (#1696)', async () => {
+	const rendered = await renderBrowseSection({
+		activeView: 'selected-report',
+		openOracleReportDetails: createOpenOracleReportDetails({ currentReporter: REPORTER, reportTimestamp: 100n, settlementTimestamp: 160n, token1: zeroAddress, token1Symbol: 'ETH', token1Decimals: 18, isDistributed: true }),
+		openOracleWithdrawableBalances: { ethAttoEth: TOKEN_UNITS, token1: TOKEN_UNITS, token2: 0n },
+	})
+	try {
+		expect(within(rendered.container).getAllByRole('button', { name: 'Withdraw ETH' })).toHaveLength(1)
+	} finally {
+		await rendered.cleanup()
+	}
+})

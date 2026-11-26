@@ -22,7 +22,7 @@
 					<li>Redeem matching Invalid, Yes, and No as <a href="../reference/glossary.html#complete-set">complete sets</a> while the <a href="../reference/glossary.html#question-ledger">question ledger</a> is <code>Operational</code> and its universe has not forked. If the universe forks while the question is unresolved, follow <a href="./trading-handle-a-fork.html">Handle a universe fork</a>.</li>
 					<li>After the market finalizes, redeem the winning share through <code>QuestionLedger.redeemShares</code>, which requires the question ledger to be <code>Operational</code>. Keep redeeming through this question ledger if its universe forks later; resolved shares cannot migrate.</li>
 				</ol>
-				<p>On an Invalid result, Invalid is the only winning share. A redemption burns the shares and pays ETH at the question ledger’s current collateral rate. A shared security pool child can also pay <a href="../explanation/statoblast.html#security-pool-shared-forks">recovery REP</a>, even when its ETH payout is zero. Redemption requires neither a new report nor an auction buyer.</p>
+				<p>On an Invalid result, Invalid is the only winning share. Redemption burns the shares and pays collateral at the question ledger’s current rate. For WETH-backed markets, winning-share redemption pays WETH and complete-set redemption through the router pays ETH. A shared security pool child can also pay <a href="../explanation/statoblast.html#security-pool-shared-forks">recovery REP</a>, even when its collateral payout is zero. Redemption requires neither a new report nor an auction buyer.</p>
 			</section>
 			<section id="in-the-ui">
 				<h2>In the UI</h2>
@@ -35,7 +35,7 @@
 					<a class="screenshot-link" href="../assets/screenshots/trading/settlement.png"><img width="480" height="811" src="../assets/screenshots/trading/settlement.png" alt="The Settlement tab of an ended market with Redeem sets selected, 0.001 entered in ETH to redeem, a Max button, a note that you hold 1.005 complete sets worth 1.0049 ETH, an estimate of about 0.001 ETH received with a 0.0009 ETH minimum, and an enabled Redeem complete sets button." loading="lazy" /></a>
 					<figcaption id="fig-trading-settlement-caption"><span class="figure-label">Settlement after the question ends.</span> The market has not finalized yet, so only complete-set redemption and fork migration are offered.</figcaption>
 				</figure>
-				<p>Check both asset balances in the selected universe after confirmation. <strong>Portfolio</strong> shows recovery REP separately from ETH.</p>
+				<p>Check both asset balances in the selected universe after confirmation. <strong>Portfolio</strong> shows recovery REP separately from collateral. For a WETH-backed market, check your WETH balance after redeeming winning shares.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>

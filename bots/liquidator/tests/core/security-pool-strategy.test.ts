@@ -5,7 +5,7 @@ import { DEFAULT_TRANSACTION_VALIDITY_BLOCKS } from '@zoltar/bot-shared/executio
 import { assertSecurityPoolPlanStillAllowed } from '../../src/execution/security-pool-executor.ts'
 import { initialRuntimeState, operatorSnapshot } from '../../src/state/operator-state.ts'
 import { securityPoolScanMetrics } from '../../src/state/security-pool-view.ts'
-import { ownerAddress, securityPoolObservation, securityPoolSettings, unit } from '../support/security-pool-observation.ts'
+import { ownerAddress, targetAddress, securityPoolObservation, securityPoolSettings, unit } from '../support/security-pool-observation.ts'
 
 function evaluate(observation = securityPoolObservation(), settings = securityPoolSettings(), totalPrincipal = observation.snapshot.ownerPrincipalAttoRep, marketAllowed = true) {
 	const position = observation.positions[0]
@@ -340,4 +340,30 @@ test('a funded full repair reserves bounded growth while a tight principal cap p
 	expect(quote?.requestedCommitment).toBeGreaterThan(quote?.commitment ?? 0n)
 	settings.securityPoolPolicy.maximumPrincipalAttoRep = 100n * unit
 	expect(securityPoolTakeoverPlan(observation, target, settings, 100n * unit, true).plan?.requestedCommitment).toBeUndefined()
+})
+
+test('same-pool managed principal limits direct takeovers even when the global cap has room (#1635)', () => {
+	const observation = securityPoolObservation()
+	observation.managedPrincipalAttoRep = 950n * unit
+	expect(evaluate(observation, securityPoolSettings(), 950n * unit).plan).toBeUndefined()
+	observation.managedPrincipalAttoRep = 800n * unit
+	expect(evaluate(observation, securityPoolSettings(), 800n * unit).plan).toBeDefined()
+})
+
+test('vault funding includes other owned positions in the pool cap (#1635)', async () => {
+	const { buildSecurityPoolInstructionRequest } = await import('../../src/execution/security-pool-instruction-request.ts')
+	const { createPublicClient, http } = await import('@zoltar/bot-shared/ethereum')
+	const { mainnet } = await import('@zoltar/core-shared/evm/ethereum')
+	const observation = securityPoolObservation()
+	const vault = { ...observation.snapshot, owner: targetAddress, ownerPrincipalAttoRep: 10n * unit }
+	observation.ownedVaults = [vault]
+	observation.managedPrincipalAttoRep = 990n * unit
+	observation.walletRep = 100n * unit
+	const client = createPublicClient({ chain: mainnet, transport: http('http://127.0.0.1:1') })
+	await expect(
+		buildSecurityPoolInstructionRequest(
+			{ client, observation, settings: securityPoolSettings(), blockNumber: 1n, totalPrincipal: 990n * unit },
+			{ id: 'over-budget', action: 'vault-deposit', securityPool: observation.selection.address, universeId: observation.selection.universeId, vault: vault.owner, amountAttoRep: 20n * unit, targetHealthFactorBps: 15000n },
+		),
+	).rejects.toThrow('exposure')
 })

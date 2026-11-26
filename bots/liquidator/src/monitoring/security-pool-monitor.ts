@@ -63,6 +63,7 @@ export type SecurityPoolObservation = {
 	pendingOperationReport?: Awaited<ReturnType<typeof loadSponsoredOperationReport>>
 	selected: boolean
 	managedPrincipalAttoRep?: bigint
+	pendingAuction?: { address: Address; principal: bigint } | undefined
 	managedCommitmentAttoEth?: bigint
 	ownedVaults?: SecurityPoolCapitalSnapshot[]
 	chosenVaultChildUniverseIds?: bigint[]
@@ -242,6 +243,7 @@ export async function loadSecurityPoolObservation(client: ReadClient, settings: 
 	return {
 		...(chosenChildUniverseId === undefined ? {} : { chosenChildUniverseId }),
 		pendingOperationReport,
+		pendingAuction: owned.pendingAuction,
 		managedPrincipalAttoRep: (pendingOperationReport?.reservedRep ?? 0n) + snapshot.ownerPrincipalAttoRep + owned.pendingPrincipal + owned.accounts.reduce((sum, account) => sum + account.ownerPrincipalAttoRep, 0n),
 		managedCommitmentAttoEth: snapshot.ownerCommitmentAttoEth + owned.pendingCommitment + owned.accounts.reduce((sum, account) => sum + account.ownerCommitmentAttoEth, 0n),
 		ownedVaults: owned.accounts,
