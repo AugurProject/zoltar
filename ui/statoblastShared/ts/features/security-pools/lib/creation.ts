@@ -1,4 +1,4 @@
-import { formatUnits, parseUnits } from '@zoltar/core-shared/evm/ethereum'
+import { formatUnits, parseUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { validateSecurityPoolEconomics, type SecurityPoolOriginConfig } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
@@ -151,11 +151,19 @@ export function parseDeploymentDraft(draft: DeploymentDraft, profile: NetworkPro
 	return { collateral, approvedQuestions, fixedQuestionIds, fixedQuestionError, creationError, origin, economics, horizon }
 }
 
-/** The wallet review for a security pool deployment; the purchase fee floor and minimum commitment are in collateral units. */
-export function securityPoolDeploymentReviewDescription(mode: CuratedAdmissionMode, config: ReturnType<typeof parseSecurityPoolCreationEconomics>, collateral: Readonly<{ decimals: number; symbol: string }>, maximumQuestionHorizonSeconds: bigint) {
+/** Describes the immutable values captured by the deployment transaction. */
+export function securityPoolDeploymentReviewDescription(mode: CuratedAdmissionMode, config: ReturnType<typeof parseSecurityPoolCreationEconomics>, collateral: Readonly<{ decimals: number; symbol: string }>, deployment: Readonly<{ origin: SecurityPoolOriginConfig; horizon: bigint; policy: Address }>) {
 	const amount = (value: bigint) => `${formatUnits(value, collateral.decimals)} ${collateral.symbol}`
-	const days = (seconds: bigint) => copy.reviewDuration(formatUnits((seconds * 10_000n + 43_200n) / 86_400n, 4))
-	return [copy.reviewQuestionRules(mode, days(maximumQuestionHorizonSeconds)), copy.reviewFees(formatUnits(config.annualFeeBps, 2), formatUnits(config.purchaseFeeBps, 2), amount(config.minimumPurchaseFeeAttoEth)), copy.reviewCommitment(amount(config.minimumCommitmentAttoEth), days(config.rewardVestingSeconds))].join(
-		' ',
-	)
+	const duration = (seconds: bigint) => {
+		const days = copy.reviewDuration(formatUnits((seconds * 10_000n + 43_200n) / 86_400n, 4))
+		return seconds % 86_400n === 0n ? days : copy.reviewDurationExact(days, seconds)
+	}
+	return [
+		copy.reviewOrigin(deployment.origin.universeId, deployment.origin.collateralToken, deployment.policy),
+		copy.reviewQuestionRules(mode, duration(deployment.horizon)),
+		copy.reviewFees(formatUnits(config.annualFeeBps, 2), formatUnits(config.purchaseFeeBps, 2), amount(config.minimumPurchaseFeeAttoEth)),
+		copy.reviewCommitment(amount(config.minimumCommitmentAttoEth), duration(config.rewardVestingSeconds)),
+		copy.reviewBacking(formatUnits(deployment.origin.securityMultiplierBps, 2), `${formatUnits(config.minimumOutcomeRate, 18)} ${collateral.symbol}`),
+		copy.reviewPriceReport(amount(deployment.origin.minimumReportCollateral), formatUnits(deployment.origin.reportPriorityFeeAttoEthPerGas, 9)),
+	].join(' ')
 }

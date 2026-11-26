@@ -92,6 +92,31 @@ describe('live fork settlement context', () => {
 		url: 'http://localhost/?demo=0#/market',
 	})
 
+	test('refreshes an externally activated branch without leaving settlement (#1734)', async () => {
+		let active = false
+		let reads = 0
+		const publicClient = createPublicClient({ transport: custom({ request: async () => undefined }) })
+		const services = {
+			createPublicClient: () => publicClient,
+			loadForkContext: async () => {
+				reads++
+				return { ...forkContext, availableTargets: forkContext.availableTargets.map(target => ({ ...target, canonicalPool: undefined, branchActive: active })) }
+			},
+			submit: async () => transactionHash,
+		}
+		const rendered = await renderIntoDocument(<SettlementControls market={market} services={services} account={account} walletClient={createConfirmingWalletClient()} balances={{ scope: shareBalanceScope(market), yes: 10n, no: 0n, invalid: 0n, lp: 0n }} />)
+		cleanupRendered = rendered.cleanup
+		await settleEffects()
+		expect(reads).toBe(1)
+		expect(document.body.textContent).toContain('Branch not active')
+		active = true
+		await act(() => buttonByLabel('Refresh fork details').click())
+		await settleEffects()
+		expect(reads).toBe(2)
+		expect(document.body.textContent).not.toContain('Branch not active')
+		expect(document.body.textContent).toContain('Not registered yet')
+	})
+
 	test('clears a confirmed complete-set redemption before refreshed balances can re-enable it', async () => {
 		const liveMarket = { ...market, systemState: 0, universeForkTime: 0n, tradingStatus: 0 }
 		const publicClient = createPublicClient({ transport: custom({ request: async () => undefined }) })

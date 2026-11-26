@@ -56,9 +56,9 @@ export function formatOutcomeQuantity(amountAttoShares: bigint, outcome: 'YES' |
 	return `${formatShareQuantity(amountAttoShares, maximumFractionDigits, rounding, collateralAsset(market).decimals)} ${outcomeLabel(outcome)}`
 }
 
-/** LP minting uses the underlying shares’ base units. */
-export function formatLpQuantity(amountLp: bigint, maximumFractionDigits = 2, rounding: ShareValueRounding = 'nearest', market: CollateralMarket = {}) {
-	return `${formatShareQuantity(amountLp, maximumFractionDigits, rounding, collateralAsset(market).decimals)} LP`
+/** LP tokens always have 18 decimals, independently of collateral. */
+export function formatLpQuantity(amountLp: bigint, maximumFractionDigits = 2, rounding: ShareValueRounding = 'nearest', _market: CollateralMarket = {}) {
+	return `${formatShareQuantity(amountLp, maximumFractionDigits, rounding, 18)} LP`
 }
 
 export function formatCompleteSetQuantity(amountAttoShares: bigint, maximumFractionDigits = 2, rounding: ShareValueRounding = 'nearest', market: CollateralMarket = {}) {
@@ -90,6 +90,11 @@ export function isUnresolvedRedemptionBlocked(market: OutcomeValueMarket) {
 	return (market.universeForkTime !== undefined && market.universeForkTime !== 0n) || (market.systemState !== undefined && market.systemState !== 0)
 }
 
+function directRedemptionMarket<T extends CollateralMarket>(market: T) {
+	const collateral = collateralAsset(market)
+	return { ...market, collateral: collateral.native ? { ...collateral, symbol: 'WETH', native: false } : collateral }
+}
+
 /** Current payout with its resolution and redemption conditions. A caller whose surroundings already state that redemption is blocked passes `noteRedemption: false`. */
 export function formatOutcomePayout(amount: bigint, outcome: 'YES' | 'NO' | 'INVALID', market: OutcomeValueMarket, rounding: ShareValueRounding = 'nearest', { noteRedemption = true }: { noteRedemption?: boolean } = {}) {
 	if (market.loadError !== undefined) return payoutCopy.unavailable
@@ -98,7 +103,8 @@ export function formatOutcomePayout(amount: bigint, outcome: 'YES' | 'NO' | 'INV
 	const index = { INVALID: 0, YES: 1, NO: 2 }[outcome]
 	if (market.questionOutcome !== undefined && market.questionOutcome !== 3) {
 		if (market.questionOutcome !== index) return payoutCopy.formatZeroPayout(collateralAsset(market).symbol)
-		return market.systemState === 0 ? payoutCopy.formatRedeemablePayout(value) : payoutCopy.formatUnredeemableWinningPayout(value)
+		const directValue = formatCollateralEth(amount, directRedemptionMarket(market), rounding)
+		return market.systemState === 0 ? payoutCopy.formatRedeemablePayout(directValue) : payoutCopy.formatUnredeemableWinningPayout(directValue)
 	}
 	const payout = payoutCopy.formatConditionalPayout(value, outcome)
 	return noteRedemption && isUnresolvedRedemptionBlocked(market) ? `${payout}; ${payoutCopy.redemptionUnavailable}` : payout
@@ -123,7 +129,7 @@ export function formatLpPayout(amount: bigint, market: LiveMarket, rounding: Sha
 		let winning = 0n
 		if (market.questionOutcome === 1) winning = yes
 		else if (market.questionOutcome === 2) winning = no
-		return payoutCopy.formatLpWinningPayout(formatCollateralEth(winning, market, rounding))
+		return payoutCopy.formatLpWinningPayout(formatCollateralEth(winning, directRedemptionMarket(market), rounding))
 	}
 	if (yes === no) return payoutCopy.formatValidPayout(formatCollateralEth(yes, market, rounding))
 	return `${payoutCopy.formatConditionalPayout(formatCollateralEth(yes, market, rounding), 'YES')}; ${payoutCopy.formatConditionalPayout(formatCollateralEth(no, market, rounding), 'NO')}`

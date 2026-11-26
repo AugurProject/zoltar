@@ -143,6 +143,7 @@ describe('useTradingOperations', () => {
 			source.setRead('securityPoolOf', securityPool)
 			source.setRead('questionId', zeroHash)
 			source.setRead('purchaseQuote', [0n])
+			source.setRead('refreshSecurityPoolFees', undefined)
 			source.setRead('quoteMintRecoveryRep', 0n)
 			source.setRead('attoEthToAttoShares', 10n ** BigInt(collateralDecimals))
 			source.setRead('availableMintCapacity', 10_000_000n * 10n ** BigInt(collateralDecimals))

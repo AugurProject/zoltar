@@ -22,13 +22,14 @@ async function setup(balance = 0n, allowance = 0n, recoveryAttoRep = 0n, recover
 	source.setRead('securityPoolOf', securityPool)
 	source.setRead('questionId', zeroHash)
 	source.setRead('purchaseQuote', [0n])
+	source.setRead('refreshSecurityPoolFees', undefined)
 	source.setRead('quoteMintRecoveryRep', recoveryAttoRep)
 	source.setRead('attoEthToAttoShares', 1_875_101n)
 	source.setRead('availableMintCapacity', 20_000_000n)
 	source.setRead('recoveryTokens', recoveryToken)
-	const quoteBatches = mock(() => undefined)
+	const quoteBatches = mock((_functionNames: readonly string[]) => undefined)
 	source.client.multicall = createMulticallStub(async request => {
-		quoteBatches()
+		quoteBatches(request.contracts.map(contract => contract.functionName))
 		return await Promise.all(
 			request.contracts.map(async contract => {
 				try {
@@ -82,6 +83,7 @@ test('mint preview uses quoted shares, fee and capacity with directional limits 
 		}),
 	)
 	expect(quoteBatches).toHaveBeenCalledTimes(before + 1)
+	expect(quoteBatches.mock.calls.at(-1)?.[0]).toEqual(['refreshSecurityPoolFees', 'purchaseQuote', 'quoteMintRecoveryRep', 'attoEthToAttoShares', 'availableMintCapacity'])
 })
 
 test('the current mint quote blocks an amount above free pool capacity', async () => {
@@ -115,7 +117,7 @@ test('Max finds the largest affordable amount with room for the fresh rounded fe
 	expect(hook.state().mintQuote).toBe(quote)
 })
 
-test('Max includes the exact recovery REP budget and uses funds even before approvals', async () => {
+test('Max uses the recovery REP actually required before approvals', async () => {
 	const { source, hook } = await setup(3_000_000n, 0n)
 	const read = source.client.readContract
 	source.setRead('balanceOf', 102n, token)
@@ -130,7 +132,7 @@ test('Max includes the exact recovery REP budget and uses funds even before appr
 	await act(async () => {
 		maximum = await hook.state().findMaximumMintAmount?.()
 	})
-	expect(maximum).toBe(1_000n)
+	expect(maximum).toBe(1_020n)
 	expect(hook.state().maximumMintAmountError).toBeUndefined()
 })
 

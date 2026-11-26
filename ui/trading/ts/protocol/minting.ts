@@ -1,3 +1,7 @@
+import { ABIS } from '@zoltar/ui-core-shared/abis.js'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import type { DeploymentConfiguration } from './config.js'
+import { collateralAsset, tokenFunded } from './collateral.js'
 import { recoveryRepPurchase } from '../copy/marketBlockers.js'
 import { securityPoolMintFee, securityPoolMintWithinBudget, type SecurityPoolMintFees } from '@zoltar/trading-shared/trading/securityPoolMint'
 import { statoblast_SecurityPool_SecurityPool as securityPoolArtifact, statoblast_QuestionLedger_QuestionLedger as poolArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
@@ -48,4 +52,28 @@ export async function loadBudgetMintState(client: PublicClient, market: LiveMark
 
 export async function loadBudgetMint(client: PublicClient, market: LiveMarket, budget: bigint, blockNumber: bigint) {
 	return (await loadBudgetMintState(client, market, budget, blockNumber)).cash
+}
+
+/** Budget headroom is a ceiling; ERC20 routers transfer only the mint and its actual fee. */
+export function estimateBudgetSpend(market: LiveMarket, budget: bigint) {
+	const cash = estimateBudgetMint(market, budget)
+	if (cash === undefined || market.mintFees === undefined) return undefined
+	return cash + securityPoolMintFee(cash, { ...market.mintFees, cashAttoEth: market.settlementCollateralAttoEth, outcomeSupplyAttoShares: market.shareTokenSupplyAttoShares })
+}
+
+/** Recheck the actual transfer inside the final wallet guard, preserving the approved budget. */
+export async function requireTokenMintFunding(client: PublicClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, cash: bigint, budget: bigint) {
+	if (!tokenFunded(market)) return
+	const block = await client.getBlock()
+	if (block.number === undefined) throw new Error('A mined block is required to check collateral funding')
+	const blockNumber = block.number
+	const capital = await client.readContract({ abi: poolArtifact.abi, address: market.pool, functionName: 'securityPoolCustody', blockNumber })
+	const central = await loadCentralSecurityPoolQuestion(client, market.pool, capital, blockNumber)
+	const [fee] = await client.readContract({ abi: securityPoolArtifact.abi, address: central.securityPoolAddress, functionName: 'purchaseQuote', args: [market.universeId, market.questionId, cash], blockNumber })
+	const required = cash + fee
+	if (required > budget) throw new Error('Purchase cost exceeds the approved budget; refresh the quote')
+	const address = collateralAsset(market).token
+	const [balance, allowance] = await Promise.all([client.readContract({ abi: ABIS.mainnet.erc20, address, functionName: 'balanceOf', args: [account], blockNumber }), client.readContract({ abi: ABIS.mainnet.erc20, address, functionName: 'allowance', args: [account, configuration.router], blockNumber })])
+	if (balance < required) throw new Error('Insufficient collateral balance')
+	if (allowance < required) throw new Error('Collateral approval required')
 }

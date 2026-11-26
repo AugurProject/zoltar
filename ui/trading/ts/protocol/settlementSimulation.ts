@@ -6,7 +6,7 @@ import type { LiveMarket } from './liveMarket.js'
 import type { SettlementOperation, ShareOutcome } from './settlement.js'
 import { minimumAfterSlippage, requireTransactionSlippageBps, simulateWithDeadline, stableSimulation, UI_SLIPPAGE_BPS, type TransactionExpiry } from './tradeQuote.js'
 import { encodeReceiveBasedRedeemRequest, shareOperationRouter, shareTokenAbi } from './authorization.js'
-import { loadTransactionFeeMarket, sellHoldingFeeBlocker } from './holdingFees.js'
+import { loadTransactionFeeMarket, loadRedemptionPayout, sellHoldingFeeBlocker } from './holdingFees.js'
 const questionLedgerAbi = statoblast_QuestionLedger_QuestionLedger.abi
 
 export function outcomeValue(outcome: ShareOutcome) {
@@ -51,10 +51,10 @@ export async function simulateSettlement(
 		} = await simulateWithDeadline(client, expiry, async (block, deadline) => {
 			const feeMarket = await loadTransactionFeeMarket(client, market, block.blockNumber, block.blockTimestamp)
 			const invalidTokenId = market.universeId << 8n
-			const estimatedEthOut = feeMarket.shareTokenSupplyAttoShares === 0n ? 0n : (amount * feeMarket.settlementCollateralAttoEth) / feeMarket.shareTokenSupplyAttoShares
+			const estimatedEthOut = await loadRedemptionPayout(client, market, amount, block.blockNumber)
 			const minimumEth = minimumAfterSlippage(estimatedEthOut, slippageBps)
 			const expectedAttoRep = attoSharesToRecoveryAttoRep(amount, feeMarket)
-			const feeBlocker = sellHoldingFeeBlocker(feeMarket, amount, minimumEth, deadline)
+			const feeBlocker = sellHoldingFeeBlocker(feeMarket, amount, minimumEth, deadline, estimatedEthOut)
 			if (feeBlocker !== undefined) throw new Error(feeBlocker)
 			const data = encodeReceiveBasedRedeemRequest(market, amount, minimumEth, account, deadline, minimumAfterSlippage(expectedAttoRep, slippageBps))
 			const simulation = await client.simulateContract({

@@ -410,7 +410,16 @@ export async function loadOpenOracleWithdrawableBalances(client: Pick<ReadClient
 			}),
 			'OpenOracle token holder balance',
 		)
-	const [rawAttoEth, rawToken1, rawToken2] = await Promise.all([loadBalance(zeroAddress), loadBalance(token1), loadBalance(token2)])
+	const balances = new Map<string, Promise<bigint>>()
+	const uniqueBalance = (token: Address) => {
+		const key = token.toLowerCase()
+		const existing = balances.get(key)
+		if (existing !== undefined) return existing
+		const balance = loadBalance(token)
+		balances.set(key, balance)
+		return balance
+	}
+	const [rawAttoEth, rawToken1, rawToken2] = await Promise.all([uniqueBalance(zeroAddress), uniqueBalance(token1), uniqueBalance(token2)])
 	const availableBalance = (balance: bigint) => (balance > 1n ? balance - 1n : 0n)
 	return {
 		ethAttoEth: availableBalance(rawAttoEth),

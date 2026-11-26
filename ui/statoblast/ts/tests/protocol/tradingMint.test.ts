@@ -1,7 +1,7 @@
 import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { decodeFunctionData, getAddress, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { createBlockWithTimestamp, createReadContractStub, createMockReadClient, createMockWriteClient, asWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { createBlockWithTimestamp, createMulticallStub, createReadContractStub, createMockReadClient, createMockWriteClient, asWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { createCompleteSetInQuestionLedger, redeemCompleteSetInQuestionLedger, redeemSharesInQuestionLedger, migrateSharesFromUniverse, requireCanonicalSecurityPoolOf } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
 import type { TransactionPlanStep, TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
@@ -9,6 +9,17 @@ import type { TransactionPlanStep, TransactionRequestPreview } from '@zoltar/ui-
 type MockSentTransaction = Parameters<Parameters<typeof createMockWriteClient>[0]>[0]
 
 const pool = getAddress('0x00000000000000000000000000000000000000a1')
+
+function mintShareQuote(shares: () => bigint) {
+	return createMulticallStub(({ contracts, blockNumber }) => {
+		expect(blockNumber).toBe(1n)
+		expect(contracts.map(contract => [contract.address, contract.functionName])).toEqual([
+			[pool, 'refreshSecurityPoolFees'],
+			[pool, 'attoEthToAttoShares'],
+		])
+		return [undefined, shares()]
+	})
+}
 
 /** A security-pool-backed pool with ample collateral, approvals, and mint capacity, no escalation game, and the given question end. */
 function mintClient(send: Parameters<typeof createMockWriteClient>[0], currentTimestamp: bigint, questionEndDate: bigint, recovery = { required: 0n, balance: 10n ** 21n, allowance: 10n ** 21n }) {
@@ -40,6 +51,7 @@ function mintClient(send: Parameters<typeof createMockWriteClient>[0], currentTi
 		),
 		account: { address: pool, type: 'json-rpc' as const },
 		getBlock: async () => ({ ...createBlockWithTimestamp(currentTimestamp), number: 1n }),
+		multicall: mintShareQuote(() => 10n ** 18n),
 	}
 }
 
@@ -232,6 +244,7 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 			account: { address: pool, type: 'json-rpc' as const },
 			getBlock: async () => ({ ...createBlockWithTimestamp(timestamp), number: 1n }),
 			getBalance: async () => walletBalance,
+			multicall: mintShareQuote(() => 90n),
 			estimateGas: async () => 100_000n,
 			onTransactionPlan: (steps: readonly TransactionPlanStep[]) => {
 				plans = steps
@@ -366,9 +379,9 @@ test('mint binds chosen limits and rejects worse fees or shares before review an
 	const base = mintClient(send, 1n, 100n)
 	const client = {
 		...base,
+		multicall: mintShareQuote(() => shares),
 		readContract: createReadContractStub(async request => {
 			if (request.functionName === 'purchaseQuote') return [fee, 0n]
-			if (request.functionName === 'attoEthToAttoShares') return shares
 			return base.readContract(request)
 		}),
 		onTransactionPlan: (steps: readonly TransactionPlanStep[]) => {
@@ -408,4 +421,29 @@ test('USDC share migration reviews the amount at six decimal precision', async (
 	await migrateSharesFromUniverse(client, pool, 'yes', [1n], 2_500_000n)
 	expect(review?.reviewAmount).toMatch(/2[.,]5/)
 	expect(send).toHaveBeenCalledTimes(1)
+})
+
+test('exact recovery funds keep an affordable signed maximum and simulate final calldata (#1694)', async () => {
+	const recovery = { required: 100n, balance: 100n, allowance: 100n }
+	const recoveryAbi = parseAbi(['function createCompleteSetWithRecoveryRep(uint248,uint256,uint256,address,uint256,uint256,uint256)'])
+	let validate: TransactionPlanStep['validateBeforeSubmit']
+	let simulations = 0
+	const client = {
+		...mintClient(() => undefined, 10n, 100n, recovery),
+		estimateGas: async (request: { data?: `0x${string}` | undefined }) => {
+			if (request.data === undefined) throw new Error('Missing final calldata')
+			expect(decodeFunctionData({ abi: recoveryAbi, data: request.data }).args?.[6]).toBe(100n)
+			simulations++
+			return 100_000n
+		},
+		onTransactionPlan: (steps: readonly TransactionPlanStep[]) => {
+			validate = steps[0]?.validateBeforeSubmit
+		},
+	}
+	await createCompleteSetInQuestionLedger(client, pool, 10n ** 18n)
+	if (validate === undefined) throw new Error('Missing mint validation')
+	await expect(validate()).resolves.toBeUndefined()
+	expect(simulations).toBe(1)
+	recovery.required = 101n
+	await expect(validate()).rejects.toThrow('Recovery REP quote changed')
 })

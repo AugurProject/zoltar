@@ -86,7 +86,7 @@ export function ForkZoltarSection({
 	const universeMissing = zoltarUniverseState === 'missing'
 	const hasForked = rootUniverse?.hasForked === true
 	const forkRepBalanceFailed = hasLoadedZoltarForkAccess && !loadingZoltarForkAccess && zoltarForkRepBalanceAttoRep === undefined
-	const hasEnoughRep = rootUniverse !== undefined && zoltarForkRepBalanceAttoRep !== undefined && zoltarForkRepBalanceAttoRep >= rootUniverse.forkThresholdAttoRep
+	const hasEnoughRep = rootUniverse !== undefined && rootUniverse.totalTheoreticalSupplyAttoRep > 0n && zoltarForkRepBalanceAttoRep !== undefined && zoltarForkRepBalanceAttoRep >= rootUniverse.forkThresholdAttoRep
 	const approvalRequirement = deriveTokenApprovalRequirement(rootUniverse?.forkThresholdAttoRep, zoltarForkApproval.value)
 	const requiresApproval = rootUniverse?.reputationTokenKind !== 'child'
 	const hasEnoughApproval = rootUniverse !== undefined && (!requiresApproval || approvalRequirement.hasSufficientApproval)
@@ -146,6 +146,7 @@ export function ForkZoltarSection({
 
 		if (hasForked) return zoltarCopy.alreadyForkedReason
 		if (questionTimingReason !== undefined) return questionTimingReason
+		if (rootUniverse.totalTheoreticalSupplyAttoRep === 0n) return zoltarCopy.forkNoRepSupplyReason
 		if (!hasForkEconomics) return zoltarCopy.forkEconomicsUnavailableReason
 
 		if (zoltarForkRepBalanceAttoRep === undefined) return forkRepBalanceFailed ? zoltarCopy.forkRepBalanceUnavailableShortReason : zoltarCopy.forkRepBalanceLoadingReason

@@ -1,9 +1,13 @@
+import { deployment as deploymentCopy } from '../copy/securityPoolTransactions.js'
+import { registrationForkThresholdTooLow } from '../copy/securityPool.js'
 import { poolErrors, contractCodeUnverified, contractSettingsMismatch, contractLinkMismatch } from '../copy/protocolErrors.js'
 import { currentStateCheckFailed } from '@zoltar/ui-core-shared/copy/transaction.js'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
+import { getMulticall3Address } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
+import type { PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { collateralPresentation } from './collateral.js'
 import { checksTransactionReview } from './reviewedClient.js'
-import { encodeFunctionData, getAddress, parseAbi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, getAddress, parseAbi, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
 	buildSecurityPoolDeploymentRequest,
 	buildSecurityPoolPrepareNextRequest,
@@ -20,6 +24,7 @@ import {
 	type SecurityPoolOriginConfig,
 } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
+import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { waitForSubmittedTransactionReceipt, type SubmittedTransactionReceiptOptions } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
 import {
@@ -168,8 +173,18 @@ export function securityPoolPreparationRequest(owner: Address, securityPool: Add
 }
 
 export async function isUniverseForked(client: Pick<ReadClient, 'readContract'>, universeId: bigint) {
-	const forkTime = await client.readContract({ abi: linksAbi, address: getInfraContractAddresses().zoltar, functionName: 'getForkTime', args: [universeId] })
-	return requireBigintValue(forkTime, 'universe fork time') !== 0n
+	const address = getInfraContractAddresses().zoltar
+	const repToken = requireAddressValue(await client.readContract({ abi: Zoltar_Zoltar.abi, address, functionName: 'getRepToken', args: [universeId] }), 'origin REP token')
+	if (repToken === zeroAddress) throw new Error(deploymentCopy.originMissing)
+	const forkTime = requireBigintValue(await client.readContract({ abi: linksAbi, address, functionName: 'getForkTime', args: [universeId] }), 'universe fork time')
+	if (forkTime !== 0n) return true
+	const [thresholdValue, supplyValue] = await Promise.all([client.readContract({ abi: Zoltar_Zoltar.abi, address, functionName: 'getNonDecisionThresholdAttoRep', args: [universeId] }), client.readContract({ abi: Zoltar_Zoltar.abi, address, functionName: 'getUniverseTheoreticalSupplyAttoRep', args: [universeId] })])
+	const threshold = requireBigintValue(thresholdValue, 'non-decision threshold')
+	const supply = requireBigintValue(supplyValue, 'universe REP supply')
+	const supplyDeposit = supply / 10_000_000n
+	const initialDeposit = supplyDeposit > 10n ** 18n ? supplyDeposit : 10n ** 18n
+	if (threshold <= initialDeposit) throw new Error(registrationForkThresholdTooLow)
+	return false
 }
 
 /** Authenticate the actual custody tree before offering approvals or transactions. */
@@ -335,8 +350,9 @@ export async function sendSecurityPoolTransaction(client: WriteClient, request: 
 	return { hash: result.hash, receipt: result.receipt }
 }
 
-export function securityPoolReadClient(client: ReadClient): SecurityPoolReadClient {
+export function securityPoolReadClient(client: ReadClient): SecurityPoolReadClient & Pick<PublicClient, 'multicall'> {
 	return {
+		multicall: parameters => client.multicall({ ...parameters, multicallAddress: getMulticall3Address() }),
 		getChainId: () => client.getChainId(),
 		readContract: parameters => client.readContract(parameters),
 		getBlock: async parameters => {

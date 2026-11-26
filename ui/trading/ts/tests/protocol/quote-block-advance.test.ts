@@ -39,7 +39,15 @@ function transactionOf(params: unknown) {
 
 // A chain whose head advances on demand; `longSharesOut` lets a test move the price between blocks.
 function createAdvancingChain() {
-	const chain: { head: bigint; feeMarket: LiveMarket; longSharesOut: bigint; sends: Hex[]; simulatedBlocks: unknown[]; blockRequests: unknown[]; transactionSimulations: string[] } = { head: 2n, feeMarket: market, longSharesOut: 10n, sends: [], simulatedBlocks: [], blockRequests: [], transactionSimulations: [] }
+	const chain: { redemptionAttoEth?: bigint; head: bigint; feeMarket: LiveMarket; longSharesOut: bigint; sends: Hex[]; simulatedBlocks: unknown[]; blockRequests: unknown[]; transactionSimulations: string[] } = {
+		head: 2n,
+		feeMarket: market,
+		longSharesOut: 10n,
+		sends: [],
+		simulatedBlocks: [],
+		blockRequests: [],
+		transactionSimulations: [],
+	}
 	const provider: InjectedEthereum = {
 		async request({ method, params }) {
 			if (method === 'eth_chainId') return '0xaa36a7'
@@ -72,7 +80,7 @@ function createAdvancingChain() {
 				}
 				throw new Error(`Unexpected share token simulation ${decoded.functionName}`)
 			}
-			const feeResponse = feeAccountingRpcResult(transaction.data, chain.feeMarket, chain.head)
+			const feeResponse = feeAccountingRpcResult(transaction.data, chain.feeMarket, chain.head, chain.redemptionAttoEth)
 			if (feeResponse !== undefined) return feeResponse
 			const decoded = decodeFunctionData({ abi: routerAbi, data: transaction.data })
 			chain.transactionSimulations.push(decoded.functionName)
@@ -355,4 +363,25 @@ describe('submitting a quote after the chain advances', () => {
 		await expect(submitFreshEntry(client, configuration, account, entry, write)).rejects.toThrow('approved minimum long shares')
 		expect(chain.sends).toHaveLength(0)
 	})
+})
+
+test('LP removal refuses an expired deadline after wallet-context checks (#1762)', async () => {
+	const { chain, client } = createAdvancingChain()
+	const quote = await simulateLiquidity(client, configuration, market, account, 'remove', 1n, 5_000n, 100n, MINIMUM_SLIPPAGE_BPS)
+	await expect(
+		submitFreshLiquidity(client, configuration, account, quote, async send => {
+			chain.head = 101n
+			return await send()
+		}),
+	).rejects.toThrow('deadline')
+	expect(chain.sends).toEqual([])
+})
+
+test('partial cash redemption uses the size-specific ledger quote (#1729)', async () => {
+	const { chain, client } = createAdvancingChain()
+	chain.redemptionAttoEth = 1n
+	chain.feeMarket = { ...market, settlementCollateralAttoEth: 0n }
+	const quote = await simulateSettlement(client, configuration, market, account, 'redeem-complete-set', { amount: 2n })
+	expect(quote.expectedAttoEth).toBe(1n)
+	expect(await submitFreshSettlement(client, configuration, account, quote, async send => await send())).toBe(transactionHash)
 })

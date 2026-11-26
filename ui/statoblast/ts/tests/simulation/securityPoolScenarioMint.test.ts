@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { decodeFunctionData, parseAbi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { createPublicClient, custom, encodeAbiParameters, decodeFunctionData, parseAbi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { SecurityPoolReadClient } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { prepareSeededSecurityPoolMint } from '@zoltar/ui-statoblast-shared/simulation/securityPoolScenarioMint.js'
 
@@ -11,10 +11,24 @@ test('security pool simulation mints use each funded purchase quote, including f
 	const unit = 10n ** 18n
 	const fees = [(3n * unit) / 10n, unit / 1000n]
 	let quoteIndex = 0
-	const client: SecurityPoolReadClient = {
+	const client = {
+		multicall: createPublicClient({
+			transport: custom({
+				request: async () =>
+					encodeAbiParameters(
+						[{ type: 'tuple[]', components: [{ type: 'bool' }, { type: 'bytes' }] }],
+						[
+							[
+								[true, '0x'],
+								[true, encodeAbiParameters([{ type: 'uint256' }], [unit])],
+							],
+						],
+					),
+			}),
+		}).multicall,
 		getBlock: async () => ({ number: 52n, hash, timestamp: 1_735_690_127n }),
 		getChainId: async () => 1,
-		readContract: async parameters => {
+		readContract: async (parameters: Parameters<SecurityPoolReadClient['readContract']>[0]) => {
 			expect(parameters.blockNumber).toBe(52n)
 			switch (parameters.functionName) {
 				case 'questionOriginIds':

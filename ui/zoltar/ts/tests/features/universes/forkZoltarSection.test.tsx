@@ -104,6 +104,15 @@ describe('ForkZoltarSection', () => {
 		return rendered
 	}
 
+	test('zero theoretical supply cannot enable a fork (#1749)', async () => {
+		const props = createProps({ zoltarUniverse: createUniverse({ totalTheoreticalSupplyAttoRep: 0n, forkThresholdAttoRep: 0n, forkBurnDivisor: 5n, zoltarAddress: ZOLTAR_ADDRESS }), zoltarForkRepBalanceAttoRep: 0n, zoltarQuestions: [createQuestion()], zoltarForkQuestionId: '0x01' })
+		await renderSection(props)
+		const confirmation = within(document.body).queryByRole('checkbox')
+		if (confirmation !== null) await act(() => fireEvent.click(confirmation))
+		expect(isForkButtonDisabled()).toBe(true)
+		expect(document.body.textContent).toContain('no REP supply')
+	})
+
 	for (const phase of ['idle', 'loading', 'failed'] as const)
 		test(`distinguishes an unknown REP balance from insufficient REP (${phase})`, async () => {
 			const retry = mock(() => undefined)

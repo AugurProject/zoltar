@@ -5,7 +5,7 @@ import { createCompleteSetInQuestionLedger } from '@zoltar/ui-statoblast-shared/
 import { reportOutcomeInQuestionLedger } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
 import { forkTriggerChangedSinceReview } from '@zoltar/ui-statoblast-shared/copy/reporting.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { createBlockWithTimestamp, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { createBlockWithTimestamp, createMulticallStub, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { afterEach, expect, mock, spyOn, test } from 'bun:test'
 import { createWalletClient, custom, publicActions, encodeFunctionData, decodeFunctionData, maxUint256, type Hash, type TransactionReceipt, type ReplacementReason } from '@zoltar/core-shared/evm/ethereum'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
@@ -879,6 +879,10 @@ function setupMintReview(alwaysReview: boolean) {
 		call,
 		getBalance: async () => 10n ** 18n,
 		getBlock: async () => ({ ...createBlockWithTimestamp(1n), number: 1n }),
+		multicall: createMulticallStub(({ contracts }) => {
+			expect(contracts.map(contract => contract.functionName)).toEqual(['refreshSecurityPoolFees', 'attoEthToAttoShares'])
+			return [undefined, 10n ** 18n]
+		}),
 		readContract: createReadContractStub(request => {
 			if (request.functionName === 'escalationGame') return '0x0000000000000000000000000000000000000000'
 			if (request.functionName === 'securityPoolFactory') return account

@@ -1,3 +1,4 @@
+import { estimateBudgetSpend } from '../protocol/minting.js'
 import { ETH_GAS_RESERVE_ATTO_ETH } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 import * as collateralCopy from '../copy/collateral.js'
 import { walletConnectionRequired } from '@zoltar/ui-core-shared/copy/common.js'
@@ -70,7 +71,9 @@ export function LiveLiquidityControls({
 	const controller = useLiquidityWorkflowController({ ...context, nowSeconds, services, onMarketCreated })
 	const { operation, amount, probability, parsed, conditionalBps, estimate, bounds, previewBlocker, transaction, selectOperation, updateAmount, updateProbability, submit } = controller
 	const { state, workflowLocked } = transaction
-	const funding = useCollateralFunding(market, parsed, { ...context, nowSeconds }, operation !== 'remove')
+	let required = parsed
+	if (parsed !== undefined && operation !== 'remove' && tokenFunded(market)) required = estimateBudgetSpend(market, parsed)
+	const funding = useCollateralFunding(market, required, { ...context, nowSeconds }, operation !== 'remove')
 	const fundingBalance = tokenFunded(market) ? funding.balance : walletEthAttoEth
 	const asset = collateralAsset(market)
 	let gasReason: string | undefined
@@ -81,7 +84,7 @@ export function LiveLiquidityControls({
 	const closedForAdding = !liquidityOperationAvailable('add', market, nowSeconds)
 	const newRiskBlocker = marketNewRiskBlocker(market, nowSeconds)
 	const walletConnected = account !== undefined && walletClient !== undefined
-	const amountDecimals = asset.decimals
+	const amountDecimals = operation === 'remove' ? 18 : asset.decimals
 	// A typed amount that cannot be read says what is wrong with it: a stray separator, too many decimals, or not a number.
 	const amountFormatError = getAmountInputErrorMessage(validateAmountInput(amount, { decimals: amountDecimals }), { decimals: amountDecimals })
 	const availability = resolveLiquidityAvailability({
@@ -92,7 +95,7 @@ export function LiveLiquidityControls({
 		submissionBlocker: submissionWindowBlocker(market, operation, nowSeconds),
 		marketClosed: closedForAdding,
 		newRiskBlocker,
-		requestedAmount: parsed,
+		requestedAmount: required,
 		amountError: amountFormatError,
 		walletEthAttoEth: fundingBalance,
 		walletEthStatus: tokenFunded(market) ? funding.balanceState : walletEthStatus,
@@ -113,7 +116,7 @@ export function LiveLiquidityControls({
 	if (operation === 'initialize') actionLabel = market.pair === undefined ? liquidityCopy.createMarketAndAddLiquidityAction : liquidityCopy.initializeLiquidityAction
 	else if (operation === 'remove') actionLabel = liquidityCopy.removeLiquidityAction
 	// A zero is marked invalid with its reason too; an amount the wallet cannot fund says so at the field as well as the action.
-	const amountError = amount.trim() === '' ? undefined : (amountFormatError ?? liquidityShortfallReason(operation, parsed, fundingBalance, balances?.lp, tokenFunded(market), asset.symbol))
+	const amountError = amount.trim() === '' ? undefined : (amountFormatError ?? liquidityShortfallReason(operation, required, fundingBalance, balances?.lp, tokenFunded(market), asset.symbol))
 	// Creating or adding to a closed market cannot happen, so its inputs rest disabled beside the action's reason.
 	const inputsDisabled = workflowLocked || funding.pending || (operation !== 'remove' && closedForAdding)
 	let amountHint: string | undefined
@@ -165,7 +168,7 @@ export function LiveLiquidityControls({
 				<CollateralFundingControls
 					actionLabel={actionLabel}
 					funding={funding}
-					required={parsed}
+					required={required}
 					disabled={workflowLocked || funding.pending || gasReason !== undefined || !walletConnected || networkMismatchReason !== undefined}
 					reason={networkMismatchReason ?? (!walletConnected ? walletConnectionRequired : gasReason)}
 				/>

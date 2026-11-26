@@ -1,5 +1,4 @@
 import { questionErrors, shareErrors } from '../copy/protocolErrors.js'
-import { securityPoolRecoveryMintBudget } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { loadRecoveryMintFunding } from './recoveryMintFunding.js'
 import { collateralPresentation } from './collateral.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
@@ -134,12 +133,21 @@ export async function loadTradingCollateral(client: ReadClient, pool: Address, o
 }
 type TradingCollateral = Awaited<ReturnType<typeof loadTradingCollateral>>
 
+function mintFeeCheckpoint(questionLedger: Address) {
+	return { address: questionLedger, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'refreshSecurityPoolFees', args: [] } as const
+}
+
+function mintSharesCall(questionLedger: Address, amount: bigint) {
+	return { address: questionLedger, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'attoEthToAttoShares', args: [amount] } as const
+}
+
+async function readMintShares(client: Pick<ReadClient, 'multicall'>, questionLedger: Address, amount: bigint, blockNumber?: bigint) {
+	const [, shares] = await readRequiredMulticall(client, [mintFeeCheckpoint(questionLedger), mintSharesCall(questionLedger, amount)] as const, blockNumber)
+	return requireBigintValue(shares, 'Minted shares')
+}
+
 function mintQuoteCalls({ securityPool, universeId, questionId }: TradingCollateral, questionLedger: Address, amount: bigint) {
-	return [
-		{ address: securityPool, abi: purchaseAbi, functionName: 'purchaseQuote', args: [universeId, questionId, amount] },
-		{ address: securityPool, abi: purchaseAbi, functionName: 'quoteMintRecoveryRep', args: [universeId, questionId, amount] },
-		{ address: questionLedger, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'attoEthToAttoShares', args: [amount] },
-	] as const
+	return [{ address: securityPool, abi: purchaseAbi, functionName: 'purchaseQuote', args: [universeId, questionId, amount] }, { address: securityPool, abi: purchaseAbi, functionName: 'quoteMintRecoveryRep', args: [universeId, questionId, amount] }, mintSharesCall(questionLedger, amount)] as const
 }
 
 function mintCapacityCall({ securityPool, universeId }: TradingCollateral) {
@@ -148,7 +156,7 @@ function mintCapacityCall({ securityPool, universeId }: TradingCollateral) {
 
 export async function quoteTradingCollateral(client: ReadClient, collateral: TradingCollateral, questionLedger: Address, amount: bigint, onRecoveryRequirement?: (required: bigint) => void) {
 	const { securityPool, universeId } = collateral
-	const [result, recoveryValue, shares, capacity] = await readRequiredMulticall(client, [...mintQuoteCalls(collateral, questionLedger, amount), mintCapacityCall(collateral)] as const)
+	const [, result, recoveryValue, shares, capacity] = await readRequiredMulticall(client, [mintFeeCheckpoint(questionLedger), ...mintQuoteCalls(collateral, questionLedger, amount), mintCapacityCall(collateral)] as const)
 	const required = requireBigintValue(recoveryValue, 'Recovery REP contribution')
 	onRecoveryRequirement?.(required)
 	const recovery = await loadRecoveryMintFunding(client, securityPool, universeId, collateral.owner, required)
@@ -160,11 +168,8 @@ export async function quoteTradingCollateral(client: ReadClient, collateral: Tra
 type MintCandidate = { amount: bigint; fee: bigint; shares: bigint; recoveryAttoRep: bigint }
 
 async function readMintCandidates(client: ReadClient, collateral: TradingCollateral, questionLedger: Address, blockNumber: bigint, amounts: bigint[]) {
-	const results = await readOptionalMulticall(
-		client,
-		amounts.flatMap(amount => mintQuoteCalls(collateral, questionLedger, amount)),
-		blockNumber,
-	)
+	const [checkpoint, ...results] = await readOptionalMulticall(client, [mintFeeCheckpoint(questionLedger), ...amounts.flatMap(amount => mintQuoteCalls(collateral, questionLedger, amount))], blockNumber)
+	if (checkpoint?.status !== 'success') throw new Error(maximumMintAmountUnavailable)
 	return amounts.flatMap((amount, index): MintCandidate[] => {
 		const [fee, recovery, shares] = results.slice(index * 3, index * 3 + 3)
 		if (fee?.status !== 'success' || recovery?.status !== 'success' || shares?.status !== 'success') return []
@@ -184,12 +189,11 @@ export async function loadMaximumTradingMintAmount(client: ReadClient, collatera
 	const [initial] = await quote([maximum])
 	if (initial === undefined) throw new Error(maximumMintAmountUnavailable)
 	const { balance: recoveryBalance } = await loadRecoveryMintFunding(client, collateral.securityPool, collateral.universeId, collateral.owner, initial.recoveryAttoRep, blockNumber)
-	const recoveryBudget = (candidate: MintCandidate) => securityPoolRecoveryMintBudget(candidate.recoveryAttoRep)
 	const mintCost = (candidate: MintCandidate) => candidate.amount + defaultMintLimits(candidate.fee, candidate.shares).maximumFee
-	const funded = (candidate: MintCandidate) => mintCost(candidate) <= wallet && recoveryBudget(candidate) <= recoveryBalance
+	const funded = (candidate: MintCandidate) => mintCost(candidate) <= wallet && candidate.recoveryAttoRep <= recoveryBalance
 	if (funded(initial)) return initial.shares > 0n ? initial.amount : undefined
 
-	const initialRecovery = recoveryBudget(initial)
+	const initialRecovery = initial.recoveryAttoRep
 	const guess = getMinBigintValue([maximum - 1n, (maximum * wallet) / mintCost(initial), initialRecovery === 0n ? maximum : (maximum * recoveryBalance) / initialRecovery]) ?? 0n
 	let affordable: MintCandidate | undefined
 	let upper = maximum
@@ -394,7 +398,7 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 		if (block.timestamp >= endTime) throw new Error(shareErrors.mintingClosed)
 		return { questionId, blockNumber: block.number }
 	}
-	const { questionId } = await validateBeforeSubmit()
+	const { questionId, blockNumber } = await validateBeforeSubmit()
 	const [universeId, factory] = await Promise.all([readQuestionLedgerUniverseId(client, questionLedgerAddress), client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'securityPoolFactory' })])
 	const securityPool = await requireCanonicalSecurityPoolOf(client, factory, questionLedgerAddress)
 	const quote = async () => {
@@ -414,8 +418,8 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 	const collateral = await loadTradingCollateral(client, questionLedgerAddress, client.account.address)
 	const quoted = await quote()
 	const purchaseFee = quoted.fee
-	const maximumRecoveryAttoRep = securityPoolRecoveryMintBudget(quoted.recoveryAttoRep)
-	const estimatedShares = await client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'attoEthToAttoShares', args: [amount] })
+	const maximumRecoveryAttoRep = (await loadRecoveryMintFunding(client, securityPool, universeId, client.account.address, quoted.recoveryAttoRep)).maximum
+	const estimatedShares = await readMintShares(client, questionLedgerAddress, amount, blockNumber)
 	const maximumFee = limits?.maximumFee ?? (purchaseFee * 10_100n + 9_999n) / 10_000n
 	const minimumShares = limits?.minimumShares ?? estimatedShares
 	validateMintLimits(purchaseFee, estimatedShares, { maximumFee, minimumShares })
@@ -454,15 +458,14 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 				if (latest.balance < amount + fresh.fee) throw new Error(shareErrors.mintBalance)
 				if (fresh.recoveryAttoRep > maximumRecoveryAttoRep) throw new Error(shareErrors.recoveryQuoteChanged)
 				const recovery = await loadRecoveryMintFunding(client, securityPool, universeId, client.account.address, fresh.recoveryAttoRep)
-				if (recovery.balance < maximumRecoveryAttoRep) throw new Error(collateralCopy.insufficientRecoveryRep)
-				if (recovery.allowance < maximumRecoveryAttoRep) throw new Error(collateralCopy.recoveryApprovalRequired)
+				if (recovery.balance < fresh.recoveryAttoRep) throw new Error(collateralCopy.insufficientRecoveryRep)
+				if (recovery.allowance < fresh.recoveryAttoRep) throw new Error(collateralCopy.recoveryApprovalRequired)
 				const { blockNumber } = await validateBeforeSubmit()
 				if (blockNumber === undefined) throw new Error(shareErrors.mintReviewBlock)
-				const [shareToken, mintedShares] = await Promise.all([
-					client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'shareToken', blockNumber }),
-					client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'attoEthToAttoShares', args: [amount], blockNumber }),
-				])
+				const [shareToken, mintedShares] = await Promise.all([client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'shareToken', blockNumber }), readMintShares(client, questionLedgerAddress, amount, blockNumber)])
 				validateMintLimits(fresh.fee, mintedShares, { maximumFee, minimumShares })
+				// Reviewed wallet clients already simulate the exact transaction after this guard.
+				if (maximumRecoveryAttoRep > 0n && !checksTransactionReview(client)) await client.estimateGas({ account: client.account, to: callParams.address, data: encodeFunctionData(callParams), value: callParams.value })
 				const [invalidShares, yesShares, noShares] = await client.readContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: shareToken, functionName: 'balanceOfShares', args: [universeId, client.account.address], blockNumber })
 				const shareRow = (outcome: ReportingOutcomeKey, balance: bigint) => ({
 					label: tradingCopy.formatOutcomeShares(getShareOutcomeLabel(outcome)),

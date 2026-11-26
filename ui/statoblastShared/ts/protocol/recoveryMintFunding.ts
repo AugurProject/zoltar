@@ -9,12 +9,15 @@ const abi = parseAbi(['function settlement() view returns(address)', 'function r
 
 /** The proportional REP contribution belongs to the purchased claims, independently of collateral fees. */
 export async function loadRecoveryMintFunding(client: Pick<ReadClient, 'readContract'>, securityPool: Address, universe: bigint, owner: Address, required: bigint, blockNumber?: bigint) {
-	const maximum = securityPoolRecoveryMintBudget(required)
+	const recommended = securityPoolRecoveryMintBudget(required)
 	if (required < 0n) throw new Error(shareErrors.invalidRecoveryAmount)
-	if (required === 0n) return { required, maximum, balance: 0n, allowance: 0n, token: undefined, spender: undefined }
+	if (required === 0n) return { required, maximum: recommended, balance: 0n, allowance: 0n, token: undefined, spender: undefined }
 	const spender = requireAddressValue(await client.readContract({ abi, address: securityPool, functionName: 'settlement', blockNumber }), 'Recovery REP spender')
 	const token = requireAddressValue(await client.readContract({ abi, address: spender, functionName: 'recoveryTokens', args: [universe], blockNumber }), 'Recovery REP token')
 	if (token === zeroAddress || spender === zeroAddress) throw new Error(shareErrors.recoveryFundsUnavailable)
 	const [balance, allowance] = await Promise.all([client.readContract({ abi: ABIS.mainnet.erc20, address: token, functionName: 'balanceOf', args: [owner], blockNumber }), client.readContract({ abi: ABIS.mainnet.erc20, address: token, functionName: 'allowance', args: [owner, spender], blockNumber })])
+	const affordable = balance < allowance ? balance : allowance
+	const bounded = affordable < recommended ? affordable : recommended
+	const maximum = bounded < required ? required : bounded
 	return { required, maximum, balance, allowance, token, spender }
 }

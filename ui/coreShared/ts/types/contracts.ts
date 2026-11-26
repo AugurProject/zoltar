@@ -65,7 +65,7 @@ export type ZoltarUniverseSummary = {
 	forkTime: bigint
 	forkingOutcomeIndex: bigint
 	hasForked: boolean
-	/** Genesis-first ancestry naming this universe by the fork outcomes that created it. */
+	/** Recent ancestry in generation order, including genesis when it fits the bounded history. */
 	lineage?: readonly UniverseLineageStep[] | undefined
 	parentUniverseId: bigint
 	reputationToken: Address

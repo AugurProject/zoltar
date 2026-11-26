@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, parseAbi, zeroHash, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { createPublicClient, custom, encodeAbiParameters, decodeFunctionData, parseAbi, zeroHash, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { buildSecurityPoolMintRequest, loadSecurityPoolMintQuote, securityPoolRecoveryMintBudget, type SecurityPoolReadClient } from './securityPool.js'
 
 const trader: Address = '0x0000000000000000000000000000000000000001'
@@ -22,22 +22,36 @@ describe('shared capital complete-set purchases', () => {
 		expect(decodeFunctionData({ abi: recoveryAbi, data: request.data })).toEqual({ functionName: 'createCompleteSetWithRecoveryRep', args: [7n, 13n, 100n, trader, 99n, 2n, 5n] })
 	})
 
-	test('quotes canonical question units and uniform purchase fees without a vault or allocation scan', async () => {
+	test('quotes attainable shares after the holding-fee checkpoint (#1733)', async () => {
 		const calls: string[] = []
 		const responses: Record<string, unknown> = { questionOriginIds: `0x${'11'.repeat(32)}`, getQuestionLedger: pool, capitalLedger, purchaseQuote: [20n, 8n], quoteQuestionMint: 99n, availableMintCapacity: 200n, isPriceValid: true, quoteMintRecoveryRep: 0n }
-		const client: SecurityPoolReadClient = {
+		const client = {
+			multicall: createPublicClient({
+				transport: custom({
+					request: async () =>
+						encodeAbiParameters(
+							[{ type: 'tuple[]', components: [{ type: 'bool' }, { type: 'bytes' }] }],
+							[
+								[
+									[true, '0x'],
+									[true, encodeAbiParameters([{ type: 'uint256' }], [101n])],
+								],
+							],
+						),
+				}),
+			}).multicall,
 			getChainId: async () => 1,
 			getBlock: async () => ({ number: 45n, timestamp: 100n }),
-			readContract: async parameters => {
+			readContract: async (parameters: Parameters<SecurityPoolReadClient['readContract']>[0]) => {
 				calls.push(parameters.functionName)
 				expect(parameters.blockNumber).toBe(45n)
 				return responses[parameters.functionName]
 			},
 		}
-		expect(await loadSecurityPoolMintQuote({ client, securityPool, universeId: 7n, questionId: 13n, mintAttoEth: 100n })).toEqual({
+		expect(await loadSecurityPoolMintQuote({ client, multicallAddress: trader, securityPool, universeId: 7n, questionId: 13n, mintAttoEth: 100n })).toEqual({
 			pool,
 			capitalLedger,
-			shares: 99n,
+			shares: 101n,
 			purchaseFeeAttoEth: 20n,
 			maximumPurchaseFeeAttoEth: 21n,
 			recoveryAttoRep: 0n,
@@ -47,7 +61,7 @@ describe('shared capital complete-set purchases', () => {
 			priceValid: true,
 			blockNumber: 45n,
 		})
-		expect(calls).toHaveLength(8)
+		expect(calls).toHaveLength(7)
 	})
 })
 
@@ -60,19 +74,26 @@ test('recovery REP headroom is finite, rounds up, and never requests REP for an 
 
 test('quotes an unregistered origin question without reading a nonexistent pool', async () => {
 	const calls: string[] = []
-	const client: SecurityPoolReadClient = {
+	const client = {
+		multicall: createPublicClient({
+			transport: custom({
+				request: async () => {
+					throw new Error('Unregistered quote must not checkpoint')
+				},
+			}),
+		}).multicall,
 		getChainId: async () => 1,
 		getBlock: async () => ({ number: 45n, timestamp: 100n }),
-		readContract: async parameters => {
+		readContract: async (parameters: Parameters<SecurityPoolReadClient['readContract']>[0]) => {
 			calls.push(parameters.functionName)
 			const responses: Record<string, unknown> = { questionOriginIds: zeroHash, originUniverseId: 7n, capitalLedger, purchaseQuote: [20n, 8n], availableMintCapacity: 200n, isPriceValid: true, quoteMintRecoveryRep: 0n }
 			if (!(parameters.functionName in responses)) throw new Error(`Unexpected read ${parameters.functionName}`)
 			return responses[parameters.functionName]
 		},
 	}
-	const quote = await loadSecurityPoolMintQuote({ client, securityPool, universeId: 7n, questionId: 13n, mintAttoEth: 100n })
+	const quote = await loadSecurityPoolMintQuote({ client, multicallAddress: trader, securityPool, universeId: 7n, questionId: 13n, mintAttoEth: 100n })
 	expect(quote).toMatchObject({ pool: zeroAddress, shares: 100n, purchaseFeeAttoEth: 20n, availableCommitmentAttoEth: 200n })
 	expect(calls).not.toContain('getQuestionLedger')
 	expect(calls).not.toContain('quoteQuestionMint')
-	await expect(loadSecurityPoolMintQuote({ client, securityPool, universeId: 8n, questionId: 13n, mintAttoEth: 100n })).rejects.toThrow('origin universe')
+	await expect(loadSecurityPoolMintQuote({ client, multicallAddress: trader, securityPool, universeId: 8n, questionId: 13n, mintAttoEth: 100n })).rejects.toThrow('origin universe')
 })

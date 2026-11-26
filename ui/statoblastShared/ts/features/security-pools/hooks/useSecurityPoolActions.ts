@@ -39,7 +39,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 	const progress = journal.current.value
 	const { read: readProgress, write: saveProgress } = journal
 	const originEdited = useRef(false)
-	const originForkState = useSignal<{ backend: ReturnType<typeof getActiveBackend>; key: string; forked: boolean } | undefined>(undefined)
+	const originForkState = useSignal<{ backend: ReturnType<typeof getActiveBackend>; key: string; forked: boolean; reason?: string } | undefined>(undefined)
 	const draftInput = useSignal(initialDeploymentDraft(model.universeInput))
 	const draft = progress?.draft ?? draftInput.value
 	const updateDraft = (patch: Partial<DeploymentDraft>) => {
@@ -93,13 +93,15 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		if (!checkDeploymentOrigin) return
 		let current = true
 		const originUniverse = securityPoolUnsignedId(draft.originInput, 248)
-		// A failed read leaves the check to submission, which repeats it for a universe that forks after this one.
+		// Check deployment eligibility again before either transaction.
 		const load = async () => {
 			if (originUniverse === undefined) return
 			const forked = await isUniverseForked(createConnectedReadClient(), originUniverse)
 			if (current) originForkState.value = { backend, key: originForkKey, forked }
 		}
-		void load().catch(() => undefined)
+		void load().catch(failure => {
+			if (current) originForkState.value = { backend, key: originForkKey, forked: false, reason: getErrorMessage(failure, deploymentCopy.originValidationUnavailable) }
+		})
 		return () => {
 			current = false
 		}
@@ -295,8 +297,10 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 			if (recoverAmbiguousSend) await refreshDeploymentProgress()
 		}
 	}
-	const originForked = originForkState.value?.backend === backend && originForkState.value.key === originForkKey && originForkState.value.forked
-	const originForkReason = originForked ? copy.originForked : undefined
+	const originState = originForkState.value
+	const checkedOrigin = originState?.backend === backend && originState.key === originForkKey ? originState : undefined
+	const originForked = checkedOrigin?.forked === true
+	const originForkReason = checkedOrigin?.reason ?? (originForked ? copy.originForked : undefined)
 	const requireUnforkedOrigin = async () => {
 		if (origin === undefined) throw new Error(copy.enterOrigin)
 		if (!(await isUniverseForked(createReviewReadClient(), origin.universeId))) return
@@ -463,7 +467,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 					return {
 						...securityPoolCreationRequest(parameters.accountAddress, originConfig, horizon, chosen.address, config),
 						validateBeforeSubmit: validateAdmission,
-						reviewDescription: securityPoolDeploymentReviewDescription(mode, config, collateral, horizon),
+						reviewDescription: securityPoolDeploymentReviewDescription(mode, config, collateral, { origin: originConfig, horizon, policy: chosen.address }),
 					}
 				},
 				requireUnforkedOrigin,

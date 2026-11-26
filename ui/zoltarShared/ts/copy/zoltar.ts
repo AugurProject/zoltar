@@ -10,6 +10,7 @@ export const questionNotEndedForkReason = 'Only an ended question can fork a uni
 export const formatForkQuestionActiveReason = (endTime: CopyTemplateValue, relativeEndTime: CopyTemplateValue) => `The selected question must end before the universe can fork. It ends ${endTime} (${relativeEndTime}).`
 export const formatParentForkResponseActiveReason = (earliestForkTime: CopyTemplateValue, relativeEarliestForkTime: CopyTemplateValue) => `This universe can fork once its parent fork response period ends at ${earliestForkTime} (${relativeEarliestForkTime}).`
 export const forkEconomicsUnavailableReason = 'Fork burn terms could not be loaded.'
+export const forkNoRepSupplyReason = 'This universe has no REP supply.'
 export const forkRepInsufficientReason = 'Insufficient REP to meet the fork threshold.'
 export const forkRepApprovalRequiredReason = 'Approve enough REP to continue.'
 export const formatForkConfirmation = (permanentBurn: CopyTemplateValue, migrationCredit: CopyTemplateValue) => `I understand forking permanently burns ${permanentBurn} REP, moves ${migrationCredit} REP to my migration balance, and cannot be undone.`
