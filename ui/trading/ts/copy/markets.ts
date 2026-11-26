@@ -59,8 +59,8 @@ export const marketsCopy = {
 	noQuestionDescription: 'This question has no description.',
 	contracts: 'Contracts',
 	yourPosition: 'Your position',
-	/** A balance ShareToken.migrate locked in the parent universe after a fork; it stays in the wallet but cannot be transferred. */
-	lockedAfterMigration: 'Locked after migration',
+	/** Source shares remain held when migration or source-backed recovery locks transfers. */
+	transfersLocked: 'Transfers locked',
 	connectToSeePosition: 'Connect a wallet to see your position',
 	allMarkets: 'All markets',
 	shareToken: 'Share token',

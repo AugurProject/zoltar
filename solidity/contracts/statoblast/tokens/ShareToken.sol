@@ -149,6 +149,11 @@ contract ShareToken is ERC1155, IShareToken {
 		return migratedShareAmountAttoShares[fromId][targetUniverseId][account];
 	}
 
+	/// @notice Whether this holder's source shares are transfer-locked by migration or spending source-backed recovery rights.
+	function isSourceBalanceLocked(uint256 id, address holder) external view returns (bool) {
+		return sourceAccounts[id][holder].balanceLocked;
+	}
+
 	function getTokenId(uint248 _universeId, BinaryOutcomes.BinaryOutcome _outcome) public pure returns (uint256 _tokenId) {
 		return TokenId.getTokenId(_universeId, _outcome);
 	}

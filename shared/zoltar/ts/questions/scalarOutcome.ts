@@ -101,12 +101,12 @@ export function formatScalarOutcomeLabel(question: ScalarQuestionDetails, tickIn
 }
 
 export function getScalarOutcomeIndexDescriptor(question: ScalarQuestionDetails, outcomeIndex: bigint): ScalarOutcomeIndexDescriptor {
-	if (question.numTicks <= 0n || question.numTicks > SCALAR_PART_MASK || outcomeIndex < 0n || outcomeIndex >= 1n << SCALAR_TOTAL_BITS) return { kind: 'malformed' }
+	if (question.numTicks < 0n || question.numTicks > SCALAR_PART_MASK || outcomeIndex < 0n || outcomeIndex >= 1n << SCALAR_TOTAL_BITS) return { kind: 'malformed' }
 	if ((outcomeIndex & SCALAR_RESERVED_BITS_MASK) !== 0n) return { kind: 'malformed' }
 
 	const { invalid, firstPart, secondPart } = splitScalarOutcomeIndex(outcomeIndex)
 	if (invalid) return firstPart === 0n && secondPart === 0n ? { kind: 'invalid' } : { kind: 'malformed' }
-	if (firstPart + secondPart !== question.numTicks) return { kind: 'malformed' }
+	if (question.numTicks === 0n || firstPart + secondPart !== question.numTicks) return { kind: 'malformed' }
 	if (secondPart > question.numTicks) return { kind: 'malformed' }
 	return { kind: 'tick', tickIndex: secondPart }
 }

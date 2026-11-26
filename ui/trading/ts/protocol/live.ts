@@ -29,7 +29,7 @@ export { submitFreshLiquidity, type LiquidityOperation } from './liquidity.js'
 import { publicErrorMessage } from './publicError.js'
 import { isRecoverableContractReadError } from '@zoltar/ui-core-shared/lib/errors.js'
 
-export { forkMigrationSettled, liveBalancesForMarket, lockedMigratedBalance, marketAcceptsNewRisk, marketNewRiskBlocker, marketSettlementPath, OUTCOME_BALANCE_KEYS, shareBalanceScope, type LiveBalances, type LiveMarket } from './liveMarket.js'
+export { forkMigrationSettled, liveBalancesForMarket, lockedSourceBalance, marketAcceptsNewRisk, marketNewRiskBlocker, marketSettlementPath, OUTCOME_BALANCE_KEYS, shareBalanceScope, type LiveBalances, type LiveMarket } from './liveMarket.js'
 
 const securityPoolFactoryAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
 const questionLedgerAbi = statoblast_QuestionLedger_QuestionLedger.abi
@@ -415,7 +415,9 @@ export async function loadLiveBalances(client: PublicClient, market: LiveMarket,
 		market.pair === undefined ? 0n : client.readContract({ abi: pair.abi, address: market.pair, functionName: 'balanceOf', args: [account], blockNumber }),
 	])
 	if (market.universeForkTime === 0n) return { scope, invalid, yes, no, lp }
-	return { scope, invalid, yes, no, lp, migrated: await loadMigratedShareTotals(client, market, account) }
+	const [invalidLocked, yesLocked, noLocked] = await Promise.all([scope.invalidTokenId, scope.yesTokenId, scope.noTokenId].map(id => client.readContract({ abi: shareTokenAbi, address: scope.shareToken, functionName: 'isSourceBalanceLocked', args: [id, account], blockNumber })))
+	if (invalidLocked === undefined || yesLocked === undefined || noLocked === undefined) throw new Error('Missing source transfer lock state')
+	return { scope, invalid, yes, no, lp, sourceLocks: { invalid: invalidLocked, yes: yesLocked, no: noLocked }, migrated: await loadMigratedShareTotals(client, market, account) }
 }
 
 /** The migration record is extra context for a forked market's balances; a failed contract read leaves it unknown instead of failing the balances. */
