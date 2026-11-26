@@ -2560,7 +2560,7 @@ describe('shared ethereum compatibility layer', () => {
 	test('HTTP transport retries rate limits for reads, receipt requests, and raw transaction broadcasts', async () => {
 		expect(http('https://rpc.example.test').retryDelay).toBe(10_000)
 		expect(http('https://rpc.example.test').requestTimeout).toBe(30_000)
-		expect(() => http('https://rpc.example.test', { requestTimeout: 0 })).toThrow('request timeout')
+		expect(() => http('https://rpc.example.test', { requestTimeout: 0 })).toThrow('RPC timeout must be a positive safe integer')
 		const responses = [
 			new Response(undefined, { status: 429 }),
 			Response.json({ id: 1, jsonrpc: '2.0', result: '0x1234' }),
