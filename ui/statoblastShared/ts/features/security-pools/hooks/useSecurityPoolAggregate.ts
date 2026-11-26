@@ -164,16 +164,16 @@ export function useSecurityPoolAggregate(
 		if (preview !== undefined && preview.status !== 'ready') return 'Retirement is not ready.'
 		return undefined
 	}
-	const serveReason = ownerReason ?? inactiveReason ?? retirementReadinessReason()
-	const requireSnapshot = () => {
+	const serveReason = (accountAddress === undefined ? 'Connect wallet.' : undefined) ?? stateReason ?? inactiveReason ?? retirementReadinessReason()
+	const requireSnapshot = (permissionless = false) => {
 		const current = model.snapshot
-		if (current === undefined || accountAddress === undefined || accountAddress.toLowerCase() !== (current.auctionVault?.bidder ?? current.owner).toLowerCase()) throw new Error('Connect the selected owner account.')
+		if (current === undefined || accountAddress === undefined || (!permissionless && accountAddress.toLowerCase() !== (current.auctionVault?.bidder ?? current.owner).toLowerCase())) throw new Error('Connect the selected owner account.')
 		return current
 	}
 	const run = (action: string, title: string, reason: string | undefined, build: (selected: NonNullable<typeof snapshot>) => SecurityPoolTransaction, validate?: (latest: SecurityPoolCapitalSnapshot) => void | Promise<void>) =>
 		actions.runSecurityPoolAction(action, title, () => {
 			if (reason !== undefined) throw new Error(reason)
-			const selected = requireSnapshot()
+			const selected = requireSnapshot(action === 'serveSecurityPoolRetirement')
 			const request = build(selected)
 			return {
 				...request,
@@ -377,8 +377,8 @@ export function useSecurityPoolAggregate(
 				selected => {
 					if (pendingRetirement === undefined) throw new Error('No pending retirement.')
 					return {
-						...buildSecurityPoolCapitalServeRetirementRequest({ ...base(selected), positionId: pendingRetirement.id }),
-						reviewDescription: `Finish your request at ${formatCurrencyBalance(pendingRetirement.remainingCommitment, selected.collateral.decimals)} ${selected.collateral.symbol} commitment. Earlier requested reductions remain reserved even if their owners have not claimed. ${capitalCopy.retirementPreviewHint}`,
+						...buildSecurityPoolCapitalServeRetirementRequest({ owner: accountAddress ?? selected.owner, capitalLedger: selected.capitalLedger, positionId: pendingRetirement.id }),
+						reviewDescription: `Serve the retirement request for ${selected.owner} at ${formatCurrencyBalance(pendingRetirement.remainingCommitment, selected.collateral.decimals)} ${selected.collateral.symbol} commitment. Earlier requested reductions remain reserved even if their owners have not claimed. ${capitalCopy.retirementPreviewHint}`,
 					}
 				},
 				latest => {

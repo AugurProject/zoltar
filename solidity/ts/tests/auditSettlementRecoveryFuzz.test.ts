@@ -258,9 +258,14 @@ describe('audit: settlement book recovery REP property test', () => {
 
 	test('random lifecycles never revert a valid redemption or move REP between questions', async () => {
 		await getAnvilWindowEthereum().advanceTime(5_000_000n)
+		const independentSeedBlock = await client.getBlockNumber()
+		let baseline = await getAnvilWindowEthereum().anvilSnapshot()
 		const failures: string[] = []
 		for (let seed = FIRST_SEED; seed < FIRST_SEED + SEEDS; seed++) {
 			try {
+				await getAnvilWindowEthereum().anvilRevert(baseline)
+				baseline = await getAnvilWindowEthereum().anvilSnapshot()
+				expect(await client.getBlockNumber()).toBe(independentSeedBlock)
 				await runSeed(seed)
 			} catch (error) {
 				failures.push(String(error instanceof Error ? error.message : error))

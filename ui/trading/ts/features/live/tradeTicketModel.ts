@@ -322,8 +322,9 @@ function invalidCoverageShortfall(estimate: TradeEstimate | undefined, balances:
 /** What a buy pays out if its outcome wins, at the pool's current backing, and the gain over the ETH paid. */
 export function buyReturn(estimate: BuyEstimate, market: LiveMarket) {
 	const payoutAttoEth = attoSharesToCollateralAttoEth(estimate.quote.totalLongShares, market)
-	const profitAttoEth = payoutAttoEth - estimate.payAttoEth
-	return { payoutAttoEth, profitAttoEth, returnBps: (profitAttoEth * BPS) / estimate.payAttoEth }
+	const spend = estimateBudgetSpend(market, estimate.payAttoEth) ?? estimate.payAttoEth
+	const profitAttoEth = payoutAttoEth - spend
+	return { payoutAttoEth, profitAttoEth, returnBps: (profitAttoEth * BPS) / spend }
 }
 
 /**

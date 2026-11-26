@@ -201,3 +201,10 @@ describe('migration wizard helpers', () => {
 		expect(getOutcomeLabelForIndex(undefined, 2n)).toBe('Outcome 2')
 	})
 })
+
+test('#1658 genesis preparation is capped independently from reusable migration credit', () => {
+	const wizard = deriveMigrationWizard({ ...input({ migrationBalanceAttoRep: 2n * ATTO_REP_PER_REP, walletRepAttoRep: 10n * ATTO_REP_PER_REP, selectedOutcomeIndexes: [1n], amountInput: '6' }), maximumNewMigrationAttoRep: 3n * ATTO_REP_PER_REP })
+	expect(wizard.maxAmountAttoRep).toBe(5n * ATTO_REP_PER_REP)
+	expect(wizard.steps[1]?.status).toBe('blocked')
+	expect(wizard.steps[2]?.status).toBe('incomplete')
+})

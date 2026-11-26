@@ -63,6 +63,10 @@ export async function discoverAuctions(context: EcosystemDiscoveryContext, pools
 				throw new Error('Indexed auction bid differs from anchored engine state')
 			bid.settled = stored[5]
 			if (bid.settled) continue
+			if (finalized) {
+				const fill = await client.readContract({ abi: abis.securityPoolUniformPriceRepairAuctionAbi, address: engine, functionName: 'previewBid', args: [BigInt(bid.bidId)], blockNumber })
+				if (fill.refundAttoEth === 0n) continue
+			}
 			try {
 				await client.simulateContract({ abi: abis.securityPoolRepairAuctionAbi, address, account: wallet, functionName: 'settleRefund', args: [BigInt(bid.bidId)], blockNumber })
 				refundableBidIds.push(bid.bidId)

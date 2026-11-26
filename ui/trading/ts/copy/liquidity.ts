@@ -40,8 +40,8 @@ export const transactionFailed = 'Liquidity transaction failed.'
 export const closedToAdditions = 'Trading has ended for this market, so it no longer accepts new liquidity. Removing liquidity is still available.'
 export { percent } from './outcomes.js'
 
-export function approximateRemovalValue(amount: string, appendEth = true) {
-	return `Worth about ${amount}${appendEth ? ' ETH' : ''} at the current trading pool price, if the question resolves Yes or No.`
+export function approximateRemovalValue(amount: string, appendEth = true, hasRecovery = false) {
+	return `Worth about ${amount}${appendEth ? ' ETH' : ''} at the current trading pool price, if the question resolves Yes or No.${hasRecovery ? ' Excludes recovery REP.' : ''}`
 }
 
 export const youProvide = 'You provide'
