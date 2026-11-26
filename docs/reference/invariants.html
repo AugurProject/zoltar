@@ -2152,7 +2152,8 @@
 						<summary><code>INV-27</code><span class="invariant-title">Outward price bounds</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">With raw price <code>p</code>, percentage precision <code>D</code> and uncertainty <code>0 ≤ e &lt; D</code>, the liquidation bound is <code>⌊pD/(D+e)⌋</code> and the conservative bound is <code>⌈pD/(D−e)⌉</code>. Increasing only uncertainty weakly widens this interval. At zero uncertainty both equal <code>p</code>.</div>
+							<div class="invariant-property">With raw uint256 price <code>p</code>, percentage precision <code>D = 10,000,000</code> and uncertainty <code>0 ≤ e &lt; D</code>, the liquidation bound is <code>⌊pD/(D+e)⌋</code>. The conservative bound is <code>⌈pD/(D−e)⌉</code> when <code>p ≤ ⌊M(D−e)/D⌋</code>, where <code>M = 2²⁵⁶−1</code>; larger prices revert with <code>Conservative oracle price exceeds uint256</code>. These domain expressions use mathematical integers. Both helpers reject <code>e ≥ D</code>. Increasing only uncertainty weakly widens the interval while both conservative bounds remain representable. At zero uncertainty both equal <code>p</code>, including <code>M</code>.</div>
+							<p>Funded reports derive <code>p = ⌊amount2 × 10¹⁸ / amount1⌋</code> from positive collateral <code>amount1</code> and uint128 REP <code>amount2</code>. Thus <code>p ≤ (2¹²⁸−1) × 10¹⁸</code>, and even <code>pD</code> fits uint256 for every allowed uncertainty. The shared feed’s cached-price getters and report authorization inherit this bound. Capital acceptance receives the same price through the authenticated canonical-feed callback. Before any observation, the cached zero price is also in the helper domain.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
