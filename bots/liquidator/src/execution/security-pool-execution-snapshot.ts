@@ -5,7 +5,7 @@ import type { ReadClient } from '#monitoring/read-client'
 import { createPublicClient, type Account, type Chain, type Transport, type WalletClient, type createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { settledQuorumValue, sharedQuorumReadTargets } from '@zoltar/bot-shared/monitoring/read-quorum'
 
-export type SecurityPoolExecutionContext = { client: ReadClient; blockNumber: bigint; observation: SecurityPoolObservation; totalPrincipal: bigint }
+export type SecurityPoolExecutionContext = { client: ReadClient; blockNumber: bigint; observation: SecurityPoolObservation; totalPrincipal: bigint | undefined }
 
 /** All security pool writes authenticate the same managed exposure at one quorum-agreed height. */
 export async function readSecurityPoolExecutionSnapshot<T>(

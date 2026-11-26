@@ -7,7 +7,7 @@ import type { SecurityPoolSelection } from '#config/security-pool-policy'
 import { erc20Abi, securityPoolCapitalLedgerAbi, securityPoolRepairAuctionVaultAbi, securityPoolRuntimeIdentities } from '@zoltar/bot-shared/contracts/abi'
 import { verifyRuntimeIdentity } from '@zoltar/bot-shared/monitoring/runtime-identity'
 import { getAddress, parseAbiItem, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
-import { decodeAuctionVaultBindings, loadSecurityPoolCapitalSnapshot, type SecurityPoolCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
+import { decodeAuctionVaultBindings, loadSecurityPoolClaimableEarnings, loadSecurityPoolCapitalSnapshot, type SecurityPoolCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import type { ReadClient } from './read-client.ts'
 import { record } from '@zoltar/bot-shared/infrastructure/json-validation'
 
@@ -175,6 +175,9 @@ export async function loadSecurityPoolObservation(client: ReadClient, settings: 
 	const owner = wallet ?? getAddress('0x0000000000000000000000000000000000000001')
 	const snapshot = await loadSecurityPoolCapitalSnapshot({ client, securityPool: scope.address, universeId: scope.universeId, owner, blockNumber })
 	await verifySecurityPoolCustody(client, snapshot, settings.deployment.zoltar)
+	const earnings = await loadSecurityPoolClaimableEarnings(snapshot, async (contracts, blockNumber) => await client.multicall({ contracts, allowFailure: false, blockNumber, multicallAddress: settings.deployment.multicall3 }))
+	snapshot.accruedFeesAttoEth = earnings.attoEth
+	snapshot.accruedFeesAttoRep = earnings.attoRep
 	let chosenChildUniverseId: bigint | undefined
 	if (snapshot.exported) {
 		const controller = address(await client.readContract({ address: scope.address, abi: securityPoolMonitorAbi, functionName: 'forkController', blockNumber }))

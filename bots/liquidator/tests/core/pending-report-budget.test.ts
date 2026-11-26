@@ -1,3 +1,7 @@
+import { loadSponsoredOperationReport } from '../../src/monitoring/security-pool-report.ts'
+import { totalManagedPrincipalAttoRep } from '../../src/core/security-pool-exposure.ts'
+import { securityPoolTakeoverPlan } from '../../src/core/security-pool-strategy.ts'
+import { securityPoolObservation } from '../support/security-pool-observation.ts'
 import { openOracleAbi, sharedPoolPriceFeedAbi } from '@zoltar/bot-shared/contracts/abi'
 import { expect, test } from 'bun:test'
 import { createRpcEndpointPool, createWalletClient, encodeFunctionData, privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared/ethereum'
@@ -28,6 +32,7 @@ test.each([
 		id: 7n,
 		oracle: targetAddress,
 		reservedRep: 0n,
+		exposureKnown: true,
 		maxSettlementBaseFee: 10n,
 		staleAt: 1n + 480n + validityWindow,
 		game: decodeFunctionResult({ abi: openOracleAbi, functionName: 'storedGame', data: encodeAbiParameters(gameAbi.outputs, [1n, 1n, targetAddress, 1n, settledAt, ownerAddress, 0n, 480n, 0n, zeroAddress, 101n, targetAddress, 1n, 0n, 0n, 100n, targetAddress, 7_000_000n, 0n, 1n]) }),
@@ -87,4 +92,33 @@ test.each([
 		expect(submitted).toBe(true)
 	}
 	expect(state.paused).toBe(false)
+})
+
+test('#1645 unpriced first-report WETH makes aggregate exposure unknown and blocks another pool acquisition', async () => {
+	const gameAbi = openOracleAbi.find(item => item.type === 'function' && item.name === 'storedGame')
+	if (gameAbi === undefined || gameAbi.type !== 'function') throw new Error('Stored game ABI missing')
+	const f = securityPoolClient({
+		sponsorOperationReport: 7n,
+		reportOutcome: 0n,
+		reportCandidates: [targetAddress, ownerAddress, 10n],
+		openOracle: targetAddress,
+		storedGame: decodeFunctionResult({ abi: openOracleAbi, functionName: 'storedGame', data: encodeAbiParameters(gameAbi.outputs, [10n ** 18n, 1n, targetAddress, 1n, 0n, ownerAddress, 0n, 480n, 0n, zeroAddress, 101n, targetAddress, 1n, 0n, 0n, 100n, targetAddress, 7_000_000n, 0n, 1n]) }),
+		storedHelper: Object.assign([targetAddress, 0n, 0n] as const, { creator: targetAddress, blockTimestamp: 0n, blockNumber: 0n }),
+		tokenHolder: 1n,
+		priceValidityWindowSeconds: 10000n,
+	})
+	f.observation.snapshot.acceptedPrice = 0n
+	f.observation.pendingOperationReport = await loadSponsoredOperationReport(f.client, f.observation.snapshot)
+	expect(f.observation.pendingOperationReport?.exposureKnown).toBe(false)
+	const other = securityPoolObservation()
+	const total = totalManagedPrincipalAttoRep([f.observation, other])
+	expect(total).toBeUndefined()
+	const position = other.positions[0]
+	if (position === undefined) throw new Error('Missing takeover fixture')
+	expect(securityPoolTakeoverPlan(other, position, f.settings, 0n, true).plan).toBeDefined()
+	expect(securityPoolTakeoverPlan(other, position, f.settings, total, true)).toMatchObject({ reason: 'Managed principal exposure is unknown' })
+	f.observation.snapshot.acceptedPrice = 10n ** 18n
+	f.observation.pendingOperationReport = await loadSponsoredOperationReport(f.client, f.observation.snapshot)
+	expect(f.observation.pendingOperationReport?.reservedRep).toBeGreaterThan(0n)
+	expect(totalManagedPrincipalAttoRep([f.observation, other])).toBeDefined()
 })

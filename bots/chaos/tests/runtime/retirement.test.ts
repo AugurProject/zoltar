@@ -1,3 +1,4 @@
+import { auctionFixture, capitalFixture } from '../support/security-pool-fixtures.ts'
 import { parseRetirementState } from '../../src/state/retirement.ts'
 import { abandonRetryableSelectableFailure } from '../../src/runtime/workflow-repair.ts'
 import { evaluatePolicySafeContinuation } from '../../src/runtime/workflow-continuation.ts'
@@ -972,4 +973,36 @@ test('a locally rejected sweep dispatch leaves retirement cancellable', async ()
 test('rejects obsolete retirement overrides without completion evidence', () => {
 	const retirement = request()
 	expect(() => parseRetirementState({ ...retirement, profileReplacementOverride: { acceptedAt: now, reason: 'Old development override', targetProfileId: 'other' } }, address(1))).toThrow()
+})
+
+test('#1685 pending pledged retirement blocks completion until principal is recovered', () => {
+	const snapshot = drainedWalletSnapshotFixture()
+	const capital = { ...capitalFixture(snapshot), withdrawableAttoRep: 0n.toString(), feesAttoEth: 0n.toString(), feesAttoRep: 0n.toString(), retirementPending: true, retirementReady: false }
+	snapshot.securityPoolCapital = [capital]
+	const parameters = { blockHash: hash(100), blockNumber: 100n, canonicalScanComplete: true, evaluations: [], retirement: request(), snapshot, state: initialDurableState(snapshot.chainId), v3: [] }
+	expect(assessRetirement(parameters).status).toBe('waiting')
+	capital.retirementReady = true
+	expect(assessRetirement(parameters).status).toBe('waiting')
+	capital.retirementPending = false
+	capital.pledgedAttoRep = 0n.toString()
+	capital.withdrawableAttoRep = capital.principalAttoRep
+	expect(assessRetirement(parameters).status).not.toBe('drained')
+	capital.withdrawableAttoRep = 0n.toString()
+	capital.principalAttoRep = 0n.toString()
+	expect(assessRetirement(parameters).status).toBe('drained')
+})
+test('#1702 funded live auction bids block completion through settlement', () => {
+	const snapshot = drainedWalletSnapshotFixture()
+	const auction = auctionFixture()
+	auction.refundableBidIds = []
+	snapshot.auctions = [auction]
+	const parameters = { blockHash: hash(100), blockNumber: 100n, canonicalScanComplete: true, evaluations: [], retirement: request(), snapshot, state: initialDurableState(snapshot.chainId), v3: [] }
+	expect(assessRetirement(parameters).status).toBe('waiting')
+	auction.finalized = true
+	expect(assessRetirement(parameters).status).toBe('waiting')
+	for (const bid of auction.bids) bid.settled = true
+	auction.pendingEthRefund = '4'
+	expect(assessRetirement(parameters).status).not.toBe('drained')
+	auction.pendingEthRefund = '0'
+	expect(assessRetirement(parameters).status).toBe('drained')
 })

@@ -29,7 +29,7 @@ export async function refreshSecurityPoolExecution(
 	positionId: SecurityPoolTarget | undefined,
 	readers?: Parameters<typeof readSecurityPoolExecutionSnapshot>[6],
 	unlockedTarget?: SecurityPoolTarget,
-): Promise<{ observation: SecurityPoolObservation; totalPrincipal: bigint; allowance: bigint }> {
+): Promise<{ observation: SecurityPoolObservation; totalPrincipal: bigint | undefined; allowance: bigint }> {
 	const targets = [positionId, unlockedTarget].filter(candidate => candidate !== undefined)
 	const result = await readSecurityPoolExecutionSnapshot(
 		wallet,

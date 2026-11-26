@@ -2,7 +2,7 @@ import { boundCloneRuntimeCode, universeCloneBindings } from '@zoltar/statoblast
 import { readFileSync } from 'node:fs'
 import { getAddress, createPublicClient, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
-import { mainnet } from '@zoltar/core-shared/evm/ethereum'
+import { chainFor } from '../../src/monitoring/operator-chain.ts'
 import { securityPoolObservation, securityPoolSettings, targetAddress } from './security-pool-observation.ts'
 
 export function securityPoolClient(overrides: Record<string, unknown> = {}) {
@@ -126,7 +126,7 @@ export function securityPoolClient(overrides: Record<string, unknown> = {}) {
 		...overrides,
 	}
 	const network = createPublicClient({
-		chain: mainnet,
+		chain: chainFor(settings),
 		transport: custom({
 			request: async () => {
 				throw new Error('Unexpected network request')
@@ -135,6 +135,15 @@ export function securityPoolClient(overrides: Record<string, unknown> = {}) {
 	})
 	const client = new Proxy(network, {
 		get(target, property) {
+			if (property === 'multicall')
+				return async (parameters: { contracts: readonly { address: string; functionName: string }[]; blockNumber: bigint; allowFailure: boolean }) => {
+					if (parameters.allowFailure || parameters.blockNumber !== snapshot.blockNumber) throw new Error('Expected pinned required multicall')
+					return parameters.contracts.map(call => {
+						reads.push({ ...call, blockNumber: parameters.blockNumber })
+						if (call.functionName === 'checkpoint') return undefined
+						return values[`projected:${call.functionName}`] ?? values[call.functionName]
+					})
+				}
 			if (property === 'getChainId') return async () => 1
 			if (property === 'getBlock') return async () => ({ number: snapshot.blockNumber, hash: snapshot.blockHash, timestamp: snapshot.timestamp, baseFeePerGas: values['baseFeePerGas'] ?? 0n })
 			if (property === 'getCode') return async (parameters: { address: string }) => codes.get(getAddress(parameters.address))

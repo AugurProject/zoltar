@@ -79,7 +79,7 @@ export async function seedSecurityPoolScenario({ accounts, createReadClient, cre
 	const feed = await readClient.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'priceFeed', args: [0n] })
 	const [minimumReport, exposureDivider] = await Promise.all([readClient.readContract({ address: feed, abi: feedArtifact.abi, functionName: 'minimumToken1ReportAttoEth' }), readClient.readContract({ address: feed, abi: feedArtifact.abi, functionName: 'OPEN_INTEREST_DIVIDER' })])
 	// Prepay the forthcoming commitment as well as the feed's current gas-security floor.
-	const requestedInitialAttoWeth = minimumReport + ceilDiv(commitment, exposureDivider)
+	const minimumInitialAttoWeth = minimumReport + ceilDiv(commitment, exposureDivider)
 	const report = await settleSeededOracleReport({
 		accountAddress: owner,
 		createWriteClient,
@@ -87,7 +87,7 @@ export async function seedSecurityPoolScenario({ accounts, createReadClient, cre
 		onProgressStep: reportStep,
 		poolLabel: 'securityPool',
 		readClient,
-		requestedInitialAttoWeth,
+		minimumInitialAttoWeth,
 		repPerCollateralPrice: collateralSymbol === 'USDC' ? 10n ** 36n / DEFAULT_SIMULATION_USDC_PER_REP_PRICE : DEFAULT_SIMULATION_REP_PER_ETH_PRICE,
 	})
 	await settleOracleReportIfNeeded({ memoryClient, readClient, writeClient: client, ...report })

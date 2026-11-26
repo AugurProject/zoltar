@@ -112,6 +112,12 @@ export function assessRetirement(parameters: {
 	const approvals = knownApprovalCount(parameters.snapshot)
 	const shareClassification = classifyShares(parameters.snapshot)
 	const blockers: RetirementBlocker[] = [...parameters.retirement.blockers.filter(blocker => blocker.category === 'ambiguous-position' && blocker.id.startsWith('v3-workflow:')), ...shareClassification.blockers]
+	for (const capital of parameters.snapshot.securityPoolCapital) {
+		if (BigInt(capital.pledgedAttoRep) > 0n || capital.retirementPending) blockers.push({ category: 'temporarily-locked', details: 'Owned capital is pledged or awaiting retirement release', id: `capital:${capital.capitalLedger}` })
+	}
+	for (const auction of parameters.snapshot.auctions) {
+		if (auction.bids.some(bid => !bid.settled && BigInt(bid.lots) > 0n)) blockers.push({ category: 'temporarily-locked', details: 'Owned auction bid awaits canonical settlement and recovery', id: `auction:${auction.address}` })
+	}
 	for (const workflow of unresolvedWorkflows.filter(candidate => candidate.classification === 'selectable' && candidate.status === 'failed')) {
 		const failure = workflow.steps.find(step => step.status === 'failed')
 		blockers.push({

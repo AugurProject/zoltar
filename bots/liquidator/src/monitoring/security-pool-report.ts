@@ -21,5 +21,5 @@ export async function loadSponsoredOperationReport(client: ReadClient, snapshot:
 	const ownReport = game[2].toLowerCase() === escrow.toLowerCase()
 	const weth = (credits[0] ?? 0n) + (ownReport ? game[0] : 0n)
 	const rep = (credits[1] ?? 0n) + (ownReport ? game[1] : 0n)
-	return { id, oracle, game, helper, maxSettlementBaseFee, staleAt, reservedRep: rep + (weth * snapshot.acceptedPrice) / 10n ** 18n }
+	return { id, oracle, game, helper, maxSettlementBaseFee, staleAt, exposureKnown: weth === 0n || snapshot.acceptedPrice > 0n, reservedRep: rep + (weth * snapshot.acceptedPrice) / 10n ** 18n }
 }

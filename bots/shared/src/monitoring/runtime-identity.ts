@@ -1,4 +1,4 @@
-import { keccak256, type Hex } from '../ethereum.js'
+import { keccak256, type Hex } from '@zoltar/core-shared/evm/ethereum'
 
 export type RuntimeIdentity = {
 	runtimeCodeHash: Hex
