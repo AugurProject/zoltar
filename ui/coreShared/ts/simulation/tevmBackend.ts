@@ -116,7 +116,7 @@ export async function createSimulationBackend(
 	dependencies: CreateSimulationBackendDependencies = {},
 ): Promise<SimulationBackend> {
 	const primaryAccount = QA_ACCOUNTS[0]
-	if (primaryAccount === undefined) throw new Error('No simulation QA accounts configured')
+	if (primaryAccount === undefined) throw new Error('No simulation QA wallets configured')
 	const profile = createSimulationProfile({ ...predictSimulationTokenAddresses(primaryAccount, genesisOutcome), genesisOutcome })
 	const initialization: SimulationInitialization =
 		savedState !== undefined && savedStateId !== undefined
@@ -169,7 +169,7 @@ export async function createSimulationBackend(
 		})
 		const restartTimeout = () => {
 			clearTimeout(timeoutId)
-			timeoutId = setTimeout(() => rejectTimeout(new Error('Simulation request timed out. Reload the page to retry.')), WORKER_REQUEST_TIMEOUT_MILLISECONDS)
+			timeoutId = setTimeout(() => rejectTimeout(new Error('The simulation timed out. Reload the page to retry.')), WORKER_REQUEST_TIMEOUT_MILLISECONDS)
 		}
 		restartTimeout()
 		if (restartsOnProgress) progressListeners.add(restartTimeout)
@@ -208,7 +208,7 @@ export async function createSimulationBackend(
 					} as SimulationWorkerMessage)
 				} catch (error) {
 					pendingRequests.delete(requestId)
-					reject(error instanceof Error ? error : new Error('Simulation worker request failed'))
+					reject(error instanceof Error ? error : new Error('The simulation could not complete this action.'))
 				}
 			}).finally(() => {
 				settled = true

@@ -376,8 +376,8 @@ describe('useZoltarUniverse', () => {
 
 		expect(onTransactionRequested).not.toHaveBeenCalled()
 		expect(onTransactionFailed).not.toHaveBeenCalled()
-		expect(requireHookState(hookState).zoltarChildUniverseFeedback?.status.detail).toBe('Wallet account changed. Review the action with the connected account and try again.')
-		expect(requireHookState(hookState).zoltarChildUniverseError).toBe('Wallet account changed. Review the action with the connected account and try again.')
+		expect(requireHookState(hookState).zoltarChildUniverseFeedback?.status.detail).toBe('The connected wallet address changed. Review the action and try again.')
+		expect(requireHookState(hookState).zoltarChildUniverseError).toBe('The connected wallet address changed. Review the action and try again.')
 	})
 
 	test('ignores stale question page results after the environment refresh key changes', async () => {

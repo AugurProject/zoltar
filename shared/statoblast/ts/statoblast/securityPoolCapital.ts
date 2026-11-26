@@ -313,7 +313,7 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 	const [indexValue, tokenValue, bookValue, price, multiplier, validUntil, valid, demand, free, frozen, importing, exported, ownerValue, collateralValue, totalsValue, forkTimeValue, choiceDeadlineValue, conservative, liquidation, exposureLimit, ownerPrice, availableCapacity] = await Promise.all([
 		read(capitalLedger, 'commitmentIndex'),
 		read(capitalLedger, 'repToken'),
-		read(decodeAddress(settlementValue, 'Settlement engine'), 'ledger'),
+		read(decodeAddress(settlementValue, 'Payout contract'), 'ledger'),
 		read(capitalLedger, 'acceptedPrice'),
 		read(capitalLedger, 'securityMultiplierBps'),
 		read(capitalLedger, 'priceValidUntil'),
@@ -334,14 +334,14 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 		owner === undefined ? 0n : read(capitalLedger, 'ownerConservativePrice', [owner]),
 		read(securityPool, 'availableMintCapacity', [universeId]),
 	])
-	const commitmentIndex = decodeAddress(indexValue, 'Commitment index')
+	const commitmentIndex = decodeAddress(indexValue, 'Pool capacity contract')
 	const account = owner === undefined ? { freeAttoRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, targetHealthFactorBps: 0n, positionId: 0n } : ownerAccount(ownerValue)
 	const [principal, commitment, withdrawable] = decodeFields(collateralValue, ['principal', 'commitment', 'withdrawable'], 'Invalid capital accounting response.')
 	const ownerPrincipalAttoRep = decodeUint(principal, 'Position pledged REP')
 	const withdrawableAttoRep = decodeUint(withdrawable, 'Withdrawable REP')
 	if (withdrawableAttoRep > ownerPrincipalAttoRep) throw new Error('Withdrawal allowance exceeds pledged REP.')
 	const [totalRep, totalK, healthyK] = decodeFields(totalsValue, ['rep', 'commitment', 'healthy'], 'Invalid capital accounting response.')
-	const [current, next, minimumOutcomeRate] = await Promise.all([read(commitmentIndex, 'currentBatch'), read(commitmentIndex, 'nextBatch'), read(decodeAddress(bookValue, 'Settlement book'), 'minimumOutcomeExchangeRate')])
+	const [current, next, minimumOutcomeRate] = await Promise.all([read(commitmentIndex, 'currentBatch'), read(commitmentIndex, 'nextBatch'), read(decodeAddress(bookValue, 'Payout records'), 'minimumOutcomeExchangeRate')])
 	const positions = await Promise.all(
 		(owner === undefined || account.positionId === 0n ? [] : [{ id: account.positionId, owner }]).map(async ({ id, owner }) => {
 			const [value, liquidation, penaltyPaid, elapsed] = await Promise.all([read(commitmentIndex, 'accountOf', [id]), read(capitalLedger, 'liquidationStarted', [id]), read(capitalLedger, 'liquidationPenaltyPaid', [id]), read(capitalLedger, 'liquidationElapsed', [id])])

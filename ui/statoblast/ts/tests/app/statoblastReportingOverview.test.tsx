@@ -74,7 +74,7 @@ test('a forked parent with a live response window points to recovery instead of 
 	const result = lifecycle.trackRendered(await renderIntoDocument(<StatoblastReportingOverview view={view} now={150n} autoRefresh={false} onTakeLead={() => undefined} />))
 	const queries = within(result.container)
 	expect(Boolean(queries.queryByRole('button', { name: /^Report.*on Yes/ }))).toBe(false)
-	expect(queries.getByText(/Your deposits carry over/)).toBeDefined()
+	expect(queries.getByText(/Set up the child questions in Fork & recovery/)).toBeDefined()
 })
 
 test('the reporting banner distinguishes open without reports, an empty game and tied outcomes', async () => {

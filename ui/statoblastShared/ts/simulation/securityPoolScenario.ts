@@ -34,9 +34,9 @@ export async function seedSecurityPoolScenario({ accounts, createReadClient, cre
 		pools.push({ questionId: market.questionId })
 	}
 	if (pools.length === 0) throw new Error('A simulation security pool needs a question')
-	const admission = await sendSecurityPoolTransaction(client, securityPoolAdmissionCreationRequest(owner, 'open', 0n, []), 'Deploy admission policy')
+	const admission = await sendSecurityPoolTransaction(client, securityPoolAdmissionCreationRequest(owner, 'open', 0n, []), 'Prepare question rules')
 	const policy = admission.receipt.contractAddress
-	if (policy === null || policy === undefined) throw new Error('Expected deployed admission policy')
+	if (policy === null || policy === undefined) throw new Error('Question rules could not be found after setup.')
 	const deployment = await sendSecurityPoolTransaction(
 		client,
 		securityPoolCreationRequest(owner, { collateralToken: collateral.address, minimumReportCollateral: collateralUnit / 100n, universeId: 0n, securityMultiplierBps: 20_000n, reportPriorityFeeAttoEthPerGas: 10_000_000_000n }, 366n * 86400n, policy, {

@@ -58,10 +58,10 @@ function requireCarryLeafPageResponse(value: unknown): {
 	page: CarryLeafViewStruct[]
 	nextNodeId: bigint
 } {
-	const [page, nextNodeId] = requireTupleValue(value, 2, 'carry leaf page')
+	const [page, nextNodeId] = requireTupleValue(value, 2, 'inherited deposits')
 	return {
-		page: requireArrayValue(page, 'carry leaf page').map(leaf => requireCarryLeafView(leaf, 'carry leaf page')),
-		nextNodeId: requireBigintValue(nextNodeId, 'carry leaf page'),
+		page: requireArrayValue(page, 'inherited deposits').map(leaf => requireCarryLeafView(leaf, 'inherited deposits')),
+		nextNodeId: requireBigintValue(nextNodeId, 'inherited deposits'),
 	}
 }
 
@@ -85,18 +85,18 @@ async function loadCarryLeafPage(client: Pick<ReadClient, 'readContract'>, escal
 }
 
 function requireHistoricalCarryNode(value: unknown, sourceNodeId: bigint, outcome: ReportingOutcomeKey): { leaf: HistoricalCarryLeafViewStruct; parentNodeId: bigint } {
-	const [parentNodeId, depositor, nodeOutcome, amountAttoRep, parentDepositIndex, cumulativeAmountAttoRep, carryLeafIndex] = requireTupleValue(value, 7, 'historical carry node')
-	if (getReportingOutcomeKey(requireIntegerLikeValue(nodeOutcome, 'historical carry node outcome')) !== outcome) throw new Error('Unexpected historical carry node outcome')
+	const [parentNodeId, depositor, nodeOutcome, amountAttoRep, parentDepositIndex, cumulativeAmountAttoRep, carryLeafIndex] = requireTupleValue(value, 7, 'recorded deposit')
+	if (getReportingOutcomeKey(requireIntegerLikeValue(nodeOutcome, 'recorded deposit outcome')) !== outcome) throw new Error('The recorded deposit has a different outcome.')
 	return {
 		leaf: {
-			amountAttoRep: requireBigintValue(amountAttoRep, 'historical carry node amount'),
-			carryLeafIndex: requireBigintValue(carryLeafIndex, 'historical carry node leaf index'),
-			cumulativeAmountAttoRep: requireBigintValue(cumulativeAmountAttoRep, 'historical carry node cumulative amount'),
-			depositor: requireAddressValue(depositor, 'historical carry node depositor'),
-			parentDepositIndex: requireBigintValue(parentDepositIndex, 'historical carry node parent deposit index'),
+			amountAttoRep: requireBigintValue(amountAttoRep, 'recorded deposit amount'),
+			carryLeafIndex: requireBigintValue(carryLeafIndex, 'recorded deposit position'),
+			cumulativeAmountAttoRep: requireBigintValue(cumulativeAmountAttoRep, 'recorded deposit total'),
+			depositor: requireAddressValue(depositor, 'recorded deposit owner'),
+			parentDepositIndex: requireBigintValue(parentDepositIndex, 'parent deposit index'),
 			sourceNodeId,
 		},
-		parentNodeId: requireBigintValue(parentNodeId, 'historical carry node parent node id'),
+		parentNodeId: requireBigintValue(parentNodeId, 'previous deposit ID'),
 	}
 }
 
@@ -106,7 +106,7 @@ async function loadHistoricalLocalCarryLeaves(client: Pick<ReadClient, 'readCont
 	const carryLeaves: HistoricalCarryLeafViewStruct[] = []
 	while (nodeId !== 0n) {
 		const nodeKey = nodeId.toString()
-		if (visitedNodeIds.has(nodeKey)) throw new Error('Historical carry node chain contains a cycle.')
+		if (visitedNodeIds.has(nodeKey)) throw new Error('The deposit history repeats an entry.')
 		visitedNodeIds.add(nodeKey)
 		const { leaf, parentNodeId } = requireHistoricalCarryNode(
 			await client.readContract({
@@ -149,12 +149,12 @@ async function loadRecursiveHistoricalCarryLeaves(client: Pick<ReadClient, 'read
 	const parentEscalationGameAddress = forkContinuation === true ? await readParentEscalationGameAddress(client, escalationGameAddress) : undefined
 	if (parentEscalationGameAddress !== undefined) {
 		const parentLeaves = await loadRecursiveHistoricalCarryLeaves(client, parentEscalationGameAddress, outcome)
-		if (BigInt(parentLeaves.length) < snapshotLeafCount) throw new Error('Inherited historical carry snapshot is incomplete.')
-		inheritedLeaves = parentLeaves.slice(0, bigintToSafeNumber(snapshotLeafCount, 'Snapshot leaf count'))
+		if (BigInt(parentLeaves.length) < snapshotLeafCount) throw new Error('The parent question did not return the full deposit history.')
+		inheritedLeaves = parentLeaves.slice(0, bigintToSafeNumber(snapshotLeafCount, 'Recorded deposit count'))
 	}
-	if (BigInt(inheritedLeaves.length) !== snapshotLeafCount) throw new Error('Inherited historical carry snapshot is not locally reconstructible.')
+	if (BigInt(inheritedLeaves.length) !== snapshotLeafCount) throw new Error('Couldn’t verify the inherited deposits.')
 	for (const [localIndex, leaf] of localLeaves.entries()) {
-		if (leaf.carryLeafIndex !== snapshotLeafCount + BigInt(localIndex)) throw new Error('Historical carry leaf order is not locally reconstructible.')
+		if (leaf.carryLeafIndex !== snapshotLeafCount + BigInt(localIndex)) throw new Error('Couldn’t verify the order of recorded deposits.')
 	}
 	const localEntries = await buildHistoricalLocalCarrySnapshotEntries(client, escalationGameAddress, outcome, localLeaves)
 	return [...inheritedLeaves, ...localEntries]
@@ -172,7 +172,7 @@ async function loadProofConsumedCarriedDepositIndexes(client: Pick<ReadClient, '
 				args: [getReportingOutcomeValue(outcome), startIndex, CONTRACT_PAGE_SIZE],
 			}),
 			'consumed carried deposit index page',
-		).map(item => requireBigintValue(item, 'consumed carried deposit index page'))
+		).map(item => requireBigintValue(item, 'claimed inherited deposit index'))
 		parentDepositIndexes.push(...page)
 		if (BigInt(page.length) !== CONTRACT_PAGE_SIZE) break
 		startIndex += CONTRACT_PAGE_SIZE
@@ -266,11 +266,11 @@ class CarrySnapshotMismatch extends Error {}
 
 function authenticateCarrySnapshot(parentHistoricalLeaves: readonly HistoricalCarrySnapshotEntry[], childOutcomeState: Awaited<ReturnType<typeof readEscalationOutcomeState>>) {
 	const { snapshotLeafCount: parentCarryLeafCount, snapshotCarryRoot: snapshotRoot } = childOutcomeState
-	if (BigInt(parentHistoricalLeaves.length) < parentCarryLeafCount) throw new CarrySnapshotMismatch('Parent carry snapshot is not locally reconstructible.')
-	const orderedEntries = parentHistoricalLeaves.slice(0, bigintToSafeNumber(parentCarryLeafCount, 'Parent carry leaf count'))
+	if (BigInt(parentHistoricalLeaves.length) < parentCarryLeafCount) throw new CarrySnapshotMismatch('The parent question did not return the full deposit history.')
+	const orderedEntries = parentHistoricalLeaves.slice(0, bigintToSafeNumber(parentCarryLeafCount, 'Parent deposit count'))
 	const orderedLeaves = orderedEntries.map(entry => entry.leaf)
 	const leafHashes = orderedEntries.map(entry => entry.leafHash)
-	if (leafHashes.length > 0 && buildCarryMerkleMountainRangeProof(leafHashes, 0).root !== snapshotRoot) throw new CarrySnapshotMismatch('Parent carry snapshot root is not locally reconstructible.')
+	if (leafHashes.length > 0 && buildCarryMerkleMountainRangeProof(leafHashes, 0).root !== snapshotRoot) throw new CarrySnapshotMismatch('Couldn’t verify the parent question’s deposit history.')
 	return { orderedEntries, orderedLeaves, leafHashes, snapshotRoot }
 }
 
@@ -285,10 +285,10 @@ function decodeFrozenParent(value: unknown): FrozenParentSnapshot | undefined {
 		return {
 			leaves: value['leaves'].map(leaf => requireCarryLeafView(leaf, 'saved parent leaf')),
 			history: value['history'].map(entry => {
-				if (!isStoredRecord(entry) || typeof entry['leafHash'] !== 'string' || !isHex(entry['leafHash'], { strict: true }) || entry['leafHash'].length !== 66) throw new Error('Stored parent leaf is invalid.')
+				if (!isStoredRecord(entry) || typeof entry['leafHash'] !== 'string' || !isHex(entry['leafHash'], { strict: true }) || entry['leafHash'].length !== 66) throw new Error('A saved parent deposit record is invalid.')
 				return { leaf: requireCarryLeafView(entry['leaf'], 'saved parent history'), leafHash: `0x${entry['leafHash'].slice(2)}` as const }
 			}),
-			consumed: value['consumed'].map(index => requireBigintValue(index, 'saved consumed index')),
+			consumed: value['consumed'].map(index => requireBigintValue(index, 'saved claimed deposit index')),
 		}
 	} catch (error) {
 		if (error instanceof Error) return undefined
@@ -443,7 +443,7 @@ async function buildCarriedProofs(client: Pick<ReadClient, 'readContract'>, pare
 		: createSparseNullifier(
 				consumedParentDepositIndexes.map(parentIndex => {
 					const index = orderedLeaves.findIndex(leaf => leaf.parentDepositIndex === parentIndex)
-					if (index < 0) throw new Error('Consumed carry deposit is absent from the snapshot')
+					if (index < 0) throw new Error('A claimed deposit is missing from the deposit history.')
 					return BigInt(index)
 				}),
 			)

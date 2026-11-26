@@ -446,7 +446,7 @@ describe('reporting protocol client', () => {
 		expect(previews[0]?.reviewDescription).toBe('Fills No to the non-decision threshold while another side is already there. Reporting ends without a decision, deposits lock, and the question can only resolve through a universe fork. This can’t be undone.')
 	})
 
-	test('withdrawEscalationFromQuestionLedger explains that clearing losing deposits returns no REP', async () => {
+	test('withdrawEscalationFromQuestionLedger uses claim wording even for a zero payout', async () => {
 		const client = createMockWriteClient(
 			() => undefined,
 			async request => {
@@ -458,10 +458,8 @@ describe('reporting protocol client', () => {
 		const writeClient = asWriteClient(client)
 		writeClient.onTransactionPrepared = preview => previews.push(preview)
 		await withdrawEscalationFromQuestionLedger(writeClient, questionLedgerAddress, 'no', [0n], 0n)
-		expect(previews[0]?.reviewTitle).toBe('Settle No deposits (0 REP payout)')
-		expect(previews[0]?.reviewDescription).toBe('Returns no REP. Losing deposits need no action after resolution.')
-		await withdrawEscalationFromQuestionLedger(writeClient, questionLedgerAddress, 'yes', [0n], 4n)
-		expect(previews[1]?.reviewDescription).toBeUndefined()
+		expect(previews[0]?.reviewTitle).toBe('Claim reporting deposits')
+		expect(previews[0]?.reviewDescription).toBeUndefined()
 	})
 
 	test('a winning claim reviews the selected deposits and wallet REP at the same block', async () => {
@@ -987,7 +985,7 @@ describe('reporting protocol client', () => {
 			}),
 		})
 
-		await expect(buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [1n])).rejects.toThrow('Unexpected historical carry node parent deposit index response')
+		await expect(buildForkCarriedEscalationProofs(client, questionLedgerAddress, 'yes', [1n])).rejects.toThrow('Unexpected parent deposit index response')
 	})
 
 	test('buildForkCarriedEscalationProofs requires the forkContinuation getter', async () => {

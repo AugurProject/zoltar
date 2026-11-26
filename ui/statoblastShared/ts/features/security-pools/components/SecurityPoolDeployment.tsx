@@ -230,6 +230,8 @@ export function SecurityPoolDeployment({ actions, model }: { actions: SecurityPo
 	const leftStep = activeStep === 3 ? 2 : activeStep
 	const previousPool = actions.deploymentPool === undefined && (model.setup?.stage ?? model.savedSetupStage ?? 4) < 4 && isAddress(model.managerInput) ? getAddress(model.managerInput) : undefined
 	const openPool = setupStage === 4 ? actions.deploymentPool : undefined
+	const pending = actions.pendingDeployment
+	const canCheckPending = pending !== undefined && pending.restartAllowed !== true && actions.busy === undefined
 	return (
 		<>
 			<nav className='statoblast-breadcrumbs' aria-label={pageCopy.breadcrumbs}>
@@ -271,9 +273,23 @@ export function SecurityPoolDeployment({ actions, model }: { actions: SecurityPo
 						{setupDataNotice !== undefined && <p className='detail'>{progressNotice}</p>}
 						{actions.creationError === undefined ? undefined : <UserMessage tone='error' detail={actions.creationError} />}
 						<DeploymentActions actions={actions} setupStage={setupStage} setupVerificationPending={verifiedSetupStage === undefined && setupStage !== undefined && setupStage < 4} />
-						{actions.pendingDeployment !== undefined && actions.pendingDeployment.restartAllowed !== true && actions.busy === undefined && (
+						{canCheckPending && pending.hash !== undefined && (
 							<button type='button' className='secondary' disabled={actions.checkingDeploymentReceipt} onClick={() => void actions.refreshDeploymentProgress()}>
 								{actions.checkingDeploymentReceipt ? pageCopy.deployCheckingReceipt : pageCopy.deployCheckReceipt}
+							</button>
+						)}
+						{canCheckPending && pending.hash === undefined && pending.nonce !== undefined && (
+							<button
+								type='button'
+								className='secondary'
+								disabled={actions.checkingDeploymentReceipt}
+								onClick={() => {
+									if (!window.confirm(deploymentCopy.confirmWalletRejection)) return
+									selectStep(3)
+									void actions.confirmWalletRejection()
+								}}
+							>
+								{deploymentCopy.walletRejected}
 							</button>
 						)}
 						{(openPool !== undefined || actions.canStartNewDeployment) && (

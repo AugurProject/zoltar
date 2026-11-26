@@ -43,7 +43,7 @@ function openTarget(input: string, currentUniverse: bigint) {
 	const url = new URL(value, window.location.href)
 	const { search } = parseRouteHash(url.hash)
 	const page = parseStatoblastPage(url.hash)
-	if ((page.kind !== 'pool' && page.kind !== 'question') || hasInvalidUniverseQueryParam(search) || hasInvalidUniverseQueryParam(url.search)) throw new Error('Enter a security pool address or a Statoblast link.')
+	if ((page.kind !== 'pool' && page.kind !== 'question') || hasInvalidUniverseQueryParam(search) || hasInvalidUniverseQueryParam(url.search)) throw new Error(pageCopy.poolAddressOrLinkRequired)
 	return { page, universe: readUniverseQueryParam(search) ?? readUniverseQueryParam(url.search) ?? currentUniverse }
 }
 
@@ -209,9 +209,9 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 		const guard = createActiveEnvironmentGuard()
 		try {
 			const { page, universe: targetUniverse } = openTarget(input, universe)
-			const client = withStatoblastRequestTimeout(createConnectedReadClient(), 'Opening this item timed out. Try again.')
+			const client = withStatoblastRequestTimeout(createConnectedReadClient(), pageCopy.openTimeoutError)
 			const head = await client.getBlock()
-			if (head.number === undefined) throw new Error('Could not confirm the latest block.')
+			if (head.number === undefined) throw new Error(pageCopy.latestBlockUnconfirmed)
 			const [result] = await checkStatoblastEntries(client, [{ pool: page.pool, universeId: targetUniverse, ...(page.kind === 'question' ? { questionId: page.questionId } : {}) }], head.number, true)
 			if (!guard.isCurrent()) return
 			if (result?.status === 'failed') throw result.error
@@ -221,11 +221,11 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 				window.location.hash = statoblastPageHref(forkPage, targetUniverse)
 				return
 			}
-			if (result?.status !== 'pool' && result?.status !== 'question') throw new Error(entryReason(result?.status ?? 'failed') ?? 'Could not verify this item.')
+			if (result?.status !== 'pool' && result?.status !== 'question') throw new Error(entryReason(result?.status ?? 'failed') ?? pageCopy.itemUnverified)
 			remember(page, page.kind === 'pool' ? page.pool : formatQuestionIdHex(page.questionId), targetUniverse)
 			window.location.hash = statoblastPageHref(page, targetUniverse)
 		} catch (error) {
-			if (guard.isCurrent()) setOpenError(error instanceof Error ? error.message : 'Could not open this item.')
+			if (guard.isCurrent()) setOpenError(error instanceof Error ? error.message : pageCopy.openItemFailed)
 		} finally {
 			if (guard.isCurrent()) setOpening(false)
 		}
@@ -238,7 +238,7 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 		link.download = 'statoblast-watchlist.json'
 		link.click()
 		setTimeout(() => URL.revokeObjectURL(url), 0)
-		setTransferMessage('Exported the watchlist and deposits located on this device.')
+		setTransferMessage(pageCopy.watchlistExported)
 	}
 	const importFile = async (file: File | undefined) => {
 		if (file === undefined || importing) return
@@ -248,9 +248,9 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 		try {
 			const client = withStatoblastRequestTimeout(createConnectedReadClient(), pageCopy.importTimeoutError)
 			const result = await importStatoblastWatchlist(client, profile, universe, await file.text(), guard.isCurrent)
-			setTransferMessage(result.skipped === 0 ? 'Watchlist imported.' : `Watchlist imported. Skipped ${result.skipped} entries.`)
+			setTransferMessage(result.skipped === 0 ? pageCopy.watchlistImported : pageCopy.formatWatchlistImportedWithSkipped(result.skipped))
 		} catch (error) {
-			setTransferMessage(error instanceof Error ? error.message : 'Could not import this watchlist.')
+			setTransferMessage(error instanceof Error ? error.message : pageCopy.importFailed)
 		} finally {
 			setImporting(false)
 		}

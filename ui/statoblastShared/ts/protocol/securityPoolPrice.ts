@@ -62,7 +62,7 @@ export async function loadSecurityPoolPriceReport(client: ReadClient, snapshot: 
 	if (observation === undefined || reportId <= 0n || reportId >= 1n << 256n) throw new Error('Enter a valid report ID for this price feed.')
 	const blockNumber = snapshot.blockNumber
 	const [candidate, outcome] = await Promise.all([client.readContract({ abi, address: snapshot.feed, functionName: 'reportCandidates', args: [reportId], blockNumber }), client.readContract({ abi, address: snapshot.feed, functionName: 'reportOutcome', args: [reportId], blockNumber })])
-	const tuple = requireTupleValue(candidate, 3, 'report candidate')
+	const tuple = requireTupleValue(candidate, 3, 'price report details')
 	const escrow = requireAddressValue(tuple[0], 'report escrow')
 	const sponsor = requireAddressValue(tuple[1], 'report funder')
 	const maxSettlementBaseFee = requireBigintValue(tuple[2], 'report settlement base-fee ceiling')
@@ -79,10 +79,10 @@ export async function loadSecurityPoolPriceReport(client: ReadClient, snapshot: 
 	])
 	const game = state.latest.game
 	if (
-		requireAddressValue(escrowFeed, 'escrow feed') !== snapshot.feed ||
-		requireBigintValue(escrowId, 'escrow report ID') !== reportId ||
-		requireAddressValue(escrowSponsor, 'escrow funder') !== getAddress(sponsor) ||
-		requireAddressValue(escrowOracle, 'escrow oracle') !== observation.openOracle ||
+		requireAddressValue(escrowFeed, 'report funding source') !== snapshot.feed ||
+		requireBigintValue(escrowId, 'funded report ID') !== reportId ||
+		requireAddressValue(escrowSponsor, 'report funder address') !== getAddress(sponsor) ||
+		requireAddressValue(escrowOracle, 'report funding contract') !== observation.openOracle ||
 		getAddress(game.callbackContract) !== getAddress(escrow) ||
 		getAddress(game.token1) !== observation.weth ||
 		getAddress(game.token2) !== snapshot.repToken ||
@@ -188,7 +188,7 @@ export async function loadSecurityPoolPriceFunds(client: Pick<ReadClient, 'multi
 		blockNumber,
 	)
 	const registered = candidates.flatMap((value, index) => {
-		const [escrowValue, sponsorValue] = requireTupleValue(value, 3, 'report candidate')
+		const [escrowValue, sponsorValue] = requireTupleValue(value, 3, 'price report details')
 		const escrow = requireAddressValue(escrowValue, 'report escrow')
 		const funder = requireAddressValue(sponsorValue, 'report funder')
 		const id = reports[index]

@@ -76,7 +76,7 @@ async function seedAccountBalances(memoryClient: TevmLikeClient, accounts: reado
 	for (const [index, account] of accounts.entries()) {
 		await memoryClient.impersonateAccount({ address: account })
 		await memoryClient.setBalance({ address: account, value: ETH_BALANCE_AMOUNT })
-		await reportBootstrapProgress(onProgress, `Funding QA account ${index + 1} of ${accounts.length}`, 0.05 + ((index + 1) / Math.max(accounts.length, 1)) * 0.08)
+		await reportBootstrapProgress(onProgress, `Funding test wallet ${index + 1} of ${accounts.length}`, 0.05 + ((index + 1) / Math.max(accounts.length, 1)) * 0.08)
 	}
 }
 
@@ -276,7 +276,7 @@ async function seedWrappedEthBalances(createWriteClient: (accountAddress: Addres
 			value: WETH_TOKEN_MINT_AMOUNT,
 		})
 		await writeClient.waitForTransactionReceipt({ hash })
-		await reportBootstrapProgress(onProgress, `Wrapping ETH for QA account ${index + 1} of ${accounts.length}`, 0.24 + ((index + 1) / Math.max(accounts.length, 1)) * 0.06)
+		await reportBootstrapProgress(onProgress, `Wrapping ETH for test wallet ${index + 1} of ${accounts.length}`, 0.24 + ((index + 1) / Math.max(accounts.length, 1)) * 0.06)
 	}
 }
 
@@ -384,8 +384,8 @@ export async function bootstrapSimulationChain({
 	zoltarAddress: Address
 }) {
 	setRuntimeNetworkProfile(profile)
-	await reportBootstrapProgress(onProgress, 'Initializing simulation engine', 0.01)
-	await withTimeout(memoryClient.tevmReady(), 20_000, 'Simulation engine initialization timed out. Reload the page to retry.')
+	await reportBootstrapProgress(onProgress, 'Starting the simulation', 0.01)
+	await withTimeout(memoryClient.tevmReady(), 20_000, 'Simulation startup timed out. Reload the page to retry.')
 	await reportBootstrapProgress(onProgress, 'Preparing simulation chain', 0.03)
 	await initializeSimulationClock(memoryClient)
 	await seedAccountBalances(memoryClient, accounts, onProgress)

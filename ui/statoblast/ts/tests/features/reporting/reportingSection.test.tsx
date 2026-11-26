@@ -424,11 +424,11 @@ describe('ReportingSection', () => {
 		expect(within(document.body).queryByRole('radiogroup')).toBeNull()
 	})
 
-	test('explains that clearing losing deposits returns no REP and when it is needed', async () => {
+	test('losing deposits show their status without a transaction action', async () => {
 		const details = createReportingDetails({ questionOutcome: 'no', parentWithdrawalEnabled: true, settlementState: 'resolved' })
 		await renderReportingSection({ reportingDetails: details })
-		expect(settlementButtonLabel('Yes')).toBe('Settle Yes deposits (0 REP payout)…')
-		expect(document.body.textContent).toContain('Losing ordinary deposits return no REP and require no cleanup transaction. Reporter deposits are separate from security pool capital.')
+		expect(within(document.body).queryByRole('button', { name: /Yes deposits|REP from Yes/ })).toBeNull()
+		expect(document.body.textContent).toContain('Lost · no action needed')
 	})
 
 	describe('fork-triggering reports', () => {
@@ -2108,7 +2108,7 @@ describe('ReportingSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Trigger universe fork' })).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Open Fork & recovery' })).not.toBeNull()
-		expect(document.body.textContent?.includes('Your deposits carry over to the child questions. Continue in Fork & recovery.')).toBe(true)
+		expect(document.body.textContent?.includes('Your deposits move to the child questions. Continue in Fork & recovery.')).toBe(true)
 	})
 
 	test('shows a Trigger universe fork action when non-decision blocks reporting', async () => {
@@ -2454,7 +2454,7 @@ describe('ReportingSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Yes' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'No' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Settle selected Invalid deposits…' })).toBeNull()
-		expectTransactionButtonEnabled(document.body, settlementButtonLabel('Invalid'))
+		expect(documentQueries.getByText('Lost · no action needed')).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Settle selected Yes deposits…' })).toBeNull()
 		expectTransactionButtonEnabled(document.body, settlementButtonLabel('Yes'))
 

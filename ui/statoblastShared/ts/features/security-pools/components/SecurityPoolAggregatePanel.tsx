@@ -51,7 +51,7 @@ export function SecurityPoolAggregatePanel({ model, actions, priceDeadlineChecki
 	const backing = snapshot === undefined ? 0n : requiredSecurityPoolCollateral({ ...snapshot, ownerAccount: { ...snapshot.ownerAccount, targetHealthFactorBps: minimumSecurityPoolHealthFactorBps } }, snapshot.ownerCommitmentAttoEth)
 	const fullBacking = Number(minimumSecurityPoolHealthFactorBps) / 100
 	const health = priceDeadlineChecking || currentPosition === undefined || backing === 0n || snapshot?.priceValid !== true ? undefined : Number((currentPosition.rep * 10_000n) / backing) / 100
-	const target = Number(snapshot?.ownerAccount.targetHealthFactorBps || 10_000n) / 100
+	const target = Number(snapshot?.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps) / 100
 	const gaugeMax = Math.max(200, target)
 	const liquidation = snapshot === undefined || snapshot.conservativePrice === 0n ? undefined : Number((snapshot.liquidationPrice * 10_000n) / snapshot.conservativePrice) / 100
 	const liquidationDuration = snapshot?.liquidationDuration === undefined ? undefined : formatDuration(snapshot.liquidationDuration)
@@ -72,7 +72,7 @@ export function SecurityPoolAggregatePanel({ model, actions, priceDeadlineChecki
 	const previewCommitment = model.commitmentAttoEth ?? snapshot?.ownerCommitmentAttoEth
 	const previewTarget = model.healthBps
 	const addRep = model.healthDepositAmount.trim() !== '' && model.healthDepositAttoRep !== 0n
-	const targetChanged = model.healthBps !== (snapshot?.ownerAccount.targetHealthFactorBps || 10_000n)
+	const targetChanged = model.healthBps !== (snapshot?.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps)
 	const commitmentChanged = model.commitmentAttoEth !== snapshot?.ownerCommitmentAttoEth
 	const previewPrincipal = (snapshot?.ownerPrincipalAttoRep ?? 0n) + (model.healthDepositAttoRep ?? 0n)
 	const previewReady = priceCurrent && snapshot !== undefined && previewCommitment !== undefined && previewTarget !== undefined && previewTarget >= 10_000n && previewTarget < 1n << 256n
@@ -80,7 +80,7 @@ export function SecurityPoolAggregatePanel({ model, actions, priceDeadlineChecki
 	let estimatedWithdrawal: bigint | undefined
 	if (previewRep !== undefined) estimatedWithdrawal = previewPrincipal > previewRep ? previewPrincipal - previewRep : 0n
 	const currentRep = priceCurrent && snapshot !== undefined ? requiredSecurityPoolCollateral(snapshot, snapshot.ownerCommitmentAttoEth) : undefined
-	const currentMaximum = priceCurrent && snapshot !== undefined ? maximumSecurityPoolCommitment(snapshot, snapshot.ownerAccount.targetHealthFactorBps || 10_000n) : undefined
+	const currentMaximum = priceCurrent && snapshot !== undefined ? maximumSecurityPoolCommitment(snapshot, snapshot.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps) : undefined
 	const previewMaximum = previewReady ? maximumSecurityPoolCommitment({ ...snapshot, ownerPrincipalAttoRep: previewPrincipal }, previewTarget, model.proofPrice) : undefined
 	const previewRows = [
 		{ label: copy.savedHealth, before: `${target}%`, after: previewTarget === undefined ? undefined : `${formatUnits(previewTarget, 2)}%` },
@@ -182,7 +182,7 @@ export function SecurityPoolAggregatePanel({ model, actions, priceDeadlineChecki
 						<CurrencyValue value={snapshot?.ownerCommitmentAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 					</MetricField>
 					<MetricField label={copy.savedHealth} loading={fieldsLoading}>
-						{snapshot === undefined ? undefined : `${formatUnits(snapshot.ownerAccount.targetHealthFactorBps || 10_000n, 2)}%`}
+						{snapshot === undefined ? undefined : `${formatUnits(snapshot.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps, 2)}%`}
 					</MetricField>
 				</MetricGrid>
 			</SectionBlock>

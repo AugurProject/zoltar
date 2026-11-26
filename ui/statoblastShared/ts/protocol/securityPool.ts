@@ -44,7 +44,18 @@ import { readRequiredMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js
 import { loadSecurityPoolAdmission } from './securityPoolAdmission.js'
 import { authenticateSecurityPoolAuctionVault, isCanonicalAuctionVaultImplementation } from './securityPoolRepairAuction.js'
 
-export type SecurityPoolTransaction = { account: Address; to?: Address; data: Hex; value?: bigint; gas?: bigint; reviewDescription?: string; readReviewRows?: (() => readonly { label: string; value: string }[]) | undefined; validateBeforeSubmit?: () => Promise<void>; refreshReviewData?: () => Promise<Hex> }
+export type SecurityPoolTransaction = {
+	account: Address
+	to?: Address
+	data: Hex
+	value?: bigint
+	gas?: bigint
+	nonce?: bigint
+	reviewDescription?: string
+	readReviewRows?: (() => readonly { label: string; value: string }[]) | undefined
+	validateBeforeSubmit?: () => Promise<void>
+	refreshReviewData?: () => Promise<Hex>
+}
 const linksAbi = parseAbi([
 	'function securityPool() view returns (address)',
 	'function implementation() view returns (address)',
@@ -193,7 +204,7 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 	const infrastructure = getInfraContractAddresses()
 	if (getAddress(factory) !== getAddress(infrastructure.securityPoolFactory) || getAddress(zoltar) !== getAddress(infrastructure.zoltar)) throw new Error('Security pool uses unrecognized protocol contracts.')
 	if (getAddress(requireAddressValue(auctionDeployerValue, 'auction deployer')) !== getAddress(infrastructure.securityPoolRepairAuctionDeployer)) throw new Error('Security pool uses an unrecognized auction deployer.')
-	if (requireAddressValue(capitalServicesValue, 'capital services') !== getAddress(services)) throw new Error('The capital contract is linked to different pool services.')
+	if (requireAddressValue(capitalServicesValue, 'pool service address') !== getAddress(services)) throw new Error('The capital contract is linked to different pool services.')
 	if (requireAddressValue(capitalForkValue, 'capital fork authority') !== getAddress(forkController)) throw new Error('The capital contract is linked to a different fork contract.')
 	const start = questionStart > questionCount ? 0n : questionStart
 	// Other contract accounts remain readable, but gain no auction-owner authority:
@@ -218,16 +229,16 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 		client.readContract({ address: settlement, abi: linksAbi, functionName: 'ledger', blockNumber }),
 		client.readContract({ address: services, abi: linksAbi, functionName: 'premiumLedger', blockNumber }),
 	])
-	const book = requireAddressValue(bookValue, 'settlement book')
+	const book = requireAddressValue(bookValue, 'payout records')
 	const premium = requireAddressValue(premiumValue, 'reporting fees contract')
 	await Promise.all([
 		verifyCapitalLedgerClone(client, securityPool, snapshot.capitalLedger, universeId, snapshot.repToken, blockNumber),
 		verifyModule(client, lifecycle, lifecycleArtifact, lifecycle, 'capital lifecycle delegate', blockNumber, 'implementation'),
 		verifyModule(client, repairAuctionDelegate, auctionDelegateArtifact, repairAuctionDelegate, 'capital auction delegate', blockNumber, 'implementation'),
-		verifyCapitalModuleClone(client, snapshot.commitmentIndex, indexArtifact, snapshot.capitalLedger, 'commitment index', blockNumber),
+		verifyCapitalModuleClone(client, snapshot.commitmentIndex, indexArtifact, snapshot.capitalLedger, 'pool capacity contract', blockNumber),
 		verifyCapitalModuleClone(client, feeStreams, feesArtifact, snapshot.capitalLedger, 'capital fee streams', blockNumber),
-		verifyModule(client, settlement, settlementArtifact, securityPool, 'settlement engine', blockNumber),
-		verifyModule(client, book, bookArtifact, settlement, 'settlement book', blockNumber),
+		verifyModule(client, settlement, settlementArtifact, securityPool, 'payout contract', blockNumber),
+		verifyModule(client, book, bookArtifact, settlement, 'payout records', blockNumber),
 		verifyModule(client, reporters, reporterArtifact, securityPool, 'reporting contract', blockNumber),
 		verifyModule(client, quoteHelper, purchaseArtifact, securityPool, 'security pool purchase helper', blockNumber),
 		verifyModule(client, forkController, forkArtifact, securityPool, 'fork coordinator', blockNumber),
@@ -318,7 +329,7 @@ export async function sendSecurityPoolTransaction(client: WriteClient, request: 
 		},
 	])
 	client.onTransactionPrepared?.({ ...review, args: undefined, chainName: client.chain.name, account: client.account })
-	const hash = await client.sendTransaction({ to: captured.to, data: captured.data, value: captured.value, ...gas })
+	const hash = await client.sendTransaction({ to: captured.to, data: captured.data, value: captured.value, nonce: captured.nonce, ...gas })
 	const result = await waitForSubmittedTransactionReceipt(client, hash, receiptOptions)
 	return { hash: result.hash, receipt: result.receipt }
 }

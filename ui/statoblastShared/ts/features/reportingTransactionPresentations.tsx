@@ -36,7 +36,7 @@ export function createReportingTransactionIntent(actionName: ReportingActionResu
 
 export function createReportingSuccessPresentation(result: ReportingActionResult) {
 	let title = transactionCopy.escalationDepositsSettled
-	if (result.amountAttoRep !== undefined) title = result.amountAttoRep === 0n ? reportingCopy.clearedDeposits(getReportingOutcomeLabel(result.outcome)) : reportingCopy.claimedDeposits(getReportingOutcomeLabel(result.outcome), formatCurrencyBalance(result.amountAttoRep))
+	if (result.amountAttoRep !== undefined && result.amountAttoRep > 0n) title = reportingCopy.claimedDeposits(getReportingOutcomeLabel(result.outcome), formatCurrencyBalance(result.amountAttoRep))
 	if (result.action === 'reportOutcome') title = reportingCopy.reportedAmount(getReportingOutcomeLabel(result.outcome), formatCurrencyBalance(result.amountAttoRep ?? 0n))
 	if (result.action === 'approveReportingRep') title = reportingCopy.approvedAmount(formatCurrencyBalance(result.amountAttoRep ?? 0n))
 	let detail = transactionCopy.escalationDepositsSettledDetail

@@ -128,7 +128,7 @@ test('auction funding controls and bid rows stay in place through reload and fai
 	await waitFor(() => expect(button(view.container, 'Refresh auction').disabled).toBe(false))
 	fixture.values['controller'] = owner
 	await act(() => button(view.container, 'Refresh auction').click())
-	await waitFor(() => expect(view.container.textContent).toContain('identity or state'))
+	await waitFor(() => expect(view.container.textContent).toContain('The auction status or contract address does not match this branch.'))
 	expect(button(view.container, 'Submit funded bid').disabled).toBe(true)
 	expect(view.container.textContent).toContain('Bid 1')
 })

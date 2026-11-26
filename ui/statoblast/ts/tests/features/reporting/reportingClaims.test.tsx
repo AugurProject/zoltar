@@ -76,7 +76,7 @@ test('claims the selected saved winning deposits together and shows losing depos
 	expect(first).toHaveProperty('checked', true)
 	expect(second).toHaveProperty('checked', true)
 	expect(rows.getAllByRole('checkbox')).toHaveLength(2)
-	const losingRows = [...claims.querySelectorAll('tbody tr')].filter(row => row.textContent?.includes('Lost, no action needed'))
+	const losingRows = [...claims.querySelectorAll('tbody tr')].filter(row => row.textContent?.includes('Lost · no action needed'))
 	expect(losingRows).toHaveLength(2)
 	expect(losingRows[0]?.textContent).toContain('1.00 REP')
 	expect(losingRows[1]?.textContent).not.toContain('1.00 REP')

@@ -1,4 +1,5 @@
 import { formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { ensureSentence } from '@zoltar/ui-core-shared/lib/errors.js'
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
@@ -254,3 +255,31 @@ export const disputesOpenIn = (duration: string) => `Disputes open in ${duration
 export const settlementDurationLimit = (duration: string) => `Settlement delay must not exceed ${duration} in this interface.`
 export const settlementGasUnsafe = 'This report exceeds the safe settlement gas limit. Disputing it could lock your dispute deposit.'
 export const settlementDurationUnsafe = (duration: string) => `This report has a settlement duration longer than ${duration}. Disputing it could lock your dispute deposit.`
+
+export const postTransactionReportRefreshFailed = 'Oracle transaction succeeded, but refreshing the selected report failed'
+export const tokenAddress = 'Token address'
+export const tokenApprovalFailed = 'Token approval failed.'
+export const ethWrapFailed = 'ETH wrap failed.'
+export const createStandaloneReportFailed = 'Failed to create standalone OpenOracle report'
+export const settleReportFailed = 'Failed to settle report'
+export const withdrawBalanceFailed = 'Failed to withdraw OpenOracle balance'
+export const disputeReportFailed = 'Failed to dispute report'
+
+export const disputingReportAction = 'disputing the report'
+export const formatApproveTokenFailed = (token: string) => `Failed to approve ${token}`
+export const genericToken = 'token'
+export const baseTokenFallback = 'base token'
+export const quoteTokenFallback = 'quote token'
+export const operateWalletAction = 'operating OpenOracle'
+export const withdrawBalanceWalletAction = 'withdrawing an OpenOracle balance'
+export const formatDisputeBalanceStatusUnavailable = (token: string, reason: string | undefined) => {
+	const details = reason === undefined ? '' : ` ${ensureSentence(reason)}`
+	return `Unable to verify ${token} balance for this dispute.${details} Retry loading the report or balance status before disputing this report.`
+}
+export const formatDisputeInsufficientBalance = (token: string, required: string, available: string) => `Insufficient ${token} balance for this dispute. Need ${required}, wallet has ${available}.`
+export const formatLoadingDisputeTokenDetails = (token: string) => `Loading ${token} details…`
+export const formatInvalidNewDisputeAmount = (token: string) => `Enter a valid new ${token} amount.`
+export const formatRequiredNewDisputeAmountUnavailable = (token: string) => `Unable to determine the required new ${token} amount.`
+export const formatLoadingDisputeTokenBalance = (token: string) => `Loading current ${token} balance…`
+export const formatLoadingDisputeTokenApproval = (token: string) => `Loading current ${token} approval…`
+export const formatDisputeTokenApprovalRequired = (token: string) => `${token} approval required`

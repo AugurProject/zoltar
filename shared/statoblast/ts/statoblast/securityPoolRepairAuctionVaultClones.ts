@@ -49,6 +49,6 @@ export function decodeAuctionVaultBindings(code: Hex | undefined): AuctionVaultB
 	return { implementation: getAddress(implementation), owner: getAddress(owner), capital: getAddress(capital), auction: getAddress(auction), bidId: BigInt(`0x${lower.slice(212, 276)}`) }
 }
 /** Accept only the exact clone the auction would have created for these bindings. */
-export function verifyAuctionVaultCode(code: Hex | undefined, bindings: AuctionVaultBindings, label = 'auction vault') {
+export function verifyAuctionVaultCode(code: Hex | undefined, bindings: AuctionVaultBindings, label = 'auction position') {
 	if (code === undefined || code.toLowerCase() !== auctionVaultRuntimeCode(bindings).toLowerCase()) throw new Error(`Unrecognized ${label} runtime code.`)
 }

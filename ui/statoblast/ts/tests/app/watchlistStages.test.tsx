@@ -26,11 +26,12 @@ const poolRow: WatchlistRow = {
 }
 
 test('saved questions show confirmed outcomes, the fork question, migration, and pre-fork reporting stages', async () => {
-	const forkQuestion = { ...questionRow, forkedAt: 15n, forkQuestionId: 1n, question: { ...question, universeHasForked: true } }
+	const forkQuestion = { ...questionRow, forkedAt: 15n, forkQuestionId: 1n, nonDecision: true, question: { ...question, universeHasForked: true } }
 	const migrating = { ...forkQuestion, forkQuestionId: 2n, reportingPrincipal: 1n, shares: { yesAttoShares: 1n, noAttoShares: 0n, invalidAttoShares: 0n } }
 	const cases: Array<[WatchlistRow, string]> = [
 		[{ ...forkQuestion, question: { ...forkQuestion.question, questionOutcome: 'no' } }, 'Resolved as No'],
 		[forkQuestion, 'Fork question'],
+		[{ ...forkQuestion, nonDecision: false }, 'Frozen'],
 		[migrating, 'Migrate your shares to a child universe'],
 		[{ ...questionRow, nonDecision: true }, 'Ended undecided'],
 		[{ ...questionRow, question: { ...question, ordinaryEscalationGameStarted: true }, escalationEnd: 40n }, 'Response window'],
@@ -49,7 +50,7 @@ test('saved questions show confirmed outcomes, the fork question, migration, and
 	)
 	const rows = [...rendered.container.querySelectorAll('li')]
 	expect(rows.map(row => row.firstElementChild?.textContent)).toEqual(cases.map(([, label]) => label))
-	expect(within(rendered.container).getByText('REP deposits carry over.')).not.toBeNull()
+	expect(within(rendered.container).getByText('REP deposits move to child questions.')).not.toBeNull()
 })
 
 test('saved pools distinguish an open choice, elapsed deadline, selected branch, migration, and activation', async () => {

@@ -172,7 +172,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			decodeAddress(capitalFork, 'Capital fork authority') !== controller
 		)
 			throw new Error('Auction identities do not match the selected branch.')
-		const engine = decodeAddress(engineValue, 'Auction engine')
+		const engine = decodeAddress(engineValue, 'Auction bidding contract')
 		const vaultImplementation = decodeAddress(implementationValue, 'Auction position implementation')
 		const opened = decodeBool(openedValue, 'Invalid auction state.')
 		const finalized = decodeBool(finalizedValue, 'Invalid auction state.')
@@ -186,7 +186,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			read(engine, 'bidderBidCount', [bidder]),
 			read(engine, 'refundCreditAttoEth', [bidder]),
 		])
-		if (decodeAddress(engineController, 'Engine controller') !== auctionAddress || decodeBool(initialized, 'Invalid auction state.') !== opened || decodeBool(engineFinalized, 'Invalid auction state.') !== finalized) throw new Error('Auction engine identity or state is inconsistent.')
+		if (decodeAddress(engineController, 'Auction controller address') !== auctionAddress || decodeBool(initialized, 'Invalid auction state.') !== opened || decodeBool(engineFinalized, 'Invalid auction state.') !== finalized) throw new Error('The auction status or contract address does not match this branch.')
 		const terms = {
 			address: auctionAddress,
 			engine,

@@ -182,7 +182,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					...buildWriteActionConfig(
 						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
 						openOracleError,
-						commonCopy.formatConnectWalletBefore('operating OpenOracle'),
+						commonCopy.formatConnectWalletBefore(openOracleCopy.operateWalletAction),
 						createOpenOracleTransactionIntent(actionName, transactionContext),
 					),
 					formatErrorMessage: options?.formatErrorMessage,
@@ -197,7 +197,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					onWriteError: message => {
 						openOracleFeedback.value = createErrorActionFeedback(actionName, getOpenOracleFailureTitle(actionName), message)
 					},
-					refreshErrorFallback: 'Oracle transaction succeeded, but refreshing the selected report failed',
+					refreshErrorFallback: openOracleCopy.postTransactionReportRefreshFailed,
 					refreshState: async () => {
 						await refreshWalletStateOnly(refreshState)
 					},
@@ -244,7 +244,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			const submittedOpenOracleForm = openOracleForm.value
 			const action = token === 'token1' ? 'approveToken1' : 'approveToken2'
 			const reportDetailsSnapshot = openOracleReportDetails.value
-			const tokenLabel = (token === 'token1' ? reportDetailsSnapshot?.token1Symbol : reportDetailsSnapshot?.token2Symbol) ?? (token === 'token1' ? 'base token' : 'quote token')
+			const tokenLabel = (token === 'token1' ? reportDetailsSnapshot?.token1Symbol : reportDetailsSnapshot?.token2Symbol) ?? (token === 'token1' ? openOracleCopy.baseTokenFallback : openOracleCopy.quoteTokenFallback)
 			return runOracleAction(
 				action,
 				async (walletAddress, context) => {
@@ -275,20 +275,20 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					})
 					return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), token === 'token1' ? reportDetails.token1 : reportDetails.token2, getOpenOracleAddress(), approvalAmount, action)
 				},
-				`Failed to approve ${tokenLabel}`,
+				openOracleCopy.formatApproveTokenFailed(tokenLabel),
 				{ refreshTokenAccessOnSuccess: true },
 			)
 		})()
 
 	const approveCreateToken = async (token: 'token1' | 'token2', amount: bigint) => {
-		const tokenAddress = parseAddressInput(openOracleCreateForm.value[token === 'token1' ? 'token1Address' : 'token2Address'], 'Token address')
+		const tokenAddress = parseAddressInput(openOracleCreateForm.value[token === 'token1' ? 'token1Address' : 'token2Address'], openOracleCopy.tokenAddress)
 		await runOracleAction(
 			token === 'token1' ? 'approveToken1' : 'approveToken2',
 			async (walletAddress, context) => {
-				if (parseAddressInput(openOracleCreateForm.value[token === 'token1' ? 'token1Address' : 'token2Address'], 'Token address') !== tokenAddress) throw new Error(openOracleCopy.reportTokenChanged)
+				if (parseAddressInput(openOracleCreateForm.value[token === 'token1' ? 'token1Address' : 'token2Address'], openOracleCopy.tokenAddress) !== tokenAddress) throw new Error(openOracleCopy.reportTokenChanged)
 				return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), tokenAddress, getOpenOracleAddress(), amount, token === 'token1' ? 'approveToken1' : 'approveToken2')
 			},
-			'Token approval failed.',
+			openOracleCopy.tokenApprovalFailed,
 		)
 	}
 	const wrapCreateWeth = async () =>
@@ -301,7 +301,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 				if (openOracleCreateForm.value !== form) throw new Error(openOracleCopy.reportFundingChanged)
 				return await dependencies.wrapWeth(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), shortfall)
 			},
-			'ETH wrap failed.',
+			openOracleCopy.ethWrapFailed,
 		)
 
 	const approveToken1 = async (amount?: bigint) => await approveDisputeToken('token1', amount)
@@ -342,8 +342,8 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 				openOracleError.value = initialValidation.message
 				return
 			}
-			const token1Address = parseAddressInput(submittedOpenOracleCreateForm.token1Address, 'Base token address')
-			const token2Address = parseAddressInput(submittedOpenOracleCreateForm.token2Address, 'Quote token address')
+			const token1Address = parseAddressInput(submittedOpenOracleCreateForm.token1Address, openOracleCopy.token1Address)
+			const token2Address = parseAddressInput(submittedOpenOracleCreateForm.token2Address, openOracleCopy.token2Address)
 			const readClient = dependencies.createConnectedReadClient()
 			const [token1DecimalsResult, token2DecimalsResult] = await Promise.all([readCreateTokenDecimals(readClient, token1Address, 'Base'), readCreateTokenDecimals(readClient, token2Address, 'Quote')])
 			const currentOpenOracleCreateForm = openOracleCreateForm.value
@@ -375,7 +375,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 
 					return await dependencies.createOpenOracleReportInstance(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), parseOpenOracleCreateFormSubmission({ form: submittedOpenOracleCreateForm, token1Decimals, token2Decimals }))
 				},
-				'Failed to create standalone OpenOracle report',
+				openOracleCopy.createStandaloneReportFailed,
 			)
 		} finally {
 			loadingOpenOracleCreate.value = false
@@ -394,7 +394,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 
 				return await dependencies.settleOracleReport(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), getOpenOracleAddress(), details.reportId)
 			},
-			'Failed to settle report',
+			openOracleCopy.settleReportFailed,
 			{ formatErrorMessage: formatOpenOracleSettleWriteErrorMessage, getReceiptPriceUnits: () => priceUnits },
 		)
 	}
@@ -426,7 +426,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		let token = zeroAddress
 		let preflightCanSubmit = false
 		try {
-			const holder = requireDefined(accountAddress, commonCopy.formatConnectWalletBefore('withdrawing an OpenOracle balance'))
+			const holder = requireDefined(accountAddress, commonCopy.formatConnectWalletBefore(openOracleCopy.withdrawBalanceWalletAction))
 			const details = requireLoadedCurrentSelectedReport()
 			const currentReportIdInput = details.reportId.toString()
 			const balances = await dependencies.loadOpenOracleWithdrawableBalances(attemptOpenOracleAddress, holder, details.token1, details.token2)
@@ -471,7 +471,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			await runOracleAction(
 				'withdrawBalance',
 				async (walletAddress, context) => await dependencies.withdrawOpenOracleBalance(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), attemptOpenOracleAddress, token, currentAmount, walletAddress),
-				'Failed to withdraw OpenOracle balance',
+				openOracleCopy.withdrawBalanceFailed,
 			)
 		} finally {
 			openOracleActiveWithdrawalBalance.value = undefined
@@ -494,7 +494,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 						return dependencies.disputeOracleReport(writeClient, getOpenOracleAddress(), details.reportId, tokenToSwap, newAmount1, newAmount2, details.currentAmount2, details.stateHash)
 					},
 				}),
-			'Failed to dispute report',
+			openOracleCopy.disputeReportFailed,
 			{
 				formatErrorMessage: formatOpenOracleDisputeWriteErrorMessage,
 				refreshTokenAccessOnSuccess: true,

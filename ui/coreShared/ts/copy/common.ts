@@ -117,7 +117,7 @@ export const approvalAmountTooLargeError = 'Approval amount is too large.'
 export const formatApproveUnlimitedValue = (tokenLabel: CopyTemplateValue) => `${approve} unlimited ${tokenLabel}`
 export const formatApprovalNotIncreasedReason = (approvedAmount: CopyTemplateValue) => `Already approved ${approvedAmount}. Enter a higher amount, or leave blank for the required total.`
 export const formatApprovalAlreadyUnlimitedReason = (tokenLabel: CopyTemplateValue) => `${tokenLabel} approval is already unlimited.`
-export const notDeployed = 'Not created yet'
+export const notDeployed = 'Not deployed'
 export const formatNetworkRequiredReason = (networkName: CopyTemplateValue) => `Switch to ${networkName}.`
 export const walletAssetAutomaticImportUnavailable = 'Automatic import unavailable. Copy the token address to import it manually.'
 export const walletAssetRequestAccepted = 'Accepted by wallet'

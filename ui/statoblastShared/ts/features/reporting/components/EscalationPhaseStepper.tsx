@@ -15,11 +15,11 @@ export function EscalationPhaseStepper({ details, forkAlreadyTriggered, detailId
 	if (stage === 'resolved' || fork) index = 2
 	const completed = (step: number) => step < index
 	const leadingOutcome = details?.status === 'active' ? getDisplayedLeadingEscalationOutcome(details.sides) : undefined
-	const hasUnsettledDeposits = details?.status === 'active' && details.sides.some(side => side.userDeposits.length > 0 || side.importedUserDeposits.length > 0)
+	const hasWinningDeposits = details?.status === 'active' && details.sides.some(side => side.key === details.questionOutcome && (side.userDeposits.length > 0 || side.importedUserDeposits.length > 0))
 	const labels = copy.phaseLabels.map((label, i) => (i === 2 && fork ? copy.forkPhase : label))
 	let next = copy.loadingReportingDetails
 	if (details !== undefined) {
-		if (stage === 'resolved' && details.questionOutcome !== 'none') next = hasUnsettledDeposits ? copy.resolvedNext : copy.resolvedNoDepositsNext
+		if (stage === 'resolved' && details.questionOutcome !== 'none') next = hasWinningDeposits ? copy.resolvedNext : copy.resolvedNoDepositsNext
 		else if (fork && details.settlementState === 'migration-required') next = copy.forkMigrationRequiredDetail
 		else if (fork) next = forkAlreadyTriggered ? copy.forkAlreadyTriggeredReportReason : copy.forkTriggerInstruction
 		else if (details.status === 'not-started') next = copy.firstReportNext(formatCurrencyBalance(details.startBondAttoRep))

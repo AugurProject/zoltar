@@ -3113,6 +3113,6 @@ test('fee preflight balance overrides change only the sender ETH balance and rem
 		{ method: 'eth_estimateGas', params: [{ from: sender, to: TOKEN_ADDRESS, maxFeePerGas: '0xa', maxPriorityFeePerGas: '0x2' }, '0x2a', { [sender]: { balance: '0x3e8' } }] },
 		{ method: 'eth_call', params: [{ from: sender, to: TOKEN_ADDRESS }, 'latest'] },
 	])
-	await expect(createPublicClient({ transport }).estimateGas({ to: TOKEN_ADDRESS, balanceOverride: 1000n })).rejects.toThrow('Balance override requires a simulation account')
+	await expect(createPublicClient({ transport }).estimateGas({ to: TOKEN_ADDRESS, balanceOverride: 1000n })).rejects.toThrow('Choose a simulation wallet before overriding its balance')
 	expect(requests).toHaveLength(3)
 })

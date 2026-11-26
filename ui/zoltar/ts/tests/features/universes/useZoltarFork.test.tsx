@@ -167,7 +167,7 @@ describe('useZoltarFork', () => {
 			else await state().forkZoltar()
 		})
 
-		expect(state().zoltarForkError).toContain('Wallet account changed')
+		expect(state().zoltarForkError).toContain('The connected wallet address changed')
 		expect(state().zoltarForkFeedback?.status.detail).toBe(state().zoltarForkError)
 		expect(onTransactionRequested).not.toHaveBeenCalled()
 		expect(ensureZoltarUniverse).not.toHaveBeenCalled()

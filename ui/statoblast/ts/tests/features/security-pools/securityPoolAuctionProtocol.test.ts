@@ -147,7 +147,7 @@ test('branch auction loading authenticates the adapter, engine, implementation a
 	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('implementation runtime')
 	source.source.codes.set(implementation, `0x${vaultArtifact.evm.deployedBytecode.object}`)
 	source.source.codes.set(engine, '0x6000')
-	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('auction engine runtime')
+	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('auction bidding contract runtime')
 })
 
 test('selected auction vault accounts retain vault liabilities while funding comes from the authenticated bidder', async () => {

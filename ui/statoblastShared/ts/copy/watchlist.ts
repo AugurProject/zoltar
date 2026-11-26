@@ -76,7 +76,7 @@ export const forkQuestion = 'Fork question'
 export const forkQuestionResolution = 'Each child universe resolves it to its own answer.'
 export const migrateShares = 'Migrate your shares to a child universe'
 export const migrateSharesHint = 'Migrate shares on each question’s Shares tab.'
-export const depositsCarryOver = 'REP deposits carry over.'
+export const depositsCarryOver = 'REP deposits move to child questions.'
 export const wasTrading = 'Was trading'
 export const wasInResponseWindow = 'Was in response window'
 export const endedUndecided = 'Ended undecided'
@@ -95,3 +95,13 @@ export const formatMovingTo = (outcome: string) => `Moving to ${outcome}`
 export const formatBranchActive = (outcome: string) => `${outcome} active`
 export const formatBranchRecapitalizing = (outcome: string) => `Recapitalizing ${outcome}`
 export const migrationOpensLead = 'Migration opens '
+
+export const poolAddressOrLinkRequired = 'Enter a security pool address or a Statoblast link.'
+export const openTimeoutError = 'Opening this item timed out. Try again.'
+export const latestBlockUnconfirmed = 'Could not confirm the latest block.'
+export const itemUnverified = 'Could not verify this item.'
+export const openItemFailed = 'Could not open this item.'
+export const watchlistExported = 'Exported the watchlist and deposits located on this device.'
+export const watchlistImported = 'Watchlist imported.'
+export const importFailed = 'Could not import this watchlist.'
+export const formatWatchlistImportedWithSkipped = (skipped: number) => `Watchlist imported. Skipped ${skipped} ${skipped === 1 ? 'entry' : 'entries'}.`

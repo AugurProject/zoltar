@@ -14,7 +14,7 @@ test('custody authentication and bounded accounting pin every read to one mined 
 test('a spoofed module fails closed before approvals can be offered', async () => {
 	const fixture = capitalClient()
 	fixture.codes.set(modules.engine, '0x6000')
-	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('settlement engine runtime')
+	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('payout contract runtime')
 })
 test('an unrecognized capital lifecycle delegate fails closed before approvals', async () => {
 	const fixture = capitalClient()

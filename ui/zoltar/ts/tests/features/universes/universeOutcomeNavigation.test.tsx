@@ -141,7 +141,7 @@ describe('outcome-based universe traversal', () => {
 		const descriptionId = unavailable.getAttribute('aria-describedby')
 		if (descriptionId === null) throw new Error('Missing deployment-status description')
 		// The disabled row says why it cannot open: the child universe exists only after a migration creates it.
-		expect(document.getElementById(descriptionId)?.textContent).toBe('Not created yet Deploy it now, or let the first migration deploy it.')
+		expect(document.getElementById(descriptionId)?.textContent).toBe('Not deployed Deploy it now, or let the first migration deploy it.')
 		expect(q.queryByRole('combobox')).toBeNull()
 		fireEvent.click(open)
 		expect(window.location.hash).toContain('universe=10')
@@ -313,7 +313,7 @@ describe('outcome-based universe traversal', () => {
 		await waitFor(() => expect(q.queryByRole('slider', { name: 'Select outcome' })).not.toBeNull())
 		await waitFor(() => expect(indexes).toHaveLength(1))
 		fireEvent.input(q.getByRole('slider', { name: 'Select outcome' }), { target: { value: '10' } })
-		await waitFor(() => expect(q.queryByText('Not created yet')).not.toBeNull())
+		await waitFor(() => expect(q.queryByText('Not deployed')).not.toBeNull())
 		expect(q.getByRole('button', { name: 'Open 50 °C universe' }).hasAttribute('disabled')).toBe(true)
 		await act(async () => {
 			pending.resolve({ universeId: 99n, exists: true })

@@ -37,7 +37,7 @@ export async function loadCentralSecurityPoolQuestion(client: Pick<ReadClient, '
 	const securityPool = requireAddressValue(securityPoolValue, 'security pool authority')
 	const universeId = requireBigintValue(universeValue, 'security pool universe')
 	const [settlementValue] = await readRequiredMulticall(client, [{ address: securityPool, abi, functionName: 'settlement', args: [] }], blockNumber)
-	const settlement = requireAddressValue(settlementValue, 'settlement engine')
+	const settlement = requireAddressValue(settlementValue, 'payout contract')
 	const [bookValue, bookIdValue] = await readRequiredMulticall(
 		client,
 		[
@@ -46,8 +46,8 @@ export async function loadCentralSecurityPoolQuestion(client: Pick<ReadClient, '
 		],
 		blockNumber,
 	)
-	const book = requireAddressValue(bookValue, 'settlement book')
-	const bookId = requireBigintValue(bookIdValue, 'settlement book ID')
+	const book = requireAddressValue(bookValue, 'payout records')
+	const bookId = requireBigintValue(bookIdValue, 'payout record ID')
 	const questionId = requireBigintValue(questionIdValue, 'question ID')
 	const [, snapshotValue, feeTimestampValue, validValue, totalsValue, remainingValue, checkpointValue, questionValue, bookStateValue, fundedValue] = await readRequiredMulticall(
 		client,
@@ -71,11 +71,11 @@ export async function loadCentralSecurityPoolQuestion(client: Pick<ReadClient, '
 	const remainingCapacity = requireBigintValue(remainingValue, 'available capacity')
 	const question = requireTupleValue(questionValue, 2, 'question stream')
 	const stream = requireObjectValue(question[0], 'question stream state')
-	const state = requireTupleValue(bookStateValue, 16, 'settlement book state')
+	const state = requireTupleValue(bookStateValue, 16, 'payout status')
 	const feeTime = BigInt(requireIntegerLikeValue(feeTimestampValue, 'native fee timestamp'))
 	const feeEnd = BigInt(requireIntegerLikeValue(Reflect.get(stream, 'feeEnd'), 'native fee end'))
 	const feesActive =
-		requireBooleanValue(validValue, 'capital price validity') && requireBooleanValue(state[11], 'fee accrual state') && !requireBooleanValue(state[7], 'book fork state') && requireBooleanValue(fundedValue, 'cash funding state') && requireBigintValue(question[1], 'frozen book ID') === 0n && feeTime < feeEnd
+		requireBooleanValue(validValue, 'capital price validity') && requireBooleanValue(state[11], 'fee accrual state') && !requireBooleanValue(state[7], 'payout fork status') && requireBooleanValue(fundedValue, 'cash funding state') && requireBigintValue(question[1], 'frozen payout record ID') === 0n && feeTime < feeEnd
 	const linearFee = { rateAttoEthPerSecond: feesActive ? requireBigintValue(Reflect.get(stream, 'feeRateAttoEthPerSecond'), 'question fee rate') : 0n, rateScale: 1_000_000_000n, endTime: feeEnd }
 	const snapshot = requireObjectValue(snapshotValue, 'question settlement')
 	const cash = requireBigintValue(Reflect.get(snapshot, 'questionCashAttoEth'), 'question cash')

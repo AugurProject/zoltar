@@ -5,3 +5,5 @@ export const formatMissingLookupDetail = (kind: 'question' | 'report') => `No ${
 export const uncheckedUniverseDetail = 'Choose a universe to continue.'
 export const missingUniverseDetail = 'This universe has not been created yet.'
 export const walletInstallationRequired = 'No browser wallet found. Install or enable one to connect.'
+export const walletDisconnected = 'Your wallet is no longer connected. Reconnect it and try again.'
+export const walletAddressChanged = 'The connected wallet address changed. Review the action and try again.'

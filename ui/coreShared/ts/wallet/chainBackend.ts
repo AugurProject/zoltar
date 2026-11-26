@@ -8,12 +8,13 @@ import { resolveConfiguredRpcConfig, type ConfiguredRpcSource, type RejectedRpcO
 import { createRecoveringReceiptWaiter } from '../transactions/receiptRecovery.js'
 import { createRetryEmptyReadProvider } from './retryEmptyReadProvider.js'
 import { createConfirmedReadTransport } from './confirmedReadTransport.js'
+import { walletAddressChanged, walletDisconnected } from '../copy/userMessages.js'
 
 export type TransactionSubmissionStatus = 'pending' | 'uncertain'
 
 /** What to do instead when the wallet cannot perform a session action for the application. */
 export const unsupportedWalletActionMessages = {
-	accountSelection: 'This wallet does not support account switching from the application. Open the wallet and choose another account.',
+	accountSelection: 'Choose another address in your wallet.',
 	disconnect: 'This wallet does not support disconnecting from the application. Disconnect this site in the wallet.',
 	formatNetworkSwitch: (networkName: string) => `This wallet does not support switching networks from the application. Switch to ${networkName} in the wallet.`,
 }
@@ -246,8 +247,8 @@ export function createInjectedBackend({ profile = getDefaultNetworkProfile(), rp
 				assertNetworkEnabled(profile.chainIdHex)
 				const currentAccounts = await readProviderAccounts(ethereum)
 				const currentAccount = currentAccounts[0]
-				if (currentAccount === undefined) throw createUserFacingError('Wallet account is no longer connected. Reconnect your wallet and try again.')
-				if (currentAccount.toLowerCase() !== accountAddress.toLowerCase()) throw createUserFacingError('Wallet account changed. Review the action with the connected account and try again.')
+				if (currentAccount === undefined) throw createUserFacingError(walletDisconnected)
+				if (currentAccount.toLowerCase() !== accountAddress.toLowerCase()) throw createUserFacingError(walletAddressChanged)
 				const currentChainId = await readProviderChainId(ethereum)
 				assertNetworkEnabled(currentChainId)
 				if (!sameChainId(currentChainId, profile.chainIdHex)) throw createUserFacingError(`Wallet network changed. Switch to ${getNetworkSwitchTarget(profile)} and try again.`)

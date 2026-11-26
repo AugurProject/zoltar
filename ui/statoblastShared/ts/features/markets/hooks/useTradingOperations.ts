@@ -56,7 +56,7 @@ export type UseTradingOperationsDependencies = {
 	redeemSharesInQuestionLedger: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], questionLedgerAddress: Address) => ReturnType<typeof redeemSharesInQuestionLedger>
 }
 
-const createTradingReadClient = () => withStatoblastRequestTimeout(createConnectedReadClient(), 'Shares refresh timed out.')
+const createTradingReadClient = () => withStatoblastRequestTimeout(createConnectedReadClient(), tradingCopy.sharesRefreshTimeout)
 
 const defaultUseTradingOperationsDependencies: UseTradingOperationsDependencies = {
 	createCompleteSetInQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress, amount, limits) => await createCompleteSetInQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, amount, limits),
@@ -115,13 +115,13 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 	const getPendingTitle = (actionName: TradingActionResult['action']) => {
 		switch (actionName) {
 			case 'createCompleteSet':
-				return 'Minting complete sets'
+				return tradingCopy.mintCompleteSetsPendingTitle
 			case 'redeemCompleteSet':
-				return 'Redeeming complete sets'
+				return tradingCopy.redeemCompleteSetsPendingTitle
 			case 'migrateShares':
-				return 'Migrating shares'
+				return tradingCopy.migrateSharesPendingTitle
 			case 'redeemShares':
-				return 'Redeeming shares'
+				return tradingCopy.redeemSharesPendingTitle
 			default:
 				return assertNever(actionName)
 		}
@@ -129,13 +129,13 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 	const getSuccessTitle = (actionName: TradingActionResult['action']) => {
 		switch (actionName) {
 			case 'createCompleteSet':
-				return 'Complete sets minted'
+				return tradingCopy.mintCompleteSetsSuccessTitle
 			case 'redeemCompleteSet':
-				return 'Complete sets redeemed'
+				return tradingCopy.redeemCompleteSetsSuccessTitle
 			case 'migrateShares':
-				return 'Shares migrated'
+				return tradingCopy.migrateSharesSuccessTitle
 			case 'redeemShares':
-				return 'Shares redeemed'
+				return tradingCopy.redeemSharesSuccessTitle
 			default:
 				return assertNever(actionName)
 		}
@@ -143,13 +143,13 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 	const getFailureTitle = (actionName: TradingActionResult['action']) => {
 		switch (actionName) {
 			case 'createCompleteSet':
-				return 'Mint failed'
+				return tradingCopy.mintCompleteSetsFailureTitle
 			case 'redeemCompleteSet':
-				return 'Complete-set redemption failed'
+				return tradingCopy.redeemCompleteSetsFailureTitle
 			case 'migrateShares':
-				return 'Share migration failed'
+				return tradingCopy.migrateSharesFailureTitle
 			case 'redeemShares':
-				return 'Share redemption failed'
+				return tradingCopy.redeemSharesFailureTitle
 			default:
 				return assertNever(actionName)
 		}
@@ -274,7 +274,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 					onWriteError: message => {
 						tradingFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
 					},
-					refreshErrorFallback: 'Trading transaction succeeded, but refreshing trading details failed.',
+					refreshErrorFallback: tradingCopy.postTransactionSharesRefreshFailed,
 					refreshState: async () => {
 						await refreshWalletStateOnly(refreshState)
 					},
@@ -389,7 +389,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 				if (reason !== undefined) throw new Error(reason)
 				return await dependencies.createCompleteSetInQuestionLedger(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, questionLedgerAddress, parseCollateralAmount(currentForm.completeSetAmount) ?? 0n, { maximumFee, minimumShares })
 			},
-			'Failed to mint complete sets.',
+			tradingCopy.mintCompleteSetsFailed,
 		)
 
 	const redeemCompleteSet = async () =>
@@ -400,7 +400,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 				const redeemAmountAttoShares = parseCollateralAmount(currentForm.redeemAmount) ?? 0n
 				return await dependencies.redeemCompleteSetInQuestionLedger(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, questionLedgerAddress, redeemAmountAttoShares)
 			},
-			'Failed to redeem complete sets.',
+			tradingCopy.redeemCompleteSetsFailed,
 		)
 
 	const redeemShares = async () =>
@@ -410,7 +410,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 				if (!isCurrentSelection()) return undefined
 				return await dependencies.redeemSharesInQuestionLedger(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, questionLedgerAddress)
 			},
-			'Failed to redeem shares.',
+			tradingCopy.redeemSharesFailed,
 		)
 
 	const migrateShares = async () =>
@@ -424,11 +424,11 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 					{ onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal },
 					questionLedgerAddress,
 					shareOutcome,
-					parseBigIntListInput(currentForm.targetOutcomeIndexes, 'Target child universes'),
+					parseBigIntListInput(currentForm.targetOutcomeIndexes, tradingCopy.targetChildUniverses),
 					getSelectedOutcomeShareBalance(tradingDetails.value?.shareBalances, shareOutcome),
 				)
 			},
-			'Failed to migrate shares.',
+			tradingCopy.migrateSharesFailed,
 		)
 
 	useEffect(() => {

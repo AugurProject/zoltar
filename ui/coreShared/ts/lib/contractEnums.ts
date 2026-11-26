@@ -57,6 +57,6 @@ export function tryGetQuestionLedgerSystemState(value: bigint | number): Questio
 
 export function getQuestionLedgerSystemState(value: bigint | number): QuestionLedgerSystemState {
 	const state = tryGetQuestionLedgerSystemState(value)
-	if (state === undefined) throw new Error(`Unhandled question ledger system state: ${value.toString()}`)
+	if (state === undefined) throw new Error(`Unknown question status: ${value.toString()}`)
 	return state
 }

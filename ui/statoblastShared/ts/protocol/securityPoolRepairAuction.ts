@@ -65,7 +65,7 @@ export async function loadSecurityPoolBranchAuction(client: ReadClient, security
 	if (auction !== undefined) {
 		await verifyAuctionCapitalCustody(client, securityPool, snapshot.capitalLedger, blockNumber)
 		await verifyCapitalLedgerClone(client, securityPool, snapshot.capitalLedger, universeId, snapshot.repToken, blockNumber)
-		modules.push({ address: auction.address, artifact: auctionArtifact, label: 'security pool auction' }, { address: auction.engine, artifact: engineArtifact, label: 'auction engine' }, { address: auction.vaultImplementation, artifact: vaultArtifact, label: 'auction position implementation' })
+		modules.push({ address: auction.address, artifact: auctionArtifact, label: 'security pool auction' }, { address: auction.engine, artifact: engineArtifact, label: 'auction bidding contract' }, { address: auction.vaultImplementation, artifact: vaultArtifact, label: 'auction position implementation' })
 	}
 	await Promise.all(modules.map(async module => verifyRuntimeCode(await client.getCode({ address: module.address, blockNumber }), `0x${module.artifact.evm.deployedBytecode.object}`, module.artifact.evm.deployedBytecode.immutableReferences, module.label)))
 	// Every vault is the exact clone the auction creates for the bidder, ledger, auction and bid.
@@ -196,7 +196,7 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 		read(auction, 'vaultImplementation'),
 	])
 	const initialUniverse = requireBigintValue(universeValue, 'initial auction universe')
-	const engine = requireAddressValue(engineValue, 'auction engine')
+	const engine = requireAddressValue(engineValue, 'auction bidding contract')
 	if (getAddress(requireAddressValue(implementationValue, 'position implementation')) !== bindings.implementation) throw new Error('Auction position uses another implementation.')
 	const [canonicalCapital, canonicalAuction, engineController, bidValue, registeredId] = await Promise.all([read(securityPool, 'capitalLedger', [initialUniverse]), read(controller, 'repairAuctions', [initialUniverse]), read(engine, 'controller'), read(engine, 'bids', [bidId]), read(auction, 'bidIdForVault', [vault])])
 	const bid = requireTupleValue(bidValue, 7, 'auction bid')
@@ -208,7 +208,7 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 		requireBigintValue(auctionUniverse, 'auction universe') !== initialUniverse ||
 		getAddress(requireAddressValue(canonicalCapital, 'canonical capital')) !== getAddress(initialCapital) ||
 		getAddress(requireAddressValue(canonicalAuction, 'canonical auction')) !== getAddress(auction) ||
-		getAddress(requireAddressValue(engineController, 'engine controller')) !== getAddress(auction) ||
+		getAddress(requireAddressValue(engineController, 'auction controller address')) !== getAddress(auction) ||
 		getAddress(requireAddressValue(bid[0], 'bid owner')) !== getAddress(bidder) ||
 		getAddress(requireAddressValue(bid[1], 'bid position')) !== getAddress(vault) ||
 		requireBigintValue(registeredId, 'registered bid') !== bidId
@@ -219,7 +219,7 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 		...[
 			{ address: controller, artifact: forkArtifact, label: 'fork coordinator' },
 			{ address: auction, artifact: auctionArtifact, label: 'security pool auction' },
-			{ address: engine, artifact: engineArtifact, label: 'auction engine' },
+			{ address: engine, artifact: engineArtifact, label: 'auction bidding contract' },
 			{ address: bindings.implementation, artifact: vaultArtifact, label: 'auction position implementation' },
 		].map(async module => verifyRuntimeCode(await client.getCode({ address: module.address, blockNumber }), `0x${module.artifact.evm.deployedBytecode.object}`, module.artifact.evm.deployedBytecode.immutableReferences, module.label)),
 	])
@@ -256,7 +256,7 @@ async function verifyAuctionCapitalCustody(client: ReadClient, securityPool: Add
 		read(securityPool, 'services'),
 		read(securityPool, 'repairAuctionDeployer'),
 	])
-	if (getAddress(requireAddressValue(capitalServices, 'capital services')) !== getAddress(requireAddressValue(securityPoolServices, 'security pool services')) || getAddress(requireAddressValue(deployer, 'auction deployer')) !== getAddress(getInfraContractAddresses().securityPoolRepairAuctionDeployer))
+	if (getAddress(requireAddressValue(capitalServices, 'pool service address')) !== getAddress(requireAddressValue(securityPoolServices, 'security pool services')) || getAddress(requireAddressValue(deployer, 'auction deployer')) !== getAddress(getInfraContractAddresses().securityPoolRepairAuctionDeployer))
 		throw new Error('Auction custody uses another services authority or deployer.')
 	const modules = [
 		{ value: lifecycle, artifact: lifecycleArtifact, label: 'capital lifecycle delegate', getter: 'implementation', authority: undefined },
@@ -264,7 +264,7 @@ async function verifyAuctionCapitalCustody(client: ReadClient, securityPool: Add
 		{ value: securityPoolServices, artifact: servicesArtifact, label: 'security pool services', getter: 'securityPool', authority: securityPool },
 	]
 	await Promise.all([
-		verifyCapitalModuleClone(client, requireAddressValue(index, 'commitment index'), indexArtifact, capitalLedger, 'commitment index', blockNumber),
+		verifyCapitalModuleClone(client, requireAddressValue(index, 'pool capacity contract'), indexArtifact, capitalLedger, 'pool capacity contract', blockNumber),
 		verifyCapitalModuleClone(client, requireAddressValue(fees, 'capital fee streams'), feesArtifact, capitalLedger, 'capital fee streams', blockNumber),
 		...modules.map(async module => {
 			const address = requireAddressValue(module.value, module.label)

@@ -29,7 +29,6 @@ test('transaction actions and pending labels use sentence case independently of 
 	expect(reportingCopy.triggerZoltarFork).toBe('Trigger universe fork')
 	expect(reportingCopy.formatSettleSelectedDepositsLabel('Yes')).toBe('Claim selected Yes deposits')
 	expect(reportingCopy.claimDeposits('Yes', '2')).toBe('Claim 2\u00a0REP from Yes')
-	expect(reportingCopy.clearDeposits('No')).toBe('Settle No deposits (0 REP payout)')
 	expect(tradingCopy.redeemResolvedShares).toBe('Redeem winning shares')
 	expect(simulationCopy.removeCorruptedSaves).toBe('Remove corrupted saved states')
 	expect(zoltarCopy.migratingRepPending).toBe('Migrating REP…')

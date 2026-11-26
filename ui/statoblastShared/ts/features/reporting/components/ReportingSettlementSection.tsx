@@ -20,12 +20,6 @@ import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts
 import type { ActiveReportingDetails, EscalationSide, ReportingDetails } from '../../../types/contracts.js'
 import type { WalletActionBlocker } from '@zoltar/ui-core-shared/types/components.js'
 
-function getWithdrawDepositClaimLabel(details: ReportingDetails | undefined, selectedOutcome: ReportingOutcomeKey) {
-	if (details === undefined || details.status !== 'active') return undefined
-	if (!isPoolQuestionFinalized(details)) return undefined
-	return details.questionOutcome === selectedOutcome ? reportingCopy.winningPayout : reportingCopy.losingDepositSettlement
-}
-
 type ReportingSettlementSideProps = {
 	/** Set on the first side's settle-all action, which regains focus after the shared wallet fix unblocks it. */
 	actionButtonRef: RefObject<HTMLButtonElement> | undefined
@@ -66,7 +60,6 @@ function ReportingSettlementSide({
 	const winning = effectiveReportingDetails?.questionOutcome === side.key
 	const selectedWithdrawDepositIndexes = selectedWithdrawDepositIndexesByOutcome[side.key]
 	const allWithdrawDepositIndexes = side.userDeposits.map(deposit => deposit.depositIndex)
-	const claimLabel = getWithdrawDepositClaimLabel(effectiveReportingDetails, side.key)
 	const withdrawSelectedGuardMessage = withdrawGuardMessage ?? (!withdrawEscalationEnabled || selectedWithdrawDepositIndexes.length > 0 ? undefined : reportingCopy.settlementSelectionRequired)
 	const withdrawSelectedUsesSharedReason = withdrawGuardMessage !== undefined && withdrawSelectedGuardMessage === withdrawGuardMessage
 	const withdrawAllUsesSharedReason = withdrawGuardMessage !== undefined
@@ -74,9 +67,9 @@ function ReportingSettlementSide({
 	return (
 		<SectionBlock density='compact' headingLevel={4} title={side.label} variant='embedded'>
 			<div className='field'>
-				{side.userDeposits.length > 1 ? <span>{reportingCopy.chooseDepositsToSettle}</span> : undefined}
+				{winning && side.userDeposits.length > 1 ? <span>{reportingCopy.chooseDepositsToSettle}</span> : undefined}
 				<EscalationDepositSelectionList
-					selectable={side.userDeposits.length > 1}
+					selectable={winning && side.userDeposits.length > 1}
 					disabled={withdrawControlsLocked || withdrawActionPending}
 					items={side.userDeposits.map(deposit => {
 						const claimAmount = getEscalationDepositClaimAmount(effectiveReportingDetails, side.key, deposit)
@@ -97,7 +90,7 @@ function ReportingSettlementSide({
 								),
 							],
 							secondaryDetails: [
-								`${reportingCopy.currentClaimType} ${claimLabel ?? reportingCopy.pendingFinalization}`,
+								winning ? `${reportingCopy.currentClaimType} ${reportingCopy.winningPayout}` : claimsCopy.lostNoActionNeeded,
 								<>
 									{escalationCopy.entryDepthLead}
 									<CurrencyValue value={deposit.cumulativeAmountAttoRep} suffix={commonCopy.rep} />
@@ -117,34 +110,35 @@ function ReportingSettlementSide({
 				/>
 			</div>
 
-			<div className='actions'>
-				{side.userDeposits.length > 1 ? (
+			{winning && (
+				<div className='actions'>
+					{side.userDeposits.length > 1 ? (
+						<TransactionActionButton
+							idleLabel={commonCopy.launchAction(reportingCopy.formatSettleSelectedDepositsLabel(side.label))}
+							pendingLabel={reportingCopy.formatSettlingDepositsPendingLabel(side.label)}
+							onClick={() => onWithdraw(side.key, selectedWithdrawDepositIndexes)}
+							pending={isPendingSide}
+							disabled={otherSidePending}
+							disabledReasonElementId={withdrawSelectedUsesSharedReason ? settlementActionDisabledReasonId : undefined}
+							tone='secondary'
+							availability={{ disabled: !isOnActiveAppChain || !withdrawEscalationEnabled || withdrawSelectedGuardMessage !== undefined, loading: loadingReportingDetails, reason: withdrawSelectedGuardMessage }}
+							showDisabledReason={!withdrawSelectedUsesSharedReason}
+						/>
+					) : undefined}
 					<TransactionActionButton
-						idleLabel={commonCopy.launchAction(reportingCopy.formatSettleSelectedDepositsLabel(side.label))}
-						pendingLabel={reportingCopy.formatSettlingDepositsPendingLabel(side.label)}
-						onClick={() => onWithdraw(side.key, selectedWithdrawDepositIndexes)}
+						idleLabel={commonCopy.launchAction(reportingCopy.claimDeposits(side.label, formatCurrencyBalance(claimAmount)))}
+						pendingLabel={reportingCopy.claimingDeposits(side.label, formatCurrencyBalance(claimAmount))}
+						actionButtonRef={actionButtonRef}
+						onClick={() => onWithdraw(side.key, allWithdrawDepositIndexes)}
 						pending={isPendingSide}
 						disabled={otherSidePending}
-						disabledReasonElementId={withdrawSelectedUsesSharedReason ? settlementActionDisabledReasonId : undefined}
-						tone='secondary'
-						availability={{ disabled: !isOnActiveAppChain || !withdrawEscalationEnabled || withdrawSelectedGuardMessage !== undefined, loading: loadingReportingDetails, reason: withdrawSelectedGuardMessage }}
-						showDisabledReason={!withdrawSelectedUsesSharedReason}
+						disabledReasonElementId={withdrawAllUsesSharedReason ? settlementActionDisabledReasonId : undefined}
+						tone='primary'
+						availability={{ disabled: !isOnActiveAppChain || !withdrawEscalationEnabled || withdrawGuardMessage !== undefined, loading: loadingReportingDetails, reason: withdrawGuardMessage }}
+						showDisabledReason={!withdrawAllUsesSharedReason}
 					/>
-				) : undefined}
-				<TransactionActionButton
-					idleLabel={commonCopy.launchAction(winning ? reportingCopy.claimDeposits(side.label, formatCurrencyBalance(claimAmount)) : reportingCopy.clearDeposits(side.label))}
-					pendingLabel={winning ? reportingCopy.claimingDeposits(side.label, formatCurrencyBalance(claimAmount)) : reportingCopy.clearingDeposits(side.label)}
-					actionButtonRef={actionButtonRef}
-					onClick={() => onWithdraw(side.key, allWithdrawDepositIndexes)}
-					pending={isPendingSide}
-					disabled={otherSidePending}
-					disabledReasonElementId={withdrawAllUsesSharedReason ? settlementActionDisabledReasonId : undefined}
-					tone={winning ? 'primary' : 'secondary'}
-					availability={{ disabled: !isOnActiveAppChain || !withdrawEscalationEnabled || withdrawGuardMessage !== undefined, loading: loadingReportingDetails, reason: withdrawGuardMessage }}
-					showDisabledReason={!withdrawAllUsesSharedReason}
-				/>
-			</div>
-			{winning || claimLabel === undefined ? undefined : <UserMessage className='detail' detail={reportingCopy.clearLosingDepositsDetail} />}
+				</div>
+			)}
 		</SectionBlock>
 	)
 }
@@ -329,14 +323,14 @@ export function ReportingSettlementSection({
 	const shouldShowWithdrawEmptyState = !loadingReportingDetails && !reportingStatusMissing && !hasLocalClaimRecords
 	const hasImportedForkedDeposits = activeReportingDetails?.sides.some(side => side.importedUserDeposits.length > 0) ?? false
 	const migrationSettlement = activeReportingDetails?.settlementState === 'migration-required'
-	const hasSettlementAction = designedClaimDetails === undefined ? withdrawableSides.length > 0 && !migrationSettlement : designedClaimDetails.sides.some(side => side.key === designedClaimDetails.questionOutcome && side.userDeposits.length > 0)
+	const hasSettlementAction = designedClaimDetails === undefined ? withdrawableSides.some(side => side.key === effectiveReportingDetails?.questionOutcome) && !migrationSettlement : designedClaimDetails.sides.some(side => side.key === designedClaimDetails.questionOutcome && side.userDeposits.length > 0)
 	return (
 		<SectionBlock className='reporting-settlement-section' title={designedClaimDetails === undefined ? transactionCopy.settleEscalationDeposits : claimsCopy.claimYourRep} description={hasSettlementAction ? actionDataNotice : undefined} variant={designedClaimDetails === undefined ? 'embedded' : 'default'}>
 			<WalletActionFixReason
 				actionButtonRef={firstSettleActionButtonRef}
 				availability={{ disabled: !isOnActiveAppChain || !withdrawEscalationEnabled || withdrawGuardMessage !== undefined, reason: displayedWithdrawGuardMessage, walletBlocker: settlementWalletBlocker }}
 				id={settlementDisabledReasonId}
-				visible={displayedWithdrawGuardMessage !== undefined && displayedWithdrawGuardMessage !== sharedReportSettlementDisabledReason}
+				visible={hasSettlementAction && displayedWithdrawGuardMessage !== undefined && displayedWithdrawGuardMessage !== sharedReportSettlementDisabledReason}
 			>
 				<UserMessage className='detail' id={settlementDisabledReasonId} loading={loadingReportingDetails} detail={displayedWithdrawGuardMessage} />
 			</WalletActionFixReason>

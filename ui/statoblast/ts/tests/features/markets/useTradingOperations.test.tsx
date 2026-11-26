@@ -30,7 +30,7 @@ const ATTO_ETH_PER_ETH = 10n ** 18n
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
 const NEXT_WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a2')
 const QUESTION_LEDGER_ADDRESS = getAddress('0x00000000000000000000000000000000000000b2')
-const WALLET_ACCOUNT_CHANGED = 'Wallet account changed. Review the action with the connected account and try again.'
+const WALLET_ACCOUNT_CHANGED = 'The connected wallet address changed. Review the action and try again.'
 const PROXY_DEPLOYER_STEP: DeploymentStatus = {
 	address: zeroAddress,
 	dependencies: [],

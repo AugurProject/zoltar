@@ -45,7 +45,7 @@ describe('universe directory', () => {
 		expect(rendered.container.querySelector('.route-header')?.textContent).toContain('Universe')
 		expect(rendered.container.querySelectorAll('.entity-card-list .entity-card')).toHaveLength(3)
 		for (const outcome of ['Invalid', 'Yes', 'No']) expect(queries.getByRole('heading', { name: outcome })).toBeTruthy()
-		expect(rendered.container.textContent).toContain('Not created yet')
+		expect(rendered.container.textContent).toContain('Not deployed')
 		// Only an existing child can be opened; the link carries the universe parameter every route reads.
 		const selectLinks = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.entity-card .universe-link')).filter(link => link.textContent === 'Open')
 		expect(selectLinks).toHaveLength(1)
@@ -58,7 +58,7 @@ describe('universe directory', () => {
 		const rendered = await renderIntoDocument(<UniverseDirectory configuration={configuration} loadUniverse={async () => createForkedUniverseSummary({ universeId: 0n, parentUniverseId: 0n, hasForked: true })} universeId={2n} />)
 		cleanupRendered = rendered.cleanup
 		await waitFor(() => expect(rendered.container.textContent).toContain('Child universes'))
-		expect(Array.from(rendered.container.querySelectorAll('.entity-card .badge')).map(badge => badge.textContent)).toEqual(['Not created yet', 'Selected', 'Not created yet'])
+		expect(Array.from(rendered.container.querySelectorAll('.entity-card .badge')).map(badge => badge.textContent)).toEqual(['Not deployed', 'Selected', 'Not deployed'])
 		await rendered.cleanup()
 
 		const genesis = await renderIntoDocument(<UniverseDirectory configuration={configuration} loadUniverse={async () => createForkedUniverseSummary({ universeId: 0n, childUniverses: [] })} universeId={0n} />)

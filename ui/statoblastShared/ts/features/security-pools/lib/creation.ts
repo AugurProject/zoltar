@@ -1,8 +1,13 @@
-import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
-import { validateSecurityPoolEconomics } from '@zoltar/statoblast-shared/statoblast/securityPool'
-import { parseSecurityPoolAmount, securityPoolAmountOrUndefined } from './draft.js'
+import { formatUnits, parseUnits } from '@zoltar/core-shared/evm/ethereum'
+import { validateSecurityPoolEconomics, type SecurityPoolOriginConfig } from '@zoltar/statoblast-shared/statoblast/securityPool'
+import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
+import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
+import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { parseSecurityPoolAmount, securityPoolAmountOrUndefined, securityPoolUnsignedId } from './draft.js'
+import { securityPoolCollateral, type CollateralSymbol } from '../../../protocol/collateral.js'
 import { requireFixedAdmissionQuestionLimit } from '../../../protocol/securityPoolAdmission.js'
 import { deployment as copy } from '../../../copy/securityPoolTransactions.js'
+import { creationInvalid, enterOrigin, horizonInvalid } from '../../../copy/securityPool.js'
 
 export type CuratedAdmissionMode = 'open' | 'fixed'
 export type SecurityPoolCreationDraft = {
@@ -14,7 +19,21 @@ export type SecurityPoolCreationDraft = {
 	rewardVestingHours: string
 }
 
-export const defaultSecurityPoolCreationDraft = (): SecurityPoolCreationDraft => ({
+export type DeploymentDraft = {
+	collateralSymbol: CollateralSymbol
+	reportFloor: string
+	originInput: string
+	multiplierInput: string
+	priorityFeeInput: string
+	horizonDays: string
+	admissionMode: CuratedAdmissionMode
+	fixedQuestions: string
+	economicsDraft: SecurityPoolCreationDraft
+}
+
+const MINIMUM_SECURITY_MULTIPLIER_BPS = 10_500n
+
+const defaultSecurityPoolCreationDraft = (): SecurityPoolCreationDraft => ({
 	annualFeePercent: '10',
 	purchaseFeePercent: '1',
 	minimumPurchaseFee: '0.001',
@@ -22,6 +41,20 @@ export const defaultSecurityPoolCreationDraft = (): SecurityPoolCreationDraft =>
 	minimumOutcomeRate: '0.01',
 	rewardVestingHours: '24',
 })
+
+export function initialDeploymentDraft(originInput: string): DeploymentDraft {
+	return {
+		collateralSymbol: 'WETH',
+		reportFloor: '0.01',
+		originInput,
+		multiplierInput: '200',
+		priorityFeeInput: (DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 9n).toString(),
+		horizonDays: '30',
+		admissionMode: 'open',
+		fixedQuestions: '',
+		economicsDraft: defaultSecurityPoolCreationDraft(),
+	}
+}
 
 function securityPoolBasisPoints(value: string, label: string) {
 	const amount = securityPoolBasisPointsOrUndefined(value)
@@ -55,7 +88,7 @@ export function parseSecurityPoolCreationEconomics(draft: SecurityPoolCreationDr
 	return config
 }
 
-export function parseFixedSecurityPoolQuestions(input: string) {
+function parseFixedSecurityPoolQuestions(input: string) {
 	const values = input
 		.trim()
 		.split(/[\s,]+/)
@@ -77,6 +110,45 @@ export function parseFixedSecurityPoolQuestions(input: string) {
 	})
 	requireFixedAdmissionQuestionLimit(questions.length)
 	return questions
+}
+
+export function parseDeploymentDraft(draft: DeploymentDraft, profile: NetworkProfile) {
+	const collateral = securityPoolCollateral(profile, draft.collateralSymbol)
+	let fixedQuestionIds: bigint[] | undefined
+	let fixedQuestionError: string | undefined
+	if (draft.admissionMode === 'fixed') {
+		try {
+			fixedQuestionIds = parseFixedSecurityPoolQuestions(draft.fixedQuestions)
+		} catch (failure) {
+			fixedQuestionError = getErrorMessage(failure, creationInvalid)
+		}
+	}
+	const approvedQuestions = fixedQuestionIds ?? []
+	let creationError: string | undefined
+	let origin: SecurityPoolOriginConfig | undefined
+	let economics: ReturnType<typeof parseSecurityPoolCreationEconomics> | undefined
+	let horizon: bigint | undefined
+	try {
+		const originUniverse = securityPoolUnsignedId(draft.originInput, 248)
+		if (originUniverse === undefined) throw new Error(enterOrigin)
+		const securityMultiplierBps = parseUnits(draft.multiplierInput, 2)
+		const reportPriorityFeeAttoEthPerGas = parseUnits(draft.priorityFeeInput, 9)
+		if (securityMultiplierBps < MINIMUM_SECURITY_MULTIPLIER_BPS) throw new Error(copy.securityMultiplierTooLow)
+		if (reportPriorityFeeAttoEthPerGas <= 0n) throw new Error(copy.priorityFeeRequired)
+		if (reportPriorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) throw new Error(copy.priorityFeeAboveLimit)
+		if (collateral.address === undefined) throw new Error(copy.collateralUnavailable)
+		const minimumReportCollateral = securityPoolAmountOrUndefined(draft.reportFloor, collateral.decimals)
+		if (minimumReportCollateral === undefined || minimumReportCollateral === 0n) throw new Error(copy.reportStakeRequired(collateral.decimals))
+		origin = { collateralToken: collateral.address, minimumReportCollateral, universeId: originUniverse, securityMultiplierBps, reportPriorityFeeAttoEthPerGas }
+		if (fixedQuestionError !== undefined) throw new Error(fixedQuestionError)
+		economics = parseSecurityPoolCreationEconomics(draft.economicsDraft, collateral.decimals)
+		if (!/^\d+$/.test(draft.horizonDays)) throw new Error(horizonInvalid)
+		horizon = BigInt(draft.horizonDays) * 86400n
+		if (horizon === 0n || horizon >= 1n << 48n) throw new Error(horizonInvalid)
+	} catch (failure) {
+		creationError = getErrorMessage(failure, creationInvalid)
+	}
+	return { collateral, approvedQuestions, fixedQuestionIds, fixedQuestionError, creationError, origin, economics, horizon }
 }
 
 /** The wallet review for a security pool deployment; the purchase fee floor and minimum commitment are in collateral units. */

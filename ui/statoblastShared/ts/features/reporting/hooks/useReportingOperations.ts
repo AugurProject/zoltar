@@ -1,5 +1,6 @@
 import { getReportingSubmissionTimingGuard } from '../../../protocol/reportingTiming.js'
 import * as reportingCopy from '../../../copy/reporting.js'
+import { lostNoActionNeeded } from '../../../copy/reportingClaims.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
@@ -121,11 +122,11 @@ export function useReportingOperations(
 	}
 	const getSuccessTitle = (actionName: ReportingActionResult['action']) => {
 		if (actionName === 'approveReportingRep') return reportingCopy.repApproved
-		return actionName === 'reportOutcome' ? reportingCopy.reportSubmitted : reportingCopy.stakesSettled
+		return actionName === 'reportOutcome' ? reportingCopy.reportSubmitted : reportingCopy.claimed
 	}
 	const getFailureTitle = (actionName: ReportingActionResult['action']) => {
 		if (actionName === 'approveReportingRep') return reportingCopy.repApprovalFailed
-		return actionName === 'reportOutcome' ? reportingCopy.reportFailed : reportingCopy.settlementFailed
+		return actionName === 'reportOutcome' ? reportingCopy.reportFailed : reportingCopy.claimFailed
 	}
 
 	const requireSelectedOutcome = (selectedOutcome: ReportingFormState['selectedOutcome']) => {
@@ -227,7 +228,7 @@ export function useReportingOperations(
 					onWriteError: message => {
 						if (isCurrentSelection()) reportingFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
 					},
-					refreshErrorFallback: 'Reporting transaction succeeded, but refreshing reporting details failed',
+					refreshErrorFallback: reportingCopy.postTransactionReportingRefreshFailed,
 					refreshState: async () => {
 						await refreshWalletStateOnly(refreshState)
 					},
@@ -358,6 +359,7 @@ export function useReportingOperations(
 
 				if (latestDetails.settlementState === 'migration-required') throw new Error(reportingCopy.claimParentAfterResolution)
 				if (!latestDetails.parentWithdrawalEnabled) throw new Error(reportingCopy.questionFinalizationRequired)
+				if (latestDetails.questionOutcome !== outcome) throw new Error(lostNoActionNeeded)
 
 				const requestedDepositIndexes = depositIndexesOverride ?? currentForm.selectedWithdrawDepositIndexesByOutcome[outcome]
 				const missingSelectedDepositIndex = requestedDepositIndexes.find(index => !availableDepositIndexes.includes(index))

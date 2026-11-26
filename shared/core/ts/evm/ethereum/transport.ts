@@ -154,7 +154,7 @@ function normalizeTransportRetryOptions(options: TransportRetryOptions = {}) {
 
 function normalizeHttpTransportOptions(options: HttpTransportOptions = {}) {
 	const requestTimeout = options.requestTimeout ?? 30_000
-	if (!Number.isSafeInteger(requestTimeout) || requestTimeout < 1) throw new Error('RPC request timeout must be a positive safe integer')
+	if (!Number.isSafeInteger(requestTimeout) || requestTimeout < 1) throw new Error('RPC timeout must be a positive safe integer')
 	return {
 		...(options.fetchFn === undefined ? {} : { fetchFn: options.fetchFn }),
 		...(options.responseParser === undefined ? {} : { responseParser: options.responseParser }),

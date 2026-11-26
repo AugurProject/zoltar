@@ -1,28 +1,22 @@
 import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
+import { signal, type Signal } from '@preact/signals'
 import { getBrowserStorage } from '@zoltar/ui-core-shared/lib/browserStorage.js'
 import { localEntityScopeForNetwork } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { decodeStoredValue } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
 import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import type { CollateralSymbol } from '../../../protocol/collateral.js'
-import type { CuratedAdmissionMode, SecurityPoolCreationDraft } from './creation.js'
+import type { DeploymentDraft } from './creation.js'
 
-export type DeploymentDraft = {
-	collateralSymbol: CollateralSymbol
-	reportFloor: string
-	originInput: string
-	multiplierInput: string
-	priorityFeeInput: string
-	horizonDays: string
-	admissionMode: CuratedAdmissionMode
-	fixedQuestions: string
-	economicsDraft: SecurityPoolCreationDraft
-}
-
-type PendingDeployment = { id: string; step: 'rules' | 'pool'; hash?: Hash | undefined; nonce?: string | undefined; restartAllowed?: boolean | undefined }
+type PendingDeployment = { id: string; step: 'rules' | 'pool'; hash?: Hash | undefined; nonce?: string | undefined; initialFactoryCount?: string | undefined; restartAllowed?: boolean | undefined }
 type DeploymentProgress = { rules?: Address | undefined; pool?: Address | undefined; activated?: boolean | undefined; pending?: PendingDeployment | undefined; draft: DeploymentDraft }
+type ProgressSignal = Signal<DeploymentProgress | undefined>
+const memoryJournals = new Map<string, ProgressSignal>()
 
 function isTransactionHash(value: string | undefined): value is Hash {
 	return value !== undefined && /^0x[\da-fA-F]{64}$/.test(value)
+}
+
+function storedUnsignedInteger(value: string | undefined) {
+	return value !== undefined && /^\d+$/.test(value) ? value : undefined
 }
 
 function decodeProgress(raw: string) {
@@ -31,7 +25,6 @@ function decodeProgress(raw: string) {
 		const economics = draft.record('economicsDraft')
 		const pending = read.optional('pending', read.record)
 		const hash = pending?.optional('hash', pending.string)
-		const nonce = pending?.optional('nonce', pending.string)
 		return {
 			rules: read.optional('rules', read.address),
 			pool: read.optional('pool', read.address),
@@ -43,7 +36,8 @@ function decodeProgress(raw: string) {
 							id: pending.string('id'),
 							step: pending.oneOf('step', ['rules', 'pool']),
 							hash: isTransactionHash(hash) ? hash : undefined,
-							nonce: nonce !== undefined && /^\d+$/.test(nonce) ? nonce : undefined,
+							nonce: storedUnsignedInteger(pending.optional('nonce', pending.string)),
+							initialFactoryCount: storedUnsignedInteger(pending.optional('initialFactoryCount', pending.string)),
 							restartAllowed: pending.optional('restartAllowed', pending.boolean),
 						},
 			draft: {
@@ -68,54 +62,77 @@ function decodeProgress(raw: string) {
 	})
 }
 
-export function deploymentProgressStore(profile: NetworkProfile, owner: Address | undefined) {
+export function deploymentProgressJournal(profile: NetworkProfile, owner: Address | undefined) {
 	const { network, persistence } = localEntityScopeForNetwork(profile, 'statoblast', 'pool')
 	const storage = owner === undefined ? undefined : getBrowserStorage(persistence === 'session' ? 'sessionStorage' : 'localStorage')
 	const key = `zoltar-ui:statoblast:deployment:v1:${network}:${owner?.toLowerCase()}`
 	const discardedKey = `${key}:discarded`
+	const current = memoryJournals.get(key) ?? signal<DeploymentProgress | undefined>(undefined)
+	const persistenceUnavailable = signal(storage === undefined || memoryJournals.has(key))
+	const rememberInTab = () => {
+		if (owner !== undefined && !memoryJournals.has(key)) memoryJournals.set(key, current)
+		persistenceUnavailable.value = true
+	}
+	if (storage === undefined) rememberInTab()
 	const readRaw = () => {
 		const raw = storage?.getItem(key)
 		return raw === null || raw === storage?.getItem(discardedKey) ? undefined : raw
 	}
+	const read = () => {
+		if (memoryJournals.has(key)) return memoryJournals.get(key)?.value
+		try {
+			const raw = readRaw()
+			return raw === undefined ? undefined : decodeProgress(raw)
+		} catch (error) {
+			if (error instanceof SyntaxError) return undefined
+			if (!(error instanceof DOMException)) throw error
+			rememberInTab()
+			return current.value
+		}
+	}
+	const restored = read()
+	current.value = restored
 	return {
-		available: storage !== undefined,
-		read: () => {
-			try {
-				const raw = readRaw()
-				if (raw === undefined) return undefined
-				return decodeProgress(raw)
-			} catch (error) {
-				if (!(error instanceof DOMException || error instanceof SyntaxError)) throw error
-				return undefined
-			}
-		},
+		current,
+		restored,
+		persistenceUnavailable,
+		read,
 		discard: (expected: DeploymentProgress) => {
-			if (storage === undefined) return 'unavailable'
+			if (memoryJournals.has(key) || storage === undefined) {
+				const memory = memoryJournals.get(key) ?? current
+				if (memory.value !== expected) return false
+				memory.value = undefined
+				return true
+			}
 			try {
 				const raw = readRaw()
-				if (raw === undefined) return 'changed'
-				const current = decodeProgress(raw)
-				if (current === undefined || current.rules !== expected.rules || current.pool !== expected.pool || current.activated !== expected.activated) return 'changed'
-				if (current.pending?.id !== expected.pending?.id || (current.pending !== undefined && !current.pending.restartAllowed)) return 'changed'
+				if (raw === undefined) return false
+				const saved = decodeProgress(raw)
+				if (saved === undefined || saved.rules !== expected.rules || saved.pool !== expected.pool || saved.activated !== expected.activated) return false
+				if (saved.pending?.id !== expected.pending?.id || (saved.pending !== undefined && !saved.pending.restartAllowed)) return false
 				// Retire only this exact revision. A concurrent write can still save its newer progress.
 				storage.setItem(discardedKey, raw)
-				return readRaw() === undefined ? 'discarded' : 'changed'
+				return readRaw() === undefined
 			} catch (error) {
-				if (error instanceof SyntaxError) return 'changed'
+				if (error instanceof SyntaxError) return false
 				if (!(error instanceof DOMException)) throw error
-				return 'unavailable'
+				rememberInTab()
+				return true
 			}
 		},
 		write: (progress: DeploymentProgress | undefined) => {
-			if (storage === undefined) return false
-			try {
-				if (progress === undefined) storage.removeItem(key)
-				else storage.setItem(key, JSON.stringify(progress))
-				return true
-			} catch (error) {
-				if (!(error instanceof DOMException)) throw error
-				return false
+			if (!memoryJournals.has(key) && storage !== undefined) {
+				try {
+					if (progress === undefined) storage.removeItem(key)
+					else storage.setItem(key, JSON.stringify(progress))
+				} catch (error) {
+					if (!(error instanceof DOMException)) throw error
+					rememberInTab()
+				}
 			}
+			const memory = memoryJournals.get(key)
+			if (memory !== undefined) memory.value = progress
+			current.value = progress
 		},
 	}
 }

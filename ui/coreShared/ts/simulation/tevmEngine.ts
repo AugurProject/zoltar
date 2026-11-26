@@ -46,7 +46,7 @@ export type SimulationEngineDependencies = {
 
 export async function createSimulationEngine({ initialization, dependencies, genesisOutcome = 'yes' }: { initialization: SimulationInitialization; dependencies: SimulationEngineDependencies; genesisOutcome?: GenesisOutcome }): Promise<SimulationEngine> {
 	const primaryAccount = QA_ACCOUNTS[0]
-	if (primaryAccount === undefined) throw new Error('No simulation QA accounts configured')
+	if (primaryAccount === undefined) throw new Error('No simulation QA wallets configured')
 	const predictedTokenAddresses = predictSimulationTokenAddresses(primaryAccount, genesisOutcome)
 	const profile = createSimulationProfile({ ...predictedTokenAddresses, genesisOutcome })
 	const baseScenario = getInitializationScenario(initialization)
@@ -135,7 +135,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 		transactionDelayMilliseconds = clampDelayMilliseconds(envelope.state.transactionDelayMilliseconds)
 		transactionCountSinceReset = envelope.state.transactionCountSinceReset
 		const nextSelectedAccount = QA_ACCOUNTS.find(account => account.toLowerCase() === envelope.state.selectedAccount.toLowerCase())
-		if (nextSelectedAccount === undefined) throw new Error(`Unknown saved simulation account: ${envelope.state.selectedAccount}`)
+		if (nextSelectedAccount === undefined) throw new Error(`Unknown saved simulation wallet: ${envelope.state.selectedAccount}`)
 		selectedAccount = nextSelectedAccount
 		await ensureImpersonated(selectedAccount)
 		await refreshSimulationState()
@@ -519,7 +519,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 			}
 		},
 		selectAccount: async address => {
-			if (!QA_ACCOUNTS.includes(address)) throw new Error(`Unknown simulation account: ${address}`)
+			if (!QA_ACCOUNTS.includes(address)) throw new Error(`Unknown simulation wallet: ${address}`)
 			selectedAccount = address
 			await ensureImpersonated(address)
 			emitState()

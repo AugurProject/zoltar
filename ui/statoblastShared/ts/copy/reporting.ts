@@ -38,12 +38,12 @@ export const forkCostLead = 'Triggering costs you'
 export const forkCostDetail = 'REP supply grew after reporting started. You give up this REP permanently.'
 export const forkStakeCarries = 'Your REP stays staked and carries to the child universes after the fork.'
 export const selectedSideBelowMinimumReason = 'Remaining selected-side capacity is below the minimum report.'
-export const continueForkMigrationDetail = 'Your deposits carry over to each child question. Claim winning deposits there after it resolves.'
+export const continueForkMigrationDetail = 'Your deposits move to each child question. Claim winning deposits there after it resolves.'
 export const reportAmountFieldLabel = 'Report amount'
 export const escalationStarted = 'Reporting started'
 export const chooseDepositsToSettle = 'Choose deposits to claim'
 export const forkAlreadyTriggeredReportReason = 'Reporting ended without a decision and the universe has forked. Continue in Fork & recovery.'
-export const forkAlreadyTriggeredSettlementReason = 'Your deposits carry over to the child questions. Continue in Fork & recovery.'
+export const forkAlreadyTriggeredSettlementReason = 'Your deposits move to the child questions. Continue in Fork & recovery.'
 export const forkTriggerInstruction = 'Reporting ended without a decision. Deposits stay locked until someone triggers the irreversible universe fork.'
 export const forkRequiredSettlementReason = 'Reporting ended without a decision. Deposits stay locked until the universe forks. Then use Fork & recovery.'
 export const leadHoldingCapital = 'Amount needed to hold the lead'
@@ -72,7 +72,7 @@ export function formatAcceptedAmountTail(trimmedByTie: boolean) {
 export const openForkAndMigration = 'Open Fork & recovery'
 export const managePoolPrice = 'Manage security pool price'
 export const currentOraclePriceRequired = 'A current security pool oracle price is required before reporting.'
-export const forkMigrationRequiredDetail = 'Set up the child questions in Fork & recovery. Your deposits carry over. Claim winning deposits after the child question resolves.'
+export const forkMigrationRequiredDetail = 'Set up the child questions in Fork & recovery. Your deposits move. Claim winning deposits after the child question resolves.'
 export const parentUniverseForked = 'Universe forked'
 export const submittingReportTitle = 'Submitting report'
 export const approvingRepTitle = 'Approving REP'
@@ -83,7 +83,6 @@ export const resolved = 'Resolved'
 export const timedOut = 'Timed out'
 export const pendingFinalization = 'Pending finalization'
 export const winningPayout = 'Winning payout'
-export const losingDepositSettlement = 'Losing deposits'
 export const currentClaimType = 'Current claim type:'
 export const refreshFinalizedOutcomeReason = 'Reporting has ended. Refresh to check the result before claiming deposits.'
 export const poolFinalizedReason = 'This question is already finalized.'
@@ -97,7 +96,7 @@ export const claimUnavailableBeforeReporting = 'Reporting has not started yet.'
 export const claimOutcomeUnavailable = 'Could not load deposits for this outcome.'
 export const claimParentAfterResolution = 'Claim winning deposits in the child question after it resolves.'
 export const claimDepositUnavailable = (index: bigint, side: string) => `Deposit #${index} is no longer available to claim on ${side}.`
-export const claimFailed = 'Failed to claim reporting deposits'
+export const claimFailed = 'Claim failed'
 export const worthAfterFinalizationPendingFinalization = 'Worth after finalization: Pending finalization'
 export const presetOutcomeSelectionRequired = 'Select an outcome side before using presets.'
 export const selectedSideIsUnavailable = 'Selected side is unavailable.'
@@ -138,9 +137,6 @@ export const availableBalance = (amount: string) => `Available: ${amount} REP.`
 export const yourPositions = 'Your positions'
 export const resultSummary = (outcome: string) => `Resolved as ${outcome}.`
 export const claimDeposits = (outcome: string, amount: string) => `Claim ${amount}\u00a0REP from ${outcome}`
-export const clearDeposits = (outcome: string) => `Settle ${outcome} deposits (0 REP payout)`
-export const clearLosingDepositsDetail = 'Losing ordinary deposits return no REP and require no cleanup transaction. Reporter deposits are separate from security pool capital.'
-export const clearLosingDepositsReviewDescription = 'Returns no REP. Losing deposits need no action after resolution.'
 export const results = 'Results'
 
 export const reportedAmount = (outcome: string, amount: string) => `Reported ${amount} REP on ${outcome}`
@@ -149,10 +145,8 @@ export const approvedAmount = (amount: string) => `Approved ${amount} REP`
 export const reportingAmount = (outcome: string, amount: string) => `Reporting ${outcome} · ${amount} REP…`
 
 export const claimedDeposits = (outcome: string, amount: string) => `Claimed ${amount} REP from ${outcome}`
-export const clearedDeposits = (outcome: string) => `Settled ${outcome} deposits (0 REP payout)`
 
 export const claimingDeposits = (outcome: string, amount: string) => `Claiming ${amount} REP from ${outcome}…`
-export const clearingDeposits = (outcome: string) => `Settling ${outcome} deposits (0 REP payout)…`
 
 export const progressToForkUnavailable = 'Progress to fork: —'
 
@@ -194,7 +188,7 @@ export const noVaultRepSelectWallet = 'Select Wallet REP to report. This positio
 
 export const depositTriggersFork = 'This report reaches the non-decision threshold: the game ends and a universe fork can be triggered.'
 export const forkTriggerWarningTitle = 'This report ends reporting without a decision'
-export const forkTriggerWarning = (outcome: string, threshold: string) => `Another side already holds ${threshold} REP. Filling ${outcome} to the same threshold locks deposits. Anyone can then trigger the irreversible universe fork. Your deposits carry over to the child universes.`
+export const forkTriggerWarning = (outcome: string, threshold: string) => `Another side already holds ${threshold} REP. Filling ${outcome} to the same threshold locks deposits. Anyone can then trigger the irreversible universe fork. Your deposits move to the child universes.`
 export const forkTriggerConfirmation = 'I understand this report ends reporting and allows the universe to fork.'
 export const forkTriggerConfirmationRequired = 'Confirm that this report ends reporting without a decision.'
 export const reportingRepApprovalRequired = 'Approve REP for this question before reporting.'
@@ -276,7 +270,11 @@ export const reportingBalanceShortfall = (shortfall: string) => `Insufficient wa
 
 export const repApproved = 'Reporting REP approved'
 export const reportSubmitted = 'Report submitted'
-export const stakesSettled = 'Deposits settled'
+export const claimed = 'Claimed'
 export const repApprovalFailed = 'REP approval failed'
 export const reportFailed = 'Report failed'
-export const settlementFailed = 'Settlement failed'
+
+export const reportWalletAction = 'reporting on a question'
+export const loadingQuestionRepAllowance = 'Loading REP allowance for the question…'
+export const formatWalletRepRequiredBeforeReporting = (required: string) => `Add ${required} to this wallet before reporting.`
+export const postTransactionReportingRefreshFailed = 'Reporting transaction succeeded, but refreshing reporting details failed'

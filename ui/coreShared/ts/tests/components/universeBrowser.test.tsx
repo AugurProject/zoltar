@@ -95,7 +95,7 @@ describe('UniverseBrowser', () => {
 		expect(queries.getByText('Forked', { selector: '.badge' })).toBeTruthy()
 		expect(queries.getByRole('button', { name: 'Migrate REP' })).toBeTruthy()
 		expect(queries.getByText('Deployed')).toBeTruthy()
-		expect(queries.getByText('Not created yet')).toBeTruthy()
+		expect(queries.getByText('Not deployed')).toBeTruthy()
 		expect(queries.getAllByRole('link', { name: 'Open' })).toHaveLength(1)
 	})
 

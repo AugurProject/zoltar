@@ -522,6 +522,7 @@ describe('useReportingOperations', () => {
 			createReportingDetails(questionLedgerAddress, {
 				sides: [side('invalid', 1n), side('yes', 5n, [userDeposit(0n, 1n)]), side('no', 2n, [userDeposit(1n, 1n)])],
 				settlementState: 'resolved',
+				questionOutcome: 'no',
 				parentWithdrawalEnabled: true,
 			}),
 		)
@@ -552,7 +553,7 @@ describe('useReportingOperations', () => {
 
 	test.each([
 		['poolForked', 'Claim winning deposits in the child question after it resolves.'],
-		['forkMigration', 'Set up the child questions in Fork & recovery. Your deposits carry over. Claim winning deposits after the child question resolves.'],
+		['forkMigration', 'Set up the child questions in Fork & recovery. Your deposits move. Claim winning deposits after the child question resolves.'],
 	] as const)('withdrawEscalation explains what to do after a fork (%s)', async (systemState, reason) => {
 		const questionLedgerAddress = getAddress('0x00000000000000000000000000000000000000d1')
 		const loadReportingDetails = mock(async () => createReportingDetails(questionLedgerAddress, { systemState }))
@@ -573,6 +574,7 @@ describe('useReportingOperations', () => {
 			currentTime: 301n,
 			escalationEndTime: 300n,
 			settlementState: 'resolved',
+			questionOutcome: 'yes',
 			parentWithdrawalEnabled: true,
 		})
 		const refreshedDetails = createReportingDetails(questionLedgerAddress, {
@@ -580,6 +582,7 @@ describe('useReportingOperations', () => {
 			currentTime: 301n,
 			escalationEndTime: 300n,
 			settlementState: 'resolved',
+			questionOutcome: 'yes',
 			parentWithdrawalEnabled: true,
 		})
 		const loadResponses = [latestDetails, refreshedDetails]
@@ -634,7 +637,7 @@ describe('useReportingOperations', () => {
 			},
 		])
 		expect(state().reportingResult).toEqual({
-			amountAttoRep: 0n,
+			amountAttoRep: 2n,
 			action: 'withdrawEscalation',
 			hash: '0x00000000000000000000000000000000000000000000000000000000000000ef',
 			outcome: 'yes',
@@ -656,11 +659,13 @@ describe('useReportingOperations', () => {
 		const firstPoolDetails = createReportingDetails(firstPoolAddress, {
 			sides: [side('invalid', 0n), side('yes', 2n, [userDeposit(0n, 1n)]), side('no', 0n)],
 			settlementState: 'resolved',
+			questionOutcome: 'yes',
 			parentWithdrawalEnabled: true,
 		})
 		const secondPoolDetails = createReportingDetails(secondPoolAddress, {
 			sides: [side('invalid', 0n), side('yes', 4n, [userDeposit(2n, 2n)]), side('no', 3n, [userDeposit(3n, 3n)])],
 			settlementState: 'resolved',
+			questionOutcome: 'yes',
 			parentWithdrawalEnabled: true,
 		})
 		const loadReportingDetails = mock(async (questionLedgerAddress: Address) => {

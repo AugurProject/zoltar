@@ -1,8 +1,24 @@
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 
-const reads = new Set<PropertyKey>(['call', 'estimateContractGas', 'estimateGas', 'getBalance', 'getBlock', 'getBlockNumber', 'getChainId', 'getCode', 'getGasPrice', 'getTransaction', 'getTransactionCount', 'getTransactionReceipt', 'multicall', 'readContract', 'simulateContract'] satisfies (keyof (ReadClient &
-	WriteClient))[])
+const reads = new Set<PropertyKey>([
+	'call',
+	'estimateContractGas',
+	'estimateGas',
+	'getBalance',
+	'getBlock',
+	'getBlockNumber',
+	'getChainId',
+	'getCode',
+	'getGasPrice',
+	'getStorageAt',
+	'getTransaction',
+	'getTransactionCount',
+	'getTransactionReceipt',
+	'multicall',
+	'readContract',
+	'simulateContract',
+] satisfies (keyof (ReadClient & WriteClient))[])
 
 export function withStatoblastRequestTimeout<T extends object>(client: T, message: string, signal?: AbortSignal, singleFlight?: { pending: boolean }): T {
 	return new Proxy(client, {

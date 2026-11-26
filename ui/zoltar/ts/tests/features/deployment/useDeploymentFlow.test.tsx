@@ -87,13 +87,13 @@ describe('useDeploymentFlow', () => {
 			name: 'the active wallet account changed',
 			arrange: () => undefined,
 			expectedRuntimeCodeHash: keccak256('0x1234'),
-			errorMessage: 'Wallet account changed. Review the action with the connected account and try again.',
+			errorMessage: 'The connected wallet address changed. Review the action and try again.',
 		},
 		{
 			name: 'the wallet disconnects after selection',
 			arrange: () => replaceEnvironment(createFakeBackend()),
 			expectedRuntimeCodeHash: keccak256('0x1234'),
-			errorMessage: 'Wallet account is no longer connected. Reconnect your wallet and try again.',
+			errorMessage: 'Your wallet is no longer connected. Reconnect it and try again.',
 		},
 		{
 			name: 'the wallet network changed',

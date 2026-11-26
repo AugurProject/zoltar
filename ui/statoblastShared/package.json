@@ -221,6 +221,10 @@
 			"bun": "./ts/protocol/deploymentHelpers.ts",
 			"default": "./js/protocol/deploymentHelpers.js"
 		},
+		"./protocol/deploymentRecovery.js": {
+			"bun": "./ts/protocol/deploymentRecovery.ts",
+			"default": "./js/protocol/deploymentRecovery.js"
+		},
 		"./protocol/openOracleMath.js": {
 			"bun": "./ts/protocol/openOracleMath.ts",
 			"default": "./js/protocol/openOracleMath.js"
