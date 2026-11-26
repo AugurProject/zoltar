@@ -10,7 +10,7 @@ export type SecurityPoolMintFees = Readonly<{
 	outcomeSupplyAttoShares: bigint
 }>
 
-/** Mirrors the security pool's checkpointed purchase fee, including all integer rounding. */
+/** Estimate from rounded public balances. Use an authoritative quote when enforcing an exact budget. */
 export function securityPoolMintFee(cash: bigint, state: SecurityPoolMintFees) {
 	if (cash < 0n || Object.values(state).some(value => value < 0n)) throw new Error('Negative security pool mint input')
 	const supply = state.outcomeSupplyAttoShares
@@ -34,4 +34,19 @@ export function securityPoolMintWithinBudget(budget: bigint, state: SecurityPool
 		else high = cash - 1n
 	}
 	return low
+}
+
+/** Validate an estimated seed against authoritative checkpointed fees, reducing it to respect the budget. */
+export async function securityPoolMintForQuotedBudget(budget: bigint, seed: bigint, quoteFee: (cash: bigint) => Promise<bigint>) {
+	if (budget < 0n || seed <= 0n || seed > budget) throw new Error('Invalid mint budget seed')
+	let cash = seed
+	for (let attempt = 0; attempt < 8; attempt++) {
+		const fee = await quoteFee(cash)
+		if (fee < 0n) throw new Error('Negative purchase fee')
+		if (cash + fee <= budget) return { cash, fee }
+		const deficit = cash + fee - budget
+		if (deficit >= cash) break
+		cash -= deficit
+	}
+	throw new Error('ETH budget is too small to cover the security pool purchase fee')
 }

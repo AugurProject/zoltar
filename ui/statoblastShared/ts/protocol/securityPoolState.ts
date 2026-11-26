@@ -11,6 +11,7 @@ const abi = parseAbi([
 	'function ledger() view returns(address)',
 	'function bookIds(uint248 universeId) view returns(uint64)',
 	'function feeTimestamp(uint248 universeId) view returns(uint48)',
+	'function priceValidUntil() view returns(uint48)',
 	'function isPriceValid() view returns(bool)',
 	'function question(uint64 bookId,uint256 questionId) view returns((uint256 units,uint256 outcomeSupplyAttoShares,uint48 finalAfter,uint256 feeRateAttoEthPerSecond,uint48 feeStart,uint48 feeEnd,uint256 feePrincipalAttoEth) state,uint64 frozenBookId)',
 	'function isCashFunded(uint64 bookId) view returns(bool)',
@@ -49,7 +50,7 @@ export async function loadCentralSecurityPoolQuestion(client: Pick<ReadClient, '
 	const book = requireAddressValue(bookValue, 'settlement book')
 	const bookId = requireBigintValue(bookIdValue, 'settlement book ID')
 	const questionId = requireBigintValue(questionIdValue, 'question ID')
-	const [, snapshotValue, feeTimestampValue, validValue, totalsValue, remainingValue, checkpointValue, questionValue, bookStateValue, fundedValue] = await readRequiredMulticall(
+	const [, snapshotValue, feeTimestampValue, validValue, totalsValue, remainingValue, checkpointValue, questionValue, bookStateValue, fundedValue, validUntilValue] = await readRequiredMulticall(
 		client,
 		[
 			// eth_call executes this checkpoint and all dependent reads atomically, without
@@ -64,6 +65,7 @@ export async function loadCentralSecurityPoolQuestion(client: Pick<ReadClient, '
 			{ address: book, abi, functionName: 'question', args: [bookId, questionId] },
 			{ address: book, abi, functionName: 'books', args: [bookId] },
 			{ address: book, abi, functionName: 'isCashFunded', args: [bookId] },
+			{ address: capital, abi, functionName: 'priceValidUntil', args: [] },
 		],
 		blockNumber,
 	)
@@ -83,6 +85,7 @@ export async function loadCentralSecurityPoolQuestion(client: Pick<ReadClient, '
 		securityPoolAddress: securityPool,
 		feePrincipalAttoEth: requireBigintValue(Reflect.get(stream, 'feePrincipalAttoEth'), 'question fee principal'),
 		centralSettlement: true as const,
+		priceValidUntil: requireBigintValue(validUntilValue, 'accepted price expiry'),
 		centralCheckpointTimestamp: requireBigintValue(checkpointValue, 'snapshot block timestamp'),
 		settlementCollateralAttoEth: cash,
 		settlementRecoveryAttoRep: requireBigintValue(Reflect.get(snapshot, 'questionRecoveryAttoRep'), 'question recovery REP'),

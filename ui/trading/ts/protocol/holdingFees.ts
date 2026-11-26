@@ -1,4 +1,4 @@
-import { readRequiredMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
+import { loadCompleteSetRedemptionQuote } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { loadCentralSecurityPoolQuestion } from '@zoltar/ui-statoblast-shared/protocol/securityPoolState.js'
 import { attoSharesToRecoveryAttoRep } from '../lib/shareValue.js'
 import type { LinearFeeState } from '@zoltar/statoblast-shared/statoblast/linearFees'
@@ -10,6 +10,7 @@ import * as copy from '../copy/availability.js'
 
 export type FeeAccounting = Readonly<{
 	linearFee?: LinearFeeState
+	priceValidUntil?: bigint
 	centralCheckpointTimestamp?: bigint
 	centralSettlement?: boolean
 	settlementCollateralAttoEth: bigint
@@ -28,30 +29,12 @@ export async function loadTransactionFeeMarket(client: WalletClient, market: Liv
 
 /** Quote the exact burn size after the same checkpoint the redemption performs. */
 export async function loadRedemptionPayout(client: WalletClient, market: LiveMarket, amount: bigint, blockNumber: bigint) {
-	const abi = statoblast_QuestionLedger_QuestionLedger.abi
-	const [, payout] = await readRequiredMulticall(
-		client,
-		[
-			{ address: market.pool, abi, functionName: 'refreshSecurityPoolFees' },
-			{ address: market.pool, abi, functionName: 'attoSharesToAttoEth', args: [amount] },
-		] as const,
-		blockNumber,
-	)
-	return payout
+	return (await loadCompleteSetRedemptionQuote(client, market.pool, amount, blockNumber)).cash
 }
 
 /** The size-specific REP quote retains fractional recovery precision through the chosen burn. */
 export async function loadRedemptionRecoveryPayout(client: WalletClient, market: LiveMarket, amount: bigint, blockNumber: bigint) {
-	const abi = statoblast_QuestionLedger_QuestionLedger.abi
-	const [, payout] = await readRequiredMulticall(
-		client,
-		[
-			{ address: market.pool, abi, functionName: 'refreshSecurityPoolFees' },
-			{ address: market.pool, abi, functionName: 'attoSharesToAttoRep', args: [amount] },
-		] as const,
-		blockNumber,
-	)
-	return payout
+	return (await loadCompleteSetRedemptionQuote(client, market.pool, amount, blockNumber)).rep
 }
 
 export function projectTransactionFeeMarket(market: LiveMarket, central: Awaited<ReturnType<typeof loadCentralSecurityPoolQuestion>>, timestamp: bigint): LiveMarket {

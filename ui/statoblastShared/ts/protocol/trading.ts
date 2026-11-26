@@ -1,3 +1,5 @@
+import { loadCompleteSetRedemptionQuote } from './redemptionQuote.js'
+export { loadCompleteSetRedemptionQuote } from './redemptionQuote.js'
 import { securityPoolRecoveryMintBudget } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { loadRecoveryMintFunding } from './recoveryMintFunding.js'
 import { collateralPresentation } from './collateral.js'
@@ -349,12 +351,8 @@ export async function redeemCompleteSetInQuestionLedger(client: WriteClient, que
 	} satisfies TradingActionResult
 }
 
-async function redemptionReview(client: Pick<ReadClient, 'readContract'>, pool: Address, shares: bigint, blockNumber: bigint | undefined) {
+async function redemptionReview(client: Pick<ReadClient, 'readContract' | 'multicall'>, pool: Address, shares: bigint, blockNumber: bigint | undefined) {
 	const collateral = await loadTradingCollateralIdentity(client, pool, blockNumber)
-	const recoveryAbi = parseAbi(['function attoSharesToAttoRep(uint256 amountAttoShares) view returns (uint256)'])
-	const [cash, rep] = await Promise.all([
-		client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: pool, functionName: 'attoSharesToAttoEth', args: [shares], blockNumber }),
-		client.readContract({ abi: recoveryAbi, address: pool, functionName: 'attoSharesToAttoRep', args: [shares], blockNumber }),
-	])
+	const { cash, rep } = await loadCompleteSetRedemptionQuote(client, pool, shares, blockNumber)
 	return `Redeem ${formatCurrencyBalanceWithUnit(shares, 'shares', collateral.decimals)} for approximately ${formatCurrencyBalanceWithUnit(cash, collateral.symbol, collateral.decimals)} and ${formatCurrencyBalanceWithUnit(requireBigintValue(rep, 'recovery REP quote'), 'REP')} in this universe.`
 }

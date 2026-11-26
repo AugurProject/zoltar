@@ -443,3 +443,22 @@ test('#1757 buy economics use expected spend while retaining the funding ceiling
 	expect(spend).toBeLessThan(estimate.payAttoEth)
 	expect(buyReturn(estimate, chargedMarket).profitAttoEth).toBe(buyReturn(estimate, chargedMarket).payoutAttoEth - spend)
 })
+
+test('#1773 unvalidated live mint output is withheld until the input-specific purchase quote passes', () => {
+	const pending = { ...market, requiresMintQuote: true }
+	expect(estimateBudgetSpend(pending, eth)).toBeUndefined()
+	const validated = { ...pending, mintQuote: { budget: eth, cash: eth / 2n, fee: 1n } }
+	expect(estimateBudgetSpend(validated, eth)).toBe(eth / 2n + 1n)
+	expect(estimateBudgetSpend(validated, eth + 1n)).toBeUndefined()
+})
+
+test('#1761 zero rounded redemption recovery cannot bypass a failed mint recovery quote', () => {
+	const blocked = { ...market, requiresMintQuote: true, settlementRecoveryAttoRep: 0n, mintQuoteError: 'Recovery REP is required' }
+	expect(estimateBudgetSpend(blocked, eth)).toBeUndefined()
+})
+
+test('public quote gating preserves input shortcuts while withholding the output estimate', () => {
+	const pending = tradeTicketModel({ ...ready, market: { ...market, requiresMintQuote: true, mintQuoteError: 'Checking mint quote…' }, amount: '0.01' })
+	expect(pending.estimate).toBeUndefined()
+	expect(pending.shortcuts.map(shortcut => shortcut.label)).toEqual(['25%', '50%', 'Max'])
+})

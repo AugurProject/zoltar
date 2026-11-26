@@ -8,7 +8,22 @@ const address = getAddress('0x1111111111111111111111111111111111111111')
 
 function fixture(
 	total: bigint,
-	options: { missingSecurityPool?: boolean; missingCapital?: boolean; stallDeploymentBlock?: boolean; stallDeployment?: boolean; unknownPool?: boolean; wrongCanonical?: boolean; failSearch?: boolean; failMetrics?: boolean; failDates?: boolean; failDeployment?: boolean; missingQuestion?: boolean; reorg?: boolean } = {},
+	options: {
+		collateral?: typeof address
+		commitment?: bigint
+		missingSecurityPool?: boolean
+		missingCapital?: boolean
+		stallDeploymentBlock?: boolean
+		stallDeployment?: boolean
+		unknownPool?: boolean
+		wrongCanonical?: boolean
+		failSearch?: boolean
+		failMetrics?: boolean
+		failDates?: boolean
+		failDeployment?: boolean
+		missingQuestion?: boolean
+		reorg?: boolean
+	} = {},
 ) {
 	const reads: { functionName: string; args: readonly unknown[]; blockNumber: bigint }[] = []
 	let blockReads = 0
@@ -62,8 +77,10 @@ function fixture(
 								return options.missingSecurityPool ? zeroAddress : address
 							case 'capitalLedger':
 								return options.missingCapital ? zeroAddress : address
+							case 'collateralToken':
+								return options.collateral ?? address
 							case 'totals':
-								return [2n * 10n ** 18n, 3n * 10n ** 18n, 3n * 10n ** 18n]
+								return [2n * 10n ** 18n, options.commitment ?? 3n * 10n ** 18n, 3n * 10n ** 18n]
 							case 'questionData':
 								if (options.failDates) throw new Error('Question unavailable')
 								return address
@@ -89,7 +106,7 @@ test('browses unselected factory deployments with bounded ranges at a canonical 
 		total: '25',
 		pageCount: '3',
 		page: 2,
-		pools: [{ address, universeId: '7', questionId: '42', deploymentDate: '1789560000', questionDates: { startTime: '1789473600', endTime: '1792065600' }, metrics: { systemState: '0', securityPool: address, sharedCommittedRep: '2', sharedCommitmentEth: '3' } }],
+		pools: [{ address, universeId: '7', questionId: '42', deploymentDate: '1789560000', questionDates: { startTime: '1789473600', endTime: '1792065600' }, metrics: { systemState: '0', securityPool: address, sharedCommittedRep: '2', collateralToken: address, sharedCommitmentRaw: '3000000000000000000' } }],
 	})
 	expect(reads.find(read => read.functionName === 'questionLedgerDeploymentsRange')?.args).toEqual([24n, 1n])
 	expect(reads.every(read => read.blockNumber === 42n)).toBe(true)
@@ -127,7 +144,7 @@ test('keeps deployment and question dates independent when either source is unav
 	const noQuestion = await loadPoolCatalog(fixture(1n, { failDates: true }).client, address, 1, 0)
 	expect(noQuestion.pools[0]?.questionDates).toBeUndefined()
 	expect(noQuestion.pools[0]?.deploymentDate).toBe('1789560000')
-	expect(noQuestion.pools[0]?.metrics?.sharedCommitmentEth).toBe('3')
+	expect(noQuestion.pools[0]?.metrics?.sharedCommitmentRaw).toBe('3000000000000000000')
 	const noDeployment = await loadPoolCatalog(fixture(1n, { failDeployment: true }).client, address, 1, 0)
 	expect(noDeployment.pools[0]?.deploymentDate).toBeUndefined()
 	expect(noDeployment.pools[0]?.questionDates?.startTime).toBe('1789473600')
@@ -180,7 +197,7 @@ test('returns pools within a bounded deadline when deployment date discovery sta
 		}),
 	])
 	expect(result.pools[0]?.address).toBe(address)
-	expect(result.pools[0]?.metrics?.sharedCommitmentEth).toBe('3')
+	expect(result.pools[0]?.metrics?.sharedCommitmentRaw).toBe('3000000000000000000')
 	expect(result.pools[0]?.deploymentDate).toBeUndefined()
 })
 
@@ -191,7 +208,7 @@ test('returns usable pools when deployment timestamp metadata stalls after log d
 			throw new Error('Deployment timestamp blocked discovery')
 		}),
 	])
-	expect(result.pools[0]?.metrics?.sharedCommitmentEth).toBe('3')
+	expect(result.pools[0]?.metrics?.sharedCommitmentRaw).toBe('3000000000000000000')
 	expect(result.pools[0]?.questionDates?.startTime).toBe('1789473600')
 	expect(result.pools[0]?.deploymentDate).toBeUndefined()
 })
@@ -204,4 +221,11 @@ test('does not invent capital metrics when the security pool or universe ledger 
 		expect(result.pools[0]?.questionId).toBe('42')
 		expect(reads.some(read => read.functionName === 'totals')).toBe(false)
 	}
+})
+
+test('#1656 catalog commitments retain collateral identity and raw units for six-decimal pools', async () => {
+	const { client } = fixture(1n, { commitment: 1_000_000n })
+	const result = await loadPoolCatalog(client, address, 1, 0)
+	expect(result.pools[0]?.metrics).toMatchObject({ collateralToken: address, sharedCommitmentRaw: '1000000' })
+	expect(result.pools[0]?.metrics).not.toHaveProperty('sharedCommitmentEth')
 })

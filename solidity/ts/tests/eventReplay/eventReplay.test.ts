@@ -1348,3 +1348,28 @@ test('#1678 accepting an older report retains the latest pending report and fee 
 	])
 	expect(state.coordinators.get(coordinator)).toMatchObject({ pendingReportId: 2n, pendingReportMaxSettlementBaseFeeAttoEthPerGas: 200n, lastPrice: 3n })
 })
+
+test('#1687 recovery retains a preceding decision and its price or rejection reason', () => {
+	const feed = '0x1111111111111111111111111111111111111111'
+	const logs = [
+		createReplayLog({ emitter: feed, logIndex: 0, eventName: 'PriceReported', args: { reportId: 1n, price: 7n, lastSettlementTimestamp: 10n } }),
+		createReplayLog({ emitter: feed, logIndex: 1, eventName: 'PriceReportRejected', args: { reportId: 2n, reason: 'Report stale', pendingReportId: 0n, pendingReportMaxSettlementBaseFeeAttoEthPerGas: 0n, lastPrice: 7n, lastSettlementTimestamp: 10n } }),
+		...[1n, 2n].map((reportId, index) => createReplayLog({ emitter: feed, logIndex: 2 + index, eventName: 'PendingReportRecovered', args: { reportId, settlementTimestamp: 10n, pendingReportId: 0n, pendingReportMaxSettlementBaseFeeAttoEthPerGas: 0n, lastPrice: 7n, lastSettlementTimestamp: 10n } })),
+	]
+	const state = replayZoltarEvents(logs)
+	expect(state.coordinators.get(feed)?.reports.get(1n)).toMatchObject({ status: 'Reported', price: 7n, recovered: true })
+	expect(state.coordinators.get(feed)?.reports.get(2n)).toMatchObject({ status: 'Rejected', reason: 'Report stale', recovered: true })
+})
+
+test('#1687 authenticated questions can share the canonical event feed', () => {
+	const factory = '0x1111111111111111111111111111111111111111'
+	const feed = '0x2222222222222222222222222222222222222222'
+	const questions = ['0x3333333333333333333333333333333333333333', '0x4444444444444444444444444444444444444444'] as const
+	const logs = questions.map((questionLedger, index) =>
+		createReplayLog({ emitter: factory, logIndex: index, eventName: 'DeployQuestionLedger', args: { questionLedger, priceFeed: feed, shareToken: questionLedger, parent: zeroAddress, universeId: 0n, questionId: BigInt(index), statoblastSecurityMultiplierBps: 10000n, initialReportPriorityFeeAttoEthPerGas: 1n } }),
+	)
+	logs.push(createReplayLog({ emitter: feed, logIndex: 2, eventName: 'PriceReported', args: { reportId: 1n, price: 7n, lastSettlementTimestamp: 10n } }))
+	const state = replayZoltarEvents(logs, new Set(), new Set([factory]))
+	for (const question of questions) expect(state.poolDeployments.get(question)?.coordinator).toBe(feed)
+	expect(state.coordinators.get(feed)?.reports.get(1n)?.price).toBe(7n)
+})
