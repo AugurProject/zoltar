@@ -151,6 +151,7 @@ export function drainedWalletSnapshotFixture() {
 	snapshot.wallet.lpTokens = []
 	snapshot.wallet.openOracleEthCredit = '0'
 	snapshot.securityPoolCapital = []
+	for (const pool of snapshot.pools) pool.lastSettlementSecurityPoolTime = pool.securityPoolTime
 	for (const pair of snapshot.pairs) pair.walletLiquidity = '0'
 	snapshot.warnings = []
 	return snapshot

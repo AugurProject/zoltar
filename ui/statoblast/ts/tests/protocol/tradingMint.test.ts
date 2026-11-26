@@ -1,7 +1,7 @@
 import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { decodeFunctionData, getAddress, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { createBlockWithTimestamp, createReadContractStub, createMockReadClient, createMockWriteClient, asWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { createBlockWithTimestamp, createMulticallStub, createReadContractStub, createMockReadClient, createMockWriteClient, asWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { createCompleteSetInQuestionLedger, redeemSharesInQuestionLedger, migrateSharesFromUniverse, requireCanonicalSecurityPoolOf } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
 import type { TransactionPlanStep, TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
@@ -87,20 +87,26 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 				pinned.push(request.blockNumber)
 				if (request.functionName === 'balanceOfShares') return [unit, 2n * unit, 3n * unit]
 				if (request.functionName === 'getQuestionOutcome') return 2n
-				expect(request.args).toEqual([3n * unit])
-				if (request.functionName === 'attoSharesToAttoEth') return unit
-				if (request.functionName === 'attoSharesToAttoRep') return 2n * unit
 				throw new Error(`Unexpected redemption read ${request.functionName}`)
 			}),
 		),
 		account: { address: pool, type: 'json-rpc' as const },
 		getBlock: async () => ({ ...createBlockWithTimestamp(100n), number: 99n }),
+		multicall: createMulticallStub(request => {
+			pinned.push(request.blockNumber)
+			expect(request.contracts.map(contract => ({ address: contract.address, functionName: contract.functionName, args: contract.args }))).toEqual([
+				{ address: pool, functionName: 'refreshSecurityPoolFees', args: [] },
+				{ address: pool, functionName: 'attoSharesToAttoEth', args: [3n * unit] },
+				{ address: pool, functionName: 'attoSharesToAttoRep', args: [3n * unit] },
+			])
+			return [undefined, unit, 2n * unit]
+		}),
 		onTransactionPrepared: (value: TransactionRequestPreview) => {
 			review = value
 		},
 	}
 	await redeemSharesInQuestionLedger(client, pool)
-	expect(pinned).toEqual([99n, 99n, 99n, 99n])
+	expect(pinned).toEqual([99n, 99n, 99n])
 	expect(review?.reviewDescription).toMatch(/1\sWETH/)
 	expect(review?.reviewDescription).toMatch(/2\sREP/)
 	expect(send).toHaveBeenCalledTimes(1)

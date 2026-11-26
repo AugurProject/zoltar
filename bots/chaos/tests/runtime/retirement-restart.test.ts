@@ -70,6 +70,26 @@ async function cycle(path: string, state: RuntimeState, snapshot: EcosystemSnaps
 }
 
 describe('Drain & Retire persisted restart behavior', () => {
+	test('checkpoints pending pool time before recording retirement completion', async () => {
+		const path = await statePath()
+		const snapshot = emptySnapshot()
+		const pool = snapshot.pools[0]
+		if (pool === undefined) throw new Error('Expected pool fixture')
+		pool.securityPoolTime = (BigInt(pool.lastSettlementSecurityPoolTime) + 1n).toString()
+		let state = requestedState(snapshot)
+		const executed: string[] = []
+		await cycle(path, state, snapshot, executed)
+		expect(executed).toHaveLength(1)
+		expect(executed[0]).toMatch(/^statoblast\.pool\.checkpoint-(collateral|fees)$/)
+		expect(state.retirement.completionEvidence).toBeUndefined()
+		pool.lastSettlementSecurityPoolTime = pool.securityPoolTime
+		state = await reload(path, state)
+		await cycle(path, state, snapshot, executed, undefined, 2n)
+		expect(executed).toHaveLength(1)
+		expect(state.retirement.status).toBe('drained')
+		expect(state.retirement.completionEvidence?.blockNumber).toBe('2')
+	})
+
 	test('repeated clean scans and restart retain the first completion block for finality', async () => {
 		const path = await statePath()
 		const snapshot = emptySnapshot()
