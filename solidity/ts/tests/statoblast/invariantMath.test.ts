@@ -18,6 +18,14 @@ beforeAll(async () => {
 	await node.setBaselineSnapshot()
 })
 const unitScale = 10n ** 9n
+test('the first settlement mint redeems the full deposit from an empty book', async () => {
+	for (const deposit of [0n, 1n, 11n, ((1n << 128n) - 1n) / unitScale]) {
+		const added = await client.readContract({ abi: artifact.abi, address, functionName: 'mintUnits', args: [deposit, 0n, 0n] })
+		expect(added).toBe(deposit * unitScale)
+		const paid = await client.readContract({ abi: artifact.abi, address, functionName: 'cashForUnits', args: [deposit, added, 0n, added] })
+		expect(paid).toBe(deposit)
+	}
+})
 test('an immediate mint and redemption of new settlement units returns the cash deposited within one raw unit', async () => {
 	let roundedDown = 0
 	let exact = 0

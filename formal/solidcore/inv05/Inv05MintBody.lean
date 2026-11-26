@@ -44,4 +44,25 @@ theorem zeroBody (f : Nat) (c : Context) (r : Runtime) (units net : Nat) (hu : u
   rw [shapeEq]
   exact blockReturned _ _ _ _ outer _ _ ((seqStep _ _ _ _ _ _ _ A).trans ((seqStep _ _ _ _ _ _ _ B).trans
     ((seqStep _ _ _ _ _ _ _ C).trans ((seqStep _ _ _ _ _ _ _ sk).trans (stop _ _ _ _ _ _ [] _ mid)))))
+theorem initialBody (f : Nat) (c : Context) (r : Runtime) (cash net : Nat) (hc : cash<R) (cp : 0<cash) (hn : net<R) (fit : cash*10^9<R) :
+    let src := r.withFrame (frame cash 0 net 0)
+    Stmt.eval (f+27) Inv03.model.core.table c src shape.value = pure (.returned src [.word (cash*10^9)]) := by
+  let t := Inv03.model.core.table
+  let src := r.withFrame (frame cash 0 net 0)
+  let outer := src.pushScope
+  let inner := outer.pushScope
+  let e := (scale (Inv03.Bodies.wvar "cash")).value
+  have first := skipZero (f+23) t c inner "cash" cash hc cp rfl (.word 0)
+  have choose := Inv32Blocks.branch (f+24) t c inner (Inv32WideGuards.zeroTest "units").core (.returnValues [e]) .skip true
+    (evalFormula _ c inner 1 (by decide) (Inv32WideGuards.zeroValue c.checked (locals inner) "units" 0 (by decide) rfl))
+  have ret := Inv32CompareValues.retOne (f+23) t c inner e (cash*10^9) (by change Expr.eval c inner (Inv03.Bodies.scaledUnits "cash").value = _; exact Inv03.Expressions.scaled c inner "cash" cash hc fit rfl)
+  have mid := blockReturned (f+25) t c outer inner purchase _ ((seqStep _ _ _ _ _ _ _ first).trans (stop _ _ _ _ _ _ _ _ (choose.trans ret)))
+  have A := cleanParamExec (f+25) t c outer "cash" cash hc rfl (by dsimp [outer,src,frame]; write_param)
+  have B := cleanParamExec (f+25) t c outer "units" 0 (by decide) rfl (by dsimp [outer,src,frame]; write_param)
+  have C := cleanParamExec (f+25) t c outer "net" net hn rfl (by dsimp [outer,src,frame]; write_param)
+  have sk : Stmt.eval (f+26) t c outer .skip = pure (.normal outer) := by rw [Stmt.eval]
+  dsimp only
+  rw [shapeEq]
+  exact blockReturned _ _ _ _ outer _ _ ((seqStep _ _ _ _ _ _ _ A).trans ((seqStep _ _ _ _ _ _ _ B).trans
+    ((seqStep _ _ _ _ _ _ _ C).trans ((seqStep _ _ _ _ _ _ _ sk).trans (stop _ _ _ _ _ _ [] _ mid)))))
 end Inv05

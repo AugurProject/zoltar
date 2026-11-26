@@ -9,20 +9,20 @@ def frame (cash units net : Nat) : Frame := [("deposit",.word cash),("units",.wo
 def args (cash units net : Nat) : List Value := [.word cash,.word units,.word net]
 def inner (r : Runtime) (cash units net : Nat) := (r.withFrame (frame cash units net)).pushScope.pushScope
 theorem hoisted (f : Nat) (c : Context) (r : Runtime) (cash units net : Nat)
-    (hc : cash<R) (hu : units<R) (hn : net<R) (up : 0<units) (np : 0<net) (fits : cash*10^9<R) :
+    (hc : cash<R) (hu : units<R) (hn : net<R) (funded : units=0 ∨ 0<net) (fits : cash*10^9<R) :
     let work := inner r cash units net
-    Ends ((result cash units net).map fun a => Inv32OneArg.store work tmp a)
+    Ends ((allUnits cash units net).map fun a => Inv32OneArg.store work tmp a)
       (Stmt.eval (f+30) Inv03.model.core.table c (Inv32OneArg.store work tmp 0) setup.value) := by
   let t := Inv03.model.core.table
   let work := inner r cash units net
   let st := fun o v => (st3 work tmp o cash units net).declareLocal dest (.word v)
-  have called := call f c (st 0 0) a0 a1 a2 [dest] cash units net hc hu hn up np fits rfl rfl rfl
+  have called := call f c (st 0 0) a0 a1 a2 [dest] cash units net hc hu hn funded fits rfl rfl rfl
   have A := Inv32Temps.temp (f+28) t c (start work tmp 0) a0 "deposit" cash hc rfl
   have B := Inv32Temps.temp (f+28) t c (st1 work tmp 0 cash) a1 "units" units hu rfl
   have C := Inv32Temps.temp (f+28) t c (st2 work tmp 0 cash units) a2 "netCash" net hn rfl
   have D := zero (f+28) t c (st3 work tmp 0 cash units net) dest
   dsimp only
-  cases Q : result cash units net with
+  cases Q : allUnits cash units net with
   | none =>
     rw [Q] at called
     obtain ⟨nr,e,ev⟩ := called
