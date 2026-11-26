@@ -729,14 +729,6 @@
 						</tr>
 						<tr>
 							<td>
-								<a href="#inv-53"><code>INV-53</code></a>
-							</td>
-							<td>Canonical event replay</td>
-							<td>Safety</td>
-							<td>Tested property</td>
-						</tr>
-						<tr>
-							<td>
 								<a href="#inv-57"><code>INV-57</code></a>
 							</td>
 							<td>Authorization namespaces</td>
@@ -2491,29 +2483,6 @@
 									<dt>Primary evidence</dt>
 									<dd>
 										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolSettlementBook.test.ts"><code>securityPoolSettlementBook.test.ts</code></a>
-									</dd>
-								</div>
-							</dl>
-						</div>
-					</details>
-					<details class="invariant-entry" id="inv-53">
-						<summary><code>INV-53</code><span class="invariant-title">Canonical event replay</span></summary>
-						<div class="invariant-details">
-							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Replaying the canonical log history reconstructs the corresponding published state for each deployment. Contract-local report, bid and game IDs require the emitter as part of their identity. Removing an orphaned branch and replaying the canonical replacement must yield the same result as replaying that canonical history from scratch.</div>
-							<dl class="invariant-metadata">
-								<div>
-									<dt>Type</dt>
-									<dd>Safety</dd>
-								</div>
-								<div>
-									<dt>Enforcement status</dt>
-									<dd>Tested property</dd>
-								</div>
-								<div>
-									<dt>Primary evidence</dt>
-									<dd>
-										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/eventReplay/eventReplay.test.ts"><code>eventReplay.test.ts</code></a>
 									</dd>
 								</div>
 							</dl>
