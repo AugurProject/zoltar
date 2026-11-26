@@ -59,7 +59,7 @@ export function useLiquidityWorkflowController({
 	const [operation, setOperation] = useState<LiquidityOperation>(() => defaultLiquidityOperation(market, nowSeconds))
 	const [amount, setAmount] = useState('')
 	const [probability, setProbability] = useState('50')
-	const parsed = tryParseNonNegativeDecimalInput(amount.trim(), collateralAsset(market).decimals)
+	const parsed = tryParseNonNegativeDecimalInput(amount.trim(), operation === 'remove' ? 18 : collateralAsset(market).decimals)
 	const parsedProbability = tryParseNonNegativeDecimalInput(probability.trim(), 2)
 	const conditionalBps = parsedProbability !== undefined && parsedProbability > 0n && parsedProbability < 10_000n ? parsedProbability : undefined
 	const operationAvailable = liquidityOperationAvailable(operation, market, nowSeconds)

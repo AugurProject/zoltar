@@ -1,6 +1,6 @@
 import { tokenFunded, loadTradingCollateralAsset } from './collateral.js'
 import { statoblast_SecurityPool_SecurityPool as securityPoolArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
-import { loadBudgetMint, loadMintFees } from './minting.js'
+import { loadBudgetMint, loadMintFees, requireTokenMintFunding } from './minting.js'
 import { loadCentralSecurityPoolQuestion } from '@zoltar/ui-statoblast-shared/protocol/securityPoolState.js'
 import { requireCanonicalSecurityPoolOf } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { submissionDeadline, requireFreshSubmissionWindow } from './submissionWindow.js'
@@ -17,7 +17,7 @@ import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.j
 import { QUESTION_LEDGER_QUESTION_OUTCOME_ABI } from '@zoltar/ui-statoblast-shared/protocol/questionLedgerAbi.js'
 import { shareBalanceScope, type LiveBalances, type LiveMarket } from './liveMarket.js'
 import { latestBlockIdentity, maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum, simulateWithDeadline, UI_SLIPPAGE_BPS, type GuardedWalletWrite, type TransactionExpiry } from './tradeQuote.js'
-import { loadTransactionFeeMarket, sellHoldingFeeBlocker } from './holdingFees.js'
+import { loadTransactionFeeMarket, loadRedemptionPayout, sellHoldingFeeBlocker } from './holdingFees.js'
 import { attoSharesToRecoveryAttoRep } from '../lib/shareValue.js'
 import { receiveBasedExitArguments, shareOperationRouter, shareTokenAbi } from './authorization.js'
 import { largestMigratedShares, loadForkMigrationContext } from './forks.js'
@@ -403,11 +403,12 @@ export async function discoverLiveUniverseMarketPage(
 
 export async function loadLiveBalances(client: PublicClient, market: LiveMarket, account: Address): Promise<LiveBalances> {
 	const scope = shareBalanceScope(market)
+	const { blockNumber } = await latestBlockIdentity(client)
 	const [invalid, yes, no, lp] = await Promise.all([
-		client.readContract({ abi: shareTokenAbi, address: scope.shareToken, functionName: 'balanceOf', args: [account, scope.invalidTokenId] }),
-		client.readContract({ abi: shareTokenAbi, address: scope.shareToken, functionName: 'balanceOf', args: [account, scope.yesTokenId] }),
-		client.readContract({ abi: shareTokenAbi, address: scope.shareToken, functionName: 'balanceOf', args: [account, scope.noTokenId] }),
-		market.pair === undefined ? 0n : client.readContract({ abi: pair.abi, address: market.pair, functionName: 'balanceOf', args: [account] }),
+		client.readContract({ abi: shareTokenAbi, address: scope.shareToken, functionName: 'balanceOf', args: [account, scope.invalidTokenId], blockNumber }),
+		client.readContract({ abi: shareTokenAbi, address: scope.shareToken, functionName: 'balanceOf', args: [account, scope.yesTokenId], blockNumber }),
+		client.readContract({ abi: shareTokenAbi, address: scope.shareToken, functionName: 'balanceOf', args: [account, scope.noTokenId], blockNumber }),
+		market.pair === undefined ? 0n : client.readContract({ abi: pair.abi, address: market.pair, functionName: 'balanceOf', args: [account], blockNumber }),
 	])
 	if (market.universeForkTime === 0n) return { scope, invalid, yes, no, lp }
 	return { scope, invalid, yes, no, lp, migrated: await loadMigratedShareTotals(client, market, account) }
@@ -459,6 +460,7 @@ export async function submitFreshEntry(client: WalletClient, configuration: Depl
 	const minimumLongShares = retainApprovedMinimum(quote.minimumLongShares, refreshed.result.totalLongShares, 'long shares')
 	return await guardedWrite(async () => {
 		await requireFreshSubmissionWindow(client, quote.market, 'entry', quote.deadline)
+		await requireTokenMintFunding(client, configuration, quote.market, account, refreshed.mintAttoEth, quote.amount)
 		return tokenFunded(quote.market)
 			? await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'enterPositionWithCollateral', account, args: [pairAddress, refreshed.mintAttoEth, quote.side === 'YES' ? 1 : 2, minimumLongShares, account, quote.deadline, quote.amount] })
 			: await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, refreshed.mintAttoEth, quote.side === 'YES' ? 1 : 2, minimumLongShares, account, quote.deadline], value: quote.amount })
@@ -486,7 +488,7 @@ async function simulateExitWithExpiry(client: WalletClient, configuration: Deplo
 			const longBalance = await client.readContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'balanceOf', args: [account, longTokenId], blockNumber: block.blockNumber })
 			if (totalLongShares > longBalance) throw new Error(`Insufficient ${outcomeLabel(side)} balance for this exit`)
 			const feeMarket = await loadTransactionFeeMarket(client, market, block.blockNumber, block.blockTimestamp)
-			const estimatedEthOut = feeMarket.shareTokenSupplyAttoShares === 0n ? 0n : (completeSets * feeMarket.settlementCollateralAttoEth) / feeMarket.shareTokenSupplyAttoShares
+			const estimatedEthOut = await loadRedemptionPayout(client, market, completeSets, block.blockNumber)
 			const slippageMaximum = maximumAfterSlippage(totalLongShares, slippageBps)
 			const maximumLongShares = slippageMaximum < longBalance ? slippageMaximum : longBalance
 			const minimumEth = minimumAfterSlippage(estimatedEthOut, slippageBps)
@@ -534,7 +536,7 @@ export async function submitFreshExit(client: WalletClient, configuration: Deplo
 		const block = await latestBlockIdentity(client)
 		const feeMarket = await loadTransactionFeeMarket(client, quote.market, block.blockNumber, block.blockTimestamp)
 		retainApprovedMinimum(minimumRep, attoSharesToRecoveryAttoRep(quote.completeSets, feeMarket), 'REP output')
-		const feeBlocker = sellHoldingFeeBlocker(feeMarket, quote.completeSets, minimumEth, quote.deadline)
+		const feeBlocker = sellHoldingFeeBlocker(feeMarket, quote.completeSets, minimumEth, quote.deadline, await loadRedemptionPayout(client, quote.market, quote.completeSets, block.blockNumber))
 		if (feeBlocker !== undefined) throw new Error(feeBlocker)
 		await requireFreshSubmissionWindow(client, quote.market, 'exit', quote.deadline)
 		return await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, shareOperationRouter(configuration), transfer.ids, transfer.amounts, transfer.data] })

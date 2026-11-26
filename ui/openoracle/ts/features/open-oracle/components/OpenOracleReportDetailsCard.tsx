@@ -197,10 +197,10 @@ export function OpenOracleReportDetailsCard({
 		return action
 	})
 	const withdrawableBalanceItems = [
-		{ amount: openOracleWithdrawableBalances?.ethAttoEth, key: 'ethAttoEth' as const, symbol: commonCopy.eth, units: 18 },
-		{ amount: openOracleWithdrawableBalances?.token1, key: 'token1' as const, symbol: openOracleReportDetails.token1Symbol, units: openOracleReportDetails.token1Decimals },
-		{ amount: openOracleWithdrawableBalances?.token2, key: 'token2' as const, symbol: openOracleReportDetails.token2Symbol, units: openOracleReportDetails.token2Decimals },
-	]
+		{ token: '0x0000000000000000000000000000000000000000', amount: openOracleWithdrawableBalances?.ethAttoEth, key: 'ethAttoEth' as const, symbol: commonCopy.eth, units: 18 },
+		{ token: openOracleReportDetails.token1, amount: openOracleWithdrawableBalances?.token1, key: 'token1' as const, symbol: openOracleReportDetails.token1Symbol, units: openOracleReportDetails.token1Decimals },
+		{ token: openOracleReportDetails.token2, amount: openOracleWithdrawableBalances?.token2, key: 'token2' as const, symbol: openOracleReportDetails.token2Symbol, units: openOracleReportDetails.token2Decimals },
+	].filter((item, index, items) => items.findIndex(candidate => candidate.token.toLowerCase() === item.token.toLowerCase()) === index)
 	const hasWithdrawableBalance = withdrawableBalanceItems.some(item => (item.amount ?? 0n) > 0n)
 	const showWithdrawableBalances = isConnected && (openOracleReportDetails.isDistributed || hasWithdrawableBalance || openOracleWithdrawableBalancesLoading || openOracleWithdrawableBalancesError !== undefined)
 	const withdrawableBalancesContent = openOracleWithdrawableBalances === undefined ? undefined : <MetricGrid>{withdrawableBalanceItems.map(item => renderReportField(item.symbol, <CurrencyValue value={item.amount ?? 0n} suffix={item.symbol} units={item.units} />))}</MetricGrid>

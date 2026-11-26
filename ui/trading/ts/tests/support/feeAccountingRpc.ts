@@ -8,7 +8,7 @@ const address = { type: 'address' } as const
 const selector = (signature: string) => keccak256(stringToHex(signature)).slice(0, 10)
 
 /** One portfolio's checkpointed state, including Multicall3 reads pinned by transaction tests. */
-export function feeAccountingRpcResult(data: Hex, market: LiveMarket, timestamp: bigint): Hex | undefined {
+export function feeAccountingRpcResult(data: Hex, market: LiveMarket, timestamp: bigint, redemptionAttoEth?: bigint): Hex | undefined {
 	const signature = data.slice(0, 10)
 	if (signature === selector('refreshSecurityPoolFees()')) return '0x'
 	if (signature === selector('redeemShares()')) return '0x'
@@ -21,7 +21,7 @@ export function feeAccountingRpcResult(data: Hex, market: LiveMarket, timestamp:
 			[
 				calls.map((call: unknown) => {
 					if (typeof call !== 'object' || call === null || !('callData' in call) || typeof call.callData !== 'string' || !/^0x[0-9a-fA-F]*$/.test(call.callData)) throw new Error('Invalid multicall call')
-					const result = feeAccountingRpcResult(`0x${call.callData.slice(2)}`, market, timestamp)
+					const result = feeAccountingRpcResult(`0x${call.callData.slice(2)}`, market, timestamp, redemptionAttoEth)
 					if (result === undefined) throw new Error(`Unexpected portfolio multicall ${call.callData}`)
 					return [true, result]
 				}),
@@ -58,6 +58,10 @@ export function feeAccountingRpcResult(data: Hex, market: LiveMarket, timestamp:
 	if (signature === selector('question(uint64,uint256)')) return encodeAbiParameters([{ type: 'tuple', components: Array.from({ length: 7 }, () => uint256) }, uint256], [[cash, supply, 0n, rate, timestamp, end, market.mintFees?.feePrincipalAttoEth ?? cash], 0n])
 	if (signature === selector('books(uint64)'))
 		return encodeAbiParameters([uint256, uint256, uint256, uint256, uint256, uint256, uint256, boolean, uint256, uint256, uint256, boolean, uint256, uint256, uint256, uint256], [cash, cash * 1_000_000_000n, 0n, 0n, 0n, 0n, timestamp, false, 0n, 0n, 0n, true, 0n, 0n, 0n, market.settlementRecoveryAttoRep ?? 0n])
+	if (signature === selector('attoSharesToAttoEth(uint256)')) {
+		const shares = BigInt(`0x${data.slice(10)}`)
+		return encodeAbiParameters([uint256], [redemptionAttoEth ?? (supply === 0n ? shares : (shares * cash) / supply)])
+	}
 	if (signature === selector('attoSharesToAttoRep(uint256)')) {
 		const shares = BigInt(`0x${data.slice(10)}`)
 		return encodeAbiParameters([uint256], [supply === 0n ? 0n : (shares * (market.settlementRecoveryAttoRep ?? 0n)) / supply])

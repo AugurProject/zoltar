@@ -970,3 +970,17 @@ describe('settlement gas for feed-authenticated escrow callbacks', () => {
 		expect(() => getOpenOracleSettleGasLimit(game, false)).toThrow('more gas than one transaction allows')
 	})
 })
+
+test('native report credits are read once per token address (#1696)', async () => {
+	const tokens: unknown[] = []
+	const client = createMockLoaderClient({
+		getBlock: async () => ({ timestamp: 0n }),
+		multicall: async () => [],
+		readContract: async request => {
+			tokens.push(request.args?.[1])
+			return 6n
+		},
+	})
+	expect(await loadOpenOracleWithdrawableBalances(client, getOpenOracleAddress(), token1Address, zeroAddress, zeroAddress)).toEqual({ ethAttoEth: 5n, token1: 5n, token2: 5n })
+	expect(tokens).toEqual([zeroAddress])
+})

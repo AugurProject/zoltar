@@ -1,3 +1,4 @@
+import { getMulticall3Address } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 import { loadRecoveryMintFunding } from '../../../protocol/recoveryMintFunding.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import { useSignal } from '@preact/signals'
@@ -40,7 +41,7 @@ export function useSecurityPoolPurchase(model: Pick<ReturnType<typeof useSecurit
 			const client = createConnectedReadClient()
 			void (async () => {
 				const question = await loadSecurityPoolMintQuestion(client, snapshot, questionId)
-				const quote = await loadSecurityPoolMintQuote({ client: securityPoolReadClient(client), securityPool: snapshot.securityPool, universeId: snapshot.universeId, questionId, mintAttoEth: amount, blockNumber: snapshot.blockNumber })
+				const quote = await loadSecurityPoolMintQuote({ multicallAddress: getMulticall3Address(), client: securityPoolReadClient(client), securityPool: snapshot.securityPool, universeId: snapshot.universeId, questionId, mintAttoEth: amount, blockNumber: snapshot.blockNumber })
 				if (current) {
 					recoveryKnowledge.value = { selection, applicable: quote.recoveryAttoRep > 0n }
 					if (maximumRecoveryRep.value.trim() === '' && quote.maximumRecoveryAttoRep > 0n) maximumRecoveryRep.value = formatUnits(quote.maximumRecoveryAttoRep, 18)
@@ -149,7 +150,7 @@ export function useSecurityPoolPurchase(model: Pick<ReturnType<typeof useSecurit
 						if (latest.chainId !== selected.chainId || latest.capitalLedger !== selected.capitalLedger) throw new Error('Security pool context changed. Review again.')
 						const question = await loadSecurityPoolMintQuestion(client, latest, captured.questionId)
 						if (question === undefined || question.escalationGame !== zeroAddress || question.systemState !== 0n || latest.timestamp >= question.questionEndTime) throw new Error('Question minting has closed.')
-						const fresh = await loadSecurityPoolMintQuote({ client: securityPoolReadClient(client), securityPool: selected.securityPool, universeId: selected.universeId, questionId: captured.questionId, mintAttoEth: captured.mintAttoEth, blockNumber: latest.blockNumber })
+						const fresh = await loadSecurityPoolMintQuote({ multicallAddress: getMulticall3Address(), client: securityPoolReadClient(client), securityPool: selected.securityPool, universeId: selected.universeId, questionId: captured.questionId, mintAttoEth: captured.mintAttoEth, blockNumber: latest.blockNumber })
 						const funding = await loadRecoveryMintFunding(client, selected.securityPool, selected.universeId, buyer, fresh.recoveryAttoRep, latest.blockNumber)
 						if (
 							fresh.recoveryAttoRep > captured.maximumRecoveryAttoRep ||

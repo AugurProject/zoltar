@@ -1,3 +1,4 @@
+import { estimateBudgetSpend } from '../protocol/minting.js'
 import { submissionWindowBlocker } from '../protocol/submissionWindow.js'
 import { ETH_GAS_RESERVE_ATTO_ETH } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 import * as collateralCopy from '../copy/collateral.js'
@@ -145,7 +146,9 @@ export function LivePositionControls({
 }) {
 	const { mode, side, state } = ticket
 	const asset = collateralAsset(market)
-	const required = mode === 'entry' ? tryParseNonNegativeDecimalInput(ticket.amount, asset.decimals) : undefined
+	const budget = mode === 'entry' ? tryParseNonNegativeDecimalInput(ticket.amount, asset.decimals) : undefined
+	let required = budget
+	if (budget !== undefined && tokenFunded(market)) required = estimateBudgetSpend(market, budget)
 	const canFund = mode === 'entry' && marketAcceptsNewRisk(market, nowSeconds) && submissionWindowBlocker(market, 'entry', nowSeconds) === undefined
 	const funding = useCollateralFunding(market, required, fundingContext, canFund)
 	let gasReason: string | undefined

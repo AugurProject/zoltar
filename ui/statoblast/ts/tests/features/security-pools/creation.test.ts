@@ -27,9 +27,25 @@ test('six-decimal collateral parses minimums in token units and rejects excess p
 	expect(() => parseSecurityPoolCreationEconomics({ ...defaultSecurityPoolCreationDraft(), minimumPurchaseFee: '0.0000001' }, 6)).toThrow('6 decimal places')
 })
 
+const deployment = { origin: { universeId: 42n, collateralToken: '0x0000000000000000000000000000000000000001', securityMultiplierBps: 25000n, minimumReportCollateral: 2_000_000n, reportPriorityFeeAttoEthPerGas: 10_000_000_000n }, horizon: 86400n, policy: '0x0000000000000000000000000000000000000002' } as const
+
 test('the deployment review states the purchase fee floor and minimum commitment in collateral units', () => {
 	const config = parseSecurityPoolCreationEconomics({ ...defaultSecurityPoolCreationDraft(), minimumCommitment: '100', minimumPurchaseFee: '1.5' }, 6)
-	const review = securityPoolDeploymentReviewDescription('open', config, { decimals: 6, symbol: 'USDC' })
+	const review = securityPoolDeploymentReviewDescription('open', config, { decimals: 6, symbol: 'USDC' }, deployment)
 	expect(review).toContain('minimum 1.5 USDC.')
 	expect(review).toContain('Minimum collateral commitment 100 USDC; fork auction lots may be larger;')
+})
+
+test('deployment review states every immutable from the captured request (#1731)', () => {
+	const review = securityPoolDeploymentReviewDescription(
+		'fixed',
+		parseSecurityPoolCreationEconomics(defaultSecurityPoolCreationDraft(), 6),
+		{ decimals: 6, symbol: 'USDC' },
+		{
+			origin: { universeId: 42n, collateralToken: '0x0000000000000000000000000000000000000001', securityMultiplierBps: 25000n, minimumReportCollateral: 2_000_000n, reportPriorityFeeAttoEthPerGas: 10_000_000_000n },
+			horizon: 86400n,
+			policy: '0x0000000000000000000000000000000000000002',
+		},
+	)
+	for (const value of ['42', '86400 seconds', '25000 bps', '2 USDC', '10 nanoETH/gas', '0.01', '0x0000000000000000000000000000000000000001', '0x0000000000000000000000000000000000000002']) expect(review).toContain(value)
 })

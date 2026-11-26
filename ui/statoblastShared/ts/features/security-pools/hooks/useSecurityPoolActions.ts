@@ -24,7 +24,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 	const collateral = securityPoolCollateral(getActiveNetworkProfile(), collateralSymbol.value)
 	const originInput = useSignal(model.universeInput)
 	const originEdited = useRef(false)
-	const originForkState = useSignal<{ backend: ReturnType<typeof getActiveBackend>; key: string; forked: boolean } | undefined>(undefined)
+	const originForkState = useSignal<{ backend: ReturnType<typeof getActiveBackend>; key: string; forked: boolean; reason?: string } | undefined>(undefined)
 	const multiplierInput = useSignal('200')
 	const priorityFeeInput = useSignal((DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 9n).toString())
 	const horizonDays = useSignal('30')
@@ -59,13 +59,15 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 	useEffect(() => {
 		let current = true
 		const originUniverse = securityPoolUnsignedId(originInput.value, 248)
-		// A failed read leaves the check to submission, which repeats it for a universe that forks after this one.
+		// Surface invalid origins early and repeat the check before either deployment.
 		const load = async () => {
 			if (originUniverse === undefined) return
 			const forked = await isUniverseForked(createConnectedReadClient(), originUniverse)
 			if (current) originForkState.value = { backend, key: originForkKey, forked }
 		}
-		void load().catch(() => undefined)
+		void load().catch(failure => {
+			if (current) originForkState.value = { backend, key: originForkKey, forked: false, reason: getErrorMessage(failure, 'Origin validation unavailable.') }
+		})
 		return () => {
 			current = false
 		}
@@ -147,7 +149,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		creationError = getErrorMessage(failure, copy.creationInvalid)
 	}
 	const originForked = originForkState.value?.backend === backend && originForkState.value.key === originForkKey && originForkState.value.forked
-	const originForkReason = originForked ? copy.originForked : undefined
+	const originForkReason = originForkState.value?.backend === backend && originForkState.value.key === originForkKey ? (originForkState.value.reason ?? (originForked ? copy.originForked : undefined)) : undefined
 	const requireUnforkedOrigin = async () => {
 		if (origin === undefined) throw new Error(copy.enterOrigin)
 		if (!(await isUniverseForked(createConnectedReadClient(), origin.universeId))) return
@@ -283,7 +285,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 					return {
 						...securityPoolCreationRequest(parameters.accountAddress, originConfig, horizon, chosen.address, config),
 						validateBeforeSubmit: validateAdmission,
-						reviewDescription: securityPoolDeploymentReviewDescription(mode, config, collateral),
+						reviewDescription: securityPoolDeploymentReviewDescription(mode, config, collateral, { origin: originConfig, horizon, policy: chosen.address }),
 					}
 				},
 				requireUnforkedOrigin,

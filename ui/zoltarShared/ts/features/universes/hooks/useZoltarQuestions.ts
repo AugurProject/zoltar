@@ -16,7 +16,7 @@ import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
-import { buildQuestionPageFromQuestions, includesQuestionId, insertCreatedQuestion, mergeQuestionLists } from '../lib/questionRegistry.js'
+import { buildQuestionPageFromQuestions, includesQuestionId, insertCreatedQuestion, mergeQuestionLists, reconcileQuestionPage } from '../lib/questionRegistry.js'
 import type { MarketDetails, MarketDetailsPage } from '@zoltar/ui-core-shared/types/contracts.js'
 
 import type { UseZoltarUniverseDependencies } from './zoltarUniverseServices.js'
@@ -165,10 +165,11 @@ export function useZoltarQuestions(
 		await runQuestionLoad({
 			load: async readClient => await dependencies.loadZoltarQuestionPage(readClient, pageIndex, pageSize),
 			onLoaded: page => {
+				const previousPage = zoltarQuestionPageQueries.get(`${environmentRefreshKey}:${pageIndex}:${pageSize}`).data
 				zoltarQuestionPage.value = page
 				questionPageCommitVersionRef.current += 1
 				zoltarQuestionPageQueries.set(`${environmentRefreshKey}:${pageIndex}:${pageSize}`, page)
-				const mergedQuestions = mergeQuestionLists(zoltarQuestions.value, page.questions)
+				const mergedQuestions = reconcileQuestionPage(zoltarQuestions.value, previousPage, page)
 				zoltarQuestions.value = mergedQuestions
 				clearResolvedQuestionLookupError(mergedQuestions)
 			},
@@ -188,9 +189,6 @@ export function useZoltarQuestions(
 			return
 		}
 
-		const existingQuestion = zoltarQuestions.value.find(question => normalizeQuestionId(question.questionId) === normalizedQuestionId)
-		if (existingQuestion !== undefined) return
-
 		const questionLoadGeneration = questionLoadGenerationRef.current
 		const questionLoadContext = { environmentRefreshKey, zoltarDeployed }
 		await questionByIdLoad.run({
@@ -198,7 +196,10 @@ export function useZoltarQuestions(
 			load: async operation => await dependencies.loadMarketDetails(readOperationClient(dependencies.createConnectedReadClient(), operation), BigInt(normalizedQuestionId)),
 			onSuccess: question => {
 				if (!isMounted.current || !isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext) || zoltarQuestionLookupId.value !== normalizedQuestionId) return
-				if (!question.exists) return
+				if (!question.exists) {
+					zoltarQuestions.value = zoltarQuestions.value.filter(existing => normalizeQuestionId(existing.questionId) !== normalizedQuestionId)
+					return
+				}
 				zoltarQuestions.value = mergeQuestionLists(zoltarQuestions.value, [question])
 				zoltarQuestionLookupError.value = undefined
 			},
@@ -271,8 +272,8 @@ export function useZoltarQuestions(
 						if (!isMounted.current || !isCurrentQuestionLoad(questionLoadGeneration, questionContext) || questionsLoad.isLoading.peek() || questionPageCommitVersionRef.current !== commitVersion) return
 						if (isSameQueryData(nextPage, zoltarQuestionPage.value)) return
 						zoltarQuestionCount.value = nextPage.questionCount
+						zoltarQuestions.value = reconcileQuestionPage(zoltarQuestions.value, page, nextPage)
 						zoltarQuestionPage.value = nextPage
-						zoltarQuestions.value = mergeQuestionLists(zoltarQuestions.value, nextPage.questions)
 					}),
 			)
 		}

@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import type { MarketDetails, MarketDetailsPage } from '@zoltar/ui-core-shared/types/contracts.js'
-import { insertCreatedQuestion, mergeQuestionLists } from '@zoltar/ui-zoltar-shared/features/universes/lib/questionRegistry.js'
+import { insertCreatedQuestion, mergeQuestionLists, reconcileQuestionPage } from '@zoltar/ui-zoltar-shared/features/universes/lib/questionRegistry.js'
 import { describe, expect, test } from 'bun:test'
 
 function createQuestion(questionId: string, title = `Question ${questionId}`): MarketDetails {
@@ -78,4 +78,12 @@ describe('questionRegistry', () => {
 		expect(result.questionPage).toEqual(createPage(0, 10, 2n, [existing, created]))
 		expect(result.questions).toEqual([existing, created])
 	})
+})
+
+test('authoritative page replacement removes stale question identities (#1751)', () => {
+	const a = createQuestion('0x01')
+	const b = createQuestion('0x02')
+	const other = createQuestion('0x03')
+	expect(reconcileQuestionPage([a, other], createPage(0, 1, 2n, [a]), createPage(0, 1, 2n, [b]))).toEqual([other, b])
+	expect(reconcileQuestionPage([a, other], createPage(0, 1, 2n, [a]), createPage(1, 1, 2n, [b]))).toEqual([a, other, b])
 })

@@ -112,10 +112,10 @@ describe('USDC on-chain UI funding flows', () => {
 			await waitFor(() => expect(approvalButton().disabled).toBe(false), { timeout: 10_000, interval: 50 })
 			const beforeFullApproval = requests.length
 			await act(() => approvalButton().click())
-			await waitFor(async () => expect(await allowance()).toBe(100_000n), { timeout: 10_000, interval: 50 })
+			await waitFor(async () => expect(await allowance()).toBe(99_965n), { timeout: 10_000, interval: 50 })
 			await waitFor(() => expect(buttonByLabel('Add liquidity').disabled).toBe(false), { timeout: 10_000, interval: 50 })
 			expect(requests).toHaveLength(beforeFullApproval + 1)
-			expect(requests.at(-1)).toMatchObject({ address: token, functionName: 'approve', args: [configuration.router, 100_000n] })
+			expect(requests.at(-1)).toMatchObject({ address: token, functionName: 'approve', args: [configuration.router, 99_965n] })
 			const previousLp = (await loadLiveBalances(read, market, account)).lp
 			const beforeAdd = requests.length
 			await act(() => buttonByLabel('Add liquidity').click())
@@ -125,7 +125,8 @@ describe('USDC on-chain UI funding flows', () => {
 			expect(requests.at(-1)?.value ?? 0n).toBe(0n)
 			await waitFor(() => expect(buttonByLabel('Remove').disabled).toBe(false), { timeout: 10_000, interval: 50 })
 			await act(() => buttonByLabel('Remove').click())
-			await typeAmount('0.01')
+			// LP has 18 decimals even when the market collateral has six.
+			await typeAmount('0.00000000000001')
 			await waitFor(() => expect(buttonByLabel('Remove liquidity').disabled).toBe(false), { timeout: 10_000, interval: 50 })
 			const lpBeforeRemove = (await loadLiveBalances(read, market, account)).lp
 			const beforeRemove = requests.length
