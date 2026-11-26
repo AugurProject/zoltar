@@ -64,6 +64,9 @@ describe('Statoblast: full-deficit auction lot sizing', () => {
 		const result = await open(61n, 20n, 21n)
 		expect([result.lots, result.lot, result.rounded]).toEqual([4n, 20n, 21n])
 	})
+	test('rejects inventory that cannot fund a lot satisfying the minimum and rounding policy', async () => {
+		await expect(open(61n, 21n, 42n)).rejects.toThrow('Collateral repair auction inventory cannot back one lot')
+	})
 	test('#1339 enlarges tiny lots until grid rounding adds less than one percent', async () => {
 		const result = await open(1_000_000n)
 		expect(result.lots).toBeGreaterThan(1n)
