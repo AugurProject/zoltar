@@ -61,7 +61,7 @@ function computeIterativeAttritionCostAttoRep(startBondAttoRep: bigint, nonDecis
 }
 
 export function computeEscalationAttritionCostAttoRep(startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, timeSinceStart: bigint) {
-	if (startBondAttoRep <= 0n || nonDecisionThresholdAttoRep <= startBondAttoRep) throw new Error('The reporting threshold must exceed the opening stake.')
+	if (startBondAttoRep <= 0n || nonDecisionThresholdAttoRep <= startBondAttoRep) throw new Error('The reporting threshold must exceed the minimum first report.')
 	return computeIterativeAttritionCostAttoRep(startBondAttoRep, nonDecisionThresholdAttoRep, computeLnRatioScaled(startBondAttoRep, nonDecisionThresholdAttoRep), timeSinceStart)
 }
 
@@ -73,7 +73,7 @@ export function computeEscalationCurveAttoRep(startBondAttoRep: bigint, nonDecis
 
 /** Last second before the forward curve strictly exceeds binding capital. */
 export function computeEscalationFinalityElapsed(startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, bindingCapitalAttoRep: bigint) {
-	if (startBondAttoRep <= 0n || nonDecisionThresholdAttoRep <= startBondAttoRep) throw new Error('The reporting threshold must exceed the opening stake.')
+	if (startBondAttoRep <= 0n || nonDecisionThresholdAttoRep <= startBondAttoRep) throw new Error('The reporting threshold must exceed the minimum first report.')
 	if (bindingCapitalAttoRep < startBondAttoRep) return 0n
 	if (bindingCapitalAttoRep >= nonDecisionThresholdAttoRep) return ESCALATION_TIME_LENGTH
 	const lnRatioScaled = computeLnRatioScaled(startBondAttoRep, nonDecisionThresholdAttoRep)

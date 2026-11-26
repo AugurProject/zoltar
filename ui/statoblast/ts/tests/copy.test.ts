@@ -7,6 +7,8 @@ import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import { expect, test } from 'bun:test'
 import * as reportingCopy from '@zoltar/ui-statoblast-shared/copy/reporting.js'
+import { getStatoblastUiDeploymentSteps } from '@zoltar/ui-statoblast-shared/protocol/deployment.js'
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 
 test('creation outcomes use sentence case', () => {
 	expect(transactionCopy.creatingQuestion).toBe('Creating question')
@@ -139,11 +141,24 @@ test.each([
 	'Protocol mismatch',
 	'Queue group ID',
 	'Proofs did not match',
+	'Minimum stake',
+	'Opening stakes',
 ])('rejects the glossary term in %s', message => {
 	expect(glossaryViolation(message)).toBe(true)
 })
 
-test.each(['Claim deposits', 'Lost, no action needed', 'Full reward share', 'Repair auction', 'Settle price report', 'Your REP carries to the child universes.'])('allows %s', message => {
+test.each([
+	'Claim deposits',
+	'Lost, no action needed',
+	'Full reward share',
+	'Repair auction',
+	'Settle price report',
+	'Your REP carries to the child universes.',
+	'Auction vault address',
+	'This report would stake REP.',
+	'Your report staked REP on the selected outcome.',
+	'Your REP stays staked.',
+])('allows %s', message => {
 	expect(glossaryViolation(message)).toBe(false)
 })
 
@@ -153,13 +168,35 @@ const generalWords = /\b(?:accounts?|requests?|providers?|engines?|ledgers?|zolt
 const requiredDeploymentPromptWarning = 'If a deployment request is still open in your wallet, reject it there before starting a new deployment.'
 const internalTerms = /\b(?:authorit(?:y|ies)|canonical|custody|coordinators?|bootstrap(?:ped|ping|s)?|accruals?|settlement engines?|auction engines?|question ledgers?|controllers?|escrows?|modules?|services|clones?|epochs?|bindings?|factor(?:y|ies)|deployers?|runtime|uint\d*)\b/i
 const statoblastInternalTerms = /\b(?:protocols?|queue groups?|proofs?)\b/i
+const stakeNoun = /\bstakes?\b/i
+const stakeVerb = /\b(?:would|will|can|could|must|to)\s+stake\b|^stakes(?=\s+REP\b)/gi
 const fixedMagnitude = /\b(?:\d+(?:[.,]\d+)?|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?:\s*%|[ -]+(?:percent|seconds?|minutes?|hours?|days?|weeks?|months?|years?)\b)/i
 
 function glossaryViolation(text: string, banStatoblastTerms = true) {
 	const depositSettlement = /\bdeposits?\b/i.test(text) && depositSettlementWord.test(text)
-	const statoblastTerm = banStatoblastTerms && (generalWords.test(text.replace(requiredDeploymentPromptWarning, '')) || statoblastInternalTerms.test(text))
-	return obsoleteCopy.test(text.replace(/\brepair auction\b/gi, '')) || internalTerms.test(text) || statoblastTerm || depositSettlement || fixedMagnitude.test(text)
+	const statoblastTerm = banStatoblastTerms && (generalWords.test(text.replace(requiredDeploymentPromptWarning, '')) || statoblastInternalTerms.test(text) || stakeNoun.test(text.replace(stakeVerb, '')))
+	return obsoleteCopy.test(text.replace(/\b(?:repair auction|auction vaults?)\b/gi, '')) || internalTerms.test(text) || statoblastTerm || depositSettlement || fixedMagnitude.test(text)
 }
+
+function hasRawDeploymentName(label: string) {
+	const words = label.match(/\b[A-Z][A-Za-z\d]*\b/g) ?? []
+	return words.some(word => word !== 'OpenOracle' && /[a-z]/.test(word) && /[A-Z\d]/.test(word.slice(1)))
+}
+
+test.each(['GenesisReputationToken', 'DeploymentStatusOracle', 'Multicall3', 'Set up (QuestionLedger)'])('rejects a raw name in the deployment label %s', label => {
+	expect(hasRawDeploymentName(label)).toBe(true)
+})
+
+test('Statoblast deployment labels describe the contracts in plain language', () => {
+	for (const profile of [MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE]) {
+		const labels = getStatoblastUiDeploymentSteps(profile).map(step => step.label)
+		expect(labels.filter(hasRawDeploymentName)).toEqual([])
+		expect(labels).toContain('OpenOracle')
+		expect(labels).toContain('Deployment status contract')
+		expect(labels).toContain('Batch read contract')
+		if (profile.id === 'sepolia') expect(labels).toContain('Test REP token contract')
+	}
+})
 
 test('keeps the approved deployment warning while banning other uses of request', () => {
 	expect(glossaryViolation(`No deployment was found. ${requiredDeploymentPromptWarning}`)).toBe(false)
@@ -392,6 +429,7 @@ function findViolations(source: ts.SourceFile, file = source.fileName) {
 
 test.each([
 	["commit('Settle your REP deposits')", 'Settle your REP deposits'],
+	["const amountLabel = 'Opening stake'", 'Opening stake'],
 	["commit('Settle 3 deposits')", 'Settle 3 deposits'],
 	["commit('Unsettled deposits')", 'Unsettled deposits'],
 	["commit('Deposits not settled')", 'Deposits not settled'],

@@ -7,11 +7,12 @@ import {
 	statoblast_openOracle_OpenOracle_OpenOracle,
 	statoblast_tokens_ShareToken_ShareToken,
 } from '../contractArtifact.js'
-import { ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { statoblast_Multicall3_Multicall3, ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { installAppContractLabelResolver } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { questionDataContract, universeContract } from '../copy/app.js'
 
 const CONTRACT_LABEL_BY_ABI = new Map<readonly unknown[], string>([
+	[statoblast_Multicall3_Multicall3.abi, deploymentCopy.batchReadContract],
 	[ZoltarQuestionData_ZoltarQuestionData.abi, questionDataContract],
 	[Zoltar_Zoltar.abi, universeContract],
 	[statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi, deploymentCopy.priceFeed],

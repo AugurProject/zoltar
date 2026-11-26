@@ -92,7 +92,7 @@ export const questionIdFormat = 'Enter a hexadecimal or decimal question ID.'
 
 export const deployCollateralSection = 'Collateral and universe'
 export const deployPriceSection = 'REP price reports'
-export const deployMinimumPriceStake = (symbol: string) => `Minimum price-report stake (${symbol})`
+export const deployMinimumPriceStake = (symbol: string) => `Minimum price-report collateral (${symbol})`
 export const deployPricePriorityFee = 'Price-report priority fee (nanoETH/gas)'
 export const deployCollateralAndPrice = 'Collateral and REP price'
 export const deployQuestionsSection = 'Questions'
@@ -111,7 +111,7 @@ export const deployDefaults = 'Defaults'
 export const deployBack = 'Back'
 export const deployContinue = (step: string) => `Continue to ${step.toLowerCase()}`
 export const deploySummary = 'Summary'
-export const deploySummaryPriceStake = 'Min price-report stake'
+export const deploySummaryPriceStake = 'Min price-report collateral'
 export const deploySummaryCommitment = 'Min commitment'
 export const deploySummaryOutcomeRate = 'Minimum outcome rate'
 export const deploySummaryRewardVesting = 'Reward vesting'

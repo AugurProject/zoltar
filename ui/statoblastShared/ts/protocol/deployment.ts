@@ -252,7 +252,15 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 }
 
 export function getStatoblastUiDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkProfile()) {
-	return getDeploymentSteps(profile).map(step => ({ ...step, verificationLabel: step.label }))
+	const labels: Partial<Record<DeploymentStepId, string>> = {
+		reputationToken: deploymentCopy.genesisRepToken,
+		deploymentStatusOracle: deploymentCopy.deploymentStatusContract,
+		multicall3: deploymentCopy.batchReadContract,
+	}
+	return getDeploymentSteps(profile).map(step => {
+		const label = labels[step.id] ?? step.label
+		return { ...step, label, verificationLabel: label }
+	})
 }
 
 /**

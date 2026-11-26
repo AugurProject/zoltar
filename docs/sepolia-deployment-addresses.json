@@ -74,7 +74,7 @@
 		},
 		{
 			"id": "sharedPoolPriceFeedDeploymentWorker",
-			"label": "REP price feed deployment support",
+			"label": "REP price feed setup contract",
 			"address": "0xb88A9Fb399D475584b3AbCc29105957bCd3159e0",
 			"constructorArguments": ""
 		},
@@ -110,55 +110,55 @@
 		},
 		{
 			"id": "securityPoolCapitalLedgerDeployer",
-			"label": "Pool capital deployment",
+			"label": "Pool capital setup contract",
 			"address": "0x4e88B6474A1a386c70028DbCD40B1cd2b7618ca7",
 			"constructorArguments": ""
 		},
 		{
 			"id": "securityPoolCommitmentIndexDeployer",
-			"label": "Pool commitment tracking deployment",
+			"label": "Pool commitment tracking setup contract",
 			"address": "0x7aB49716649BFDc83310D04B84c9Ced502bfF987",
 			"constructorArguments": ""
 		},
 		{
 			"id": "securityPoolCapitalFeeStreamsDeployer",
-			"label": "Pool fee tracking deployment",
+			"label": "Pool fee tracking setup contract",
 			"address": "0xf47Ff7fBf45F787850dd0Abe0C7238F1Bd18f461",
 			"constructorArguments": ""
 		},
 		{
 			"id": "securityPoolSettlementBookDeployer",
-			"label": "Pool payout tracking deployment",
+			"label": "Pool payout tracking setup contract",
 			"address": "0x381cA9c4eeF8496788619116E92Beb6eDb451404",
 			"constructorArguments": ""
 		},
 		{
 			"id": "securityPoolSettlementDeployer",
-			"label": "Pool payout deployment",
+			"label": "Pool payout setup contract",
 			"address": "0x246f43a7e2E9458eaB5Fa3c95a3BE00e6FEDD605",
 			"constructorArguments": ""
 		},
 		{
 			"id": "securityPoolServicesDeployer",
-			"label": "Pool operations deployment",
+			"label": "Pool operations setup contract",
 			"address": "0x5C1fDf5d73A3b2213F1395a3Ff80dC9ae67B49e0",
 			"constructorArguments": ""
 		},
 		{
 			"id": "securityPoolReporterLedgerDeployer",
-			"label": "Pool reporting deployment",
+			"label": "Pool reporting setup contract",
 			"address": "0x66c3598aa64980F5d14F77490f5EaE59bC7eecA2",
 			"constructorArguments": ""
 		},
 		{
 			"id": "securityPoolForkCoordinatorDeployer",
-			"label": "Pool fork deployment",
+			"label": "Pool fork setup contract",
 			"address": "0xE827ac306B53764FcFA496744962Fa793411726e",
 			"constructorArguments": ""
 		},
 		{
 			"id": "securityPoolRepairAuctionDeployer",
-			"label": "Repair auction deployment",
+			"label": "Repair auction setup contract",
 			"address": "0x78eC0Db8Ed3f0049604153297Bb66D3B24355735",
 			"constructorArguments": ""
 		}

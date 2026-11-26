@@ -10,12 +10,14 @@ import { capitalSnapshot, owner, token } from './capitalFixture.js'
 
 type PendingDeployment = Parameters<typeof readPendingDeploymentRecovery>[2]['pending']
 
+const receiptPending = 'Check your wallet activity, then check again for the deployment receipt.'
 const openPromptWarning = 'If a deployment request is still open in your wallet, reject it there before starting a new deployment.'
 const pendingTransactionWarning = 'This transaction may still be pending in your wallet. Cancel it there before starting a new deployment.'
 const missingTransaction = async ({ hash }: { hash: Hash }) => {
 	throw new TransactionLookupNotFoundError('transaction', hash)
 }
 const visibleTransaction = async ({ hash }: { hash: Hash }) => ({ from: owner, hash, nonce: 7n, input: '0x' as const, gas: 1n, value: 0n })
+const visibleTransactionFromAnotherAddress = async (request: { hash: Hash }) => ({ ...(await visibleTransaction(request)), from: token })
 const recorded = { id: 'saved', step: 'rules', nonce: '6' } satisfies PendingDeployment
 const withHash = { ...recorded, hash: mockTransactionHash } satisfies PendingDeployment
 const draft = initialDeploymentDraft('0')
@@ -49,8 +51,23 @@ test('a legacy invisible saved hash without a nonce requires the transaction res
 })
 
 test('a legacy hash still visible to the RPC is not cleared when the sender differs', async () => {
-	const { check } = fixture({ confirmed: 7n, getTransaction: async request => ({ ...(await visibleTransaction(request)), from: token }) })
+	const { check } = fixture({ confirmed: 7n, getTransaction: visibleTransactionFromAnotherAddress })
 	expect(await check({ id: 'saved', step: 'rules', hash: mockTransactionHash })).toMatchObject({ kind: 'waiting' })
+})
+
+test('a visible transaction at the confirmed nonce waits for its receipt', async () => {
+	const { check } = fixture({ confirmed: 7n, getTransaction: visibleTransaction })
+	expect(await check(withHash)).toEqual({ kind: 'waiting', detail: receiptPending, transactionNonce: '7' })
+})
+
+test('a visible transaction with an unspent estimated nonce waits for its receipt', async () => {
+	const { check } = fixture({ confirmed: 4n, getTransaction: visibleTransactionFromAnotherAddress })
+	expect(await check(withHash)).toMatchObject({ kind: 'waiting', detail: receiptPending })
+})
+
+test.each([7n, 23n])('a visible transaction with a spent estimated nonce stays locked at confirmed nonce %s', async confirmed => {
+	const { check } = fixture({ confirmed, getTransaction: visibleTransactionFromAnotherAddress })
+	expect(await check(withHash)).toEqual({ kind: 'waiting', detail: receiptPending })
 })
 
 test('a spent estimated nonce with no match warns that the known transaction could still be pending', async () => {

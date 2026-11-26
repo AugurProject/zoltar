@@ -95,6 +95,7 @@ export async function readPendingDeploymentRecovery(client: ReadClient, wallet: 
 		if (transaction === undefined) return { ...waiting(copy.droppedDeploymentTransaction(nonce, estimatedNonce)), transactionNonce }
 		return { ...waiting(transactionNonce !== undefined && state.confirmed < nonce ? copy.transactionWaitingForEarlierNonce(nonce) : copy.receiptPending), transactionNonce }
 	}
+	if (transaction !== undefined && transactionNonce === undefined) return waiting(copy.receiptPending)
 
 	const draft = parseDeploymentDraft(progress.draft, profile)
 	if (draft.creationError !== undefined) throw new Error(draft.creationError)

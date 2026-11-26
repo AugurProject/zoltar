@@ -1349,7 +1349,7 @@ test('USDC creation validates the configured oracle floor in six-decimal collate
 	})
 	expect(hook.state().deployReason).toContain('question rules first')
 	await act(() => hook.state().setReportFloor('0'))
-	expect(hook.state().deployReason).toContain('positive minimum report stake with up to 6 decimal places')
+	expect(hook.state().deployReason).toContain('positive minimum report collateral amount with up to 6 decimal places')
 })
 test('the origin universe follows the selected universe until the user edits it', async () => {
 	capitalClient().install()

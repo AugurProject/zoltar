@@ -295,7 +295,7 @@ export async function loadSecurityPoolClaimableEarnings(
 			snapshot.blockNumber,
 		)
 		const [vault, , , , , , , eth, rep] = decodeFields(value, ['vault', 'positionId', 'principal', 'commitment', 'targetHealthFactorBps', 'liquidationStarted', 'materialized', 'earnedAttoEth', 'earnedAttoRep'], 'Invalid auction earnings response.')
-		if (decodeAddress(vault, 'Auction position address') !== snapshot.owner) throw new Error('Auction earnings owner mismatch.')
+		if (decodeAddress(vault, 'Auction vault address') !== snapshot.owner) throw new Error('Auction earnings owner mismatch.')
 		return { attoEth: decodeUint(eth, 'ETH earnings'), attoRep: decodeUint(rep, 'REP earnings') }
 	}
 	const [, ownerValue, positionValue] = await multicall(

@@ -19,7 +19,7 @@ export const deployment = {
 	originValidationUnavailable: 'Could not check the origin universe. Try again.',
 	originMissing: 'The origin universe does not exist.',
 	collateralUnavailable: 'This collateral token is unavailable on the selected network.',
-	reportStakeRequired: (decimals: number) => `Enter a positive minimum report stake with up to ${decimals} decimal places.`,
+	reportStakeRequired: (decimals: number) => `Enter a positive minimum report collateral amount with up to ${decimals} decimal places.`,
 	poolAddressUnavailable: 'Security pool deployment address unavailable.',
 	receiptPending: 'Check your wallet activity, then check again for the deployment receipt.',
 	receiptCheckFailed: 'Could not check the deployment status. Try again.',
@@ -63,7 +63,7 @@ export const deployment = {
 	reviewDuration: (days: string) => `${days} ${days === '1' ? 'day' : 'days'}`,
 	reviewDurationExact: (days: string, seconds: bigint) => `${days} (${seconds} seconds)`,
 	reviewBacking: (multiplier: string, minimumPerShare: string) => `Security multiplier ${multiplier}%. Minimum backing per share ${minimumPerShare}.`,
-	reviewPriceReport: (minimumStake: string, priorityFee: string) => `Minimum price-report stake ${minimumStake}. Price-report priority fee ${priorityFee} nanoETH/gas.`,
+	reviewPriceReport: (minimumStake: string, priorityFee: string) => `Minimum price-report collateral ${minimumStake}. Price-report priority fee ${priorityFee} nanoETH/gas.`,
 	prepareModulesReview: (stage: number, total: number) => `Complete setup stage ${stage} of ${total}. This deploys more pool contracts without moving funds.`,
 	stageChanged: 'Setup advanced. Refresh and review again.',
 }

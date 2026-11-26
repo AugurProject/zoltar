@@ -8,11 +8,11 @@ export const fundingLoading = 'Loading collateral balance and approval.'
 export const approvalRequired = 'Collateral approval required.'
 export const formatInsufficientBalance = (symbol: string) => `Insufficient ${symbol} balance.`
 export const approvalFailed = 'Collateral approval failed.'
-export const floorHint = 'Reports also need an exposure-based stake. This floor does not automatically cover dispute gas costs.'
+export const floorHint = 'Reports also require collateral based on exposure. This floor does not automatically cover dispute gas costs.'
 const amount = (label: string, symbol: string) => `${label} (${symbol})`
 export const purchaseFee = (symbol: string) => amount('Minimum purchase fee', symbol)
 export const commitment = (symbol: string) => amount('Minimum commitment', symbol)
-export const reportStake = (symbol: string) => amount('Report stake', symbol)
+export const reportStake = (symbol: string) => amount('Report collateral', symbol)
 export const walletBalance = (symbol: string) => `Wallet ${symbol}`
 export const released = (symbol: string) => `Released ${symbol}`
 export const recoveryContribution = 'Recovery REP contribution'
