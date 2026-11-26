@@ -21,7 +21,7 @@ private theorem modWords (c : Bool) (a d : Nat) (ha : a < R) (hd : d < R) (pos :
   simp [Source.BinaryOp.apply,Value.forceAbiLazy,Source.BinaryOp.preservesFixedBytesWidth,
     Source.BinaryOp.applyWord,checkedMod,norm,Nat.ne_of_gt pos,word,Bind.bind,Except.bind]
 
-private theorem addWords (c : Bool) (a b : Nat) (fit : a+b < R) :
+theorem addWords (c : Bool) (a b : Nat) (fit : a+b < R) :
     Source.BinaryOp.apply c .add (.word a) (.word b) = .ok (.word (a+b)) := by
   have ha : a < R := by omega
   have hb : b < R := by omega

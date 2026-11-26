@@ -9,7 +9,7 @@ import subprocess
 from tempfile import TemporaryDirectory
 
 
-def prove(models, solidcore, with_pair=False, with_thresholds=False, with_index=False, with_settlement=False):
+def prove(models, solidcore, with_pair=False, with_thresholds=False, with_index=False, with_settlement=False, with_streams=False):
     harness = 'TwoWayConstantProductMathHarness'
     model = models / 'contracts/trading/test' / (harness + '.sol') / (harness + '.lean')
     here = Path(__file__).parent
@@ -19,18 +19,23 @@ def prove(models, solidcore, with_pair=False, with_thresholds=False, with_index=
         # Require each public proof even if its entry module is accidentally removed.
         entries = [(number, f'Inv{number}Proved.lean') for number in range(32, 37)]
         entries.append((37, 'Inv37Backing.lean'))
-        if with_thresholds:
+        if with_thresholds or with_streams:
             entries.append((40, 'Inv40GeneratedThresholds.lean'))
             zoltar = models / 'contracts/Zoltar.sol/Zoltar.lean'
             shutil.copyfile(zoltar, work / 'Inv40Generated.lean')
-        if with_index:
+        if with_index or with_streams:
             index = models / 'contracts/statoblast/SecurityPoolCommitmentIndex.sol/SecurityPoolCommitmentIndex.lean'
             shutil.copyfile(index, work / 'Inv01Generated.lean')
             entries.extend([('01', 'Inv01PriceBoundary.lean'), ('02', 'Inv02Proved.lean')])
-        if with_settlement:
+        if with_settlement or with_streams:
             settlement = models / 'contracts/test/statoblast/InvariantMathHarness.sol/InvariantMathHarness.lean'
             shutil.copyfile(settlement, work / 'Inv27Generated.lean')
             entries.extend([('03', 'Inv03Proved.lean'), ('04', 'Inv04Proved.lean'), ('05', 'Inv05Proved.lean'), ('06', 'Inv06Proved.lean'), ('07', 'Inv07Proved.lean'), (27, 'Inv27Proved.lean')])
+        if with_streams:
+            streams = 'SecurityPoolCapitalFeeStreams'
+            stream_model = models / 'contracts/statoblast' / (streams + '.sol') / (streams + '.lean')
+            shutil.copyfile(stream_model, work / 'Inv08Generated.lean')
+            entries.append(('08', 'Inv08Proved.lean'))
         for number, name in entries:
             proof_sources = here / f'inv{number}'
             if not (proof_sources / name).is_file():
@@ -73,5 +78,6 @@ if __name__ == '__main__':
     cli.add_argument('--with-thresholds', action='store_true', help='also check the generated Zoltar threshold getters')
     cli.add_argument('--with-index', action='store_true', help='also check the commitment-index price proofs')
     cli.add_argument('--with-settlement', action='store_true', help='also check the settlement and oracle math harness')
+    cli.add_argument('--with-streams', action='store_true', help='also check the capital fee stream history proofs')
     args = cli.parse_args()
-    prove(args.models.resolve(), args.solidcore.resolve(), args.with_pair, args.with_thresholds, args.with_index, args.with_settlement)
+    prove(args.models.resolve(), args.solidcore.resolve(), args.with_pair, args.with_thresholds, args.with_index, args.with_settlement, args.with_streams)

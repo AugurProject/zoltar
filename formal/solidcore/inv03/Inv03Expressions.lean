@@ -28,7 +28,7 @@ theorem zeros (c : Context) (r : Runtime) (a b : String) (x y : Nat) (hx : x<R) 
 def scale := choice (literal 1) (literal (1000000000)) (literal (1000000000))
 def product (name : String) := Inv32NewtonBody.twice (Inv32Product.mulF (w name) scale)
 
-private theorem mulWord (ch : Bool) (x y : Nat) (hx : x<R) (hy : y<R) (fits : x*y<R) :
+theorem mulWord (ch : Bool) (x y : Nat) (hx : x<R) (hy : y<R) (fits : x*y<R) :
     Source.BinaryOp.apply ch .mul (.word x) (.word y) = .ok (.word (x*y)) := by
   have m := Inv32Execution.mul (bv x) (bv y)
   simp only [BitVec.toNat_mul,BitVec.toNat_ofNat,Nat.mod_eq_of_lt hx,Nat.mod_eq_of_lt hy,
