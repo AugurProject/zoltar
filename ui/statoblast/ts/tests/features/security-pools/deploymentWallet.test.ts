@@ -5,9 +5,10 @@ import { readPendingDeploymentRecovery } from '@zoltar/ui-statoblast-shared/feat
 import type { ReadClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { mockTransactionHash } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { deployRecoveryConfirmation, deployRetryConfirmation } from '@zoltar/ui-statoblast-shared/copy/securityPoolPage.js'
-import type { PendingDeployment } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/deploymentProgress.js'
 import { capitalClient } from './capitalClient.js'
 import { owner, token } from './capitalFixture.js'
+
+type PendingDeployment = Parameters<typeof readPendingDeploymentRecovery>[2]['pending']
 
 const openPromptWarning = 'If a deployment request is still open in your wallet, reject it there before starting a new deployment.'
 const missingTransaction = async ({ hash }: { hash: Hash }) => {
@@ -15,7 +16,7 @@ const missingTransaction = async ({ hash }: { hash: Hash }) => {
 }
 const visibleTransaction = async ({ hash }: { hash: Hash }) => ({ from: owner, hash, nonce: 7n, input: '0x' as const, gas: 1n, value: 0n })
 const recorded = { id: 'saved', step: 'rules', nonce: '6' } satisfies PendingDeployment
-const withHash = { ...recorded, hash: mockTransactionHash }
+const withHash = { ...recorded, hash: mockTransactionHash } satisfies PendingDeployment
 const draft = initialDeploymentDraft('0')
 
 function fixture(options: { confirmed: bigint; pending?: bigint; getTransaction?: ReadClient['getTransaction'] }) {

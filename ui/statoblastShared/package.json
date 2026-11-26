@@ -365,6 +365,10 @@
 			"bun": "./ts/features/security-pools/lib/creation.ts",
 			"default": "./js/features/security-pools/lib/creation.js"
 		},
+		"./features/security-pools/lib/deploymentWallet.js": {
+			"bun": "./ts/features/security-pools/lib/deploymentWallet.ts",
+			"default": "./js/features/security-pools/lib/deploymentWallet.js"
+		},
 		"./protocol/securityPoolAdmission.js": {
 			"bun": "./ts/protocol/securityPoolAdmission.ts",
 			"default": "./js/protocol/securityPoolAdmission.js"
