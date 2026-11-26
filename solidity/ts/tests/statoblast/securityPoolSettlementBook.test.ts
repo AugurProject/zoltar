@@ -275,6 +275,42 @@ describe('Statoblast: central internal settlement units', () => {
 			parent = id
 		}
 	})
+	test('INV-04 near-cap funding targets survive underfunded inheritance and funded minting', async () => {
+		const scale = 1_000_000_000n
+		const limit = 1n << 128n
+		const deposit = (limit - 1n) / scale - 10n
+		await mint(1n, 1n, deposit)
+		await seal(1n)
+		await child(1n, deposit - 1n)
+		expect(await client.readContract({ ...target(), functionName: 'requiredCash', args: [2n] })).toBe(deposit)
+		await seal(2n)
+		await child(2n, 0n)
+		expect(await client.readContract({ ...target(), functionName: 'requiredForkCash', args: [3n] })).toBe(deposit)
+		await repair(3n, deposit)
+		await mint(3n, 2n, 1n)
+		expect(await client.readContract({ ...target(), functionName: 'requiredCash', args: [3n] })).toBe(deposit + 1n)
+		expect(await client.readContract({ ...target(), functionName: 'isCashFunded', args: [3n] })).toBe(true)
+	})
+	test('INV-04 funded snapshots drop fee carry and retain a non-unit target through runoff forks', async () => {
+		for (const id of [1n, 2n]) {
+			await mint(1n, id, 100n)
+			await writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'replaceFeeStream', args: [1n, id, 600_000_000n, 100, 0] }))
+		}
+		await freeze(1n, 1)
+		expect(await client.readContract({ ...target(), functionName: 'scaledUnits', args: [1n] })).toBe(198_800_000_000n)
+		expect(await client.readContract({ ...target(), functionName: 'requiredCash', args: [1n] })).toBe(199n)
+		expect(await client.readContract({ ...target(), functionName: 'requiredForkCash', args: [1n] })).toBe(199n)
+		await seal(1n, 1)
+		await child(1n, 198n)
+		expect(await client.readContract({ ...target(), functionName: 'requiredCash', args: [2n] })).toBe(199n)
+		await seal(2n, 1)
+		await child(2n, 0n)
+		expect(await client.readContract({ ...target(), functionName: 'requiredForkCash', args: [3n] })).toBe(199n)
+		await repair(3n, 199n)
+		await mint(3n, 3n, 5n)
+		expect(await client.readContract({ ...target(), functionName: 'requiredCash', args: [3n] })).toBe(204n)
+		expect(await client.readContract({ ...target(), functionName: 'isCashFunded', args: [3n] })).toBe(true)
+	})
 	test('sole-question recovery funding is exactly minimal pro-rata REP and depends on issued shares', async () => {
 		await mint(1n, 1n, 17n)
 		await seal(1n)
@@ -556,6 +592,8 @@ describe('Statoblast: central internal settlement units', () => {
 			const [b] = await client.readContract({ ...target(), functionName: 'scaledQuestion', args: [1n, 2n] })
 			expect(a.units + b.units).toBe(await client.readContract({ ...target(), functionName: 'scaledUnits', args: [1n] }))
 			expect((await book(1n))[2]).toBe((BigInt(timestamp) * 12n) / 10n)
+			// The 1:1 target plus fractional fee carry still requires the remaining raw cash.
+			expect(await client.readContract({ ...target(), functionName: 'requiredCash', args: [1n] })).toBe((await book(1n))[0])
 		}
 		const first = (await client.simulateContract({ ...target(), functionName: 'redeem', args: [1n, 1n, 100n, 0n, 3] })).result[0]
 		await redeem(1n, 1n, 100n, 3)

@@ -98,3 +98,28 @@ test('settlement one-less/one-more bounds and oracle price brackets', async () =
 		}
 	}
 })
+
+test('INV-04 carry boundary and out-of-domain scaled overflow retain their specified outcomes', async () => {
+	const quote = (units: bigint, remainder: bigint) => client.readContract({ abi: artifact.abi, address, functionName: 'requiredCash', args: [units, 1n, 1n, remainder] })
+	expect(await quote(unitScale, 0n)).toBe(1n)
+	expect(await quote(unitScale, 1n)).toBe(2n)
+	const maxWord = (1n << 256n) - 1n
+	expect(await quote(maxWord, 0n)).toBe((maxWord + unitScale - 1n) / unitScale)
+	await expect(quote(maxWord, 1n)).rejects.toThrow(/overflow|0x11/i)
+})
+
+test('INV-04 production allocation envelope fits with maximum fee carry and remains least-integer', async () => {
+	const limit = 1n << 128n
+	const maximumAllocation = (limit - 1n) * unitScale
+	// Funded-parent snapshots can have a large numerator and a small denominator.
+	for (const denominator of [1n, 7n, limit - 1n])
+		for (const units of [0n, 1n, denominator / 2n, denominator])
+			for (const remainder of [0n, 1n, unitScale - 1n]) {
+				const scaled = (units * maximumAllocation + denominator - 1n) / denominator + remainder
+				expect(scaled < 1n << 159n).toBe(true)
+				const cash = await client.readContract({ abi: artifact.abi, address, functionName: 'requiredCash', args: [units, maximumAllocation, denominator, remainder] })
+				expect(cash).toBe((scaled + unitScale - 1n) / unitScale)
+				expect((cash * unitScale - remainder) * denominator >= units * maximumAllocation).toBe(true)
+				if (cash > 0n) expect(((cash - 1n) * unitScale - remainder) * denominator < units * maximumAllocation).toBe(true)
+			}
+})

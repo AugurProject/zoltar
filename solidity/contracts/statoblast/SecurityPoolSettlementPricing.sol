@@ -29,6 +29,10 @@ abstract contract SecurityPoolSettlementPricing is SecurityPoolSettlementState {
 		state.feePrincipalAttoEth = SettlementMath.rawValue(state.feePrincipalAttoEth, net, units, Math.Rounding.Ceil);
 		state.feeRateAttoEthPerSecond = SettlementMath.scaledValue(state.feeRateAttoEthPerSecond, net, units);
 	}
+	/// @dev INV-04: target allocation is at most (RECOVERY_SCALE - 1) * UNIT_SCALE.
+	/// Targets start at 1:1 or snapshot funded cash/units. Underfunded forks inherit them.
+	/// Funded mints round units down and cap cash; all other unit changes decrease units.
+	/// Fee remainders stay below UNIT_SCALE, so the helper's scaled intermediate fits.
 	function requiredCash(uint64 bookId) public view returns (uint256) {
 		Book storage book = _book(bookId);
 		FundingTarget storage target = fundingTargets[bookId];
