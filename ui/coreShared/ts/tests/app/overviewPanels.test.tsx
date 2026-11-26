@@ -131,7 +131,7 @@ describe('OverviewPanels', () => {
 			universePresentation: getUniversePresentation('missing'),
 		})
 
-		expect(documentQueries.getAllByText('This universe is not deployed.')).toHaveLength(1)
+		expect(documentQueries.getAllByText('This universe has not been created yet.')).toHaveLength(1)
 		expect(documentQueries.getAllByRole('button', { name: 'Go to root universe' })).toHaveLength(1)
 		expect(documentQueries.queryByText('Go to root universe', { selector: 'p' })).toBeNull()
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Go to root universe' }))

@@ -1,7 +1,13 @@
-import { encodeFunctionData, parseAbi, zeroAddress, type AbiValue, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, formatUnits, parseAbi, zeroAddress, type AbiValue, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { SecurityPoolEconomicsConfig } from './securityPool.js'
 import type { SecurityPoolReadClient } from './securityPoolRead.js'
 import { decodeAddress, decodeBool, decodeFields, decodeUint } from './securityPoolDecoding.js'
+
+export const minimumSecurityPoolHealthFactorBps = 10_000n
+
+function minimumHealthMessage() {
+	return `Health target must be at least ${formatUnits(minimumSecurityPoolHealthFactorBps, 2)}%.`
+}
 
 const abi = parseAbi([
 	'function originUniverseId() view returns (uint248)',
@@ -151,7 +157,7 @@ function positive(value: unknown, label: string, bits = 256) {
 }
 function healthTarget(value: unknown) {
 	const target = decodeUint(value, 'Health target')
-	if (target < 10_000n) throw new Error('Health target must be at least 100%.')
+	if (target < minimumSecurityPoolHealthFactorBps) throw new Error(minimumHealthMessage())
 	return target
 }
 function retirementStatus(value: unknown): SecurityPoolRetirementPreview['status'] {
@@ -238,7 +244,7 @@ export function buildSecurityPoolCapitalTakeOverRequest(parameters: CapitalReque
 export function buildSecurityPoolCapitalTakeOverWithBoundsRequest(parameters: CapitalRequest & { positionId: bigint; commitment: bigint; minimumTakeoverReward: bigint; maximumOwnRep: bigint; bounds: SecurityPoolTakeoverBounds }) {
 	const bounds = parameters.bounds
 	const expectedTargetHealthFactorBps = decodeUint(bounds.expectedTargetHealthFactorBps, 'Expected health target')
-	if (expectedTargetHealthFactorBps < 10_000n) throw new Error('Health target must be at least 100%.')
+	if (expectedTargetHealthFactorBps < minimumSecurityPoolHealthFactorBps) throw new Error(minimumHealthMessage())
 	return request(parameters, 'takeOverWithBounds', [
 		positive(parameters.positionId, 'Position id', 96),
 		positive(parameters.commitment, 'Takeover commitment'),

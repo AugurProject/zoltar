@@ -8,14 +8,12 @@ import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNoti
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
-import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import * as common from '@zoltar/ui-core-shared/copy/common.js'
 import { useFavorites } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { abbreviateAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import * as collateralCopy from '../../../copy/collateral.js'
 import * as recoveryCopy from '../../../copy/forkRecovery.js'
 import * as copy from '../../../copy/securityPoolSharedFork.js'
 import { tryAgain } from '../../../copy/securityPoolPage.js'
@@ -141,57 +139,13 @@ function RecoveryButtons({ model, actions }: { model: Model; actions: RecoveryAc
 	)
 }
 
-export function SecurityPoolShareRecovery({ model, actions, snapshot, redesigned, forkQuestion }: { model: Model; actions: RecoveryActions; snapshot: SecurityPoolAccountSnapshot | undefined; redesigned: boolean; forkQuestion?: ForkQuestionTitle | undefined }) {
+export function SecurityPoolShareRecovery({ model, actions, snapshot, forkQuestion }: { model: Model; actions: RecoveryActions; snapshot: SecurityPoolAccountSnapshot | undefined; forkQuestion?: ForkQuestionTitle | undefined }) {
 	const state = model.displayedState
-	const branch = state?.branch
 	const units = snapshot?.collateral.decimals ?? 18
 	const disabled = actions.busy !== undefined
 	const recoveryError = useStatoblastRefreshError(model.recoveryError, model.recoveryReadAt)
-	const actionDataNotice = useOldActionDataNotice(redesigned ? model.recoveryReadAt : undefined)
+	const actionDataNotice = useOldActionDataNotice(model.recoveryReadAt)
 	const failure = <RetryableNotice message={recoveryError} onRetry={model.retryRecovery} retryLabel={tryAgain} disabled={disabled} />
-	if (!redesigned) {
-		return (
-			<SectionBlock title={recoveryCopy.shareRecovery}>
-				<WorkflowSubsection title={copy.basketTitle}>
-					<UserMessage detail={copy.basketHint} />
-					<MetricGrid>
-						<MetricField label={copy.cashRecovery} loading={model.loading}>
-							<CurrencyValue value={branch?.parentCash} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={units} />
-						</MetricField>
-						<MetricField label={copy.repRecovery} loading={model.loading}>
-							<CurrencyValue value={branch?.started ? branch.recoveryAttoRep : undefined} suffix={common.rep} />
-						</MetricField>
-					</MetricGrid>
-				</WorkflowSubsection>
-				<WorkflowSubsection title={copy.recovery}>
-					<UserMessage detail={copy.recoveryHint} />
-					<MetricGrid>
-						<SecurityPoolInput label={copy.question} value={model.questionInput} onChange={model.setQuestion} disabled={disabled} />
-						<SecurityPoolInput label={copy.shares} value={model.sharesInput} onChange={model.setShares} disabled={disabled} numeric />
-						<MetricField label={copy.available}>
-							<CurrencyValue value={model.recovery?.availableShares} units={units} />
-						</MetricField>
-					</MetricGrid>
-					{failure}
-					<ol className='statoblast-fork-steps statoblast-share-recovery-workflow'>
-						<RecoveryButtons model={model} actions={actions} />
-					</ol>
-					<MetricGrid>
-						<MetricField label={copy.invalidAvailable}>
-							<CurrencyValue value={model.recovery?.rights[0]} units={units} />
-						</MetricField>
-						<MetricField label={copy.yesAvailable}>
-							<CurrencyValue value={model.recovery?.rights[1]} units={units} />
-						</MetricField>
-						<MetricField label={copy.noAvailable}>
-							<CurrencyValue value={model.recovery?.rights[2]} units={units} />
-						</MetricField>
-					</MetricGrid>
-					<TransferRights model={model} actions={actions} />
-				</WorkflowSubsection>
-			</SectionBlock>
-		)
-	}
 	const maximum = model.recovery?.availableShares
 	const deadline = state?.choiceDeadline ?? snapshot?.forkChoiceDeadline
 	const timestamp = state?.timestamp ?? snapshot?.timestamp

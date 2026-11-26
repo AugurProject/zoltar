@@ -57,18 +57,21 @@ test.each([
 })
 
 test.each([
-	{ forkQuestionId: 1n, started: true, phase: 'Undecided · fork step', current: 'Fork' },
-	{ forkQuestionId: 2n, started: true, phase: 'Response window', current: 'Response window' },
-	{ forkQuestionId: 2n, started: false, phase: 'Trading', current: 'Trading' },
-])('a forked universe keeps the actual question stage when forked question ID is $forkQuestionId', async ({ forkQuestionId, started, phase, current }) => {
+	{ forkQuestionId: 1n, started: true, hasReachedNonDecision: true, phase: 'Undecided · fork step', current: 'Fork', notice: false },
+	{ forkQuestionId: 1n, started: true, hasReachedNonDecision: false, phase: 'Response window', current: 'Response window', notice: true },
+	{ forkQuestionId: 2n, started: true, hasReachedNonDecision: false, phase: 'Response window', current: 'Response window', notice: true },
+	{ forkQuestionId: 1n, started: false, hasReachedNonDecision: false, phase: 'Trading', current: 'Trading', notice: true },
+	{ forkQuestionId: undefined, started: true, hasReachedNonDecision: undefined, phase: 'Checking question stage…', current: undefined, notice: true },
+])('a forked universe keeps the pool game’s stage ($phase)', async ({ forkQuestionId, started, hasReachedNonDecision, phase, current, notice }) => {
 	installStatoblastRouting()
-	const heading = decodeQuestionHeading({ ...question, ordinaryEscalationGameStarted: started, questionOutcome: 'none', universeHasForked: true, forkQuestionId, forkedAt: 5n })
+	const heading = decodeQuestionHeading({ ...question, ordinaryEscalationGameStarted: started, questionOutcome: 'none', universeHasForked: true, forkQuestionId, hasReachedNonDecision, forkedAt: 5n })
 	if (heading === undefined) throw new Error('Saved heading was not decoded')
-	const view = lifecycle.trackRendered(await renderIntoDocument(<StatoblastQuestionHead page={{ kind: 'question', pool, questionId: 1n, tab: 'reporting' }} question={heading} reporting={undefined} now={20n} hasShares={false} />))
+	const view = lifecycle.trackRendered(await renderIntoDocument(<StatoblastQuestionHead page={{ kind: 'question', pool, questionId: 1n, tab: 'reporting' }} question={heading} reporting={undefined} now={20n} hasShares={false} presentationOnly={forkQuestionId === undefined} />))
 	expect(view.container.querySelector('.statoblast-question-stage .badge')?.textContent).toBe(phase)
 	expect(view.container.querySelector('.statoblast-question-progress [aria-current=step] strong')?.textContent).toBe(current)
-	if (forkQuestionId === 2n) {
+	if (notice) {
 		expect(view.container.textContent).toContain('This universe has forked.')
 		expect(view.container.textContent).not.toContain('Trading is open')
+		expect(view.container.textContent).not.toContain('Ended undecided')
 	}
 })

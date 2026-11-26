@@ -42,13 +42,23 @@ async function fill(field: HTMLInputElement | undefined, value: string) {
 	})
 }
 
+function action(view: { container: HTMLElement }, label: string) {
+	return [...view.container.querySelectorAll('button')].find(button => button.textContent === label)
+}
+
+async function openTypedPosition(view: { container: HTMLElement }) {
+	const button = action(view, 'Open position')
+	if (button === undefined || button.disabled) throw new Error('Cannot open the typed position')
+	await act(() => button.click())
+}
+
 test('the liquidation timeline and position comparison reflect the selected takeover', async () => {
 	const base = capitalSnapshot({ timestamp: 10_000n, liquidationDuration: 3_600n, demandAttoEth: 20n * unit })
 	const snapshot = { ...base, ownerAccount: { ...base.ownerAccount, freeAttoRep: 2n * unit } }
 	const reader = installTakeoverReader(snapshot)
 	reader.setRead('liquidationStarted', 9_500n, capital)
 	reader.setRead('liquidationElapsed', 900n, capital)
-	const view = await renderIntoDocument(<SecurityPoolTakeover redesigned positionId={2n} model={{ snapshot }} wallet={snapshot.owner} actions={idleActions} />)
+	const view = await renderIntoDocument(<SecurityPoolTakeover positionId={2n} model={{ snapshot }} wallet={snapshot.owner} actions={idleActions} />)
 	lifecycle.trackRendered(view)
 	await waitFor(() => expect(view.container.querySelector('.statoblast-liquidation-reward')?.textContent).toContain('Takeover reward'))
 	const timeline = view.container.querySelector('.statoblast-liquidation-reward')
@@ -74,7 +84,7 @@ test('the liquidation timeline and position comparison reflect the selected take
 test('keeps a saved target readable while the pool is loading and makes no reads from saved addresses', async () => {
 	const snapshot = capitalSnapshot({ totalCommitmentAttoEth: 20n * unit, demandAttoEth: 10n * unit })
 	const reader = installTakeoverReader(snapshot)
-	const live = await renderIntoDocument(<SecurityPoolTakeover redesigned model={{ snapshot }} wallet={snapshot.owner} actions={idleActions} />)
+	const live = await renderIntoDocument(<SecurityPoolTakeover model={{ snapshot }} wallet={snapshot.owner} actions={idleActions} />)
 	lifecycle.trackRendered(live)
 	const positions = () => live.container.querySelector('table')
 	expect(positions()?.textContent).toContain('Position #1')
@@ -95,7 +105,7 @@ test('keeps a saved target readable while the pool is loading and makes no reads
 	expect(live.container.textContent).toContain('Open the entered position before continuing.')
 	expect(reader.reads).toHaveLength(requests)
 	const newerPool = { ...snapshot, blockHash: '0x1111111111111111111111111111111111111111111111111111111111111111' as const, conservativePrice: 4n * unit }
-	const saved = await renderIntoDocument(<SecurityPoolTakeover redesigned positionId={2n} model={{ snapshot: undefined, presentationSnapshot: newerPool }} actions={idleActions} />)
+	const saved = await renderIntoDocument(<SecurityPoolTakeover positionId={2n} model={{ snapshot: undefined, presentationSnapshot: newerPool }} actions={idleActions} />)
 	lifecycle.trackRendered(saved)
 	await waitFor(() => expect(saved.container.querySelector('table')?.textContent).toContain('15.00 REP'))
 	expect(saved.container.querySelector('table')?.textContent).toContain('50%')
@@ -122,11 +132,12 @@ test.each([true, false])('an existing auction permits manual takeover with conse
 		},
 	}
 	const view = await renderTakeover(snapshot, actions)
-	const button = view.container.querySelector('button')
-	if (button === null) throw new Error('Missing takeover button')
+	const button = action(view, 'Take over position')
+	if (button === undefined) throw new Error('Missing takeover button')
 	expect(button.disabled).toBe(true)
 	const fields = Array.from(view.container.querySelectorAll('input'))
 	for (const [offset, value] of ['2', '10', '20', '200', '100'].entries()) await fill(fields[offset], value)
+	await openTypedPosition(view)
 	await waitFor(() => expect(button.disabled).toBe(false))
 	await act(() => {
 		button.click()
@@ -155,7 +166,8 @@ test.each([true, false])('an existing auction permits manual takeover with conse
 	await request.validateBeforeSubmit?.()
 	reader.setRead('liquidationStarted', 0n, capital)
 	await fill(fields[0], '3')
-	await waitFor(() => expect(view.container.textContent).toContain('Not started'))
+	await openTypedPosition(view)
+	await waitFor(() => expect(view.container.textContent).toContain('Choose another owner’s position in liquidation.'))
 	expect(button.disabled).toBe(true)
 })
 
@@ -180,7 +192,8 @@ test('a position that unused pool commitment restores is offered as an unpaid cu
 	}
 	const view = await renderIntoDocument(<SecurityPoolTakeover model={{ snapshot }} actions={actions} />)
 	lifecycle.trackRendered(view)
-	const [takeOverButton, cureButton] = Array.from(view.container.querySelectorAll('button'))
+	const takeOverButton = action(view, 'Take over position')
+	const cureButton = action(view, 'Cure position')
 	if (takeOverButton === undefined || cureButton === undefined) throw new Error('Missing takeover or cure button')
 	expect(cureButton.disabled).toBe(true)
 	const fields = view.container.querySelectorAll('input')
@@ -193,6 +206,7 @@ test('a position that unused pool commitment restores is offered as an unpaid cu
 			field.dispatchEvent(new Event('input', { bubbles: true }))
 		})
 	}
+	await openTypedPosition(view)
 	await waitFor(() => expect(cureButton.disabled).toBe(false))
 	expect(takeOverButton.disabled).toBe(true)
 	expect(view.container.textContent).toContain('Free capacity can restore this position. Curing it pays no takeover reward.')
@@ -221,10 +235,11 @@ test('#1570 a partial takeover that would leave the source between the two price
 	snapshot.positions = snapshot.positions.map(position => ({ ...position, rep: 40n * unit }))
 	installTakeoverReader(snapshot)
 	const view = await renderTakeover(snapshot, idleActions)
-	const button = view.container.querySelector('button')
-	if (button === null) throw new Error('Missing takeover button')
+	const button = action(view, 'Take over position')
+	if (button === undefined) throw new Error('Missing takeover button')
 	const fields = Array.from(view.container.querySelectorAll('input'))
 	for (const [offset, value] of ['2', '2', '20', '200', '100'].entries()) await fill(fields[offset], value)
+	await openTypedPosition(view)
 	await waitFor(() => expect(view.container.textContent).toContain('Take over the maximum, or a smaller amount that keeps the position below liquidation.'))
 	expect(button.disabled).toBe(true)
 	await fill(fields[1], '1')
@@ -251,26 +266,30 @@ test('a position the unused commitment cannot restore keeps the takeover and dis
 		field.value = '2'
 		field.dispatchEvent(new Event('input', { bubbles: true }))
 	})
+	await openTypedPosition(view)
 	await waitFor(() => expect(view.container.textContent).toContain('There is too little free capacity to cure this position.'))
-	expect(view.container.querySelectorAll('button')[1]?.disabled).toBe(true)
+	expect(action(view, 'Cure position')?.disabled).toBe(true)
 })
 
-test('entering another target clears the bounds typed for the previous position but a new block keeps them', async () => {
+test('opening another target clears the bounds typed for the previous position but a new block keeps them', async () => {
 	const snapshot = capitalSnapshot({ totalCommitmentAttoEth: 20n * unit, demandAttoEth: 20n * unit })
 	snapshot.ownerPrincipalAttoRep = 40n * unit
 	snapshot.positions = snapshot.positions.map(position => ({ ...position, rep: 40n * unit }))
 	installTakeoverReader(snapshot)
 	const view = await renderTakeover(snapshot, idleActions)
-	const button = view.container.querySelector('button')
-	if (button === null) throw new Error('Missing takeover button')
+	const button = action(view, 'Take over position')
+	if (button === undefined) throw new Error('Missing takeover button')
 	const fields = Array.from(view.container.querySelectorAll('input'))
 	for (const [offset, value] of ['2', '10', '20', '200', '100'].entries()) await fill(fields[offset], value)
+	await openTypedPosition(view)
 	await waitFor(() => expect(button.disabled).toBe(false))
 	await act(() => {
 		render(<SecurityPoolTakeover model={{ snapshot: { ...snapshot, blockHash: `0x${'ab'.repeat(32)}` } }} actions={idleActions} />, view.container)
 	})
 	expect(fields.slice(1).map(field => field.value)).toEqual(['10', '20', '200', '100'])
 	await fill(fields[0], '3')
+	expect(fields.slice(1).map(field => field.value)).toEqual(['10', '20', '200', '100'])
+	await openTypedPosition(view)
 	await waitFor(() => expect(fields.slice(1).map(field => field.value)).toEqual(['', '', '', '']))
 	await waitFor(() => expect(button.disabled).toBe(true))
 	for (const [offset, value] of ['10', '20', '200', '100'].entries()) await fill(fields[offset + 1], value)
@@ -290,6 +309,7 @@ test('bounds outlive a snapshot reload and a first target, and clear when an ID 
 	const typed = ['10', '20', '200', '100']
 	for (const [offset, value] of typed.entries()) await fill(fields[offset + 1], value)
 	await fill(fields[0], '5')
+	await openTypedPosition(view)
 	expect(bounds()).toEqual(typed)
 	await act(() => {
 		render(<SecurityPoolTakeover model={{ snapshot: undefined }} actions={idleActions} />, view.container)
@@ -301,6 +321,7 @@ test('bounds outlive a snapshot reload and a first target, and clear when an ID 
 	await fill(fields[0], '')
 	expect(bounds()).toEqual(typed)
 	await fill(fields[0], '6')
+	await openTypedPosition(view)
 	await waitFor(() => expect(bounds()).toEqual(['', '', '', '']))
 })
 
@@ -309,8 +330,9 @@ test('a forked universe cannot take over at all', async () => {
 	installTakeoverReader(snapshot)
 	const view = await renderTakeover(snapshot, idleActions)
 	await fill(view.container.querySelector('input') ?? undefined, '2')
+	await openTypedPosition(view)
 	await waitFor(() => expect(view.container.textContent).toContain('Takeovers require an active universe.'))
-	expect(view.container.querySelector('button')?.disabled).toBe(true)
+	expect(action(view, 'Take over position')?.disabled).toBe(true)
 })
 
 test('a disabled reason both actions share renders once and describes both buttons', async () => {
@@ -321,7 +343,7 @@ test('a disabled reason both actions share renders once and describes both butto
 	lifecycle.trackRendered(view)
 	const reason = 'Enter a positive position ID.'
 	expect(view.container.textContent?.split(reason)).toHaveLength(2)
-	const described = [...view.container.querySelectorAll('button')].map(button => button.getAttribute('aria-describedby'))
+	const described = ['Take over position', 'Cure position'].map(label => action(view, label)?.getAttribute('aria-describedby'))
 	expect(described).toHaveLength(2)
 	expect(described[0]).toBeTruthy()
 	expect(described[1]).toBe(described[0])
@@ -345,6 +367,7 @@ test.each([
 	const view = await renderTakeover(snapshot, idleActions)
 	const fields = [...view.container.querySelectorAll('input')]
 	for (const [index, value] of ['2', '10', condition === 'consent' ? '4' : '20', condition === 'principal' ? '39' : '200', condition === 'commitment' ? '12' : '100'].entries()) await fill(fields[index], value)
+	await openTypedPosition(view)
 	await waitFor(() => expect(view.container.textContent).toContain(reason))
-	expect(view.container.querySelector('button')?.disabled).toBe(true)
+	expect(action(view, 'Take over position')?.disabled).toBe(true)
 })

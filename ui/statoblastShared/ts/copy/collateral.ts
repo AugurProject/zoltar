@@ -13,7 +13,6 @@ const amount = (label: string, symbol: string) => `${label} (${symbol})`
 export const purchaseFee = (symbol: string) => amount('Minimum purchase fee', symbol)
 export const commitment = (symbol: string) => amount('Minimum commitment', symbol)
 export const reportStake = (symbol: string) => amount('Report stake', symbol)
-export const minimumReportStake = (symbol: string) => amount('Minimum report stake', symbol)
 export const walletBalance = (symbol: string) => `Wallet ${symbol}`
 export const released = (symbol: string) => `Released ${symbol}`
 export const recoveryContribution = 'Recovery REP contribution'
@@ -22,3 +21,5 @@ export const insufficientRecoveryRep = 'Insufficient REP for the proportional re
 export const recoveryApprovalRequired = 'Recovery REP approval required.'
 export const recoveryContributionHint = 'These complete sets include inherited REP. Your proportional contribution preserves existing holders’ backing.'
 export const approvalPending = 'Wait for the current approval to finish.'
+
+export const fundingReadFailed = 'Unable to load collateral funding.'

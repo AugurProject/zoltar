@@ -10,7 +10,7 @@ import { statoblastPageHref, type StatoblastQuestionPage } from '@zoltar/ui-stat
 import { decodeStoredValue } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
 import type { ListedQuestionLedger, ReportingDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 
-type QuestionHeading = Pick<ListedQuestionLedger, 'forkQuestionId' | 'forkedAt' | 'initialReportingResponseWindow' | 'ordinaryEscalationGameStarted' | 'questionId' | 'questionLedgerAddress' | 'questionOutcome' | 'universeHasForked'> & {
+type QuestionHeading = Pick<ListedQuestionLedger, 'forkQuestionId' | 'forkedAt' | 'hasReachedNonDecision' | 'initialReportingResponseWindow' | 'ordinaryEscalationGameStarted' | 'questionId' | 'questionLedgerAddress' | 'questionOutcome' | 'universeHasForked'> & {
 	marketDetails: Pick<ListedQuestionLedger['marketDetails'], 'description' | 'endTime' | 'title'>
 }
 
@@ -27,6 +27,7 @@ export function decodeQuestionHeading(value: unknown): QuestionHeading | undefin
 			universeHasForked: read.boolean('universeHasForked'),
 			forkQuestionId: read.optional('forkQuestionId', read.bigint),
 			forkedAt: read.optional('forkedAt', read.bigint),
+			hasReachedNonDecision: read.optional('hasReachedNonDecision', read.boolean),
 		}
 	})
 }
@@ -54,7 +55,9 @@ export function StatoblastQuestionHead({
 	const resolved = question.questionOutcome !== 'none' || reporting?.settlementState === 'resolved'
 	const started = question.ordinaryEscalationGameStarted || reporting?.status === 'active'
 	const paused = !resolved && reporting?.status === 'active' && reporting.forkContinuation && reporting.forkResumedAt === 0n
-	const forkStep = !resolved && (question.forkQuestionId === page.questionId || (reporting?.status === 'active' && reporting.hasReachedNonDecision))
+	const nonDecision = question.hasReachedNonDecision ?? (reporting?.status === 'active' ? reporting.hasReachedNonDecision : undefined)
+	const checkingStage = !resolved && question.universeHasForked && (question.forkQuestionId === undefined || (question.forkQuestionId === page.questionId && nonDecision === undefined))
+	const forkStep = !resolved && !checkingStage && nonDecision === true
 	const stageTime = question.forkedAt ?? now
 	const ended = stageTime !== undefined && stageTime >= question.marketDetails.endTime
 	let step = 0
@@ -65,6 +68,7 @@ export function StatoblastQuestionHead({
 	if (paused) phase = pageCopy.pausedUntilBranchActivation
 	if (forkStep) phase = pageCopy.undecidedForkStage
 	if (checkingDeadline && !resolved) phase = pageCopy.deadlineChecking
+	if (checkingStage) phase = pageCopy.checkingQuestionStage
 	const phaseTone = resolved ? 'ok' : 'muted'
 	const hasStakedRep = reporting?.status === 'active' && reporting.sides.some(side => (side.localPrincipalAttoRep ?? 0n) > 0n || side.userDeposits.some(deposit => deposit.amountAttoRep > 0n))
 	const threshold = reporting?.nonDecisionThresholdAttoRep
@@ -79,7 +83,7 @@ export function StatoblastQuestionHead({
 		)
 	const responseEnd = reporting?.status === 'active' ? reporting.escalationEndTime : undefined
 	const responseDeadline = responseEnd === undefined || responseEnd === 0n ? pageCopy.responseWindowBeforeReport : <TimestampValue timestamp={responseEnd} relative={false} />
-	const forkDetail = question.forkQuestionId === page.questionId ? undefined : pageCopy.waitingForFork
+	const forkDetail = question.universeHasForked ? undefined : pageCopy.waitingForFork
 	const steps = [
 		{ label: forkStep ? pageCopy.tradingEnded : pageCopy.trading, detail: step === 0 && !forkStep && !question.universeHasForked ? pageCopy.tradingActive : undefined },
 		{ label: forkStep ? pageCopy.reportingOpened : pageCopy.reportingOpens, detail: <TimestampValue timestamp={question.marketDetails.endTime} relative={now === undefined ? false : 'after'} {...(now === undefined ? {} : { currentTimestamp: now })} /> },
@@ -182,7 +186,7 @@ export function StatoblastQuestionHead({
 			<div className='statoblast-question-progress' aria-label={pageCopy.questionProgress}>
 				<ol>
 					{steps.map(({ label, detail }, index) => (
-						<li key={label} data-completed={index < (forkStep ? 3 : step)} data-danger={forkStep && index === 2 ? true : undefined} aria-current={!checkingDeadline && index === (forkStep ? 3 : step) ? 'step' : undefined}>
+						<li key={label} data-completed={!checkingStage && index < (forkStep ? 3 : step)} data-danger={forkStep && index === 2 ? true : undefined} aria-current={!checkingStage && !checkingDeadline && index === (forkStep ? 3 : step) ? 'step' : undefined}>
 							<strong>{label}</strong>
 							{detail === undefined ? undefined : <span>{detail}</span>}
 						</li>

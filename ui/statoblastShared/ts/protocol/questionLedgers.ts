@@ -18,7 +18,7 @@ export type QuestionReadCheckpoint = {
 async function loadDeploymentRegistryAnchor(client: ReadClient): Promise<DeploymentRegistryAnchor> {
 	const observedAt = Date.now()
 	const block = await client.getBlock()
-	if (block.hash === undefined || block.number === undefined) throw new Error('Question ledger deployment head is missing its canonical identity')
+	if (block.hash === undefined || block.number === undefined) throw new Error('Couldn’t verify the block for this question.')
 	return { blockHash: block.hash, blockNumber: block.number, timestamp: block.timestamp, observedAt }
 }
 

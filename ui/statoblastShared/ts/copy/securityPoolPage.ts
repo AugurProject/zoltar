@@ -9,7 +9,7 @@ export const formatHealth = (detail: string | number | bigint) => `${detail}% he
 export const positionHealth = 'Position health'
 export const liquidationThresholdUnavailable = 'Liquidation threshold unavailable'
 export const formatLiquidation = (liquidation: string | number | bigint) => `Liquidation ${liquidation}%`
-export const backingAndTargetTail = ' · Backing 100% · Target '
+export const backingAndTargetTail = (backing: number, target: number) => ` · Backing ${backing}% · Target ${target}%`
 export const savedQuestions = 'Your saved questions'
 export const savedQuestionsHere = (count: number) => `Showing the ${count} you saved here.`
 export const question = 'Question'

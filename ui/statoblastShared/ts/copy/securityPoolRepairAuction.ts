@@ -1,5 +1,7 @@
+import { minimumSecurityPoolHealthFactorBps } from '@zoltar/statoblast-shared/statoblast/securityPool'
+
 import { formatEther, formatUnits } from '@zoltar/core-shared/evm/ethereum'
-export const title = 'Recapitalization auction'
+export const title = 'Repair auction'
 export const description = 'Lowest REP asks fill first. Every winning lot gets the higher of the highest winning ask and the minimum REP needed to back a lot at closing.'
 export const ownership = 'If the REP price rises before closing, fewer lots may fill and the position may start below your health target.'
 export const fairness = 'Equal asks fill in submission order. Unfilled lots are refunded. Bids cannot be cancelled or changed.'
@@ -11,8 +13,8 @@ export const loadError = 'Unable to load this branch auction.'
 export const contextChanged = 'Auction, wallet or network changed. Refresh and review again.'
 export const fundingChanged = 'Auction funding changed. Refresh and review the new amounts.'
 export const quoteError = 'Invalid auction bid funding.'
-export const open = 'Open recapitalization auction'
-export const opening = 'Opening recapitalization auction…'
+export const open = 'Open repair auction'
+export const opening = 'Opening repair auction…'
 export const closed = 'The auction bidding window is closed.'
 export const openFirst = 'Open the auction after accepting a funded branch price report.'
 export const status = 'Auction state'
@@ -26,7 +28,7 @@ export const minimumRep = 'REP you want per lot, at least'
 export const priceHint = (grid: bigint | undefined) => (grid === undefined ? 'Checking REP price step.' : `Use multiples of ${formatEther(grid)} REP.`)
 export const repInvalid = 'Enter a positive REP amount with up to 18 decimal places.'
 export const health = 'Target health (%)'
-export const healthInvalid = 'Enter a health target of at least 100%, with up to two decimal places.'
+export const healthInvalid = `Enter a health target of at least ${formatUnits(minimumSecurityPoolHealthFactorBps, 2)}%, with up to two decimal places.`
 export const clearingRep = 'Clearing REP per winning lot'
 export const purchasedPrincipal = 'REP pledged at closing'
 export const bid = 'Submit funded bid'
@@ -89,7 +91,7 @@ export const details = 'Position controls'
 export const yourAsk = 'Your ask'
 export const lowestAsk = 'Your lowest'
 export const highestAsk = 'Highest now'
-export const baseAsk = '100% health'
+export const baseAsk = `${formatUnits(minimumSecurityPoolHealthFactorBps, 2)}% health`
 export const askScale = 'Your ask, REP per lot'
 export const askAmount = (amount: string) => `${amount} REP per lot`
 export const lotsForShortfall = (lots: bigint, value: string) => `${lots} ${lots === 1n ? 'lot' : 'lots'} of ${value} cover the shortfall`

@@ -63,7 +63,7 @@ function requireReportingBootstrapReadResult(value: unknown): ReportingBootstrap
 		initialEscalationGameDepositAttoRep: requireBigintValue(initialEscalationGameDepositAttoRep, 'minimum first report'),
 		systemStateValue: requireIntegerLikeValue(systemStateValue, 'reporting system state'),
 		questionOutcomeValue: requireIntegerLikeValue(questionOutcomeValue, 'reporting question outcome'),
-		parentQuestionLedgerAddress: requireAddressValue(parentQuestionLedgerAddress, 'reporting parent question ledger address'),
+		parentQuestionLedgerAddress: requireAddressValue(parentQuestionLedgerAddress, 'parent question contract for reporting'),
 	}
 }
 

@@ -255,13 +255,13 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 						reportIdInput: submittedOpenOracleForm.reportId,
 						requireCurrentSelection: true,
 					})
-					if (getOpenOracleSelectedReportActionMode(reportDetails) !== 'dispute') throw new Error('Token approvals are only available while disputing a report')
+					if (getOpenOracleSelectedReportActionMode(reportDetails) !== 'dispute') throw new Error(openOracleCopy.approvalDisputeOnly)
 					const refreshedDisputeSubmission = getDisputeSubmission(reportDetails, submittedOpenOracleForm)
 					if (refreshedDisputeSubmission.inputBlockMessage !== undefined) throw new Error(refreshedDisputeSubmission.inputBlockMessage.message)
 					assertDisputeSwapTokenUnchanged(cachedDisputeSubmission, refreshedDisputeSubmission, reportDetails)
 					const contributionAmount = (submission: typeof refreshedDisputeSubmission) => (token === 'token1' ? submission.token1ContributionAmount : submission.token2ContributionAmount)
 					if (amount !== undefined && contributionAmount(refreshedDisputeSubmission) !== contributionAmount(cachedDisputeSubmission)) {
-						throw new Error(`The required ${tokenLabel} approval changed. Review the refreshed report and try again.`)
+						throw new Error(openOracleCopy.approvalChanged(tokenLabel))
 					}
 					await refreshOpenOracleTokenAccess(reportDetails, { preserveExisting: true })
 					assertSelectedReportCurrent(reportDetails.reportId.toString())
@@ -285,7 +285,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		await runOracleAction(
 			token === 'token1' ? 'approveToken1' : 'approveToken2',
 			async (walletAddress, context) => {
-				if (parseAddressInput(openOracleCreateForm.value[token === 'token1' ? 'token1Address' : 'token2Address'], 'Token address') !== tokenAddress) throw new Error('Report token changed. Review again.')
+				if (parseAddressInput(openOracleCreateForm.value[token === 'token1' ? 'token1Address' : 'token2Address'], 'Token address') !== tokenAddress) throw new Error(openOracleCopy.reportTokenChanged)
 				return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), tokenAddress, getOpenOracleAddress(), amount, token === 'token1' ? 'approveToken1' : 'approveToken2')
 			},
 			'Token approval failed.',
@@ -298,7 +298,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 				const form = openOracleCreateForm.value
 				const client = dependencies.createConnectedReadClient()
 				const shortfall = await createReportWrapShortfall(client, walletAddress, form)
-				if (openOracleCreateForm.value !== form) throw new Error('Report funding changed. Review again.')
+				if (openOracleCreateForm.value !== form) throw new Error(openOracleCopy.reportFundingChanged)
 				return await dependencies.wrapWeth(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), shortfall)
 			},
 			'ETH wrap failed.',
@@ -371,7 +371,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					})
 					if (createGuardMessage !== undefined) throw new Error(createGuardMessage)
 					const preciseCreateValidation = getOpenOracleCreateValidation({ form: submittedOpenOracleCreateForm, token1Decimals, token2Decimals })
-					if (!preciseCreateValidation.isValid) throw new Error(preciseCreateValidation.message ?? 'Invalid oracle report parameters.')
+					if (!preciseCreateValidation.isValid) throw new Error(preciseCreateValidation.message ?? openOracleCopy.invalidReportParameters)
 
 					return await dependencies.createOpenOracleReportInstance(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), parseOpenOracleCreateFormSubmission({ form: submittedOpenOracleCreateForm, token1Decimals, token2Decimals }))
 				},
@@ -389,7 +389,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			async (walletAddress, context) => {
 				const { details } = await ensureLoadedSelectedReport({ forceReload: true, requireCurrentSelection: true })
 				const settleAvailability = getOpenOracleSettleAvailability(details)
-				if (!settleAvailability.canAct) throw new Error(settleAvailability.message ?? 'This report is not ready to settle.')
+				if (!settleAvailability.canAct) throw new Error(settleAvailability.message ?? openOracleCopy.reportNotReadyToSettle)
 				priceUnits = getSettlementPriceUnits(details)
 
 				return await dependencies.settleOracleReport(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), getOpenOracleAddress(), details.reportId)

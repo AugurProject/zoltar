@@ -13,7 +13,7 @@ import * as copy from '@zoltar/ui-statoblast-shared/copy/securityPoolCapital.js'
 import { capitalSnapshot, owner, unit } from './capitalFixture.js'
 const lifecycle = installDomTestLifecycle()
 function Harness({ snapshot = capitalSnapshot(), lastFailedAction, displayedAt }: { snapshot?: ReturnType<typeof capitalSnapshot>; lastFailedAction?: string; displayedAt?: number }) {
-	const model = useSecurityPoolAggregate({ snapshot, loading: false, error: undefined, displayedAt, refresh: async () => undefined }, { ownerReason: undefined, runSecurityPoolAction: async () => undefined }, owner, true)
+	const model = useSecurityPoolAggregate({ snapshot, loading: false, error: undefined, displayedAt, refresh: async () => undefined }, { ownerReason: undefined, runSecurityPoolAction: async () => undefined }, owner)
 	return <SecurityPoolAggregatePanel model={model} actions={{ scope: unscopedTransaction, busy: undefined, ...(lastFailedAction === undefined ? {} : { lastFailedAction }) }} />
 }
 

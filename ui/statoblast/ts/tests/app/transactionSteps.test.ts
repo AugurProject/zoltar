@@ -14,6 +14,7 @@ import { getActiveNetworkProfile, installActiveEnvironmentForTesting, resetActiv
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
 import { withTransactionReviews } from '@zoltar/ui-statoblast-shared/protocol/reviewedBackend.js'
+import { runFundingTransactions } from '@zoltar/ui-statoblast-shared/protocol/fundingTransactions.js'
 import { runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 import { registerTransactionReviewScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
@@ -1114,6 +1115,116 @@ test('a timeout in the final preflight returns to a review that can retry withou
 	confirm()
 	await expect(sending).resolves.toBe(hash)
 	expect(sendTransaction).toHaveBeenCalledTimes(1)
+})
+
+test('a timeout in the funding preflight can recheck and send the chosen approval', async () => {
+	const { client, sendTransaction, receipt } = setup()
+	const validate = mock(async () => undefined)
+	const reviewed = createReviewedClient(
+		{
+			...client,
+			sendTransaction,
+			waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }),
+			readContract: createReadContractStub(request => {
+				if (request.functionName === 'symbol') return 'REP'
+				if (request.functionName === 'decimals') return 0
+				return 0n
+			}),
+		},
+		validate,
+		undefined,
+		undefined,
+		true,
+	)
+	const data = encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [account, 6n] })
+	const fundingStep = { functionName: 'approve', contractAddress: account, args: [account, 6n], data } as const
+	reviewed.onTransactionPlan?.([fundingStep, { functionName: 'report', contractAddress: account, tokenFunding: [{ tokenAddress: account, amount: 3n }] }])
+	if (reviewed.runFundingTransaction === undefined) throw new Error('Funding unavailable')
+	const funding = reviewed.runFundingTransaction([0], async () => {
+		reviewed.onTransactionPrepared?.({ ...fundingStep, account, chainName: client.chain.name, value: undefined })
+		await reviewed.sendTransaction({ to: account, data })
+		await reviewed.waitForTransactionReceipt({ hash })
+	})
+	void funding.catch(() => undefined)
+	await waitForTransactionStep(0)
+	validate.mockRejectedValueOnce(new Error(currentStateCheckFailed))
+	transactionSteps.value?.confirmStep(0, 5n)
+	await Bun.sleep(5)
+	const status = transactionSteps.value?.reviewCheck
+	expect(status?.status).toBe('failed')
+	if (status?.status !== 'failed') throw new Error('Expected retryable funding preflight')
+	expect(sendTransaction).not.toHaveBeenCalled()
+	status.retry()
+	await waitForTransactionStep(0)
+	expect(sendTransaction).not.toHaveBeenCalled()
+	transactionSteps.value?.confirmStep(0, 5n)
+	await expect(funding).resolves.toBe(true)
+	expect(sendTransaction).toHaveBeenCalledTimes(1)
+	expect(sendTransaction).toHaveBeenCalledWith(expect.objectContaining({ data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [account, 5n] }) }))
+})
+
+test('a timeout while re-reading a game preparation requirement can retry without opening the wallet', async () => {
+	const { client, sendTransaction, receipt } = setup()
+	const reviewed = createReviewedClient({ ...client, sendTransaction, waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }) }, undefined, undefined, undefined, true)
+	const step = { functionName: 'prepareEscalationGame', contractAddress: account, data: '0x1234' } as const
+	const isRequired = mock(async () => true)
+	const funding = runFundingTransactions(
+		reviewed,
+		[
+			{
+				step,
+				isRequired,
+				execute: async () => {
+					reviewed.onTransactionPrepared?.({ ...step, account, args: [], chainName: client.chain.name, value: undefined })
+					await reviewed.sendTransaction({ to: account, data: step.data })
+					return await reviewed.waitForTransactionReceipt({ hash })
+				},
+			},
+		],
+		{ functionName: 'report', contractAddress: account },
+	)
+	void funding.catch(() => undefined)
+	await waitForTransactionStep(0)
+	isRequired.mockRejectedValueOnce(new Error(currentStateCheckFailed))
+	confirm()
+	await Bun.sleep(5)
+	const check = transactionSteps.value?.reviewCheck
+	if (check?.status !== 'failed') throw new Error('Expected retryable game preparation check')
+	expect(sendTransaction).not.toHaveBeenCalled()
+	check.retry()
+	await waitForTransactionStep(0)
+	expect(sendTransaction).not.toHaveBeenCalled()
+	confirm()
+	await expect(funding).resolves.toBeUndefined()
+	expect(sendTransaction).toHaveBeenCalledTimes(1)
+})
+
+test('writeContract sends the exact refreshed calldata from a confirmed review', async () => {
+	const { client, sendTransaction } = setup()
+	const writeContract = mock(async () => hash)
+	const call = mock(async () => ({ data: '0x' as const }))
+	const parameters = { abi: ABIS.mainnet.erc20, address: account, functionName: 'transfer', args: [account, 1n], gas: 50_000n } as const
+	const refreshed = encodeFunctionData({ ...parameters, args: [account, 2n] })
+	const validateBeforeSubmit = mock(async () => undefined)
+	validateBeforeSubmit.mockRejectedValueOnce(new Error(changedSinceReview))
+	const reviewed = createReviewedClient({ ...client, call, writeContract, sendTransaction }, undefined, undefined, undefined, true)
+	reviewed.onTransactionPlan?.([{ ...parameters, contractAddress: account, validateBeforeSubmit, refreshReviewData: async () => refreshed }])
+	const sending = reviewed.writeContract(parameters)
+	void sending.catch(() => undefined)
+	await waitForStarted()
+	await Bun.sleep(5)
+	const check = transactionSteps.value?.reviewCheck
+	if (check?.status !== 'changed') throw new Error('Expected Review again')
+	check.retry()
+	await waitForTransactionStep(0)
+	expect(call).toHaveBeenCalledWith(expect.objectContaining({ data: refreshed }))
+	expect(transactionSteps.value?.steps[0]?.technicalRows).toContainEqual({ label: 'Arguments', value: `${account}, 2` })
+	expect(writeContract).not.toHaveBeenCalled()
+	expect(sendTransaction).not.toHaveBeenCalled()
+	confirm()
+	await expect(sending).resolves.toBe(hash)
+	expect(writeContract).not.toHaveBeenCalled()
+	expect(sendTransaction).toHaveBeenCalledWith(expect.objectContaining({ to: account, data: refreshed, gas: 50_000n }))
 })
 
 test('an aged review exposes changed rows and requires a fresh review confirmation before sending', async () => {

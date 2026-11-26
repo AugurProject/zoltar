@@ -3,7 +3,7 @@ import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import { getTransactionReviewSignal } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
-import { getAddress, encodeFunctionData, maxUint256, parseTransaction, recoverTransactionAddress } from '@zoltar/core-shared/evm/ethereum'
+import { decodeFunctionData, getAddress, encodeFunctionData, maxUint256, parseTransaction, recoverTransactionAddress, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { TransactionPlanStep, TransactionRequestPreview, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -19,6 +19,14 @@ const checkedReviewClients = new WeakSet<WriteClient>()
 
 export function checksTransactionReview(client: WriteClient) {
 	return checkedReviewClients.has(client)
+}
+
+function retryReviewStatus(error: unknown) {
+	if (error instanceof Error) {
+		if (error.message === transactionCopy.currentStateCheckFailed) return 'failed'
+		if (error.message === changedSinceReview) return 'changed'
+	}
+	return undefined
 }
 
 async function describeTransaction(client: WriteClient, preview: TransactionRequestPreview & Pick<TransactionPlanStep, 'optional' | 'tokenFunding' | 'oracleOutcome' | 'approvalPurpose'>, requiredApprovalAmount?: bigint): Promise<TransactionStepDetails> {
@@ -47,7 +55,7 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 	}
 	if (preview.functionName === 'depositRepOnOutcome' || preview.functionName === 'depositRepOnOutcomeWithLead' || preview.functionName === 'depositWalletRepToEscalationGame' || preview.functionName === 'depositWalletRepToEscalationGameWithLead') {
 		const [outcome, amount] = preview.args ?? []
-		if (typeof amount !== 'bigint' || (outcome !== 0 && outcome !== 1 && outcome !== 2 && outcome !== 0n && outcome !== 1n && outcome !== 2n)) throw new Error('Invalid escalation deposit review')
+		if (typeof amount !== 'bigint' || (outcome !== 0 && outcome !== 1 && outcome !== 2 && outcome !== 0n && outcome !== 1n && outcome !== 2n)) throw new Error('Couldn’t review this reporting deposit.')
 		let label = commonCopy.no
 		if (outcome === 0 || outcome === 0n) label = commonCopy.invalid
 		if (outcome === 1 || outcome === 1n) label = commonCopy.yes
@@ -128,8 +136,15 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 		const signer = await recoverTransactionAddress({ serializedTransaction: transaction.data })
 		return await client.call({ account: signer, to: signed.to ?? undefined, data: signed.data, value: signed.value, gas: signed.gas })
 	}
-	const send = async (fallback: TransactionRequestPreview, execute: (approvalArgs?: readonly [ReturnType<typeof getAddress>, bigint], gas?: bigint, data?: TransactionRequestPreview['data']) => Promise<`0x${string}`>, requestedGas?: bigint, raw = false) => {
+	const send = async (
+		fallback: TransactionRequestPreview,
+		execute: (approvalArgs?: readonly [ReturnType<typeof getAddress>, bigint], gas?: bigint, data?: TransactionRequestPreview['data']) => Promise<`0x${string}`>,
+		requestedGas?: bigint,
+		options?: { raw?: boolean; readReviewArgs?: (data: Hex) => readonly unknown[] | undefined },
+	) => {
 		const prepared = preview
+		const funding = selectedFunding
+		selectedFunding = undefined
 		let transaction = prepared ?? fallback
 		let gas = requestedGas
 		preview = undefined
@@ -144,9 +159,8 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 			if (expected === undefined || expected.functionName !== transaction.functionName || (expected.value ?? 0n) !== (transaction.value ?? 0n) || (expected.contractAddress ?? expected.to) !== (transaction.contractAddress ?? transaction.to))
 				throw new Error('The transaction plan changed. No further transactions were sent. Review the action again.')
 			if (transaction.functionName === 'approve' && (expected.args?.[0] !== transaction.args?.[0] || expected.args?.[1] !== transaction.args?.[1])) throw new Error('The approval amount changed. Review the action again.')
-			const check = (candidate: TransactionRequestPreview) => checkTransaction(candidate, expected, gas, raw)
+			const check = (candidate: TransactionRequestPreview) => checkTransaction(candidate, expected, gas, options?.raw)
 			if (alwaysReview) controller.setTechnicalRows(stepIndex, [...getPreparedTransactionTechnicalRows(transaction), { label: appCopy.network, value: client.chain.name }])
-			const alreadyReviewedFunding = selectedFunding !== undefined
 			let reviewedRows: ReturnType<NonNullable<TransactionPlanStep['readReviewRows']>> | undefined
 			let checkedAt = 0
 			const readRows = () => {
@@ -158,6 +172,7 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 			let approvalArgs: readonly [ReturnType<typeof getAddress>, bigint] | undefined
 			const prepareToSend = async (selectedAmount: bigint | undefined) => {
 				approvalArgs = undefined
+				partialApproval = false
 				transaction = originalTransaction
 				gas = requestedGas
 				if (selectedAmount !== undefined) {
@@ -199,7 +214,7 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 				if (expected.tokenFunding !== undefined) await validate()
 				if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 				controller.assertActive()
-				if (alwaysReview && (approvalArgs !== undefined || alreadyReviewedFunding)) await check(transaction)
+				if (alwaysReview && (approvalArgs !== undefined || funding !== undefined)) await check(transaction)
 				else if (expected.validateBeforeSubmit !== undefined) {
 					const validation = expected.validateBeforeSubmit()
 					if (alwaysReview) await validation
@@ -209,42 +224,50 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 				controller.assertActive()
 			}
 
-			let selectedAmount = selectedFunding?.amount
-			if (selectedFunding === undefined) {
-				if (alwaysReview) {
-					selectedAmount = await controller.review(stepIndex, {
-						deferWallet: true,
-						check: async retrying => {
-							if (retrying && expected.refreshReviewData !== undefined) {
-								originalTransaction = { ...originalTransaction, data: await expected.refreshReviewData() }
-								controller.setTechnicalRows(stepIndex, [...getPreparedTransactionTechnicalRows(originalTransaction), { label: appCopy.network, value: client.chain.name }])
-							}
+			const review = (initialError?: Error) =>
+				controller.review(stepIndex, {
+					deferWallet: true,
+					initialError,
+					check: async retrying => {
+						if (retrying && expected.refreshReviewData !== undefined) {
+							const data = await expected.refreshReviewData()
+							const args = options?.readReviewArgs === undefined ? originalTransaction.args : options.readReviewArgs(data)
+							originalTransaction = { ...originalTransaction, args, data }
+							controller.setTechnicalRows(stepIndex, [...getPreparedTransactionTechnicalRows(originalTransaction), { label: appCopy.network, value: client.chain.name }])
+						}
+						await check(originalTransaction)
+						reviewedRows = readRows()
+						checkedAt = performance.now()
+					},
+					recheck: async amount => {
+						if (performance.now() - checkedAt > 30_000) {
 							await check(originalTransaction)
-							reviewedRows = readRows()
-							checkedAt = performance.now()
-						},
-						recheck: async amount => {
-							if (performance.now() - checkedAt > 30_000) {
-								await check(originalTransaction)
-								const currentRows = readRows()
-								if (reviewedRows !== undefined && currentRows !== undefined && (reviewedRows.length !== currentRows.length || reviewedRows.some((row, index) => row.label !== currentRows[index]?.label || row.value !== currentRows[index]?.value))) throw new Error(changedSinceReview)
-							}
-							await prepareToSend(amount)
-						},
-						retryStatus: error => {
-							if (!(error instanceof Error)) return undefined
-							if (error.message === transactionCopy.currentStateCheckFailed) return 'failed'
-							if (error.message === changedSinceReview) return 'changed'
-							return undefined
-						},
-					})
-				} else {
+							const currentRows = readRows()
+							if (reviewedRows !== undefined && currentRows !== undefined && (reviewedRows.length !== currentRows.length || reviewedRows.some((row, index) => row.label !== currentRows[index]?.label || row.value !== currentRows[index]?.value))) throw new Error(changedSinceReview)
+						}
+						await prepareToSend(amount)
+					},
+					retryStatus: retryReviewStatus,
+				})
+			if (alwaysReview) {
+				if (funding === undefined) await review()
+				else {
+					try {
+						await prepareToSend(funding.amount)
+					} catch (error) {
+						// This check runs before opening the wallet. A submitted transaction must never be retried here.
+						if (!(error instanceof Error) || retryReviewStatus(error) === undefined) throw error
+						await review(error)
+					}
+				}
+			} else {
+				let selectedAmount = funding?.amount
+				if (funding === undefined) {
 					readRows()
 					selectedAmount = requiresReview() ? await controller.review(stepIndex) : controller.startWithoutReview(stepIndex)
 				}
+				await prepareToSend(selectedAmount)
 			}
-			selectedFunding = undefined
-			if (!alwaysReview || alreadyReviewedFunding) await prepareToSend(selectedAmount)
 			stepIndex += 1
 			controller.openWallet()
 			client.onTransactionPrepared?.(transaction)
@@ -268,37 +291,52 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 				controller.assertActive()
 				if (!alwaysReview) await validate()
 				await initialize()
-				selectedFunding = await controller.chooseFunding(
-					requiredIndices,
-					!requiresReview() && plan?.length === 1,
-					alwaysReview
-						? {
-								deferWallet: true,
-								check: async () => {
-									await Promise.all(
-										requiredIndices.map(async index => {
-											const step = plan?.[index]
-											if (step === undefined) throw new Error('Missing planned funding transaction.')
-											const transaction = { account: client.account, args: undefined, chainName: client.chain.name, value: undefined, ...step }
-											controller.setTechnicalRows(index, [...getPreparedTransactionTechnicalRows(transaction), { label: appCopy.network, value: client.chain.name }])
-											await checkTransaction(transaction, step, undefined)
-											const rows = step.readReviewRows?.()
-											if (rows !== undefined) controller.setReviewRows(index, rows)
-										}),
-									)
-								},
-							}
-						: undefined,
-				)
-				stepIndex = selectedFunding?.index ?? (plan?.length ?? 1) - 1
-				if (selectedFunding === undefined) return false
-				await execute(selectedFunding.index)
-				if (selectedFunding !== undefined) {
-					selectedFunding = undefined
-					controller.skipped()
+				let initialError: Error | undefined
+				while (true) {
+					selectedFunding = await controller.chooseFunding(
+						requiredIndices,
+						!requiresReview() && plan?.length === 1,
+						alwaysReview
+							? {
+									deferWallet: true,
+									initialError,
+									retryStatus: retryReviewStatus,
+									check: async () => {
+										await Promise.all(
+											requiredIndices.map(async index => {
+												const step = plan?.[index]
+												if (step === undefined) throw new Error('Missing planned funding transaction.')
+												const transaction = { account: client.account, args: undefined, chainName: client.chain.name, value: undefined, ...step }
+												controller.setTechnicalRows(index, [...getPreparedTransactionTechnicalRows(transaction), { label: appCopy.network, value: client.chain.name }])
+												await checkTransaction(transaction, step, undefined)
+												const rows = step.readReviewRows?.()
+												if (rows !== undefined) controller.setReviewRows(index, rows)
+											}),
+										)
+									},
+								}
+							: undefined,
+					)
+					stepIndex = selectedFunding?.index ?? (plan?.length ?? 1) - 1
+					if (selectedFunding === undefined) return false
+					try {
+						await execute(selectedFunding.index)
+					} catch (error) {
+						// The selection is consumed as soon as send starts. Only retry work that failed before that point.
+						if (!alwaysReview || selectedFunding === undefined || !(error instanceof Error) || retryReviewStatus(error) === undefined) throw error
+						initialError = error
+						selectedFunding = undefined
+						preview = undefined
+						continue
+					}
+					if (selectedFunding !== undefined) {
+						selectedFunding = undefined
+						controller.skipped()
+					}
+					return true
 				}
-				return true
 			} catch (error) {
+				selectedFunding = undefined
 				controller.failed(createTransactionFailure(error, getErrorMessage(error, 'Funding failed. Remaining transactions were not sent.')))
 				throw error
 			}
@@ -312,9 +350,10 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 				async (approvalArgs, gas, data) => await client.sendTransaction({ ...parameters, ...(gas === undefined ? {} : { gas }), ...(data === undefined ? {} : { data }), ...(approvalArgs === undefined ? {} : { data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs }) }) }),
 				parameters.gas,
 			),
-		sendRawTransaction: async parameters => await send({ account: undefined, args: undefined, chainName: client.chain.name, functionName: 'Deploy contract', data: parameters.serializedTransaction, value: undefined }, async () => await client.sendRawTransaction(parameters), undefined, true),
-		writeContract: async parameters =>
-			await send(
+		sendRawTransaction: async parameters => await send({ account: undefined, args: undefined, chainName: client.chain.name, functionName: 'Deploy contract', data: parameters.serializedTransaction, value: undefined }, async () => await client.sendRawTransaction(parameters), undefined, { raw: true }),
+		writeContract: async parameters => {
+			const encodedData = encodeFunctionData({ abi: parameters.abi, functionName: parameters.functionName, ...(parameters.args === undefined ? {} : { args: parameters.args }) })
+			return await send(
 				{
 					account: client.account,
 					args: parameters.args,
@@ -322,14 +361,24 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 					functionName: parameters.functionName,
 					contractAddress: parameters.address,
 					value: parameters.value,
-					data: encodeFunctionData({ abi: parameters.abi, functionName: parameters.functionName, ...(parameters.args === undefined ? {} : { args: parameters.args }) }),
+					data: encodedData,
 				},
-				async (approvalArgs, gas) => {
+				async (approvalArgs, gas, data) => {
 					const call = { ...parameters, ...(gas === undefined ? {} : { gas }) }
-					return approvalArgs === undefined ? await client.writeContract(call) : await client.writeContract({ ...call, abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs })
+					if (approvalArgs !== undefined) return await client.writeContract({ ...call, abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs })
+					if (data !== undefined && data !== encodedData) return await client.sendTransaction({ account: parameters.account, to: parameters.address, data, value: parameters.value, gas })
+					return await client.writeContract(call)
 				},
 				parameters.gas,
-			),
+				{
+					readReviewArgs: data => {
+						const decoded = decodeFunctionData({ abi: parameters.abi, data })
+						if (decoded.functionName !== parameters.functionName) throw new Error('The prepared transaction changed.')
+						return decoded.args
+					},
+				},
+			)
+		},
 		waitForTransactionReceipt: async parameters => {
 			let diagnosedReceiptFailure = false
 			try {

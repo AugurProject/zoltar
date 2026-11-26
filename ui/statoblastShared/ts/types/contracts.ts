@@ -134,6 +134,7 @@ export type ListedQuestionLedger = {
 	}
 	feeEligibleUnderwritingLimitAttoEth: bigint
 	hasEscalationGame: boolean
+	hasReachedNonDecision?: boolean | undefined
 	initialReportingResponseWindow?: bigint | undefined
 	oraclePriceValidUntilTimestamp?: bigint | undefined
 	ordinaryEscalationGameStarted: boolean

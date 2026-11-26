@@ -111,3 +111,8 @@ export const formatMintWallet = (symbol: string) => `Wallet ${symbol}`
 export const formatMintLimits = (fee: string, symbol: string, shares: string) => `Pay at most ${fee} ${symbol} in fees and receive at least ${shares} sets`
 
 export const checkingMintMaximum = 'Checking the maximum collateral amount…'
+
+export const tradingReadFailed = 'Failed to load trading details.'
+export const invalidMintAmount = 'Invalid mint amount.'
+export const invalidRedeemAmount = 'Invalid redeem amount.'
+export const collateralDetailsLoading = 'Collateral metadata is not loaded. Wait for funding details and try again.'

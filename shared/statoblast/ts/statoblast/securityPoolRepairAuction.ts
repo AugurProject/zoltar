@@ -1,5 +1,6 @@
-import { encodeFunctionData, formatEther, getAddress, isAddress, isHex, parseAbi, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, formatEther, formatUnits, getAddress, isAddress, isHex, parseAbi, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { ceilDiv } from '@zoltar/core-shared/math/bigint'
+import { minimumSecurityPoolHealthFactorBps } from './securityPoolCapital.js'
 import type { SecurityPoolAuctionSnapshot } from './securityPoolAuctionRead.js'
 export { loadSecurityPoolAuctionSnapshot, type SecurityPoolAuctionSnapshot, type SecurityPoolAuctionBid } from './securityPoolAuctionRead.js'
 
@@ -16,6 +17,8 @@ const abi = parseAbi([
 ])
 const ATTO_UNITS = 10n ** 18n
 const BPS = 10_000n
+const secondsPerDay = 86_400n
+const minimumAuctionOpeningDays = 1n
 function address(value: Address, label: string) {
 	if (!isAddress(value) || getAddress(value) === zeroAddress) throw new Error(`${label} must be a nonzero address.`)
 	return getAddress(value)
@@ -25,7 +28,7 @@ function uint(value: bigint, label: string, bits = 256) {
 	return value
 }
 function requireAuction(snapshot: SecurityPoolAuctionSnapshot) {
-	if (snapshot.auction === undefined) throw new Error('This branch has no recapitalization auction.')
+	if (snapshot.auction === undefined) throw new Error('This branch has no repair auction.')
 	return snapshot.auction
 }
 
@@ -36,7 +39,7 @@ export function securityPoolAuctionOpeningReason(snapshot: SecurityPoolAuctionSn
 	if (auction.finalized) return 'This auction is finalized.'
 	if (auction.opened) return 'This auction is already open.'
 	if (snapshot.timestamp >= auction.closesAt) return 'The auction window has closed.'
-	if (auction.closesAt - snapshot.timestamp < 86_400n) return 'Opening requires at least one day for competitive bidding.'
+	if (auction.closesAt - snapshot.timestamp < minimumAuctionOpeningDays * secondsPerDay) return `Opening requires at least ${minimumAuctionOpeningDays} day for competitive bidding.`
 	if (snapshot.forkTime !== 0n) return 'This auction universe has forked.'
 	if (auction.targetLots === 0n || auction.inventoryAttoRep === 0n) return 'This branch has no saleable auction lots.'
 	const price = auction.price
@@ -80,7 +83,7 @@ export function quoteSecurityPoolAuctionBid(snapshot: SecurityPoolAuctionSnapsho
 	const targetHealthFactorBps = uint(terms.targetHealthFactorBps, 'Health target')
 	if (lots === 0n || minimumAttoRepPerLot === 0n || minimumAttoRepPerLot % auction.repGrid !== 0n) throw new Error('Use positive whole lots and an exact REP price-grid multiple.')
 	if (minimumAttoRepPerLot > auction.maximumBidAttoRepPerLot) throw new Error('The minimum REP per lot exceeds the auction inventory.')
-	if (targetHealthFactorBps < BPS) throw new Error('The chosen health target must be at least 100%.')
+	if (targetHealthFactorBps < minimumSecurityPoolHealthFactorBps) throw new Error(`Choose a health target of at least ${formatUnits(minimumSecurityPoolHealthFactorBps, 2)}%.`)
 	const requiredPrincipalPerLotAttoRep = uint(minimumSecurityPoolAuctionRepPerLot(auction, targetHealthFactorBps), 'Required REP per lot')
 	if (auction.maximumAdmissibleBidAttoRepPerLot < auction.minimumCollateralAttoRepPerLot) throw new Error('Better funded bids leave no admissible new limit.')
 	if (minimumAttoRepPerLot < requiredPrincipalPerLotAttoRep) throw new Error(`Increase the minimum REP per lot to at least ${formatEther(requiredPrincipalPerLotAttoRep)} REP for the chosen health target.`)
@@ -160,6 +163,6 @@ export function buildSecurityPoolAuctionVaultExecuteRequest(parameters: { bidder
 }
 /** The vault pulls the exact approved REP amount from its owner before depositing. */
 export function buildSecurityPoolAuctionVaultDepositRequest(parameters: { bidder: Address; vault: Address; capitalLedger: Address; amountAttoRep: bigint; targetHealthFactorBps: bigint }) {
-	if (uint(parameters.amountAttoRep, 'REP deposit') === 0n || uint(parameters.targetHealthFactorBps, 'Health target') < BPS) throw new Error('Choose a positive REP deposit and a health target of at least 100%.')
+	if (uint(parameters.amountAttoRep, 'REP deposit') === 0n || uint(parameters.targetHealthFactorBps, 'Health target') < minimumSecurityPoolHealthFactorBps) throw new Error(`Choose a positive REP deposit and a health target of at least ${formatUnits(minimumSecurityPoolHealthFactorBps, 2)}%.`)
 	return { account: address(parameters.bidder, 'Position owner'), to: address(parameters.vault, 'Auction position'), value: 0n, data: encodeFunctionData({ abi, functionName: 'depositPrincipal', args: [address(parameters.capitalLedger, 'Capital contract'), parameters.amountAttoRep, parameters.targetHealthFactorBps] }) }
 }

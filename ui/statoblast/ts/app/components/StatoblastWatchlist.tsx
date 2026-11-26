@@ -66,6 +66,11 @@ function hasPosition(row: WatchlistRow | undefined) {
 	return (pledged ?? 0n) > 0n || (commitment ?? 0n) > 0n || (reportingPrincipal ?? 0n) > 0n || (shares !== undefined && Object.values(shares).some(amount => amount > 0n))
 }
 
+type WatchlistAnchor = NonNullable<WatchlistReadCheckpoint['anchor']>
+type WatchlistRotation = { next: number; rows: Map<string, WatchlistRow>; oldest?: WatchlistAnchor }
+const primaryWatchlistSize = 25
+const watchlistRotationSize = 10
+
 export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, registerPageRefresh, onReadStatus }: { registerPageRefresh: RegisterStatoblastPageRefresh; onReadStatus?: ReportStatoblastReadStatus | undefined; enabled: boolean; universe: bigint; owner: Address | undefined; environmentKey: number }) {
 	const questions = useFavorites('statoblast', 'question')
 	const pools = useFavorites('statoblast', 'pool')
@@ -90,7 +95,7 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 	const inputId = useId()
 	const fileId = useId()
 	const generation = useRef(0)
-	const tail = useRef(25)
+	const rotation = useRef<WatchlistRotation>()
 	const inFlight = useRef<number>()
 	const pendingRead = useRef<AbortController>()
 	const watchlistRead = useRef<{ scope: string; checkpoint: WatchlistReadCheckpoint }>()
@@ -104,12 +109,8 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 		pendingRead.current = abort
 		const guard = createActiveEnvironmentGuard()
 		const current = () => generation.current === marker && guard.isCurrent()
-		const first = source.slice(0, 25)
-		let selected = source
-		if (automatic && source.length > 25) {
-			selected = [...first, ...source.slice(tail.current, tail.current + 10)]
-			tail.current = tail.current + 10 >= source.length ? 25 : tail.current + 10
-		}
+		const rotating: WatchlistRotation | undefined = automatic && source.length > primaryWatchlistSize + watchlistRotationSize ? (rotation.current ??= { next: primaryWatchlistSize, rows: new Map() }) : undefined
+		const selected = rotating === undefined ? source : [...source.slice(0, primaryWatchlistSize), ...source.slice(rotating.next, rotating.next + watchlistRotationSize)]
 		const readScope = `${scope}:${selected.map(entry => entry.id).join(',')}`
 		if (watchlistRead.current?.scope !== readScope) watchlistRead.current = { scope: readScope, checkpoint: { rows: [] } }
 		const { checkpoint } = watchlistRead.current
@@ -132,9 +133,20 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 					watchlistRead.current = undefined
 					const anchor = checkpoint.anchor
 					if (anchor === undefined) return
-					const observedAt = anchor.observedAt
-					setReadAt(previous => (selected.length === source.length || previous === undefined ? observedAt : Math.min(previous, observedAt)))
-					if (selected.length === source.length) displayCache.write(result, anchor, observedAt)
+					if (rotating === undefined) {
+						rotation.current = undefined
+						setReadAt(anchor.observedAt)
+						displayCache.write(result, anchor, anchor.observedAt)
+						return
+					}
+					for (const row of result) rotating.rows.set(row.entity.id, row)
+					if (rotating.oldest === undefined || anchor.observedAt < rotating.oldest.observedAt) rotating.oldest = anchor
+					rotating.next += watchlistRotationSize
+					if (rotating.next >= source.length) {
+						rotation.current = undefined
+						setReadAt(rotating.oldest.observedAt)
+						displayCache.write([...rotating.rows.values()], rotating.oldest, rotating.oldest.observedAt)
+					}
 				},
 				error => {
 					if (current()) setReadError(ensureSentence(getErrorDetail(error) ?? pageCopy.refreshFailedError))
@@ -157,7 +169,6 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 			setRows(new Map(cached?.value.map(row => [row.entity.id, row])))
 			setReadAt(cached?.savedAt)
 			setRecent(history.read())
-			tail.current = 25
 		}
 		const cancel = () => {
 			generation.current++
@@ -165,6 +176,7 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 			pendingRead.current?.abort()
 			pendingRead.current = undefined
 			watchlistRead.current = undefined
+			rotation.current = undefined
 		}
 		const visibilityChanged = () => {
 			if (!document.hidden) {

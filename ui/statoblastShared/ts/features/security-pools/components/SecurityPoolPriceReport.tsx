@@ -8,7 +8,6 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
 import { formatDuration, formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { formatOldDataCheck } from '@zoltar/ui-core-shared/copy/transaction.js'
-import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -17,7 +16,6 @@ import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
-import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import { SecurityPoolButton, SecurityPoolInput } from './SecurityPoolControls.js'
 import { useSecurityPoolPrice, type SecurityPoolPriceParameters } from '../hooks/useSecurityPoolPrice.js'
 import { getSecurityPoolPriceWarning } from '../lib/priceWarning.js'
@@ -31,7 +29,6 @@ import * as common from '@zoltar/ui-core-shared/copy/common.js'
 export function SecurityPoolPriceReport({
 	returnFundsOnly = false,
 	hideReportingDeadline = false,
-	redesigned = false,
 	priceWindowChecking = false,
 	autoRefresh = false,
 	registerPageRefresh,
@@ -43,7 +40,6 @@ export function SecurityPoolPriceReport({
 }: SecurityPoolPriceParameters & {
 	returnFundsOnly?: boolean
 	hideReportingDeadline?: boolean
-	redesigned?: boolean
 	priceWindowChecking?: boolean
 	autoRefresh?: boolean
 	registerPageRefresh?: RegisterStatoblastPageRefresh | undefined
@@ -98,7 +94,7 @@ export function SecurityPoolPriceReport({
 	const priceStatus = priceWindowChecking ? priceWindowEndedChecking : confirmedPriceStatus
 	const reportHeading = report === undefined ? copy.currentReport : copy.reportHeading(report.reportId)
 	const settlementReady = reportStatus === copy.states.settle
-	const disputeIdentity = redesigned && reportStatus === copy.states.pending && report !== undefined ? `${model.draftKey}:${report.reportId}:${report.eligibleAt}` : undefined
+	const disputeIdentity = reportStatus === copy.states.pending && report !== undefined ? `${model.draftKey}:${report.reportId}:${report.eligibleAt}` : undefined
 	const disputeCheck = useDisputeDeadlineCheck(disputeIdentity, now !== undefined && report !== undefined && now >= report.eligibleAt, !visible || model.loading || model.reportLoading, model.refresh)
 	const disputeChecking = disputeCheck.checking
 	const acceptedPriceAge = elapsedSeconds(wallTime, observation !== undefined ? model.snapshotReadAt : priceBand?.readAt)
@@ -130,19 +126,19 @@ export function SecurityPoolPriceReport({
 			{deviation !== undefined && <MetricField label={copy.deviation}>{copy.formatDeviation(formatUnits(deviation, 2))}</MetricField>}
 		</MetricGrid>
 	)
-	const prepare = <SecurityPoolButton model={parameters.actions} action={model.actionId('prepare')} label={redesigned && model.prepareReason === scoped.prepared ? copy.preparedStep : copy.prepare} pendingLabel={copy.preparing} reason={model.prepareReason} onClick={model.prepare} />
+	const prepare = <SecurityPoolButton model={parameters.actions} action={model.actionId('prepare')} label={model.prepareReason === scoped.prepared ? copy.preparedStep : copy.prepare} pendingLabel={copy.preparing} reason={model.prepareReason} onClick={model.prepare} />
 	const wrap = <SecurityPoolButton model={parameters.actions} action={model.actionId('wrap')} label={copy.wrap} pendingLabel={copy.wrapping} reason={model.wrapReason} onClick={model.wrap} />
 	const reportPrice = <SecurityPoolButton model={parameters.actions} action={model.actionId('request')} label={scoped.request} pendingLabel={scoped.requesting} reason={model.requestReason} onClick={model.request} />
 	const priceField = (
 		<div className='initial-price-input'>
 			<SecurityPoolInput
-				label={(redesigned ? copy.priceDraftLabel : copy.price)(model.collateral.symbol)}
+				label={copy.priceDraftLabel(model.collateral.symbol)}
 				value={model.priceInput}
 				onChange={model.setPrice}
 				disabled={disabled}
 				numeric
 				describedBy={priceWarning === undefined ? undefined : priceWarningId}
-				hint={redesigned && model.comparisonPrice !== undefined ? (branch && !observation?.lastSettlementTimestamp ? copy.branchReferencePrice : copy.referencePrice)(formatRoundedCurrencyBalance(model.comparisonPrice, priceUnits)) : undefined}
+				hint={model.comparisonPrice !== undefined ? (branch && !observation?.lastSettlementTimestamp ? copy.branchReferencePrice : copy.referencePrice)(formatRoundedCurrencyBalance(model.comparisonPrice, priceUnits)) : undefined}
 			/>
 			<div aria-live='polite' className='field-error-live-region'>
 				{priceWarning === undefined ? undefined : <UserMessage id={priceWarningId} placement='field' tone='warning' detail={priceWarning} />}
@@ -155,11 +151,11 @@ export function SecurityPoolPriceReport({
 		const minimum = formatRoundedCurrencyBalance(minimumStake, model.collateral.decimals, 4, 'up')
 		stakeHint = model.funding !== undefined && model.wethInput.trim() === '' ? copy.suggestedStake(minimum, formatRoundedCurrencyBalance(model.funding.weth, model.collateral.decimals, 4, 'up'), model.collateral.symbol) : copy.minimumStake(minimum, model.collateral.symbol)
 	}
-	const stakeField = <SecurityPoolInput label={collateralCopy.reportStake(model.collateral.symbol)} hint={redesigned ? stakeHint : copy.wethHint} value={model.wethInput} onChange={model.setWeth} disabled={disabled} numeric />
+	const stakeField = <SecurityPoolInput label={collateralCopy.reportStake(model.collateral.symbol)} hint={stakeHint} value={model.wethInput} onChange={model.setWeth} disabled={disabled} numeric />
 	const wethApproval = (
 		<TokenApprovalControl
-			compact={redesigned}
-			customAmountDisclosureLabel={redesigned ? copy.adjustAmount : undefined}
+			compact
+			customAmountDisclosureLabel={copy.adjustAmount}
 			actionLabel={scoped.request}
 			allowanceError={model.fundingReadError}
 			allowanceLoading={model.loading}
@@ -179,8 +175,8 @@ export function SecurityPoolPriceReport({
 	)
 	const repApproval = (
 		<TokenApprovalControl
-			compact={redesigned}
-			customAmountDisclosureLabel={redesigned ? copy.adjustAmount : undefined}
+			compact
+			customAmountDisclosureLabel={copy.adjustAmount}
 			actionLabel={scoped.request}
 			allowanceError={model.fundingReadError}
 			allowanceLoading={model.loading}
@@ -198,50 +194,6 @@ export function SecurityPoolPriceReport({
 			tokenUnits={18}
 		/>
 	)
-	const funding = (
-		<>
-			{branch ? prepare : undefined}
-			<MetricGrid>
-				{priceField}
-				{stakeField}
-				<MetricField label={collateralCopy.minimumReportStake(model.collateral.symbol)} loading={model.loading}>
-					<CurrencyValue value={model.minimumWethAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
-				</MetricField>
-				<MetricField label={scoped.requiredRep}>
-					<CurrencyValue value={model.funding?.rep} suffix={common.rep} />
-				</MetricField>
-				<MetricField label={copy.currentExposure} loading={model.loading}>
-					<CurrencyValue value={observation?.currentExposureAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
-				</MetricField>
-				<MetricField label={copy.reportCoverage}>
-					<CurrencyValue value={model.funding?.coveredExposureAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
-				</MetricField>
-				<MetricField label={copy.extraCoverage}>
-					<CurrencyValue value={model.funding?.growthHeadroomAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
-				</MetricField>
-				<MetricField label={copy.bounty} loading={model.loading}>
-					<CurrencyValue value={observation?.bounty} suffix={common.eth} />
-				</MetricField>
-				<MetricField label={collateralCopy.walletBalance(model.collateral.symbol)} loading={model.loading}>
-					<CurrencyValue value={observation?.wethBalanceAttoEth} suffix={model.collateral.symbol} units={model.collateral.decimals} />
-				</MetricField>
-				<MetricField label={scoped.walletRep} loading={model.loading}>
-					<CurrencyValue value={observation?.repBalanceAttoRep} suffix={common.rep} />
-				</MetricField>
-				{model.collateral.symbol === collateralCopy.weth ? (
-					<MetricField label={copy.wrapAmount}>
-						<CurrencyValue value={model.funding?.wrap} suffix={common.eth} />
-					</MetricField>
-				) : undefined}
-			</MetricGrid>
-			{showWrap ? wrap : undefined}
-			{wethApproval}
-			{repApproval}
-			<UserMessage tone='warning' detail={scoped.requestWarning} />
-			<UserMessage detail={copy.coverageWarning} />
-			{reportPrice}
-		</>
-	)
 	const reportDetails = (
 		<>
 			{model.savedReportAt !== undefined && (
@@ -250,22 +202,6 @@ export function SecurityPoolPriceReport({
 				</p>
 			)}
 			<MetricGrid>
-				{!redesigned && <MetricField label={copy.reportState}>{reportStatus}</MetricField>}
-				{!redesigned && (
-					<MetricField label={copy.settleAt}>
-						<TimestampValue timestamp={report?.eligibleAt} relative={false} />
-					</MetricField>
-				)}
-				{report === undefined || redesigned ? undefined : (
-					<>
-						<MetricField label={copy.reportBaseFee}>
-							<CurrencyValue value={report.baseFeePerGas} suffix={copy.reportBaseFeeUnit} units={9} precision='exact' />
-						</MetricField>
-						<MetricField label={copy.reportBaseFeeCeiling}>
-							<CurrencyValue value={report.maxSettlementBaseFee} suffix={copy.reportBaseFeeUnit} units={9} precision='exact' />
-						</MetricField>
-					</>
-				)}
 				<MetricField label={copy.sponsor}>
 					<AddressValue longAbbreviation address={report?.sponsor} />
 				</MetricField>
@@ -281,22 +217,13 @@ export function SecurityPoolPriceReport({
 	const settleReport = <SecurityPoolButton model={parameters.actions} action={model.actionId('settle')} label={copy.settle} pendingLabel={copy.settling} reason={model.settleReason} onClick={model.settle} />
 	const recoverReport = <SecurityPoolButton model={parameters.actions} action={model.actionId('recover')} label={copy.recover} pendingLabel={copy.recovering} reason={model.recoverReason} onClick={model.recover} />
 	const returnFunds = <SecurityPoolButton model={parameters.actions} action={model.actionId('withdraw')} label={copy.returnFunds} pendingLabel={copy.withdrawing} reason={model.withdrawReason} onClick={model.withdraw} />
-	const settleActions = (
-		<div className='actions'>
-			{settleReport}
-			{recoverReport}
-			{returnFunds}
-		</div>
-	)
 	const olderReports = (
 		<>
-			<SecurityPoolInput label={copy.reportId} hint={redesigned ? copy.latestReportHint : copy.reportHint} value={model.reportInput} onChange={model.setReportId} disabled={disabled} />
-			{!redesigned && <UserMessage detail={copy.fundingReturnHint} />}
+			<SecurityPoolInput label={copy.reportId} hint={copy.latestReportHint} value={model.reportInput} onChange={model.setReportId} disabled={disabled} />
 			{model.canRedirectFunding ? <SecurityPoolInput label={copy.withdrawalRecipient} hint={copy.withdrawalRecipientHint} error={model.recipientError} value={model.recipientInput} onChange={model.setRecipient} disabled={disabled} /> : undefined}
 			<div className='actions'>
 				<SecurityPoolButton model={parameters.actions} action={model.actionId('withdrawCollateral')} label={copy.withdrawToken(model.collateral.symbol)} pendingLabel={copy.withdrawingToken(model.collateral.symbol)} reason={model.withdrawCollateralReason} onClick={() => model.withdrawToken('collateral')} />
 				<SecurityPoolButton model={parameters.actions} action={model.actionId('withdrawRep')} label={copy.withdrawToken(common.rep)} pendingLabel={copy.withdrawingToken(common.rep)} reason={model.withdrawRepReason} onClick={() => model.withdrawToken('rep')} />
-				{!redesigned && <ActionLauncherButton tone='secondary' idleLabel={copy.refresh} pendingLabel={copy.refreshing} availability={{ disabled: disabled || model.refreshReason !== undefined, reason: (disabled ? copy.busy : undefined) ?? model.refreshReason }} onClick={model.refresh} />}
 			</div>
 			{openOracleHref !== undefined && (
 				<a href={openOracleHref} target='_blank' rel='noreferrer'>
@@ -387,75 +314,63 @@ export function SecurityPoolPriceReport({
 		</>
 	)
 	const reportSection = branch ? ({ variant: 'embedded', headingLevel: 4 } as const) : undefined
-	if (redesigned)
-		return (
-			<div className='route-view-flow'>
-				<SectionBlock {...reportSection} title={copy.pricePage} description={acceptedPriceAge > 60n ? copy.asOf(formatDuration(acceptedPriceAge)) : undefined} badge={accepted === undefined ? undefined : <Badge tone={priceStatus === copy.priceCurrent ? 'ok' : 'muted'}>{priceStatus}</Badge>}>
-					{notice}
-					<div className='statoblast-price-summary'>
-						{branch ? summary : priceSummary}
-						{priceBand !== undefined && accepted !== undefined && priceBand.health > 0n && <PriceBand accepted={accepted} health={priceBand.health} liquidation={priceBand.liquidation} units={priceUnits} />}
-					</div>
-				</SectionBlock>
-				<div className='statoblast-price-layout' data-funding={!branch && !returnFundsOnly}>
-					{!returnFundsOnly && (
-						<SectionBlock {...reportSection} title={copy.reportNewPrice} description={acceptedPriceAge > 60n ? formatOldDataCheck(formatDuration(acceptedPriceAge)) : undefined}>
-							{compactFunding}
-						</SectionBlock>
-					)}
-					<aside aria-label={copy.currentReport}>
-						<SectionBlock
-							{...reportSection}
-							title={reportHeading}
-							description={reportAge > 60n ? copy.asOf(formatDuration(reportAge)) : undefined}
-							badge={reportStatus === undefined ? undefined : <Badge tone={settlementReady || reportStatus === copy.states.accepted ? 'ok' : 'muted'}>{disputeChecking ? deadlineChecking : reportStatus}</Badge>}
-						>
-							<ol className='statoblast-price-progress'>
-								<li data-done={report !== undefined}>
-									{copy.reportedStep}
-									<TimestampValue className='detail' timestamp={report?.reportedAt} relative={false} />
-								</li>
-								<li data-done={report?.state.settled || settlementReady}>
-									{copy.disputeStep}
-									<TimestampValue className='detail' timestamp={report?.eligibleAt} relative={false} />
-								</li>
-								<li data-done={report?.state.settled} aria-current={settlementReady ? 'step' : undefined}>
-									{copy.settleStep}
-									{settlementReady && <span className='detail'>{copy.now}</span>}
-								</li>
-								<li data-done={fundsReturned}>
-									{copy.fundsReturnedStep}
-									<span className='detail'>{copy.fundsRecipient}</span>
-								</li>
-							</ol>
-							{disputeCheck.failed && (
-								<button type='button' className='secondary' onClick={disputeCheck.retry}>
-									{tryAgain}
-								</button>
-							)}
-							{!autoRefresh && reportStatus === copy.states.pending && !disputeChecking && <p className='detail'>{followWithAutoRefresh}</p>}
-							{reportDetails}
-							{reportAge > 60n && <p className='detail'>{formatOldDataCheck(formatDuration(reportAge))}</p>}
-							{recoverySteps}
-							<details open={returnFundsOnly || undefined}>
-								<summary>{copy.olderReports}</summary>
-								{olderReports}
-							</details>
-						</SectionBlock>
-					</aside>
-				</div>
-			</div>
-		)
 	return (
-		<WorkflowSubsection title={branch ? scoped.title : undefined}>
-			<UserMessage detail={scoped.description} />
-			{notice}
-			{summary}
-			{!returnFundsOnly && funding}
-			{olderReports}
-			{reportDetails}
-			{settleActions}
-		</WorkflowSubsection>
+		<div className='route-view-flow'>
+			<SectionBlock {...reportSection} title={copy.pricePage} description={acceptedPriceAge > 60n ? copy.asOf(formatDuration(acceptedPriceAge)) : undefined} badge={accepted === undefined ? undefined : <Badge tone={priceStatus === copy.priceCurrent ? 'ok' : 'muted'}>{priceStatus}</Badge>}>
+				{notice}
+				<div className='statoblast-price-summary'>
+					{branch ? summary : priceSummary}
+					{priceBand !== undefined && accepted !== undefined && priceBand.health > 0n && <PriceBand accepted={accepted} health={priceBand.health} liquidation={priceBand.liquidation} units={priceUnits} />}
+				</div>
+			</SectionBlock>
+			<div className='statoblast-price-layout' data-funding={!branch && !returnFundsOnly}>
+				{!returnFundsOnly && (
+					<SectionBlock {...reportSection} title={copy.reportNewPrice} description={acceptedPriceAge > 60n ? formatOldDataCheck(formatDuration(acceptedPriceAge)) : undefined}>
+						{compactFunding}
+					</SectionBlock>
+				)}
+				<aside aria-label={copy.currentReport}>
+					<SectionBlock
+						{...reportSection}
+						title={reportHeading}
+						description={reportAge > 60n ? copy.asOf(formatDuration(reportAge)) : undefined}
+						badge={reportStatus === undefined ? undefined : <Badge tone={settlementReady || reportStatus === copy.states.accepted ? 'ok' : 'muted'}>{disputeChecking ? deadlineChecking : reportStatus}</Badge>}
+					>
+						<ol className='statoblast-price-progress'>
+							<li data-done={report !== undefined}>
+								{copy.reportedStep}
+								<TimestampValue className='detail' timestamp={report?.reportedAt} relative={false} />
+							</li>
+							<li data-done={report?.state.settled || settlementReady}>
+								{copy.disputeStep}
+								<TimestampValue className='detail' timestamp={report?.eligibleAt} relative={false} />
+							</li>
+							<li data-done={report?.state.settled} aria-current={settlementReady ? 'step' : undefined}>
+								{copy.settleStep}
+								{settlementReady && <span className='detail'>{copy.now}</span>}
+							</li>
+							<li data-done={fundsReturned}>
+								{copy.fundsReturnedStep}
+								<span className='detail'>{copy.fundsRecipient}</span>
+							</li>
+						</ol>
+						{disputeCheck.failed && (
+							<button type='button' className='secondary' onClick={disputeCheck.retry}>
+								{tryAgain}
+							</button>
+						)}
+						{!autoRefresh && reportStatus === copy.states.pending && !disputeChecking && <p className='detail'>{followWithAutoRefresh}</p>}
+						{reportDetails}
+						{reportAge > 60n && <p className='detail'>{formatOldDataCheck(formatDuration(reportAge))}</p>}
+						{recoverySteps}
+						<details open={returnFundsOnly || undefined}>
+							<summary>{copy.olderReports}</summary>
+							{olderReports}
+						</details>
+					</SectionBlock>
+				</aside>
+			</div>
+		</div>
 	)
 }
 

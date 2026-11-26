@@ -1,6 +1,6 @@
 import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '../initialReport/oracleInitialReport.js'
 export { securityPoolTakeoverSource, securityPoolTakeoverFill, securityPoolTakeoverTransfer } from './securityPoolTakeover.js'
-import { type Address, type Hex, encodeAbiParameters, encodeFunctionData, isAddress, isHex, getAddress, parseAbi, parseAbiItem, parseAbiParameters, toEventSelector, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { type Address, type Hex, encodeAbiParameters, encodeFunctionData, formatUnits, isAddress, isHex, getAddress, parseAbi, parseAbiItem, parseAbiParameters, toEventSelector, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 
 export type SecurityPoolOriginConfig = {
 	collateralToken: Address
@@ -25,13 +25,17 @@ function address(value: Address, label: string) {
 	if (!isAddress(value) || value.toLowerCase() === zeroAddress) throw new Error(`${label} must be a nonzero address.`)
 }
 
+const maximumFeeBps = 10_000n
+const secondsPerDay = 86_400n
+const maximumVestingDays = 3650n
+
 export function validateSecurityPoolEconomics(config: SecurityPoolEconomicsConfig) {
 	for (const [name, value] of Object.entries(config)) uint(value, name === 'rewardVestingSeconds' ? 48 : 256, name)
-	if (config.purchaseFeeBps > 10_000n) throw new Error('Purchase fee cannot exceed 100%.')
-	if (config.annualFeeBps > 10_000n) throw new Error('Annual fee cannot exceed 100%.')
+	if (config.purchaseFeeBps > maximumFeeBps) throw new Error(`Purchase fee cannot exceed ${formatUnits(maximumFeeBps, 2)}%.`)
+	if (config.annualFeeBps > maximumFeeBps) throw new Error(`Annual fee cannot exceed ${formatUnits(maximumFeeBps, 2)}%.`)
 	if (config.minimumCommitmentAttoEth === 0n || config.rewardVestingSeconds === 0n) throw new Error('Minimum commitment and fee vesting duration must be positive.')
-	if (config.rewardVestingSeconds > 3650n * 86_400n) throw new Error('Fee vesting duration cannot exceed 3650 days.')
-	if (config.rewardVestingSeconds < 86_400n) throw new Error('Fee vesting duration must be at least 24 hours.')
+	if (config.rewardVestingSeconds > maximumVestingDays * secondsPerDay) throw new Error(`Fee vesting duration cannot exceed ${maximumVestingDays} days.`)
+	if (config.rewardVestingSeconds < secondsPerDay) throw new Error(`Fee vesting duration must be at least ${secondsPerDay / 3_600n} hours.`)
 	if (config.minimumOutcomeRate === 0n || config.minimumOutcomeRate > 10n ** 18n) throw new Error('Minimum outcome exchange rate must be positive and at most one.')
 }
 
@@ -119,6 +123,7 @@ export {
 	buildSecurityPoolCapitalServeRetirementRequest,
 	buildSecurityPoolCapitalClaimEarningsRequest,
 	loadSecurityPoolCapitalSnapshot,
+	minimumSecurityPoolHealthFactorBps,
 	loadSecurityPoolClaimableEarnings,
 	type SecurityPoolCapitalSnapshot,
 } from './securityPoolCapital.js'

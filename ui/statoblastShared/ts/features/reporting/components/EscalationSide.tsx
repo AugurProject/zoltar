@@ -26,9 +26,7 @@ type EscalationSideProps = {
 }
 
 function getChartRatio(value: bigint | undefined, maxValue: bigint) {
-	if (value === undefined || value <= 0n || maxValue <= 0n) return '0%'
-
-	const basisPoints = (value * 10000n) / maxValue
+	const basisPoints = value === undefined || value <= 0n || maxValue <= 0n ? 0n : (value * 10000n) / maxValue
 	const wholePercent = basisPoints / 100n
 	const fractionalPercent = (basisPoints % 100n).toString().padStart(2, '0')
 

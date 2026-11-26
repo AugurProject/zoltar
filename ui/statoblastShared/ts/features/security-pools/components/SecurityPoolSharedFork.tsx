@@ -11,18 +11,12 @@ import { useOldActionDataNotice, useStatoblastRefreshError, type RegisterStatobl
 import { tryAgain } from '../../../copy/securityPoolPage.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
-import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import { formatCurrencyBalanceWithUnit, formatDuration, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
-import { formatUniverseIdHex } from '@zoltar/ui-core-shared/lib/universeLabels.js'
-import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
 import { OnChainText } from '@zoltar/ui-core-shared/components/OnChainText.js'
-import { OutcomeIdentity } from '@zoltar/ui-core-shared/components/OutcomeIdentity.js'
-import { SecurityPoolButton, SecurityPoolInput } from './SecurityPoolControls.js'
+import { SecurityPoolButton } from './SecurityPoolControls.js'
 import { useSecurityPoolSharedFork, type SecurityPoolSharedForkParameters } from '../hooks/useSecurityPoolSharedFork.js'
 import { useSecurityPoolDeadline } from '../hooks/useSecurityPoolDeadline.js'
 import { SecurityPoolShareRecovery } from './SecurityPoolShareRecovery.js'
@@ -37,7 +31,6 @@ import * as common from '@zoltar/ui-core-shared/copy/common.js'
 export type ForkQuestionRead = { loading: boolean; error: string | undefined; retry: () => void }
 
 export function SecurityPoolSharedFork({
-	redesigned = false,
 	forkQuestion,
 	forkQuestionRead,
 	onBranchCommitted,
@@ -47,7 +40,6 @@ export function SecurityPoolSharedFork({
 	registerPageRefresh,
 	...parameters
 }: SecurityPoolSharedForkParameters & {
-	redesigned?: boolean
 	forkQuestion?: MarketDetails | undefined
 	forkQuestionRead?: ForkQuestionRead | undefined
 	onBranchCommitted?: ((committed: boolean) => void) | undefined
@@ -61,8 +53,8 @@ export function SecurityPoolSharedFork({
 	const livePool = parameters.snapshot
 	const verifiedFork = state ?? (livePool === undefined ? undefined : { controller: livePool.forkController, universeId: livePool.universeId, blockNumber: livePool.blockNumber, blockHash: livePool.blockHash, branch: undefined })
 	const display = model.displayedState
-	const refreshError = useStatoblastRefreshError(model.forkError, redesigned ? model.displayedAt : undefined)
-	const actionDataNotice = useOldActionDataNotice(redesigned ? model.displayedAt : undefined)
+	const refreshError = useStatoblastRefreshError(model.forkError, model.displayedAt)
+	const actionDataNotice = useOldActionDataNotice(model.displayedAt)
 	const branch = display?.branch
 	const shownPool = parameters.presentationSnapshot ?? parameters.snapshot
 	const branchDone = display?.choice.recorded === true
@@ -76,7 +68,7 @@ export function SecurityPoolSharedFork({
 	const nextDeadline = forkTime === 0n || choiceTime === undefined ? undefined : [choiceAt, activationAt].find(deadline => deadline !== undefined && deadline > choiceTime)
 	const check = useSecurityPoolDeadline({
 		scope: `${shownPool?.chainId}:${shownPool?.securityPool}:${shownPool?.owner}:${model.sourceInput}`,
-		deadline: redesigned ? nextDeadline : undefined,
+		deadline: nextDeadline,
 		timestamp: choiceTime,
 		readAt: model.displayedAt,
 		reading: model.loading,
@@ -84,7 +76,7 @@ export function SecurityPoolSharedFork({
 	})
 	const choiceChecking = choiceAt !== undefined && choiceTime !== undefined && choiceTime < choiceAt && check.checking
 	const approximateTime = check.now
-	const activationChecking = redesigned && activationAt !== undefined && choiceTime !== undefined && choiceTime < activationAt && ((approximateTime !== undefined && approximateTime >= activationAt) || (nextDeadline === activationAt && check.checking))
+	const activationChecking = activationAt !== undefined && choiceTime !== undefined && choiceTime < activationAt && ((approximateTime !== undefined && approximateTime >= activationAt) || (nextDeadline === activationAt && check.checking))
 	const canChooseByDeadline = !choiceChecking && choiceAt !== undefined && approximateTime !== undefined && approximateTime < choiceAt
 	const choiceDate = choiceAt === undefined ? undefined : formatTimestamp(choiceAt)
 	let choiceTitle = pageCopy.choiceExpired
@@ -141,48 +133,37 @@ export function SecurityPoolSharedFork({
 	useEffect(() => {
 		if (state !== undefined && parameters.bidder !== undefined && sameAddress(state.owner, parameters.bidder)) onBranchCommitted?.(state.choice.recorded)
 	}, [state?.choice.recorded, state?.owner, parameters.bidder, onBranchCommitted])
-	const chooseReason = (choiceChecking ? deadlineChecking : undefined) ?? model.chooseReason ?? (redesigned && !confirmedChoice ? pageCopy.branchConfirmationReason : undefined)
-	const committedMessage = copy.chosen(state?.choice.outcomeIndex ?? 0n)
-	let branchState = copy.branchStates.choose
-	if (branch !== undefined) {
-		branchState = copy.branchStates.unprepared
-		if (branch.prepared) branchState = copy.branchStates.chosen
-		if (branch.started) branchState = copy.branchStates.waiting
-		if (branch.ready) branchState = copy.branchStates.active
-	}
+	const chooseReason = (choiceChecking ? deadlineChecking : undefined) ?? model.chooseReason ?? (!confirmedChoice ? pageCopy.branchConfirmationReason : undefined)
 	const prepareBranch = <SecurityPoolButton model={parameters.actions} action='prepareSecurityPoolFork' label={copy.prepareBranch} pendingLabel={copy.preparingBranch} reason={model.prepareBranchReason} onClick={model.prepareBranch} />
 	const chooseBranch = <SecurityPoolButton model={parameters.actions} action='chooseSecurityPoolFork' label={copy.choice} pendingLabel={copy.choosing} reason={chooseReason} onClick={model.choose} />
 	const startBranch = <SecurityPoolButton model={parameters.actions} action='startSecurityPoolFork' label={copy.start} pendingLabel={copy.starting} reason={model.startReason} onClick={model.start} />
 	const activateBranch = <SecurityPoolButton model={parameters.actions} action='finalizeSecurityPoolFork' label={copy.finalize} pendingLabel={copy.finalizing} reason={model.finalizeReason} onClick={model.finalize} />
 	const openBranch = <ActionLauncherButton tone='secondary' idleLabel={copy.open} pendingLabel={copy.loading} availability={{ disabled: disabled || model.openReason !== undefined, reason: disabled ? copy.busy : model.openReason }} onClick={rememberOpen} />
-	const pricePanel =
-		!redesigned || migrationStarted ? (
-			<div ref={priceSection} tabIndex={-1} className={redesigned ? 'statoblast-fork-step-body' : undefined}>
-				<SecurityPoolPriceReport
-					redesigned={redesigned}
-					hideReportingDeadline={redesigned}
-					scope='branch'
-					target={priceTarget}
-					displayTarget={priceTarget ?? model.savedBranch}
-					actions={parameters.actions}
-					bidder={parameters.bidder}
-					returnFundsOnly={activationChecking || (redesigned && activationAt !== undefined && choiceTime !== undefined && choiceTime >= activationAt)}
-					referencePrice={shownPool?.acceptedPrice}
-					onPriceAccepted={setPricedBranch}
-					autoRefresh={autoRefresh ?? false}
-					registerPageRefresh={registerPageRefresh}
-				/>
-			</div>
-		) : undefined
-	const auctionPanel =
-		!redesigned || migrationStarted ? (
-			<div ref={auctionSection} tabIndex={-1} className={redesigned ? 'statoblast-fork-step-body' : undefined} hidden={redesigned && auctionReason !== undefined}>
-				<SecurityPoolRepairAuction fork={state} savedBranch={model.savedBranch} actions={parameters.actions} bidder={parameters.bidder} openVault={parameters.openVault} onAuctionFinalized={setFinalizedAuctionBranch} sharedDeadline={redesigned} sharedDeadlineChecking={activationChecking} />
-			</div>
-		) : undefined
+	const pricePanel = migrationStarted ? (
+		<div ref={priceSection} tabIndex={-1} className='statoblast-fork-step-body'>
+			<SecurityPoolPriceReport
+				hideReportingDeadline
+				scope='branch'
+				target={priceTarget}
+				displayTarget={priceTarget ?? model.savedBranch}
+				actions={parameters.actions}
+				bidder={parameters.bidder}
+				returnFundsOnly={activationChecking || (activationAt !== undefined && choiceTime !== undefined && choiceTime >= activationAt)}
+				referencePrice={shownPool?.acceptedPrice}
+				onPriceAccepted={setPricedBranch}
+				autoRefresh={autoRefresh ?? false}
+				registerPageRefresh={registerPageRefresh}
+			/>
+		</div>
+	) : undefined
+	const auctionPanel = migrationStarted ? (
+		<div ref={auctionSection} tabIndex={-1} className='statoblast-fork-step-body' hidden={auctionReason !== undefined}>
+			<SecurityPoolRepairAuction fork={state} savedBranch={model.savedBranch} actions={parameters.actions} bidder={parameters.bidder} openVault={parameters.openVault} onAuctionFinalized={setFinalizedAuctionBranch} sharedDeadline sharedDeadlineChecking={activationChecking} />
+		</div>
+	) : undefined
 	return (
 		<div className='route-view-flow'>
-			{redesigned && forkTime > 0n && !branchDone && choiceAt !== undefined && choiceAt > 0n && choiceDate !== undefined && (
+			{forkTime > 0n && !branchDone && choiceAt !== undefined && choiceAt > 0n && choiceDate !== undefined && (
 				<div className='statoblast-fork-choice-deadline'>
 					<div>
 						<strong>{choiceTitle}</strong>
@@ -196,16 +177,9 @@ export function SecurityPoolSharedFork({
 					)}
 				</div>
 			)}
-			<SectionBlock title={redesigned ? pageCopy.branchMigration : copy.title} description={redesigned ? pageCopy.branchDefinition : copy.description}>
-				{redesigned && <SecurityPoolForkDiagram state={display} snapshot={shownPool} question={forkQuestion} outcomeInput={model.outcomeInput} childUniverses={childUniverses} verifiedFork={verifiedFork} />}
-				{redesigned ? (
-					<BranchChoices question={forkQuestion} read={forkQuestionRead} value={model.outcomeInput} onChange={model.setOutcome} disabled={disabled || branchDone} />
-				) : (
-					<MetricGrid>
-						<SecurityPoolInput label={copy.universe} value={model.sourceInput} onChange={model.setSource} disabled={disabled} />
-						<SecurityPoolInput label={copy.outcome} hint={copy.outcomeHint} value={model.outcomeInput} onChange={model.setOutcome} disabled={disabled} />
-					</MetricGrid>
-				)}
+			<SectionBlock title={pageCopy.branchMigration} description={pageCopy.branchDefinition}>
+				<SecurityPoolForkDiagram state={display} snapshot={shownPool} question={forkQuestion} outcomeInput={model.outcomeInput} childUniverses={childUniverses} verifiedFork={verifiedFork} />
+				<BranchChoices question={forkQuestion} read={forkQuestionRead} value={model.outcomeInput} onChange={model.setOutcome} disabled={disabled || branchDone} />
 				<RetryableNotice message={refreshError ?? (check.failed ? deadlineChecking : undefined)} retryLabel={tryAgain} onRetry={check.failed ? check.retry : model.retryFork} />
 				{state?.forkTime === 0n ? <UserMessage detail={copy.noFork} /> : undefined}
 				{model.outcome?.outcomeLabel === undefined ? undefined : (
@@ -215,82 +189,46 @@ export function SecurityPoolSharedFork({
 								<OnChainText text={model.outcome.questionTitle} />
 								{copy.questionOutcomeSeparator}
 								<OnChainText text={model.outcome.outcomeLabel} />
-								{redesigned || branch === undefined ? undefined : <OutcomeIdentity label={model.outcome.outcomeLabel} outcomeIndex={branch.outcomeIndex} />}
 							</>
 						}
 					/>
 				)}
-				{redesigned ? (
-					<>
-						{activationAt !== undefined && activationAt > 0n && (
-							<div className='statoblast-branch-recapitalization'>
-								<strong>{pageCopy.recapitalizationDeadline}</strong> <span>{formatTimestamp(activationAt)}</span>
-								{activationChecking && <UserMessage announcement='polite' detail={deadlineChecking} />}
-								<p className='detail'>{pageCopy.recapitalizationHint}</p>
-							</div>
-						)}
-						<ol aria-label={pageCopy.branchSteps} className='statoblast-fork-steps statoblast-fork-workflow'>
-							<ForkStep title={pageCopy.prepareSelectedBranch} done={branch?.prepared === true} actionDataNotice={actionDataNotice} action={prepareBranch} />
-							<ForkStep title={copy.choice} done={branchDone} actionDataNotice={actionDataNotice} action={chooseBranch}>
-								{!branchDone && (
-									<label className='statoblast-choice-confirmation'>
-										<input type='checkbox' checked={confirmedChoice} disabled={disabled || !canChooseByDeadline || state?.branch === undefined} onChange={event => setConfirmedChoice(event.currentTarget.checked)} />
-										{branchConfirmation}
-									</label>
-								)}
-							</ForkStep>
-							<ForkStep title={copy.start} done={branch?.started === true} detail={pageCopy.pendingSharedStep} actionDataNotice={actionDataNotice} action={startBranch} />
-							<ForkStep
-								title={pageCopy.branchRepPrice}
-								body={pricePanel}
-								done={accepted}
-								detail={branch?.ready && !accepted ? pageCopy.branchPriceClosed : pageCopy.branchPriceConsequence}
-								action={<ActionLauncherButton tone='secondary' idleLabel={pageCopy.openPriceStep} pendingLabel={pageCopy.openPriceStep} availability={{ disabled: priceReason !== undefined, reason: priceReason }} onClick={() => openSection(priceSection.current)} />}
-							/>
-							<ForkStep
-								title={pageCopy.repairAuction}
-								body={auctionPanel}
-								done={finalized}
-								action={<ActionLauncherButton tone='secondary' idleLabel={pageCopy.openAuctionStep} pendingLabel={pageCopy.openAuctionStep} availability={{ disabled: auctionReason !== undefined, reason: auctionReason }} onClick={() => openSection(auctionSection.current)} />}
-							/>
-							<ForkStep title={copy.finalize} done={branch?.ready === true} detail={pageCopy.pendingSharedStep} actionDataNotice={actionDataNotice} action={activateBranch} />
-							<ForkStep title={copy.open} done={opened} action={openBranch} />
-						</ol>
-					</>
-				) : (
-					<>
-						<MetricGrid>
-							<MetricField label={copy.choiceDeadline} loading={model.loading}>
-								{state === undefined || state.choiceDeadline === 0n ? undefined : formatTimestamp(state.choiceDeadline)}
-							</MetricField>
-							<MetricField label={copy.activationDeadline} loading={model.loading}>
-								{state === undefined || state.activationDeadline === 0n ? undefined : formatTimestamp(state.activationDeadline)}
-							</MetricField>
-							<MetricField label={copy.child} loading={model.loading}>
-								{branch === undefined ? undefined : <IdentifierValue abbreviated value={formatUniverseIdHex(branch.universeId)} />}
-							</MetricField>
-							<MetricField label={copy.forkQuestionId} loading={model.loading}>
-								{model.outcome === undefined ? undefined : <IdentifierValue abbreviated value={formatQuestionIdHex(model.outcome.questionId)} />}
-							</MetricField>
-							<MetricField label={copy.state} loading={model.loading}>
-								{branchState}
-							</MetricField>
-						</MetricGrid>
-						<UserMessage tone='warning' detail={copy.choiceHint} />
-						<UserMessage detail={state?.choice.recorded ? committedMessage : copy.unchosen} />
-						<ol className='statoblast-fork-steps'>
-							<li>{prepareBranch}</li>
-							<li>{chooseBranch}</li>
-							<li>{startBranch}</li>
-							<li>{activateBranch}</li>
-							<li>{openBranch}</li>
-						</ol>
-					</>
+				{activationAt !== undefined && activationAt > 0n && (
+					<div className='statoblast-branch-recapitalization'>
+						<strong>{pageCopy.recapitalizationDeadline}</strong> <span>{formatTimestamp(activationAt)}</span>
+						{activationChecking && <UserMessage announcement='polite' detail={deadlineChecking} />}
+						<p className='detail'>{pageCopy.recapitalizationHint}</p>
+					</div>
 				)}
+				<ol aria-label={pageCopy.branchSteps} className='statoblast-fork-steps statoblast-fork-workflow'>
+					<ForkStep title={pageCopy.prepareSelectedBranch} done={branch?.prepared === true} actionDataNotice={actionDataNotice} action={prepareBranch} />
+					<ForkStep title={copy.choice} done={branchDone} actionDataNotice={actionDataNotice} action={chooseBranch}>
+						{!branchDone && (
+							<label className='statoblast-choice-confirmation'>
+								<input type='checkbox' checked={confirmedChoice} disabled={disabled || !canChooseByDeadline || state?.branch === undefined} onChange={event => setConfirmedChoice(event.currentTarget.checked)} />
+								{branchConfirmation}
+							</label>
+						)}
+					</ForkStep>
+					<ForkStep title={copy.start} done={branch?.started === true} detail={pageCopy.pendingSharedStep} actionDataNotice={actionDataNotice} action={startBranch} />
+					<ForkStep
+						title={pageCopy.branchRepPrice}
+						body={pricePanel}
+						done={accepted}
+						detail={branch?.ready && !accepted ? pageCopy.branchPriceClosed : pageCopy.branchPriceConsequence}
+						action={<ActionLauncherButton tone='secondary' idleLabel={pageCopy.openPriceStep} pendingLabel={pageCopy.openPriceStep} availability={{ disabled: priceReason !== undefined, reason: priceReason }} onClick={() => openSection(priceSection.current)} />}
+					/>
+					<ForkStep
+						title={pageCopy.repairAuction}
+						body={auctionPanel}
+						done={finalized}
+						action={<ActionLauncherButton tone='secondary' idleLabel={pageCopy.openAuctionStep} pendingLabel={pageCopy.openAuctionStep} availability={{ disabled: auctionReason !== undefined, reason: auctionReason }} onClick={() => openSection(auctionSection.current)} />}
+					/>
+					<ForkStep title={copy.finalize} done={branch?.ready === true} detail={pageCopy.pendingSharedStep} actionDataNotice={actionDataNotice} action={activateBranch} />
+					<ForkStep title={copy.open} done={opened} action={openBranch} />
+				</ol>
 			</SectionBlock>
-			{!redesigned && pricePanel}
-			{!redesigned && auctionPanel}
-			<SecurityPoolShareRecovery model={model} actions={parameters.actions} snapshot={shownPool} redesigned={redesigned} forkQuestion={forkQuestion} />
+			<SecurityPoolShareRecovery model={model} actions={parameters.actions} snapshot={shownPool} forkQuestion={forkQuestion} />
 		</div>
 	)
 }

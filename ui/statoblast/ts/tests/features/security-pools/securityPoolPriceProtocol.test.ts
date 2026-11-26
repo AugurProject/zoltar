@@ -1,19 +1,36 @@
 import { afterEach, expect, mock, spyOn, test } from 'bun:test'
 import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, parseAbi, parseAbiParameters, zeroHash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import { acceptedSecurityPoolPriceReport, buildSecurityPoolPriceTokenWithdrawal, loadSecurityPoolBranchPrice, loadSecurityPoolPriceReport, submittedSecurityPoolPriceReport } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPrice.js'
+import { acceptedSecurityPoolPriceReport, buildSecurityPoolPriceTokenWithdrawal, loadSecurityPoolBranchPrice, loadSecurityPoolPriceFunds, loadSecurityPoolPriceReport, submittedSecurityPoolPriceReport } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPrice.js'
 import { sendSecurityPoolTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
 import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
 import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { asWriteClient, createMockWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { asWriteClient, createMockWriteClient, createMulticallStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { priceFixture, priceFeed, priceEscrow, priceOracle, priceWeth } from './priceFixture.js'
 import { capital, owner, securityPool, token, unit } from './capitalFixture.js'
 
 afterEach(resetActiveEnvironmentForTesting)
+
+test('price funds find the funder’s latest operation report without a device record or global scan', async () => {
+	const fixture = priceFixture()
+	fixture.set(priceFeed, 'sponsorOperationReport', 9n)
+	const branch = await loadSecurityPoolBranchPrice(fixture.client, securityPool, owner, 42n)
+	fixture.reads.length = 0
+	const client = {
+		getBlock: fixture.client.getBlock,
+		multicall: createMulticallStub(({ blockNumber, contracts }) => Promise.all(contracts.map(contract => fixture.client.readContract({ ...contract, blockNumber })))),
+	}
+	const snapshot = { ...branch, priceFeed, collateralToken: priceWeth }
+	const result = await loadSecurityPoolPriceFunds(client, MAINNET_NETWORK_PROFILE, snapshot, owner)
+	expect(result).toEqual([{ reportId: 9n, funder: owner }])
+	expect(fixture.reads.find(request => request.functionName === 'sponsorOperationReport')?.args).toEqual([owner])
+	expect(fixture.reads.some(request => request.functionName === 'nextReportId')).toBe(false)
+	expect(new Set(fixture.reads.map(request => request.blockNumber))).toEqual(new Set([branch.blockNumber]))
+})
 
 test('direct report authentication pins stored preimages and subtracts oracle credit sentinels', async () => {
 	const fixture = priceFixture()

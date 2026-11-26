@@ -1,8 +1,8 @@
 import { OPEN_ORACLE_MAX_UI_SETTLEMENT_SECONDS } from './openOracleSettlementSafety.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { disputeGrowthCutoffMaximum, disputeGrowthCutoffNegative } from '../copy/openOracle.js'
+import { formatDuration, formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatUnits, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { disputeGrowthCutoffMaximum, disputeGrowthCutoffNegative, settlementDurationLimit } from '../copy/openOracle.js'
 
 export const OPEN_ORACLE_PERCENTAGE_PRECISION = 10n ** 7n
 export const OPEN_ORACLE_MULTIPLIER_PRECISION = 100n
@@ -52,7 +52,7 @@ export function getOpenOracleCreateParameterValidation(
 	if (ethValueAttoEth !== settlerRewardAttoEth) return { field: 'ethValueAttoEth', message: 'ETH sent must equal the settler reward for ERC-20 token pairs.' }
 	if (settlementTime < 0n) return { field: 'settlementTime', message: 'Enter a valid settlement delay.' }
 	if (settlementTime > OPEN_ORACLE_UINT48_MAX) return { field: 'settlementTime', message: 'Settlement delay exceeds the contract maximum.' }
-	if (settlementTime > OPEN_ORACLE_MAX_UI_SETTLEMENT_SECONDS) return { field: 'settlementTime', message: 'Settlement delay must not exceed one year in this interface.' }
+	if (settlementTime > OPEN_ORACLE_MAX_UI_SETTLEMENT_SECONDS) return { field: 'settlementTime', message: settlementDurationLimit(formatDuration(OPEN_ORACLE_MAX_UI_SETTLEMENT_SECONDS)) }
 	if (disputeDelay < 0n) return { field: 'disputeDelay', message: 'Enter a valid dispute delay.' }
 	if (disputeDelay > OPEN_ORACLE_UINT24_MAX) return { field: 'disputeDelay', message: 'Dispute delay exceeds the contract maximum.' }
 	if (settlementTime <= disputeDelay) return { field: 'settlementTime', message: 'Settlement delay must be greater than dispute delay.' }
@@ -62,6 +62,6 @@ export function getOpenOracleCreateParameterValidation(
 	if (feePercentage > OPEN_ORACLE_UINT24_MAX) return { field: 'feePercentage', message: 'Dispute fee exceeds the contract maximum.' }
 	if (protocolFee < 0n) return { field: 'protocolFee', message: 'Protocol fee must be non-negative.' }
 	if (protocolFee > OPEN_ORACLE_UINT24_MAX) return { field: 'protocolFee', message: 'Protocol fee exceeds the contract maximum.' }
-	if (feePercentage + protocolFee > OPEN_ORACLE_PERCENTAGE_PRECISION) return { field: 'protocolFee', message: 'Dispute fee plus protocol fee must not exceed 100%.' }
+	if (feePercentage + protocolFee > OPEN_ORACLE_PERCENTAGE_PRECISION) return { field: 'protocolFee', message: `Dispute fee plus protocol fee must not exceed ${formatUnits(OPEN_ORACLE_PERCENTAGE_PRECISION, 5)}%.` }
 	return undefined
 }

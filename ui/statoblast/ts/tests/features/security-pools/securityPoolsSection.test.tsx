@@ -245,7 +245,7 @@ test('an unforked pool with an expired price can fund a price report from its RE
 	fixture.set(priceFeed, 'universeId', 0n)
 	const view = await renderSecurityPools('price')
 	await waitFor(() => expect(view.container.textContent).toContain('Wallet WETH'))
-	const input = [...view.container.querySelectorAll('input')].find(candidate => candidate.closest('.field')?.querySelector('label')?.textContent?.includes(priceCopy.price('WETH')))
+	const input = [...view.container.querySelectorAll('input')].find(candidate => candidate.closest('.field')?.querySelector('label')?.textContent?.includes(priceCopy.priceDraftLabel('WETH')))
 	if (input === undefined) throw new Error('Missing REP price input')
 	await act(() => {
 		input.value = '2'
@@ -275,6 +275,9 @@ test.each([undefined, owner] as const)('a forked pool on Capital checks other fu
 				switch (name) {
 					case 'pendingReportId':
 						return 0n
+					case 'sponsorOperationReport':
+						expect(first).toBe(wallet)
+						return 8n
 					case 'openOracle':
 						return priceOracle
 					case 'reportCandidates':
@@ -300,12 +303,13 @@ test.each([undefined, owner] as const)('a forked pool on Capital checks other fu
 	}))
 	installActiveEnvironmentForTesting({ ...fixture.backend, createReadClient: () => client })
 	const savedBlock = { number: 9n, timestamp: 1100n }
-	const oldPreview = securityPoolPriceReportCache(fixture.backend.profile, securityPool, 0n, owner, 8n)
-	oldPreview.write({ reportId: 8n, sponsor: owner, outcome: 1n, state: { settled: true }, reportedAt: undefined, eligibleAt: 1100n, bounty: undefined, baseFeePerGas: undefined, maxSettlementBaseFee: 1n, wethCredit: 19n, repCredit: 0n, collateralToken: priceWeth }, savedBlock)
-	for (const reportId of [8n, 9n]) rememberSecurityPoolPriceReport(fixture.backend.profile, securityPool, 0n, owner, reportId, savedBlock)
+	if (wallet === undefined) {
+		const oldPreview = securityPoolPriceReportCache(fixture.backend.profile, securityPool, 0n, owner, 8n)
+		oldPreview.write({ reportId: 8n, sponsor: owner, outcome: 1n, state: { settled: true }, reportedAt: undefined, eligibleAt: 1100n, bounty: undefined, baseFeePerGas: undefined, maxSettlementBaseFee: 1n, wethCredit: 19n, repCredit: 0n, collateralToken: priceWeth }, savedBlock)
+	}
+	rememberSecurityPoolPriceReport(fixture.backend.profile, securityPool, 0n, owner, 9n, savedBlock)
 	rememberSecurityPoolPriceReport(fixture.backend.profile, securityPool, 0n, priceFeed, 11n, savedBlock)
 	rememberSecurityPoolPriceReport(fixture.backend.profile, securityPool, 7n, owner, 12n, savedBlock)
-	expect(oldPreview.read()?.value.wethCredit).toBe(19n)
 	const view = await renderIntoDocument(<SecurityPoolsSection page={{ kind: 'pool', pool: securityPool, tab: 'capital' }} parameters={{ ...parameters, accountAddress: wallet }} walletConnected={wallet !== undefined} enabled environmentKey={0} activeUniverseId={0n} />)
 	lifecycle.trackRendered(view)
 	const priceTab = () => [...view.container.querySelectorAll('a')].find(link => link.hash.includes('/price'))
@@ -345,7 +349,7 @@ test('the REP price tab preserves its draft through a failed pool refresh', asyn
 	const fixture = priceFixture(capitalSnapshot({ priceValid: false, priceValidUntil: 900n }))
 	fixture.set(priceFeed, 'universeId', 0n)
 	const view = await renderSecurityPools('price')
-	const priceInput = () => [...view.container.querySelectorAll('input')].find(candidate => candidate.closest('.field')?.querySelector('label')?.textContent?.includes(priceCopy.price('WETH')))
+	const priceInput = () => [...view.container.querySelectorAll('input')].find(candidate => candidate.closest('.field')?.querySelector('label')?.textContent?.includes(priceCopy.priceDraftLabel('WETH')))
 	await waitFor(() => expect(view.container.textContent).toContain('Wallet WETH'))
 	await act(() => {
 		const input = priceInput()

@@ -79,8 +79,8 @@ export function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbac
 	const detail = getErrorDetail(error, fallbackMessage)
 	if (detail === undefined) return 'Transaction failed while disputing the report. Try again; the latest report state will be checked automatically.'
 	const normalizedDetail = detail.toLowerCase()
-	if (normalizedDetail.includes('disputetooearly') || normalizedDetail.includes('0x058009cb')) return 'This report is not ready to dispute.'
-	if (normalizedDetail.includes('disputetoolate') || normalizedDetail.includes('0x6aeec261')) return 'Dispute window closed. Settle report instead.'
+	if (normalizedDetail.includes('disputetooearly') || normalizedDetail.includes('0x058009cb')) return openOracleCopy.disputeNotReady
+	if (normalizedDetail.includes('disputetoolate') || normalizedDetail.includes('0x6aeec261')) return openOracleCopy.disputeWindowClosed
 	if (normalizedDetail.includes('alreadysettled') || normalizedDetail.includes('0x560ff900')) return openOracleCopy.reportAlreadySettled
 	if (normalizedDetail.includes('noreporttodispute') || normalizedDetail.includes('0x833b7496')) return openOracleCopy.reportMissingInitialReport
 	if (genericMessage === ensureSentence(detail)) return genericMessage
@@ -278,7 +278,7 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 }
 
 function getOpenOracleReportStatus(report: Pick<OpenOracleReportSummary, 'currentReporter' | 'disputeOccurred' | 'isDistributed' | 'reportTimestamp'>): OpenOracleReportStatus {
-	if (report.reportTimestamp === 0n || report.currentReporter === zeroAddress) throw new Error('OpenOracle report is missing its initial report.')
+	if (report.reportTimestamp === 0n || report.currentReporter === zeroAddress) throw new Error(openOracleCopy.missingInitialReport)
 	if (report.isDistributed) return 'Settled'
 	if (report.disputeOccurred) return 'Disputed'
 	return 'Pending'
@@ -387,12 +387,12 @@ export function getOpenOracleDisputeAvailability(
 	if (currentClock < disputeStart)
 		return {
 			canAct: false,
-			message: 'This report is not ready to dispute.',
+			message: openOracleCopy.disputeNotReady,
 		}
 	if (currentClock >= settlementStart)
 		return {
 			canAct: false,
-			message: 'Dispute window closed. Settle report instead.',
+			message: openOracleCopy.disputeWindowClosed,
 		}
 	const submissionGuard = getOpenOracleDisputeSubmissionTimingGuard({ ...report, currentClock })
 	if (submissionGuard !== undefined) return { canAct: false, message: submissionGuard }
@@ -441,7 +441,7 @@ export function getOpenOracleSettleAvailability(
 	if (remaining > 0n) {
 		return {
 			canAct: false,
-			message: `This report can be settled in ${formatOpenOracleLifecycleRemaining(remaining, report.timeType)} if no disputes occur.`,
+			message: openOracleCopy.settlementCountdown(formatOpenOracleLifecycleRemaining(remaining, report.timeType)),
 		}
 	}
 	return {
@@ -456,16 +456,16 @@ export function formatOpenOracleFeePercentage(feePercentage: bigint | undefined)
 }
 function parseOpenOracleFeePercentageInput(value: string, label: string) {
 	const trimmed = value.trim()
-	if (trimmed === '') throw new Error(`${label} is required`)
+	if (trimmed === '') throw new Error(openOracleCopy.requiredInput(label))
 	const parsed = tryParseDecimalInput(trimmed, 5)
-	if (parsed === undefined) throw new Error(`${label} must be a decimal percentage`)
-	if (parsed < 0n) throw new Error(`${label} must be non-negative`)
-	if (parsed > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(`${label} exceeds the maximum safe integer range`)
+	if (parsed === undefined) throw new Error(openOracleCopy.invalidPercentage(label))
+	if (parsed < 0n) throw new Error(openOracleCopy.negativeInput(label))
+	if (parsed > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(openOracleCopy.unsafeInteger(label))
 	return bigintToSafeNumber(parsed, label)
 }
 export function parseOpenOracleCreateFormSubmission({ form, token1Decimals, token2Decimals }: { form: OpenOracleCreateFormState; token1Decimals: number; token2Decimals: number }) {
 	const validation = getOpenOracleCreateValidation({ form, token1Decimals, token2Decimals })
-	if (!validation.isValid) throw new Error(validation.message ?? 'Invalid oracle report parameters.')
+	if (!validation.isValid) throw new Error(validation.message ?? openOracleCopy.invalidReportParameters)
 	return {
 		disputeDelay: bigintToSafeNumber(parseBigIntInput(form.disputeDelay, 'Dispute delay'), 'Dispute delay'),
 		escalationHalt: parseDecimalInput(form.escalationHalt, openOracleCopy.escalationHalt, token1Decimals),

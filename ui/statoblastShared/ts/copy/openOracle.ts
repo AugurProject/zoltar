@@ -211,3 +211,46 @@ export const reportMissingInitialReport = 'This report is invalid because its in
 
 export const formatAbsoluteBlock = (value: bigint) => `Block ${value}`
 export const approvalGasRequired = 'Add ETH to pay the token approval network fee.'
+
+export const approvalDisputeOnly = 'Token approvals are only available while disputing a report'
+export const reportTokenChanged = 'Report token changed. Review again.'
+export const reportFundingChanged = 'Report funding changed. Review again.'
+export const invalidReportParameters = 'Invalid oracle report parameters.'
+export const reportNotReadyToSettle = 'This report is not ready to settle.'
+export const approvalChanged = (token: string) => `The required ${token} approval changed. Review the refreshed report and try again.`
+
+export const balancesReadFailed = 'Failed to load OpenOracle balances'
+export const staleReportRead = 'Stale oracle report load'
+export const reportReadFailed = 'Failed to load OpenOracle report'
+export const selectedReportChanged = 'Selected report changed. Review the current report and try again.'
+
+export const approvalReadFailed = 'Failed to load token approval'
+export const balanceReadFailed = 'Failed to load token balance'
+export const tokenAccessReadInvalid = 'Unexpected token access response'
+
+export const createTokenReadFailed = (token: string) => `Unable to read the ${token} token.`
+
+export const tokenPrecisionUnavailable = 'Token decimals unavailable.'
+export const noWrappingNeeded = 'No ETH wrapping is required.'
+
+export const invalidDisputeDetails = 'Invalid dispute submission details.'
+
+export const missingInitialReport = 'OpenOracle report is missing its initial report.'
+export const disputeNotReady = 'This report is not ready to dispute.'
+export const disputeWindowClosed = 'Dispute window closed. Settle report instead.'
+export const settlementCountdown = (duration: string) => `This report can be settled in ${duration} if no disputes occur.`
+export const requiredInput = (label: string) => `${label} is required`
+export const invalidPercentage = (label: string) => `${label} must be a decimal percentage`
+export const negativeInput = (label: string) => `${label} must be non-negative`
+export const unsafeInteger = (label: string) => `${label} exceeds the maximum safe integer range`
+
+export const approvalNoLongerRequired = (token: string) => `No ${token} approval is required for the refreshed report`
+export const approvalAlreadySufficient = (token: string) => `The ${token} approval is already sufficient for the refreshed report`
+export const approvalAmountNoLongerRequired = (token: string) => `No ${token} approval amount is required for the refreshed report`
+export const approvalMustIncrease = (token: string) => `The ${token} approval must increase the current allowance`
+
+export const disputesOpenIn = (duration: string) => `Disputes open in ${duration}.`
+
+export const settlementDurationLimit = (duration: string) => `Settlement delay must not exceed ${duration} in this interface.`
+export const settlementGasUnsafe = 'This report exceeds the safe settlement gas limit. Disputing it could lock your dispute deposit.'
+export const settlementDurationUnsafe = (duration: string) => `This report has a settlement duration longer than ${duration}. Disputing it could lock your dispute deposit.`

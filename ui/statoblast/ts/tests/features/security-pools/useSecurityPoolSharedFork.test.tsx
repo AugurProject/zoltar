@@ -133,7 +133,7 @@ test('the fork banner records a choice for the wallet’s own position only', as
 	fixture.setChosen(true)
 	const choices: boolean[] = []
 	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolSharedFork {...fixture.parameters} bidder={token} onBranchCommitted={choice => choices.push(choice)} />))
-	await waitFor(() => expect(view.container.textContent).toContain(forkCopy.chosen(1n)))
+	await waitFor(() => expect(view.container.textContent).toContain('Your branch choice is already recorded.'))
 	await act(() => Bun.sleep(25))
 	expect(choices).toEqual([])
 })
@@ -141,7 +141,7 @@ test('the fork banner records a choice for the wallet’s own position only', as
 test('a failed fork question read keeps the chooser visible with a retry', async () => {
 	const fixture = await setup()
 	let retries = 0
-	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolSharedFork {...fixture.parameters} redesigned forkQuestionRead={{ loading: false, error: 'RPC could not load the fork question.', retry: () => retries++ }} />))
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolSharedFork {...fixture.parameters} forkQuestionRead={{ loading: false, error: 'RPC could not load the fork question.', retry: () => retries++ }} />))
 	await waitFor(() => expect(view.container.textContent).toContain('RPC could not load the fork question.'))
 	const retry = [...view.container.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Try again')
 	await act(() => retry?.click())
@@ -151,7 +151,7 @@ test('a failed fork question read keeps the chooser visible with a retry', async
 test('the scalar fork diagram exposes every valid outcome in bounded pages', async () => {
 	const fixture = await setup()
 	const question = { title: 'Scalar fork', description: '', marketType: 'scalar' as const, outcomeLabels: [], questionId: '0x7', createdAt: 1n, exists: true, startTime: 1n, endTime: 800n, displayValueMin: -2n * unit, displayValueMax: 5n * unit, numTicks: 7n, answerUnit: '' }
-	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolSharedFork {...fixture.parameters} redesigned forkQuestion={question} />))
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolSharedFork {...fixture.parameters} forkQuestion={question} />))
 	const figure = () => view.container.querySelector('figure.statoblast-fork-diagram')
 	const labels = () => [...(figure()?.querySelectorAll('li strong') ?? [])].map(label => label.textContent)
 	await waitFor(() => expect(labels()).toEqual(['-2', '-1', '0', '1', '2', '3']))
@@ -166,7 +166,7 @@ test('redesigned branch steps keep seven rows and show confirmed progress after 
 	fixture.setChosen(true)
 	fixture.setStarted(true)
 	fixture.setReady(true)
-	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolSharedFork {...fixture.parameters} redesigned />))
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolSharedFork {...fixture.parameters} />))
 	const steps = () => [...view.container.querySelectorAll('.statoblast-fork-workflow > li')]
 	await waitFor(() => expect(steps().filter(step => step.getAttribute('data-done') === 'true')).toHaveLength(4))
 	expect(steps()).toHaveLength(7)
@@ -182,7 +182,7 @@ test('redesigned branch steps keep seven rows and show confirmed progress after 
 
 test('the choice page states that missing the deadline ends the commitment', async () => {
 	const fixture = await setup()
-	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolSharedFork {...fixture.parameters} redesigned />))
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolSharedFork {...fixture.parameters} />))
 	await waitFor(() => expect(view.container.textContent).toContain('your commitment ends'))
 	expect(view.container.textContent).toContain('claimants in every branch')
 })
@@ -191,7 +191,7 @@ test('a fork choice becomes neutral at the deadline and closes after verifying t
 	const fixture = await setup()
 	const nearDeadline = { ...fixture.snapshot, timestamp: 1_999n }
 	fixture.source.setSnapshot(nearDeadline)
-	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolSharedFork {...fixture.parameters} snapshot={nearDeadline} redesigned />))
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolSharedFork {...fixture.parameters} snapshot={nearDeadline} />))
 	await waitFor(() => expect(view.container.textContent).toContain('1s left'))
 	fixture.source.setSnapshot({ ...nearDeadline, timestamp: 2_000n })
 	fixture.setReadDelay(250)
@@ -422,7 +422,7 @@ test('share recovery opens saved questions or a submitted decimal or hexadecimal
 	const scope = localEntityScopeForNetwork(getActiveBackend().profile, 'statoblast', 'question')
 	setEntityFavorite(scope, `${fixture.snapshot.securityPool}:0x7`, true)
 	setEntityFavorite(scope, `${capital}:0x8`, true)
-	const view = await renderIntoDocument(<SecurityPoolSharedFork {...fixture.parameters} redesigned />)
+	const view = await renderIntoDocument(<SecurityPoolSharedFork {...fixture.parameters} />)
 	lifecycle.trackRendered(view)
 	const recovery = [...view.container.querySelectorAll('section')].find(section => section.querySelector('h3')?.textContent === 'Recovery for share holders')
 	const picker = recovery?.querySelector('select')
@@ -626,16 +626,12 @@ test('USDC source recovery quantities and outcome rights use collateral precisio
 		questionInput.value = '7'
 		questionInput.dispatchEvent(new Event('input', { bubbles: true }))
 	})
-	const quantity = (label: string) =>
-		[...view.container.querySelectorAll('.metric-label')]
-			.find(node => node.textContent === label)
-			?.parentElement?.querySelector('.currency-value')
-			?.getAttribute('title')
-			?.replaceAll(/\s/g, '')
-	await waitFor(() => expect(quantity(forkCopy.available)).toBe('3'))
-	expect(quantity(forkCopy.invalidAvailable)).toBe('3')
-	expect(quantity(forkCopy.yesAvailable)).toBe('5')
-	expect(quantity(forkCopy.noAvailable)).toBe('4')
+	const open = view.container.querySelector<HTMLButtonElement>('.statoblast-recovery-picker button[type=submit]')
+	if (open === null) throw new Error('Missing recovery question submit')
+	await act(() => open.click())
+	const rights = () => [...view.container.querySelectorAll('.statoblast-recovery-rights .currency-value')].map(value => value.getAttribute('title')?.trim())
+	await waitFor(() => expect(rights()).toEqual(['5 Yes', '4 No', '3 Invalid']))
+	expect(view.container.textContent).toContain('3 sets available')
 })
 
 test('a prepared branch can activate without a separate migration-start transaction', async () => {

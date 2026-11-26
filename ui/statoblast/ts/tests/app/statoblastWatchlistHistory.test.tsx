@@ -1,12 +1,16 @@
 import { expect, spyOn, test } from 'bun:test'
 import { act } from 'preact/test-utils'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { localEntityScopeForNetwork, setEntityFavoriteLabel } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
+import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
+import { localEntityScopeForNetwork, setEntityFavorite, setEntityFavoriteLabel } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { createMulticallStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { testDouble } from '@zoltar/ui-core-shared/tests/testUtils/testDouble.js'
 import { installStatoblastRouting, statoblastPageHash, statoblastPageHref } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { statoblastDisplayCache } from '@zoltar/ui-statoblast-shared/protocol/statoblastPageCache.js'
 import { decodeWatchlistRows } from '@zoltar/ui-statoblast-shared/protocol/watchlistRows.js'
@@ -120,6 +124,69 @@ test('a saved question displays its verified title and ignores an old imported l
 		expect(view.container.textContent).toContain('Verified title')
 		expect(view.container.textContent).not.toContain('Forged title')
 	} finally {
+		restoreEnvironment()
+	}
+})
+
+test('a complete Watchlist auto-refresh rotation advances the displayed age and caches every row', async () => {
+	installStatoblastRouting()
+	const backend = createFakeBackend({ profile })
+	const favoriteScope = localEntityScopeForNetwork(profile, 'statoblast', 'pool')
+	for (let index = 1; index <= 36; index++) {
+		const id: Address = `0x${index.toString(16).padStart(40, '0')}`
+		setEntityFavorite(favoriteScope, id, true, index)
+	}
+	let blockNumber = 1n
+	let lastRead: number | undefined
+	let progress: string | undefined
+	const chunkSizes: number[] = []
+	const client = testDouble<ReturnType<typeof backend.createReadClient>>({
+		getBlock: async ({ blockNumber: pinned }: { blockNumber?: bigint } = {}) => ({ number: pinned ?? blockNumber, timestamp: pinned ?? blockNumber, hash: `0x${(pinned ?? blockNumber).toString(16).padStart(64, '0')}` }),
+		getCode: async () => undefined,
+		multicall: createMulticallStub(({ contracts }) => {
+			chunkSizes.push(contracts.length)
+			return contracts.map(() => ({ status: 'success', result: false }))
+		}),
+	})
+	const restoreEnvironment = installActiveEnvironmentForTesting({ ...backend, createReadClient: () => client })
+	const clock = spyOn(Date, 'now').mockReturnValue(1_000)
+	const cache = statoblastDisplayCache(profile, { universeId: 0n, owner: undefined, page: 'watchlist' }, decodeWatchlistRows)
+	try {
+		appBlockWatcher.reportBlock(blockNumber)
+		lifecycle.trackRendered(
+			await renderIntoDocument(
+				<StatoblastWatchlist
+					enabled
+					environmentKey={0}
+					owner={undefined}
+					universe={0n}
+					registerPageRefresh={() => () => undefined}
+					onReadStatus={(readAt, pending) => {
+						lastRead = readAt
+						progress = pending
+					}}
+				/>,
+			),
+		)
+		await waitFor(() => expect(cache.read()?.savedAt).toBe(1_000))
+		const advanceBlock = async (number: bigint, time: number, expectedChunks: number[]) => {
+			blockNumber = number
+			clock.mockReturnValue(time)
+			await act(() => appBlockWatcher.reportBlock(blockNumber))
+			await waitFor(() => {
+				expect(chunkSizes).toEqual(expectedChunks)
+				expect(progress).toBeUndefined()
+			})
+		}
+		await advanceBlock(2n, 2_000, [25, 11, 25, 10])
+		expect(lastRead).toBe(1_000)
+		expect(cache.read()?.savedAt).toBe(1_000)
+		await advanceBlock(3n, 3_000, [25, 11, 25, 10, 25, 1])
+		expect(lastRead).toBe(2_000)
+		expect(cache.read()).toMatchObject({ savedAt: 2_000, timestamp: 2n })
+		expect(cache.read()?.value).toHaveLength(36)
+	} finally {
+		clock.mockRestore()
 		restoreEnvironment()
 	}
 })

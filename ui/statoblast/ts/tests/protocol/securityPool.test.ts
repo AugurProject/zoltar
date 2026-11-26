@@ -53,8 +53,8 @@ test('genuine runtime code the canonical factory did not deploy fails setup and 
 			return await fixture.client.getCode(request)
 		},
 	}))
-	await expect(loadSecurityPoolSetup(client, securityPool, owner)).rejects.toThrow('not deployed by the canonical factory')
-	await expect(loadSecurityPoolAccount(client, securityPool, owner, 0n)).rejects.toThrow('not deployed by the canonical factory')
+	await expect(loadSecurityPoolSetup(client, securityPool, owner)).rejects.toThrow('not created by the canonical factory')
+	await expect(loadSecurityPoolAccount(client, securityPool, owner, 0n)).rejects.toThrow('not created by the canonical factory')
 	expect(codeTargets).toEqual([])
 	expect(fixture.reads.map(read => read.name)).toEqual(['isSecurityPool', 'isSecurityPool'])
 	expect(fixture.reads.filter(read => read.name === 'isSecurityPool').map(read => [read.args, read.blockNumber])).toEqual([
@@ -75,17 +75,17 @@ test.each([
 test('a genuine capital ledger cannot nominate an unrelated fork authority', async () => {
 	const fixture = capitalClient()
 	fixture.setRead('forkAuthority', modules.engine)
-	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('Capital ledger uses another fork authority')
+	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('The capital contract is linked to a different fork contract')
 })
 test('capital accounting must use the security pool services authority', async () => {
 	const fixture = capitalClient()
 	fixture.setRead('services', modules.engine, capital)
-	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('Capital ledger uses another services authority')
+	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('The capital contract is linked to different pool services')
 })
 
 for (const [module, label] of [
 	[modules.services, 'security pool services'],
-	[modules.premium, 'resolution premium book'],
+	[modules.premium, 'reporting fees contract'],
 ] as const) {
 	test(`unrecognized ${label} code blocks security pool approval`, async () => {
 		const fixture = capitalClient()

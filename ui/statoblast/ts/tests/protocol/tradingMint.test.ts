@@ -69,7 +69,7 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 	const unit = 10n ** 18n
 	let review: TransactionRequestPreview | undefined
 	let plan: readonly TransactionPlanStep[] = []
-	let balances = [unit, 2n * unit, 3n * unit]
+	let balances: [bigint, bigint, bigint] = [unit, 2n * unit, 3n * unit]
 	const send = mock((request: MockSentTransaction) => {
 		expect(request.to).toBe(pool)
 		if (request.data === undefined) throw new Error('Missing redemption calldata')
@@ -91,7 +91,7 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 				pinned.push(request.blockNumber)
 				if (request.functionName === 'balanceOfShares') return balances
 				if (request.functionName === 'getQuestionOutcome') return 2n
-				expect(request.args).toEqual([3n * unit])
+				expect(request.args).toEqual([balances[2]])
 				if (request.functionName === 'attoSharesToAttoEth') return unit
 				if (request.functionName === 'attoSharesToAttoRep') return 2n * unit
 				throw new Error(`Unexpected redemption read ${request.functionName}`)
@@ -117,6 +117,11 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 	expect(step.readReviewRows()).toContainEqual({ label: 'No shares', value: '3 → 0' })
 	balances = [unit, 2n * unit, 4n * unit]
 	await expect(step.validateBeforeSubmit()).rejects.toThrow('Changed since you reviewed')
+	if (step.refreshReviewData === undefined) throw new Error('Missing winning-share review refresh')
+	const data = await step.refreshReviewData()
+	expect(decodeFunctionData({ abi: parseAbi(['function redeemShares()']), data }).functionName).toBe('redeemShares')
+	await step.validateBeforeSubmit()
+	expect(step.readReviewRows()).toContainEqual({ label: 'No shares', value: '4 → 0' })
 })
 
 test('complete-set redemption refreshes all three share balances and its payout estimate', async () => {
@@ -255,8 +260,8 @@ for (const mode of ['purchase', 'insufficient backing', 'child pool'] as const) 
 			// A security pool the factory did not deploy is rejected before its collateral token or spender is read.
 			game = zeroAddress
 			canonicalSecurityPool = false
-			await expect(validate()).rejects.toThrow('not deployed by the canonical factory')
-			await expect(createCompleteSetInQuestionLedger(client, pool, 100n)).rejects.toThrow('not deployed by the canonical factory')
+			await expect(validate()).rejects.toThrow('not created by the canonical factory')
+			await expect(createCompleteSetInQuestionLedger(client, pool, 100n)).rejects.toThrow('not created by the canonical factory')
 			expect(send).toHaveBeenCalledTimes(1)
 		} else {
 			await expect(createCompleteSetInQuestionLedger(client, pool, 100n)).rejects.toThrow('Insufficient shared REP')
@@ -300,7 +305,7 @@ test('a funded recovery purchase binds REP and rechecks funding before submissio
 test('a pool security pool is trusted only when the factory that registered the pool deployed it, at the requested block', async () => {
 	for (const scenario of [
 		{ recorded: securityPool, deployed: true, failure: undefined },
-		{ recorded: securityPool, deployed: false, failure: 'not deployed by the canonical factory' },
+		{ recorded: securityPool, deployed: false, failure: 'not created by the canonical factory' },
 		{ recorded: zeroAddress, deployed: true, failure: 'Question has no security pool' },
 	]) {
 		const reads: unknown[] = []

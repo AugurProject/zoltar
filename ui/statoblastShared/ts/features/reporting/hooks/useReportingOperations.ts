@@ -120,12 +120,12 @@ export function useReportingOperations(
 		return actionName === 'reportOutcome' ? reportingCopy.submittingReportTitle : reportingCopy.settlingEscalationDepositsTitle
 	}
 	const getSuccessTitle = (actionName: ReportingActionResult['action']) => {
-		if (actionName === 'approveReportingRep') return 'Reporting REP approved'
-		return actionName === 'reportOutcome' ? 'Report submitted' : 'Escalation deposits settled'
+		if (actionName === 'approveReportingRep') return reportingCopy.repApproved
+		return actionName === 'reportOutcome' ? reportingCopy.reportSubmitted : reportingCopy.stakesSettled
 	}
 	const getFailureTitle = (actionName: ReportingActionResult['action']) => {
-		if (actionName === 'approveReportingRep') return 'REP approval failed'
-		return actionName === 'reportOutcome' ? 'Report failed' : 'Settlement failed'
+		if (actionName === 'approveReportingRep') return reportingCopy.repApprovalFailed
+		return actionName === 'reportOutcome' ? reportingCopy.reportFailed : reportingCopy.settlementFailed
 	}
 
 	const requireSelectedOutcome = (selectedOutcome: ReportingFormState['selectedOutcome']) => {
@@ -154,7 +154,7 @@ export function useReportingOperations(
 			onError:
 				onReadError ??
 				(error => {
-					reportingError.value = getErrorMessage(error, 'Failed to load reporting details')
+					reportingError.value = getErrorMessage(error, reportingCopy.reportingReadFailed)
 				}),
 		})
 	}
@@ -266,11 +266,11 @@ export function useReportingOperations(
 	const loadReportingContributionPreflight = async (walletAddress: Address, questionLedgerAddress: Address, currentForm: ReportingFormState, isCurrentSelection: () => boolean) => {
 		const selectedOutcome = requireSelectedOutcome(currentForm.selectedOutcome)
 		const reportAmount = parseRepAmountInput(currentForm.reportAmount, 'Report amount')
-		if (reportAmount <= 0n) throw new Error('Invalid report amount.')
+		if (reportAmount <= 0n) throw new Error(reportingCopy.invalidReportingAmount)
 		const latestDetails = await dependencies.loadReportingDetails(questionLedgerAddress, walletAddress)
 		if (!isCurrentSelection()) return undefined
 		if (latestDetails.reportingBlockedReason !== undefined) throw new Error(latestDetails.reportingBlockedReason)
-		if (latestDetails.systemState !== 'operational') throw new Error('Reporting actions are unavailable until this question is operational.')
+		if (latestDetails.systemState !== 'operational') throw new Error(reportingCopy.reportingUnavailable)
 		const timingGuard = getReportingSubmissionTimingGuard(latestDetails.status === 'active' ? latestDetails : undefined)
 		if (timingGuard !== undefined) throw new Error(timingGuard)
 		const contributionPreview = previewReportingContribution(latestDetails, selectedOutcome, reportAmount)
@@ -278,10 +278,10 @@ export function useReportingOperations(
 		const remainingSelectedOutcomeCapacity = getRemainingSelectedOutcomeContributionCapacity(latestDetails, selectedOutcome)
 		if (contributionPreview.actualDepositAmount > remainingSelectedOutcomeCapacity) {
 			if (remainingSelectedOutcomeCapacity === 0n) throw new Error(reportingCopy.selectedSideCapacityEmpty)
-			throw new Error(`Only ${formatCurrencyBalanceWithUnit(remainingSelectedOutcomeCapacity, 'REP')} remains before the selected side reaches the non-decision threshold.`)
+			throw new Error(reportingCopy.reportingCapacityRemaining(formatCurrencyBalanceWithUnit(remainingSelectedOutcomeCapacity, 'REP')))
 		}
 		const walletRepBalanceAttoRep = latestDetails.viewerWalletRepBalanceAttoRep ?? 0n
-		if (contributionPreview.actualDepositAmount > walletRepBalanceAttoRep) throw new Error(`Insufficient wallet REP. Add ${formatAdditionalCurrencyBalance(contributionPreview.actualDepositAmount - walletRepBalanceAttoRep, 'REP')} before reporting.`)
+		if (contributionPreview.actualDepositAmount > walletRepBalanceAttoRep) throw new Error(reportingCopy.reportingBalanceShortfall(formatAdditionalCurrencyBalance(contributionPreview.actualDepositAmount - walletRepBalanceAttoRep, 'REP')))
 		if (!isCurrentSelection()) return undefined
 		return { actualDepositAmount: contributionPreview.actualDepositAmount, latestDetails, reportAmount, selectedOutcome }
 	}
@@ -295,7 +295,7 @@ export function useReportingOperations(
 				if (preflight === undefined) return undefined
 				const approvalAmountAttoRep = amountAttoRep ?? preflight.actualDepositAmount
 				const allowanceAttoRep = preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n
-				if (allowanceAttoRep >= approvalAmountAttoRep) throw new Error(allowanceAttoRep >= preflight.actualDepositAmount ? 'This question already has enough REP allowance for this report.' : commonCopy.formatApprovalNotIncreasedReason(formatCurrencyBalanceWithUnit(allowanceAttoRep, 'REP')))
+				if (allowanceAttoRep >= approvalAmountAttoRep) throw new Error(allowanceAttoRep >= preflight.actualDepositAmount ? reportingCopy.allowanceAlreadySufficient : commonCopy.formatApprovalNotIncreasedReason(formatCurrencyBalanceWithUnit(allowanceAttoRep, 'REP')))
 				return { ...(await dependencies.approveReportingRep(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, questionLedgerAddress, preflight.selectedOutcome, approvalAmountAttoRep)), amountAttoRep: approvalAmountAttoRep }
 			},
 			'Failed to approve REP for reporting',
@@ -326,7 +326,7 @@ export function useReportingOperations(
 				let requireLead = true
 				if (latestDetails.status === 'active') {
 					const selectedSide = latestDetails.sides.find(side => side.key === preflight.selectedOutcome)
-					if (selectedSide === undefined) throw new Error('The selected reporting outcome is unavailable.')
+					if (selectedSide === undefined) throw new Error(reportingCopy.reportingOutcomeUnavailable)
 					const resultingBalance = selectedSide.balance + preflight.actualDepositAmount
 					requireLead = triggersFork || latestDetails.sides.every(side => side.key === preflight.selectedOutcome || resultingBalance > side.balance)
 				}

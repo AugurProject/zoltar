@@ -3,7 +3,7 @@ import { unsupportedAdmission } from '../../../copy/securityPool.js'
 import { formatCurrencyBalance, formatRoundedCurrencyBalance, formatUnitSuffix } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
-import { encodeFunctionData, formatEther, formatUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, formatUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
 	buildSecurityPoolCapitalDepositRequest,
 	buildSecurityPoolCapitalWithdrawPrincipalRequest,
@@ -74,7 +74,6 @@ export function useSecurityPoolAggregate(
 	model: Pick<ReturnType<typeof useSecurityPool>, 'snapshot' | 'loading' | 'error' | 'refresh'> & Partial<Pick<ReturnType<typeof useSecurityPool>, 'presentationSnapshot' | 'displayedAt'>>,
 	actions: Pick<ReturnType<typeof useSecurityPoolActions>, 'ownerReason' | 'runSecurityPoolAction'>,
 	accountAddress: Address | undefined,
-	redesigned = false,
 ) {
 	const depositAmount = useSignal('')
 	const withdrawalAmount = useSignal('')
@@ -107,10 +106,10 @@ export function useSecurityPoolAggregate(
 	const targetRequiredRep = snapshot !== undefined && healthBps !== undefined && healthBps >= 10_000n && healthBps < 1n << 256n && snapshot.ownerConservativePrice > 0n ? requiredSecurityPoolCollateral(snapshot, snapshot.ownerCommitmentAttoEth, undefined, healthBps) : undefined
 	let targetShortfall: bigint | undefined
 	if (targetRequiredRep !== undefined && snapshot !== undefined) targetShortfall = targetRequiredRep > pledgedRep ? targetRequiredRep - pledgedRep : 0n
-	const healthDepositAttoRep = !redesigned && healthDepositAmount.value.trim() === '' ? targetShortfall : securityPoolAmountOrUndefined(healthDepositAmount.value)
-	const sizingRep = (snapshot?.ownerPrincipalAttoRep ?? 0n) + (redesigned ? (healthDepositAttoRep ?? 0n) : 0n)
+	const healthDepositAttoRep = securityPoolAmountOrUndefined(healthDepositAmount.value)
+	const sizingRep = (snapshot?.ownerPrincipalAttoRep ?? 0n) + (healthDepositAttoRep ?? 0n)
 	const targetCapacity = snapshot === undefined ? undefined : maximumSecurityPoolCommitment({ ...snapshot, ownerPrincipalAttoRep: sizingRep }, healthBps, sizingProofPrice)
-	const commitmentDefault = redesigned ? snapshot?.ownerCommitmentAttoEth : targetCapacity
+	const commitmentDefault = snapshot?.ownerCommitmentAttoEth
 	const displayedCommitment = commitmentAmount.value.trim() === '' && commitmentDefault !== undefined ? formatUnits(commitmentDefault, snapshot?.collateral.decimals ?? 18) : commitmentAmount.value
 	const commitmentAttoEth = securityPoolAmountOrUndefined(displayedCommitment, snapshot?.collateral.decimals ?? 18)
 	const proofKey = `${proofContext}:${commitmentAttoEth}`
@@ -269,12 +268,12 @@ export function useSecurityPoolAggregate(
 			commitmentAmount.value = value
 		},
 		useTargetCapacity: () => {
-			commitmentAmount.value = redesigned && targetCapacity !== undefined ? formatUnits(targetCapacity, snapshot?.collateral.decimals ?? 18) : ''
+			commitmentAmount.value = targetCapacity !== undefined ? formatUnits(targetCapacity, snapshot?.collateral.decimals ?? 18) : ''
 		},
 		targetCapacity,
 		retirementTargetCapacity,
 		targetShortfall,
-		healthDepositAmount: !redesigned && healthDepositAmount.value.trim() === '' && targetShortfall !== undefined ? formatEther(targetShortfall) : healthDepositAmount.value,
+		healthDepositAmount: healthDepositAmount.value,
 		setHealthDepositAmount: (value: string) => {
 			healthDepositAmount.value = value
 		},
@@ -394,11 +393,9 @@ export function useSecurityPoolAggregate(
 					if (allowance < healthDepositAttoRep) throw new Error(transactionCopy.approveBeforeDeposit)
 				},
 				undefined,
-				redesigned
-					? async () => {
-							healthDepositAmount.value = ''
-						}
-					: undefined,
+				async () => {
+					healthDepositAmount.value = ''
+				},
 			),
 		authorize: () =>
 			run(

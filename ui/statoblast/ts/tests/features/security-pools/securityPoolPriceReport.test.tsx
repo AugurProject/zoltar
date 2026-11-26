@@ -20,7 +20,7 @@ test('the REP price workflow keeps recovery available outside older reports and 
 	fixture.values['pendingReportId'] = 9n
 	fixture.game.settlementTimestamp = 900n
 	const actions: SecurityPoolPriceParameters['actions'] = { scope: unscopedTransaction, busy: undefined, ownerReason: undefined, runSecurityPoolAction: async () => undefined }
-	const view = await renderIntoDocument(<SecurityPoolPriceReport redesigned scope='universe' target={accountPriceTarget(capitalSnapshot())} actions={actions} bidder={owner} />)
+	const view = await renderIntoDocument(<SecurityPoolPriceReport scope='universe' target={accountPriceTarget(capitalSnapshot())} actions={actions} bidder={owner} />)
 	lifecycle.trackRendered(view)
 	const button = (name: string) => Array.from(view.container.querySelectorAll('button')).find(candidate => candidate.textContent === name)
 	await waitFor(() => expect(view.container.textContent).toContain('Report #9'))
@@ -28,7 +28,7 @@ test('the REP price workflow keeps recovery available outside older reports and 
 	expect(button(copy.recover)?.closest('details')).toBeNull()
 	expect(button(copy.recover)?.disabled).toBe(false)
 	expect(view.container.querySelectorAll('.statoblast-price-actions > li')).toHaveLength(7)
-	expect(button(copy.refresh)).toBeUndefined()
+	expect(button('Refresh report status')).toBeUndefined()
 })
 
 test('a forked pool keeps an older report ID entered before the first authenticated read', async () => {
@@ -36,7 +36,7 @@ test('a forked pool keeps an older report ID entered before the first authentica
 	fixture.set(priceFeed, 'universeId', 0n)
 	fixture.values['pendingReportId'] = 0n
 	const actions: SecurityPoolPriceParameters['actions'] = { scope: unscopedTransaction, busy: undefined, ownerReason: undefined, runSecurityPoolAction: async () => undefined }
-	const report = (ready: boolean) => <SecurityPoolPriceReport redesigned returnFundsOnly scope='universe' target={ready ? accountPriceTarget(capitalSnapshot()) : undefined} actions={actions} bidder={owner} />
+	const report = (ready: boolean) => <SecurityPoolPriceReport returnFundsOnly scope='universe' target={ready ? accountPriceTarget(capitalSnapshot()) : undefined} actions={actions} bidder={owner} />
 	const view = lifecycle.trackRendered(await renderIntoDocument(report(false)))
 	const field = [...view.container.querySelectorAll('input')].find(input => input.labels?.[0]?.textContent === copy.reportId)
 	if (field === undefined) throw new Error('Missing report ID field')
@@ -61,8 +61,10 @@ test('branch report keeps preparation, wrap, editable approvals and recovery con
 	expect(Array.from(view.container.querySelectorAll('button')).filter(button => !button.disabled)).toHaveLength(0)
 	await act(() => render(<SecurityPoolPriceReport scope='branch' target={branchPriceTarget(fork)} actions={actions} />, view.container))
 	await waitFor(() => expect(view.container.textContent).toContain('already prepared'))
-	const normalize = (values: string[]) => values.map(value => value.replace(/^(Approve|Return released) (Collateral|WETH)$/, '$1 collateral'))
-	expect(normalize(labels().filter(label => !label.includes('Wrap ETH for report')))).toEqual(normalize(initial))
+	const afterPrepare = Array.from(view.container.querySelectorAll('button')).filter(button => button.textContent !== 'Wrap ETH for report')
+	expect(afterPrepare).toEqual(originalButtons)
+	expect(originalButtons[0]?.textContent).toBe(copy.preparedStep)
+	expect(originalButtons[0]?.disabled).toBe(true)
 	expect(view.container.querySelectorAll('.card .card')).toHaveLength(0)
 	const input = Array.from(view.container.querySelectorAll('input')).find(input => input.closest('.field')?.querySelector('label')?.textContent?.includes('REP price (REP per'))
 	if (input === undefined) throw new Error('Missing REP price input')
@@ -86,7 +88,20 @@ test('an unreported feed has no accepted price until its first accepted settleme
 	fixture.values['lastSettlementTimestamp'] = 0n
 	const fork = await fixture.fork()
 	const actions: SecurityPoolPriceParameters['actions'] = { scope: unscopedTransaction, busy: undefined, ownerReason: undefined, runSecurityPoolAction: async () => undefined }
-	const view = await renderIntoDocument(<SecurityPoolPriceReport scope='branch' target={branchPriceTarget(fork)} actions={actions} />)
+	let refresh: (() => Promise<unknown>) | undefined
+	const view = await renderIntoDocument(
+		<SecurityPoolPriceReport
+			scope='branch'
+			target={branchPriceTarget(fork)}
+			actions={actions}
+			registerPageRefresh={refreshPage => {
+				refresh = refreshPage
+				return () => {
+					refresh = undefined
+				}
+			}}
+		/>,
+	)
 	lifecycle.trackRendered(view)
 	const acceptedPrice = () =>
 		Array.from(view.container.querySelectorAll('.metric-label'))
@@ -96,10 +111,14 @@ test('an unreported feed has no accepted price until its first accepted settleme
 	expect(acceptedPrice()).toBe('—')
 	fixture.values['lastPrice'] = 3n * 10n ** 18n
 	fixture.values['lastSettlementTimestamp'] = 900n
-	const refresh = Array.from(view.container.querySelectorAll('button')).find(button => button.textContent === 'Refresh report status')
-	if (refresh === undefined) throw new Error('Missing report refresh button')
-	await act(() => refresh.click())
+	if (refresh === undefined) throw new Error('Missing report refresh action')
+	const refreshReport = refresh
+	let completed: Promise<unknown> | undefined
+	await act(() => {
+		completed = refreshReport()
+	})
 	await waitFor(() => expect(acceptedPrice()).toBe('3.00'))
+	await completed
 })
 
 test('six-decimal reports label released collateral accurately and omit native wrapping', async () => {
@@ -218,15 +237,14 @@ test('the universe report has no feed preparation, branch deadline or branch wor
 	lifecycle.trackRendered(view)
 	// The funding guard replaces the loading reason once the feed has loaded.
 	await waitFor(() => expect(view.container.textContent).toContain(copy.priceInvalid))
-	// The Shared backing disclosure names the universe report, so it has no heading of its own.
-	expect(view.container.querySelector('h4') === null).toBe(true)
+	expect(view.container.textContent).toContain(copy.pricePage)
 	const labels = Array.from(view.container.querySelectorAll('button')).map(button => button.textContent ?? '')
 	expect(labels).toContain(copy.scopes.universe.request)
 	expect(labels).not.toContain(copy.prepare)
 	const metrics = Array.from(view.container.querySelectorAll('.metric-label')).map(label => label.textContent)
-	expect(metrics).toContain(copy.currentPrice('WETH'))
+	expect(view.container.textContent).toContain(copy.acceptedPrice)
 	expect(metrics).not.toContain(copy.reportingDeadline)
-	expect(metrics).toContain(copy.validUntil)
+	expect(view.container.textContent).toContain(copy.validUntil)
 	expect(view.container.textContent).not.toMatch(/branch/i)
 })
 

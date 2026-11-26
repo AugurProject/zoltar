@@ -1,9 +1,9 @@
 import { resolveOpenOracleDisputeFlows } from './openOracleDisputeFlows.js'
 import { getOpenOracleSettlementGasLimit } from './openOracleSettlementSafety.js'
 import { loadOpenOracleTokenMetadata, type OpenOracleTokenMetadata } from './openOracleTokenMetadata.js'
-import { wrapWeth } from './wethFunding.js'
+import { wethDepositAbi, wrapWeth } from './wethFunding.js'
 import { runFundingTransactions, type FundingTransaction } from './fundingTransactions.js'
-import { bigintToSafeNumber, toEventSelector, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { bigintToSafeNumber, encodeFunctionData, toEventSelector, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hasOpenOracleFlag, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_STORE_PRICE, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
@@ -309,7 +309,7 @@ export async function createOpenOracleReportInstance(
 	const actions: FundingTransaction[] = []
 	if (wethShortfallAttoEth > 0n)
 		actions.push({
-			step: { functionName: 'deposit', contractAddress: getWethAddress(), value: wethShortfallAttoEth },
+			step: { functionName: 'deposit', contractAddress: getWethAddress(), value: wethShortfallAttoEth, data: encodeFunctionData({ abi: wethDepositAbi, functionName: 'deposit' }) },
 			isRequired: async () => (await client.readContract({ address: getWethAddress(), abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [client.account.address] })) < wethFundingAmountAttoEth,
 			execute: async () => await wrapWeth(client, wethShortfallAttoEth),
 		})
@@ -317,12 +317,13 @@ export async function createOpenOracleReportInstance(
 	const token2Funding = { needed: needsToken2Approval, token: parameters.token2Address, required: parameters.initialToken2Amount }
 	const fundingOrder = sameAddress(parameters.token2Address, getWethAddress()) ? [token2Funding, token1Funding] : [token1Funding, token2Funding]
 	for (const funding of fundingOrder) {
-		if (funding.needed)
-			actions.push({
-				step: { functionName: 'approve', contractAddress: funding.token, args: [getOpenOracleAddress(), funding.required] },
-				isRequired: async () => (await client.readContract({ address: funding.token, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, getOpenOracleAddress()] })) < funding.required,
-				execute: async () => await writeContractAndWait(client, () => ({ address: funding.token, abi: ABIS.mainnet.erc20, functionName: 'approve', args: [getOpenOracleAddress(), funding.required] })),
-			})
+		if (!funding.needed) continue
+		const call = { address: funding.token, abi: ABIS.mainnet.erc20, functionName: 'approve', args: [getOpenOracleAddress(), funding.required] } as const
+		actions.push({
+			step: { functionName: call.functionName, contractAddress: call.address, args: call.args, data: encodeFunctionData(call) },
+			isRequired: async () => (await client.readContract({ address: funding.token, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, getOpenOracleAddress()] })) < funding.required,
+			execute: async () => await writeContractAndWait(client, () => call),
+		})
 	}
 	await runFundingTransactions(client, actions, {
 		functionName: 'report',

@@ -17,7 +17,7 @@ function getDisputeWindowPendingPresentation(report: OpenOracleStageReport): Lif
 	return {
 		availableActions: [],
 		blockedActions: [],
-		detail: `Disputes open in ${duration}.`,
+		detail: openOracleCopy.disputesOpenIn(duration),
 		key: 'dispute-pending',
 		label: openOracleCopy.awaitingDisputeWindow,
 		tone: 'warning',

@@ -17,7 +17,8 @@ export const deployment = {
 	receiptPending: 'Waiting for the deployment receipt.',
 	receiptCheckFailed: 'Could not check the deployment receipt. Try again.',
 	walletSendUncertain: 'The wallet hasn’t returned a transaction hash. Check the activity in your wallet.',
-	progressUnavailable: 'Could not save deployment progress on this device.',
+	restartAvailable: 'The previous deployment did not confirm. Start a new deployment to continue.',
+	progressUnavailable: 'Deployment progress cannot be saved. Keep this tab open until setup is complete.',
 	rulesChanged: 'The saved question rules changed. Reopen this page before deploying.',
 	setupClosed: 'The origin universe has forked. Setup is closed.',
 	stageComplete: 'This setup stage is complete.',
@@ -34,7 +35,7 @@ export const deployment = {
 	reviewQuestionRules: (mode: 'open' | 'fixed', horizon: string) => `${mode === 'open' ? 'Any eligible question may be registered.' : 'Only questions on the fixed list may be registered.'} Maximum time to the question close is ${horizon}.`,
 	reviewFees: (annual: string, purchase: string, floor: string) => `Annual holding fee ${annual}%. Purchase fee ${purchase}% of required backing value, minimum ${floor}.`,
 	reviewCommitment: (minimum: string, vesting: string) => `Minimum collateral commitment ${minimum}. Rewards vest over ${vesting}.`,
-	reviewDuration: (days: string) => (days === '1' ? '1 day' : `${days} days`),
+	reviewDuration: (days: string) => `${days} ${days === '1' ? 'day' : 'days'}`,
 	prepareModulesReview: (stage: number, total: number) => `Complete setup stage ${stage} of ${total}. This deploys more pool modules without moving funds.`,
 	stageChanged: 'Setup advanced. Refresh and review again.',
 }
@@ -92,7 +93,7 @@ export const fork = {
 	selectBranch: 'Select a branch.',
 	choiceUnavailable: 'Fork choice is no longer available.',
 	prepareReview: 'Create this branch’s REP token and shared capital contracts when needed.',
-	startReview: 'Move shared REP to this branch and set up its recapitalization auction.',
+	startReview: 'Move shared REP to this branch and set up its repair auction.',
 	activateReview: 'Activate this branch’s collateral and REP claims and the positions that chose it.',
 }
 

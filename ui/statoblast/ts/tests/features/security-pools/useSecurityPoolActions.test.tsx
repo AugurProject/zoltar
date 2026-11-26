@@ -1,4 +1,4 @@
-import type { WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
+import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { expect, mock, test } from 'bun:test'
@@ -11,7 +11,7 @@ import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { localEntityScopeForNetwork, readFavoriteEntries } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { useSecurityPoolActions } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolActions.js'
-import { decodeFunctionData, encodeAbiParameters, encodeFunctionData, parseAbi, parseAbiItem, parseAbiParameters, toEventSelector, TransactionLookupNotFoundError, type Address, type Hash, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { decodeFunctionData, encodeAbiParameters, encodeFunctionData, getCreateAddress, parseAbi, parseAbiItem, parseAbiParameters, toEventSelector, TransactionLookupNotFoundError, type Address, type Hash, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { getInfraContractAddresses } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { renderHookWithProps } from '../../support/renderHook.js'
 import { auctionCapitalSnapshot, capitalSnapshot, owner, securityPool, token, capital } from './capitalFixture.js'
@@ -49,7 +49,17 @@ const deploymentTopic = (value: Address) => encodeAbiParameters(parseAbiParamete
 const deployedPoolLog = () => ({ address: factory(), data: '0x' as const, topics: [toEventSelector(parseAbiItem('event SecurityPoolDeployed(address indexed securityPool, address indexed creator)')), deploymentTopic(securityPool), deploymentTopic(owner)] })
 
 /** Renders the actions over `source` with an owner wallet that records each transaction, reports `token` as the first deployed contract and the factory's deployment event for `securityPool` after it. */
-async function renderWithDeploymentWallet(source: ReturnType<typeof capitalClient>, deploying = false, delays: { wallet?: Promise<void>; receipt?: Promise<void>; confirmed?: () => boolean; unrelatedReplacement?: () => void } = {}) {
+async function renderWithDeploymentWallet(
+	source: ReturnType<typeof capitalClient>,
+	deploying = false,
+	delays: {
+		wallet?: Promise<void>
+		receipt?: Promise<void>
+		confirmed?: () => boolean
+		unrelatedReplacement?: () => void
+		chain?: (requests: readonly { to?: Address | null | undefined; data?: Hex | undefined }[]) => Partial<Pick<ReadClient, 'getBlock' | 'getTransaction' | 'getTransactionCount' | 'getTransactionReceipt'>>
+	} = {},
+) {
 	// The factory creates the security pool, so the receipt carries no contract address for it: only the factory's event names it.
 	const requests: { to?: Address | null | undefined; data?: Hex | undefined }[] = []
 	const receiptHashes: Hash[] = []
@@ -70,11 +80,15 @@ async function renderWithDeploymentWallet(source: ReturnType<typeof capitalClien
 		...source.backend,
 		createReadClient: () =>
 			source.client.extend(() => ({
+				getTransaction: async ({ hash }) => {
+					throw new TransactionLookupNotFoundError('transaction', hash)
+				},
 				getTransactionReceipt: async ({ hash }) => {
 					receiptHashes.push(hash)
 					if (delays.confirmed?.() !== true) throw new TransactionLookupNotFoundError('receipt', hash)
 					return { ...receipt(), transactionHash: mockTransactionHash, blockHash: mockTransactionHash, blockNumber: 1n, cumulativeGasUsed: 1n, gasUsed: 1n, transactionIndex: 0n } satisfies TransactionReceipt
 				},
+				...delays.chain?.(requests),
 			})),
 		createWriteClient: (_, callbacks) => ({
 			...writer,
@@ -218,6 +232,145 @@ test('an explicit wallet rejection unlocks the rules deployment again', async ()
 	expect(hook.state().deploymentLocked).toBe(false)
 	expect(hook.state().admissionDeployReason).toBeUndefined()
 	expect(requests).toHaveLength(1)
+})
+
+test('a wallet send failure before receiving a hash unlocks the rules deployment again', async () => {
+	const wallet = createDeferred<void>()
+	const { hook, requests } = await renderWithDeploymentWallet(capitalClient(), true, { wallet: wallet.promise })
+	let sending: Promise<void> | undefined
+	await act(() => {
+		sending = hook.state().deployAdmission()
+	})
+	await waitFor(() => expect(requests).toHaveLength(1))
+	await act(async () => {
+		wallet.reject(new Error('Hardware wallet disconnected'))
+		await sending
+	})
+	expect(hook.state().pendingDeployment).toBeUndefined()
+	expect(hook.state().admissionDeployReason).toBeUndefined()
+})
+
+test('the wizard can finish deployment without persistent storage', async () => {
+	const descriptor = Object.getOwnPropertyDescriptor(window, 'localStorage')
+	Object.defineProperty(window, 'localStorage', {
+		configurable: true,
+		get: () => {
+			throw new DOMException('Storage access denied', 'SecurityError')
+		},
+	})
+	try {
+		const { hook, requests } = await renderWithDeploymentWallet(capitalClient(), true)
+		expect(hook.state().deploymentProgressPersistent).toBe(false)
+		await act(() => hook.state().deployAdmission())
+		expect(hook.state().admissionAddress).toBe(token)
+		await act(() => hook.state().deploy())
+		expect(hook.state().deploymentPool).toBe(securityPool)
+		expect(requests).toHaveLength(2)
+	} finally {
+		if (descriptor === undefined) Reflect.deleteProperty(window, 'localStorage')
+		else Object.defineProperty(window, 'localStorage', descriptor)
+	}
+})
+
+test('discard cannot remove a pool saved by a different wizard tab', async () => {
+	const { hook } = await renderWithDeploymentWallet(capitalClient(), true)
+	await act(() => hook.state().deployAdmission())
+	expect(hook.state().canStartNewDeployment).toBe(true)
+	const otherTab = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolActionsWrapper, { model: model(), deploying: true }))
+	await act(() => otherTab.state().deploy())
+	expect(otherTab.state().deploymentPool).toBe(securityPool)
+	await act(() => expect(hook.state().startNewDeployment()).toBe(false))
+	const restored = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolActionsWrapper, { model: model(), deploying: true }))
+	expect(restored.state().deploymentPool).toBe(securityPool)
+})
+
+test('a saved deployment hash does not keep the wizard locked after a different transaction spends its nonce', async () => {
+	const receipt = createDeferred<void>()
+	let replaced = false
+	let finalized = false
+	let originalVisible = true
+	const nonce = 3n
+	const originalBlock = capitalSnapshot().blockNumber
+	const replacementBlock = originalBlock + 1n
+	const source = capitalClient()
+	const { hook, requests } = await renderWithDeploymentWallet(source, true, {
+		receipt: receipt.promise,
+		chain: requests => ({
+			getTransaction: async ({ hash }) => {
+				if (!originalVisible) throw new TransactionLookupNotFoundError('transaction', hash)
+				return { from: owner, input: requests[0]?.data ?? '0x', nonce, gas: 1n, value: 0n, hash: mockTransactionHash }
+			},
+			getTransactionCount: async request => (replaced && (request.blockNumber === undefined || request.blockNumber >= replacementBlock) ? nonce + 1n : nonce),
+			getBlock: async request => ({
+				...(await source.client.getBlock()),
+				number: request?.blockNumber ?? ((request?.blockTag === 'finalized' ? finalized : replaced) ? replacementBlock : originalBlock),
+			}),
+		}),
+	})
+	let sending: Promise<void> | undefined
+	try {
+		await act(() => {
+			sending = hook.state().deployAdmission()
+		})
+		await waitFor(() => expect(hook.state().pendingDeployment?.hash).toBe(mockTransactionHash))
+		await waitFor(() => expect(hook.state().pendingDeployment?.nonce).toBe(nonce.toString()))
+		await act(() => hook.cleanup())
+		originalVisible = false
+		const restored = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolActionsWrapper, { model: model(), deploying: true }))
+		await act(() => restored.state().refreshDeploymentProgress())
+		expect(restored.state().canStartNewDeployment).toBe(false)
+		await waitFor(() => expect(restored.state().checkingDeploymentReceipt).toBe(false))
+		replaced = true
+		await act(() => restored.state().refreshDeploymentProgress())
+		expect(restored.state().canStartNewDeployment).toBe(false)
+		finalized = true
+		await act(() => restored.state().refreshDeploymentProgress())
+		await waitFor(() => expect(restored.state().canStartNewDeployment).toBe(true))
+		expect(restored.state().admissionAddress).toBeUndefined()
+		expect(requests).toHaveLength(1)
+		await act(() => expect(restored.state().startNewDeployment()).toBe(true))
+		expect(restored.state().admissionDeployReason).toBeUndefined()
+	} finally {
+		receipt.resolve()
+		await sending
+	}
+})
+
+test('verified question rules are recovered at the wallet’s mined creation address', async () => {
+	const receipt = createDeferred<void>()
+	const nonce = 4n
+	let mined = false
+	const source = capitalClient()
+	const recoveredAddress = getCreateAddress({ from: owner, nonce })
+	const code = source.codes.get(token)
+	if (code === undefined) throw new Error('Missing mock question rules code')
+	const { hook, requests } = await renderWithDeploymentWallet(source, true, {
+		receipt: receipt.promise,
+		chain: requests => ({
+			getTransaction: async () => ({ from: owner, input: requests[0]?.data ?? '0x', nonce, gas: 1n, value: 0n, hash: mockTransactionHash }),
+			getTransactionCount: async () => (mined ? nonce + 1n : nonce),
+		}),
+	})
+	let sending: Promise<void> | undefined
+	try {
+		await act(() => {
+			sending = hook.state().deployAdmission()
+		})
+		await waitFor(() => expect(hook.state().pendingDeployment?.nonce).toBe(nonce.toString()))
+		await act(() => hook.cleanup())
+		const restored = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolActionsWrapper, { model: model(), deploying: true }))
+		await waitFor(() => expect(restored.state().checkingDeploymentReceipt).toBe(false))
+		expect(restored.state().admissionAddress).toBeUndefined()
+		source.codes.set(recoveredAddress, code)
+		mined = true
+		await act(() => restored.state().refreshDeploymentProgress())
+		await waitFor(() => expect(restored.state().admissionAddress).toBe(recoveredAddress))
+		expect(restored.state().pendingDeployment).toBeUndefined()
+		expect(requests).toHaveLength(1)
+	} finally {
+		receipt.resolve()
+		await sending
+	}
 })
 
 test('a different transaction replacing the rules send is never adopted on reload', async () => {

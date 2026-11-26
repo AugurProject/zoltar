@@ -104,13 +104,13 @@ export async function verifyCapitalModuleClone(client: ReadClient, address: Addr
 	const implementation = boundCloneImplementation(await client.getCode({ address, blockNumber }), ledger, label)
 	const [code, authority] = await Promise.all([client.getCode({ address: implementation, blockNumber }), client.readContract({ address, abi: linksAbi, functionName: 'capitalLedger', blockNumber })])
 	verifyRuntimeCode(code, `0x${artifact.evm.deployedBytecode.object}`, artifact.evm.deployedBytecode.immutableReferences, label)
-	if (getAddress(requireAddressValue(authority, 'capital ledger')) !== getAddress(ledger)) throw new Error(`${label} belongs to another authority.`)
+	if (getAddress(requireAddressValue(authority, 'capital contract')) !== getAddress(ledger)) throw new Error(`${label} belongs to another authority.`)
 }
 
 export async function verifyCapitalLedgerClone(client: ReadClient, securityPool: Address, ledger: Address, universeId: bigint, repToken: Address, blockNumber: bigint) {
 	const implementation = requireAddressValue(await client.readContract({ address: securityPool, abi: linksAbi, functionName: 'capitalImplementation', blockNumber }), 'capital implementation')
 	const expected = boundCloneRuntimeCode(implementation, universeCloneBindings(universeId, repToken))
-	await Promise.all([verifyModule(client, implementation, capitalArtifact, securityPool, 'capital implementation', blockNumber), client.getCode({ address: ledger, blockNumber }).then(code => verifyBoundCloneCode(code, expected, 'capital ledger'))])
+	await Promise.all([verifyModule(client, implementation, capitalArtifact, securityPool, 'capital implementation', blockNumber), client.getCode({ address: ledger, blockNumber }).then(code => verifyBoundCloneCode(code, expected, 'capital contract'))])
 }
 
 /**
@@ -120,7 +120,7 @@ export async function verifyCapitalLedgerClone(client: ReadClient, securityPool:
 async function requireCanonicalSecurityPool(client: Pick<ReadClient, 'readContract'>, securityPool: Address, blockNumber?: bigint, readUnverifiedCode?: ReadClient['getCode']) {
 	const recorded = await client.readContract({ address: getInfraContractAddresses().securityPoolFactory, abi: linksAbi, functionName: 'isSecurityPool', args: [securityPool], ...(blockNumber === undefined ? {} : { blockNumber }) })
 	if (recorded === true) return
-	if (readUnverifiedCode === undefined) throw new Error('Security pool was not deployed by the canonical factory.')
+	if (readUnverifiedCode === undefined) throw new Error('Security pool was not created by the canonical factory.')
 	const code = await readUnverifiedCode({ address: securityPool, blockNumber })
 	throw new Error(code === undefined || code === '0x' ? missingPoolContract : invalidPool)
 }
@@ -193,8 +193,8 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 	const infrastructure = getInfraContractAddresses()
 	if (getAddress(factory) !== getAddress(infrastructure.securityPoolFactory) || getAddress(zoltar) !== getAddress(infrastructure.zoltar)) throw new Error('Security pool uses unrecognized protocol contracts.')
 	if (getAddress(requireAddressValue(auctionDeployerValue, 'auction deployer')) !== getAddress(infrastructure.securityPoolRepairAuctionDeployer)) throw new Error('Security pool uses an unrecognized auction deployer.')
-	if (requireAddressValue(capitalServicesValue, 'capital services') !== getAddress(services)) throw new Error('Capital ledger uses another services authority.')
-	if (requireAddressValue(capitalForkValue, 'capital fork authority') !== getAddress(forkController)) throw new Error('Capital ledger uses another fork authority.')
+	if (requireAddressValue(capitalServicesValue, 'capital services') !== getAddress(services)) throw new Error('The capital contract is linked to different pool services.')
+	if (requireAddressValue(capitalForkValue, 'capital fork authority') !== getAddress(forkController)) throw new Error('The capital contract is linked to a different fork contract.')
 	const start = questionStart > questionCount ? 0n : questionStart
 	// Other contract accounts remain readable, but gain no auction-owner authority:
 	// a clone of another implementation stays an ordinary owner, and a clone of the
@@ -219,7 +219,7 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 		client.readContract({ address: services, abi: linksAbi, functionName: 'premiumLedger', blockNumber }),
 	])
 	const book = requireAddressValue(bookValue, 'settlement book')
-	const premium = requireAddressValue(premiumValue, 'resolution premium book')
+	const premium = requireAddressValue(premiumValue, 'reporting fees contract')
 	await Promise.all([
 		verifyCapitalLedgerClone(client, securityPool, snapshot.capitalLedger, universeId, snapshot.repToken, blockNumber),
 		verifyModule(client, lifecycle, lifecycleArtifact, lifecycle, 'capital lifecycle delegate', blockNumber, 'implementation'),
@@ -228,11 +228,11 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 		verifyCapitalModuleClone(client, feeStreams, feesArtifact, snapshot.capitalLedger, 'capital fee streams', blockNumber),
 		verifyModule(client, settlement, settlementArtifact, securityPool, 'settlement engine', blockNumber),
 		verifyModule(client, book, bookArtifact, settlement, 'settlement book', blockNumber),
-		verifyModule(client, reporters, reporterArtifact, securityPool, 'reporter ledger', blockNumber),
+		verifyModule(client, reporters, reporterArtifact, securityPool, 'reporting contract', blockNumber),
 		verifyModule(client, quoteHelper, purchaseArtifact, securityPool, 'security pool purchase helper', blockNumber),
 		verifyModule(client, forkController, forkArtifact, securityPool, 'fork coordinator', blockNumber),
 		verifyModule(client, services, servicesArtifact, securityPool, 'security pool services', blockNumber),
-		verifyModule(client, premium, premiumArtifact, services, 'resolution premium book', blockNumber, 'services'),
+		verifyModule(client, premium, premiumArtifact, services, 'reporting fees contract', blockNumber, 'services'),
 	])
 	const [capitalUniverse, capitalProtocol, reporterProtocol, forkProtocol, canonicalRep] = await Promise.all([
 		client.readContract({ address: snapshot.capitalLedger, abi: linksAbi, functionName: 'universeId', blockNumber }),

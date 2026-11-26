@@ -94,9 +94,9 @@ export function SecurityPoolsSection({
 	const setupVerificationReasonId = useId()
 	const setupVerificationReason = model.setup === undefined && model.savedSetupStage !== undefined ? actions.preparationReason(1) : undefined
 	const priceDeadline = useSecurityPoolPriceDeadline(model.presentationSnapshot, model.displayedAt, model.refresh)
-	const capital = useSecurityPoolAggregate(model, actions, parameters.accountAddress, true)
+	const capital = useSecurityPoolAggregate(model, actions, parameters.accountAddress)
 	const shown = model.presentationSnapshot
-	const fundedPriceReports = useSecurityPoolPriceFunds(model.snapshot, shown, enabled && page !== undefined)
+	const fundedPriceReports = useSecurityPoolPriceFunds(model.snapshot, shown, enabled && page !== undefined, readingWallet)
 	const hasPositionOwner = isAddress(model.ownerInput.trim())
 	const connectedPositionOwner = shown?.auctionVault?.bidder ?? model.ownerInput
 	let positionMode: 'own' | 'other' | 'none' = 'none'
@@ -160,7 +160,7 @@ export function SecurityPoolsSection({
 								<UserMessage detail={pageCopy.liquidationsUnavailableAfterFork} />
 							</SectionBlock>
 						) : (
-							<SecurityPoolTakeover key={page.positionId?.toString()} positionId={page.positionId} wallet={parameters.accountAddress} model={model} actions={actions} redesigned autoRefresh={autoRefresh ?? false} />
+							<SecurityPoolTakeover key={page.positionId?.toString()} positionId={page.positionId} wallet={parameters.accountAddress} model={model} actions={actions} autoRefresh={autoRefresh ?? false} />
 						))}
 					{page.tab === 'questions' && (
 						<SecurityPoolQuestionsPanel
@@ -180,7 +180,6 @@ export function SecurityPoolsSection({
 					)}
 					{page.tab === 'price' && (
 						<SecurityPoolPriceReport
-							redesigned
 							scope='universe'
 							target={hasPositionOwner ? accountPriceTarget(model.snapshot) : undefined}
 							displayTarget={hasPositionOwner ? accountPriceTarget(shown) : undefined}
@@ -204,7 +203,6 @@ export function SecurityPoolsSection({
 					{page.tab === 'fork' && (shown?.forkTime ?? 0n) > 0n && !hasPositionOwner && <UserMessage detail={pageCopy.connectToSeePosition} />}
 					{page.tab === 'fork' && (shown?.forkTime ?? 0n) > 0n && (
 						<SecurityPoolSharedFork
-							redesigned
 							forkQuestion={forkQuestion}
 							forkQuestionRead={forkQuestionRead}
 							childUniverses={forkChildren}

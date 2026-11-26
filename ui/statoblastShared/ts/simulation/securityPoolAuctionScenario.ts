@@ -136,11 +136,11 @@ export async function seedSecurityPoolAuctionScenario(parameters: ScenarioSeedPa
 	await reportStep('Settled the branch REP price')
 
 	const auctionFor = (bidder: Address) => loadSecurityPoolAuctionSnapshot({ client: reader, securityPool, bidder, universeId: child })
-	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolAuctionOpenRequest(await auctionFor(owner)), 'Open the recapitalization auction')
-	await reportStep('Opened the recapitalization auction')
+	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolAuctionOpenRequest(await auctionFor(owner)), 'Open the repair auction')
+	await reportStep('Opened the repair auction')
 	let snapshot = await auctionFor(owner)
 	const auction = snapshot.auction
-	if (auction === undefined) throw new Error('Expected the open recapitalization auction')
+	if (auction === undefined) throw new Error('Expected the open repair auction')
 	if (auction.targetLots <= 2n) throw new Error('Expected room for both the owner and rival auction bids')
 	const minimum = auction.minimumCollateralAttoRepPerLot
 	for (const [account, client] of [

@@ -30,3 +30,9 @@ export const formatDepositSearchProgress = (done: bigint, total: bigint, remaini
 export const inheritedClaimTimeout = 'Preparing claims took too long.'
 export const inheritedClaimFailure = 'Unable to prepare inherited claims.'
 export const formatInheritedClaimProgress = (done: bigint, total: bigint) => `${done} of ${total}`
+
+export const invalidDepositIndex = 'Enter a valid deposit number.'
+export const depositWrongOwner = 'This deposit belongs to another address.'
+export const depositAlreadyClaimed = 'This deposit was already claimed.'
+export const depositCheckFailed = 'Could not check that deposit.'
+export const depositNotFound = (index: bigint, outcome: string) => `There is no deposit #${index} on ${outcome}.`

@@ -1,3 +1,4 @@
+import * as openOracleCopy from '../../../copy/openOracle.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
@@ -22,7 +23,7 @@ function useTokenMetadata(addressInput: string, label: 'Base' | 'Quote', environ
 		setEntry({ address, metadata: { status: 'loading' } })
 		void loadTokenMetadata(address, label)
 			.then(result => (result.status === 'success' ? { decimals: result.decimals, status: 'ready' as const, symbol: result.symbol } : { message: result.message, status: 'failure' as const }))
-			.catch((error: unknown) => ({ message: getErrorMessage(error, `Unable to read the ${label.toLowerCase()} token.`), status: 'failure' as const }))
+			.catch((error: unknown) => ({ message: getErrorMessage(error, openOracleCopy.createTokenReadFailed(label.toLowerCase())), status: 'failure' as const }))
 			.then(metadata => {
 				if (!cancelled) setEntry({ address, metadata })
 			})

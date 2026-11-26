@@ -32,18 +32,22 @@ export async function loadQuestionLedgerDetails(client: ReadClient, questionLedg
 		)
 		if (confirmedId !== questionId) throw new Error('The registered question does not match this ID.')
 		if (capital === zeroAddress || securityPoolAddress === zeroAddress) throw new Error('Question has no security pool.')
-		const [central, hasForkContinuationEscalationGame, validUntil] = await Promise.all([
+		const game = { abi: gameArtifact.abi, address: escalationGameAddress, blockNumber }
+		const hasGame = escalationGameAddress !== zeroAddress
+		const [central, hasForkContinuationEscalationGame, hasReachedNonDecision, validUntil] = await Promise.all([
 			loadCentralSecurityPoolQuestion(client, questionLedgerAddress, capital, blockNumber),
-			escalationGameAddress !== zeroAddress && client.readContract({ abi: gameArtifact.abi, address: escalationGameAddress, functionName: 'forkContinuation', blockNumber }),
+			hasGame && client.readContract({ ...game, functionName: 'forkContinuation' }),
+			forkTime > 0n ? hasGame && client.readContract({ ...game, functionName: 'hasReachedNonDecision' }) : undefined,
 			client.readContract({ abi: capitalArtifact.abi, address: capital, functionName: 'priceValidUntil', blockNumber }),
 		])
-		return { central, securityPoolAddress, escalationGameAddress, systemState, outcome, forkTime, forkQuestionId, initialReportingResponseWindow, validUntil, hasForkContinuationEscalationGame }
+		return { central, securityPoolAddress, escalationGameAddress, systemState, outcome, forkTime, forkQuestionId, initialReportingResponseWindow, validUntil, hasForkContinuationEscalationGame, hasReachedNonDecision }
 	}
 	const [state, marketDetails] = await Promise.all([readState(), loadMarketDetails(client, questionId)])
-	const { central, securityPoolAddress, escalationGameAddress, outcome, forkTime, forkQuestionId, initialReportingResponseWindow, validUntil, hasForkContinuationEscalationGame } = state
+	const { central, securityPoolAddress, escalationGameAddress, outcome, forkTime, forkQuestionId, initialReportingResponseWindow, validUntil, hasForkContinuationEscalationGame, hasReachedNonDecision } = state
 	return {
 		securityPoolAddress,
 		hasEscalationGame: escalationGameAddress !== zeroAddress,
+		hasReachedNonDecision,
 		settlementCollateralAttoEth: central.settlementCollateralAttoEth,
 		settlementRecoveryAttoRep: central.settlementRecoveryAttoRep,
 		mintingCapacityAttoEth: escalationGameAddress === zeroAddress ? central.mintingCapacityAttoEth : 0n,

@@ -61,6 +61,7 @@ export const firstReportMinimum = <Amount>(amount: Amount) => ['No reports yet. 
 export const reportingTied = 'Tied'
 export const reportingTiedConsequence = 'A tie doesn’t resolve the question: it stays open until one outcome leads.'
 export const deadlineChecking = 'Ended · checking…'
+export const checkingQuestionStage = 'Checking question stage…'
 export const followWithAutoRefresh = 'Turn on Auto-refresh to follow this.'
 export const asOfMinutes = (minutes: number) => `as of ${minutes} min ago`
 export const othersStake = 'Others'

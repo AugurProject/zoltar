@@ -468,7 +468,7 @@ export type ClientRequestParameters = {
 	params?: unknown
 }
 
-export type BlockTag = 'earliest' | 'latest' | 'pending'
+export type BlockTag = 'earliest' | 'latest' | 'pending' | 'finalized'
 
 export type LogTopicFilter = Hex | readonly Hex[] | null
 

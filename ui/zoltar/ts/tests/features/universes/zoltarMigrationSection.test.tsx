@@ -249,7 +249,7 @@ describe('ZoltarMigrationSection', () => {
 		const queries = within(document.body)
 
 		expect(getCurrentStepTitle()).toBe('Select outcomes')
-		expect(document.body.textContent).toContain('Not deployed')
+		expect(document.body.textContent).toContain('Not created yet')
 		// Each card names its immutable outcome index and short child universe ID beside the label (#1477).
 		expect(Array.from(document.querySelectorAll('.migration-outcome-row .outcome-identity')).map(identity => identity.textContent)).toEqual(['#1 · 0x2', '#2 · 0x3'])
 		expect(document.body.textContent).not.toContain('Split REP')
@@ -377,7 +377,7 @@ describe('ZoltarMigrationSection', () => {
 		})
 		expect(q.getByRole('button', { name: 'Remove 50 °C · 0x2' })).toBeTruthy()
 		expect(q.getByRole('button', { name: 'Deploy 5 °C universe' })).toBeTruthy()
-		expect(q.getByText('Not deployed')).toBeTruthy()
+		expect(q.getByText('Not created yet')).toBeTruthy()
 		q.getByRole('button', { name: 'Remove 50 °C · 0x2' }).click()
 		expect(updates).toEqual([{ outcomeIndexes: [] }])
 		await act(() => render(h(ZoltarMigrationSection, createProps({ zoltarUniverse: createUniverse({ forkQuestionDetails: question, childUniverses: [child] }), zoltarMigrationForm: createForm({ outcomeIndexes: [] }) })), rendered.container))

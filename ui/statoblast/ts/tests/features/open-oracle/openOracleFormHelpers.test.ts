@@ -69,7 +69,7 @@ describe('OpenOracle create form helpers', () => {
 
 	test('keeps newly created reports inside the one-year dispute safety policy', () => {
 		expect(getOpenOracleCreateValidation({ form: createValidForm({ settlementTime: '31536000' }) }).isValid).toBe(true)
-		expect(getOpenOracleCreateValidation({ form: createValidForm({ settlementTime: '31536001' }) }).fieldErrors.settlementTime).toBe('Settlement delay must not exceed one year in this interface.')
+		expect(getOpenOracleCreateValidation({ form: createValidForm({ settlementTime: '31536001' }) }).fieldErrors.settlementTime).toBe('Settlement delay must not exceed 1y in this interface.')
 	})
 
 	test('sends exactly the settler reward as the ETH value', () => {

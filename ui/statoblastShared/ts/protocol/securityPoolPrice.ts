@@ -19,6 +19,7 @@ const abi = parseAbi([
 	'function reportCandidates(uint256 id) view returns (address escrow,address sponsor,uint256 maxSettlementBaseFee)',
 	'function reportOutcome(uint256 id) view returns (uint8)',
 	'function pendingReportId() view returns (uint256)',
+	'function sponsorOperationReport(address funder) view returns (uint256)',
 	'function feed() view returns (address)',
 	'function reportId() view returns (uint256)',
 	'function sponsor() view returns (address)',
@@ -152,15 +153,12 @@ export function securityPoolPriceFundsCache(profile: NetworkProfile, pool: Addre
 	return statoblastDisplayCache(profile, { universeId, owner: undefined, page: `price-funds:${pool.toLowerCase()}` }, value => (Array.isArray(value) ? value.flatMap(item => knownFundedReport(item) ?? []) : undefined))
 }
 
-/** The verified pool snapshot names its factory-registered feed at this block. Only report identities come from disk. */
-export async function loadSecurityPoolPriceFunds(client: Pick<ReadClient, 'multicall' | 'getBlock'>, profile: NetworkProfile, snapshot: Pick<SecurityPoolAccountSnapshot, 'securityPool' | 'universeId' | 'priceFeed' | 'repToken' | 'collateralToken' | 'blockNumber' | 'blockHash'>) {
+/** Candidate lookups are limited to feed pointers and report identities observed on this device. */
+export async function loadSecurityPoolPriceFunds(client: Pick<ReadClient, 'multicall' | 'getBlock'>, profile: NetworkProfile, snapshot: Pick<SecurityPoolAccountSnapshot, 'securityPool' | 'universeId' | 'priceFeed' | 'repToken' | 'collateralToken' | 'blockNumber' | 'blockHash'>, wallet?: Address) {
 	const { securityPool, universeId, priceFeed, repToken, collateralToken, blockNumber, blockHash } = snapshot
 	if (priceFeed === zeroAddress) return []
-	const calls = [
-		{ abi, address: priceFeed, functionName: 'pendingReportId' },
-		{ abi, address: priceFeed, functionName: 'openOracle' },
-	] as const
-	const [pending, oracleValue] = await readRequiredMulticall(client, calls, blockNumber)
+	const calls = [{ abi, address: priceFeed, functionName: 'pendingReportId' }, { abi, address: priceFeed, functionName: 'openOracle' }, ...(wallet === undefined || wallet === zeroAddress ? [] : ([{ abi, address: priceFeed, functionName: 'sponsorOperationReport', args: [wallet] }] as const))] as const
+	const [pending, oracleValue, operation] = await readRequiredMulticall(client, calls, blockNumber)
 	const pendingId = requireBigintValue(pending, 'pending price report ID')
 	const oracle = requireAddressValue(oracleValue, 'price feed oracle')
 	const requirePinnedBlock = async () => {
@@ -169,6 +167,10 @@ export async function loadSecurityPoolPriceFunds(client: Pick<ReadClient, 'multi
 	}
 	const ids = new Set<bigint>()
 	if (pendingId > 0n) ids.add(pendingId)
+	if (operation !== undefined) {
+		const operationId = requireBigintValue(operation, 'price report ID')
+		if (operationId > 0n) ids.add(operationId)
+	}
 	const cache = securityPoolPriceFundsCache(profile, securityPool, universeId)
 	for (const funded of cache.read()?.value ?? []) ids.add(funded.reportId)
 	for (const suffix of cache.universePageSuffixes(reportPagePrefix(securityPool))) {

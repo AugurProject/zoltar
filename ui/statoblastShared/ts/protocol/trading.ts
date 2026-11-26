@@ -6,7 +6,7 @@ import { QUESTION_LEDGER_QUESTION_OUTCOME_ABI } from './questionLedgerAbi.js'
 import { requireAddressValue, requireBigintValue } from './decoders.js'
 import { loadCentralSecurityPoolQuestion } from './securityPoolState.js'
 import type { LinearFeeState } from '@zoltar/statoblast-shared/statoblast/linearFees'
-import { getAddress, maxUint256, parseAbi, zeroAddress, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, getAddress, maxUint256, parseAbi, zeroAddress, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { sortBigIntsAscending } from '@zoltar/core-shared/serialization/bigInt'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { statoblast_QuestionLedger_QuestionLedger, statoblast_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
@@ -57,7 +57,7 @@ export async function loadQuestionLedgerMintCapacity(client: Pick<ReadClient, 'g
 	const capital = requireAddressValue(custody, 'security pool custody')
 	if (capital === zeroAddress) throw new Error(questionNotLinkedToSecurityPool)
 	const central = await loadCentralSecurityPoolQuestion(client, questionLedgerAddress, capital, currentBlock.number)
-	const escalationGameActive = requireAddressValue(escalationGame, 'escalation game') !== zeroAddress
+	const escalationGameActive = requireAddressValue(escalationGame, 'reporting game') !== zeroAddress
 	return { ...central, currentTimestamp: currentBlock.timestamp, escalationGameActive, mintingCapacityAttoEth: escalationGameActive ? 0n : central.mintingCapacityAttoEth }
 }
 export async function loadTradingDetails(client: ReadClient, questionLedgerAddress: Address, accountAddress: Address | undefined): Promise<TradingDetails> {
@@ -103,7 +103,7 @@ export async function requireCanonicalSecurityPoolOf(client: Pick<ReadClient, 'r
 	const block = blockNumber === undefined ? {} : { blockNumber }
 	const securityPool = getAddress(requireAddressValue(await client.readContract({ address: factory, abi: purchaseAbi, functionName: 'securityPoolOf', args: [pool], ...block }), 'SecurityPool'))
 	if (securityPool === zeroAddress) throw new Error('Question has no security pool.')
-	if ((await client.readContract({ address: factory, abi: purchaseAbi, functionName: 'isSecurityPool', args: [securityPool], ...block })) !== true) throw new Error('Market security pool was not deployed by the canonical factory.')
+	if ((await client.readContract({ address: factory, abi: purchaseAbi, functionName: 'isSecurityPool', args: [securityPool], ...block })) !== true) throw new Error('Market security pool was not created by the canonical factory.')
 	return securityPool
 }
 
@@ -261,17 +261,23 @@ function getShareTokenId(universeId: bigint, outcome: ReportingOutcomeKey) {
 }
 export async function redeemSharesInQuestionLedger(client: WriteClient, questionLedgerAddress: Address) {
 	const universeId = await readQuestionLedgerUniverseId(client, questionLedgerAddress)
-	const [shareToken, forker, block] = await Promise.all([
+	const [shareToken, forker, initialBlock] = await Promise.all([
 		client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'shareToken' }),
 		client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'questionForker' }),
 		client.getBlock(),
 	])
-	const balances = await client.readContract({ address: shareToken, abi: statoblast_tokens_ShareToken_ShareToken.abi, functionName: 'balanceOfShares', args: [universeId, client.account.address], blockNumber: block.number })
-	const outcome = await client.readContract({ address: forker, abi: QUESTION_LEDGER_QUESTION_OUTCOME_ABI, functionName: 'getQuestionOutcome', args: [questionLedgerAddress], blockNumber: block.number })
-	const winner = getReportingOutcomeKey(outcome)
-	if (winner === 'none') throw new Error(tradingCopy.poolResolutionRequired)
-	const amount = balances[getReportingOutcomeValue(winner)]
-	const quote = await readRedemptionQuote(client, questionLedgerAddress, amount, block.number)
+	const readBalance = async (blockNumber: bigint | undefined) => {
+		if (blockNumber === undefined) throw new Error(tradingCopy.redemptionNeedsBlock)
+		const [balances, outcome] = await Promise.all([
+			client.readContract({ address: shareToken, abi: statoblast_tokens_ShareToken_ShareToken.abi, functionName: 'balanceOfShares', args: [universeId, client.account.address], blockNumber }),
+			client.readContract({ address: forker, abi: QUESTION_LEDGER_QUESTION_OUTCOME_ABI, functionName: 'getQuestionOutcome', args: [questionLedgerAddress], blockNumber }),
+		])
+		const winner = getReportingOutcomeKey(outcome)
+		if (winner === 'none') throw new Error(tradingCopy.poolResolutionRequired)
+		return { amount: balances[getReportingOutcomeValue(winner)], balances, blockNumber, winner }
+	}
+	let reviewedBalance = await readBalance(initialBlock.number)
+	const upfrontQuote = checksTransactionReview(client) ? undefined : await readRedemptionQuote(client, questionLedgerAddress, reviewedBalance.amount, reviewedBalance.blockNumber)
 	const callParams = {
 		address: questionLedgerAddress,
 		abi: statoblast_QuestionLedger_QuestionLedger.abi,
@@ -286,20 +292,19 @@ export async function redeemSharesInQuestionLedger(client: WriteClient, question
 			reviewTitle: tradingCopy.redeemResolvedShares,
 			reviewDescription: tradingCopy.redeemSharesReview,
 			readReviewRows: () => reviewRows,
+			refreshReviewData: async () => {
+				reviewedBalance = await readBalance((await client.getBlock()).number)
+				return encodeFunctionData(callParams)
+			},
 			validateBeforeSubmit: async () => {
-				const { number: blockNumber } = await client.getBlock()
-				if (blockNumber === undefined) throw new Error(tradingCopy.redemptionNeedsBlock)
-				const [freshOutcome, freshShares] = await Promise.all([
-					client.readContract({ address: forker, abi: QUESTION_LEDGER_QUESTION_OUTCOME_ABI, functionName: 'getQuestionOutcome', args: [questionLedgerAddress], blockNumber }),
-					client.readContract({ address: shareToken, abi: statoblast_tokens_ShareToken_ShareToken.abi, functionName: 'balanceOfShares', args: [universeId, client.account.address], blockNumber }),
-				])
-				if (getReportingOutcomeKey(freshOutcome) !== winner || freshShares[getReportingOutcomeValue(winner)] !== amount) throw new Error(changedSinceReview)
+				const { amount, balances, blockNumber, winner } = await readBalance((await client.getBlock()).number)
+				if (winner !== reviewedBalance.winner || amount !== reviewedBalance.amount) throw new Error(changedSinceReview)
 				if (amount === 0n) throw new Error(tradingCopy.redemptionInsufficientShares)
-				reviewRows = redemptionRows(await readRedemptionQuote(client, questionLedgerAddress, amount, blockNumber), amount, freshShares, [winner])
+				reviewRows = redemptionRows(await readRedemptionQuote(client, questionLedgerAddress, amount, blockNumber), amount, balances, [winner])
 			},
 		},
 	])
-	const hash = await writeContractAndWait(client, () => ({ ...callParams, reviewDescription: quote.description }))
+	const hash = await writeContractAndWait(client, () => ({ ...callParams, reviewDescription: upfrontQuote?.description ?? tradingCopy.redeemSharesReview }))
 	return {
 		action: 'redeemShares',
 		hash,
@@ -322,7 +327,7 @@ export async function loadShareMigrationTargets(client: Pick<ReadClient, 'multic
 			: childUniverses.flatMap(child => SHARE_MIGRATION_SOURCE_OUTCOMES.map(outcome => ({ address: shareTokenAddress, abi: statoblast_tokens_ShareToken_ShareToken.abi, functionName: 'getMigratedShareAmountAttoShares', args: [getShareTokenId(universeId, outcome), child.universeId, accountAddress] })))
 	const results: readonly unknown[] = await readRequiredMulticall(client, [...canonicalPoolCalls, ...migratedAmountCalls])
 	return childUniverses.map((child, childIndex) => {
-		const canonicalPool = requireAddressValue(results[childIndex], 'canonical child question ledger')
+		const canonicalPool = requireAddressValue(results[childIndex], 'verified child question contract')
 		const migrated = (outcomeOffset: number) => (accountAddress === undefined ? 0n : requireBigintValue(results[childUniverses.length + childIndex * SHARE_MIGRATION_SOURCE_OUTCOMES.length + outcomeOffset], 'migrated share amount'))
 		return {
 			canonicalPool: canonicalPool === zeroAddress ? undefined : canonicalPool,

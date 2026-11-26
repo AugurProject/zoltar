@@ -3,5 +3,5 @@ export const wrongNetwork = 'Wrong network'
 export const noWallet = 'No wallet'
 export const formatMissingLookupDetail = (kind: 'question' | 'report') => `No ${kind} matches this ID. Try another ${kind} ID.`
 export const uncheckedUniverseDetail = 'Choose a universe to continue.'
-export const missingUniverseDetail = 'This universe is not deployed.'
+export const missingUniverseDetail = 'This universe has not been created yet.'
 export const walletInstallationRequired = 'No browser wallet found. Install or enable one to connect.'

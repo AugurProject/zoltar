@@ -1,3 +1,6 @@
+import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
+import { minimumSecurityPoolHealthFactorBps } from '@zoltar/statoblast-shared/statoblast/securityPool'
+
 export const withdrawableRep = 'Withdrawable REP'
 export const principalRep = 'Your REP deposited'
 export const commitment = 'Your commitment'
@@ -22,7 +25,7 @@ export const withdrawHint = 'Withdraw surplus while keeping your health target. 
 export const authorize = 'Authorize commitment'
 export const authorizing = 'Authorizing commitment…'
 export const health = 'Your health target (%)'
-export const healthHint = '100% includes the protocol backing requirement. A higher target keeps more REP per collateral token. Raising it needs enough REP now; it does not change the liquidation threshold.'
+export const healthHint = `${formatUnits(minimumSecurityPoolHealthFactorBps, 2)}% includes the protocol backing requirement. A higher target keeps more REP per collateral token. Raising it needs enough REP now; it does not change the liquidation threshold.`
 export const saveHealth = 'Save health target'
 export const savingHealth = 'Saving target…'
 export const depositHealth = 'Deposit REP and save target'
@@ -121,7 +124,7 @@ export const waitingForFreeCapacity = 'Waiting for free capacity'
 export const retryRelease = 'Retry release'
 
 export const healthChangesClosed = 'This universe is closed to health changes.'
-export const healthTargetMinimum = 'Choose a health target of at least 100%.'
+export const healthTargetMinimum = `Choose a health target of at least ${formatUnits(minimumSecurityPoolHealthFactorBps, 2)}%.`
 export const healthTargetTooLarge = 'This health target is too large.'
 export const healthNeedsCurrentPrice = 'A new accepted REP price is required before raising your target.'
 export const healthNeedsMoreRep = 'Add REP or complete a commitment reduction before raising your target.'

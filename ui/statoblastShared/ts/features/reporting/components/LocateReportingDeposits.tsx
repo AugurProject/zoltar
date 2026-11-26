@@ -128,7 +128,7 @@ export function LocateReportingDeposits({ details, wallet, refresh, openOnEntry 
 		if (!/^\d{1,78}$/u.test(manualIndex) || checkingIndex) return
 		const index = BigInt(manualIndex)
 		if (index >= 1n << 256n) {
-			setIndexError('Enter a valid deposit number.')
+			setIndexError(pageCopy.invalidDepositIndex)
 			return
 		}
 		const guard = createActiveEnvironmentGuard()
@@ -141,13 +141,13 @@ export function LocateReportingDeposits({ details, wallet, refresh, openOnEntry 
 			const client = withStatoblastRequestTimeout(createConnectedReadClient(), pageCopy.depositCheckTimeout)
 			const [deposit] = await client.readContract(reportingDepositRead(escalationGameAddress, missingOutcome, index, 1n))
 			if (!guard.isCurrent()) return
-			if (deposit === undefined) throw new Error(`There is no deposit #${index} on ${missing.label}.`)
-			if (!sameAddress(deposit.depositor, wallet)) throw new Error('This deposit belongs to another address.')
-			if (deposit.amountAttoRep === 0n) throw new Error('This deposit was already claimed.')
+			if (deposit === undefined) throw new Error(pageCopy.depositNotFound(index, missing.label))
+			if (!sameAddress(deposit.depositor, wallet)) throw new Error(pageCopy.depositWrongOwner)
+			if (deposit.amountAttoRep === 0n) throw new Error(pageCopy.depositAlreadyClaimed)
 			reportingDepositStore(profile).add([{ pool: reportingDepositPool, questionId: reportingQuestionId, universeId, depositor: wallet, outcome: missingOutcome, index, originalAttoRep: deposit.amountAttoRep }])
 			await refresh()
 		} catch (failure) {
-			if (guard.isCurrent()) setIndexError(failure instanceof Error ? failure.message : 'Could not check that deposit.')
+			if (guard.isCurrent()) setIndexError(failure instanceof Error ? failure.message : pageCopy.depositCheckFailed)
 		} finally {
 			if (guard.isCurrent()) setCheckingIndex(false)
 		}

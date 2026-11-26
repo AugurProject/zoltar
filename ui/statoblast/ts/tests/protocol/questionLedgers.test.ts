@@ -7,7 +7,7 @@ import { centralSecurityPoolRead, owner, securityPool, capital, token } from '..
 
 const block = { hash: `0x${'11'.repeat(32)}`, number: 99n, timestamp: 1000n } as const
 const deployment = { universeId: 42n, questionId: 7n }
-function fixture({ forked = false, reporting = false, missingSecurityPool = false, reorg = false } = {}) {
+function fixture({ forked = false, reporting = false, nonDecision = false, missingSecurityPool = false, reorg = false } = {}) {
 	const reads: string[] = []
 	let headReads = 0
 	const client = createMockLoaderClient({
@@ -29,6 +29,8 @@ function fixture({ forked = false, reporting = false, missingSecurityPool = fals
 					return reporting ? token : zeroAddress
 				case 'forkContinuation':
 					return forked
+				case 'hasReachedNonDecision':
+					return nonDecision
 				case 'systemState':
 					return 0n
 				case 'getQuestionOutcome':
@@ -66,6 +68,13 @@ function fixture({ forked = false, reporting = false, missingSecurityPool = fals
 	})
 	return { client, reads }
 }
+
+test.each([false, true])('a forked question snapshot reads whether its own game reached non-decision (%s)', async nonDecision => {
+	const { client } = fixture({ forked: true, reporting: true, nonDecision })
+	const { question } = await loadStatoblastQuestion(client, securityPool, deployment.questionId, deployment.universeId, false)
+	expect(question).toMatchObject({ forkQuestionId: deployment.questionId, hasReachedNonDecision: nonDecision })
+})
+
 test.each([false, true])('discovers native security pool question snapshots (reporting: %s)', async reporting => {
 	const { client, reads } = fixture({ reporting })
 	const { question } = await loadStatoblastQuestion(client, securityPool, deployment.questionId, deployment.universeId, false)

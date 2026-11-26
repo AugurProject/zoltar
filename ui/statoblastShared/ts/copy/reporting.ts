@@ -265,3 +265,18 @@ export const claimPayoutChangedSinceReview = 'The claim payout changed. Refresh 
 export const stakedRepReviewLabel = (outcome: string) => `Your REP staked on ${outcome}`
 export const reportReviewInsufficientRep = 'Wallet REP changed. Add enough REP for this report and try again.'
 export const escalationPreparationChanged = 'Reporting is already prepared. Review the question again.'
+
+export const reportingReadFailed = 'Failed to load reporting details'
+export const invalidReportingAmount = 'Invalid report amount.'
+export const reportingUnavailable = 'Reporting actions are unavailable until this question is operational.'
+export const allowanceAlreadySufficient = 'This question already has enough REP allowance for this report.'
+export const reportingOutcomeUnavailable = 'The selected reporting outcome is unavailable.'
+export const reportingCapacityRemaining = (remaining: string) => `Only ${remaining} remains before the selected side reaches the non-decision threshold.`
+export const reportingBalanceShortfall = (shortfall: string) => `Insufficient wallet REP. Add ${shortfall} before reporting.`
+
+export const repApproved = 'Reporting REP approved'
+export const reportSubmitted = 'Report submitted'
+export const stakesSettled = 'Deposits settled'
+export const repApprovalFailed = 'REP approval failed'
+export const reportFailed = 'Report failed'
+export const settlementFailed = 'Settlement failed'

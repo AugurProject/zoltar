@@ -60,7 +60,7 @@ describe('manual takeover against native security pool contracts', () => {
 					}
 				},
 			}
-			const view = await renderIntoDocument(<SecurityPoolTakeover model={{ snapshot }} actions={actions} />)
+			const view = await renderIntoDocument(<SecurityPoolTakeover positionId={source.id} model={{ snapshot }} actions={actions} />)
 			lifecycle.trackRendered(view)
 			const fields = view.container.querySelectorAll('input')
 			for (const [index, value] of [source.id.toString(), '200', '1000', scenario === 'rejected-bounds' ? '999' : '2000', '200'].entries()) {
@@ -71,8 +71,8 @@ describe('manual takeover against native security pool contracts', () => {
 					field.dispatchEvent(new Event('input', { bubbles: true }))
 				})
 			}
-			const button = view.container.querySelector('button')
-			if (button === null) throw new Error('Missing takeover action')
+			const button = [...view.container.querySelectorAll('button')].find(candidate => candidate.textContent === 'Take over position')
+			if (button === undefined) throw new Error('Missing takeover action')
 			if (scenario === 'rejected-bounds') {
 				await waitFor(() => expect(view.container.textContent).toContain('The resulting pledged REP exceeds your limit.'))
 				expect(button.disabled).toBe(true)

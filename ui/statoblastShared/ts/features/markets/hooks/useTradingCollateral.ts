@@ -82,7 +82,7 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 				.catch(error => {
 					if (active && getActiveBackend() === backend) {
 						const previous = collateralLoaded.peek()
-						collateralLoaded.value = { ...(previous?.key === collateralKey ? previous : { key: collateralKey }), error: getErrorMessage(error, 'Unable to load collateral funding.') }
+						collateralLoaded.value = { ...(previous?.key === collateralKey ? previous : { key: collateralKey }), error: getErrorMessage(error, collateralCopy.fundingReadFailed) }
 					}
 				})
 				.finally(() => {

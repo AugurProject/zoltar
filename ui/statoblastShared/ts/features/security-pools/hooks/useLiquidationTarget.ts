@@ -99,14 +99,14 @@ export function readKnownLiquidationTargets(pool: TakeoverSnapshot, ids: readonl
 	return new Map(ids.map(id => [id, saved.get(liquidationTargetPage(pool, id))]))
 }
 
-export function useLiquidationTarget(snapshot: TakeoverSnapshot | undefined, presentationSnapshot: TakeoverSnapshot | undefined, id: bigint | undefined, saveForDisplay: boolean) {
+export function useLiquidationTarget(snapshot: TakeoverSnapshot | undefined, presentationSnapshot: TakeoverSnapshot | undefined, id: bigint | undefined) {
 	const backend = getActiveBackend()
 	const pool = snapshot ?? presentationSnapshot
 	const page = pool === undefined || id === undefined || id === 0n ? undefined : liquidationTargetPage(pool, id.toString())
 	const identity = page === undefined || pool === undefined ? undefined : `${backend.id}:${backend.profile.genesisRepTokenAddress}:${pool.chainId}:${pool.universeId}:${pool.owner.toLowerCase()}:${page}`
 	const [attempt, setAttempt] = useState(0)
 	const requestKey = snapshot === undefined || identity === undefined ? undefined : `${identity}:${snapshot.blockHash}:${attempt}`
-	const cache = pool === undefined || page === undefined || !saveForDisplay ? undefined : statoblastDisplayCache(backend.profile, { universeId: pool.universeId, owner: pool.owner, page }, decodeTarget)
+	const cache = pool === undefined || page === undefined ? undefined : statoblastDisplayCache(backend.profile, { universeId: pool.universeId, owner: pool.owner, page }, decodeTarget)
 	const [saved, setSaved] = useState<{ identity: string; target: LiquidationTarget; blockHash: string; savedAt: number; health: LiquidationHealth | undefined }>()
 	const [observed, setObserved] = useState<{ identity: string; snapshot: TakeoverSnapshot; target: LiquidationTarget; savedAt: number }>()
 	const [result, setResult] = useState<{ key: string; value?: LiquidationTarget; error?: string }>()
@@ -114,7 +114,7 @@ export function useLiquidationTarget(snapshot: TakeoverSnapshot | undefined, pre
 		if (identity === undefined || cache === undefined) return
 		const cached = cache.read()
 		if (cached !== undefined) setSaved({ identity, ...cached.value, savedAt: cached.savedAt })
-	}, [identity, saveForDisplay])
+	}, [identity])
 	useEffect(() => {
 		if (snapshot === undefined || id === undefined || identity === undefined || requestKey === undefined) return
 		let current = true
@@ -136,7 +136,7 @@ export function useLiquidationTarget(snapshot: TakeoverSnapshot | undefined, pre
 	const loaded = result?.key === requestKey ? result : undefined
 	const lastObserved = observed?.identity === identity ? observed : undefined
 	const lastSaved = saved?.identity === identity ? saved : undefined
-	const fallback = saveForDisplay ? (lastObserved ?? lastSaved) : undefined
+	const fallback = lastObserved ?? lastSaved
 	const target = loaded?.value ?? fallback?.target
 	const displaySnapshot = loaded?.value !== undefined ? snapshot : (lastObserved?.snapshot ?? (pool?.blockHash === lastSaved?.blockHash ? pool : undefined))
 	return {

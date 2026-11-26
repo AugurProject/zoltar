@@ -32,14 +32,20 @@ test('registration describes the actual question horizon in days or seconds', ()
 })
 
 const obsoleteCopy =
-	/7 weeks|3-day|eight weeks|52 days|\bheadroom\b|adds 1 REP|settlement demand|healthy capacity|spare healthy commitment|(?:above|below|liquidation) boundary|conservative (?:health|price)|funding recipient|clear(?:ed|ing)? (?:no )?deposits|settled records|admission policy|question admission|base purchase fee|resolution premium|idle REP|proposed price|price you propose|requested commitment|source universe|source-backed rights|source recovery|child preparation|child not deployed|\b(?:bonus|vaults?|accounts?|repairs?|requests?|providers?|principal|sponsor|callback|charged|ledger|retire|retirement|retiring|scanner|liquidator|escalation|cohort|underwriters|keepers)\b/i
+	/\bheadroom\b|adds 1 REP|settlement demand|healthy capacity|spare healthy commitment|(?:above|below|liquidation) boundary|conservative (?:health|price)|funding recipient|clear(?:ed|ing)? (?:no )?deposits|settled records|admission policy|question admission|base purchase fee|resolution premium|idle REP|proposed price|price you propose|requested commitment|source universe|source-backed rights|source recovery|child preparation|committed REP|REP\s*\/\s*WETH|\bgwei\b|max reward|not deployed|\bpremium\b|\b(?:bonus|vaults?|accounts?|repairs?|requests?|providers?|principal|sponsor|callback|charged|ledger|retire|retirement|retiring|scanner|liquidator|escalation|cohort|underwriters|keepers)\b/i
+
+const fixedMagnitude = /\b(?:\d+(?:[.,]\d+)?|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?:\s*%|[ -]+(?:percent|seconds?|minutes?|hours?|days?|weeks?|months?|years?)\b)/i
+
+function glossaryViolation(text: string) {
+	return obsoleteCopy.test(text.replace(/\brepair auction\b/gi, '')) || fixedMagnitude.test(text)
+}
 
 function checkCopy(directory: URL, names: readonly string[], include: (node: ts.Node) => boolean) {
 	const violations: string[] = []
 	for (const name of names) {
 		const source = ts.createSourceFile(name, readFileSync(new URL(name, directory), 'utf8'), ts.ScriptTarget.Latest, true)
 		const visit = (node: ts.Node) => {
-			if ((ts.isStringLiteralLike(node) || ts.isTemplateLiteralToken(node)) && include(node) && obsoleteCopy.test(node.text)) {
+			if ((ts.isStringLiteralLike(node) || ts.isTemplateLiteralToken(node) || ts.isJsxText(node)) && include(node) && glossaryViolation(node.text)) {
 				const { line } = source.getLineAndCharacterOfPosition(node.getStart(source))
 				violations.push(`${name}:${line + 1} ${node.text}`)
 			}
@@ -65,30 +71,50 @@ test('Statoblast and shared UI copy follow the redesign glossary and use live va
 	expect(violations).toEqual([])
 })
 
-test('shared Statoblast errors and decoding labels follow the redesign glossary', () => {
-	const directory = new URL('../../../../shared/statoblast/ts/statoblast/', import.meta.url)
-	const files = [...new Bun.Glob('*.ts').scanSync({ cwd: fileURLToPath(directory) })].filter(name => !name.endsWith('.test.ts')).sort()
-	expect(files).toContain('securityPoolAuctionRead.ts')
-	expect(files).toContain('securityPoolFork.ts')
-	const labelPosition = new Map<string, number>([
-		['address', 1],
-		['uint', 1],
-		['decodeAddress', 1],
-		['decodeUint', 1],
-		['decodeBool', 1],
-		['decodeFields', 2],
-		['verifyAuctionVaultCode', 2],
-	])
-	expect(
-		checkCopy(directory, files, node => {
-			let expression: ts.Node = node
-			if (ts.isTemplateSpan(node.parent)) expression = node.parent.parent
-			else if (ts.isTemplateExpression(node.parent)) expression = node.parent
-			const parent = expression.parent
-			if (ts.isNewExpression(parent)) return parent.expression.getText() === 'Error' && parent.arguments?.[0] === expression
-			if (!ts.isCallExpression(parent)) return false
-			const index = labelPosition.get(parent.expression.getText())
-			return index !== undefined && parent.arguments[index] === expression
-		}),
-	).toEqual([])
+const labelPosition = new Map<string, number>([
+	['address', 1],
+	['uint', 1],
+	['decodeAddress', 1],
+	['decodeUint', 1],
+	['decodeBool', 1],
+	['decodeFields', 2],
+	['verifyAuctionVaultCode', 2],
+	['requireAddressValue', 1],
+	['getErrorMessage', 1],
+	['setIndexError', 0],
+	['setError', 0],
+])
+
+function isMessage(node: ts.Node) {
+	if (ts.isJsxText(node)) return true
+	let expression = node
+	if (ts.isTemplateSpan(node.parent)) expression = node.parent.parent
+	else if (ts.isTemplateExpression(node.parent)) expression = node.parent
+	while (ts.isBinaryExpression(expression.parent) && (expression.parent.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken || expression.parent.operatorToken.kind === ts.SyntaxKind.PlusToken)) expression = expression.parent
+	if (ts.isConditionalExpression(expression.parent)) expression = expression.parent
+	if (ts.isJsxExpression(expression.parent)) expression = expression.parent
+	const parent = expression.parent
+	if (ts.isReturnStatement(parent)) return !ts.isStringLiteralLike(expression) || !/^[a-z-]+$/.test(expression.text)
+	if (ts.isNewExpression(parent)) return /^(?:Error|RangeError|TypeError)$/.test(parent.expression.getText()) && parent.arguments?.[0] === expression
+	if (ts.isJsxAttribute(parent)) return /^(?:label|title|description|hint|placeholder|detail)$/.test(parent.name.getText())
+	if (ts.isPropertyAssignment(parent)) return parent.name !== expression && /^(?:message|reviewTitle|reviewDescription)$/.test(parent.name.getText())
+	if (!ts.isCallExpression(parent)) return false
+	const index = labelPosition.get(parent.expression.getText())
+	return index !== undefined && parent.arguments[index] === expression
+}
+
+test('Statoblast errors, review messages and decoding labels follow the redesign glossary', () => {
+	const roots = [
+		['../../../../shared/statoblast/ts/statoblast/', '*.ts'],
+		['../../../../shared/statoblast/ts/escalationGame/', '*.ts'],
+		['../../../statoblastShared/ts/', '{protocol,features,lib}/**/*.{ts,tsx}'],
+		['../', 'app/**/*.{ts,tsx}'],
+	] as const
+	const violations = roots.flatMap(([path, pattern]) => {
+		const directory = new URL(path, import.meta.url)
+		const files = [...new Bun.Glob(pattern).scanSync({ cwd: fileURLToPath(directory) })].filter(name => !/\.test\.tsx?$/.test(name)).sort()
+		expect(files.length).toBeGreaterThan(0)
+		return checkCopy(directory, files, isMessage)
+	})
+	expect(violations).toEqual([])
 })

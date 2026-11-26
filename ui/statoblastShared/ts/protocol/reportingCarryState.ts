@@ -447,7 +447,7 @@ async function buildCarriedProofs(client: Pick<ReadClient, 'readContract'>, pare
 					return BigInt(index)
 				}),
 			)
-	if (nullifierTree !== undefined && nullifierTree.getRoot() !== childNullifierRoot) throw new Error('Child proof-consumed carry state is not locally reconstructible.')
+	if (nullifierTree !== undefined && nullifierTree.getRoot() !== childNullifierRoot) throw new Error('Couldn’t verify which inherited deposits have already been claimed.')
 	const consumedParentDepositIndexSet = new Set(consumedParentDepositIndexes.map(parentDepositIndex => parentDepositIndex.toString()))
 	const proofs: CarriedDepositProof[] = []
 	for (const parentDepositIndex of parentDepositIndexes) {

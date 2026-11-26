@@ -222,7 +222,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 			onError:
 				onReadError ??
 				((error: unknown) => {
-					tradingError.value = getErrorMessage(error, 'Failed to load trading details.')
+					tradingError.value = getErrorMessage(error, tradingCopy.tradingReadFailed)
 				}),
 		}
 
@@ -289,7 +289,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 						tradingForkUniverse.value = latestForkUniverse
 					}
 					if (actionName === 'createCompleteSet') {
-						if ((parseCollateralAmount(currentForm.completeSetAmount) ?? 0n) <= 0n) throw new Error('Invalid mint amount.')
+						if ((parseCollateralAmount(currentForm.completeSetAmount) ?? 0n) <= 0n) throw new Error(tradingCopy.invalidMintAmount)
 						const latestMintCapacity = await dependencies.loadQuestionLedgerMintCapacity(questionLedgerAddress)
 						const walletBalanceAttoEth = await dependencies.getWalletEthBalance(walletAddress)
 						const mintCheckpoint = estimateMintCheckpoint({
@@ -318,7 +318,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 						if (guardMessage !== undefined) throw new Error(guardMessage)
 					}
 					if (actionName === 'redeemCompleteSet') {
-						if ((parseCollateralAmount(currentForm.redeemAmount) ?? 0n) <= 0n) throw new Error('Invalid redeem amount.')
+						if ((parseCollateralAmount(currentForm.redeemAmount) ?? 0n) <= 0n) throw new Error(tradingCopy.invalidRedeemAmount)
 						const guardMessage = getTradingRedeemCompleteSetGuardMessage({
 							accountAddress: walletAddress,
 							hasSelectedPool: true,
@@ -372,7 +372,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 
 	function requireCollateralDecimals() {
 		const collateral = collateralFunding.collateral
-		if (collateral === undefined) throw new Error('Collateral metadata is not loaded. Wait for funding details and try again.')
+		if (collateral === undefined) throw new Error(tradingCopy.collateralDetailsLoading)
 		return collateral.decimals
 	}
 

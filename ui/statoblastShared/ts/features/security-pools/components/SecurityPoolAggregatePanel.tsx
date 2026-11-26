@@ -3,6 +3,7 @@ import * as pageCopy from '../../../copy/securityPoolPage.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import { useId } from 'preact/hooks'
 import { formatCurrencyBalanceWithUnit, formatDuration, formatRoundedCurrencyBalance, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { minimumSecurityPoolHealthFactorBps } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
@@ -47,7 +48,8 @@ export function SecurityPoolAggregatePanel({ model, actions, priceDeadlineChecki
 	const queued = currentPosition !== undefined && currentPosition.batch !== 0n
 	const collateral = (value: bigint | undefined) => <CurrencyValue value={value} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
 	const rep = (value: bigint | undefined) => <CurrencyValue value={value} suffix={common.rep} />
-	const backing = snapshot === undefined ? 0n : requiredSecurityPoolCollateral({ ...snapshot, ownerAccount: { ...snapshot.ownerAccount, targetHealthFactorBps: 10_000n } }, snapshot.ownerCommitmentAttoEth)
+	const backing = snapshot === undefined ? 0n : requiredSecurityPoolCollateral({ ...snapshot, ownerAccount: { ...snapshot.ownerAccount, targetHealthFactorBps: minimumSecurityPoolHealthFactorBps } }, snapshot.ownerCommitmentAttoEth)
+	const fullBacking = Number(minimumSecurityPoolHealthFactorBps) / 100
 	const health = priceDeadlineChecking || currentPosition === undefined || backing === 0n || snapshot?.priceValid !== true ? undefined : Number((currentPosition.rep * 10_000n) / backing) / 100
 	const target = Number(snapshot?.ownerAccount.targetHealthFactorBps || 10_000n) / 100
 	const gaugeMax = Math.max(200, target)
@@ -159,14 +161,13 @@ export function SecurityPoolAggregatePanel({ model, actions, priceDeadlineChecki
 					<strong>{health === undefined ? pageCopy.healthUnavailable : pageCopy.formatHealth(health.toLocaleString('en-US', { maximumFractionDigits: 1 }))}</strong>
 					{health !== undefined && (
 						<div className='statoblast-marked-meter'>
-							<meter min={0} max={gaugeMax} low={liquidation} high={100} optimum={target} value={Math.min(health, gaugeMax)} aria-label={pageCopy.positionHealth} />
-							{[liquidation, 100, target].map((point, index) => (point === undefined ? undefined : <span key={index} aria-hidden='true' style={{ insetInlineStart: `${Math.min(99, (point * 100) / gaugeMax)}%` }} />))}
+							<meter min={0} max={gaugeMax} low={liquidation} high={fullBacking} optimum={target} value={Math.min(health, gaugeMax)} aria-label={pageCopy.positionHealth} />
+							{[liquidation, fullBacking, target].map((point, index) => (point === undefined ? undefined : <span key={index} aria-hidden='true' style={{ insetInlineStart: `${Math.min(99, (point * 100) / gaugeMax)}%` }} />))}
 						</div>
 					)}
 					<p>
 						{liquidation === undefined ? pageCopy.liquidationThresholdUnavailable : pageCopy.formatLiquidation(liquidation)}
-						{pageCopy.backingAndTargetTail}
-						{target}%
+						{pageCopy.backingAndTargetTail(fullBacking, target)}
 					</p>
 				</div>
 
