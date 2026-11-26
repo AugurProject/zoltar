@@ -9,11 +9,18 @@ library OraclePriceMath {
 	uint256 internal constant DISPUTE_GAS_UNITS = 300_000;
 	uint256 internal constant REPORT_SECURITY_MULTIPLIER_BPS = 100_000;
 
+	/// @dev Exact ceiling bound for uncertainty below D and price <= floor(MAX_UINT256 * (D - uncertainty) / D).
+	/// Funded-report prices are at most uint128.max * 1e18, so even price * D fits uint256.
 	function conservativePrice(uint256 price, uint256 uncertainty) internal pure returns (uint256) {
+		require(uncertainty < OPEN_ORACLE_PERCENTAGE_PRECISION, 'Invalid oracle uncertainty');
+		uint256 maximumPrice = Math.mulDiv(type(uint256).max, OPEN_ORACLE_PERCENTAGE_PRECISION - uncertainty, OPEN_ORACLE_PERCENTAGE_PRECISION);
+		require(price <= maximumPrice, 'Conservative oracle price exceeds uint256');
 		return
 			Math.mulDiv(price, OPEN_ORACLE_PERCENTAGE_PRECISION, OPEN_ORACLE_PERCENTAGE_PRECISION - uncertainty, Math.Rounding.Ceil);
 	}
+	/// @dev Exact floor bound for every uint256 price and uncertainty below D.
 	function liquidationPrice(uint256 price, uint256 uncertainty) internal pure returns (uint256) {
+		require(uncertainty < OPEN_ORACLE_PERCENTAGE_PRECISION, 'Invalid oracle uncertainty');
 		return Math.mulDiv(price, OPEN_ORACLE_PERCENTAGE_PRECISION, OPEN_ORACLE_PERCENTAGE_PRECISION + uncertainty);
 	}
 	function maximumPriorityFee(uint256 uncertainty, uint256 protocolFee, uint256 reporterFee, uint256 haltMultiplierBps) internal pure returns (uint256) {
