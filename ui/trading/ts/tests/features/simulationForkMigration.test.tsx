@@ -123,7 +123,8 @@ describe(`${FORKED_TRADING_SIMULATION_SCENARIO} simulation scenario`, () => {
 				const acknowledgment = document.querySelector('.trade-impact-acknowledge input[type="checkbox"]')
 				if (!(acknowledgment instanceof HTMLInputElement)) throw new Error('Missing migration acknowledgment')
 				expect(acknowledgment.checked).toBe(false)
-				expect(acknowledgment.closest('label')?.textContent).toContain('in each selected child universe and keeps the original shares in the parent universe, permanently locking my Yes transfers')
+				expect(acknowledgment.closest('label')?.textContent).toContain('tops up each selected child universe to ')
+				expect(acknowledgment.closest('label')?.textContent).toContain('subtracting shares already migrated there, and keeps the original shares in the parent universe, permanently locking my Yes transfers')
 				expect(buttonByLabel('Migrate to 1 child universe').disabled).toBe(true)
 				await act(() => acknowledgment.click())
 				// The action also waits for the migration quote, which can land just after the acknowledgment.
