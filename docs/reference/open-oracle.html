@@ -184,9 +184,8 @@
 					<li>a nonzero <code>escalationHaltMultiplierBps</code></li>
 					<li><code>settlementTime</code> greater than <code>disputeDelay</code>, and a dispute <code>multiplier</code> of at least <code>100</code></li>
 					<li><code>maxSettlementBaseFeeMultiplierBps</code> of at least <code>1x</code></li>
-					<li><code>minLiquidationPriceDistanceBps</code> no greater than <code>100%</code></li>
 				</ol>
-				<p>The priority-fee bound uses the fixed gas and security factors above and half the smaller of the maximum report amount and the escalation-halt capacity. A larger fee reverts with <code>Initial report priority fee exceeds OpenOracle limits</code>. <code>SharedPoolPriceFeedFactory</code> validates report timing, fees and risk configuration at construction. Each feed implementation validates its positive priority fee against that configuration.</p>
+				<p>The priority-fee bound uses the fixed gas and security factors above and half the smaller of the maximum report amount and the escalation-halt capacity. It also requires the minimum ordinary settlement bounty to fit <code>uint96</code> at zero base fee. A larger fee reverts with <code>Initial report priority fee exceeds OpenOracle limits</code>. <code>SharedPoolPriceFeedFactory</code> validates report timing, fees and risk configuration at construction. Each feed implementation validates its positive priority fee against that configuration.</p>
 			</section>
 
 			<section id="callback-rejection-and-recovery">

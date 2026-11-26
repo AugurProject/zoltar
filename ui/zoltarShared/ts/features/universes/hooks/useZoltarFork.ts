@@ -48,7 +48,7 @@ type ZoltarForkAccessChildUniverse = ZoltarUniverseSummary['childUniverses'][num
 
 export type UseZoltarForkDependencies = {
 	approveForkRep: (accountAddress: Address, callbacks: CreateWriteClientCallbacks, reputationToken: Address, amount: bigint, questionId: bigint, universeId: bigint) => Promise<ZoltarForkActionResult>
-	forkZoltarUniverse: (accountAddress: Address, callbacks: CreateWriteClientCallbacks, universeId: bigint, questionId: bigint) => Promise<ZoltarForkActionResult>
+	forkZoltarUniverse: (accountAddress: Address, callbacks: CreateWriteClientCallbacks, universeId: bigint, questionId: bigint, maximumThresholdAttoRep: bigint) => Promise<ZoltarForkActionResult>
 	loadZoltarForkAccess: (accountAddress: Address, reputationToken: Address, universeId: bigint, childUniverses: ZoltarForkAccessChildUniverse[]) => Promise<readonly OptionalReadResult<bigint>[]>
 }
 
@@ -62,7 +62,7 @@ const defaultUseZoltarForkDependencies: UseZoltarForkDependencies = {
 			universeId,
 		}
 	},
-	forkZoltarUniverse: async (accountAddress, callbacks, universeId, questionId) => await forkZoltarUniverse(createWalletWriteClient(accountAddress, callbacks), universeId, questionId),
+	forkZoltarUniverse: async (accountAddress, callbacks, universeId, questionId, maximumThresholdAttoRep) => await forkZoltarUniverse(createWalletWriteClient(accountAddress, callbacks), universeId, questionId, maximumThresholdAttoRep),
 	loadZoltarForkAccess: async (accountAddress, reputationToken, universeId, childUniverses) => {
 		const readClient = createConnectedReadClient()
 		const results = await readOptionalMulticall(readClient, [
@@ -339,16 +339,19 @@ export function useZoltarFork(
 		[runZoltarForkAction, onTransactionPrepared, onTransactionSubmitted, dependencies],
 	)
 
-	const forkZoltar = async () =>
+	const forkZoltar = async () => {
+		const maximumThresholdAttoRep = zoltarUniverse?.forkThresholdAttoRep
 		await runZoltarForkAction(
 			'fork',
 			async (walletAddress, universe, questionId) => {
 				if (universe.hasForked) throw new Error(zoltarCopy.alreadyForkedReason)
-				return await dependencies.forkZoltarUniverse(walletAddress, { onTransactionPrepared, onTransactionSubmitted }, universe.universeId, questionId)
+				if (maximumThresholdAttoRep === undefined) throw new Error('Reviewed fork threshold is unavailable')
+				return await dependencies.forkZoltarUniverse(walletAddress, { onTransactionPrepared, onTransactionSubmitted }, universe.universeId, questionId, maximumThresholdAttoRep)
 			},
 			'Failed to fork the universe',
 			true,
 		)
+	}
 
 	useEffect(() => {
 		if (!shouldAutoLoadForkAccess) return

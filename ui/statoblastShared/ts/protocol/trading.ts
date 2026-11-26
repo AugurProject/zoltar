@@ -181,14 +181,17 @@ export async function redeemSharesInQuestionLedger(client: WriteClient, question
 	const outcome = await client.readContract({ address: forker, abi: QUESTION_LEDGER_QUESTION_OUTCOME_ABI, functionName: 'getQuestionOutcome', args: [questionLedgerAddress], blockNumber: block.number })
 	const amount = balances[Number(outcome)]
 	if (amount === undefined) throw new Error('Winning outcome is unavailable.')
-	const reviewDescription = await redemptionReview(client, questionLedgerAddress, amount, block.number)
-	const hash = await writeContractAndWait(client, () => ({
+	const { reviewDescription, minimumCash, minimumRep } = await redemptionReview(client, questionLedgerAddress, amount, block.number)
+	const callParams = {
 		address: questionLedgerAddress,
 		abi: statoblast_QuestionLedger_QuestionLedger.abi,
 		functionName: 'redeemShares',
+		reviewTitle: 'Redeem winning shares',
 		reviewDescription,
-		args: [],
-	}))
+		args: [minimumCash, minimumRep],
+	} as const
+	client.onTransactionPlan?.([{ ...callParams, contractAddress: questionLedgerAddress, requireReview: true, validateBeforeSubmit: redemptionValidator(client, questionLedgerAddress, amount, minimumCash, minimumRep) }])
+	const hash = await writeContractAndWait(client, () => callParams)
 	return {
 		action: 'redeemShares',
 		hash,
@@ -335,14 +338,17 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 export async function redeemCompleteSetInQuestionLedger(client: WriteClient, questionLedgerAddress: Address, amount: bigint) {
 	const universeId = await readQuestionLedgerUniverseId(client, questionLedgerAddress)
 	const block = await client.getBlock()
-	const reviewDescription = await redemptionReview(client, questionLedgerAddress, amount, block.number)
-	const hash = await writeContractAndWait(client, () => ({
+	const { reviewDescription, minimumCash, minimumRep } = await redemptionReview(client, questionLedgerAddress, amount, block.number)
+	const callParams = {
 		address: questionLedgerAddress,
 		abi: statoblast_QuestionLedger_QuestionLedger.abi,
 		functionName: 'redeemCompleteSet',
+		reviewTitle: 'Redeem complete sets',
 		reviewDescription,
-		args: [amount],
-	}))
+		args: [amount, minimumCash, minimumRep],
+	} as const
+	client.onTransactionPlan?.([{ ...callParams, contractAddress: questionLedgerAddress, requireReview: true, validateBeforeSubmit: redemptionValidator(client, questionLedgerAddress, amount, minimumCash, minimumRep) }])
+	const hash = await writeContractAndWait(client, () => callParams)
 	return {
 		action: 'redeemCompleteSet',
 		hash,
@@ -351,8 +357,24 @@ export async function redeemCompleteSetInQuestionLedger(client: WriteClient, que
 	} satisfies TradingActionResult
 }
 
+function redemptionValidator(client: WriteClient, pool: Address, shares: bigint, minimumCash: bigint, minimumRep: bigint) {
+	return async () => {
+		const block = await client.getBlock()
+		const quote = await loadCompleteSetRedemptionQuote(client, pool, shares, block.number)
+		if (quote.cash < minimumCash || requireBigintValue(quote.rep, 'recovery REP quote') < minimumRep) throw new Error('Redemption payout changed. Review the amount again.')
+	}
+}
+
 async function redemptionReview(client: Pick<ReadClient, 'readContract' | 'multicall'>, pool: Address, shares: bigint, blockNumber: bigint | undefined) {
 	const collateral = await loadTradingCollateralIdentity(client, pool, blockNumber)
 	const { cash, rep } = await loadCompleteSetRedemptionQuote(client, pool, shares, blockNumber)
-	return `Redeem ${formatCurrencyBalanceWithUnit(shares, 'shares', collateral.decimals)} for approximately ${formatCurrencyBalanceWithUnit(cash, collateral.symbol, collateral.decimals)} and ${formatCurrencyBalanceWithUnit(requireBigintValue(rep, 'recovery REP quote'), 'REP')} in this universe.`
+	// Allow ordinary fee accrual between review and inclusion, with both floors
+	// included in the review and signed calldata.
+	const minimumCash = (cash * 9950n) / 10000n
+	const minimumRep = (requireBigintValue(rep, 'recovery REP quote') * 9950n) / 10000n
+	return {
+		minimumCash,
+		minimumRep,
+		reviewDescription: `Redeem ${formatCurrencyBalanceWithUnit(shares, 'shares', collateral.decimals)} for approximately ${formatCurrencyBalanceWithUnit(cash, collateral.symbol, collateral.decimals)} and ${formatCurrencyBalanceWithUnit(requireBigintValue(rep, 'recovery REP quote'), 'REP')} in this universe. Minimum payouts (0.5% tolerance): ${formatCurrencyBalanceWithUnit(minimumCash, collateral.symbol, collateral.decimals)} and ${formatCurrencyBalanceWithUnit(minimumRep, 'REP')}.`,
+	}
 }

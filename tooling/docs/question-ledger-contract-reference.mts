@@ -1,12 +1,12 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const questionLedgerContractReference: ContractReference = {
-	compiledAbiFingerprint: 'd443a80dbd3ed5f58e802be1bf58d8f1ead6096ef01e5fe6c90e859fbebaea7d',
+	compiledAbiFingerprint: '3df5b0cffe8a5dd4c2e300c7b9e8d561b93d8e28a9f60b8a575c500cf8a20097',
 	name: 'QuestionLedger',
 	interactionNotes: 'See the [security pool module boundaries](./contract-inventory.html#security-pool-boundary) for capital, settlement, and reporter custody.',
 	purpose: 'Question ledger for one shared security pool, question and universe. Shares and reporting are question-specific; provider capital, settlement cash and fees are accounted centrally.',
 	readAbiFingerprint: '345c9328a593ad73dfaf56593ce2a0e4d482f7c891fda926c11edaf10cf072b7',
 	readSurface:
-		'Read security pool owner positions from the capital ledger and question fee streams from the settlement book. Amounts named `AttoEth` use raw units of the security pool collateral token; no token metadata is required. After security pool binding, question storage mirrors settlement cash, share supply and `lastSettlementSecurityPoolTime`, the security pool time of its last checkpoint. Fee stream deadlines use native time; question storage does not enumerate owners. `additionalMintCapacityAttoEth` is zero once the question ends or reporting starts; otherwise it returns available shared capacity, excluding existing question collateral. `attoSharesToAttoEth`, `attoSharesToAttoRep` and `attoEthToAttoShares` quote central settlement including fork recovery rights. `isEscalationResolved` recognizes inherited final outcomes and locally finalized reports. The settlement book tracks each question’s fee stream. An unreported question can continue paying fees after its calendar end until reporting starts. Additional validated configuration and accounting getters: `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceFeed`, `openOracle`, `escalationGameFactory`, `accountingModule`, `escalationGame`, `questionData`, `questionForker`, `securityPoolFactory`, `settlementCollateralAttoEth`, `statoblastSecurityMultiplierBps`, `shareTokenSupplyAttoShares`, `lastSettlementSecurityPoolTime`, `awaitingForkContinuation`, `systemState`, `securityPoolCustody`.',
+		'Read security pool owner positions from the capital ledger and question fee streams from the settlement book. Amounts named `AttoEth` use raw units of the security pool collateral token; no token metadata is required. After security pool binding, question storage mirrors settlement cash, share supply and `lastSettlementSecurityPoolTime`, the security pool time of its last checkpoint. Fee stream deadlines use native time; question storage does not enumerate owners. `additionalMintCapacityAttoEth` is zero once the question ends, reporting starts or its admission policy rejects it; otherwise it returns available shared capacity, excluding existing question collateral. `attoSharesToAttoEth`, `attoSharesToAttoRep` and `attoEthToAttoShares` quote central settlement including fork recovery rights. The collateral quote projects holding fees through the effective price checkpoint. After the source book seals, active source claims quote zero current collateral and REP proceeds; protected claims finalized in that source retain their ordinary quotes. `isEscalationResolved` recognizes inherited final outcomes and locally finalized reports. The settlement book tracks each question’s fee stream. An unreported question can continue paying fees after its calendar end until reporting starts. Additional validated configuration and accounting getters: `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceFeed`, `openOracle`, `escalationGameFactory`, `accountingModule`, `escalationGame`, `questionData`, `questionForker`, `securityPoolFactory`, `settlementCollateralAttoEth`, `statoblastSecurityMultiplierBps`, `shareTokenSupplyAttoShares`, `lastSettlementSecurityPoolTime`, `awaitingForkContinuation`, `systemState`, `securityPoolCustody`.',
 	securityBoundary:
 		'Price-sensitive withdrawal, commitment-increase, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A21 REP and selected collateral behavior](./security-model.html#assumption-a21), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated question ledger calls additionally depend on [A28 account authority](./security-model.html#assumption-a28).',
 	readDeclarations: [
@@ -165,7 +165,7 @@ export const questionLedgerContractReference: ContractReference = {
 			signals: 'Relevant share, reporting or central accounting events; no standalone vault accounting.',
 		},
 		{
-			call: '`redeemCompleteSet(amountAttoShares)`',
+			call: '`redeemCompleteSet(amountAttoShares, minimumCollateral, minimumRecoveryRep)`',
 			caller: 'A complete-set holder',
 			effect: 'Burns complete sets and pays their current collateral and recovery REP entitlement. Released exposure becomes available to the security pool.',
 			declarations: [
@@ -173,11 +173,11 @@ export const questionLedgerContractReference: ContractReference = {
 					name: 'redeemCompleteSet',
 				},
 			],
-			preconditions: 'Operational unforked universe; holder has all outcome shares.',
+			preconditions: 'Operational unforked universe; holder has all outcome shares; actual collateral and recovery REP meet the caller’s minima. Zero minima permit disposal of worthless shares.',
 			signals: 'Relevant share, reporting or central accounting events; no standalone vault accounting.',
 		},
 		{
-			call: '`redeemShares()`',
+			call: '`redeemShares(minimumCollateral, minimumRecoveryRep)`',
 			caller: 'A winning-share holder',
 			effect: 'Burns winning shares and pays their central collateral and recovery REP entitlement.',
 			declarations: [
@@ -185,7 +185,7 @@ export const questionLedgerContractReference: ContractReference = {
 					name: 'redeemShares',
 				},
 			],
-			preconditions: 'Operational question with a final outcome; finalized claims retain their protected settlement path.',
+			preconditions: 'Operational question with a final outcome; finalized claims retain their protected settlement path; actual collateral and recovery REP meet the caller’s minima.',
 			signals: 'Relevant share, reporting or central accounting events; no standalone vault accounting.',
 		},
 		{

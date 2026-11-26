@@ -1,5 +1,5 @@
 import { tokenFunded } from './collateral.js'
-import { loadBudgetMint, loadBudgetMintState } from './minting.js'
+import { loadBudgetMintState } from './minting.js'
 import { submissionDeadline } from './submissionWindow.js'
 import { maxUint256, type Address, type WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { tradingContracts } from '../generated/contractArtifact.js'
@@ -26,14 +26,23 @@ export async function simulateLiquidity(client: WalletClient, configuration: Dep
 			client,
 			expiry,
 			async (block, deadline) => {
-				mintAttoEth = await loadBudgetMint(client, market, amount, block.blockNumber)
-				if (pairAddress === undefined) {
+				const budgetMint = await loadBudgetMintState(client, market, amount, block.blockNumber)
+				mintAttoEth = budgetMint.cash
+				const simulate = async () => {
+					if (pairAddress === undefined) {
+						if (tokenFunded(market))
+							return await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithCollateral', account, args: [market.pool, mintAttoEth, conditionalYesBps, maxUint256, maxUint256, 0n, 0n, 0n, account, deadline, amount], blockNumber: block.blockNumber })
+						return await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [market.pool, mintAttoEth, conditionalYesBps, maxUint256, maxUint256, 0n, 0n, 0n, account, deadline], value: amount, blockNumber: block.blockNumber })
+					}
 					if (tokenFunded(market))
-						return await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithCollateral', account, args: [market.pool, mintAttoEth, conditionalYesBps, maxUint256, maxUint256, 0n, 0n, 0n, account, deadline, amount], blockNumber: block.blockNumber })
-					return await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [market.pool, mintAttoEth, conditionalYesBps, maxUint256, maxUint256, 0n, 0n, 0n, account, deadline], value: amount, blockNumber: block.blockNumber })
+						return await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithCollateral', account, args: [pairAddress, mintAttoEth, conditionalYesBps, maxUint256, maxUint256, 0n, 0n, 0n, account, deadline, amount], blockNumber: block.blockNumber })
+					return await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [pairAddress, mintAttoEth, conditionalYesBps, maxUint256, maxUint256, 0n, 0n, 0n, account, deadline], value: amount, blockNumber: block.blockNumber })
 				}
-				if (tokenFunded(market)) return await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithCollateral', account, args: [pairAddress, mintAttoEth, conditionalYesBps, maxUint256, maxUint256, 0n, 0n, 0n, account, deadline, amount], blockNumber: block.blockNumber })
-				return await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [pairAddress, mintAttoEth, conditionalYesBps, maxUint256, maxUint256, 0n, 0n, 0n, account, deadline], value: amount, blockNumber: block.blockNumber })
+				const simulation = await simulate()
+				const feeMarket = projectTransactionFeeMarket(market, budgetMint.central, block.blockTimestamp)
+				const feeBlocker = liquidityHoldingFeeBlocker(feeMarket, mintAttoEth, maximumAfterSlippage(simulation.result.yesUsed, slippageBps), maximumAfterSlippage(simulation.result.noUsed, slippageBps), deadline, simulation.result)
+				if (feeBlocker !== undefined) throw new Error(feeBlocker)
+				return simulation
 			},
 			(block, deadline) => submissionDeadline(client, market, operation, block, deadline),
 		)

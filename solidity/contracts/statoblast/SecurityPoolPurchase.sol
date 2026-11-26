@@ -83,6 +83,7 @@ contract SecurityPoolPurchase {
 		if (calculated == 0) return (0, 0);
 		uint256 duration = Math.min(type(uint48).max - nativeTime, engine.ledger().scaledAvailableFeeBudget(engine.bookIds(pool.universeId()), pool.questionId()) / calculated);
 		if (duration == 0) return (0, 0);
-		return (uint96(calculated), uint48(nativeTime + duration));
+		return
+			engine.ledger().normalizeFeeStream(uint96(calculated), uint48(nativeTime + duration), uint48(nativeTime), engine.ledger().scaledAvailableFeeBudget(engine.bookIds(pool.universeId()), pool.questionId()));
 	}
 }

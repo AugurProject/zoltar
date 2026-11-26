@@ -161,7 +161,7 @@ contract SharedPoolPriceFeed {
 		escalationHaltMultiplierBps = config.escalationHaltMultiplierBps();
 		maxSettlementBaseFeeMultiplierBps = config.maxSettlementBaseFeeMultiplierBps();
 		require(priorityFee > 0, 'Initial priority fee zero');
-		require(priorityFee <= OraclePriceMath.maximumPriorityFee(targetPriceErrorForDispute, protocolFee, feePercentage, escalationHaltMultiplierBps), 'Initial report priority fee exceeds OpenOracle limits');
+		require(priorityFee <= OraclePriceMath.maximumPriorityFee(targetPriceErrorForDispute, protocolFee, feePercentage, escalationHaltMultiplierBps, maxSettlementBaseFeeMultiplierBps), 'Initial report priority fee exceeds OpenOracle limits');
 	}
 
 	function universeId() public view returns (uint248 universe) {
@@ -223,6 +223,7 @@ contract SharedPoolPriceFeed {
 	}
 	function minimumToken1ReportAttoEthForPrice(uint256 proposedRepPerEthPrice) public view returns (uint256) {
 		require(proposedRepPerEthPrice != 0, 'Initial oracle price zero');
+		require(OraclePriceMath.liquidationPrice(proposedRepPerEthPrice, targetPriceErrorForDispute) != 0, 'Oracle liquidation price is zero');
 		return
 			Math.max(minimumToken1ReportAttoEth(), Math.mulDiv(minimumToken2ReportAttoRep(), SecurityPoolUtils.PRICE_PRECISION, proposedRepPerEthPrice, Math.Rounding.Ceil));
 	}
@@ -258,7 +259,7 @@ contract SharedPoolPriceFeed {
 	/// @notice Anyone may settle, but these ordered operations retain the funding sponsor.
 	/// Count is limited only by the declared gas budget and transaction gas limits.
 	function requestSecurityPoolPriceWithOperations(uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth, IReportOperations.Batch calldata batch) external payable returns (uint256 reportId) {
-		require(batch.deadline > block.timestamp, 'Report operations expired');
+		require(batch.deadline >= block.timestamp + settlementTime, 'Report operations expire before settlement');
 		require(batch.maximumPrice >= batch.minimumPrice && batch.maximumPrice != 0, 'Invalid operation price bounds');
 		require(batch.operations.length != 0, 'No report operations');
 		uint256 requiredGas;
@@ -497,7 +498,10 @@ contract SharedPoolPriceFeed {
 		// their settlements must not suppress a sponsor's authorized operation.
 		if (!_isFreshPriceTimestamp(priceTimestamp)) return ('Report stale', 0);
 		if (amount1 == 0 || amount2 == 0) return ('Empty oracle settlement', 0);
-		if (Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1) == 0) return ('Oracle price is zero', 0);
+		uint256 price = Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1);
+		if (price == 0) return ('Oracle price is zero', 0);
+		if (OraclePriceMath.liquidationPrice(price, targetPriceErrorForDispute) == 0)
+			return ('Oracle liquidation price is zero', 0);
 	}
 
 	/// @notice An accepted candidate may authorize growth even when a

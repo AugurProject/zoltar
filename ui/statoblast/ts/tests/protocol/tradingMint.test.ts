@@ -66,10 +66,13 @@ const securityPoolMintAbi = parseAbi(['function createCompleteSet(uint248 univer
 test('winning-share redemption reviews ETH and REP recovery for the winning balance at one block', async () => {
 	const unit = 10n ** 18n
 	let review: TransactionRequestPreview | undefined
+	let plan: readonly TransactionPlanStep[] = []
+	let quotedCash = unit
+	let quotedRep = 2n * unit
 	const send = mock((request: MockSentTransaction) => {
 		expect(request.to).toBe(pool)
 		if (request.data === undefined) throw new Error('Missing redemption calldata')
-		expect(decodeFunctionData({ abi: parseAbi(['function redeemShares()']), data: request.data }).functionName).toBe('redeemShares')
+		expect(decodeFunctionData({ abi: parseAbi(['function redeemShares(uint256,uint256)']), data: request.data })).toEqual({ functionName: 'redeemShares', args: [(unit * 9950n) / 10000n, (2n * unit * 9950n) / 10000n] })
 	})
 	const pinned: (bigint | undefined)[] = []
 	const client = {
@@ -99,17 +102,32 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 				{ address: pool, functionName: 'attoSharesToAttoEth', args: [3n * unit] },
 				{ address: pool, functionName: 'attoSharesToAttoRep', args: [3n * unit] },
 			])
-			return [undefined, unit, 2n * unit]
+			return [undefined, quotedCash, quotedRep]
 		}),
+		onTransactionPlan: (steps: readonly TransactionPlanStep[]) => {
+			plan = steps
+		},
 		onTransactionPrepared: (value: TransactionRequestPreview) => {
 			review = value
 		},
 	}
 	await redeemSharesInQuestionLedger(client, pool)
+	expect(plan).toHaveLength(1)
+	expect(plan[0]?.requireReview).toBe(true)
+	expect(plan[0]?.reviewDescription).toContain('Minimum payouts (0.5% tolerance):')
 	expect(pinned).toEqual([99n, 99n, 99n])
 	expect(review?.reviewDescription).toMatch(/1\sWETH/)
 	expect(review?.reviewDescription).toMatch(/2\sREP/)
+	expect(review?.reviewDescription).toContain('Minimum payouts (0.5% tolerance):')
 	expect(send).toHaveBeenCalledTimes(1)
+	const validate = plan[0]?.validateBeforeSubmit
+	if (validate === undefined) throw new Error('Expected redemption revalidation')
+	await validate()
+	quotedCash = 0n
+	await expect(validate()).rejects.toThrow('Redemption payout changed')
+	quotedCash = unit
+	quotedRep = 0n
+	await expect(validate()).rejects.toThrow('Redemption payout changed')
 })
 
 test('token approval authorizes only the requested spender and amount', async () => {

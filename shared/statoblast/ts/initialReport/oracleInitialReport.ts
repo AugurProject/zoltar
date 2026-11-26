@@ -14,7 +14,6 @@ export const ORACLE_PROTOCOL_FEE_RECIPIENT = '0x00000000000000000000000000000000
 export const ORACLE_SETTLEMENT_TIME = 40 * 12
 export const ORACLE_DISPUTE_DELAY = 0
 export const ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS = 30000n
-export const ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS = 1000n
 
 /** Exact native settlement reward required by the shared REP price feed. */
 export function calculateOracleSettlementBountyAttoEth(parameters: { baseFeePerGas: bigint; initialReportPriorityFeeAttoEthPerGas: bigint; settlementCallbackGasLimit: bigint; maxSettlementBaseFeeMultiplierBps: bigint }) {
@@ -38,7 +37,12 @@ function calculateMaximumOracleInitialReportPriorityFeeAttoEthPerGas() {
 	const escalationLimitedReport = (UINT128_MAX * BPS_DENOMINATOR) / ORACLE_ESCALATION_HALT_MULTIPLIER_BPS
 	const maximumPriorityFeeReport = (escalationLimitedReport < UINT128_MAX ? escalationLimitedReport : UINT128_MAX) / 2n
 	const maximumPriorityDisputeGasCost = (maximumPriorityFeeReport * reportDenominator) / reportNumeratorMultiplier
-	return maximumPriorityDisputeGasCost / ORACLE_GAS_UNITS_FOR_ONE_DISPUTE
+	const reportMaximum = maximumPriorityDisputeGasCost / ORACLE_GAS_UNITS_FOR_ONE_DISPUTE
+	const callback = 4_000_000n
+	const gas = ceilDiv((callback + callback / 63n + 310_000n) * 12_000n, 10_000n) + 20_000n
+	const maximumAllowance = ((1n << 96n) - 1n - 101n) / gas
+	const bountyMaximum = ceilDiv((maximumAllowance + 1n) * 10_000n, ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS) - 1n
+	return reportMaximum < bountyMaximum ? reportMaximum : bountyMaximum
 }
 
 export const MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS = calculateMaximumOracleInitialReportPriorityFeeAttoEthPerGas()

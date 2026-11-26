@@ -83,7 +83,7 @@ describe('Statoblast security pool: fee-stream end keys chosen by dust buyers', 
 		await fixture.mint(10n * unit, victimId, { sender: victim })
 		expect(await feeEnd(victimId)).toBe(key)
 		const redeemWithCap = async () => {
-			const hash = await victim.writeContract({ abi: poolArtifact.abi, address: victimPool, functionName: 'redeemCompleteSet', args: [unit], gas: CAP })
+			const hash = await victim.writeContract({ abi: poolArtifact.abi, address: victimPool, functionName: 'redeemCompleteSet', args: [unit, 0n, 0n], gas: CAP })
 			return victim.waitForTransactionReceipt({ hash })
 		}
 		const snapshot = await window.anvilSnapshot()

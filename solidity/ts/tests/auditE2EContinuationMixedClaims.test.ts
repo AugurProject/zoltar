@@ -236,8 +236,10 @@ describe('auditE2E: continuation games mix inherited and local claims across gen
 			if (outcome !== YES && loser !== undefined) await expect(e2e.simulateInheritedClaim(owner, childAA.pool, outcome, snapshot[outcome], loser, new SparseNullifierTree())).rejects.toThrow('Not winning outcome')
 		}
 		const residualAA = await e2e.gameBalance(childAA.game)
-		if (residualAA === 0n) await expect(owner.simulateContract({ ...e2e.game(childAA.game), functionName: 'sweepResidualRepToQuestionLedger' })).rejects.toThrow('No sweepable REP')
+		const escrowAA = await owner.readContract({ ...e2e.game(childAA.game), functionName: 'totalDisputeStakedAttoRep' })
+		if (residualAA === 0n && escrowAA === 0n) await expect(owner.simulateContract({ ...e2e.game(childAA.game), functionName: 'sweepResidualRepToQuestionLedger' })).rejects.toThrow('No sweepable REP')
 		else await e2e.sweep(r6, childAA.game)
+		expect(await owner.readContract({ ...e2e.game(childAA.game), functionName: 'totalDisputeStakedAttoRep' })).toBe(0n)
 		expect(await e2e.rep(AA, ledger)).toBe(0n)
 		expect(supplyAA - (await e2e.supply(AA))).toBe(settledAA.burn + residualAA)
 
@@ -260,8 +262,10 @@ describe('auditE2E: continuation games mix inherited and local claims across gen
 		expect(supplyAB - (await e2e.supply(AB))).toBe(burnAB)
 		const residualAB = await e2e.gameBalance(childAB.game)
 		expect(residualAB).toBe(backingAB - settledAB.paid - localPaid - burnAB)
-		if (residualAB === 0n) await expect(owner.simulateContract({ ...e2e.game(childAB.game), functionName: 'sweepResidualRepToQuestionLedger' })).rejects.toThrow('No sweepable REP')
+		const escrowAB = await owner.readContract({ ...e2e.game(childAB.game), functionName: 'totalDisputeStakedAttoRep' })
+		if (residualAB === 0n && escrowAB === 0n) await expect(owner.simulateContract({ ...e2e.game(childAB.game), functionName: 'sweepResidualRepToQuestionLedger' })).rejects.toThrow('No sweepable REP')
 		else await e2e.sweep(r6, childAB.game)
+		expect(await owner.readContract({ ...e2e.game(childAB.game), functionName: 'totalDisputeStakedAttoRep' })).toBe(0n)
 		expect(await e2e.rep(AB, ledger)).toBe(0n)
 		expect(supplyAB - (await e2e.supply(AB))).toBe(burnAB + residualAB)
 		// Nothing is left behind in the intermediate universes' reporter custody.

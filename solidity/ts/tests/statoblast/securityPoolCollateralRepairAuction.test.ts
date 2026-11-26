@@ -318,8 +318,9 @@ describe('Statoblast: automatic collateral-repair-auction vaults', () => {
 			repBound = 0,
 			cashBound = 0,
 			dust = 0
+		await expect(c.owner.readContract({ abi: feedArtifact.abi, address: c.feed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [1n] })).rejects.toThrow('Oracle liquidation price is zero')
 		const switchPrice = (rep * unit + cash - 1n) / cash
-		for (const p of [...new Set([1n, 13n, 997n, unit / 5n, unit - 1n, unit, unit + 1n, switchPrice - 1n, switchPrice, switchPrice + 1n, 10n ** 27n].filter(p => p > 0n))].sort((a, b) => (a < b ? -1 : 1))) {
+		for (const p of [...new Set([2n, 13n, 997n, unit / 5n, unit - 1n, unit, unit + 1n, switchPrice - 1n, switchPrice, switchPrice + 1n, 10n ** 27n].filter(p => p > 0n))].sort((a, b) => (a < b ? -1 : 1))) {
 			const needed = await c.owner.readContract({ abi: feedArtifact.abi, address: c.feed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [p] })
 			expect(needed >= cash && needed * p >= rep * unit).toBe(true)
 			expect(needed - 1n < cash || (needed - 1n) * p < rep * unit).toBe(true)

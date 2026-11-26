@@ -186,7 +186,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		if (!book.isSealed) {
 			uint256 forkTime = zoltar.getForkTime(identity.universeId);
 			if (forkTime == 0) _freezeMatured(identity.universeId, book, _securityPoolTime(identity.universeId));
-			else _sealFork(identity.universeId, book, forkTime);
+			else _sealBook(identity.universeId, book, forkTime);
 		}
 		(Question memory state, bool finalClaim) = _question(identity.universeId, identity.questionId);
 		require(!book.isSealed || finalClaim, 'Use child reporter escrow');
@@ -235,7 +235,6 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 
 	function freezeFork(uint248 universeId) external onlyForkAuthority {
 		Book storage book = _book(universeId);
-		if (book.isSealed) return;
 		_sealFork(universeId, book, zoltar.getForkTime(universeId));
 	}
 
@@ -273,12 +272,12 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		_writeQuestion(book, questionId, state);
 		emit ReporterBalanceChanged(universeId, questionId, state.balanceAttoRep);
 		IERC20(address(zoltar.getRepToken(universeId))).safeApprove(address(zoltar), threshold);
-		zoltar.forkUniverse(universeId, questionId);
+		zoltar.forkUniverse(universeId, questionId, zoltar.getForkThresholdAttoRep(universeId));
 		_sealFork(universeId, book, zoltar.getForkTime(universeId));
 	}
 
 	/// @notice Duplicate all live reporter balances into one branch with one native migration.
-	function createChild(uint248 sourceUniverseId, uint256 outcomeIndex) external onlyForkAuthority returns (uint248 childUniverseId) {
+	function createChild(uint248 sourceUniverseId, uint256 outcomeIndex, bool preserveFixedDeadline) external onlyForkAuthority returns (uint248 childUniverseId) {
 		Book storage source = _book(sourceUniverseId);
 		require(source.isSealed, 'Reporter source is not sealed');
 		childUniverseId = zoltar.getChildUniverseId(sourceUniverseId, outcomeIndex);
@@ -292,7 +291,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 		books[childUniverseId] = Book({liveAttoRep: source.liveAttoRep, finalAttoRep: 0, questionRoot: source.questionRoot, finalityRoot: source.finalityRoot, frozenRoot: source.frozenRoot, timestamp: source.timestamp, exists: true, isSealed: false, minimumFinalAfter: source.timestamp, finalizedRepPrefix: source.finalizedRepPrefix});
 		(, uint256 forkQuestionId, , , ) = zoltar.universes(sourceUniverseId);
 		(Question memory fixedQuestion, bool alreadyFinal) = _question(childUniverseId, forkQuestionId);
-		if (!alreadyFinal && fixedQuestion.balanceAttoRep != 0) {
+		if (!alreadyFinal && !preserveFixedDeadline && fixedQuestion.balanceAttoRep != 0) {
 			Book storage child = books[childUniverseId];
 			_changeFinality(child, fixedQuestion.finalAfter, fixedQuestion.balanceAttoRep, false);
 			fixedQuestion.finalAfter = child.minimumFinalAfter + Constants.FORK_RESPONSE_DELAY;
@@ -304,10 +303,7 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 	}
 
 	function _sealFork(uint248 universeId, Book storage book, uint256 forkTime) private {
-		require(forkTime != 0 && forkTime <= type(uint48).max, 'Reporter fork is missing');
-		uint48 forkSecurityPoolTime = IReporterSecurityPoolClock(securityPool).forkSecurityPoolTime(universeId);
-		_freezeMatured(universeId, book, forkSecurityPoolTime);
-		book.isSealed = true;
+		_sealBook(universeId, book, forkTime);
 		uint256 prepared = zoltar.getMigrationRepBalanceAttoRep(address(this), universeId);
 		require(prepared <= book.liveAttoRep, 'Reporter migration exceeds live inventory');
 		uint256 remaining = book.liveAttoRep - prepared;
@@ -316,6 +312,14 @@ contract SecurityPoolReporterLedger is ISecurityPoolReporterLedger {
 			zoltar.addRepToMigrationBalance(universeId, remaining);
 		}
 		emit ReporterForkFrozen(universeId, book.liveAttoRep, book.finalAttoRep);
+	}
+
+	/// @dev Protect parent claims independently of the admission capacity for unrelated live REP.
+	function _sealBook(uint248 universeId, Book storage book, uint256 forkTime) private {
+		if (book.isSealed) return;
+		require(forkTime != 0 && forkTime <= type(uint48).max, 'Reporter fork is missing');
+		_freezeMatured(universeId, book, IReporterSecurityPoolClock(securityPool).forkSecurityPoolTime(universeId));
+		book.isSealed = true;
 	}
 
 	function _question(uint248 universeId, uint256 questionId) private view returns (Question memory state, bool finalClaim) {

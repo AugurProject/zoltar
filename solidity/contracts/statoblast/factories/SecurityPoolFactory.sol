@@ -168,6 +168,14 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	}
 
 	/// @notice Maximum supported priority fee for a new oracle configuration.
+	function maximumReportCollateral() external view override returns (uint256) {
+		uint256 haltMultiplier = sharedPoolPriceFeedFactory.escalationHaltMultiplierBps();
+		// The report uses floor(deposit * haltMultiplier / BPS).
+		uint256 maximum = (uint256(type(uint128).max) + 1) * 10_000 - 1;
+		maximum /= haltMultiplier;
+		return maximum < type(uint128).max ? maximum : type(uint128).max;
+	}
+
 	function maximumReportPriorityFeeAttoEthPerGas() external view override returns (uint256) {
 		return sharedPoolPriceFeedFactory.maximumReportPriorityFeeAttoEthPerGas();
 	}

@@ -120,7 +120,7 @@ export const forkUniverse = async (client: WriteClient, universeId: bigint, ques
 			abi: Zoltar_Zoltar.abi,
 			functionName: 'forkUniverse',
 			address: getZoltarAddress(),
-			args: [universeId, questionId],
+			args: [universeId, questionId, (1n << 256n) - 1n],
 		}),
 	)
 

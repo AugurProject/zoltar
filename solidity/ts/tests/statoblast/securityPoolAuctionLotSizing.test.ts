@@ -33,10 +33,10 @@ describe('Statoblast: full-deficit auction lot sizing', () => {
 		index = await client.readContract({ abi: capitalArtifact.abi, address: ledger, functionName: 'commitmentIndex' })
 		await node.setBaselineSnapshot()
 	})
-	const open = async (shortfall: bigint, minimum = 1n) => {
+	const open = async (shortfall: bigint, minimum = 1n, inventory = 11_000_000n * 10n ** 18n) => {
 		await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: root, functionName: 'setMinimum', args: [minimum] }))
 		const deadline = (await client.getBlock()).timestamp + 3n * 86_400n
-		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: auctionArtifact.abi, bytecode: `0x${auctionArtifact.evm.bytecode.object}`, args: [client.account.address, root, 1n, deadline, 11_000_000n * 10n ** 18n, shortfall, implementation] }) }) })
+		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: auctionArtifact.abi, bytecode: `0x${auctionArtifact.evm.bytecode.object}`, args: [client.account.address, root, 1n, deadline, inventory, shortfall, implementation] }) }) })
 		if (!receipt.contractAddress) throw new Error('Missing auction')
 		const target = { abi: auctionArtifact.abi, address: receipt.contractAddress }
 		const transaction = await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'open' }))
@@ -52,6 +52,18 @@ describe('Statoblast: full-deficit auction lot sizing', () => {
 		expect((result.lots - 1n) * result.lot).toBeLessThan(shortfall)
 		expect(result.lots * result.lot - shortfall).toBeLessThan(result.lots)
 	}
+	test('#1646 finds an intermediate lot count that the actual inventory can back', async () => {
+		const result = await open(60n, 15n, 21n)
+		expect([result.lots, result.lot, result.rounded]).toEqual([3n, 20n, 21n])
+	})
+	test('#1646 fallback skips an unprofitable REP grid band to find a smaller viable lot', async () => {
+		const result = await open(58n, 5n, 42n)
+		expect([result.lots, result.lot, result.rounded]).toEqual([3n, 20n, 21n])
+	})
+	test('#1646 fallback honors the configured minimum below the initial rounded lot', async () => {
+		const result = await open(61n, 20n, 21n)
+		expect([result.lots, result.lot, result.rounded]).toEqual([4n, 20n, 21n])
+	})
 	test('#1339 enlarges tiny lots until grid rounding adds less than one percent', async () => {
 		const result = await open(1_000_000n)
 		expect(result.lots).toBeGreaterThan(1n)

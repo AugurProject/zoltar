@@ -147,7 +147,7 @@ describe('Statoblast: inherited activation delay and finality', () => {
 			expect(secondFork).toBeGreaterThan(gameEnd)
 			await expect(trader.simulateContract({ ...shares, functionName: 'migrate', args: [child * 256n + 1n, [1n]] })).rejects.toThrow('ShareToken question finalized before fork')
 			const cashBefore = await collateralBalance(owner, fixture.securityPool, engine)
-			await writeContractAndWait(trader, () => trader.writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'redeemShares' }))
+			await writeContractAndWait(trader, () => trader.writeContract({ abi: poolArtifact.abi, address: childPool, functionName: 'redeemShares', args: [0n, 0n] }))
 			expect(await collateralBalance(owner, fixture.securityPool, engine)).toBeLessThan(cashBefore)
 			expect(await trader.readContract({ ...shares, functionName: 'balanceOf', args: [trader.account.address, child * 256n + 1n] })).toBe(0n)
 			return
@@ -168,7 +168,7 @@ describe('Statoblast: inherited activation delay and finality', () => {
 		const grandEnd = await owner.readContract({ abi: gameArtifact.abi, address: grandGame, functionName: 'getEscalationGameEndDate' })
 		// Leave room for the fixed-point attrition curve's inverse-rounding boundary.
 		await base.mockWindow.setTime(grandEnd + DAY)
-		await writeContractAndWait(trader, () => trader.writeContract({ abi: poolArtifact.abi, address: grandPool, functionName: 'redeemShares' }))
+		await writeContractAndWait(trader, () => trader.writeContract({ abi: poolArtifact.abi, address: grandPool, functionName: 'redeemShares', args: [0n, 0n] }))
 		expect(await trader.readContract({ ...shares, functionName: 'balanceOf', args: [trader.account.address, grandchild * 256n + 1n] })).toBe(0n)
 	})
 })

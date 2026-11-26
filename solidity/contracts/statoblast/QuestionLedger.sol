@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { ISecurityPoolQuestionAdmissionPolicy } from './interfaces/ISecurityPoolQuestionAdmissionPolicy.sol';
 import { ISecurityPoolNative } from './interfaces/ISecurityPoolNative.sol';
 import { IERC20 } from '../IERC20.sol';
 import { ReputationToken } from '../ReputationToken.sol';
@@ -32,6 +33,11 @@ import { IQuestionLedgerDeploymentWorkerConfiguration } from './interfaces/IQues
 import { QuestionLedgerSettlementSync } from './QuestionLedgerSettlementSync.sol';
 import { QuestionLedgerAccountingDelegate } from './QuestionLedgerAccountingDelegate.sol';
 import { ISecurityPoolSettlement } from './interfaces/ISecurityPoolSettlement.sol';
+
+interface IQuestionAdmissionHost {
+	function questionAdmissionPolicy() external view returns (ISecurityPoolQuestionAdmissionPolicy);
+	function originUniverseId() external view returns (uint248);
+}
 
 interface ICompletePurchaseFunding {
 	function completePurchaseFunding(uint256 fee, uint256 premium) external;
@@ -165,6 +171,10 @@ contract QuestionLedger is QuestionLedgerStorage {
 		if (address(escalationGame) != address(0) || block.timestamp >= questionData.getQuestionEndDate(questionId))
 			return 0;
 		if (securityPoolCustody != address(0)) {
+			address authority = securityPoolFactory.securityPoolOf(IQuestionLedger(payable(address(this))));
+			IQuestionAdmissionHost host = IQuestionAdmissionHost(authority);
+			if (!host.questionAdmissionPolicy().isQuestionAllowed(authority, host.originUniverseId(), questionId))
+				return 0;
 			return ISecurityPoolSettlement(address(securityPoolAccounting)).availableMintCapacity(universeId);
 		}
 		revert('Security pool settlement missing');
@@ -202,24 +212,33 @@ contract QuestionLedger is QuestionLedgerStorage {
 	/// @notice Burns `amountAttoShares` complete sets from the caller and sends the matching settlement collateral in the configured token.
 	/// @dev Complete-set exits use the current collateral-per-share rate after fee
 	/// accrual, preserving the exchange rate for remaining complete sets.
-	function redeemCompleteSet(uint256 amountAttoShares) external isOperational {
+	function redeemCompleteSet(uint256 amountAttoShares, uint256 minimumCollateral, uint256 minimumRecoveryRep) external isOperational {
 		updateSettlementCollateral();
+		uint256 repBefore = repToken.balanceOf(msg.sender);
 		bytes memory result = DelegateCall.invoke(operationsDelegate, abi.encodeCall(QuestionLedgerOperationsDelegate.redeemCompleteSet, (shareToken, universeId, msg.sender, amountAttoShares)));
 		uint256 settlementCollateralRedeemedAttoEth = abi.decode(result, (uint256));
+		_requireRedemptionMinima(settlementCollateralRedeemedAttoEth, repBefore, minimumCollateral, minimumRecoveryRep);
 		refreshSecurityPoolFees();
 		emit CompleteSetRedeemed(msg.sender, amountAttoShares, settlementCollateralRedeemedAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
 		_emitQuestionLedgerAccountingCheckpoint(AccountingReason.CollateralReconciliation);
 	}
 
 	/// @notice Burns the caller's winning-outcome shares after finalization and sends their settlement collateral in the configured token.
-	function redeemShares() external {
+	function redeemShares(uint256 minimumCollateral, uint256 minimumRecoveryRep) external {
 		require(systemState == SystemState.Operational, 'Pool inactive');
 		updateSettlementCollateral();
+		uint256 repBefore = repToken.balanceOf(msg.sender);
 		bytes memory result = DelegateCall.invoke(operationsDelegate, abi.encodeCall(QuestionLedgerOperationsDelegate.redeemShares, (shareToken, IQuestionForker(questionForker), universeId, msg.sender)));
 		(uint256 winningSharesBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth) = abi.decode(result, (uint256, uint256));
+		_requireRedemptionMinima(settlementCollateralRedeemedAttoEth, repBefore, minimumCollateral, minimumRecoveryRep);
 		refreshSecurityPoolFees();
 		emit SharesRedeemed(msg.sender, winningSharesBurnedAttoShares, settlementCollateralRedeemedAttoEth, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
 		_emitQuestionLedgerAccountingCheckpoint(AccountingReason.CollateralReconciliation);
+	}
+
+	function _requireRedemptionMinima(uint256 paidCash, uint256 repBefore, uint256 minimumCollateral, uint256 minimumRecoveryRep) private view {
+		require(paidCash >= minimumCollateral, 'Minimum collateral not met');
+		require(repToken.balanceOf(msg.sender) - repBefore >= minimumRecoveryRep, 'Minimum recovery REP not met');
 	}
 
 	/// @notice Withdraws fork-carried escalation deposits after the question is final; all proofs must share one depositor.

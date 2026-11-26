@@ -17,7 +17,7 @@
 			</header>
 			<section id="how-it-works">
 				<h2>How it works</h2>
-				<p>Each ordinary ETH entry returns one Invalid share for each <a href="../../reference/glossary.html#complete-set">complete set</a> created. If the question resolves Invalid, the holder redeems those shares with the <a href="../../reference/glossary.html#question-ledger">question ledger</a>'s <code>redeemShares()</code> at the current collateral value.</p>
+				<p>Each ordinary ETH entry returns one Invalid share for each <a href="../../reference/glossary.html#complete-set">complete set</a> created. If the question resolves Invalid, the holder redeems those shares with the <a href="../../reference/glossary.html#question-ledger">question ledger</a>'s <code>redeemShares(minimumCollateral, minimumRecoveryRep)</code> at the current collateral value.</p>
 				<p>The <a href="./architecture-decisions.html#decisions">two-reserve design</a> keeps Invalid in the holder’s wallet. The pair therefore supplies no price for Invalid that a trader could use to judge the risk of that result.</p>
 			</section>
 			<section id="worked-example">

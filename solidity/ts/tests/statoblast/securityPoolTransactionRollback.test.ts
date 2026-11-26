@@ -37,7 +37,7 @@ describe('Security pool question transaction rollback', () => {
 		if (shares === undefined || shares === 0n) throw new Error('Receiver must own a complete set')
 		expect(before.shares).toEqual([shares, shares, shares])
 		const balance = await collateralBalance(client, fixture.securityPool, receiver)
-		await writeContractAndWait(client, () => client.writeContract({ abi: receiverArtifact.abi, address: receiver, functionName: 'execute', args: [pool().address, encodeFunctionData({ abi: poolArtifact.abi, functionName: 'redeemCompleteSet', args: [shares] })] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: receiverArtifact.abi, address: receiver, functionName: 'execute', args: [pool().address, encodeFunctionData({ abi: poolArtifact.abi, functionName: 'redeemCompleteSet', args: [shares, 0n, 0n] })] }))
 		expect((await state(receiver)).shares).toEqual([0n, 0n, 0n])
 		expect(await collateralBalance(client, fixture.securityPool, receiver)).toBeGreaterThan(balance)
 	})

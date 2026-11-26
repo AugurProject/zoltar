@@ -38,22 +38,22 @@ export { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.j
 
 export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	escalationGameDepositDelegate: '0x64c4eaa617bc1ae029805c959024ae025386fdfbcd09dc0d74011990c203f9ec',
-	escalationGameFactory: '0xf710c067640e4c7f706bea4ecb4874b46be648a6d720be3f327d3441f4729b43',
+	escalationGameFactory: '0x387f41646d6a424dc8a500b45315ab422969aa19e2a9acf0661906ef21bd8acd',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	sharedPoolPriceFeedFactory: '0x8239f503691a3236cbba9b87ab382e70b98e85997c076b8f55ab3e0d528453ed',
+	sharedPoolPriceFeedFactory: '0xb73435a3cce3ce807c3106c927b8ab75ea13be4331a6e0d377d3c8a38aae205f',
 	questionLedgerEventEmitter: '0x7cc076e2822ad2187a680ab7b091a7a93963fa5c07bf31be029b9ea90dcd5b46',
-	securityPoolFactory: '0x7e54fcb67e7f3f4cda72e42aa08110cdfe1f0b11c2579e5092e59f995ade097f',
-	questionForker: '0xdbda564ee210faa59b6c560007ebf746200d925872b66370f3d886b58c2e580f',
+	securityPoolFactory: '0xb4086cecb75bafd2f36d488961c052ddeace77267d87e3dce3da039f43d1a8f3',
+	questionForker: '0xb943c51de2f1dfb06aef9404c0d9966fbb9aa76664f2d82fa63a5e6f4255ec39',
 	questionLedgerOperationsDelegate: '0x70efd3ecf075e48d3f86f51d9b7480e6512d8d034f016a0f50b72223ad820d1c',
-	shareTokenFactory: '0x4d5982f652306b617f5d4a7274a61d432354861cd72ff264e833fdb761946380',
-	sharedPoolPriceFeedDeploymentWorker: '0xf26a9f37dda0fcf81acb96f55cf6d2f3b10282cc5e2e66fe6ec097abd45de811',
+	shareTokenFactory: '0x5d36307371a5737f98c283875104baa32da56c9a035e6d8bea8f90565d345eb0',
+	sharedPoolPriceFeedDeploymentWorker: '0xb8c41903a37d46594037683b5f3aab725f68469fefd20f63c3f407e41e49d3ec',
 }
 
 const EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0xf15245d57dcbebfd3fa09c6b72d5357db9cbd3fdb15e46e3d693b143c3a8ae14',
-	questionForker: '0x297b4ffe0e4dec3a131c530712f0b6b512086785ed95d27692ddba82ea26ea5a',
-	shareTokenFactory: '0xfcf02bda33c1076d3f9f0e087860d2a3ccdb9d94f78981d993143e05271d9603',
+	securityPoolFactory: '0x758e7d7ab918806c703ddc19554d8cff9b20f5bb9a26597b55f29dff83198270',
+	questionForker: '0x264856bf82d587a858c772b8b7157495f3115d9e9453a02d19654f6770c4f1a9',
+	shareTokenFactory: '0x455b37ed5b6e81f95dc8f7d0820f7d53d13738634e28fe21cf1d2973d5f7c10f',
 }
 
 function runtimeWithAddresses(artifact: { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } }, addresses: readonly Address[]) {
@@ -120,22 +120,22 @@ export function assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes(
 
 const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	escalationGameDepositDelegate: '0x64c4eaa617bc1ae029805c959024ae025386fdfbcd09dc0d74011990c203f9ec',
-	escalationGameFactory: '0xf710c067640e4c7f706bea4ecb4874b46be648a6d720be3f327d3441f4729b43',
+	escalationGameFactory: '0x387f41646d6a424dc8a500b45315ab422969aa19e2a9acf0661906ef21bd8acd',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	sharedPoolPriceFeedFactory: '0x903345bdf0cde535689e914321990c3f8a165a77b1650a437e9eef4d332398ba',
+	sharedPoolPriceFeedFactory: '0x4d73909e89ec06f2a851a21ae9a6621981a8528469b6e0592c07a8559a8f853c',
 	questionLedgerEventEmitter: '0x7cc076e2822ad2187a680ab7b091a7a93963fa5c07bf31be029b9ea90dcd5b46',
-	securityPoolFactory: '0x76f3a7a4057889832d80bb9e18a1392fe0cc28882c277f877d924cdb13546dd3',
-	questionForker: '0x939b31e1335bb9c5678533a848f5f9b657d85bde85ce9719145ee0c79a2bc10f',
+	securityPoolFactory: '0xf9b166ad9193484dc7af5eba1535ba121438f91c8430b3fc1640ef49459dc6c6',
+	questionForker: '0x7efa736bc98b0f7b5d9509444128d978d790c3bd8a956762be8d617803f4b686',
 	questionLedgerOperationsDelegate: '0x70efd3ecf075e48d3f86f51d9b7480e6512d8d034f016a0f50b72223ad820d1c',
-	shareTokenFactory: '0xdd95221b1081ffe5924a5d34770c807597423d93cbb87b99e97fde205f3ea58b',
-	sharedPoolPriceFeedDeploymentWorker: '0xf26a9f37dda0fcf81acb96f55cf6d2f3b10282cc5e2e66fe6ec097abd45de811',
+	shareTokenFactory: '0x1655d4e1bf272dd2e2bc32d38ba9a8d59a48ad0b59af85903158fda48fbe1532',
+	sharedPoolPriceFeedDeploymentWorker: '0xb8c41903a37d46594037683b5f3aab725f68469fefd20f63c3f407e41e49d3ec',
 }
 
 const EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_MAINNET_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0x4f8523a36b5cb5d86c35049f732ac3db860318dc4c3527bc27aa30db945b4420',
-	questionForker: '0xea60e3dab10e3c08c98da5f8fcdd031ae6e09b8589c1f53bd3769fdd96c67e75',
-	shareTokenFactory: '0xc505ae2c855b6fd462c17d25e95e52f1f6093866f67004b2ee99ebbb95d74ddc',
+	securityPoolFactory: '0x90826d008dedaef09a71bb5bd85b08e18e63d4ed5a87e9b46af5863106b371aa',
+	questionForker: '0x59d35895876398c2c1a5c365a685119bcdcbfb027d4842d98bdf8054e2a24ce9',
+	shareTokenFactory: '0x1f5876886ea35c0073eca2754f24d6d375c6e73706337a9868c2eebeb67a0e0f',
 }
 const EXPECTED_PUBLIC_RUNTIME_CODE_HASHES = {
 	mainnet: { yes: EXPECTED_MAINNET_RUNTIME_CODE_HASHES, no: EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES },

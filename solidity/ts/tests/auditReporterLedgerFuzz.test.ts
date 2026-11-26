@@ -70,7 +70,7 @@ type Op =
 const show = (value: unknown) => JSON.stringify(value, (_key, item) => (typeof item === 'bigint' ? `${item}n` : item))
 
 type ModelQuestion = { balance: bigint; finalAfter: number; finalIn: string | undefined; sourceGame: string | undefined; scheduledIn: string | undefined; haircut: boolean }
-type ModelBook = { live: bigint; final: bigint; ts: number; isSealed: boolean; minimumFinalAfter: number; questions: Map<number, ModelQuestion>; registered: Set<number> }
+type ModelBook = { migrationPrepared: boolean; live: bigint; final: bigint; ts: number; isSealed: boolean; minimumFinalAfter: number; questions: Map<number, ModelQuestion>; registered: Set<number> }
 type Model = { books: Map<string, ModelBook>; forkTime: Map<string, number>; forkQuestion: Map<string, number>; now: number }
 const emptyQuestion = (): ModelQuestion => ({ balance: 0n, finalAfter: 0, finalIn: undefined, sourceGame: undefined, scheduledIn: undefined, haircut: false })
 const cloneModel = (model: Model): Model => ({
@@ -208,6 +208,7 @@ const apply = (model: Model, op: Op, time: number, environment: Environment, rea
 			model.forkQuestion.set(op.u, op.q)
 			const sealProblem = sealFork(model, op.u, book)
 			if (sealProblem !== undefined) throw new Error(`MODEL: trigger could not seal: ${sealProblem}`)
+			book.migrationPrepared = true
 			return { ok: true, touched: [op.u] }
 		}
 		case 'xfork': {
@@ -222,17 +223,18 @@ const apply = (model: Model, op: Op, time: number, environment: Environment, rea
 		}
 		case 'frz': {
 			if (book === undefined) return reject('universe not registered')
-			if (book.isSealed) return { ok: true, touched: [op.u] }
-			const problem = sealFork(model, op.u, book)
+			const problem = book.isSealed ? undefined : sealFork(model, op.u, book)
 			if (problem !== undefined) return reject(problem)
+			book.migrationPrepared = true
 			return { ok: true, touched: [op.u] }
 		}
 		case 'child': {
 			if (book === undefined) return reject('universe not registered')
 			if (!book.isSealed) return reject('source not sealed')
+			if (!book.migrationPrepared && book.live !== 0n) return reject('source migration not prepared')
 			const childId = `${op.u}${op.outcome}`
 			if (model.books.has(childId)) return reject('child exists')
-			const child: ModelBook = { live: book.live, final: 0n, ts: book.ts, isSealed: false, minimumFinalAfter: book.ts, registered: new Set(), questions: new Map([...book.questions].map(([id, state]) => [id, { ...state }])) }
+			const child: ModelBook = { migrationPrepared: false, live: book.live, final: 0n, ts: book.ts, isSealed: false, minimumFinalAfter: book.ts, registered: new Set(), questions: new Map([...book.questions].map(([id, state]) => [id, { ...state }])) }
 			const forkQuestion = model.forkQuestion.get(op.u)
 			if (forkQuestion === undefined) throw new Error('MODEL: sealed universe without fork question')
 			const fixed = child.questions.get(forkQuestion)
@@ -450,7 +452,7 @@ describe('audit fuzz: reporter ledger against an explicit per-question reference
 		const asAuthority = (data: Hex) => encodeFunctionData({ abi: authorityArtifact.abi, functionName: 'execute', args: [ledger, data] })
 		await aux(authority, asAuthority(encodeFunctionData({ abi: artifact.abi, functionName: 'registerUniverse', args: [0n] })))
 
-		let model: Model = { books: new Map([['', { live: 0n, final: 0n, ts: 0, isSealed: false, minimumFinalAfter: 0, questions: new Map(), registered: new Set() }]]), forkTime: new Map(), forkQuestion: new Map(), now: lastTime }
+		let model: Model = { books: new Map([['', { migrationPrepared: false, live: 0n, final: 0n, ts: 0, isSealed: false, minimumFinalAfter: 0, questions: new Map(), registered: new Set() }]]), forkTime: new Map(), forkQuestion: new Map(), now: lastTime }
 		const history: string[] = []
 		const universeIds = new Map<string, bigint>([['', 0n]])
 		const universeId = async (path: string): Promise<bigint> => {
@@ -509,14 +511,14 @@ describe('audit fuzz: reporter ledger against an explicit per-question reference
 					case 'xfork': {
 						const repToken = await token(op.u)
 						if (BigInt(repToken) !== 0n) await aux(repToken, encodeFunctionData({ abi: erc20, functionName: 'approve', args: [getZoltarAddress(), (1n << 255n) - 1n] }))
-						await transact(getZoltarAddress(), encodeFunctionData({ abi: zoltarArtifact.abi, functionName: 'forkUniverse', args: [id, questionId(op.q)] }), time)
+						await transact(getZoltarAddress(), encodeFunctionData({ abi: zoltarArtifact.abi, functionName: 'forkUniverse', args: [id, questionId(op.q), (1n << 256n) - 1n] }), time)
 						return undefined
 					}
 					case 'frz':
 						await transact(authority, asAuthority(encodeFunctionData({ abi: artifact.abi, functionName: 'freezeFork', args: [id] })), time)
 						return undefined
 					case 'child':
-						await transact(authority, asAuthority(encodeFunctionData({ abi: artifact.abi, functionName: 'createChild', args: [id, BigInt(op.outcome)] })), time)
+						await transact(authority, asAuthority(encodeFunctionData({ abi: artifact.abi, functionName: 'createChild', args: [id, BigInt(op.outcome), false] })), time)
 						return undefined
 					default:
 						throw new Error('Unknown operation')
@@ -560,8 +562,8 @@ describe('audit fuzz: reporter ledger against an explicit per-question reference
 			}
 			if (liveSum !== live) return `${where}: INVARIANT sum of live question balances ${liveSum} != live ${live}`
 			if (finalSum !== final) return `${where}: INVARIANT sum of final question balances ${finalSum} != final ${final}`
-			// Custody: an open universe holds live + final; a sealed one burned its live REP into migration.
-			const owed = isSealed ? final : live + final
+			// Sealing protects final claims; preparing migration separately consumes live REP.
+			const owed = expected.migrationPrepared ? final : live + final
 			if (custody !== owed) return `${where}: CUSTODY ledger holds ${custody} REP but owes ${owed} (live ${live}, final ${final}, sealed ${isSealed})`
 			return undefined
 		}

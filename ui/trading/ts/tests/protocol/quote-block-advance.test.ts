@@ -248,7 +248,7 @@ describe('submitting a quote after the chain advances', () => {
 		expect(await submitFreshLiquidity(client, configuration, account, quote, write)).toBe(transactionHash)
 		expect(chain.sends).toHaveLength(1)
 	})
-	test('does not offer an add-liquidity quote whose deposit caps cannot cover holding fees', async () => {
+	test.each(['add', 'initialize', 'create'] as const)('#1659 %s quotes cover holding fees through the signed deposit deadline', async operation => {
 		const { chain, client } = createAdvancingChain()
 		const feeMarket = {
 			...market,
@@ -265,8 +265,11 @@ describe('submitting a quote after the chain advances', () => {
 				},
 			},
 		}
-		chain.feeMarket = feeMarket
-		await expect(simulateLiquidity(client, configuration, feeMarket, account, 'add', 10n, 5_000n, { validityMinutes: 7n }, MINIMUM_SLIPPAGE_BPS)).rejects.toThrow('Holding fees')
+		let quoteMarket = feeMarket
+		if (operation === 'create') quoteMarket = { ...feeMarket, pair: undefined, lpTotalSupply: 0n }
+		else if (operation === 'initialize') quoteMarket = { ...feeMarket, lpTotalSupply: 0n }
+		chain.feeMarket = quoteMarket
+		await expect(simulateLiquidity(client, configuration, quoteMarket, account, operation === 'create' ? 'initialize' : operation, 10n, 5_000n, { validityMinutes: 7n }, MINIMUM_SLIPPAGE_BPS)).rejects.toThrow('Holding fees')
 		expect(chain.sends).toHaveLength(0)
 	})
 

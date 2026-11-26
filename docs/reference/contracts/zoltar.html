@@ -22,7 +22,7 @@
 				<h2 id="interactions">State-changing interactions</h2>
 				<p>The <a href="../contracts.html#table-columns">contract index</a> defines the columns.</p>
 				<!-- Validated read ABI fingerprint: af953dbf8c9829c81943e2873905308a3a57839625fa5f1ee8e7812f3438883d -->
-				<!-- Validated complete compiled ABI fingerprint: 9fce09c68c109d4ffabc5f85f0813ec2d92515318b265554fa40270759a1a006 -->
+				<!-- Validated complete compiled ABI fingerprint: 7a728c799e95d6d3eff2780e2074b1888a27cdea22cd49f4ec9bae56cfc2a653 -->
 				<table>
 					<thead>
 						<tr>
@@ -35,9 +35,9 @@
 					</thead>
 					<tbody>
 						<tr>
-							<td><code>forkUniverse(universeId, questionId)</code><wbr /></td>
+							<td><code>forkUniverse(universeId, questionId, maximumThresholdAttoRep)</code><wbr /></td>
 							<td>Any address able to fund the current fork threshold</td>
-							<td>Initialized and unforked universe; existing ended question; sufficient caller REP; a child must have reached its parent fork timestamp plus ten weeks. Genesis REP requires allowance; child REP is burned directly without allowance.</td>
+							<td>Initialized and unforked universe; existing ended question; sufficient caller REP; the live fork threshold must not exceed the caller’s maximum; a child must have reached its parent fork timestamp plus ten weeks. Genesis REP requires allowance; child REP is burned directly without allowance.</td>
 							<td>Records the fork, removes threshold REP from the parent universe, and credits the caller with the threshold minus the uncredited fork haircut.</td>
 							<td>The REP burn events (genesis REP <code>Transfer</code> to the burn address, or child REP <code>Transfer</code> and <code>Burn</code>), then <code>UniverseForked</code></td>
 						</tr>

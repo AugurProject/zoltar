@@ -4,7 +4,6 @@ import {
 	ORACLE_ESCALATION_HALT_MULTIPLIER_BPS,
 	ORACLE_FEE_PERCENTAGE,
 	ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS,
-	ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS,
 	ORACLE_MULTIPLIER,
 	ORACLE_PROTOCOL_FEE,
 	ORACLE_PROTOCOL_FEE_RECIPIENT,
@@ -14,19 +13,8 @@ import {
 import { createInfraContractAddressHelper } from './deploymentAddresses.js'
 
 // Constructor parameters shared by the price coordinator and its factory, after their gas parameters.
-const ORACLE_SETTLEMENT_PARAMETER_TYPES = [{ type: 'uint256' }, { type: 'uint48' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint16' }, { type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }] as const
-const ORACLE_SETTLEMENT_PARAMETERS = [
-	ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
-	ORACLE_SETTLEMENT_TIME,
-	ORACLE_DISPUTE_DELAY,
-	ORACLE_PROTOCOL_FEE,
-	ORACLE_FEE_PERCENTAGE,
-	ORACLE_MULTIPLIER,
-	ORACLE_PROTOCOL_FEE_RECIPIENT,
-	ORACLE_ESCALATION_HALT_MULTIPLIER_BPS,
-	ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS,
-	ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS,
-] as const
+const ORACLE_SETTLEMENT_PARAMETER_TYPES = [{ type: 'uint256' }, { type: 'uint48' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint16' }, { type: 'address' }, { type: 'uint256' }, { type: 'uint256' }] as const
+const ORACLE_SETTLEMENT_PARAMETERS = [ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, ORACLE_SETTLEMENT_TIME, ORACLE_DISPUTE_DELAY, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE, ORACLE_MULTIPLIER, ORACLE_PROTOCOL_FEE_RECIPIENT, ORACLE_ESCALATION_HALT_MULTIPLIER_BPS, ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS] as const
 
 /** ABI-encoded SharedPoolPriceFeedFactory constructor arguments. */
 function encodeSharedPoolPriceFeedFactoryArguments(weth: Address, feedWorker: Address): Hex {

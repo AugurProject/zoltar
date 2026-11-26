@@ -53,8 +53,30 @@ export function securityPoolAuctionOpeningReason(snapshot: SecurityPoolAuctionSn
 		targetLots = ceilDiv(auction.shortfallAttoEth, lot)
 		required = requiredForLot()
 	}
-	const requiredCollateral = ceilDiv(required, auction.repGrid) * auction.repGrid
-	if (requiredCollateral > auction.inventoryAttoRep) return 'The auction inventory cannot back one collateral lot at the minimum health target.'
+	let requiredCollateral = ceilDiv(required, auction.repGrid) * auction.repGrid
+	if (requiredCollateral > auction.inventoryAttoRep) {
+		let gridBudget = (auction.inventoryAttoRep / auction.repGrid) * auction.repGrid
+		requiredCollateral = 0n
+		while (gridBudget !== 0n) {
+			const affordableLot = (((gridBudget * BPS) / auction.securityMultiplierBps) * ATTO_UNITS) / price.conservativePrice
+			if (affordableLot < auction.minimumCommitmentAttoEth) break
+			targetLots = ceilDiv(auction.shortfallAttoEth, affordableLot)
+			const resized = ceilDiv(auction.shortfallAttoEth, targetLots)
+			lot = resized > auction.minimumCommitmentAttoEth ? resized : auction.minimumCommitmentAttoEth
+			targetLots = ceilDiv(auction.shortfallAttoEth, lot)
+			required = requiredForLot()
+			const rounded = ceilDiv(required, auction.repGrid) * auction.repGrid
+			if (targetLots === 1n || (rounded - required) * 100n < required) {
+				requiredCollateral = rounded
+				break
+			}
+			// Same bounded grid-band search as the contract: a failed band
+			// lies below 100 grids and smaller requirements only round worse.
+			gridBudget = (required / auction.repGrid) * auction.repGrid
+		}
+	}
+	if (price.exposureLimitAttoEth < auction.chosenCommitmentAttoEth + targetLots * lot) return 'The price report must cover the final auction collateral exposure.'
+	if (requiredCollateral === 0n || requiredCollateral > auction.inventoryAttoRep) return 'The auction inventory cannot back one collateral lot at the minimum health target.'
 	return undefined
 }
 export function buildSecurityPoolAuctionOpenRequest(snapshot: SecurityPoolAuctionSnapshot) {
@@ -76,11 +98,11 @@ export function quoteSecurityPoolAuctionBid(snapshot: SecurityPoolAuctionSnapsho
 	const requiredBase = ceilDiv(auction.lotAttoEth * auction.openingConservativePrice, ATTO_UNITS)
 	const requiredSecurity = ceilDiv(requiredBase * auction.securityMultiplierBps, BPS)
 	const requiredPrincipalPerLotAttoRep = uint(ceilDiv(ceilDiv(requiredSecurity * targetHealthFactorBps, BPS), auction.repGrid) * auction.repGrid, 'Required REP per lot')
+	const bidAttoEth = uint(lots * auction.lotAttoEth, 'Bid collateral', 128)
+	uint(auction.depositedAttoEth + bidAttoEth, 'Total auction bid escrow', 128)
 	if (auction.maximumAdmissibleBidAttoRepPerLot < auction.minimumCollateralAttoRepPerLot) throw new Error('Better funded bids leave no admissible new limit.')
 	if (minimumAttoRepPerLot < requiredPrincipalPerLotAttoRep) throw new Error(`Increase the minimum REP per lot to at least ${formatEther(requiredPrincipalPerLotAttoRep)} REP for the chosen health target.`)
 	if (minimumAttoRepPerLot > auction.maximumAdmissibleBidAttoRepPerLot) throw new Error(auction.maximumAdmissibleBidAttoRepPerLot === 0n ? 'Better funded bids leave no admissible new limit.' : `Better funded bids exclude this limit. Use at most ${formatEther(auction.maximumAdmissibleBidAttoRepPerLot)} REP per lot.`)
-	const bidAttoEth = uint(lots * auction.lotAttoEth, 'Bid collateral', 128)
-	uint(auction.depositedAttoEth + bidAttoEth, 'Total auction bid escrow', 128)
 	return {
 		...terms,
 		bidAttoEth,

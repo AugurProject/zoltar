@@ -88,7 +88,7 @@ describe('Statoblast: reject materializing a question that finalized before an u
 		}
 
 		await expect(trader.simulateContract({ ...shares(), functionName: 'migrate', args: [base.genesisUniverse * 256n + 1n, [1n]] })).rejects.toThrow('ShareToken question finalized before fork')
-		await writeContractAndWait(trader, () => trader.writeContract({ abi: poolArtifact.abi, address: sourcePool(), functionName: 'redeemShares' }))
+		await writeContractAndWait(trader, () => trader.writeContract({ abi: poolArtifact.abi, address: sourcePool(), functionName: 'redeemShares', args: [0n, 0n] }))
 		const rep = getRepTokenAddress(base.genesisUniverse)
 		const repBefore = await getERC20Balance(owner, rep, owner.account.address)
 		await writeContractAndWait(owner, () => owner.writeContract({ abi: poolArtifact.abi, address: sourcePool(), functionName: 'withdrawFromEscalationGame', args: [1, [0n]] }))

@@ -260,3 +260,17 @@ test('#1756 an operations bounty must also fit the oracle uint96 domain', async 
 	snapshot.observation.nextBlockBounty = ((1n << 96n) - 1n) / 2n
 	expect(() => quoteSecurityPoolPriceFunding(snapshot, unit, 2n * unit, 6000000n)).toThrow('uint96')
 })
+
+test('#1682 operation deadline includes the first eligible settlement second', async () => {
+	const { client } = fixture()
+	const snapshot = await load(client)
+	const batch = { gasLimit: 300_000n, minimumPrice: unit, maximumPrice: unit, deadline: snapshot.timestamp + 299n, operations: [{ gasLimit: 100_000n, data: supportedOperation }] }
+	expect(() => buildSecurityPoolPriceOperationsRequest(snapshot, unit, 2n * unit, batch)).toThrow('before settlement')
+	expect(() => buildSecurityPoolPriceOperationsRequest(snapshot, unit, 2n * unit, { ...batch, deadline: snapshot.timestamp + 300n })).not.toThrow()
+})
+
+test('#1624 funding rejects a positive price with an unpublishable liquidation bound', async () => {
+	const snapshot = await load(fixture().client)
+	expect(() => quoteSecurityPoolPriceFunding(snapshot, 1n)).toThrow('liquidation price')
+	expect(quoteSecurityPoolPriceFunding(snapshot, 2n).price).toBe(2n)
+})

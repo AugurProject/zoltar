@@ -114,7 +114,28 @@ contract SecurityPoolRepairAuction is ISecurityPoolRepairAuctionCapital {
 			required = capital.commitmentIndex().requiredRep(lotAttoEth, openingConservativePrice, capital.securityMultiplierBps(), 10_000);
 		}
 		minimumCollateralAttoRepPerLot = Math.ceilDiv(required, repGrid) * repGrid;
-		require(minimumCollateralAttoRepPerLot <= inventoryAttoRep, 'Collateral repair auction inventory cannot back one lot');
+		if (minimumCollateralAttoRepPerLot > inventoryAttoRep) {
+			uint256 gridBudget = (inventoryAttoRep / repGrid) * repGrid;
+			uint256 minimumLot = securityPool.minimumCommitmentAttoEth();
+			minimumCollateralAttoRepPerLot = 0;
+			while (gridBudget != 0) {
+				uint256 affordableLot = Math.mulDiv((gridBudget * 10_000) / capital.securityMultiplierBps(), 1e18, openingConservativePrice);
+				if (affordableLot < minimumLot) break;
+				(targetLots, lotAttoEth) = _coveringLots(shortfallAttoEth, Math.ceilDiv(shortfallAttoEth, affordableLot), minimumLot);
+				required = capital.commitmentIndex().requiredRep(lotAttoEth, openingConservativePrice, capital.securityMultiplierBps(), 10_000);
+				uint256 rounded = Math.ceilDiv(required, repGrid) * repGrid;
+				if (targetLots == 1 || (rounded - required) * 100 < required) {
+					minimumCollateralAttoRepPerLot = rounded;
+					break;
+				}
+				// Smaller requirements in this same REP-grid band only worsen
+				// rounding. Skip it entirely. A failing requirement is below
+				// 100 grids, so fewer than 100 strictly decreasing bands remain.
+				gridBudget = (required / repGrid) * repGrid;
+			}
+		}
+		require(minimumCollateralAttoRepPerLot != 0 && minimumCollateralAttoRepPerLot <= inventoryAttoRep, 'Collateral repair auction inventory cannot back one lot');
+		require(_fundedQuote(feed, block.timestamp, REQUIRE_FRESH_QUOTE), 'Collateral repair auction quote does not cover final lots');
 		engine.startRepairAuction(block.timestamp, closesAt, lotAttoEth, targetLots, inventoryAttoRep, repGrid, address(this));
 		opened = true;
 		emit RepairAuctionOpened(openingConservativePrice, minimumCollateralAttoRepPerLot, engine.maximumBidAttoRepPerLot());
