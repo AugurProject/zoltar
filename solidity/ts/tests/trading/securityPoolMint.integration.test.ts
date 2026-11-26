@@ -1,10 +1,11 @@
+import { loadMintPurchaseQuote } from '../../../../ui/trading/ts/protocol/mintPurchaseQuote.js'
 import { describe, expect, test } from 'bun:test'
 import { estimateMintCheckpoint } from '../../../../ui/statoblastShared/ts/features/markets/lib/trading.js'
 import { readRequiredMulticall } from '../../../../ui/zoltarShared/ts/protocol/core.js'
 import { ReputationToken_ReputationToken as erc20Artifact, statoblast_SecurityPoolSettlement_SecurityPoolSettlement as settlementArtifact } from '../../types/contractArtifact'
 import { loadCentralSecurityPoolQuestion } from '../../../../ui/statoblastShared/ts/protocol/securityPoolState.js'
 import { loadMintFees } from '../../../../ui/trading/ts/protocol/minting.js'
-import { securityPoolMintFee, securityPoolMintWithinBudget } from '@zoltar/trading-shared/trading/securityPoolMint'
+import { securityPoolMintFee, securityPoolMintForQuotedBudget, securityPoolMintWithinBudget } from '@zoltar/trading-shared/trading/securityPoolMint'
 import { encodeDeployData, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 import { deployContract } from '../../testSupport/deployContract'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
@@ -82,6 +83,22 @@ describe('Trading: security-pool-funded complete sets', () => {
 				expect(securityPoolMintWithinBudget(budget, state)).toBe(cash)
 			}
 		}
+	})
+
+	test('#1640 exact budgets use checkpointed fees with fractional book remainders', async () => {
+		await fixture.prepare()
+		await fixture.mint(1_000_000n)
+		await fixture.base.mockWindow.advanceTime(631n)
+		const owner = fixture.owner()
+		const pool = fixture.poolFor(fixture.base.questionId).questionLedger
+		const block = await owner.getBlockNumber()
+		const market = { pool, universeId: fixture.base.genesisUniverse, questionId: fixture.base.questionId }
+		const cash = 1_751_990_000n
+		const quote = await loadMintPurchaseQuote(owner, market, fixture.securityPool, cash, block)
+		const budget = cash + quote.fee
+		const result = await securityPoolMintForQuotedBudget(budget, cash, async amount => (await loadMintPurchaseQuote(owner, market, fixture.securityPool, amount, block)).fee)
+		expect(result).toEqual({ cash, fee: quote.fee })
+		expect(result.cash + result.fee).toBe(budget)
 	})
 
 	test('central reads simulate accrued fees at their pinned block without a prior checkpoint transaction', async () => {

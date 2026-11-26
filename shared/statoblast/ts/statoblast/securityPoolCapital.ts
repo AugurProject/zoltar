@@ -1,9 +1,11 @@
 import { encodeFunctionData, parseAbi, zeroAddress, type AbiValue, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { SecurityPoolEconomicsConfig } from './securityPool.js'
 import type { SecurityPoolReadClient } from './securityPoolRead.js'
+import { decodeAuctionVaultBindings } from './securityPoolRepairAuctionVaultClones.js'
 import { decodeAddress, decodeBool, decodeFields, decodeUint } from './securityPoolDecoding.js'
 
 const abi = parseAbi([
+	'function repairAuctionPosition(uint256 bidId) view returns ((address vault,uint96 positionId,uint256 principal,uint256 commitment,uint256 targetHealthFactorBps,uint48 liquidationStarted,bool materialized,uint256 earnedAttoEth,uint256 earnedAttoRep) result)',
 	'function originUniverseId() view returns (uint248)',
 	'function capitalLedger(uint248 universeId) view returns (address)',
 	'function availableMintCapacity(uint248 universeId) view returns (uint256)',
@@ -98,6 +100,7 @@ type SecurityPoolCapitalPosition = {
 	retirementPreview: SecurityPoolRetirementPreview | undefined
 }
 export type SecurityPoolCapitalSnapshot = {
+	auctionBidId?: bigint | undefined
 	chainId: number
 	blockNumber: bigint
 	blockHash: Hex
@@ -267,10 +270,22 @@ export function buildSecurityPoolCapitalCureRequest(parameters: CapitalRequest &
  * until then. One `eth_call` runs that checkpoint and the reads that depend on it without keeping any state change.
  */
 export async function loadSecurityPoolClaimableEarnings(
-	snapshot: Pick<SecurityPoolCapitalSnapshot, 'blockNumber' | 'capitalLedger' | 'commitmentIndex' | 'owner' | 'ownerAccount'>,
+	snapshot: Pick<SecurityPoolCapitalSnapshot, 'blockNumber' | 'capitalLedger' | 'commitmentIndex' | 'owner' | 'ownerAccount' | 'auctionBidId'>,
 	multicall: (contracts: readonly { address: Address; abi: typeof abi; functionName: string; args: readonly AbiValue[] }[], blockNumber: bigint) => Promise<readonly unknown[]>,
 ) {
 	const positionId = snapshot.ownerAccount.positionId
+	if (positionId === 0n && snapshot.auctionBidId !== undefined) {
+		const [, value] = await multicall(
+			[
+				{ address: snapshot.capitalLedger, abi, functionName: 'checkpoint', args: [] },
+				{ address: snapshot.capitalLedger, abi, functionName: 'repairAuctionPosition', args: [snapshot.auctionBidId] },
+			],
+			snapshot.blockNumber,
+		)
+		const [vault, , , , , , , eth, rep] = decodeFields(value, ['vault', 'positionId', 'principal', 'commitment', 'targetHealthFactorBps', 'liquidationStarted', 'materialized', 'earnedAttoEth', 'earnedAttoRep'], 'Invalid auction earnings response.')
+		if (decodeAddress(vault, 'Auction vault') !== snapshot.owner) throw new Error('Auction earnings owner mismatch.')
+		return { attoEth: decodeUint(eth, 'ETH earnings'), attoRep: decodeUint(rep, 'REP earnings') }
+	}
 	const [, ownerValue, positionValue] = await multicall(
 		[{ address: snapshot.capitalLedger, abi, functionName: 'checkpoint', args: [] }, { address: snapshot.capitalLedger, abi, functionName: 'ownerAccount', args: [snapshot.owner] }, ...(positionId === 0n ? [] : [{ address: snapshot.commitmentIndex, abi, functionName: 'accountOf', args: [positionId] }])],
 		snapshot.blockNumber,
@@ -362,6 +377,8 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 			}
 		}),
 	)
+	const bindings = account.positionId !== 0n || client.getCode === undefined ? undefined : decodeAuctionVaultBindings(await client.getCode({ address: owner, blockNumber }))
+	const auctionBidId = bindings?.capital === capitalLedger ? bindings.bidId : undefined
 	const forkTime = decodeUint(forkTimeValue, 'Fork time')
 	const forkChoiceDeadline = decodeUint(choiceDeadlineValue, 'Fork choice deadline')
 	const isExported = decodeBool(exported, 'Exported owner must be a boolean.')
@@ -369,6 +386,7 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 	const [finalChain, finalBlock] = await Promise.all([client.getChainId(), client.getBlock({ blockNumber })])
 	if (finalChain !== chainId || finalBlock.hash !== block.hash) throw new Error('Chain changed while reading capital. Refresh and try again.')
 	return {
+		auctionBidId,
 		chainId,
 		blockNumber,
 		blockHash: block.hash,

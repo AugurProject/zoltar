@@ -5,7 +5,7 @@ import { loadBudgetMint, requireTokenMintFunding } from '../../protocol/minting.
 import { feeAccountingRpcResult } from '../support/feeAccountingRpc.js'
 import { smallReserveMarketFixture } from '../support/liveMarketFixture.js'
 
-function mintClient(current: ReturnType<typeof smallReserveMarketFixture>, requiredRep = 0n, funding?: { balance: bigint; allowance: bigint; fee: bigint }) {
+function mintClient(current: ReturnType<typeof smallReserveMarketFixture>, requiredRep = 0n, funding?: { balance: bigint; allowance: bigint; fee: bigint; quoteError?: string }) {
 	return createPublicClient({
 		transport: custom({
 			async request({ method, params }) {
@@ -21,7 +21,7 @@ function mintClient(current: ReturnType<typeof smallReserveMarketFixture>, requi
 					if (call.data.startsWith(selector('allowance(address,address)'))) return encodeAbiParameters([{ type: 'uint256' }], [funding.allowance])
 				}
 				if (call.data.startsWith(keccak256(stringToHex('quoteMintRecoveryRep(uint248,uint256,uint256)')).slice(0, 10))) return encodeAbiParameters([{ type: 'uint256' }], [requiredRep])
-				const result = feeAccountingRpcResult(`0x${call.data.slice(2)}`, current, 1n)
+				const result = feeAccountingRpcResult(`0x${call.data.slice(2)}`, current, 1n, undefined, undefined, undefined, requiredRep, funding?.fee, funding?.quoteError)
 				if (result === undefined) throw new Error('Unexpected contract call')
 				return result
 			},
@@ -55,4 +55,18 @@ test('final token funding uses actual spend and rechecks fee, balance and allowa
 	funding.balance = 99n
 	funding.fee = 11n
 	await expect(validate()).rejects.toThrow('budget')
+})
+
+test('#1773 purchase precision rejection suppresses a mint quote while a valid control proceeds', async () => {
+	const market = smallReserveMarketFixture()
+	const funding = { balance: 100n, allowance: 100n, fee: 0n, quoteError: 'Fee precision annual loss exceeds limit' }
+	await expect(loadBudgetMint(mintClient(market, 0n, funding), market, 10n, 1n)).rejects.toThrow('Fee precision')
+	await expect(loadBudgetMint(mintClient(market), market, 10n, 1n)).resolves.toBeGreaterThan(0n)
+})
+
+test('#1640 budget sizing uses authoritative fees when rounded local inputs underestimate the charge', async () => {
+	const market = smallReserveMarketFixture()
+	const cash = await loadBudgetMint(mintClient(market, 0n, { balance: 100n, allowance: 100n, fee: 3n }), market, 10n, 1n)
+	expect(cash).toBe(7n)
+	expect(cash + 3n).toBe(10n)
 })

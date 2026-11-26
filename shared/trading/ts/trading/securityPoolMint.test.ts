@@ -21,3 +21,14 @@ test('zero supply starts at one share per collateral unit; existing fees use his
 	expect(securityPoolMintFee(900n, { ...state, minimumPurchaseFeeAttoEth: 0n, purchaseFeeBps: 0n })).toBe(15n)
 	expect(() => securityPoolMintWithinBudget(10n, { ...state, cashAttoEth: 0n })).toThrow('backing exhausted')
 })
+
+test('#1640 authoritative fee revalidation reduces a seed that underestimates fractional fees', async () => {
+	const { securityPoolMintForQuotedBudget } = await import('./securityPoolMint')
+	const seen: bigint[] = []
+	const result = await securityPoolMintForQuotedBudget(100n, 90n, async cash => {
+		seen.push(cash)
+		return 11n
+	})
+	expect(result).toEqual({ cash: 89n, fee: 11n })
+	expect(seen).toEqual([90n, 89n])
+})

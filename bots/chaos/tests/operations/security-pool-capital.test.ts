@@ -178,3 +178,19 @@ test('commitment increases reject the exact accepted-price expiry boundary', () 
 	capital.priceValidUntil = snapshot.anchor.timestamp
 	expect(operation.evaluate(snapshot, target).eligible).toBe(false)
 })
+
+test('#1680 retirement servicing requires an accepted price that is still fresh', () => {
+	const { snapshot, capital, options } = fixture()
+	const operation = capitalAction('serve-retirement')
+	capital.retirementReady = true
+	capital.priceValid = false
+	expect(operation.evaluate(snapshot, options).eligible).toBe(false)
+	expect(operation.buildPlan(snapshot, options)).toBeUndefined()
+	capital.priceValid = true
+	capital.priceValidUntil = snapshot.anchor.timestamp
+	expect(operation.evaluate(snapshot, options).eligible).toBe(false)
+	capital.priceValidUntil = (BigInt(snapshot.anchor.timestamp) + 1n).toString()
+	expect(operation.evaluate(snapshot, options).eligible).toBe(true)
+	const plan = operation.buildPlan(snapshot, options)
+	expect(plan?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ kind: 'event', signature: 'RetirementServed(uint256,uint256)' }))
+})

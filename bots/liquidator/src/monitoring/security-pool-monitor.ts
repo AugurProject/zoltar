@@ -1,4 +1,4 @@
-import { loadSponsoredOperationReport } from './security-pool-report.ts'
+import { loadSponsoredOperationReport, type SponsoredReportCursor } from './security-pool-report.ts'
 import { loadOwnedSecurityPoolVaults } from './security-pool-owned-vaults.ts'
 import { verifySecurityPoolCustody } from './security-pool-identity.ts'
 import { authenticateSecurityPoolAuction, loadSecurityPoolAuctionPosition, securityPoolAuctionPage, type SecurityPoolAuctionTarget, type SecurityPoolTarget } from './security-pool-auction.ts'
@@ -41,7 +41,7 @@ const securityPoolMonitorAbi = [
 	parseAbiItem('function previewRetirement(uint96 id,uint256 acceptedPrice,uint256 demand) view returns ((uint8 status,uint96 effectiveCurrentBatch,uint256 healthyCommitment,uint256 spareCommitment,uint256 queuedAheadCommitment,uint256 commitmentReduction,uint256 releasedRep) preview)'),
 ] as const
 
-export type SecurityPoolScope = SecurityPoolSelection & { managedVaults?: Address[]; nextPositionId: bigint; sweepEnd: bigint; auctionAfterBidId?: bigint; retirementObservations?: { id: bigint; commitment: bigint; batch: bigint; since: bigint }[] }
+export type SecurityPoolScope = SecurityPoolSelection & { sponsoredReports?: SponsoredReportCursor; managedVaults?: Address[]; nextPositionId: bigint; sweepEnd: bigint; auctionAfterBidId?: bigint; retirementObservations?: { id: bigint; commitment: bigint; batch: bigint; since: bigint }[] }
 export type SecurityPoolPosition = {
 	id: bigint
 	auctionTarget?: SecurityPoolAuctionTarget
@@ -242,7 +242,9 @@ export async function loadSecurityPoolObservation(client: ReadClient, settings: 
 	}
 	page.nextScope.retirementObservations = [...retirementObservations.values()].slice(-256)
 	if ((await client.getBlock({ blockNumber })).hash !== snapshot.blockHash) throw new Error('Security pool snapshot changed during discovery')
-	const pendingOperationReport = snapshot.priceFeed === zeroAddress ? undefined : await loadSponsoredOperationReport(client, snapshot)
+	const reportCursor = { ...(scope.sponsoredReports ?? { nextBlock: 0n, reportIds: [] }) }
+	const pendingOperationReport = snapshot.priceFeed === zeroAddress ? undefined : await loadSponsoredOperationReport(client, snapshot, reportCursor)
+	if (reportCursor.blockHash !== undefined) page.nextScope.sponsoredReports = reportCursor
 	return {
 		...(chosenChildUniverseId === undefined ? {} : { chosenChildUniverseId }),
 		pendingOperationReport,

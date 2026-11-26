@@ -1,9 +1,10 @@
+import { loadMintPurchaseQuote } from './mintPurchaseQuote.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentConfiguration } from './config.js'
 import { collateralAsset, tokenFunded } from './collateral.js'
 import { recoveryRepPurchase } from '../copy/marketBlockers.js'
-import { securityPoolMintFee, securityPoolMintWithinBudget, type SecurityPoolMintFees } from '@zoltar/trading-shared/trading/securityPoolMint'
+import { securityPoolMintFee, securityPoolMintForQuotedBudget, securityPoolMintWithinBudget, type SecurityPoolMintFees } from '@zoltar/trading-shared/trading/securityPoolMint'
 import { statoblast_SecurityPool_SecurityPool as securityPoolArtifact, statoblast_QuestionLedger_QuestionLedger as poolArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { loadCentralSecurityPoolQuestion } from '@zoltar/ui-statoblast-shared/protocol/securityPoolState.js'
 import type { PublicClient } from '@zoltar/core-shared/evm/ethereum'
@@ -29,11 +30,13 @@ function mintWithMargin(budget: bigint, state: SecurityPoolMintFees) {
 	return securityPoolMintWithinBudget(budget > margin ? budget - margin : 0n, state)
 }
 
-export function recoveryMintBlocker(market: Pick<LiveMarket, 'settlementRecoveryAttoRep'>) {
+export function recoveryMintBlocker(market: Pick<LiveMarket, 'settlementRecoveryAttoRep' | 'mintQuoteError'>) {
+	if (market.mintQuoteError !== undefined) return market.mintQuoteError
 	return (market.settlementRecoveryAttoRep ?? 0n) > 0n ? recoveryRepPurchase : undefined
 }
 
-export function estimateBudgetMint(market: Pick<LiveMarket, 'mintFees' | 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares' | 'settlementRecoveryAttoRep'>, budget: bigint) {
+export function estimateBudgetMint(market: Pick<LiveMarket, 'mintFees' | 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares' | 'settlementRecoveryAttoRep' | 'requiresMintQuote' | 'mintQuote' | 'mintQuoteError'>, budget: bigint) {
+	if (market.requiresMintQuote) return market.mintQuote?.budget === budget ? market.mintQuote.cash : undefined
 	if (market.mintFees === undefined || recoveryMintBlocker(market) !== undefined || (market.shareTokenSupplyAttoShares > 0n && market.settlementCollateralAttoEth === 0n)) return undefined
 	return mintWithMargin(budget, { ...market.mintFees, cashAttoEth: market.settlementCollateralAttoEth, outcomeSupplyAttoShares: market.shareTokenSupplyAttoShares })
 }
@@ -43,11 +46,14 @@ export async function loadBudgetMintState(client: PublicClient, market: LiveMark
 	const central = await loadCentralSecurityPoolQuestion(client, market.pool, capital, blockNumber)
 	if (central.settlementRecoveryAttoRep > 0n) throw new Error(recoveryRepPurchase)
 	const fees = await loadMintFees(client, central, blockNumber)
-	const cash = mintWithMargin(budget, { ...fees, cashAttoEth: central.settlementCollateralAttoEth, outcomeSupplyAttoShares: central.shareTokenSupplyAttoShares })
-	if (cash === 0n) throw new Error('ETH budget is too small to cover the security pool purchase fee')
-	const recovery = await client.readContract({ abi: securityPoolArtifact.abi, address: central.securityPoolAddress, functionName: 'quoteMintRecoveryRep', args: [market.universeId, market.questionId, cash], blockNumber })
-	if (recovery > 0n) throw new Error(recoveryRepPurchase)
-	return { cash, central }
+	const seed = mintWithMargin(budget, { ...fees, cashAttoEth: central.settlementCollateralAttoEth, outcomeSupplyAttoShares: central.shareTokenSupplyAttoShares })
+	if (seed === 0n) throw new Error('ETH budget is too small to cover the security pool purchase fee')
+	const { cash, fee } = await securityPoolMintForQuotedBudget(budget, seed, async amount => {
+		const quote = await loadMintPurchaseQuote(client, market, central.securityPoolAddress, amount, blockNumber)
+		if (quote.recovery > 0n) throw new Error(recoveryRepPurchase)
+		return quote.fee
+	})
+	return { cash, fee, central }
 }
 
 export async function loadBudgetMint(client: PublicClient, market: LiveMarket, budget: bigint, blockNumber: bigint) {
@@ -58,6 +64,7 @@ export async function loadBudgetMint(client: PublicClient, market: LiveMarket, b
 export function estimateBudgetSpend(market: LiveMarket, budget: bigint) {
 	const cash = estimateBudgetMint(market, budget)
 	if (cash === undefined || market.mintFees === undefined) return undefined
+	if (market.mintQuote?.budget === budget) return cash + market.mintQuote.fee
 	return cash + securityPoolMintFee(cash, { ...market.mintFees, cashAttoEth: market.settlementCollateralAttoEth, outcomeSupplyAttoShares: market.shareTokenSupplyAttoShares })
 }
 

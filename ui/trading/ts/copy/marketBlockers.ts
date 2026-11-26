@@ -13,3 +13,5 @@ export function resolvedOutcome(outcome: 'INVALID' | 'YES' | 'NO') {
 }
 
 export const recoveryRepPurchase = 'New complete sets require recovery REP. Purchase complete sets from this market’s security pool in Statoblast.'
+export const mintQuoteLoading = 'Checking mint quote…'
+export const mintQuoteUnavailable = 'Mint quote unavailable. Refresh and try again.'

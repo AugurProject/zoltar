@@ -154,7 +154,7 @@ const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT']
 			...pool,
 			deploymentDate: '1789387200',
 			questionDates: { startTime: '1789473600', endTime: '1792065600' },
-			metrics: { systemState: pool.systemState, securityPool: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sharedCommittedRep: pool.totalPoolHeldRep, sharedCommitmentEth: '650' },
+			metrics: { systemState: pool.systemState, securityPool: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sharedCommittedRep: pool.totalPoolHeldRep, collateralToken: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', sharedCommitmentRaw: '650000000000000000000' },
 		}))
 		const unmonitored = Array.from({ length: 10 }, (_, offset) => {
 			const index = offset + 3
@@ -164,7 +164,13 @@ const server = startDashboardServer(Number(process.env['DASHBOARD_FIXTURE_PORT']
 				questionId: (42 + index).toString(),
 				universeId: '101',
 				multiplierBps: '12500',
-				...(index === 3 ? {} : { deploymentDate: '1789387200', questionDates: { startTime: '1789473600', endTime: '1792065600' }, metrics: { systemState: '0', securityPool: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sharedCommittedRep: '125000.123456789', sharedCommitmentEth: '650' } }),
+				...(index === 3
+					? {}
+					: {
+							deploymentDate: '1789387200',
+							questionDates: { startTime: '1789473600', endTime: '1792065600' },
+							metrics: { systemState: '0', securityPool: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sharedCommittedRep: '125000.123456789', collateralToken: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', sharedCommitmentRaw: '650000000000000000000' },
+						}),
 			}
 		})
 		const pools = [...monitored, ...unmonitored]

@@ -90,3 +90,18 @@ describe('idempotent Statoblast keeper evidence', () => {
 		).toThrow('to be at least')
 	})
 })
+
+test('#1708 descendant checkpoints use pool time after a pause, even after calendar end', () => {
+	const snapshot = dueFeeSnapshot()
+	const pool = snapshot.pools[0]
+	const question = snapshot.questions[0]
+	if (pool === undefined || question === undefined) throw new Error('Missing pool')
+	const descendant = { ...pool, securityPoolTime: '500', lastSettlementSecurityPoolTime: '499' }
+	snapshot.pools = [descendant]
+	question.endTime = '100'
+	const plan = planFor(snapshot, 'statoblast.pool.checkpoint-fees')
+	expect(plan.steps[0]?.evidence).toContainEqual(expect.objectContaining({ expected: '500' }))
+	descendant.lastSettlementSecurityPoolTime = '500'
+	const definition = STATOBLAST_OPERATIONS.find(candidate => candidate.id === plan.definitionId)
+	expect(definition?.buildPlan(snapshot, options)).toBeUndefined()
+})

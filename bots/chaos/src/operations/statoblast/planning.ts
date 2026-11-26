@@ -67,13 +67,8 @@ export function feeCheckpointDue(snapshot: EcosystemSnapshot, pool: PoolSnapshot
 	return target !== undefined && amount(pool.lastSettlementSecurityPoolTime) < target
 }
 
-function feeCheckpointTarget(snapshot: EcosystemSnapshot, pool: PoolSnapshot) {
-	const universe = snapshot.universes.find(candidate => candidate.id === pool.universeId)
-	const question = snapshot.questions.find(candidate => candidate.id === pool.questionId)
-	if (universe === undefined || question === undefined) return undefined
-	const feeEnd = amount(universe.forkTime) === 0n ? amount(question.endTime) : amount(universe.forkTime)
-	const now = amount(snapshot.anchor.timestamp)
-	return now < feeEnd ? now : feeEnd
+function feeCheckpointTarget(_snapshot: EcosystemSnapshot, pool: PoolSnapshot) {
+	return pool.securityPoolTime === undefined ? undefined : amount(pool.securityPoolTime)
 }
 
 export function poolAccountingCurrentEvidence(snapshot: EcosystemSnapshot, pool: PoolSnapshot): OperationEvidence {

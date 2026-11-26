@@ -231,6 +231,7 @@ describe('Uniswap testnet deployment', () => {
 		let pendingCreation: Address | undefined
 		const rpc = async (method: string, params: readonly unknown[]) => {
 			rpcCalls.push({ method, params })
+			if (method === 'eth_getBalance') return '0x0'
 			if (method === 'eth_sendTransaction') {
 				const request = params[0]
 				if (typeof request !== 'object' || request === null || !('from' in request)) throw new Error('Unexpected creation request')
@@ -257,8 +258,8 @@ describe('Uniswap testnet deployment', () => {
 		const installed = await ensurePublishedContracts(client, rpc, SEPOLIA_CHAIN_ID, publishedContracts)
 		expect(installed).toEqual(['weth', 'uniswapV3Factory', 'uniswapV3Quoter', 'uniswapV4PoolManager', 'uniswapV4Quoter'])
 		expect(rpcCalls[0]?.method).toBe('anvil_nodeInfo')
-		expect(rpcCalls.slice(1, 6).map(call => call.method)).toEqual(['anvil_impersonateAccount', 'anvil_setBalance', 'anvil_setNonce', 'eth_sendTransaction', 'anvil_stopImpersonatingAccount'])
-		expect(rpcCalls[3]?.params).toEqual(['0x3344BBDCeb8f6fb52de759c127E4A44EFb40432A', '0x0'])
+		expect(rpcCalls.slice(1, 7).map(call => call.method)).toEqual(['anvil_impersonateAccount', 'eth_getBalance', 'anvil_setBalance', 'anvil_setNonce', 'eth_sendTransaction', 'anvil_stopImpersonatingAccount'])
+		expect(rpcCalls[4]?.params).toEqual(['0x3344BBDCeb8f6fb52de759c127E4A44EFb40432A', '0x0'])
 		expect(rpcCalls.filter(call => call.method === 'anvil_setNonce').map(call => call.params[1])).toEqual(['0x0', '0x1', '0xd', '0x5b'])
 		const creations = rpcCalls.filter(call => call.method === 'eth_sendTransaction').map(call => call.params[0])
 		expect(creations).toHaveLength(5)
@@ -270,13 +271,43 @@ describe('Uniswap testnet deployment', () => {
 		expect(rpcCalls[rpcCalls.length - 3]?.method).toBe('anvil_setBalance')
 	})
 
+	test.each([0n, 2_000_000_000_000_000_000n])('#1721 preserves creator funding through failed replay and retry (%s)', async initialBalance => {
+		const contracts = (await stubbedPublishedContracts()).slice(0, 1)
+		let balance: bigint = initialBalance
+		let stops = 0
+		const rpc = async (method: string, params: readonly unknown[]) => {
+			if (method === 'eth_getBalance') return `0x${balance.toString(16)}`
+			if (method === 'anvil_setBalance') balance = BigInt(String(params[1]))
+			if (method === 'anvil_stopImpersonatingAccount') stops++
+			if (method === 'eth_sendTransaction') throw new Error('Replay failed')
+			return undefined
+		}
+		const client = asWriteClient({ getCode: async () => '0x' })
+		for (let retry = 0; retry < 2; retry++) {
+			await expect(ensurePublishedContracts(client, rpc, SEPOLIA_CHAIN_ID, contracts)).rejects.toThrow('Replay failed')
+			expect(balance).toBe(initialBalance > 10n ** 18n ? initialBalance : 10n ** 18n)
+		}
+		expect(stops).toBe(2)
+	})
+
 	test('rejects a replayed creation that lands somewhere other than the published address', async () => {
 		const { publishedContracts } = await getUniswapDeployment(SEPOLIA_CHAIN_ID)
 		const client = asWriteClient({
 			getCode: async () => '0x',
 			waitForTransactionReceipt: async () => ({ ...successReceipt(), contractAddress: getAddress('0x00000000000000000000000000000000000000bb') }),
 		})
-		await expect(ensurePublishedContracts(client, async (method: string) => (method === 'eth_sendTransaction' ? `0x${'4'.repeat(64)}` : undefined), SEPOLIA_CHAIN_ID, publishedContracts)).rejects.toThrow('Wrapped Ether was created at 0x00000000000000000000000000000000000000bb instead of the published address')
+		await expect(
+			ensurePublishedContracts(
+				client,
+				async (method: string) => {
+					if (method === 'eth_getBalance') return '0x0'
+					if (method === 'eth_sendTransaction') return `0x${'4'.repeat(64)}`
+					return undefined
+				},
+				SEPOLIA_CHAIN_ID,
+				publishedContracts,
+			),
+		).rejects.toThrow('Wrapped Ether was created at 0x00000000000000000000000000000000000000bb instead of the published address')
 	})
 
 	test('waits for a concurrent canonical CREATE2 deployer transaction', async () => {

@@ -143,6 +143,7 @@ export type EscalationClaimReplay = {
 
 export type CoordinatorReportReplay = {
 	status: 'Requested' | 'Reported' | 'Rejected' | 'Recovered'
+	recovered?: boolean
 	price?: bigint
 	settlementTimestamp?: bigint
 	reason?: string
@@ -1128,7 +1129,8 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 		coordinator.pendingReportMaxSettlementBaseFeeAttoEthPerGas = requireBigInt(log.args, 'pendingReportMaxSettlementBaseFeeAttoEthPerGas')
 		coordinator.lastPrice = requireBigInt(log.args, 'lastPrice')
 		coordinator.lastSettlementTimestamp = requireBigInt(log.args, 'lastSettlementTimestamp')
-		coordinator.reports.set(reportId, { status: 'Recovered', settlementTimestamp })
+		const decision = coordinator.reports.get(reportId)
+		coordinator.reports.set(reportId, { ...(decision?.status === 'Reported' || decision?.status === 'Rejected' ? decision : { status: 'Recovered' as const, settlementTimestamp }), recovered: true })
 		return
 	}
 }

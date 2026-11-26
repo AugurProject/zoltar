@@ -306,6 +306,7 @@ export function securityPoolReadClient(client: ReadClient): SecurityPoolReadClie
 	return {
 		multicall: parameters => client.multicall({ ...parameters, multicallAddress: getMulticall3Address() }),
 		getChainId: () => client.getChainId(),
+		getCode: parameters => client.getCode(parameters),
 		readContract: parameters => client.readContract(parameters),
 		getBlock: async parameters => {
 			const block = await client.getBlock(parameters)

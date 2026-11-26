@@ -222,3 +222,24 @@ test('live collateral never becomes withdrawable merely because principal exists
 test('takeover builders encode the receiver minimum takeover reward', () => {
 	expect(decodeFunctionData({ abi, data: buildSecurityPoolCapitalTakeOverRequest({ owner, capitalLedger, positionId: 1n, commitment: 1n, minimumTakeoverReward: 1n, maximumOwnRep: 0n }).data }).args).toEqual([1n, 1n, 1n, 0n])
 })
+
+test('#1683 previews unmaterialized auction earnings after the same checkpoint', async () => {
+	const { loadSecurityPoolClaimableEarnings } = await import('./securityPoolCapital.js')
+	const snapshot = { blockNumber: 42n, capitalLedger, commitmentIndex: index, owner, ownerAccount: { freeAttoRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, targetHealthFactorBps: 10000n, positionId: 0n }, auctionBidId: 7n }
+	const result = await loadSecurityPoolClaimableEarnings(snapshot, async (calls, block) => {
+		expect(block).toBe(42n)
+		expect(calls.map(call => call.functionName)).toEqual(['checkpoint', 'repairAuctionPosition'])
+		return [undefined, [owner, 0n, 100n, 10n, 10000n, 0n, false, 11n, 13n]]
+	})
+	expect(result).toEqual({ attoEth: 11n, attoRep: 13n })
+})
+
+test('#1683 detects bound auction vault bids and rejects another owner’s preview', async () => {
+	const { auctionVaultRuntimeCode } = await import('./securityPoolRepairAuctionVaultClones.js')
+	const { loadSecurityPoolClaimableEarnings } = await import('./securityPoolCapital.js')
+	const f = fixture({ ownerAccount: { freeAttoRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, targetHealthFactorBps: 10000n, positionId: 0n } })
+	f.client.getCode = async () => auctionVaultRuntimeCode({ implementation: index, owner: securityPool, capital: capitalLedger, auction: repToken, bidId: 7n })
+	const snapshot = await loadSecurityPoolCapitalSnapshot({ client: f.client, securityPool, owner })
+	expect(snapshot.auctionBidId).toBe(7n)
+	await expect(loadSecurityPoolClaimableEarnings(snapshot, async () => [undefined, [securityPool, 0n, 100n, 10n, 10000n, 0n, false, 11n, 13n]])).rejects.toThrow('owner mismatch')
+})
