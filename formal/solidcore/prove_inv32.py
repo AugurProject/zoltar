@@ -8,8 +8,10 @@ import shutil
 import subprocess
 from tempfile import TemporaryDirectory
 
+from replay_inv39 import stage as stage_reputation
 
-def prove(models, solidcore, with_pair=False, with_thresholds=False, with_index=False, with_settlement=False, with_streams=False, with_mask=False, with_labels=False):
+
+def prove(models, solidcore, with_pair=False, with_thresholds=False, with_index=False, with_settlement=False, with_streams=False, with_mask=False, with_labels=False, with_reputation=False):
     with_streams = with_streams or with_mask or with_labels
     harness = 'TwoWayConstantProductMathHarness'
     model = models / 'contracts/trading/test' / (harness + '.sol') / (harness + '.lean')
@@ -56,6 +58,8 @@ def prove(models, solidcore, with_pair=False, with_thresholds=False, with_index=
             pair_model = models / 'contracts/trading' / (pair + '.sol') / (pair + '.lean')
             shutil.copyfile(pair_model, work / 'Inv37PairGenerated.lean')
             shutil.copyfile(here / 'pair/Inv37PairGuard.lean', work / 'Inv37PairGuard.lean')
+        if with_reputation:
+            stage_reputation(models, work)
         modules = {source.stem: source for source in work.glob('*.lean')}
         deps = TopologicalSorter()
         for name, source in modules.items():
@@ -72,6 +76,7 @@ def prove(models, solidcore, with_pair=False, with_thresholds=False, with_index=
         ).strip()
         env = {**os.environ, 'LEAN_PATH': str(work) + os.pathsep + lean_path}
         for name in deps.static_order():
+            print(name, flush=True)
             subprocess.run(
                 ['lean', '--root=' + str(work), '-s', '131072', '-o',
                  work / (name + '.olean'), modules[name]],
@@ -90,5 +95,6 @@ if __name__ == '__main__':
     cli.add_argument('--with-streams', action='store_true', help='also check the capital fee stream history proofs')
     cli.add_argument('--with-mask', action='store_true', help='also check the deployment status oracle mask')
     cli.add_argument('--with-labels', action='store_true', help='also prove the scalar answer labels from the public getter')
+    cli.add_argument('--with-reputation', action='store_true', help='also prove INV-39 child mint supply, public mint correspondence and constructor coverage with a recursive axiom audit')
     args = cli.parse_args()
-    prove(args.models.resolve(), args.solidcore.resolve(), args.with_pair, args.with_thresholds, args.with_index, args.with_settlement, args.with_streams, args.with_mask, args.with_labels)
+    prove(args.models.resolve(), args.solidcore.resolve(), args.with_pair, args.with_thresholds, args.with_index, args.with_settlement, args.with_streams, args.with_mask, args.with_labels, args.with_reputation)

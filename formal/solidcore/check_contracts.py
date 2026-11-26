@@ -198,6 +198,14 @@ def check(args, work):
                 'contracts/statoblast/SecurityPoolCommitmentIndex.sol', 'SecurityPoolCommitmentIndex',
             ):
                 ns = 'SolidCore.Solidity.Inv01Generated'
+            elif (path, name) == ('contracts/ReputationToken.sol', 'ReputationToken'):
+                ns = 'SolidCore.Solidity.Inv39Generated'
+            elif (path, name) == ('contracts/ZoltarQuestionData.sol', 'ZoltarQuestionData'):
+                ns = 'SolidCore.Solidity.Inv45Generated'
+            elif (path, name) == (
+                'contracts/statoblast/SecurityPoolCapitalFeeStreams.sol', 'SecurityPoolCapitalFeeStreams',
+            ):
+                ns = 'SolidCore.Solidity.Inv08Generated'
             try:
                 selected = project(ast, name)
                 root = next(
