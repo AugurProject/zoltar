@@ -7,7 +7,7 @@ import { bytesToHex, decodeFunctionResult, encodeFunctionData, getAddress, hexTo
 import { createSimulationProfile } from '../../ui/coreShared/ts/wallet/networkProfile.js'
 import { simulationBootstrapFailed } from '../../ui/coreShared/ts/copy/app.ts'
 import { getInfraContractAddresses } from '../../ui/statoblastShared/ts/protocol/deploymentHelpers.js'
-import { getDeploymentSteps } from '../../ui/statoblastShared/ts/protocol/deployment.js'
+import { getStatoblastUiDeploymentSteps } from '../../ui/statoblastShared/ts/protocol/deployment.js'
 import { statoblast_openOracle_OpenOracle_OpenOracle } from '../../ui/statoblastShared/ts/contractArtifact.js'
 import { shareTokenAbi } from '../../ui/trading/ts/protocol/authorization.js'
 import { tradingContracts } from '../../ui/trading/ts/generated/contractArtifact.js'
@@ -907,7 +907,7 @@ productionInteractionTest('deployment', '#/watchlist?simulate=1&genesis=yes&simS
 	const genesisRepTokenAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.genesisRepTokenAddress')
 	const wethAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.wethAddress')
 	if (typeof genesisRepTokenAddress !== 'string' || typeof wethAddress !== 'string') throw new Error('Simulation network profile was not available')
-	const steps = getDeploymentSteps(createSimulationProfile({ genesisOutcome: 'yes', genesisRepTokenAddress: getAddress(genesisRepTokenAddress), wethAddress: getAddress(wethAddress) }))
+	const steps = getStatoblastUiDeploymentSteps(createSimulationProfile({ genesisOutcome: 'yes', genesisRepTokenAddress: getAddress(genesisRepTokenAddress), wethAddress: getAddress(wethAddress) }))
 	await driver.waitForBodyText(`0 / ${steps.length}`)
 	await driver.clickButton('Deploy next contract')
 	await createWorkflowActions(driver).completeTransactionReview()
