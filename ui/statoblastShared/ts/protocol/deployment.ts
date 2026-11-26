@@ -247,9 +247,12 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 	]
 	return withExpectedDeploymentRuntimeCodeHashes(steps, profile).map(step => ({
 		...step,
-		verificationLabel: step.label,
 		...(expectedRuntimeCodeHashes?.[step.id] === undefined ? {} : { expectedRuntimeCodeHash: expectedRuntimeCodeHashes[step.id] }),
 	}))
+}
+
+export function getStatoblastUiDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkProfile()) {
+	return getDeploymentSteps(profile).map(step => ({ ...step, verificationLabel: step.label }))
 }
 
 /**
@@ -304,7 +307,7 @@ function getDeploymentStatusOracleAddress(profile = getRuntimeNetworkProfile()):
 
 export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient, 'readContract' | 'getCode'>): Promise<DeploymentStatusSnapshot> {
 	const profile = getRuntimeNetworkProfile()
-	const steps = getDeploymentSteps(profile)
+	const steps = getStatoblastUiDeploymentSteps(profile)
 	const oracleAddress = getDeploymentStatusOracleAddress(profile)
 	const oracleCode = await client.getCode({ address: oracleAddress })
 	if (profile.id === 'simulation') {

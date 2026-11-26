@@ -5,7 +5,7 @@ import { asWriteClient, createMockWriteClient } from '@zoltar/ui-core-shared/tes
 import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getGenesisNetworkProfile, MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, createSimulationProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes, getDeploymentSteps, getDeploymentStepConstructorArguments, loadDeploymentStatusOracleSnapshot } from '@zoltar/ui-statoblast-shared/protocol/deployment.js'
+import { assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes, getDeploymentSteps, getStatoblastUiDeploymentSteps, getDeploymentStepConstructorArguments, loadDeploymentStatusOracleSnapshot } from '@zoltar/ui-statoblast-shared/protocol/deployment.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { assertDeploymentStepRuntimeCode } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
@@ -67,8 +67,8 @@ describe('statoblast deployment steps', () => {
 	})
 
 	test('the missing expected hash message keeps the underlying ID private in Statoblast', () => {
-		const universeStep = getDeploymentSteps(MAINNET_NETWORK_PROFILE).find(step => step.id === 'zoltar')
-		if (universeStep?.verificationLabel === undefined) throw new Error('Expected the universe deployment step and display label')
+		const universeStep = getStatoblastUiDeploymentSteps(MAINNET_NETWORK_PROFILE).find(step => step.id === 'zoltar')
+		if (universeStep === undefined) throw new Error('Expected the universe deployment step')
 		const stepWithoutHash = { id: universeStep.id, address: universeStep.address }
 		const stepWithDisplayLabel = { ...stepWithoutHash, verificationLabel: universeStep.verificationLabel }
 		expect(() => assertDeploymentStepRuntimeCode(stepWithDisplayLabel, '0x6000')).toThrow('Could not verify the contract code for deployment step Universe contract on the active network')
