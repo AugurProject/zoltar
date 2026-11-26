@@ -1,4 +1,4 @@
-"""Rebuild the INV-32 through INV-35 trading quote theorems from a checked source model produced by check_contracts.py."""
+"""Rebuild the INV-32 through INV-36 trading quote theorems from a checked source model produced by check_contracts.py."""
 
 import argparse
 from graphlib import TopologicalSorter
@@ -17,7 +17,7 @@ def prove(models, solidcore):
         work = Path(directory)
         shutil.copyfile(model, work / 'Inv32Generated.lean')
         # Require each public proof even if its entry module is accidentally removed.
-        for number in (32, 33, 34, 35):
+        for number in (32, 33, 34, 35, 36):
             name = f'Inv{number}Proved.lean'
             proof_sources = here / f'inv{number}'
             if not (proof_sources / name).is_file():
