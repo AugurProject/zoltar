@@ -604,6 +604,22 @@ describe('factory, pair, and router integration', () => {
 		expect(pairBalancesAfter[2] + noOut).toBe(pairBalancesBefore[2])
 	})
 
+	test('initialization credits both LP mints when the recipient is the lock address', async () => {
+		const lock = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'MINIMUM_LIQUIDITY_LOCK' })
+		const scale = 1_001n
+		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
+		for (const outcome of [1n, 2n]) {
+			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, (universe << 8n) | outcome, scale] }))
+		}
+		const lockedBalance = () => client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [lock] })
+		expect(await lockedBalance()).toBe(0n)
+		const request = { abi: pairArtifact.abi, address: pair, functionName: 'initialize', args: [scale, scale, 1n, lock, NO_DEADLINE] } as const
+		expect((await client.simulateContract(request)).result).toBe(1n)
+		await writeContractAndWait(client, () => client.writeContract(request))
+		expect(await lockedBalance()).toBe(scale)
+		expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'totalSupply' })).toBe(scale)
+	})
+
 	test('lets a dust LP position exit when only one side of its share rounds to zero', async () => {
 		const yesId = (universe << 8n) | 1n
 		const noId = (universe << 8n) | 2n
