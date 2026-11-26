@@ -7,8 +7,8 @@ abbrev h0 := "_sol_hoist_0"
 abbrev h1 := "_sol_hoist_1"
 abbrev h2 := "_sol_hoist_2"
 abbrev h3 := "_sol_hoist_3"
-def base (r : Runtime) (x y d : Nat) :=
-  (r.withFrame [("x",.word x),("y",.word y),("denominator",.word d),("rounding",.word 1),("_ret0",.word 0)]).pushScope.pushScope
+def base (r : Runtime) (x y d : Nat) (up : Bool := true) :=
+  (r.withFrame [("x",.word x),("y",.word y),("denominator",.word d),("rounding",.word (boolWord up)),("_ret0",.word 0)]).pushScope.pushScope
 def first := Inv32OneArg.code h0 rUp Inv32Bodies.RoundsUp.key .uint256 .bool (.var "rounding")
 def condR := Inv32WideGuards.gtF (clean Inv32Borrow.productMod) (literal 0)
 def test : Expr := .binary .boolAnd (.var h0) condR.core
@@ -17,16 +17,24 @@ def hasRemainder (x y d : Nat) := decide (0 < x*y%d)
 def ss := match Inv32Bodies.Ceil.body with | .block [_,_,_,_,_,.block stmts] => stmts | _ => []
 theorem begins : ss.take 4 = [.varDecl .bool h0 none,first,.varDecl .uint256 h1 none,second] := by rfl
 
-theorem firstStep (n : Nat) (c : Context) (r : Runtime) (x y d : Nat) :
-    let root := base r x y d
-    Stmt.eval (n+6) Inv32Dispatch.model.core.table c (Inv32OneArg.store root h0 0) first =
-      pure (.normal (Inv32OneArg.store root h0 1)) := by
-  let rt := base r x y d
-  apply Inv32OneArg.execute (n+3) _ _ rt _ _ _ _ _ _ 1 1 (by decide) (by decide) (by decide)
+theorem firstStepAt (t : FunctionTable) (linked : Inv32Library.LinkAt t Inv32Bodies.RoundsUp.key
+    [.word "rounding"] [.flag "_ret0"] Inv32Bodies.RoundsUp.body)
+    (n : Nat) (c : Context) (r : Runtime) (x y d : Nat) (up : Bool) :
+    let root := base r x y d up
+    Stmt.eval (n+6) t c (Inv32OneArg.store root h0 0) first =
+      pure (.normal (Inv32OneArg.store root h0 (boolWord up))) := by
+  let rt := base r x y d up
+  apply Inv32OneArg.execute (n+3) _ _ rt _ _ _ _ _ _ (boolWord up) (boolWord up)
+    (by decide) (by decide) (by decide)
   · rw [Ty.coerceValue?]
   · rw [Ty.defaultValue]
   · exact Inv32Guards.readWord _ _ _ _ _ rfl
-  · exact Inv32FlagCalls.roundsUp n c _ _ _ (1 : Fin 4) rfl
+  · cases up
+    · exact Inv32FlagCalls.roundsUpAt t linked n c _ _ _ (0 : Fin 4) rfl
+    · exact Inv32FlagCalls.roundsUpAt t linked n c _ _ _ (1 : Fin 4) rfl
+
+abbrev firstStep (n : Nat) (c : Context) (r : Runtime) (x y d : Nat) :=
+  firstStepAt Inv32Dispatch.model.core.table Inv32Library.linkRoundsUp n c r x y d true
 
 private theorem modRun (ctx : Bool) (env : Env) (x y d : Nat) (hx : x<R) (hy : y<R) (hd : d<R)
     (hp : 0<d) (X : env "x" = some x) (Y : env "y" = some y) (D : env "denominator" = some d) :
@@ -53,15 +61,31 @@ theorem testValue (c : Context) (r : Runtime) (x y d : Nat) (hx : x<R) (hy : y<R
              pure (Value.word (boolWord (wordTruthy w)),s)) = _
   rw [right]; cases hasRemainder x y d <;> rfl
 
-theorem secondStep (n : Nat) (c : Context) (r : Runtime) (x y d : Nat) (hx : x<R) (hy : y<R) (hd : d<R) (hp : 0<d) :
-    let root := Inv32OneArg.store (base r x y d) h0 1
-    Stmt.eval (n+9) Inv32Dispatch.model.core.table c (Inv32OneArg.store root h1 0) second =
-      pure (.normal (Inv32OneArg.store root h1 (boolWord (hasRemainder x y d)))) := by
-  let rt := Inv32OneArg.store (base r x y d) h0 1
-  let bit := hasRemainder x y d
-  apply Inv32OneArg.execute (n+6) _ _ rt _ _ _ _ _ _ (boolWord bit) (boolWord bit) (by decide) (by decide) (by decide)
+theorem secondStepAt (t : FunctionTable) (linked : Inv32Library.LinkAt t Inv32Bodies.ToUint.key
+    [.flag "b"] [.word "u"] Inv32Bodies.ToUint.body)
+    (n : Nat) (c : Context) (r : Runtime) (x y d : Nat) (up : Bool)
+    (hx : x<R) (hy : y<R) (hd : d<R) (hp : 0<d) :
+    let root := Inv32OneArg.store (base r x y d up) h0 (boolWord up)
+    Stmt.eval (n+9) t c (Inv32OneArg.store root h1 0) second =
+      pure (.normal (Inv32OneArg.store root h1 (boolWord (up && hasRemainder x y d)))) := by
+  let rt := Inv32OneArg.store (base r x y d up) h0 (boolWord up)
+  let bit := up && hasRemainder x y d
+  apply Inv32OneArg.execute (n+6) _ _ rt _ _ _ _ _ _ (boolWord bit) (boolWord bit)
+    (by decide) (by decide) (by decide)
   · exact Inv32Hoist.boolCoerce _
   · rw [Ty.defaultValue]
-  · exact testValue _ _ _ _ _ hx hy hd hp rfl rfl rfl rfl
-  · exact Inv32FlagCalls.toUint n c _ _ _ bit rfl
+  · cases up with
+    | true => exact testValue _ _ _ _ _ hx hy hd hp rfl rfl rfl rfl
+    | false =>
+      let st := (Inv32OneArg.store rt h1 0).pushScope
+      have zero : Expr.evalFuel test.orderFuel c st (.var h0) = pure (.word 0,st) :=
+        Inv32Guards.readWord _ _ _ _ _ rfl
+      unfold test at zero
+      unfold Expr.eval test
+      rw [Expr.evalFuel,zero]
+      rfl
+  · exact Inv32FlagCalls.toUintAt t linked n c _ _ _ bit rfl
+
+abbrev secondStep (n : Nat) (c : Context) (r : Runtime) (x y d : Nat) :=
+  secondStepAt Inv32Dispatch.model.core.table Inv32Library.linkToUint n c r x y d true
 end Inv32CeilFlags

@@ -8,11 +8,13 @@ theorem arg (c : Context) (r : Runtime) (name : String) (v : Nat)
   change Expr.evalRefArgListFuel (_+1+1) c r [.var name] = _
   simp only [Expr.evalRefArgListFuel,Inv32ProductCall.wordArg _ _ _ _ read,pb]
 
-theorem toUint (n : Nat) (c : Context) (r : Runtime) (name : String) (targets : List String) (b : Bool)
+theorem toUintAt (t : FunctionTable)
+    (linked : LinkAt t Inv32Bodies.ToUint.key [.flag "b"] [.word "u"] Inv32Bodies.ToUint.body)
+    (n : Nat) (c : Context) (r : Runtime) (name : String) (targets : List String) (b : Bool)
     (read : r.lookupLocal? name = some (.word (boolWord b))) :
-    Stmt.eval (n+7) Inv32Dispatch.model.core.table c r (.internalCall targets Inv32Bodies.ToUint.key [.var name]) =
+    Stmt.eval (n+7) t c r (.internalCall targets Inv32Bodies.ToUint.key [.var name]) =
     internalCallAssign r targets [.word (boolWord b)] := by
-  obtain ⟨f,found,ps,rs,bd⟩ := linkToUint
+  obtain ⟨f,found,ps,rs,bd⟩ := linked
   let empty := {r with locals := []}
   let source := empty.withFrame (Inv32BoolHelper.frame b 0)
   let dest := empty.withFrame (Inv32BoolHelper.frame b (boolWord b))
@@ -21,7 +23,7 @@ theorem toUint (n : Nat) (c : Context) (r : Runtime) (name : String) (targets : 
     rw [ps,rs]; cases b <;> simp [decl,BindingDecl.bindArgsRef?,BindingDecl.bindArgRef?,BindingDecl.bindArg?,
       BindingDecl.defaultBinding,Ty.coerceValue?,Ty.defaultValue,source,empty,Runtime.withFrame,Inv32BoolHelper.frame,boolWord]
     all_goals rfl
-  have ev : Stmt.eval (n+6) Inv32Dispatch.model.core.table {c with checked := true} source f.body = pure (.normal dest) := by
+  have ev : Stmt.eval (n+6) t {c with checked := true} source f.body = pure (.normal dest) := by
     rw [bd]; exact Inv32BoolHelper.execute _ _ _ _ _
   rw [call _ _ _ _ _ _ _ _ _ _ _ _ _ (arg _ _ _ _ read) found enter ev]
   simp only [internalCallFinish,rs]
@@ -29,17 +31,21 @@ theorem toUint (n : Nat) (c : Context) (r : Runtime) (name : String) (targets : 
     Runtime.withFrame,Runtime.lookupLocal?,LocalEnv.lookup?,Frame.lookup?,Runtime.derefMemoryValueDeep,
     Runtime.derefMemoryValueWithFuel,Ty.coerceValue?,Bind.bind,Except.bind]
 
-theorem roundsUp (n : Nat) (c : Context) (r : Runtime) (name : String) (targets : List String) (i : Fin 4)
+abbrev toUint := toUintAt Inv32Dispatch.model.core.table linkToUint
+
+theorem roundsUpAt (t : FunctionTable)
+    (linked : LinkAt t Inv32Bodies.RoundsUp.key [.word "rounding"] [.flag "_ret0"] Inv32Bodies.RoundsUp.body)
+    (n : Nat) (c : Context) (r : Runtime) (name : String) (targets : List String) (i : Fin 4)
     (read : r.lookupLocal? name = some (.word i.val)) :
-    Stmt.eval (n+4) Inv32Dispatch.model.core.table c r (.internalCall targets Inv32Bodies.RoundsUp.key [.var name]) =
+    Stmt.eval (n+4) t c r (.internalCall targets Inv32Bodies.RoundsUp.key [.var name]) =
     internalCallAssign r targets [.word (i.val%2)] := by
-  obtain ⟨f,found,ps,rs,bd⟩ := linkRoundsUp
+  obtain ⟨f,found,ps,rs,bd⟩ := linked
   let src := {r with locals := [[("rounding",Value.word i.val),("_ret0",.word 0)]]}
   have enter : internalCallEnter? f [.word i.val] r = some (src,r.locals) := by
     unfold internalCallEnter? InternalFunction.initialFrame? InternalFunction.returnDefaultBindings
     rw [ps,rs]; simp [decl,BindingDecl.bindArgsRef?,BindingDecl.bindArgRef?,BindingDecl.bindArg?,
       BindingDecl.defaultBinding,Ty.coerceValue?,Ty.defaultValue,src]
-  have ev : Stmt.eval (n+3) Inv32Dispatch.model.core.table {c with checked := true} src f.body =
+  have ev : Stmt.eval (n+3) t {c with checked := true} src f.body =
       pure (.returned src [.word (i.val%2)]) := by
     rw [bd]; exact Inv32RoundingHelper.execute _ _ _ _ _ rfl
   rw [call _ _ _ _ _ _ _ _ _ _ _ _ _ (arg _ _ _ _ read) found enter ev]
@@ -48,4 +54,6 @@ theorem roundsUp (n : Nat) (c : Context) (r : Runtime) (name : String) (targets 
     exact v i
   simp [internalCallFinish,rs,coerceReturnBindingsRef,coerceReturnBindingsRef.coerce,decl,src,
     Runtime.derefMemoryValueDeep,Runtime.derefMemoryValueWithFuel,Ty.coerceValue?,valid,Bind.bind,Except.bind]
+abbrev roundsUp := roundsUpAt Inv32Dispatch.model.core.table linkRoundsUp
+
 end Inv32FlagCalls

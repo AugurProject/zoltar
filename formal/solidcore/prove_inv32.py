@@ -9,7 +9,7 @@ import subprocess
 from tempfile import TemporaryDirectory
 
 
-def prove(models, solidcore, with_pair=False, with_thresholds=False, with_index=False):
+def prove(models, solidcore, with_pair=False, with_thresholds=False, with_index=False, with_settlement=False):
     harness = 'TwoWayConstantProductMathHarness'
     model = models / 'contracts/trading/test' / (harness + '.sol') / (harness + '.lean')
     here = Path(__file__).parent
@@ -27,6 +27,10 @@ def prove(models, solidcore, with_pair=False, with_thresholds=False, with_index=
             index = models / 'contracts/statoblast/SecurityPoolCommitmentIndex.sol/SecurityPoolCommitmentIndex.lean'
             shutil.copyfile(index, work / 'Inv01Generated.lean')
             entries.extend([('01', 'Inv01PriceBoundary.lean'), ('02', 'Inv02Proved.lean')])
+        if with_settlement:
+            settlement = models / 'contracts/test/statoblast/InvariantMathHarness.sol/InvariantMathHarness.lean'
+            shutil.copyfile(settlement, work / 'Inv27Generated.lean')
+            entries.extend([('03', 'Inv03Proved.lean'), ('04', 'Inv04RequiredCash.lean'), (27, 'Inv27Counterexample.lean')])
         for number, name in entries:
             proof_sources = here / f'inv{number}'
             if not (proof_sources / name).is_file():
@@ -68,5 +72,6 @@ if __name__ == '__main__':
     cli.add_argument('--with-pair', action='store_true', help='also check the generated pair reserve guard')
     cli.add_argument('--with-thresholds', action='store_true', help='also check the generated Zoltar threshold getters')
     cli.add_argument('--with-index', action='store_true', help='also check the commitment-index price proofs')
+    cli.add_argument('--with-settlement', action='store_true', help='also check the settlement and oracle math harness')
     args = cli.parse_args()
-    prove(args.models.resolve(), args.solidcore.resolve(), args.with_pair, args.with_thresholds, args.with_index)
+    prove(args.models.resolve(), args.solidcore.resolve(), args.with_pair, args.with_thresholds, args.with_index, args.with_settlement)

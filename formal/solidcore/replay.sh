@@ -67,12 +67,5 @@ fi
   models=$(mktemp -d "$work/models-XXXXXX")
   echo "Writing checked Lean source modules to $models/contracts"
   python3 "$here/check_contracts.py" --models "$models/contracts" --solidcore "$sc" --solc "$solc35" --oracle-solc "$solc28" --forge "$forge" --jobs "${SOLIDCORE_JOBS:-3}" --report "$work/contracts.tsv"
-  # Compile both settlement and oracle checks against the same generated math harness.
-  witness=$(mktemp -d "$work/inv27-XXXXXX")
-  cp "$models/contracts/contracts/test/statoblast/InvariantMathHarness.sol/InvariantMathHarness.lean" "$witness/Inv27Generated.lean"
-  lake env lean --root="$witness" -o "$witness/Inv27Generated.olean" "$witness/Inv27Generated.lean"
-  for proof in inv04/Inv04RequiredCash.lean inv27/Inv27Counterexample.lean; do
-    LEAN_PATH="$witness:$(lake env printenv LEAN_PATH)" lean "$here/$proof"
-  done
-  python3 "$here/prove_inv32.py" "$models/contracts" "$sc" --with-pair --with-thresholds --with-index
+  python3 "$here/prove_inv32.py" "$models/contracts" "$sc" --with-pair --with-thresholds --with-index --with-settlement
 )

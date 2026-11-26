@@ -29,19 +29,19 @@ theorem sound (ds : List BindingDecl) (xs : List Scalar) (h : decode ds = some x
       all_goals
         cases rest : decode ds <;> simp [rest] at h
         subst xs; rw [ih _ rest]; rfl
-def metadata (key : String) := (Inv32Dispatch.model.core.table.lookup? key).bind fun f => do
+def metadataAt (t : FunctionTable) (key : String) := (t.lookup? key).bind fun f => do
   let ps ← decode f.params
   let rs ← decode f.returns
   pure (ps,rs)
-def Link (key : String) (ps rs : List Scalar) (body : Stmt) :=
-  ∃ f, Inv32Dispatch.model.core.table.lookup? key = some f ∧ f.params = ps.map decl ∧
+def LinkAt (t : FunctionTable) (key : String) (ps rs : List Scalar) (body : Stmt) :=
+  ∃ f, t.lookup? key = some f ∧ f.params = ps.map decl ∧
     f.returns = rs.map decl ∧ f.body = body
-theorem link (key : String) (ps rs : List Scalar) (body : Stmt)
-    (sig : metadata key = some (ps,rs))
-    (b : ((Inv32Dispatch.model.core.table.lookup? key).map InternalFunction.body) = some body) :
-    Link key ps rs body := by
-  unfold metadata at sig
-  cases h : Inv32Dispatch.model.core.table.lookup? key with
+theorem linkAt (t : FunctionTable) (key : String) (ps rs : List Scalar) (body : Stmt)
+    (sig : metadataAt t key = some (ps,rs))
+    (b : ((t.lookup? key).map InternalFunction.body) = some body) :
+    LinkAt t key ps rs body := by
+  unfold metadataAt at sig
+  cases h : t.lookup? key with
   | none => simp [h] at b
   | some f =>
     simp only [h,Option.bind_some] at sig
@@ -49,6 +49,9 @@ theorem link (key : String) (ps rs : List Scalar) (body : Stmt)
     cases hr : decode f.returns <;> simp [hr] at sig
     obtain ⟨rfl,rfl⟩ := sig
     exact ⟨f,h,sound _ _ hp,sound _ _ hr,by simpa [h] using b⟩
+
+abbrev Link := LinkAt Inv32Dispatch.model.core.table
+abbrev link := linkAt Inv32Dispatch.model.core.table
 open Inv32Bodies.ToUint in
 theorem linkToUint : Link key [.flag "b"] [.word "u"] body :=
   link _ _ _ _ (by native_decide) checkedBody
