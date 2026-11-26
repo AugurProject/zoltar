@@ -6249,7 +6249,7 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0xc8ce4df8c14f45f0ba72f08e5f9f8d3dd363f59b922f2aaddc82d83d61f65278',
 		runtimeCodeLength: 15219,
 		immutableReferences: {
-			'59250': [
+			'59251': [
 				{ length: 32, start: 478 },
 				{ length: 32, start: 556 },
 				{ length: 32, start: 1272 },
@@ -6260,7 +6260,7 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 3653 },
 				{ length: 32, start: 3860 },
 			],
-			'59377': [
+			'59378': [
 				{ length: 32, start: 3344 },
 				{ length: 32, start: 4105 },
 				{ length: 32, start: 9651 },
