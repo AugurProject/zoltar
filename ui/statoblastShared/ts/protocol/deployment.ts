@@ -1,3 +1,4 @@
+import { deploymentErrors } from '../copy/protocolErrors.js'
 import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { getRuntimeNetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { bytesToHex, encodeDeployData, getCreateAddress, hexToBytes, keccak256, toHex, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
@@ -58,14 +59,14 @@ const EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Pa
 
 function runtimeWithAddresses(artifact: { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } }, addresses: readonly Address[]) {
 	const groups = Object.values(artifact.evm.deployedBytecode.immutableReferences)
-	if (groups.length !== addresses.length) throw new Error(`Unexpected deployment immutable layout: ${groups.length.toString()} immutables, ${addresses.length.toString()} addresses, runtime ${artifact.evm.deployedBytecode.object.length.toString()} characters`)
+	if (groups.length !== addresses.length) throw new Error(deploymentErrors.contractCodeInvalid)
 	const code = hexToBytes(`0x${artifact.evm.deployedBytecode.object}`)
 	for (const [index, group] of groups.entries()) {
 		const address = addresses[index]
-		if (address === undefined) throw new Error('Missing deployment immutable')
+		if (address === undefined) throw new Error(deploymentErrors.contractAddressMissing)
 		const padded = hexToBytes(toHex(hexToBytes(address), { size: 32 }))
 		for (const reference of group) {
-			if (reference.length !== 32 || code.slice(reference.start, reference.start + reference.length).some(byte => byte !== 0)) throw new Error('Unexpected deployment immutable bytes')
+			if (reference.length !== 32 || code.slice(reference.start, reference.start + reference.length).some(byte => byte !== 0)) throw new Error(deploymentErrors.contractCodeInvalid)
 			code.set(padded, reference.start)
 		}
 	}
@@ -78,7 +79,7 @@ function moduleRuntimeCode(module: (typeof securityPoolModuleDeployments)[number
 	if (module.id === 'securityPoolForkCoordinatorDeployer') return runtimeWithAddresses(module.artifact, [getCreateAddress({ from: addresses[module.id], nonce: 1n }), getCreateAddress({ from: addresses[module.id], nonce: 2n })])
 	if (module.id === 'securityPoolCapitalLedgerDeployer') {
 		const chunkDeployer = securityPoolModuleDeployments.find(candidate => candidate.id === 'securityPoolForkCoordinatorDeployer')
-		if (chunkDeployer === undefined) throw new Error('Missing creation-code chunk deployer layout')
+		if (chunkDeployer === undefined) throw new Error(deploymentErrors.libraryLayoutMissing)
 		const chunkIds = Object.keys(chunkDeployer.artifact.evm.deployedBytecode.immutableReferences)
 		return runtimeWithAddresses(
 			module.artifact,
@@ -90,7 +91,7 @@ function moduleRuntimeCode(module: (typeof securityPoolModuleDeployments)[number
 	// SecurityPoolCreationCodeDeployer immutables instead of by position.
 	if (module.id === 'securityPoolRepairAuctionDeployer') {
 		const chunkDeployer = securityPoolModuleDeployments.find(candidate => candidate.id === 'securityPoolForkCoordinatorDeployer')
-		if (chunkDeployer === undefined) throw new Error('Missing creation-code chunk deployer layout')
+		if (chunkDeployer === undefined) throw new Error(deploymentErrors.libraryLayoutMissing)
 		const chunkIds = Object.keys(chunkDeployer.artifact.evm.deployedBytecode.immutableReferences)
 		const chunkAddresses = [getCreateAddress({ from: addresses[module.id], nonce: 1n }), getCreateAddress({ from: addresses[module.id], nonce: 2n })]
 		const vaultImplementation = getCreateAddress({ from: addresses[module.id], nonce: 3n })
@@ -310,7 +311,7 @@ export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient
 		return buildDeploymentStatusSnapshot(steps, await loadDeploymentStatusOracleMaskAtAddress(client, oracleAddress), true)
 	}
 	const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
-	if (oracleStep === undefined) throw new Error('Deployment plan is missing its deployment status oracle step')
+	if (oracleStep === undefined) throw new Error(deploymentErrors.statusCheckMissing)
 	if (!assertDeploymentStepRuntimeCode(oracleStep, oracleCode)) return await loadDeploymentStatusSnapshotFromCode(client, steps)
 	const snapshot = buildDeploymentStatusSnapshot(steps, await loadDeploymentStatusOracleMaskAtAddress(client, oracleAddress), true)
 	// The oracle mask only says a step was recorded; a step whose address holds no code is reported as not deployed.

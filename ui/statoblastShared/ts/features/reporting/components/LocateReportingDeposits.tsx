@@ -45,7 +45,7 @@ export function LocateReportingDeposits({ details, wallet, refresh, openOnEntry 
 		const profile = getActiveNetworkProfile()
 		const guard = createActiveEnvironmentGuard()
 		const abort = new AbortController()
-		const client = withStatoblastRequestTimeout(createConnectedReadClient(), 'Deposit search timed out.', abort.signal, singleFlight.current)
+		const client = withStatoblastRequestTimeout(createConnectedReadClient(), pageCopy.searchTimedOut, abort.signal, singleFlight.current)
 		const deposits = reportingDepositStore(profile)
 		const cursors = reportingDepositCursorStore(profile, side)
 		const initial = latest.current

@@ -1,3 +1,4 @@
+import { pageErrors } from '../copy/protocolErrors.js'
 import { createPublicClient, custom, encodeFunctionData, isAddress, isHex, parseAbi, requestRpc, toHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { getBrowserStorage } from '@zoltar/ui-core-shared/lib/browserStorage.js'
@@ -158,7 +159,7 @@ export function statoblastPageCache(profile: NetworkProfile, identity: { pool: A
 					{
 						request: async request => {
 							const found = reads.get(keyForRead(request))
-							if (found === undefined) throw new Error('Saved page is incomplete.')
+							if (found === undefined) throw new Error(pageErrors.incompletePage)
 							return found.response
 						},
 					},
@@ -230,7 +231,7 @@ export function statoblastPageCache(profile: NetworkProfile, identity: { pool: A
 			transport: custom(
 				{
 					request: async read => {
-						if (!readMethods.has(read.method)) throw new Error('Unexpected page read.')
+						if (!readMethods.has(read.method)) throw new Error(pageErrors.invalidPageRead)
 						const readKey = keyForRead(read)
 						let job = jobs.get(readKey)
 						if (job === undefined) {

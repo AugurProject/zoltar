@@ -1,3 +1,4 @@
+import { questionErrors } from '../copy/protocolErrors.js'
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_EscalationGame_EscalationGame as gameArtifact, statoblast_QuestionLedger_QuestionLedger as poolArtifact, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory as factoryArtifact } from '../contractArtifact.js'
 import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
@@ -30,8 +31,8 @@ export async function loadQuestionLedgerDetails(client: ReadClient, questionLedg
 			],
 			blockNumber,
 		)
-		if (confirmedId !== questionId) throw new Error('The registered question does not match this ID.')
-		if (capital === zeroAddress || securityPoolAddress === zeroAddress) throw new Error('Question has no security pool.')
+		if (confirmedId !== questionId) throw new Error(questionErrors.idMismatch)
+		if (capital === zeroAddress || securityPoolAddress === zeroAddress) throw new Error(questionErrors.poolMissing)
 		const game = { abi: gameArtifact.abi, address: escalationGameAddress, blockNumber }
 		const hasGame = escalationGameAddress !== zeroAddress
 		const [central, hasForkContinuationEscalationGame, hasReachedNonDecision, validUntil] = await Promise.all([

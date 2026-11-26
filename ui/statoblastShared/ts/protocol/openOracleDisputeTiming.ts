@@ -1,3 +1,4 @@
+import { oracleErrors } from '../copy/protocolErrors.js'
 import { hasSubmissionWindow, TRANSACTION_SUBMISSION_RESERVE_SECONDS } from '@zoltar/ui-core-shared/transactions/submissionTiming.js'
 import { hasOpenOracleFlag, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -26,7 +27,7 @@ export async function requireOpenOracleDisputeSubmissionWindow(client: Pick<Read
 	const safetyGuard = getOpenOracleSettlementSafetyGuard({ ...state.latest.game, timeType, trustedSettlementCallback })
 	if (safetyGuard !== undefined) throw new Error(safetyGuard)
 	const currentClock = timeType ? block.timestamp : block.number
-	if (currentClock === undefined) throw new Error('Could not read the current dispute clock. Retry before sending.')
+	if (currentClock === undefined) throw new Error(oracleErrors.disputeClock)
 	const guard = getOpenOracleDisputeSubmissionTimingGuard({ ...state.latest.game, currentClock, timeType })
 	if (guard !== undefined) throw new Error(guard)
 	return state

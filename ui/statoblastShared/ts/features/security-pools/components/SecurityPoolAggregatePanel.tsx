@@ -75,7 +75,7 @@ export function SecurityPoolAggregatePanel({ model, actions, priceDeadlineChecki
 	const targetChanged = model.healthBps !== (snapshot?.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps)
 	const commitmentChanged = model.commitmentAttoEth !== snapshot?.ownerCommitmentAttoEth
 	const previewPrincipal = (snapshot?.ownerPrincipalAttoRep ?? 0n) + (model.healthDepositAttoRep ?? 0n)
-	const previewReady = priceCurrent && snapshot !== undefined && previewCommitment !== undefined && previewTarget !== undefined && previewTarget >= 10_000n && previewTarget < 1n << 256n
+	const previewReady = priceCurrent && snapshot !== undefined && previewCommitment !== undefined && previewTarget !== undefined && previewTarget >= minimumSecurityPoolHealthFactorBps && previewTarget < 1n << 256n
 	const previewRep = previewReady ? requiredSecurityPoolCollateral(snapshot, previewCommitment, model.proofPrice, previewTarget) : undefined
 	let estimatedWithdrawal: bigint | undefined
 	if (previewRep !== undefined) estimatedWithdrawal = previewPrincipal > previewRep ? previewPrincipal - previewRep : 0n

@@ -255,12 +255,12 @@ function previewEscalationContribution(details: ActiveReportingDetails, outcome:
 	if (selectedSide === undefined)
 		return {
 			actualDepositAmount: undefined,
-			reason: 'Select a valid reporting outcome.',
+			reason: reportingCopy.validReportingOutcomeRequired,
 		}
 	if (selectedSide.balance >= details.nonDecisionThresholdAttoRep)
 		return {
 			actualDepositAmount: undefined,
-			reason: `Selected side is already full at ${formatCurrencyBalanceWithUnit(details.nonDecisionThresholdAttoRep, 'REP')}.`,
+			reason: reportingCopy.selectedSideAlreadyFull(formatCurrencyBalanceWithUnit(details.nonDecisionThresholdAttoRep, 'REP')),
 		}
 	if (amount < details.startBondAttoRep)
 		return {

@@ -106,7 +106,7 @@ for (const hash of [undefined, zeroHash, '0x01'] as const)
 				return true
 			}),
 		}
-		await expect(load(client)).rejects.toThrow('anchor is unavailable')
+		await expect(load(client)).rejects.toThrow('Could not confirm the block for this claim.')
 		expect(reads).toBe(0)
 	})
 

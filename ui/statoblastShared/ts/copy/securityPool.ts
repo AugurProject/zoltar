@@ -110,3 +110,5 @@ export const questionReporting = 'Question reporting'
 export const approveForkCostFailed = 'Could not approve REP for the fork.'
 export const triggerForkAction = 'triggering a universe fork'
 export const triggerForkFailed = 'Could not trigger the universe fork.'
+
+export const nonnegativeAmountRequired = 'Enter a nonnegative amount with up to 18 decimal places.'

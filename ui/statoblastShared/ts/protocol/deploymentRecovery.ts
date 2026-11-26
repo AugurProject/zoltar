@@ -1,6 +1,7 @@
 import { concatHex, decodeFunctionData, encodeAbiParameters, getCreate2Address, getCreateAddress, keccak256, parseAbi, parseAbiParameters, TransactionLookupNotFoundError, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { hasErrorCode, hasErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
+import { deployment as copy } from '../copy/securityPoolTransactions.js'
 import { getInfraContractAddresses, getSecurityPoolCreationCode } from './deploymentHelpers.js'
 import type { SecurityPoolTransaction } from './securityPool.js'
 import { loadSecurityPoolAdmission, type SecurityPoolAdmission } from './securityPoolAdmission.js'
@@ -15,18 +16,23 @@ const ownerAndCounter = parseAbiParameters('address, uint256')
 const poolDeploymentAbi = parseAbi(['function deploySecurityPool(bytes creationCode, bytes configuration) returns (address)', 'function isSecurityPool(address) view returns (bool)'])
 const poolModuleParameters = parseAbiParameters('address, address, address, address, address, address, address, address, address, address')
 
-async function readDeploymentRecoveryHead(client: Pick<ReadClient, 'getBlock'>) {
+function providerFailureMessage(error: unknown) {
+	if (typeof error === 'string') return error
+	return hasErrorMessage(error) ? error.message : ''
+}
+
+export async function readDeploymentRecoveryHead(client: Pick<ReadClient, 'getBlock'>) {
 	for (const blockTag of ['finalized', 'safe'] as const) {
 		try {
 			const block = await client.getBlock({ blockTag })
-			if (block.number !== undefined && block.hash !== undefined) return block
+			if (block?.number !== undefined && block.hash !== undefined) return block
 		} catch (error) {
-			const unsupported = (hasErrorCode(error) && [-32601, -32602, -32004].includes(Number(error.code))) || (hasErrorMessage(error) && /unsupported|not supported|not implemented|(?:invalid|unknown|unrecognized) block tag|^RPC block not found$/i.test(error.message))
+			const unsupported = (hasErrorCode(error) && [-32601, -32602, -32004].includes(Number(error.code))) || /unsupported|not supported|not implemented|(?:invalid|unknown|unrecognized) block tag|\b(?:RPC|finalized|safe) block not found\b/i.test(providerFailureMessage(error))
 			if (!unsupported) throw error
 		}
 	}
 	const latest = await client.getBlock({ blockTag: 'latest' })
-	if (latest.number === undefined || latest.number < recoveryConfirmationDepth) return undefined
+	if (latest?.number === undefined || latest.number < recoveryConfirmationDepth) return undefined
 	return client.getBlock({ blockNumber: latest.number - recoveryConfirmationDepth })
 }
 
@@ -94,6 +100,25 @@ async function findNonceBlock(client: Pick<ReadClient, 'getTransactionCount'>, o
 	return high
 }
 
+export class DeploymentHistoryUnavailableError extends Error {
+	constructor(cause: unknown) {
+		super(copy.historyUnavailable, { cause })
+		this.name = 'DeploymentHistoryUnavailableError'
+	}
+}
+
+async function readDeploymentBlockPoolCounts(client: Pick<ReadClient, 'getTransactionCount' | 'getStorageAt'>, owner: Address, nonce: bigint, confirmedHead: bigint) {
+	try {
+		const nonceBlock = await findNonceBlock(client, owner, nonce, confirmedHead)
+		const first = nonceBlock === 0n ? 0n : await readSecurityPoolCreationCount(client, owner, nonceBlock - 1n)
+		const end = await readSecurityPoolCreationCount(client, owner, nonceBlock)
+		return { first, end }
+	} catch (error) {
+		if (/missing trie node|\bpruned\b|historical (?:state|data|history)(?: is)? (?:unavailable|not available)/i.test(providerFailureMessage(error))) throw new DeploymentHistoryUnavailableError(error)
+		throw error
+	}
+}
+
 function poolInitCodeHash(request: Pick<SecurityPoolTransaction, 'to' | 'data'>) {
 	const addresses = getInfraContractAddresses()
 	if (request.to?.toLowerCase() !== addresses.securityPoolFactory.toLowerCase()) return undefined
@@ -127,9 +152,9 @@ export async function recoverSecurityPoolDeployment(client: ConfirmationClient &
 	let end = first === undefined ? undefined : await readSecurityPoolCreationCount(client, owner, head.number)
 	if (first === undefined || end === undefined || end < first || end - first > 64n) {
 		// Limit lookup to one block when the draft predates the counter checkpoint or many deployments followed it.
-		const nonceBlock = await findNonceBlock(client, owner, nonce, head.number)
-		first = nonceBlock === 0n ? 0n : await readSecurityPoolCreationCount(client, owner, nonceBlock - 1n)
-		end = await readSecurityPoolCreationCount(client, owner, nonceBlock)
+		const counts = await readDeploymentBlockPoolCounts(client, owner, nonce, head.number)
+		first = counts.first
+		end = counts.end
 		if (end < first) return undefined
 	}
 	const factory = getInfraContractAddresses().securityPoolFactory

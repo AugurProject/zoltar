@@ -14,7 +14,7 @@ export type TransactionSubmissionStatus = 'pending' | 'uncertain'
 
 /** What to do instead when the wallet cannot perform a session action for the application. */
 export const unsupportedWalletActionMessages = {
-	accountSelection: 'Choose another address in your wallet.',
+	accountSelection: 'This wallet can’t switch addresses from the app. Open your wallet and choose another address.',
 	disconnect: 'This wallet does not support disconnecting from the application. Disconnect this site in the wallet.',
 	formatNetworkSwitch: (networkName: string) => `This wallet does not support switching networks from the application. Switch to ${networkName} in the wallet.`,
 }

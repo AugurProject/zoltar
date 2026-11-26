@@ -170,7 +170,7 @@ async function assertMockPairSupported(client: ReadClient, tokenIn: Address, tok
 	if (!isMockRepPricingEnabled()) return undefined
 	const mockResult = await maybeQuoteMockRepPair(client, tokenIn, tokenOut, amountIn)
 	if (mockResult !== undefined) return mockResult
-	throw new Error('Simulation mock pricing only supports REP / ETH, REP / WETH, and REP / USDC pairs.')
+	throw new Error('Simulation pricing supports REP paired with ETH, WETH, or USDC.')
 }
 
 function buildUniswapV4PoolId(tokenA: Address, tokenB: Address, poolConfig: PoolConfig): Hex {

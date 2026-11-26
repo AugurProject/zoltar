@@ -156,18 +156,7 @@ export function createOpenOracleWarningPresentation(result: OpenOracleActionResu
 type OpenOracleAction = OpenOracleActionResult['action']
 type OpenOracleActionTitles = Readonly<{ failure: string; pending: string; success: string }>
 
-const OPEN_ORACLE_ACTION_TITLES = {
-	approveToken1: { failure: 'Base token approval failed', pending: 'Approving base token', success: 'Base token approved' },
-	approveToken2: { failure: 'Quote token approval failed', pending: 'Approving quote token', success: 'Quote token approved' },
-	createReportInstance: { failure: 'Report creation failed', pending: openOracleCopy.creatingStandaloneReportTitle, success: openOracleCopy.standaloneReportCreated },
-	dispute: { failure: 'Dispute failed', pending: 'Submitting dispute', success: 'Dispute submitted' },
-	executeStagedOperation: { failure: 'Staged operation failed', pending: 'Executing staged operation', success: 'Staged operation executed' },
-	queueOperation: { failure: 'Queue operation failed', pending: 'Queueing operation', success: 'Operation queued' },
-	requestPrice: openOracleCopy.priceReportActionTitles,
-	settle: { failure: 'Settlement failed', pending: openOracleCopy.settlingReportTitle, success: openOracleCopy.reportSettled },
-	withdrawBalance: { failure: 'Oracle balance withdrawal failed', pending: 'Withdrawing oracle balance', success: 'Oracle balance withdrawn' },
-	wrapWeth: { failure: 'ETH wrap failed', pending: 'Wrapping ETH to WETH', success: 'ETH wrapped to WETH' },
-} satisfies Record<OpenOracleAction, OpenOracleActionTitles>
+const OPEN_ORACLE_ACTION_TITLES = openOracleCopy.standaloneWriteActionTitles satisfies Record<OpenOracleAction, OpenOracleActionTitles>
 
 export const getOpenOraclePendingTitle = (actionName: OpenOracleAction) => OPEN_ORACLE_ACTION_TITLES[actionName].pending
 export const getOpenOracleSuccessTitle = (actionName: OpenOracleAction) => OPEN_ORACLE_ACTION_TITLES[actionName].success

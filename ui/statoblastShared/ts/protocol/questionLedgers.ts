@@ -1,3 +1,4 @@
+import * as copy from '../copy/questionPage.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { readOptionalMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -5,6 +6,19 @@ import { statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
 import { isReadCheckpointRecent } from './readCheckpoint.js'
 import { checkStatoblastEntries } from './statoblastEntries.js'
 import { loadQuestionLedgerDetails } from './questionLedgerSnapshot.js'
+
+const questionEntryMessages = {
+	'invalid-pool': copy.poolContractMissing,
+	'non-statoblast-contract': copy.foreignPoolContract,
+	'unregistered-question': copy.questionNotRegistered,
+	'unprepared-question': copy.questionUnprepared,
+}
+
+export class StatoblastQuestionEntryError extends Error {
+	constructor(readonly status: keyof typeof questionEntryMessages) {
+		super(questionEntryMessages[status])
+	}
+}
 
 type DeploymentRegistryAnchor = Readonly<{ blockHash: `0x${string}`; blockNumber: bigint; timestamp: bigint; observedAt: number }>
 
@@ -18,7 +32,7 @@ export type QuestionReadCheckpoint = {
 async function loadDeploymentRegistryAnchor(client: ReadClient): Promise<DeploymentRegistryAnchor> {
 	const observedAt = Date.now()
 	const block = await client.getBlock()
-	if (block.hash === undefined || block.number === undefined) throw new Error('Couldn’t verify the block for this question.')
+	if (block.hash === undefined || block.number === undefined) throw new Error(copy.questionBlockUnverified)
 	return { blockHash: block.hash, blockNumber: block.number, timestamp: block.timestamp, observedAt }
 }
 
@@ -37,7 +51,7 @@ export async function loadStatoblastQuestion(client: ReadClient, pool: Address, 
 	const checkAnchor = async (anchor: DeploymentRegistryAnchor) => {
 		if (await isDeploymentRegistryAnchorCurrent(client, anchor)) return
 		resetCheckpoint()
-		throw new Error('Question changed during refresh.')
+		throw new Error(copy.questionChangedDuringRefresh)
 	}
 	const savedAnchor = checkpoint.anchor
 	if (savedAnchor !== undefined && !isReadCheckpointRecent(savedAnchor.observedAt)) resetCheckpoint()
@@ -49,10 +63,8 @@ export async function loadStatoblastQuestion(client: ReadClient, pool: Address, 
 			if (checked?.status === 'failed') throw checked.error
 			if (checked?.status !== 'question') {
 				delete checkpoint.anchor
-				if (checked?.status === 'unregistered-question') throw new Error('Question not registered')
-				if (checked?.status === 'unprepared-question') throw new Error('Question pool unavailable')
-				if (checked?.status === 'non-statoblast-contract') throw new Error('This contract is not a Statoblast security pool.')
-				throw new Error('No contract exists at this security pool address.')
+				const status = checked?.status === 'pool' || checked === undefined ? 'invalid-pool' : checked.status
+				throw new StatoblastQuestionEntryError(status)
 			}
 			checkpoint.ledger = checked.ledger
 		}

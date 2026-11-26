@@ -1,3 +1,4 @@
+import { oracleErrors, reportErrors } from '../copy/protocolErrors.js'
 import { getReportingSubmissionTimingGuard } from './reportingTiming.js'
 import * as reportingCopy from '../copy/reporting.js'
 import * as securityPoolCopy from '../copy/securityPool.js'
@@ -149,7 +150,7 @@ export async function loadReportingDetails(client: ReadClient, questionLedgerAdd
 			args: [universeId],
 		}),
 	])
-	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
+	if (!hasTimestamp(block)) throw new Error(oracleErrors.blockResponse)
 	if (escalationGameAddress === zeroAddress || escalationGameCode === undefined || escalationGameCode === '0x') {
 		const nonDecisionThresholdAttoRep = forkThresholdAttoRep / 2n + (forkThresholdAttoRep % 2n)
 		const startBondAttoRep = nonDecisionThresholdAttoRep > 1n && initialEscalationGameDepositAttoRep >= nonDecisionThresholdAttoRep ? nonDecisionThresholdAttoRep - 1n : initialEscalationGameDepositAttoRep
@@ -383,7 +384,7 @@ export async function reportOutcomeInQuestionLedger(client: WriteClient, questio
 					client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'escalationGame', blockNumber }),
 					client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'systemState', blockNumber }),
 				])
-				if (currentGame !== escalationGameAddress || getQuestionLedgerSystemState(systemState) !== 'operational') throw new Error('Reporting changed. Review the question again.')
+				if (currentGame !== escalationGameAddress || getQuestionLedgerSystemState(systemState) !== 'operational') throw new Error(reportErrors.reportingChanged)
 				let leaderBefore: string = reportingCopy.reportComparisonNoReports
 				let leaderAfter: string = getEscalationSideLabel(outcome)
 				let deadlineChange: string | undefined
@@ -400,7 +401,7 @@ export async function reportOutcomeInQuestionLedger(client: WriteClient, questio
 						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getOutcomeBalancesAttoRep', blockNumber }),
 						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'nonDecisionThresholdAttoRep', blockNumber }),
 					])
-					if (acceptedDeposit[0] !== reviewAmountAttoRep || acceptedDeposit[0] <= 0n) throw new Error('The report amount changed. Review the report again.')
+					if (acceptedDeposit[0] !== reviewAmountAttoRep || acceptedDeposit[0] <= 0n) throw new Error(reportErrors.reportAmountChanged)
 					const timingGuard = getReportingSubmissionTimingGuard({ currentTime: block.timestamp, escalationEndTime: endTime })
 					if (timingGuard !== undefined) throw new Error(timingGuard)
 					const endsUndecided = acceptedDeposit[1] === threshold && balances.some((balance, index) => index !== outcomeIndex && balance >= threshold)
@@ -455,9 +456,9 @@ async function getEscalationGamePreparation(client: WriteClient, questionLedgerA
 		client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'questionData' }),
 		client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'questionId' }),
 	])
-	if (getQuestionLedgerSystemState(systemState) !== 'operational') throw new Error('Reporting changed. Review the question again.')
+	if (getQuestionLedgerSystemState(systemState) !== 'operational') throw new Error(reportErrors.reportingChanged)
 	const [endTime, block] = await Promise.all([client.readContract({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, address: questionData, functionName: 'getQuestionEndDate', args: [questionId] }), client.getBlock()])
-	if (block.timestamp < endTime) throw new Error('Reporting opens when the question ends.')
+	if (block.timestamp < endTime) throw new Error(reportErrors.reportingNotOpen)
 	const factory = await client.readContract({ address: questionLedgerAddress, abi: statoblast_QuestionLedger_QuestionLedger.abi, functionName: 'escalationGameFactory' })
 	const game = await client.readContract({ address: factory, abi: statoblast_factories_EscalationGameFactory_EscalationGameFactory.abi, functionName: 'escalationGameAddress', args: [questionLedgerAddress] })
 	const isRequired = async () => {

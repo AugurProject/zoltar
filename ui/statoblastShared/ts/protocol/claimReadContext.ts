@@ -1,3 +1,4 @@
+import { claimErrors } from '../copy/protocolErrors.js'
 import { zeroHash, type Block } from '@zoltar/core-shared/evm/ethereum'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 
@@ -13,7 +14,7 @@ function readKey(value: unknown) {
 export async function withClaimReadContext<T>(client: ClaimReadClient, read: (context: Pick<ReadClient, 'readContract'>, blockNumber: bigint) => Promise<T>): Promise<T> {
 	async function readAnchor(blockNumber: bigint) {
 		const anchor = await client.getBlock({ blockNumber })
-		if (typeof anchor.hash !== 'string' || !/^0x[0-9a-f]{64}$/i.test(anchor.hash) || anchor.hash === zeroHash || anchor.number !== blockNumber) throw new Error('Claim block anchor is unavailable. Refresh and retry.')
+		if (typeof anchor.hash !== 'string' || !/^0x[0-9a-f]{64}$/i.test(anchor.hash) || anchor.hash === zeroHash || anchor.number !== blockNumber) throw new Error(claimErrors.blockUnavailable)
 		return anchor
 	}
 	for (let attempt = 0; attempt < 2; attempt++) {
@@ -36,10 +37,10 @@ export async function withClaimReadContext<T>(client: ClaimReadClient, read: (co
 		const current = await readAnchor(blockNumber)
 		if (current.hash !== anchor.hash || current.number !== blockNumber) {
 			if (attempt === 0) continue
-			throw new Error('Claim block changed repeatedly. Refresh and retry.')
+			throw new Error(claimErrors.blockChanged)
 		}
 		if (!result.ok) throw result.error
 		return result.value
 	}
-	throw new Error('Claim block could not be verified.')
+	throw new Error(claimErrors.blockUnverified)
 }

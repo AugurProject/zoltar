@@ -9,7 +9,7 @@ import { requiredSecurityPoolCollateral } from '../lib/capital.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useId, useMemo, useRef, useState } from 'preact/hooks'
-import { buildSecurityPoolCapitalCureRequest, buildSecurityPoolCapitalTakeOverWithBoundsRequest, securityPoolTakeoverSource, securityPoolTakeoverFill, securityPoolTakeoverTransfer } from '@zoltar/statoblast-shared/statoblast/securityPool'
+import { minimumSecurityPoolHealthFactorBps, buildSecurityPoolCapitalCureRequest, buildSecurityPoolCapitalTakeOverWithBoundsRequest, securityPoolTakeoverSource, securityPoolTakeoverFill, securityPoolTakeoverTransfer } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -227,7 +227,7 @@ export function SecurityPoolTakeover({
 				commitment,
 				minimumTakeoverReward,
 				maximumOwnRep,
-				bounds: { maximumOwnerPrincipal, maximumOwnerCommitment, expectedTargetHealthFactorBps: snapshot.ownerAccount.targetHealthFactorBps || 10_000n, expectedAcceptedPriceEpoch: target.epoch, expectedSourceBatch: target.position.batch },
+				bounds: { maximumOwnerPrincipal, maximumOwnerCommitment, expectedTargetHealthFactorBps: snapshot.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps, expectedAcceptedPriceEpoch: target.epoch, expectedSourceBatch: target.position.batch },
 			})
 		await actions.runSecurityPoolAction('takeOverSecurityPoolPosition', copy.takeOver, () => ({
 			...build(fresh),
@@ -265,7 +265,7 @@ export function SecurityPoolTakeover({
 	const repNeededAfter = displayedSnapshot === undefined || commitmentAfter === undefined ? undefined : requiredSecurityPoolCollateral(displayedSnapshot, commitmentAfter)
 	const healthAt = (rep: bigint | undefined, commitment: bigint | undefined) => {
 		if (displayedSnapshot === undefined || rep === undefined || commitment === undefined || commitment === 0n) return undefined
-		const backing = requiredSecurityPoolCollateral(displayedSnapshot, commitment, undefined, 10_000n)
+		const backing = requiredSecurityPoolCollateral(displayedSnapshot, commitment, undefined, minimumSecurityPoolHealthFactorBps)
 		return backing === 0n ? undefined : copy.formatHealth(formatUnits((rep * 10_000n) / backing, 2))
 	}
 	const applySuggestedBound = () => {
@@ -397,7 +397,7 @@ export function SecurityPoolTakeover({
 					{[
 						{ label: copy.commitmentColumn, before: displayCollateral(commitmentBefore), after: displayCollateral(commitmentAfter) },
 						{ label: copy.pledgedColumn, before: displayRep(pledgedBefore), after: displayRep(pledgedAfter) },
-						{ label: copy.formatRepNeeded(copy.formatHealth(formatUnits(displayedSnapshot.ownerAccount.targetHealthFactorBps || 10_000n, 2))), before: displayRep(repNeededBefore), after: displayRep(repNeededAfter) },
+						{ label: copy.formatRepNeeded(copy.formatHealth(formatUnits(displayedSnapshot.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps, 2))), before: displayRep(repNeededBefore), after: displayRep(repNeededAfter) },
 						{ label: copy.healthColumn, before: healthAt(pledgedBefore, commitmentBefore) ?? copy.healthUnavailable, after: healthAt(pledgedAfter, commitmentAfter) ?? copy.healthUnavailable },
 					].map(({ label, before, after }) => (
 						<div key={label}>

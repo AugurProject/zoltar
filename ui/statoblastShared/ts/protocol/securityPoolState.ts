@@ -69,15 +69,15 @@ export async function loadCentralSecurityPoolQuestion(client: Pick<ReadClient, '
 	)
 	const totals = requireTupleValue(totalsValue, 3, 'capital totals')
 	const remainingCapacity = requireBigintValue(remainingValue, 'available capacity')
-	const question = requireTupleValue(questionValue, 2, 'question stream')
-	const stream = requireObjectValue(question[0], 'question stream state')
+	const question = requireTupleValue(questionValue, 2, 'question fee details')
+	const stream = requireObjectValue(question[0], 'question fee state')
 	const state = requireTupleValue(bookStateValue, 16, 'payout status')
 	const feeTime = BigInt(requireIntegerLikeValue(feeTimestampValue, 'native fee timestamp'))
 	const feeEnd = BigInt(requireIntegerLikeValue(Reflect.get(stream, 'feeEnd'), 'native fee end'))
 	const feesActive =
 		requireBooleanValue(validValue, 'capital price validity') && requireBooleanValue(state[11], 'fee accrual state') && !requireBooleanValue(state[7], 'payout fork status') && requireBooleanValue(fundedValue, 'cash funding state') && requireBigintValue(question[1], 'frozen payout record ID') === 0n && feeTime < feeEnd
 	const linearFee = { rateAttoEthPerSecond: feesActive ? requireBigintValue(Reflect.get(stream, 'feeRateAttoEthPerSecond'), 'question fee rate') : 0n, rateScale: 1_000_000_000n, endTime: feeEnd }
-	const snapshot = requireObjectValue(snapshotValue, 'question settlement')
+	const snapshot = requireObjectValue(snapshotValue, 'question payout details')
 	const cash = requireBigintValue(Reflect.get(snapshot, 'questionCashAttoEth'), 'question cash')
 	return {
 		securityPoolAddress: securityPool,
@@ -90,7 +90,7 @@ export async function loadCentralSecurityPoolQuestion(client: Pick<ReadClient, '
 		mintingCapacityAttoEth: cash + remainingCapacity,
 		totalPoolHeldAttoRep: requireBigintValue(totals[0], 'total REP'),
 		totalUnderwritingLimitAttoEth: requireBigintValue(totals[1], 'total commitment'),
-		feeEligibleUnderwritingLimitAttoEth: requireBigintValue(totals[2], 'healthy commitment'),
+		feeEligibleUnderwritingLimitAttoEth: requireBigintValue(totals[2], 'commitment backed by REP'),
 		lastFeeCheckpointNativeTime: feeTime,
 		linearFee,
 		feeEndTimestamp: feeEnd,

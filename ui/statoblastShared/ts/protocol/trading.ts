@@ -1,3 +1,4 @@
+import { questionErrors, shareErrors } from '../copy/protocolErrors.js'
 import { securityPoolRecoveryMintBudget } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { loadRecoveryMintFunding } from './recoveryMintFunding.js'
 import { collateralPresentation } from './collateral.js'
@@ -45,7 +46,7 @@ type QuestionLedgerMintCapacity = {
 }
 export async function loadQuestionLedgerMintCapacity(client: Pick<ReadClient, 'getBlock' | 'multicall'>, questionLedgerAddress: Address): Promise<QuestionLedgerMintCapacity> {
 	const currentBlock = await client.getBlock()
-	if (typeof currentBlock.number !== 'bigint') throw new Error('Mint capacity requires a mined block.')
+	if (typeof currentBlock.number !== 'bigint') throw new Error(shareErrors.mintCapacityBlock)
 	const [escalationGame, custody] = await readRequiredMulticall(
 		client,
 		[
@@ -57,7 +58,7 @@ export async function loadQuestionLedgerMintCapacity(client: Pick<ReadClient, 'g
 	const capital = requireAddressValue(custody, 'security pool custody')
 	if (capital === zeroAddress) throw new Error(questionNotLinkedToSecurityPool)
 	const central = await loadCentralSecurityPoolQuestion(client, questionLedgerAddress, capital, currentBlock.number)
-	const escalationGameActive = requireAddressValue(escalationGame, 'reporting game') !== zeroAddress
+	const escalationGameActive = requireAddressValue(escalationGame, 'question reporting address') !== zeroAddress
 	return { ...central, currentTimestamp: currentBlock.timestamp, escalationGameActive, mintingCapacityAttoEth: escalationGameActive ? 0n : central.mintingCapacityAttoEth }
 }
 export async function loadTradingDetails(client: ReadClient, questionLedgerAddress: Address, accountAddress: Address | undefined): Promise<TradingDetails> {
@@ -82,7 +83,7 @@ export async function loadTradingDetails(client: ReadClient, questionLedgerAddre
 		functionName: 'balanceOfShares',
 		args: [universeId, accountAddress],
 	})
-	if (!isBigintTriple(shareBalancesResult)) throw new Error('Unexpected trading share balances response')
+	if (!isBigintTriple(shareBalancesResult)) throw new Error(shareErrors.balancesResponse)
 	const shareBalances: TradingShareBalances = {
 		invalidAttoShares: shareBalancesResult[0],
 		noAttoShares: shareBalancesResult[2],
@@ -102,8 +103,8 @@ export async function loadTradingDetails(client: ReadClient, questionLedgerAddre
 export async function requireCanonicalSecurityPoolOf(client: Pick<ReadClient, 'readContract'>, factory: Address, pool: Address, blockNumber?: bigint) {
 	const block = blockNumber === undefined ? {} : { blockNumber }
 	const securityPool = getAddress(requireAddressValue(await client.readContract({ address: factory, abi: purchaseAbi, functionName: 'securityPoolOf', args: [pool], ...block }), 'SecurityPool'))
-	if (securityPool === zeroAddress) throw new Error('Question has no security pool.')
-	if ((await client.readContract({ address: factory, abi: purchaseAbi, functionName: 'isSecurityPool', args: [securityPool], ...block })) !== true) throw new Error('Market security pool was not created by the canonical factory.')
+	if (securityPool === zeroAddress) throw new Error(questionErrors.poolMissing)
+	if ((await client.readContract({ address: factory, abi: purchaseAbi, functionName: 'isSecurityPool', args: [securityPool], ...block })) !== true) throw new Error(shareErrors.mintPoolUnverified)
 	return securityPool
 }
 
@@ -151,7 +152,7 @@ export async function quoteTradingCollateral(client: ReadClient, collateral: Tra
 	const required = requireBigintValue(recoveryValue, 'Recovery REP contribution')
 	onRecoveryRequirement?.(required)
 	const recovery = await loadRecoveryMintFunding(client, securityPool, universeId, collateral.owner, required)
-	if (!Array.isArray(result) || typeof result[0] !== 'bigint') throw new Error('Invalid collateral fee quote.')
+	if (!Array.isArray(result) || typeof result[0] !== 'bigint') throw new Error(shareErrors.feeQuote)
 	const fee = result[0]
 	return { amount, fee, shares, capacity: requireBigintValue(capacity, 'Mint capacity'), recovery, ...defaultMintLimits(fee, shares) }
 }
@@ -390,7 +391,7 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 			client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'questionId' }),
 		])
 		const [endTime, block] = await Promise.all([client.readContract({ abi: ZoltarQuestionData_ZoltarQuestionData.abi, address: questionData, functionName: 'getQuestionEndDate', args: [questionId] }), client.getBlock()])
-		if (block.timestamp >= endTime) throw new Error('Minting closed when the question ended.')
+		if (block.timestamp >= endTime) throw new Error(shareErrors.mintingClosed)
 		return { questionId, blockNumber: block.number }
 	}
 	const { questionId } = await validateBeforeSubmit()
@@ -404,10 +405,10 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 			client.readContract({ abi: purchaseAbi, address: securityPool, functionName: 'availableMintCapacity', args: [universeId] }),
 			client.readContract({ abi: purchaseAbi, address: securityPool, functionName: 'quoteMintRecoveryRep', args: [universeId, questionId, amount] }),
 		])
-		if (!Array.isArray(quoted) || typeof quoted[0] !== 'bigint' || quoted.length !== 2 || typeof quoted[1] !== 'bigint') throw new Error('Invalid shared REP purchase quote.')
+		if (!Array.isArray(quoted) || typeof quoted[0] !== 'bigint' || quoted.length !== 2 || typeof quoted[1] !== 'bigint') throw new Error(shareErrors.purchaseQuote)
 		const fee = quoted[0]
 		if (typeof capacity !== 'bigint' || capacity < amount) throw new Error(insufficientMintCapacity)
-		if (typeof fee !== 'bigint' || fee < 0n) throw new Error('Invalid shared REP purchase quote.')
+		if (typeof fee !== 'bigint' || fee < 0n) throw new Error(shareErrors.purchaseQuote)
 		return { fee, capacity, recoveryAttoRep: requireBigintValue(recoveryValue, 'Recovery REP contribution') }
 	}
 	const collateral = await loadTradingCollateral(client, questionLedgerAddress, client.account.address)
@@ -450,13 +451,13 @@ export async function createCompleteSetInQuestionLedger(client: WriteClient, que
 				const fresh = await quote()
 				if (fresh.fee > maximumFee) throw new Error(mintFeeChanged)
 				if (latest.allowance < amount + fresh.fee) throw new Error(collateralCopy.approvalRequired)
-				if (latest.balance < amount + fresh.fee) throw new Error('Insufficient collateral for minting and purchase fees.')
-				if (fresh.recoveryAttoRep > maximumRecoveryAttoRep) throw new Error('Recovery REP quote changed. Review the amount again.')
+				if (latest.balance < amount + fresh.fee) throw new Error(shareErrors.mintBalance)
+				if (fresh.recoveryAttoRep > maximumRecoveryAttoRep) throw new Error(shareErrors.recoveryQuoteChanged)
 				const recovery = await loadRecoveryMintFunding(client, securityPool, universeId, client.account.address, fresh.recoveryAttoRep)
 				if (recovery.balance < maximumRecoveryAttoRep) throw new Error(collateralCopy.insufficientRecoveryRep)
 				if (recovery.allowance < maximumRecoveryAttoRep) throw new Error(collateralCopy.recoveryApprovalRequired)
 				const { blockNumber } = await validateBeforeSubmit()
-				if (blockNumber === undefined) throw new Error('Mint review requires a mined block.')
+				if (blockNumber === undefined) throw new Error(shareErrors.mintReviewBlock)
 				const [shareToken, mintedShares] = await Promise.all([
 					client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'shareToken', blockNumber }),
 					client.readContract({ abi: statoblast_QuestionLedger_QuestionLedger.abi, address: questionLedgerAddress, functionName: 'attoEthToAttoShares', args: [amount], blockNumber }),

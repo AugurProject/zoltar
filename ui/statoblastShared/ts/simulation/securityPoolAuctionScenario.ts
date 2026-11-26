@@ -86,10 +86,10 @@ export async function seedSecurityPoolAuctionScenario(parameters: ScenarioSeedPa
 	const rivalRep = 5_000n * unit
 	await sendSecurityPoolTransaction(rivalClient, { account: rival, to: profile.genesisRepTokenAddress, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [capitalLedger, rivalRep] }), value: 0n }, 'Approve rival REP')
 	await sendSecurityPoolTransaction(rivalClient, buildSecurityPoolCapitalDepositRequest({ owner: rival, capitalLedger, amountAttoRep: rivalRep }), 'Deposit rival REP')
-	await reportStep("Deposited the second underwriter's REP")
+	await reportStep('Deposited REP for the second position')
 	await sendSecurityPoolTransaction(rivalClient, buildSecurityPoolCapitalSetHealthRequest({ owner: rival, capitalLedger, targetHealthFactorBps: 12_000n }), 'Set rival health target')
 	await sendSecurityPoolTransaction(rivalClient, buildSecurityPoolCapitalSetCommitmentRequest({ owner: rival, capitalLedger, commitment: 10n * unit }), 'Authorize rival commitment')
-	await reportStep('Funded a second underwriter whose backing stays unchosen')
+	await reportStep('Funded a second position that remains outside the chosen branch')
 
 	// Forcing a fork burns the threshold from the caller; the fixture mints it to the owner first.
 	const threshold = await readClient.readContract({ address: zoltar, abi: zoltarArtifact.abi, functionName: 'getForkThresholdAttoRep', args: [0n] })

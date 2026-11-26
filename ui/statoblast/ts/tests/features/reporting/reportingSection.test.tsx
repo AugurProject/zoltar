@@ -424,11 +424,11 @@ describe('ReportingSection', () => {
 		expect(within(document.body).queryByRole('radiogroup')).toBeNull()
 	})
 
-	test('losing deposits show their status without a transaction action', async () => {
-		const details = createReportingDetails({ questionOutcome: 'no', parentWithdrawalEnabled: true, settlementState: 'resolved' })
+	test.each([false, true])('losing deposits show their status without a transaction action (continuation: %s)', async forkContinuation => {
+		const details = createReportingDetails({ questionOutcome: 'no', parentWithdrawalEnabled: true, settlementState: 'resolved', forkContinuation })
 		await renderReportingSection({ reportingDetails: details })
 		expect(within(document.body).queryByRole('button', { name: /Yes deposits|REP from Yes/ })).toBeNull()
-		expect(document.body.textContent).toContain('Lost · no action needed')
+		expect(document.body.textContent).toContain('Lost, no action needed')
 	})
 
 	describe('fork-triggering reports', () => {
@@ -2108,7 +2108,7 @@ describe('ReportingSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Trigger universe fork' })).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Open Fork & recovery' })).not.toBeNull()
-		expect(document.body.textContent?.includes('Your deposits move to the child questions. Continue in Fork & recovery.')).toBe(true)
+		expect(document.body.textContent?.includes('Your deposits carry to the child questions. Continue in Fork & recovery.')).toBe(true)
 	})
 
 	test('shows a Trigger universe fork action when non-decision blocks reporting', async () => {
@@ -2454,7 +2454,7 @@ describe('ReportingSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Yes' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'No' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Settle selected Invalid deposits…' })).toBeNull()
-		expect(documentQueries.getByText('Lost · no action needed')).not.toBeNull()
+		expect(documentQueries.getByText('Lost, no action needed')).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Settle selected Yes deposits…' })).toBeNull()
 		expectTransactionButtonEnabled(document.body, settlementButtonLabel('Yes'))
 
@@ -2995,7 +2995,7 @@ describe('InheritedReporterClaims', () => {
 		expect([...view.container.querySelectorAll('button')]).toEqual(buttons)
 		details.sides[1]?.importedUserDeposits.splice(0, 1, { ...identity, claimIdentity: identity })
 		await act(() => render(<InheritedReporterClaims parameters={parameters} accountState={createAccountState({ chainId: getRuntimeNetworkProfile().chainIdHex })} details={{ ...details, settlementState: 'resolved', questionOutcome: 'no' }} onRefresh={async () => undefined} />, view.container))
-		expect([within(view.container).queryByRole('button', { name: 'Claim REP' }), within(view.container).queryByText('Lost · no action needed')?.textContent]).toEqual([null, 'Lost · no action needed'])
+		expect([within(view.container).queryByRole('button', { name: 'Claim REP' }), within(view.container).queryByText('Lost, no action needed')?.textContent]).toEqual([null, 'Lost, no action needed'])
 		await act(() => render(<InheritedReporterClaims parameters={parameters} accountState={createAccountState({ chainId: getRuntimeNetworkProfile().chainIdHex })} details={{ ...details, settlementState: 'resolved', questionOutcome: 'yes' }} onRefresh={async () => undefined} />, view.container))
 		expectTransactionButtonEnabled(view.container, 'Claim REP')
 		await act(() => render(<InheritedReporterClaims parameters={parameters} accountState={createAccountState({ address: undefined })} details={{ ...details, settlementState: 'resolved', questionOutcome: 'yes' }} onRefresh={async () => undefined} />, view.container))

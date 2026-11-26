@@ -1,3 +1,4 @@
+import { questionContractAddress } from '../../../copy/questionPage.js'
 import { getReportingSubmissionTimingGuard } from '../../../protocol/reportingTiming.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 import { lostNoActionNeeded } from '../../../copy/reportingClaims.js'
@@ -59,7 +60,7 @@ export type UseReportingOperationsDependencies = {
 
 const defaultUseReportingOperationsDependencies: UseReportingOperationsDependencies = {
 	approveReportingRep: async (accountAddress, callbacks, questionLedgerAddress, outcome, amount) => await approveReportingRep(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, outcome, amount),
-	loadReportingDetails: async (questionLedgerAddress, accountAddress, includeSchedule) => await loadReportingDetails(withStatoblastRequestTimeout(createConnectedReadClient(), 'Reporting refresh timed out.'), questionLedgerAddress, accountAddress, includeSchedule),
+	loadReportingDetails: async (questionLedgerAddress, accountAddress, includeSchedule) => await loadReportingDetails(withStatoblastRequestTimeout(createConnectedReadClient(), reportingCopy.reportingRefreshTimedOut), questionLedgerAddress, accountAddress, includeSchedule),
 	reportOutcomeInQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress, outcome, amount, reviewAmount, triggersFork, requireLead) => await reportOutcomeInQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, outcome, amount, reviewAmount, triggersFork, requireLead),
 	withdrawEscalationFromQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress, outcome, depositIndexes, claimAmount) => await withdrawEscalationFromQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, outcome, depositIndexes, claimAmount),
 }
@@ -135,7 +136,7 @@ export function useReportingOperations(
 	}
 	const isReportingSelectionCurrent = (selectionKey: string) => currentReportingSelectionKeyRef.current === selectionKey && currentAccountRef.current === accountAddress
 
-	const resolveReportingQuestionLedgerAddress = () => parseAddressInput(effectiveReportingPoolAddressInput, commonCopy.questionLedgerAddress)
+	const resolveReportingQuestionLedgerAddress = () => parseAddressInput(effectiveReportingPoolAddressInput, questionContractAddress)
 
 	const readReporting = async (onReadError?: (error: unknown) => void) => {
 		const selectionKey = currentReportingSelectionKey
@@ -299,7 +300,7 @@ export function useReportingOperations(
 				if (allowanceAttoRep >= approvalAmountAttoRep) throw new Error(allowanceAttoRep >= preflight.actualDepositAmount ? reportingCopy.allowanceAlreadySufficient : commonCopy.formatApprovalNotIncreasedReason(formatCurrencyBalanceWithUnit(allowanceAttoRep, 'REP')))
 				return { ...(await dependencies.approveReportingRep(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, questionLedgerAddress, preflight.selectedOutcome, approvalAmountAttoRep)), amountAttoRep: approvalAmountAttoRep }
 			},
-			'Failed to approve REP for reporting',
+			reportingCopy.reportingRepApprovalFailed,
 		)
 
 	const reportOutcome = async () => {
@@ -336,7 +337,7 @@ export function useReportingOperations(
 					amountAttoRep: preflight.actualDepositAmount,
 				}
 			},
-			'Failed to report on outcome',
+			reportingCopy.reportOutcomeFailed,
 		)
 	}
 

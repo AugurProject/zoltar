@@ -1,4 +1,5 @@
 import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
+import { universeNotCreated } from '@zoltar/ui-statoblast-shared/copy/questionPage.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 
 /**
@@ -7,5 +8,7 @@ import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
  */
 export function getStatoblastUniversePresentation({ canReadOnchainData, loadingZoltarUniverse, zoltarUniverse, zoltarUniverseMissing }: { canReadOnchainData: boolean; loadingZoltarUniverse: boolean; zoltarUniverse: object | undefined; zoltarUniverseMissing: boolean }) {
 	const universeState = resolveLoadableValueState({ isLoading: loadingZoltarUniverse, isMissing: zoltarUniverseMissing, value: zoltarUniverse })
-	return canReadOnchainData && universeState === 'missing' ? getUniversePresentation(universeState) : undefined
+	if (!canReadOnchainData || universeState !== 'missing') return undefined
+	const presentation = getUniversePresentation(universeState)
+	return presentation === undefined ? undefined : { ...presentation, detail: universeNotCreated }
 }

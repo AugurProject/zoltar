@@ -1,5 +1,6 @@
 import { serializeStoredValue } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import type { ReadClient, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import { lostNoActionNeeded } from '../../../copy/reportingClaims.js'
 import * as pageCopy from '../../../copy/reportingDeposits.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
@@ -262,7 +263,7 @@ export function InheritedReporterClaims({ actionDataReadAt, parameters, accountS
 							{copy.inheritedClaimIdentity(side.label, deposit.parentDepositIndex.toString())} <CurrencyValue value={getImportedEscalationDepositClaimAmount(active, side.key, deposit)} suffix={copy.repUnit} />
 						</p>
 						{lost ? (
-							<p className='detail'>{pageCopy.inheritedDepositLost}</p>
+							<p className='detail'>{lostNoActionNeeded}</p>
 						) : (
 							<div className='actions'>
 								<TransactionActionButton

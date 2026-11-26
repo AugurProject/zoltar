@@ -126,6 +126,16 @@ test('retry starts from a new head when the question was missing at the previous
 	await expect(load()).resolves.toMatchObject({ question: { questionLedgerAddress: owner } })
 	expect(latestReads).toBe(2)
 })
+test('reports a registered but unprepared question as a typed entry failure', async () => {
+	const { client } = fixture()
+	const multicall = client.multicall
+	client.multicall = createMulticallStub(request => {
+		if (request.contracts[0]?.functionName === 'getQuestionLedger') return [{ status: 'failure', error: new Error('Multicall contract call failed: execution reverted: Question pool unavailable') }]
+		return multicall(request)
+	})
+	await expect(loadStatoblastQuestion(client, securityPool, deployment.questionId, deployment.universeId, false)).rejects.toMatchObject({ status: 'unprepared-question' })
+})
+
 test('reflects a forked universe without per-question vault scans', async () => {
 	const { question } = await loadStatoblastQuestion(fixture({ forked: true }).client, securityPool, deployment.questionId, deployment.universeId, false)
 	expect(question.universeHasForked).toBe(true)

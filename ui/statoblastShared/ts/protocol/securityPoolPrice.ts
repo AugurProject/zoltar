@@ -1,3 +1,4 @@
+import { priceErrors } from '../copy/protocolErrors.js'
 import { decodeEventLog, encodeFunctionData, getAddress, parseAbi, parseAbiItem, toEventSelector, zeroAddress, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { getErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
 import { decodeStoredValue } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
@@ -52,21 +53,21 @@ const capitalPriceAcceptedTopic = toEventSelector(capitalPriceAcceptedEvent)
 export async function loadSecurityPoolBranchPrice(client: ReadClient, securityPool: Address, owner: Address, universeId: bigint) {
 	const snapshot = await loadSecurityPoolPriceSnapshot({ client: { ...securityPoolReadClient(client), getBalance: parameters => client.getBalance(parameters) }, securityPool, owner, universeId })
 	const infrastructure = getInfraContractAddresses()
-	if (getAddress(snapshot.factory) !== getAddress(infrastructure.securityPoolFactory) || getAddress(snapshot.zoltar) !== getAddress(infrastructure.zoltar)) throw new Error('Security pool uses unrecognized price infrastructure.')
+	if (getAddress(snapshot.factory) !== getAddress(infrastructure.securityPoolFactory) || getAddress(snapshot.zoltar) !== getAddress(infrastructure.zoltar)) throw new Error(priceErrors.feedMismatch)
 	return snapshot
 }
 
 /** Authenticate one explicitly selected candidate and its stored oracle preimage. */
 export async function loadSecurityPoolPriceReport(client: ReadClient, snapshot: SecurityPoolPriceSnapshot, reportId: bigint) {
 	const observation = snapshot.observation
-	if (observation === undefined || reportId <= 0n || reportId >= 1n << 256n) throw new Error('Enter a valid report ID for this price feed.')
+	if (observation === undefined || reportId <= 0n || reportId >= 1n << 256n) throw new Error(priceErrors.validReportId)
 	const blockNumber = snapshot.blockNumber
 	const [candidate, outcome] = await Promise.all([client.readContract({ abi, address: snapshot.feed, functionName: 'reportCandidates', args: [reportId], blockNumber }), client.readContract({ abi, address: snapshot.feed, functionName: 'reportOutcome', args: [reportId], blockNumber })])
 	const tuple = requireTupleValue(candidate, 3, 'price report details')
-	const escrow = requireAddressValue(tuple[0], 'report escrow')
+	const escrow = requireAddressValue(tuple[0], 'report funding address')
 	const sponsor = requireAddressValue(tuple[1], 'report funder')
 	const maxSettlementBaseFee = requireBigintValue(tuple[2], 'report settlement base-fee ceiling')
-	if (escrow === zeroAddress) throw new Error('This report does not belong to this price feed.')
+	if (escrow === zeroAddress) throw new Error(priceErrors.reportNotFromFeed)
 	const pinned: Pick<ReadClient, 'readContract'> = { readContract: parameters => client.readContract({ ...parameters, blockNumber }) }
 	const [escrowFeed, escrowId, escrowSponsor, escrowOracle, state, wethCredit, repCredit] = await Promise.all([
 		client.readContract({ abi, address: escrow, functionName: 'feed', blockNumber }),
@@ -88,9 +89,9 @@ export async function loadSecurityPoolPriceReport(client: ReadClient, snapshot: 
 		getAddress(game.token2) !== snapshot.repToken ||
 		!hasOpenOracleFlag(game, OPEN_ORACLE_FLAG_TIME_TYPE)
 	)
-		throw new Error('Report escrow or oracle identities do not match this price feed.')
+		throw new Error(priceErrors.reportReadMismatch)
 	const [block, chain] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
-	if (block.hash !== snapshot.blockHash || chain !== snapshot.chainId) throw new Error('Report state changed. Refresh and retry.')
+	if (block.hash !== snapshot.blockHash || chain !== snapshot.chainId) throw new Error(priceErrors.reportStateChanged)
 	const reportOutcome = BigInt(requireIntegerLikeValue(outcome, 'report outcome'))
 	let recoveryBaseFeeBlocked = false
 	if (state.settled && reportOutcome === 0n && block.baseFeePerGas !== undefined && block.baseFeePerGas > maxSettlementBaseFee) {
@@ -103,7 +104,7 @@ export async function loadSecurityPoolPriceReport(client: ReadClient, snapshot: 
 			else throw error
 		}
 		const [finalBlock, finalChain] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
-		if (finalBlock.hash !== snapshot.blockHash || finalChain !== snapshot.chainId) throw new Error('Report state changed. Refresh and retry.')
+		if (finalBlock.hash !== snapshot.blockHash || finalChain !== snapshot.chainId) throw new Error(priceErrors.reportStateChanged)
 	}
 	return {
 		reportId,
@@ -163,7 +164,7 @@ export async function loadSecurityPoolPriceFunds(client: Pick<ReadClient, 'multi
 	const oracle = requireAddressValue(oracleValue, 'price feed oracle')
 	const requirePinnedBlock = async () => {
 		const block = await client.getBlock({ blockNumber })
-		if (block.hash !== blockHash) throw new Error('Report state changed. Refresh and retry.')
+		if (block.hash !== blockHash) throw new Error(priceErrors.reportStateChanged)
 	}
 	const ids = new Set<bigint>()
 	if (pendingId > 0n) ids.add(pendingId)
@@ -189,7 +190,7 @@ export async function loadSecurityPoolPriceFunds(client: Pick<ReadClient, 'multi
 	)
 	const registered = candidates.flatMap((value, index) => {
 		const [escrowValue, sponsorValue] = requireTupleValue(value, 3, 'price report details')
-		const escrow = requireAddressValue(escrowValue, 'report escrow')
+		const escrow = requireAddressValue(escrowValue, 'report funding address')
 		const funder = requireAddressValue(sponsorValue, 'report funder')
 		const id = reports[index]
 		return id !== undefined && escrow !== zeroAddress && funder !== zeroAddress ? [{ id, escrow, funder }] : []
@@ -216,7 +217,7 @@ export async function loadSecurityPoolPriceFunds(client: Pick<ReadClient, 'multi
 		const collateral = releasedCredit(funding[index * 3 + 1])
 		const rep = releasedCredit(funding[index * 3 + 2])
 		const [amount1, amount2, reporter, , settled, token1, , , , , , token2, , , , , callback] = game
-		if (requireAddressValue(callback, 'report receiver') !== escrow || requireAddressValue(token1, 'report collateral') !== collateralToken || requireAddressValue(token2, 'report REP') !== repToken) throw new Error('Report escrow identities do not match this price feed.')
+		if (requireAddressValue(callback, 'report receiver') !== escrow || requireAddressValue(token1, 'report collateral') !== collateralToken || requireAddressValue(token2, 'report REP') !== repToken) throw new Error(priceErrors.reportFundingMismatch)
 		const locked = BigInt(requireIntegerLikeValue(settled, 'report settlement time')) === 0n && requireAddressValue(reporter, 'current reporter') === escrow && (requireBigintValue(amount1, 'locked collateral') > 0n || requireBigintValue(amount2, 'locked REP') > 0n)
 		return locked || collateral > 0n || rep > 0n ? [{ reportId: id, funder }] : []
 	})
@@ -241,7 +242,7 @@ export function securityPoolPriceReportCache(profile: NetworkProfile, pool: Addr
 	)
 }
 export function buildSecurityPoolPriceSettlement(snapshot: SecurityPoolPriceSnapshot, report: SecurityPoolPriceReport): SecurityPoolTransaction {
-	if (snapshot.observation === undefined) throw new Error('Branch price feed is unavailable.')
+	if (snapshot.observation === undefined) throw new Error(priceErrors.branchPriceUnavailable)
 	return {
 		account: snapshot.owner,
 		to: snapshot.observation.openOracle,
@@ -259,7 +260,7 @@ export function buildSecurityPoolPriceFundingWithdrawal(snapshot: SecurityPoolPr
 }
 export function buildSecurityPoolPriceTokenWithdrawal(snapshot: SecurityPoolPriceSnapshot, report: SecurityPoolPriceReport, token: 'collateral' | 'rep', recipient: Address): SecurityPoolTransaction {
 	const tokenAddress = token === 'rep' ? snapshot.repToken : snapshot.observation?.weth
-	if (tokenAddress === undefined) throw new Error('Branch price feed is unavailable.')
+	if (tokenAddress === undefined) throw new Error(priceErrors.branchPriceUnavailable)
 	if (recipient === zeroAddress || recipient === report.escrow) throw new Error(priceCopy.invalidWithdrawalRecipient)
 	if (recipient !== getAddress(report.sponsor) && getAddress(snapshot.owner) !== getAddress(report.sponsor)) throw new Error(priceCopy.withdrawalRecipientRequiresFunder)
 	return { account: snapshot.owner, to: report.escrow, value: 0n, data: encodeFunctionData({ abi, functionName: 'withdrawTokenFunding', args: [tokenAddress, recipient] }) }

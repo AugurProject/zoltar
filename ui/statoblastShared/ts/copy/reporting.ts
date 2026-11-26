@@ -38,12 +38,12 @@ export const forkCostLead = 'Triggering costs you'
 export const forkCostDetail = 'REP supply grew after reporting started. You give up this REP permanently.'
 export const forkStakeCarries = 'Your REP stays staked and carries to the child universes after the fork.'
 export const selectedSideBelowMinimumReason = 'Remaining selected-side capacity is below the minimum report.'
-export const continueForkMigrationDetail = 'Your deposits move to each child question. Claim winning deposits there after it resolves.'
+export const continueForkMigrationDetail = 'Your deposits carry to each child question. Claim winning deposits there after it resolves.'
 export const reportAmountFieldLabel = 'Report amount'
 export const escalationStarted = 'Reporting started'
 export const chooseDepositsToSettle = 'Choose deposits to claim'
 export const forkAlreadyTriggeredReportReason = 'Reporting ended without a decision and the universe has forked. Continue in Fork & recovery.'
-export const forkAlreadyTriggeredSettlementReason = 'Your deposits move to the child questions. Continue in Fork & recovery.'
+export const forkAlreadyTriggeredSettlementReason = 'Your deposits carry to the child questions. Continue in Fork & recovery.'
 export const forkTriggerInstruction = 'Reporting ended without a decision. Deposits stay locked until someone triggers the irreversible universe fork.'
 export const forkRequiredSettlementReason = 'Reporting ended without a decision. Deposits stay locked until the universe forks. Then use Fork & recovery.'
 export const leadHoldingCapital = 'Amount needed to hold the lead'
@@ -72,7 +72,7 @@ export function formatAcceptedAmountTail(trimmedByTie: boolean) {
 export const openForkAndMigration = 'Open Fork & recovery'
 export const managePoolPrice = 'Manage security pool price'
 export const currentOraclePriceRequired = 'A current security pool oracle price is required before reporting.'
-export const forkMigrationRequiredDetail = 'Set up the child questions in Fork & recovery. Your deposits move. Claim winning deposits after the child question resolves.'
+export const forkMigrationRequiredDetail = 'Set up the child questions in Fork & recovery. Your deposits carry to the child questions. Claim winning deposits there after resolution.'
 export const parentUniverseForked = 'Universe forked'
 export const submittingReportTitle = 'Submitting report'
 export const approvingRepTitle = 'Approving REP'
@@ -188,7 +188,7 @@ export const noVaultRepSelectWallet = 'Select Wallet REP to report. This positio
 
 export const depositTriggersFork = 'This report reaches the non-decision threshold: the game ends and a universe fork can be triggered.'
 export const forkTriggerWarningTitle = 'This report ends reporting without a decision'
-export const forkTriggerWarning = (outcome: string, threshold: string) => `Another side already holds ${threshold} REP. Filling ${outcome} to the same threshold locks deposits. Anyone can then trigger the irreversible universe fork. Your deposits move to the child universes.`
+export const forkTriggerWarning = (outcome: string, threshold: string) => `Another side already holds ${threshold} REP. Filling ${outcome} to the same threshold locks deposits. Anyone can then trigger the irreversible universe fork. Your deposits carry to the child universes.`
 export const forkTriggerConfirmation = 'I understand this report ends reporting and allows the universe to fork.'
 export const forkTriggerConfirmationRequired = 'Confirm that this report ends reporting without a decision.'
 export const reportingRepApprovalRequired = 'Approve REP for this question before reporting.'
@@ -278,3 +278,9 @@ export const reportWalletAction = 'reporting on a question'
 export const loadingQuestionRepAllowance = 'Loading REP allowance for the question…'
 export const formatWalletRepRequiredBeforeReporting = (required: string) => `Add ${required} to this wallet before reporting.`
 export const postTransactionReportingRefreshFailed = 'Reporting transaction succeeded, but refreshing reporting details failed'
+
+export const reportingRefreshTimedOut = 'Reporting refresh timed out.'
+export const reportingRepApprovalFailed = 'Failed to approve REP for reporting'
+export const reportOutcomeFailed = 'Failed to report on outcome'
+export const validReportingOutcomeRequired = 'Select a valid reporting outcome.'
+export const selectedSideAlreadyFull = (threshold: string) => `Selected side is already full at ${threshold}.`

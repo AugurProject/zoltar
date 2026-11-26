@@ -1,3 +1,4 @@
+import { forkErrors } from '../copy/protocolErrors.js'
 import { encodeFunctionData, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { SecurityPoolForkSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -20,7 +21,7 @@ const abi = parseAbi([
 ])
 export async function loadSharedForkOutcome(client: ReadClient, snapshot: SecurityPoolForkSnapshot, outcomeIndex: bigint) {
 	const result = await loadSecurityPoolForkOutcome(client, { zoltar: snapshot.zoltar, universeId: snapshot.universeId, outcomeIndex, blockNumber: snapshot.blockNumber })
-	if ((await client.getBlock({ blockNumber: snapshot.blockNumber })).hash !== snapshot.blockHash) throw new Error('Fork snapshot changed. Refresh and retry.')
+	if ((await client.getBlock({ blockNumber: snapshot.blockNumber })).hash !== snapshot.blockHash) throw new Error(forkErrors.forkChanged)
 	return result
 }
 export async function loadSecurityPoolSourceRecovery(client: ReadClient, snapshot: Pick<SecurityPoolForkSnapshot, 'securityPool' | 'owner' | 'universeId' | 'blockNumber' | 'blockHash'>, questionId: bigint) {
@@ -32,13 +33,13 @@ export async function loadSecurityPoolSourceRecovery(client: ReadClient, snapsho
 		client.readContract({ address: snapshot.securityPool, abi, functionName: 'sourceGame', args: [snapshot.universeId, questionId], blockNumber }),
 	])
 	const factory = requireAddressValue(factoryValue, 'security pool factory')
-	if (typeof originId !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(originId) || BigInt(originId) === 0n) throw new Error('Question is not registered in this security pool.')
+	if (typeof originId !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(originId) || BigInt(originId) === 0n) throw new Error(forkErrors.questionUnregistered)
 	const pool = requireAddressValue(await client.readContract({ address: factory, abi, functionName: 'getQuestionLedger', args: [originId, snapshot.universeId], blockNumber }), 'parent question contract')
 	const origin = requireBigintValue(originValue, 'origin universe')
-	const game = requireAddressValue(gameValue, 'source game')
+	const game = requireAddressValue(gameValue, 'parent question reporting address')
 	const sourceValue = game === zeroAddress ? await client.readContract({ address: snapshot.securityPool, abi, functionName: 'getQuestionLedger', args: [questionId, origin], blockNumber }) : await client.readContract({ address: game, abi, functionName: 'questionLedger', blockNumber })
 	const source = requireAddressValue(sourceValue, 'parent question contract used for reporting')
-	if (source === zeroAddress) throw new Error('Question is not registered in this security pool.')
+	if (source === zeroAddress) throw new Error(forkErrors.questionUnregistered)
 	const shareTokenValue = await client.readContract({ address: source, abi, functionName: 'shareToken', blockNumber })
 	const shareToken = requireAddressValue(shareTokenValue, 'source shares')
 	const [rightsValue, eligibleValue] = await Promise.all([
@@ -47,9 +48,9 @@ export async function loadSecurityPoolSourceRecovery(client: ReadClient, snapsho
 	])
 	const eligible = requireBooleanValue(eligibleValue, 'collateral recovery eligibility')
 	const rights = requireBigintArray(rightsValue, 'collateral recovery rights')
-	if (rights.length !== 3 || rights.some(value => value < 0n || value >= 1n << 256n)) throw new Error('Invalid collateral recovery rights.')
+	if (rights.length !== 3 || rights.some(value => value < 0n || value >= 1n << 256n)) throw new Error(forkErrors.collateralRecovery)
 	const availableShares = rights.reduce((minimum, value) => (value < minimum ? value : minimum), rights[0] ?? 0n)
-	if ((await client.getBlock({ blockNumber })).hash !== snapshot.blockHash) throw new Error('Fork snapshot changed. Refresh and retry.')
+	if ((await client.getBlock({ blockNumber })).hash !== snapshot.blockHash) throw new Error(forkErrors.forkChanged)
 	return { pool, source, shareToken, eligible, rights, availableShares }
 }
 export function buildSecurityPoolRecoveryPreparation(snapshot: SecurityPoolForkSnapshot, source: Awaited<ReturnType<typeof loadSecurityPoolSourceRecovery>>) {

@@ -23,3 +23,6 @@ export const recoveryContributionHint = 'These complete sets include inherited R
 export const approvalPending = 'Wait for the current approval to finish.'
 
 export const fundingReadFailed = 'Unable to load collateral funding.'
+
+export const updatingCollateralQuote = 'Updating collateral quote.'
+export const positiveCollateralAmountRequired = 'Enter a positive collateral amount.'

@@ -1,3 +1,4 @@
+import { watchlistErrors } from '../copy/protocolErrors.js'
 import { identifySecurityPoolAdmission } from './securityPoolAdmission.js'
 import { getAddress, isAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
@@ -364,7 +365,7 @@ export async function loadWatchlistRows(client: ReadClient, entries: readonly Wa
 		if (checkpoint.anchor === undefined) {
 			const observedAt = Date.now()
 			const latest = await client.getBlock()
-			if (latest.number === undefined || latest.hash === undefined) throw new Error('Watchlist refresh requires a mined block.')
+			if (latest.number === undefined || latest.hash === undefined) throw new Error(watchlistErrors.refreshBlock)
 			checkpoint.anchor = { number: latest.number, hash: latest.hash, timestamp: latest.timestamp, observedAt }
 		}
 		const head = checkpoint.anchor

@@ -14,27 +14,27 @@ test('custody authentication and bounded accounting pin every read to one mined 
 test('a spoofed module fails closed before approvals can be offered', async () => {
 	const fixture = capitalClient()
 	fixture.codes.set(modules.engine, '0x6000')
-	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('payout contract runtime')
+	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('verify the payout contract code')
 })
 test('an unrecognized capital lifecycle delegate fails closed before approvals', async () => {
 	const fixture = capitalClient()
 	fixture.setRead('lifecycleDelegate', modules.engine)
-	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('capital lifecycle delegate runtime')
+	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('verify the pool setup contract code')
 })
 test('a lifecycle delegate whose implementation getter points elsewhere fails authentication', async () => {
 	const fixture = capitalClient()
 	fixture.setRead('implementation', modules.engine, modules.lifecycle)
-	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('capital lifecycle delegate belongs to another authority')
+	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('pool setup contract is linked to a different contract')
 })
 test('an unrecognized capital auction delegate fails closed before approvals', async () => {
 	const fixture = capitalClient()
 	fixture.setRead('repairAuctionDelegate', modules.engine)
-	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('capital auction delegate runtime')
+	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('verify the pool auction contract code')
 })
 test('an auction delegate whose implementation getter points elsewhere fails authentication', async () => {
 	const fixture = capitalClient()
 	fixture.setRead('implementation', modules.engine, modules.repairAuctionDelegate)
-	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('capital auction delegate belongs to another authority')
+	await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow('pool auction contract is linked to a different contract')
 })
 test('setup and account authentication reject an unrecognized future auction deployer', async () => {
 	const fixture = capitalClient()
@@ -90,7 +90,7 @@ for (const [module, label] of [
 	test(`unrecognized ${label} code blocks security pool approval`, async () => {
 		const fixture = capitalClient()
 		fixture.codes.set(module, '0x6000')
-		await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow(`${label} runtime`)
+		await expect(loadSecurityPoolAccount(fixture.client, securityPool, owner, 0n)).rejects.toThrow(`Could not verify the ${label} code.`)
 	})
 }
 test('runtime masking requires repeated immutable instances to agree', () => {
@@ -101,8 +101,8 @@ test('runtime masking requires repeated immutable instances to agree', () => {
 		],
 	}
 	expect(() => verifyRuntimeCode('0x60aa60aa', '0x60006000', refs, 'module')).not.toThrow()
-	expect(() => verifyRuntimeCode('0x60aa60bb', '0x60006000', refs, 'module')).toThrow('Inconsistent')
-	expect(() => verifyRuntimeCode('0x61aa60aa', '0x60006000', refs, 'module')).toThrow('Unrecognized')
+	expect(() => verifyRuntimeCode('0x60aa60bb', '0x60006000', refs, 'module')).toThrow('The module has unexpected settings.')
+	expect(() => verifyRuntimeCode('0x61aa60aa', '0x60006000', refs, 'module')).toThrow('Could not verify the module code.')
 })
 
 test('setup readiness includes the separate fourth price-feed stage and rejects out-of-range stages', async () => {

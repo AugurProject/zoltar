@@ -59,45 +59,45 @@ export type OpenOracleDisputeSubmissionDetails = {
 	/** The ETH-to-WETH wrap step before the approvals; undefined when neither report token is WETH. `amountAttoEth` is the WETH the wallet lacks for this dispute. */
 	wethWrap: { amountAttoEth: bigint | undefined; blockMessage: OpenOracleGateMessage | undefined } | undefined
 }
-export function formatOpenOracleSettleWriteErrorMessage(error: unknown, fallbackMessage = 'Failed to settle report') {
+export function formatOpenOracleSettleWriteErrorMessage(error: unknown, fallbackMessage = openOracleCopy.settleWriteFailed) {
 	const genericMessage = formatWriteErrorMessage(error, fallbackMessage)
 	if (genericMessage === transactionErrorMessages.walletRejected) return genericMessage
 	const detail = getErrorDetail(error, fallbackMessage)
-	if (detail === undefined) return 'Transaction failed while settling the report. Try again; the latest report state will be checked automatically.'
+	if (detail === undefined) return openOracleCopy.settleWriteRetry
 	const normalizedDetail = detail.toLowerCase()
 	// Match only OpenOracle custom error names and their selectors.
 	if (normalizedDetail.includes('invalidgaslimit') || normalizedDetail.includes('0x98bdb2e0')) return openOracleCopy.settlementContractNeedsGas
-	if (normalizedDetail.includes('settletooearly') || normalizedDetail.includes('0x3edf6050')) return 'This report is not ready to settle.'
+	if (normalizedDetail.includes('settletooearly') || normalizedDetail.includes('0x3edf6050')) return openOracleCopy.reportNotReadyToSettle
 	if (normalizedDetail.includes('alreadysettled') || normalizedDetail.includes('0x560ff900')) return openOracleCopy.reportAlreadySettled
 	if (normalizedDetail.includes('noreportyet') || normalizedDetail.includes('0x15c7bbe9')) return openOracleCopy.reportMissingInitialReport
 	if (genericMessage === ensureSentence(detail)) return genericMessage
-	return `Transaction failed while settling the report. Reason: ${ensureSentence(detail)}`
+	return openOracleCopy.settleWriteReason(ensureSentence(detail))
 }
-export function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbackMessage = 'Failed to dispute report') {
+export function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbackMessage = openOracleCopy.disputeWriteFailed) {
 	const genericMessage = formatWriteErrorMessage(error, fallbackMessage)
 	if (genericMessage === transactionErrorMessages.walletRejected) return genericMessage
 	const detail = getErrorDetail(error, fallbackMessage)
-	if (detail === undefined) return 'Transaction failed while disputing the report. Try again; the latest report state will be checked automatically.'
+	if (detail === undefined) return openOracleCopy.disputeWriteRetry
 	const normalizedDetail = detail.toLowerCase()
 	if (normalizedDetail.includes('disputetooearly') || normalizedDetail.includes('0x058009cb')) return openOracleCopy.disputeNotReady
 	if (normalizedDetail.includes('disputetoolate') || normalizedDetail.includes('0x6aeec261')) return openOracleCopy.disputeWindowClosed
 	if (normalizedDetail.includes('alreadysettled') || normalizedDetail.includes('0x560ff900')) return openOracleCopy.reportAlreadySettled
 	if (normalizedDetail.includes('noreporttodispute') || normalizedDetail.includes('0x833b7496')) return openOracleCopy.reportMissingInitialReport
 	if (genericMessage === ensureSentence(detail)) return genericMessage
-	return `Transaction failed while disputing the report. Reason: ${ensureSentence(detail)}`
+	return openOracleCopy.disputeWriteReason(ensureSentence(detail))
 }
 export function getOpenOracleCreateGuardMessage({ isOnActiveAppChain, settlerRewardInput, walletConnected, walletBalanceAttoEth }: { isOnActiveAppChain: boolean; settlerRewardInput: string; walletConnected: boolean; walletBalanceAttoEth: bigint | undefined }) {
 	const walletGuardState = getWalletConnectionActiveAppChainGuardState({
 		isOnActiveAppChain,
 		walletConnected,
-		walletRequiredReason: commonCopy.formatConnectWalletBefore('creating a standalone OpenOracle report'),
+		walletRequiredReason: commonCopy.formatConnectWalletBefore(openOracleCopy.createReportAction),
 	})
 	if (walletGuardState.blocked) return walletGuardState.reason
 	// Standalone reports are ERC-20 pairs, so the transaction sends exactly the settler reward in ETH.
 	const ethSentAttoEth = getOpenOracleCreateEthSent(settlerRewardInput)
-	if (ethSentAttoEth === undefined) return 'Enter a valid settler reward.'
+	if (ethSentAttoEth === undefined) return openOracleCopy.validSettlerRewardRequired
 	if (walletBalanceAttoEth === undefined) return statoblastAppCopy.loadingWalletEthBalance
-	if (ethSentAttoEth > walletBalanceAttoEth) return `Need ${formatAdditionalCurrencyBalance(ethSentAttoEth - walletBalanceAttoEth, 'ETH')} in this wallet to create the selected standalone OpenOracle report.`
+	if (ethSentAttoEth > walletBalanceAttoEth) return openOracleCopy.createReportEthRequired(formatAdditionalCurrencyBalance(ethSentAttoEth - walletBalanceAttoEth, 'ETH'))
 	return undefined
 }
 
@@ -110,13 +110,13 @@ export function getOpenOracleCreateWrapGuardMessage(wrap: bigint, reward: bigint
 	if (wrap === 0n) return undefined
 	if (walletBalanceAttoEth === undefined) return statoblastAppCopy.loadingWalletEthBalance
 	const needed = wrap + reward + ETH_GAS_RESERVE_ATTO_ETH
-	if (walletBalanceAttoEth < needed) return `Need ${formatAdditionalCurrencyBalance(needed - walletBalanceAttoEth, 'ETH')} to wrap and leave enough for the settler reward and network fees.`
+	if (walletBalanceAttoEth < needed) return openOracleCopy.createReportWrapEthRequired(formatAdditionalCurrencyBalance(needed - walletBalanceAttoEth, 'ETH'))
 	return undefined
 }
 
 function getOpenOracleCreateAddressValidationMessage(addressInput: string, role: 'base' | 'quote') {
 	if (tryParseAddressInput(addressInput) !== undefined) return undefined
-	return role === 'base' ? 'Enter a valid base token address.' : 'Enter a valid quote token address.'
+	return role === 'base' ? openOracleCopy.validBaseTokenAddressRequired : openOracleCopy.validQuoteTokenAddressRequired
 }
 
 /** The ETH sent is derived from the settler reward, so it is not an editable field. */
@@ -159,17 +159,17 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 	const fieldErrors: Partial<Record<OpenOracleCreateField, string>> = {}
 	const token1AddressValidationMessage = getOpenOracleCreateAddressValidationMessage(form.token1Address, 'base')
 	setOpenOracleCreateFieldError(fieldErrors, 'token1Address', token1AddressValidationMessage)
-	const token1Address = token1AddressValidationMessage === undefined ? parseAddressInput(form.token1Address, 'Base token address') : undefined
+	const token1Address = token1AddressValidationMessage === undefined ? parseAddressInput(form.token1Address, openOracleCopy.baseTokenAddress) : undefined
 	const token2AddressValidationMessage = getOpenOracleCreateAddressValidationMessage(form.token2Address, 'quote')
 	setOpenOracleCreateFieldError(fieldErrors, 'token2Address', token2AddressValidationMessage)
-	const token2Address = token2AddressValidationMessage === undefined ? parseAddressInput(form.token2Address, 'Quote token address') : undefined
+	const token2Address = token2AddressValidationMessage === undefined ? parseAddressInput(form.token2Address, openOracleCopy.quoteTokenAddress) : undefined
 	const exactToken1Report =
 		token1Decimals === undefined
 			? (() => {
 					const validationMessage = getOpenOracleUnknownScaleDecimalValidationMessage({
 						allowZero: false,
 						input: form.exactToken1Report,
-						invalidMessage: 'Enter a valid base token amount.',
+						invalidMessage: openOracleCopy.validBaseTokenAmountRequired,
 						negativeMessage: undefined,
 					})
 					setOpenOracleCreateFieldError(fieldErrors, 'exactToken1Report', validationMessage)
@@ -177,14 +177,14 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 					return 1n
 				})()
 			: tryParseDecimalInput(form.exactToken1Report, token1Decimals)
-	if (token1Decimals !== undefined && exactToken1Report === undefined) setOpenOracleCreateFieldError(fieldErrors, 'exactToken1Report', 'Enter a valid base token amount.')
+	if (token1Decimals !== undefined && exactToken1Report === undefined) setOpenOracleCreateFieldError(fieldErrors, 'exactToken1Report', openOracleCopy.validBaseTokenAmountRequired)
 	const initialToken2Amount =
 		token2Decimals === undefined
 			? (() => {
 					const validationMessage = getOpenOracleUnknownScaleDecimalValidationMessage({
 						allowZero: false,
 						input: form.initialToken2Amount,
-						invalidMessage: 'Enter a valid quote token amount.',
+						invalidMessage: openOracleCopy.validQuoteTokenAmountRequired,
 						negativeMessage: undefined,
 					})
 					setOpenOracleCreateFieldError(fieldErrors, 'initialToken2Amount', validationMessage)
@@ -192,14 +192,14 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 					return 1n
 				})()
 			: tryParseDecimalInput(form.initialToken2Amount, token2Decimals)
-	if (token2Decimals !== undefined && initialToken2Amount === undefined) setOpenOracleCreateFieldError(fieldErrors, 'initialToken2Amount', 'Enter a valid quote token amount.')
+	if (token2Decimals !== undefined && initialToken2Amount === undefined) setOpenOracleCreateFieldError(fieldErrors, 'initialToken2Amount', openOracleCopy.validQuoteTokenAmountRequired)
 
 	const escalationHalt =
 		token1Decimals === undefined
 			? (() => {
 					const validationMessage = getOpenOracleUnknownScaleDecimalValidationMessage({
 						input: form.escalationHalt,
-						invalidMessage: 'Enter a valid escalation halt.',
+						invalidMessage: openOracleCopy.validDisputeGrowthCutoffRequired,
 						negativeMessage: openOracleCopy.disputeGrowthCutoffNegative,
 					})
 					setOpenOracleCreateFieldError(fieldErrors, 'escalationHalt', validationMessage)
@@ -207,24 +207,24 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 					return 0n
 				})()
 			: tryParseDecimalInput(form.escalationHalt, token1Decimals)
-	if (token1Decimals !== undefined && escalationHalt === undefined) setOpenOracleCreateFieldError(fieldErrors, 'escalationHalt', 'Enter a valid escalation halt.')
+	if (token1Decimals !== undefined && escalationHalt === undefined) setOpenOracleCreateFieldError(fieldErrors, 'escalationHalt', openOracleCopy.validDisputeGrowthCutoffRequired)
 
 	const settlerRewardAttoEth = tryParseDecimalInput(form.settlerRewardEthAmount)
 	const ethValue = getOpenOracleCreateEthSent(form.settlerRewardEthAmount)
-	if (settlerRewardAttoEth === undefined) setOpenOracleCreateFieldError(fieldErrors, 'settlerRewardEthAmount', 'Enter a valid settler reward.')
+	if (settlerRewardAttoEth === undefined) setOpenOracleCreateFieldError(fieldErrors, 'settlerRewardEthAmount', openOracleCopy.validSettlerRewardRequired)
 
 	const settlementTime = tryParseBigIntInput(form.settlementTime)
-	if (settlementTime === undefined) setOpenOracleCreateFieldError(fieldErrors, 'settlementTime', 'Enter a valid settlement delay.')
+	if (settlementTime === undefined) setOpenOracleCreateFieldError(fieldErrors, 'settlementTime', openOracleCopy.validSettlementDelayRequired)
 	const disputeDelay = tryParseBigIntInput(form.disputeDelay)
-	if (disputeDelay === undefined) setOpenOracleCreateFieldError(fieldErrors, 'disputeDelay', 'Enter a valid dispute delay.')
+	if (disputeDelay === undefined) setOpenOracleCreateFieldError(fieldErrors, 'disputeDelay', openOracleCopy.validDisputeDelayRequired)
 
 	const multiplier = parseOpenOracleMultiplierInput(form.multiplier)
-	if (multiplier === undefined || multiplier < 0n) setOpenOracleCreateFieldError(fieldErrors, 'multiplier', 'Enter a valid multiplier, such as 1.5.')
+	if (multiplier === undefined || multiplier < 0n) setOpenOracleCreateFieldError(fieldErrors, 'multiplier', openOracleCopy.validMultiplierRequired)
 
 	const feePercentage = tryParseDecimalInput(form.feePercentage, 5)
-	if (feePercentage === undefined) setOpenOracleCreateFieldError(fieldErrors, 'feePercentage', 'Enter a valid dispute fee.')
+	if (feePercentage === undefined) setOpenOracleCreateFieldError(fieldErrors, 'feePercentage', openOracleCopy.validDisputeFeeRequired)
 	const protocolFee = tryParseDecimalInput(form.protocolFee, 5)
-	if (protocolFee === undefined) setOpenOracleCreateFieldError(fieldErrors, 'protocolFee', 'Enter a valid protocol fee.')
+	if (protocolFee === undefined) setOpenOracleCreateFieldError(fieldErrors, 'protocolFee', openOracleCopy.validProtocolFeeRequired)
 
 	if (
 		token1Address !== undefined &&
@@ -467,18 +467,18 @@ export function parseOpenOracleCreateFormSubmission({ form, token1Decimals, toke
 	const validation = getOpenOracleCreateValidation({ form, token1Decimals, token2Decimals })
 	if (!validation.isValid) throw new Error(validation.message ?? openOracleCopy.invalidReportParameters)
 	return {
-		disputeDelay: bigintToSafeNumber(parseBigIntInput(form.disputeDelay, 'Dispute delay'), 'Dispute delay'),
+		disputeDelay: bigintToSafeNumber(parseBigIntInput(form.disputeDelay, openOracleCopy.disputeDelay), openOracleCopy.disputeDelay),
 		escalationHalt: parseDecimalInput(form.escalationHalt, openOracleCopy.escalationHalt, token1Decimals),
-		exactToken1Report: parseDecimalInput(form.exactToken1Report, 'Base token amount', token1Decimals),
-		initialToken2Amount: parseDecimalInput(form.initialToken2Amount, 'Quote token amount', token2Decimals),
-		ethValueAttoEth: parseDecimalInput(form.settlerRewardEthAmount, 'Settler reward'),
-		feePercentage: parseOpenOracleFeePercentageInput(form.feePercentage, 'Dispute fee'),
-		multiplier: bigintToSafeNumber(parseDecimalInput(form.multiplier, 'Multiplier', OPEN_ORACLE_MULTIPLIER_DECIMALS), 'Multiplier'),
-		protocolFee: parseOpenOracleFeePercentageInput(form.protocolFee, 'Protocol fee'),
-		settlementTime: bigintToSafeNumber(parseBigIntInput(form.settlementTime, 'Settlement delay'), 'Settlement delay'),
-		settlerRewardAttoEth: parseDecimalInput(form.settlerRewardEthAmount, 'Settler reward'),
-		token1Address: parseAddressInput(form.token1Address, 'Base token address'),
-		token2Address: parseAddressInput(form.token2Address, 'Quote token address'),
+		exactToken1Report: parseDecimalInput(form.exactToken1Report, openOracleCopy.baseTokenAmount, token1Decimals),
+		initialToken2Amount: parseDecimalInput(form.initialToken2Amount, openOracleCopy.quoteTokenAmount, token2Decimals),
+		ethValueAttoEth: parseDecimalInput(form.settlerRewardEthAmount, openOracleCopy.settlerReward),
+		feePercentage: parseOpenOracleFeePercentageInput(form.feePercentage, openOracleCopy.disputeFeeRate),
+		multiplier: bigintToSafeNumber(parseDecimalInput(form.multiplier, openOracleCopy.multiplier, OPEN_ORACLE_MULTIPLIER_DECIMALS), openOracleCopy.multiplier),
+		protocolFee: parseOpenOracleFeePercentageInput(form.protocolFee, openOracleCopy.protocolFee),
+		settlementTime: bigintToSafeNumber(parseBigIntInput(form.settlementTime, openOracleCopy.settlementDelay), openOracleCopy.settlementDelay),
+		settlerRewardAttoEth: parseDecimalInput(form.settlerRewardEthAmount, openOracleCopy.settlerReward),
+		token1Address: parseAddressInput(form.token1Address, openOracleCopy.baseTokenAddress),
+		token2Address: parseAddressInput(form.token2Address, openOracleCopy.quoteTokenAddress),
 	}
 }
 export function formatOpenOracleMultiplier(multiplier: bigint | undefined) {

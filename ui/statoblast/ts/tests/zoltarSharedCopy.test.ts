@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
+import { questionContractAddress } from '@zoltar/ui-statoblast-shared/copy/questionPage.js'
 import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import * as reportingCopy from '@zoltar/ui-statoblast-shared/copy/reporting.js'
 import * as simulationCopy from '@zoltar/ui-core-shared/copy/simulation.js'
@@ -35,7 +36,8 @@ test('transaction actions and pending labels use sentence case independently of 
 })
 
 test('the Statoblast question address label uses the glossary', () => {
-	expect(commonCopy.questionLedgerAddress).toBe('Question contract address')
+	expect(questionContractAddress).toBe('Question contract address')
+	expect(commonCopy.questionLedgerAddress).toBe('Question ledger address')
 })
 
 test('shared OpenOracle labels describe what the price report changes', () => {

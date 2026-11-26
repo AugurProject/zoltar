@@ -142,7 +142,7 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 	if (accountAddress === undefined) collateralReason = commonCopy.walletConnectionRequired
 	else if (selectedCollateral?.error !== undefined) collateralReason = selectedCollateral.error
 	else if (collateral === undefined) collateralReason = collateralCopy.fundingLoading
-	else if (requiredCollateral === undefined) collateralReason = (parseCompleteSetAmountInput(amountInput, collateral.decimals) ?? 0n) > 0n ? 'Updating collateral quote.' : 'Enter a positive collateral amount.'
+	else if (requiredCollateral === undefined) collateralReason = (parseCompleteSetAmountInput(amountInput, collateral.decimals) ?? 0n) > 0n ? collateralCopy.updatingCollateralQuote : collateralCopy.positiveCollateralAmountRequired
 	else if (collateralQuote !== undefined && collateralQuote.amount > collateralQuote.capacity) collateralReason = insufficientMintCapacity
 	else if (collateral.balance < requiredCollateral) collateralReason = collateralCopy.formatInsufficientBalance(collateral.symbol)
 	else if (collateral.allowance < requiredCollateral) collateralReason = collateralCopy.approvalRequired

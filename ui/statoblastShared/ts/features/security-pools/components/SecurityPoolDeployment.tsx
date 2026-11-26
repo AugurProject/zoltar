@@ -231,7 +231,10 @@ export function SecurityPoolDeployment({ actions, model }: { actions: SecurityPo
 	const previousPool = actions.deploymentPool === undefined && (model.setup?.stage ?? model.savedSetupStage ?? 4) < 4 && isAddress(model.managerInput) ? getAddress(model.managerInput) : undefined
 	const openPool = setupStage === 4 ? actions.deploymentPool : undefined
 	const pending = actions.pendingDeployment
-	const canCheckPending = pending !== undefined && pending.restartAllowed !== true && actions.busy === undefined
+	const canCheckPending = pending !== undefined && actions.busy === undefined
+	let restartConfirmation = pageCopy.deployDiscardConfirmation
+	if (pending !== undefined) restartConfirmation = pending.step === 'pool' ? pageCopy.deployRetryConfirmation : pageCopy.deployRecoveryConfirmation
+	const checkPendingLabel = pending?.hash === undefined ? pageCopy.deployCheckAgain : pageCopy.deployCheckReceipt
 	return (
 		<>
 			<nav className='statoblast-breadcrumbs' aria-label={pageCopy.breadcrumbs}>
@@ -273,24 +276,26 @@ export function SecurityPoolDeployment({ actions, model }: { actions: SecurityPo
 						{setupDataNotice !== undefined && <p className='detail'>{progressNotice}</p>}
 						{actions.creationError === undefined ? undefined : <UserMessage tone='error' detail={actions.creationError} />}
 						<DeploymentActions actions={actions} setupStage={setupStage} setupVerificationPending={verifiedSetupStage === undefined && setupStage !== undefined && setupStage < 4} />
-						{canCheckPending && pending.hash !== undefined && (
-							<button type='button' className='secondary' disabled={actions.checkingDeploymentReceipt} onClick={() => void actions.refreshDeploymentProgress()}>
-								{actions.checkingDeploymentReceipt ? pageCopy.deployCheckingReceipt : pageCopy.deployCheckReceipt}
-							</button>
-						)}
-						{canCheckPending && pending.hash === undefined && pending.nonce !== undefined && (
-							<button
-								type='button'
-								className='secondary'
-								disabled={actions.checkingDeploymentReceipt}
-								onClick={() => {
-									if (!window.confirm(deploymentCopy.confirmWalletRejection)) return
-									selectStep(3)
-									void actions.confirmWalletRejection()
-								}}
-							>
-								{deploymentCopy.walletRejected}
-							</button>
+						{canCheckPending && (
+							<div className='actions'>
+								<button type='button' className='secondary' disabled={actions.checkingDeploymentReceipt} onClick={() => void actions.refreshDeploymentProgress()}>
+									{actions.checkingDeploymentReceipt ? pageCopy.deployCheckingReceipt : checkPendingLabel}
+								</button>
+								{pending.hash === undefined && pending.nonce !== undefined && !actions.canStartNewDeployment && (
+									<button
+										type='button'
+										className='secondary'
+										disabled={actions.checkingDeploymentReceipt}
+										onClick={() => {
+											if (!window.confirm(deploymentCopy.confirmWalletRejection)) return
+											selectStep(3)
+											void actions.confirmWalletRejection()
+										}}
+									>
+										{deploymentCopy.walletRejected}
+									</button>
+								)}
+							</div>
 						)}
 						{(openPool !== undefined || actions.canStartNewDeployment) && (
 							<div className='actions'>
@@ -303,9 +308,12 @@ export function SecurityPoolDeployment({ actions, model }: { actions: SecurityPo
 									<button
 										type='button'
 										className='secondary'
-										disabled={actions.busy !== undefined}
+										disabled={actions.busy !== undefined || actions.checkingDeploymentReceipt}
 										onClick={() => {
-											if (window.confirm(pageCopy.deployDiscardConfirmation) && actions.startNewDeployment()) selectStep(0)
+											if (!window.confirm(restartConfirmation)) return
+											void actions.startNewDeployment().then(started => {
+												if (started) selectStep(pending?.step === 'pool' ? 3 : 0)
+											})
 										}}
 									>
 										{pageCopy.deployAnother}

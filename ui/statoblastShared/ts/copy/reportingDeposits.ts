@@ -5,7 +5,6 @@ export const tryAgain = 'Try again'
 export const formatClaimRepDeposits = (detail: string | number | bigint, length: string | number | bigint) => `Claim ${detail} REP (${length} deposits)`
 export const claimingDeposits = 'Claiming deposits…'
 export const checkingInheritedClaims = 'Checking inherited claims.'
-export const inheritedDepositLost = 'Lost · no action needed'
 export const locateDeposits = 'Locate deposits'
 export const locatedStake = 'Located'
 export const unlocatedStake = 'Still to locate'
@@ -36,3 +35,5 @@ export const depositWrongOwner = 'This deposit belongs to another address.'
 export const depositAlreadyClaimed = 'This deposit was already claimed.'
 export const depositCheckFailed = 'Could not check that deposit.'
 export const depositNotFound = (index: bigint, outcome: string) => `There is no deposit #${index} on ${outcome}.`
+
+export const searchTimedOut = 'Deposit search timed out.'

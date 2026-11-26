@@ -1,3 +1,4 @@
+import { questionContractAddress } from '../../../copy/questionPage.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
@@ -268,7 +269,7 @@ export function TradingSection({
 			: [
 					{ label: commonCopy.question, value: selectedPool.marketDetails.title },
 					{ identityKey: 'outcome', label: commonCopy.outcome, value: outcome },
-					{ identityKey: 'security-pool', label: commonCopy.questionLedgerAddress, value: <AddressValue longAbbreviation address={selectedPool.questionLedgerAddress} /> },
+					{ identityKey: 'security-pool', label: questionContractAddress, value: <AddressValue longAbbreviation address={selectedPool.questionLedgerAddress} /> },
 				]
 	const toggleTargetOutcomeIndex = (outcomeIndex: bigint) => {
 		if (selectedTargetOutcomeIndexSet.has(outcomeIndex.toString())) {

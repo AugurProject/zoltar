@@ -32,7 +32,7 @@ export const callbackContract = 'Settlement contract'
 export const callbackExtra = 'Settlement add-ons'
 export const callbackGasLimit = 'Settlement contract gas limit'
 export const settlementContractNeedsGas = 'The settlement contract ran out of gas. Retry using the gas limit suggested by your wallet.'
-export const priceReportActionTitles = { failure: 'Price report failed', pending: 'Reporting price', success: 'Price reported' }
+const priceReportActionTitles = { failure: 'Price report failed', pending: 'Reporting price', success: 'Price reported' }
 export const formatCurrentAmount1Label = (tokenSymbol: string) => `Current base amount (${tokenSymbol})`
 export const formatCurrentAmount2Label = (tokenSymbol: string) => `Current quote amount (${tokenSymbol})`
 export const formatTokenPairSuffix = (token1Symbol: string, token2Symbol: string) => `${token1Symbol} / ${token2Symbol}`
@@ -154,8 +154,8 @@ export const settleReport = 'Settle report'
 export const formatReportMissing = (reportId: CopyTemplateValue) => `OpenOracle report #${reportId} does not exist.`
 export const formatApprovingTokenTitle = (tokenSymbol: CopyTemplateValue) => `Approving ${tokenSymbol}`
 export const formatWithdrawingTokenTitle = (tokenSymbol: CopyTemplateValue) => `Withdrawing ${tokenSymbol}`
-export const creatingStandaloneReportTitle = 'Creating standalone OpenOracle report'
-export const standaloneReportCreated = 'Standalone OpenOracle report created'
+const creatingStandaloneReportTitle = 'Creating standalone OpenOracle report'
+const standaloneReportCreated = 'Standalone OpenOracle report created'
 
 export const formatSecondsDurationHint = (seconds: CopyTemplateValue, duration: CopyTemplateValue) => `${seconds} seconds = ${duration}`
 export const impliedInitialPrice = 'Initial price'
@@ -253,8 +253,8 @@ export const approvalMustIncrease = (token: string) => `The ${token} approval mu
 export const disputesOpenIn = (duration: string) => `Disputes open in ${duration}.`
 
 export const settlementDurationLimit = (duration: string) => `Settlement delay must not exceed ${duration} in this interface.`
-export const settlementGasUnsafe = 'This report exceeds the safe settlement gas limit. Disputing it could lock your dispute deposit.'
-export const settlementDurationUnsafe = (duration: string) => `This report has a settlement duration longer than ${duration}. Disputing it could lock your dispute deposit.`
+export const settlementGasUnsafe = 'This report exceeds the safe settlement gas limit. Disputing it could lock the funds you put into this report.'
+export const settlementDurationUnsafe = (duration: string) => `This report has a settlement duration longer than ${duration}. Disputing it could lock the funds you put into this report.`
 
 export const postTransactionReportRefreshFailed = 'Oracle transaction succeeded, but refreshing the selected report failed'
 export const tokenAddress = 'Token address'
@@ -283,3 +283,43 @@ export const formatRequiredNewDisputeAmountUnavailable = (token: string) => `Una
 export const formatLoadingDisputeTokenBalance = (token: string) => `Loading current ${token} balance…`
 export const formatLoadingDisputeTokenApproval = (token: string) => `Loading current ${token} approval…`
 export const formatDisputeTokenApprovalRequired = (token: string) => `${token} approval required`
+
+export const settleWriteFailed = 'Failed to settle report'
+export const disputeWriteFailed = 'Failed to dispute report'
+export const settleWriteRetry = 'Transaction failed while settling the report. Try again; the latest report state will be checked automatically.'
+export const disputeWriteRetry = 'Transaction failed while disputing the report. Try again; the latest report state will be checked automatically.'
+export const settleWriteReason = (reason: string) => `Transaction failed while settling the report. Reason: ${reason}`
+export const disputeWriteReason = (reason: string) => `Transaction failed while disputing the report. Reason: ${reason}`
+export const createReportAction = 'creating a standalone OpenOracle report'
+export const validSettlerRewardRequired = 'Enter a valid settler reward.'
+export const createReportEthRequired = (amount: string) => `Need ${amount} in this wallet to create the selected standalone OpenOracle report.`
+export const createReportWrapEthRequired = (amount: string) => `Need ${amount} to wrap and leave enough for the settler reward and network fees.`
+export const validBaseTokenAddressRequired = 'Enter a valid base token address.'
+export const validQuoteTokenAddressRequired = 'Enter a valid quote token address.'
+export const baseTokenAddress = 'Base token address'
+export const quoteTokenAddress = 'Quote token address'
+export const validBaseTokenAmountRequired = 'Enter a valid base token amount.'
+export const validQuoteTokenAmountRequired = 'Enter a valid quote token amount.'
+export const validDisputeGrowthCutoffRequired = 'Enter a valid dispute growth cutoff.'
+export const validSettlementDelayRequired = 'Enter a valid settlement delay.'
+export const validDisputeDelayRequired = 'Enter a valid dispute delay.'
+export const validMultiplierRequired = 'Enter a valid multiplier, such as 1.5.'
+export const validDisputeFeeRequired = 'Enter a valid dispute fee.'
+export const validProtocolFeeRequired = 'Enter a valid protocol fee.'
+export const baseTokenAmount = 'Base token amount'
+export const quoteTokenAmount = 'Quote token amount'
+export const multiplier = 'Multiplier'
+export const disputeAndSwapDescription = 'Challenge the current report and provide the replacement swap amounts.'
+
+export const standaloneWriteActionTitles = {
+	approveToken1: { failure: 'Base token approval failed', pending: 'Approving base token', success: 'Base token approved' },
+	approveToken2: { failure: 'Quote token approval failed', pending: 'Approving quote token', success: 'Quote token approved' },
+	createReportInstance: { failure: 'Report creation failed', pending: creatingStandaloneReportTitle, success: standaloneReportCreated },
+	dispute: { failure: 'Dispute failed', pending: 'Submitting dispute', success: 'Dispute submitted' },
+	executeStagedOperation: { failure: 'Staged operation failed', pending: 'Executing staged operation', success: 'Staged operation executed' },
+	queueOperation: { failure: 'Queue operation failed', pending: 'Queueing operation', success: 'Operation queued' },
+	requestPrice: priceReportActionTitles,
+	settle: { failure: 'Settlement failed', pending: settlingReportTitle, success: reportSettled },
+	withdrawBalance: { failure: 'Oracle balance withdrawal failed', pending: 'Withdrawing oracle balance', success: 'Oracle balance withdrawn' },
+	wrapWeth: { failure: 'ETH wrap failed', pending: 'Wrapping ETH to WETH', success: 'ETH wrapped to WETH' },
+}

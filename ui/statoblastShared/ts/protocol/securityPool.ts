@@ -1,3 +1,4 @@
+import { poolErrors, contractCodeUnverified, contractSettingsMismatch, contractLinkMismatch } from '../copy/protocolErrors.js'
 import { currentStateCheckFailed } from '@zoltar/ui-core-shared/copy/transaction.js'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { collateralPresentation } from './collateral.js'
@@ -82,12 +83,12 @@ const linksAbi = parseAbi([
 type RuntimeArtifact = { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } }
 
 export function verifyRuntimeCode(actual: Hex | undefined, expected: Hex, references: Readonly<Record<string, readonly { start: number; length: number }[]>>, label: string) {
-	if (actual === undefined || actual.length !== expected.length) throw new Error(`Unrecognized ${label} runtime code.`)
+	if (actual === undefined || actual.length !== expected.length) throw new Error(contractCodeUnverified(label))
 	for (const entries of Object.values(references)) {
 		let immutableValue: string | undefined
 		for (const entry of entries) {
 			const value = actual.slice(2 + entry.start * 2, 2 + (entry.start + entry.length) * 2).toLowerCase()
-			if (immutableValue !== undefined && immutableValue !== value) throw new Error(`Inconsistent ${label} immutable values.`)
+			if (immutableValue !== undefined && immutableValue !== value) throw new Error(contractSettingsMismatch(label))
 			immutableValue = value
 		}
 	}
@@ -96,26 +97,26 @@ export function verifyRuntimeCode(actual: Hex | undefined, expected: Hex, refere
 		for (const entry of Object.values(references).flat()) {
 			const start = 2 + entry.start * 2
 			const length = entry.length * 2
-			if (start < 2 || start + length > code.length) throw new Error('Invalid compiler immutable reference.')
+			if (start < 2 || start + length > code.length) throw new Error(poolErrors.deploymentCode)
 			masked = masked.slice(0, start) + '0'.repeat(length) + masked.slice(start + length)
 		}
 		return masked
 	}
-	if (mask(actual) !== mask(expected)) throw new Error(`Unrecognized ${label} runtime code.`)
+	if (mask(actual) !== mask(expected)) throw new Error(contractCodeUnverified(label))
 }
 
 async function verifyModule(client: ReadClient, address: Address, artifact: RuntimeArtifact, authority: Address, label: string, blockNumber: bigint, authorityGetter: 'securityPool' | 'implementation' | 'services' = 'securityPool') {
 	verifyRuntimeCode(await client.getCode({ address, blockNumber }), `0x${artifact.evm.deployedBytecode.object}`, artifact.evm.deployedBytecode.immutableReferences, label)
 	const actualValue = await client.readContract({ address, abi: linksAbi, functionName: authorityGetter, blockNumber })
 	const actual = requireAddressValue(actualValue, 'module authority')
-	if (getAddress(actual) !== getAddress(authority)) throw new Error(`${label} belongs to another authority.`)
+	if (getAddress(actual) !== getAddress(authority)) throw new Error(contractLinkMismatch(label))
 }
 
 export async function verifyCapitalModuleClone(client: ReadClient, address: Address, artifact: RuntimeArtifact, ledger: Address, label: string, blockNumber: bigint) {
 	const implementation = boundCloneImplementation(await client.getCode({ address, blockNumber }), ledger, label)
 	const [code, authority] = await Promise.all([client.getCode({ address: implementation, blockNumber }), client.readContract({ address, abi: linksAbi, functionName: 'capitalLedger', blockNumber })])
 	verifyRuntimeCode(code, `0x${artifact.evm.deployedBytecode.object}`, artifact.evm.deployedBytecode.immutableReferences, label)
-	if (getAddress(requireAddressValue(authority, 'capital contract')) !== getAddress(ledger)) throw new Error(`${label} belongs to another authority.`)
+	if (getAddress(requireAddressValue(authority, 'capital contract')) !== getAddress(ledger)) throw new Error(contractLinkMismatch(label))
 }
 
 export async function verifyCapitalLedgerClone(client: ReadClient, securityPool: Address, ledger: Address, universeId: bigint, repToken: Address, blockNumber: bigint) {
@@ -131,7 +132,7 @@ export async function verifyCapitalLedgerClone(client: ReadClient, securityPool:
 async function requireCanonicalSecurityPool(client: Pick<ReadClient, 'readContract'>, securityPool: Address, blockNumber?: bigint, readUnverifiedCode?: ReadClient['getCode']) {
 	const recorded = await client.readContract({ address: getInfraContractAddresses().securityPoolFactory, abi: linksAbi, functionName: 'isSecurityPool', args: [securityPool], ...(blockNumber === undefined ? {} : { blockNumber }) })
 	if (recorded === true) return
-	if (readUnverifiedCode === undefined) throw new Error('Security pool was not created by the canonical factory.')
+	if (readUnverifiedCode === undefined) throw new Error(poolErrors.poolUnverified)
 	const code = await readUnverifiedCode({ address: securityPool, blockNumber })
 	throw new Error(code === undefined || code === '0x' ? missingPoolContract : invalidPool)
 }
@@ -139,7 +140,7 @@ async function requireCanonicalSecurityPool(client: Pick<ReadClient, 'readContra
 /** A bounded setup status is readable before the custody modules exist. */
 export async function loadSecurityPoolSetup(client: ReadClient, securityPool: Address, owner: Address, fromDirectLink = false) {
 	const [block, chainId] = await Promise.all([client.getBlock(), client.getChainId()])
-	if (block.number === undefined || block.hash === undefined) throw new Error('Security pool setup requires a mined block.')
+	if (block.number === undefined || block.hash === undefined) throw new Error(poolErrors.setupBlock)
 	const blockNumber = block.number
 	await requireCanonicalSecurityPool(client, securityPool, blockNumber, fromDirectLink ? request => client.getCode(request) : undefined)
 	verifyRuntimeCode(await client.getCode({ address: securityPool, blockNumber }), getSecurityPoolRuntimeCode(), securityPoolArtifact.evm.deployedBytecode.immutableReferences, 'securityPool')
@@ -151,14 +152,14 @@ export async function loadSecurityPoolSetup(client: ReadClient, securityPool: Ad
 		client.readContract({ address: securityPool, abi: linksAbi, functionName: 'repairAuctionDeployer', blockNumber }),
 	])
 	const infrastructure = getInfraContractAddresses()
-	if (getAddress(requireAddressValue(factoryValue, 'security pool factory')) !== getAddress(infrastructure.securityPoolFactory) || getAddress(requireAddressValue(zoltarValue, 'security pool protocol')) !== getAddress(infrastructure.zoltar)) throw new Error('Security pool uses unrecognized protocol contracts.')
-	if (getAddress(requireAddressValue(auctionDeployerValue, 'auction deployer')) !== getAddress(infrastructure.securityPoolRepairAuctionDeployer)) throw new Error('Security pool uses an unrecognized auction deployer.')
+	if (getAddress(requireAddressValue(factoryValue, 'security pool factory')) !== getAddress(infrastructure.securityPoolFactory) || getAddress(requireAddressValue(zoltarValue, 'security pool protocol')) !== getAddress(infrastructure.zoltar)) throw new Error(poolErrors.protocolMismatch)
+	if (getAddress(requireAddressValue(auctionDeployerValue, 'auction deployer')) !== getAddress(infrastructure.securityPoolRepairAuctionDeployer)) throw new Error(poolErrors.auctionContractMismatch)
 	const stage = Number(requireIntegerLikeValue(stageValue, 'setup stage'))
-	if (stage < 0 || stage > 4) throw new Error('Invalid security pool setup stage.')
+	if (stage < 0 || stage > 4) throw new Error(poolErrors.setupStage)
 	const originUniverseId = requireBigintValue(originValue, 'origin universe')
 	const originForkTime = requireBigintValue(await client.readContract({ address: infrastructure.zoltar, abi: linksAbi, functionName: 'getForkTime', args: [originUniverseId], blockNumber }), 'origin fork time')
 	const [finalBlock, finalChain] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
-	if (finalBlock.hash !== block.hash || finalChain !== chainId) throw new Error('Security pool setup changed. Refresh and retry.')
+	if (finalBlock.hash !== block.hash || finalChain !== chainId) throw new Error(poolErrors.setupChanged)
 	return { securityPool, owner, stage, originUniverseId, originForkTime, chainId, blockNumber, blockHash: block.hash, timestamp: block.timestamp }
 }
 export type SecurityPoolSetupSnapshot = Awaited<ReturnType<typeof loadSecurityPoolSetup>>
@@ -178,7 +179,7 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 	if (blockNumber === undefined || anchor.hash === undefined) throw new Error(positionNeedsConfirmedBlock)
 	await requireCanonicalSecurityPool(client, securityPool, blockNumber)
 	const snapshot = await loadSecurityPoolCapitalSnapshot({ client: securityPoolReadClient(client), securityPool, owner, universeId, blockNumber })
-	if (snapshot.blockHash !== anchor.hash) throw new Error('Chain changed while reading the security pool. Refresh and try again.')
+	if (snapshot.blockHash !== anchor.hash) throw new Error(poolErrors.poolChanged)
 	verifyRuntimeCode(await client.getCode({ address: securityPool, blockNumber }), getSecurityPoolRuntimeCode(), securityPoolArtifact.evm.deployedBytecode.immutableReferences, 'securityPool')
 	const [factory, zoltar, originUniverseId, admissionAddress, settlement, reporters, quoteHelper, forkController, feeStreamsValue, lifecycleValue, services, capitalServicesValue, capitalForkValue, questionCount, auctionDelegateValue, auctionDeployerValue] = await Promise.all([
 		client.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'factory', blockNumber }),
@@ -199,13 +200,13 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 		client.readContract({ address: securityPool, abi: linksAbi, functionName: 'repairAuctionDeployer', blockNumber }),
 	])
 	const feeStreams = requireAddressValue(feeStreamsValue, 'fee streams')
-	const lifecycle = requireAddressValue(lifecycleValue, 'capital lifecycle delegate')
-	const repairAuctionDelegate = requireAddressValue(auctionDelegateValue, 'capital auction delegate')
+	const lifecycle = requireAddressValue(lifecycleValue, 'pool setup contract')
+	const repairAuctionDelegate = requireAddressValue(auctionDelegateValue, 'pool auction contract')
 	const infrastructure = getInfraContractAddresses()
-	if (getAddress(factory) !== getAddress(infrastructure.securityPoolFactory) || getAddress(zoltar) !== getAddress(infrastructure.zoltar)) throw new Error('Security pool uses unrecognized protocol contracts.')
-	if (getAddress(requireAddressValue(auctionDeployerValue, 'auction deployer')) !== getAddress(infrastructure.securityPoolRepairAuctionDeployer)) throw new Error('Security pool uses an unrecognized auction deployer.')
-	if (requireAddressValue(capitalServicesValue, 'pool service address') !== getAddress(services)) throw new Error('The capital contract is linked to different pool services.')
-	if (requireAddressValue(capitalForkValue, 'capital fork authority') !== getAddress(forkController)) throw new Error('The capital contract is linked to a different fork contract.')
+	if (getAddress(factory) !== getAddress(infrastructure.securityPoolFactory) || getAddress(zoltar) !== getAddress(infrastructure.zoltar)) throw new Error(poolErrors.protocolMismatch)
+	if (getAddress(requireAddressValue(auctionDeployerValue, 'auction deployer')) !== getAddress(infrastructure.securityPoolRepairAuctionDeployer)) throw new Error(poolErrors.auctionContractMismatch)
+	if (requireAddressValue(capitalServicesValue, 'pool service address') !== getAddress(services)) throw new Error(poolErrors.poolServicesMismatch)
+	if (requireAddressValue(capitalForkValue, 'capital fork authority') !== getAddress(forkController)) throw new Error(poolErrors.poolForkMismatch)
 	const start = questionStart > questionCount ? 0n : questionStart
 	// Other contract accounts remain readable, but gain no auction-owner authority:
 	// a clone of another implementation stays an ordinary owner, and a clone of the
@@ -233,8 +234,8 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 	const premium = requireAddressValue(premiumValue, 'reporting fees contract')
 	await Promise.all([
 		verifyCapitalLedgerClone(client, securityPool, snapshot.capitalLedger, universeId, snapshot.repToken, blockNumber),
-		verifyModule(client, lifecycle, lifecycleArtifact, lifecycle, 'capital lifecycle delegate', blockNumber, 'implementation'),
-		verifyModule(client, repairAuctionDelegate, auctionDelegateArtifact, repairAuctionDelegate, 'capital auction delegate', blockNumber, 'implementation'),
+		verifyModule(client, lifecycle, lifecycleArtifact, lifecycle, 'pool setup contract', blockNumber, 'implementation'),
+		verifyModule(client, repairAuctionDelegate, auctionDelegateArtifact, repairAuctionDelegate, 'pool auction contract', blockNumber, 'implementation'),
 		verifyCapitalModuleClone(client, snapshot.commitmentIndex, indexArtifact, snapshot.capitalLedger, 'pool capacity contract', blockNumber),
 		verifyCapitalModuleClone(client, feeStreams, feesArtifact, snapshot.capitalLedger, 'capital fee streams', blockNumber),
 		verifyModule(client, settlement, settlementArtifact, securityPool, 'payout contract', blockNumber),
@@ -253,10 +254,10 @@ export async function loadSecurityPoolAccount(client: ReadClient, securityPool: 
 		client.readContract({ address: zoltar, abi: linksAbi, functionName: 'getRepToken', args: [universeId], blockNumber }),
 	])
 	if (requireBigintValue(capitalUniverse, 'capital universe') !== universeId || requireAddressValue(canonicalRep, 'canonical REP') !== snapshot.repToken || [capitalProtocol, reporterProtocol, forkProtocol].some(value => requireAddressValue(value, 'module protocol') !== getAddress(zoltar)))
-		throw new Error('Security pool modules use another universe or protocol.')
+		throw new Error(poolErrors.modulesMismatch)
 
 	const [block, chainId] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
-	if (block.hash !== snapshot.blockHash || chainId !== snapshot.chainId) throw new Error('Chain changed while reading the security pool. Refresh and try again.')
+	if (block.hash !== snapshot.blockHash || chainId !== snapshot.chainId) throw new Error(poolErrors.poolChanged)
 	// The credited amounts stand in when the preview fails: the account stays usable and claiming still pays the full amount.
 	const [claimableEarnings, liquidationDuration] = await Promise.all([
 		owner === undefined ? undefined : loadSecurityPoolClaimableEarnings(snapshot, async (contracts, block) => await readRequiredMulticall(client, contracts, block)).catch(() => undefined),
@@ -340,7 +341,7 @@ export function securityPoolReadClient(client: ReadClient): SecurityPoolReadClie
 		readContract: parameters => client.readContract(parameters),
 		getBlock: async parameters => {
 			const block = await client.getBlock(parameters)
-			if (block.number === undefined || block.hash === undefined) throw new Error('Security pool snapshot requires a mined block.')
+			if (block.number === undefined || block.hash === undefined) throw new Error(poolErrors.poolReadBlock)
 			return { number: block.number, hash: block.hash, timestamp: block.timestamp, baseFeePerGas: block.baseFeePerGas }
 		},
 	}

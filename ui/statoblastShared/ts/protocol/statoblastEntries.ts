@@ -1,3 +1,4 @@
+import { entryErrors } from '../copy/protocolErrors.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getAddress, isAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -59,15 +60,15 @@ async function readStatoblastEntries(client: Pick<ReadClient, 'multicall'> & Par
 					const code = await client.getCode?.({ address, blockNumber })
 					return { status: code === undefined || code === '0x' ? 'invalid-pool' : 'non-statoblast-contract' }
 				} catch (error) {
-					return { status: 'failed', error: error instanceof Error ? error : new Error('Could not check the pool address.') }
+					return { status: 'failed', error: error instanceof Error ? error : new Error(entryErrors.poolUnavailable) }
 				}
 			}
-			if (poolResult?.result !== true) return { status: 'failed', error: new Error('Invalid security pool verification result.') }
+			if (poolResult?.result !== true) return { status: 'failed', error: new Error(entryErrors.poolVerification) }
 			if (questionId === undefined) return { status: 'pool', pool: address }
 			const question = questionChecks.get(index)
 			if (question?.status === 'failure') return questionFailure(question.error)
 			const ledger = question?.result
-			if (typeof ledger !== 'string' || !isAddress(ledger) || ledger.toLowerCase() === zeroAddress) return { status: 'failed', error: new Error('Invalid question verification result.') }
+			if (typeof ledger !== 'string' || !isAddress(ledger) || ledger.toLowerCase() === zeroAddress) return { status: 'failed', error: new Error(entryErrors.questionVerification) }
 			return { status: 'question', pool: address, ledger: getAddress(ledger) }
 		}),
 	)
@@ -92,5 +93,5 @@ export async function checkStatoblastEntries(client: Pick<ReadClient, 'multicall
 		// A registration, deployment, or child preparation from another wallet can change a negative result.
 		if (result?.status === 'pool' || result?.status === 'question') cache.set(entry, result)
 	}
-	return entries.map(entry => cache.get(key(entry)) ?? checked.get(key(entry)) ?? { status: 'failed', error: new Error('Missing entry verification result.') })
+	return entries.map(entry => cache.get(key(entry)) ?? checked.get(key(entry)) ?? { status: 'failed', error: new Error(entryErrors.noVerification) })
 }

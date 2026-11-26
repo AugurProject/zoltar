@@ -1,12 +1,12 @@
 import { capital, newPriceRequired } from '../../../copy/securityPoolTransactions.js'
 import * as copy from '../../../copy/securityPoolCapital.js'
-import type { SecurityPoolCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
+import { minimumSecurityPoolHealthFactorBps, type SecurityPoolCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
 
 const ceilDivide = (value: bigint, divisor: bigint) => (value + divisor - 1n) / divisor
 
 export function requiredSecurityPoolCollateral(snapshot: Pick<SecurityPoolCapitalSnapshot, 'ownerConservativePrice' | 'securityMultiplierBps' | 'ownerAccount'>, commitment: bigint, proofPrice?: bigint, targetHealthFactorBps?: bigint) {
 	const price = proofPrice !== undefined && proofPrice > snapshot.ownerConservativePrice ? proofPrice : snapshot.ownerConservativePrice
-	const health = targetHealthFactorBps ?? (snapshot.ownerAccount.targetHealthFactorBps || 10_000n)
+	const health = targetHealthFactorBps ?? (snapshot.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps)
 	const value = ceilDivide(commitment * price, 10n ** 18n)
 	const backing = ceilDivide(value * snapshot.securityMultiplierBps, 10_000n)
 	return ceilDivide(backing * health, 10_000n)
@@ -15,7 +15,7 @@ export function requiredSecurityPoolCollateral(snapshot: Pick<SecurityPoolCapita
 /** Reverse the contract's nested upward rounding, preserving the exact maximum. */
 export function maximumSecurityPoolCommitment(snapshot: Pick<SecurityPoolCapitalSnapshot, 'ownerConservativePrice' | 'securityMultiplierBps' | 'ownerPrincipalAttoRep'>, health: bigint | undefined, proofPrice?: bigint) {
 	const price = proofPrice !== undefined && proofPrice > snapshot.ownerConservativePrice ? proofPrice : snapshot.ownerConservativePrice
-	if (health === undefined || health < 10_000n || health >= 1n << 256n || price <= 0n || snapshot.securityMultiplierBps <= 0n) return undefined
+	if (health === undefined || health < minimumSecurityPoolHealthFactorBps || health >= 1n << 256n || price <= 0n || snapshot.securityMultiplierBps <= 0n) return undefined
 	const backing = (snapshot.ownerPrincipalAttoRep * 10_000n) / health
 	const value = (backing * 10_000n) / snapshot.securityMultiplierBps
 	const capacity = (value * 10n ** 18n) / price
@@ -24,9 +24,9 @@ export function maximumSecurityPoolCommitment(snapshot: Pick<SecurityPoolCapital
 
 export function capitalHealthReason(snapshot: SecurityPoolCapitalSnapshot, health: bigint | undefined, additionalRep = 0n) {
 	if (snapshot.forkTime > 0n || snapshot.frozen || snapshot.importing || snapshot.exported) return copy.healthChangesClosed
-	if (health === undefined || health < 10_000n) return copy.healthTargetMinimum
+	if (health === undefined || health < minimumSecurityPoolHealthFactorBps) return copy.healthTargetMinimum
 	if (health >= 1n << 256n) return copy.healthTargetTooLarge
-	const saved = snapshot.ownerAccount.targetHealthFactorBps || 10_000n
+	const saved = snapshot.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps
 	if (health <= saved || snapshot.ownerCommitmentAttoEth === 0n) return undefined
 	if (!snapshot.priceValid) return copy.healthNeedsCurrentPrice
 	const pledged = snapshot.positions.find(position => position.commitment > 0n)?.rep ?? 0n

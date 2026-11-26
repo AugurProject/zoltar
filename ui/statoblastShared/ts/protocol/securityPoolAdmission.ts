@@ -1,3 +1,4 @@
+import { poolErrors, contractCodeUnverified, contractSettingsMismatch } from '../copy/protocolErrors.js'
 import { encodeDeployData, parseAbi, type Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { statoblast_SecurityPoolOpenAdmissionPolicy_SecurityPoolOpenAdmissionPolicy as openArtifact, statoblast_SecurityPoolFixedAdmissionPolicy_SecurityPoolFixedAdmissionPolicy as fixedArtifact, statoblast_SecurityPool_SecurityPool as securityPoolArtifact } from '../contractArtifact.js'
@@ -22,10 +23,10 @@ export function requireFixedAdmissionQuestionLimit(count: number) {
 export function identifySecurityPoolAdmission(code: Awaited<ReturnType<ReadClient['getCode']>>) {
 	if (code === `0x${openArtifact.evm.deployedBytecode.object}`) return 'open'
 	try {
-		verifyRuntimeCode(code, `0x${fixedArtifact.evm.deployedBytecode.object}`, fixedArtifact.evm.deployedBytecode.immutableReferences, 'fixed question policy')
+		verifyRuntimeCode(code, `0x${fixedArtifact.evm.deployedBytecode.object}`, fixedArtifact.evm.deployedBytecode.immutableReferences, 'fixed question rules')
 		return 'fixed'
 	} catch (failure) {
-		if (!(failure instanceof Error) || (failure.message !== 'Unrecognized fixed question policy runtime code.' && failure.message !== 'Inconsistent fixed question policy immutable values.')) throw failure
+		if (!(failure instanceof Error) || (failure.message !== contractCodeUnverified('fixed question rules') && failure.message !== contractSettingsMismatch('fixed question rules'))) throw failure
 		return 'custom'
 	}
 }
@@ -37,13 +38,13 @@ export async function loadSecurityPoolAdmission(client: Pick<ReadClient, 'getCod
 	const policyUniverse = await client.readContract({ address, abi: admissionAbi, functionName: 'universeId', blockNumber })
 	if (policyUniverse !== universeId) return { address, mode: 'custom' }
 	const questionCount = await client.readContract({ address, abi: admissionAbi, functionName: 'questionCount', blockNumber })
-	if (typeof questionCount !== 'bigint' || questionCount < 0n) throw new Error('Invalid approved question count.')
+	if (typeof questionCount !== 'bigint' || questionCount < 0n) throw new Error(poolErrors.approvedQuestionCount)
 	const start = questionStart > questionCount ? 0n : questionStart
 	const remaining = questionCount - start
 	const questions = await client.readContract({ address, abi: admissionAbi, functionName: 'getQuestions', args: [start, remaining < 64n ? remaining : 64n], blockNumber })
-	if (!Array.isArray(questions) || questions.some(id => typeof id !== 'bigint')) throw new Error('Invalid approved question page.')
+	if (!Array.isArray(questions) || questions.some(id => typeof id !== 'bigint')) throw new Error(poolErrors.approvedQuestionPage)
 	const approved = questions.map(id => {
-		if (typeof id !== 'bigint') throw new Error('Invalid approved question ID.')
+		if (typeof id !== 'bigint') throw new Error(poolErrors.approvedQuestionId)
 		return id
 	})
 	return { address, mode: 'fixed', questions: approved, questionCount, questionStart: start }
@@ -52,8 +53,8 @@ export async function loadSecurityPoolAdmission(client: Pick<ReadClient, 'getCod
 export function securityPoolAdmissionCreationRequest(owner: Address, mode: 'open' | 'fixed', universeId: bigint, questionIds: readonly bigint[]): SecurityPoolTransaction {
 	if (mode === 'open') return { account: owner, value: 0n, data: encodeDeployData({ abi: openArtifact.abi, bytecode: `0x${openArtifact.evm.bytecode.object}` }), reviewDescription: copy.openQuestionRulesReview }
 	requireFixedAdmissionQuestionLimit(questionIds.length)
-	if (questionIds.length === 0) throw new Error('Choose at least one approved question.')
-	if (questionIds.some((id, index) => id < 0n || id >= 1n << 256n || (index > 0 && id <= (questionIds[index - 1] ?? id)))) throw new Error('Choose increasing unique question IDs.')
+	if (questionIds.length === 0) throw new Error(poolErrors.selectApprovedQuestion)
+	if (questionIds.some((id, index) => id < 0n || id >= 1n << 256n || (index > 0 && id <= (questionIds[index - 1] ?? id)))) throw new Error(poolErrors.approvedQuestionOrder)
 	return {
 		account: owner,
 		value: 0n,

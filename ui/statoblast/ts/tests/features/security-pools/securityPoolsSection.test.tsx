@@ -12,7 +12,9 @@ import { resetRoutingForTesting } from '@zoltar/ui-core-shared/navigation/routin
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
+import { localEntityScopeForNetwork } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { SecurityPoolsSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsSection.js'
+import { initialDeploymentDraft } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/creation.js'
 import * as copy from '@zoltar/ui-statoblast-shared/copy/securityPoolCapital.js'
 import * as priceCopy from '@zoltar/ui-statoblast-shared/copy/securityPoolPrice.js'
 import { poolTabLabels, returnFundsOnly } from '@zoltar/ui-statoblast-shared/copy/securityPoolPage.js'
@@ -153,6 +155,32 @@ test('deploy and setup shows all six persistent transaction controls in the same
 	const transactions = [...(workflow?.querySelectorAll('button.tx-action-button') ?? [])]
 	expect(transactions.map(button => button.textContent)).toEqual(['Prepare question rules', 'Deploy security pool', ...copy.prepareStages])
 	expect(transactions.map(button => button.hasAttribute('disabled'))).toEqual([false, true, true, true, true, true])
+})
+
+test('a hashless deployment offers a way to check the wallet again', async () => {
+	installStatoblastRouting()
+	window.history.replaceState({}, '', '#/deploy-pool')
+	const source = capitalClient()
+	const { network, persistence } = localEntityScopeForNetwork(source.backend.profile, 'statoblast', 'pool')
+	const storage = persistence === 'session' ? window.sessionStorage : window.localStorage
+	storage.setItem(`zoltar-ui:statoblast:deployment:v1:${network}:${owner.toLowerCase()}`, JSON.stringify({ draft: initialDeploymentDraft('0'), pending: { id: 'waiting-deployment', step: 'rules', nonce: '0' } }))
+	let nonceChecks = 0
+	installActiveEnvironmentForTesting({
+		...source.backend,
+		createReadClient: () =>
+			source.client.extend(() => ({
+				getTransactionCount: async () => {
+					nonceChecks++
+					return 0n
+				},
+			})),
+	})
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolsSection deploying parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />))
+	const findCheck = () => [...view.container.querySelectorAll('button')].find(button => button.textContent === 'Check again' && !button.disabled)
+	await waitFor(() => expect(findCheck()).toBeDefined(), { timeout: 1000 })
+	const checksBeforeClick = nonceChecks
+	await act(() => findCheck()?.click())
+	await waitFor(() => expect(nonceChecks).toBeGreaterThan(checksBeforeClick))
 })
 
 test('completed setup preserves the four transaction controls in their original order with completion reasons', async () => {

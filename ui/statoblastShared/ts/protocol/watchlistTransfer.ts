@@ -1,3 +1,4 @@
+import { watchlistErrors } from '../copy/protocolErrors.js'
 import { isAddress, getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { formatQuestionIdHex, normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { isStoredRecord } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
@@ -52,21 +53,21 @@ export async function importStatoblastWatchlist(client: Pick<ReadClient, 'getBlo
 		value = JSON.parse(contents)
 	} catch (error) {
 		if (!(error instanceof SyntaxError)) throw error
-		throw new Error('Not a Statoblast watchlist file.', { cause: error })
+		throw new Error(watchlistErrors.invalidFile, { cause: error })
 	}
-	if (!isStoredRecord(value) || value['version'] !== 1 || !Number.isSafeInteger(value['chainId']) || !Array.isArray(value['saved']) || !Array.isArray(value['deposits'])) throw new Error('Not a Statoblast watchlist file.')
-	if (value['chainId'] !== profile.chain.id) throw new Error('This file is for another network.')
+	if (!isStoredRecord(value) || value['version'] !== 1 || !Number.isSafeInteger(value['chainId']) || !Array.isArray(value['saved']) || !Array.isArray(value['deposits'])) throw new Error(watchlistErrors.invalidFile)
+	if (value['chainId'] !== profile.chain.id) throw new Error(watchlistErrors.wrongNetwork)
 	const saved = value['saved'].map(readSavedEntry).filter(entry => entry !== undefined)
 	const deposits = value['deposits'].map(readDeposit).filter(deposit => deposit !== undefined)
 	const acceptedSaved: SavedWatchlistEntry[] = []
 	const acceptedDeposits: typeof deposits = []
 	const block = await client.getBlock()
-	if (block.number === undefined || block.hash === undefined) throw new Error('Watchlist import requires a mined block.')
+	if (block.number === undefined || block.hash === undefined) throw new Error(watchlistErrors.importBlock)
 	const blockNumber = block.number
 	// Import checks factory membership before calling a pool. It never needs bytecode from a rejected address.
 	const entryClient: Pick<ReadClient, 'multicall'> = { multicall: request => client.multicall(request) }
 	const requireEnvironment = () => {
-		if (!isCurrent()) throw new Error('The network changed during watchlist import. Try again.')
+		if (!isCurrent()) throw new Error(watchlistErrors.importNetworkChanged)
 	}
 
 	for (let start = 0; start < saved.length; start += 25) {
@@ -117,7 +118,7 @@ export async function importStatoblastWatchlist(client: Pick<ReadClient, 'getBlo
 			if (result?.status === 'success' && sameAddress(result.result[0]?.depositor, deposit.depositor)) acceptedDeposits.push(deposit)
 		}
 	}
-	if ((await client.getBlock({ blockNumber })).hash !== block.hash) throw new Error('The chain changed during watchlist import. Try again.')
+	if ((await client.getBlock({ blockNumber })).hash !== block.hash) throw new Error(watchlistErrors.importChainChanged)
 	requireEnvironment()
 	reportingDepositStore(profile).add(acceptedDeposits)
 	for (const entry of acceptedSaved) {

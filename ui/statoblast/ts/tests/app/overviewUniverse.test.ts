@@ -14,7 +14,7 @@ describe('Statoblast top bar universe', () => {
 	})
 
 	test('shows the not-found hint for a universe link that names no deployed universe', () => {
-		expect(getStatoblastUniversePresentation({ canReadOnchainData: true, loadingZoltarUniverse: false, zoltarUniverse: undefined, zoltarUniverseMissing: true })?.key).toBe('not_found')
+		expect(getStatoblastUniversePresentation({ canReadOnchainData: true, loadingZoltarUniverse: false, zoltarUniverse: undefined, zoltarUniverseMissing: true })).toMatchObject({ key: 'not_found', detail: 'This universe has not been created yet.' })
 		expect(getStatoblastUniversePresentation({ canReadOnchainData: true, loadingZoltarUniverse: true, zoltarUniverse: undefined, zoltarUniverseMissing: false })).toBeUndefined()
 		expect(getStatoblastUniversePresentation({ canReadOnchainData: false, loadingZoltarUniverse: false, zoltarUniverse: undefined, zoltarUniverseMissing: true })).toBeUndefined()
 		expect(getStatoblastUniversePresentation({ canReadOnchainData: true, loadingZoltarUniverse: false, zoltarUniverse: unforkedUniverse, zoltarUniverseMissing: false })).toBeUndefined()

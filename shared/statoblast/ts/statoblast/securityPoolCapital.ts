@@ -357,7 +357,7 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 				rep: decodeUint(rep, 'Pledged REP'),
 				commitment: liveCommitment,
 				maxHealthyPrice: decodeUint(maximum, 'Maximum healthy price'),
-				releasedRep: decodeUint(released, 'Retired REP'),
+				releasedRep: decodeUint(released, 'Released REP'),
 				feesAttoEth: decodeUint(eth, 'ETH earnings'),
 				feesAttoRep: decodeUint(repFees, 'REP earnings'),
 				liquidationStarted: decodeUint(liquidation, 'Liquidation start', 48),

@@ -24,7 +24,7 @@ function word(value: bigint, label: string) {
 
 /** @public The exact code a vault clone carries; external verifiers and fixtures reproduce it from the bindings. */
 export function auctionVaultRuntimeCode(bindings: AuctionVaultBindings): Hex {
-	return concatHex([FORWARDER_PREFIX, address(bindings.implementation, 'Auction position implementation'), FORWARDER_SUFFIX, address(bindings.owner, 'Position owner'), address(bindings.capital, 'Position capital'), address(bindings.auction, 'Position auction'), word(bindings.bidId, 'Vault bid')])
+	return concatHex([FORWARDER_PREFIX, address(bindings.implementation, 'Auction position implementation'), FORWARDER_SUFFIX, address(bindings.owner, 'Position owner'), address(bindings.capital, 'Position capital'), address(bindings.auction, 'Position auction'), word(bindings.bidId, 'Auction bid ID')])
 }
 /** @public The CREATE2 init code the auction uses; external tooling derives vault addresses from it. */
 export function auctionVaultCreationCode(bindings: AuctionVaultBindings): Hex {
@@ -33,7 +33,7 @@ export function auctionVaultCreationCode(bindings: AuctionVaultBindings): Hex {
 }
 /** The auction creates each clone with CREATE2 and the bid identifier as salt. */
 export function predictAuctionVaultAddress(bindings: AuctionVaultBindings): Address {
-	return getCreate2Address({ from: getAddress(bindings.auction), salt: word(bindings.bidId, 'Vault bid'), bytecode: auctionVaultCreationCode(bindings) })
+	return getCreate2Address({ from: getAddress(bindings.auction), salt: word(bindings.bidId, 'Auction bid ID'), bytecode: auctionVaultCreationCode(bindings) })
 }
 /** Decode a deployed account's code as a vault clone, or return undefined for any other code. */
 export function decodeAuctionVaultBindings(code: Hex | undefined): AuctionVaultBindings | undefined {

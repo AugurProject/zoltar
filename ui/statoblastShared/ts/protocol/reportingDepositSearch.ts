@@ -1,3 +1,4 @@
+import { reportErrors } from '../copy/protocolErrors.js'
 import { getBrowserStorage } from '@zoltar/ui-core-shared/lib/browserStorage.js'
 import { localEntityScopeForNetwork, parseStoredValue, serializeStoredValue } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { isStoredRecord } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
@@ -39,7 +40,7 @@ export async function readLocatedReportingDeposits(client: Pick<ReadClient, 'mul
 /** Searches two bounded pages. The caller can keep the live position in memory and save only the confirmed cursor. */
 export async function searchReportingDepositsPage(client: Pick<ReadClient, 'getBlock' | 'multicall'>, game: Address, side: DepositSide, position?: DepositSearchCursor) {
 	const head = await client.getBlock()
-	if (head.number === undefined || head.hash === undefined) throw new Error('Deposit search requires a confirmed block.')
+	if (head.number === undefined || head.hash === undefined) throw new Error(reportErrors.searchBlock)
 	const blockNumber = head.number
 	if (position !== undefined && blockNumber < position.block) throw new Error(depositSearchLagging)
 	const safeBlockNumber = blockNumber > confirmationDepth ? blockNumber - confirmationDepth : 0n
@@ -61,7 +62,7 @@ export async function searchReportingDepositsPage(client: Pick<ReadClient, 'getB
 	const safeCount = safeBlockNumber === blockNumber ? totalDeposits : (await readOptionalMulticall(client, [lengthRead], safeBlockNumber))[0]
 	const checkedHead = await client.getBlock({ blockNumber })
 	const checkedSafeBlock = safeBlockNumber === blockNumber ? checkedHead : await client.getBlock({ blockNumber: safeBlockNumber })
-	if (checkedHead.hash !== head.hash || checkedSafeBlock.hash !== safeBlock.hash) throw new Error('The chain changed during the deposit search. Retry this page.')
+	if (checkedHead.hash !== head.hash || checkedSafeBlock.hash !== safeBlock.hash) throw new Error(reportErrors.searchChainChanged)
 	const nextIndex = start + BigInt(first.length + second.length)
 	const matches = [...first, ...second].flatMap((deposit, offset) => (sameAddress(deposit.depositor, side.depositor) && deposit.amountAttoRep > 0n ? [{ deposit: { ...side, index: start + BigInt(offset), originalAttoRep: deposit.amountAttoRep }, principal: deposit.amountAttoRep }] : []))
 	const safeIndex = safeCount.status === 'success' && safeCount.result < nextIndex ? safeCount.result : nextIndex

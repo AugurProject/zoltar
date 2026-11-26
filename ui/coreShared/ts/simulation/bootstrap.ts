@@ -330,7 +330,7 @@ type CoreScenarioApplyParameters = {
 }
 
 async function applyCoreScenario({ accounts, createWriteClient, getDeploymentSteps, memoryClient, onProgress, profile, scenario }: CoreScenarioApplyParameters) {
-	const primaryAccount = requireQaAccount(accounts[0], 'Expected seeded simulation QA account A1')
+	const primaryAccount = requireQaAccount(accounts[0], 'Could not find the first simulation wallet.')
 
 	switch (scenario) {
 		case 'baseline':

@@ -1,3 +1,4 @@
+import { reportErrors, unexpectedResponse } from '../copy/protocolErrors.js'
 import { isHex } from '@zoltar/core-shared/evm/ethereum'
 import { isStoredRecord } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
 import { statoblastDisplayCache } from './statoblastPageCache.js'
@@ -51,7 +52,7 @@ function requireCarryLeafView(value: unknown, context: string): CarryLeafViewStr
 			sourceNodeId: requireBigintValue(leaf.sourceNodeId, context),
 		}
 	}
-	throw new Error(`Unexpected ${context} response`)
+	throw new Error(unexpectedResponse(context))
 }
 
 function requireCarryLeafPageResponse(value: unknown): {
@@ -86,7 +87,7 @@ async function loadCarryLeafPage(client: Pick<ReadClient, 'readContract'>, escal
 
 function requireHistoricalCarryNode(value: unknown, sourceNodeId: bigint, outcome: ReportingOutcomeKey): { leaf: HistoricalCarryLeafViewStruct; parentNodeId: bigint } {
 	const [parentNodeId, depositor, nodeOutcome, amountAttoRep, parentDepositIndex, cumulativeAmountAttoRep, carryLeafIndex] = requireTupleValue(value, 7, 'recorded deposit')
-	if (getReportingOutcomeKey(requireIntegerLikeValue(nodeOutcome, 'recorded deposit outcome')) !== outcome) throw new Error('The recorded deposit has a different outcome.')
+	if (getReportingOutcomeKey(requireIntegerLikeValue(nodeOutcome, 'recorded deposit outcome')) !== outcome) throw new Error(reportErrors.depositOutcome)
 	return {
 		leaf: {
 			amountAttoRep: requireBigintValue(amountAttoRep, 'recorded deposit amount'),
@@ -106,7 +107,7 @@ async function loadHistoricalLocalCarryLeaves(client: Pick<ReadClient, 'readCont
 	const carryLeaves: HistoricalCarryLeafViewStruct[] = []
 	while (nodeId !== 0n) {
 		const nodeKey = nodeId.toString()
-		if (visitedNodeIds.has(nodeKey)) throw new Error('The deposit history repeats an entry.')
+		if (visitedNodeIds.has(nodeKey)) throw new Error(reportErrors.repeatedDeposit)
 		visitedNodeIds.add(nodeKey)
 		const { leaf, parentNodeId } = requireHistoricalCarryNode(
 			await client.readContract({
@@ -149,12 +150,12 @@ async function loadRecursiveHistoricalCarryLeaves(client: Pick<ReadClient, 'read
 	const parentEscalationGameAddress = forkContinuation === true ? await readParentEscalationGameAddress(client, escalationGameAddress) : undefined
 	if (parentEscalationGameAddress !== undefined) {
 		const parentLeaves = await loadRecursiveHistoricalCarryLeaves(client, parentEscalationGameAddress, outcome)
-		if (BigInt(parentLeaves.length) < snapshotLeafCount) throw new Error('The parent question did not return the full deposit history.')
+		if (BigInt(parentLeaves.length) < snapshotLeafCount) throw new Error(reportErrors.incompleteHistory)
 		inheritedLeaves = parentLeaves.slice(0, bigintToSafeNumber(snapshotLeafCount, 'Recorded deposit count'))
 	}
-	if (BigInt(inheritedLeaves.length) !== snapshotLeafCount) throw new Error('Couldn’t verify the inherited deposits.')
+	if (BigInt(inheritedLeaves.length) !== snapshotLeafCount) throw new Error(reportErrors.inheritedDepositsUnverified)
 	for (const [localIndex, leaf] of localLeaves.entries()) {
-		if (leaf.carryLeafIndex !== snapshotLeafCount + BigInt(localIndex)) throw new Error('Couldn’t verify the order of recorded deposits.')
+		if (leaf.carryLeafIndex !== snapshotLeafCount + BigInt(localIndex)) throw new Error(reportErrors.depositOrder)
 	}
 	const localEntries = await buildHistoricalLocalCarrySnapshotEntries(client, escalationGameAddress, outcome, localLeaves)
 	return [...inheritedLeaves, ...localEntries]
@@ -283,9 +284,9 @@ function decodeFrozenParent(value: unknown): FrozenParentSnapshot | undefined {
 	if (!isStoredRecord(value) || !Array.isArray(value['leaves']) || !Array.isArray(value['history']) || !Array.isArray(value['consumed'])) return undefined
 	try {
 		return {
-			leaves: value['leaves'].map(leaf => requireCarryLeafView(leaf, 'saved parent leaf')),
+			leaves: value['leaves'].map(leaf => requireCarryLeafView(leaf, 'saved parent deposit')),
 			history: value['history'].map(entry => {
-				if (!isStoredRecord(entry) || typeof entry['leafHash'] !== 'string' || !isHex(entry['leafHash'], { strict: true }) || entry['leafHash'].length !== 66) throw new Error('A saved parent deposit record is invalid.')
+				if (!isStoredRecord(entry) || typeof entry['leafHash'] !== 'string' || !isHex(entry['leafHash'], { strict: true }) || entry['leafHash'].length !== 66) throw new Error(reportErrors.invalidSavedDeposit)
 				return { leaf: requireCarryLeafView(entry['leaf'], 'saved parent history'), leafHash: `0x${entry['leafHash'].slice(2)}` as const }
 			}),
 			consumed: value['consumed'].map(index => requireBigintValue(index, 'saved claimed deposit index')),
@@ -443,11 +444,11 @@ async function buildCarriedProofs(client: Pick<ReadClient, 'readContract'>, pare
 		: createSparseNullifier(
 				consumedParentDepositIndexes.map(parentIndex => {
 					const index = orderedLeaves.findIndex(leaf => leaf.parentDepositIndex === parentIndex)
-					if (index < 0) throw new Error('A claimed deposit is missing from the deposit history.')
+					if (index < 0) throw new Error(reportErrors.missingClaimedDeposit)
 					return BigInt(index)
 				}),
 			)
-	if (nullifierTree !== undefined && nullifierTree.getRoot() !== childNullifierRoot) throw new Error('Couldn’t verify which inherited deposits have already been claimed.')
+	if (nullifierTree !== undefined && nullifierTree.getRoot() !== childNullifierRoot) throw new Error(reportErrors.claimedDepositsUnverified)
 	const consumedParentDepositIndexSet = new Set(consumedParentDepositIndexes.map(parentDepositIndex => parentDepositIndex.toString()))
 	const proofs: CarriedDepositProof[] = []
 	for (const parentDepositIndex of parentDepositIndexes) {

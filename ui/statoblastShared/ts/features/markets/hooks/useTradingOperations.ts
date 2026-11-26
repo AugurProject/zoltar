@@ -1,3 +1,4 @@
+import { questionContractAddress } from '../../../copy/questionPage.js'
 import { useTradingCollateral } from './useTradingCollateral.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
@@ -280,7 +281,7 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 					},
 				},
 				async (walletAddress, activeWallet) => {
-					const questionLedgerAddress = parseAddressInput(resolveEffectiveTradingPoolAddressInput(), commonCopy.questionLedgerAddress)
+					const questionLedgerAddress = parseAddressInput(resolveEffectiveTradingPoolAddressInput(), questionContractAddress)
 					const isOnActiveAppChain = isActiveAppChain(activeWallet.chainId)
 					const { details: latestTradingDetails, forkUniverse: latestForkUniverse } = await loadTradingState(questionLedgerAddress, walletAddress)
 					if (isActionSelectionCurrent()) {

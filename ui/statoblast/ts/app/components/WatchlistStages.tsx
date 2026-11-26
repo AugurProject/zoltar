@@ -37,7 +37,9 @@ export function WatchlistQuestionStage({ row, reason }: { row: WatchlistRow | un
 	}
 	if (question.universeHasForked) {
 		if (row.forkQuestionId === undefined) return <Badge>{copy.frozen}</Badge>
-		if (row.nonDecision === true && row.entity.kind === 'question' && row.forkQuestionId === row.entity.questionId) {
+		const matchesForkQuestion = row.entity.kind === 'question' && row.forkQuestionId === row.entity.questionId
+		if (matchesForkQuestion && row.nonDecision === undefined) return <Badge>{copy.checking}</Badge>
+		if (matchesForkQuestion && row.nonDecision) {
 			return (
 				<>
 					<Badge tone='danger'>{copy.forkQuestion}</Badge>

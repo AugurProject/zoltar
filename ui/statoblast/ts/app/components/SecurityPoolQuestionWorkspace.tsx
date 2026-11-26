@@ -28,7 +28,7 @@ import { useTradingOperations } from '@zoltar/ui-statoblast-shared/features/mark
 import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import { statoblastDisplayCache } from '@zoltar/ui-statoblast-shared/protocol/statoblastPageCache.js'
-import { loadStatoblastQuestion, type QuestionReadCheckpoint } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
+import { loadStatoblastQuestion, StatoblastQuestionEntryError, type QuestionReadCheckpoint } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
 import { withStatoblastRequestTimeout } from '@zoltar/ui-statoblast-shared/protocol/requestTimeout.js'
 import { deadlineRetryDelays } from '@zoltar/ui-statoblast-shared/lib/deadlineRefresh.js'
 import type { ListedQuestionLedger } from '@zoltar/ui-statoblast-shared/types/contracts.js'
@@ -64,8 +64,9 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 	const [reportRead, setReportRead] = useState<{ scope: string; at: number }>()
 	const [sharesRead, setSharesRead] = useState<{ scope: string; at: number }>()
 	const [loading, setLoading] = useState(false)
-	const [failure, setFailure] = useState<{ scope: string; message: string }>()
-	const loadError = failure?.scope === readScope ? failure.message : undefined
+	const [failure, setFailure] = useState<{ scope: string; message: string; entryStatus: StatoblastQuestionEntryError['status'] | undefined }>()
+	const currentFailure = failure?.scope === readScope ? failure : undefined
+	const loadError = currentFailure?.message
 	const [refresh, setRefresh] = useState(0)
 	const [deadlineFailed, setDeadlineFailed] = useState(false)
 	const [cachedReporting, setCachedReporting] = useState<{ scope: string; data: NonNullable<ReturnType<typeof decodeReportingOverview>> }>()
@@ -114,7 +115,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 			promise: Promise.resolve().then(async () => {
 				const isCurrent = () => requestScope.current === readScope && activeRead.current === request
 				const showReadError = (error: unknown) => {
-					if (isCurrent()) setFailure({ scope: readScope, message: getErrorMessage(error, copy.questionUnavailable) })
+					if (isCurrent()) setFailure({ scope: readScope, message: getErrorMessage(error, copy.questionUnavailable), entryStatus: error instanceof StatoblastQuestionEntryError ? error.status : undefined })
 				}
 				setFailure(undefined)
 				setReadStep(1)
@@ -290,8 +291,8 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 		</nav>
 	)
 	if (selected === undefined) {
-		const unavailable = loadError?.includes('Question pool unavailable') === true
-		if (cached !== undefined && !unavailable && loadError?.includes('Question not registered') !== true) {
+		const unavailable = currentFailure?.entryStatus === 'unprepared-question'
+		if (cached !== undefined && !unavailable && currentFailure?.entryStatus !== 'unregistered-question') {
 			return (
 				<div className='route-view-flow'>
 					<StatoblastQuestionHead page={entry} question={cached.value} reporting={undefined} now={cached.timestamp} hasShares={false} presentationOnly />
