@@ -604,21 +604,42 @@ describe('factory, pair, and router integration', () => {
 		expect(pairBalancesAfter[2] + noOut).toBe(pairBalancesBefore[2])
 	})
 
-	test('initialization credits both LP mints when the recipient is the lock address', async () => {
-		const lock = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'MINIMUM_LIQUIDITY_LOCK' })
-		const scale = 1_001n
-		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
-		for (const outcome of [1n, 2n]) {
-			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, (universe << 8n) | outcome, scale] }))
+	for (const viaRouter of [false, true]) {
+		for (const recipientIsLock of [false, true]) {
+			test(`#1788: ${viaRouter ? 'router' : 'direct'} initialization separates minted liquidity from ${recipientIsLock ? 'coincident' : 'distinct'} recipient balances`, async () => {
+				const lock = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'MINIMUM_LIQUIDITY_LOCK' })
+				const recipient = recipientIsLock ? lock : account
+				const amount = 1_001n
+				const minted = amount * rate
+				const scale = viaRouter ? (minted * 3n) / 7n : amount
+				const liquidity = scale - 1_000n
+				const balance = (holder: Address) => client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [holder] })
+				expect(await balance(lock)).toBe(0n)
+				expect(await balance(recipient)).toBe(0n)
+				if (viaRouter) {
+					const request = { abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, amount, 7_000n, unboundedShares, unboundedShares, 0n, 0n, liquidity, recipient, NO_DEADLINE], value: amount } as const
+					expect((await client.simulateContract(request)).result.liquidity).toBe(liquidity)
+					await writeContractAndWait(client, () => client.writeContract(request))
+					// The router also directs insurance and unused outcome shares to the recipient.
+					expect(await shareBalances(recipient)).toEqual([minted, minted - scale, 0n])
+					expect(await shareBalances(router)).toEqual([0n, 0n, 0n])
+				} else {
+					await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
+					for (const outcome of [1n, 2n]) {
+						await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mint', args: [account, (universe << 8n) | outcome, amount] }))
+					}
+					const request = { abi: pairArtifact.abi, address: pair, functionName: 'initialize', args: [amount, amount, liquidity, recipient, NO_DEADLINE] } as const
+					expect((await client.simulateContract(request)).result).toBe(liquidity)
+					await writeContractAndWait(client, () => client.writeContract(request))
+				}
+				expect(await balance(lock)).toBe(recipientIsLock ? scale : 1_000n)
+				expect(await balance(recipient)).toBe(recipientIsLock ? scale : liquidity)
+				expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'totalSupply' })).toBe(scale)
+				expect(await shareBalances(pair)).toEqual([0n, scale, viaRouter ? minted : scale])
+				await expect(client.simulateContract({ abi: pairArtifact.abi, address: pair, functionName: 'initialize', args: [amount, amount, 0n, recipient, NO_DEADLINE] })).rejects.toThrow('Already initialized')
+			})
 		}
-		const lockedBalance = () => client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [lock] })
-		expect(await lockedBalance()).toBe(0n)
-		const request = { abi: pairArtifact.abi, address: pair, functionName: 'initialize', args: [scale, scale, 1n, lock, NO_DEADLINE] } as const
-		expect((await client.simulateContract(request)).result).toBe(1n)
-		await writeContractAndWait(client, () => client.writeContract(request))
-		expect(await lockedBalance()).toBe(scale)
-		expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'totalSupply' })).toBe(scale)
-	})
+	}
 
 	test('lets a dust LP position exit when only one side of its share rounds to zero', async () => {
 		const yesId = (universe << 8n) | 1n

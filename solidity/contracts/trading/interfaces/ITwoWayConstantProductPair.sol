@@ -44,6 +44,9 @@ interface ITwoWayConstantProductPair {
 	function tradingStatus() external view returns (TradingStatus status);
 	function quoteExactInput(bool yesForNo, uint256 amountIn) external view returns (uint256 amountOut, uint256 feeAmount);
 	function quoteExactOutput(bool yesForNo, uint256 amountOut) external view returns (uint256 amountIn, uint256 feeAmount);
+	/// @notice Mints 1,000 LP units to the lock and the remaining initial supply to recipient.
+	/// @dev The lock is a valid recipient; both mints then credit its balance.
+	/// @return liquidity The recipient-directed mint, excluding the mandatory 1,000-unit lock mint.
 	function initialize(uint256 yesAmount, uint256 noAmount, uint256 minLiquidity, address recipient, uint256 deadline) external returns (uint256 liquidity);
 	function addLiquidity(uint256 maxYes, uint256 maxNo, uint256 minLiquidity, address recipient, uint256 deadline) external returns (uint256 yesUsed, uint256 noUsed, uint256 liquidity);
 	function removeLiquidity(uint256 liquidity, uint256 minYes, uint256 minNo, address recipient, uint256 deadline) external returns (uint256 yesOut, uint256 noOut);
