@@ -1,3 +1,4 @@
+import { loadCompleteSetRedemptionQuote } from '../../../../ui/statoblastShared/ts/protocol/redemptionQuote.js'
 import { describe, expect, test } from 'bun:test'
 import {
 	statoblast_QuestionLedger_QuestionLedger as poolArtifact,
@@ -154,6 +155,25 @@ describe('Statoblast: central question fees and vested capital earnings', () => 
 		await fixture.base.mockWindow.advanceTime(100n)
 		await checkpoint()
 		expect(await fixture.owner().readContract({ ...capital(), functionName: 'demandAttoEth' })).toBe(demand)
+	})
+
+	test('#1633 reviewed redemption pays the checkpointed quote at the same timestamp', async () => {
+		await fixture.prepare()
+		const client = fixture.other()
+		await fixture.mint(100n * unit)
+		await fixture.base.mockWindow.advanceTime(120n)
+		const saved = await fixture.base.mockWindow.anvilSnapshot()
+		await fixture.base.mockWindow.advanceTime(1n)
+		const pool = fixture.poolFor(fixture.base.questionId).questionLedger
+		const shares = unit
+		const stale = await client.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'attoSharesToAttoEth', args: [shares] })
+		const quote = await loadCompleteSetRedemptionQuote(client, pool, shares, await client.getBlockNumber())
+		expect(quote.cash).toBeLessThan(stale)
+		const token = await client.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'collateralToken' })
+		const before = await getERC20Balance(client, token, client.account.address)
+		await fixture.base.mockWindow.anvilRevert(saved)
+		await writeContractAndWait(client, () => client.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'redeemCompleteSet', args: [shares] }))
+		expect((await getERC20Balance(client, token, client.account.address)) - before).toBe(quote.cash)
 	})
 
 	test('full complete-set redemption cancels future question fees and preserves nonrefundable vested purchase income', async () => {

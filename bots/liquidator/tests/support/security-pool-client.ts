@@ -144,6 +144,12 @@ export function securityPoolClient(overrides: Record<string, unknown> = {}) {
 						return values[`projected:${call.functionName}`] ?? values[call.functionName]
 					})
 				}
+			if (property === 'simulateContract')
+				return async () => {
+					if (values['recoveryAllowed'] !== true) throw new Error('Base fee too high')
+					return { result: undefined }
+				}
+			if (property === 'getLogs') return async () => values['reportLogs'] ?? []
 			if (property === 'getChainId') return async () => 1
 			if (property === 'getBlock') return async () => ({ number: snapshot.blockNumber, hash: snapshot.blockHash, timestamp: snapshot.timestamp, baseFeePerGas: values['baseFeePerGas'] ?? 0n })
 			if (property === 'getCode') return async (parameters: { address: string }) => codes.get(getAddress(parameters.address))

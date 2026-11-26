@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import type { OperatorSettings } from '#config/settings'
 import type { RuntimeState } from '#state/operator-state'
 import type { SecurityPoolObservation } from '#monitoring/security-pool-monitor'
@@ -20,10 +21,20 @@ export async function executePendingSecurityPoolReport(wallet: Wallet, settings:
 			pool,
 			state.securityPoolScopes.map(scope => ({ scope, targets: [] })),
 			target.selection,
-			async ({ client, blockNumber }) => {
+			async ({ client, blockNumber, observation }) => {
 				const block = await client.getBlock({ blockNumber })
 				if (block.baseFeePerGas === undefined) throw new Error('Sponsored report block has no base fee')
-				return block.baseFeePerGas
+				const pending = observation.pendingOperationReport
+				let terminalRecovery = false
+				if (pending !== undefined && pending.game[4] !== 0n && block.baseFeePerGas > pending.maxSettlementBaseFee) {
+					try {
+						await client.simulateContract({ account: wallet.account.address, abi: sharedPoolPriceFeedAbi, address: observation.snapshot.priceFeed, functionName: 'recoverReport', args: [pending.id], blockNumber })
+						terminalRecovery = true
+					} catch (error) {
+						if (!errorMessage(error).includes('Base fee too high')) throw error
+					}
+				}
+				return { baseFee: block.baseFeePerGas, terminalRecovery }
 			},
 			readers,
 		)
@@ -34,7 +45,7 @@ export async function executePendingSecurityPoolReport(wallet: Wallet, settings:
 	const [amount1, amount2, reporter, reportedAt, settledAt, token1, oppoTime, settlementTime, halt, recipient, bounty, token2, count, delay, fee, multiplier, callback, callbackGas, protocolFee, flags] = pending.game
 	// Recovery can execute canonical operations when a candidate is rejected. Keep its
 	// settlement ceiling even when the candidate's own price window has closed.
-	if (initial.details > pending.maxSettlementBaseFee) return 'waiting'
+	if (initial.details.baseFee > pending.maxSettlementBaseFee && !initial.details.terminalRecovery) return 'waiting'
 	if (!current.selected || !current.approvedUniverse || !settings.runtime.execute || !settings.securityPoolPolicy.allowFundedTakeovers) return 'waiting'
 	if (settledAt === 0n && current.snapshot.timestamp < reportedAt + settlementTime) return 'waiting'
 	const request =
@@ -54,7 +65,7 @@ export async function executePendingSecurityPoolReport(wallet: Wallet, settings:
 	const revalidate = async () => {
 		const refreshed = await refresh()
 		const next = refreshed.observation.pendingOperationReport
-		if (next !== undefined && refreshed.details > next.maxSettlementBaseFee) throw new SecurityPoolOpportunityExpired('Report settlement base fee exceeds its ceiling')
+		if (next !== undefined && refreshed.details.baseFee > next.maxSettlementBaseFee && !refreshed.details.terminalRecovery) throw new SecurityPoolOpportunityExpired('Report settlement base fee exceeds its ceiling')
 		if (next === undefined || next.id !== pending.id || next.game.some((value, index) => value !== pending.game[index])) throw new SecurityPoolOpportunityExpired('Sponsored report changed before settlement')
 	}
 	if (current.walletAttoEth < settings.strategy.maximumGasCostAttoEth + settings.securityPoolPolicy.walletReserveAttoEth) throw new SecurityPoolOpportunityExpired('Report settlement would consume ETH reserve')
@@ -66,7 +77,7 @@ export async function executePendingSecurityPoolReport(wallet: Wallet, settings:
 		{
 			...request,
 			gas,
-			maxFeePerGasCap: pending.maxSettlementBaseFee,
+			maxFeePerGasCap: initial.details.terminalRecovery ? undefined : pending.maxSettlementBaseFee,
 			reportOperations: { feed: current.snapshot.priceFeed, reportId: pending.id },
 			label,
 			preSubmit: revalidate,

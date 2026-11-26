@@ -81,6 +81,7 @@ export function snapshotFixture(): EcosystemSnapshot {
 				escalationStartBondAttoRep: 1_000n.toString(),
 				forkCarrySnapshotInitialized: false,
 				lastRepPerEthPrice: '1000000000000000000',
+				securityPoolTime: '2000000000',
 				lastSettlementSecurityPoolTime: '1999999999',
 				minimumToken1ReportAttoEth: 10_000_000_000_000_005n.toString(),
 				oracleRequestFunding: {

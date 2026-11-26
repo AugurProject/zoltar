@@ -1,3 +1,4 @@
+import { catalogMetrics } from './catalog-metrics.ts'
 import { controlReconnectTimers } from './reconnect-test-clock.ts'
 import { parseSecurityPoolPolicy, serializeSecurityPoolPolicy } from '../../src/config/security-pool-policy.ts'
 import { decodeSnapshot, type MarketSourceRow } from '../../src/dashboard/api-validation.ts'
@@ -273,11 +274,10 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 				const address = url.searchParams.get('address')
 				const pools = snapshot.pools
 					.filter(pool => address === null || pool.address.toLowerCase() === address.toLowerCase())
-					.map(pool => ({ ...pool, parent: '0x0000000000000000000000000000000000000000', universeId: '7', metrics: { systemState: pool.systemState, securityPool: pool.address, sharedCommittedRep: pool.totalPoolHeldRep, sharedCommitmentEth: pool.knownVaultCount } }))
+					.map(pool => ({ ...pool, parent: '0x0000000000000000000000000000000000000000', universeId: '7', metrics: catalogMetrics(pool.systemState, pool.address, pool.totalPoolHeldRep, pool.knownVaultCount) }))
 				const page = Number(url.searchParams.get('page'))
 				return new window.Response(JSON.stringify({ chainId: currentConfiguration.network?.chainId, snapshotTimestamp: '1789560000', page, pageCount: String(Math.ceil(pools.length / 12)), total: String(pools.length), pools: pools.slice(page * 12, (page + 1) * 12) }))
 			}
-
 			catalogRequests.push(url.searchParams.get('page') ?? '0')
 			const address = url.searchParams.get('address')
 			catalogSearches.push(address)
@@ -300,7 +300,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 												questionId: String(42 + catalogRevision),
 												universeId: '7',
 												multiplierBps: '12500',
-												metrics: { systemState: '0', securityPool: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', sharedCommittedRep: String(2 + catalogRevision), sharedCommitmentEth: String(3 + catalogRevision) },
+												metrics: catalogMetrics('0', '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', String(2 + catalogRevision), (BigInt(3 + catalogRevision) * 10n ** 18n).toString()),
 												deploymentDate: '1789560000',
 												questionDates: { startTime: '1789473600', endTime: '1792065600' },
 											},
