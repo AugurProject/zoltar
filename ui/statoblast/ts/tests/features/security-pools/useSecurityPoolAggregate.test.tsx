@@ -486,3 +486,20 @@ test('re-submits the saved pending target while keeping other retirement values 
 	if (request === undefined) throw new Error('Missing repeated retirement request')
 	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'setCommitment', args: [5n * unit] })
 })
+
+test('#1677 another connected signer can serve a selected owners ready retirement', async () => {
+	const base = capitalSnapshot()
+	const snapshot = {
+		...base,
+		positions: base.positions.map(position => ({ ...position, batch: 1n, remainingCommitment: 5n * unit, retirementPreview: { status: 'ready' as const, effectiveCurrentBatch: 1n, healthyCommitment: 20n * unit, spareCommitment: 10n * unit, queuedAheadCommitment: 0n, commitmentReduction: 5n * unit, releasedRep: 0n } })),
+	}
+	const { hook, requests } = await setup(snapshot)
+	await hook.setProps({ account: '0x00000000000000000000000000000000000000ff' })
+	expect(hook.state().serveReason).toBeUndefined()
+	await act(() => hook.state().serve())
+	const request = requests[0]
+	if (request === undefined) throw new Error('Missing service call')
+	expect(request.account?.toLowerCase()).toBe('0x00000000000000000000000000000000000000ff')
+	expect(request.to).toBe(capital)
+	expect(request.reviewDescription).toContain(snapshot.owner)
+})

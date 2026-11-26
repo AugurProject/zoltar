@@ -1,3 +1,4 @@
+import { getPendingReportId, getRequestPriceCostAttoEth, openOracleSettle, requestPriceWithValue } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { getZoltarAddress, getRepTokenAddress, forkUniverse } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { DAY } from '../../testSupport/simulator/utils/constants'
 import { approveToken, getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
@@ -1038,6 +1039,28 @@ describe('event-only replay', () => {
 		return replayLogs
 	}
 
+	test('#1678 actual feed retains report B when the earlier report A is accepted', async () => {
+		await securityPoolFixture.prepare()
+		const owner = securityPoolFixture.owner()
+		const address = questionLedgerAddresses.priceFeed
+		const feed = { address, abi: statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed.abi }
+		await requestPriceWithValue(owner, address, await getRequestPriceCostAttoEth(owner, address), unit)
+		const first = await getPendingReportId(owner, address)
+		await requestPriceWithValue(owner, address, await getRequestPriceCostAttoEth(owner, address), unit)
+		const second = await getPendingReportId(owner, address)
+		await mockWindow.advanceTime(481n)
+		await openOracleSettle(owner, first)
+		const storedPending = await getPendingReportId(owner, address)
+		const storedCeiling = await owner.readContract({ ...feed, functionName: 'pendingReportMaxSettlementBaseFeeAttoEthPerGas' })
+		const logs = await getContractReplayLogs(address, feed.abi, 0n, await owner.getBlockNumber())
+		const replayed = replayZoltarEvents(logs).coordinators.get(address)
+		expect(storedPending).toBe(second)
+		expect(second).not.toBe(first)
+		expect(replayed?.reports.get(first)?.status).toBe('Reported')
+		expect(replayed?.pendingReportId).toBe(storedPending)
+		expect(replayed?.pendingReportMaxSettlementBaseFeeAttoEthPerGas).toBe(storedCeiling)
+	})
+
 	test('actual origin deployment pre-discovers relationships before constructor checkpoints', async () => {
 		const questionData = { ...fixture.questionData, title: 'Event replay deployment discovery' }
 		const questionId = getQuestionId(questionData, fixture.outcomes)
@@ -1314,4 +1337,14 @@ test('retired pool event names do not invent current accounting state', () => {
 	const pool = '0x1111111111111111111111111111111111111111'
 	const state = replayZoltarEvents([createReplayLog({ emitter: pool, eventName: 'TotalRepBackingUnitsSet', logIndex: 0, args: { totalRepBackingUnits: 50n } }), createReplayLog({ emitter: pool, eventName: 'PoolForkModeActivated', logIndex: 1, args: { repTransferredAttoRep: 60n, systemState: 1n } })])
 	expect(state.poolStates.has(pool)).toBe(false)
+})
+
+test('#1678 accepting an older report retains the latest pending report and fee ceiling', () => {
+	const coordinator = '0x1111111111111111111111111111111111111111'
+	const state = replayZoltarEvents([
+		createReplayLog({ emitter: coordinator, logIndex: 0, eventName: 'PriceRequested', args: { reportId: 1n, pendingReportMaxSettlementBaseFeeAttoEthPerGas: 100n } }),
+		createReplayLog({ emitter: coordinator, logIndex: 1, eventName: 'PriceRequested', args: { reportId: 2n, pendingReportMaxSettlementBaseFeeAttoEthPerGas: 200n } }),
+		createReplayLog({ emitter: coordinator, logIndex: 2, eventName: 'PriceReported', args: { reportId: 1n, price: 3n, lastSettlementTimestamp: 10n } }),
+	])
+	expect(state.coordinators.get(coordinator)).toMatchObject({ pendingReportId: 2n, pendingReportMaxSettlementBaseFeeAttoEthPerGas: 200n, lastPrice: 3n })
 })

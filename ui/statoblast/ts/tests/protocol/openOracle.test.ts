@@ -253,7 +253,7 @@ describe('openOracle protocol client', () => {
 		const page = await loadOpenOracleReportSummaries(client, 0, 10)
 		expect(page.reportCount).toBe(2n)
 		expect(page.reports.map(report => report.reportId)).toEqual([1n])
-		expect(page.unavailableReports).toEqual([{ reportId: 2n, message: 'OpenOracle report #2 is unavailable: it was created without stored state and dispute history.' }])
+		expect(page.unavailableReports).toEqual([{ reportId: 2n, message: 'OpenOracle report #2 is unavailable: it was created without stored state.' }])
 	})
 
 	test('derives the dispute contribution token from the strict proposed-price direction', () => {
@@ -983,4 +983,21 @@ test('native report credits are read once per token address (#1696)', async () =
 	})
 	expect(await loadOpenOracleWithdrawableBalances(client, getOpenOracleAddress(), token1Address, zeroAddress, zeroAddress)).toEqual({ ethAttoEth: 5n, token1: 5n, token2: 5n })
 	expect(tokens).toEqual([zeroAddress])
+})
+
+test('#1707 verified STORE_ALL state is available without historical dispute tracking', async () => {
+	const preimage = createOpenOraclePreimage()
+	preimage.game.flags = OPEN_ORACLE_FLAG_STORE_ALL | OPEN_ORACLE_FLAG_TIME_TYPE
+	preimage.game.numReports = 2n
+	const client = createMockLoaderClient({
+		getBlock: async () => ({ number: 1n, timestamp: 2n }),
+		multicall: createOpenOracleMulticall({ tokens: defaultTokenFixtures }),
+		readContract: async request => {
+			if (request.functionName === 'disputeHistory') throw new Error('History was not retained')
+			return readStoredOracleFixture(request.functionName, preimage)
+		},
+	})
+	const report = await loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)
+	expect(report.currentAmount1).toBe(preimage.game.currentAmount1)
+	expect(report.exactToken1Report).toBeUndefined()
 })

@@ -231,8 +231,8 @@ describe('live fork settlement context', () => {
 		expect(refreshes).toBe(0)
 		const acknowledgment = document.querySelector('.trade-impact-acknowledge input[type="checkbox"]')
 		if (!(acknowledgment instanceof HTMLInputElement)) throw new Error('Missing migration acknowledgment')
-		expect(acknowledgment.closest('label')?.textContent).toContain('mints 0.000000000000000001 Yes (')
-		expect(acknowledgment.closest('label')?.textContent).toContain('in each selected child universe and keeps the original shares in the parent universe, permanently locking my Yes transfers')
+		expect(acknowledgment.closest('label')?.textContent).toContain('tops up each selected child universe to 0.000000000000000001 Yes (')
+		expect(acknowledgment.closest('label')?.textContent).toContain('subtracting shares already migrated there, and keeps the original shares in the parent universe, permanently locking my Yes transfers')
 		await act(() => {
 			acknowledgment.click()
 		})

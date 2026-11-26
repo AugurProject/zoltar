@@ -284,7 +284,11 @@ describe('security pool collateral repair auction SDK', () => {
 		const closed = await load(fixture({}, { finalized: true }))
 		expect(quoteSecurityPoolAuctionRefundClaim(closed, 1n)).toMatchObject({ settles: true, bidRefundAttoEth: unit, totalAttoEth: unit })
 		const fullWinner = await load(fixture({ previewBid: [bidder, vaultFor(1n), 12_000n, 2n, 2n * unit, 12n * unit, 0n], refundCreditAttoEth: unit, bidderBidCount: 1n }, { finalized: true }))
-		expect(() => quoteSecurityPoolAuctionRefundClaim(fullWinner, 1n)).toThrow('no unused collateral')
+		expect(() => buildSecurityPoolAuctionRefundCreditRequest(fullWinner, 1n)).toThrow('no unused collateral')
+		expect(quoteSecurityPoolAuctionRefundClaim(fullWinner, 1n)).toMatchObject({ bidRefundAttoEth: 0n, creditedAttoEth: unit, totalAttoEth: unit })
+		if (fullWinner.auction === undefined) throw new Error('Missing auction')
+		fullWinner.auction.refundAttoEth = 0n
+		expect(() => quoteSecurityPoolAuctionRefundClaim(fullWinner, 1n)).toThrow('No refund credit')
 	})
 	test('early refund reads reject partial amounts and keep potential winners committed', async () => {
 		const pending = await load(fixture())

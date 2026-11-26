@@ -1,3 +1,4 @@
+import { waitForRawReceipt } from '../testSupport/waitForRawReceipt'
 import { positiveFuzzInteger } from './auditFuzzBudget'
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { encodeDeployData, encodeFunctionData, getAddress, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
@@ -86,24 +87,7 @@ const modelInitialLiquidity = (completeSets: bigint, yesBps: bigint) => {
 	return { first: yesAmount, second: noAmount }
 }
 
-const receiptWaitBudgetMs = 10_000
-const receiptClock = { now: () => performance.now(), wait: (ms: number) => Bun.sleep(ms) }
-
-async function waitForRawReceipt(hash: unknown, read: () => Promise<unknown>, clock = receiptClock) {
-	const deadline = clock.now() + receiptWaitBudgetMs
-	let delay = 5
-	while (true) {
-		const receipt = await read()
-		if (typeof receipt === 'object' && receipt !== null && 'status' in receipt) return receipt
-		if (receipt !== null) throw new Error(`Invalid receipt response for ${String(hash)}`)
-		const remaining = deadline - clock.now()
-		if (remaining <= 0) throw new Error(`No receipt for ${String(hash)} after ${receiptWaitBudgetMs} ms (last RPC result: null)`)
-		await clock.wait(Math.min(delay, remaining))
-		delay = Math.min(50, delay * 2)
-	}
-}
-
-test('raw receipt wait retries pending receipts and preserves reverted status', async () => {
+test('#1688 raw receipt wait retries pending receipts and preserves reverted status', async () => {
 	const requests: number[] = []
 	let now = 0
 	const receipt = { status: '0x0' }
@@ -119,7 +103,7 @@ test('raw receipt wait retries pending receipts and preserves reverted status', 
 	expect(requests).toEqual([0, 5, 15, 35, 75])
 })
 
-test('raw receipt wait bounds pending retries and propagates transport failures immediately', async () => {
+test('#1688 raw receipt wait bounds pending retries and propagates transport failures immediately', async () => {
 	let now = 0
 	const clock = { now: () => now, wait: async (ms: number) => void (now += ms) }
 	const failure = new Error('receipt transport failed')

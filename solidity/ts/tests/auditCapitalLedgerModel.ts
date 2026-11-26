@@ -743,13 +743,11 @@ export const applyModel = (m: Model, op: Operation): TakeoverResult | undefined 
 			return undefined
 		case 'takeover':
 			requireOpen(m)
-			requireFresh(m)
 			checkpoint(m)
 			serve(m, 0n)
 			return takeover(m, op.o, op.id, op.k, op.minimumTakeoverReward, op.maxOwn, op.bounds, op.sponsored === true)
 		case 'takeoverBid': {
 			requireOpen(m)
-			requireFresh(m)
 			checkpoint(m)
 			const id = materialize(m, op.bid)
 			serve(m, 0n)

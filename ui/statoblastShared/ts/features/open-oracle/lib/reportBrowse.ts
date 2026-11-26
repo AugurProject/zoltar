@@ -62,7 +62,7 @@ function decodeCachedOpenOracleReportSummary(value: unknown) {
 			// Timing is optional so summaries cached before it was recorded stay readable.
 			disputeDelay: read.optional('disputeDelay', read.bigint),
 			disputeOccurred: read.boolean('disputeOccurred'),
-			exactToken1Report: read.bigint('exactToken1Report'),
+			exactToken1Report: read.optional('exactToken1Report', read.bigint),
 			isDistributed: read.boolean('isDistributed'),
 			price: read.bigint('price'),
 			reportId: read.bigint('reportId'),
