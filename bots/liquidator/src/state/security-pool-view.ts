@@ -36,7 +36,7 @@ export function securityPoolViews(state: RuntimeState, settings: OperatorSetting
 			priceValid: snapshot.priceValid && snapshot.timestamp < snapshot.priceValidUntil,
 			principalRep: formatDecimalAmount(snapshot.ownerPrincipalAttoRep),
 			commitmentEth: formatDecimalAmount(snapshot.ownerCommitmentAttoEth),
-			managedPrincipalRep: formatDecimalAmount(totalPrincipal),
+			managedPrincipalRep: totalPrincipal === undefined ? 'Unknown' : formatDecimalAmount(totalPrincipal),
 			maximumTotalPrincipalRep: formatDecimalAmount(settings.securityPoolPolicy.maximumTotalPrincipalAttoRep),
 			automation: settings.runtime.execute && !state.paused && securityPool.selected && securityPool.approvedUniverse && settings.securityPoolPolicy.allowFundedTakeovers,
 			knownPositionCount: securityPool.knownPositionCount.toString(),

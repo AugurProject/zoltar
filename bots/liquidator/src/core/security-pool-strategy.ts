@@ -33,7 +33,7 @@ export type SecurityPoolTakeover = {
  * A cure that heals its target consumes shared spare and pays nothing. It is worth its gas only when
  * another position, itself curable until then, is left without spare and becomes a profitable takeover.
  */
-function unlockingCurePlan(observation: SecurityPoolObservation, position: SecurityPoolPosition, removed: bigint, settings: OperatorSettings, totalPrincipal: bigint, marketAllowed: boolean): { reason: string; plan?: SecurityPoolTakeover } {
+function unlockingCurePlan(observation: SecurityPoolObservation, position: SecurityPoolPosition, removed: bigint, settings: OperatorSettings, totalPrincipal: bigint | undefined, marketAllowed: boolean): { reason: string; plan?: SecurityPoolTakeover } {
 	const { snapshot } = observation
 	const curedSnapshot = { ...snapshot, totalCommitmentAttoEth: snapshot.totalCommitmentAttoEth - removed }
 	const cured = { ...observation, snapshot: curedSnapshot, positions: observation.positions.filter(candidate => candidate !== position) }
@@ -68,14 +68,14 @@ function unlockingCurePlan(observation: SecurityPoolObservation, position: Secur
 }
 
 /** Quote the complete residual after the transaction’s deterministic preliminary cure, or the unpaid cure when it alone heals the target. */
-export function securityPoolTakeoverPlan(observation: SecurityPoolObservation, position: SecurityPoolPosition, settings: OperatorSettings, totalPrincipal: bigint, marketAllowed: boolean, requestedCommitment?: bigint): { reason: string; plan?: SecurityPoolTakeover } {
+export function securityPoolTakeoverPlan(observation: SecurityPoolObservation, position: SecurityPoolPosition, settings: OperatorSettings, totalPrincipal: bigint | undefined, marketAllowed: boolean, requestedCommitment?: bigint): { reason: string; plan?: SecurityPoolTakeover } {
 	const result = paidTakeoverPlan(observation, position, settings, totalPrincipal, marketAllowed, requestedCommitment)
 	if (result.healingCure === undefined) return result
 	return unlockingCurePlan(observation, position, result.healingCure, settings, totalPrincipal, marketAllowed)
 }
 
 /** A takeover that asks for a takeover reward. A target its own model predicts the cure will heal never gets one. */
-function paidTakeoverPlan(observation: SecurityPoolObservation, position: SecurityPoolPosition, settings: OperatorSettings, totalPrincipal: bigint, marketAllowed: boolean, requestedCommitment?: bigint): { reason: string; plan?: SecurityPoolTakeover; healingCure?: bigint } {
+function paidTakeoverPlan(observation: SecurityPoolObservation, position: SecurityPoolPosition, settings: OperatorSettings, totalPrincipal: bigint | undefined, marketAllowed: boolean, requestedCommitment?: bigint): { reason: string; plan?: SecurityPoolTakeover; healingCure?: bigint } {
 	const { snapshot } = observation
 	const policy = settings.securityPoolPolicy
 	const reject = (reason: string) => ({ reason })
@@ -118,6 +118,7 @@ function paidTakeoverPlan(observation: SecurityPoolObservation, position: Securi
 	const ownFunding = required > snapshot.ownerPrincipalAttoRep + takeoverReward ? required - snapshot.ownerPrincipalAttoRep - takeoverReward : 0n
 	if (ownFunding > 0n && receiver !== undefined && receiver.maxHealthyPrice < snapshot.liquidationPrice) return reject('Receiver position is liquidating; principal top-ups are unavailable')
 	const poolPrincipalHeadroom = policy.maximumPrincipalAttoRep - (observation.managedPrincipalAttoRep ?? snapshot.ownerPrincipalAttoRep) + snapshot.ownerPrincipalAttoRep
+	if (totalPrincipal === undefined) return reject('Managed principal exposure is unknown')
 	const globalPrincipalHeadroom = policy.maximumTotalPrincipalAttoRep - totalPrincipal + snapshot.ownerPrincipalAttoRep
 	const maximumOwnerPrincipal = poolPrincipalHeadroom < globalPrincipalHeadroom ? poolPrincipalHeadroom : globalPrincipalHeadroom
 	// Both receiver-funded principal and the pledged takeover reward count toward exposure limits.

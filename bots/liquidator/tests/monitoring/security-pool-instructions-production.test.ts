@@ -97,6 +97,9 @@ describe('explicit security pool instruction lifecycle', () => {
 			if (winner === undefined) throw new Error('Missing operator bid')
 			expect(winner.fill?.filledLots).toBeGreaterThan(0n)
 			await executeSecurityPoolInstruction(wallet, settings, state, pool, { ...base, id: 'activate', action: 'auction-activate', bidId: winner.id }, async () => true)
+			// #1709: a queued activation completed by another keeper is durably fulfilled.
+			expect(await executeSecurityPoolInstruction(wallet, settings, state, pool, { ...base, id: 'already-active', action: 'auction-activate', bidId: winner.id }, async () => true)).toBe(false)
+			expect(state.completedSecurityPoolInstructions?.['already-active']).toBeDefined()
 			await executeSecurityPoolInstruction(wallet, settings, state, pool, { ...base, id: 'health', action: 'vault-health', vault: winner.vault, targetHealthFactorBps: 10_000n }, async () => true)
 			const final = await loadSecurityPoolObservation(client, settings, account.address, pending.nextScope, await client.getBlockNumber())
 			expect(final.ownedVaults?.find(vault => vault.owner === winner.vault)?.ownerCommitmentAttoEth).toBeGreaterThan(0n)
@@ -147,7 +150,7 @@ describe('explicit security pool instruction lifecycle', () => {
 			state.securityPoolScopes.push({ ...scope, universeId: descendant, managedVaults: [winner.vault] })
 			expect(await executeSecurityPoolInstruction(wallet, settings, state, pool, { ...base, id: 'direct-choice', action: 'fork-choice', outcome: 1n }, async () => true)).toBe(true)
 			expect([...(await client.readContract({ address: context.forks, abi: forkAbi, functionName: 'choices', args: [context.child, account.address] }))]).toEqual([1n, true])
-			expect(Object.keys(state.completedSecurityPoolInstructions ?? {})).toEqual(['losing-bid', 'early-refund', 'one-bid', 'closed-auction-bid', 'activate', 'health', 'deposit', 'withdraw', 'earnings', 'retire', 'choose', 'direct-choice'])
+			expect(Object.keys(state.completedSecurityPoolInstructions ?? {})).toEqual(['losing-bid', 'early-refund', 'one-bid', 'closed-auction-bid', 'activate', 'already-active', 'health', 'deposit', 'withdraw', 'earnings', 'retire', 'choose', 'direct-choice'])
 		} finally {
 			await stop()
 		}
