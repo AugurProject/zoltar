@@ -103,7 +103,7 @@
 					</dd>
 					<dt id="invariant-62">Predeployment shares and initial supply</dt>
 					<dd>
-						Canonical Invalid, Yes and No shares sent to the predicted pair before deployment move to the share sink during construction. They buy no LP supply. At initialization the scale is exactly the smaller of the two supplied reserves. The designated LP recipient receives that scale less 1,000 locked LP units. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/trading/pairRouter.integration.test.ts"><code>pairRouter.integration.test.ts</code></a
+						Canonical Invalid, Yes and No shares sent to the predicted pair before deployment move to the share sink during construction. They buy no LP supply. At initialization the scale is exactly the smaller of the two supplied reserves. Initialization mints 1,000 LP units to <code>MINIMUM_LIQUIDITY_LOCK</code> and the scale less 1,000 units to the designated recipient. The returned liquidity is the recipient-directed mint. The lock address is a valid recipient; when both mints target it, its balance increases by the full scale. The minimum lock remains intact. <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/trading/pairRouter.integration.test.ts"><code>pairRouter.integration.test.ts</code></a
 						>.
 					</dd>
 				</dl>

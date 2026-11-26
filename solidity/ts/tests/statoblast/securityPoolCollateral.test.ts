@@ -9,6 +9,7 @@ import {
 	statoblast_SecurityPoolServices_SecurityPoolServices as servicesArtifact,
 	trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory as factoryArtifact,
 	trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter as routerArtifact,
+	trading_TwoWayConstantProductPair_TwoWayConstantProductPair as pairArtifact,
 } from '../../types/contractArtifact'
 import { deployContract } from '../../testSupport/deployContract'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
@@ -189,7 +190,7 @@ describe('ERC20 security pool collateral', () => {
 		expect(await owner.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [other.account.address] })).toBeGreaterThan(before)
 	})
 
-	test('six-decimal collateral funds direct reports and round trips', async () => {
+	test.each([false, true])('six-decimal collateral funds direct reports and round trips (LP recipient is lock: %s)', async recipientIsLock => {
 		const owner = fixture.owner()
 		const buyer = fixture.other()
 		const token = await deployContract(owner, encodeDeployData({ abi: tokenArtifact.abi, bytecode: `0x${tokenArtifact.evm.bytecode.object}`, args: [6] }))
@@ -244,7 +245,17 @@ describe('ERC20 security pool collateral', () => {
 		await expect(buyer.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithCollateral', args: [pool, cash, 5_000n, maxUint256, maxUint256, 0n, 0n, 1n, buyer.account.address, deadline, 0n] })).rejects.toThrow('Invalid token budget')
 		await expect(buyer.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithCollateral', args: [pool, cash, 5_000n, maxUint256, maxUint256, 0n, 0n, 1n, buyer.account.address, deadline, cash] })).rejects.toThrow('Purchase fee exceeds budget')
 		expect(await balance()).toBe(beforeRouter)
-		await writeContractAndWait(buyer, () => buyer.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithCollateral', args: [pool, cash, 5_000n, maxUint256, maxUint256, 0n, 0n, 1n, buyer.account.address, fixture.base.questionData.endTime - 1n, 2n * cash] }))
+		const lock = '0x0000000000000000000000000000000000000001'
+		const recipient = recipientIsLock ? lock : buyer.account.address
+		const initializeRequest = { abi: routerArtifact.abi, address: router, functionName: 'createPairAndInitializeWithCollateral', args: [pool, cash, 5_000n, maxUint256, maxUint256, 0n, 0n, 1n, recipient, deadline, 2n * cash] } as const
+		const initial = (await buyer.simulateContract(initializeRequest)).result
+		expect(initial.liquidity).toBe(initial.yesUsed - 1_000n)
+		expect(initial.yesUsed).toBe(initial.noUsed)
+		await writeContractAndWait(buyer, () => buyer.writeContract(initializeRequest))
+		expect(await buyer.readContract({ abi: pairArtifact.abi, address: initial.pair, functionName: 'MINIMUM_LIQUIDITY_LOCK' })).toBe(lock)
+		expect(await buyer.readContract({ abi: pairArtifact.abi, address: initial.pair, functionName: 'totalSupply' })).toBe(initial.yesUsed)
+		expect(await buyer.readContract({ abi: pairArtifact.abi, address: initial.pair, functionName: 'balanceOf', args: [lock] })).toBe(recipientIsLock ? initial.yesUsed : 1_000n)
+		expect(await buyer.readContract({ abi: pairArtifact.abi, address: initial.pair, functionName: 'balanceOf', args: [recipient] })).toBe(recipientIsLock ? initial.yesUsed : initial.liquidity)
 		expect(await buyer.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [router] })).toBe(0n)
 		expect(await buyer.getBalance({ address: router })).toBe(0n)
 		const pair = await buyer.readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'getPair', args: [pool] })
