@@ -5,6 +5,7 @@ import * as path from 'node:path'
 import * as process from 'node:process'
 import { bytesToHex, decodeFunctionResult, encodeFunctionData, getAddress, hexToBytes, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { createSimulationProfile } from '../../ui/coreShared/ts/wallet/networkProfile.js'
+import { simulationBootstrapFailed } from '../../ui/coreShared/ts/copy/app.ts'
 import { getInfraContractAddresses } from '../../ui/statoblastShared/ts/protocol/deploymentHelpers.js'
 import { getDeploymentSteps } from '../../ui/statoblastShared/ts/protocol/deployment.js'
 import { statoblast_openOracle_OpenOracle_OpenOracle } from '../../ui/statoblastShared/ts/contractArtifact.js'
@@ -312,7 +313,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			const deadline = performance.now() + timeoutMilliseconds
 			while (performance.now() < deadline) {
 				body = await readBody()
-				if (body.includes('Simulation bootstrap failed')) throw new Error(`Production simulation failed to bootstrap: ${body}`)
+				if (body.includes(simulationBootstrapFailed)) throw new Error(`Production simulation failed to bootstrap: ${body}`)
 				if (predicate(body)) return body
 				await Bun.sleep(50)
 			}
@@ -333,9 +334,10 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 				return { startsNewDocument: typeof result === 'object' && result !== null && 'loaderId' in result && typeof result.loaderId === 'string' }
 			},
 			readDocument: async () => {
-				const document = await evaluate('({ body: document.body?.innerText ?? "", timeOrigin: performance.timeOrigin })')
-				if (typeof document !== 'object' || document === null || !('body' in document) || typeof document.body !== 'string' || !('timeOrigin' in document) || typeof document.timeOrigin !== 'number') throw new Error('Chromium did not return production document state')
-				return { body: document.body, timeOrigin: document.timeOrigin }
+				const document = await evaluate('({ body: document.body?.innerText ?? "", simulationStarting: document.querySelector(".simulation-strip-progress") !== null, timeOrigin: performance.timeOrigin })')
+				if (typeof document !== 'object' || document === null || !('body' in document) || typeof document.body !== 'string' || !('timeOrigin' in document) || typeof document.timeOrigin !== 'number' || !('simulationStarting' in document) || typeof document.simulationStarting !== 'boolean')
+					throw new Error('Chromium did not return production document state')
+				return { body: document.body, simulationStarting: document.simulationStarting, timeOrigin: document.timeOrigin }
 			},
 		})
 

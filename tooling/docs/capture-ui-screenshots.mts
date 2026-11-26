@@ -153,7 +153,7 @@ async function captureScreenshot(chromiumPath: string, baseUrl: string, spec: Ui
 		})
 		await session.send('Page.addScriptToEvaluateOnNewDocument', { source: `try { localStorage.setItem('zoltar.theme', 'light') } catch {}\n${PAGE_HELPERS}` })
 		await session.send('Page.navigate', { url: pageUrl })
-		await session.waitFor(`document.readyState === 'complete' && document.body.innerText.includes(${quote(app.title)}) && !document.body.innerText.includes('BOOTSTRAPPING') && !document.body.innerText.includes('Starting simulation')`, {
+		await session.waitFor(`document.readyState === 'complete' && document.body.innerText.includes(${quote(app.title)}) && document.querySelector('.simulation-strip-progress') === null`, {
 			attempts: APP_READY_ATTEMPTS,
 			intervalMilliseconds: 250,
 			retryFailures: true,

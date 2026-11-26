@@ -1,4 +1,5 @@
 import { useSignal } from '@preact/signals'
+import { repPriceRefreshTimeout, repQuoteTimeout } from '../../../copy/openOracle.js'
 import { useEffect, useRef } from 'preact/hooks'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
@@ -98,12 +99,12 @@ async function fetchRepPerEthPrice(client: ReturnType<ChainBackend['createReadCl
 	const quoter = getRepPriceQuoter()
 	const repAddress = quoter.getRepAddress()
 	try {
-		const { amountOut, source } = await withTimeout(quoter.quoteBestExactInputWithSource(client, ETH_ADDRESS, repAddress, ATTO_ETH_PER_ETH), 30_000, 'RPC timeout while loading the Uniswap V4 REP price.')
+		const { amountOut, source } = await withTimeout(quoter.quoteBestExactInputWithSource(client, ETH_ADDRESS, repAddress, ATTO_ETH_PER_ETH), 30_000, repQuoteTimeout('V4'))
 		return { price: amountOut, source: source.protocol === 'mock' ? 'mock' : 'v4', sourceUrl: source.poolUrl }
 	} catch (error) {
 		if (!isRecoverableQuoteError(error)) throw error
 		// Missing or stalled V4 quotes must still allow a bounded V3 fallback.
-		const { amountOut, source } = await withTimeout(quoter.quoteBestV3ExactInputWithSource(client, ETH_ADDRESS, repAddress, ATTO_ETH_PER_ETH), 30_000, 'RPC timeout while loading the Uniswap V3 REP price.')
+		const { amountOut, source } = await withTimeout(quoter.quoteBestV3ExactInputWithSource(client, ETH_ADDRESS, repAddress, ATTO_ETH_PER_ETH), 30_000, repQuoteTimeout('V3'))
 		return { price: amountOut, source: source.protocol === 'mock' ? 'mock' : 'v3', sourceUrl: source.poolUrl }
 	}
 }
@@ -133,7 +134,7 @@ async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean, heade
 	repPriceRefreshGenerationByBackend.set(backend, refreshGeneration)
 	const refreshPromise = (async () => {
 		const client = backend.createReadClient()
-		const [repPerEthResult, repUsdcResult] = await Promise.allSettled([fetchRepPerEthPrice(client), headerOnly ? undefined : withTimeout(getRepPriceQuoter().quoteRepForUsdcV4WithSource(client, ATTO_REP), 30_000, 'RPC timeout while loading REP price. Refresh prices to retry.')])
+		const [repPerEthResult, repUsdcResult] = await Promise.allSettled([fetchRepPerEthPrice(client), headerOnly ? undefined : withTimeout(getRepPriceQuoter().quoteRepForUsdcV4WithSource(client, ATTO_REP), 30_000, repPriceRefreshTimeout)])
 		if (repPerEthResult.status === 'rejected' && !isRecoverableQuoteError(repPerEthResult.reason)) throw repPerEthResult.reason
 		if (repUsdcResult.status === 'rejected' && !isRecoverableQuoteError(repUsdcResult.reason)) throw repUsdcResult.reason
 		const nextCachedRepPrices: CachedRepPrices = {

@@ -279,7 +279,7 @@ export async function createOpenOracleReportInstance(
 		token1Address: parameters.token1Address,
 		token2Address: parameters.token2Address,
 	})
-	if (parameterValidation !== undefined) throw new Error(parameterValidation.message ?? 'Invalid oracle report parameters.')
+	if (parameterValidation !== undefined) throw new Error(parameterValidation.message ?? openOracleCopy.invalidReportParameters)
 	let wethFundingAmountAttoEth = 0n
 	if (sameAddress(parameters.token1Address, getWethAddress())) wethFundingAmountAttoEth = parameters.exactToken1Report
 	else if (sameAddress(parameters.token2Address, getWethAddress())) wethFundingAmountAttoEth = parameters.initialToken2Amount

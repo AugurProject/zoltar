@@ -267,11 +267,11 @@ class CarrySnapshotMismatch extends Error {}
 
 function authenticateCarrySnapshot(parentHistoricalLeaves: readonly HistoricalCarrySnapshotEntry[], childOutcomeState: Awaited<ReturnType<typeof readEscalationOutcomeState>>) {
 	const { snapshotLeafCount: parentCarryLeafCount, snapshotCarryRoot: snapshotRoot } = childOutcomeState
-	if (BigInt(parentHistoricalLeaves.length) < parentCarryLeafCount) throw new CarrySnapshotMismatch('The parent question did not return the full deposit history.')
+	if (BigInt(parentHistoricalLeaves.length) < parentCarryLeafCount) throw new CarrySnapshotMismatch(reportErrors.incompleteHistory)
 	const orderedEntries = parentHistoricalLeaves.slice(0, bigintToSafeNumber(parentCarryLeafCount, 'Parent deposit count'))
 	const orderedLeaves = orderedEntries.map(entry => entry.leaf)
 	const leafHashes = orderedEntries.map(entry => entry.leafHash)
-	if (leafHashes.length > 0 && buildCarryMerkleMountainRangeProof(leafHashes, 0).root !== snapshotRoot) throw new CarrySnapshotMismatch('Couldn’t verify the parent question’s deposit history.')
+	if (leafHashes.length > 0 && buildCarryMerkleMountainRangeProof(leafHashes, 0).root !== snapshotRoot) throw new CarrySnapshotMismatch(reportErrors.unverifiedHistory)
 	return { orderedEntries, orderedLeaves, leafHashes, snapshotRoot }
 }
 

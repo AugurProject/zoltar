@@ -61,7 +61,7 @@ export async function loadSecurityPoolBranchAuction(client: ReadClient, security
 	if (getAddress(snapshot.factory) !== getAddress(infrastructure.securityPoolFactory) || getAddress(snapshot.zoltar) !== getAddress(infrastructure.zoltar)) throw new Error(auctionErrors.auctionNotVerified)
 	const blockNumber = snapshot.blockNumber
 	verifyRuntimeCode(await client.getCode({ address: securityPool, blockNumber }), getSecurityPoolRuntimeCode(), securityPoolArtifact.evm.deployedBytecode.immutableReferences, 'securityPool')
-	const modules: { address: Address; artifact: { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } }; label: string }[] = [{ address: snapshot.controller, artifact: forkArtifact, label: 'fork coordinator' }]
+	const modules: { address: Address; artifact: { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } }; label: string }[] = [{ address: snapshot.controller, artifact: forkArtifact, label: 'fork contract' }]
 	const auction = snapshot.auction
 	if (auction !== undefined) {
 		await verifyAuctionCapitalCustody(client, securityPool, snapshot.capitalLedger, blockNumber)
@@ -180,7 +180,7 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 	// The clone's code is the only authority for its bindings; the getters must agree with it.
 	verifyAuctionVaultCode(vaultCode, { implementation: bindings.implementation, owner: bidder, capital: initialCapital, auction, bidId }, 'auction position')
 	if (predictAuctionVaultAddress({ implementation: bindings.implementation, owner: bidder, capital: initialCapital, auction, bidId }) !== getAddress(vault)) throw new Error(auctionErrors.positionAddress)
-	const controller = requireAddressValue(controllerValue, 'fork coordinator')
+	const controller = requireAddressValue(controllerValue, 'fork contract')
 	const zoltar = requireAddressValue(protocolValue, 'security pool protocol')
 	const infrastructure = getInfraContractAddresses()
 	if (getAddress(requireAddressValue(factoryValue, 'security pool factory')) !== getAddress(infrastructure.securityPoolFactory) || getAddress(zoltar) !== getAddress(infrastructure.zoltar) || bidId <= 0n) throw new Error(auctionErrors.positionPool)
@@ -205,10 +205,10 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 		[capitalRoot, auctionRoot, controllerRoot].some(value => getAddress(requireAddressValue(value, 'module security pool')) !== getAddress(securityPool)) ||
 		getAddress(requireAddressValue(capitalProtocol, 'capital protocol')) !== getAddress(zoltar) ||
 		getAddress(requireAddressValue(auctionCapital, 'auction capital')) !== getAddress(initialCapital) ||
-		getAddress(requireAddressValue(auctionFork, 'auction fork authority')) !== getAddress(controller) ||
+		getAddress(requireAddressValue(auctionFork, 'auction fork contract')) !== getAddress(controller) ||
 		requireBigintValue(auctionUniverse, 'auction universe') !== initialUniverse ||
-		getAddress(requireAddressValue(canonicalCapital, 'canonical capital')) !== getAddress(initialCapital) ||
-		getAddress(requireAddressValue(canonicalAuction, 'canonical auction')) !== getAddress(auction) ||
+		getAddress(requireAddressValue(canonicalCapital, 'pool capital contract')) !== getAddress(initialCapital) ||
+		getAddress(requireAddressValue(canonicalAuction, 'pool auction')) !== getAddress(auction) ||
 		getAddress(requireAddressValue(engineController, 'auction controller address')) !== getAddress(auction) ||
 		getAddress(requireAddressValue(bid[0], 'bid owner')) !== getAddress(bidder) ||
 		getAddress(requireAddressValue(bid[1], 'bid position')) !== getAddress(vault) ||
@@ -218,7 +218,7 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 	await Promise.all([
 		client.getCode({ address: securityPool, blockNumber }).then(code => verifyRuntimeCode(code, getSecurityPoolRuntimeCode(), securityPoolArtifact.evm.deployedBytecode.immutableReferences, 'securityPool')),
 		...[
-			{ address: controller, artifact: forkArtifact, label: 'fork coordinator' },
+			{ address: controller, artifact: forkArtifact, label: 'fork contract' },
 			{ address: auction, artifact: auctionArtifact, label: 'security pool auction' },
 			{ address: engine, artifact: engineArtifact, label: 'auction bidding contract' },
 			{ address: bindings.implementation, artifact: vaultArtifact, label: 'auction position contract' },

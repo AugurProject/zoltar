@@ -99,7 +99,7 @@ export function resetRoutingForTesting() {
 
 function requireRouting(): RoutingState {
 	const activeRouting = getRoutingState()
-	if (activeRouting === undefined) throw new Error('Routing has not been installed. Call installRouting() during application bootstrap before reading routes.')
+	if (activeRouting === undefined) throw new Error('Routing has not been installed. Call installRouting() during app startup before reading routes.')
 	return activeRouting
 }
 

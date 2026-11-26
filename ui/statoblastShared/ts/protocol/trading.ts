@@ -55,7 +55,7 @@ export async function loadQuestionLedgerMintCapacity(client: Pick<ReadClient, 'g
 		],
 		currentBlock.number,
 	)
-	const capital = requireAddressValue(custody, 'security pool custody')
+	const capital = requireAddressValue(custody, 'pool collateral contract')
 	if (capital === zeroAddress) throw new Error(questionNotLinkedToSecurityPool)
 	const central = await loadCentralSecurityPoolQuestion(client, questionLedgerAddress, capital, currentBlock.number)
 	const escalationGameActive = requireAddressValue(escalationGame, 'question reporting address') !== zeroAddress

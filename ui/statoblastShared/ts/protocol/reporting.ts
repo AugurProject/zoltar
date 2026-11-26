@@ -54,7 +54,7 @@ type ReportingBootstrapReadResult = {
 }
 
 function requireReportingBootstrapReadResult(value: unknown): ReportingBootstrapReadResult {
-	const [questionId, escalationGameAddress, settlementCollateralAttoEth, universeId, zoltarAddress, initialEscalationGameDepositAttoRep, systemStateValue, questionOutcomeValue, parentQuestionLedgerAddress] = requireTupleValue(value, 9, 'reporting bootstrap')
+	const [questionId, escalationGameAddress, settlementCollateralAttoEth, universeId, zoltarAddress, initialEscalationGameDepositAttoRep, systemStateValue, questionOutcomeValue, parentQuestionLedgerAddress] = requireTupleValue(value, 9, 'question reporting details')
 	return {
 		questionId: requireBigintValue(questionId, 'reporting question id'),
 		escalationGameAddress: requireAddressValue(escalationGameAddress, 'reporting game address'),
@@ -435,7 +435,7 @@ export async function reportOutcomeInQuestionLedger(client: WriteClient, questio
 	else await runFundingTransactions(client, [gamePreparation], reportSteps[0])
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
 	// A confirmed report remains successful if receipt metadata cannot be saved on this device.
-	await withTimeout(captureReportingDeposits(client, profile, questionLedgerAddress, universeId, receipt), 15_000, 'Saving the report deposit timed out.').catch(() => undefined)
+	await withTimeout(captureReportingDeposits(client, profile, questionLedgerAddress, universeId, receipt), 15_000, reportErrors.savingDepositTimedOut).catch(() => undefined)
 	return {
 		action: 'reportOutcome',
 		hash,

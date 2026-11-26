@@ -4,10 +4,11 @@ import { getBrowserStorage } from '@zoltar/ui-core-shared/lib/browserStorage.js'
 import { localEntityScopeForNetwork } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { decodeStoredValue } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
 import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { deployment as copy } from '../../../copy/securityPoolTransactions.js'
 import type { DeploymentDraft } from './creation.js'
 
-export type PendingDeployment = { id: string; step: 'rules' | 'pool'; hash?: Hash | undefined; nonce?: string | undefined; nonceVerified?: boolean | undefined; initialFactoryCount?: string | undefined }
-type DeploymentProgress = { rules?: Address | undefined; pool?: Address | undefined; activated?: boolean | undefined; pending?: PendingDeployment | undefined; draft: DeploymentDraft }
+export type PendingDeployment = { id: string; step: 'rules' | 'pool'; hash?: Hash | undefined; nonce?: string | undefined; nonceVerified?: boolean | undefined; initialFactoryCount?: string | undefined; replacedWithoutDeployment?: boolean | undefined }
+export type DeploymentProgress = { rules?: Address | undefined; pool?: Address | undefined; activated?: boolean | undefined; pending?: PendingDeployment | undefined; draft: DeploymentDraft }
 type ProgressSignal = Signal<DeploymentProgress | undefined>
 const memoryJournals = new Map<string, ProgressSignal>()
 
@@ -39,6 +40,7 @@ function decodeProgress(raw: string) {
 							nonce: storedUnsignedInteger(pending.optional('nonce', pending.string)),
 							nonceVerified: pending.optional('nonceVerified', pending.boolean),
 							initialFactoryCount: storedUnsignedInteger(pending.optional('initialFactoryCount', pending.string)),
+							replacedWithoutDeployment: pending.optional('replacedWithoutDeployment', pending.boolean),
 						},
 			draft: {
 				collateralSymbol: draft.oneOf('collateralSymbol', ['WETH', 'USDC']),
@@ -63,7 +65,7 @@ function decodeProgress(raw: string) {
 }
 
 export function samePendingDeployment(left: PendingDeployment | undefined, right: PendingDeployment | undefined) {
-	return left?.id === right?.id && left?.step === right?.step && left?.hash === right?.hash && left?.nonce === right?.nonce && left?.nonceVerified === right?.nonceVerified && left?.initialFactoryCount === right?.initialFactoryCount
+	return left?.id === right?.id && left?.step === right?.step && left?.hash === right?.hash && left?.nonce === right?.nonce && left?.nonceVerified === right?.nonceVerified && left?.initialFactoryCount === right?.initialFactoryCount && left?.replacedWithoutDeployment === right?.replacedWithoutDeployment
 }
 
 export function deploymentProgressJournal(profile: NetworkProfile, owner: Address | undefined) {
@@ -96,53 +98,67 @@ export function deploymentProgressJournal(profile: NetworkProfile, owner: Addres
 	}
 	const restored = read()
 	current.value = restored
+	const write = (progress: DeploymentProgress | undefined) => {
+		if (!memoryJournals.has(key) && storage !== undefined) {
+			try {
+				if (progress === undefined) storage.removeItem(key)
+				else storage.setItem(key, JSON.stringify(progress))
+			} catch (error) {
+				if (!(error instanceof DOMException)) throw error
+				rememberInTab()
+			}
+		}
+		const memory = memoryJournals.get(key)
+		if (memory !== undefined) memory.value = progress
+		current.value = progress
+	}
+	const coordinate = async <Result>(operation: () => Result): Promise<Result> => {
+		// Simulations run independently in separate tabs and use session storage.
+		if (persistence === 'session' || storage === undefined || memoryJournals.has(key)) return operation()
+		if (navigator.locks === undefined) throw new Error(copy.coordinationUnavailable)
+		return await navigator.locks.request(key, operation)
+	}
 	return {
 		current,
 		restored,
 		persistenceUnavailable,
 		read,
-		restart: (expected: DeploymentProgress) => {
-			const replacement = expected.pending?.step === 'pool' && expected.rules !== undefined && expected.pool === undefined ? { ...expected, pending: undefined } : undefined
-			if (memoryJournals.has(key) || storage === undefined) {
-				const memory = memoryJournals.get(key) ?? current
-				if (memory.value !== expected) return false
-				memory.value = replacement
-				return true
-			}
-			try {
-				const raw = readRaw()
-				if (raw === undefined) return false
-				const saved = decodeProgress(raw)
-				if (saved === undefined || saved.rules !== expected.rules || saved.pool !== expected.pool || saved.activated !== expected.activated) return false
-				if (!samePendingDeployment(saved.pending, expected.pending)) return false
-				// Retire only this exact revision. A concurrent write can still save its newer progress.
-				storage.setItem(discardedKey, raw)
-				if (readRaw() !== undefined) return false
-				if (replacement === undefined) return true
-				const updated = JSON.stringify(replacement)
-				storage.setItem(key, updated)
-				return readRaw() === updated
-			} catch (error) {
-				if (error instanceof SyntaxError) return false
-				if (!(error instanceof DOMException)) throw error
-				rememberInTab()
-				current.value = replacement
-				return true
-			}
-		},
-		write: (progress: DeploymentProgress | undefined) => {
-			if (!memoryJournals.has(key) && storage !== undefined) {
+		claim: (create: (latest: DeploymentProgress | undefined) => DeploymentProgress) =>
+			coordinate(() => {
+				const latest = read()
+				current.value = latest
+				write(create(latest))
+			}),
+		restart: (expected: DeploymentProgress) =>
+			coordinate(() => {
+				const replacement = expected.pending?.step === 'pool' && expected.rules !== undefined && expected.pool === undefined ? { ...expected, pending: undefined } : undefined
+				if (memoryJournals.has(key) || storage === undefined) {
+					const memory = memoryJournals.get(key) ?? current
+					if (memory.value !== expected) return false
+					memory.value = replacement
+					return true
+				}
 				try {
-					if (progress === undefined) storage.removeItem(key)
-					else storage.setItem(key, JSON.stringify(progress))
+					const raw = readRaw()
+					if (raw === undefined) return false
+					const saved = decodeProgress(raw)
+					if (saved === undefined || saved.rules !== expected.rules || saved.pool !== expected.pool || saved.activated !== expected.activated) return false
+					if (!samePendingDeployment(saved.pending, expected.pending)) return false
+					// Retire only this exact revision. A concurrent write can still save its newer progress.
+					storage.setItem(discardedKey, raw)
+					if (readRaw() !== undefined) return false
+					if (replacement === undefined) return true
+					const updated = JSON.stringify(replacement)
+					storage.setItem(key, updated)
+					return readRaw() === updated
 				} catch (error) {
+					if (error instanceof SyntaxError) return false
 					if (!(error instanceof DOMException)) throw error
 					rememberInTab()
+					current.value = replacement
+					return true
 				}
-			}
-			const memory = memoryJournals.get(key)
-			if (memory !== undefined) memory.value = progress
-			current.value = progress
-		},
+			}),
+		write,
 	}
 }

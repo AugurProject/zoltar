@@ -63,7 +63,7 @@ export function getEscalationSideLabel(key: ReportingOutcomeKey) {
 		case 'no':
 			return 'No'
 		default:
-			throw new Error(`Could not recognize the reporting outcome.`)
+			throw new Error(zoltarCopy.formatUnknownReportingOutcome(key))
 	}
 }
 

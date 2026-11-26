@@ -1,3 +1,4 @@
+import { scenarioOwner } from '../copy/simulation.js'
 import type { CollateralSymbol } from '../protocol/collateral.js'
 import { seedSecurityPoolScenario } from './securityPoolScenario.js'
 import { seedSecurityPoolAuctionScenario } from './securityPoolAuctionScenario.js'
@@ -7,7 +8,7 @@ import { STATOBLAST_SCENARIOS } from './statoblastScenarioDescriptions.js'
 
 export async function applyStatoblastScenario({ scenario, ...parameters }: BootstrapScenarioApplyParameters, collateralSymbol: CollateralSymbol = 'WETH'): Promise<boolean> {
 	if (!STATOBLAST_SCENARIOS.some(candidate => candidate === scenario)) return false
-	const owner = requireQaAccount(parameters.accounts[0], 'Expected simulation security pool owner')
+	const owner = requireQaAccount(parameters.accounts[0], scenarioOwner.missing)
 	await deploySimulationAppContracts(parameters.createWriteClient(owner), parameters.memoryClient, parameters.onProgress, parameters.profile, { start: 0.32, end: 0.7 }, getStatoblastScenarioProtocol().getDeploymentSteps)
 	const seeded = scenario === 'portfolio-auction' ? await seedSecurityPoolAuctionScenario(parameters) : await seedSecurityPoolScenario(parameters, scenario === 'security-pool' ? 1 : 2, collateralSymbol)
 	parameters.onSeededSecurityPool?.({ address: seeded.securityPool, questionIds: seeded.questionIds })

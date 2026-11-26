@@ -1,3 +1,4 @@
+import { priceReport } from '../copy/simulation.js'
 import { DEFAULT_SIMULATION_REP_PER_ETH_PRICE } from '@zoltar/ui-core-shared/simulation/repPrices.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -34,19 +35,19 @@ export async function settleSeededOracleReport({
 	const reader = { ...securityPoolReadClient(readClient), getBalance: (request: { address: Address; blockNumber: bigint }) => readClient.getBalance(request) }
 	const load = () => loadSecurityPoolPriceSnapshot({ client: reader, securityPool, owner: accountAddress, universeId: 0n })
 	let price = await load()
-	if (price.observation === undefined) throw new Error('Simulation report collateral is unavailable.')
+	if (price.observation === undefined) throw new Error(priceReport.collateralUnavailable)
 	const decimals = Number(await readClient.readContract({ address: price.observation.weth, abi: ABIS.mainnet.erc20, functionName: 'decimals' }))
 	const repPerEth = repPerCollateralPrice ?? (DEFAULT_SIMULATION_REP_PER_ETH_PRICE * 10n ** BigInt(36 - decimals)) / 10n ** 18n
 	const funding = quoteSecurityPoolPriceFunding(price, repPerEth, requestedInitialAttoWeth)
-	if (funding.wrap > 0n) await sendSecurityPoolTransaction(client, buildSecurityPoolPriceWrapRequest(price, funding.wrap), 'Wrap report ETH')
-	await sendSecurityPoolTransaction(client, buildSecurityPoolPriceApprovalRequest(price, 'weth', funding.weth), 'Approve report WETH')
-	await onProgressStep(`Funded collateral price report for ${poolLabel}`)
-	await sendSecurityPoolTransaction(client, buildSecurityPoolPriceApprovalRequest(price, 'rep', funding.rep), 'Approve report REP')
+	if (funding.wrap > 0n) await sendSecurityPoolTransaction(client, buildSecurityPoolPriceWrapRequest(price, funding.wrap), priceReport.wrapEth)
+	await sendSecurityPoolTransaction(client, buildSecurityPoolPriceApprovalRequest(price, 'weth', funding.weth), priceReport.approveWeth)
+	await onProgressStep(priceReport.funded(poolLabel))
+	await sendSecurityPoolTransaction(client, buildSecurityPoolPriceApprovalRequest(price, 'rep', funding.rep), priceReport.approveRep)
 	price = await load()
-	await sendSecurityPoolTransaction(client, buildSecurityPoolPriceRequest(price, repPerEth, requestedInitialAttoWeth), 'Report security pool price')
-	await onProgressStep(`Opened price report for ${poolLabel}`)
+	await sendSecurityPoolTransaction(client, buildSecurityPoolPriceRequest(price, repPerEth, requestedInitialAttoWeth), priceReport.reportPrice)
+	await onProgressStep(priceReport.opened(poolLabel))
 	price = await load()
-	if (price.observation === undefined || price.observation.pendingReportId === 0n) throw new Error('Expected a pending security pool price report')
+	if (price.observation === undefined || price.observation.pendingReportId === 0n) throw new Error(priceReport.pendingReportUnavailable)
 	return { openOracleAddress: price.observation.openOracle, pendingReportId: price.observation.pendingReportId }
 }
 

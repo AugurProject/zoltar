@@ -14,6 +14,7 @@ import {
 	buildSecurityPoolCapitalClaimEarningsRequest,
 	loadSecurityPoolCapitalSnapshot,
 	buildSecurityPoolAuctionVaultDepositRequest,
+	minimumSecurityPoolHealthFactorBps,
 	type SecurityPoolCapitalSnapshot,
 } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
@@ -103,7 +104,7 @@ export function useSecurityPoolAggregate(
 	const pledgedRep = snapshot?.positions.find(position => position.commitment > 0n)?.rep ?? 0n
 	const retirementTargetCapacity = snapshot === undefined ? undefined : maximumSecurityPoolCommitment({ ...snapshot, ownerPrincipalAttoRep: pledgedRep }, healthBps)
 	const remainingCommitment = securityPoolAmountOrUndefined(remainingCommitmentAmount.value, snapshot?.collateral.decimals ?? 18)
-	const targetRequiredRep = snapshot !== undefined && healthBps !== undefined && healthBps >= 10_000n && healthBps < 1n << 256n && snapshot.ownerConservativePrice > 0n ? requiredSecurityPoolCollateral(snapshot, snapshot.ownerCommitmentAttoEth, undefined, healthBps) : undefined
+	const targetRequiredRep = snapshot !== undefined && healthBps !== undefined && healthBps >= minimumSecurityPoolHealthFactorBps && healthBps < 1n << 256n && snapshot.ownerConservativePrice > 0n ? requiredSecurityPoolCollateral(snapshot, snapshot.ownerCommitmentAttoEth, undefined, healthBps) : undefined
 	let targetShortfall: bigint | undefined
 	if (targetRequiredRep !== undefined && snapshot !== undefined) targetShortfall = targetRequiredRep > pledgedRep ? targetRequiredRep - pledgedRep : 0n
 	const healthDepositAttoRep = securityPoolAmountOrUndefined(healthDepositAmount.value)
@@ -139,7 +140,7 @@ export function useSecurityPoolAggregate(
 	useLayoutEffect(() => {
 		if (snapshot === undefined) return
 		const key = `${snapshot.chainId}:${snapshot.securityPool}:${snapshot.owner}:${snapshot.universeId}`
-		const savedHealth = snapshot.ownerAccount.targetHealthFactorBps || 10_000n
+		const savedHealth = snapshot.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps
 		const previous = draftContext.current
 		draftContext.current = { key, savedHealth }
 		if (previous?.key === key) {
@@ -169,7 +170,7 @@ export function useSecurityPoolAggregate(
 		(snapshot !== undefined && healthDepositAttoRep !== undefined && healthDepositAttoRep > snapshot.walletAttoRep ? transactionCopy.insufficientRep : undefined) ??
 		(snapshot === undefined ? undefined : capitalHealthReason(snapshot, healthBps, healthDepositAttoRep))
 	const healthDepositReason = healthFundingReason ?? (snapshot !== undefined && healthDepositAttoRep !== undefined && healthDepositAttoRep > snapshot.allowanceAttoRep ? transactionCopy.approveBeforeDeposit : undefined)
-	const unsavedTargetReason = snapshot !== undefined && healthBps !== (snapshot.ownerAccount.targetHealthFactorBps || 10_000n) ? transactionCopy.saveTargetBeforeCommitment : undefined
+	const unsavedTargetReason = snapshot !== undefined && healthBps !== (snapshot.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps) ? transactionCopy.saveTargetBeforeCommitment : undefined
 	const authorizeReason = ownerReason ?? admissionReason ?? unsavedTargetReason ?? proofReason ?? (snapshot === undefined ? undefined : capitalAuthorizationReason(snapshot, commitmentAttoEth, proofPrice))
 	const livePositions = snapshot?.positions.filter(position => position.commitment > 0n) ?? []
 	const pendingRetirement = livePositions.find(position => position.batch !== 0n)
@@ -213,9 +214,9 @@ export function useSecurityPoolAggregate(
 						if (action === 'depositSecurityPoolRep' && depositAttoRep !== undefined) return [capitalComparison(capitalCopy.principalRep, latest.ownerPrincipalAttoRep, latest.ownerPrincipalAttoRep + depositAttoRep, 18, 'REP')]
 						if (action === 'withdrawSecurityPoolRep' && withdrawAttoRep !== undefined) return [capitalComparison(capitalCopy.principalRep, latest.ownerPrincipalAttoRep, latest.ownerPrincipalAttoRep - withdrawAttoRep, 18, 'REP')]
 						if (action === 'authorizeSecurityPoolCommitment' && commitmentAttoEth !== undefined) return [commitmentComparison(selected.collateral, capitalCopy.commitment, latest.ownerCommitmentAttoEth, commitmentAttoEth)]
-						if (action === 'setSecurityPoolHealth' && healthBps !== undefined) return [capitalComparison(capitalCopy.savedHealth, latest.ownerAccount.targetHealthFactorBps || 10_000n, healthBps, 2, '%')]
+						if (action === 'setSecurityPoolHealth' && healthBps !== undefined) return [capitalComparison(capitalCopy.savedHealth, latest.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps, healthBps, 2, '%')]
 						if (action === 'depositSecurityPoolHealthRep' && healthDepositAttoRep !== undefined && healthBps !== undefined) {
-							return [capitalComparison(capitalCopy.principalRep, latest.ownerPrincipalAttoRep, latest.ownerPrincipalAttoRep + healthDepositAttoRep, 18, 'REP'), capitalComparison(capitalCopy.savedHealth, latest.ownerAccount.targetHealthFactorBps || 10_000n, healthBps, 2, '%')]
+							return [capitalComparison(capitalCopy.principalRep, latest.ownerPrincipalAttoRep, latest.ownerPrincipalAttoRep + healthDepositAttoRep, 18, 'REP'), capitalComparison(capitalCopy.savedHealth, latest.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps, healthBps, 2, '%')]
 						}
 						return []
 					},
@@ -329,7 +330,7 @@ export function useSecurityPoolAggregate(
 				const request =
 					selected.auctionVault === undefined
 						? buildSecurityPoolCapitalDepositRequest({ ...base(selected), amountAttoRep: depositAttoRep })
-						: buildSecurityPoolAuctionVaultDepositRequest({ bidder: selected.auctionVault.bidder, vault: selected.owner, capitalLedger: selected.capitalLedger, amountAttoRep: depositAttoRep, targetHealthFactorBps: selected.ownerAccount.targetHealthFactorBps || 10_000n })
+						: buildSecurityPoolAuctionVaultDepositRequest({ bidder: selected.auctionVault.bidder, vault: selected.owner, capitalLedger: selected.capitalLedger, amountAttoRep: depositAttoRep, targetHealthFactorBps: selected.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps })
 				return { ...request, reviewDescription: transactionCopy.reviewDeposit(formatCurrencyBalance(depositAttoRep)) }
 			}),
 		withdraw: () =>
@@ -341,7 +342,7 @@ export function useSecurityPoolAggregate(
 					if (withdrawAttoRep === undefined) throw new Error(transactionCopy.withdrawalRequired)
 					return {
 						...buildSecurityPoolCapitalWithdrawPrincipalRequest({ ...base(selected), amountAttoRep: withdrawAttoRep }),
-						reviewDescription: transactionCopy.reviewWithdrawal(formatCurrencyBalance(withdrawAttoRep), selected.owner, formatCurrencyBalance(selected.ownerAccount.targetHealthFactorBps || 10_000n, 2)),
+						reviewDescription: transactionCopy.reviewWithdrawal(formatCurrencyBalance(withdrawAttoRep), selected.owner, formatCurrencyBalance(selected.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps, 2)),
 					}
 				},
 				latest => {
@@ -406,7 +407,12 @@ export function useSecurityPoolAggregate(
 					if (commitmentAttoEth === undefined) throw new Error(transactionCopy.commitmentRequired)
 					return {
 						...buildSecurityPoolCapitalSetCommitmentRequest({ ...base(selected), commitment: commitmentAttoEth, ...(reportId === undefined ? {} : { reportId }) }),
-						reviewDescription: transactionCopy.reviewCommitment(`${formatCurrencyBalance(commitmentAttoEth, selected.collateral.decimals)} ${selected.collateral.symbol}`, formatCurrencyBalance(selected.ownerPrincipalAttoRep), formatCurrencyBalance(selected.ownerAccount.targetHealthFactorBps || 10_000n, 2), reportId),
+						reviewDescription: transactionCopy.reviewCommitment(
+							`${formatCurrencyBalance(commitmentAttoEth, selected.collateral.decimals)} ${selected.collateral.symbol}`,
+							formatCurrencyBalance(selected.ownerPrincipalAttoRep),
+							formatCurrencyBalance(selected.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps, 2),
+							reportId,
+						),
 					}
 				},
 				async latest => {

@@ -26,3 +26,7 @@ export const fundingReadFailed = 'Unable to load collateral funding.'
 
 export const updatingCollateralQuote = 'Updating collateral quote.'
 export const positiveCollateralAmountRequired = 'Enter a positive collateral amount.'
+
+export const approveRecoveryRep = 'Approve recovery REP'
+export const approveCollateral = 'Approve collateral'
+export const approvingCollateralAction = 'approving collateral'

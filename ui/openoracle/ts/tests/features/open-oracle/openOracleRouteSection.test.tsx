@@ -1156,7 +1156,7 @@ describe('OpenOracleSection route create view', () => {
 		const documentQueries = within(document.body)
 		await waitFor(() => expectTransactionButtonEnabled(document.body, 'Create standalone OpenOracle report'))
 		expect(documentQueries.queryByRole('heading', { name: 'Transaction review' })).toBeNull()
-		for (const label of ['Settlement delay (seconds)', 'Dispute delay (seconds)', 'Dispute fee (%)', 'Multiplier', 'Dispute growth cutoff', 'Protocol fee (%)']) {
+		for (const label of ['Settlement delay (seconds)', 'Dispute delay (seconds)', 'Dispute fee (%)', 'Multiplier', 'Dispute limit', 'Protocol fee (%)']) {
 			expect(documentQueries.getByLabelText(label)).not.toBeNull()
 		}
 		expect((documentQueries.getByLabelText('Settlement delay (seconds)') as HTMLInputElement).value).toBe(defaultForm.settlementTime)
@@ -1184,7 +1184,7 @@ describe('OpenOracleSection route create view', () => {
 		const quoteTokenAddressInput = documentQueries.getByLabelText('Quote token address')
 		const feePercentageInput = documentQueries.getByLabelText('Dispute fee (%)')
 		const settlementTimeInput = documentQueries.getByLabelText('Settlement delay (seconds)')
-		const escalationHaltInput = documentQueries.getByLabelText('Dispute growth cutoff')
+		const escalationHaltInput = documentQueries.getByLabelText('Dispute limit')
 		const disputeDelayInput = documentQueries.getByLabelText('Dispute delay (seconds)')
 		const protocolFeeInput = documentQueries.getByLabelText('Protocol fee (%)')
 
@@ -1231,7 +1231,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.getByText(openOracleCopy.settlerRewardHelpText)).not.toBeNull()
 		expect(documentQueries.queryByText('Fee charged during dispute economics, entered as a percentage.')).toBeNull()
 		expect(documentQueries.queryByText('Delay in seconds after the initial report before settlement can begin.')).toBeNull()
-		expect(documentQueries.getByText('Base token amount at which disputes stop multiplying the stake.')).not.toBeNull()
+		expect(documentQueries.getByText('At this token amount, disputes can continue without multiplying the stake.')).not.toBeNull()
 		expect(documentQueries.getByText('Parameter details')).not.toBeNull()
 		expect(documentQueries.queryByText('Delay in seconds after the initial report before disputes can begin.')).toBeNull()
 		expect(documentQueries.queryByText('Protocol fee charged during disputes, entered as a percentage.')).toBeNull()

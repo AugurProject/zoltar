@@ -20,7 +20,13 @@ export const readyWithWarningLabel = 'Ready with warning'
 export const warningLabel = 'Warning'
 export const formatOtherGenesisSavedStateLabel = (stateName: CopyTemplateValue, genesisOutcome: GenesisOutcome) => `${stateName} (${formatGenesisUniverse(genesisOutcome)})`
 export const formatSavedStateGenesisMismatchDetail = (stateName: CopyTemplateValue, genesisOutcome: GenesisOutcome) => `Saved simulation state "${stateName}" belongs to ${formatGenesisUniverse(genesisOutcome)}. Falling back to the baseline scenario.`
-export const bootstrapping = 'Bootstrapping'
+export const bootstrapping = 'Starting'
+export const startingSimulation = 'Starting simulation'
+export const loadingSavedSimulationState = 'Loading saved simulation state'
+export const scenarioSetupFailed = 'Could not prepare the simulation scenario.'
+export const exportBeforeScenarioReady = 'Wait for the simulation to finish starting before exporting its state.'
+export const mintBeforeScenarioReady = 'Wait for the simulation to finish starting before minting REP.'
+export const formatBlockOutsideActiveChain = (hash: string) => `Block ${hash} is no longer on the active chain.`
 export const formatSavedStateDetail = (stateName: CopyTemplateValue, scenarioLabel: CopyTemplateValue, savedAt: CopyTemplateValue) => `Custom state "${stateName}" based on ${scenarioLabel}. Saved ${savedAt}.`
 export const showSimulationDetails = 'Show details'
 export const hideSimulationDetails = 'Hide details'

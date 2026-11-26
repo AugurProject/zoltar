@@ -265,7 +265,7 @@ function previewEscalationContribution(details: ActiveReportingDetails, outcome:
 	if (amount < details.startBondAttoRep)
 		return {
 			actualDepositAmount: undefined,
-			reason: `Enter at least ${formatCurrencyBalanceWithUnit(details.startBondAttoRep, 'REP')} to meet the minimum first report.`,
+			reason: reportingCopy.enterMinimumFirstReport(formatCurrencyBalanceWithUnit(details.startBondAttoRep, 'REP')),
 		}
 	const projectedDeposit = projectEscalationDeposit({
 		amountAttoRep: amount,

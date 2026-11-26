@@ -4,7 +4,7 @@ import { invalidateStatoblastEntries } from '../../../protocol/statoblastEntries
 import type { CollateralSymbol } from '../../../protocol/collateral.js'
 import { signal, useSignal } from '@preact/signals'
 import { useEffect, useMemo, useRef } from 'preact/hooks'
-import { getAddress, TransactionLookupNotFoundError, type Address, type Hash, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, type Address, type Hash, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { createTransactionScope, mergeTransactionScopes } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
@@ -23,8 +23,8 @@ import { securityPoolAdmissionCreationRequest, requireSecurityPoolQuestionAdmiss
 import { buildSecurityPoolAuctionVaultExecuteRequest } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { authenticateSecurityPoolAuctionVault } from '../../../protocol/securityPoolRepairAuction.js'
 import { deploymentProgressJournal, samePendingDeployment, type PendingDeployment } from '../lib/deploymentProgress.js'
-import { DeploymentHistoryUnavailableError, matchesQuestionRules, readDeploymentNonce, readSecurityPoolCreationCount, recoverQuestionRules, recoverSecurityPoolDeployment } from '../../../protocol/deploymentRecovery.js'
-import { isDefiniteDeploymentRejection, readDeploymentWalletState } from '../lib/deploymentWallet.js'
+import { matchesQuestionRules, readDeploymentNonce, readSecurityPoolCreationCount } from '../../../protocol/deploymentRecovery.js'
+import { isDefiniteDeploymentRejection, readPendingDeploymentRecovery, supportsDeploymentNonce } from '../lib/deploymentWallet.js'
 import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
 
 const createReviewReadClient = () => withStatoblastRequestTimeout(createConnectedReadClient(), currentStateCheckFailed)
@@ -51,7 +51,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 	const busy = useSignal<string | undefined>(undefined)
 	const checkingDeploymentReceipt = useMemo(() => signal(false), [journal])
 	const restartProof = useMemo(() => signal<PendingDeployment | undefined>(undefined), [journal])
-	const waitingForWallet = useMemo(() => signal(false), [journal])
+	const deploymentRecoveryDetail = useMemo(() => signal<string | undefined>(undefined), [journal])
 	const error = useSignal<string | undefined>(undefined)
 	const lastFailedAction = useSignal<string | undefined>(undefined)
 	const feedback = useSignal<string | undefined>(undefined)
@@ -122,96 +122,49 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		return undefined
 	}
 	const refreshDeploymentProgress = async (walletRejected = false) => {
-		if (!currentContext() || checkingDeploymentReceipt.value || busy.value !== undefined || wallet === undefined) return
+		if (!currentContext() || checkingDeploymentReceipt.value || busy.value !== undefined || wallet === undefined) return undefined
 		const latest = readProgress()
 		journal.current.value = latest
 		const pending = latest?.pending
 		if (latest === undefined || pending === undefined) {
 			if (latest?.pool !== undefined && (latest.pool !== model.managerInput || model.setup?.securityPool !== latest.pool)) await model.load(latest.pool, wallet, latest.draft.originInput)
 			else await model.refresh()
-			return
+			return undefined
 		}
 		checkingDeploymentReceipt.value = true
 		error.value = undefined
 		restartProof.value = undefined
-		waitingForWallet.value = false
-		const getCurrentProgress = () => {
-			if (!currentContext()) return undefined
-			const current = readProgress()
-			return current?.pending?.id === pending.id && current.pending.hash === pending.hash ? { ...current, pending: current.pending } : undefined
-		}
+		deploymentRecoveryDetail.value = undefined
 		try {
-			const client = createReviewReadClient()
-			const receipt =
-				pending.hash === undefined
-					? undefined
-					: await client.getTransactionReceipt({ hash: pending.hash }).catch((failure: unknown) => {
-							if (failure instanceof TransactionLookupNotFoundError && failure.kind === 'receipt') return undefined
-							throw failure
-						})
-			if (getCurrentProgress() === undefined) return
-			if (receipt?.status === 'success') {
-				const pool = settleDeployment(pending.id, receipt)
-				if (pool !== undefined) await model.load(pool, wallet, latest.draft.originInput)
-				return
-			}
-			const txNonce = pending.hash === undefined ? undefined : await readDeploymentNonce(client, wallet, pending.hash)
-			const current = getCurrentProgress()
-			if (current === undefined) return
-			if (txNonce !== undefined && (current.pending.nonce !== txNonce || !current.pending.nonceVerified)) saveProgress({ ...current, pending: { ...current.pending, nonce: txNonce, nonceVerified: true } })
-			const nonceValue = txNonce ?? (pending.hash === undefined || current.pending.nonceVerified ? current.pending.nonce : undefined)
-			const walletState = await readDeploymentWalletState(client, wallet)
-			const checked = getCurrentProgress()
-			if (checked === undefined || walletState === undefined) return
-			waitingForWallet.value = !walletState.idle
-			if (nonceValue === undefined) {
-				if (checked.pending.nonce === undefined && walletState.idle) restartProof.value = checked.pending
-				return
-			}
-			const nonce = BigInt(nonceValue)
-			if (walletRejected && pending.hash === undefined && walletState.idle && walletState.confirmed === nonce) {
-				if (checked.rules === undefined) {
-					originEdited.current = true
-					draftInput.value = checked.draft
-				}
+			const result = await readPendingDeploymentRecovery(createReviewReadClient(), wallet, { ...latest, pending }, backend.profile, walletRejected)
+			if (!currentContext()) return undefined
+			const checked = readProgress()
+			if (checked?.pending === undefined || !samePendingDeployment(checked.pending, pending)) return undefined
+			const verified = result.transactionNonce === undefined ? checked : { ...checked, pending: { ...checked.pending, nonce: result.transactionNonce, nonceVerified: true } }
+			if (verified !== checked) saveProgress(verified)
+			if (result.kind === 'rejected') {
+				originEdited.current = true
+				draftInput.value = checked.draft
 				settleDeployment(pending.id)
-				return
-			}
-			if (walletState.confirmed <= nonce) return
-			const savedDraft = parseDeploymentDraft(checked.draft, backend.profile)
-			if (savedDraft.creationError !== undefined) throw new Error(savedDraft.creationError)
-			if (savedDraft.origin === undefined) return
-			let recovered: { rules?: Address | undefined; pool?: Address | undefined } | undefined
-			if (pending.step === 'rules') {
-				recovered = await recoverQuestionRules(client, wallet, nonce, checked.draft.admissionMode, savedDraft.origin.universeId, savedDraft.approvedQuestions)
+			} else if (result.kind === 'recovered') {
+				if (result.rules !== undefined) saveProgress({ ...checked, rules: result.rules, pending: undefined })
+				else if (result.pool !== undefined) {
+					saveProgress({ ...checked, pool: result.pool, pending: undefined })
+					await model.load(result.pool, wallet, checked.draft.originInput)
+				}
 			} else {
-				if (checked.rules === undefined || savedDraft.economics === undefined || savedDraft.horizon === undefined) return
-				const request = securityPoolCreationRequest(wallet, savedDraft.origin, savedDraft.horizon, checked.rules, savedDraft.economics)
-				const initialFactoryCount = checked.pending.initialFactoryCount === undefined ? undefined : BigInt(checked.pending.initialFactoryCount)
-				recovered = await recoverSecurityPoolDeployment(client, wallet, nonce, request, initialFactoryCount)
+				deploymentRecoveryDetail.value = result.detail
+				if (result.kind === 'restart') {
+					restartProof.value = verified.pending
+					return verified
+				}
 			}
-			if (recovered === undefined) {
-				if (walletRejected && currentContext()) error.value = deploymentCopy.walletStillPending
-				return
-			}
-			const unresolved = getCurrentProgress()
-			if (unresolved === undefined || !samePendingDeployment(unresolved.pending, checked.pending)) return
-			if (recovered.rules !== undefined) saveProgress({ ...unresolved, rules: recovered.rules, pending: undefined })
-			else if (recovered.pool !== undefined) {
-				saveProgress({ ...unresolved, pool: recovered.pool, pending: undefined })
-				await model.load(recovered.pool, wallet, unresolved.draft.originInput)
-			} else if (walletState.idle) restartProof.value = unresolved.pending
 		} catch (failure) {
-			if (!currentContext()) return
-			if (failure instanceof DeploymentHistoryUnavailableError) {
-				error.value = deploymentCopy.historyUnavailable
-				const idle = await readDeploymentWalletState(createReviewReadClient(), wallet).catch(() => undefined)
-				const current = getCurrentProgress()
-				if (current !== undefined && idle?.idle === true) restartProof.value = current.pending
-			} else error.value = getErrorMessage(failure, deploymentCopy.receiptCheckFailed)
+			if (currentContext()) error.value = getErrorMessage(failure, deploymentCopy.receiptCheckFailed)
 		} finally {
 			checkingDeploymentReceipt.value = false
 		}
+		return undefined
 	}
 	useEffect(() => {
 		if (journal.restored?.pending !== undefined) void refreshDeploymentProgress()
@@ -271,16 +224,17 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 
 					const reader = createReviewReadClient()
 					const initialFactoryCount = deploymentStep === 'pool' ? await readSecurityPoolCreationCount(reader, account).catch(() => undefined) : undefined
-					const nonce = await reader.getTransactionCount({ address: account, blockTag: 'pending' })
+					const nonce = (await supportsDeploymentNonce(reader, account)) ? await reader.getTransactionCount({ address: account, blockTag: 'pending' }) : undefined
 					const validateDeployment = async () => {
 						await request.validateBeforeSubmit?.()
-						if ((await reader.getTransactionCount({ address: account, blockTag: 'pending' })) !== nonce) throw new Error(deploymentCopy.walletActivityChanged)
+						if (nonce !== undefined && (await reader.getTransactionCount({ address: account, blockTag: 'pending' })) !== nonce) throw new Error(deploymentCopy.walletActivityChanged)
 					}
 					const id = crypto.randomUUID()
-					const saveHash = (hash: Hash) => {
+					const saveHash = (hash: Hash, replacedWithoutDeployment?: boolean) => {
 						const latest = readProgress()
 						if (latest?.pending?.id !== id || latest.pending.hash === hash) return
-						saveProgress({ ...latest, pending: { ...latest.pending, hash, nonceVerified: undefined } })
+						saveProgress({ ...latest, pending: { ...latest.pending, hash, nonceVerified: undefined, replacedWithoutDeployment } })
+						if (nonce === undefined) return
 						void readDeploymentNonce(reader, account, hash)
 							.then(nonce => {
 								const current = readProgress()
@@ -290,27 +244,27 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 					}
 					const client = createWalletWriteClient(account, {
 						...commonCallbacks,
-						assertBeforeSubmit: () => {
-							context.assertActive()
-							const latest = readProgress()
-							if (latest?.pending !== undefined) throw new Error(deploymentCopy.receiptPending)
-							if (deploymentStep === 'rules' && latest?.rules !== undefined) throw new Error(copy.admissionDeployed)
-							if (deploymentStep === 'pool') {
-								if (latest?.pool !== undefined) throw new Error(copy.poolAlreadyDeployed)
-								if (latest?.rules !== progress?.rules) throw new Error(deploymentCopy.rulesChanged)
-							}
-							// The wallet provides the hash after the send. Lock the step before the wallet receives the transaction.
-							saveProgress({ ...latest, draft, pending: { id, step: deploymentStep, nonce: nonce.toString(), initialFactoryCount: initialFactoryCount?.toString() } })
-						},
+						assertBeforeSubmit: () =>
+							journal.claim(latest => {
+								context.assertActive()
+								if (latest?.pending !== undefined) throw new Error(deploymentCopy.receiptPending)
+								if (deploymentStep === 'rules' && latest?.rules !== undefined) throw new Error(copy.admissionDeployed)
+								if (deploymentStep === 'pool') {
+									if (latest?.pool !== undefined) throw new Error(copy.poolAlreadyDeployed)
+									if (latest?.rules !== progress?.rules) throw new Error(deploymentCopy.rulesChanged)
+								}
+								// The wallet provides the hash after the send. Lock the step before the wallet receives the transaction.
+								return { ...latest, draft, pending: { id, step: deploymentStep, nonce: nonce?.toString(), initialFactoryCount: initialFactoryCount?.toString() } }
+							}),
 						onTransactionSubmitted: (hash, status, replacedHash) => {
 							if (replacedHash === undefined) saveHash(hash)
 							parameters.onTransactionSubmitted(hash, status, replacedHash)
 						},
 					})
 					try {
-						const result = await sendSecurityPoolTransaction(client, { ...request, nonce, validateBeforeSubmit: validateDeployment }, label, validate, {
+						const result = await sendSecurityPoolTransaction(client, { ...request, ...(nonce === undefined ? {} : { nonce }), validateBeforeSubmit: validateDeployment }, label, validate, {
 							onTransactionReplaced: (hash, reason) => {
-								if (reason === 'repriced') saveHash(hash)
+								saveHash(hash, reason !== 'repriced')
 							},
 						})
 						const pool = settleDeployment(id, result.receipt)
@@ -318,8 +272,8 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 						return result
 					} catch (failure) {
 						const latest = readProgress()
-						if (latest?.pending?.id === id && latest.pending.hash === undefined) {
-							if (isDefiniteDeploymentRejection(failure)) settleDeployment(id)
+						if (latest?.pending?.id === id) {
+							if (latest.pending.hash === undefined && isDefiniteDeploymentRejection(failure)) settleDeployment(id)
 							else recoverAmbiguousSend = true
 						}
 						throw failure
@@ -353,14 +307,8 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 	const previousAdmission = deployedAdmission.value
 	const liveAdmission = previousAdmission?.key === admissionKey && previousAdmission.backend === backend ? previousAdmission : undefined
 	const admission = progress?.rules !== undefined && origin !== undefined ? { address: progress.rules, universeId: origin.universeId } : liveAdmission
-	let pendingDeploymentReason: string | undefined
 	const restartReady = progress?.pending !== undefined && samePendingDeployment(progress.pending, restartProof.value)
-	if (progress?.pending !== undefined) {
-		if (restartReady && progress.pending.nonce !== undefined && error.value !== deploymentCopy.historyUnavailable) pendingDeploymentReason = deploymentCopy.restartAvailable
-		else if (waitingForWallet.value) pendingDeploymentReason = deploymentCopy.walletSendUncertain
-		else if (progress.pending.hash !== undefined) pendingDeploymentReason = deploymentCopy.receiptPending
-		else pendingDeploymentReason = progress.pending.nonce === undefined ? deploymentCopy.walletNonceUnavailable : deploymentCopy.walletSendUncertain
-	}
+	const pendingDeploymentReason = progress?.pending === undefined ? undefined : (deploymentRecoveryDetail.value ?? (progress.pending.hash === undefined ? deploymentCopy.walletSendUncertain : deploymentCopy.receiptPending))
 	const canStartNewDeployment = progress !== undefined && (progress.pending === undefined || restartReady) && (progress.activated === true || progress.pool === undefined || originForked || (verifiedSetup?.originForkTime ?? 0n) !== 0n)
 	const deploymentStatus = (savedPool === undefined ? undefined : copy.poolAlreadyDeployed) ?? (admission === undefined ? copy.deployAdmissionFirst : undefined)
 	const questionId = securityPoolUnsignedId(questionInput.value)
@@ -410,40 +358,35 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		deploymentPool: savedPool,
 		deploymentActivated: progress?.activated === true,
 		pendingDeployment: progress?.pending,
+		pendingDeploymentReason,
 		checkingDeploymentReceipt: checkingDeploymentReceipt.value,
-		refreshDeploymentProgress: () => refreshDeploymentProgress(),
-		confirmWalletRejection: () => refreshDeploymentProgress(true),
+		refreshDeploymentProgress: async () => {
+			await refreshDeploymentProgress()
+		},
+		confirmWalletRejection: async () => {
+			await refreshDeploymentProgress(true)
+		},
 		canStartNewDeployment,
 		startNewDeployment: async () => {
 			if (!canStartNewDeployment || progress === undefined || busy.value !== undefined || checkingDeploymentReceipt.value) return false
-			if (progress.pending !== undefined) {
-				if (wallet === undefined || !samePendingDeployment(progress.pending, restartProof.value)) return false
-				checkingDeploymentReceipt.value = true
-				try {
-					const state = await readDeploymentWalletState(createReviewReadClient(), wallet)
-					if (state?.idle !== true || (progress.pending.nonce !== undefined && state.confirmed <= BigInt(progress.pending.nonce))) {
-						restartProof.value = undefined
-						waitingForWallet.value = state?.idle === false
-						return false
-					}
-				} catch (failure) {
-					if (currentContext()) error.value = getErrorMessage(failure, deploymentCopy.receiptCheckFailed)
-					restartProof.value = undefined
+			const current = progress.pending === undefined ? progress : await refreshDeploymentProgress()
+			if (current === undefined || !currentContext() || !samePendingDeployment(current.pending, progress.pending)) return false
+			try {
+				if (!(await journal.restart(current))) {
+					journal.current.value = readProgress()
 					return false
-				} finally {
-					checkingDeploymentReceipt.value = false
 				}
-			}
-			if (!currentContext()) return false
-			if (!journal.restart(progress)) {
-				journal.current.value = readProgress()
+			} catch (failure) {
+				if (currentContext()) error.value = getErrorMessage(failure, deploymentCopy.receiptCheckFailed)
 				return false
 			}
+			if (!currentContext()) return false
 			const preserveDraft = progress.pending !== undefined
 			originEdited.current = preserveDraft
 			draftInput.value = preserveDraft ? progress.draft : initialDeploymentDraft(model.universeInput)
 			journal.current.value = readProgress()
 			restartProof.value = undefined
+			deploymentRecoveryDetail.value = undefined
 			error.value = undefined
 			lastFailedAction.value = undefined
 			feedback.value = undefined

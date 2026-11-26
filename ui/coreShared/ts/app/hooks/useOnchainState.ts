@@ -7,6 +7,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { createConnectedReadClient, normalizeAccount } from '../../wallet/clients.js'
 import type { ChainBackend, ReadBackendIssue, ReadBackendStatus } from '../../wallet/chainBackend.js'
 import { getErrorMessage } from '../../lib/errors.js'
+import { simulationBootstrapFailed } from '../../copy/app.js'
 import { sameAddress } from '../../lib/address.js'
 import { getActiveBackend } from '../../lib/activeEnvironment.js'
 
@@ -385,7 +386,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 				await refreshState()
 			} catch (error) {
 				if (cancelled) return
-				environmentBootstrapError.value = getErrorMessage(error, 'Failed to bootstrap simulation environment')
+				environmentBootstrapError.value = getErrorMessage(error, simulationBootstrapFailed)
 			}
 		})
 

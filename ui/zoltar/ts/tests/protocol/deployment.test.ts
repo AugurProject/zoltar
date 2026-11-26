@@ -1097,7 +1097,7 @@ describe('contract deployment internals', () => {
 			waitForTransactionReceipt: async () => hashReceipt('success'),
 		})
 
-		await expect(proxyStep.deploy(client)).rejects.toThrow('Unexpected code at canonical proxy deployer')
+		await expect(proxyStep.deploy(client)).rejects.toThrow('Unexpected code at the proxy deployer')
 	})
 
 	test('proxy deployer successful broadcasts reject unexpected installed code immediately', async () => {
@@ -1117,7 +1117,7 @@ describe('contract deployment internals', () => {
 			},
 		})
 
-		await expect(proxyStep.deploy(client)).rejects.toThrow('Unexpected code at canonical proxy deployer')
+		await expect(proxyStep.deploy(client)).rejects.toThrow('Unexpected code at the proxy deployer')
 	})
 
 	test('proxy deployer step stops when the signer-funding transaction is cancelled in the wallet', async () => {

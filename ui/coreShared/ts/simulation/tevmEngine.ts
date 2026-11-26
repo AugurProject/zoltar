@@ -1,4 +1,5 @@
 import { DEFAULT_SIMULATION_REP_PER_ETH_PRICE, DEFAULT_SIMULATION_USDC_PER_REP_PRICE } from './repPrices.js'
+import * as simulationCopy from '../copy/simulation.js'
 import type { SimulationEngine } from './simulationEngineTypes.js'
 import { parseScenarioSnapshot } from './preparedScenarioSnapshot.js'
 import {
@@ -366,7 +367,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 		if (bootstrapPromise !== undefined) return await bootstrapPromise
 		bootstrapping = true
 		bootstrapError = undefined
-		bootstrapLabel = initialization.kind === 'scenario' ? 'Starting simulation bootstrap' : 'Loading saved simulation state'
+		bootstrapLabel = initialization.kind === 'scenario' ? simulationCopy.startingSimulation : simulationCopy.loadingSavedSimulationState
 		bootstrapProgress = 0
 		emitState()
 		bootstrapPromise = (async () => {
@@ -378,7 +379,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 					await restoreSavedStateEnvelope(initialization.envelope, 'Loading saved simulation state')
 				}
 			} catch (error) {
-				bootstrapError = error instanceof Error ? error.message : 'Failed to bootstrap simulation scenario'
+				bootstrapError = error instanceof Error ? error.message : simulationCopy.scenarioSetupFailed
 				throw error
 			} finally {
 				bootstrapping = false
@@ -421,7 +422,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 		bootstrap,
 		exportState: async name => {
 			await awaitSeeding()
-			if (!bootstrapped) throw new Error('Simulation scenario must be bootstrapped before exporting state')
+			if (!bootstrapped) throw new Error(simulationCopy.exportBeforeScenarioReady)
 			return exportSimulationSnapshot(chain, { baseScenario, genesisOutcome, name }, () => ({
 				blockCountSinceReset,
 				currentTimestamp,
@@ -442,7 +443,7 @@ export async function createSimulationEngine({ initialization, dependencies, gen
 		mintRep: async amount => {
 			await awaitSeeding()
 			if (!bootstrapped) {
-				throw new Error('Simulation scenario must be bootstrapped before minting REP')
+				throw new Error(simulationCopy.mintBeforeScenarioReady)
 			}
 			const activeChain = chain
 			const repCode = await activeChain.memoryClient.getCode({

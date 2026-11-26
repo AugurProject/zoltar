@@ -16,7 +16,7 @@ export function withTransactionReviews<T extends ChainBackend>(backend: T, alway
 				assertBeforeSubmit: () => {
 					if (assertReviewActive === undefined) throw new Error(reviewErrors.reviewNotReady)
 					assertReviewActive()
-					callbacks?.assertBeforeSubmit?.()
+					return callbacks?.assertBeforeSubmit?.()
 				},
 			}),
 			async () => {

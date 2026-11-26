@@ -6,9 +6,9 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 export const disputeAndSwap = 'Dispute & swap'
 export const disputeDelay = 'Dispute delay'
 export const disputeDelaySeconds = 'Dispute delay (seconds)'
-export const escalationHalt = 'Dispute growth cutoff'
-export const disputeGrowthCutoffNegative = 'Dispute growth cutoff must be non-negative.'
-export const disputeGrowthCutoffMaximum = 'Dispute growth cutoff exceeds the contract maximum.'
+export const escalationHalt = 'Dispute limit'
+export const disputeGrowthCutoffNegative = 'Dispute limit must be non-negative.'
+export const disputeGrowthCutoffMaximum = 'Dispute limit exceeds the contract maximum.'
 export const disputeFeePercentage = 'Dispute fee (%)'
 export const disputeFeeRate = 'Dispute fee'
 export const price = 'Price'
@@ -68,7 +68,7 @@ export const formatInsufficientEthToWrap = (required: string, available: string)
 export const formatWrapEthFirst = (amount: string) => `Wrap ${amount} ETH to WETH first.`
 export const wrapEthFailed = 'Failed to wrap ETH'
 export const wrapEthDisputeOnly = 'ETH can only be wrapped for a report that is open to disputes.'
-export const disputeEscalationStopAmountHelpText = 'Base token amount at which disputes stop multiplying the stake.'
+export const disputeEscalationStopAmountHelpText = 'At this token amount, disputes can continue without multiplying the stake.'
 export const ethSent = 'ETH sent'
 export const formatInitialTokenReportLabel = (tokenSymbol: string) => `Initial ${tokenSymbol} report deposit`
 export const exactToken1Report = 'Base token amount'
@@ -77,7 +77,7 @@ export const identity = 'Identity'
 export const initialEconomics = 'Initial economics'
 export const lastReportOpportunity = 'Last report on opposite clock'
 export const reportLoadRequired = 'Select a report first.'
-export const escalationMultiplierHelpText = 'Below the cutoff, each dispute multiplies the base stake by this factor. At or above the cutoff, it adds one raw base-token unit. A zero cutoff uses that increment from the first dispute.'
+export const escalationMultiplierHelpText = 'Below the dispute limit, each dispute multiplies the base stake by this factor. At or above the limit, it adds one raw base-token unit. A zero limit uses that increment from the first dispute.'
 export const formatNewAmountMustBeExactDetail = (tokenSymbol: string, amount: string) => `New ${tokenSymbol} amount must be exactly ${amount} for this dispute.`
 export const formatNewAmountRangeDetail = (tokenSymbol: string, minimumAmount: string, maximumAmount: string) => `New ${tokenSymbol} amount must be between ${minimumAmount} and ${maximumAmount} for this dispute.`
 export const oracleBalances = 'Your oracle balances'
@@ -145,7 +145,7 @@ export const trackDisputes = 'Track disputes'
 export const formatNewTokenAmountFieldLabel = (tokenSymbol: string) => `New ${tokenSymbol} amount`
 export const reporter = 'Reporter'
 export const parameterDetails = 'Parameter details'
-export const standaloneParameterDetails = 'Base token amount and dispute growth cutoff use the base token’s decimals.'
+export const standaloneParameterDetails = 'Base token amount and dispute limit use the base token’s decimals.'
 
 export const formatSettledReportNumber = (id: string) => `Report #${id} settled`
 
@@ -186,10 +186,10 @@ export const expiredReportPrice = 'This report’s price has expired.'
 export const reportPriceRejected = 'Report settled; price rejected'
 export const poolPriceAccepted = 'Security pool accepted the report.'
 export const candidatePrice = 'Candidate price'
-export const canonicalPrice = 'Canonical price'
+export const canonicalPrice = 'Pool price'
 export const rawPriceUnits = 'raw price units'
-export const poolPriceObservationUpdated = 'Report accepted. The feed updated its canonical observation.'
-export const poolPriceObservationRetained = 'Report accepted. The feed kept its canonical observation.'
+export const poolPriceObservationUpdated = 'Report accepted. The pool price was updated.'
+export const poolPriceObservationRetained = 'Report accepted. The pool price stayed the same.'
 
 export function formatPriceSettlementRejection(reason: string) {
 	if (reason === 'Security pool reporting window closed') return 'Reporting is closed in this security pool universe. Check its fork and branch status.'
@@ -300,7 +300,7 @@ export const baseTokenAddress = 'Base token address'
 export const quoteTokenAddress = 'Quote token address'
 export const validBaseTokenAmountRequired = 'Enter a valid base token amount.'
 export const validQuoteTokenAmountRequired = 'Enter a valid quote token amount.'
-export const validDisputeGrowthCutoffRequired = 'Enter a valid dispute growth cutoff.'
+export const validDisputeGrowthCutoffRequired = 'Enter a valid dispute limit.'
 export const validSettlementDelayRequired = 'Enter a valid settlement delay.'
 export const validDisputeDelayRequired = 'Enter a valid dispute delay.'
 export const validMultiplierRequired = 'Enter a valid multiplier, such as 1.5.'
@@ -323,3 +323,27 @@ export const standaloneWriteActionTitles = {
 	withdrawBalance: { failure: 'Oracle balance withdrawal failed', pending: 'Withdrawing oracle balance', success: 'Oracle balance withdrawn' },
 	wrapWeth: { failure: 'ETH wrap failed', pending: 'Wrapping ETH to WETH', success: 'ETH wrapped to WETH' },
 }
+
+export const differentReportTokens = 'Base and quote tokens must use different addresses.'
+export const reportRequiresErc20Tokens = 'Direct OpenOracle reports currently require two ERC-20 token addresses.'
+export const baseTokenAmountTooLarge = 'Base token amount exceeds the contract maximum.'
+export const quoteTokenAmountTooLarge = 'Quote token amount exceeds the contract maximum.'
+export const settlerRewardNegative = 'Settler reward must be non-negative.'
+export const settlerRewardTooLarge = 'Settler reward exceeds the contract maximum.'
+export const reportEthNegative = 'ETH sent must be non-negative.'
+export const reportEthTooLarge = 'ETH sent exceeds the contract maximum.'
+export const reportEthMustEqualReward = 'ETH sent must equal the settler reward for ERC-20 token pairs.'
+export const settlementDelayTooLarge = 'Settlement delay exceeds the contract maximum.'
+export const disputeDelayTooLarge = 'Dispute delay exceeds the contract maximum.'
+export const settlementDelayMustExceedDisputeDelay = 'Settlement delay must be greater than dispute delay.'
+export const multiplierTooSmall = 'Multiplier must be at least 1×.'
+export const disputeFeeNegative = 'Dispute fee must be non-negative.'
+export const disputeFeeTooLarge = 'Dispute fee exceeds the contract maximum.'
+export const protocolFeeNegative = 'Protocol fee must be non-negative.'
+export const protocolFeeTooLarge = 'Protocol fee exceeds the contract maximum.'
+export const multiplierMaximum = (maximum: string) => `Multiplier must be at most ${maximum}.`
+export const reportFeeTotalMaximum = (maximum: string) => `Dispute fee plus protocol fee must not exceed ${maximum}%.`
+export const disputeWindowTooShort = 'Dispute window ends too soon. Wait to settle this report.'
+
+export const repQuoteTimeout = (version: 'V3' | 'V4') => `RPC timeout while loading the Uniswap ${version} REP price.`
+export const repPriceRefreshTimeout = 'RPC timeout while loading REP price. Refresh prices to retry.'

@@ -1,3 +1,4 @@
+import { poolSetup } from '../copy/simulation.js'
 import { DEFAULT_SIMULATION_REP_PER_ETH_PRICE, DEFAULT_SIMULATION_USDC_PER_REP_PRICE } from '@zoltar/ui-core-shared/simulation/repPrices.js'
 import { securityPoolCollateral, type CollateralSymbol } from '../protocol/collateral.js'
 import { encodeFunctionData } from '@zoltar/core-shared/evm/ethereum'
@@ -16,11 +17,11 @@ import { prepareSeededSecurityPoolMint } from './securityPoolScenarioMint.js'
 /** Seeds real security pool contracts on the browser-local chain, with no production RPC writes. */
 export async function seedSecurityPoolScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile }: ScenarioSeedParameters, questionCount = 2, collateralSymbol: CollateralSymbol = 'WETH') {
 	const collateral = securityPoolCollateral(profile, collateralSymbol)
-	if (collateral.address === undefined) throw new Error('Simulation collateral is unavailable.')
+	if (collateral.address === undefined) throw new Error(poolSetup.collateralUnavailable)
 	const collateralUnit = 10n ** BigInt(collateral.decimals)
 	const reportStep = createRangeProgressReporter(onProgress, { start: 0.98, end: 0.99 }, 20)
-	await reportStep('Preparing shared security pool')
-	const owner = requireQaAccount(accounts[0], 'Expected security pool simulation owner')
+	await reportStep(poolSetup.preparing)
+	const owner = requireQaAccount(accounts[0], poolSetup.ownerMissing)
 	const client = createWriteClient(owner)
 	const readClient = createReadClient()
 	const timestamp = await getSimulationChainTimestamp(memoryClient)
@@ -29,14 +30,14 @@ export async function seedSecurityPoolScenario({ accounts, createReadClient, cre
 		const market = await createMarket(client, {
 			marketType: 'binary',
 			outcomeLabels: ['Yes', 'No'],
-			questionData: { answerUnit: '', description: '', displayValueMax: 0n, displayValueMin: 0n, endTime: timestamp + 365n * 86400n, numTicks: 0n, startTime: 0n, title: `Will this resolve? (security pool question ${index + 1})` },
+			questionData: { answerUnit: '', description: '', displayValueMax: 0n, displayValueMin: 0n, endTime: timestamp + 365n * 86400n, numTicks: 0n, startTime: 0n, title: poolSetup.questionTitle(index + 1) },
 		})
 		pools.push({ questionId: market.questionId })
 	}
-	if (pools.length === 0) throw new Error('A simulation security pool needs a question')
-	const admission = await sendSecurityPoolTransaction(client, securityPoolAdmissionCreationRequest(owner, 'open', 0n, []), 'Prepare question rules')
+	if (pools.length === 0) throw new Error(poolSetup.questionMissing)
+	const admission = await sendSecurityPoolTransaction(client, securityPoolAdmissionCreationRequest(owner, 'open', 0n, []), poolSetup.prepareRules)
 	const policy = admission.receipt.contractAddress
-	if (policy === null || policy === undefined) throw new Error('Question rules could not be found after setup.')
+	if (policy === null || policy === undefined) throw new Error(poolSetup.rulesMissing)
 	const deployment = await sendSecurityPoolTransaction(
 		client,
 		securityPoolCreationRequest(owner, { collateralToken: collateral.address, minimumReportCollateral: collateralUnit / 100n, universeId: 0n, securityMultiplierBps: 20_000n, reportPriorityFeeAttoEthPerGas: 10_000_000_000n }, 366n * 86400n, policy, {
@@ -47,30 +48,30 @@ export async function seedSecurityPoolScenario({ accounts, createReadClient, cre
 			minimumOutcomeRate: 10n ** 16n,
 			rewardVestingSeconds: 86400n,
 		}),
-		'Deploy security pool',
+		poolSetup.deploy,
 	)
 	const securityPool = securityPoolAddressFromCreationReceipt(deployment.receipt)
 	const services = await readClient.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'services' })
-	await sendSecurityPoolTransaction(client, { account: owner, to: collateral.address, value: 0n, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [services, (1n << 256n) - 1n] }) }, 'Approve simulated collateral')
+	await sendSecurityPoolTransaction(client, { account: owner, to: collateral.address, value: 0n, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [services, (1n << 256n) - 1n] }) }, poolSetup.approveCollateral)
 
-	await reportStep('Deployed shared security pool')
+	await reportStep(poolSetup.deployed)
 	for (let stage = 1; stage <= 4; stage++) {
-		await sendSecurityPoolTransaction(client, buildSecurityPoolPrepareNextRequest({ caller: owner, securityPool }), 'Prepare security pool modules')
-		await reportStep(`Prepared security pool stage ${stage} of 4`)
+		await sendSecurityPoolTransaction(client, buildSecurityPoolPrepareNextRequest({ caller: owner, securityPool }), poolSetup.prepareContracts)
+		await reportStep(poolSetup.preparedStage(stage))
 	}
 	for (const [index, pool] of pools.entries()) {
-		await sendSecurityPoolTransaction(client, securityPoolContractRequest(owner, securityPool, 'addQuestion', [BigInt(pool.questionId)]), 'Register question')
-		await reportStep(`Registered security pool question ${index + 1} of ${pools.length}`)
+		await sendSecurityPoolTransaction(client, securityPoolContractRequest(owner, securityPool, 'addQuestion', [BigInt(pool.questionId)]), poolSetup.registerQuestion)
+		await reportStep(poolSetup.registeredQuestion(index + 1, pools.length))
 	}
 	const capitalLedger = await readClient.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'capitalLedger', args: [0n] })
 	const depositAttoRep = 5000n * 10n ** 18n
-	await sendSecurityPoolTransaction(client, { account: owner, to: profile.genesisRepTokenAddress, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [capitalLedger, depositAttoRep] }), value: 0n }, 'Approve REP for the security pool')
-	await reportStep('Approved common REP deposit for the security pool')
-	await sendSecurityPoolTransaction(client, buildSecurityPoolCapitalDepositRequest({ owner, capitalLedger, amountAttoRep: depositAttoRep }), 'Deposit REP into the security pool')
-	await reportStep('Deposited REP into the owner’s position')
+	await sendSecurityPoolTransaction(client, { account: owner, to: profile.genesisRepTokenAddress, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [capitalLedger, depositAttoRep] }), value: 0n }, poolSetup.approveRep)
+	await reportStep(poolSetup.repApproved)
+	await sendSecurityPoolTransaction(client, buildSecurityPoolCapitalDepositRequest({ owner, capitalLedger, amountAttoRep: depositAttoRep }), poolSetup.depositRep)
+	await reportStep(poolSetup.repDeposited)
 	// One settlement refreshes every question in the security pool universe.
 	await advanceSimulationTime(memoryClient, 301n)
-	await reportStep('Preparing shared security pool oracle')
+	await reportStep(poolSetup.preparingPrice)
 	const commitment = 10n * collateralUnit
 	const feed = await readClient.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'priceFeed', args: [0n] })
 	const [minimumReport, exposureDivider] = await Promise.all([readClient.readContract({ address: feed, abi: feedArtifact.abi, functionName: 'minimumToken1ReportAttoEth' }), readClient.readContract({ address: feed, abi: feedArtifact.abi, functionName: 'OPEN_INTEREST_DIVIDER' })])
@@ -87,17 +88,17 @@ export async function seedSecurityPoolScenario({ accounts, createReadClient, cre
 		repPerCollateralPrice: collateralSymbol === 'USDC' ? 10n ** 36n / DEFAULT_SIMULATION_USDC_PER_REP_PRICE : DEFAULT_SIMULATION_REP_PER_ETH_PRICE,
 	})
 	await settleOracleReportIfNeeded({ memoryClient, readClient, writeClient: client, ...report })
-	await reportStep('Settled shared security pool oracle')
-	await sendSecurityPoolTransaction(client, buildSecurityPoolCapitalSetHealthRequest({ owner, capitalLedger, targetHealthFactorBps: 12_000n }), 'Set owner health target')
+	await reportStep(poolSetup.priceAccepted)
+	await sendSecurityPoolTransaction(client, buildSecurityPoolCapitalSetHealthRequest({ owner, capitalLedger, targetHealthFactorBps: 12_000n }), poolSetup.setHealthTarget)
 	const required = await readClient.readContract({ address: capitalLedger, abi: capitalArtifact.abi, functionName: 'requiredRep', args: [commitment, 12_000n] })
-	if (required > depositAttoRep) throw new Error('Seeded capital cannot cover the intended commitment')
-	await sendSecurityPoolTransaction(client, buildSecurityPoolCapitalSetCommitmentRequest({ owner, capitalLedger, commitment }), 'Authorize shared commitment')
-	await reportStep('Authorized individual healthy commitment')
+	if (required > depositAttoRep) throw new Error(poolSetup.insufficientBacking)
+	await sendSecurityPoolTransaction(client, buildSecurityPoolCapitalSetCommitmentRequest({ owner, capitalLedger, commitment }), poolSetup.authorizeCommitment)
+	await reportStep(poolSetup.commitmentAuthorized)
 	for (const [index, pool] of pools.entries()) {
 		const request = await prepareSeededSecurityPoolMint(securityPoolReadClient(readClient), owner, securityPool, BigInt(pool.questionId), collateralUnit)
-		await sendSecurityPoolTransaction(client, request, 'Mint security pool complete sets')
-		await reportStep(`Minted shared security pool question ${index + 1} of ${pools.length}`)
+		await sendSecurityPoolTransaction(client, request, poolSetup.mintSets)
+		await reportStep(poolSetup.mintedQuestion(index + 1, pools.length))
 	}
-	await reportStep('Shared security pool scenario is ready')
+	await reportStep(poolSetup.ready)
 	return { securityPool, capitalLedger, questionIds: pools.map(pool => BigInt(pool.questionId), collateralUnit) }
 }

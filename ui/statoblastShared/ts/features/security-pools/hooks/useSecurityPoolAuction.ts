@@ -12,6 +12,7 @@ import {
 	quoteSecurityPoolAuctionRefundClaim,
 	buildSecurityPoolAuctionMaterializeRequest,
 	securityPoolAuctionOpeningReason,
+	minimumSecurityPoolHealthFactorBps,
 	minimumSecurityPoolAuctionRepPerLot,
 	quoteSecurityPoolAuctionBid,
 	type SecurityPoolAuctionBid,
@@ -89,8 +90,9 @@ export function useSecurityPoolAuction({ fork, savedBranch, bidder, actions, ope
 	const lots = securityPoolUnsignedId(lotsInput.value)
 	const minimumAttoRepPerLot = securityPoolAmountOrUndefined(repInput.value)
 	const targetHealthFactorBps = /^\d+(\.\d{0,2})?$/.test(healthInput.value.trim()) ? parseUnits(healthInput.value.trim(), 2) : undefined
-	const minimumAsk = auction?.opened && targetHealthFactorBps !== undefined && targetHealthFactorBps >= 10_000n && targetHealthFactorBps < 1n << 256n ? minimumSecurityPoolAuctionRepPerLot(auction, targetHealthFactorBps) : undefined
-	const inputReason = (lots === undefined || lots === 0n ? copy.lotsInvalid : undefined) ?? (minimumAttoRepPerLot === undefined || minimumAttoRepPerLot === 0n ? copy.repInvalid : undefined) ?? (targetHealthFactorBps === undefined || targetHealthFactorBps < 10_000n ? copy.healthInvalid : undefined)
+	const minimumAsk = auction?.opened && targetHealthFactorBps !== undefined && targetHealthFactorBps >= minimumSecurityPoolHealthFactorBps && targetHealthFactorBps < 1n << 256n ? minimumSecurityPoolAuctionRepPerLot(auction, targetHealthFactorBps) : undefined
+	const inputReason =
+		(lots === undefined || lots === 0n ? copy.lotsInvalid : undefined) ?? (minimumAttoRepPerLot === undefined || minimumAttoRepPerLot === 0n ? copy.repInvalid : undefined) ?? (targetHealthFactorBps === undefined || targetHealthFactorBps < minimumSecurityPoolHealthFactorBps ? copy.healthInvalid : undefined)
 	let quote: ReturnType<typeof quoteSecurityPoolAuctionBid> | undefined
 	let quoteError: string | undefined
 	if (biddingReason === undefined && inputReason === undefined && snapshot !== undefined && lots !== undefined && minimumAttoRepPerLot !== undefined && targetHealthFactorBps !== undefined) {

@@ -7,6 +7,7 @@ import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as collateralCopy from '../../../copy/collateral.js'
+import { completeSets } from '../../../copy/trading.js'
 import { insufficientMintCapacity, maximumMintAmountNotFunded, maximumMintAmountUnavailable } from '../../../copy/securityPool.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
@@ -156,10 +157,10 @@ export function useTradingCollateral({ pool, amountInput, ...parameters }: Write
 		approvalPending.value = recovery ? 'recovery' : 'collateral'
 		try {
 			await runWriteAction(
-				buildWriteActionConfig({ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState }, tradingError, commonCopy.formatConnectWalletBefore('approving collateral'), {
+				buildWriteActionConfig({ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState }, tradingError, commonCopy.formatConnectWalletBefore(collateralCopy.approvingCollateralAction), {
 					action: recovery ? 'approvePurchaseRecoveryRep' : 'approvePurchaseCollateral',
-					source: 'Complete sets',
-					submittedTitle: recovery ? 'Approve recovery REP' : 'Approve collateral',
+					source: completeSets,
+					submittedTitle: recovery ? collateralCopy.approveRecoveryRep : collateralCopy.approveCollateral,
 				}),
 				async (account, context) => {
 					const client = createWalletWriteClient(account, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal })

@@ -122,3 +122,5 @@ export const selectedOutcomes = 'Selected outcomes'
 export const formatRemoveOutcome = (outcome: CopyTemplateValue) => `Remove ${outcome}`
 export const formatDeployChildUniverse = (outcome: CopyTemplateValue) => `Deploy ${outcome} universe`
 export const childDeploymentPendingReason = 'Wait for the pending universe deployment.'
+
+export const formatUnknownReportingOutcome = (outcome: string) => `Could not recognize the reporting outcome. Received ${JSON.stringify(outcome)}.`

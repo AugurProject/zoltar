@@ -5,3 +5,10 @@ export const oracleReportViews = 'OpenOracle views'
 export const statoblastSecurityMultiplierBps = 'Security multiplier'
 export const changedSinceReview = 'Changed since you reviewed. Review the updated amounts before sending.'
 export const missingTokenSpender = 'Couldn’t identify the contract approved to spend these tokens.'
+
+export const approveSpendingTitle = 'Approve token spending'
+export const approveSpendingDescription = 'Authorize the listed spending limit; tokens stay in your wallet.'
+export const approvalInBaseUnits = (amount: bigint) => `${amount} token base units`
+export const transferEthTitle = 'Transfer ETH'
+export const contractTransactionTitle = 'Contract transaction'
+export const deployContractTitle = 'Deploy contract'

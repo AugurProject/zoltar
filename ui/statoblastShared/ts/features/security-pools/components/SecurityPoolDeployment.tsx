@@ -95,6 +95,7 @@ function DeploymentFields({ actions, step }: DeployStepProps) {
 function DeploymentActions({ actions, setupStage, setupVerificationPending }: { actions: SecurityPoolActions; setupStage?: number | undefined; setupVerificationPending?: boolean }) {
 	const originReasonId = useId()
 	const setupReasonId = useId()
+	const pendingReasonId = useId()
 	const sharedSetupReason = setupVerificationPending ? actions.preparationReason(1) : undefined
 	const deployActions = [
 		{ action: 'deploySecurityPoolAdmission', label: copy.deployAdmission, pendingLabel: copy.deployingAdmission, reason: actions.admissionDeployReason, onClick: actions.deployAdmission, address: actions.admissionAddress },
@@ -105,7 +106,11 @@ function DeploymentActions({ actions, setupStage, setupVerificationPending }: { 
 			<InlineHint id={originReasonId} message={copy.originForkedAction} />
 		</div>
 	) : undefined
-	const deployButton = (stage: (typeof deployActions)[number]) => <SecurityPoolButton model={actions} action={stage.action} label={stage.label} pendingLabel={stage.pendingLabel} reason={stage.reason} sharedReasonId={stage.reason === copy.originForked ? originReasonId : undefined} onClick={stage.onClick} />
+	const deployButton = (stage: (typeof deployActions)[number]) => {
+		const isPendingReason = stage.reason !== undefined && stage.reason === actions.pendingDeploymentReason
+		const sharedReasonId = stage.reason === copy.originForked ? originReasonId : undefined
+		return <SecurityPoolButton model={actions} action={stage.action} label={stage.label} pendingLabel={stage.pendingLabel} reason={stage.reason} sharedReasonId={sharedReasonId ?? (isPendingReason ? pendingReasonId : undefined)} onClick={stage.onClick} />
+	}
 	return (
 		<>
 			<ol className='statoblast-deploy-transactions' aria-label={pageCopy.deployTransactions}>
@@ -129,6 +134,7 @@ function DeploymentActions({ actions, setupStage, setupVerificationPending }: { 
 				})}
 			</ol>
 			{originReason}
+			{actions.pendingDeploymentReason === undefined ? undefined : <InlineHint id={pendingReasonId} message={actions.pendingDeploymentReason} />}
 			{sharedSetupReason === undefined ? undefined : <InlineHint id={setupReasonId} message={sharedSetupReason} />}
 		</>
 	)

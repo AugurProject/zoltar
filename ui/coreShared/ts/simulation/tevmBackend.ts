@@ -1,4 +1,5 @@
 import { withTimeout } from '../lib/promise.js'
+import { startingSimulation } from '../copy/simulation.js'
 import { clearSessionLocalEntities, localEntityScopeForNetwork, seedEntityFavorite } from '../lib/localEntityStore.js'
 import { formatQuestionIdHex } from '../lib/questionId.js'
 import { createPublicClient, createWalletClient, custom, publicActions, type Address } from '@zoltar/core-shared/evm/ethereum'
@@ -372,7 +373,7 @@ export async function createSimulationBackend(
 			if (bootstrapPromise === undefined) {
 				patchState({
 					bootstrapError: currentState?.bootstrapError,
-					bootstrapLabel: 'Starting simulation bootstrap',
+					bootstrapLabel: startingSimulation,
 					bootstrapProgress: 0,
 					isBootstrapping: true,
 				})

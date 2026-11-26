@@ -183,7 +183,7 @@ function retirementPreview(value: unknown): SecurityPoolRetirementPreview {
 	return {
 		status: retirementStatus(status),
 		effectiveCurrentBatch: decodeUint(batch, 'Current queue group', 96),
-		healthyCommitment: decodeUint(healthy, 'Preview healthy commitment'),
+		healthyCommitment: decodeUint(healthy, 'Projected backed commitment'),
 		spareCommitment: decodeUint(spare, 'Preview spare commitment'),
 		queuedAheadCommitment: decodeUint(ahead, 'Earlier reserved reductions'),
 		commitmentReduction: decodeUint(reduction, 'Commitment reduction'),
@@ -264,7 +264,7 @@ export function buildSecurityPoolCapitalCureRequest(parameters: CapitalRequest &
 		...parameters,
 		minimumTakeoverReward: 0n,
 		maximumOwnRep: 0n,
-		bounds: { maximumOwnerPrincipal: 0n, maximumOwnerCommitment: 0n, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: parameters.expectedAcceptedPriceEpoch, expectedSourceBatch: parameters.expectedSourceBatch },
+		bounds: { maximumOwnerPrincipal: 0n, maximumOwnerCommitment: 0n, expectedTargetHealthFactorBps: minimumSecurityPoolHealthFactorBps, expectedAcceptedPriceEpoch: parameters.expectedAcceptedPriceEpoch, expectedSourceBatch: parameters.expectedSourceBatch },
 	})
 }
 
@@ -397,7 +397,7 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 		demandAttoEth: decodeUint(demand, 'Demand'),
 		totalPledgedAttoRep: decodeUint(totalRep, 'Total pledged REP'),
 		totalCommitmentAttoEth: decodeUint(totalK, 'Total commitment'),
-		healthyCommitmentAttoEth: decodeUint(healthyK, 'Healthy commitment'),
+		healthyCommitmentAttoEth: decodeUint(healthyK, 'Backed commitment'),
 		availableMintCapacityAttoEth: decodeUint(availableCapacity, 'Available mint capacity'),
 		totalFreeAttoRep: decodeUint(free, 'Total free REP'),
 		currentBatch: decodeUint(current, 'Current queue group', 96),

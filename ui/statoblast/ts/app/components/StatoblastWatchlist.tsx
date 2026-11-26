@@ -456,7 +456,7 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 											)}
 										</td>
 										{!frozen && (
-											<td role='cell' data-label='Capacity in use'>
+											<td role='cell' data-label={pageCopy.capacityInUse}>
 												{row?.demand === undefined || row.capacity === undefined ? (
 													placeholder
 												) : (
@@ -471,7 +471,7 @@ export function StatoblastWatchlist({ enabled, universe, owner, environmentKey, 
 												)}
 											</td>
 										)}
-										<td role='cell' data-label='Your position'>
+										<td role='cell' data-label={pageCopy.yourPosition}>
 											{row?.pledged === undefined ? (
 												placeholder
 											) : (

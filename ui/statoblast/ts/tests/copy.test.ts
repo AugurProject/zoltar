@@ -36,6 +36,7 @@ const depositSettlementWord = /\b(?:settle(?:s|d|ment|ments|able)?|settling|unse
 
 test.each([
 	'Headroom',
+	'Dispute growth cutoff',
 	'Settlement demands',
 	'Healthy capacities',
 	'Source recoveries',
@@ -114,6 +115,12 @@ test.each([
 	'Unexpected report candidate response',
 	'Unexpected escrow funder response',
 	'Unexpected question ledger response',
+	'Unexpected capital fork authority response',
+	'Unexpected canonical capital response',
+	'Unexpected security pool custody response',
+	'Unexpected fork coordinator response',
+	'Unexpected reporting bootstrap response',
+	'Unexpected fee accrual state response',
 ])('rejects the glossary term in %s', message => {
 	expect(glossaryViolation(message)).toBe(true)
 })
@@ -123,13 +130,14 @@ test.each(['Claim deposits', 'Lost, no action needed', 'Full reward share', 'Rep
 })
 
 const obsoleteCopy =
-	/\bheadrooms?\b|adds 1 REP|settlement demands?|healthy capacit(?:y|ies)|spare healthy commitments?|(?:above|below|liquidation) boundar(?:y|ies)|conservative (?:health|prices?)|funding recipients?|clear(?:s|ed|ing)? (?:no )?deposits?|settled records?|capital services|commitment index(?:es|ices)?|report candidates?|escrow funders?|admission polic(?:y|ies)|question admissions?|base purchase fees?|resolution premiums?|idle REP|proposed prices?|prices? you propose|requested commitments?|source universes?|source-backed rights?|source recover(?:y|ies)|child preparations?|committed REP|REP\s*\/\s*WETH|\bgwei\b|max rewards?|not deployed|\bcarry (?:lea(?:f|ves)|pages?|nodes?|snapshots?)\b|\b(?:premiums?|books?|bonus(?:es)?|vaults?|repairs?|principals?|sponsors?|callbacks?|charged|retire(?:s|d|ments?)?|retiring|scanners?|liquidators?|escalations?|cohorts?|underwriters?|keepers?)\b/i
+	/\bheadrooms?\b|\bdispute growth cutoffs?\b|adds 1 REP|settlement demands?|healthy capacit(?:y|ies)|spare healthy commitments?|(?:above|below|liquidation) boundar(?:y|ies)|conservative (?:health|prices?)|funding recipients?|clear(?:s|ed|ing)? (?:no )?deposits?|settled records?|capital services|commitment index(?:es|ices)?|report candidates?|escrow funders?|admission polic(?:y|ies)|question admissions?|base purchase fees?|resolution premiums?|idle REP|proposed prices?|prices? you propose|requested commitments?|source universes?|source-backed rights?|source recover(?:y|ies)|child preparations?|committed REP|REP\s*\/\s*WETH|\bgwei\b|max rewards?|not deployed|\bcarry (?:lea(?:f|ves)|pages?|nodes?|snapshots?)\b|\b(?:premiums?|books?|bonus(?:es)?|vaults?|repairs?|principals?|sponsors?|callbacks?|charged|retire(?:s|d|ments?)?|retiring|scanners?|liquidators?|escalations?|cohorts?|underwriters?|keepers?)\b/i
 const generalWords = /\b(?:accounts?|requests?|providers?|engines?|ledgers?)\b/i
+const internalTerms = /\b(?:authorit(?:y|ies)|canonical|custody|coordinators?|bootstrap(?:ped|ping|s)?|accruals?|settlement engines?|auction engines?|engine controllers?|question ledgers?)\b/i
 const fixedMagnitude = /\b(?:\d+(?:[.,]\d+)?|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?:\s*%|[ -]+(?:percent|seconds?|minutes?|hours?|days?|weeks?|months?|years?)\b)/i
 
-function glossaryViolation(text: string) {
+function glossaryViolation(text: string, banGeneralWords = true) {
 	const depositSettlement = /\bdeposits?\b/i.test(text) && depositSettlementWord.test(text)
-	return obsoleteCopy.test(text.replace(/\brepair auction\b/gi, '')) || generalWords.test(text) || depositSettlement || fixedMagnitude.test(text)
+	return obsoleteCopy.test(text.replace(/\brepair auction\b/gi, '')) || internalTerms.test(text) || (banGeneralWords && generalWords.test(text)) || depositSettlement || fixedMagnitude.test(text)
 }
 
 const machineFields = new Set(['abi', 'className', 'data-testid', 'download', 'errorName', 'eventName', 'functionName', 'href', 'id', 'key', 'kind', 'method', 'role', 'style', 'testId', 'transportMode', 'type'])
@@ -138,6 +146,7 @@ const comparisonOperators = new Set([ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxK
 const machineArguments = new Map([
 	['Reflect.get', 1],
 	['actionId', 0],
+	['callWorker', 0],
 	['decodeFields', 1],
 	['securityPoolPriceAction', 1],
 	['read', 1],
@@ -146,10 +155,33 @@ const machineArguments = new Map([
 const abiParameterType = /^(?:address|bool|bytes(?:[0-9]+)?|string|u?int(?:[0-9]+)?|tuple)(?:\[[0-9]*\])*$/
 const storedRecordReaders = new Set(['address', 'bigint', 'boolean', 'hex', 'number', 'optional', 'record', 'string'])
 const matchOperations = new Set(['includes', 'startsWith', 'endsWith'])
-const unrenderedSharedCopy = new Map([
+const sharedCopyRenderedUnchangedByDesign = new Map([
 	['ui/coreShared/ts/copy/common.ts', new Set(['notDeployed', 'questionLedgerAddress'])],
 	['ui/coreShared/ts/copy/userMessages.ts', new Set(['missingUniverseDetail'])],
 ])
+
+// Shared modules can serve several products. The general-word rule covers the copy
+// used by the Statoblast shell, plus explicitly named copy used by its feature views.
+const sharedCopyUsingStatoblastTerminology = new Map([
+	['ui/coreShared/ts/copy/app.ts', new Set(['formatAccountMenuLabel', 'qaAccountDisconnected', 'qaWalletDisconnectedDetail', 'walletConnectionFailed', 'deploymentIncompleteReason'])],
+	['ui/coreShared/ts/copy/common.ts', new Set(['connectWallet', 'walletConnectionRequired', 'formatConnectWalletBefore'])],
+	['ui/coreShared/ts/copy/simulation.ts', new Set(['formatQaAccountNumber', 'qaAccount', 'simulationQaAccount'])],
+	['ui/coreShared/ts/copy/transaction.ts', new Set(['currentStateCheckFailed', 'formatOldDataCheck'])],
+	['ui/coreShared/ts/copy/userMessages.ts', new Set(['walletAddressChanged', 'walletDisconnected', 'walletInstallationRequired'])],
+	['ui/zoltarShared/ts/copy/forkTargets.ts', new Set(['targetChildUniverses'])],
+	['ui/zoltarShared/ts/copy/zoltar.ts', new Set(['formatParentForkResponseActiveReason', 'formatUnknownReportingOutcome'])],
+	['ui/zoltarShared/ts/protocol/helpers.ts', new Set(['getEscalationSideLabel'])],
+])
+
+function appliesGeneralWordBan(node: ts.Node, file: string) {
+	if (/^ui\/(?:statoblast|statoblastShared)\//.test(file)) return true
+	const names = sharedCopyUsingStatoblastTerminology.get(file)
+	if (names === undefined) return false
+	for (let parent = node.parent; parent !== undefined; parent = parent.parent) {
+		if ((ts.isVariableDeclaration(parent) || ts.isFunctionDeclaration(parent)) && parent.name !== undefined && ts.isIdentifier(parent.name) && names.has(parent.name.text)) return true
+	}
+	return false
+}
 
 function propertyName(node: ts.PropertyName) {
 	return ts.isIdentifier(node) || ts.isStringLiteralLike(node) ? node.text : undefined
@@ -179,10 +211,11 @@ function isMachineText(node: ts.Node, file: string) {
 			if (isAbiName(parent)) return true
 		}
 		if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) {
-			if (unrenderedSharedCopy.get(file)?.has(parent.name.text) === true) return true
+			if (sharedCopyRenderedUnchangedByDesign.get(file)?.has(parent.name.text) === true) return true
 			if (file.endsWith('/transactionTray.ts') && parent.name.text === 'key') return true
 			if (file.endsWith('/errors.ts') && parent.name.text === 'closeableErrorPatterns') return true
 			if (file.endsWith('/chainBackend.ts') && parent.name.text === 'readTransportMode') return true
+			if (file.endsWith('/tevmBackend.ts') && parent.name.text === 'PROGRESS_REPORTING_CALLS') return true
 		}
 		if (ts.isCaseClause(parent) && current === parent.expression) return true
 		if (ts.isBinaryExpression(parent) && comparisonOperators.has(parent.operatorToken.kind)) return true
@@ -202,18 +235,28 @@ function isMachineText(node: ts.Node, file: string) {
 	return false
 }
 
+function concatenatedText(node: ts.Node): string | undefined {
+	if (ts.isStringLiteralLike(node)) return node.text
+	if (ts.isParenthesizedExpression(node)) return concatenatedText(node.expression)
+	if (!ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.PlusToken) return undefined
+	const left = concatenatedText(node.left)
+	const right = concatenatedText(node.right)
+	return left === undefined || right === undefined ? undefined : left + right
+}
+
 function findViolations(source: ts.SourceFile, file = source.fileName) {
 	const violations: string[] = []
 	const visit = (node: ts.Node) => {
-		if (ts.isStringLiteralLike(node) || ts.isJsxText(node) || ts.isTemplateExpression(node)) {
-			// Check static fragments together and visit substitutions independently.
-			const text = ts.isTemplateExpression(node) ? [node.head.text, ...node.templateSpans.map(span => span.literal.text)].join(' ') : node.text
-			if (!isMachineText(node, file) && glossaryViolation(text)) {
-				const { line } = source.getLineAndCharacterOfPosition(node.getStart(source))
-				violations.push(`${file}:${line + 1} ${text.replace(/\s+/g, ' ').trim()}`)
-			}
+		const joined = ts.isBinaryExpression(node) ? concatenatedText(node) : undefined
+		// Check static fragments together and visit template substitutions independently.
+		let text = joined
+		if (ts.isTemplateExpression(node)) text = [node.head.text, ...node.templateSpans.map(span => span.literal.text)].join(' ')
+		else if (ts.isStringLiteralLike(node) || ts.isJsxText(node)) text = node.text
+		if (text !== undefined && !isMachineText(node, file) && glossaryViolation(text, appliesGeneralWordBan(node, file))) {
+			const { line } = source.getLineAndCharacterOfPosition(node.getStart(source))
+			violations.push(`${file}:${line + 1} ${text.replace(/\s+/g, ' ').trim()}`)
 		}
-		ts.forEachChild(node, visit)
+		if (joined === undefined) ts.forEachChild(node, visit)
 	}
 	ts.forEachChild(source, visit)
 	return violations
@@ -244,10 +287,31 @@ test.each([
 	["setOpenOracleCreateFieldError(fields, 'amount', 'Settle deposits')", 'Settle deposits'],
 	["formatOpenOracleDisputeWriteErrorMessage(error, 'Settle deposits')", 'Settle deposits'],
 	["formatOpenOracleSettleWriteErrorMessage(error, 'Settle deposits')", 'Settle deposits'],
+	["const message = 'Settle ' + 'deposits'", 'Settle deposits'],
+	["const message = ('Set' + 'tle ') + ('depos' + 'its')", 'Settle deposits'],
 	['const message = `The ${type} ledger failed`', 'The ledger failed'],
 ])('finds reserved product wording in %s', (fixture, message) => {
-	const source = ts.createSourceFile('fixture.tsx', fixture, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
-	expect(findViolations(source)).toEqual([`fixture.tsx:1 ${message}`])
+	const file = 'ui/statoblast/ts/fixtures/copy.tsx'
+	const source = ts.createSourceFile(file, fixture, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+	expect(findViolations(source)).toEqual([`${file}:1 ${message}`])
+})
+
+test('allows Zoltar-only general wording while keeping shared internal terms banned', () => {
+	const fixture = "export const requestSent = 'Request sent'\nexport const status = 'Settlement for your deposits'\nexport const label = 'Question ledger'"
+	const source = ts.createSourceFile('ui/zoltarShared/ts/copy/example.ts', fixture, ts.ScriptTarget.Latest, true)
+	expect(findViolations(source)).toEqual(['ui/zoltarShared/ts/copy/example.ts:2 Settlement for your deposits', 'ui/zoltarShared/ts/copy/example.ts:3 Question ledger'])
+})
+
+test('applies the general-word ban to selected shared exports rendered in Statoblast', () => {
+	const fixture = "export const qaWalletDisconnectedDetail = 'Account disconnected'\nexport const requestSent = 'Request sent'"
+	const source = ts.createSourceFile('ui/coreShared/ts/copy/app.ts', fixture, ts.ScriptTarget.Latest, true)
+	expect(findViolations(source)).toEqual(['ui/coreShared/ts/copy/app.ts:1 Account disconnected'])
+})
+
+test('keeps a shared wording exception specific to its export', () => {
+	const fixture = "export const questionLedgerAddress = 'Question ledger address'\nexport const renamed = 'Question ledger address'"
+	const source = ts.createSourceFile('ui/coreShared/ts/copy/common.ts', fixture, ts.ScriptTarget.Latest, true)
+	expect(findViolations(source)).toEqual(['ui/coreShared/ts/copy/common.ts:2 Question ledger address'])
 })
 
 test('leaves non-text ABI names, CSS, lookup keys and discriminants alone', () => {
@@ -260,7 +324,7 @@ test('leaves non-text ABI names, CSS, lookup keys and discriminants alone', () =
 		"const element = <p className='settlement-engine' data-testid='ledger' />",
 		"console.error('Failed to inspect the provider account')",
 	].join('\n')
-	expect(findViolations(ts.createSourceFile('fixture.tsx', fixture, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX))).toEqual([])
+	expect(findViolations(ts.createSourceFile('ui/statoblast/ts/fixtures/copy.tsx', fixture, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX))).toEqual([])
 })
 
 const root = fileURLToPath(new URL('../../../../', import.meta.url))

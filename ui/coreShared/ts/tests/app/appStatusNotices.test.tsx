@@ -62,7 +62,7 @@ describe('AppStatusNotices', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Simulation bootstrap failed')).not.toBeNull()
+		expect(documentQueries.getByText('Could not start the simulation')).not.toBeNull()
 		expect(documentQueries.getByText('Anvil boot failed')).not.toBeNull()
 	})
 

@@ -553,7 +553,7 @@ describe('useReportingOperations', () => {
 
 	test.each([
 		['poolForked', 'Claim winning deposits in the child question after it resolves.'],
-		['forkMigration', 'Set up the child questions in Fork & recovery. Your deposits carry to the child questions. Claim winning deposits there after resolution.'],
+		['forkMigration', 'Set up the child questions in Fork & recovery. Your deposits carry to the child universes. Claim winning deposits there after resolution.'],
 	] as const)('withdrawEscalation explains what to do after a fork (%s)', async (systemState, reason) => {
 		const questionLedgerAddress = getAddress('0x00000000000000000000000000000000000000d1')
 		const loadReportingDetails = mock(async () => createReportingDetails(questionLedgerAddress, { systemState }))

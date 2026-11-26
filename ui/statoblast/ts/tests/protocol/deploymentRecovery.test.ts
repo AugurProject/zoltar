@@ -83,14 +83,45 @@ for (const { label, response } of unavailableFinalityResponses) {
 	})
 }
 
+test('hashless rules recovery adopts a matching contract from a later confirmed nonce', async () => {
+	const checked: string[] = []
+	const expected = getCreateAddress({ from: owner, nonce: nonce + 2n })
+	const client = testDouble<ReadClient>({
+		getBlock: async () => block(head),
+		getTransactionCount: async () => nonce + 3n,
+		getCode: async ({ address }: { address: string }) => {
+			checked.push(address)
+			return address === expected ? `0x${openRules.evm.deployedBytecode.object}` : '0x'
+		},
+	})
+	expect(await recovery.recoverQuestionRules(client, owner, nonce, 'open', 0n, [], true)).toEqual({ rules: expected })
+	expect(checked).toEqual([0n, 1n, 2n].map(offset => getCreateAddress({ from: owner, nonce: nonce + offset })))
+})
+
+test('hashless rules recovery is bounded and tells the caller when the scan is incomplete', async () => {
+	const checked: string[] = []
+	const client = testDouble<ReadClient>({
+		getBlock: async () => block(head),
+		getTransactionCount: async () => nonce + 18n,
+		getCode: async ({ address }: { address: string }) => {
+			checked.push(address)
+			return '0x'
+		},
+	})
+	expect(await recovery.recoverQuestionRules(client, owner, nonce, 'open', 0n, [], true)).toEqual({ rules: undefined, scanLimitReached: true })
+	expect(checked).toEqual(Array.from({ length: 16 }, (_, offset) => getCreateAddress({ from: owner, nonce: nonce + BigInt(offset) })))
+})
+
 const factorySource = 'contracts/statoblast/factories/SecurityPoolFactory.sol'
 const factoryAbi = parseAbi(['function deploySecurityPool(bytes creationCode, bytes configuration) returns (address)'])
 const saltParameters = parseAbiParameters('address, uint256')
 
-for (const { initialCount, missingRead, failure, restartable } of [
-	{ initialCount: undefined, missingRead: 'nonce', failure: new RpcError('missing trie node at requested block', { code: -32000 }), restartable: true },
-	{ initialCount: 0n, missingRead: 'counter', failure: new RpcError('state at block #46 is pruned', { code: -32000 }), restartable: true },
-	{ initialCount: undefined, missingRead: 'nonce', failure: new Error('RPC timed out'), restartable: false },
+for (const { initialCount, missingRead, failure } of [
+	{ initialCount: undefined, missingRead: 'nonce', failure: new RpcError('missing trie node at requested block', { code: -32000 }) },
+	{ initialCount: 0n, missingRead: 'counter', failure: new RpcError('state at block #46 is pruned', { code: -32000 }) },
+	{ initialCount: undefined, missingRead: 'nonce', failure: new Error('No state available for block') },
+	{ initialCount: 0n, missingRead: 'counter', failure: new Error('header not found') },
+	{ initialCount: undefined, missingRead: 'nonce', failure: new Error('RPC failed') },
 ]) {
 	test(`classifies legacy or wide-range recovery failure reading historical ${missingRead}: ${failure.message}`, async () => {
 		const restore = installActiveEnvironmentForTesting(createFakeBackend())
@@ -111,8 +142,7 @@ for (const { initialCount, missingRead, failure, restartable } of [
 				},
 			})
 			const result = recovery.recoverSecurityPoolDeployment(client, owner, nonce, request, initialCount)
-			if (restartable) await expect(result).rejects.toMatchObject({ name: 'DeploymentHistoryUnavailableError', cause: failure })
-			else await expect(result).rejects.toBe(failure)
+			await expect(result).rejects.toMatchObject({ name: 'DeploymentHistoryUnavailableError', cause: failure })
 		} finally {
 			restore()
 		}

@@ -209,7 +209,7 @@ describe('SimulationBanner', () => {
 			if (!(summary instanceof HTMLElement)) throw new Error('Expected simulation strip summary')
 			expect(within(summary).getByText('Preparing replacement scenario')).not.toBeNull()
 			expect(summary.querySelector('.simulation-strip-progress-track')).not.toBeNull()
-			expect(summary.textContent).toContain('Bootstrapping')
+			expect(summary.textContent).toContain('Starting')
 
 			bootstrappingController.isBootstrapped = true
 			bootstrappingController.isBootstrapping = false

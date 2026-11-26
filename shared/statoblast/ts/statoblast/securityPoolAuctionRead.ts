@@ -100,7 +100,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 	const capitalLedger = decodeAddress(capitalValue, 'Capital contract', true)
 	const priceFeed = decodeAddress(feedValue, 'Price feed', true)
 	const [authorityValue, controllerProtocol, auctionValue, tokenValue, forkTimeValue] = await Promise.all([read(controller, 'securityPool'), read(controller, 'zoltar'), read(controller, 'repairAuctions', [universeId]), read(zoltar, 'getRepToken', [universeId]), read(zoltar, 'getForkTime', [universeId])])
-	if (decodeAddress(authorityValue, 'Fork authority') !== securityPool || decodeAddress(controllerProtocol, 'Fork protocol') !== zoltar) throw new Error('Auction fork controller belongs to another security pool.')
+	if (decodeAddress(authorityValue, 'Security pool linked to the fork') !== securityPool || decodeAddress(controllerProtocol, 'Fork protocol') !== zoltar) throw new Error('Auction fork controller belongs to another security pool.')
 	const auctionAddress = decodeAddress(auctionValue, 'Auction', true)
 	const repToken = decodeAddress(tokenValue, 'Branch REP', true)
 	const collateralToken = decodeAddress(collateralValue, 'Collateral token')
@@ -160,7 +160,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			read(auctionAddress, 'vaultImplementation'),
 		])
 		if (
-			decodeAddress(fork, 'Auction fork authority') !== controller ||
+			decodeAddress(fork, 'Auction fork contract') !== controller ||
 			decodeAddress(root, 'Auction security pool') !== securityPool ||
 			decodeAddress(capital, 'Auction capital') !== capitalLedger ||
 			decodeAddress(token, 'Auction REP') !== repToken ||
@@ -169,7 +169,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			decodeAddress(capitalProtocol, 'Capital protocol') !== zoltar ||
 			decodeUint(capitalChild, 'Capital universe', 248) !== universeId ||
 			decodeAddress(capitalToken, 'Capital REP') !== repToken ||
-			decodeAddress(capitalFork, 'Capital fork authority') !== controller
+			decodeAddress(capitalFork, 'Fork contract for pool capital') !== controller
 		)
 			throw new Error('Auction identities do not match the selected branch.')
 		const engine = decodeAddress(engineValue, 'Auction bidding contract')

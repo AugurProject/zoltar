@@ -2,8 +2,7 @@ export const connecting = 'Connecting…'
 export const walletConnectionFailed = 'Wallet connection failed'
 export const changeWallet = 'Change wallet'
 export const disconnectWallet = 'Disconnect'
-const accountMenu = 'Wallet menu'
-export const formatAccountMenuLabel = (account: string) => `${accountMenu} ${account}`
+export const formatAccountMenuLabel = (account: string) => `Wallet menu ${account}`
 export const formatSwitchToNetwork = (networkName: string) => `Switch to ${networkName}`
 export const qaWallet = 'QA wallet'
 export const simulationQaWallet = 'Simulation QA wallet'
@@ -52,7 +51,7 @@ export const readRpcUnavailable = 'Read RPC unavailable'
 export const unavailableReadBackendDetail = 'Content stays unavailable until the read RPC responds. Retrying automatically.'
 export const dismissNotice = 'Dismiss notice'
 export const setupIncomplete = 'Setup incomplete'
-export const simulationBootstrapFailed = 'Simulation bootstrap failed'
+export const simulationBootstrapFailed = 'Could not start the simulation'
 export const staleReadBackendDetail = 'Displayed onchain state may be behind the latest chain state. Switch to an up-to-date RPC before sending transactions.'
 export const urlProvidedReadRpc = 'Custom RPC URL from page URL'
 export const repUsdc = 'USDC per REP'

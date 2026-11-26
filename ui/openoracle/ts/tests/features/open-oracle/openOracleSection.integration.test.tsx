@@ -187,7 +187,7 @@ async function fillOpenOracleCreateForm() {
 	// The form takes the escalation multiplier as a decimal; the contract stores it scaled by 100.
 	await setInputValue('Multiplier', (openOracleCreateParameters.multiplier / 100).toString())
 	await setInputValue('Settlement delay (seconds)', openOracleCreateParameters.settlementTime.toString())
-	await setInputValue('Dispute growth cutoff', formatCurrencyInputBalance(openOracleCreateParameters.escalationHalt))
+	await setInputValue('Dispute limit', formatCurrencyInputBalance(openOracleCreateParameters.escalationHalt))
 	await setInputValue('Dispute delay (seconds)', openOracleCreateParameters.disputeDelay.toString())
 	await setInputValue('Protocol fee (%)', formatFeePercentageInput(openOracleCreateParameters.protocolFee))
 }

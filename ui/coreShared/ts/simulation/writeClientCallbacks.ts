@@ -3,19 +3,19 @@ import type { CreateWriteClientCallbacks, WriteClient } from '../wallet/chainBac
 /** Wraps a simulation write client so every submitted transaction hash reaches the caller's callbacks. */
 export function withTransactionCallbacks(baseClient: WriteClient, callbacks: CreateWriteClientCallbacks): WriteClient {
 	const sendRawTransaction: typeof baseClient.sendRawTransaction = async parameters => {
-		callbacks.assertBeforeSubmit?.()
+		await callbacks.assertBeforeSubmit?.()
 		const hash = await baseClient.sendRawTransaction(parameters)
 		callbacks.onTransactionSubmitted?.(hash)
 		return hash
 	}
 	const sendTransaction: typeof baseClient.sendTransaction = async parameters => {
-		callbacks.assertBeforeSubmit?.()
+		await callbacks.assertBeforeSubmit?.()
 		const hash = await baseClient.sendTransaction(parameters)
 		callbacks.onTransactionSubmitted?.(hash)
 		return hash
 	}
 	const writeContract: typeof baseClient.writeContract = async parameters => {
-		callbacks.assertBeforeSubmit?.()
+		await callbacks.assertBeforeSubmit?.()
 		const hash = await baseClient.writeContract(parameters)
 		callbacks.onTransactionSubmitted?.(hash)
 		return hash

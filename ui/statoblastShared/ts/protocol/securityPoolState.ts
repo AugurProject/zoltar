@@ -34,7 +34,7 @@ export async function loadCentralSecurityPoolQuestion(client: Pick<ReadClient, '
 		],
 		blockNumber,
 	)
-	const securityPool = requireAddressValue(securityPoolValue, 'security pool authority')
+	const securityPool = requireAddressValue(securityPoolValue, 'linked security pool')
 	const universeId = requireBigintValue(universeValue, 'security pool universe')
 	const [settlementValue] = await readRequiredMulticall(client, [{ address: securityPool, abi, functionName: 'settlement', args: [] }], blockNumber)
 	const settlement = requireAddressValue(settlementValue, 'payout contract')
@@ -75,7 +75,12 @@ export async function loadCentralSecurityPoolQuestion(client: Pick<ReadClient, '
 	const feeTime = BigInt(requireIntegerLikeValue(feeTimestampValue, 'native fee timestamp'))
 	const feeEnd = BigInt(requireIntegerLikeValue(Reflect.get(stream, 'feeEnd'), 'native fee end'))
 	const feesActive =
-		requireBooleanValue(validValue, 'capital price validity') && requireBooleanValue(state[11], 'fee accrual state') && !requireBooleanValue(state[7], 'payout fork status') && requireBooleanValue(fundedValue, 'cash funding state') && requireBigintValue(question[1], 'frozen payout record ID') === 0n && feeTime < feeEnd
+		requireBooleanValue(validValue, 'capital price validity') &&
+		requireBooleanValue(state[11], 'holding fee status') &&
+		!requireBooleanValue(state[7], 'payout fork status') &&
+		requireBooleanValue(fundedValue, 'collateral funding status') &&
+		requireBigintValue(question[1], 'frozen payout record ID') === 0n &&
+		feeTime < feeEnd
 	const linearFee = { rateAttoEthPerSecond: feesActive ? requireBigintValue(Reflect.get(stream, 'feeRateAttoEthPerSecond'), 'question fee rate') : 0n, rateScale: 1_000_000_000n, endTime: feeEnd }
 	const snapshot = requireObjectValue(snapshotValue, 'question payout details')
 	const cash = requireBigintValue(Reflect.get(snapshot, 'questionCashAttoEth'), 'question cash')

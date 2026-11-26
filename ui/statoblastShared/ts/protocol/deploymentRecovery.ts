@@ -10,6 +10,7 @@ type ConfirmationClient = Pick<ReadClient, 'getBlock' | 'getTransactionCount'>
 type CuratedAdmissionMode = Exclude<SecurityPoolAdmission['mode'], 'custom'>
 
 const recoveryConfirmationDepth = 12n
+const questionRulesNonceScanLimit = 16n
 // SecurityPoolFactory.securityPoolCreationCount is private. The compiled storage layout is checked in deploymentRecovery.test.ts.
 const securityPoolCreationCountSlot = 7n
 const ownerAndCounter = parseAbiParameters('address, uint256')
@@ -38,8 +39,9 @@ export async function readDeploymentRecoveryHead(client: Pick<ReadClient, 'getBl
 
 async function readSpentNonceHead(client: ConfirmationClient, owner: Address, nonce: bigint) {
 	const head = await readDeploymentRecoveryHead(client)
-	if (head?.number === undefined || head.hash === undefined || (await client.getTransactionCount({ address: owner, blockNumber: head.number })) <= nonce) return undefined
-	return { number: head.number, hash: head.hash }
+	if (head?.number === undefined || head.hash === undefined) return undefined
+	const transactionCount = await client.getTransactionCount({ address: owner, blockNumber: head.number })
+	return transactionCount > nonce ? { number: head.number, hash: head.hash, transactionCount } : undefined
 }
 
 export async function readDeploymentNonce(client: Pick<ReadClient, 'getTransaction'>, owner: Address, hash: Hash) {
@@ -68,13 +70,19 @@ function matchesPage(actual: readonly bigint[], expected: readonly bigint[]) {
 	return actual.length === expected.length && actual.every((id, index) => id === expected[index])
 }
 
-export async function recoverQuestionRules(client: ConfirmationClient & Pick<ReadClient, 'getCode' | 'readContract'>, owner: Address, nonce: bigint, mode: CuratedAdmissionMode, universeId: bigint, ids: readonly bigint[]) {
+export async function recoverQuestionRules(client: ConfirmationClient & Pick<ReadClient, 'getCode' | 'readContract'>, owner: Address, nonce: bigint, mode: CuratedAdmissionMode, universeId: bigint, ids: readonly bigint[], scanLaterNonces = false) {
 	const head = await readSpentNonceHead(client, owner, nonce)
 	if (head === undefined) return undefined
-	const address = getCreateAddress({ from: owner, nonce })
-	const matches = await matchesQuestionRules(client, address, mode, universeId, ids, head.number)
+	const scanEnd = nonce + (scanLaterNonces ? questionRulesNonceScanLimit : 1n)
+	let rules: Address | undefined
+	for (let candidate = nonce; candidate < scanEnd && candidate < head.transactionCount; candidate++) {
+		const address = getCreateAddress({ from: owner, nonce: candidate })
+		if (!(await matchesQuestionRules(client, address, mode, universeId, ids, head.number))) continue
+		rules = address
+		break
+	}
 	if ((await client.getBlock({ blockNumber: head.number })).hash !== head.hash) return undefined
-	return { rules: matches ? address : undefined }
+	return rules === undefined && scanLaterNonces && scanEnd < head.transactionCount ? { rules, scanLimitReached: true } : { rules }
 }
 
 export async function readSecurityPoolCreationCount(client: Pick<ReadClient, 'getStorageAt'>, owner: Address, blockNumber?: bigint) {
@@ -108,15 +116,22 @@ export class DeploymentHistoryUnavailableError extends Error {
 }
 
 async function readDeploymentBlockPoolCounts(client: Pick<ReadClient, 'getTransactionCount' | 'getStorageAt'>, owner: Address, nonce: bigint, confirmedHead: bigint) {
-	try {
-		const nonceBlock = await findNonceBlock(client, owner, nonce, confirmedHead)
-		const first = nonceBlock === 0n ? 0n : await readSecurityPoolCreationCount(client, owner, nonceBlock - 1n)
-		const end = await readSecurityPoolCreationCount(client, owner, nonceBlock)
-		return { first, end }
-	} catch (error) {
-		if (/missing trie node|\bpruned\b|historical (?:state|data|history)(?: is)? (?:unavailable|not available)/i.test(providerFailureMessage(error))) throw new DeploymentHistoryUnavailableError(error)
-		throw error
+	const readAt = async <T>(blockNumber: bigint | undefined, read: () => Promise<T>) => {
+		try {
+			return await read()
+		} catch (error) {
+			if ((blockNumber !== undefined && blockNumber < confirmedHead) || /missing trie node|\bpruned\b|historical (?:state|data|history)(?: is)? (?:unavailable|not available)/i.test(providerFailureMessage(error))) throw new DeploymentHistoryUnavailableError(error)
+			throw error
+		}
 	}
+	const history: typeof client = {
+		getTransactionCount: request => readAt(request.blockNumber, () => client.getTransactionCount(request)),
+		getStorageAt: request => readAt(request.blockNumber, () => client.getStorageAt(request)),
+	}
+	const nonceBlock = await findNonceBlock(history, owner, nonce, confirmedHead)
+	const first = nonceBlock === 0n ? 0n : await readSecurityPoolCreationCount(history, owner, nonceBlock - 1n)
+	const end = await readSecurityPoolCreationCount(history, owner, nonceBlock)
+	return { first, end }
 }
 
 function poolInitCodeHash(request: Pick<SecurityPoolTransaction, 'to' | 'data'>) {

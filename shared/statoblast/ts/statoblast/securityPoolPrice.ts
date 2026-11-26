@@ -70,14 +70,15 @@ export async function loadSecurityPoolPriceSnapshot(parameters: { client: PriceR
 	const feed = decodeAddress(feedValue, 'Security pool price feed', true)
 	const reportingOpen = decodeBool(openValue, 'Reporting window must be a boolean.')
 	const [questionPage, factoryProtocol, registeredFeed, repValue] = await Promise.all([read(securityPool, 'getQuestions', [0n, 1n]), read(factory, 'zoltar'), read(factory, 'sharedPriceFeeds', [securityPool, universeId]), read(zoltar, 'getRepToken', [universeId])])
-	if (decodeAddress(factoryProtocol, 'Factory protocol') !== zoltar || decodeAddress(registeredFeed, 'Canonical price feed', true) !== feed) throw new Error('Security pool price identities do not match.')
+	if (decodeAddress(factoryProtocol, 'Factory protocol') !== zoltar || decodeAddress(registeredFeed, 'Registered price feed', true) !== feed) throw new Error('Security pool price identities do not match.')
 	if (!Array.isArray(questionPage) || questionPage.length > 1) throw new Error('Invalid security pool preparation source page.')
 	let sourcePool: Address | undefined
 	if (questionPage.length === 1) {
 		sourcePool = decodeAddress(await read(securityPool, 'getQuestionLedger', [decodeUint(questionPage[0], 'Source question'), originUniverseId]), 'Preparation source')
 		const [sourceSecurityPool, sourceOrigin] = await Promise.all([read(factory, 'securityPoolOf', [sourcePool]), read(factory, 'getQuestionLedgerOriginId', [sourcePool])])
 		if (typeof sourceOrigin !== 'string' || !isHex(sourceOrigin) || sourceOrigin.length !== 66) throw new Error('Invalid preparation source origin.')
-		if (decodeAddress(sourceSecurityPool, 'Source security pool') !== securityPool || decodeAddress(await read(factory, 'getQuestionLedger', [sourceOrigin, originUniverseId]), 'Canonical source') !== sourcePool) throw new Error('Security pool preparation source is not canonical.')
+		if (decodeAddress(sourceSecurityPool, 'Source security pool') !== securityPool || decodeAddress(await read(factory, 'getQuestionLedger', [sourceOrigin, originUniverseId]), 'Registered source question') !== sourcePool)
+			throw new Error('The source question does not match the question registered for this security pool.')
 	}
 	const repToken = decodeAddress(repValue, 'Branch REP', true)
 	let observation:

@@ -20,7 +20,22 @@ import { auctionCapitalSnapshot, capitalSnapshot, owner, securityPool, token, ca
 import { capitalClient } from './capitalClient.js'
 import { getZoltarContractAddresses } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 import { auctionFixture } from './auctionFixture.js'
-const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
+const lifecycle = installDomTestLifecycle({
+	beforeTest: ({ window }) => {
+		let active: Promise<unknown> = Promise.resolve()
+		Object.defineProperty(window.navigator, 'locks', {
+			configurable: true,
+			value: {
+				request: (_name: string, callback: () => unknown) => {
+					const next = active.then(callback)
+					active = next.catch(() => undefined)
+					return next
+				},
+			},
+		})
+	},
+	afterTest: resetActiveEnvironmentForTesting,
+})
 const parameters = { accountAddress: owner, onTransactionRequested: () => undefined, onTransactionSubmitted: () => undefined, onTransactionFinished: () => undefined, onTransactionPresented: () => undefined, refreshState: async () => undefined }
 function model(): Parameters<typeof useSecurityPoolActions>[0] {
 	return {
@@ -50,7 +65,7 @@ const factory = () => getInfraContractAddresses().securityPoolFactory
 const deploymentTopic = (value: Address) => encodeAbiParameters(parseAbiParameters('address'), [value])
 const deployedPoolLog = () => ({ address: factory(), data: '0x' as const, topics: [toEventSelector(parseAbiItem('event SecurityPoolDeployed(address indexed securityPool, address indexed creator)')), deploymentTopic(securityPool), deploymentTopic(owner)] })
 
-function saveDeploymentMarker(source: ReturnType<typeof capitalClient>, pending: { step: 'rules' | 'pool'; nonce?: string; hash?: Hash }, rules?: Address) {
+function saveDeploymentMarker(source: ReturnType<typeof capitalClient>, pending: { step: 'rules' | 'pool'; nonce?: string; hash?: Hash; nonceVerified?: boolean }, rules?: Address) {
 	const { network, persistence } = localEntityScopeForNetwork(source.backend.profile, 'statoblast', 'pool')
 	const storage = persistence === 'session' ? window.sessionStorage : window.localStorage
 	storage.setItem(`zoltar-ui:statoblast:deployment:v1:${network}:${owner.toLowerCase()}`, JSON.stringify({ draft: { ...initialDeploymentDraft('0'), horizonDays: '45' }, rules, pending: { id: 'saved-deployment', ...pending } }))
@@ -65,6 +80,7 @@ async function renderWithDeploymentWallet(
 		receipt?: Promise<void>
 		confirmed?: () => boolean
 		unrelatedReplacement?: () => void
+		cancelled?: boolean
 		chain?: (requests: readonly { to?: Address | null | undefined; data?: Hex | undefined }[]) => Partial<Pick<ReadClient, 'getBlock' | 'getStorageAt' | 'getTransaction' | 'getTransactionCount' | 'getTransactionReceipt'>>
 	} = {},
 ) {
@@ -77,7 +93,12 @@ async function renderWithDeploymentWallet(
 		...createMockWriteClient(request => requests.push(request)),
 		waitForTransactionReceipt: async ({ onReplaced }: Parameters<WriteClient['waitForTransactionReceipt']>[0]) => {
 			if (delays.unrelatedReplacement !== undefined) {
-				onReplaced?.({ reason: 'replaced', transaction: { hash: replacementHash }, replacedTransaction: { hash: mockTransactionHash }, transactionReceipt: { ...receipt(), transactionHash: replacementHash, blockHash: mockTransactionHash, blockNumber: 1n, cumulativeGasUsed: 1n, gasUsed: 1n, transactionIndex: 0n } })
+				onReplaced?.({
+					reason: delays.cancelled ? 'cancelled' : 'replaced',
+					transaction: { hash: replacementHash },
+					replacedTransaction: { hash: mockTransactionHash },
+					transactionReceipt: { ...receipt(), transactionHash: replacementHash, blockHash: mockTransactionHash, blockNumber: 1n, cumulativeGasUsed: 1n, gasUsed: 1n, transactionIndex: 0n },
+				})
 				delays.unrelatedReplacement()
 			}
 			if (requests.length !== 1 || delays.wallet === undefined) await delays.receipt
@@ -109,7 +130,7 @@ async function renderWithDeploymentWallet(
 			call: async () => ({ data: undefined }),
 			onTransactionSubmitted: callbacks?.onTransactionSubmitted,
 			sendTransaction: async request => {
-				callbacks?.assertBeforeSubmit?.()
+				await callbacks?.assertBeforeSubmit?.()
 				const hash = await writer.sendTransaction(request)
 				if (requests.length === 1) await delays.wallet
 				callbacks?.onTransactionSubmitted?.(hash)
@@ -314,7 +335,7 @@ test('the wizard will not send against an outdated wallet nonce', async () => {
 	expect(nonceReads).toBe(2n)
 })
 
-test('an explicit wallet rejection unlocks the rules deployment again', async () => {
+test.each([{ code: 4001 }, { data: { originalError: { code: 4001 } } }, { error: { data: { code: '4001' } } }])('an explicit wallet rejection unlocks the rules deployment again (%j)', async details => {
 	const wallet = createDeferred<void>()
 	const { hook, requests } = await renderWithDeploymentWallet(capitalClient(), true, { wallet: wallet.promise })
 	let sending: Promise<void> | undefined
@@ -323,7 +344,7 @@ test('an explicit wallet rejection unlocks the rules deployment again', async ()
 	})
 	await waitFor(() => expect(hook.state().deploymentLocked).toBe(true))
 	await act(async () => {
-		wallet.reject(Object.assign(new Error('User rejected request'), { code: 4001 }))
+		wallet.reject(Object.assign(new Error('User rejected request'), details))
 		await sending
 	})
 	expect(hook.state().deploymentLocked).toBe(false)
@@ -358,9 +379,10 @@ test('a spent nonce cannot unlock a restart or a rejection escape while the wall
 	})
 	await waitFor(() => expect(hook.state().checkingDeploymentReceipt).toBe(false))
 	expect(hook.state().canStartNewDeployment).toBe(false)
-	expect(hook.state().admissionDeployReason).toBe('Waiting for the wallet')
+	expect(hook.state().admissionDeployReason).toBe('Earlier transactions from this wallet are still pending or not yet final. Speed up or cancel them in your wallet, or wait about 15 minutes, then check again.')
 	await act(() => hook.state().confirmWalletRejection())
 	expect(hook.state().canStartNewDeployment).toBe(false)
+	expect(hook.state().admissionDeployReason).toContain('Speed up or cancel them in your wallet')
 	outstanding = false
 	await act(() => hook.state().refreshDeploymentProgress())
 	expect(hook.state().canStartNewDeployment).toBe(true)
@@ -374,7 +396,7 @@ test('a spent nonce cannot unlock a restart or a rejection escape while the wall
 test('a known deployment hash uses the nonce of its transaction instead of the saved RPC estimate', async () => {
 	const source = capitalClient()
 	saveDeploymentMarker(source, { step: 'rules', hash: mockTransactionHash, nonce: '3' })
-	let visible = false
+	let visible = true
 	let count = 4n
 	const { hook } = await renderWithDeploymentWallet(source, true, {
 		chain: () => ({
@@ -395,6 +417,48 @@ test('a known deployment hash uses the nonce of its transaction instead of the s
 	count = 6n
 	await act(() => hook.state().refreshDeploymentProgress())
 	expect(hook.state().canStartNewDeployment).toBe(true)
+})
+
+test('a known deployment hash with no receipt or transaction can restart after the wallet is idle', async () => {
+	const source = capitalClient()
+	saveDeploymentMarker(source, { step: 'rules', hash: mockTransactionHash, nonce: '9' })
+	const { hook } = await renderWithDeploymentWallet(source, true, {
+		chain: () => ({ getTransactionCount: async () => 2n }),
+	})
+	await waitFor(() => expect(hook.state().canStartNewDeployment).toBe(true))
+	expect(hook.state().admissionDeployReason).toContain('Check your wallet activity')
+	await act(async () => expect(await hook.state().startNewDeployment()).toBe(true))
+	expect(hook.state().deploymentLocked).toBe(false)
+})
+
+test('a dropped deployment with an unused verified nonce shows the exact nonce and wallet action', async () => {
+	const source = capitalClient()
+	saveDeploymentMarker(source, { step: 'rules', hash: mockTransactionHash, nonce: '6', nonceVerified: true })
+	const { hook } = await renderWithDeploymentWallet(source, true, { chain: () => ({ getTransactionCount: async () => 6n }) })
+	await waitFor(() => expect(hook.state().checkingDeploymentReceipt).toBe(false))
+	expect(hook.state().admissionDeployReason).toBe('If your wallet no longer shows this transaction, send or cancel a transaction with nonce 6, then check again.')
+	expect(hook.state().canStartNewDeployment).toBe(false)
+})
+
+test('a finalized reverted receipt offers restart without searching for a deployment at the saved nonce', async () => {
+	const source = capitalClient()
+	const { blockHash, blockNumber } = capitalSnapshot()
+	saveDeploymentMarker(source, { step: 'rules', nonce: '6', hash: mockTransactionHash, nonceVerified: true })
+	const lookup = mock(async () => {
+		throw new Error('The transaction lookup is unavailable')
+	})
+	const { hook } = await renderWithDeploymentWallet(source, true, {
+		chain: () => ({
+			getTransaction: lookup,
+			getTransactionCount: async () => 7n,
+			getTransactionReceipt: async () => ({ status: 'reverted', blockHash, blockNumber, from: owner, to: undefined, contractAddress: undefined, transactionHash: mockTransactionHash, logs: [], cumulativeGasUsed: 1n, gasUsed: 1n, transactionIndex: 0n }),
+		}),
+	})
+	await waitFor(() => expect(hook.state().canStartNewDeployment).toBe(true))
+	expect(hook.state().admissionDeployReason).toContain('did not deploy')
+	await act(async () => expect(await hook.state().startNewDeployment()).toBe(true))
+	expect(lookup).not.toHaveBeenCalled()
+	expect(hook.state().deploymentLocked).toBe(false)
 })
 
 test('restarting a dropped pool send keeps the existing rules and form settings', async () => {
@@ -437,20 +501,65 @@ test('a pruned block read in recovery explains the archive option and allows a c
 		}),
 	})
 	await waitFor(() => expect(hook.state().canStartNewDeployment).toBe(true))
-	expect(hook.state().error).toBe('This RPC can’t check older blocks. Switch to an archive RPC or check your wallet activity.')
+	expect(hook.state().deployReason).toBe('This RPC can’t check older blocks. Switch to an archive RPC or check your wallet activity.')
 	expect(hook.state().deploymentLocked).toBe(true)
 })
 
-test.each(['0x6000', '0xef01000000000000000000000000000000000000000044'] as const)('nonce-based recovery stays locked when the wallet has code (%s)', async code => {
+test.each(['0x6000', '0xef01000000000000000000000000000000000000000044'] as const)('a wallet with code can restart after checking wallet activity (%s)', async code => {
 	const source = capitalClient()
 	source.codes.set(owner, code)
 	saveDeploymentMarker(source, { step: 'rules', nonce: '3' })
-	const { hook } = await renderWithDeploymentWallet(source, true, { chain: () => ({ getTransactionCount: async () => 4n }) })
-	await waitFor(() => expect(hook.state().checkingDeploymentReceipt).toBe(false))
-	expect(hook.state().error).toContain('This wallet does not support automatic deployment recovery')
-	expect(hook.state().canStartNewDeployment).toBe(false)
-	await act(() => hook.state().confirmWalletRejection())
-	expect(hook.state().deploymentLocked).toBe(true)
+	const nonceRead = mock(async () => 4n)
+	const { hook } = await renderWithDeploymentWallet(source, true, { chain: () => ({ getTransactionCount: nonceRead }) })
+	await waitFor(() => expect(hook.state().canStartNewDeployment).toBe(true))
+	expect(hook.state().admissionDeployReason).toContain('Check your wallet activity')
+	await act(async () => expect(await hook.state().startNewDeployment()).toBe(true))
+	expect(hook.state().deploymentLocked).toBe(false)
+	expect(nonceRead).not.toHaveBeenCalled()
+})
+
+test('restarting a delegated wallet rechecks the known hash and adopts a receipt that just arrived', async () => {
+	const source = capitalClient()
+	source.codes.set(owner, '0xef01000000000000000000000000000000000000000044')
+	saveDeploymentMarker(source, { step: 'rules', hash: mockTransactionHash })
+	let confirmed = false
+	const { hook } = await renderWithDeploymentWallet(source, true, { confirmed: () => confirmed })
+	await waitFor(() => expect(hook.state().canStartNewDeployment).toBe(true))
+	confirmed = true
+	await act(async () => expect(await hook.state().startNewDeployment()).toBe(false))
+	expect(hook.state().pendingDeployment).toBeUndefined()
+	expect(hook.state().admissionAddress).toBe(token)
+})
+
+test('two wizard tabs wait for the same deployment lock before either can send', async () => {
+	const lockHeld = createDeferred<void>()
+	const releaseLock = createDeferred<void>()
+	const lockName = `zoltar-ui:statoblast:deployment:v1:${localEntityScopeForNetwork(capitalClient().backend.profile, 'statoblast', 'pool').network}:${owner.toLowerCase()}`
+	const lockManager = navigator.locks
+	const request = mock((name: string, callback: () => unknown) => lockManager.request(name, callback))
+	Object.defineProperty(navigator, 'locks', { configurable: true, value: { request } })
+	const occupied = request(lockName, async () => {
+		lockHeld.resolve()
+		await releaseLock.promise
+	})
+	await lockHeld.promise
+	const { hook, requests } = await renderWithDeploymentWallet(capitalClient(), true)
+	const otherTab = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolActionsWrapper, { model: model(), deploying: true }))
+	let submissions: Promise<void>[] = []
+	try {
+		await act(() => {
+			submissions = [hook.state().deployAdmission(), otherTab.state().deployAdmission()]
+		})
+		await waitFor(() => {
+			expect(request.mock.calls.map(([name]) => name)).toEqual([lockName, lockName, lockName])
+		})
+		expect(requests).toHaveLength(0)
+	} finally {
+		releaseLock.resolve()
+		await occupied
+		await Promise.all(submissions)
+	}
+	expect(requests).toHaveLength(1)
 })
 
 test('the wizard can finish deployment without persistent storage', async () => {
@@ -685,10 +794,20 @@ test('verified question rules are recovered at the wallet’s mined creation add
 	}
 })
 
-test('an unrelated replacement keeps the rules deployment locked until its nonce is confirmed spent', async () => {
+test.each([false, true])('a replacement is saved but cannot be mistaken for the rules deployment (cancelled: %s)', async cancelled => {
 	const receipt = createDeferred<void>()
 	const replaced = createDeferred<void>()
-	const { hook, receiptHashes } = await renderWithDeploymentWallet(capitalClient(), true, { receipt: receipt.promise, unrelatedReplacement: () => replaced.resolve() })
+	const { hook, receiptHashes } = await renderWithDeploymentWallet(capitalClient(), true, {
+		receipt: receipt.promise,
+		cancelled,
+		unrelatedReplacement: () => replaced.resolve(),
+		chain: () => ({
+			getTransactionReceipt: async ({ hash }) => {
+				receiptHashes.push(hash)
+				return { status: 'success', transactionHash: hash, from: owner, to: owner, blockHash: capitalSnapshot().blockHash, blockNumber: capitalSnapshot().blockNumber, contractAddress: token, logs: [], cumulativeGasUsed: 1n, gasUsed: 1n, transactionIndex: 0n }
+			},
+		}),
+	})
 	let sending: Promise<void> | undefined
 	try {
 		await act(() => {
@@ -698,9 +817,10 @@ test('an unrelated replacement keeps the rules deployment locked until its nonce
 		await act(() => hook.cleanup())
 		const restored = lifecycle.trackRendered(await renderHookWithProps(useSecurityPoolActionsWrapper, { model: model(), deploying: true }))
 		expect(restored.state().admissionAddress).toBeUndefined()
-		expect(restored.state().pendingDeployment?.hash).toBe(mockTransactionHash)
-		expect(restored.state().canStartNewDeployment).toBe(false)
-		expect(receiptHashes).not.toContain(replacementHash)
+		expect(restored.state().pendingDeployment?.hash).toBe(replacementHash)
+		await waitFor(() => expect(restored.state().canStartNewDeployment).toBe(true))
+		expect(restored.state().admissionAddress).toBeUndefined()
+		expect(receiptHashes).toContain(replacementHash)
 	} finally {
 		receipt.resolve()
 		await sending

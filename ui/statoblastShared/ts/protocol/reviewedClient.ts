@@ -13,7 +13,7 @@ import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { getPreparedTransactionTechnicalRows, humanizeTransactionAction } from '@zoltar/ui-core-shared/transactions/transactionPreviewRows.js'
 import { createTransactionStepController, type TransactionStepDetails } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { createTransactionFailure, createTransactionFailureError } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
-import { changedSinceReview, missingTokenSpender } from '../copy/app.js'
+import * as reviewCopy from '../copy/app.js'
 import { withStatoblastRequestTimeout } from './requestTimeout.js'
 
 const checkedReviewClients = new WeakSet<WriteClient>()
@@ -25,7 +25,7 @@ export function checksTransactionReview(client: WriteClient) {
 function retryReviewStatus(error: unknown) {
 	if (error instanceof Error) {
 		if (error.message === transactionCopy.currentStateCheckFailed) return 'failed'
-		if (error.message === changedSinceReview) return 'changed'
+		if (error.message === reviewCopy.changedSinceReview) return 'changed'
 	}
 	return undefined
 }
@@ -70,9 +70,9 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 	const [spender, amount] = preview.args ?? []
 	if (typeof spender !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(spender) || typeof amount !== 'bigint') throw new Error(reviewErrors.tokenApproval)
 	details.spender = getAddress(spender)
-	details.title = 'Approve token spending'
-	details.description = 'Authorize the listed spending limit; tokens stay in your wallet.'
-	details.amount = `${amount} token base units`
+	details.title = reviewCopy.approveSpendingTitle
+	details.description = reviewCopy.approveSpendingDescription
+	details.amount = reviewCopy.approvalInBaseUnits(amount)
 	try {
 		const [symbol, decimals] = await Promise.all([client.readContract({ address: preview.contractAddress, abi: ABIS.mainnet.erc20, functionName: 'symbol' }), client.readContract({ address: preview.contractAddress, abi: ABIS.mainnet.erc20, functionName: 'decimals' })])
 		const formatApprovalAmount = (value: bigint) => (value === maxUint256 ? commonCopy.max : formatCurrencyBalance(value, Number(decimals)))
@@ -204,7 +204,7 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 				const currentFunding = await expected.refreshFundingRequirements?.()
 				for (const funding of currentFunding ?? expected.tokenFunding ?? []) {
 					const spender = expected.fundingSpender ?? expected.contractAddress
-					if (spender === undefined) throw new Error(missingTokenSpender)
+					if (spender === undefined) throw new Error(reviewCopy.missingTokenSpender)
 					const [balance, allowance] = await Promise.all([
 						client.readContract({ address: funding.tokenAddress, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [client.account.address] }),
 						client.readContract({ address: funding.tokenAddress, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, spender] }),
@@ -243,7 +243,7 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 						if (performance.now() - checkedAt > 30_000) {
 							await check(originalTransaction)
 							const currentRows = readRows()
-							if (reviewedRows !== undefined && currentRows !== undefined && (reviewedRows.length !== currentRows.length || reviewedRows.some((row, index) => row.label !== currentRows[index]?.label || row.value !== currentRows[index]?.value))) throw new Error(changedSinceReview)
+							if (reviewedRows !== undefined && currentRows !== undefined && (reviewedRows.length !== currentRows.length || reviewedRows.some((row, index) => row.label !== currentRows[index]?.label || row.value !== currentRows[index]?.value))) throw new Error(reviewCopy.changedSinceReview)
 						}
 						await prepareToSend(amount)
 					},
@@ -275,7 +275,7 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 			controller.submitted(hash)
 			return hash
 		} catch (error) {
-			controller.failed(createTransactionFailure(error, getErrorMessage(error, 'Transaction failed.')))
+			controller.failed(createTransactionFailure(error, getErrorMessage(error, reviewErrors.transactionFailed)))
 			throw error
 		}
 	}
@@ -337,7 +337,7 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 				}
 			} catch (error) {
 				selectedFunding = undefined
-				controller.failed(createTransactionFailure(error, getErrorMessage(error, 'Funding failed. Remaining transactions were not sent.')))
+				controller.failed(createTransactionFailure(error, getErrorMessage(error, reviewErrors.fundingFailed)))
 				throw error
 			}
 		},
@@ -346,11 +346,11 @@ export function createReviewedClient(baseClient: WriteClient, validate: () => Pr
 		},
 		sendTransaction: async parameters =>
 			await send(
-				{ account: client.account, args: undefined, chainName: client.chain.name, data: parameters.data, functionName: parameters.data === undefined ? 'Transfer ETH' : 'Contract transaction', to: parameters.to ?? undefined, value: parameters.value },
+				{ account: client.account, args: undefined, chainName: client.chain.name, data: parameters.data, functionName: parameters.data === undefined ? reviewCopy.transferEthTitle : reviewCopy.contractTransactionTitle, to: parameters.to ?? undefined, value: parameters.value },
 				async (approvalArgs, gas, data) => await client.sendTransaction({ ...parameters, ...(gas === undefined ? {} : { gas }), ...(data === undefined ? {} : { data }), ...(approvalArgs === undefined ? {} : { data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs }) }) }),
 				parameters.gas,
 			),
-		sendRawTransaction: async parameters => await send({ account: undefined, args: undefined, chainName: client.chain.name, functionName: 'Deploy contract', data: parameters.serializedTransaction, value: undefined }, async () => await client.sendRawTransaction(parameters), undefined, { raw: true }),
+		sendRawTransaction: async parameters => await send({ account: undefined, args: undefined, chainName: client.chain.name, functionName: reviewCopy.deployContractTitle, data: parameters.serializedTransaction, value: undefined }, async () => await client.sendRawTransaction(parameters), undefined, { raw: true }),
 		writeContract: async parameters => {
 			const encodedData = encodeFunctionData({ abi: parameters.abi, functionName: parameters.functionName, ...(parameters.args === undefined ? {} : { args: parameters.args }) })
 			return await send(

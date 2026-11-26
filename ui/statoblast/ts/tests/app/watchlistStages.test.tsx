@@ -52,7 +52,7 @@ test('saved questions show confirmed outcomes, the fork question, migration, and
 	)
 	const rows = [...rendered.container.querySelectorAll('li')]
 	expect(rows.map(row => row.firstElementChild?.textContent)).toEqual(cases.map(([, label]) => label))
-	expect(within(rendered.container).getByText('REP deposits carry to child questions.')).not.toBeNull()
+	expect(within(rendered.container).getByText('REP deposits carry to the child universes.')).not.toBeNull()
 })
 
 test('saved pools distinguish an open choice, elapsed deadline, selected branch, migration, and activation', async () => {

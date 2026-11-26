@@ -333,7 +333,7 @@ export function TradingSection({
 		<>
 			<ShareActionForm
 				closeOnSuccessKey={tradingResult?.action === 'createCompleteSet' ? tradingResult.hash : undefined}
-				context={getTransactionContext('Complete set · Yes + No + Invalid')}
+				context={getTransactionContext(tradingCopy.completeSetOutcomes)}
 				description={oldActionData}
 				finalActionLabel={continueInWallet}
 				action='mint'
@@ -427,7 +427,7 @@ export function TradingSection({
 
 			<ShareActionForm
 				closeOnSuccessKey={tradingResult?.action === 'redeemCompleteSet' ? tradingResult.hash : undefined}
-				context={getTransactionContext('Complete set · Yes + No + Invalid')}
+				context={getTransactionContext(tradingCopy.completeSetOutcomes)}
 				description={oldActionData}
 				finalActionLabel={continueInWallet}
 				action='redeem-complete-sets'

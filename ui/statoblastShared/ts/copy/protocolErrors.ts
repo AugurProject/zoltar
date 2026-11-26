@@ -12,6 +12,8 @@ export const deploymentErrors = {
 }
 
 export const reviewErrors = {
+	transactionFailed: 'Transaction failed.',
+	fundingFailed: 'Funding failed. Remaining transactions were not sent.',
 	fundingSelection: 'Choose a funding step that is still needed.',
 	reviewNotReady: 'Open the transaction review and try again.',
 	walletChanged: 'The wallet changed. Review the action again.',
@@ -61,7 +63,7 @@ export const shareErrors = {
 	recoveryFundsUnavailable: 'Recovery REP funding is unavailable.',
 	mintCapacityBlock: 'Mint capacity requires a mined block.',
 	balancesResponse: 'Could not read the share balances.',
-	mintPoolUnverified: 'Market security pool was not created by the canonical factory.',
+	mintPoolUnverified: 'Market security pool was not created by the expected factory.',
 	feeQuote: 'Could not read the collateral fee quote.',
 	mintingClosed: 'Minting closed when the question ended.',
 	purchaseQuote: 'Could not read the REP purchase quote.',
@@ -77,6 +79,8 @@ export const reportErrors = {
 	depositOutcome: 'The recorded deposit has a different outcome.',
 	repeatedDeposit: 'The deposit history repeats an entry.',
 	incompleteHistory: 'The parent question did not return the full deposit history.',
+	unverifiedHistory: 'Couldn’t verify the parent question’s deposit history.',
+	savingDepositTimedOut: 'Saving the report deposit timed out.',
 	inheritedDepositsUnverified: 'Couldn’t verify the inherited deposits.',
 	depositOrder: 'Couldn’t verify the order of recorded deposits.',
 	invalidSavedDeposit: 'A saved parent deposit record is invalid.',
@@ -88,7 +92,7 @@ export const reportErrors = {
 
 export const poolErrors = {
 	deploymentCode: 'Could not verify the deployment code.',
-	poolUnverified: 'Security pool was not created by the canonical factory.',
+	poolUnverified: 'Security pool was not created by the expected factory.',
 	setupBlock: 'Security pool setup requires a mined block.',
 	protocolMismatch: 'Security pool uses unrecognized protocol contracts.',
 	auctionContractMismatch: 'Security pool uses an unrecognized auction deployer.',

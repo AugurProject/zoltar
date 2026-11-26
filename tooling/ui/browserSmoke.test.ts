@@ -12,6 +12,7 @@ const mountedState = {
 	body: 'Augur Statoblast\nSecurity pools',
 	height: 844,
 	hasMain: true,
+	simulationStarting: false,
 	readyState: 'complete' as const,
 	title: 'Question ledgers | Augur Statoblast',
 	width: 390,
@@ -47,14 +48,14 @@ test('browser smoke readiness can wait for route-specific loaded content', () =>
 	expect(isBrowserSmokeReady({ ...mountedState, body: `${mountedState.body}\nOpen question` }, 'Augur Statoblast', 'Open question', viewport)).toBe(true)
 })
 
-test('an explicit route-ready marker overrides stale bootstrap copy outside the route', () => {
-	const routeReadyState = { ...mountedState, body: `${mountedState.body}\nBOOTSTRAPPING\nDEPLOYMENT COMPLETE` }
+test('an explicit route-ready marker overrides simulation progress outside the route', () => {
+	const routeReadyState = { ...mountedState, body: `${mountedState.body}\nDEPLOYMENT COMPLETE`, simulationStarting: true }
 	expect(isBrowserSmokeReady(routeReadyState, 'Augur Statoblast', 'Deployment complete', viewport)).toBe(true)
 	expect(isBrowserSmokeReady(routeReadyState, 'Augur Statoblast', undefined, viewport)).toBe(false)
 })
 
 test('a blank route-ready marker is ignored, so a bootstrapping page is not ready', () => {
-	const bootstrappingState = { ...mountedState, body: 'Augur Statoblast\nBOOTSTRAPPING' }
+	const bootstrappingState = { ...mountedState, body: 'Augur Statoblast', simulationStarting: true }
 	for (const readyText of ['', '  ']) {
 		expect(isBrowserSmokeReady(bootstrappingState, 'Augur Statoblast', readyText, viewport)).toBe(false)
 		expect(isBrowserSmokeReady(mountedState, 'Augur Statoblast', readyText, viewport)).toBe(true)

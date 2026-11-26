@@ -2108,7 +2108,7 @@ describe('ReportingSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Trigger universe fork' })).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Open Fork & recovery' })).not.toBeNull()
-		expect(document.body.textContent?.includes('Your deposits carry to the child questions. Continue in Fork & recovery.')).toBe(true)
+		expect(document.body.textContent?.includes('Your deposits carry to the child universes. Continue in Fork & recovery.')).toBe(true)
 	})
 
 	test('shows a Trigger universe fork action when non-decision blocks reporting', async () => {

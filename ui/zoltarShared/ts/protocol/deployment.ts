@@ -10,6 +10,7 @@ import type { DeploymentStatusSnapshot, DeploymentStep, DeploymentStepId, ReadCl
 import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { getRuntimeNetworkProfile, type NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { getSepoliaGenesisRepDeployment } from '@zoltar/ui-core-shared/lib/sepoliaDeploymentConfig.js'
+import { formatUnexpectedProxyDeployerCode, proxyDeployerSendWithoutHash } from '../copy/deployment.js'
 
 const PROXY_DEPLOYER_SIGNER = getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1')
 const PROXY_DEPLOYER_RAW_TRANSACTION = '0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222' satisfies Hex
@@ -111,7 +112,7 @@ export async function getProxyDeployerActivity(client: Pick<ReadClient, 'getBala
 async function proxyDeployerIsInstalled(client: Pick<ReadClient, 'getCode'>) {
 	const code = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
 	if (code === undefined || code === '0x') return false
-	if (code.toLowerCase() !== PROXY_DEPLOYER_RUNTIME_CODE.toLowerCase()) throw new Error(`Unexpected code at canonical proxy deployer ${PROXY_DEPLOYER_ADDRESS}`)
+	if (code.toLowerCase() !== PROXY_DEPLOYER_RUNTIME_CODE.toLowerCase()) throw new Error(formatUnexpectedProxyDeployerCode(PROXY_DEPLOYER_ADDRESS))
 	return true
 }
 
@@ -373,7 +374,7 @@ async function ensureProxyDeployerDeployed(client: WriteClient, wait?: RpcStateR
 	if (postFundingActivity.confirmedNonce !== 0n) return await resolveConfirmedProxyDeployer(client, wait)
 
 	const resolvedDeployHash = await broadcastCanonicalProxyDeployer(client, false, wait)
-	if (resolvedDeployHash === undefined) throw new Error('Canonical proxy deployer broadcast unexpectedly returned without a transaction hash')
+	if (resolvedDeployHash === undefined) throw new Error(proxyDeployerSendWithoutHash)
 	return resolvedDeployHash
 }
 

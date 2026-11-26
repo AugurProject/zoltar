@@ -50,13 +50,13 @@ describe('transaction presentations', () => {
 		const priceSettlement = { status: 'accepted' as const, candidate: { candidatePrice: 2n * 10n ** 30n, canonicalPrice: 3n * 10n ** 30n, observationTimestamp: 11n, canonicalUpdated: false } }
 		const context = { priceUnits: { decimals: 30, label: 'REP per USDC' } }
 		const result = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement }, context)
-		expect(result.detail).toBe('Report accepted. The feed kept its canonical observation.')
+		expect(result.detail).toBe('Report accepted. The pool price stayed the same.')
 		expect(result.rows).toMatchObject([
 			{ label: 'Candidate price', value: { props: { children: '2 REP per USDC' } } },
-			{ label: 'Canonical price', value: { props: { children: '3 REP per USDC' } } },
+			{ label: 'Pool price', value: { props: { children: '3 REP per USDC' } } },
 		])
 		const updated = createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234', priceSettlement: { ...priceSettlement, candidate: { ...priceSettlement.candidate, candidatePrice: 3n * 10n ** 30n, canonicalUpdated: true } } }, context)
-		expect(updated.detail).toBe('Report accepted. The feed updated its canonical observation.')
+		expect(updated.detail).toBe('Report accepted. The pool price was updated.')
 	})
 
 	test.each(['Security pool reporting window closed', 'Report timestamp not newer'])('does not recommend another request for %s', reason => {

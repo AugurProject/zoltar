@@ -157,3 +157,6 @@ export const formatMaxMintCapacity = (maximum: string) => `Max mint capacity is 
 export const formatMintWalletFundingRequired = (required: string, reserve: string) => `Need ${required} in this wallet to mint the selected amount and keep ${reserve} for gas.`
 export const formatMaxRedeemableAmount = (maximum: string) => `Max redeemable amount is ${maximum}.`
 export const formatNoSharesToMigrate = (outcome: string) => `No ${outcome} shares available to migrate.`
+
+export const completeSets = 'Complete sets'
+export const completeSetOutcomes = 'Complete set · Yes + No + Invalid'

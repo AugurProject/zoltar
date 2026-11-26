@@ -86,6 +86,12 @@ export function buildSecurityPoolDeploymentRequest(parameters: { owner: Address;
 
 const securityPoolDeployedTopic = toEventSelector(parseAbiItem('event SecurityPoolDeployed(address indexed securityPool, address indexed creator)'))
 
+export class MissingSecurityPoolDeploymentEventError extends Error {
+	constructor() {
+		super('Security pool deployment event is missing.')
+	}
+}
+
 /** The security pool a factory deployment transaction created, read from that factory's own event. */
 export function securityPoolAddressFromDeploymentLogs(logs: readonly { address: Address; data: Hex; topics: readonly Hex[] }[], factory: Address): Address {
 	for (const log of logs) {
@@ -93,7 +99,7 @@ export function securityPoolAddressFromDeploymentLogs(logs: readonly { address: 
 		if (log.address.toLowerCase() !== factory.toLowerCase() || log.topics[0] !== securityPoolDeployedTopic || securityPoolTopic === undefined) continue
 		return getAddress(`0x${securityPoolTopic.slice(26)}`)
 	}
-	throw new Error('Security pool deployment event is missing.')
+	throw new MissingSecurityPoolDeploymentEventError()
 }
 
 /** Each call completes one immutable setup stage; anyone can resume an interrupted setup until the origin universe forks. */

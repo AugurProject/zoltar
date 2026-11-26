@@ -6,7 +6,7 @@ import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getOpenOracleSettlementSafetyGuard } from './openOracleSettlementSafety.js'
 import { loadOpenOracleStoredState } from './openOracleState.js'
 import { isFeedAuthenticatedReportEscrow } from './openOracleSettlement.js'
-import { reportAlreadySettled } from '../copy/openOracle.js'
+import { disputeWindowTooShort, reportAlreadySettled } from '../copy/openOracle.js'
 
 // Keep seconds and block clocks separate; neither reserve guarantees arbitrary inclusion delays.
 const DISPUTE_SUBMISSION_BLOCKS = 2n
@@ -16,7 +16,7 @@ export function getOpenOracleDisputeSubmissionReserve(timeType: boolean) {
 }
 
 export function getOpenOracleDisputeSubmissionTimingGuard(timing: { currentClock: bigint; reportTimestamp: bigint; settlementTime: bigint; timeType: boolean }) {
-	return hasSubmissionWindow(timing.currentClock, timing.reportTimestamp + timing.settlementTime, getOpenOracleDisputeSubmissionReserve(timing.timeType)) ? undefined : 'Dispute window ends too soon. Wait to settle this report.'
+	return hasSubmissionWindow(timing.currentClock, timing.reportTimestamp + timing.settlementTime, getOpenOracleDisputeSubmissionReserve(timing.timeType)) ? undefined : disputeWindowTooShort
 }
 
 export async function requireOpenOracleDisputeSubmissionWindow(client: Pick<ReadClient, 'readContract' | 'getBlock' | 'multicall'>, address: Address, reportId: bigint) {
