@@ -13,8 +13,8 @@ elan with Lean 4.28.0, Forge 1.5.1, Anvil 1.5.1 and native Solidity compilers.
 Set SOLC_035 and SOLC_028 to the native solc executable paths. FORGE and ANVIL
 override the respective binaries on PATH. Set SOLIDCORE_JOBS to limit parallel
 contract checks. Each run writes passing Lean modules under WORKDIR/models-*
-and coverage to WORKDIR/contracts.tsv. A nonzero exit
-indicates a build/test failure or one or more unsupported source declarations.
+and coverage to WORKDIR/contracts.tsv, then proves INV-32 against the emitted
+harness. A failed proof, build, test or source declaration check exits nonzero.
 HELP
 }
 if [[ ${1:-} == --help ]]; then usage; exit 0; fi
@@ -65,4 +65,5 @@ fi
   models=$(mktemp -d "$work/models-XXXXXX")
   echo "Writing checked Lean source modules to $models/contracts"
   python3 "$here/check_contracts.py" --models "$models/contracts" --solidcore "$sc" --solc "$solc35" --oracle-solc "$solc28" --forge "$forge" --jobs "${SOLIDCORE_JOBS:-3}" --report "$work/contracts.tsv"
+  python3 "$here/prove_inv32.py" "$models/contracts" "$sc"
 )
