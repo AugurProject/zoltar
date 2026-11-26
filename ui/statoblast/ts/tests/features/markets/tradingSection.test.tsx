@@ -2,17 +2,15 @@ import { evaluateQuestionLedgerState } from '@zoltar/ui-statoblast-shared/featur
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
 
-import { zeroAddress, zeroHash } from '@zoltar/core-shared/evm/ethereum'
-import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
-import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { ListedQuestionLedger, TradingActionResult, TradingDetails, TradingShareBalances } from '@zoltar/ui-statoblast-shared/types/contracts.js'
+import type { ListedQuestionLedger, TradingDetails, TradingShareBalances } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { TradingSection as ProductionTradingSection } from '@zoltar/ui-statoblast-shared/features/markets/components/TradingSection.js'
 import { NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE, UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
@@ -21,7 +19,7 @@ import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { TradingFormState } from '@zoltar/ui-statoblast-shared/types/app.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
-import { useContext, useEffect, useState } from 'preact/hooks'
+import { useContext, useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { createAccountState as createEmptyAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 
@@ -31,6 +29,11 @@ function getExactValueTitles(root: ParentNode, exactValue: string) {
 		const title = element.getAttribute('title')
 		return title === exactValue || title?.startsWith(`${exactValue} `) === true
 	})
+}
+
+function getShareTabState(name: string) {
+	const tab = within(document.body).getByRole('tab', { name })
+	return { disabled: tab.hasAttribute('disabled') || tab.getAttribute('aria-disabled') === 'true', reason: tab.getAttribute('aria-description') ?? undefined }
 }
 
 function TradingSection(props: Parameters<typeof ProductionTradingSection>[0]) {
@@ -145,7 +148,6 @@ function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {})
 		tradingError: undefined,
 		tradingForkUniverse: undefined,
 		tradingForm: createTradingForm(),
-		tradingResult: undefined,
 		...overrides,
 	}
 }
@@ -294,17 +296,17 @@ void describe('TradingSection', () => {
 		const props = createTradingSectionProps()
 		const rendered = await renderIntoDocument(<TradingSection {...props} actionDataReadAt={Date.now() - 360_000} />)
 		cleanupRenderedComponent = rendered.cleanup
-		fireEvent.click(within(document.body).getByRole('button', { name: action }))
-		const dialog = within(document.body).getByRole('dialog')
-		const age = within(dialog).getByText('Data from 6m ago. Checked again before sending.')
-		expect(dialog.getAttribute('aria-describedby')).toBe(age.id)
-		expect(getTransactionButtonState(dialog, action).disabled).toBe(false)
+		fireEvent.click(within(document.body).getByRole('tab', { name: action === 'Mint complete sets' ? 'Mint sets' : 'Redeem sets' }))
+		const form = within(document.body).getByRole('tabpanel')
+		const age = within(form).getByText('Data from 6m ago. Checked again before sending.')
+		expect(form.getAttribute('aria-describedby')).toBe(age.id)
+		expect(getTransactionButtonState(form, action).disabled).toBe(false)
 		await act(() => render(<TradingSection {...props} actionDataReadAt={Date.now()} />, rendered.container))
-		expect(within(dialog).queryByText(/Checked again before sending/)).toBeNull()
+		expect(within(form).queryByText(/Checked again before sending/)).toBeNull()
 	})
 
 	test('redemption waits for the collateral precision even after the balances render', async () => {
-		const props = createTradingSectionProps({ embedInCard: true })
+		const props = createTradingSectionProps()
 		const funding = props.collateralFunding
 		if (funding === undefined) throw new Error('Missing collateral funding fixture')
 		const rendered = await renderIntoDocument(<TradingSection {...props} collateralFunding={{ ...funding, collateral: undefined, loading: true }} />)
@@ -334,14 +336,14 @@ void describe('TradingSection', () => {
 			/>,
 		)
 		cleanupRenderedComponent = rendered.cleanup
-		fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
-		const dialog = within(document.body).getByRole('dialog')
-		expect(dialog.textContent).toContain('Recovery REP contribution')
-		expect(dialog.textContent).toContain('Your proportional contribution preserves existing holders')
-		expect(getExactValueTitles(dialog, '2 REP').length).toBeGreaterThan(0)
-		const approval = within(dialog).getByRole('button', { name: /REP/ })
+		fireEvent.click(within(document.body).getByRole('tab', { name: 'Mint sets' }))
+		const form = within(document.body).getByRole('tabpanel')
+		expect(form.textContent).toContain('Recovery REP contribution')
+		expect(form.textContent).toContain('Your proportional contribution preserves existing holders')
+		expect(getExactValueTitles(form, '2 REP').length).toBeGreaterThan(0)
+		const approval = within(form).getByRole('button', { name: /REP/ })
 		expect(approval.textContent).toContain(pending ? 'Approving REP' : 'Approve')
-		expect(getTransactionButtonState(dialog, 'Mint complete sets').disabled).toBe(true)
+		expect(getTransactionButtonState(form, 'Mint complete sets').disabled).toBe(true)
 	})
 
 	test('the mint form labels stablecoin collateral and keeps its token precision', async () => {
@@ -350,16 +352,16 @@ void describe('TradingSection', () => {
 		if (funding?.collateral === undefined) throw new Error('Missing collateral fixture')
 		const rendered = await renderIntoDocument(<TradingSection {...props} tradingForm={createTradingForm({ completeSetAmount: '1.234567' })} collateralFunding={{ ...funding, collateral: { ...funding.collateral, symbol: 'USDC', decimals: 6, balance: 3_000_000n, allowance: 3_000_000n } }} />)
 		cleanupRenderedComponent = rendered.cleanup
-		expect(document.body.textContent).toContain('Collateral values assume the outcome wins; they are not sale quotes.')
-		fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
-		const dialog = within(document.body).getByRole('dialog')
-		const input = within(dialog).getByLabelText('Collateral amount')
+		expect(document.body.textContent).toContain('Only one outcome wins.')
+		fireEvent.click(within(document.body).getByRole('tab', { name: 'Mint sets' }))
+		const form = within(document.body).getByRole('tabpanel')
+		const input = within(form).getByLabelText('Collateral amount')
 		if (!(input instanceof HTMLInputElement)) throw new Error('Missing collateral input')
 		expect(input.value).toBe('1.234567')
-		expect(dialog.textContent).toContain('USDC')
-		expect(dialog.textContent).not.toContain('Recovery REP contribution')
-		expect(dialog.textContent).not.toContain('REP approval amount')
-		expect(dialog.textContent).not.toContain('ETH to mint with')
+		expect(form.textContent).toContain('USDC')
+		expect(form.textContent).not.toContain('Recovery REP contribution')
+		expect(form.textContent).not.toContain('REP approval amount')
+		expect(form.textContent).not.toContain('ETH to mint with')
 	})
 
 	test('quotes shared backing and discloses the purchase fee when native spare capacity is exhausted', async () => {
@@ -370,14 +372,27 @@ void describe('TradingSection', () => {
 			totalUnderwritingLimitAttoEth: 10n ** 18n,
 			feeAccrualState: { linearFee: { rateAttoEthPerSecond: 0n, endTime: 100n }, lastFeeCheckpointNativeTime: 0n, feeEndTimestamp: 100n },
 		})
-		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool, onCreateCompleteSet, tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })} />)
+		const props = createTradingSectionProps({ selectedPool, onCreateCompleteSet, tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })
+		const funding = props.collateralFunding
+		if (funding?.recovery === undefined) throw new Error('Missing collateral funding fixture')
+		const rendered = await renderIntoDocument(
+			<TradingSection
+				{...props}
+				collateralFunding={{
+					...funding,
+					mintQuote: { amount: 10n ** 17n, fee: 10n ** 16n, shares: 10n ** 17n, capacity: 10n ** 18n, maximumFee: 2n * 10n ** 16n, minimumShares: 10n ** 17n, recovery: funding.recovery },
+				}}
+			/>,
+		)
 		cleanupRenderedComponent = rendered.cleanup
-		fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
-		const dialog = within(document.body).getByRole('dialog')
-		expect(within(dialog).getByText('Quoted before submission')).not.toBeNull()
-		expect(dialog.textContent).toContain('quoted purchase fee')
-		expect(getTransactionButtonState(dialog, 'Mint complete sets').disabled).toBe(false)
-		fireEvent.click(within(dialog).getByRole('button', { name: 'Mint complete sets' }))
+		fireEvent.click(within(document.body).getByRole('tab', { name: 'Mint sets' }))
+		const form = within(document.body).getByRole('tabpanel')
+		expect(within(form).getByText('Fee')).not.toBeNull()
+		expect(getExactValueTitles(form, '0.01 WETH')).toHaveLength(1)
+		expect(within(form).getByText('You pay')).not.toBeNull()
+		expect(getExactValueTitles(form, '0.11 WETH')).toHaveLength(1)
+		expect(getTransactionButtonState(form, 'Mint complete sets').disabled).toBe(false)
+		fireEvent.click(within(form).getByRole('button', { name: 'Mint complete sets' }))
 		expect(onCreateCompleteSet).toHaveBeenCalledTimes(1)
 	})
 
@@ -390,8 +405,8 @@ void describe('TradingSection', () => {
 			</ChainTimestampContext.Provider>,
 		)
 		cleanupRenderedComponent = rendered.cleanup
-		fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
-		const dialog = within(document.body).getByRole('dialog')
+		fireEvent.click(within(document.body).getByRole('tab', { name: 'Mint sets' }))
+		const form = within(document.body).getByRole('tabpanel')
 		await act(() =>
 			render(
 				<ChainTimestampContext.Provider value={10n ** 6n}>
@@ -400,8 +415,8 @@ void describe('TradingSection', () => {
 				rendered.container,
 			),
 		)
-		expect(getTransactionButtonState(dialog, 'Mint complete sets').disabled).toBe(false)
-		fireEvent.click(within(dialog).getByRole('button', { name: 'Mint complete sets' }))
+		expect(getTransactionButtonState(form, 'Mint complete sets').disabled).toBe(false)
+		fireEvent.click(within(form).getByRole('button', { name: 'Mint complete sets' }))
 		expect(onCreateCompleteSet).toHaveBeenCalled()
 	})
 
@@ -409,7 +424,7 @@ void describe('TradingSection', () => {
 		[createAccountState({ address: undefined }), 'Connect wallet'],
 		[createAccountState({ chainId: '0x1' }), 'Switch to Sepolia'],
 	] as const)
-		test(`offers the ${fixLabel} fix inside the mint dialog when the wallet changes while it is open`, async () => {
+		test(`offers the ${fixLabel} fix inside the mint form when the wallet changes while it is open`, async () => {
 			const { calls, walletActions } = createWalletActions()
 			const renderSection = (accountState: AccountState) => (
 				<WalletActionsProvider walletActions={walletActions}>
@@ -418,35 +433,35 @@ void describe('TradingSection', () => {
 			)
 			const rendered = await renderIntoDocument(renderSection(createAccountState()))
 			cleanupRenderedComponent = rendered.cleanup
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+			fireEvent.click(within(document.body).getByRole('tab', { name: 'Mint sets' }))
 			await act(() => render(renderSection(blockedAccount), rendered.container))
-			const fix = expectWalletFixDescribesAction(within(document.body).getByRole('dialog'), 'Mint complete sets', fixLabel)
+			const fix = expectWalletFixDescribesAction(within(document.body).getByRole('tabpanel'), 'Mint complete sets', fixLabel)
 			await act(() => {
 				fireEvent.click(fix)
 			})
 			expect(calls).toEqual([fixLabel === 'Connect wallet' ? 'connect' : 'switch'])
 		})
 
-	test('says to enter an amount while the mint dialog has none', async () => {
+	test('says to enter an amount while the mint form has none', async () => {
 		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ tradingForm: createTradingForm({ completeSetAmount: '' }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+			fireEvent.click(within(document.body).getByRole('tab', { name: 'Mint sets' }))
 		})
-		const state = getTransactionButtonState(within(document.body).getByRole('dialog'), 'Mint complete sets')
+		const state = getTransactionButtonState(within(document.body).getByRole('tabpanel'), 'Mint complete sets')
 		expect(state.disabled).toBe(true)
 		expect(state.reason).toBe('Enter a mint amount.')
 	})
 
-	test('explains a mint action that becomes unavailable while its dialog is open', async () => {
+	test('explains a mint action that becomes unavailable while its form is open', async () => {
 		const props = createTradingSectionProps({ tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })
 		const rendered = await renderIntoDocument(<TradingSection {...props} />)
 		cleanupRenderedComponent = rendered.cleanup
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+			fireEvent.click(within(document.body).getByRole('tab', { name: 'Mint sets' }))
 		})
 		await act(() => render(<TradingSection {...props} poolState={evaluateQuestionLedgerState({ lifecycleState: 'ended', universeHasForked: false })} />, rendered.container))
-		const state = getTransactionButtonState(within(document.body).getByRole('dialog'), 'Mint complete sets')
+		const state = getTransactionButtonState(within(document.body).getByRole('tabpanel'), 'Mint complete sets')
 		expect(state.disabled).toBe(true)
 		expect(state.reason).toBe('This action is unavailable in the current question state.')
 	})
@@ -465,104 +480,6 @@ void describe('TradingSection', () => {
 		if (outcomeRows === null) throw new Error('Expected per-outcome holdings')
 		// Each row is already labelled by its outcome, so share counts carry no unit there.
 		expect(Array.from(outcomeRows.querySelectorAll('.currency-value')).filter(element => element.getAttribute('title') === '3')).toHaveLength(1)
-	})
-
-	void test('renders the Shares panel and launches complete-set actions from the share summary', async () => {
-		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps()} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		expect(documentQueries.queryByText('Share Workflow')).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Your holdings' })).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Shares' })).not.toBeNull()
-		expect(document.body.textContent?.includes('Balances are shown as complete-set amounts for the selected pool.')).toBe(false)
-		expect(document.body.textContent?.includes('Statoblast does not execute secondary-market trades here. Use this panel to mint, redeem, or migrate share balances after reviewing pool capacity and finality.')).toBe(false)
-		expect(documentQueries.queryByRole('heading', { name: 'Mint complete sets' })).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Redeem complete sets' })).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Mint complete sets' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Redeem complete sets' })).not.toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Migrate forked shares' })).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Redeem winning shares' })).toBeNull()
-	})
-
-	void test('does not render a local latest trading action card when a result exists', async () => {
-		const poolAddress = '0x00000000000000000000000000000000000000ab'
-		const renderedComponent = await renderIntoDocument(
-			<TradingSection
-				{...createTradingSectionProps({
-					tradingResult: {
-						action: 'createCompleteSet',
-						hash: zeroHash,
-						questionLedgerAddress: poolAddress,
-						universeId: 0n,
-					},
-				})}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
-		})
-
-		const documentQueries = within(document.body)
-		expect(poolAddress).toBe('0x00000000000000000000000000000000000000ab')
-		expect(documentQueries.queryByRole('heading', { name: 'Latest Share Action' })).toBeNull()
-		expect(documentQueries.queryByText('Complete Sets Minted')).toBeNull()
-		expect(documentQueries.queryByRole('button', { name: `Copy address ${poolAddress}` })).toBeNull()
-		expect(document.body.querySelector('.workflow-transaction-status')).toBeNull()
-	})
-
-	void test('closes a trading modal for a new result without blocking the same modal from reopening', async () => {
-		let completeTradingOperation: ((result: TradingActionResult) => void) | undefined
-
-		function TradingResultHarness() {
-			const [tradingResult, setTradingResult] = useState<TradingActionResult | undefined>(undefined)
-			const [transaction, setTransaction] = useState<GlobalTransactionPresentation | undefined>()
-			useEffect(() => {
-				completeTradingOperation = result => {
-					setTradingResult(result)
-					setTransaction({
-						dismissKey: result.hash,
-						hash: result.hash,
-						operationKey: 'trading-request-1',
-						title: 'Complete sets minted',
-						tone: 'success',
-					})
-				}
-			}, [])
-
-			return (
-				<GlobalTransactionPresentationProvider transaction={transaction}>
-					<TradingSection {...createTradingSectionProps({ tradingResult })} />
-				</GlobalTransactionPresentationProvider>
-			)
-		}
-
-		const renderedComponent = await renderIntoDocument(<TradingResultHarness />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
-		})
-		expect(documentQueries.getByRole('dialog', { name: 'Mint complete sets' })).not.toBeNull()
-
-		await act(() => {
-			if (completeTradingOperation === undefined) throw new Error('Expected trading operation completion')
-			completeTradingOperation({
-				action: 'createCompleteSet',
-				hash: zeroHash,
-				questionLedgerAddress: zeroAddress,
-				universeId: 1n,
-			})
-		})
-		expect(documentQueries.queryByRole('dialog', { name: 'Mint complete sets' })).toBeNull()
-
-		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
-		})
-		expect(documentQueries.getByRole('dialog', { name: 'Mint complete sets' })).not.toBeNull()
 	})
 
 	void test('renders your share metrics using rounded values with exact value titles', async () => {
@@ -646,11 +563,11 @@ void describe('TradingSection', () => {
 		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 0n }), tradingForm: createTradingForm({ completeSetAmount: '1' }) })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+			fireEvent.click(within(document.body).getByRole('tab', { name: 'Mint sets' }))
 		})
-		const dialog = within(within(document.body).getByRole('dialog', { name: 'Mint complete sets' }))
-		expect(dialog.queryByText('Estimated complete sets received')).toBeNull()
-		expect(dialog.getByRole('button', { name: 'Mint complete sets' })).not.toBeNull()
+		const form = within(within(document.body).getByRole('tabpanel', { name: 'Mint sets' }))
+		expect(form.queryByText('Estimated complete sets received')).toBeNull()
+		expect(form.getByRole('button', { name: 'Mint complete sets' })).not.toBeNull()
 	})
 
 	void test('shows the minting disabled reason when total underwriting commitments remain unclaimed and none is fee eligible', async () => {
@@ -671,37 +588,9 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const mintButton = documentQueries.getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
+		const mintButton = documentQueries.getByRole('tab', { name: 'Mint sets' }) as HTMLButtonElement
 		expect(mintButton.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Mint complete sets').reason).toBe(NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE)
-	})
-
-	void test('shows wallet ETH and the amount currently available to mint', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<TradingSection
-				{...createTradingSectionProps({
-					accountState: createAccountState({ ethBalanceAttoEth: 1_250_000_000_000_000_000n }),
-					selectedPool: createSelectedPool({
-						settlementCollateralAttoEth: 0n,
-						totalUnderwritingLimitAttoEth: 5n * 10n ** 18n,
-					}),
-				})}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
-		})
-
-		const modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint complete sets' }))
-		const walletMetric = modalQueries.getByText('Wallet collateral').parentElement
-		const mintableMetric = modalQueries.getByText('Available to mint').parentElement
-		if (walletMetric === null || mintableMetric === null) throw new Error('Expected mint balance metrics')
-		expect(getExactValueTitles(walletMetric, '1.25')).toHaveLength(1)
-		// Available to mint leaves 0.01 ETH in the wallet for gas.
-		expect(getExactValueTitles(mintableMetric, '1.24')).toHaveLength(1)
+		expect(getShareTabState('Mint sets').reason).toBe(NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE)
 	})
 
 	void test.each([
@@ -724,10 +613,10 @@ void describe('TradingSection', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
+			fireEvent.click(documentQueries.getByRole('tab', { name: 'Mint sets' }))
 		})
 		await act(() => {
-			const maxButton = documentQueries.getByRole('dialog', { name: 'Mint complete sets' }).querySelector('.field-inline-action')
+			const maxButton = documentQueries.getByRole('tabpanel', { name: 'Mint sets' }).querySelector('.field-inline-action')
 			if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected mint max button')
 			fireEvent.click(maxButton)
 		})
@@ -750,10 +639,10 @@ void describe('TradingSection', () => {
 		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+			fireEvent.click(within(document.body).getByRole('tab', { name: 'Mint sets' }))
 		})
-		const dialog = within(document.body).getByRole('dialog', { name: 'Mint complete sets' })
-		expect(getTransactionButtonState(dialog, 'Mint complete sets').disabled).toBe(false)
+		const form = within(document.body).getByRole('tabpanel', { name: 'Mint sets' })
+		expect(getTransactionButtonState(form, 'Mint complete sets').disabled).toBe(false)
 	})
 
 	void test('shows zero mint capacity without waiting for an unavailable price', async () => {
@@ -779,27 +668,27 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
+			fireEvent.click(documentQueries.getByRole('tab', { name: 'Mint sets' }))
 		})
 		await act(() => {
-			const maxButton = documentQueries.getByRole('dialog', { name: 'Mint complete sets' }).querySelector('.field-inline-action')
+			const maxButton = documentQueries.getByRole('tabpanel', { name: 'Mint sets' }).querySelector('.field-inline-action')
 			if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected mint max button')
 			fireEvent.click(maxButton)
 		})
 		expect(mintedAmount).toBe('10')
 	})
 
-	void test('keeps minting disabled off Sepolia and explains how to recover after the modal is already open', async () => {
+	void test('keeps minting disabled off Sepolia and explains how to recover after the form is already open', async () => {
 		const renderedComponent = await renderIntoDocument(<TradingSectionNetworkHarness />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
+			fireEvent.click(documentQueries.getByRole('tab', { name: 'Mint sets' }))
 		})
 
-		let modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint complete sets' }))
-		let mintSubmitButton = modalQueries.getByRole('button', { name: 'Mint complete sets' })
+		let panelQueries = within(documentQueries.getByRole('tabpanel', { name: 'Mint sets' }))
+		let mintSubmitButton = panelQueries.getByRole('button', { name: 'Mint complete sets' })
 		if (!(mintSubmitButton instanceof HTMLButtonElement)) throw new Error('Expected Mint complete sets transaction button')
 		expect(mintSubmitButton.disabled).toBe(false)
 
@@ -807,11 +696,11 @@ void describe('TradingSection', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Switch Test Network' }))
 		})
 
-		modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint complete sets' }))
-		mintSubmitButton = modalQueries.getByRole('button', { name: 'Mint complete sets' })
+		panelQueries = within(documentQueries.getByRole('tabpanel', { name: 'Mint sets' }))
+		mintSubmitButton = panelQueries.getByRole('button', { name: 'Mint complete sets' })
 		if (!(mintSubmitButton instanceof HTMLButtonElement)) throw new Error('Expected Mint complete sets transaction button after network switch')
 		expect(mintSubmitButton.disabled).toBe(true)
-		expect(getTransactionButtonState(documentQueries.getByRole('dialog', { name: 'Mint complete sets' }), 'Mint complete sets').reason).toBe('Switch to Sepolia.')
+		expect(getTransactionButtonState(documentQueries.getByRole('tabpanel', { name: 'Mint sets' }), 'Mint complete sets').reason).toBe('Switch to Sepolia.')
 		expect(document.body.textContent?.includes('Switch to Sepolia')).toBe(true)
 	})
 
@@ -835,15 +724,15 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+			fireEvent.click(within(document.body).getByRole('tab', { name: 'Mint sets' }))
 		})
 
-		expect(getTransactionButtonState(document.body, 'Mint complete sets').disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Mint complete sets').reason).toBe('Minting closed when the question ended.')
-		expect(within(document.body).queryByRole('dialog')).toBeNull()
+		expect(getShareTabState('Mint sets').disabled).toBe(true)
+		expect(getShareTabState('Mint sets').reason).toBe('Minting closed when the question ended.')
+		expect(within(document.body).queryByRole('tabpanel', { name: 'Mint sets' })).toBeNull()
 	})
 
-	void test('shows the minting disabled reason on the launcher when migrated shares have no collateral exchange rate', async () => {
+	void test('shows the minting disabled reason on the tab when migrated shares have no collateral exchange rate', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
@@ -860,12 +749,12 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const mintButton = documentQueries.getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
+		const mintButton = documentQueries.getByRole('tab', { name: 'Mint sets' }) as HTMLButtonElement
 		expect(mintButton.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Mint complete sets').reason).toBe(UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE)
+		expect(getShareTabState('Mint sets').reason).toBe(UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE)
 	})
 
-	void test('shows the complete-set redemption disabled reason on the launcher when the wallet lacks matching shares', async () => {
+	void test('shows the complete-set redemption disabled reason on the tab when the wallet lacks matching shares', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
@@ -885,9 +774,9 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const redeemButton = documentQueries.getByRole('button', { name: 'Redeem complete sets' }) as HTMLButtonElement
+		const redeemButton = documentQueries.getByRole('tab', { name: 'Redeem sets' }) as HTMLButtonElement
 		expect(redeemButton.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Redeem complete sets').reason).toBe(NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE)
+		expect(getShareTabState('Redeem sets').reason).toBe(NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE)
 	})
 
 	void test('shows the share migration disabled reason before the universe forks', async () => {
@@ -901,12 +790,12 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const migrateButton = documentQueries.getByRole('button', { name: 'Migrate forked shares' }) as HTMLButtonElement
+		const migrateButton = documentQueries.getByRole('tab', { name: 'Migrate shares' }) as HTMLButtonElement
 		expect(migrateButton.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Migrate forked shares').reason).toBe('Available only after this universe forks.')
+		expect(getShareTabState('Migrate shares').reason).toBe('Available only after this universe forks.')
 	})
 
-	void test('opens the migration modal with the shared outcome selector and target picker when migration is available', async () => {
+	void test('opens the migration form with the shared outcome selector and target picker when migration is available', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
@@ -919,19 +808,19 @@ void describe('TradingSection', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Migrate forked shares' }))
+			fireEvent.click(documentQueries.getByRole('tab', { name: 'Migrate shares' }))
 		})
 
-		const modalQueries = within(documentQueries.getByRole('dialog'))
-		const shareOutcomeDropdown = modalQueries.getByRole('button', { name: 'Share outcome to migrate' }) as HTMLButtonElement
+		const panelQueries = within(documentQueries.getByRole('tabpanel'))
+		const shareOutcomeDropdown = panelQueries.getByRole('button', { name: 'Share outcome to migrate' }) as HTMLButtonElement
 		expect(shareOutcomeDropdown.disabled).toBe(false)
-		expect(modalQueries.getByText('Target child universes')).not.toBeNull()
-		expect(modalQueries.getByRole('heading', { name: 'Fork question' })).toBeTruthy()
-		expect(modalQueries.getByText('Will this resolve?')).toBeTruthy()
-		expect(modalQueries.getByText('Question description')).toBeTruthy()
-		expect(modalQueries.getByText('Scalar')).toBeTruthy()
-		expect(modalQueries.getByText('Display range')).toBeTruthy()
-		expect(modalQueries.getByText('USD')).toBeTruthy()
+		expect(panelQueries.getByText('Target child universes')).not.toBeNull()
+		expect(panelQueries.getByRole('heading', { name: 'Fork question' })).toBeTruthy()
+		expect(panelQueries.getByText('Will this resolve?')).toBeTruthy()
+		expect(panelQueries.getByText('Question description')).toBeTruthy()
+		expect(panelQueries.getByText('Scalar')).toBeTruthy()
+		expect(panelQueries.getByText('Display range')).toBeTruthy()
+		expect(panelQueries.getByText('USD')).toBeTruthy()
 	})
 
 	void test('shows the share redemption disabled reason before finalization', async () => {
@@ -945,9 +834,9 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const redeemSharesButton = documentQueries.getByRole('button', { name: 'Redeem winning shares' }) as HTMLButtonElement
+		const redeemSharesButton = documentQueries.getByRole('tab', { name: 'Redeem winning shares' }) as HTMLButtonElement
 		expect(redeemSharesButton.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Redeem winning shares').reason).toBe('Wait for the selected question to resolve before redeeming shares.')
+		expect(getShareTabState('Redeem winning shares').reason).toBe('Wait for the selected question to resolve before redeeming shares.')
 	})
 
 	test('keeps finalized parent winning-share redemption available after an unrelated fork', async () => {
@@ -955,18 +844,18 @@ void describe('TradingSection', () => {
 		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ questionOutcome: 'yes', universeHasForked: true }), onRedeemShares: redeem })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		const queries = within(document.body)
-		const redeemButton = queries.getByRole('button', { name: 'Redeem winning shares' })
+		const redeemButton = queries.getByRole('tab', { name: 'Redeem winning shares' })
 		if (!(redeemButton instanceof HTMLButtonElement)) throw new Error('Missing redemption button')
 		expect(redeemButton.disabled).toBe(false)
 		await act(() => {
 			fireEvent.click(redeemButton)
 		})
-		const dialog = queries.getByRole('dialog', { name: 'Redeem winning shares' })
+		const form = queries.getByRole('tabpanel', { name: 'Redeem winning shares' })
 		await act(() => {
-			fireEvent.click(within(dialog).getByRole('button', { name: 'Redeem winning shares' }))
+			fireEvent.click(within(form).getByRole('button', { name: 'Redeem winning shares' }))
 		})
 		expect(redeem).toHaveBeenCalledTimes(1)
-		const migrate = queries.getByRole('button', { name: 'Migrate forked shares' })
+		const migrate = queries.getByRole('tab', { name: 'Migrate shares' })
 		if (!(migrate instanceof HTMLButtonElement)) throw new Error('Missing migration button')
 		expect(migrate.disabled).toBe(true)
 	})
@@ -985,22 +874,22 @@ void describe('TradingSection', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Redeem winning shares' }))
+			fireEvent.click(documentQueries.getByRole('tab', { name: 'Redeem winning shares' }))
 		})
 
 		expect(redeem).not.toHaveBeenCalled()
-		const dialog = documentQueries.getByRole('dialog', { name: 'Redeem winning shares' })
-		const modalQueries = within(dialog)
-		const sharesMetric = modalQueries.getByText('Winning Yes shares').parentElement
-		const payoutMetric = modalQueries.getByText('Expected collateral payout').parentElement
-		const repMetric = modalQueries.getByText('Expected REP payout').parentElement
+		const form = documentQueries.getByRole('tabpanel', { name: 'Redeem winning shares' })
+		const panelQueries = within(form)
+		const sharesMetric = panelQueries.getByText('Winning Yes shares').parentElement
+		const payoutMetric = panelQueries.getByText('Expected collateral payout').parentElement
+		const repMetric = panelQueries.getByText('Expected REP payout').parentElement
 		if (sharesMetric === null || payoutMetric === null || repMetric === null) throw new Error('Expected resolved-share redemption metrics')
 		expect(getExactValueTitles(sharesMetric, '3')).toHaveLength(1)
 		// 3 winning shares of a 4-share supply backed by 6 WETH and 8 recovery REP.
 		expect(getExactValueTitles(payoutMetric, '4.5')).toHaveLength(1)
 		expect(getExactValueTitles(repMetric, '6 REP')).toHaveLength(1)
 		await act(() => {
-			fireEvent.click(modalQueries.getByRole('button', { name: 'Redeem winning shares' }))
+			fireEvent.click(panelQueries.getByRole('button', { name: 'Redeem winning shares' }))
 		})
 		expect(redeem).toHaveBeenCalledTimes(1)
 	})
@@ -1016,16 +905,16 @@ void describe('TradingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const launcher = within(document.body).getByRole('button', { name: 'Redeem winning shares' }) as HTMLButtonElement
+		const launcher = within(document.body).getByRole('tab', { name: 'Redeem winning shares' }) as HTMLButtonElement
 		expect(launcher.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Redeem winning shares').reason).toBe('You hold no winning No shares to redeem.')
+		expect(getShareTabState('Redeem winning shares').reason).toBe('You hold no winning No shares to redeem.')
 	})
 
 	void test('explains that an escalation game pauses minting instead of reporting missing capacity', async () => {
 		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ hasEscalationGame: true, totalPoolHeldAttoRep: 10n ** 18n }) })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(getTransactionButtonState(document.body, 'Mint complete sets').reason).toBe('Minting is closed for this question once reporting starts.')
+		expect(getShareTabState('Mint sets').reason).toBe('Minting is closed for this question once reporting starts.')
 	})
 
 	void test('does not call minting paused for a forked pool whose escalation game has ended', async () => {
@@ -1033,7 +922,7 @@ void describe('TradingSection', () => {
 		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ hasEscalationGame: true, systemState: 'forkMigration', totalPoolHeldAttoRep: 10n ** 18n }) })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const mintState = getTransactionButtonState(document.body, 'Mint complete sets')
+		const mintState = getShareTabState('Mint sets')
 		expect(mintState.disabled).toBe(true)
 		// The stage, not the zero capacity the stale flag causes, explains why minting is closed.
 		expect(mintState.reason).toBe('This action is unavailable in the current question state.')
@@ -1052,34 +941,34 @@ void describe('TradingSection', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Migrate forked shares' }))
+			fireEvent.click(documentQueries.getByRole('tab', { name: 'Migrate shares' }))
 		})
 
-		const dialog = documentQueries.getByRole('dialog', { name: 'Migrate forked shares' })
-		expect(dialog.textContent).toContain('Migrating 3.00 Yes shares')
-		expect(dialog.textContent).toContain('Migration cannot be undone.')
-		const outcomeDropdown = within(dialog).getByRole('button', { name: 'Share outcome to migrate' })
+		const form = documentQueries.getByRole('tabpanel', { name: 'Migrate shares' })
+		expect(form.textContent).toContain('Migrating 3.00 Yes shares')
+		expect(form.textContent).toContain('Migration cannot be undone.')
+		const outcomeDropdown = within(form).getByRole('button', { name: 'Share outcome to migrate' })
 		expect(outcomeDropdown.textContent).toContain('Yes (3.00 shares)')
 		await act(() => {
 			fireEvent.click(outcomeDropdown)
 		})
-		const optionLabels = Array.from(dialog.querySelectorAll('[role="option"]')).map(option => option.textContent)
+		const optionLabels = Array.from(form.querySelectorAll('[role="option"]')).map(option => option.textContent)
 		expect(optionLabels).toEqual(['Invalid (2.00 shares)', 'Yes (3.00 shares)', 'No (4.00 shares)'])
 	})
 
-	void test('shows the redeemable complete sets and their ETH value in the redeem modal', async () => {
+	void test('shows the redeemable complete sets and their ETH value in the redeem form', async () => {
 		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ settlementCollateralAttoEth: 3n * 10n ** 18n, settlementRecoveryAttoRep: 8n * 10n ** 18n, shareTokenSupplyAttoShares: 4n * 10n ** 18n }) })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Redeem complete sets' }))
+			fireEvent.click(documentQueries.getByRole('tab', { name: 'Redeem sets' }))
 		})
 
-		const modalQueries = within(documentQueries.getByRole('dialog', { name: 'Redeem complete sets' }))
-		const setsMetric = modalQueries.getByText('Redeemable complete sets').parentElement
-		const ethMetric = modalQueries.getByText('Available to redeem').parentElement
-		const repMetric = modalQueries.getByText('REP available to redeem').parentElement
+		const panelQueries = within(documentQueries.getByRole('tabpanel', { name: 'Redeem sets' }))
+		const setsMetric = panelQueries.getByText('Redeemable complete sets').parentElement
+		const ethMetric = panelQueries.getByText('Available to redeem').parentElement
+		const repMetric = panelQueries.getByText('REP available to redeem').parentElement
 		if (setsMetric === null || ethMetric === null || repMetric === null) throw new Error('Expected complete-set redemption metrics')
 		expect(getExactValueTitles(setsMetric, '2 sets')).toHaveLength(1)
 		expect(getExactValueTitles(ethMetric, '1.5 WETH')).toHaveLength(1)
@@ -1097,8 +986,12 @@ void describe('TradingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(getTransactionButtonState(document.body, 'Mint complete sets')).toMatchObject({ disabled: true, reason: 'This action is unavailable in the current question state.' })
-		expect(Array.from(document.querySelectorAll('.vault-action-launcher-grid .action-launcher-card button')).map(button => button.textContent)).toEqual(['Mint complete sets', 'Redeem complete sets', 'Migrate forked shares', 'Redeem winning shares'])
+		expect(getShareTabState('Mint sets')).toMatchObject({ disabled: true, reason: 'This action is unavailable in the current question state.' })
+		expect(
+			within(document.body)
+				.getAllByRole('tab')
+				.map(tab => tab.textContent),
+		).toEqual(['Mint sets', 'Redeem sets', 'Migrate shares', 'Redeem winning shares'])
 	})
 
 	test('uses saved holdings in place of the empty live holdings surface', async () => {
@@ -1107,12 +1000,12 @@ void describe('TradingSection', () => {
 		const queries = within(rendered.container)
 		expect(queries.getByText('Saved balances')).not.toBeNull()
 		expect(queries.queryByRole('heading', { name: 'Your holdings' })).toBeNull()
-		expect(queries.getByRole('button', { name: 'Mint complete sets' })).not.toBeNull()
+		expect(queries.getByRole('tab', { name: 'Mint sets' })).not.toBeNull()
 	})
 
 	test('keeps all four Share actions visible and switches forms inline', async () => {
 		const props = createTradingSectionProps()
-		const rendered = await renderIntoDocument(<TradingSection {...props} embedInCard />)
+		const rendered = await renderIntoDocument(<TradingSection {...props} />)
 		cleanupRenderedComponent = rendered.cleanup
 		const query = within(rendered.container)
 		const actions = within(query.getByRole('tablist', { name: 'Share actions' }))
@@ -1146,15 +1039,15 @@ void describe('TradingSection', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
+			fireEvent.click(documentQueries.getByRole('tab', { name: 'Mint sets' }))
 		})
 
-		const modalQueries = within(documentQueries.getByRole('dialog'))
+		const panelQueries = within(documentQueries.getByRole('tabpanel'))
 		expect(documentQueries.getByText('Transaction failed. Reason: question already resolved.')).not.toBeNull()
-		expect(modalQueries.queryByText('Mint failed')).toBeNull()
+		expect(panelQueries.queryByText('Mint failed')).toBeNull()
 	})
 
-	void test('keeps non-suppressed trading guard messages visible in the redeem modal', async () => {
+	void test('keeps non-suppressed trading guard messages visible in the redeem form', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
@@ -1166,9 +1059,9 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const redeemButton = documentQueries.getByRole('button', { name: 'Redeem complete sets' }) as HTMLButtonElement
+		const redeemButton = documentQueries.getByRole('tab', { name: 'Redeem sets' }) as HTMLButtonElement
 		expect(redeemButton.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Redeem complete sets').reason).toBe('Loading wallet share balances…')
+		expect(getShareTabState('Redeem sets').reason).toBe('Loading wallet share balances…')
 	})
 
 	void test('keeps scalar share migration interactive through the shared target list and picker', async () => {
@@ -1177,15 +1070,15 @@ void describe('TradingSection', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Migrate forked shares' }))
+			fireEvent.click(documentQueries.getByRole('tab', { name: 'Migrate shares' }))
 		})
 
-		const modalQueries = within(documentQueries.getByRole('dialog'))
-		const slider = modalQueries.getByRole('slider') as HTMLInputElement
+		const panelQueries = within(documentQueries.getByRole('tabpanel'))
+		const slider = panelQueries.getByRole('slider') as HTMLInputElement
 
-		expect(modalQueries.getByText('Select scalar target')).not.toBeNull()
-		expect(modalQueries.getByText('No target child universes selected.')).not.toBeNull()
-		expect(modalQueries.getByRole('button', { name: 'Add target' })).not.toBeNull()
+		expect(panelQueries.getByText('Select scalar target')).not.toBeNull()
+		expect(panelQueries.getByText('No target child universes selected.')).not.toBeNull()
+		expect(panelQueries.getByRole('button', { name: 'Add target' })).not.toBeNull()
 
 		await act(() => {
 			fireEvent.input(slider, {
@@ -1193,46 +1086,18 @@ void describe('TradingSection', () => {
 			})
 		})
 
-		expect((modalQueries.getByRole('textbox', { name: 'Scalar value' }) as HTMLInputElement).value).toBe('0.00000000000000007')
-		expect(modalQueries.queryByText('Selected tick')).toBeNull()
+		expect((panelQueries.getByRole('textbox', { name: 'Scalar value' }) as HTMLInputElement).value).toBe('0.00000000000000007')
+		expect(panelQueries.queryByText('Selected tick')).toBeNull()
 
 		await act(() => {
-			fireEvent.click(modalQueries.getByRole('button', { name: 'Add target' }))
+			fireEvent.click(panelQueries.getByRole('button', { name: 'Add target' }))
 		})
 
-		expect(modalQueries.queryByText('No target child universes selected.')).toBeNull()
-		expect(modalQueries.getByRole('button', { name: 'Remove target' })).not.toBeNull()
+		expect(panelQueries.queryByText('No target child universes selected.')).toBeNull()
+		expect(panelQueries.getByRole('button', { name: 'Remove target' })).not.toBeNull()
 	})
 
-	void test('does not render local trading outcome cards for completed action variants', async () => {
-		for (const scenario of [
-			{ action: 'redeemCompleteSet' as const, title: 'Complete Sets Redeemed' },
-			{ action: 'migrateShares' as const, title: 'Shares Migrated' },
-			{ action: 'redeemShares' as const, title: 'Resolved Shares Redeemed' },
-		] as const) {
-			const tradingResult: TradingActionResult = {
-				action: scenario.action,
-				hash: zeroHash,
-				questionLedgerAddress: zeroAddress,
-				universeId: 1n,
-				...(scenario.action === 'migrateShares' ? { shareOutcome: 'yes', targetOutcomeIndexes: [0n, 1n] } : {}),
-			} as const
-
-			const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ tradingResult })} />)
-			cleanupRenderedComponent = renderedComponent.cleanup
-
-			const documentQueries = within(document.body)
-			expect(documentQueries.queryByText('Latest Share Action')).toBeNull()
-			expect(documentQueries.queryByText(scenario.title)).toBeNull()
-			expect(documentQueries.queryByRole('button', { name: `Copy address ${zeroAddress}` })).toBeNull()
-			expect(document.body.querySelector('.workflow-transaction-status')).toBeNull()
-
-			await renderedComponent.cleanup()
-			cleanupRenderedComponent = undefined
-		}
-	})
-
-	void test('fills the redeem amount from the max helper in the redeem modal', async () => {
+	void test('fills the redeem amount from the max helper in the redeem form', async () => {
 		let redeemedAmount: string | undefined
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
@@ -1252,11 +1117,11 @@ void describe('TradingSection', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Redeem complete sets' }))
+			fireEvent.click(documentQueries.getByRole('tab', { name: 'Redeem sets' }))
 		})
 
-		const modalElement = documentQueries.getByRole('dialog')
-		const maxButton = modalElement.querySelector('.field-inline-action') as HTMLButtonElement
+		const panelElement = documentQueries.getByRole('tabpanel')
+		const maxButton = panelElement.querySelector('.field-inline-action') as HTMLButtonElement
 		expect(maxButton.disabled).toBe(false)
 
 		await act(() => {
@@ -1279,22 +1144,22 @@ void describe('TradingSection', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Migrate forked shares' }))
+			fireEvent.click(documentQueries.getByRole('tab', { name: 'Migrate shares' }))
 		})
 
-		const modalQueries = within(documentQueries.getByRole('dialog'))
-		expect(modalQueries.getByRole('heading', { name: 'Fork question' })).toBeTruthy()
-		expect(modalQueries.getByText('Question description')).toBeTruthy()
-		expect(modalQueries.getByText('Binary')).toBeTruthy()
-		const selectAllButton = modalQueries.getByRole('button', { name: 'Select all' }) as HTMLButtonElement
-		const clearButton = modalQueries.getByRole('button', { name: 'Clear' }) as HTMLButtonElement
+		const panelQueries = within(documentQueries.getByRole('tabpanel'))
+		expect(panelQueries.getByRole('heading', { name: 'Fork question' })).toBeTruthy()
+		expect(panelQueries.getByText('Question description')).toBeTruthy()
+		expect(panelQueries.getByText('Binary')).toBeTruthy()
+		const selectAllButton = panelQueries.getByRole('button', { name: 'Select all' }) as HTMLButtonElement
+		const clearButton = panelQueries.getByRole('button', { name: 'Clear' }) as HTMLButtonElement
 		expect(clearButton.disabled).toBe(true)
 		await act(() => {
 			fireEvent.click(selectAllButton)
 		})
 		expect(clearButton.disabled).toBe(false)
 
-		const yesTarget = modalQueries.getByRole('button', { name: /^Yes/ }) as HTMLButtonElement
+		const yesTarget = panelQueries.getByRole('button', { name: /^Yes/ }) as HTMLButtonElement
 		expect(yesTarget.getAttribute('aria-pressed')).toBe('true')
 		await act(() => {
 			fireEvent.click(yesTarget)
@@ -1315,14 +1180,14 @@ void describe('TradingSection', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Migrate forked shares' }))
+			fireEvent.click(documentQueries.getByRole('tab', { name: 'Migrate shares' }))
 		})
-		const modalQueries = within(documentQueries.getByRole('dialog'))
+		const panelQueries = within(documentQueries.getByRole('tabpanel'))
 		await act(() => {
-			fireEvent.click(modalQueries.getByRole('button', { name: 'Select all' }))
+			fireEvent.click(panelQueries.getByRole('button', { name: 'Select all' }))
 		})
 
-		expect(modalQueries.getByRole('button', { name: /^Yes/ }).getAttribute('aria-pressed')).toBe('false')
-		expect(modalQueries.getByRole('button', { name: /^No/ }).getAttribute('aria-pressed')).toBe('true')
+		expect(panelQueries.getByRole('button', { name: /^Yes/ }).getAttribute('aria-pressed')).toBe('false')
+		expect(panelQueries.getByRole('button', { name: /^No/ }).getAttribute('aria-pressed')).toBe('true')
 	})
 })

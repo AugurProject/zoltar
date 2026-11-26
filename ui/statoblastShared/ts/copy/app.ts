@@ -2,7 +2,6 @@ export const loadingWalletEthBalance = 'Loading wallet ETH balance…'
 export const createOracleReport = 'Create OpenOracle report'
 export const oracleReportDetails = 'OpenOracle report details'
 export const oracleReportViews = 'OpenOracle views'
-export const statoblastSecurityMultiplierBps = 'Security multiplier'
 export const changedSinceReview = 'Changed since you reviewed. Review the updated amounts before sending.'
 export const missingTokenSpender = 'Couldn’t identify the contract approved to spend these tokens.'
 

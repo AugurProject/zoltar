@@ -11,7 +11,6 @@ import type { ForkAdmissionApproval } from '../../oracleTypes.js'
 type Props = {
 	actionDataNotice?: string | undefined
 	approval: ForkAdmissionApproval | undefined
-	designedOverview: boolean
 	forkButton: ComponentChildren
 	forkPending: boolean
 	onOpenForkWorkflow: (() => void) | undefined
@@ -19,7 +18,7 @@ type Props = {
 }
 
 /** Only a nonzero admission shortfall requires a wallet approval before the fork. */
-export function ForkTriggeredActions({ actionDataNotice, approval, designedOverview, forkButton, forkPending, onOpenForkWorkflow, questionLedgerAddress }: Props) {
+export function ForkTriggeredActions({ actionDataNotice, approval, forkButton, forkPending, onOpenForkWorkflow, questionLedgerAddress }: Props) {
 	if (onOpenForkWorkflow !== undefined)
 		return (
 			<div className='actions'>
@@ -39,7 +38,7 @@ export function ForkTriggeredActions({ actionDataNotice, approval, designedOverv
 		</div>
 	)
 	return (
-		<SectionBlock className='statoblast-fork-danger' title={securityPoolCopy.forkAdmission} description={actionDataNotice} tone='critical' variant={designedOverview ? 'default' : 'embedded'}>
+		<SectionBlock className='statoblast-fork-danger' title={securityPoolCopy.forkAdmission} description={actionDataNotice} tone='critical'>
 			<div className='statoblast-fork-danger-grid'>
 				<div className='statoblast-fork-consequences'>
 					<UserMessage

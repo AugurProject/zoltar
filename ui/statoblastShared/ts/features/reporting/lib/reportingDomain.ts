@@ -12,13 +12,12 @@ import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts
 import type { ActiveReportingDetails, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReportingDetails } from '../../../types/contracts.js'
 import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 
-export { getSecondLargestEscalationBalance, getStrictLeadingEscalationOutcome }
+export { getStrictLeadingEscalationOutcome }
 
 type ReportingAmountSuggestion = {
 	amountAttoRep: bigint | undefined
 	reason: string | undefined
 }
-export const ESCALATION_GAME_ACTIVATION_DELAY = ESCALATION_ACTIVATION_DELAY
 const LOAD_REPORTING_PRESETS_REASON = reportingCopy.loadingReportingDetails
 const MAX_PROFIT_NOT_STARTED_REASON = reportingCopy.maxProfitPrestartReason
 const SELECTED_SIDE_ALREADY_LEADS_REASON = reportingCopy.selectedSideLeadsReason
@@ -115,14 +114,6 @@ export function getRemainingSelectedOutcomeContributionCapacity(details: Reporti
 	const selectedSide = details.sides.find(side => side.key === outcome)
 	if (selectedSide === undefined) return 0n
 	return details.nonDecisionThresholdAttoRep > selectedSide.balance ? details.nonDecisionThresholdAttoRep - selectedSide.balance : 0n
-}
-export function getHypotheticalClaimAmount(details: ActiveReportingDetails, outcome: ReportingOutcomeKey, deposit: EscalationDeposit | ImportedEscalationDeposit) {
-	const leader = getStrictLeadingEscalationOutcome(details.sides)
-	if (leader === undefined) return undefined
-	if (outcome !== leader) return 0n
-	const hypotheticalDetails: ActiveReportingDetails = { ...details, questionOutcome: leader, systemState: 'operational', parentWithdrawalEnabled: true }
-	// Imported cumulative amounts use a different allocation convention.
-	return 'parentDepositIndex' in deposit ? getImportedEscalationDepositClaimAmount(hypotheticalDetails, outcome, deposit) : getEscalationDepositClaimAmount(hypotheticalDetails, outcome, deposit)
 }
 function getMinimumOutcomeChangeContribution(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey): ReportingAmountSuggestion {
 	const { largestOtherBalance, selectedSide } = getSelectedAndOtherSides(details, selectedOutcome)
@@ -303,7 +294,7 @@ export function previewReportingContribution(details: ReportingDetails, outcome:
 
 export function previewReportingDeadline(details: ReportingDetails, outcome: ReportingOutcomeKey, amount: bigint) {
 	if (amount <= 0n || previewReportingContribution(details, outcome, amount).reason !== undefined) return undefined
-	if (details.status === 'not-started') return { deadline: details.currentTime + ESCALATION_GAME_ACTIVATION_DELAY, extension: ESCALATION_GAME_ACTIVATION_DELAY, reachesNonDecision: false }
+	if (details.status === 'not-started') return { deadline: details.currentTime + ESCALATION_ACTIVATION_DELAY, extension: ESCALATION_ACTIVATION_DELAY, reachesNonDecision: false }
 	if (details.systemState !== 'operational' || details.hasReachedNonDecision || isPoolQuestionFinalized(details) || details.currentTime > details.escalationEndTime) return undefined
 	const projected = projectEscalationDeposit({ amountAttoRep: amount, balancesAttoRep: getEscalationBalanceTuple(details.sides), nonDecisionThresholdAttoRep: details.nonDecisionThresholdAttoRep, outcome, startBondAttoRep: details.startBondAttoRep })
 	if (projected === undefined) return undefined

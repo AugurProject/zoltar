@@ -385,8 +385,6 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 					tradingError={trading.tradingError}
 					tradingForkUniverse={trading.tradingForkUniverse}
 					tradingForm={trading.tradingForm}
-					tradingResult={trading.tradingResult}
-					embedInCard
 				/>
 			)}
 			{entry.tab === 'reporting' && reportingDetails !== undefined && (
@@ -419,12 +417,7 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 					actionDataReadAt={reportCheckedAt}
 					accountState={accountState}
 					currentTimestamp={now}
-					showLifecycle={false}
-					designedOverview
-					manageDeadlineRefresh={false}
-					embedInCard
 					lockedReason={checkingDeadline ? pageCopy.deadlineChecking : undefined}
-					allowInProgressClaims={false}
 					loadingReportingDetails={reporting.loadingReportingDetails}
 					onApproveReportingRep={reporting.onApproveReportingRep}
 					onLoadReporting={reporting.loadReporting}
@@ -435,7 +428,6 @@ export function SecurityPoolQuestionWorkspace({ accountState, parameters, deploy
 					reportingDetails={reportingDetails}
 					reportingError={reporting.reportingError}
 					reportingForm={reporting.reportingForm}
-					reportingResult={reporting.reportingResult}
 					forkAlreadyTriggered={selected.universeHasForked}
 					onOpenForkWorkflow={() => {
 						window.location.hash = statoblastPageHref({ kind: 'pool', pool: selected.securityPoolAddress, tab: 'fork' }, selected.universeId)

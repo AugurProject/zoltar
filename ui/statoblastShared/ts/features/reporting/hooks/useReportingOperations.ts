@@ -14,7 +14,7 @@ import { normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { parseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
-import { getDefaultReportingFormState, getDefaultReportingWithdrawDepositIndexesByOutcome } from '../lib/reportingForm.js'
+import { getDefaultReportingFormState } from '../lib/reportingForm.js'
 import { parseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getEscalationDepositClaimAmount, getRemainingSelectedOutcomeContributionCapacity, previewReportingContribution, reportingContributionTriggersFork } from '../lib/reportingDomain.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
@@ -24,7 +24,7 @@ import { createReportingSuccessPresentation, createReportingTransactionIntent, c
 import { buildWriteActionConfig, runWriteAction, type WriteActionContext } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
 import type { WriteOperationsParameters } from '@zoltar/ui-zoltar-shared/types/app.js'
-import type { ReportingFormState, ReportingWithdrawDepositIndexesByOutcome } from '../../../types/app.js'
+import type { ReportingFormState } from '../../../types/app.js'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ReportingActionResult, ReportingDetails } from '../../../types/contracts.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -63,34 +63,6 @@ const defaultUseReportingOperationsDependencies: UseReportingOperationsDependenc
 	loadReportingDetails: async (questionLedgerAddress, accountAddress, includeSchedule) => await loadReportingDetails(withStatoblastRequestTimeout(createConnectedReadClient(), reportingCopy.reportingRefreshTimedOut), questionLedgerAddress, accountAddress, includeSchedule),
 	reportOutcomeInQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress, outcome, amount, reviewAmount, triggersFork, requireLead) => await reportOutcomeInQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, outcome, amount, reviewAmount, triggersFork, requireLead),
 	withdrawEscalationFromQuestionLedger: async (accountAddress, callbacks, questionLedgerAddress, outcome, depositIndexes, claimAmount) => await withdrawEscalationFromQuestionLedger(createWalletWriteClient(accountAddress, callbacks), questionLedgerAddress, outcome, depositIndexes, claimAmount),
-}
-
-function getAvailableWithdrawDepositIndexes(details: ReportingDetails, outcome: ReportingOutcomeKey) {
-	if (details.status !== 'active') return []
-	const side = details.sides.find(candidate => candidate.key === outcome)
-	return side?.userDeposits.map(deposit => deposit.depositIndex) ?? []
-}
-
-function filterAvailableWithdrawDepositIndexes(selectedDepositIndexes: bigint[], availableDepositIndexes: bigint[]) {
-	return selectedDepositIndexes.filter(index => availableDepositIndexes.includes(index))
-}
-
-function sameSelectedWithdrawDepositIndexes(left: bigint[], right: bigint[]) {
-	return left.length === right.length && left.every((value, index) => value === right[index])
-}
-
-function sameSelectedWithdrawDepositIndexesByOutcome(left: ReportingWithdrawDepositIndexesByOutcome, right: ReportingWithdrawDepositIndexesByOutcome) {
-	return sameSelectedWithdrawDepositIndexes(left.invalid, right.invalid) && sameSelectedWithdrawDepositIndexes(left.yes, right.yes) && sameSelectedWithdrawDepositIndexes(left.no, right.no)
-}
-
-function pruneSelectedWithdrawDepositIndexesByOutcome(currentSelections: ReportingWithdrawDepositIndexesByOutcome, details: ReportingDetails) {
-	if (details.status !== 'active') return getDefaultReportingWithdrawDepositIndexesByOutcome()
-
-	return {
-		invalid: filterAvailableWithdrawDepositIndexes(currentSelections.invalid, getAvailableWithdrawDepositIndexes(details, 'invalid')),
-		yes: filterAvailableWithdrawDepositIndexes(currentSelections.yes, getAvailableWithdrawDepositIndexes(details, 'yes')),
-		no: filterAvailableWithdrawDepositIndexes(currentSelections.no, getAvailableWithdrawDepositIndexes(details, 'no')),
-	}
 }
 
 export function useReportingOperations(
@@ -250,14 +222,6 @@ export function useReportingOperations(
 					const details = await dependencies.loadReportingDetails(result.questionLedgerAddress, accountAddress, includeSchedule)
 					if (!isCurrentSelection()) return
 					reportingDetails.value = details
-					setReportingForm(current => {
-						const selectedWithdrawDepositIndexesByOutcome = pruneSelectedWithdrawDepositIndexesByOutcome(current.selectedWithdrawDepositIndexesByOutcome, details)
-						if (sameSelectedWithdrawDepositIndexesByOutcome(current.selectedWithdrawDepositIndexesByOutcome, selectedWithdrawDepositIndexesByOutcome)) return current
-						return {
-							...current,
-							selectedWithdrawDepositIndexesByOutcome,
-						}
-					})
 				},
 			)
 		} finally {
@@ -341,10 +305,10 @@ export function useReportingOperations(
 		)
 	}
 
-	const withdrawEscalation = async (outcome: ReportingOutcomeKey, depositIndexesOverride?: bigint[]) =>
+	const withdrawEscalation = async (outcome: ReportingOutcomeKey, depositIndexes: bigint[]) =>
 		await runReportingAction(
 			'withdrawEscalation',
-			async (walletAddress, questionLedgerAddress, currentForm, isCurrentSelection, context) => {
+			async (walletAddress, questionLedgerAddress, _currentForm, isCurrentSelection, context) => {
 				const latestDetails = await dependencies.loadReportingDetails(questionLedgerAddress, walletAddress)
 				if (!isCurrentSelection()) return undefined
 				if (latestDetails.status !== 'active') {
@@ -356,19 +320,17 @@ export function useReportingOperations(
 				if (selectedSide === undefined) {
 					throw new Error(reportingCopy.claimOutcomeUnavailable)
 				}
-				const availableDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []
+				const availableDepositIndexes = selectedSide.userDeposits.map(deposit => deposit.depositIndex)
 
 				if (latestDetails.settlementState === 'migration-required') throw new Error(reportingCopy.claimParentAfterResolution)
 				if (!latestDetails.parentWithdrawalEnabled) throw new Error(reportingCopy.questionFinalizationRequired)
 				if (latestDetails.questionOutcome !== outcome) throw new Error(lostNoActionNeeded)
 
-				const requestedDepositIndexes = depositIndexesOverride ?? currentForm.selectedWithdrawDepositIndexesByOutcome[outcome]
-				const missingSelectedDepositIndex = requestedDepositIndexes.find(index => !availableDepositIndexes.includes(index))
+				const missingSelectedDepositIndex = depositIndexes.find(index => !availableDepositIndexes.includes(index))
 				if (missingSelectedDepositIndex !== undefined) {
 					throw new Error(reportingCopy.claimDepositUnavailable(missingSelectedDepositIndex, selectedSide.label))
 				}
 
-				const depositIndexes = requestedDepositIndexes
 				if (depositIndexes.length === 0) {
 					throw new Error(reportingCopy.settlementSelectionRequired)
 				}

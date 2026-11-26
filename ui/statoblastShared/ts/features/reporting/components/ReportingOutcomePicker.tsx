@@ -4,7 +4,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import { useId } from 'preact/hooks'
 import * as reportingCopy from '../../../copy/reporting.js'
-import type { EscalationDeposit, ReportingDetails } from '../../../types/contracts.js'
+import type { ReportingDetails } from '../../../types/contracts.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../lib/reporting.js'
 import { getReportingMinimumOutcomeChangeContribution, reportingContributionTriggersFork } from '../lib/reportingDomain.js'
 import { RepAmount } from './RepAmount.js'
@@ -13,7 +13,6 @@ type EscalationSideDisplay = {
 	balance: bigint | undefined
 	key: ReportingOutcomeKey
 	label: string
-	userDeposits: EscalationDeposit[] | undefined
 	userStake: bigint | undefined
 }
 const outcomeOrder = { yes: 0, no: 1, invalid: 2 } satisfies Record<ReportingOutcomeKey, number>
@@ -24,7 +23,6 @@ export function getOutcomeSides(reportingDetails: ReportingDetails | undefined) 
 			balance: side.balance,
 			key: side.key,
 			label: side.label,
-			userDeposits: side.userDeposits,
 			userStake: (side.localPrincipalAttoRep ?? side.userDeposits.reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n)) + side.importedUserDeposits.reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n),
 		}))
 	if (reportingDetails?.status === 'not-started')
@@ -32,14 +30,12 @@ export function getOutcomeSides(reportingDetails: ReportingDetails | undefined) 
 			balance: 0n,
 			key: option.value,
 			label: option.label,
-			userDeposits: [],
 			userStake: 0n,
 		}))
 	return REPORTING_OUTCOME_DROPDOWN_OPTIONS.map<EscalationSideDisplay>(option => ({
 		balance: undefined,
 		key: option.value,
 		label: option.label,
-		userDeposits: undefined,
 		userStake: undefined,
 	}))
 }

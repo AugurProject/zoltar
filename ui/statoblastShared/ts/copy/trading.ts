@@ -40,32 +40,24 @@ export const forkTargetsRefreshRequired = 'Refresh the child universes.'
 export const shareMigrationRequiresFork = 'Available only after this universe forks.'
 export const mintCapacityUnavailable = 'Mint capacity unavailable. Refresh to retry.'
 export const migrateForkedShares = 'Migrate forked shares'
-export const shareMigrationDescription = 'After this universe forks, move your shares for one outcome into the child universes you choose.'
 export const migratingShares = 'Migrating shares…'
 export const mintCompleteSetsAmount = 'Collateral amount'
-export const completeSetMintDescription = 'Lock collateral to mint a fresh Yes, No, and Invalid share set for this question.'
 export const mintingCompleteSets = 'Minting complete sets…'
 export const mintCapacityEmpty = 'No mint capacity remaining.'
 export const formatNoSharesAvailableToMigrateReason = (outcomeLabel: string) => `You hold no ${outcomeLabel} shares to migrate.`
-export const completeSetBurnDescription = 'Burn matching Yes, No, and Invalid shares to recover collateral from the current question.'
 export const redeemingCompleteSets = 'Redeeming complete sets…'
 export const redeemResolvedShares = 'Redeem winning shares'
-export const resolvedShareRedemptionDescription = 'Redeem final winning shares after the selected question fully resolves.'
 export const redeemingShares = 'Redeeming shares…'
 export const completeSetBalanceLimitDetail = 'Limited by your smallest Yes, No, or Invalid balance.'
 export const redeemableCompleteSets = 'Redeemable complete sets'
 export const walletBalancesUnavailable = 'Wallet balances are still loading.'
 export const shareOutcomeToMigrate = 'Share outcome to migrate'
-export const shares = 'Shares'
 export const poolResolutionRequired = 'Wait for the selected question to resolve before redeeming shares.'
 export const yourHoldings = 'Your holdings'
 export const noSharesHeld = 'You hold no shares for this question.'
-export const availableToMint = 'Available to mint'
 
 export const forkDetailsUnavailable = 'Fork details unavailable. Refresh to retry.'
 export const shareBalancesUnavailable = 'Share balances unavailable. Refresh to retry.'
-
-export const shareBackingDetail = 'Collateral values assume the outcome wins; they are not sale quotes.'
 
 export const actionUnavailableReason = 'This action is unavailable in the current question state.'
 export const formatMaxKeepsGasReserveHint = (gasReserve: string) => `Max keeps ${gasReserve} in your wallet for gas.`
@@ -86,9 +78,6 @@ export const formatMigrateSharesReviewDescription = (outcomeLabel: string) => `C
 export const mintAmountRequired = 'Enter a mint amount.'
 export const redeemAmountRequired = 'Enter a redeem amount.'
 export const redeemCollateralLoading = 'Loading collateral details…'
-
-export const sharedPoolCapacityAtReview = 'Quoted before submission'
-export const sharedPoolPurchaseDetail = 'Purchases use shared REP backing. The transaction includes the quoted purchase fee in addition to this mint amount.'
 
 export const mintingClosedAtQuestionEnd = 'Minting closed when the question ended.'
 
@@ -159,4 +148,3 @@ export const formatMaxRedeemableAmount = (maximum: string) => `Max redeemable am
 export const formatNoSharesToMigrate = (outcome: string) => `No ${outcome} shares available to migrate.`
 
 export const completeSets = 'Complete sets'
-export const completeSetOutcomes = 'Complete set · Yes + No + Invalid'

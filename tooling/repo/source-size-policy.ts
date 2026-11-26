@@ -45,6 +45,6 @@ export const testSourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['ui/coreShared/ts/tests/app/useOnchainState.integration.test.tsx', 2160],
 		['ui/openoracle/ts/tests/features/open-oracle/openOracleRouteSection.test.tsx', 1877],
 		['ui/statoblast/ts/tests/features/open-oracle/useOpenOracleOperations.test.tsx', 2369],
-		['ui/statoblast/ts/tests/features/reporting/reportingSection.test.tsx', 3005],
+		['ui/statoblast/ts/tests/features/reporting/reportingSection.test.tsx', 1626],
 	]),
 ])

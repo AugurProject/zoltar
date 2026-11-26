@@ -567,7 +567,7 @@ describe('useReportingOperations', () => {
 		expect(withdrawEscalationFromQuestionLedger).not.toHaveBeenCalled()
 	})
 
-	test('withdrawEscalation prunes selections per side after a successful refresh', async () => {
+	test('withdrawEscalation refreshes remaining deposits after claiming the selected indexes', async () => {
 		const questionLedgerAddress = getAddress('0x00000000000000000000000000000000000000d2')
 		const latestDetails = createReportingDetails(questionLedgerAddress, {
 			sides: [side('invalid', 1n, [userDeposit(0n, 1n)]), side('yes', 5n, [userDeposit(0n, 1n), userDeposit(1n, 2n, 3n)]), side('no', 2n)],
@@ -616,11 +616,6 @@ describe('useReportingOperations', () => {
 
 		await setForm({
 			questionLedgerAddress,
-			selectedWithdrawDepositIndexesByOutcome: {
-				invalid: [0n],
-				yes: [0n, 1n],
-				no: [2n],
-			},
 		})
 
 		await act(async () => {
@@ -644,11 +639,7 @@ describe('useReportingOperations', () => {
 			questionLedgerAddress,
 			universeId: 1n,
 		})
-		expect(state().reportingForm.selectedWithdrawDepositIndexesByOutcome).toEqual({
-			invalid: [0n],
-			yes: [1n],
-			no: [],
-		})
+		expect(state().reportingDetails).toEqual(refreshedDetails)
 	})
 
 	test('withdrawEscalation ignores a stale post-success refresh after the selected pool changes', async () => {
@@ -694,11 +685,6 @@ describe('useReportingOperations', () => {
 
 		await setForm({
 			questionLedgerAddress: firstPoolAddress,
-			selectedWithdrawDepositIndexesByOutcome: {
-				invalid: [],
-				yes: [0n],
-				no: [],
-			},
 		})
 
 		let withdrawPromise = Promise.resolve()
@@ -710,11 +696,6 @@ describe('useReportingOperations', () => {
 
 		await setForm({
 			questionLedgerAddress: secondPoolAddress,
-			selectedWithdrawDepositIndexesByOutcome: {
-				invalid: [],
-				yes: [2n],
-				no: [3n],
-			},
 		})
 
 		await act(async () => {
@@ -722,11 +703,6 @@ describe('useReportingOperations', () => {
 		})
 
 		await waitFor(() => expect(state().reportingDetails?.questionLedgerAddress).toBe(secondPoolAddress))
-		expect(state().reportingForm.selectedWithdrawDepositIndexesByOutcome).toEqual({
-			invalid: [],
-			yes: [2n],
-			no: [3n],
-		})
 
 		await act(async () => {
 			staleRefresh.resolve(firstPoolDetails)
@@ -734,11 +710,6 @@ describe('useReportingOperations', () => {
 		})
 
 		expect(state().reportingDetails?.questionLedgerAddress).toBe(secondPoolAddress)
-		expect(state().reportingForm.selectedWithdrawDepositIndexesByOutcome).toEqual({
-			invalid: [],
-			yes: [2n],
-			no: [3n],
-		})
 		expect(withdrawEscalationFromQuestionLedger).toHaveBeenCalledTimes(1)
 	})
 

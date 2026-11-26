@@ -68,7 +68,6 @@ function Harness({ dependencies, details = reportingDetails, reportAmount = '5',
 		<ReportingSection
 			accountState={createAccountState({ address: zeroAddress })}
 			currentTimestamp={150n}
-			designedOverview
 			loadingReportingDetails={false}
 			onApproveReportingRep={() => undefined}
 			onLoadReporting={() => undefined}
@@ -79,8 +78,7 @@ function Harness({ dependencies, details = reportingDetails, reportAmount = '5',
 			reportingActiveAction={undefined}
 			reportingDetails={details}
 			reportingError={undefined}
-			reportingForm={{ reportAmount, questionLedgerAddress: pool, selectedOutcome: 'yes', selectedWithdrawDepositIndexesByOutcome: { invalid: [], no: [], yes: [] } }}
-			reportingResult={undefined}
+			reportingForm={{ reportAmount, questionLedgerAddress: pool, selectedOutcome: 'yes' }}
 			triggerZoltarForkApproval={ownFork.approval}
 			triggerZoltarForkAvailability={ownFork.triggerForkAvailability}
 			triggerZoltarForkPending={ownFork.forkPending}

@@ -1,12 +1,9 @@
-import { questionContractAddress } from '../../../copy/questionPage.js'
 import * as collateralCopy from '../../../copy/collateral.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as tradingCopy from '../../../copy/trading.js'
-import { continueInWallet } from '../../../copy/statoblastShell.js'
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
-import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { EnumDropdown } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
@@ -16,9 +13,8 @@ import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { ShareMintAmountField } from './ShareMintAmountField.js'
 import { ShareMintGlyph, ShareMintPreview } from './ShareMintPreview.js'
-import { ShareActionForm, ShareActionTabs, ShareActionCards, type ShareAction } from './ShareActionForms.js'
+import { ShareActionForm, ShareActionTabs, type ShareAction } from './ShareActionForms.js'
 import { RankedBarList } from '@zoltar/ui-core-shared/components/RankedBarList.js'
-import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkflowPanel.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { ShareMigrationTargetsSection } from '../../universes/components/ShareMigrationTargetsSection.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
@@ -60,7 +56,6 @@ import type { TradingSectionProps } from '../../types.js'
 export function TradingSection({
 	accountState,
 	actionDataReadAt,
-	embedInCard = false,
 	loadingTradingForkUniverse,
 	loadingTradingDetails,
 	collateralFunding,
@@ -79,14 +74,12 @@ export function TradingSection({
 	tradingError,
 	tradingForm,
 	tradingForkUniverse,
-	tradingResult,
 }: TradingSectionProps) {
 	const collateralDecimals = collateralFunding?.collateral?.decimals ?? 18
 	const collateralSymbol = collateralFunding?.collateral?.symbol ?? collateralCopy.fallback
-	const [activeModal, setActiveModal] = useState<ShareAction>()
+	const [chosenAction, setChosenAction] = useState<ShareAction>()
 	const id = useId()
-	const inlineId = embedInCard ? id : undefined
-	const oldActionData = useOldActionDataNotice(embedInCard || activeModal !== undefined ? actionDataReadAt : undefined)
+	const oldActionData = useOldActionDataNotice(actionDataReadAt)
 	const handledSharesAction = useRef<string>()
 	const currentTimestamp = useChainTimestamp()
 	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
@@ -181,7 +174,7 @@ export function TradingSection({
 		const balance = getSelectedOutcomeShareBalance(shareBalances, option.value)
 		return balance === undefined ? option : { ...option, label: tradingCopy.formatShareOutcomeOption(option.label, formatAmountDisplay(balance, { units: collateralDecimals })) }
 	})
-	const mintLauncherBlocker = (() => {
+	const mintTabBlocker = (() => {
 		if (!hasSelectedPool) return tradingCopy.completeSetMintPoolRequiredReason
 		if (accountState.address === undefined) return tradingCopy.completeSetMintWalletRequiredReason
 		if (!isOnActiveAppChain) return getWrongNetworkReason()
@@ -199,7 +192,7 @@ export function TradingSection({
 		}
 		return undefined
 	})()
-	const redeemCompleteSetsLauncherBlocker = (() => {
+	const redeemCompleteSetsTabBlocker = (() => {
 		if (!hasSelectedPool) return tradingCopy.completeSetBurnPoolRequiredReason
 		if (accountState.address === undefined) return tradingCopy.completeSetBurnWalletRequiredReason
 
@@ -215,7 +208,7 @@ export function TradingSection({
 			})()
 		})()
 	})()
-	const migrateSharesLauncherBlocker = (() => {
+	const migrateSharesTabBlocker = (() => {
 		if (!hasSelectedPool) return tradingCopy.shareMigrationPoolRequiredReason
 		if (accountState.address === undefined) return tradingCopy.shareMigrationWalletRequiredReason
 
@@ -241,21 +234,20 @@ export function TradingSection({
 	const winningOutcomeLabel = winningOutcome === undefined ? undefined : getReportingOutcomeLabel(winningOutcome)
 	const winningAttoShares = winningOutcome === undefined ? undefined : getSelectedOutcomeShareBalance(shareBalances, winningOutcome)
 	const expectedRedemptionPayoutAttoEth = convertAttoSharesToSettlementCollateralAttoEth(winningAttoShares, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
-	const redeemSharesLauncherBlocker = getTradingRedeemSharesGuardMessage({ accountAddress: accountState.address, hasSelectedPool, isOnActiveAppChain, questionOutcome: selectedPool?.questionOutcome, shareBalances: loadingTradingDetails ? undefined : shareBalances })
+	const redeemSharesTabBlocker = getTradingRedeemSharesGuardMessage({ accountAddress: accountState.address, hasSelectedPool, isOnActiveAppChain, questionOutcome: selectedPool?.questionOutcome, shareBalances: loadingTradingDetails ? undefined : shareBalances })
 
-	const effectiveRedeemCompleteSetsLauncherBlocker = redeemCompleteSetsLauncherBlocker ?? (redeemCompleteSetsEnabled ? undefined : tradingCopy.actionUnavailableReason)
-	const effectiveMigrateSharesLauncherBlocker = migrateSharesLauncherBlocker ?? (migrateSharesEnabled ? undefined : tradingCopy.actionUnavailableReason)
-	const effectiveRedeemSharesLauncherBlocker = redeemSharesLauncherBlocker ?? (redeemSharesEnabled ? undefined : tradingCopy.actionUnavailableReason)
-	const getModalActionReason = (actionEnabled: boolean, guardMessage: string | undefined) => {
+	const effectiveRedeemCompleteSetsTabBlocker = redeemCompleteSetsTabBlocker ?? (redeemCompleteSetsEnabled ? undefined : tradingCopy.actionUnavailableReason)
+	const effectiveMigrateSharesTabBlocker = migrateSharesTabBlocker ?? (migrateSharesEnabled ? undefined : tradingCopy.actionUnavailableReason)
+	const effectiveRedeemSharesTabBlocker = redeemSharesTabBlocker ?? (redeemSharesEnabled ? undefined : tradingCopy.actionUnavailableReason)
+	const getActionReason = (actionEnabled: boolean, guardMessage: string | undefined) => {
 		if (!isOnActiveAppChain) return getWrongNetworkReason()
 		if (!actionEnabled) return tradingCopy.actionUnavailableReason
 		return guardMessage
 	}
 	// For a selected pool the trading guards check the wallet first, so a blocking wallet is the reason whenever the pool action is enabled.
 	const walletBlocker = getActiveAppChainWalletBlocker({ accountAddress: accountState.address, isOnActiveAppChain })
-	const getModalActionAvailability = (actionEnabled: boolean, guardMessage: string | undefined, validAmount = true) =>
-		withWalletBlocker({ disabled: !isOnActiveAppChain || !actionEnabled || !validAmount || guardMessage !== undefined, reason: getModalActionReason(actionEnabled, guardMessage) }, !isOnActiveAppChain || (actionEnabled && hasSelectedPool) ? walletBlocker : undefined)
-	const closeActiveModal = () => setActiveModal(undefined)
+	const getActionAvailability = (actionEnabled: boolean, guardMessage: string | undefined, validAmount = true) =>
+		withWalletBlocker({ disabled: !isOnActiveAppChain || !actionEnabled || !validAmount || guardMessage !== undefined, reason: getActionReason(actionEnabled, guardMessage) }, !isOnActiveAppChain || (actionEnabled && hasSelectedPool) ? walletBlocker : undefined)
 	const shareMigrationSelectionDisabled = poolUniverseHasForked !== true
 	const setAllTargetOutcomeIndexes = () => {
 		onTradingFormChange({ targetOutcomeIndexes: getDefaultShareMigrationTargetOutcomeIndexes({ selectedShareOutcome: tradingForm.selectedShareOutcome, shareBalances, shareMigrationTargets: tradingDetails?.shareMigrationTargets, tradingForkUniverse }) })
@@ -263,14 +255,6 @@ export function TradingSection({
 	const clearTargetOutcomeIndexes = () => {
 		onTradingFormChange({ targetOutcomeIndexes: '' })
 	}
-	const getTransactionContext = (outcome: string) =>
-		selectedPool === undefined
-			? []
-			: [
-					{ label: commonCopy.question, value: selectedPool.marketDetails.title },
-					{ identityKey: 'outcome', label: commonCopy.outcome, value: outcome },
-					{ identityKey: 'security-pool', label: questionContractAddress, value: <AddressValue longAbbreviation address={selectedPool.questionLedgerAddress} /> },
-				]
 	const toggleTargetOutcomeIndex = (outcomeIndex: bigint) => {
 		if (selectedTargetOutcomeIndexSet.has(outcomeIndex.toString())) {
 			onTradingFormChange({
@@ -296,7 +280,7 @@ export function TradingSection({
 			)}
 		</>
 	)
-	// Both redemption dialogs show the shares being redeemed beside the collateral and recovery REP they pay out.
+	// Both redemption forms show the shares being redeemed beside the collateral and recovery REP they pay out.
 	const renderPayoutMetrics = ({ attoShares, collateralLabel, collateralPayout, repLabel, sharesLabel, sharesUnit }: { attoShares: bigint | undefined; collateralLabel: string; collateralPayout: bigint | undefined; repLabel: string; sharesLabel: string; sharesUnit: string }) => (
 		<MetricGrid>
 			<MetricField label={sharesLabel}>
@@ -311,12 +295,12 @@ export function TradingSection({
 		</MetricGrid>
 	)
 	const shareActions = [
-		{ value: 'mint', reason: mintLauncherBlocker },
-		{ value: 'redeem-complete-sets', reason: effectiveRedeemCompleteSetsLauncherBlocker },
-		{ value: 'migrate-shares', reason: effectiveMigrateSharesLauncherBlocker },
-		{ value: 'redeem-shares', reason: effectiveRedeemSharesLauncherBlocker },
+		{ value: 'mint', reason: mintTabBlocker },
+		{ value: 'redeem-complete-sets', reason: effectiveRedeemCompleteSetsTabBlocker },
+		{ value: 'migrate-shares', reason: effectiveMigrateSharesTabBlocker },
+		{ value: 'redeem-shares', reason: effectiveRedeemSharesTabBlocker },
 	] satisfies { value: ShareAction; reason: string | undefined }[]
-	const selectedAction = activeModal ?? (embedInCard ? shareActions.find(action => action.reason === undefined)?.value : undefined)
+	const selectedAction = chosenAction ?? shareActions.find(action => action.reason === undefined)?.value
 	useEffect(() => {
 		if (requestedSharesAction === undefined) {
 			handledSharesAction.current = undefined
@@ -326,34 +310,16 @@ export function TradingSection({
 		const key = `${selectedPool.questionLedgerAddress}:${requestedSharesAction}`
 		if (handledSharesAction.current === key) return
 		handledSharesAction.current = key
-		if (requestedSharesAction === 'mint' && mintLauncherBlocker === undefined) setActiveModal('mint')
-		if (requestedSharesAction === 'redeem' && effectiveRedeemSharesLauncherBlocker === undefined) setActiveModal('redeem-shares')
-	}, [requestedSharesAction, accountState.address, isOnActiveAppChain, selectedPool?.questionLedgerAddress, tradingDetails, loadingTradingDetails, loadingTradingForkUniverse, mintLauncherBlocker, effectiveRedeemSharesLauncherBlocker])
+		if (requestedSharesAction === 'mint' && mintTabBlocker === undefined) setChosenAction('mint')
+		if (requestedSharesAction === 'redeem' && effectiveRedeemSharesTabBlocker === undefined) setChosenAction('redeem-shares')
+	}, [requestedSharesAction, accountState.address, isOnActiveAppChain, selectedPool?.questionLedgerAddress, tradingDetails, loadingTradingDetails, loadingTradingForkUniverse, mintTabBlocker, effectiveRedeemSharesTabBlocker])
 	const forms = (
 		<>
-			<ShareActionForm
-				closeOnSuccessKey={tradingResult?.action === 'createCompleteSet' ? tradingResult.hash : undefined}
-				context={getTransactionContext(tradingCopy.completeSetOutcomes)}
-				description={oldActionData}
-				finalActionLabel={continueInWallet}
-				action='mint'
-				inlineId={inlineId}
-				isOpen={selectedAction === 'mint'}
-				onClose={closeActiveModal}
-				title={tradingCopy.mintCompleteSets}
-			>
-				{!embedInCard && (
-					<MetricGrid>
-						<MetricField label={collateralCopy.wallet}>
-							<CurrencyValue exactWhenRoundedToZero value={collateralFunding?.collateral?.balance} suffix={collateralFunding?.collateral?.symbol ?? collateralCopy.fallback} units={collateralFunding?.collateral?.decimals ?? 0} />
-						</MetricField>
-						<MetricField label={tradingCopy.availableToMint}>{usesSharedBacking ? tradingCopy.sharedPoolCapacityAtReview : <CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maximumMintAmount} suffix={collateralSymbol} units={collateralDecimals} />}</MetricField>
-					</MetricGrid>
-				)}
-				{embedInCard && <ShareMintGlyph funding={collateralFunding} />}
+			<ShareActionForm description={oldActionData} action='mint' panelId={id} isOpen={selectedAction === 'mint'} title={tradingCopy.mintCompleteSets}>
+				<ShareMintGlyph funding={collateralFunding} />
 				<ShareMintAmountField
 					funding={collateralFunding}
-					sharedBacking={usesSharedBacking && embedInCard}
+					sharedBacking={usesSharedBacking}
 					hint={
 						maximumMintAmount !== undefined && maximumMintAmount > 0n && accountState.ethBalanceAttoEth !== undefined && maximumMintAmount === getSpendableEthBalance(accountState.ethBalanceAttoEth)
 							? tradingCopy.formatMaxKeepsGasReserveHint(formatCurrencyBalanceWithUnit(ETH_GAS_RESERVE_ATTO_ETH, commonCopy.eth))
@@ -363,11 +329,10 @@ export function TradingSection({
 					onChange={completeSetAmount => onTradingFormChange({ completeSetAmount })}
 					value={tradingForm.completeSetAmount}
 				/>
-				{embedInCard && <ShareMintPreview funding={collateralFunding} limits={mintLimits} balances={shareBalances} form={tradingForm} onChange={onTradingFormChange} />}
-				{!embedInCard && usesSharedBacking && <UserMessage className='detail' detail={tradingCopy.sharedPoolPurchaseDetail} />}
+				<ShareMintPreview funding={collateralFunding} limits={mintLimits} balances={shareBalances} form={tradingForm} onChange={onTradingFormChange} />
 				<TokenApprovalControl
 					actionLabel={tradingCopy.mintCompleteSets}
-					amountPrecision={embedInCard ? 'exact' : 'rounded'}
+					amountPrecision='exact'
 					allowanceError={collateralFunding?.error}
 					allowanceLoading={collateralFunding?.loading ?? true}
 					approvedAmount={collateralFunding?.collateral?.allowance}
@@ -420,22 +385,12 @@ export function TradingSection({
 						pendingLabel={tradingCopy.mintingCompleteSets}
 						onClick={onCreateCompleteSet}
 						pending={tradingActiveAction === 'createCompleteSet'}
-						availability={getModalActionAvailability(mintEnabled, mintGuardMessage ?? collateralFunding?.reason ?? mintLimits?.reason, (parseCompleteSetAmountInput(tradingForm.completeSetAmount, collateralDecimals) ?? 0n) > 0n)}
+						availability={getActionAvailability(mintEnabled, mintGuardMessage ?? collateralFunding?.reason ?? mintLimits?.reason, (parseCompleteSetAmountInput(tradingForm.completeSetAmount, collateralDecimals) ?? 0n) > 0n)}
 					/>
 				</div>
 			</ShareActionForm>
 
-			<ShareActionForm
-				closeOnSuccessKey={tradingResult?.action === 'redeemCompleteSet' ? tradingResult.hash : undefined}
-				context={getTransactionContext(tradingCopy.completeSetOutcomes)}
-				description={oldActionData}
-				finalActionLabel={continueInWallet}
-				action='redeem-complete-sets'
-				inlineId={inlineId}
-				isOpen={selectedAction === 'redeem-complete-sets'}
-				onClose={closeActiveModal}
-				title={tradingCopy.redeemCompleteSets}
-			>
+			<ShareActionForm description={oldActionData} action='redeem-complete-sets' panelId={id} isOpen={selectedAction === 'redeem-complete-sets'} title={tradingCopy.redeemCompleteSets}>
 				{renderPayoutMetrics({
 					attoShares: maxRedeemableCompleteSetsAttoShares,
 					collateralLabel: tradingCopy.availableToRedeem,
@@ -452,22 +407,12 @@ export function TradingSection({
 						pendingLabel={tradingCopy.redeemingCompleteSets}
 						onClick={onRedeemCompleteSet}
 						pending={tradingActiveAction === 'redeemCompleteSet'}
-						availability={getModalActionAvailability(redeemCompleteSetsEnabled, redeemCollateralReason ?? redeemCompleteSetGuardMessage, (parseCompleteSetAmountInput(tradingForm.redeemAmount, collateralDecimals) ?? 0n) > 0n)}
+						availability={getActionAvailability(redeemCompleteSetsEnabled, redeemCollateralReason ?? redeemCompleteSetGuardMessage, (parseCompleteSetAmountInput(tradingForm.redeemAmount, collateralDecimals) ?? 0n) > 0n)}
 					/>
 				</div>
 			</ShareActionForm>
 
-			<ShareActionForm
-				closeOnSuccessKey={tradingResult?.action === 'migrateShares' ? tradingResult.hash : undefined}
-				context={getTransactionContext(getReportingOutcomeLabel(tradingForm.selectedShareOutcome))}
-				finalActionLabel={continueInWallet}
-				action='migrate-shares'
-				inlineId={inlineId}
-				isOpen={selectedAction === 'migrate-shares'}
-				description={oldActionData}
-				onClose={closeActiveModal}
-				title={tradingCopy.migrateForkedShares}
-			>
+			<ShareActionForm action='migrate-shares' panelId={id} isOpen={selectedAction === 'migrate-shares'} description={oldActionData} title={tradingCopy.migrateForkedShares}>
 				<label className='field'>
 					<span>{tradingCopy.shareOutcomeToMigrate}</span>
 					<EnumDropdown options={shareOutcomeOptions} value={tradingForm.selectedShareOutcome} onChange={selectedShareOutcome => onTradingFormChange({ selectedShareOutcome })} disabled={shareMigrationSelectionDisabled} />
@@ -483,21 +428,11 @@ export function TradingSection({
 					selectedOutcomeIndexes={selectedTargetOutcomeIndexes}
 				/>
 				<div className='actions'>
-					<TransactionActionButton idleLabel={tradingCopy.migrateShares} pendingLabel={tradingCopy.migratingShares} onClick={onMigrateShares} pending={tradingActiveAction === 'migrateShares'} availability={getModalActionAvailability(migrateSharesEnabled, migrateSharesGuardMessage)} />
+					<TransactionActionButton idleLabel={tradingCopy.migrateShares} pendingLabel={tradingCopy.migratingShares} onClick={onMigrateShares} pending={tradingActiveAction === 'migrateShares'} availability={getActionAvailability(migrateSharesEnabled, migrateSharesGuardMessage)} />
 				</div>
 			</ShareActionForm>
 
-			<ShareActionForm
-				closeOnSuccessKey={tradingResult?.action === 'redeemShares' ? tradingResult.hash : undefined}
-				context={getTransactionContext(winningOutcomeLabel ?? '')}
-				description={oldActionData}
-				finalActionLabel={continueInWallet}
-				action='redeem-shares'
-				inlineId={inlineId}
-				isOpen={selectedAction === 'redeem-shares'}
-				onClose={closeActiveModal}
-				title={tradingCopy.redeemResolvedShares}
-			>
+			<ShareActionForm description={oldActionData} action='redeem-shares' panelId={id} isOpen={selectedAction === 'redeem-shares'} title={tradingCopy.redeemResolvedShares}>
 				{renderPayoutMetrics({
 					attoShares: winningAttoShares,
 					collateralLabel: tradingCopy.expectedCollateralPayout,
@@ -508,14 +443,14 @@ export function TradingSection({
 				})}
 				<UserMessage className='detail' detail={tradingCopy.resolvedShareRedemptionFeeDetail} />
 				<div className='actions'>
-					<TransactionActionButton idleLabel={tradingCopy.redeemResolvedShares} pendingLabel={tradingCopy.redeemingShares} onClick={onRedeemShares} pending={tradingActiveAction === 'redeemShares'} availability={getModalActionAvailability(redeemSharesEnabled, redeemSharesLauncherBlocker)} />
+					<TransactionActionButton idleLabel={tradingCopy.redeemResolvedShares} pendingLabel={tradingCopy.redeemingShares} onClick={onRedeemShares} pending={tradingActiveAction === 'redeemShares'} availability={getActionAvailability(redeemSharesEnabled, redeemSharesTabBlocker)} />
 				</div>
 			</ShareActionForm>
 		</>
 	)
-	const sections = (
+	return (
 		<>
-			{/* Holdings first, then one row of share actions with their buttons aligned across the cards. */}
+			{/* Holdings first, followed by share actions. */}
 			<div className={selectedPool === undefined ? 'trading-workspace-layout is-single' : 'trading-workspace-layout'}>
 				{selectedPool === undefined
 					? undefined
@@ -562,36 +497,24 @@ export function TradingSection({
 													},
 												]}
 											/>
-											<UserMessage className='detail' detail={inlineId === undefined ? tradingCopy.shareBackingDetail : tradingCopy.onlyWinningOutcome} />
+											<UserMessage className='detail' detail={tradingCopy.onlyWinningOutcome} />
 										</div>
 									</div>
 								)}
-								{inlineId !== undefined && (
-									<details>
-										<summary>{tradingCopy.howSharesWork}</summary>
-										<p>{tradingCopy.shareBasics}</p>
-									</details>
-								)}
+								<details>
+									<summary>{tradingCopy.howSharesWork}</summary>
+									<p>{tradingCopy.shareBasics}</p>
+								</details>
 							</SectionBlock>
 						))}
 
-				<SectionBlock title={inlineId === undefined ? tradingCopy.shares : tradingCopy.shareActions} variant='embedded'>
-					{inlineId === undefined ? (
-						<ShareActionCards actions={shareActions} onSelect={setActiveModal} walletBlocksFirst={hasSelectedPool ? { accountAddress: accountState.address, isOnActiveAppChain } : undefined} />
-					) : (
-						<>
-							<ShareActionTabs id={inlineId} actions={shareActions} selected={selectedAction} onSelect={setActiveModal} />
-							{forms}
-						</>
-					)}
+				<SectionBlock title={tradingCopy.shareActions} variant='embedded'>
+					<ShareActionTabs id={id} actions={shareActions} selected={selectedAction} onSelect={setChosenAction} />
+					{forms}
 				</SectionBlock>
 			</div>
 
 			<ErrorNotice message={tradingError} />
-
-			{inlineId === undefined && forms}
 		</>
 	)
-	if (embedInCard) return sections
-	return <RouteWorkflowPanel title={tradingCopy.shares}>{sections}</RouteWorkflowPanel>
 }

@@ -36,17 +36,10 @@ export type OpenOracleCreateFormState = {
 	disputeDelay: string
 }
 
-export type ReportingWithdrawDepositIndexesByOutcome = {
-	invalid: bigint[]
-	yes: bigint[]
-	no: bigint[]
-}
-
 export type ReportingFormState = {
 	reportAmount: string
 	questionLedgerAddress: string
 	selectedOutcome: ReportingOutcomeKey | undefined
-	selectedWithdrawDepositIndexesByOutcome: ReportingWithdrawDepositIndexesByOutcome
 }
 
 export type QuestionLedgerLifecycleState = 'operational' | 'ended' | 'poolForked' | 'forkMigration'

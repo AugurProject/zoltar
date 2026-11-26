@@ -519,6 +519,5 @@ export function useTradingOperations(parameters: UseTradingOperationsParameters,
 		tradingFeedback: tradingFeedback.value,
 		tradingForm: tradingForm.value,
 		tradingForkUniverse: tradingForkUniverse.value,
-		tradingResult: tradingResult.value,
 	}
 }

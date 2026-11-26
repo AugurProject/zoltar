@@ -1,5 +1,3 @@
-import * as copy from '../../../copy/reporting.js'
-
 function escapeCalendarText(value: string) {
 	return value
 		.replace(/\\/g, '\\\\')
@@ -33,10 +31,6 @@ function calendarTimestamp(seconds: bigint) {
 		.toISOString()
 		.replace(/[-:]/g, '')
 		.replace(/\.\d{3}Z$/, 'Z')
-}
-
-export function buildEscalationReminder({ questionLedgerAddress, escalationEndTime, generatedAt, questionTitle, status, pageUrl }: { questionLedgerAddress: string; escalationEndTime: bigint; generatedAt: bigint; questionTitle: string; status: string; pageUrl: string }) {
-	return buildStatoblastCalendarEvent({ id: questionLedgerAddress.toLowerCase(), generatedAt, startsAt: escalationEndTime - 3600n, title: copy.reminderSummary(questionTitle), description: `${status}\n${pageUrl}` })
 }
 
 export const LAST_CALENDAR_START = 253_402_299_899n

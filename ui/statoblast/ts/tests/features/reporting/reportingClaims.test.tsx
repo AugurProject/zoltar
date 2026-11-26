@@ -52,7 +52,6 @@ test('claims the selected saved winning deposits together and shows losing depos
 	lifecycle.trackRendered(
 		await renderIntoDocument(
 			<ReportingSection
-				designedOverview
 				accountState={createAccountState()}
 				loadingReportingDetails={false}
 				onApproveReportingRep={() => undefined}
@@ -63,8 +62,7 @@ test('claims the selected saved winning deposits together and shows losing depos
 				reportingActiveAction={undefined}
 				reportingDetails={details}
 				reportingError={undefined}
-				reportingResult={undefined}
-				reportingForm={{ questionLedgerAddress: zeroAddress, reportAmount: '', selectedOutcome: undefined, selectedWithdrawDepositIndexesByOutcome: { yes: [], no: [], invalid: [] } }}
+				reportingForm={{ questionLedgerAddress: zeroAddress, reportAmount: '', selectedOutcome: undefined }}
 			/>,
 		),
 	)

@@ -81,6 +81,10 @@
 			"bun": "./ts/lib/routing.ts",
 			"default": "./js/lib/routing.js"
 		},
+		"./lib/reportingOutcomeBalances.js": {
+			"bun": "./ts/lib/reportingOutcomeBalances.ts",
+			"default": "./js/lib/reportingOutcomeBalances.js"
+		},
 		"./lib/deadlineRefresh.js": {
 			"bun": "./ts/lib/deadlineRefresh.ts",
 			"default": "./js/lib/deadlineRefresh.js"
@@ -177,10 +181,6 @@
 			"bun": "./ts/features/oracleTypes.ts",
 			"default": "./js/features/oracleTypes.js"
 		},
-		"./features/reporting/components/EscalationDepositSelectionList.js": {
-			"bun": "./ts/features/reporting/components/EscalationDepositSelectionList.tsx",
-			"default": "./js/features/reporting/components/EscalationDepositSelectionList.js"
-		},
 		"./features/reporting/components/EscalationExplainer.js": {
 			"bun": "./ts/features/reporting/components/EscalationExplainer.tsx",
 			"default": "./js/features/reporting/components/EscalationExplainer.js"
@@ -196,10 +196,6 @@
 		"./features/reporting/lib/reporting.js": {
 			"bun": "./ts/features/reporting/lib/reporting.ts",
 			"default": "./js/features/reporting/lib/reporting.js"
-		},
-		"./features/reporting/lib/reportingStagePresentation.js": {
-			"bun": "./ts/features/reporting/lib/reportingStagePresentation.ts",
-			"default": "./js/features/reporting/lib/reportingStagePresentation.js"
 		},
 		"./features/reporting/lib/reportingDomain.js": {
 			"bun": "./ts/features/reporting/lib/reportingDomain.ts",
@@ -249,10 +245,6 @@
 			"bun": "./ts/contractArtifact.ts",
 			"default": "./js/contractArtifact.js"
 		},
-		"./features/reporting/components/EscalationSide.js": {
-			"bun": "./ts/features/reporting/components/EscalationSide.tsx",
-			"default": "./js/features/reporting/components/EscalationSide.js"
-		},
 		"./features/universes/components/ShareMigrationTargetsSection.js": {
 			"bun": "./ts/features/universes/components/ShareMigrationTargetsSection.tsx",
 			"default": "./js/features/universes/components/ShareMigrationTargetsSection.js"
@@ -280,10 +272,6 @@
 		"./features/reporting/lib/reportingMaxContribution.js": {
 			"bun": "./ts/features/reporting/lib/reportingMaxContribution.ts",
 			"default": "./js/features/reporting/lib/reportingMaxContribution.js"
-		},
-		"./features/reporting/lib/reportingViewerStatus.js": {
-			"bun": "./ts/features/reporting/lib/reportingViewerStatus.ts",
-			"default": "./js/features/reporting/lib/reportingViewerStatus.js"
 		},
 		"./features/question-ledgers/lib/poolLifecycle.js": {
 			"bun": "./ts/features/question-ledgers/lib/poolLifecycle.ts",

@@ -2,11 +2,13 @@ import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadO
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as copy from '../../../copy/reporting.js'
 import * as glossaryCopy from '../../../copy/glossary.js'
-import { escalationExplanationHref } from '../lib/reportingViewerStatus.js'
+import { protocolGuideHref } from '@zoltar/ui-core-shared/copy/app.js'
 
-export function EscalationExplainer({ firstReportMinimum, nonDecisionThreshold, defaultOpen = false }: { firstReportMinimum: bigint; nonDecisionThreshold: bigint; defaultOpen?: boolean }) {
+const escalationExplanationHref = new URL('explanation/escalation-game.html', protocolGuideHref).href
+
+export function EscalationExplainer({ firstReportMinimum, nonDecisionThreshold }: { firstReportMinimum: bigint; nonDecisionThreshold: bigint }) {
 	return (
-		<ReadOnlyDetailAccordion title={copy.explainerTitle} defaultOpen={defaultOpen}>
+		<ReadOnlyDetailAccordion title={copy.explainerTitle}>
 			<ol>
 				<li>{copy.explainerFirstReport(formatCurrencyBalance(firstReportMinimum))}</li>
 				<li>{copy.explainerCompetition}</li>

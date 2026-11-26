@@ -6,7 +6,7 @@ import type { ComponentChildren } from 'preact'
 
 export type * from '@zoltar/ui-core-shared/types/components.js'
 
-type TradingRouteContentProps = {
+export type TradingSectionProps = {
 	accountState: AccountState
 	loadingTradingForkUniverse: boolean
 	loadingTradingDetails: boolean
@@ -22,14 +22,9 @@ type TradingRouteContentProps = {
 	tradingError: string | undefined
 	tradingForkUniverse: ZoltarUniverseSummary | undefined
 	tradingForm: TradingFormState
-	tradingResult: TradingActionResult | undefined
-}
-
-export type TradingSectionProps = TradingRouteContentProps & {
 	mintLimits?: ReturnType<typeof import('./markets/hooks/useTradingOperations.js').useTradingOperations>['mintLimits']
 	actionDataReadAt?: number | undefined
 	savedHoldings?: ComponentChildren
 	requestedSharesAction?: 'mint' | 'redeem' | undefined
-	embedInCard?: boolean
 	poolState?: QuestionLedgerStateModel | undefined
 }

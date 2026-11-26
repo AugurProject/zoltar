@@ -2,13 +2,8 @@
  * A sentence with REP amounts, as its parts with each amount in place, so the UI can render each one rounded with the exact
  * value on hover and plain text can join rounded strings. Each amount carries its own REP unit.
  */
-export type CopyParts<Amount> = readonly (string | Amount)[]
+type CopyParts<Amount> = readonly (string | Amount)[]
 
-export const timeoutResolutionDetail = 'The response window ended. The result uses the final REP staked on each outcome.'
-export const escalationMetrics = 'Reporting details'
-export const loadingEscalationDeposits = 'Loading reporting deposits…'
-export const reportingWorkflow = 'Reporting workflow'
-export const reportOutcome = 'Report outcome'
 export const reportAnOutcome = 'Report an outcome'
 export const reportOutcomeChoice = 'Outcome'
 export const outcomeRepStaked = 'staked'
@@ -38,15 +33,7 @@ export const forkCostLead = 'Triggering costs you'
 export const forkCostDetail = 'REP supply grew after reporting started. You give up this REP permanently.'
 export const forkStakeCarries = 'Your REP stays staked and carries to the child universes after the fork.'
 export const selectedSideBelowMinimumReason = 'Remaining selected-side capacity is below the minimum report.'
-export const continueForkMigrationDetail = 'Your deposits carry to the child universes. Claim winning deposits after the question resolves.'
 export const reportAmountFieldLabel = 'Report amount'
-export const escalationStarted = 'Reporting started'
-export const chooseDepositsToSettle = 'Choose deposits to claim'
-export const forkAlreadyTriggeredReportReason = 'Reporting ended without a decision and the universe has forked. Continue in Fork & recovery.'
-export const forkAlreadyTriggeredSettlementReason = 'Your deposits carry to the child universes. Continue in Fork & recovery.'
-export const forkTriggerInstruction = 'Reporting ended without a decision. Deposits stay locked until someone triggers the irreversible universe fork.'
-export const forkRequiredSettlementReason = 'Reporting ended without a decision. Deposits stay locked until the universe forks. Then use Fork & recovery.'
-export const leadHoldingCapital = 'Amount needed to hold the lead'
 export const loadingPoolHeldVaultRepBacking = 'Loading the position’s pledged REP…'
 export const loadingWalletRepBalance = 'Loading wallet REP balance…'
 export const loadingReportingDetails = 'Loading reporting details…'
@@ -77,19 +64,10 @@ export const parentUniverseForked = 'Universe forked'
 export const submittingReportTitle = 'Submitting report'
 export const approvingRepTitle = 'Approving REP'
 export const settlingEscalationDepositsTitle = 'Claiming reporting deposits'
-export const reportingNotEnabled = 'Reporting not enabled'
-export const reportingOpen = 'Reporting open'
-export const resolved = 'Resolved'
-export const timedOut = 'Timed out'
-export const pendingFinalization = 'Pending finalization'
-export const winningPayout = 'Winning payout'
-export const currentClaimType = 'Current claim type:'
 export const refreshFinalizedOutcomeReason = 'Reporting has ended. Refresh to check the result before claiming deposits.'
-export const poolFinalizedReason = 'This question is already finalized.'
 export const questionFinalizationRequired = 'Claim deposits after the question resolves.'
 export const reportingAlreadyResolved = 'Reporting has already resolved.'
 export const invalidReportAmount = 'The reporting game would not accept this amount.'
-export const reportingOpensWhenQuestionEnds = (ends: string) => `Reporting opens when this question ends: ${ends}.`
 export const enterMinimumFirstReport = (amount: string) => `Enter at least ${amount} to meet the minimum first report.`
 export const minimumReportRequired = (amount: string) => `Enter at least ${amount} to start the reporting game.`
 export const reportPreviewUnavailable = 'Unable to check how much REP this report would stake.'
@@ -99,47 +77,24 @@ export const claimOutcomeUnavailable = 'Could not load deposits for this outcome
 export const claimParentAfterResolution = 'Claim winning deposits in the child question after it resolves.'
 export const claimDepositUnavailable = (index: bigint, side: string) => `Deposit #${index} is no longer available to claim on ${side}.`
 export const claimFailed = 'Claim failed'
-export const worthAfterFinalizationPendingFinalization = 'Worth after finalization: Pending finalization'
 export const presetOutcomeSelectionRequired = 'Select an outcome side before using presets.'
 export const selectedSideIsUnavailable = 'Selected side is unavailable.'
 export const selectedSide = 'Selected side'
-export const formatSettleSelectedDepositsLabel = (sideLabel: string) => `Claim selected ${sideLabel} deposits`
-export const formatSettlingDepositsPendingLabel = (sideLabel: string) => `Claiming ${sideLabel} deposits…`
-export const minimumFirstReport = 'Minimum report'
-export const totalSideDisputeStakedRep = 'All reporters'
-export const yourSideDisputeStakedRep = 'You'
 export const triggeringZoltarFork = 'Triggering universe fork…'
 export const walletUnsettledDepositsEmpty = 'This wallet has no remaining reporting deposits.'
 export const forkCarriedSettlementRedirectDetail = 'Claim deposits carried from the parent universe in Fork & recovery.'
 
-export const reportingParameters = 'Reporting parameters'
-
-export const phaseLabels = ['Reporting open', 'Response window', 'Resolved']
-export const forkPhase = 'Fork'
-export const phaseProgress = (step: number, label: string) => `Step ${step} of ${phaseLabels.length} · ${label}`
-export const firstReportNext = (bond: string) => `The first report starts the game. Minimum report: ${bond} REP.`
-export const formatLeaderWinsNext = (end: string, leader: string) => `If no other side overtakes ${leader} by ${end}, ${leader} wins.`
-export const resolvedNext = 'Claim winning deposits below.'
-export const resolvedNoDepositsNext = 'You have no deposits to claim.'
-export const startsWithFirstReport = 'After the first report'
-export const progressToFork = (secondLargest: string, threshold: string, percent: string) => `Progress to fork: second side at ${secondLargest} / ${threshold} REP (${percent}%)`
-export const forkProgressHelp = 'A fork needs two sides at this threshold, so progress follows the second-largest side.'
-export const bindingCapitalHelp = 'The second-largest side balance; exceed it to hold the lead.'
-export const takeTheLead = 'Take the lead'
 export const takeLeadBeforeFirstReport = 'Take the lead is available after the first report.'
 export const takeLeadForkReason = 'Two outcomes would reach the threshold and end reporting without a decision.'
-const minimumPresetLabels = { fork: 'Reach non-decision', lead: 'Min to lead', min: 'Min', start: 'Minimum report', takeLead: takeTheLead } as const
-/** The minimum preset fills the minimum first report, the smallest lead, or the amount that ends reporting without a decision. */
+const minimumPresetLabels = { min: 'Min', takeLead: 'Take the lead' } as const
+/** The reporting presets fill the minimum first report or the smallest amount needed to take the lead. */
 export const minimumPreset = <Amount>(kind: keyof typeof minimumPresetLabels, amount?: Amount): CopyParts<Amount> => (amount === undefined ? [minimumPresetLabels[kind]] : [minimumPresetLabels[kind], ' (', amount, ')'])
 export const rewardPreset = <Amount>(amount?: Amount): CopyParts<Amount> => (amount === undefined ? ['Full reward share'] : ['Full reward share (', amount, ')'])
 export const reportAmountPlaceholder = '0'
 export const reportAmountLabel = (outcome: string, amount: string) => `Report ${outcome} · ${amount} REP`
 export const paidFromWallet = 'Paid from: wallet REP'
 export const availableBalance = (amount: string) => `Available: ${amount} REP.`
-export const yourPositions = 'Your positions'
-export const resultSummary = (outcome: string) => `Resolved as ${outcome}.`
 export const claimDeposits = (outcome: string, amount: string) => `Claim ${amount}\u00a0REP from ${outcome}`
-export const results = 'Results'
 
 export const reportedAmount = (outcome: string, amount: string) => `Reported ${amount} REP on ${outcome}`
 export const approvedAmount = (amount: string) => `Approved ${amount} REP`
@@ -148,22 +103,6 @@ export const reportingAmount = (outcome: string, amount: string) => `Reporting $
 
 export const claimedDeposits = (outcome: string, amount: string) => `Claimed ${amount} REP from ${outcome}`
 
-export const claimingDeposits = (outcome: string, amount: string) => `Claiming ${amount} REP from ${outcome}…`
-
-export const progressToForkUnavailable = 'Progress to fork: —'
-
-export const winningStatusLead = (side: string) => `You’re leading on ${side}.`
-export const winningStatusDetail = <Amount>(stake: Amount, worth: Amount): CopyParts<Amount> => ['Your ', stake, ' would be worth ', worth, ' if it ended now.']
-export const losingStatusLead = (side: string) => `You’re behind on ${side}.`
-export const losingStatusDetail = <Amount>(minimum: Amount | undefined, deadline: string, stake: Amount): CopyParts<Amount> => [...(minimum === undefined ? ['Report more on this side'] : ['Add at least ', minimum]), ` before ${deadline} or your `, stake, ' is lost.']
-export const tieStatusLead = 'No side leads right now.'
-export const tieStatusDetail = (deadline: string) => `If this stays tied at ${deadline}, no side wins (`
-export const tiesResolve = 'see how ties resolve'
-export const tieStatusEnd = ').'
-export const checkBack = (deadline: string) => `Check back before ${deadline}. A report that raises the middle of the three balances can extend the response window.`
-export const addReminder = 'Add reminder (.ics)'
-export const reminderSummary = (title: string) => `Check reporting: ${title}`
-export const deadlineMoved = (deadline: string) => `The response window now ends ${deadline} because a new report was added. Your status may have changed.`
 export const explainerTitle = 'How reporting works'
 export const explainerFirstReport = (bond: string) => `Put REP behind the outcome you believe is correct. The first report must be at least ${bond} REP.`
 export const explainerCompetition = 'Other reporters can overtake your side, even in the last seconds. A report that raises the middle of the three balances extends the response window.'
@@ -172,23 +111,10 @@ export const explainerForkLead = 'If two sides both reach the '
 export const formatExplainerForkThresholdSeparator = (threshold: string) => ` (${threshold} REP), the game stops and a `
 export const explainerForkTail = ' can be triggered. Your REP then follows the outcome you backed through Fork & recovery.'
 export const fullExplanation = 'Read the full explanation'
-export const winningPosition = <Amount>(worth: Amount): CopyParts<Amount> => ['Leading · worth ', worth, ' if it ended now']
-export const losingPosition = <Amount>(zero: Amount): CopyParts<Amount> => ['Behind · worth ', zero, ' if it ended now']
 export const tiedPosition = 'Tied'
-export const forkPosition = 'Continue in Fork & recovery'
-export const responseWindowEnds = 'Response window ends'
-export const attritionStarts = 'Attrition starts'
-export const dismissDeadlineNotice = 'Dismiss response window notice'
 
-export const resultClaim = <Amount>(amount: Amount): CopyParts<Amount> => [' You can claim ', amount, '.']
-
-export const forkViewerStake = <Amount>(side: string, stake: Amount): CopyParts<Amount> => ['You have ', stake, ` on ${side}.`]
-
-export const updateReminder = 'Update your reminder (.ics)'
-export const zeroBalanceStatusDetail = 'If all balances stay at zero, the timeout outcome is Invalid.'
 export const noVaultRepSelectWallet = 'Select Wallet REP to report. This position has no REP available.'
 
-export const depositTriggersFork = 'This report reaches the non-decision threshold: the game ends and a universe fork can be triggered.'
 export const forkTriggerWarningTitle = 'This report ends reporting without a decision'
 export const forkTriggerWarning = (outcome: string, threshold: string) => `Another side already holds ${threshold} REP. Filling ${outcome} to the same threshold locks deposits. Anyone can then trigger the irreversible universe fork. Your deposits carry to the child universes.`
 export const forkTriggerConfirmation = 'I understand this report ends reporting and allows the universe to fork.'
@@ -204,9 +130,6 @@ export const reportForkReviewTitle = (outcome: string, amount: string) => `Repor
 export const reportForkReviewDescription = (outcome: string) => `Fills ${outcome} to the non-decision threshold while another side is already there. Reporting ends without a decision, deposits lock, and the question can only resolve through a universe fork. This can’t be undone.`
 export const reportReviewDescription = (outcome: string) => `Deposits REP on ${outcome}. If ${outcome} loses, this REP is lost; if it wins, it returns with any earned reward.`
 export const forkTriggerChangedSinceReview = 'This report would now end reporting without a decision. Review the warning and confirm before reporting.'
-export const depositDeadlinePreview = (deadline: string, extension: string, unchanged: boolean) => `After this report, check back before ${deadline}. ${unchanged ? 'This report does not extend the response window.' : `Response window extended by ${extension}.`} Other reports can change when it ends.`
-
-export const dismissReminderUpdate = 'Dismiss'
 
 export const responseWindowEndsTooSoon = 'The response window ends too soon to report. Wait for the result.'
 
@@ -250,11 +173,6 @@ export const inheritedOutcomeReportingClosed = 'This branch inherits a fixed que
 export const continuationNotResumed = 'Resume the continuation game before reporting.'
 export const inheritedOutcomeCannotFork = 'This game has a fixed inherited outcome and cannot trigger a universe fork.'
 
-export const continuationResumed = 'Continuation resumed'
-export const inheritedAttritionElapsed = 'Inherited attrition elapsed'
-export const attritionBeginsAfter = (duration: string) => `${duration} until attrition begins`
-
-export const readyToFork = 'Ready to fork'
 export const walletRepReviewLabel = 'Wallet REP'
 export const claimPayoutReviewLabel = 'Claim payout'
 export const claimPayoutChangedSinceReview = 'The claim payout changed. Refresh and review the claim again.'
