@@ -123,14 +123,14 @@ export const priceErrors = {
 export const auctionErrors = {
 	auctionNotVerified: 'Could not verify the auction for this pool.',
 	auctionChanged: 'The auction changed. Refresh and retry.',
-	positionCode: 'Could not verify the auction position contract.',
-	positionAddress: 'The auction position address does not match the selected bid.',
-	positionPool: 'Could not verify the pool for this auction position.',
-	positionVersion: 'The auction position uses unexpected contract code.',
-	positionNotFromPool: 'Auction position does not belong to the selected security pool and bidder.',
+	positionCode: 'Could not verify the auction vault contract.',
+	positionAddress: 'The auction vault address does not match the selected bid.',
+	positionPool: 'Could not verify the pool for this auction vault.',
+	positionVersion: 'The auction vault uses unexpected contract code.',
+	positionNotFromPool: 'Auction vault does not belong to the selected security pool and bidder.',
 	closingStatus: 'Could not check whether the auction has closed.',
-	fillMismatch: 'The winning bid does not match this auction position.',
-	positionMismatch: 'Could not verify the auction position.',
+	fillMismatch: 'The winning bid does not match this auction vault.',
+	positionMismatch: 'Could not verify the auction vault.',
 	collateralContractMismatch: 'The address holding auction collateral does not match this pool.',
 }
 

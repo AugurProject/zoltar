@@ -324,7 +324,7 @@ describe('security pool collateral repair auction SDK', () => {
 		expect(decodeFunctionData({ abi, data: sweep.data })).toEqual({ functionName: 'executeAndSweep', args: [capital, 0n, data, rep, bidder] })
 		expect(() => buildSecurityPoolAuctionVaultExecuteRequest({ bidder, vault, request: { account: vault, to: capital, value: 0n, data }, sweep: { repToken: rep, recipient: zeroAddress } })).toThrow('Sweep recipient')
 		expect(buildSecurityPoolAuctionVaultExecuteRequest({ bidder, vault, request: { account: vault, to: bidder, value: 7n, data: '0x' }, fundingAttoEth: 0n }).value).toBe(0n)
-		expect(() => buildSecurityPoolAuctionVaultExecuteRequest({ bidder, vault, request: { account: bidder, to: capital, value: 0n, data } })).toThrow('selected auction position')
+		expect(() => buildSecurityPoolAuctionVaultExecuteRequest({ bidder, vault, request: { account: bidder, to: capital, value: 0n, data } })).toThrow('selected auction vault')
 		const deposit = buildSecurityPoolAuctionVaultDepositRequest({ bidder, vault, capitalLedger: capital, amountAttoRep: 9n, targetHealthFactorBps: 12_345n })
 		expect(decodeFunctionData({ abi, data: deposit.data })).toEqual({ functionName: 'depositPrincipal', args: [capital, 9n, 12_345n] })
 	})

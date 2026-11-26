@@ -4861,6 +4861,16 @@ export const shareTokenAbi = [
 	},
 	{ type: 'function', name: 'isAuthorized', stateMutability: 'view', inputs: [{ name: 'account', type: 'address', internalType: 'address' }], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
 	{ type: 'function', name: 'isSecurityPoolRecoveryEligible', stateMutability: 'view', inputs: [{ name: 'sourceUniverse', type: 'uint248', internalType: 'uint248' }], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
+	{
+		type: 'function',
+		name: 'isSourceBalanceLocked',
+		stateMutability: 'view',
+		inputs: [
+			{ name: 'id', type: 'uint256', internalType: 'uint256' },
+			{ name: 'holder', type: 'address', internalType: 'address' },
+		],
+		outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
+	},
 	{ type: 'function', name: 'maximumOutcomeSupply', stateMutability: 'view', inputs: [{ name: '_universeId', type: 'uint248', internalType: 'uint248' }], outputs: [{ name: 'maximumSupplyAttoShares', type: 'uint256', internalType: 'uint256' }] },
 	{
 		type: 'function',

@@ -173,7 +173,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 		)
 			throw new Error('Auction identities do not match the selected branch.')
 		const engine = decodeAddress(engineValue, 'Auction bidding contract')
-		const vaultImplementation = decodeAddress(implementationValue, 'Auction position contract template')
+		const vaultImplementation = decodeAddress(implementationValue, 'Auction vault contract template')
 		const opened = decodeBool(openedValue, 'Invalid auction state.')
 		const finalized = decodeBool(finalizedValue, 'Invalid auction state.')
 		const [engineController, initialized, engineFinalized, maximum, admissible, deposited, count, bidCredit] = await Promise.all([
@@ -242,7 +242,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			const id = decodeUint(await read(engine, 'bidderBidId', [bidder, index]), 'Bid ID')
 			if (id === 0n) throw new Error('Auction bid ID is missing.')
 			const values = decodeFields(await read(engine, 'bids', [id]), ['bidder', 'vault', 'targetHealthBps', 'lots', 'minimumAttoRepPerLot', 'settled', 'feesRemoved'], 'Invalid auction response.')
-			const vault = decodeAddress(values[1], 'Auction position')
+			const vault = decodeAddress(values[1], 'Auction vault')
 			const [vaultOwner, vaultCapital, vaultAuction, vaultId, registeredId] = await Promise.all([read(vault, 'owner'), read(vault, 'initialCapital'), read(vault, 'repairAuction'), read(vault, 'bidId'), read(auctionAddress, 'bidIdForVault', [vault])])
 			if (
 				decodeAddress(values[0], 'Bid owner') !== bidder ||
@@ -276,7 +276,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 					const current = decodeFields(await read(capitalLedger, 'repairAuctionPosition', [id]), ['vault', 'positionId', 'principal', 'commitment', 'targetHealthFactorBps', 'liquidationStarted', 'materialized', 'earnedAttoEth', 'earnedAttoRep'], 'Invalid auction response.')
 					if (decodeAddress(current[0], 'Auction capital position') !== vault || decodeBool(current[6], 'Invalid auction state.') !== bid.materialized) throw new Error('Auction capital position identity mismatch.')
 					position = {
-						positionId: decodeUint(current[1], 'Auction position ID', 96),
+						positionId: decodeUint(current[1], 'Pool position ID', 96),
 						principalAttoRep: decodeUint(current[2], 'Current pledged REP'),
 						commitmentAttoEth: decodeUint(current[3], 'Current commitment ETH'),
 						targetHealthFactorBps: decodeUint(current[4], 'Current health target'),

@@ -28,7 +28,7 @@ describe('auction vault clones', () => {
 		expect(() => verifyAuctionVaultCode(runtime, bindings)).not.toThrow()
 		for (const code of [undefined, '0x', `0x${runtime.slice(2)}00`, `0x00${runtime.slice(4)}`, auctionVaultRuntimeCode({ ...bindings, implementation: owner }), auctionVaultRuntimeCode({ ...bindings, bidId: 8n }), auctionVaultRuntimeCode({ ...bindings, owner: capital })] as const) {
 			expect(decodeAuctionVaultBindings(code)).not.toEqual(bindings)
-			expect(() => verifyAuctionVaultCode(code, bindings, 'auction position')).toThrow('Could not verify the code or linked addresses for the auction position.')
+			expect(() => verifyAuctionVaultCode(code, bindings, 'auction vault')).toThrow('Could not verify the code or linked addresses for the auction vault.')
 		}
 		expect(decodeAuctionVaultBindings(`0x00${runtime.slice(4)}`)).toBeUndefined()
 		expect(decodeAuctionVaultBindings(auctionVaultRuntimeCode({ ...bindings, bidId: 8n }))).toEqual({ ...bindings, bidId: 8n })

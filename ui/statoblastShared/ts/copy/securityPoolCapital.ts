@@ -96,7 +96,7 @@ export const reportChecking = 'Checking report funding and freshness.'
 export const reportChanged = 'Report terms changed. Review the commitment again.'
 
 export { readUnavailable } from './securityPool.js'
-export const auctionVaultOwnership = 'This auction position has separate collateral. Your wallet controls it and receives withdrawals.'
+export const auctionVaultOwnership = 'This auction vault has separate collateral. Your wallet controls it and receives withdrawals.'
 
 export const depositLiquidating = 'This position is liquidating. REP top-ups are unavailable.'
 

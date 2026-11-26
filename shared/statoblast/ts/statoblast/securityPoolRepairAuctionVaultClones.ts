@@ -25,7 +25,7 @@ function word(value: bigint, label: string) {
 
 /** @public The exact code a vault clone carries; external verifiers and fixtures reproduce it from the bindings. */
 export function auctionVaultRuntimeCode(bindings: AuctionVaultBindings): Hex {
-	return concatHex([FORWARDER_PREFIX, address(bindings.implementation, 'Auction position contract template'), FORWARDER_SUFFIX, address(bindings.owner, 'Position owner'), address(bindings.capital, 'Position capital'), address(bindings.auction, 'Position auction'), word(bindings.bidId, 'Auction bid ID')])
+	return concatHex([FORWARDER_PREFIX, address(bindings.implementation, 'Auction vault contract template'), FORWARDER_SUFFIX, address(bindings.owner, 'Position owner'), address(bindings.capital, 'Position capital'), address(bindings.auction, 'Position auction'), word(bindings.bidId, 'Auction bid ID')])
 }
 /** @public The CREATE2 init code the auction uses; external tooling derives vault addresses from it. */
 export function auctionVaultCreationCode(bindings: AuctionVaultBindings): Hex {
@@ -50,6 +50,6 @@ export function decodeAuctionVaultBindings(code: Hex | undefined): AuctionVaultB
 	return { implementation: getAddress(implementation), owner: getAddress(owner), capital: getAddress(capital), auction: getAddress(auction), bidId: BigInt(`0x${lower.slice(212, 276)}`) }
 }
 /** Accept only the exact clone the auction would have created for these bindings. */
-export function verifyAuctionVaultCode(code: Hex | undefined, bindings: AuctionVaultBindings, label = 'auction position') {
+export function verifyAuctionVaultCode(code: Hex | undefined, bindings: AuctionVaultBindings, label = 'auction vault') {
 	verifyBoundCloneCode(code, auctionVaultRuntimeCode(bindings), label)
 }

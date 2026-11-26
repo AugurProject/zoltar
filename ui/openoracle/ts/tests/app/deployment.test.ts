@@ -28,6 +28,10 @@ function createClient(missingId?: DeploymentStepId) {
 }
 
 describe('OpenOracle deployment boundary', () => {
+	test.each([MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, simulationProfile])('shows deployment labels in plain language on $id', profile => {
+		expect(onchainStateDependencies.getDeploymentSteps(profile).map(step => step.label)).toEqual(['Shared proxy', 'Batch read contract', 'OpenOracle'])
+	})
+
 	test.each([MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, simulationProfile])('requires only oracle contracts on $id', profile => {
 		const steps = onchainStateDependencies.getDeploymentSteps(profile)
 		expect(steps.map(step => step.id)).toEqual(requiredIds)
@@ -100,7 +104,7 @@ describe('OpenOracle deployment boundary', () => {
 			const step = onchainStateDependencies.getDeploymentSteps().find(candidate => candidate.id === id)
 			if (step === undefined) throw new Error(`Missing ${id} step`)
 			client.codes.set(step.address, '0x00')
-			await expect(onchainStateDependencies.loadDeploymentStatusOracleSnapshot(client)).rejects.toThrow(`Unexpected contract code for ${id}`)
+			await expect(onchainStateDependencies.loadDeploymentStatusOracleSnapshot(client)).rejects.toThrow(`Unexpected contract code for ${step.label}`)
 		} finally {
 			restore()
 		}

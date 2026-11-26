@@ -139,7 +139,7 @@ describe('OpenOracle application navigation', () => {
 		for (const label of ['Question ledgers', 'SecurityPoolFactory', 'QuestionForker', 'ShareTokenFactory', 'EscalationGameFactory', 'UniformPriceDualCapBatchAuctionFactory', 'ZoltarQuestionData']) {
 			expect(text).not.toContain(label)
 		}
-		for (const label of ['Shared proxy', 'Multicall3', 'OpenOracle']) expect(text).toContain(label)
+		for (const label of ['Shared proxy', 'Batch read contract', 'OpenOracle']) expect(text).toContain(label)
 	})
 
 	test('returns from deployment to the oracle browser', async () => {

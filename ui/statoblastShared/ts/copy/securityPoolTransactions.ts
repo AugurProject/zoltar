@@ -10,9 +10,9 @@ export const openDeploymentPromptWarning = 'If a deployment request is still ope
 export const pendingDeploymentTransactionWarning = 'This transaction may still be pending in your wallet. Cancel it there before starting a new deployment.'
 
 export const deployment = {
-	positionReview: (description: string, position: string, wallet: string) => `${description} The auction position is ${position}. Returned collateral, ETH and REP go to ${wallet}.`,
-	positionBlockRequired: 'Wait for a confirmed block to check this auction position.',
-	positionAuthorityChanged: 'Control of this auction position changed. Review again.',
+	positionReview: (description: string, position: string, wallet: string) => `${description} The auction vault is ${position}. Returned collateral, ETH and REP go to ${wallet}.`,
+	positionBlockRequired: 'Wait for a confirmed block to check this auction vault.',
+	positionAuthorityChanged: 'Control of this auction vault changed. Review again.',
 	securityMultiplierTooLow: `Security multiplier must be at least ${formatUnits(minimumSecurityMultiplierBps, 2)}%.`,
 	priorityFeeRequired: 'Enter a positive oracle priority fee.',
 	priorityFeeAboveLimit: 'Oracle priority fee exceeds the report funding limit.',
@@ -63,7 +63,7 @@ export const deployment = {
 	reviewDuration: (days: string) => `${days} ${days === '1' ? 'day' : 'days'}`,
 	reviewDurationExact: (days: string, seconds: bigint) => `${days} (${seconds} seconds)`,
 	reviewBacking: (multiplier: string, minimumPerShare: string) => `Security multiplier ${multiplier}%. Minimum backing per share ${minimumPerShare}.`,
-	reviewPriceReport: (minimumStake: string, priorityFee: string) => `Minimum price-report collateral ${minimumStake}. Price-report priority fee ${priorityFee} nanoETH/gas.`,
+	reviewPriceReport: (minimumStake: string, priorityFee: string) => `Minimum report collateral ${minimumStake}. Price-report priority fee ${priorityFee} nanoETH/gas.`,
 	prepareModulesReview: (stage: number, total: number) => `Complete setup stage ${stage} of ${total}. This deploys more pool contracts without moving funds.`,
 	stageChanged: 'Setup advanced. Refresh and review again.',
 }

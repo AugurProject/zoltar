@@ -167,7 +167,7 @@ const obsoleteCopy =
 const generalWords = /\b(?:accounts?|requests?|providers?|engines?|ledgers?|zoltar)\b/i
 const requiredDeploymentPromptWarning = 'If a deployment request is still open in your wallet, reject it there before starting a new deployment.'
 const internalTerms = /\b(?:authorit(?:y|ies)|canonical|custody|coordinators?|bootstrap(?:ped|ping|s)?|accruals?|settlement engines?|auction engines?|question ledgers?|controllers?|escrows?|modules?|services|clones?|epochs?|bindings?|factor(?:y|ies)|deployers?|runtime|uint\d*)\b/i
-const statoblastInternalTerms = /\b(?:protocols?|queue groups?|proofs?)\b/i
+const statoblastInternalTerms = /\b(?:protocols?|queue groups?|proofs?|auction positions?)\b/i
 const stakeNoun = /\bstakes?\b/i
 const stakeVerb = /\b(?:would|will|can|could|must|to)\s+stake\b|^stakes(?=\s+REP\b)/gi
 const fixedMagnitude = /\b(?:\d+(?:[.,]\d+)?|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?:\s*%|[ -]+(?:percent|seconds?|minutes?|hours?|days?|weeks?|months?|years?)\b)/i
@@ -180,6 +180,7 @@ function glossaryViolation(text: string, banStatoblastTerms = true) {
 
 function hasRawDeploymentName(label: string) {
 	const words = label.match(/\b[A-Z][A-Za-z\d]*\b/g) ?? []
+	// OpenOracle is the product name users see throughout the app.
 	return words.some(word => word !== 'OpenOracle' && /[a-z]/.test(word) && /[A-Z\d]/.test(word.slice(1)))
 }
 
@@ -430,6 +431,7 @@ function findViolations(source: ts.SourceFile, file = source.fileName) {
 test.each([
 	["commit('Settle your REP deposits')", 'Settle your REP deposits'],
 	["const amountLabel = 'Opening stake'", 'Opening stake'],
+	["decodeAddress(value, 'Auction position address') !== owner", 'Auction position address'],
 	["commit('Settle 3 deposits')", 'Settle 3 deposits'],
 	["commit('Unsettled deposits')", 'Unsettled deposits'],
 	["commit('Deposits not settled')", 'Deposits not settled'],

@@ -66,11 +66,11 @@ export async function loadSecurityPoolBranchAuction(client: ReadClient, security
 	if (auction !== undefined) {
 		await verifyAuctionCapitalCustody(client, securityPool, snapshot.capitalLedger, blockNumber)
 		await verifyCapitalLedgerClone(client, securityPool, snapshot.capitalLedger, universeId, snapshot.repToken, blockNumber)
-		modules.push({ address: auction.address, artifact: auctionArtifact, label: 'security pool auction' }, { address: auction.engine, artifact: engineArtifact, label: 'auction bidding contract' }, { address: auction.vaultImplementation, artifact: vaultArtifact, label: 'auction position contract' })
+		modules.push({ address: auction.address, artifact: auctionArtifact, label: 'security pool auction' }, { address: auction.engine, artifact: engineArtifact, label: 'auction bidding contract' }, { address: auction.vaultImplementation, artifact: vaultArtifact, label: 'auction vault contract' })
 	}
 	await Promise.all(modules.map(async module => verifyRuntimeCode(await client.getCode({ address: module.address, blockNumber }), `0x${module.artifact.evm.deployedBytecode.object}`, module.artifact.evm.deployedBytecode.immutableReferences, module.label)))
 	// Every vault is the exact clone the auction creates for the bidder, ledger, auction and bid.
-	if (auction !== undefined) await Promise.all(auction.bids.map(async bid => verifyAuctionVaultCode(await client.getCode({ address: bid.vault, blockNumber }), { implementation: auction.vaultImplementation, owner: bidder, capital: snapshot.capitalLedger, auction: auction.address, bidId: bid.id }, 'auction position')))
+	if (auction !== undefined) await Promise.all(auction.bids.map(async bid => verifyAuctionVaultCode(await client.getCode({ address: bid.vault, blockNumber }), { implementation: auction.vaultImplementation, owner: bidder, capital: snapshot.capitalLedger, auction: auction.address, bidId: bid.id }, 'auction vault')))
 	const [block, chainId] = await Promise.all([client.getBlock({ blockNumber }), client.getChainId()])
 	if (block.hash !== snapshot.blockHash || chainId !== snapshot.chainId) throw new Error(auctionErrors.auctionChanged)
 	return { ...snapshot, collateral: collateralPresentation(snapshot.collateralToken) }
@@ -151,10 +151,10 @@ export function securityPoolAuctionCache(profile: NetworkProfile, pool: Address,
  */
 export async function isCanonicalAuctionVaultImplementation(client: ReadClient, implementation: Address, blockNumber: bigint) {
 	try {
-		verifyRuntimeCode(await client.getCode({ address: implementation, blockNumber }), `0x${vaultArtifact.evm.deployedBytecode.object}`, vaultArtifact.evm.deployedBytecode.immutableReferences, 'auction position contract')
+		verifyRuntimeCode(await client.getCode({ address: implementation, blockNumber }), `0x${vaultArtifact.evm.deployedBytecode.object}`, vaultArtifact.evm.deployedBytecode.immutableReferences, 'auction vault contract')
 		return true
 	} catch (error) {
-		if (error instanceof Error && [contractCodeUnverified('auction position contract'), contractSettingsMismatch('auction position contract')].includes(error.message)) return false
+		if (error instanceof Error && [contractCodeUnverified('auction vault contract'), contractSettingsMismatch('auction vault contract')].includes(error.message)) return false
 		throw error
 	}
 }
@@ -173,12 +173,12 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 		read(securityPool, 'zoltar'),
 		read(securityPool, 'factory'),
 	])
-	const bidder = requireAddressValue(ownerValue, 'auction position owner')
+	const bidder = requireAddressValue(ownerValue, 'auction vault owner')
 	const initialCapital = requireAddressValue(capitalValue, 'initial auction capital')
 	const auction = requireAddressValue(auctionValue, 'position auction')
 	const bidId = requireBigintValue(idValue, 'position bid ID')
 	// The clone's code is the only authority for its bindings; the getters must agree with it.
-	verifyAuctionVaultCode(vaultCode, { implementation: bindings.implementation, owner: bidder, capital: initialCapital, auction, bidId }, 'auction position')
+	verifyAuctionVaultCode(vaultCode, { implementation: bindings.implementation, owner: bidder, capital: initialCapital, auction, bidId }, 'auction vault')
 	if (predictAuctionVaultAddress({ implementation: bindings.implementation, owner: bidder, capital: initialCapital, auction, bidId }) !== getAddress(vault)) throw new Error(auctionErrors.positionAddress)
 	const controller = requireAddressValue(controllerValue, 'fork contract')
 	const zoltar = requireAddressValue(protocolValue, 'universe contract for the security pool')
@@ -198,7 +198,7 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 	])
 	const initialUniverse = requireBigintValue(universeValue, 'initial auction universe')
 	const engine = requireAddressValue(engineValue, 'auction bidding contract')
-	if (getAddress(requireAddressValue(implementationValue, 'auction position contract template')) !== bindings.implementation) throw new Error(auctionErrors.positionVersion)
+	if (getAddress(requireAddressValue(implementationValue, 'auction vault contract template')) !== bindings.implementation) throw new Error(auctionErrors.positionVersion)
 	const [canonicalCapital, canonicalAuction, engineController, bidValue, registeredId] = await Promise.all([read(securityPool, 'capitalLedger', [initialUniverse]), read(controller, 'repairAuctions', [initialUniverse]), read(engine, 'controller'), read(engine, 'bids', [bidId]), read(auction, 'bidIdForVault', [vault])])
 	const bid = requireTupleValue(bidValue, 7, 'auction bid')
 	if (
@@ -221,7 +221,7 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 			{ address: controller, artifact: forkArtifact, label: 'fork contract' },
 			{ address: auction, artifact: auctionArtifact, label: 'security pool auction' },
 			{ address: engine, artifact: engineArtifact, label: 'auction bidding contract' },
-			{ address: bindings.implementation, artifact: vaultArtifact, label: 'auction position contract' },
+			{ address: bindings.implementation, artifact: vaultArtifact, label: 'auction vault contract' },
 		].map(async module => verifyRuntimeCode(await client.getCode({ address: module.address, blockNumber }), `0x${module.artifact.evm.deployedBytecode.object}`, module.artifact.evm.deployedBytecode.immutableReferences, module.label)),
 	])
 	const rep = requireAddressValue(await read(zoltar, 'getRepToken', [initialUniverse]), 'initial universe REP')
@@ -236,7 +236,7 @@ export async function authenticateSecurityPoolAuctionVault(client: ReadClient, s
 		filledLots = requireBigintValue(Reflect.get(fill, 'filledLots'), 'winning auction lots')
 		if (getAddress(requireAddressValue(Reflect.get(fill, 'vault'), 'filled position')) !== getAddress(vault) || getAddress(requireAddressValue(Reflect.get(fill, 'bidder'), 'fill bidder')) !== getAddress(bidder)) throw new Error(auctionErrors.fillMismatch)
 		if (filledLots > 0n) {
-			const position = requireObjectValue(await read(initialCapital, 'repairAuctionPosition', [bidId]), 'auction position')
+			const position = requireObjectValue(await read(initialCapital, 'repairAuctionPosition', [bidId]), 'auction vault')
 			const materializedValue = Reflect.get(position, 'materialized')
 			if (getAddress(requireAddressValue(Reflect.get(position, 'vault'), 'position address')) !== getAddress(vault) || typeof materializedValue !== 'boolean') throw new Error(auctionErrors.positionMismatch)
 			materialized = materializedValue
