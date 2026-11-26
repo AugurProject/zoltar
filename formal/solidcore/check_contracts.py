@@ -178,12 +178,16 @@ def check(args, work):
         result = []
         for i, name in enumerate(names):
             ns = f'SolidCore.Solidity.Target{index}_{i}'
-            # The INV-32 proof imports this model independently of inventory order.
+            # Proofs import these models independently of inventory order.
             if (path, name) == (
                 'contracts/trading/test/TwoWayConstantProductMathHarness.sol',
                 'TwoWayConstantProductMathHarness',
             ):
                 ns = 'SolidCore.Solidity.Inv32Generated'
+            elif (path, name) == (
+                'contracts/test/statoblast/InvariantMathHarness.sol', 'InvariantMathHarness',
+            ):
+                ns = 'SolidCore.Solidity.Inv27Generated'
             try:
                 selected = project(ast, name)
                 root = next(

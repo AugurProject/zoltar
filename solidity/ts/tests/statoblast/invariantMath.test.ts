@@ -98,3 +98,12 @@ test('settlement one-less/one-more bounds and oracle price brackets', async () =
 		}
 	}
 })
+
+test('INV-27 conservative price reaches the uint256 boundary at half uncertainty', async () => {
+	const firstOverflow = 1n << 255n
+	const bounds = (price: bigint, uncertainty: bigint) => client.readContract({ abi: artifact.abi, address, functionName: 'bounds', args: [price, uncertainty] })
+	const lastFit = firstOverflow - 1n
+	expect(await bounds(lastFit, 5000000n)).toEqual([(2n * lastFit) / 3n, 2n * lastFit])
+	expect(await bounds(firstOverflow, 0n)).toEqual([firstOverflow, firstOverflow])
+	await expect(bounds(firstOverflow, 5000000n)).rejects.toThrow(/overflow|0x11/i)
+})
