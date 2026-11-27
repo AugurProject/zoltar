@@ -38,6 +38,18 @@ describe('escalation game: a start-bond report that would tie the leader', () =>
 		expect((await e2e.balances(game.address))[YES]).toBe(2n * bond - 1n)
 	})
 
+	test('the configured response window is readable before the first report and matches the game clock', async () => {
+		const { first, bond } = await setup()
+		const responseWindow = await first.readContract({ abi: poolArtifact.abi, address: pool(), functionName: 'initialReportingResponseWindow' })
+		const hash = await deposit(first, NO, bond)
+		const receipt = await first.getTransactionReceipt({ hash })
+		const block = await first.getBlock({ blockNumber: receipt.blockNumber })
+		const game = e2e.game(await e2e.gameOf(pool()))
+		const activation = await first.readContract({ ...game, functionName: 'activationTime' })
+		expect(responseWindow).toBeGreaterThan(0n)
+		expect(activation).toBe(block.timestamp + responseWindow)
+	})
+
 	test('still rejects an offered amount below the start bond', async () => {
 		const { first, second, bond } = await setup()
 		await deposit(first, NO, bond)

@@ -134,6 +134,10 @@ export type ListedQuestionLedger = {
 	}
 	feeEligibleUnderwritingLimitAttoEth: bigint
 	hasEscalationGame: boolean
+	hasReachedNonDecision?: boolean | undefined
+	initialReportingResponseWindow?: bigint | undefined
+	oraclePriceValidUntilTimestamp?: bigint | undefined
+	ordinaryEscalationGameStarted: boolean
 	marketDetails: MarketDetails
 	questionOutcome: ReportingOutcomeKey | 'none'
 	questionId: string
@@ -143,6 +147,8 @@ export type ListedQuestionLedger = {
 	totalPoolHeldAttoRep: bigint
 	totalUnderwritingLimitAttoEth: bigint
 	universeHasForked: boolean
+	forkQuestionId?: bigint | undefined
+	forkedAt?: bigint | undefined
 	universeId: bigint
 }
 
@@ -180,6 +186,7 @@ export type TradingActionResult = ActionResult & {
 }
 
 export type EscalationDeposit = {
+	originalAttoRep?: bigint | undefined
 	amountAttoRep: bigint
 	cumulativeAmountAttoRep: bigint
 	depositIndex: bigint
@@ -219,6 +226,7 @@ export type CarriedDepositProof = {
 }
 
 export type EscalationSide = {
+	localPrincipalAttoRep?: bigint | undefined
 	balance: bigint
 	deposits: EscalationDeposit[]
 	importedUserDeposits: ImportedEscalationDeposit[]
@@ -238,7 +246,6 @@ type EscalationMigrationEntitlementStatus = {
 type ReportingDetailsBase = {
 	reportingBlockedReason?: string
 	canTriggerOwnFork?: boolean
-	contributionFunding?: 'vault' | 'wallet' | undefined
 	settlementCollateralAttoEth: bigint
 	currentTime: bigint
 	forkThresholdAttoRep: bigint
@@ -260,11 +267,14 @@ type ReportingDetailsBase = {
 
 export type ActiveReportingDetails = ReportingDetailsBase & {
 	status: 'active'
+	reportingDepositPool?: Address | undefined
+	reportingQuestionId?: bigint
 	bindingCapital: bigint
 	currentRequiredBond: bigint
 	/** Zoltar refuses this universe's fork before this time while its parent fork response period is active. */
 	earliestForkTime: bigint
 	escalationEndTime: bigint
+	latestEscalationEndTime?: bigint | undefined
 	escalationGameAddress: Address
 	hasReachedNonDecision: boolean
 	sides: EscalationSide[]

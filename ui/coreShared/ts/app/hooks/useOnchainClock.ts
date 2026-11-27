@@ -14,6 +14,7 @@ import { type ChainClock, loadBackendChainClock } from './readBackendValidation.
 export function useOnchainClock({
 	activeEnvironmentNonce,
 	enableChainClock,
+	autoRefreshChainClock,
 	environmentReady,
 	readBackendMessage,
 	readBackendValidated,
@@ -22,6 +23,7 @@ export function useOnchainClock({
 }: {
 	activeEnvironmentNonce: number
 	enableChainClock: boolean
+	autoRefreshChainClock: boolean
 	environmentReady: boolean
 	readBackendMessage: string | undefined
 	readBackendValidated: boolean
@@ -61,7 +63,7 @@ export function useOnchainClock({
 					chainClockError.value = undefined
 				})
 				updateReadBackendStatus(backend, nextChainClock)
-				appBlockWatcher.reportBlock(nextChainClock.currentBlockNumber)
+				if (autoRefreshChainClock) appBlockWatcher.reportBlock(nextChainClock.currentBlockNumber)
 			} catch (error) {
 				if (!isCurrentChainClockRequest()) return
 				clearChainClock()
@@ -87,7 +89,7 @@ export function useOnchainClock({
 		}
 	}, [activeEnvironmentNonce, enableChainClock])
 	useEffect(() => {
-		if (!enableChainClock) {
+		if (!enableChainClock || !autoRefreshChainClock) {
 			return
 		}
 		const backend = getActiveBackend()
@@ -103,7 +105,7 @@ export function useOnchainClock({
 			},
 			blockPollIntervalMilliseconds(getActiveSimulationController() !== undefined),
 		)
-	}, [activeEnvironmentNonce, enableChainClock, environmentReady, readBackendMessage, readBackendValidated])
+	}, [activeEnvironmentNonce, enableChainClock, autoRefreshChainClock, environmentReady, readBackendMessage, readBackendValidated])
 
 	return {
 		currentTimestamp: currentTimestamp.value,

@@ -53,7 +53,7 @@ export async function validateConfiguredReadBackend(backend: ChainBackend): Prom
 	if (backend.profile.id !== 'simulation' && blockTimestamp !== undefined && currentUnixSeconds > blockTimestamp + READ_BACKEND_STALE_BLOCK_SECONDS) {
 		return {
 			readBackendIssue: 'stale',
-			readBackendMessage: `Configured read RPC is out of date. Its latest block is from ${formatBlockTimestampWithRelative(blockTimestamp, currentUnixSeconds)}, more than 10 minutes behind local time.`,
+			readBackendMessage: `Configured read RPC is out of date. Its latest block is from ${formatBlockTimestampWithRelative(blockTimestamp, currentUnixSeconds)}, more than ${READ_BACKEND_STALE_BLOCK_SECONDS / 60n} minutes behind local time.`,
 			validated: true,
 		}
 	}

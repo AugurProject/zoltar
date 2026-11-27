@@ -5,7 +5,7 @@ export type ReadOperation = {
 }
 
 /** A deadline for lack of progress, rather than the combined duration of a chain of successful reads. */
-export async function runReadOperation<T>(load: (operation: ReadOperation) => Promise<T>, { timeoutMilliseconds = 30_000, isCurrent = () => true }: { timeoutMilliseconds?: number; isCurrent?: () => boolean } = {}) {
+export async function runReadOperation<T>(load: (operation: ReadOperation) => Promise<T>, { timeoutMilliseconds = 30_000, isCurrent = () => true }: { timeoutMilliseconds?: number | false; isCurrent?: () => boolean } = {}) {
 	let active = true
 	let timer: ReturnType<typeof setTimeout> | undefined
 	let rejectTimeout: (reason: Error) => void = () => undefined
@@ -14,6 +14,7 @@ export async function runReadOperation<T>(load: (operation: ReadOperation) => Pr
 		rejectTimeout = reject
 	})
 	const resetDeadline = () => {
+		if (timeoutMilliseconds === false) return
 		clearTimeout(timer)
 		timer = setTimeout(() => {
 			active = false

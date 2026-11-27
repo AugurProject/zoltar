@@ -9,7 +9,7 @@ import { unscopedTransaction } from '@zoltar/ui-core-shared/transactions/transac
 import { SecurityPoolRepairAuction } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolRepairAuction.js'
 import type { SecurityPoolAuctionParameters } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolAuction.js'
 import { auctionFixture, auctionVault } from './auctionFixture.js'
-import { owner, unit } from './capitalFixture.js'
+import { capitalSnapshot, owner, unit } from './capitalFixture.js'
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 const actions: SecurityPoolAuctionParameters['actions'] = { scope: unscopedTransaction, busy: undefined, ownerReason: undefined, runSecurityPoolAction: async () => undefined }
 function button(container: HTMLElement, text: string) {
@@ -28,6 +28,63 @@ function metric(container: HTMLElement, text: string) {
 		?.parentElement?.querySelector('.metric-field-value')?.textContent
 }
 
+test('the auction shows its recapitalization deadline, lot layout, and the current ask range', async () => {
+	const fixture = await auctionFixture()
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolRepairAuction fork={{ ...fixture.fork, activationDeadline: 3_600n }} bidder={owner} actions={actions} />))
+	await waitFor(() => expect(view.container.textContent).toContain('Bid 1'))
+	expect(view.container.querySelector('time')?.dateTime).toBe('1970-01-01T01:00:00.000Z')
+	expect(view.container.querySelector('[role="img"][aria-label*="10 lots"]')).not.toBeNull()
+	const scale = view.container.querySelector('.statoblast-auction-ask-scale')
+	expect(scale?.textContent).toContain('Your lowest')
+	expect(scale?.textContent).toContain('4.80')
+	expect(scale?.textContent).toContain('Highest now')
+})
+
+test('an auction deadline stops live bidding and rechecks the last observed block', async () => {
+	const fixture = await auctionFixture()
+	const nearDeadline = capitalSnapshot({ timestamp: 2_999n })
+	fixture.source.setSnapshot(nearDeadline)
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolRepairAuction fork={fixture.fork} bidder={owner} actions={actions} />))
+	await waitFor(() => expect(metric(view.container, 'Auction state')).toBe('Accepting bids'))
+	const pending = createDeferred<bigint>()
+	fixture.values['repGrid'] = pending.promise
+	fixture.source.setSnapshot({ ...nearDeadline, timestamp: 3_000n })
+	try {
+		await waitFor(() => expect(metric(view.container, 'Auction state')).toBe('Ended · checking…'), { timeout: 3_000 })
+		expect(view.container.querySelector('.statoblast-auction-ask-scale')).toBeNull()
+		expect(button(view.container, 'Submit funded bid').disabled).toBe(true)
+	} finally {
+		fixture.values['repGrid'] = 2n
+		await act(() => pending.resolve(2n))
+	}
+	await waitFor(() => expect(metric(view.container, 'Auction state')).toBe('Awaiting branch activation'))
+	expect([...view.container.querySelectorAll('button')].some(node => node.textContent === 'Submit funded bid')).toBe(false)
+	expect(view.container.querySelectorAll('input')).toHaveLength(0)
+})
+
+test('an open bid shows the lower-ask reason only when the verified limit proves strictly better bids', async () => {
+	const fixture = await auctionFixture()
+	fixture.values['maximumAdmissibleBidAttoRepPerLot'] = 50n * unit
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolRepairAuction fork={fixture.fork} bidder={owner} actions={actions} />))
+	await waitFor(() => expect(view.container.textContent).toContain('In contention'))
+	expect(view.container.textContent).not.toContain('Lower asks already fill the auction')
+	fixture.values['earlyRefundAttoEth'] = 2n * unit
+	await act(() => button(view.container, 'Refresh auction').click())
+	await waitFor(() => expect(view.container.textContent).toContain('Lower asks already fill the auction'))
+	expect(view.container.textContent).toContain('Outbid')
+})
+
+test('a finalized auction with no fills explains the remaining shortfall and makes bid collateral refundable', async () => {
+	const fixture = await auctionFixture()
+	fixture.values['finalized'] = true
+	fixture.values['clearing'] = [0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n, false]
+	fixture.values['previewBid'] = [owner, auctionVault, 12_000n, 0n, 0n, 0n, 2n * unit]
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolRepairAuction fork={fixture.fork} bidder={owner} actions={actions} />))
+	await waitFor(() => expect(view.container.textContent).toContain('Bid collateral is refundable. The branch activates with its collateral shortfall.'))
+	expect(button(view.container, 'Credit and withdraw refunds').disabled).toBe(false)
+	expect(view.container.textContent).toContain('No winning lots')
+})
+
 test('#1371 a full book displays no admissible limit rather than a price below the backing floor', async () => {
 	const fixture = await auctionFixture()
 	fixture.values['maximumAdmissibleBidAttoRepPerLot'] = 3n * unit
@@ -44,11 +101,11 @@ test('auction funding controls and bid rows stay in place through reload and fai
 	await waitFor(() => expect(view.container.textContent).toContain('Bid 1'))
 	expect(view.container.querySelectorAll('.card .card')).toHaveLength(0)
 	const original = Array.from(view.container.querySelectorAll('button'))
-	for (const name of ['Open collateral repair auction', 'Submit funded bid', 'Credit this bid’s refunds', 'Credit and withdraw refunds', 'Activate vault controls', 'Manage vault', 'Withdraw credited refunds', 'Refresh auction']) expect(original.some(node => node.textContent === name)).toBe(true)
+	for (const name of ['Open repair auction', 'Submit funded bid', 'Credit this bid’s refunds', 'Credit and withdraw refunds', 'Activate position controls', 'Manage position', 'Withdraw credited refunds', 'Refresh auction']) expect(original.some(node => node.textContent === name)).toBe(true)
 	await act(() => {
 		for (const [name, value] of [
 			['Number of lots', '2'],
-			['Minimum REP purchased per lot', '5'],
+			['REP you want per lot, at least', '5'],
 		] as const) {
 			const input = field(view.container, name)
 			input.value = value
@@ -59,7 +116,7 @@ test('auction funding controls and bid rows stay in place through reload and fai
 	expect(view.container.textContent).not.toContain('Approve REP')
 	expect(view.container.textContent).not.toContain('REP top-up')
 	expect(view.container.textContent).not.toContain('Execution reserve')
-	expect(metric(view.container, 'collateral bid')).toContain('2.00')
+	expect(metric(view.container, 'You lock until the auction closes')).toContain('2.00')
 	expect(view.container.textContent).not.toContain('Credited REP refund')
 	const pending = createDeferred<bigint>()
 	fixture.values['repGrid'] = pending.promise
@@ -71,7 +128,7 @@ test('auction funding controls and bid rows stay in place through reload and fai
 	await waitFor(() => expect(button(view.container, 'Refresh auction').disabled).toBe(false))
 	fixture.values['controller'] = owner
 	await act(() => button(view.container, 'Refresh auction').click())
-	await waitFor(() => expect(view.container.textContent).toContain('identity or state'))
+	await waitFor(() => expect(view.container.textContent).toContain('The auction status or contract address does not match this branch.'))
 	expect(button(view.container, 'Submit funded bid').disabled).toBe(true)
 	expect(view.container.textContent).toContain('Bid 1')
 })
@@ -82,20 +139,20 @@ test('funded unclaimed winners show live fees and separate activation from manag
 	const opened: string[] = []
 	const view = await renderIntoDocument(<SecurityPoolRepairAuction fork={fixture.fork} bidder={owner} actions={actions} openVault={vault => opened.push(vault)} />)
 	lifecycle.trackRendered(view)
-	await waitFor(() => expect(view.container.textContent).toContain('Funded vault'))
-	expect(metric(view.container, 'Current vault REP principal')).toContain('100.00')
+	await waitFor(() => expect(view.container.textContent).toContain('Funded position'))
+	expect(metric(view.container, 'Current pledged REP')).toContain('100.00')
 	expect(metric(view.container, 'Clearing REP per winning lot')).toContain('100.00')
 	expect(metric(view.container, 'REP pledged at closing')).toContain('100.00')
 	expect(metric(view.container, 'Unclaimed collateral fees')).toContain('7.00')
 	expect(metric(view.container, 'Unclaimed REP fees')).toContain('9.00')
-	expect(button(view.container, 'Activate vault controls').disabled).toBe(false)
-	expect(button(view.container, 'Manage vault').disabled).toBe(true)
+	expect(button(view.container, 'Activate position controls').disabled).toBe(false)
+	expect(button(view.container, 'Manage position').disabled).toBe(true)
 	fixture.values['bids'] = [owner, auctionVault, 12_000n, 2n, 60n * unit, false, true]
 	fixture.values['repairAuctionPosition'] = [auctionVault, 8n, 100n * unit, unit, 12_000n, 0n, true, 7n * unit, 9n * unit]
 	await act(() => button(view.container, 'Refresh auction').click())
-	await waitFor(() => expect(button(view.container, 'Manage vault').disabled).toBe(false))
-	expect(button(view.container, 'Activate vault controls').disabled).toBe(true)
-	await act(() => button(view.container, 'Manage vault').click())
+	await waitFor(() => expect(button(view.container, 'Manage position').disabled).toBe(false))
+	expect(button(view.container, 'Activate position controls').disabled).toBe(true)
+	await act(() => button(view.container, 'Manage position').click())
 	expect(opened).toEqual([auctionVault])
 })
 
@@ -117,8 +174,8 @@ test('early refund status enables only crediting then a separate unrestricted wi
 	await act(() => button(view.container, 'Refresh auction').click())
 	await waitFor(() => expect(credit.disabled).toBe(false))
 	expect(claim.disabled).toBe(false)
-	expect(view.container.textContent).toContain('Better funded bids rule out this bid')
-	expect(metric(view.container, 'Unused bid collateral')).toContain('2.00')
+	expect(view.container.textContent).toContain('Better asks or earlier bids at the same ask take the available lots')
+	expect(view.container.querySelector('[data-label="WETH refundable"]')?.textContent).toContain('2.00')
 	expect(withdraw.disabled).toBe(true)
 	fixture.values['earlyRefundAttoEth'] = 0n
 	fixture.values['bids'] = [owner, auctionVault, 12_000n, 2n, 60n * unit, true, false]
@@ -139,7 +196,6 @@ test('early refund status enables only crediting then a separate unrestricted wi
 	expect(view.container.textContent).toContain('This bid’s refund was settled')
 	expect(withdraw.disabled).toBe(true)
 	expect(claim.disabled).toBe(true)
-	expect(view.container.textContent).toContain('No refund credit remains to withdraw.')
 	fixture.values['refundCreditAttoEth'] = unit
 	await act(() => button(view.container, 'Refresh auction').click())
 	await waitFor(() => expect(withdraw.disabled).toBe(false))
@@ -160,7 +216,7 @@ test.each([
 	await act(() => {
 		for (const [name, value] of [
 			['Number of lots', '2'],
-			['Minimum REP purchased per lot', '5'],
+			['REP you want per lot, at least', '5'],
 		] as const) {
 			const input = field(view.container, name)
 			input.value = value

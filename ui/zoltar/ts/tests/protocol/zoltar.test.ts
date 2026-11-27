@@ -53,7 +53,7 @@ describe('zoltar contract helpers', () => {
 		const reads: string[] = []
 		const client = createReadClient({
 			multicallResponses: [
-				[REP_TOKEN, [1n, 42n, 2n, REP_TOKEN, 123n], 1n, 100n, 10n],
+				[REP_TOKEN, [1n, 42n, 2n, REP_TOKEN, 123n], 1n, 100n, 10n, 3_000n],
 				['REP', 'REP', 8n],
 				[[1n, 41n, 0n, REP_TOKEN, 77n], REP_TOKEN],
 			],
@@ -170,9 +170,9 @@ describe('zoltar contract helpers', () => {
 		expect(questionPageCalls).toEqual([[expectedStartIndex, 1n]])
 	})
 
-	test('loadZoltarUniverseSummary returns undefined for an unknown universe without reading its fork schedule', async () => {
+	test('loadZoltarUniverseSummary returns undefined for an unknown universe after its first batch', async () => {
 		const client = createReadClient({
-			multicallResponses: [[zeroAddress, [0n, 0n, 0n, zeroAddress, 0n], 0n, 1n, 5n]],
+			multicallResponses: [[zeroAddress, [0n, 0n, 0n, zeroAddress, 0n], 0n, 1n, 5n, 0n]],
 			readContractHandlers: {},
 		})
 		expect(await loadZoltarUniverseSummary(client, 999n)).toBeUndefined()
@@ -181,7 +181,7 @@ describe('zoltar contract helpers', () => {
 	test('loadZoltarUniverseSummary returns a non-forked universe summary for an active universe', async () => {
 		const client = createReadClient({
 			multicallResponses: [
-				[REP_TOKEN, [0n, 9n, 0n, getAddress('0x00000000000000000000000000000000000000ff'), 123n], 0n, 999n, 5n],
+				[REP_TOKEN, [0n, 9n, 0n, getAddress('0x00000000000000000000000000000000000000ff'), 123n], 0n, 999n, 5n, 0n],
 				['Augur Reputation 5', 'REP5', 5n],
 				[QUESTION_TUPLE_BINARY, 0n],
 			],
@@ -197,6 +197,7 @@ describe('zoltar contract helpers', () => {
 
 		expect(summary).toBeDefined()
 		expect(summary?.hasForked).toBe(false)
+		expect(summary?.forkRecapitalizationDeadline).toBeUndefined()
 		expect(summary?.forkQuestionDetails).toBeUndefined()
 		expect(summary?.childUniverses).toEqual([])
 		expect(summary?.totalTheoreticalSupplyAttoRep).toBe(111n)
@@ -214,7 +215,7 @@ describe('zoltar contract helpers', () => {
 	test('loadZoltarUniverseSummary loads scalar fork metadata without enumerating deployed children', async () => {
 		const client = createReadClient({
 			multicallResponses: [
-				[REP_TOKEN, [0n, 55n, 2n, getAddress('0x0000000000000000000000000000000000000000'), 77n], 15n, 5n, 5n],
+				[REP_TOKEN, [0n, 55n, 2n, getAddress('0x0000000000000000000000000000000000000000'), 77n], 15n, 5n, 5n, 3_000n],
 				['Augur Reputation 8', 'REP8', 8n],
 				[QUESTION_TUPLE_SCALAR, 1n],
 			],
@@ -234,6 +235,7 @@ describe('zoltar contract helpers', () => {
 		expect(summary).toBeDefined()
 		expect(summary?.forkQuestionDetails?.marketType).toBe('scalar')
 		expect(summary?.hasForked).toBe(true)
+		expect(summary?.forkRecapitalizationDeadline).toBe(3_000n)
 		expect(summary?.childUniverses).toEqual([])
 		expect(summary?.lineage).toEqual([
 			{ outcomeLabel: undefined, universeId: 0n },
@@ -247,7 +249,7 @@ describe('zoltar contract helpers', () => {
 		const lastIndex = getScalarOutcomeIndex({ numTicks, answerUnit: '', displayValueMin: 0n, displayValueMax: numTicks }, numTicks)
 		const client = createReadClient({
 			multicallResponses: [
-				[REP_TOKEN, [0n, 55n, 2n, REP_TOKEN, 77n], 15n, 5n, 5n],
+				[REP_TOKEN, [0n, 55n, 2n, REP_TOKEN, 77n], 15n, 5n, 5n, 3_000n],
 				['Augur Reputation 8', 'REP8', 8n],
 				[['Scalar question', '', 0n, 1n, numTicks, 0n, 100n, 'units'], 1n],
 				[99n, 100n],
@@ -279,7 +281,7 @@ describe('zoltar contract helpers', () => {
 		const childUniverseIds = [10n, 20n, 30n]
 		const client = createReadClient({
 			multicallResponses: [
-				[REP_TOKEN, [0n, 44n, 1n, getAddress('0x0000000000000000000000000000000000000000'), 123n], 12n, 9n, 5n],
+				[REP_TOKEN, [0n, 44n, 1n, getAddress('0x0000000000000000000000000000000000000000'), 123n], 12n, 9n, 5n, 3_000n],
 				['Augur Reputation 8', 'REP8', 8n],
 				[QUESTION_TUPLE_BINARY, 1n],
 				childUniverseIds,

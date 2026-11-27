@@ -2,6 +2,7 @@ import { afterEach, expect, mock, test } from 'bun:test'
 import { transactionErrorMessages } from '../lib/errors.js'
 import { createRecoveringReceiptWaiter } from '../transactions/receiptRecovery.js'
 import { announceTransactionTrackingStopped, resetTransactionTrackingStopsForTesting } from '../transactions/transactionTrackingStop.js'
+import { createDeferred } from './testUtils/deferred.js'
 
 afterEach(() => {
 	resetTransactionTrackingStopsForTesting()
@@ -72,4 +73,37 @@ test('releases a receipt wait as soon as the user stops tracking its transaction
 	// A later wait for the released hash, such as the activity watcher resuming, ends immediately too.
 	await expect(wait({ hash, pollingInterval: 1 })).rejects.toThrow(transactionErrorMessages.trackingStopped)
 	expect(waitForTransactionReceipt).toHaveBeenCalledTimes(1)
+})
+
+test('stops tracking the new hash after the wallet speeds up a transaction', async () => {
+	const speedUpHash = '0x0000000000000000000000000000000000000000000000000000000000000002'
+	const account = '0x0000000000000000000000000000000000000001'
+	const speedUp = createDeferred<void>()
+	const wait = createRecoveringReceiptWaiter(
+		{
+			getTransaction: mock(async () => {
+				throw new Error('Transaction read unavailable')
+			}),
+			waitForTransactionReceipt: async parameters => {
+				parameters.onReplaced?.({
+					reason: 'repriced',
+					replacedTransaction: { hash },
+					transaction: { hash: speedUpHash },
+					transactionReceipt: { blockHash: hash, blockNumber: 1n, cumulativeGasUsed: 21000n, from: account, gasUsed: 21000n, logs: [], status: 'success', transactionHash: speedUpHash, transactionIndex: 0n },
+				})
+				speedUp.resolve()
+				return await new Promise<never>(() => undefined)
+			},
+		},
+		{ onTransactionSubmitted: mock(() => undefined) },
+	)
+	const pending = wait({ hash, onReplaced: () => undefined })
+	void pending.catch(() => undefined)
+	await speedUp.promise
+	try {
+		announceTransactionTrackingStopped(speedUpHash)
+		await expect(Promise.race([pending, Bun.sleep(50).then(() => 'still tracking')])).rejects.toThrow(transactionErrorMessages.trackingStopped)
+	} finally {
+		announceTransactionTrackingStopped(hash)
+	}
 })

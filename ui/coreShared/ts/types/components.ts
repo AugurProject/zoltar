@@ -145,14 +145,6 @@ export type SectionBlockProps = {
 	variant?: 'default' | 'embedded' | 'plain' | 'surface'
 }
 
-export type RouteWorkflowPanelProps = {
-	children: ComponentChildren
-	className?: string
-	description?: ComponentChildren
-	showHeader?: boolean
-	title: ComponentChildren
-}
-
 export type DataGridProps = {
 	children: ComponentChildren
 	className?: string
@@ -168,17 +160,6 @@ export type MetricGridProps = {
 	columns?: 2 | 3 | 4 | 'auto'
 	dense?: boolean
 	variant?: MetricGridVariant
-}
-
-export type ProgressMeterProps = {
-	className?: string
-	detail?: ComponentChildren
-	label: ComponentChildren
-	maxValue?: bigint
-	secondaryValue?: ComponentChildren
-	tone?: 'default' | 'danger' | 'muted' | 'success' | 'warning'
-	value?: bigint
-	valueText: ComponentChildren
 }
 
 export type RankedBarListProps = {
@@ -255,6 +236,8 @@ export type OperationModalProps = {
 	children?: ComponentChildren
 	closeDisabled?: boolean
 	closeOnSuccessKey?: string | undefined
+	/** Optional label for the final confirmation within this dialog's review. */
+	finalActionLabel?: string | undefined
 	getReturnFocusTarget?: (() => HTMLElement | null) | undefined
 	/** Objects the action touches (question, pool, vault), shown above the form; transaction notices inside the dialog omit matching rows. */
 	context?: TransactionContextItem[]

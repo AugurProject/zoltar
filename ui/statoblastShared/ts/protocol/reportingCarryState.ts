@@ -1,3 +1,7 @@
+import { reportErrors, unexpectedResponse } from '../copy/protocolErrors.js'
+import { isHex } from '@zoltar/core-shared/evm/ethereum'
+import { isStoredRecord } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
+import { statoblastDisplayCache } from './statoblastPageCache.js'
 import { bigintToSafeNumber, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_EscalationGame_EscalationGame, statoblast_QuestionLedger_QuestionLedger } from '../contractArtifact.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
@@ -5,13 +9,18 @@ import type { ReadClient, ReportingOutcomeKey, WriteClient } from '@zoltar/ui-co
 import type { AuthenticatedForkClaim, CarriedDepositProof, ImportedEscalationDeposit } from '../types/contracts.js'
 import { readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { requireAddressValue, requireArrayValue, requireBigintValue, requireIntegerLikeValue, requireObjectValue, requireTupleValue } from './decoders.js'
-import { getReportingOutcomeValue } from '@zoltar/ui-core-shared/lib/contractEnums.js'
+import { getReportingOutcomeKey, getReportingOutcomeValue } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import { executeForkAuctionAction, readQuestionLedgerUniverseId } from './questionLedgerActions.js'
 import { buildCarryMerkleMountainRangeProof, createSparseNullifier, hashCarryLeaf } from './reportingCarryProof.js'
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { claimStateChanged } from './claimActionState.js'
 import { withClaimReadContext } from './claimReadContext.js'
 import { CONTRACT_PAGE_SIZE } from './pagination.js'
+import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import * as copy from '../copy/reporting.js'
+import { ABIS } from '@zoltar/ui-core-shared/abis.js'
+import { rep } from '@zoltar/ui-core-shared/copy/common.js'
+import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 
 const EMPTY_CARRY_LEAF_HASH = ('0x' + '00'.repeat(32)) as Hex
 
@@ -43,17 +52,17 @@ function requireCarryLeafView(value: unknown, context: string): CarryLeafViewStr
 			sourceNodeId: requireBigintValue(leaf.sourceNodeId, context),
 		}
 	}
-	throw new Error(`Unexpected ${context} response`)
+	throw new Error(unexpectedResponse(context))
 }
 
 function requireCarryLeafPageResponse(value: unknown): {
 	page: CarryLeafViewStruct[]
 	nextNodeId: bigint
 } {
-	const [page, nextNodeId] = requireTupleValue(value, 2, 'carry leaf page')
+	const [page, nextNodeId] = requireTupleValue(value, 2, 'inherited deposits')
 	return {
-		page: requireArrayValue(page, 'carry leaf page').map(leaf => requireCarryLeafView(leaf, 'carry leaf page')),
-		nextNodeId: requireBigintValue(nextNodeId, 'carry leaf page'),
+		page: requireArrayValue(page, 'inherited deposits').map(leaf => requireCarryLeafView(leaf, 'inherited deposits')),
+		nextNodeId: requireBigintValue(nextNodeId, 'inherited deposits'),
 	}
 }
 
@@ -77,18 +86,18 @@ async function loadCarryLeafPage(client: Pick<ReadClient, 'readContract'>, escal
 }
 
 function requireHistoricalCarryNode(value: unknown, sourceNodeId: bigint, outcome: ReportingOutcomeKey): { leaf: HistoricalCarryLeafViewStruct; parentNodeId: bigint } {
-	const [parentNodeId, depositor, nodeOutcome, amountAttoRep, parentDepositIndex, cumulativeAmountAttoRep, carryLeafIndex] = requireTupleValue(value, 7, 'historical carry node')
-	if (requireIntegerLikeValue(nodeOutcome, 'historical carry node outcome') !== getReportingOutcomeValue(outcome)) throw new Error('Unexpected historical carry node outcome')
+	const [parentNodeId, depositor, nodeOutcome, amountAttoRep, parentDepositIndex, cumulativeAmountAttoRep, carryLeafIndex] = requireTupleValue(value, 7, 'recorded deposit')
+	if (getReportingOutcomeKey(requireIntegerLikeValue(nodeOutcome, 'recorded deposit outcome')) !== outcome) throw new Error(reportErrors.depositOutcome)
 	return {
 		leaf: {
-			amountAttoRep: requireBigintValue(amountAttoRep, 'historical carry node amount'),
-			carryLeafIndex: requireBigintValue(carryLeafIndex, 'historical carry node leaf index'),
-			cumulativeAmountAttoRep: requireBigintValue(cumulativeAmountAttoRep, 'historical carry node cumulative amount'),
-			depositor: requireAddressValue(depositor, 'historical carry node depositor'),
-			parentDepositIndex: requireBigintValue(parentDepositIndex, 'historical carry node parent deposit index'),
+			amountAttoRep: requireBigintValue(amountAttoRep, 'recorded deposit amount'),
+			carryLeafIndex: requireBigintValue(carryLeafIndex, 'recorded deposit position'),
+			cumulativeAmountAttoRep: requireBigintValue(cumulativeAmountAttoRep, 'recorded deposit total'),
+			depositor: requireAddressValue(depositor, 'recorded deposit owner'),
+			parentDepositIndex: requireBigintValue(parentDepositIndex, 'parent deposit ID'),
 			sourceNodeId,
 		},
-		parentNodeId: requireBigintValue(parentNodeId, 'historical carry node parent node id'),
+		parentNodeId: requireBigintValue(parentNodeId, 'previous deposit ID'),
 	}
 }
 
@@ -98,7 +107,7 @@ async function loadHistoricalLocalCarryLeaves(client: Pick<ReadClient, 'readCont
 	const carryLeaves: HistoricalCarryLeafViewStruct[] = []
 	while (nodeId !== 0n) {
 		const nodeKey = nodeId.toString()
-		if (visitedNodeIds.has(nodeKey)) throw new Error('Historical carry node chain contains a cycle.')
+		if (visitedNodeIds.has(nodeKey)) throw new Error(reportErrors.repeatedDeposit)
 		visitedNodeIds.add(nodeKey)
 		const { leaf, parentNodeId } = requireHistoricalCarryNode(
 			await client.readContract({
@@ -141,12 +150,12 @@ async function loadRecursiveHistoricalCarryLeaves(client: Pick<ReadClient, 'read
 	const parentEscalationGameAddress = forkContinuation === true ? await readParentEscalationGameAddress(client, escalationGameAddress) : undefined
 	if (parentEscalationGameAddress !== undefined) {
 		const parentLeaves = await loadRecursiveHistoricalCarryLeaves(client, parentEscalationGameAddress, outcome)
-		if (BigInt(parentLeaves.length) < snapshotLeafCount) throw new Error('Inherited historical carry snapshot is incomplete.')
-		inheritedLeaves = parentLeaves.slice(0, bigintToSafeNumber(snapshotLeafCount, 'Snapshot leaf count'))
+		if (BigInt(parentLeaves.length) < snapshotLeafCount) throw new Error(reportErrors.incompleteHistory)
+		inheritedLeaves = parentLeaves.slice(0, bigintToSafeNumber(snapshotLeafCount, 'Recorded deposit count'))
 	}
-	if (BigInt(inheritedLeaves.length) !== snapshotLeafCount) throw new Error('Inherited historical carry snapshot is not locally reconstructible.')
+	if (BigInt(inheritedLeaves.length) !== snapshotLeafCount) throw new Error(reportErrors.inheritedDepositsUnverified)
 	for (const [localIndex, leaf] of localLeaves.entries()) {
-		if (leaf.carryLeafIndex !== snapshotLeafCount + BigInt(localIndex)) throw new Error('Historical carry leaf order is not locally reconstructible.')
+		if (leaf.carryLeafIndex !== snapshotLeafCount + BigInt(localIndex)) throw new Error(reportErrors.depositOrder)
 	}
 	const localEntries = await buildHistoricalLocalCarrySnapshotEntries(client, escalationGameAddress, outcome, localLeaves)
 	return [...inheritedLeaves, ...localEntries]
@@ -163,8 +172,8 @@ async function loadProofConsumedCarriedDepositIndexes(client: Pick<ReadClient, '
 				functionName: 'getProofConsumedCarriedDepositIndexesByOutcome',
 				args: [getReportingOutcomeValue(outcome), startIndex, CONTRACT_PAGE_SIZE],
 			}),
-			'consumed carried deposit index page',
-		).map(item => requireBigintValue(item, 'consumed carried deposit index page'))
+			'claimed inherited deposit IDs',
+		).map(item => requireBigintValue(item, 'claimed inherited deposit ID'))
 		parentDepositIndexes.push(...page)
 		if (BigInt(page.length) !== CONTRACT_PAGE_SIZE) break
 		startIndex += CONTRACT_PAGE_SIZE
@@ -254,40 +263,112 @@ async function loadRecursiveCarrySnapshot(
 	}
 }
 
+class CarrySnapshotMismatch extends Error {}
+
 function authenticateCarrySnapshot(parentHistoricalLeaves: readonly HistoricalCarrySnapshotEntry[], childOutcomeState: Awaited<ReturnType<typeof readEscalationOutcomeState>>) {
 	const { snapshotLeafCount: parentCarryLeafCount, snapshotCarryRoot: snapshotRoot } = childOutcomeState
-	if (BigInt(parentHistoricalLeaves.length) < parentCarryLeafCount) throw new Error('Parent carry snapshot is not locally reconstructible.')
-	const orderedEntries = parentHistoricalLeaves.slice(0, bigintToSafeNumber(parentCarryLeafCount, 'Parent carry leaf count'))
+	if (BigInt(parentHistoricalLeaves.length) < parentCarryLeafCount) throw new CarrySnapshotMismatch(reportErrors.incompleteHistory)
+	const orderedEntries = parentHistoricalLeaves.slice(0, bigintToSafeNumber(parentCarryLeafCount, 'Parent deposit count'))
 	const orderedLeaves = orderedEntries.map(entry => entry.leaf)
 	const leafHashes = orderedEntries.map(entry => entry.leafHash)
-	if (leafHashes.length > 0 && buildCarryMerkleMountainRangeProof(leafHashes, 0).root !== snapshotRoot) throw new Error('Parent carry snapshot root is not locally reconstructible.')
+	if (leafHashes.length > 0 && buildCarryMerkleMountainRangeProof(leafHashes, 0).root !== snapshotRoot) throw new CarrySnapshotMismatch(reportErrors.unverifiedHistory)
 	return { orderedEntries, orderedLeaves, leafHashes, snapshotRoot }
 }
 
-async function loadParentSnapshot(client: Pick<ReadClient, 'readContract'>, childEscalationGameAddress: Address, parentQuestionLedgerAddress: Address, outcome: ReportingOutcomeKey, depositor: Address): Promise<ImportedEscalationDeposit[]> {
+type FrozenParentSnapshot = {
+	leaves: CarryLeafViewStruct[]
+	history: HistoricalCarrySnapshotEntry[]
+	consumed: bigint[]
+}
+function decodeFrozenParent(value: unknown): FrozenParentSnapshot | undefined {
+	if (!isStoredRecord(value) || !Array.isArray(value['leaves']) || !Array.isArray(value['history']) || !Array.isArray(value['consumed'])) return undefined
+	try {
+		return {
+			leaves: value['leaves'].map(leaf => requireCarryLeafView(leaf, 'saved parent deposit')),
+			history: value['history'].map(entry => {
+				if (!isStoredRecord(entry) || typeof entry['leafHash'] !== 'string' || !isHex(entry['leafHash'], { strict: true }) || entry['leafHash'].length !== 66) throw new Error(reportErrors.invalidSavedDeposit)
+				return { leaf: requireCarryLeafView(entry['leaf'], 'saved parent history'), leafHash: `0x${entry['leafHash'].slice(2)}` as const }
+			}),
+			consumed: value['consumed'].map(index => requireBigintValue(index, 'saved claimed deposit ID')),
+		}
+	} catch (error) {
+		if (error instanceof Error) return undefined
+		throw error
+	}
+}
+
+export type ParentClaimPreparation = {
+	read: (client: Pick<ReadClient, 'readContract'>, report: (node: string) => void) => Pick<ReadClient, 'readContract'>
+	onProgress: (outcome: ReportingOutcomeKey, completed: bigint, total: bigint) => void
+}
+
+const frozenParentSnapshots = new WeakMap<ReturnType<typeof getActiveBackend>, Map<string, FrozenParentSnapshot>>()
+
+async function loadParentSnapshot(
+	client: Pick<ReadClient, 'readContract'>,
+	childEscalationGameAddress: Address,
+	parentQuestionLedgerAddress: Address,
+	outcome: ReportingOutcomeKey,
+	depositor: Address,
+	blockNumber: bigint,
+	preparation?: ParentClaimPreparation,
+): Promise<{ claims: ImportedEscalationDeposit[]; cache?: () => void }> {
 	const parentEscalationGameAddress = await client.readContract({
 		abi: statoblast_QuestionLedger_QuestionLedger.abi,
 		address: parentQuestionLedgerAddress,
 		functionName: 'escalationGame',
 		args: [],
 	})
-	if (parentEscalationGameAddress === zeroAddress) return []
-	const [{ orderedLeaves: parentSnapshotLeaves }, inheritedConsumedParentDepositIndexes, localConsumedParentDepositIndexes, historicalLeaves, childOutcomeState] = await Promise.all([
-		loadRecursiveCarrySnapshot(client, parentEscalationGameAddress, outcome),
-		loadRecursiveProofConsumedCarriedDepositIndexes(client, parentEscalationGameAddress, outcome),
-		loadProofConsumedCarriedDepositIndexes(client, childEscalationGameAddress, outcome),
-		loadRecursiveHistoricalCarryLeaves(client, parentEscalationGameAddress, outcome),
-		readEscalationOutcomeState(client, childEscalationGameAddress, outcome),
+	if (parentEscalationGameAddress === zeroAddress) return { claims: [] }
+	const [parentIsContinuation, principal] = await Promise.all([
+		readForkContinuation(client, parentEscalationGameAddress),
+		client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: parentEscalationGameAddress, functionName: 'getLocalUnresolvedPrincipalByVaultAndOutcome', args: [depositor, getReportingOutcomeValue(outcome)] }),
 	])
-	const { orderedEntries, snapshotRoot } = authenticateCarrySnapshot(historicalLeaves, childOutcomeState)
-	const consumedParentDepositIndexes = [...inheritedConsumedParentDepositIndexes, ...localConsumedParentDepositIndexes]
+	if (!parentIsContinuation && principal === 0n) return { claims: [] }
+	const childOutcomeState = await readEscalationOutcomeState(client, childEscalationGameAddress, outcome)
+	const cacheKey = `${parentEscalationGameAddress}:${outcome}:${childOutcomeState.snapshotCarryRoot}:${childOutcomeState.snapshotLeafCount}`
+	const backend = getActiveBackend()
+	const parentCache = frozenParentSnapshots.get(backend) ?? new Map<string, FrozenParentSnapshot>()
+	frozenParentSnapshots.set(backend, parentCache)
+	const persisted = preparation === undefined ? undefined : statoblastDisplayCache(backend.profile, { universeId: 0n, owner: undefined, page: `frozen-parent:${cacheKey}` }, decodeFrozenParent)
+	let parent = parentCache.get(cacheKey) ?? persisted?.read()?.value
+	if (parent !== undefined) {
+		try {
+			authenticateCarrySnapshot(parent.history, childOutcomeState)
+		} catch (error) {
+			if (!(error instanceof CarrySnapshotMismatch)) throw error
+			parent = undefined
+		}
+	}
+	if (parent === undefined) {
+		const processed = new Set<string>()
+		const total = childOutcomeState.snapshotLeafCount
+		preparation?.onProgress(outcome, 0n, total)
+		const parentRead =
+			preparation?.read(client, node => {
+				processed.add(node)
+				const completed = BigInt(processed.size)
+				preparation.onProgress(outcome, completed < total ? completed : total, total)
+			}) ?? client
+		const [{ orderedLeaves: leaves }, history, consumed] = await Promise.all([
+			loadRecursiveCarrySnapshot(parentRead, parentEscalationGameAddress, outcome),
+			loadRecursiveHistoricalCarryLeaves(parentRead, parentEscalationGameAddress, outcome),
+			loadRecursiveProofConsumedCarriedDepositIndexes(parentRead, parentEscalationGameAddress, outcome),
+		])
+		parent = { leaves, history, consumed }
+	}
+	preparation?.onProgress(outcome, childOutcomeState.snapshotLeafCount, childOutcomeState.snapshotLeafCount)
+	const { orderedEntries, snapshotRoot } = authenticateCarrySnapshot(parent.history, childOutcomeState)
+	const localConsumedParentDepositIndexes = await loadProofConsumedCarriedDepositIndexes(client, childEscalationGameAddress, outcome)
+	const parentSnapshotLeaves = parent.leaves
+	const consumedParentDepositIndexes = [...parent.consumed, ...localConsumedParentDepositIndexes]
 	const consumedParentDepositIndexSet = new Set(consumedParentDepositIndexes.map(value => value.toString()))
-	return await Promise.all(
+	const claims = await Promise.all(
 		parentSnapshotLeaves
 			.filter(leaf => sameAddress(leaf.depositor, depositor) && !consumedParentDepositIndexSet.has(leaf.parentDepositIndex.toString()))
 			.map(async leaf => {
 				const leafIndex = orderedEntries.findIndex(entry => entry.leaf.parentDepositIndex === leaf.parentDepositIndex && entry.leafHash === hashCarryLeaf(leaf, outcome))
-				if (leafIndex < 0) throw new Error('Inherited claim history is incomplete.')
+				if (leafIndex < 0) throw new Error(copy.inheritedClaimParentDepositsUnavailable)
 				const claimIdentity: AuthenticatedForkClaim = {
 					escalationGame: childEscalationGameAddress,
 					outcome,
@@ -302,9 +383,26 @@ async function loadParentSnapshot(client: Pick<ReadClient, 'readContract'>, chil
 				return { amountAttoRep: leaf.amountAttoRep, cumulativeAmountAttoRep: leaf.cumulativeAmountAttoRep, depositor: leaf.depositor, parentDepositIndex: leaf.parentDepositIndex, claimIdentity }
 			}),
 	)
+	const snapshot = parent
+	return {
+		claims,
+		cache: () => {
+			parentCache.set(cacheKey, snapshot)
+			persisted?.write(snapshot, { number: blockNumber, timestamp: 0n })
+		},
+	}
 }
-export async function loadForkCarriedEscalationDepositsFromParentSnapshot(client: Parameters<typeof withClaimReadContext>[0], childEscalationGameAddress: Address, parentQuestionLedgerAddress: Address, outcome: ReportingOutcomeKey, depositor: Address): Promise<ImportedEscalationDeposit[]> {
-	return await withClaimReadContext(client, context => loadParentSnapshot(context, childEscalationGameAddress, parentQuestionLedgerAddress, outcome, depositor))
+export async function loadForkCarriedEscalationDepositsFromParentSnapshot(
+	client: Parameters<typeof withClaimReadContext>[0],
+	childEscalationGameAddress: Address,
+	parentQuestionLedgerAddress: Address,
+	outcome: ReportingOutcomeKey,
+	depositor: Address,
+	preparation?: ParentClaimPreparation,
+): Promise<ImportedEscalationDeposit[]> {
+	const result = await withClaimReadContext(client, (context, blockNumber) => loadParentSnapshot(context, childEscalationGameAddress, parentQuestionLedgerAddress, outcome, depositor, blockNumber, preparation))
+	result.cache?.()
+	return result.claims
 }
 
 export async function buildForkCarriedEscalationProofs(client: ReadClient, questionLedgerAddress: Address, outcome: ReportingOutcomeKey, parentDepositIndexes: readonly bigint[]): Promise<CarriedDepositProof[]> {
@@ -322,15 +420,15 @@ export async function buildForkCarriedEscalationProofs(client: ReadClient, quest
 }
 
 async function buildCarriedProofs(client: Pick<ReadClient, 'readContract'>, parentQuestionLedgerAddress: Address, childEscalationGameAddress: Address, outcome: ReportingOutcomeKey, parentDepositIndexes: readonly bigint[]): Promise<CarriedDepositProof[]> {
-	if (parentQuestionLedgerAddress === zeroAddress) throw new Error('Parent deposits can only be settled in a child question.')
-	if (childEscalationGameAddress === zeroAddress) throw new Error('The child escalation game is unavailable for settling parent deposits.')
+	if (parentQuestionLedgerAddress === zeroAddress) throw new Error(copy.inheritedClaimRequiresChildQuestion)
+	if (childEscalationGameAddress === zeroAddress) throw new Error(copy.inheritedClaimChildReportingUnavailable)
 	const parentEscalationGameAddress = await client.readContract({
 		address: parentQuestionLedgerAddress,
 		abi: statoblast_QuestionLedger_QuestionLedger.abi,
 		functionName: 'escalationGame',
 		args: [],
 	})
-	if (parentEscalationGameAddress === zeroAddress) throw new Error('The parent escalation game is unavailable for settling parent deposits.')
+	if (parentEscalationGameAddress === zeroAddress) throw new Error(copy.inheritedClaimParentDepositsUnavailable)
 	const [parentHistoricalLeaves, inheritedConsumedParentDepositIndexes, localConsumedParentDepositIndexes, childOutcomeState] = await Promise.all([
 		loadRecursiveHistoricalCarryLeaves(client, parentEscalationGameAddress, outcome),
 		loadRecursiveProofConsumedCarriedDepositIndexes(client, parentEscalationGameAddress, outcome),
@@ -346,20 +444,20 @@ async function buildCarriedProofs(client: Pick<ReadClient, 'readContract'>, pare
 		: createSparseNullifier(
 				consumedParentDepositIndexes.map(parentIndex => {
 					const index = orderedLeaves.findIndex(leaf => leaf.parentDepositIndex === parentIndex)
-					if (index < 0) throw new Error('Consumed carry deposit is absent from the snapshot')
+					if (index < 0) throw new Error(reportErrors.missingClaimedDeposit)
 					return BigInt(index)
 				}),
 			)
-	if (nullifierTree !== undefined && nullifierTree.getRoot() !== childNullifierRoot) throw new Error('Child proof-consumed carry state is not locally reconstructible.')
+	if (nullifierTree !== undefined && nullifierTree.getRoot() !== childNullifierRoot) throw new Error(reportErrors.claimedDepositsUnverified)
 	const consumedParentDepositIndexSet = new Set(consumedParentDepositIndexes.map(parentDepositIndex => parentDepositIndex.toString()))
 	const proofs: CarriedDepositProof[] = []
 	for (const parentDepositIndex of parentDepositIndexes) {
 		const parentDepositIndexKey = parentDepositIndex.toString()
-		if (consumedParentDepositIndexSet.has(parentDepositIndexKey)) throw claimStateChanged(`Parent deposit #${parentDepositIndexKey} is already settled.`)
+		if (consumedParentDepositIndexSet.has(parentDepositIndexKey)) throw claimStateChanged(copy.inheritedDepositAlreadyClaimed(parentDepositIndex))
 		const leafIndex = orderedLeaves.findIndex(leaf => leaf.parentDepositIndex === parentDepositIndex)
-		if (leafIndex === -1) throw new Error(`Parent deposit #${parentDepositIndex.toString()} is unavailable.`)
+		if (leafIndex === -1) throw new Error(copy.inheritedDepositUnavailable(parentDepositIndex))
 		const targetLeaf = orderedLeaves[leafIndex]
-		if (targetLeaf === undefined) throw new Error(`Parent deposit #${parentDepositIndex.toString()} is unavailable.`)
+		if (targetLeaf === undefined) throw new Error(copy.inheritedDepositUnavailable(parentDepositIndex))
 		const { leafIndex: globalLeafIndex, merkleMountainRangePeakIndex, merkleMountainRangeSiblings } = buildCarryMerkleMountainRangeProof(leafHashes, leafIndex)
 		const nullifierSiblings = nullifierTree?.getProof(globalLeafIndex) ?? []
 		proofs.push({
@@ -381,23 +479,41 @@ async function buildCarriedProofs(client: Pick<ReadClient, 'readContract'>, pare
 
 export async function withdrawForkedEscalationDeposits(client: WriteClient, questionLedgerAddress: Address, outcome: ReportingOutcomeKey, proofs: readonly CarriedDepositProof[]) {
 	const universeId = await readQuestionLedgerUniverseId(client, questionLedgerAddress)
-	return await executeForkAuctionAction(
-		'settleForkedEscalation',
-		questionLedgerAddress,
-		universeId,
-		async () =>
-			await writeContractAndWait(client, () => ({
-				address: questionLedgerAddress,
-				abi: statoblast_QuestionLedger_QuestionLedger.abi,
-				functionName: 'withdrawForkedEscalationDeposits',
-				args: [
-					getReportingOutcomeValue(outcome),
-					proofs.map(proof => ({
-						...proof,
-						merkleMountainRangeSiblings: Array.from(proof.merkleMountainRangeSiblings),
-						nullifierSiblings: Array.from(proof.nullifierSiblings),
-					})),
-				],
+	const claim = {
+		address: questionLedgerAddress,
+		abi: statoblast_QuestionLedger_QuestionLedger.abi,
+		functionName: 'withdrawForkedEscalationDeposits',
+		reviewTitle: proofs.length === 1 ? copy.settleInheritedClaim : copy.settleInheritedClaims,
+		args: [
+			getReportingOutcomeValue(outcome),
+			proofs.map(proof => ({
+				...proof,
+				merkleMountainRangeSiblings: Array.from(proof.merkleMountainRangeSiblings),
+				nullifierSiblings: Array.from(proof.nullifierSiblings),
 			})),
-	)
+		],
+	} as const
+	let rows: readonly { label: string; value: string }[] = []
+	client.onTransactionPlan?.([
+		{
+			...claim,
+			contractAddress: questionLedgerAddress,
+			readReviewRows: () => rows,
+			validateBeforeSubmit: async () => {
+				const owner = client.account.address
+				if (proofs.some(proof => !sameAddress(proof.depositor, owner))) throw new Error(copy.inheritedClaimDepositChanged)
+				const repToken = await client.readContract({ address: questionLedgerAddress, abi: claim.abi, functionName: 'repToken' })
+				const balance = { address: repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [owner] } as const
+				// The ledger pays the proven depositor regardless of caller. One eth_call runs the
+				// whole proof batch and measures its wallet effect without repeating the parent scan.
+				const [before, , after] = await readRequiredMulticall(client, [balance, claim, balance])
+				const formatRep = (amount: bigint) => formatCurrencyBalanceWithUnit(amount, rep)
+				rows = [
+					{ label: copy.claimPayoutReviewLabel, value: formatRep(after - before) },
+					{ label: copy.walletRepReviewLabel, value: `${formatRep(before)} → ${formatRep(after)}` },
+				]
+			},
+		},
+	])
+	return await executeForkAuctionAction('settleForkedEscalation', questionLedgerAddress, universeId, async () => await writeContractAndWait(client, () => claim))
 }

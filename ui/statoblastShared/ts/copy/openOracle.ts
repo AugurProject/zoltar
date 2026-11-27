@@ -1,16 +1,19 @@
 import { formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { ensureSentence } from '@zoltar/ui-core-shared/lib/errors.js'
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 export const disputeAndSwap = 'Dispute & swap'
 export const disputeDelay = 'Dispute delay'
 export const disputeDelaySeconds = 'Dispute delay (seconds)'
-export const escalationHalt = 'Escalation halt'
+export const escalationHalt = 'Dispute limit'
+export const disputeGrowthCutoffNegative = 'Dispute limit must be non-negative.'
+export const disputeGrowthCutoffMaximum = 'Dispute limit exceeds the contract maximum.'
 export const disputeFeePercentage = 'Dispute fee (%)'
 export const disputeFeeRate = 'Dispute fee'
 export const price = 'Price'
-export const protocolFee = 'Protocol fee'
-export const protocolFeePercentage = 'Protocol fee (%)'
+export const protocolFee = 'OpenOracle fee'
+export const protocolFeePercentage = 'OpenOracle fee (%)'
 export const reportId = 'Report ID'
 export const settlementDelay = 'Settlement delay'
 export const settlementDelaySeconds = 'Settlement delay (seconds)'
@@ -25,9 +28,11 @@ export const reportDirectory = 'Report directory'
 export const browseReportsDescription = 'Search favorite reports or open a report by ID.'
 export const selectedReportDescription = 'Review the selected report’s current stage, balances, and available settlement or dispute actions.'
 export const formatReportsShownSummary = (shownCount: CopyTemplateValue, totalCount: CopyTemplateValue) => `${shownCount} of ${totalCount} reports shown.`
-export const callbackContract = 'Callback contract'
-export const callbackExtra = 'Callback / extra'
-export const callbackGasLimit = 'Callback gas limit'
+export const callbackContract = 'Settlement contract'
+export const callbackExtra = 'Settlement add-ons'
+export const callbackGasLimit = 'Settlement contract gas limit'
+export const settlementContractNeedsGas = 'The settlement contract ran out of gas. Retry using the gas limit suggested by your wallet.'
+const priceReportActionTitles = { failure: 'Price report failed', pending: 'Reporting price', success: 'Price reported' }
 export const formatCurrentAmount1Label = (tokenSymbol: string) => `Current base amount (${tokenSymbol})`
 export const formatCurrentAmount2Label = (tokenSymbol: string) => `Current quote amount (${tokenSymbol})`
 export const formatTokenPairSuffix = (token1Symbol: string, token2Symbol: string) => `${token1Symbol} / ${token2Symbol}`
@@ -38,7 +43,7 @@ export const createAnother = 'Create another'
 export const formatTokenDecimalsInvalid = (tokenAddress: CopyTemplateValue) => `Token metadata for ${tokenAddress} returned invalid decimals`
 export const formatWethMetadataInvalid = (tokenAddress: CopyTemplateValue) => `WETH metadata is invalid for ${tokenAddress}`
 export const formatReportTokenMetadataUnavailable = (reportId: CopyTemplateValue, reason: CopyTemplateValue) => `OpenOracle report #${reportId} is unavailable. ${reason}.`
-export const settlementGasExceedsTransactionCap = 'This report’s settlement callback needs more gas than one transaction allows, so it cannot be settled from this app.'
+export const settlementGasExceedsTransactionCap = 'Settling this report needs more gas than one transaction allows.'
 export const reportCreated = 'Report created'
 export const createStandaloneReport = 'Create standalone OpenOracle report'
 export const creating = 'Creating…'
@@ -63,7 +68,7 @@ export const formatInsufficientEthToWrap = (required: string, available: string)
 export const formatWrapEthFirst = (amount: string) => `Wrap ${amount} ETH to WETH first.`
 export const wrapEthFailed = 'Failed to wrap ETH'
 export const wrapEthDisputeOnly = 'ETH can only be wrapped for a report that is open to disputes.'
-export const disputeEscalationStopAmountHelpText = 'Base token amount that ends escalation.'
+export const disputeEscalationStopAmountHelpText = 'Disputes can continue past this limit. The multiplier stops applying, and each dispute adds only the smallest unit of the base token to the bond.'
 export const ethSent = 'ETH sent'
 export const formatInitialTokenReportLabel = (tokenSymbol: string) => `Initial ${tokenSymbol} report deposit`
 export const exactToken1Report = 'Base token amount'
@@ -72,11 +77,11 @@ export const identity = 'Identity'
 export const initialEconomics = 'Initial economics'
 export const lastReportOpportunity = 'Last report on opposite clock'
 export const reportLoadRequired = 'Select a report first.'
-export const escalationMultiplierHelpText = 'Below the escalation halt, each dispute multiplies the base amount by this factor. At or above the halt, it adds one raw base-token unit. A zero halt uses that increment from the first dispute.'
+export const escalationMultiplierHelpText = 'Below the dispute limit, each dispute multiplies the base bond by this factor. A zero limit uses the smallest unit of the base token as the increase from the first dispute.'
 export const formatNewAmountMustBeExactDetail = (tokenSymbol: string, amount: string) => `New ${tokenSymbol} amount must be exactly ${amount} for this dispute.`
 export const formatNewAmountRangeDetail = (tokenSymbol: string, minimumAmount: string, maximumAmount: string) => `New ${tokenSymbol} amount must be between ${minimumAmount} and ${maximumAmount} for this dispute.`
 export const oracleBalances = 'Your oracle balances'
-export const oracleBalancesDetail = 'Settlement rewards, returned report liquidity, and dispute proceeds stay in the oracle until the credited account withdraws them.'
+export const oracleBalancesDetail = 'Settlement rewards, returned report liquidity, and dispute proceeds stay in the oracle until the credited wallet withdraws them.'
 export const noOracleBalances = 'No withdrawable oracle balances are available for this token pair.'
 export const noWithdrawableBalanceForAsset = 'No withdrawable balance is available for this asset.'
 export const loadingOracleBalances = 'Loading oracle balances…'
@@ -91,7 +96,7 @@ export const numberOfReports = 'Number of reports'
 export const openReport = 'Open report'
 export const formatOpenReportLabel = (reportTitle: string) => `Open report: ${reportTitle}`
 export const oracleAddress = 'Oracle address'
-export const protocolFeeRecipient = 'Protocol fee recipient'
+export const protocolFeeRecipient = 'OpenOracle fee recipient'
 export const report = 'Report'
 export const formatReportNumberTitle = (reportId: string) => `Report #${reportId}`
 export const reportTimestamp = 'Report timestamp'
@@ -125,7 +130,7 @@ export const reportFiltersEmpty = 'No favorite reports match the current search 
 export const refreshReport = 'Refresh report'
 export const reportAmounts = 'Report amounts'
 export const openOracleReportDetails = 'OpenOracle report details'
-export const standaloneOracleWarningDetail = 'Standalone only. Start security-pool-managed requests from the security pool price panel.'
+export const standaloneOracleWarningDetail = 'Standalone only. To report a security pool price, use its REP price tab.'
 export const advancedDisputeAndTimingSettings = 'Advanced dispute & timing settings'
 export const advancedDisputeAndTimingSettingsDetail = 'These values control how challenges escalate and when settlement becomes available. Keep the defaults unless your report requires different economics.'
 export const secondsAbbreviation = 's'
@@ -140,7 +145,7 @@ export const trackDisputes = 'Track disputes'
 export const formatNewTokenAmountFieldLabel = (tokenSymbol: string) => `New ${tokenSymbol} amount`
 export const reporter = 'Reporter'
 export const parameterDetails = 'Parameter details'
-export const standaloneParameterDetails = 'Base token amount and escalation halt use the base token’s decimals.'
+export const standaloneParameterDetails = 'Base token amount and dispute limit use the base token’s decimals.'
 
 export const formatSettledReportNumber = (id: string) => `Report #${id} settled`
 
@@ -149,8 +154,8 @@ export const settleReport = 'Settle report'
 export const formatReportMissing = (reportId: CopyTemplateValue) => `OpenOracle report #${reportId} does not exist.`
 export const formatApprovingTokenTitle = (tokenSymbol: CopyTemplateValue) => `Approving ${tokenSymbol}`
 export const formatWithdrawingTokenTitle = (tokenSymbol: CopyTemplateValue) => `Withdrawing ${tokenSymbol}`
-export const creatingStandaloneReportTitle = 'Creating standalone OpenOracle report'
-export const standaloneReportCreated = 'Standalone OpenOracle report created'
+const creatingStandaloneReportTitle = 'Creating standalone OpenOracle report'
+const standaloneReportCreated = 'Standalone OpenOracle report created'
 
 export const formatSecondsDurationHint = (seconds: CopyTemplateValue, duration: CopyTemplateValue) => `${seconds} seconds = ${duration}`
 export const impliedInitialPrice = 'Initial price'
@@ -164,10 +169,10 @@ export const disputeFee = 'Dispute fee (to current reporter)'
 export const feesIncludedInPayment = 'Fees are included in the amounts you pay.'
 export const creditedToOracleBalance = 'Credited to your oracle balance'
 export const yourNewReport = 'Your new report'
-export const proposedPrice = 'Proposed price'
-export const newBaseAmountFixedHint = 'Set by the report’s escalation rules.'
-export const newQuoteAmountHint = 'The quote amount sets the price you propose.'
-export const disputeSwapTokenPending = 'Determined by the proposed price'
+export const proposedPrice = 'New price'
+export const newBaseAmountFixedHint = 'Set by the report’s dispute rules.'
+export const newQuoteAmountHint = 'The quote amount sets the report price.'
+export const disputeSwapTokenPending = 'Determined by the new price'
 export const formatReportCreatedDetail = (reportId: CopyTemplateValue) => `Report #${reportId} is live. Open it to track disputes and settlement.`
 export const reportCreatedWithoutIdDetail = 'Your report is live. Find it in the report directory.'
 export const multiplierUnit = '×'
@@ -176,20 +181,20 @@ export const formatDisputeSwapTokenChanged = (newTokenSymbol: CopyTemplateValue,
 export const priceExpired = 'Price expired'
 export const settledAfterPriceExpired = 'Settled after price expired'
 export const staleSettlementWarning = 'Settlement will clear this report, but the security pool will reject its price.'
-export const staleSettledReportWarning = 'Request a new price.'
+export const staleSettledReportWarning = 'Report a new price.'
 export const expiredReportPrice = 'This report’s price has expired.'
 export const reportPriceRejected = 'Report settled; price rejected'
 export const poolPriceAccepted = 'Security pool accepted the report.'
 export const candidatePrice = 'Candidate price'
-export const canonicalPrice = 'Canonical price'
+export const canonicalPrice = 'Pool price'
 export const rawPriceUnits = 'raw price units'
-export const poolPriceObservationUpdated = 'Report accepted. The feed updated its canonical observation.'
-export const poolPriceObservationRetained = 'Report accepted. The feed kept its canonical observation.'
+export const poolPriceObservationUpdated = 'Report accepted. The pool price was updated.'
+export const poolPriceObservationRetained = 'Report accepted. The pool price stayed the same.'
 
 export function formatPriceSettlementRejection(reason: string) {
 	if (reason === 'Security pool reporting window closed') return 'Reporting is closed in this security pool universe. Check its fork and branch status.'
 	if (reason === 'Report timestamp not newer') return 'This report did not replace the newer accepted price. Check the accepted price and any attached operation results.'
-	return reason === 'Report stale' ? 'Price expired before settlement. Request a new price.' : `Security pool rejected this price: ${reason}. Request a new price.`
+	return reason === 'Report stale' ? 'Price expired before settlement. Report a new price.' : `Security pool rejected this price: ${reason}. Report a new price.`
 }
 
 export const reportPriceDeferred = 'Report settled; price pending recovery'
@@ -202,12 +207,144 @@ export const priceExpiredDuringReview = 'Price expired while reviewing. Review s
 export const priceSettlementUnconfirmed = 'Report settled; price acceptance unconfirmed'
 export const priceSettlementUnconfirmedDetail = 'The security pool did not confirm accepting this price. Check the security pool oracle before using it.'
 
-export const priceReports = 'Price reports'
-export const reportStatus = 'Report status'
-export const selectPriceReport = 'Select a price report'
-export const priceReportNotFound = 'Price report not found'
 export const reportAlreadySettled = 'This report is already settled.'
 export const reportMissingInitialReport = 'This report is invalid because its initial report is missing.'
 
 export const formatAbsoluteBlock = (value: bigint) => `Block ${value}`
 export const approvalGasRequired = 'Add ETH to pay the token approval network fee.'
+
+export const approvalDisputeOnly = 'Token approvals are only available while disputing a report'
+export const reportTokenChanged = 'Report token changed. Review again.'
+export const reportFundingChanged = 'Report funding changed. Review again.'
+export const invalidReportParameters = 'Invalid oracle report parameters.'
+export const reportNotReadyToSettle = 'This report is not ready to settle.'
+export const approvalChanged = (token: string) => `The required ${token} approval changed. Review the refreshed report and try again.`
+
+export const balancesReadFailed = 'Failed to load OpenOracle balances'
+export const staleReportRead = 'Stale oracle report load'
+export const reportReadFailed = 'Failed to load OpenOracle report'
+export const selectedReportChanged = 'Selected report changed. Review the current report and try again.'
+
+export const approvalReadFailed = 'Failed to load token approval'
+export const balanceReadFailed = 'Failed to load token balance'
+export const tokenAccessReadInvalid = 'Unexpected token access response'
+
+export const createTokenReadFailed = (token: string) => `Unable to read the ${token} token.`
+
+export const tokenPrecisionUnavailable = 'Token decimals unavailable.'
+export const noWrappingNeeded = 'No ETH wrapping is required.'
+
+export const invalidDisputeDetails = 'Invalid dispute submission details.'
+
+export const missingInitialReport = 'OpenOracle report is missing its initial report.'
+export const disputeNotReady = 'This report is not ready to dispute.'
+export const newReportAmountTooLarge = 'New report amount exceeds the contract maximum.'
+export const disputeWindowClosed = 'Dispute window closed. Settle report instead.'
+export const settlementCountdown = (duration: string) => `This report can be settled in ${duration} if no disputes occur.`
+export const requiredInput = (label: string) => `${label} is required`
+export const invalidPercentage = (label: string) => `${label} must be a decimal percentage`
+export const negativeInput = (label: string) => `${label} must be non-negative`
+export const unsafeInteger = (label: string) => `${label} exceeds the maximum safe integer range`
+
+export const approvalNoLongerRequired = (token: string) => `No ${token} approval is required for the refreshed report`
+export const approvalAlreadySufficient = (token: string) => `The ${token} approval is already sufficient for the refreshed report`
+export const approvalAmountNoLongerRequired = (token: string) => `No ${token} approval amount is required for the refreshed report`
+export const approvalMustIncrease = (token: string) => `The ${token} approval must increase the current allowance`
+
+export const disputesOpenIn = (duration: string) => `Disputes open in ${duration}.`
+
+export const settlementDurationLimit = (duration: string) => `Settlement delay must not exceed ${duration} in this interface.`
+export const settlementGasUnsafe = 'This report exceeds the safe settlement gas limit. Disputing it could lock the funds you put into this report.'
+export const settlementDurationUnsafe = (duration: string) => `This report has a settlement duration longer than ${duration}. Disputing it could lock the funds you put into this report.`
+
+export const postTransactionReportRefreshFailed = 'Oracle transaction succeeded, but refreshing the selected report failed'
+export const tokenAddress = 'Token address'
+export const tokenApprovalFailed = 'Token approval failed.'
+export const ethWrapFailed = 'ETH wrap failed.'
+export const createStandaloneReportFailed = 'Failed to create standalone OpenOracle report'
+export const settleReportFailed = 'Failed to settle report'
+export const withdrawBalanceFailed = 'Failed to withdraw OpenOracle balance'
+export const disputeReportFailed = 'Failed to dispute report'
+
+export const disputingReportAction = 'disputing the report'
+export const formatApproveTokenFailed = (token: string) => `Failed to approve ${token}`
+export const genericToken = 'token'
+export const baseTokenFallback = 'base token'
+export const quoteTokenFallback = 'quote token'
+export const operateWalletAction = 'operating OpenOracle'
+export const withdrawBalanceWalletAction = 'withdrawing an OpenOracle balance'
+export const formatDisputeBalanceStatusUnavailable = (token: string, reason: string | undefined) => {
+	const details = reason === undefined ? '' : ` ${ensureSentence(reason)}`
+	return `Unable to verify ${token} balance for this dispute.${details} Retry loading the report or balance status before disputing this report.`
+}
+export const formatDisputeInsufficientBalance = (token: string, required: string, available: string) => `Insufficient ${token} balance for this dispute. Need ${required}, wallet has ${available}.`
+export const formatLoadingDisputeTokenDetails = (token: string) => `Loading ${token} details…`
+export const formatInvalidNewDisputeAmount = (token: string) => `Enter a valid new ${token} amount.`
+export const formatRequiredNewDisputeAmountUnavailable = (token: string) => `Unable to determine the required new ${token} amount.`
+export const formatLoadingDisputeTokenBalance = (token: string) => `Loading current ${token} balance…`
+export const formatLoadingDisputeTokenApproval = (token: string) => `Loading current ${token} approval…`
+export const formatDisputeTokenApprovalRequired = (token: string) => `${token} approval required`
+
+export const settleWriteFailed = 'Failed to settle report'
+export const disputeWriteFailed = 'Failed to dispute report'
+export const settleWriteRetry = 'Transaction failed while settling the report. Try again; the latest report state will be checked automatically.'
+export const disputeWriteRetry = 'Transaction failed while disputing the report. Try again; the latest report state will be checked automatically.'
+export const settleWriteReason = (reason: string) => `Transaction failed while settling the report. Reason: ${reason}`
+export const disputeWriteReason = (reason: string) => `Transaction failed while disputing the report. Reason: ${reason}`
+export const createReportAction = 'creating a standalone OpenOracle report'
+export const validSettlerRewardRequired = 'Enter a valid settler reward.'
+export const createReportEthRequired = (amount: string) => `Need ${amount} in this wallet to create the selected standalone OpenOracle report.`
+export const createReportWrapEthRequired = (amount: string) => `Need ${amount} to wrap and leave enough for the settler reward and network fees.`
+export const validBaseTokenAddressRequired = 'Enter a valid base token address.'
+export const validQuoteTokenAddressRequired = 'Enter a valid quote token address.'
+export const baseTokenAddress = 'Base token address'
+export const quoteTokenAddress = 'Quote token address'
+export const validBaseTokenAmountRequired = 'Enter a valid base token amount.'
+export const validQuoteTokenAmountRequired = 'Enter a valid quote token amount.'
+export const validDisputeGrowthCutoffRequired = 'Enter a valid dispute limit.'
+export const validSettlementDelayRequired = 'Enter a valid settlement delay.'
+export const validDisputeDelayRequired = 'Enter a valid dispute delay.'
+export const validMultiplierRequired = 'Enter a valid multiplier, such as 1.5.'
+export const validDisputeFeeRequired = 'Enter a valid dispute fee.'
+export const validProtocolFeeRequired = 'Enter a valid OpenOracle fee.'
+export const baseTokenAmount = 'Base token amount'
+export const quoteTokenAmount = 'Quote token amount'
+export const multiplier = 'Multiplier'
+export const disputeAndSwapDescription = 'Challenge the current report and provide the replacement swap amounts.'
+
+export const standaloneWriteActionTitles = {
+	approveToken1: { failure: 'Base token approval failed', pending: 'Approving base token', success: 'Base token approved' },
+	approveToken2: { failure: 'Quote token approval failed', pending: 'Approving quote token', success: 'Quote token approved' },
+	createReportInstance: { failure: 'Report creation failed', pending: creatingStandaloneReportTitle, success: standaloneReportCreated },
+	dispute: { failure: 'Dispute failed', pending: 'Submitting dispute', success: 'Dispute submitted' },
+	executeStagedOperation: { failure: 'Staged operation failed', pending: 'Executing staged operation', success: 'Staged operation executed' },
+	queueOperation: { failure: 'Queue operation failed', pending: 'Queueing operation', success: 'Operation queued' },
+	requestPrice: priceReportActionTitles,
+	settle: { failure: 'Settlement failed', pending: settlingReportTitle, success: reportSettled },
+	withdrawBalance: { failure: 'Oracle balance withdrawal failed', pending: 'Withdrawing oracle balance', success: 'Oracle balance withdrawn' },
+	wrapWeth: { failure: 'ETH wrap failed', pending: 'Wrapping ETH to WETH', success: 'ETH wrapped to WETH' },
+}
+
+export const differentReportTokens = 'Base and quote tokens must use different addresses.'
+export const reportRequiresErc20Tokens = 'Direct OpenOracle reports currently require two ERC-20 token addresses.'
+export const baseTokenAmountTooLarge = 'Base token amount exceeds the contract maximum.'
+export const quoteTokenAmountTooLarge = 'Quote token amount exceeds the contract maximum.'
+export const settlerRewardNegative = 'Settler reward must be non-negative.'
+export const settlerRewardTooLarge = 'Settler reward exceeds the contract maximum.'
+export const reportEthNegative = 'ETH sent must be non-negative.'
+export const reportEthTooLarge = 'ETH sent exceeds the contract maximum.'
+export const reportEthMustEqualReward = 'ETH sent must equal the settler reward for ERC-20 token pairs.'
+export const settlementDelayTooLarge = 'Settlement delay exceeds the contract maximum.'
+export const disputeDelayTooLarge = 'Dispute delay exceeds the contract maximum.'
+export const settlementDelayMustExceedDisputeDelay = 'Settlement delay must be greater than dispute delay.'
+export const multiplierTooSmall = 'Multiplier must be at least 1×.'
+export const disputeFeeNegative = 'Dispute fee must be non-negative.'
+export const disputeFeeTooLarge = 'Dispute fee exceeds the contract maximum.'
+export const protocolFeeNegative = 'OpenOracle fee must be non-negative.'
+export const protocolFeeTooLarge = 'OpenOracle fee exceeds the contract maximum.'
+export const multiplierMaximum = (maximum: string) => `Multiplier must be at most ${maximum}.`
+export const reportFeeTotalMaximum = (maximum: string) => `Dispute fee plus OpenOracle fee must not exceed ${maximum}%.`
+export const disputeWindowTooShort = 'Dispute window ends too soon. Wait to settle this report.'
+
+export const repQuoteTimeout = (version: 'V3' | 'V4') => `RPC timeout while loading the Uniswap ${version} REP price.`
+export const repPriceRefreshTimeout = 'RPC timeout while loading REP price. Refresh prices to retry.'

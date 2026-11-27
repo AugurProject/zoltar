@@ -10,6 +10,7 @@ import type { DeploymentStatusSnapshot, DeploymentStep, DeploymentStepId, ReadCl
 import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { getRuntimeNetworkProfile, type NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { getSepoliaGenesisRepDeployment } from '@zoltar/ui-core-shared/lib/sepoliaDeploymentConfig.js'
+import { formatUnexpectedProxyDeployerCode, proxyDeployerSendWithoutHash } from '../copy/deployment.js'
 
 const PROXY_DEPLOYER_SIGNER = getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1')
 const PROXY_DEPLOYER_RAW_TRANSACTION = '0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222' satisfies Hex
@@ -48,11 +49,11 @@ export function assertStaticDeploymentArtifactRuntimeCodeHashes(
 	const verifiedStepIds: string[] = []
 	for (const [id, runtimeCode] of Object.entries(parameters.runtimeCodeByStepId)) {
 		const expectedRuntimeCodeHash = parameters.expectedRuntimeCodeHashes[id]
-		if (expectedRuntimeCodeHash === undefined) throw new Error(`Static deployment artifact ${id} has no pinned expected runtime code hash`)
+		if (expectedRuntimeCodeHash === undefined) throw new Error(`Static deployment artifact ${id} has no expected contract code hash`)
 		const artifactRuntimeCodeHash = keccak256(runtimeCode)
 		verifiedStepIds.push(id)
 		if (artifactRuntimeCodeHash !== expectedRuntimeCodeHash) {
-			throw new Error(`Local runtime code for ${id} does not match its pinned expected hash: expected ${expectedRuntimeCodeHash}, artifact contains ${artifactRuntimeCodeHash}. Run bun run compile-contracts and refresh the pinned deployment hashes if the bytecode change is intentional.`)
+			throw new Error(`Local contract code for ${id} does not match its pinned expected hash: expected ${expectedRuntimeCodeHash}, artifact contains ${artifactRuntimeCodeHash}. Run bun run compile-contracts and refresh the pinned deployment hashes if the bytecode change is intentional.`)
 		}
 	}
 	return verifiedStepIds.sort()
@@ -111,11 +112,11 @@ export async function getProxyDeployerActivity(client: Pick<ReadClient, 'getBala
 async function proxyDeployerIsInstalled(client: Pick<ReadClient, 'getCode'>) {
 	const code = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
 	if (code === undefined || code === '0x') return false
-	if (code.toLowerCase() !== PROXY_DEPLOYER_RUNTIME_CODE.toLowerCase()) throw new Error(`Unexpected code at canonical proxy deployer ${PROXY_DEPLOYER_ADDRESS}`)
+	if (code.toLowerCase() !== PROXY_DEPLOYER_RUNTIME_CODE.toLowerCase()) throw new Error(formatUnexpectedProxyDeployerCode(PROXY_DEPLOYER_ADDRESS))
 	return true
 }
 
-const PROXY_DEPLOYER_TRANSACTION_USED_ERROR = 'The proxy deployer cannot be deployed on this network: its one-time deployment transaction was already used, but the contract is missing.'
+const PROXY_DEPLOYER_TRANSACTION_USED_ERROR = 'The shared proxy cannot be deployed on this network: its one-time deployment transaction was already used, but the contract is missing.'
 
 export async function assertCanonicalRawTransactionFeeCompatible(client: Pick<ReadClient, 'getBlock'>, label: string) {
 	const { baseFeePerGas } = await client.getBlock()
@@ -169,7 +170,7 @@ async function resolveConfirmedProxyDeployer(client: WriteClient, wait?: RpcStat
 
 async function waitForCanonicalProxyDeployer(client: WriteClient, wait?: RpcStateRetryWait) {
 	const { hash } = await waitForSubmittedTransactionReceipt(client, PROXY_DEPLOYER_RAW_TRANSACTION_HASH)
-	if (!(await proxyDeployerIsInstalledAfterReceipt(client, wait))) throw new Error(`Proxy deployer transaction ${hash} confirmed, but no contract code was found at ${PROXY_DEPLOYER_ADDRESS}.`)
+	if (!(await proxyDeployerIsInstalledAfterReceipt(client, wait))) throw new Error(`Shared proxy deployment transaction ${hash} confirmed, but no contract code was found at ${PROXY_DEPLOYER_ADDRESS}.`)
 	return hash
 }
 
@@ -218,13 +219,13 @@ async function broadcastCanonicalProxyDeployer(client: WriteClient, allowInsuffi
 		try {
 			return await resolveProxyDeployerBroadcastRace(client, error, wait)
 		} catch (resolvedError) {
-			if (allowInsufficientFunds) throw new Error(`The network rejected the proxy deployer transaction before it was funded: ${resolvedError instanceof Error ? resolvedError.message : String(resolvedError)}`, { cause: resolvedError })
+			if (allowInsufficientFunds) throw new Error(`The network rejected the shared proxy deployment before it was funded: ${resolvedError instanceof Error ? resolvedError.message : String(resolvedError)}`, { cause: resolvedError })
 			throw resolvedError
 		}
 	}
 	client.recordCanonicalRawTransaction?.(PROXY_DEPLOYER_SIGNER, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST)
 	const { hash: resolvedDeployHash } = await waitForSubmittedTransactionReceipt(client, deployHash)
-	if (!(await proxyDeployerIsInstalledAfterReceipt(client, wait))) throw new Error(`Proxy deployer transaction ${resolvedDeployHash} confirmed, but no contract code was found at ${PROXY_DEPLOYER_ADDRESS}.`)
+	if (!(await proxyDeployerIsInstalledAfterReceipt(client, wait))) throw new Error(`Shared proxy deployment transaction ${resolvedDeployHash} confirmed, but no contract code was found at ${PROXY_DEPLOYER_ADDRESS}.`)
 	return resolvedDeployHash
 }
 
@@ -298,7 +299,7 @@ export async function deployViaProxy(client: WriteClient, bytecode: Hex) {
 		data: bytecode,
 		functionName: 'Deploy contract through deterministic proxy',
 		to: PROXY_DEPLOYER_ADDRESS,
-		toLabel: 'Proxy deployer',
+		toLabel: 'Shared proxy',
 	})
 	const hash = await client.sendTransaction({
 		to: PROXY_DEPLOYER_ADDRESS,
@@ -323,11 +324,11 @@ async function ensureProxyDeployerDeployed(client: WriteClient, wait?: RpcStateR
 		return await waitForCanonicalProxyDeployer(client, wait)
 	}
 	if (activity.fundingPending) {
-		throw new Error('The deterministic proxy deployer has pending funding or deployment activity. Wait for it to settle, then retry.')
+		throw new Error('The shared proxy has pending funding or deployment activity. Wait for it to finish, then retry.')
 	}
 	if (await proxyDeployerIsInstalled(client)) return undefined
 	if (activity.confirmedNonce !== 0n) return await resolveConfirmedProxyDeployer(client, wait)
-	await assertCanonicalRawTransactionFeeCompatible(client, 'Deterministic proxy deployer')
+	await assertCanonicalRawTransactionFeeCompatible(client, 'Shared proxy')
 	const reviewedFundingShortfall = client.onTransactionPlan === undefined ? undefined : await getProxyDeployerFundingShortfall(client)
 	client.onTransactionPlan?.([
 		{ functionName: 'Broadcast deterministic proxy deployer transaction' },
@@ -345,7 +346,7 @@ async function ensureProxyDeployerDeployed(client: WriteClient, wait?: RpcStateR
 	if (fundingShortfall > 0n) {
 		const finalActivity = await getProxyDeployerActivity(client)
 		if (finalActivity.pending) {
-			throw new Error('The deterministic proxy deployer has pending funding or deployment activity. Wait for it to settle, then retry.')
+			throw new Error('The shared proxy has pending funding or deployment activity. Wait for it to finish, then retry.')
 		}
 		if (await proxyDeployerIsInstalled(client)) return undefined
 		const confirmedNonce = await client.getTransactionCount({ address: PROXY_DEPLOYER_SIGNER, blockTag: 'latest' })
@@ -369,11 +370,11 @@ async function ensureProxyDeployerDeployed(client: WriteClient, wait?: RpcStateR
 		accountCanonicalRawTransaction(client, PROXY_DEPLOYER_SIGNER)
 		return await waitForCanonicalProxyDeployer(client, wait)
 	}
-	if (postFundingActivity.fundingPending) throw new Error('The deterministic proxy deployer has pending funding or deployment activity. Wait for it to settle, then retry.')
+	if (postFundingActivity.fundingPending) throw new Error('The shared proxy has pending funding or deployment activity. Wait for it to finish, then retry.')
 	if (postFundingActivity.confirmedNonce !== 0n) return await resolveConfirmedProxyDeployer(client, wait)
 
 	const resolvedDeployHash = await broadcastCanonicalProxyDeployer(client, false, wait)
-	if (resolvedDeployHash === undefined) throw new Error('Canonical proxy deployer broadcast unexpectedly returned without a transaction hash')
+	if (resolvedDeployHash === undefined) throw new Error(proxyDeployerSendWithoutHash)
 	return resolvedDeployHash
 }
 
@@ -411,7 +412,7 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 	const steps: DeploymentStep[] = [
 		{
 			id: 'proxyDeployer',
-			label: 'Proxy Deployer',
+			label: 'Shared proxy',
 			address: PROXY_DEPLOYER_ADDRESS,
 			dependencies: [],
 			deploy: async client => {
@@ -488,13 +489,14 @@ export function withExpectedDeploymentRuntimeCodeHashes(steps: readonly Deployme
 	})
 }
 
-export function assertDeploymentStepRuntimeCode(step: Pick<DeploymentStep, 'address' | 'expectedRuntimeCodeHash' | 'id' | 'trustedSimulationCodePresence'>, code: Hex | undefined) {
+export function assertDeploymentStepRuntimeCode(step: Pick<DeploymentStep, 'address' | 'expectedRuntimeCodeHash' | 'id' | 'trustedSimulationCodePresence' | 'verificationLabel'>, code: Hex | undefined) {
 	if (code === undefined || code === '0x') return false
 	if (step.trustedSimulationCodePresence) return true
-	if (step.expectedRuntimeCodeHash === undefined) throw new Error(`Exact runtime-code verification is unavailable for deployment step ${step.id} on the active network`)
+	const label = step.verificationLabel ?? step.id
+	if (step.expectedRuntimeCodeHash === undefined) throw new Error(`Could not verify the contract code for deployment step ${label} on the active network`)
 	const actualRuntimeCodeHash = keccak256(code)
 	if (actualRuntimeCodeHash !== step.expectedRuntimeCodeHash) {
-		throw new Error(`Unexpected runtime code for ${step.id} at ${step.address}: expected ${step.expectedRuntimeCodeHash}, received ${actualRuntimeCodeHash}`)
+		throw new Error(`Unexpected contract code for ${label} at ${step.address}: expected ${step.expectedRuntimeCodeHash}, received ${actualRuntimeCodeHash}`)
 	}
 	return true
 }

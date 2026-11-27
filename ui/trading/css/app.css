@@ -788,6 +788,15 @@ button.outcome-button--no:hover:not(:disabled) {
 		padding: var(--space-4);
 	}
 }
+@media (max-width: 40rem) {
+	.portfolio-position-row {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-areas: "market" "holdings" "value" "actions" "extra";
+	}
+	.portfolio-position-actions {
+		justify-content: flex-start;
+	}
+}
 .portfolio-position-value {
 	display: flex;
 	flex-direction: column;

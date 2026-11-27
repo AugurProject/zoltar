@@ -12,6 +12,8 @@ import { TransactionStepsModal } from '../components/TransactionStepsModal.js'
 import { TransactionStepsContent } from '../components/TransactionStepsContent.js'
 import { TransactionFundingSummary } from '../components/TransactionFundingSummary.js'
 import { createTransactionStepController, transactionStepOutcome, transactionSteps } from '../transactions/transactionSteps.js'
+import { recordTransactionSubmitted, resetTransactionActivityForTesting, transactionActivity } from '../transactions/transactionActivityStore.js'
+import { createDeferred } from './testUtils/deferred.js'
 
 test('shows funding in plan order with readable amounts and exact values available', async () => {
 	const dom = installDomEnvironment()
@@ -98,6 +100,108 @@ test('closes a confirmed transaction review without another dialog', async () =>
 	}
 })
 
+test('retains a confirmed lifecycle review when the form moves inline', async () => {
+	const dom = installDomEnvironment()
+	const controller = createTransactionStepController(undefined, true, true)
+	controller.setPlan([{ title: 'Mint complete sets', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
+	controller.startWithoutReview(0)
+	const hash = '0x1111111111111111111111111111111111111111111111111111111111111111'
+	controller.submitted(hash)
+	controller.receipt(hash, 'success')
+	const rendered = await renderIntoDocument(<TransactionStepsModal contextKey='inline' keepConfirmed />)
+	try {
+		const dialog = within(within(rendered.container).getByRole('dialog'))
+		expect(dialog.getByText('Confirmed')).toBeTruthy()
+		await act(() => fireEvent.click(dialog.getByRole('button', { name: 'Close' })))
+		expect(transactionSteps.value).toBeUndefined()
+	} finally {
+		transactionSteps.value?.cancel()
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('shows a fixed review placeholder with an available retry after a check fails', async () => {
+	const dom = installDomEnvironment()
+	const controller = createTransactionStepController(undefined, true, true)
+	controller.setPlan([{ title: 'Claim REP', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: undefined }])
+	const checking = createDeferred<void>()
+	let retry = false
+	const reviewed = controller.review(0, {
+		check: async () => {
+			if (!retry) await checking.promise
+			controller.setReviewRows(0, [{ label: 'Wallet REP', value: '1 → 3' }])
+		},
+	})
+	void reviewed.catch(() => undefined)
+	const rendered = await renderIntoDocument(<TransactionStepsModal contextKey='rep-claim' finalActionLabel='Continue in wallet' />)
+	const queries = within(rendered.container)
+	try {
+		expect(rendered.container.querySelectorAll('.skeleton-row')).toHaveLength(3)
+		expect(queries.getByRole('button', { name: 'Continue in wallet' }).hasAttribute('disabled')).toBe(true)
+		await act(async () => {
+			checking.reject(new Error('The current state check timed out.'))
+			await checking.promise.catch(() => undefined)
+		})
+		expect(rendered.container.textContent).toContain('The current state check timed out.')
+		expect(queries.getByRole('button', { name: 'Continue in wallet' }).hasAttribute('disabled')).toBe(true)
+		retry = true
+		await act(async () => {
+			fireEvent.click(queries.getByRole('button', { name: 'Try again' }))
+			await Promise.resolve()
+		})
+		expect(rendered.container.textContent).toContain('1 → 3')
+		expect(queries.getByRole('button', { name: 'Continue in wallet' }).hasAttribute('disabled')).toBe(false)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Continue in wallet' })))
+		await reviewed
+		expect(rendered.container.textContent).toContain('Confirm the transaction in your wallet.')
+	} finally {
+		transactionSteps.value?.cancel()
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('keeps a sped-up transaction visible and can release its replacement hash from the pending dialog', async () => {
+	const dom = installDomEnvironment()
+	const controller = createTransactionStepController(undefined, true, true)
+	const hash = '0x1111111111111111111111111111111111111111111111111111111111111111'
+	const replacement = '0x2222222222222222222222222222222222222222222222222222222222222222'
+	controller.setPlan([{ title: 'Claim REP', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: undefined }])
+	controller.startWithoutReview(0)
+	const rendered = await renderIntoDocument(<TransactionStepsModal contextKey='rep-claim' />)
+	const queries = within(rendered.container)
+	try {
+		expect(queries.getByRole('button', { name: 'Close' }).hasAttribute('disabled')).toBe(true)
+		await act(() => {
+			recordTransactionSubmitted({ hash, scope: undefined, title: 'Claim REP' })
+			controller.submitted(hash)
+		})
+		expect(queries.getByRole('button', { name: 'Close' }).hasAttribute('disabled')).toBe(false)
+		expect(rendered.container.textContent).toContain('Safe to close. This stays tracked in Activity.')
+		await act(() => {
+			recordTransactionSubmitted({ hash: replacement, previousHash: hash, scope: undefined, title: 'Claim REP' })
+			controller.submitted(replacement, true)
+		})
+		expect(rendered.container.textContent).toContain('Sped up in your wallet.')
+		expect(rendered.container.querySelector('.transaction-hash-link')?.getAttribute('title')).toBe(replacement)
+		const details = rendered.container.querySelector('details')
+		if (details === null) throw new Error('Missing transaction tracking controls')
+		await act(() => {
+			details.open = true
+			details.dispatchEvent(new Event('toggle'))
+		})
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Stop tracking' })))
+		expect(transactionActivity.value.entries).toEqual([expect.objectContaining({ hash: replacement, status: 'failed', failureKind: 'dropped' })])
+		expect(rendered.container.textContent).toContain('No longer tracked. Check it before sending again.')
+	} finally {
+		transactionSteps.value?.cancel()
+		resetTransactionActivityForTesting()
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
 test('shows every step, token deposit, expected return and ETH cost before the first confirmation', async () => {
 	const dom = installDomEnvironment()
 	const controller = createTransactionStepController()
@@ -142,6 +246,30 @@ test('shows every step, token deposit, expected return and ETH cost before the f
 		expect(confirmed).toBe(true)
 		expect(transactionSteps.value?.steps[1]?.phase).toBe('upcoming')
 	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('labels only the final step with the wallet handoff copy supplied by the host', async () => {
+	const dom = installDomEnvironment()
+	const controller = createTransactionStepController()
+	const common = { description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }
+	controller.setPlan([
+		{ ...common, title: 'Prepare escalation game' },
+		{ ...common, title: 'Report outcome' },
+	])
+	const review = controller.review()
+	const rendered = await renderIntoDocument(<TransactionStepsModal contextKey='report' finalActionLabel='Continue in wallet' />)
+	try {
+		const queries = within(rendered.container)
+		expect(queries.getByRole('dialog', { name: 'Report outcome' })).not.toBeNull()
+		expect(queries.getByRole('button', { name: 'Prepare escalation game' }).hasAttribute('disabled')).toBe(false)
+		expect(queries.getByRole('button', { name: 'Continue in wallet' }).hasAttribute('disabled')).toBe(true)
+		expect(queries.queryByRole('button', { name: 'Report outcome' })).toBeNull()
+	} finally {
+		transactionSteps.value?.cancel()
+		await review.catch(() => undefined)
 		await rendered.cleanup()
 		dom.cleanup()
 	}
@@ -205,7 +333,8 @@ test('explains a step without token funding using its description, the operation
 	const dom = installDomEnvironment()
 	const controller = createTransactionStepController()
 	const contractAddress = '0x00000000000000000000000000000000000000aa'
-	const description = 'Create the binary question and deploy its question ledger in one transaction.'
+	const recipient = '0x1234567890abcdef1234567890abcdef12345678'
+	const description = `Create the binary question and deploy its question ledger for ${recipient} in one transaction.`
 	controller.setPlan([{ title: 'Create question and question ledger', description, contractAddress, contractLabel: 'Multicall3', spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
 	const review = controller.review()
 	const rendered = await renderIntoDocument(
@@ -225,7 +354,11 @@ test('explains a step without token funding using its description, the operation
 	try {
 		const queries = within(rendered.container)
 		expect(rendered.container.querySelector('.modal-header h3')?.textContent).toBe('Create question and question ledger')
-		expect(queries.getByText(description)).not.toBeNull()
+		const explanation = rendered.container.querySelector('.transaction-step-content > .detail')
+		expect(explanation?.textContent).toContain('Create the binary question and deploy its question ledger for ')
+		expect(explanation?.querySelector('.address-value-full')?.textContent).toBe(recipient)
+		expect(explanation?.querySelector('.address-value-abbreviated')?.textContent).toBe('0x1234567890…ef12345678')
+		expect(queries.getByRole('button', { name: `Copy address ${recipient}` })).not.toBeNull()
 		expect(queries.getByText('Question ID')).not.toBeNull()
 		expect(queries.getByText('123')).not.toBeNull()
 		expect(queries.getByText('Statoblast security multiplier')).not.toBeNull()
@@ -235,6 +368,7 @@ test('explains a step without token funding using its description, the operation
 		expect(rendered.container.querySelector('details .address-value')?.getAttribute('title')).toBe(contractAddress)
 		expect(rendered.container.querySelector('details dd')?.textContent).toContain(`Multicall3 ${contractAddress}`)
 		expect(rendered.container.querySelector('details dd .address-value-full')?.textContent).toBe(contractAddress)
+		expect([...rendered.container.querySelectorAll('details .address-value-abbreviated')].map(form => form.textContent)).toEqual([`${contractAddress.slice(0, 12)}…${contractAddress.slice(-10)}`])
 		expect(queries.getByRole('button', { name: `Copy address ${contractAddress}` })).not.toBeNull()
 		expect(rendered.container.querySelector(`details a[href="https://sepolia.etherscan.io/address/${contractAddress}"]`)).not.toBeNull()
 		await act(() => {
@@ -671,7 +805,7 @@ for (const result of ['pending', 'reverted'] as const) {
 }
 
 test('uses reviewed result titles and generic action tenses', () => {
-	expect(completedAction('Request new price')).toBe('Price requested')
+	expect(completedAction('Report a price')).toBe('Report funded')
 	expect(completedAction('Queue custom operation')).toBe('Queued custom operation')
 	expect(formatPendingAction('Queue custom operation')).toBe('Queuing custom operation…')
 	expect(completedAction('Custom operation')).toBe('Custom operation – done')

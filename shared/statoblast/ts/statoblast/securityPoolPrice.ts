@@ -51,7 +51,7 @@ type PriceReadClient = SecurityPoolReadClient & { getBalance(parameters: { addre
 export async function loadSecurityPoolPriceSnapshot(parameters: { client: PriceReadClient; securityPool: Address; owner: Address; universeId: bigint; blockNumber?: bigint }) {
 	const { client } = parameters
 	const securityPool = decodeAddress(parameters.securityPool, 'Security pool')
-	const owner = decodeAddress(parameters.owner, 'Report sponsor')
+	const owner = decodeAddress(parameters.owner, 'Report funder')
 	const universeId = decodeUint(parameters.universeId, 'Universe', 248)
 	const [block, chainId] = await Promise.all([client.getBlock(parameters.blockNumber === undefined ? undefined : { blockNumber: parameters.blockNumber }), client.getChainId()])
 	if (block.number === undefined || block.hash === undefined) throw new Error('Price preparation requires a mined block.')
@@ -66,20 +66,21 @@ export async function loadSecurityPoolPriceSnapshot(parameters: { client: PriceR
 		read(securityPool, 'isPriceReportingOpen', [universeId]),
 		client.getBalance({ address: owner, blockNumber }),
 	])
-	const factory = decodeAddress(factoryValue, 'Security pool factory')
+	const factory = decodeAddress(factoryValue, 'Security pool deployment contract')
 	const originUniverseId = decodeUint(originUniverseValue, 'Origin universe', 248)
-	const zoltar = decodeAddress(protocolValue, 'Security pool protocol')
+	const zoltar = decodeAddress(protocolValue, 'universe contract for the security pool')
 	const feed = decodeAddress(feedValue, 'Security pool price feed', true)
 	const reportingOpen = decodeBool(openValue, 'Reporting window must be a boolean.')
 	const [questionPage, factoryProtocol, registeredFeed, repValue] = await Promise.all([read(securityPool, 'getQuestions', [0n, 1n]), read(factory, 'zoltar'), read(factory, 'sharedPriceFeeds', [securityPool, universeId]), read(zoltar, 'getRepToken', [universeId])])
-	if (decodeAddress(factoryProtocol, 'Factory protocol') !== zoltar || decodeAddress(registeredFeed, 'Canonical price feed', true) !== feed) throw new Error('Security pool price identities do not match.')
+	if (decodeAddress(factoryProtocol, 'universe contract for pool deployment') !== zoltar || decodeAddress(registeredFeed, 'Registered price feed', true) !== feed) throw new Error('Security pool price identities do not match.')
 	if (!Array.isArray(questionPage) || questionPage.length > 1) throw new Error('Invalid security pool preparation source page.')
 	let sourcePool: Address | undefined
 	if (questionPage.length === 1) {
 		sourcePool = decodeAddress(await read(securityPool, 'getQuestionLedger', [decodeUint(questionPage[0], 'Source question'), originUniverseId]), 'Preparation source')
 		const [sourceSecurityPool, sourceOrigin] = await Promise.all([read(factory, 'securityPoolOf', [sourcePool]), read(factory, 'getQuestionLedgerOriginId', [sourcePool])])
 		if (typeof sourceOrigin !== 'string' || !isHex(sourceOrigin) || sourceOrigin.length !== 66) throw new Error('Invalid preparation source origin.')
-		if (decodeAddress(sourceSecurityPool, 'Source security pool') !== securityPool || decodeAddress(await read(factory, 'getQuestionLedger', [sourceOrigin, originUniverseId]), 'Canonical source') !== sourcePool) throw new Error('Security pool preparation source is not canonical.')
+		if (decodeAddress(sourceSecurityPool, 'Source security pool') !== securityPool || decodeAddress(await read(factory, 'getQuestionLedger', [sourceOrigin, originUniverseId]), 'Registered source question') !== sourcePool)
+			throw new Error('The source question does not match the question registered for this security pool.')
 	}
 	const repToken = decodeAddress(repValue, 'Branch REP', true)
 	let observation:
@@ -107,7 +108,8 @@ export async function loadSecurityPoolPriceSnapshot(parameters: { client: PriceR
 		| undefined
 	if (feed !== zeroAddress) {
 		const [authority, feedFactory, feedUniverse, feedRep, wethValue, oracleValue] = await Promise.all([read(feed, 'securityPool'), read(feed, 'securityPoolFactory'), read(feed, 'universeId'), read(feed, 'reputationToken'), read(feed, 'collateralToken'), read(feed, 'openOracle')])
-		if (decodeAddress(authority, 'Feed security pool') !== securityPool || decodeAddress(feedFactory, 'Feed factory') !== factory || decodeUint(feedUniverse, 'Feed universe', 248) !== universeId || decodeAddress(feedRep, 'Feed REP') !== repToken) throw new Error('Price feed belongs to another security pool or branch.')
+		if (decodeAddress(authority, 'Feed security pool') !== securityPool || decodeAddress(feedFactory, 'pool deployment contract for the price feed') !== factory || decodeUint(feedUniverse, 'Feed universe', 248) !== universeId || decodeAddress(feedRep, 'Feed REP') !== repToken)
+			throw new Error('Price feed belongs to another security pool or branch.')
 		const weth = decodeAddress(wethValue, 'Collateral')
 		const wrappedNative = decodeAddress(await read(feed, 'weth'), 'Wrapped native token')
 		const openOracle = decodeAddress(oracleValue, 'OpenOracle')
@@ -134,7 +136,7 @@ export async function loadSecurityPoolPriceSnapshot(parameters: { client: PriceR
 		// contract quote from immutable settings and the pinned block instead.
 		const settlementSettings = {
 			maxSettlementBaseFeeMultiplierBps: decodeUint(multiplier, 'Settlement fee multiplier'),
-			settlementCallbackGasLimit: decodeUint(callbackGas, 'Settlement callback gas', 32),
+			settlementCallbackGasLimit: decodeUint(callbackGas, 'Settlement gas limit', 32),
 			initialReportPriorityFeeAttoEthPerGas: decodeUint(priority, 'Report priority fee'),
 		}
 		const baseFeePerGas = decodeUint(block.baseFeePerGas ?? 0n, 'Block base fee')
@@ -143,7 +145,7 @@ export async function loadSecurityPoolPriceSnapshot(parameters: { client: PriceR
 		const bountyAt = (baseFeePerGas: bigint) => decodeUint(calculateOracleSettlementBountyAttoEth({ ...settlementSettings, baseFeePerGas }), 'Settlement bounty', 96)
 		observation = {
 			wrappedNative,
-			escalationHaltMultiplierBps: decodeUint(haltMultiplier, 'Escalation halt multiplier'),
+			escalationHaltMultiplierBps: decodeUint(haltMultiplier, 'Dispute limit multiplier'),
 			currentExposureAttoEth: decodeUint(exposure, 'Current exposure'),
 			minimumReportCollateral: decodeUint(reportCollateral, 'Report collateral offset'),
 			weth,
@@ -177,7 +179,7 @@ export function quoteSecurityPoolPriceFunding(snapshot: SecurityPoolPriceSnapsho
 	if (observation.minimumWethAttoEth === undefined || observation.minimumRepAttoRep === undefined) throw new Error('The branch price reporting window is closed.')
 	const price = decodeUint(proposedRepPerEth, 'REP per ETH price')
 	if (price === 0n) throw new Error('Enter a positive REP per ETH price.')
-	decodeUint(requestedWeth, 'Requested WETH', 128)
+	decodeUint(requestedWeth, 'WETH for the report', 128)
 	const inventoryWeth = (observation.minimumRepAttoRep * 10n ** 18n + price - 1n) / price
 	const required = inventoryWeth > observation.minimumWethAttoEth ? inventoryWeth : observation.minimumWethAttoEth
 	// The feed judges the report against exposure at settlement. Its minimum covers
@@ -186,12 +188,12 @@ export function quoteSecurityPoolPriceFunding(snapshot: SecurityPoolPriceSnapsho
 	const suggested = requestedWeth === 0n ? required + required / SECURITY_POOL_REPORT_FUNDING_HEADROOM_DIVISOR : requestedWeth
 	const weth = decodeUint(suggested > required ? suggested : required, 'Initial WETH report', 128)
 	const rep = decodeUint((weth * price + 10n ** 18n - 1n) / 10n ** 18n, 'Initial REP report', 128)
-	decodeUint((weth * observation.escalationHaltMultiplierBps) / 10_000n, 'Escalation halt', 128)
+	decodeUint((weth * observation.escalationHaltMultiplierBps) / 10_000n, 'Dispute limit', 128)
 	const wrap = observation.weth === observation.wrappedNative && weth > observation.wethBalanceAttoEth ? weth - observation.wethBalanceAttoEth : 0n
 	const coveredExposureAttoEth = weth > observation.minimumReportCollateral ? (weth - observation.minimumReportCollateral) * 100n : 0n
 	const growthHeadroomAttoEth = coveredExposureAttoEth > observation.currentExposureAttoEth ? coveredExposureAttoEth - observation.currentExposureAttoEth : 0n
 	const callbackGas = SECURITY_POOL_REPORT_SETTLEMENT_CALLBACK_GAS + decodeUint(operationsGas, 'Operations gas', 32)
-	if (callbackGas > MAXIMUM_SECURITY_POOL_REPORT_CALLBACK_GAS) throw new Error('Callback gas exceeds limit.')
+	if (callbackGas > MAXIMUM_SECURITY_POOL_REPORT_CALLBACK_GAS) throw new Error('Report settlement gas exceeds the limit.')
 	const paddedGas = (callback: bigint) => ((callback + callback / 63n + 310_000n) * 12_000n + 9_999n) / 10_000n + 20_000n
 	const baseGas = paddedGas(SECURITY_POOL_REPORT_SETTLEMENT_CALLBACK_GAS)
 	const bounty = operationsGas === 0n ? observation.nextBlockBounty : ((observation.nextBlockBounty - 101n) * paddedGas(callbackGas) + baseGas - 1n) / baseGas + 101n
@@ -229,7 +231,7 @@ export type SecurityPoolReportOperations = { gasLimit: bigint; minimumPrice: big
 export function buildSecurityPoolPriceOperationsRequest(snapshot: SecurityPoolPriceSnapshot, proposedRepPerEth: bigint, requestedWethAttoEth: bigint, batch: SecurityPoolReportOperations) {
 	const request = buildSecurityPoolPriceRequest(snapshot, proposedRepPerEth, requestedWethAttoEth)
 	const funding = quoteSecurityPoolPriceFunding(snapshot, proposedRepPerEth, requestedWethAttoEth, batch.gasLimit)
-	if (decodeUint(batch.gasLimit, 'Operations gas') + SECURITY_POOL_REPORT_SETTLEMENT_CALLBACK_GAS > MAXIMUM_SECURITY_POOL_REPORT_CALLBACK_GAS) throw new Error('Callback gas exceeds limit.')
+	if (decodeUint(batch.gasLimit, 'Operations gas') + SECURITY_POOL_REPORT_SETTLEMENT_CALLBACK_GAS > MAXIMUM_SECURITY_POOL_REPORT_CALLBACK_GAS) throw new Error('Report settlement gas exceeds the limit.')
 	decodeUint(batch.minimumPrice, 'Minimum operation price')
 	decodeUint(batch.maximumPrice, 'Maximum operation price')
 	decodeUint(batch.deadline, 'Operations deadline', 48)

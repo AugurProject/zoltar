@@ -420,6 +420,6 @@ test('replaces a tree that fails to render with a recoverable notice instead of 
 
 test('rejects a missing root before running initialization', async () => {
 	const initialize = mock(async () => undefined)
-	await expect(mountApp({ applicationTitle, initialize })).rejects.toThrow('mountApp requires a root component factory')
+	await expect(mountApp({ applicationTitle, initialize })).rejects.toThrow('mountApp requires a function that renders the root component')
 	expect(initialize).not.toHaveBeenCalled()
 })

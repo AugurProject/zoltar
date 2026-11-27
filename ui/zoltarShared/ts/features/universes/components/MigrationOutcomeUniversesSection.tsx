@@ -29,6 +29,7 @@ type MigrationOutcomeUniversesSectionProps = {
 	onScalarOutcomesChange?: ((indexes: readonly bigint[]) => void) | undefined
 	disabled: boolean
 	loadingBalances: boolean
+	selectionOnly?: boolean
 	onDeployChildUniverse: (outcomeIndex: bigint) => void
 	onToggleOutcomeIndex: (outcomeIndex: bigint) => void
 	outcomes: readonly MigrationWizardOutcome[]
@@ -45,7 +46,20 @@ function OutcomeMetric({ label, children }: { label: string; children: Component
 }
 
 /** The "choose outcomes" step: one checkbox card per outcome universe, named by its outcome. */
-export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQuestion, selectedOutcomeIndexes = [], onScalarOutcomesChange, deploymentDisabledReason, disabled, loadingBalances, onDeployChildUniverse, onToggleOutcomeIndex, outcomes, pendingOutcomeIndex }: MigrationOutcomeUniversesSectionProps) {
+export function MigrationOutcomeUniversesSection({
+	universeBrowserHref,
+	scalarQuestion,
+	selectedOutcomeIndexes = [],
+	onScalarOutcomesChange,
+	deploymentDisabledReason,
+	disabled,
+	loadingBalances,
+	selectionOnly = false,
+	onDeployChildUniverse,
+	onToggleOutcomeIndex,
+	outcomes,
+	pendingOutcomeIndex,
+}: MigrationOutcomeUniversesSectionProps) {
 	const browser = universeBrowserHref === undefined ? undefined : parseRouteHash(universeBrowserHref)
 	const [tickInput, setTickInput] = useState('0')
 	const [invalid, setInvalid] = useState(false)
@@ -68,7 +82,7 @@ export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQu
 	const showSharedDeploymentReason = sharedDeploymentReason !== undefined && visibleOutcomes.some(outcome => !outcome.exists && outcome.outcomeIndex !== pendingOutcomeIndex)
 	return (
 		<div className='form-grid'>
-			{outcomes.some(outcome => outcome.selected) ? (
+			{(!selectionOnly || scalarQuestion !== undefined) && outcomes.some(outcome => outcome.selected) ? (
 				<div className='field'>
 					<span className='field-label'>{zoltarCopy.selectedOutcomes}</span>
 					<div className='actions'>
@@ -84,7 +98,7 @@ export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQu
 				</div>
 			) : undefined}
 			{scalarQuestion === undefined ? undefined : <UniverseScalarPicker question={scalarQuestion} tickInput={tickInput} invalid={invalid} onTickChange={setTickInput} onInvalidChange={setInvalid} disabled={disabled || pendingOutcomeIndex !== undefined} />}
-			{selection?.outcomeIndex !== undefined && selectedChild === undefined ? (
+			{!selectionOnly && selection?.outcomeIndex !== undefined && selectedChild === undefined ? (
 				<div className='actions'>
 					<Badge tone={resolvingSelection ? 'loading' : 'muted'}>{resolvingSelection ? commonCopy.loading : commonCopy.notDeployed}</Badge>
 					<TransactionActionButton
@@ -99,55 +113,75 @@ export function MigrationOutcomeUniversesSection({ universeBrowserHref, scalarQu
 					/>
 				</div>
 			) : undefined}
-			{showSharedDeploymentReason ? (
+			{!selectionOnly && showSharedDeploymentReason ? (
 				<p className='detail' id={sharedDeploymentReasonId}>
 					{sharedDeploymentReason}
 				</p>
 			) : undefined}
-			<OutcomeUniverseList
-				selection
-				className='migration-outcome-section'
-				emptyMessage={scalarQuestion === undefined ? zoltarCopy.migrationChildUniversesEmpty : undefined}
-				outcomes={visibleOutcomes.map(outcome => {
-					const deployReason = deploymentDisabledReason(outcome)
-					const deployingThisOutcome = pendingOutcomeIndex === outcome.outcomeIndex
-					return {
-						actions: outcome.exists ? (
-							<UniverseLink href={browser === undefined ? undefined : buildRouteHref(browser.routeHash, writeUniverseQueryParam(browser.search, outcome.universeId))} className='button-link secondary-link' universeId={outcome.universeId}>
-								{universeCopy.formatOpenChildUniverse(escapeOnChainText(outcome.label))}
-							</UniverseLink>
-						) : (
-							<TransactionActionButton
-								tone='secondary'
-								showDisabledReason={false}
-								disabledReasonElementId={showSharedDeploymentReason && !deployingThisOutcome ? sharedDeploymentReasonId : undefined}
-								idleLabel={zoltarCopy.formatDeployChildUniverse(escapeOnChainText(outcome.label))}
-								pendingLabel={marketCopy.deployingUniverse}
-								pending={deployingThisOutcome}
-								onClick={() => onDeployChildUniverse(outcome.outcomeIndex)}
-								availability={{ disabled: pendingOutcomeIndex !== undefined || deployReason !== undefined, reason: deployReason ?? (deployingThisOutcome ? undefined : sharedDeploymentReason) }}
-							/>
-						),
-						details: (
-							<>
-								<OutcomeMetric label={zoltarCopy.outcomeHeldRep}>
-									<CurrencyValue copyable={false} loading={loadingBalances && outcome.heldAttoRep === undefined} value={outcome.heldAttoRep} suffix={commonCopy.rep} />
-								</OutcomeMetric>
-								<OutcomeMetric label={zoltarCopy.outcomeAlreadyMigrated}>
-									<CurrencyValue copyable={false} loading={loadingBalances && outcome.alreadyMigratedAttoRep === undefined} value={outcome.alreadyMigratedAttoRep} suffix={commonCopy.rep} />
-								</OutcomeMetric>
-							</>
-						),
-						disabled,
-						exists: outcome.exists,
-						key: outcome.universeId.toString(),
-						label: outcome.label,
-						identity: { outcomeIndex: outcome.outcomeIndex, universeId: outcome.universeId },
-						onSelect: () => onToggleOutcomeIndex(outcome.outcomeIndex),
-						selected: outcome.selected,
-					}
-				})}
-			/>
+			{selectionOnly ? (
+				<fieldset className='migration-outcome-checklist'>
+					<legend>{zoltarCopy.migrateInto}</legend>
+					{resolvingSelection && (
+						<p className='detail' role='status'>
+							{commonCopy.loadingWithEllipsis}
+						</p>
+					)}
+					{visibleOutcomes.map(outcome => (
+						<label key={String(outcome.outcomeIndex)}>
+							<input type='checkbox' checked={outcome.selected} disabled={disabled} onChange={() => onToggleOutcomeIndex(outcome.outcomeIndex)} />
+							<span>
+								<OnChainText text={outcome.label} /> <OutcomeIdentity label={outcome.label} outcomeIndex={outcome.outcomeIndex} universeId={outcome.universeId} />
+								{!outcome.exists && <small>{zoltarCopy.migrationCreatesUniverse}</small>}
+							</span>
+						</label>
+					))}
+				</fieldset>
+			) : (
+				<OutcomeUniverseList
+					selection
+					className='migration-outcome-section'
+					emptyMessage={scalarQuestion === undefined ? zoltarCopy.migrationChildUniversesEmpty : undefined}
+					outcomes={visibleOutcomes.map(outcome => {
+						const deployReason = deploymentDisabledReason(outcome)
+						const deployingThisOutcome = pendingOutcomeIndex === outcome.outcomeIndex
+						return {
+							actions: outcome.exists ? (
+								<UniverseLink href={browser === undefined ? undefined : buildRouteHref(browser.routeHash, writeUniverseQueryParam(browser.search, outcome.universeId))} className='button-link secondary-link' universeId={outcome.universeId}>
+									{universeCopy.formatOpenChildUniverse(escapeOnChainText(outcome.label))}
+								</UniverseLink>
+							) : (
+								<TransactionActionButton
+									tone='secondary'
+									showDisabledReason={false}
+									disabledReasonElementId={showSharedDeploymentReason && !deployingThisOutcome ? sharedDeploymentReasonId : undefined}
+									idleLabel={zoltarCopy.formatDeployChildUniverse(escapeOnChainText(outcome.label))}
+									pendingLabel={marketCopy.deployingUniverse}
+									pending={deployingThisOutcome}
+									onClick={() => onDeployChildUniverse(outcome.outcomeIndex)}
+									availability={{ disabled: pendingOutcomeIndex !== undefined || deployReason !== undefined, reason: deployReason ?? (deployingThisOutcome ? undefined : sharedDeploymentReason) }}
+								/>
+							),
+							details: (
+								<>
+									<OutcomeMetric label={zoltarCopy.outcomeHeldRep}>
+										<CurrencyValue copyable={false} loading={loadingBalances && outcome.heldAttoRep === undefined} value={outcome.heldAttoRep} suffix={commonCopy.rep} />
+									</OutcomeMetric>
+									<OutcomeMetric label={zoltarCopy.outcomeAlreadyMigrated}>
+										<CurrencyValue copyable={false} loading={loadingBalances && outcome.alreadyMigratedAttoRep === undefined} value={outcome.alreadyMigratedAttoRep} suffix={commonCopy.rep} />
+									</OutcomeMetric>
+								</>
+							),
+							disabled,
+							exists: outcome.exists,
+							key: outcome.universeId.toString(),
+							label: outcome.label,
+							identity: { outcomeIndex: outcome.outcomeIndex, universeId: outcome.universeId },
+							onSelect: () => onToggleOutcomeIndex(outcome.outcomeIndex),
+							selected: outcome.selected,
+						}
+					})}
+				/>
+			)}
 			{scalarQuestion === undefined ? <PaginationControls loading={false} hasPreviousPage={page > 0} hasNextPage={(page + 1) * 10 < outcomes.length} onPreviousPage={() => setPage(current => Math.max(0, current - 1))} onNextPage={() => setPage(current => current + 1)} /> : undefined}
 		</div>
 	)

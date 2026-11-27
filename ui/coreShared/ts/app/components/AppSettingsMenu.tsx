@@ -9,7 +9,7 @@ import * as appCopy from '../../copy/app.js'
 import type { ComponentChildren } from 'preact'
 import { ThemeSetting } from './ThemeSetting.js'
 
-export function AppSettingsMenu({ onEnvironmentChanged, settingsContent }: { onEnvironmentChanged: () => Promise<void>; settingsContent?: ComponentChildren }) {
+export function AppSettingsMenu({ onEnvironmentChanged, settingsContent, triggerId }: { onEnvironmentChanged: () => Promise<void>; settingsContent?: ComponentChildren; triggerId?: string | undefined }) {
 	const [selectedNetwork, setSelectedNetwork] = useState<RpcNetworkId>(getActiveNetworkProfile().id)
 	const [rpcUrls, setRpcUrls] = useState(() => readNetworkRpcUrls())
 	const [error, setError] = useState<string | undefined>(undefined)
@@ -42,7 +42,7 @@ export function AppSettingsMenu({ onEnvironmentChanged, settingsContent }: { onE
 
 	return (
 		<div className='app-settings' ref={containerRef}>
-			<button ref={triggerRef} className='app-settings-trigger' type='button' aria-expanded={open} aria-haspopup='dialog' onClick={toggle}>
+			<button id={triggerId} ref={triggerRef} className='app-settings-trigger' type='button' aria-expanded={open} aria-haspopup='dialog' onClick={toggle}>
 				<svg className='app-settings-icon' viewBox='0 0 24 24' width='16' height='16' aria-hidden='true' focusable='false'>
 					<path fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M4 6h9M17 6h3M15 4v4M4 12h3M11 12h9M9 10v4M4 18h11M19 18h1M17 16v4' />
 				</svg>

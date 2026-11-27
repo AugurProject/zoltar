@@ -1,0 +1,15 @@
+export const diagram = 'Universe branches'
+export const source = 'This universe'
+export const destination = 'Your branch'
+export const stays = 'Stays here'
+export const moved = 'Pledged REP and commitment'
+export const fees = 'Earned fees'
+export const unpledged = 'Unpledged REP'
+export const choose = 'Choose a branch below.'
+export const created = 'Universe created'
+export const notCreated = 'Universe not created yet'
+export const selected = 'Selected'
+export const committed = 'Committed'
+export const pageRange = (start: bigint, end: bigint, total: bigint) => `Branches ${start}–${end} of ${total}`
+
+export const repCommitted = 'committed'

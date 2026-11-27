@@ -45,6 +45,7 @@ export type OverviewPanelsProps = {
 	/** Primary navigation for the top bar, supplied by `AppHeaderShell`. */
 	navigation?: ComponentChildren
 	applicationTitle: string
+	brandHref?: string | undefined
 	/** Omit universe context for applications, such as the oracle console, that operate independently of universes. */
 	activeUniverseId: bigint | undefined
 	accountState: AccountState
@@ -79,6 +80,8 @@ export type OverviewPanelsProps = {
 	repPrices?: OverviewRepPricesProps | undefined
 	/** Lists the wallet's WETH balance; only applications that use WETH set it. */
 	showWethBalance?: boolean
+	/** Uses the first and last ten address characters when the full wallet address does not fit. */
+	longWalletAbbreviation?: boolean
 }
 
 function omitPresentationActionHint(presentation: UserMessagePresentation) {
@@ -173,6 +176,7 @@ export function OverviewPanels({
 	settingsMenu,
 	navigation,
 	applicationTitle,
+	brandHref,
 	activeUniverseId,
 	accountState,
 	hasInjectedWallet = true,
@@ -189,6 +193,7 @@ export function OverviewPanels({
 	readBackendStatus,
 	repPrices,
 	showWethBalance = false,
+	longWalletAbbreviation = false,
 	universeControl,
 	universeForkTime,
 	showUniverseForkedNotice,
@@ -232,6 +237,7 @@ export function OverviewPanels({
 				{hasWrongWalletNetwork ? <WalletNetworkControl className='primary wallet-button' onClick={onSwitchNetwork} disabled={isManagingWallet} label={switchNetworkLabel} /> : undefined}
 				<AccountMenu
 					address={accountState.address}
+					longAbbreviation={longWalletAbbreviation}
 					tone={hasWrongWalletNetwork ? 'danger' : 'ok'}
 					network={
 						<>
@@ -253,6 +259,7 @@ export function OverviewPanels({
 	return (
 		<OverviewHeaderPanel
 			applicationTitle={applicationTitle}
+			brandHref={brandHref}
 			settingsMenu={settingsMenu}
 			navigation={navigation}
 			badges={

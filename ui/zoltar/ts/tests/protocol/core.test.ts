@@ -3,8 +3,9 @@
 import { describe, expect, mock, test } from 'bun:test'
 import { encodeFunctionData, getAddress, type Hash, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
+import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { getMulticall3Address } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
-import { readOptionalMulticall, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar-shared/protocol/core.js'
+import { installAppContractLabelResolver, readOptionalMulticall, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { buildIntent, createPreparedWalletPresentation } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -151,6 +152,30 @@ describe('contract core helpers', () => {
 		}))
 
 		expect(presentation?.technicalRows?.some(row => row.label === 'Contract' && row.value === `ERC-20 token (${tokenAddress})`)).toBe(true)
+	})
+
+	test('an app can override the default contract label in transaction previews', async () => {
+		const hash = `0x${'e'.repeat(64)}` as Hash
+		const address = getAddress('0x5555555555555555555555555555555555555555')
+		let label: string | undefined
+		const client: WriteContractClient = {
+			onTransactionPrepared: preview => {
+				label = preview.contractLabel
+			},
+			sendTransaction: async () => hash,
+			waitForTransactionReceipt: async () => hashReceipt('success'),
+		}
+		const prepare = async () => await writeContractAndWaitForReceipt(client, () => ({ abi: Zoltar_Zoltar.abi, address, args: [0n], functionName: 'getRepToken' }))
+
+		await prepare()
+		expect(label).toBe('Zoltar')
+		installAppContractLabelResolver(abi => (abi === Zoltar_Zoltar.abi ? 'Universe contract' : undefined))
+		try {
+			await prepare()
+			expect(label).toBe('Universe contract')
+		} finally {
+			installAppContractLabelResolver(() => undefined)
+		}
 	})
 
 	test('writeContractAndWaitForReceipt maps transaction revert and fallback error messages', async () => {

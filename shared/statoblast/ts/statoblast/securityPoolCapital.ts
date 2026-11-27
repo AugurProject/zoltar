@@ -1,8 +1,14 @@
-import { encodeFunctionData, parseAbi, zeroAddress, type AbiValue, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, formatUnits, parseAbi, zeroAddress, type AbiValue, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { SecurityPoolEconomicsConfig } from './securityPool.js'
 import type { SecurityPoolReadClient } from './securityPoolRead.js'
 import { decodeAuctionVaultBindings } from './securityPoolRepairAuctionVaultClones.js'
 import { decodeAddress, decodeBool, decodeFields, decodeUint } from './securityPoolDecoding.js'
+
+export const minimumSecurityPoolHealthFactorBps = 10_000n
+
+function minimumHealthMessage() {
+	return `Health target must be at least ${formatUnits(minimumSecurityPoolHealthFactorBps, 2)}%.`
+}
 
 const abi = parseAbi([
 	'function repairAuctionPosition(uint256 bidId) view returns ((address vault,uint96 positionId,uint256 principal,uint256 commitment,uint256 targetHealthFactorBps,uint48 liquidationStarted,bool materialized,uint256 earnedAttoEth,uint256 earnedAttoRep) result)',
@@ -154,7 +160,7 @@ function positive(value: unknown, label: string, bits = 256) {
 }
 function healthTarget(value: unknown) {
 	const target = decodeUint(value, 'Health target')
-	if (target < 10_000n) throw new Error('Health target must be at least 100%.')
+	if (target < minimumSecurityPoolHealthFactorBps) throw new Error(minimumHealthMessage())
 	return target
 }
 function retirementStatus(value: unknown): SecurityPoolRetirementPreview['status'] {
@@ -172,19 +178,19 @@ function retirementStatus(value: unknown): SecurityPoolRetirementPreview['status
 		case 5n:
 			return 'ready'
 		default:
-			throw new Error('Invalid retirement preview status.')
+			throw new Error('Invalid commitment reduction preview status.')
 	}
 }
 function retirementPreview(value: unknown): SecurityPoolRetirementPreview {
 	const [status, batch, healthy, spare, ahead, reduction, rep] = decodeFields(value, ['status', 'effectiveCurrentBatch', 'healthyCommitment', 'spareCommitment', 'queuedAheadCommitment', 'commitmentReduction', 'releasedRep'], 'Invalid capital accounting response.')
 	return {
 		status: retirementStatus(status),
-		effectiveCurrentBatch: decodeUint(batch, 'Effective current cohort', 96),
-		healthyCommitment: decodeUint(healthy, 'Preview healthy commitment'),
+		effectiveCurrentBatch: decodeUint(batch, 'Current reduction batch ID', 96),
+		healthyCommitment: decodeUint(healthy, 'Projected backed commitment'),
 		spareCommitment: decodeUint(spare, 'Preview spare commitment'),
 		queuedAheadCommitment: decodeUint(ahead, 'Earlier reserved reductions'),
-		commitmentReduction: decodeUint(reduction, 'Requested commitment reduction'),
-		releasedRep: decodeUint(rep, 'Requested REP release'),
+		commitmentReduction: decodeUint(reduction, 'Commitment reduction'),
+		releasedRep: decodeUint(rep, 'REP to release'),
 	}
 }
 function ownerAccount(value: unknown): SecurityPoolCapitalOwner {
@@ -194,13 +200,13 @@ function ownerAccount(value: unknown): SecurityPoolCapitalOwner {
 		feesAttoEth: decodeUint(eth, 'ETH earnings'),
 		feesAttoRep: decodeUint(rep, 'REP earnings'),
 		targetHealthFactorBps: decodeUint(health, 'Health target'),
-		positionId: decodeUint(id, 'Position id', 96),
+		positionId: decodeUint(id, 'Position ID', 96),
 	}
 }
 
 type CapitalRequest = { owner: Address; capitalLedger: Address }
 function request(parameters: CapitalRequest, functionName: string, args: readonly AbiValue[] = [], value = 0n) {
-	return { account: decodeAddress(parameters.owner, 'Owner'), to: decodeAddress(parameters.capitalLedger, 'Capital ledger'), value: decodeUint(value, 'Transaction value'), data: encodeFunctionData({ abi, functionName, args }) }
+	return { account: decodeAddress(parameters.owner, 'Owner'), to: decodeAddress(parameters.capitalLedger, 'Capital contract'), value: decodeUint(value, 'Transaction value'), data: encodeFunctionData({ abi, functionName, args }) }
 }
 
 export function buildSecurityPoolCapitalDepositRequest(parameters: CapitalRequest & { amountAttoRep: bigint }) {
@@ -223,10 +229,10 @@ export function buildSecurityPoolCapitalDepositAndSetHealthRequest(parameters: C
  */
 export function buildSecurityPoolCapitalSetCommitmentRequest(parameters: CapitalRequest & { commitment: bigint; reportId?: bigint }) {
 	const commitment = decodeUint(parameters.commitment, 'Commitment')
-	return parameters.reportId === undefined ? request(parameters, 'setCommitment', [commitment]) : request(parameters, 'setCommitmentWithReport', [decodeUint(parameters.reportId, 'Report id'), positive(commitment, 'Commitment')])
+	return parameters.reportId === undefined ? request(parameters, 'setCommitment', [commitment]) : request(parameters, 'setCommitmentWithReport', [decodeUint(parameters.reportId, 'Report ID'), positive(commitment, 'Commitment')])
 }
 export function buildSecurityPoolCapitalServeRetirementRequest(parameters: CapitalRequest & { positionId: bigint }) {
-	return request(parameters, 'serveRetirement', [positive(decodeUint(parameters.positionId, 'Position id', 96), 'Position id')])
+	return request(parameters, 'serveRetirement', [positive(decodeUint(parameters.positionId, 'Position ID', 96), 'Position ID')])
 }
 /** Pays REP and collateral earnings to `recipient`, defaulting to the owner, so a token that refuses the owner cannot strand them. */
 export function buildSecurityPoolCapitalClaimEarningsRequest(parameters: CapitalRequest & { recipient?: Address }) {
@@ -234,20 +240,26 @@ export function buildSecurityPoolCapitalClaimEarningsRequest(parameters: Capital
 }
 /** @public Keeper takeover: a new receiver commits all idle principal within maximumOwnRep; an existing receiver must be active or share the target cohort. */
 export function buildSecurityPoolCapitalTakeOverRequest(parameters: CapitalRequest & { positionId: bigint; commitment: bigint; minimumTakeoverReward: bigint; maximumOwnRep: bigint }) {
-	return request(parameters, 'takeOver', [positive(parameters.positionId, 'Position id', 96), positive(parameters.commitment, 'Takeover commitment'), decodeUint(parameters.minimumTakeoverReward, 'Minimum takeover reward'), decodeUint(parameters.maximumOwnRep, 'Maximum own REP')])
+	return request(parameters, 'takeOver', [positive(parameters.positionId, 'Position ID', 96), positive(parameters.commitment, 'Takeover commitment'), decodeUint(parameters.minimumTakeoverReward, 'Minimum takeover reward'), decodeUint(parameters.maximumOwnRep, 'Maximum own REP')])
 }
 
 /** Bind an automated acquisition to its quoted price epoch, owner policy and final exposure. */
 export function buildSecurityPoolCapitalTakeOverWithBoundsRequest(parameters: CapitalRequest & { positionId: bigint; commitment: bigint; minimumTakeoverReward: bigint; maximumOwnRep: bigint; bounds: SecurityPoolTakeoverBounds }) {
 	const bounds = parameters.bounds
 	const expectedTargetHealthFactorBps = decodeUint(bounds.expectedTargetHealthFactorBps, 'Expected health target')
-	if (expectedTargetHealthFactorBps < 10_000n) throw new Error('Health target must be at least 100%.')
+	if (expectedTargetHealthFactorBps < minimumSecurityPoolHealthFactorBps) throw new Error(minimumHealthMessage())
 	return request(parameters, 'takeOverWithBounds', [
-		positive(parameters.positionId, 'Position id', 96),
+		positive(parameters.positionId, 'Position ID', 96),
 		positive(parameters.commitment, 'Takeover commitment'),
 		decodeUint(parameters.minimumTakeoverReward, 'Minimum takeover reward'),
 		decodeUint(parameters.maximumOwnRep, 'Maximum own REP'),
-		[decodeUint(bounds.maximumOwnerPrincipal, 'Maximum owner principal'), decodeUint(bounds.maximumOwnerCommitment, 'Maximum owner commitment'), expectedTargetHealthFactorBps, decodeUint(bounds.expectedAcceptedPriceEpoch, 'Expected price epoch'), decodeUint(bounds.expectedSourceBatch, 'Expected source cohort', 96)],
+		[
+			decodeUint(bounds.maximumOwnerPrincipal, 'Maximum pledged REP'),
+			decodeUint(bounds.maximumOwnerCommitment, 'Maximum owner commitment'),
+			expectedTargetHealthFactorBps,
+			decodeUint(bounds.expectedAcceptedPriceEpoch, 'Expected price update ID'),
+			decodeUint(bounds.expectedSourceBatch, 'Expected reduction batch ID', 96),
+		],
 	])
 }
 
@@ -261,7 +273,7 @@ export function buildSecurityPoolCapitalCureRequest(parameters: CapitalRequest &
 		...parameters,
 		minimumTakeoverReward: 0n,
 		maximumOwnRep: 0n,
-		bounds: { maximumOwnerPrincipal: 0n, maximumOwnerCommitment: 0n, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: parameters.expectedAcceptedPriceEpoch, expectedSourceBatch: parameters.expectedSourceBatch },
+		bounds: { maximumOwnerPrincipal: 0n, maximumOwnerCommitment: 0n, expectedTargetHealthFactorBps: minimumSecurityPoolHealthFactorBps, expectedAcceptedPriceEpoch: parameters.expectedAcceptedPriceEpoch, expectedSourceBatch: parameters.expectedSourceBatch },
 	})
 }
 
@@ -283,7 +295,7 @@ export async function loadSecurityPoolClaimableEarnings(
 			snapshot.blockNumber,
 		)
 		const [vault, , , , , , , eth, rep] = decodeFields(value, ['vault', 'positionId', 'principal', 'commitment', 'targetHealthFactorBps', 'liquidationStarted', 'materialized', 'earnedAttoEth', 'earnedAttoRep'], 'Invalid auction earnings response.')
-		if (decodeAddress(vault, 'Auction vault') !== snapshot.owner) throw new Error('Auction earnings owner mismatch.')
+		if (decodeAddress(vault, 'Auction vault address') !== snapshot.owner) throw new Error('Auction earnings owner mismatch.')
 		return { attoEth: decodeUint(eth, 'ETH earnings'), attoRep: decodeUint(rep, 'REP earnings') }
 	}
 	const [, ownerValue, positionValue] = await multicall(
@@ -296,16 +308,16 @@ export async function loadSecurityPoolClaimableEarnings(
 	return { attoEth: account.feesAttoEth + decodeUint(eth, 'ETH earnings'), attoRep: account.feesAttoRep + decodeUint(rep, 'REP earnings') }
 }
 
-/** All reads share one block and inspect only the owner's single position. */
-export async function loadSecurityPoolCapitalSnapshot(parameters: { client: SecurityPoolReadClient; securityPool: Address; owner: Address; universeId?: bigint; blockNumber?: bigint }): Promise<SecurityPoolCapitalSnapshot> {
+/** All reads share one block. A position is only read when an owner is supplied. */
+export async function loadSecurityPoolCapitalSnapshot(parameters: { client: SecurityPoolReadClient; securityPool: Address; owner?: Address | undefined; universeId?: bigint; blockNumber?: bigint }): Promise<SecurityPoolCapitalSnapshot> {
 	const { client } = parameters
 	const securityPool = decodeAddress(parameters.securityPool, 'Security pool')
-	const owner = decodeAddress(parameters.owner, 'Owner')
+	const owner = parameters.owner === undefined ? undefined : decodeAddress(parameters.owner, 'Owner')
 	const [chainId, block] = await Promise.all([client.getChainId(), client.getBlock(parameters.blockNumber === undefined ? undefined : { blockNumber: parameters.blockNumber })])
 	if (!Number.isSafeInteger(chainId) || chainId <= 0 || block.number === undefined || block.hash === undefined) throw new Error('A confirmed block is required for capital accounting.')
 	const blockNumber = block.number
 	const read = (target: Address, functionName: string, args: readonly AbiValue[] = []) => client.readContract({ address: target, abi, functionName, args, blockNumber })
-	const universeId = decodeUint(parameters.universeId ?? (await read(securityPool, 'originUniverseId')), 'Universe id', 248)
+	const universeId = decodeUint(parameters.universeId ?? (await read(securityPool, 'originUniverseId')), 'Universe ID', 248)
 	const [ledgerValue, zoltarValue, settlementValue, feeBps, annualFeeBps, minimumFee, minimumCommitment, duration, feedValue] = await Promise.all([
 		read(securityPool, 'capitalLedger', [universeId]),
 		read(securityPool, 'zoltar'),
@@ -317,12 +329,12 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 		read(securityPool, 'rewardVestingSeconds'),
 		read(securityPool, 'priceFeed', [universeId]),
 	])
-	const capitalLedger = decodeAddress(ledgerValue, 'Capital ledger')
-	const zoltar = decodeAddress(zoltarValue, 'Zoltar')
+	const capitalLedger = decodeAddress(ledgerValue, 'Capital contract')
+	const zoltar = decodeAddress(zoltarValue, 'universe contract for the security pool')
 	const [indexValue, tokenValue, bookValue, price, multiplier, validUntil, valid, demand, free, frozen, importing, exported, ownerValue, collateralValue, totalsValue, forkTimeValue, choiceDeadlineValue, conservative, liquidation, exposureLimit, ownerPrice, availableCapacity] = await Promise.all([
 		read(capitalLedger, 'commitmentIndex'),
 		read(capitalLedger, 'repToken'),
-		read(decodeAddress(settlementValue, 'Settlement engine'), 'ledger'),
+		read(decodeAddress(settlementValue, 'Payout contract'), 'ledger'),
 		read(capitalLedger, 'acceptedPrice'),
 		read(capitalLedger, 'securityMultiplierBps'),
 		read(capitalLedger, 'priceValidUntil'),
@@ -331,34 +343,34 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 		read(capitalLedger, 'totalFreeAttoRep'),
 		read(capitalLedger, 'frozen'),
 		read(capitalLedger, 'importing'),
-		read(capitalLedger, 'exported', [owner]),
-		read(capitalLedger, 'ownerAccount', [owner]),
-		read(capitalLedger, 'ownerCollateral', [owner]),
+		owner === undefined ? false : read(capitalLedger, 'exported', [owner]),
+		owner === undefined ? undefined : read(capitalLedger, 'ownerAccount', [owner]),
+		owner === undefined ? [0n, 0n, 0n] : read(capitalLedger, 'ownerCollateral', [owner]),
 		read(capitalLedger, 'totals'),
 		read(zoltar, 'getForkTime', [universeId]),
 		read(zoltar, 'getForkChoiceDeadline', [universeId]),
 		read(capitalLedger, 'conservativePrice'),
 		read(capitalLedger, 'liquidationPrice'),
 		feedValue === zeroAddress ? 0n : read(decodeAddress(feedValue, 'Shared price feed'), 'acceptedExposureLimitAttoEth'),
-		read(capitalLedger, 'ownerConservativePrice', [owner]),
+		owner === undefined ? 0n : read(capitalLedger, 'ownerConservativePrice', [owner]),
 		read(securityPool, 'availableMintCapacity', [universeId]),
 	])
-	const commitmentIndex = decodeAddress(indexValue, 'Commitment index')
-	const account = ownerAccount(ownerValue)
+	const commitmentIndex = decodeAddress(indexValue, 'Pool capacity contract')
+	const account = owner === undefined ? { freeAttoRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, targetHealthFactorBps: 0n, positionId: 0n } : ownerAccount(ownerValue)
 	const [principal, commitment, withdrawable] = decodeFields(collateralValue, ['principal', 'commitment', 'withdrawable'], 'Invalid capital accounting response.')
-	const ownerPrincipalAttoRep = decodeUint(principal, 'Owner principal')
+	const ownerPrincipalAttoRep = decodeUint(principal, 'Position pledged REP')
 	const withdrawableAttoRep = decodeUint(withdrawable, 'Withdrawable REP')
-	if (withdrawableAttoRep > ownerPrincipalAttoRep) throw new Error('Withdrawal allowance exceeds owner principal.')
+	if (withdrawableAttoRep > ownerPrincipalAttoRep) throw new Error('Withdrawal allowance exceeds pledged REP.')
 	const [totalRep, totalK, healthyK] = decodeFields(totalsValue, ['rep', 'commitment', 'healthy'], 'Invalid capital accounting response.')
-	const [current, next, minimumOutcomeRate] = await Promise.all([read(commitmentIndex, 'currentBatch'), read(commitmentIndex, 'nextBatch'), read(decodeAddress(bookValue, 'Settlement book'), 'minimumOutcomeExchangeRate')])
+	const [current, next, minimumOutcomeRate] = await Promise.all([read(commitmentIndex, 'currentBatch'), read(commitmentIndex, 'nextBatch'), read(decodeAddress(bookValue, 'Payout records'), 'minimumOutcomeExchangeRate')])
 	const positions = await Promise.all(
-		(account.positionId === 0n ? [] : [account.positionId]).map(async id => {
+		(owner === undefined || account.positionId === 0n ? [] : [{ id: account.positionId, owner }]).map(async ({ id, owner }) => {
 			const [value, liquidation, penaltyPaid, elapsed] = await Promise.all([read(commitmentIndex, 'accountOf', [id]), read(capitalLedger, 'liquidationStarted', [id]), read(capitalLedger, 'liquidationPenaltyPaid', [id]), read(capitalLedger, 'liquidationElapsed', [id])])
 			const [holder, batch, rep, commitment, maximum, released, eth, repFees, remaining] = decodeFields(value, ['owner', 'batch', 'rep', 'commitment', 'maxHealthyPrice', 'releasedRep', 'ethFees', 'repFees', 'remainingCommitment'], 'Invalid capital accounting response.')
 			if (decodeAddress(holder, 'Position owner').toLowerCase() !== owner.toLowerCase()) throw new Error('Capital position belongs to another owner.')
-			const cohort = decodeUint(batch, 'Cohort id', 96)
+			const cohort = decodeUint(batch, 'Reduction batch ID', 96)
 			const liveCommitment = decodeUint(commitment, 'Commitment')
-			const preview = cohort !== 0n && liveCommitment !== 0n ? retirementPreview(await read(commitmentIndex, 'previewRetirement', [id, decodeUint(conservative, 'Conservative price'), decodeUint(demand, 'Demand')])) : undefined
+			const preview = cohort !== 0n && liveCommitment !== 0n ? retirementPreview(await read(commitmentIndex, 'previewRetirement', [id, decodeUint(conservative, 'Health price'), decodeUint(demand, 'Demand')])) : undefined
 			return {
 				id,
 				owner,
@@ -366,7 +378,7 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 				rep: decodeUint(rep, 'Pledged REP'),
 				commitment: liveCommitment,
 				maxHealthyPrice: decodeUint(maximum, 'Maximum healthy price'),
-				releasedRep: decodeUint(released, 'Retired REP'),
+				releasedRep: decodeUint(released, 'Released REP'),
 				feesAttoEth: decodeUint(eth, 'ETH earnings'),
 				feesAttoRep: decodeUint(repFees, 'REP earnings'),
 				liquidationStarted: decodeUint(liquidation, 'Liquidation start', 48),
@@ -377,12 +389,12 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 			}
 		}),
 	)
-	const bindings = account.positionId !== 0n || client.getCode === undefined ? undefined : decodeAuctionVaultBindings(await client.getCode({ address: owner, blockNumber }))
+	const bindings = owner === undefined || account.positionId !== 0n || client.getCode === undefined ? undefined : decodeAuctionVaultBindings(await client.getCode({ address: owner, blockNumber }))
 	const auctionBidId = bindings?.capital === capitalLedger ? bindings.bidId : undefined
 	const forkTime = decodeUint(forkTimeValue, 'Fork time')
 	const forkChoiceDeadline = decodeUint(choiceDeadlineValue, 'Fork choice deadline')
-	const isExported = decodeBool(exported, 'Exported owner must be a boolean.')
-	const isImporting = decodeBool(importing, 'Import phase must be a boolean.')
+	const isExported = decodeBool(exported, 'Invalid position migration status.')
+	const isImporting = decodeBool(importing, 'Invalid incoming migration status.')
 	const [finalChain, finalBlock] = await Promise.all([client.getChainId(), client.getBlock({ blockNumber })])
 	if (finalChain !== chainId || finalBlock.hash !== block.hash) throw new Error('Chain changed while reading capital. Refresh and try again.')
 	return {
@@ -392,14 +404,14 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 		blockHash: block.hash,
 		timestamp: block.timestamp,
 		securityPool,
-		owner,
+		owner: owner ?? zeroAddress,
 		universeId,
 		capitalLedger,
 		priceFeed: feedValue === zeroAddress ? zeroAddress : decodeAddress(feedValue, 'Shared price feed'),
 		commitmentIndex,
 		repToken: decodeAddress(tokenValue, 'REP token'),
 		acceptedPrice: decodeUint(price, 'Accepted price'),
-		conservativePrice: decodeUint(conservative, 'Conservative price'),
+		conservativePrice: decodeUint(conservative, 'Health price'),
 		liquidationPrice: decodeUint(liquidation, 'Liquidation price'),
 		ownerConservativePrice: decodeUint(ownerPrice, 'Owner collateral price'),
 		oracleExposureLimitAttoEth: decodeUint(exposureLimit, 'Oracle exposure limit'),
@@ -409,14 +421,14 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 		demandAttoEth: decodeUint(demand, 'Demand'),
 		totalPledgedAttoRep: decodeUint(totalRep, 'Total pledged REP'),
 		totalCommitmentAttoEth: decodeUint(totalK, 'Total commitment'),
-		healthyCommitmentAttoEth: decodeUint(healthyK, 'Healthy commitment'),
+		healthyCommitmentAttoEth: decodeUint(healthyK, 'Backed commitment'),
 		availableMintCapacityAttoEth: decodeUint(availableCapacity, 'Available mint capacity'),
 		totalFreeAttoRep: decodeUint(free, 'Total free REP'),
-		currentBatch: decodeUint(current, 'Current cohort', 96),
-		nextBatch: decodeUint(next, 'Next cohort', 96),
+		currentBatch: decodeUint(current, 'Current reduction batch ID', 96),
+		nextBatch: decodeUint(next, 'Next reduction batch ID', 96),
 		forkTime,
 		forkChoiceDeadline,
-		frozen: decodeBool(frozen, 'Frozen capital must be a boolean.'),
+		frozen: decodeBool(frozen, 'Invalid capital freeze status.'),
 		importing: isImporting,
 		exported: isExported,
 		ownerAccount: account,

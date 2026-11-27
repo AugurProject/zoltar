@@ -52,7 +52,7 @@ describe('carry proof primitives', () => {
 
 	test('uses the unique carry leaf position directly as the nullifier path', () => {
 		for (const leafIndex of [0n, 1n, (1n << 64n) - 1n]) expect(getCarryNullifierPath(leafIndex)).toBe(leafIndex)
-		expect(() => getCarryNullifierPath(1n << 64n)).toThrow('64-bit')
+		expect(() => getCarryNullifierPath(1n << 64n)).toThrow('outside the supported range')
 	})
 
 	test('recomputes sparse nullifier roots from absence and consumption proofs', () => {

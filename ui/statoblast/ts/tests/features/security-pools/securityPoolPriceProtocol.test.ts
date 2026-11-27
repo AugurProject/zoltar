@@ -1,15 +1,36 @@
-import { afterEach, expect, test } from 'bun:test'
+import { afterEach, expect, mock, spyOn, test } from 'bun:test'
 import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, parseAbi, parseAbiParameters, zeroHash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import { buildSecurityPoolPriceTokenWithdrawal, loadSecurityPoolBranchPrice, loadSecurityPoolPriceReport, submittedSecurityPoolPriceReport } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPrice.js'
+import { acceptedSecurityPoolPriceReport, buildSecurityPoolPriceTokenWithdrawal, loadSecurityPoolBranchPrice, loadSecurityPoolPriceFunds, loadSecurityPoolPriceReport, submittedSecurityPoolPriceReport } from '@zoltar/ui-statoblast-shared/protocol/securityPoolPrice.js'
 import { sendSecurityPoolTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
-import { asWriteClient, createMockWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
+import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { asWriteClient, createMockWriteClient, createMulticallStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { priceFixture, priceFeed, priceEscrow, priceOracle, priceWeth } from './priceFixture.js'
-import { owner, securityPool, token, unit } from './capitalFixture.js'
+import { capital, owner, securityPool, token, unit } from './capitalFixture.js'
 
 afterEach(resetActiveEnvironmentForTesting)
+
+test('price funds find the funder’s latest operation report without a device record or global scan', async () => {
+	const fixture = priceFixture()
+	fixture.set(priceFeed, 'sponsorOperationReport', 9n)
+	const branch = await loadSecurityPoolBranchPrice(fixture.client, securityPool, owner, 42n)
+	fixture.reads.length = 0
+	const client = {
+		getBlock: fixture.client.getBlock,
+		multicall: createMulticallStub(({ blockNumber, contracts }) => Promise.all(contracts.map(contract => fixture.client.readContract({ ...contract, blockNumber })))),
+	}
+	const snapshot = { ...branch, priceFeed, collateralToken: priceWeth }
+	const result = await loadSecurityPoolPriceFunds(client, MAINNET_NETWORK_PROFILE, snapshot, owner)
+	expect(result).toEqual([{ reportId: 9n, funder: owner }])
+	expect(fixture.reads.find(request => request.functionName === 'sponsorOperationReport')?.args).toEqual([owner])
+	expect(fixture.reads.some(request => request.functionName === 'nextReportId')).toBe(false)
+	expect(new Set(fixture.reads.map(request => request.blockNumber))).toEqual(new Set([branch.blockNumber]))
+})
 
 test('direct report authentication pins stored preimages and subtracts oracle credit sentinels', async () => {
 	const fixture = priceFixture()
@@ -32,8 +53,8 @@ test('encodes independent funding withdrawals to the sponsor or a sponsor-select
 	expect(rep).toMatchObject({ account: owner, to: priceEscrow, value: 0n })
 	expect(decodeFunctionData({ abi, data: rep.data })).toEqual({ functionName: 'withdrawTokenFunding', args: [token, owner] })
 	expect(decodeFunctionData({ abi, data: collateral.data })).toEqual({ functionName: 'withdrawTokenFunding', args: [priceWeth, securityPool] })
-	expect(() => buildSecurityPoolPriceTokenWithdrawal({ ...snapshot, owner: securityPool }, report, 'rep', securityPool)).toThrow('Invalid report funding recipient')
-	expect(() => buildSecurityPoolPriceTokenWithdrawal(snapshot, report, 'rep', priceEscrow)).toThrow('Invalid report funding recipient')
+	expect(() => buildSecurityPoolPriceTokenWithdrawal({ ...snapshot, owner: securityPool }, report, 'rep', securityPool)).toThrow('Only the original funder can send funds to a different address.')
+	expect(() => buildSecurityPoolPriceTokenWithdrawal(snapshot, report, 'rep', priceEscrow)).toThrow('Enter a valid recipient address other than the report funding address.')
 })
 test.each(['escrow', 'token', 'callback', 'stored flags', 'time flag', 'state hash', 'block hash'])('report authentication rejects mismatched %s', async mismatch => {
 	const fixture = priceFixture()
@@ -59,6 +80,29 @@ test('receipt captures an indexed report ID while ignoring unrelated feed logs',
 	expect(submittedSecurityPoolPriceReport(receipt, priceFeed)).toBe(9n)
 	expect(submittedSecurityPoolPriceReport(receipt, token)).toBeUndefined()
 })
+
+test('an accepted report ID requires the verified ledger’s canonical price checkpoint in the same receipt', () => {
+	const abi = parseAbi(['event CapitalPriceAccepted(uint256 price,uint48 validUntil)', 'event PriceReported(uint256 indexed reportId,uint256 price,uint256 lastSettlementTimestamp)'])
+	const base = { blockHash: zeroHash, blockNumber: 10n, transactionHash: zeroHash, transactionIndex: 0n, logIndex: 0n, removed: false }
+	const checkpoint = {
+		...base,
+		address: capital,
+		topics: encodeEventTopics({ abi, eventName: 'CapitalPriceAccepted' }).filter(topic => topic !== null),
+		data: encodeAbiParameters(parseAbiParameters('uint256,uint48'), [unit, 1_700]),
+	}
+	const reported = {
+		...base,
+		address: priceFeed,
+		logIndex: 1n,
+		topics: encodeEventTopics({ abi, eventName: 'PriceReported', args: { reportId: 9n } }).filter(topic => topic !== null),
+		data: encodeAbiParameters(parseAbiParameters('uint256,uint256'), [unit, 1_100n]),
+	}
+	expect(acceptedSecurityPoolPriceReport({ logs: [checkpoint, reported] }, priceFeed, capital, 600n)).toEqual({ reportId: 9n, price: unit, observedAt: 1_100n })
+	expect(acceptedSecurityPoolPriceReport({ logs: [reported] }, priceFeed, capital, 600n)).toBeUndefined()
+	expect(acceptedSecurityPoolPriceReport({ logs: [{ ...checkpoint, address: token }, reported] }, priceFeed, capital, 600n)).toBeUndefined()
+	expect(acceptedSecurityPoolPriceReport({ logs: [checkpoint, reported] }, token, capital, 600n)).toBeUndefined()
+	expect(acceptedSecurityPoolPriceReport({ logs: [checkpoint, reported] }, priceFeed, capital, 599n)).toBeUndefined()
+})
 test('security pool sender preserves explicit callback gas for simulation, review and sending', async () => {
 	const observed: (bigint | undefined)[] = []
 	const writer = asWriteClient(createMockWriteClient(request => observed.push(request.gas)))
@@ -82,6 +126,63 @@ test('security pool sender preserves explicit callback gas for simulation, revie
 		'Settle report',
 	)
 	expect(observed).toEqual([2_000_000n, 2_000_000n, 2_000_000n])
+})
+
+test('Capital review allows successive slow validation and simulation requests', async () => {
+	const requests: Hex[] = []
+	const writer = asWriteClient(
+		createMockWriteClient(request => {
+			if (request.data !== undefined) requests.push(request.data)
+		}),
+	)
+	const shortened = new Proxy(globalThis.setTimeout, {
+		apply(schedule, receiver, [handler, delay, ...args]) {
+			return Reflect.apply(schedule, receiver, [handler, delay === 15_000 ? 40 : delay, ...args])
+		},
+	})
+	const timer = spyOn(globalThis, 'setTimeout').mockImplementation(shortened)
+	try {
+		const client = {
+			...writer,
+			account: { address: owner, type: 'json-rpc' },
+			chain: MAINNET_NETWORK_PROFILE.chain,
+			call: async () => {
+				await Bun.sleep(25)
+				return { data: undefined }
+			},
+		}
+		await sendSecurityPoolTransaction(client, { account: owner, to: priceOracle, data: '0x' }, 'Review', async () => {
+			await Bun.sleep(25)
+		})
+		expect(requests).toEqual(['0x'])
+	} finally {
+		timer.mockRestore()
+	}
+})
+
+test('Capital opens review while its preflight is still reading', async () => {
+	const abort = new AbortController()
+	const reading = createDeferred<void>()
+	const sent = mock(() => undefined)
+	const call = mock(async () => ({ data: undefined }))
+	const client = createReviewedClient({ ...asWriteClient(createMockWriteClient(sent)), account: { address: owner, type: 'json-rpc' }, chain: MAINNET_NETWORK_PROFILE.chain, call }, undefined, abort.signal, undefined, true)
+	const sending = sendSecurityPoolTransaction(client, { account: owner, to: priceOracle, data: '0x', validateBeforeSubmit: () => reading.promise }, 'Claim earnings')
+	const settled = sending.catch(() => undefined)
+	try {
+		await waitFor(() => expect(transactionSteps.value?.reviewCheck?.status).toBe('checking'), { timeout: 300 })
+		expect(call).not.toHaveBeenCalled()
+		expect(sent).not.toHaveBeenCalled()
+		reading.resolve()
+		await waitFor(() => expect(transactionSteps.value?.reviewCheck).toBeUndefined())
+		expect(call).toHaveBeenCalledTimes(1)
+		transactionSteps.value?.confirmStep(0)
+		await sending
+		expect(sent).toHaveBeenCalledTimes(1)
+	} finally {
+		abort.abort()
+		reading.resolve()
+		await settled
+	}
 })
 
 test('#1252 the UI security pool adapter preserves the base fee for bounty quotes', async () => {

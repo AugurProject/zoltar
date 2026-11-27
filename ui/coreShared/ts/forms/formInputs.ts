@@ -54,6 +54,6 @@ export function formatLocalDateTimeInput(timestamp: bigint) {
 export function parseTimestampInput(value: string, label: string) {
 	const timestamp = tryParseTimestampInput(value)
 	if (timestamp === undefined) throw new Error(`${label} is invalid`)
-	if (timestamp < 0n) throw new Error(`${label} must not be before the Unix epoch`)
+	if (timestamp < 0n) throw new Error(`${label} must be on or after January 1, 1970 at 00:00 UTC`)
 	return timestamp
 }

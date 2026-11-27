@@ -2,6 +2,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { InjectedEthereum } from '../wallet/injectedEthereum.js'
 import { DEFAULT_SIMULATION_WALLET_MODE, SIMULATION_WRONG_CHAIN_ID_HEX, UNRECOGNIZED_CHAIN_ERROR_CODE, createProviderRpcError, type SimulationWalletMode } from './simulationWallet.js'
 import { sameChainId } from '../wallet/chainId.js'
+import { formatBlockOutsideActiveChain } from '../copy/simulation.js'
 
 export type SimulationProviderRequest = {
 	method: string
@@ -60,7 +61,7 @@ async function resolveBlockHashSelector(parameters: SimulationProviderRequest, r
 	if (blockNumber === undefined) throw createProviderRpcError(INVALID_BLOCK_SELECTOR_ERROR_CODE, `Block ${selector.blockHash} not found`)
 	if (selector.requireCanonical) {
 		const canonicalHash = readBlockField(await requestRpc({ method: 'eth_getBlockByNumber', params: [blockNumber, false] }), 'hash')
-		if (canonicalHash?.toLowerCase() !== selector.blockHash.toLowerCase()) throw createProviderRpcError(INVALID_BLOCK_SELECTOR_ERROR_CODE, `Block ${selector.blockHash} is not canonical`)
+		if (canonicalHash?.toLowerCase() !== selector.blockHash.toLowerCase()) throw createProviderRpcError(INVALID_BLOCK_SELECTOR_ERROR_CODE, formatBlockOutsideActiveChain(selector.blockHash))
 	}
 	return { ...parameters, params: parameters.params.map((parameter: unknown, index) => (index === selectorIndex ? blockNumber : parameter)) }
 }
