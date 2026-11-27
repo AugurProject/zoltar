@@ -1074,6 +1074,20 @@ button.tx-action-button[aria-disabled="true"]:hover {
 	color: var(--text);
 }
 
+/* Wallet details inside the settings menu, for applications that move the account control there on phones. Hidden
+ * until an application's narrow layout shows it, so wide screens keep the account control on the bar. */
+.app-settings-account {
+	display: none;
+	gap: var(--space-2);
+	margin-bottom: 0.75rem;
+	padding-bottom: 0.75rem;
+	border-bottom: 1px solid var(--divider-strong);
+}
+
+.app-settings-account .account-menu-network {
+	margin: 0;
+}
+
 .account-menu-popover {
 	position: absolute;
 	z-index: var(--z-dropdown);
@@ -1309,9 +1323,14 @@ button.tx-action-button[aria-disabled="true"]:hover {
 
 	.header-toolbar-brand {
 		grid-area: 1 / 1;
+		max-width: 100%;
 	}
 
-	/* The brand yields to the activity and settings buttons: a long name wraps onto a second line instead of running under them or being cut off. */
+	.header-toolbar .application-brand-link {
+		min-width: 0;
+	}
+
+	/* The brand yields to the activity and settings buttons: a long name stays on one line and truncates instead of running under them. */
 	.header-toolbar .application-brand {
 		min-width: 0;
 		font-size: var(--font-body);
@@ -1323,10 +1342,11 @@ button.tx-action-button[aria-disabled="true"]:hover {
 		height: auto;
 		min-width: 0;
 		margin: 0;
-		overflow: visible;
 		clip: auto;
+		overflow: hidden;
 		line-height: var(--line-height-tight);
-		white-space: normal;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.header-toolbar-settings {
