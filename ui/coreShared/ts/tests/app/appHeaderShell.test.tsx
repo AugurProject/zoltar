@@ -236,6 +236,30 @@ describe('AppHeaderShell', () => {
 			domEnvironment.cleanup()
 		}
 	})
+
+	test('puts wallet details first in the settings menu, before the application content', async () => {
+		const domEnvironment = installDomEnvironment('http://localhost/#/markets')
+		const rendered = await renderIntoDocument(
+			<AppHeaderShell
+				renderOverview={({ navigation, renderSettingsMenu }) => <HeaderToolbar brand='App' controls={<div>Overview</div>} navigation={navigation} settings={renderSettingsMenu(<section className='test-wallet-details'>Wallet details</section>)} />}
+				settingsContent={<div className='test-app-status'>Refresh</div>}
+				simulationController={undefined}
+				onRefresh={async () => undefined}
+			/>,
+		)
+		try {
+			fireEvent.click(within(rendered.container).getByRole('button', { name: 'Settings' }))
+			const dialog = within(rendered.container).getByRole('dialog')
+			const wallet = dialog.querySelector('.test-wallet-details')
+			const status = dialog.querySelector('.test-app-status')
+			if (wallet === null || status === null) throw new Error('Expected wallet details and application content in the settings menu')
+			expect(dialog.firstElementChild).toBe(wallet)
+			expect(wallet.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+		} finally {
+			await rendered.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
 })
 
 describe('ProtocolAppFrame', () => {

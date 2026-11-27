@@ -261,7 +261,7 @@ export function SecurityPoolDeployment({ actions, model }: { actions: SecurityPo
 			<div className='statoblast-deploy-layout' data-transactions={showTransactions}>
 				{!isSetupStep && (
 					<SectionBlock title={pageCopy.deployStepNumber(activeStep, deploySteps[activeStep] ?? '')} headingLevel={2} badge={actions.deploymentLocked ? <Badge>{pageCopy.deployLocked}</Badge> : undefined}>
-						{actions.deploymentLocked && activeStep === 2 ? <DeploymentSummary actions={actions} economicsOnly={!actions.deploymentLocked} /> : <DeploymentFields actions={actions} step={activeStep} />}
+						{actions.deploymentLocked && activeStep === 2 ? <DeploymentSummary actions={actions} economicsOnly /> : <DeploymentFields actions={actions} step={activeStep} />}
 						{actions.deploymentLocked ? (
 							<UserMessage detail={pageCopy.deploySettingsLocked} />
 						) : (
