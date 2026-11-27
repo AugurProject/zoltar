@@ -220,3 +220,16 @@ test('a pending reduction keeps the saved amount locked', async () => {
 	expect(queue?.textContent?.replaceAll('\u00a0', ' ')).toContain('5 WETH')
 	expect([...(queue?.querySelectorAll('input') ?? [])].some(input => input.labels?.[0]?.textContent === copy.newCommitment)).toBe(false)
 })
+
+test('unclaimed repair auction bids are shown from the ledger count, since account views exclude unclaimed lots', async () => {
+	const empty = await renderIntoDocument(<Harness snapshot={{ ...capitalSnapshot(), positions: [], ownerCommitmentAttoEth: 0n }} />)
+	expect(empty.container.textContent ?? '').not.toContain('repair auction bid')
+	await empty.cleanup()
+	const pending = await renderIntoDocument(<Harness snapshot={{ ...capitalSnapshot(), positions: [], ownerCommitmentAttoEth: 0n, unclaimedRepairAuctionBids: 2n }} />)
+	expect(pending.container.textContent ?? '').toContain(copy.unclaimedAuctionBidsDetail(2n))
+	await pending.cleanup()
+	// An account with its own position still learns about bids waiting to be claimed.
+	const live = await renderIntoDocument(<Harness snapshot={capitalSnapshot({ unclaimedRepairAuctionBids: 1n })} />)
+	lifecycle.trackRendered(live)
+	expect(live.container.textContent ?? '').toContain(copy.unclaimedAuctionBidsDetail(1n))
+})

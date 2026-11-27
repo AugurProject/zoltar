@@ -50,7 +50,7 @@ export function securityPoolViews(state: RuntimeState, settings: OperatorSetting
 					if (state.wallet !== undefined) takeoverStatus = securityPoolTakeoverPlan(securityPool, position, settings, totalPrincipal, marketAllowed).reason
 					return {
 						id: position.auctionTarget === undefined ? position.id.toString() : `auction:${position.auctionTarget.bidId}`,
-						label: position.auctionTarget === undefined ? `Position ${position.id}` : `Auction bid ${position.auctionTarget.bidId} · awaiting individual position`,
+						label: position.auctionTarget === undefined ? `Position ${position.id}` : `Auction bid ${position.auctionTarget.bidId} · bidder position after claim`,
 						commitmentEth: formatDecimalAmount(position.commitment),
 						distressed: position.maxHealthyPrice < snapshot.liquidationPrice,
 						retirementStatus: position.retirementStatus,

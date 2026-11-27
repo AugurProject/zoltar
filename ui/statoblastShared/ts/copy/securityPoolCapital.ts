@@ -53,6 +53,9 @@ export const targetUnavailable = 'A valid target and current REP price are requi
 export const retirementRequested = 'A commitment reduction is already in queue.'
 export const minimumCommitment = 'Minimum commitment (collateral)'
 export const minimumCommitmentHint = 'The minimum collateral commitment; fork auction lots may be larger.'
+const unclaimedAuctionBids = (count: bigint) => (count === 1n ? '1 repair auction bid to claim' : `${count} repair auction bids to claim`)
+const unclaimedAuctionBidsHint = 'Claim them in the branch’s repair auction. Winning lots join this position once claimed. Unclaimed bids block your next fork choice.'
+export const unclaimedAuctionBidsDetail = (count: bigint) => `${unclaimedAuctionBids(count)}. ${unclaimedAuctionBidsHint}`
 export const liquidationHint = (duration?: string) => `The liquidation penalty grows${duration === undefined ? '' : ` for ${duration}`} after liquidation starts. The new backer can receive up to all of your pledged REP. Add REP or reduce commitment to stay above the liquidation threshold.`
 export const formatRewardVesting = (duration: string) => `More earnings vest over ${duration}.`
 export const retire = 'Reduce commitment'
@@ -101,9 +104,9 @@ export const reportChecking = 'Checking report funding and freshness.'
 export const reportChanged = 'Report terms changed. Review the commitment again.'
 
 export { readUnavailable } from './securityPool.js'
-export const auctionVaultOwnership = 'This auction vault has separate collateral. Your wallet controls it and receives withdrawals.'
 
-export const depositLiquidating = 'This position is liquidating. REP top-ups are unavailable.'
+export const depositRescueRequired = (amount: string) => `This position is liquidating. Deposit at least ${amount} REP to back it fully and end the liquidation.`
+export const rescueNeedsCurrentPrice = 'This position is liquidating. A new accepted REP price is required before a rescue deposit.'
 
 export const resubmitRetirement = 'Retry reduction'
 export const preview = 'Preview'

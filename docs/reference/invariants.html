@@ -355,7 +355,23 @@
 							<td>
 								<a href="#inv-10"><code>INV-10</code></a>
 							</td>
-							<td>Distress age after materialization</td>
+							<td>Distress age after a bid claim</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-62"><code>INV-62</code></a>
+							</td>
+							<td>Retirement request across an auction merge</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
+								<a href="#inv-64"><code>INV-64</code></a>
+							</td>
+							<td>In-place liquidation rescue</td>
 							<td>Safety</td>
 							<td>Tested property</td>
 						</tr>
@@ -513,6 +529,14 @@
 						</tr>
 						<tr>
 							<td>
+								<a href="#inv-63"><code>INV-63</code></a>
+							</td>
+							<td>Unclaimed auction bids block fork choice</td>
+							<td>Safety</td>
+							<td>Contract guard</td>
+						</tr>
+						<tr>
+							<td>
 								<a href="#inv-18"><code>INV-18</code></a>
 							</td>
 							<td>Longest fundable prefix</td>
@@ -571,7 +595,7 @@
 							<td>
 								<a href="#inv-61"><code>INV-61</code></a>
 							</td>
-							<td>Order of materialization</td>
+							<td>Order of bid claims</td>
 							<td>Conservation</td>
 							<td>Tested property</td>
 						</tr>
@@ -1396,10 +1420,10 @@
 						</div>
 					</details>
 					<details class="invariant-entry" id="inv-10">
-						<summary><code>INV-10</code><span class="invariant-title">Distress age after materialization</span></summary>
+						<summary><code>INV-10</code><span class="invariant-title">Distress age after a bid claim</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Splitting an auction position transfers its original adverse-observation history to the materialized lots. Ordinary new owners and imported positions have their own first applicable observation. A later return to the same price does not reconstruct the prior distress age.</div>
+							<div class="invariant-property">Claiming a winning bid for a bidder without a position transfers the auction position’s adverse-observation history to the new position. Merging the bid’s lots into the bidder’s live position keeps the older of the two parts’ healthy observations, so a merge can neither reset nor shorten either part’s liquidation clock; the existing position can inherit the lots’ older distress. A liquidation penalty the receiving position already paid in its current liquidation keeps counting after the merge. Ordinary new owners and imported positions have their own first applicable observation. A later return to the same price does not reconstruct the prior distress age.</div>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -1412,7 +1436,55 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolAuctionPositionSplit.test.ts"><code>securityPoolAuctionPositionSplit.test.ts</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolAuctionPositionSplit.test.ts"><code>securityPoolAuctionPositionSplit.test.ts</code></a
+										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCapitalAuction.test.ts"><code>securityPoolCapitalAuction.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-62">
+						<summary><code>INV-62</code><span class="invariant-title">Retirement request across an auction merge</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">Winning lots that a bid claim merges into a position with a pending retirement request never join that request. The queued remaining commitment grows by the added commitment, so the requested reduction is unchanged.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCapitalAuction.test.ts"><code>securityPoolCapitalAuction.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-64">
+						<summary><code>INV-64</code><span class="invariant-title">In-place liquidation rescue</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">An owner’s REP deposit into its own position below the liquidation price succeeds only at a fresh price and only when the resulting backing holds at the conservative repair price; a smaller deposit, or any deposit at a stale price, reverts and leaves the liquidation clock unchanged. A successful rescue clears the liquidation clock and moves no REP to any other owner.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCapitalLedger.test.ts"><code>securityPoolCapitalLedger.test.ts</code></a
+										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditCapitalLedgerFuzz.test.ts"><code>auditCapitalLedgerFuzz.test.ts</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1867,6 +1939,30 @@
 							</dl>
 						</div>
 					</details>
+					<details class="invariant-entry" id="inv-63">
+						<summary><code>INV-63</code><span class="invariant-title">Unclaimed auction bids block fork choice</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">An owner’s fork choice cannot be exported while the owner has any unclaimed repair-auction bid, winning or losing. Each submitted bid adds one to the owner’s unclaimed count and each first claim of that bid removes one, so the export can succeed only after every bid the owner placed has been claimed and its winning lots, if any, are in the owner’s own position.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Contract guard</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolCapitalLifecycleDelegate.sol"><code>SecurityPoolCapitalLifecycleDelegate.exportChoice</code></a
+										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCapitalAuction.test.ts"><code>securityPoolCapitalAuction.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
 				</div>
 			</section>
 			<section id="auction-clearing-and-ownership">
@@ -1945,7 +2041,7 @@
 						<summary><code>INV-21</code><span class="invariant-title">Winner cursor</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">From a frozen auction book, repeatedly requesting the next unmaterialized bid visits each remaining winner exactly once in price and time priority. Settlement or materialization between cursor calls can remove a winner from future results. Bid IDs themselves need not increase.</div>
+							<div class="invariant-property">From a frozen auction book, repeatedly requesting the next unmaterialized bid visits each remaining winner exactly once in price and time priority. Settlement, or a claim of a winning bid, between cursor calls can remove that bid from future results. Bid IDs themselves need not increase.</div>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2034,10 +2130,10 @@
 						</div>
 					</details>
 					<details class="invariant-entry" id="inv-61">
-						<summary><code>INV-61</code><span class="invariant-title">Order of materialization</span></summary>
+						<summary><code>INV-61</code><span class="invariant-title">Order of bid claims</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">If a fixed cash and REP award goes to the aggregate auction position before any further winner detaches, the <em>individual</em> amounts that belong to each winner are independent of detachment order. Each matches its pre-detachment preview. Later fee accrual changes the set of eligible owners and begins a new comparison.</div>
+							<div class="invariant-property">If a fixed cash and REP award goes to the aggregate auction position before any further winning bid is claimed, the <em>individual</em> amounts that belong to each winning bid are independent of the order in which bids are claimed. Each matches the preview taken before that bid is claimed. Later fee accrual changes the set of eligible owners and begins a new comparison.</div>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>

@@ -4,7 +4,7 @@ import { invalidateStatoblastEntries } from '../../../protocol/statoblastEntries
 import type { CollateralSymbol } from '../../../protocol/collateral.js'
 import { signal, useSignal } from '@preact/signals'
 import { useEffect, useMemo, useRef } from 'preact/hooks'
-import { getAddress, type Address, type Hash, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import type { Address, Hash, TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { createTransactionScope, mergeTransactionScopes } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
@@ -20,8 +20,6 @@ import type { useSecurityPool } from './useSecurityPool.js'
 import * as copy from '../../../copy/securityPool.js'
 import { initialDeploymentDraft, parseDeploymentDraft, securityPoolDeploymentReviewDescription, type CuratedAdmissionMode, type DeploymentDraft, type SecurityPoolCreationDraft } from '../lib/creation.js'
 import { securityPoolAdmissionCreationRequest, requireSecurityPoolQuestionAdmission, requireSecurityPoolQuestionHorizon, requireSecurityPoolQuestionEligibility } from '../../../protocol/securityPoolAdmission.js'
-import { buildSecurityPoolAuctionVaultExecuteRequest } from '@zoltar/statoblast-shared/statoblast/securityPool'
-import { authenticateSecurityPoolAuctionVault } from '../../../protocol/securityPoolRepairAuction.js'
 import { deploymentProgressJournal, samePendingDeployment, type PendingDeployment } from '../lib/deploymentProgress.js'
 import { matchesQuestionRules, readDeploymentNonce, readSecurityPoolCreationCount } from '../../../protocol/deploymentRecovery.js'
 import { isDefiniteDeploymentRejection, readPendingDeploymentRecovery, supportsDeploymentNonce } from '../lib/deploymentWallet.js'
@@ -65,7 +63,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 		(snapshot === undefined && (model.loading || busy.value !== undefined) ? copy.loading : undefined) ??
 		(snapshot === undefined && model.presentationSnapshot !== undefined ? copy.readUnavailable : undefined) ??
 		(snapshot === undefined ? copy.enterSecurityPool : undefined) ??
-		(parameters.accountAddress?.toLowerCase() !== (snapshot?.auctionVault?.bidder ?? snapshot?.owner)?.toLowerCase() ? copy.ownerRequired : undefined)
+		(parameters.accountAddress?.toLowerCase() !== snapshot?.owner.toLowerCase() ? copy.ownerRequired : undefined)
 	useEffect(() => {
 		error.value = undefined
 		feedback.value = undefined
@@ -198,29 +196,7 @@ export function useSecurityPoolActions(model: ReturnType<typeof useSecurityPool>
 					scope,
 				}),
 				async (account, context) => {
-					let request = await build()
-					const selectedVault = snapshot?.auctionVault
-					if (selectedVault !== undefined && getAddress(request.account) === selectedVault.vault) {
-						if (snapshot === undefined || request.to === undefined || getAddress(account) !== selectedVault.bidder) throw new Error(copy.ownerRequired)
-						const original = request
-						const destination = request.to
-						const wrap = (data: typeof original.data) =>
-							buildSecurityPoolAuctionVaultExecuteRequest({ bidder: selectedVault.bidder, vault: selectedVault.vault, request: { account: original.account, to: destination, value: original.value ?? 0n, data }, sweep: { repToken: snapshot.repToken, recipient: selectedVault.bidder } })
-						request = {
-							...original,
-							...wrap(original.data),
-							...(original.refreshReviewData === undefined ? {} : { refreshReviewData: async () => wrap(await (original.refreshReviewData?.() ?? original.data)).data }),
-							reviewDescription: deploymentCopy.positionReview(original.reviewDescription ?? label, selectedVault.vault, selectedVault.bidder),
-							validateBeforeSubmit: async () => {
-								const client = createReviewReadClient()
-								const block = await client.getBlock()
-								if (block.number === undefined) throw new Error(deploymentCopy.positionBlockRequired)
-								const fresh = await authenticateSecurityPoolAuctionVault(client, snapshot.securityPool, selectedVault.vault, block.number)
-								if (fresh.bidder !== selectedVault.bidder || fresh.auction !== selectedVault.auction || fresh.bidId !== selectedVault.bidId) throw new Error(deploymentCopy.positionAuthorityChanged)
-								await original.validateBeforeSubmit?.()
-							},
-						}
-					}
+					const request = await build()
 					context.assertActive()
 					const commonCallbacks = { reviewSignal: context.reviewSignal, onTransactionPrepared: parameters.onTransactionPrepared, onTransactionSubmitted: parameters.onTransactionSubmitted }
 					if (!deploying || deploymentStep === undefined) return await sendSecurityPoolTransaction(createWalletWriteClient(account, commonCallbacks), request, label, validate)

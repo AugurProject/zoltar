@@ -27,8 +27,8 @@ function parseTarget(value: unknown): SecurityPoolTarget {
 	if (typeof value === 'string' && /^[1-9]\d*$/.test(value) && BigInt(value) < 2n ** 96n) return BigInt(value)
 	const data = record(value, 'Funding target')
 	const bidId = data['bidId']
-	if (typeof bidId !== 'string' || !/^[1-9]\d*$/.test(bidId) || BigInt(bidId) >= 2n ** 256n || typeof data['auction'] !== 'string' || typeof data['vault'] !== 'string') throw new Error('Invalid funding target')
-	return { auction: getAddress(data['auction']), vault: getAddress(data['vault']), bidId: BigInt(bidId) }
+	if (typeof bidId !== 'string' || !/^[1-9]\d*$/.test(bidId) || BigInt(bidId) >= 2n ** 256n || typeof data['auction'] !== 'string' || typeof data['bidder'] !== 'string') throw new Error('Invalid funding target')
+	return { auction: getAddress(data['auction']), bidder: getAddress(data['bidder']), bidId: BigInt(bidId) }
 }
 export function parseFundingEffect(value: unknown): SecurityPoolFundingEffect | undefined {
 	if (value === undefined) return undefined

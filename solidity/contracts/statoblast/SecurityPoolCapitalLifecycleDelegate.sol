@@ -163,7 +163,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 	}
 
 	function cure(uint96 id, uint256 target, bool ownerExit, uint256 minimumCommitmentAttoEth, uint256 securityMultiplierBps) public onlyDelegateCall returns (uint256 removed) {
-		require(id != 0 && id != repairAuctionCohort.positionId, 'Materialize an individual repair auction vault');
+		require(id != 0 && id != repairAuctionCohort.positionId, 'Materialize an individual repair auction bidder');
 		SecurityPoolCommitmentIndex.Cure memory result = commitmentIndex.cure(id, liquidationPrice, securityMultiplierBps, minimumCommitmentAttoEth, demandAttoEth, target, ownerExit);
 		removed = result.removed;
 		if (removed != 0) {
@@ -254,6 +254,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 
 	function exportChoice(address owner) external onlyDelegateCall returns (ChoicePosition memory choice, uint256 target) {
 		require(frozen && !owners[owner].exported, 'Fork choice unavailable');
+		require(owners[owner].unclaimedRepairAuctionBids == 0, 'Claim repair auction bids before choosing');
 		_settleOwner(owner);
 		Owner storage account = owners[owner].account;
 		uint96 id = account.positionId;

@@ -10,9 +10,6 @@ export const openDeploymentPromptWarning = 'If a deployment request is still ope
 export const pendingDeploymentTransactionWarning = 'This transaction may still be pending in your wallet. Cancel it there before starting a new deployment.'
 
 export const deployment = {
-	positionReview: (description: string, position: string, wallet: string) => `${description} The auction vault is ${position}. Returned collateral, ETH and REP go to ${wallet}.`,
-	positionBlockRequired: 'Wait for a confirmed block to check this auction vault.',
-	positionAuthorityChanged: 'Control of this auction vault changed. Review again.',
 	securityMultiplierTooLow: `Security multiplier must be at least ${formatUnits(minimumSecurityMultiplierBps, 2)}%.`,
 	priorityFeeRequired: 'Enter a positive oracle priority fee.',
 	priorityFeeAboveLimit: 'Oracle priority fee exceeds the report funding limit.',

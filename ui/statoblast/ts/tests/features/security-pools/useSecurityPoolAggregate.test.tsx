@@ -6,13 +6,12 @@ import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/act
 import { useSecurityPoolAggregate } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolAggregate.js'
 import type { SecurityPoolTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
 import { renderHookWithProps } from '../../support/renderHook.js'
-import { auctionCapitalSnapshot, capitalSnapshot, owner, capital, unit } from './capitalFixture.js'
+import { capitalSnapshot, owner, capital, unit } from './capitalFixture.js'
 import { capitalClient } from './capitalClient.js'
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 const abi = parseAbi([
 	'function approve(address spender,uint256 amount)',
 	'function depositFor(address owner,uint256 amount)',
-	'function depositPrincipal(address ledger,uint256 amount,uint256 targetHealthFactorBps)',
 	'function withdrawPrincipal(uint256 amount,address recipient)',
 	'function setCommitment(uint256 commitment)',
 	'function setCommitmentWithReport(uint256 reportId,uint256 commitment)',
@@ -73,21 +72,21 @@ test('approval and deposit remain separate transactions with exact capital-ledge
 	expect(requests).toHaveLength(2)
 })
 
-test('an auction vault deposit pulls REP from its controlling wallet with approval to that vault', async () => {
-	const snapshot = auctionCapitalSnapshot()
+test('an auction winner with unclaimed bids approves and deposits REP directly into the capital ledger', async () => {
+	const snapshot = capitalSnapshot({ unclaimedRepairAuctionBids: 1n })
 	const { hook, requests } = await setup(snapshot)
 	await act(() => hook.state().setDepositAmount('5'))
 	await act(() => hook.state().approve(7n * unit))
 	const approval = requests[0]
-	if (approval === undefined) throw new Error('Missing vault approval')
+	if (approval === undefined) throw new Error('Missing approval')
 	expect(approval.account).toBe(owner)
-	expect(decodeFunctionData({ abi, data: approval.data })).toEqual({ functionName: 'approve', args: [snapshot.owner, 7n * unit] })
+	expect(decodeFunctionData({ abi, data: approval.data })).toEqual({ functionName: 'approve', args: [capital, 7n * unit] })
 	await hook.setProps({ snapshot: { ...snapshot, allowanceAttoRep: 7n * unit } })
 	await act(() => hook.state().deposit())
 	const deposit = requests[1]
-	if (deposit === undefined) throw new Error('Missing vault deposit')
-	expect(deposit).toMatchObject({ account: owner, to: snapshot.owner })
-	expect(decodeFunctionData({ abi, data: deposit.data })).toEqual({ functionName: 'depositPrincipal', args: [capital, 5n * unit, snapshot.ownerAccount.targetHealthFactorBps] })
+	if (deposit === undefined) throw new Error('Missing deposit')
+	expect(deposit).toMatchObject({ account: owner, to: capital })
+	expect(decodeFunctionData({ abi, data: deposit.data })).toEqual({ functionName: 'depositFor', args: [owner, 5n * unit] })
 })
 test('stale prices block live-principal withdrawal and authorization while preserving earned fees', async () => {
 	const { hook, requests } = await setup(capitalSnapshot({ priceValid: false, withdrawableAttoRep: 0n }))
@@ -480,31 +479,54 @@ test.each([true, false])('authenticated Capital remains actionable during or aft
 	expect(hook.state().claimReason).toBeUndefined()
 })
 
-test.each([true, false])('#1448: liquidation blocks REP top-ups and combined health deposits at a fresh or stale price (%s)', async priceValid => {
+/** A 20 REP / 10 ETH position below the 2 REP/ETH price; at least 1 REP more backs it at the repair price. */
+const liquidating = (priceValid = true, rep = 20n * unit) => {
 	const base = capitalSnapshot()
-	const snapshot = capitalSnapshot({ priceValid, allowanceAttoRep: 100n * unit, positions: base.positions.map(position => ({ ...position, maxHealthyPrice: unit, liquidationStarted: 1n })) })
-	const { hook, requests } = await setup(snapshot)
+	return capitalSnapshot({ priceValid, allowanceAttoRep: 100n * unit, positions: base.positions.map(position => ({ ...position, rep, maxHealthyPrice: (((rep * 10_000n) / 10_500n) * unit) / (10n * unit), liquidationStarted: 1n })) })
+}
+
+test('the shown rescue minimum rounds up so entering it as shown rescues the position', async () => {
+	// 21 REP backs the position, so 19.996 REP needs 1.004 REP more: shown as 1.01, never 1.00.
+	const { hook } = await setup(liquidating(true, 19_996n * 10n ** 15n))
+	expect(hook.state().fundingReason).toContain('Deposit at least 1.01 REP')
+	await act(() => hook.state().setDepositAmount('1.01'))
+	expect(hook.state().depositReason).toBeUndefined()
+})
+
+test('a liquidating owner can rescue in place only with a full rescue deposit', async () => {
+	const { hook, requests } = await setup(liquidating())
 	await act(() => {
-		hook.state().setDepositAmount('5')
-		hook.state().setHealthDepositAmount('5')
+		hook.state().setDepositAmount('0.5')
+		hook.state().setHealthDepositAmount('0.5')
 	})
-	expect(hook.state().fundingReason).toContain('liquidating')
-	expect(hook.state().depositReason).toContain('liquidating')
-	expect(hook.state().healthDepositReason).toContain('liquidating')
+	expect(hook.state().fundingReason).toBe('This position is liquidating. Deposit at least 1.00 REP to back it fully and end the liquidation.')
+	expect(hook.state().healthDepositReason).toContain('Deposit at least 1.00 REP')
 	await expect(hook.state().deposit()).rejects.toThrow('liquidating')
 	await expect(hook.state().depositAndSetHealth()).rejects.toThrow('liquidating')
 	expect(requests).toEqual([])
+	await act(() => hook.state().setDepositAmount('1'))
+	expect(hook.state().depositReason).toBeUndefined()
+	await act(() => hook.state().deposit())
+	expect(requests).toHaveLength(1)
 })
 
-test('#1448: a position that enters liquidation during review blocks an already planned REP deposit', async () => {
+test('a stale price blocks a rescue deposit of any size', async () => {
+	const { hook, requests } = await setup(liquidating(false))
+	await act(() => hook.state().setDepositAmount('50'))
+	expect(hook.state().depositReason).toBe('This position is liquidating. A new accepted REP price is required before a rescue deposit.')
+	await expect(hook.state().deposit()).rejects.toThrow('A new accepted REP price is required before a rescue deposit.')
+	expect(requests).toEqual([])
+})
+
+test('a position that enters liquidation during review blocks an already planned deposit too small to rescue it', async () => {
 	const snapshot = capitalSnapshot({ allowanceAttoRep: 100n * unit })
 	const { hook, requests, transport } = await setup(snapshot)
-	await act(() => hook.state().setDepositAmount('5'))
+	await act(() => hook.state().setDepositAmount('0.5'))
 	await act(() => hook.state().deposit())
 	const request = requests[0]
 	if (request?.validateBeforeSubmit === undefined) throw new Error('Deposit preflight missing')
-	transport.setSnapshot({ ...snapshot, positions: snapshot.positions.map(position => ({ ...position, maxHealthyPrice: unit, liquidationStarted: 1n })) })
-	await expect(request.validateBeforeSubmit()).rejects.toThrow('liquidating')
+	transport.setSnapshot(liquidating())
+	await expect(request.validateBeforeSubmit()).rejects.toThrow('Deposit at least 1.00 REP')
 })
 
 test('re-submits the saved pending target while keeping other retirement values locked', async () => {

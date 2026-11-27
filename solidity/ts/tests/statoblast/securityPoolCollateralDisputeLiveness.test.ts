@@ -175,7 +175,7 @@ describe('collateral-independent outcome disputes', () => {
 		const burn = '0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF'
 		await writeContractAndWait(owner, () => owner.writeContract({ ...token, functionName: 'setBlocked', args: [burn, true] }))
 		await fixture.base.mockWindow.advanceTime(86_401n)
-		await expect(fixture.deposit(unit, owner, securityPool)).rejects.toThrow('Position is liquidating')
+		await expect(fixture.deposit(unit, owner, securityPool)).rejects.toThrow('Capital price stale')
 		// An idle provider can checkpoint the deferred burn without curing the liquidating owner.
 		await fixture.deposit(unit, other, securityPool)
 		const pending = await owner.readContract({ ...capital, functionName: 'pendingBurnCash' })

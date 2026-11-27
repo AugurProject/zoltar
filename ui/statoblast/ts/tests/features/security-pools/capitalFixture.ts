@@ -1,5 +1,4 @@
 import { getAddress, zeroHash } from '@zoltar/core-shared/evm/ethereum'
-import { predictAuctionVaultAddress } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import type { SecurityPoolAccountSnapshot } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
 export const owner = getAddress('0x0000000000000000000000000000000000000011')
 export const securityPool = getAddress('0x0000000000000000000000000000000000000022')
@@ -9,22 +8,7 @@ export const collateralToken = getAddress('0xC02aaA39b223FE8D0A0e5C4F27eAD9083C7
 export const index = getAddress('0x0000000000000000000000000000000000000055')
 export const auctionAddress = getAddress('0x0000000000000000000000000000000000000091')
 export const auctionEngine = getAddress('0x0000000000000000000000000000000000000092')
-export const auctionVaultImplementation = getAddress('0x0000000000000000000000000000000000000094')
-// The fixture vault is the clone the auction would create for this bidder, ledger and bid.
-export const auctionVaultBindings = { implementation: auctionVaultImplementation, owner, capital, auction: auctionAddress, bidId: 1n }
-export const auctionVault = predictAuctionVaultAddress(auctionVaultBindings)
 export const unit = 10n ** 18n
-export function auctionCapitalSnapshot(overrides: Partial<SecurityPoolAccountSnapshot> = {}): SecurityPoolAccountSnapshot {
-	const vault = auctionVault
-	const snapshot = capitalSnapshot()
-	return {
-		...snapshot,
-		owner: vault,
-		positions: snapshot.positions.map(position => ({ ...position, owner: vault })),
-		auctionVault: { vault, bidder: owner, auction: auctionAddress, initialCapital: capital, initialUniverse: 0n, bidId: 1n, filledLots: 10n, materialized: true },
-		...overrides,
-	}
-}
 export function capitalSnapshot(overrides: Partial<SecurityPoolAccountSnapshot> = {}): SecurityPoolAccountSnapshot {
 	return {
 		collateralToken,
@@ -65,6 +49,7 @@ export function capitalSnapshot(overrides: Partial<SecurityPoolAccountSnapshot> 
 		frozen: false,
 		importing: false,
 		exported: false,
+		unclaimedRepairAuctionBids: 0n,
 		ownerAccount: { freeAttoRep: 0n, feesAttoEth: unit, feesAttoRep: 2n * unit, targetHealthFactorBps: 12_000n, positionId: 1n },
 		positions: [{ id: 1n, owner, batch: 0n, rep: 30n * unit, commitment: 10n * unit, maxHealthyPrice: (28n * unit) / 10n, releasedRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, liquidationStarted: 0n, remainingCommitment: 0n, retirementPreview: undefined }],
 		ownerPrincipalAttoRep: 30n * unit,

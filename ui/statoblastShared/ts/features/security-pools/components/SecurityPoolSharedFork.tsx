@@ -158,7 +158,7 @@ export function SecurityPoolSharedFork({
 	) : undefined
 	const auctionPanel = migrationStarted ? (
 		<div ref={auctionSection} tabIndex={-1} className='statoblast-fork-step-body' hidden={auctionReason !== undefined}>
-			<SecurityPoolRepairAuction fork={state} savedBranch={model.savedBranch} actions={parameters.actions} bidder={parameters.bidder} openVault={parameters.openVault} onAuctionFinalized={setFinalizedAuctionBranch} sharedDeadline sharedDeadlineChecking={activationChecking} />
+			<SecurityPoolRepairAuction fork={state} savedBranch={model.savedBranch} actions={parameters.actions} bidder={parameters.bidder} onAuctionFinalized={setFinalizedAuctionBranch} sharedDeadline sharedDeadlineChecking={activationChecking} />
 		</div>
 	) : undefined
 	return (
@@ -208,6 +208,14 @@ export function SecurityPoolSharedFork({
 								<input type='checkbox' checked={confirmedChoice} disabled={disabled || !canChooseByDeadline || state?.branch === undefined} onChange={event => setConfirmedChoice(event.currentTarget.checked)} />
 								{branchConfirmation}
 							</label>
+						)}
+						{!branchDone && model.unclaimedBids > 0n && (
+							<>
+								<UserMessage tone='warning' detail={copy.unclaimedBids(model.unclaimedBids)} />
+								<div className='actions'>
+									<SecurityPoolButton model={parameters.actions} action='claimSecurityPoolForkAuctionBids' label={copy.claimBids} pendingLabel={copy.claimingBids} reason={model.claimBidsReason} onClick={model.claimBids} />
+								</div>
+							</>
 						)}
 					</ForkStep>
 					<ForkStep title={copy.start} done={branch?.started === true} detail={pageCopy.pendingSharedStep} actionDataNotice={actionDataNotice} action={startBranch} />

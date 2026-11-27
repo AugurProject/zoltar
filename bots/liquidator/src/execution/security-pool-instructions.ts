@@ -14,16 +14,15 @@ type RpcPool = ReturnType<typeof createRpcEndpointPool>
 /** Durable, one-shot instructions use the same quorum, simulation and journal as automatic takeovers. */
 /** The journal classification of each instruction by its effect on the operator's funds. */
 const INSTRUCTION_KINDS: Record<SecurityPoolInstruction['action'], RuntimeState['pendingTransactions'][number]['kind']> = {
-	'auction-activate': 'withdrawal',
 	'auction-bid': 'deposit',
+	'auction-claim': 'withdrawal',
 	'auction-refund': 'withdrawal',
+	'capital-deposit': 'deposit',
+	'capital-earnings': 'fees',
+	'capital-health': 'configuration',
+	'capital-retire': 'withdrawal',
+	'capital-withdraw': 'withdrawal',
 	'fork-choice': 'migration',
-	'vault-deposit': 'deposit',
-	'vault-earnings': 'fees',
-	'vault-fork-choice': 'migration',
-	'vault-health': 'configuration',
-	'vault-retire': 'withdrawal',
-	'vault-withdraw': 'withdrawal',
 }
 
 /** @internal Tests verify each instruction's journal classification. */

@@ -77,7 +77,7 @@ export interface ProtocolIndexUpdate {
 const REPORT_SUBMITTED = eventTopic('ReportSubmitted(uint256,bytes)')
 const REPORT_DISPUTED = eventTopic('ReportDisputed(uint256,bytes)')
 const REPORT_SETTLED = eventTopic('ReportSettled(uint256)')
-const BID_SUBMITTED = eventTopic('BidSubmitted(uint256,address,address,uint256,uint256,uint256)')
+const BID_SUBMITTED = eventTopic('BidSubmitted(uint256,address,uint256,uint256)')
 const BID_SETTLED = eventTopic('BidSettled(uint256,address,uint256,uint256)')
 const REFUND_WITHDRAWN = eventTopic('RefundWithdrawn(address,address,uint256)')
 const LOCAL_DEPOSIT_APPENDED = eventTopic('LocalDepositAppended(uint256,uint8,address,uint256,uint256,uint256)')
@@ -462,7 +462,7 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 				if (topic0 !== BID_SUBMITTED && topic0 !== BID_SETTLED) continue
 				const submitted = topic0 === BID_SUBMITTED
 				const data = hexToBytes(log.data)
-				if (log.topics.length !== (submitted ? 4 : 3) || data.length !== (submitted ? 96 : 64)) throw new Error('Auction bid event has an invalid shape')
+				if (log.topics.length !== 3 || data.length !== 64) throw new Error('Auction bid event has an invalid shape')
 				const bidder = strictTopicAddress(log.topics[2], 'Auction bidder')
 				if (bidder.toLowerCase() !== context.wallet.toLowerCase()) continue
 				const bidId = topicUnsigned(log.topics[1], 'Auction bid id').toString()
@@ -470,7 +470,7 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 				const existing = bids.find(bid => bid.bidId === bidId)
 				if (submitted) {
 					if (existing !== undefined) throw new Error('Duplicate auction bid identity')
-					bids.push({ bidId, vault: strictTopicAddress(log.topics[3], 'Auction vault'), lots: readUnsigned(data, 0, 32).toString(), minimumAttoRepPerLot: readUnsigned(data, 32, 32).toString(), targetHealthBps: readUnsigned(data, 64, 32).toString(), settled: false })
+					bids.push({ bidId, lots: readUnsigned(data, 0, 32).toString(), minimumAttoRepPerLot: readUnsigned(data, 32, 32).toString(), settled: false })
 				} else {
 					if (existing === undefined && !partialHistory) throw new Error('Auction settlement has no indexed bid')
 					if (existing?.settled) throw new Error('Auction bid settled twice')

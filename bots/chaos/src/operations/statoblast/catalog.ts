@@ -15,7 +15,7 @@ import { recoverSettledReport, requestOraclePrice } from './oracle.ts'
 
 import { forkDefinition, resumeEscalation } from './forks.ts'
 
-import { auctionDefinition, finalizeCollateralRepairAuctionRoute, refundLosingAuctionBids, settleAuctionBids, startCollateralRepairAuction } from './auctions.ts'
+import { auctionDefinition, claimAuctionBids, finalizeCollateralRepairAuctionRoute, refundLosingAuctionBids, settleAuctionBids, startCollateralRepairAuction } from './auctions.ts'
 
 import { sweepResidualEscalation, withdrawForkedCarry } from './carry.ts'
 
@@ -45,6 +45,7 @@ export const STATOBLAST_OPERATIONS: readonly OperationDefinition[] = [
 	startCollateralRepairAuction,
 	finalizeCollateralRepairAuctionRoute,
 	settleAuctionBids,
+	claimAuctionBids,
 	auctionDefinition('bid'),
 	auctionDefinition('withdraw-refund'),
 	withdrawEscalation,

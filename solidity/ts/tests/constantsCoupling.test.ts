@@ -67,8 +67,6 @@ describe('protocol constant coupling', () => {
 		expect(constants.minimumForkBurnDivisor * (constants.payoutDenominator - constants.rewardNumerator)).toBeGreaterThanOrEqual(2n * constants.payoutDenominator)
 		// The fee-end granularity keeps every bucket number within the 17-level gas bound.
 		expect(((BigInt(feeEndLimit) - 1n) / BigInt(feeEndGranularity)).toString(2).length).toBeLessThanOrEqual(Number(MAXIMUM_FEE_END_LEVELS))
-		// Auction vault bindings start right after the shared forwarder prologue.
-		expect(constants.repairAuctionVaultRuntimeLength).toBe(constants.forwarderLength + constants.repairAuctionVaultBindingsLength)
 	})
 
 	test('the three-day response is defined once and not repeated as a literal', async () => {

@@ -391,12 +391,12 @@ export const capitalPositionRisk = (state: Readonly<Record<string, unknown>>): C
 			scannerSeverity: 'critical',
 			scannerReason: `Pledged REP is below the requirement at the liquidation price and an adverse price observation has started the take-over clock. The ledger cures the position first and rejects the take-over while spare commitment covers the deficit.${stalePrice}`,
 		}
-	// A cohort holds the unmaterialized winning bids of an auction; the ledger takes it over one materialized bid at a time.
+	// A cohort holds the unclaimed winning bids of an auction; the ledger takes it over one claimed bid at a time.
 	if (state['belowLiquidationPrice'] === true && state['repairAuctionCohort'] === true)
-		return { protocolState: 'under-collateralized', scannerSeverity: 'critical', scannerReason: `The auction cohort's pledged REP is below the requirement at the liquidation price; it is taken over per bid, once a bid is materialized.${stalePrice}` }
+		return { protocolState: 'under-collateralized', scannerSeverity: 'critical', scannerReason: `The auction cohort's pledged REP is below the requirement at the liquidation price; it is taken over per bid, after the take-over claims that bid into its bidder's account.${stalePrice}` }
 	if (state['belowLiquidationPrice'] === true) return { protocolState: 'under-collateralized', scannerSeverity: 'critical', scannerReason: `Pledged REP is below the requirement at the liquidation price; a take-over additionally needs an adverse observation that starts the clock.${stalePrice}` }
 	const health = unsigned('healthFactorBps')
-	// An owner whose commitment is still an unmaterialized auction bid has no index position to compare with the liquidation price.
+	// A bidder whose only commitment is still unclaimed auction lots has no index position to compare with the liquidation price.
 	if (health !== undefined && health < 10_000n) return { protocolState: 'under-collateralized', scannerSeverity: 'critical', scannerReason: `Pledged REP is below the requirement at the liquidation price.${stalePrice}` }
 	if (health === undefined) return { protocolState: 'unavailable', scannerSeverity: 'unavailable', scannerReason: 'The ledger has not accepted a price, so the commitment has no REP requirement yet' }
 	if (health < CAPITAL_WARNING_HEALTH_FACTOR_BPS) return { protocolState: 'healthy', scannerSeverity: 'warning', scannerReason: `Health factor is below the scanner warning threshold of ${CAPITAL_WARNING_HEALTH_FACTOR_BPS} bps.${stalePrice}` }

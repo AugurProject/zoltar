@@ -144,8 +144,8 @@ function refundLog(parameters: { amount: bigint; auction?: Address; blockNumber:
 				address: log.address,
 				blockNumber: log.blockNumber,
 				logIndex: log.logIndex - 1,
-				topics: [keccak256(toHex('BidSubmitted(uint256,address,address,uint256,uint256,uint256)')), toHex(bidId, { size: 32 }), indexedAddress(address(1)), indexedAddress(address(21))],
-				data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [parameters.amount, 1n, 10000n]),
+				topics: [keccak256(toHex('BidSubmitted(uint256,address,uint256,uint256)')), toHex(bidId, { size: 32 }), indexedAddress(address(1))],
+				data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [parameters.amount, 1n]),
 			}),
 		)
 	return log
@@ -553,7 +553,7 @@ describe('durable protocol index', () => {
 
 	test('keeps the durable shape JSON-safe', () => {
 		const index = protocolIndexFixture({
-			auctionBids: { [address(20)]: [{ bidId: '1', vault: address(21), lots: '10', minimumAttoRepPerLot: 1n.toString(), targetHealthBps: '10000', settled: false }] },
+			auctionBids: { [address(20)]: [{ bidId: '1', lots: '10', minimumAttoRepPerLot: 1n.toString(), settled: false }] },
 			chainId: 1,
 			escalationDeposits: [{ amountAttoRep: 9n.toString(), claimed: false, depositIndex: '2', escalationGame: address(21), outcome: 1, parentDepositIndex: '2', pool: address(22), vault: address(1) }],
 		})
@@ -636,7 +636,7 @@ describe('durable protocol index', () => {
 
 	test('prunes terminal bids and escalation deposits even when the cursor is already current', async () => {
 		const terminalIndex = protocolIndexFixture({
-			auctionBids: { [address(20)]: [{ bidId: '1', vault: address(21), lots: '10', minimumAttoRepPerLot: 1n.toString(), targetHealthBps: '10000', settled: true }] },
+			auctionBids: { [address(20)]: [{ bidId: '1', lots: '10', minimumAttoRepPerLot: 1n.toString(), settled: true }] },
 			escalationDeposits: [{ amountAttoRep: 9n.toString(), claimed: true, depositIndex: '2', escalationGame: address(21), outcome: 1, parentDepositIndex: '2', pool: address(22), vault: address(1) }],
 		})
 		const implementation = {
@@ -739,16 +739,16 @@ describe('durable protocol index', () => {
 })
 
 test('native security pool auction replay tracks bid IDs and refund generations across settlement and withdrawal', async () => {
-	const submittedTopic = keccak256(toHex('BidSubmitted(uint256,address,address,uint256,uint256,uint256)'))
+	const submittedTopic = keccak256(toHex('BidSubmitted(uint256,address,uint256,uint256)'))
 	const settledTopic = keccak256(toHex('BidSettled(uint256,address,uint256,uint256)'))
 	const withdrawnTopic = keccak256(toHex('RefundWithdrawn(address,address,uint256)'))
-	const submitted = canonicalLog({ address: address(20), blockNumber: 10n, logIndex: 0, topics: [submittedTopic, toHex(1n, { size: 32 }), indexedAddress(address(1)), indexedAddress(address(21))], data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [2n, 15n, 12000n]) })
+	const submitted = canonicalLog({ address: address(20), blockNumber: 10n, logIndex: 0, topics: [submittedTopic, toHex(1n, { size: 32 }), indexedAddress(address(1))], data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [2n, 15n]) })
 	const settled = canonicalLog({ address: address(20), blockNumber: 11n, logIndex: 0, topics: [settledTopic, toHex(1n, { size: 32 }), indexedAddress(address(1))], data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [0n, 2000n]) })
 	const withdrawal = canonicalLog({ address: address(20), blockNumber: 12n, logIndex: 0, topics: [withdrawnTopic, indexedAddress(address(1)), indexedAddress(address(1))], data: encodeAbiParameters([{ type: 'uint256' }], [2000n]) })
 	const client = eventIndexClient([submitted, settled, withdrawal])
 	const context = indexContext(client, { auctionAddresses: [address(20)] })
 	const initial = await updateProtocolIndex(context)
-	expect(initial.index.auctionBids[address(20).toLowerCase()]).toEqual([{ bidId: '1', vault: address(21), lots: '2', minimumAttoRepPerLot: 15n.toString(), targetHealthBps: '12000', settled: false }])
+	expect(initial.index.auctionBids[address(20).toLowerCase()]).toEqual([{ bidId: '1', lots: '2', minimumAttoRepPerLot: 15n.toString(), settled: false }])
 	const credited = await updateProtocolIndex({ ...context, anchorBlockNumber: 11n, previous: initial.index })
 	expect(credited.index.auctionBids[address(20).toLowerCase()]).toBeUndefined()
 	expect(credited.index.auctionRefunds[address(20).toLowerCase()]).toEqual({ generation: refundGeneration(settled), pendingAttoEth: 2000n.toString() })
@@ -764,8 +764,8 @@ test('indexed discovery detects a removed bid block as a recoverable reorg befor
 		address: address(20),
 		blockNumber: 10n,
 		logIndex: 0,
-		topics: [keccak256(toHex('BidSubmitted(uint256,address,address,uint256,uint256,uint256)')), toHex(1n, { size: 32 }), indexedAddress(address(1)), indexedAddress(address(21))],
-		data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [2n, 15n, 12000n]),
+		topics: [keccak256(toHex('BidSubmitted(uint256,address,uint256,uint256)')), toHex(1n, { size: 32 }), indexedAddress(address(1))],
+		data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [2n, 15n]),
 	})
 	const initial = await updateProtocolIndex(indexContext(eventIndexClient([submitted]), { auctionAddresses: [address(20)] }))
 	expect(initial.index.auctionBids[address(20).toLowerCase()]).toHaveLength(1)

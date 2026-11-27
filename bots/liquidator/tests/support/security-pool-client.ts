@@ -24,7 +24,6 @@ export function securityPoolClient(overrides: Record<string, unknown> = {}) {
 		'SecurityPoolCapitalRepairAuctionDelegate',
 		'SecurityPoolRepairAuction',
 		'SecurityPoolUniformPriceRepairAuction',
-		'SecurityPoolRepairAuctionVault',
 		'SecurityPoolResolutionPremiumBook',
 	]
 	const modules = new Map(names.map((name, index) => [name, index === 0 ? snapshot.securityPool : getAddress(`0x${(256 + index).toString(16).padStart(40, '0')}`)]))
@@ -62,7 +61,7 @@ export function securityPoolClient(overrides: Record<string, unknown> = {}) {
 	setClone(snapshot.capitalLedger, capitalImplementation, universeCloneBindings(snapshot.universeId, snapshot.repToken))
 	setClone(snapshot.commitmentIndex, getAddress('0x00000000000000000000000000000000000000AB'), snapshot.capitalLedger)
 	setClone(module('SecurityPoolCapitalFeeStreams'), getAddress('0x00000000000000000000000000000000000000AC'), snapshot.capitalLedger)
-	const reads: { address: string; functionName: string; blockNumber?: bigint }[] = []
+	const reads: { address: string; functionName: string; blockNumber?: bigint; args?: readonly unknown[] }[] = []
 	const values: Record<string, unknown> = {
 		collateralToken: settings.deployment.weth,
 		factory: settings.deployment.securityPoolFactory,
@@ -84,6 +83,7 @@ export function securityPoolClient(overrides: Record<string, unknown> = {}) {
 		repairAuctionDelegate: module('SecurityPoolCapitalRepairAuctionDelegate'),
 		repairAuctions: '0x0000000000000000000000000000000000000000',
 		bidderBidCount: 0n,
+		unclaimedRepairAuctionBids: 0n,
 		repairAuctionCohort: ['0x0000000000000000000000000000000000000000', 0n, 0n, 0n, 0n],
 		premiumLedger: module('SecurityPoolResolutionPremiumBook'),
 		priceFeed: snapshot.priceFeed,
@@ -165,7 +165,7 @@ export function securityPoolClient(overrides: Record<string, unknown> = {}) {
 					if (parameters.functionName === 'implementation') return getAddress(parameters.address)
 					if (!(parameters.functionName in values)) throw new Error(`Unexpected read ${parameters.functionName}`)
 					const value = values[parameters.functionName]
-					return typeof value === 'function' ? value(parameters.args ?? []) : value
+					return typeof value === 'function' ? value(parameters.args ?? [], parameters.blockNumber) : value
 				}
 			return Reflect.get(target, property, target)
 		},

@@ -512,6 +512,10 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				if (overrides.auctionOpeningError !== undefined) throw overrides.auctionOpeningError
 				return { result: undefined }
 			}
+			if (parameters.functionName === 'materializeRepairAuctionBids') {
+				expect(parameters.args).toEqual([[1n]])
+				return { result: [0n] }
+			}
 			expect(parameters.functionName).toBe('settleRefund')
 			expect(parameters.args).toEqual([1n])
 			return { result: undefined }
@@ -548,24 +552,22 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'ledger':
 					return address(94)
 				case 'forkController':
+				case 'forkAuthority':
 					return address(95)
 				case 'securityPool':
 					return parameters.address === address(92) ? address(91) : address(90)
-				case 'forkAuthority':
-					return address(95)
 				case 'repairAuctions':
+				case 'controller':
 					return collateralRepairAuction
 				case 'engine':
 					return address(24)
-				case 'controller':
-					return collateralRepairAuction
 				case 'ownerAccount':
 					return [0n, 0n, 0n, 10000n, 0n]
 				case 'ownerCollateral':
 				case 'totals':
 					return [0n, 0n, 0n]
 				case 'bids':
-					return [address(1), address(25), 10000n, 1n, 100n, false]
+					return [address(1), false, false, 1n, 100n]
 				case 'purchaseQuote':
 					return [0n, 0n]
 				case 'attoSharesToAttoRep':
@@ -579,6 +581,9 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'frozen':
 				case 'importing':
 				case 'exported':
+				case 'repairAuctionBidClaimed':
+				case 'awaitingForkContinuation':
+				case 'isApprovedForAll':
 					return false
 				case 'securityMultiplierBps':
 					return 10000n
@@ -615,23 +620,20 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'minimumOutcomeExchangeRate':
 				case 'settlementCollateralAttoEth':
 				case 'lastSettlementSecurityPoolTime':
+				case 'unclaimedRepairAuctionBids':
+				case 'universeId':
+				case 'systemState':
 					return 0n
 				case 'repToken':
 				case 'reputationToken':
 					return address(10)
 				case 'shareToken':
 					return shareToken
-				case 'universeId':
-					return 0n
 				case 'questionId':
 					return 101n
 				case 'escalationGame':
 				case 'securityPoolCustody':
 					return address(0)
-				case 'systemState':
-					return 0n
-				case 'awaitingForkContinuation':
-					return false
 				case 'shareTokenSupplyAttoShares':
 				case 'totalRepBackingUnits':
 				case 'totalBadDebtAttoEth':
@@ -666,8 +668,6 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 					expect(parameters.address).toBe(address(21))
 					if (parameters.args?.[0] === 7n) return [address(87), address(1), 1n]
 					return [parameters.args?.[0] === 6n ? address(86) : zeroAddress, address(1), 1n]
-				case 'minimumToken2ReportAttoRep':
-					return 0n
 				case 'minimumReportCollateral':
 					return 10_001n
 				case 'minimumToken1ReportAttoEth':
@@ -680,6 +680,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 				case 'targetPriceErrorForDispute':
 					return 1_000n
 				case 'getVaultUnderwritingLimitAttoEth':
+				case 'minimumToken2ReportAttoRep':
 					return 0n
 				case 'openOracleSecurityMultiplierBps':
 				case 'escalationHaltMultiplierBps':
@@ -715,14 +716,11 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, _walletVaultRegister
 					return []
 				case 'getPair':
 					return address(0)
-				case 'isApprovedForAll':
-					return false
 				case 'auctionStarted':
-					return 1n
 				case 'minBidSizeAttoEth':
 					return 1n
 				case 'previewBid':
-					return { bidder: address(1), vault: address(25), targetHealthBps: 10000n, filledLots: 1n, usedAttoEth: 1n, principalAttoRep: 100n, refundAttoEth: overrides.auctionRefundAttoEth ?? 1n }
+					return { bidder: address(1), filledLots: 1n, usedAttoEth: 1n, principalAttoRep: 100n, refundAttoEth: overrides.auctionRefundAttoEth ?? 1n }
 				case 'finalized':
 					return overrides.auctionFinalized ?? false
 				default:
@@ -776,10 +774,12 @@ describe('anchored ecosystem discovery', () => {
 			client: fixture.client,
 			deployments: snapshotFixture().deployments,
 			wallet: address(1),
-			indexedAuctionBids: { [address(24).toLowerCase()]: [{ bidId: '1', vault: address(25), lots: '1', minimumAttoRepPerLot: 100n.toString(), targetHealthBps: '10000', settled: false }] },
+			indexedAuctionBids: { [address(24).toLowerCase()]: [{ bidId: '1', lots: '1', minimumAttoRepPerLot: 100n.toString(), settled: false }] },
 		})
-		expect(snapshot.auctions[0]).toMatchObject({ finalized: true, refundableBidIds: ['1'] })
+		expect(snapshot.auctions[0]).toMatchObject({ finalized: true, refundableBidIds: ['1'], capital: address(91), claimableBidIds: ['1'] })
 		expect(urgentOperationPlans(snapshot, { seed: 1, maximumBlockIntervalSeconds: 15 }).filter(plan => plan.definitionId === 'statoblast.auction.settle-bids')).toEqual([expect.objectContaining({ metadata: expect.objectContaining({ bidId: '1' }) })])
+		// A finalized bid must be claimed, winning or not, before the wallet can choose a branch in a later fork.
+		expect(urgentOperationPlans(snapshot, { seed: 1, maximumBlockIntervalSeconds: 15 }).filter(plan => plan.definitionId === 'statoblast.auction.claim-bids')).toEqual([expect.objectContaining({ metadata: expect.objectContaining({ bidIds: '1' }) })])
 		expect(canonicalLifecyclePresence(snapshot, { seed: 1, maximumBlockIntervalSeconds: 15 }).filter(item => item.definitionId === 'statoblast.auction.settle-bids')).toEqual([expect.objectContaining({ blocksNovelty: true, metadata: expect.objectContaining({ bidId: '1' }) })])
 	})
 
@@ -1621,7 +1621,7 @@ test('#1701 fully filled bids do not schedule a zero-value standalone refund', a
 		client: fixture.client,
 		deployments: snapshotFixture().deployments,
 		wallet: address(1),
-		indexedAuctionBids: { [address(24).toLowerCase()]: [{ bidId: '1', vault: address(25), lots: '1', minimumAttoRepPerLot: 100n.toString(), targetHealthBps: '10000', settled: false }] },
+		indexedAuctionBids: { [address(24).toLowerCase()]: [{ bidId: '1', lots: '1', minimumAttoRepPerLot: 100n.toString(), settled: false }] },
 	})
 	expect(snapshot.auctions[0]?.refundableBidIds).toEqual([])
 	expect(urgentOperationPlans(snapshot, { seed: 1, maximumBlockIntervalSeconds: 15 }).filter(plan => plan.definitionId === 'statoblast.auction.settle-bids')).toEqual([])

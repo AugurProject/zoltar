@@ -98,7 +98,7 @@ export function SecurityPoolsSection({
 	const shown = model.presentationSnapshot
 	const fundedPriceReports = useSecurityPoolPriceFunds(model.snapshot, shown, enabled && page !== undefined, readingWallet)
 	const hasPositionOwner = isAddress(model.ownerInput.trim())
-	const connectedPositionOwner = shown?.auctionVault?.bidder ?? model.ownerInput
+	const connectedPositionOwner = model.ownerInput
 	let positionMode: 'own' | 'other' | 'none' = 'none'
 	if (hasPositionOwner) positionMode = connectedPositionOwner.toLowerCase() === readingWallet?.toLowerCase() ? 'own' : 'other'
 	const initialPoolLoading = model.loading && shown === undefined && shownSetupStage === undefined
@@ -215,7 +215,6 @@ export function SecurityPoolsSection({
 							actions={actions}
 							bidder={parameters.accountAddress}
 							openUniverse={universeId => openChildPosition(page.pool, universeId, hasPositionOwner ? shown?.owner : undefined)}
-							openVault={(vault, universeId) => openChildPosition(page.pool, universeId, vault)}
 						/>
 					)}
 				</TransactionScopeProvider>

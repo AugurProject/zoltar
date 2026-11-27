@@ -1,13 +1,12 @@
 import { loadSponsoredOperationReport, type SponsoredReportCursor } from './security-pool-report.ts'
-import { loadOwnedSecurityPoolVaults } from './security-pool-owned-vaults.ts'
+import { loadPendingSecurityPoolAuctionExposure } from './security-pool-pending-auction.ts'
 import { verifySecurityPoolCustody } from './security-pool-identity.ts'
 import { authenticateSecurityPoolAuction, loadSecurityPoolAuctionPosition, securityPoolAuctionPage, type SecurityPoolAuctionTarget, type SecurityPoolTarget } from './security-pool-auction.ts'
 import type { OperatorSettings } from '#config/settings'
 import type { SecurityPoolSelection } from '#config/security-pool-policy'
-import { erc20Abi, securityPoolCapitalLedgerAbi, securityPoolRepairAuctionVaultAbi, securityPoolRuntimeIdentities } from '@zoltar/bot-shared/contracts/abi'
-import { verifyRuntimeIdentity } from '@zoltar/bot-shared/monitoring/runtime-identity'
+import { erc20Abi, securityPoolCapitalLedgerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { getAddress, parseAbiItem, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
-import { decodeAuctionVaultBindings, loadSecurityPoolClaimableEarnings, loadSecurityPoolCapitalSnapshot, type SecurityPoolCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
+import { loadSecurityPoolClaimableEarnings, loadSecurityPoolCapitalSnapshot, type SecurityPoolCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import type { ReadClient } from './read-client.ts'
 import { record } from '@zoltar/bot-shared/infrastructure/json-validation'
 
@@ -41,12 +40,11 @@ const securityPoolMonitorAbi = [
 	parseAbiItem('function previewRetirement(uint96 id,uint256 acceptedPrice,uint256 demand) view returns ((uint8 status,uint96 effectiveCurrentBatch,uint256 healthyCommitment,uint256 spareCommitment,uint256 queuedAheadCommitment,uint256 commitmentReduction,uint256 releasedRep) preview)'),
 ] as const
 
-export type SecurityPoolScope = SecurityPoolSelection & { sponsoredReports?: SponsoredReportCursor; managedVaults?: Address[]; nextPositionId: bigint; sweepEnd: bigint; auctionAfterBidId?: bigint; retirementObservations?: { id: bigint; commitment: bigint; batch: bigint; since: bigint }[] }
+export type SecurityPoolScope = SecurityPoolSelection & { sponsoredReports?: SponsoredReportCursor; nextPositionId: bigint; sweepEnd: bigint; auctionAfterBidId?: bigint; retirementObservations?: { id: bigint; commitment: bigint; batch: bigint; since: bigint }[] }
 export type SecurityPoolPosition = {
 	id: bigint
 	auctionTarget?: SecurityPoolAuctionTarget
 	owner: Address
-	controllingOwner?: Address
 	batch: bigint
 	rep: bigint
 	commitment: bigint
@@ -65,8 +63,6 @@ export type SecurityPoolObservation = {
 	managedPrincipalAttoRep?: bigint
 	pendingAuction?: { address: Address; principal: bigint } | undefined
 	managedCommitmentAttoEth?: bigint
-	ownedVaults?: SecurityPoolCapitalSnapshot[]
-	chosenVaultChildUniverseIds?: bigint[]
 	chosenChildUniverseId?: bigint
 	approvedUniverse: boolean
 	snapshot: SecurityPoolCapitalSnapshot
@@ -87,14 +83,7 @@ export function managedSecurityPoolScopes(previous: readonly SecurityPoolScope[]
 		if (!scopes.has(key)) scopes.set(key, { ...selection, nextPositionId: 1n, sweepEnd: 0n })
 	}
 	if (scopes.size > 64) throw new Error('Managed security pool scope history exceeds 64; reconcile exposure before adding more security pools')
-	const vaultsBySecurityPool = new Map<string, Set<Address>>()
-	for (const scope of scopes.values()) {
-		const key = scope.address.toLowerCase()
-		const vaults = vaultsBySecurityPool.get(key) ?? new Set<Address>()
-		for (const vault of scope.managedVaults ?? []) vaults.add(vault)
-		vaultsBySecurityPool.set(key, vaults)
-	}
-	return [...scopes.values()].map(scope => ({ ...scope, managedVaults: [...(vaultsBySecurityPool.get(scope.address.toLowerCase()) ?? [])] }))
+	return [...scopes.values()]
 }
 
 /** @internal Tests verify the fixed sweep end prevents new positions from indefinitely postponing older ones. */
@@ -107,16 +96,6 @@ export function securityPoolPositionPage(scope: SecurityPoolScope, lastPositionI
 	return { ids, nextScope: { ...scope, nextPositionId: next > end ? 1n : next, sweepEnd: next > end ? 0n : end } }
 }
 
-async function isCanonicalAuctionVaultImplementation(client: ReadClient, implementation: Address, blockNumber: bigint) {
-	try {
-		verifyRuntimeIdentity(await client.getCode({ address: implementation, blockNumber }), securityPoolRuntimeIdentities.SecurityPoolRepairAuctionVault, 'position auction vault implementation')
-		return true
-	} catch (error) {
-		if (error instanceof Error && ['Unrecognized position auction vault implementation runtime code', 'Inconsistent position auction vault implementation runtime immutable values'].includes(error.message)) return false
-		throw error
-	}
-}
-
 async function loadSecurityPoolPosition(client: ReadClient, snapshot: SecurityPoolCapitalSnapshot, id: bigint): Promise<SecurityPoolPosition> {
 	const blockNumber = snapshot.blockNumber
 	const [rawAccount, started, penaltyPaid, elapsed] = await Promise.all([
@@ -127,17 +106,6 @@ async function loadSecurityPoolPosition(client: ReadClient, snapshot: SecurityPo
 	])
 	const account = record(rawAccount, 'Security pool position')
 	const owner = address(account['owner'])
-	// Ordinary EOAs and other account contracts have no known auction signer, and
-	// any contract may open a position, so a clone-shaped owner whose
-	// implementation is not the canonical vault stays an ordinary owner instead of
-	// stalling the scan. A clone of the canonical implementation names its
-	// controlling wallet.
-	const bindings = decodeAuctionVaultBindings(await client.getCode({ address: owner, blockNumber }))
-	let controllingOwner = owner
-	if (bindings !== undefined && (await isCanonicalAuctionVaultImplementation(client, bindings.implementation, blockNumber))) {
-		controllingOwner = getAddress(await client.readContract({ address: owner, abi: securityPoolRepairAuctionVaultAbi, functionName: 'owner', blockNumber }))
-		if (controllingOwner !== bindings.owner) throw new Error('Position auction vault owner does not match its code')
-	}
 	let retirementStatus = 'No pending reduction'
 	if (uint(account['batch']) !== 0n && uint(account['commitment']) !== 0n) {
 		const raw = await client.readContract({ address: snapshot.commitmentIndex, abi: securityPoolMonitorAbi, functionName: 'previewRetirement', args: [id, snapshot.conservativePrice, snapshot.demandAttoEth], blockNumber })
@@ -153,7 +121,6 @@ async function loadSecurityPoolPosition(client: ReadClient, snapshot: SecurityPo
 		stalledRetirement: false,
 		id,
 		owner,
-		controllingOwner,
 		batch: uint(account['batch']),
 		rep: uint(account['rep']),
 		commitment: uint(account['commitment']),
@@ -198,9 +165,7 @@ export async function loadSecurityPoolObservation(client: ReadClient, settings: 
 	if (address(authority) !== scope.address || address(indexAuthority) !== snapshot.capitalLedger || universeId !== scope.universeId || address(token) !== snapshot.repToken || snapshot.chainId !== settings.network.chainId) throw new Error('Security pool capital identity does not match the approved universe')
 	const page = securityPoolPositionPage(scope, uint(lastPositionId), settings.securityPoolPolicy.maximumPositionsPerScan)
 	const cohort = await client.readContract({ address: snapshot.capitalLedger, abi: securityPoolCapitalLedgerAbi, functionName: 'repairAuctionCohort', blockNumber })
-	const owned = await loadOwnedSecurityPoolVaults(client, snapshot, scope.managedVaults ?? [])
-	page.nextScope.managedVaults = owned.vaults
-	const chosenVaultChildUniverseIds = await Promise.all(owned.chosenOutcomes.map(async outcome => uint(await client.readContract({ address: settings.deployment.zoltar, abi: securityPoolMonitorAbi, functionName: 'getChildUniverseId', args: [scope.universeId, outcome], blockNumber }))))
+	const pending = await loadPendingSecurityPoolAuctionExposure(client, snapshot)
 	const positions: SecurityPoolPosition[] = []
 	for (const id of targets ?? page.ids) {
 		if (typeof id !== 'bigint') continue
@@ -216,15 +181,14 @@ export async function loadSecurityPoolObservation(client: ReadClient, settings: 
 		knownAuctionBidCount = auction.bidCount
 		const bids = targets === undefined ? await securityPoolAuctionPage(client, auction.engine, blockNumber, scope.auctionAfterBidId ?? 0n, auction.bidCount, settings.securityPoolPolicy.maximumPositionsPerScan) : { ids: [], auctionAfterBidId: scope.auctionAfterBidId ?? 0n }
 		page.nextScope.auctionAfterBidId = bids.auctionAfterBidId
-		const threshold = await client.readContract({ address: snapshot.capitalLedger, abi: securityPoolCapitalLedgerAbi, functionName: 'maximumHealthyPrice', args: [cohort[3], cohort[4]], blockNumber })
+		// Each winning bid is its own target: a takeover claims only that bid before acting on the bidder's position.
 		for (const candidate of targets ?? bids.ids.map(bidId => ({ auction: auction.address, bidId }))) {
 			if (typeof candidate === 'bigint') continue
 			if (candidate.auction !== auction.address) throw new Error('Auction target controller changed')
-			const position = await loadSecurityPoolAuctionPosition(client, snapshot, auction, candidate.bidId, threshold)
-			if (position !== undefined) {
-				if ('vault' in candidate && candidate.vault !== position.owner) throw new Error('Auction target vault changed')
-				positions.push(position)
-			}
+			const position = await loadSecurityPoolAuctionPosition(client, settings.deployment.multicall3, snapshot, auction, candidate.bidId)
+			if (position === undefined) continue
+			if ('bidder' in candidate && candidate.bidder !== position.owner) throw new Error('Auction target bidder changed')
+			positions.push(position)
 		}
 	}
 	const retirementObservations = new Map((scope.retirementObservations ?? []).map(entry => [entry.id, entry]))
@@ -248,11 +212,9 @@ export async function loadSecurityPoolObservation(client: ReadClient, settings: 
 	return {
 		...(chosenChildUniverseId === undefined ? {} : { chosenChildUniverseId }),
 		pendingOperationReport,
-		pendingAuction: owned.pendingAuction,
-		managedPrincipalAttoRep: (pendingOperationReport?.reservedRep ?? 0n) + snapshot.ownerPrincipalAttoRep + owned.pendingPrincipal + owned.accounts.reduce((sum, account) => sum + account.ownerPrincipalAttoRep, 0n),
-		managedCommitmentAttoEth: snapshot.ownerCommitmentAttoEth + owned.pendingCommitment + owned.accounts.reduce((sum, account) => sum + account.ownerCommitmentAttoEth, 0n),
-		ownedVaults: owned.accounts,
-		chosenVaultChildUniverseIds,
+		pendingAuction: pending.pendingAuction,
+		managedPrincipalAttoRep: (pendingOperationReport?.reservedRep ?? 0n) + snapshot.ownerPrincipalAttoRep + pending.pendingPrincipal,
+		managedCommitmentAttoEth: snapshot.ownerCommitmentAttoEth + pending.pendingCommitment,
 		selection: { address: scope.address, universeId: scope.universeId },
 		selected: settings.selectedSecurityPools.some(selection => selection.address === scope.address && selection.universeId === scope.universeId),
 		approvedUniverse: settings.approvedUniverses.includes(scope.universeId),
@@ -270,27 +232,16 @@ export async function loadSecurityPoolObservation(client: ReadClient, settings: 
 /** @internal Fork exports cannot erase risk: the chosen child must remain within the explicitly managed scope set. */
 export function requireCompleteSecurityPoolExposure(observations: readonly SecurityPoolObservation[]) {
 	for (const observation of observations) {
-		for (const universe of [...(observation.chosenVaultChildUniverseIds ?? []), ...(observation.chosenChildUniverseId === undefined ? [] : [observation.chosenChildUniverseId])]) {
-			if (!observations.some(child => child.selection.address === observation.selection.address && child.selection.universeId === universe))
-				throw new Error(`Add chosen fork universe ${universe} for security pool ${observation.selection.address} to selectedSecurityPools before continuing; exported principal must remain in managed exposure`)
-		}
+		const universe = observation.chosenChildUniverseId
+		if (universe !== undefined && !observations.some(child => child.selection.address === observation.selection.address && child.selection.universeId === universe))
+			throw new Error(`Add chosen fork universe ${universe} for security pool ${observation.selection.address} to selectedSecurityPools before continuing; exported principal must remain in managed exposure`)
 	}
 }
 
-/** Newly discovered vaults must enter every managed universe before any exposure-based decision. */
+/** Fork exports must keep every chosen child universe inside managed exposure before any exposure-based decision. */
 export async function loadManagedSecurityPoolObservations(client: ReadClient, settings: OperatorSettings, wallet: Address | undefined, requests: readonly { scope: SecurityPoolScope; targets?: readonly SecurityPoolTarget[] | undefined }[], blockNumber: bigint) {
 	const observations: SecurityPoolObservation[] = []
 	for (const request of requests) observations.push(await loadSecurityPoolObservation(client, settings, wallet, request.scope, blockNumber, request.targets))
-	const scopes = managedSecurityPoolScopes(
-		observations.map(item => item.nextScope),
-		[],
-	)
-	for (const [index, request] of requests.entries()) {
-		const expanded = scopes.find(scope => scope.address === request.scope.address && scope.universeId === request.scope.universeId)
-		const observed = observations[index]
-		if (expanded === undefined || observed === undefined) throw new Error('Managed exposure scope disappeared')
-		if ((expanded.managedVaults ?? []).some(vault => !observed.ownedVaults?.some(account => account.owner === vault))) observations[index] = await loadSecurityPoolObservation(client, settings, wallet, { ...request.scope, managedVaults: expanded.managedVaults ?? [] }, blockNumber, request.targets)
-	}
 	requireCompleteSecurityPoolExposure(observations)
 	return observations
 }

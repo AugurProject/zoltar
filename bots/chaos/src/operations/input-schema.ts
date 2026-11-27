@@ -53,12 +53,7 @@ const schemas: Record<string, InputField[]> = {
 	'open-oracle.withdraw': [token, amountField(['args', 1])],
 	'open-oracle.withdraw-to': [token, amountField(['args', 1]), { key: 'recipient', label: 'Recipient address', kind: 'address', path: ['args', 2] }],
 	'open-oracle.push-or-credit': [token, amountField(['args', 2])],
-	'statoblast.auction.bid': [
-		selection('auctions', 'Auction', ['metadata', 'auction']),
-		integer('lots', 'ETH lots', ['metadata', 'lots'], '1'),
-		amountField(['metadata', 'minimumAttoRepPerLot'], 'Minimum REP per lot', 'minimumAttoRepPerLot'),
-		integer('healthFactorBps', 'Owner health target (basis points)', ['metadata', 'healthFactorBps'], '10000'),
-	],
+	'statoblast.auction.bid': [selection('auctions', 'Auction', ['metadata', 'auction']), integer('lots', 'ETH lots', ['metadata', 'lots'], '1'), amountField(['metadata', 'minimumAttoRepPerLot'], 'Minimum REP per lot', 'minimumAttoRepPerLot')],
 	'trading.pair.initialize-shares': [pair, amountField(['metadata', 'shareAmount'], 'Shares per outcome'), amountField(['metadata', 'minimumLiquidity'], 'Minimum LP tokens', 'minimumLiquidity')],
 	'trading.liquidity.add-shares': [pair, amountField(['metadata', 'shareAmount'], 'Shares per outcome'), amountField(['metadata', 'minimumLiquidity'], 'Minimum LP tokens', 'minimumLiquidity')],
 	'trading.swap.exact-input': [pair, swapDirection, amountField(['metadata', 'inputAmount'], 'Input shares'), amountField(['metadata', 'minimumOutput'], 'Minimum output shares', 'minimumOutput')],

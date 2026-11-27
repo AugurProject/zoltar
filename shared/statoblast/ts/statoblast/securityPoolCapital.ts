@@ -1,7 +1,6 @@
 import { encodeFunctionData, formatUnits, parseAbi, zeroAddress, type AbiValue, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { SecurityPoolEconomicsConfig } from './securityPool.js'
 import type { SecurityPoolReadClient } from './securityPoolRead.js'
-import { decodeAuctionVaultBindings } from './securityPoolRepairAuctionVaultClones.js'
 import { decodeAddress, decodeBool, decodeFields, decodeUint } from './securityPoolDecoding.js'
 
 export const minimumSecurityPoolHealthFactorBps = 10_000n
@@ -11,7 +10,7 @@ function minimumHealthMessage() {
 }
 
 const abi = parseAbi([
-	'function repairAuctionPosition(uint256 bidId) view returns ((address vault,uint96 positionId,uint256 principal,uint256 commitment,uint256 targetHealthFactorBps,uint48 liquidationStarted,bool materialized,uint256 earnedAttoEth,uint256 earnedAttoRep) result)',
+	'function unclaimedRepairAuctionBids(address owner) view returns (uint256)',
 	'function originUniverseId() view returns (uint248)',
 	'function capitalLedger(uint248 universeId) view returns (address)',
 	'function availableMintCapacity(uint248 universeId) view returns (uint256)',
@@ -106,7 +105,11 @@ type SecurityPoolCapitalPosition = {
 	retirementPreview: SecurityPoolRetirementPreview | undefined
 }
 export type SecurityPoolCapitalSnapshot = {
-	auctionBidId?: bigint | undefined
+	/**
+	 * The owner's repair auction bids not yet claimed. Their winning lots are not part of this account until claimed,
+	 * and the owner cannot choose a branch in a later fork while any remain.
+	 */
+	unclaimedRepairAuctionBids: bigint
 	chainId: number
 	blockNumber: bigint
 	blockHash: Hex
@@ -282,26 +285,16 @@ export function buildSecurityPoolCapitalCureRequest(parameters: CapitalRequest &
  * until then. One `eth_call` runs that checkpoint and the reads that depend on it without keeping any state change.
  */
 export async function loadSecurityPoolClaimableEarnings(
-	snapshot: Pick<SecurityPoolCapitalSnapshot, 'blockNumber' | 'capitalLedger' | 'commitmentIndex' | 'owner' | 'ownerAccount' | 'auctionBidId'>,
+	snapshot: Pick<SecurityPoolCapitalSnapshot, 'blockNumber' | 'capitalLedger' | 'commitmentIndex' | 'owner' | 'ownerAccount'>,
 	multicall: (contracts: readonly { address: Address; abi: typeof abi; functionName: string; args: readonly AbiValue[] }[], blockNumber: bigint) => Promise<readonly unknown[]>,
 ) {
 	const positionId = snapshot.ownerAccount.positionId
-	if (positionId === 0n && snapshot.auctionBidId !== undefined) {
-		const [, value] = await multicall(
-			[
-				{ address: snapshot.capitalLedger, abi, functionName: 'checkpoint', args: [] },
-				{ address: snapshot.capitalLedger, abi, functionName: 'repairAuctionPosition', args: [snapshot.auctionBidId] },
-			],
-			snapshot.blockNumber,
-		)
-		const [vault, , , , , , , eth, rep] = decodeFields(value, ['vault', 'positionId', 'principal', 'commitment', 'targetHealthFactorBps', 'liquidationStarted', 'materialized', 'earnedAttoEth', 'earnedAttoRep'], 'Invalid auction earnings response.')
-		if (decodeAddress(vault, 'Auction vault address') !== snapshot.owner) throw new Error('Auction earnings owner mismatch.')
-		return { attoEth: decodeUint(eth, 'ETH earnings'), attoRep: decodeUint(rep, 'REP earnings') }
-	}
-	const [, ownerValue, positionValue] = await multicall(
+	// Unclaimed repair auction lots keep their earnings per bid until claimed, so they are not paid here.
+	const values = await multicall(
 		[{ address: snapshot.capitalLedger, abi, functionName: 'checkpoint', args: [] }, { address: snapshot.capitalLedger, abi, functionName: 'ownerAccount', args: [snapshot.owner] }, ...(positionId === 0n ? [] : [{ address: snapshot.commitmentIndex, abi, functionName: 'accountOf', args: [positionId] }])],
 		snapshot.blockNumber,
 	)
+	const [ownerValue, positionValue] = values.slice(1)
 	const account = ownerAccount(ownerValue)
 	if (positionValue === undefined) return { attoEth: account.feesAttoEth, attoRep: account.feesAttoRep }
 	const [eth, rep] = decodeFields(positionValue, ['ethFees', 'repFees'], 'Invalid capital accounting response.')
@@ -331,7 +324,7 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 	])
 	const capitalLedger = decodeAddress(ledgerValue, 'Capital contract')
 	const zoltar = decodeAddress(zoltarValue, 'universe contract for the security pool')
-	const [indexValue, tokenValue, bookValue, price, multiplier, validUntil, valid, demand, free, frozen, importing, exported, ownerValue, collateralValue, totalsValue, forkTimeValue, choiceDeadlineValue, conservative, liquidation, exposureLimit, ownerPrice, availableCapacity] = await Promise.all([
+	const [indexValue, tokenValue, bookValue, price, multiplier, validUntil, valid, demand, free, frozen, importing, exported, ownerValue, collateralValue, totalsValue, forkTimeValue, choiceDeadlineValue, conservative, liquidation, exposureLimit, ownerPrice, availableCapacity, unclaimedBids] = await Promise.all([
 		read(capitalLedger, 'commitmentIndex'),
 		read(capitalLedger, 'repToken'),
 		read(decodeAddress(settlementValue, 'Payout contract'), 'ledger'),
@@ -354,6 +347,7 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 		feedValue === zeroAddress ? 0n : read(decodeAddress(feedValue, 'Shared price feed'), 'acceptedExposureLimitAttoEth'),
 		owner === undefined ? 0n : read(capitalLedger, 'ownerConservativePrice', [owner]),
 		read(securityPool, 'availableMintCapacity', [universeId]),
+		owner === undefined ? 0n : read(capitalLedger, 'unclaimedRepairAuctionBids', [owner]),
 	])
 	const commitmentIndex = decodeAddress(indexValue, 'Pool capacity contract')
 	const account = owner === undefined ? { freeAttoRep: 0n, feesAttoEth: 0n, feesAttoRep: 0n, targetHealthFactorBps: 0n, positionId: 0n } : ownerAccount(ownerValue)
@@ -389,8 +383,6 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 			}
 		}),
 	)
-	const bindings = owner === undefined || account.positionId !== 0n || client.getCode === undefined ? undefined : decodeAuctionVaultBindings(await client.getCode({ address: owner, blockNumber }))
-	const auctionBidId = bindings?.capital === capitalLedger ? bindings.bidId : undefined
 	const forkTime = decodeUint(forkTimeValue, 'Fork time')
 	const forkChoiceDeadline = decodeUint(choiceDeadlineValue, 'Fork choice deadline')
 	const isExported = decodeBool(exported, 'Invalid position migration status.')
@@ -398,7 +390,7 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 	const [finalChain, finalBlock] = await Promise.all([client.getChainId(), client.getBlock({ blockNumber })])
 	if (finalChain !== chainId || finalBlock.hash !== block.hash) throw new Error('Chain changed while reading capital. Refresh and try again.')
 	return {
-		auctionBidId,
+		unclaimedRepairAuctionBids: decodeUint(unclaimedBids, 'Unclaimed repair auction bids'),
 		chainId,
 		blockNumber,
 		blockHash: block.hash,
@@ -447,4 +439,13 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 			rewardVestingSeconds: decodeUint(duration, 'Vesting duration', 48),
 		},
 	}
+}
+
+/** The owner's unclaimed repair auction bids in one universe; while any remain, the owner cannot choose a branch of its fork. */
+export async function loadSecurityPoolUnclaimedRepairAuctionBids(parameters: { client: SecurityPoolReadClient; securityPool: Address; owner: Address; universeId: bigint; blockNumber: bigint }) {
+	const { client, blockNumber } = parameters
+	const owner = decodeAddress(parameters.owner, 'Owner')
+	const ledger = decodeAddress(await client.readContract({ address: decodeAddress(parameters.securityPool, 'Security pool'), abi, functionName: 'capitalLedger', args: [decodeUint(parameters.universeId, 'Universe id', 248)], blockNumber }), 'Capital contract', true)
+	if (ledger === zeroAddress) return 0n
+	return decodeUint(await client.readContract({ address: ledger, abi, functionName: 'unclaimedRepairAuctionBids', args: [owner], blockNumber }), 'Unclaimed repair auction bids')
 }

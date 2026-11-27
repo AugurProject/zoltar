@@ -94,7 +94,7 @@ test.skipIf(url === undefined)('capital positions rank by health, attribute liqu
 			event(1, 0, ledger, 'PrincipalDeposited', { payer: alice, owner: alice, amountAttoRep: '500' }),
 			event(1, 1, ledger, 'CommitmentAuthorized', { owner: alice, positionId: '1', rep: '500', commitment: '100', targetHealthFactorBps: '12000' }),
 			event(1, 2, ledger, 'PrincipalDeposited', { payer: bob, owner: bob, amountAttoRep: '900' }),
-			event(1, 3, ledger, 'RepairAuctionBidMaterialized', { bidId: '4', vault: carol, positionId: '3', principal: '70', commitment: '10' }),
+			event(1, 3, ledger, 'RepairAuctionBidMaterialized', { bidId: '4', bidder: carol, positionId: '3', principal: '70', commitment: '10' }),
 			// Bob takes over part of Alice's position. The split creates position 2, which no event ties to an owner.
 			event(2, 0, ledger, 'CommitmentTakenOver', { sourceId: '1', receiverId: '2', commitment: '40', takeoverRewardAttoRep: '25' }),
 			event(2, 1, ledger, 'CommitmentCured', { positionId: '1', removedCommitment: '10' }),

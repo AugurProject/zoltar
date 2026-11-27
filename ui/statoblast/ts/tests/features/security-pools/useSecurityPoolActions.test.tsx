@@ -16,7 +16,7 @@ import { getInfraContractAddresses } from '@zoltar/ui-statoblast-shared/protocol
 import { recoverSecurityPoolDeployment } from '@zoltar/ui-statoblast-shared/protocol/deploymentRecovery.js'
 import { initialDeploymentDraft } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/creation.js'
 import { renderHookWithProps } from '../../support/renderHook.js'
-import { auctionCapitalSnapshot, capitalSnapshot, owner, securityPool, token, capital } from './capitalFixture.js'
+import { capitalSnapshot, owner, securityPool, token, capital } from './capitalFixture.js'
 import { capitalClient } from './capitalClient.js'
 import { getZoltarContractAddresses } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 import { auctionFixture } from './auctionFixture.js'
@@ -1144,40 +1144,30 @@ test('the deployment form reads the proposed origin universe while Capital omits
 	expect(source.reads.filter(read => read.name === 'getForkTime')).toHaveLength(1)
 })
 
-test('a winning vault is controlled by its bidder before and after automatic materialization', async () => {
+test('an auction winner controls its own capital account directly from the connected wallet', async () => {
 	capitalClient().install()
-	const snapshot = auctionCapitalSnapshot()
+	const snapshot = capitalSnapshot({ unclaimedRepairAuctionBids: 1n })
 	const hook = await renderHookWithProps(useSecurityPoolActionsWrapper, { model: { ...model(), snapshot } })
 	lifecycle.trackRendered(hook)
 	expect(hook.state().ownerReason).toBeUndefined()
 	await hook.setProps({ parameters: { ...parameters, accountAddress: token } })
 	expect(hook.state().ownerReason).toContain('owner')
-	const auctionVault = snapshot.auctionVault
-	if (auctionVault === undefined) throw new Error('Missing auction authority')
-	await hook.setProps({ parameters, model: { ...model(), snapshot: { ...snapshot, auctionVault: { ...auctionVault, materialized: false } } } })
-	expect(hook.state().ownerReason).toBeUndefined()
 })
-test('individual capital actions execute through the authenticated auction vault and sweep returned assets to its bidder', async () => {
+test('capital actions with unclaimed auction bids are sent unchanged by the owner to the capital ledger', async () => {
 	const fixture = await auctionFixture()
-	const snapshot = auctionCapitalSnapshot()
+	const snapshot = capitalSnapshot({ unclaimedRepairAuctionBids: 1n })
 	const requests: { data?: Hex | undefined; to?: string | null | undefined }[] = []
 	const writer = asWriteClient(createMockWriteClient(request => requests.push(request)))
 	installActiveEnvironmentForTesting({ ...fixture.backend, createWriteClient: () => ({ ...writer, account: { address: owner, type: 'json-rpc' }, chain: MAINNET_NETWORK_PROFILE.chain, call: async () => ({ data: undefined }) }) })
 	const hook = await renderHookWithProps(useSecurityPoolActionsWrapper, { model: { ...model(), snapshot } })
 	lifecycle.trackRendered(hook)
-	const abi = parseAbi(['function claimEarnings(address recipient)', 'function executeAndSweep(address target,uint256 value,bytes data,address token,address recipient) payable returns(bytes)'])
-	const data = encodeFunctionData({ abi, functionName: 'claimEarnings', args: [snapshot.owner] })
-	await act(() => hook.state().runSecurityPoolAction('claimSecurityPoolEarnings', 'Claim earnings', () => ({ account: snapshot.owner, to: capital, value: 0n, data })))
+	const abi = parseAbi(['function claimEarnings(address recipient)'])
+	const data = encodeFunctionData({ abi, functionName: 'claimEarnings', args: [owner] })
+	await act(() => hook.state().runSecurityPoolAction('claimSecurityPoolEarnings', 'Claim earnings', () => ({ account: owner, to: capital, value: 0n, data })))
 	expect(hook.state().error).toBeUndefined()
 	expect(requests).toHaveLength(1)
-	const request = requests[0]
-	if (request?.data === undefined) throw new Error('Missing vault execution')
-	expect(request.to).toBe(snapshot.owner)
-	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'executeAndSweep', args: [capital, 0n, data, token, owner] })
-	fixture.values['owner'] = token
-	await act(() => hook.state().runSecurityPoolAction('claimSecurityPoolEarnings', 'Claim earnings', () => ({ account: snapshot.owner, to: capital, value: 0n, data })))
-	expect(hook.state().error).toBeDefined()
-	expect(requests).toHaveLength(1)
+	expect(requests[0]?.to).toBe(capital)
+	expect(requests[0]?.data).toBe(data)
 })
 test('security pool refresh keeps actions usable with an authenticated snapshot', async () => {
 	capitalClient().install()

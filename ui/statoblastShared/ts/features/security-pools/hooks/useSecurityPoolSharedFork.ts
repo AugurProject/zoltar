@@ -10,6 +10,9 @@ import {
 	buildSecurityPoolForkRecoveryRequest,
 	buildSecurityPoolRecoveryRightsTransferRequest,
 	loadSecurityPoolForkSnapshot,
+	loadSecurityPoolUnclaimedRepairAuctionBids,
+	buildSecurityPoolAuctionClaimAllRequest,
+	MAX_REPAIR_AUCTION_CLAIM_BATCH,
 	type SecurityPoolForkSnapshot,
 } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
@@ -22,6 +25,7 @@ import { decodeStoredValue } from '@zoltar/ui-core-shared/lib/storedValueReader.
 import { withStatoblastRequestTimeout } from '../../../protocol/requestTimeout.js'
 import { securityPoolReadClient, type SecurityPoolAccountSnapshot, type SecurityPoolTransaction } from '../../../protocol/securityPool.js'
 import { loadSharedForkOutcome, loadSecurityPoolSourceRecovery, buildSecurityPoolRecoveryPreparation } from '../../../protocol/securityPoolSharedFork.js'
+import { loadSecurityPoolBranchAuction } from '../../../protocol/securityPoolRepairAuction.js'
 import { securityPoolAmountOrUndefined, securityPoolUnsignedId } from '../lib/draft.js'
 import { reviewBalance, type ReviewRow } from '../lib/reviewRows.js'
 import type { SecurityPoolActions } from '../components/SecurityPoolControls.js'
@@ -39,7 +43,6 @@ export type SecurityPoolSharedForkParameters = {
 	actions: Pick<SecurityPoolActions, 'scope' | 'busy' | 'ownerReason' | 'runSecurityPoolAction'>
 	openUniverse: (universeId: bigint) => void
 	bidder: Address | undefined
-	openVault?: ((vault: Address, universeId: bigint) => void) | undefined
 }
 
 function branchDisplayCache(profile: NetworkProfile, pool: Address, owner: Address, universeId: bigint, outcomeIndex?: bigint) {
@@ -60,7 +63,7 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 	const invalidRightsInput = useSignal('0')
 	const yesRightsInput = useSignal('0')
 	const noRightsInput = useSignal('0')
-	const loaded = useSignal<{ backend: typeof backend; key: string; state?: SecurityPoolForkSnapshot; readAt?: number; outcome?: Awaited<ReturnType<typeof loadSharedForkOutcome>>; error?: string } | undefined>(undefined)
+	const loaded = useSignal<{ backend: typeof backend; key: string; state?: SecurityPoolForkSnapshot; readAt?: number; outcome?: Awaited<ReturnType<typeof loadSharedForkOutcome>>; claims?: SourceAuctionClaims; error?: string } | undefined>(undefined)
 	const savedFork = useSignal<{ backend: typeof backend; key: string; state: SecurityPoolForkSnapshot; readAt: number } | undefined>(undefined)
 	const retry = useSignal(0)
 	const recovered = useSignal<{ backend: typeof backend; scope: string; key: string; source?: Awaited<ReturnType<typeof loadSecurityPoolSourceRecovery>> | undefined; readAt?: number | undefined; error?: string } | undefined>(undefined)
@@ -110,11 +113,11 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 			const client = withStatoblastRequestTimeout(createConnectedReadClient(), copy.readTimeout, abort.signal)
 			const read = async () => {
 				const state = await loadSecurityPoolForkSnapshot({ client: securityPoolReadClient(client), securityPool: securityPool.securityPool, owner: securityPool.owner, universeId, ...(outcomeIndex === undefined ? {} : { outcomeIndex }) })
-				const outcome = state.forkTime === 0n || state.branch === undefined ? undefined : await loadSharedForkOutcome(client, state, state.branch.outcomeIndex)
-				return { state, outcome }
+				const [outcome, claims] = await Promise.all([state.forkTime === 0n || state.branch === undefined ? undefined : loadSharedForkOutcome(client, state, state.branch.outcomeIndex), state.forkTime === 0n ? undefined : loadSourceAuctionClaims(client, state)])
+				return { state, outcome, claims }
 			}
 			void read()
-				.then(({ state, outcome }) => {
+				.then(({ state, outcome, claims }) => {
 					if (abort.signal.aborted || getActiveBackend() !== backend) return
 					const child = branchPriceTarget(state)
 					const block = { number: state.blockNumber, timestamp: state.timestamp }
@@ -140,7 +143,7 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 						if (outcomeIndex !== undefined && state.choice.recorded && state.choice.outcomeIndex === outcomeIndex) branchDisplayCache(profile, state.securityPool, state.owner, state.universeId).write(child, block)
 					}
 					const readAt = Date.now()
-					loaded.value = { backend, key, state, readAt, ...(outcome === undefined ? {} : { outcome }) }
+					loaded.value = { backend, key, state, readAt, ...(outcome === undefined ? {} : { outcome }), ...(claims === undefined ? {} : { claims }) }
 					savedFork.value = { backend, key: presentationKey, state, readAt }
 				})
 				.catch(error => {
@@ -188,11 +191,15 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 	const forkReason = baseReason ?? (state?.forkTime === 0n ? copy.noFork : undefined)
 	const branchReason = forkReason ?? (state?.branch === undefined || current?.outcome?.outcomeLabel === undefined ? transactionCopy.chooseOutcome : undefined)
 	const publicBranchReason = walletReason ?? branchReason
+	const claims = current?.claims
+	const unclaimedBids = claims?.unclaimed ?? 0n
 	const chooseReason =
 		ownerReason ??
 		branchReason ??
 		(state?.choice.recorded ? transactionCopy.choiceRecorded : undefined) ??
 		(state !== undefined && state.timestamp >= state.choiceDeadline ? transactionCopy.choiceWindowClosed : undefined) ??
+		// The source ledger refuses to export a choice while any of the owner's auction bids there is unclaimed.
+		(unclaimedBids > 0n ? copy.claimBidsFirst : undefined) ??
 		(securityPool !== undefined && universeId === securityPool.universeId && !securityPool.positions.some(position => position.rep > 0n && position.commitment > 0n) ? transactionCopy.noPledgedRep : undefined)
 	const custodyPreparationReason = (selected: SecurityPoolForkSnapshot) => (selected.branch?.prepared ? transactionCopy.capitalPrepared : undefined)
 	const migrationReason = (selected: SecurityPoolForkSnapshot) => {
@@ -238,6 +245,14 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 		(transferAmounts === undefined || transferAmounts.every(amount => amount === 0n) || transferAmounts.some(amount => amount >= 1n << 256n) ? recoveryCopy.enterTransferAmounts : undefined) ??
 		(recovery !== undefined && transferAmounts?.some((amount, index) => amount > (recovery.rights[index] ?? 0n)) ? recoveryCopy.insufficientTransferRights : undefined)
 
+	let claimBidsReason = forkReason ?? (unclaimedBids === 0n ? copy.noBidsToClaim : undefined) ?? claims?.error ?? (claims?.auction === undefined || claims.auction.claimableBidIds.length === 0 ? copy.claimAfterClose : undefined)
+	if (claimBidsReason === undefined && claims?.auction !== undefined) {
+		try {
+			buildSecurityPoolAuctionClaimAllRequest(claims.auction, claims.auction.claimableBidIds)
+		} catch (error) {
+			claimBidsReason = getErrorMessage(error, copy.claimBidsFirst)
+		}
+	}
 	const run = (action: string, title: string, reason: string | undefined, build: (selected: SecurityPoolForkSnapshot) => SecurityPoolTransaction, check?: (latest: SecurityPoolForkSnapshot, client: ReadClient) => Promise<readonly ReviewRow[] | void>) =>
 		actions.runSecurityPoolAction(action, title, () => {
 			if (reason !== undefined || state === undefined) throw new Error(reason ?? transactionCopy.stateUnavailable)
@@ -311,6 +326,25 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 		},
 		transferReason,
 		chooseReason,
+		unclaimedBids,
+		claimBidsReason,
+		claimBids: () =>
+			actions.runSecurityPoolAction('claimSecurityPoolForkAuctionBids', copy.claimBids, () => {
+				const auction = claims?.auction
+				if (claimBidsReason !== undefined || auction === undefined) throw new Error(claimBidsReason ?? copy.noBidsToClaim)
+				return {
+					...buildSecurityPoolAuctionClaimAllRequest(auction, auction.claimableBidIds),
+					reviewDescription: copy.claimBidsReview(Math.min(auction.claimableBidIds.length, MAX_REPAIR_AUCTION_CLAIM_BATCH), auction.claimableBidIds.length),
+					validateBeforeSubmit: async () => {
+						if (getActiveBackend() !== backend) throw new Error(transactionCopy.walletChanged)
+						const client = withStatoblastRequestTimeout(createConnectedReadClient(), currentStateCheckFailed)
+						const latest = await loadSecurityPoolBranchAuction(client, auction.securityPool, auction.bidder, auction.universeId)
+						if (latest.chainId !== auction.chainId || latest.capitalLedger !== auction.capitalLedger) throw new Error(transactionCopy.contextChanged)
+						// Bids someone else claimed meanwhile are skipped on chain.
+						buildSecurityPoolAuctionClaimAllRequest(latest, latest.claimableBidIds)
+					},
+				}
+			}),
 		prepareBranchReason,
 		startReason,
 		finalizeReason,
@@ -433,5 +467,18 @@ export function useSecurityPoolSharedFork({ snapshot, presentationSnapshot = sna
 					return [reviewBalance(copy.available, fresh.availableShares, fresh.availableShares - shares, securityPool?.collateral.decimals ?? 18)]
 				},
 			),
+	}
+}
+
+type SourceAuctionClaims = { unclaimed: bigint; auction?: Awaited<ReturnType<typeof loadSecurityPoolBranchAuction>> | undefined; error?: string | undefined }
+/** The owner's unclaimed repair auction bids in the source universe, and the auction to claim them in when any remain. */
+async function loadSourceAuctionClaims(client: ReturnType<typeof createConnectedReadClient>, state: SecurityPoolForkSnapshot): Promise<SourceAuctionClaims> {
+	const unclaimed = await loadSecurityPoolUnclaimedRepairAuctionBids({ client: securityPoolReadClient(client), securityPool: state.securityPool, owner: state.owner, universeId: state.universeId, blockNumber: state.blockNumber })
+	if (unclaimed === 0n) return { unclaimed }
+	// The count alone blocks the choice; an auction that fails to load only disables the offered claim.
+	try {
+		return { unclaimed, auction: await loadSecurityPoolBranchAuction(client, state.securityPool, state.owner, state.universeId) }
+	} catch (error) {
+		return { unclaimed, error: getErrorMessage(error, copy.claimLoadError) }
 	}
 }

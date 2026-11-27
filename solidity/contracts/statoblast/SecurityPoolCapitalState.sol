@@ -7,6 +7,11 @@ import { ICapitalFeeStreams } from './interfaces/ICapitalAccounting.sol';
 import { SecurityPoolCommitmentIndex } from './SecurityPoolCommitmentIndex.sol';
 import { ISecurityPoolRepairAuctionCapital } from './interfaces/ISecurityPoolRepairAuctionCapital.sol';
 
+/// @dev The fork coordinator's registry of each universe's repair auction.
+interface ICapitalRepairAuctions {
+	function repairAuctions(uint248 universeId) external view returns (address);
+}
+
 /// @dev Exact shared storage for the custody ledger and its lifecycle delegate.
 /// The delegate uses host getters for immutable configuration; only the ledger
 /// holds assets or authorizes calls. Keep all mutable ledger state here.
@@ -67,10 +72,14 @@ abstract contract SecurityPoolCapitalState {
 		uint256 floor;
 		uint256 epoch;
 	}
+	/// @dev `unclaimedRepairAuctionBids` counts the owner's repair auction bids
+	/// not yet claimed; an owner cannot export a fork choice while any remain.
+	/// It shares `exported`'s slot.
 	struct OwnerState {
 		Owner account;
 		FundingPrice fundingPrice;
 		bool exported;
+		uint64 unclaimedRepairAuctionBids;
 	}
 	mapping(address => OwnerState) internal owners;
 
@@ -92,21 +101,22 @@ abstract contract SecurityPoolCapitalState {
 		uint256 commitmentPerLot;
 	}
 	struct RepairAuctionPosition {
-		address vault;
+		address bidder;
 		uint96 positionId;
 		uint256 principal;
 		uint256 commitment;
-		uint256 targetHealthFactorBps;
 		uint48 liquidationStarted;
+		bool claimed;
 		bool materialized;
 		uint256 earnedAttoEth;
 		uint256 earnedAttoRep;
 	}
 	RepairAuctionCohort public repairAuctionCohort;
 	mapping(uint256 => uint96) public repairAuctionBidPositionIds;
+	mapping(uint256 => bool) public repairAuctionBidClaimed;
 
 	function _settleOwner(address owner) internal {
-		require(owner != address(repairAuctionCohort.adapter), 'Materialize an individual repair auction vault');
+		require(owner != address(repairAuctionCohort.adapter), 'Materialize an individual repair auction bidder');
 		Owner storage account = owners[owner].account;
 		uint96 id = account.positionId;
 		if (id == 0) return;

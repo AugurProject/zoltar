@@ -45,7 +45,7 @@ async function sendSecurityPoolTransaction(client: Parameters<typeof sendUnlabel
 /**
  * Seeds the shared security pool, forks it on its first question and opens the Yes
  * branch collateral repair auction with the owner's winning bid, the owner's excluded bid and
- * a rival's tied bids, so refunds, activation and vault controls are all reachable.
+ * a rival's tied bids, so refunds and moving winning lots into the bidder's account are both reachable.
  */
 export async function seedSecurityPoolAuctionScenario(parameters: ScenarioSeedParameters) {
 	const seeded = await seedSecurityPoolScenario(parameters)
@@ -151,12 +151,12 @@ export async function seedSecurityPoolAuctionScenario(parameters: ScenarioSeedPa
 		await sendSecurityPoolTransaction(client, { account, to: profile.wethAddress, value: 0n, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [auction.address, (1n << 256n) - 1n] }) }, auctionSetup.approveCollateral)
 	snapshot = await auctionFor(owner)
 
-	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolAuctionBidRequest(snapshot, { lots: 2n, minimumAttoRepPerLot: minimum, targetHealthFactorBps: 10_000n }), auctionSetup.submitWinningBid)
+	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolAuctionBidRequest(snapshot, { lots: 2n, minimumAttoRepPerLot: minimum }), auctionSetup.submitWinningBid)
 	await reportStep(auctionSetup.winningBidPlaced)
 	snapshot = await auctionFor(owner)
-	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolAuctionBidRequest(snapshot, { lots: 1n, minimumAttoRepPerLot: 50n * minimum, targetHealthFactorBps: 10_000n }), auctionSetup.submitExpensiveBid)
+	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolAuctionBidRequest(snapshot, { lots: 1n, minimumAttoRepPerLot: 50n * minimum }), auctionSetup.submitExpensiveBid)
 	await reportStep(auctionSetup.expensiveBidPlaced)
-	await sendSecurityPoolTransaction(rivalClient, buildSecurityPoolAuctionBidRequest(await auctionFor(rival), { lots: auction.targetLots, minimumAttoRepPerLot: minimum, targetHealthFactorBps: 10_000n }), auctionSetup.submitRivalBids)
+	await sendSecurityPoolTransaction(rivalClient, buildSecurityPoolAuctionBidRequest(await auctionFor(rival), { lots: auction.targetLots, minimumAttoRepPerLot: minimum }), auctionSetup.submitRivalBids)
 	const final = await auctionFor(owner)
 	const excluded = final.auction?.bids.find(bid => bid.minimumAttoRepPerLot === 50n * minimum)
 	if (excluded === undefined || excluded.earlyRefundAttoEth === 0n) throw new Error(auctionSetup.bidNotRefundable)

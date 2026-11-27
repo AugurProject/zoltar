@@ -23,6 +23,9 @@ test('summarizes a position with REP principal and commitment in the ledger coll
 	expect(capitalPositionSummary({ principalAttoRep: '0', commitmentAttoEth: '7' })).toBe('0 REP principal · 7 collateral units commitment · no health factor')
 	expect(capitalSummaryMetrics({ healthFactorBps: '12550' })[2]).toEqual(['Health factor', '125.5%'])
 	expect(capitalSummaryMetrics({})[2]).toEqual(['Health factor', 'No health factor'])
+	// Unclaimed repair-auction bids get their own card: losing bids still count, and winning lots show their REP.
+	expect(capitalSummaryMetrics({ ...state, repairAuctionUnclaimedBids: '3', repairAuctionPendingPrincipalAttoRep: (70n * 10n ** 18n).toString() })[5]).toEqual(['Unclaimed auction bids', '3 · 70 REP in winning lots'])
+	expect(capitalSummaryMetrics({ ...state, repairAuctionUnclaimedBids: '1' })[5]).toEqual(['Unclaimed auction bids', '1 · no winning lots'])
 })
 
 test('summarizes a ledger and says whether its price is fresh', () => {
@@ -58,7 +61,7 @@ test("presents an owner's ledger events in REP and the ledger collateral", () =>
 	expect(at('PrincipalWithdrawn', { owner: alice, recipient: bob, amountAttoRep: (5n * 10n ** 18n).toString() })).toEqual({ title: 'Principal withdrawal', summary: '5 REP to 0xbbbbbb…bbbbbb' })
 	expect(at('CommitmentAuthorized', { owner: alice, positionId: '7', rep: (5n * 10n ** 18n).toString(), commitment: '100000000', targetHealthFactorBps: '12000' })?.summary).toBe('position 7 · 5 REP backing 100 USDC · target health 120%')
 	expect(at('EarningsClaimed', { owner: alice, ethAmount: '1500000', repAmount: '0' })?.summary).toBe('1.5 USDC · 0 REP')
-	expect(at('RepairAuctionBidMaterialized', { bidId: '4', vault: alice, positionId: '3', principal: (70n * 10n ** 18n).toString(), commitment: '10000000' })?.summary).toBe('bid 4 became position 3 · 70 REP principal · 10 USDC commitment')
+	expect(at('RepairAuctionBidMaterialized', { bidId: '4', bidder: alice, positionId: '3', principal: (70n * 10n ** 18n).toString(), commitment: '10000000' })?.summary).toBe('bid 4 claimed into position 3 · 70 REP principal · 10 USDC commitment')
 	expect(at('CommitmentTakenOver', {})).toBeUndefined()
 })
 

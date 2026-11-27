@@ -11,12 +11,12 @@ import { useSecurityPoolAuction, type SecurityPoolAuctionParameters } from '@zol
 import type { SecurityPoolTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
 import { renderHookWithProps } from '../../support/renderHook.js'
 import { capital, owner, token, unit } from './capitalFixture.js'
-import { auctionFixture, auctionAddress, auctionVault } from './auctionFixture.js'
+import { auctionFixture, auctionAddress } from './auctionFixture.js'
 const lifecycle = installDomTestLifecycle({ afterTest: resetActiveEnvironmentForTesting })
 const abi = parseAbi([
 	'function open()',
-	'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot,uint256 targetHealthFactorBps) payable returns (uint256,address)',
-	'function materializeRepairAuctionBid(uint256 bidId) returns (address,uint96)',
+	'function submitBid(uint256 lots,uint256 minimumAttoRepPerLot) returns (uint256)',
+	'function materializeRepairAuctionBids(uint256[] bidIds) returns (uint96[])',
 	'function settleRefund(uint256 bidId)',
 	'function withdrawRefunds(address recipient)',
 	'function settleAndWithdrawRefund(uint256 bidId,address recipient) returns (uint256)',
@@ -72,8 +72,8 @@ test('auction bidding sends only the reviewed collateral bid without REP approva
 	await act(() => state.hook.state().bid())
 	expect(state.requests).toHaveLength(1)
 	expect(last(state.requests)).toMatchObject({ account: owner, to: auctionAddress, value: 0n })
-	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'submitBid', args: [2n, 5n * unit, 12_000n] })
-	expect(last(state.requests).reviewDescription).toContain('At closing, that REP backs the position’s commitment.')
+	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'submitBid', args: [2n, 5n * unit] })
+	expect(last(state.requests).reviewDescription).toContain('claim the bid to add them to your position')
 	await last(state.requests).validateBeforeSubmit?.()
 	expect(last(state.requests).readReviewRows?.()).toContainEqual({ label: 'Number of lots', value: '0 → 2' })
 	state.values['lotAttoEth'] = 2n * unit
@@ -163,15 +163,15 @@ test('a timed-out bid check uses the review retry message and recalculates on re
 	}
 })
 
-test('chosen health, integer lots and price grid are checked before sending', async () => {
+test('collateral floor, integer lots and price grid are checked before sending, with no bid health target', async () => {
 	const state = await setup()
+	expect(state.hook.state()).not.toHaveProperty('setHealth')
+	expect(state.hook.state()).not.toHaveProperty('healthInput')
 	await terms(state)
-	await act(() => state.hook.state().setHealth('130'))
-	expect(state.hook.state().bidReason).toContain('chosen health target')
-	await act(() => state.hook.state().setHealth('120.001'))
-	expect(state.hook.state().bidReason).toContain('two decimal')
+	await act(() => state.hook.state().setRep('3'))
+	expect(state.hook.state().bidReason).toContain('at least 4 REP to back each lot')
 	await act(() => {
-		state.hook.state().setHealth('120')
+		state.hook.state().setRep('5')
 		state.hook.state().setLots('0')
 	})
 	expect(state.hook.state().bidReason).toContain('whole number')
@@ -199,21 +199,76 @@ test('auction drafts survive transient fork reloads but reset when the bidder ch
 	expect(state.hook.state()).toMatchObject({ lotsInput: '', repInput: '' })
 })
 
-test('automatic winners expose live principal and fees before activating individual controls', async () => {
+test('a bidder with many bids can still bid', async () => {
+	const state = await setup(fixture => {
+		fixture.values['bidderBidCount'] = 8n
+	})
+	expect(state.hook.state().snapshot?.auction).not.toHaveProperty('maximumBidsPerBidder')
+	await terms(state)
+	expect(state.hook.state().bidReason).toBeUndefined()
+})
+
+test('winners expose live principal and fees until their bid is claimed', async () => {
 	const state = await setup(fixture => {
 		fixture.values['finalized'] = true
 	})
 	const bid = firstBid(state, 'auction bid')
+	expect(bid).toMatchObject({ claimable: true, claimed: false })
 	expect(bid.position).toMatchObject({ principalAttoRep: 100n * unit, commitmentAttoEth: unit, earnedAttoEth: 7n * unit, earnedAttoRep: 9n * unit, materialized: false })
-	expect(state.hook.state().activateReason(bid)).toBeUndefined()
-	await act(() => state.hook.state().activate(bid))
+	expect(state.hook.state().bidClaimReason(bid)).toBeUndefined()
+	await act(() => state.hook.state().claimBid(bid))
 	expect(state.requests).toHaveLength(1)
 	expect(last(state.requests)).toMatchObject({ account: owner, to: capital, value: 0n })
-	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'materializeRepairAuctionBid', args: [1n] })
+	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'materializeRepairAuctionBids', args: [[1n]] })
+	expect(state.labels.at(-1)).toBe('Claim bid')
+	expect(last(state.requests).reviewDescription).toContain('Its winning lots join this wallet’s position')
 	await last(state.requests).validateBeforeSubmit?.()
-	state.values['bids'] = [owner, auctionVault, 12_000n, 2n, 60n * unit, false, true]
-	state.values['repairAuctionPosition'] = [auctionVault, 8n, 100n * unit, unit, 12_000n, 0n, true, 7n * unit, 9n * unit]
-	await expect(last(state.requests).validateBeforeSubmit?.()).rejects.toThrow()
+	state.values['bids'] = [owner, false, true, 2n, 60n * unit]
+	state.values['repairAuctionPositions'] = [[owner, 8n, 100n * unit, unit, 0n, true, true, 0n, 0n]]
+	await expect(last(state.requests).validateBeforeSubmit?.()).rejects.toThrow('This bid is claimed.')
+	await act(() => state.hook.state().refresh())
+	await waitFor(() => expect(state.hook.state().snapshot?.auction?.bids[0]?.claimed).toBe(true))
+	expect(state.hook.state().bidClaimReason(firstBid(state, 'claimed bid'))).toBe('This bid is claimed.')
+})
+
+test('claiming all bids sends every claimable bid in one transaction, losing bids included', async () => {
+	const state = await setup(fixture => {
+		fixture.values['finalized'] = true
+		fixture.values['previewBid'] = [owner, 0n, 0n, 0n, 2n * unit]
+		fixture.values['repairAuctionPositions'] = [[owner, 0n, 0n, 0n, 0n, false, false, 0n, 0n]]
+	})
+	expect(firstBid(state, 'losing bid')).toMatchObject({ claimable: true, claimed: false, position: undefined })
+	expect(state.hook.state().claimableBidIds).toEqual([1n])
+	expect(state.hook.state().claimAllReason).toBeUndefined()
+	await act(() => state.hook.state().claimAllBids())
+	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'materializeRepairAuctionBids', args: [[1n]] })
+	expect(state.labels.at(-1)).toBe('Claim all bids')
+	await last(state.requests).validateBeforeSubmit?.()
+	// Someone else claimed it meanwhile: nothing is left to send.
+	state.values['repairAuctionPositions'] = [[owner, 0n, 0n, 0n, 0n, true, false, 0n, 0n]]
+	state.values['unclaimedRepairAuctionBids'] = 0n
+	await expect(last(state.requests).validateBeforeSubmit?.()).rejects.toThrow('No bids')
+	await act(() => state.hook.state().refresh())
+	await waitFor(() => expect(state.hook.state().claimAllReason).toBe('All your bids are claimed.'))
+})
+
+test('claiming all bids while the branch imports capital gives the import reason without the bid-funding prefix', async () => {
+	const state = await setup(fixture => {
+		fixture.values['finalized'] = true
+		fixture.values['importing'] = true
+	})
+	expect(state.hook.state().claimableBidIds).toEqual([1n])
+	expect(state.hook.state().claimAllReason).toBe('Bids can be claimed after the branch finishes importing capital.')
+})
+
+test('bids cannot be claimed while they may still win', async () => {
+	const state = await setup()
+	const bid = firstBid(state, 'open bid')
+	expect(bid).toMatchObject({ claimable: false, claimed: false })
+	expect(state.hook.state().bidClaimReason(bid)).toBe('This bid can be claimed after the auction closes.')
+	expect(state.hook.state().claimAllReason).toBe('Bids can be claimed after the auction closes.')
+	await expect(state.hook.state().claimAllBids()).rejects.toThrow('after the auction closes')
+	expect(state.requests).toHaveLength(0)
 })
 
 test('reviewed auction actions reject a context change during their fresh read', async () => {
@@ -241,7 +296,7 @@ test('early refund actions revalidate eligibility and leave withdrawal under bid
 	await last(state.requests).validateBeforeSubmit?.()
 	state.values['earlyRefundAttoEth'] = 0n
 	await expect(last(state.requests).validateBeforeSubmit?.()).rejects.toThrow('may still win')
-	state.values['bids'] = [owner, auctionVault, 12_000n, 2n, 60n * unit, true, false]
+	state.values['bids'] = [owner, true, false, 2n, 60n * unit]
 	state.values['refundCreditAttoEth'] = 2n * unit
 	await act(() => state.hook.state().refresh())
 	await waitFor(() => expect(state.hook.state().snapshot?.auction?.refundAttoEth).toBe(2n * unit))
@@ -271,7 +326,7 @@ test('a combined refund claim withdraws the whole credit, tolerates a keeper cre
 	expect(last(state.requests).reviewDescription).toContain('including 1 WETH already credited, possibly from your other bids')
 	await last(state.requests).validateBeforeSubmit?.()
 	// Someone credited the bid first: the chain skips settlement and the total is unchanged.
-	state.values['bids'] = [owner, auctionVault, 12_000n, 2n, 60n * unit, true, false]
+	state.values['bids'] = [owner, true, false, 2n, 60n * unit]
 	state.values['refundCreditAttoEth'] = 3n * unit
 	await last(state.requests).validateBeforeSubmit?.()
 	state.values['refundCreditAttoEth'] = 4n * unit
@@ -300,7 +355,7 @@ test('a combined refund claim with no earlier credit reviews only the bid’s ow
 	const bid = firstBid(state, 'auction bid')
 	await act(() => state.hook.state().claim(bid))
 	expect(last(state.requests).reviewDescription).toBe('Credit this bid’s 2 WETH refund and withdraw it to your wallet.')
-	state.values['bids'] = [owner, auctionVault, 12_000n, 2n, 60n * unit, true, false]
+	state.values['bids'] = [owner, true, false, 2n, 60n * unit]
 	await act(() => state.hook.state().refresh())
 	await waitFor(() => expect(state.hook.state().snapshot?.auction?.bids[0]?.refundSettled).toBe(true))
 	const settled = firstBid(state, 'settled bid')

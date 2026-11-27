@@ -58,14 +58,14 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('auction', 'auction', ['RepairAuctionStarted', 'BidSubmitted', 'RepairAuctionFinalized', 'BidSettled', 'FeesRemoved', 'RefundWithdrawn', 'RaisedWithdrawn']),
 	...definitions('risk', 'pool', ['DeployQuestionLedger', 'QuestionLedgerRegistered', 'AwaitingForkContinuationSet', 'CompleteSetCreated', 'CompleteSetRedeemed', 'EscalationGameSet', 'QuestionAccountingCheckpoint', 'ShareTokenSupplySet', 'SharesRedeemed', 'SystemStateSet'], ['questionLedger']),
 	...definitions('risk', 'vault', ['PrincipalDeposited', 'PrincipalWithdrawn', 'CommitmentAuthorized', 'HealthTargetSet', 'EarningsClaimed'], ['owner']),
-	// A materialized auction bid becomes the position of the vault that won it, so the vault is the owner.
-	...definitions('risk', 'vault', ['RepairAuctionBidMaterialized'], ['vault']),
+	// Claiming a winning bid moves its lots into its bidder's own capital account, so the bidder is the owner.
+	...definitions('risk', 'vault', ['RepairAuctionBidMaterialized'], ['bidder']),
 	...definitions('risk', 'capital-position', ['CommitmentCured', 'CommitmentTakenOver', 'RepairAuctionCohortInstalled'], ['positionId', 'sourceId']),
 	...definitions('risk', 'security-pool', ['QuestionRegistered', 'CompleteSetsFunded', 'UniversePrepared', 'SetupAdvanced', 'RetirementServed', 'CapitalPriceAccepted', 'UnassignedFeesBurned']),
 	...definitions('risk', 'security-pool', ['SecurityPoolDeployed', 'SecurityPoolRegistered'], ['securityPool']),
 	...definitions('oracle', 'price-feed', ['SharedPriceFeedRegistered'], ['priceFeed']),
 	// The security pool auction controls a uniform-price auction engine at another address; only the engine's events build the auction views.
-	...definitions('risk', 'security-pool-auction', ['RepairAuctionOpened', 'BidVaultCreated', 'RepairAuctionClosed']),
+	...definitions('risk', 'security-pool-auction', ['RepairAuctionOpened', 'RepairAuctionClosed']),
 	...definitions('fork', 'security-pool-branch', ['ForkFrozen', 'BranchChosen', 'BranchStarted', 'BranchActivated', 'NeutralCashRecovered', 'ReporterForkFrozen'], ['universeId']),
 	// The reporter ledger creates a child's reporter escrow under the forked source universe.
 	...definitions('fork', 'security-pool-branch', ['ReporterChildCreated'], ['sourceUniverseId']),

@@ -13,7 +13,7 @@ function snapshot() {
 	if (position === undefined) throw new Error('Fixture position missing')
 	position.stalledRetirement = true
 	position.retirementStatus = 'Capacity reserved for earlier requests'
-	observation.positions.push({ ...position, id: 9n, auctionTarget: { auction: observation.selection.address, bidId: 9n, vault: position.owner }, retirementStatus: 'No pending reduction', stalledRetirement: false })
+	observation.positions.push({ ...position, id: 9n, auctionTarget: { auction: observation.selection.address, bidId: 9n, bidder: position.owner }, retirementStatus: 'No pending reduction', stalledRetirement: false })
 	observation.knownAuctionBidCount = 512n
 	observation.nextScope.auctionAfterBidId = 33n
 	state.securityPools = [observation]
@@ -52,7 +52,7 @@ test('security pool panel shows explicit automation and retirement blockers, emp
 		expect(window.document.body.textContent).toContain('Retirement stalled: Capacity reserved for earlier requests')
 		expect(window.document.body.textContent).toContain('Automation disabled')
 		expect(window.document.body.textContent).toContain('Independent REP price')
-		expect(window.document.body.textContent).toContain('Auction bid 9 · awaiting individual position')
+		expect(window.document.body.textContent).toContain('Auction bid 9 · bidder position after claim')
 		expect(window.document.body.textContent).toContain('Auction bids 512; winner scan after bid 33')
 		expect(window.document.body.textContent).not.toContain('Position 0')
 		expect(window.document.querySelector('button')).toBeNull()

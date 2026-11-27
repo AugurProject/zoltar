@@ -28,11 +28,9 @@ export type PoolStateReplay = {
 
 export type AuctionBidReplay = {
 	bidder: Address
-	vault: Address
 	bidId: bigint
 	lots: bigint
 	minimumAttoRepPerLot: bigint
-	targetHealthBps: bigint
 	filledLots?: bigint
 	refundAttoEth?: bigint
 }
@@ -1065,11 +1063,9 @@ export function reduceAuctionEvent(state: ReplayState, log: ReplayLog) {
 	if (log.eventName === 'BidSubmitted') {
 		bids.set(key, {
 			bidder: requireAddress(log.args, 'bidder'),
-			vault: requireAddress(log.args, 'vault'),
 			bidId,
 			lots: requireBigInt(log.args, 'lots'),
 			minimumAttoRepPerLot: requireBigInt(log.args, 'minimumAttoRepPerLot'),
-			targetHealthBps: requireBigInt(log.args, 'targetHealthBps'),
 		})
 		return
 	}

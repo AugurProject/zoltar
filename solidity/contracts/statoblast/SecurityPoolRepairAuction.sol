@@ -9,10 +9,6 @@ import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { SecurityPoolCapitalLedger } from './SecurityPoolCapitalLedger.sol';
 import { SecurityPoolUniformPriceRepairAuction } from './SecurityPoolUniformPriceRepairAuction.sol';
-import {
-	SecurityPoolRepairAuctionVault,
-	SecurityPoolRepairAuctionVaultClones
-} from './SecurityPoolRepairAuctionVault.sol';
 import { SecurityPoolCreationCodeDeployer } from './SecurityPoolCreationCode.sol';
 import { ISecurityPoolRepairAuctionCapital } from './interfaces/ISecurityPoolRepairAuctionCapital.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
@@ -23,6 +19,10 @@ interface ICollateralRepairAuctionSecurityPool {
 	function priceFeed(uint248 universeId) external view returns (address);
 	function minimumCommitmentAttoEth() external view returns (uint256);
 	function oracleExposure(uint248 universeId) external view returns (uint256);
+}
+
+interface IRepairAuctionCapitalBidders {
+	function registerRepairAuctionBidder(address bidder) external;
 }
 
 interface ICollateralRepairAuctionPriceFeed {
@@ -51,8 +51,6 @@ contract SecurityPoolRepairAuction is ISecurityPoolRepairAuctionCapital {
 	uint256 public lotAttoEth;
 	uint256 public targetLots;
 	uint256 public immutable repGrid;
-	/// @notice Shared code behind every bid's vault clone; each clone binds its own owner, ledger, auction and bid.
-	address public immutable vaultImplementation;
 	uint256 public openingConservativePrice;
 	uint256 public minimumCollateralAttoRepPerLot;
 	bool private constant REQUIRE_FRESH_QUOTE = true;
@@ -60,16 +58,13 @@ contract SecurityPoolRepairAuction is ISecurityPoolRepairAuctionCapital {
 	bool public opened;
 	bool public finalized;
 	bool private entered;
-	mapping(address => uint256) public bidIdForVault;
 
 	event RepairAuctionOpened(uint256 conservativePrice, uint256 minimumCollateralAttoRepPerLot, uint256 maximumBidAttoRepPerLot);
-	event BidVaultCreated(uint256 indexed bidId, address indexed bidder, address indexed vault);
 	event RepairAuctionClosed(uint256 filledLots, uint256 raisedAttoEth, uint256 soldAttoRep);
 
-	constructor(address authority, address root, uint248 child, uint256 deadline, uint256 inventory, uint256 shortfall, address implementation) {
-		require(authority != address(0) && root.code.length != 0 && implementation.code.length != 0, 'Collateral repair auction dependencies missing');
+	constructor(address authority, address root, uint248 child, uint256 deadline, uint256 inventory, uint256 shortfall) {
+		require(authority != address(0) && root.code.length != 0, 'Collateral repair auction dependencies missing');
 		forkAuthority = authority;
-		vaultImplementation = implementation;
 		securityPool = ICollateralRepairAuctionSecurityPool(root);
 		capital = securityPool.capitalLedger(child);
 		require(address(capital) != address(0), 'Collateral repair auction capital missing');
@@ -122,22 +117,19 @@ contract SecurityPoolRepairAuction is ISecurityPoolRepairAuctionCapital {
 	}
 
 	/// @notice Only the collateral purchase amount is paid upfront.
-	/// The bid's minimum REP must back the commitment at the bidder's chosen health
-	/// target at the opening price. A higher closing price guarantees only the
-	/// protocol's own backing requirement at that price.
-	function submitBid(uint256 lots, uint256 minimumAttoRepPerLot, uint256 targetHealthFactorBps) external nonReentrant returns (uint256 bidId, address vault) {
+	/// The bid's minimum REP must back the commitment at the protocol floor at the
+	/// opening price; a higher closing price raises every winning lot to that
+	/// price's floor. Winning lots join the bidder's own capital account, whose
+	/// owner chooses any higher health target after the auction.
+	function submitBid(uint256 lots, uint256 minimumAttoRepPerLot) external nonReentrant returns (uint256 bidId) {
 		require(opened && !finalized, 'Collateral repair auction is not accepting bids');
 		require(securityPool.zoltar().getForkTime(universeId) == 0, 'Collateral repair auction universe forked');
-		require(lots != 0 && targetHealthFactorBps >= 10_000, 'Invalid collateral repair auction lots or health target');
+		require(lots != 0, 'Invalid collateral repair auction lots');
+		require(minimumAttoRepPerLot >= minimumCollateralAttoRepPerLot, 'Auction bid does not back its lots');
 		IERC20 collateral = ICollateralConfig(address(securityPool)).collateralToken();
 		Collateral.pull(collateral, msg.sender, address(engine), lots * lotAttoEth);
-		uint256 required = capital.commitmentIndex().requiredRep(lotAttoEth, openingConservativePrice, capital.securityMultiplierBps(), targetHealthFactorBps);
-		require(minimumAttoRepPerLot >= required, 'Auction bid does not meet chosen health target');
-		bidId = engine.bidCount() + 1;
-		vault = SecurityPoolRepairAuctionVaultClones.create(vaultImplementation, msg.sender, address(capital), address(this), bidId);
-		bidIdForVault[vault] = bidId;
-		require(engine.submitBid(msg.sender, vault, targetHealthFactorBps, lots, minimumAttoRepPerLot) == bidId, 'Auction bid identity mismatch');
-		emit BidVaultCreated(bidId, msg.sender, vault);
+		bidId = engine.submitBid(msg.sender, lots, minimumAttoRepPerLot);
+		IRepairAuctionCapitalBidders(address(capital)).registerRepairAuctionBidder(msg.sender);
 	}
 
 	/// @notice Closing never requires a bidder transaction. The quote is tested
@@ -186,20 +178,21 @@ contract SecurityPoolRepairAuction is ISecurityPoolRepairAuctionCapital {
 		emit RepairAuctionClosed(result.filledLots, result.raisedAttoEth, result.soldAttoRep);
 	}
 
-	/// @notice The clone address a bidder's bid receives, computable before bidding.
-	function vaultFor(address bidder, uint256 bidId) external view returns (address) {
-		return
-			SecurityPoolRepairAuctionVaultClones.predict(address(this), vaultImplementation, bidder, address(capital), address(this), bidId);
-	}
 	function bidPosition(uint256 bidId) external view returns (BidPosition memory position) {
 		if (!finalized) {
-			(, address vault, uint256 targetHealthBps, , , bool settled, ) = engine.bids(bidId);
+			(address bidder, bool settled, , , ) = engine.bids(bidId);
 			// Before closing, a bid can settle only when it is permanently excluded.
 			require(settled, 'Auction has not been finalized');
-			return BidPosition(vault, targetHealthBps, 0);
+			return BidPosition(bidder, 0);
 		}
 		SecurityPoolUniformPriceRepairAuction.Fill memory fill = engine.previewBid(bidId);
-		return BidPosition(fill.vault, fill.targetHealthBps, fill.filledLots);
+		return BidPosition(fill.bidder, fill.filledLots);
+	}
+	function bidderBidCount(address bidder) external view returns (uint256) {
+		return engine.bidderBidCount(bidder);
+	}
+	function bidderBidId(address bidder, uint256 index) external view returns (uint256) {
+		return engine.bidderBidId(bidder, index);
 	}
 	function claimAndRemoveFees(uint256 bidId, uint256 addedAttoEth, uint256 addedAttoRep) external onlyCapital returns (uint256 ownedAttoEth, uint256 ownedAttoRep) {
 		return engine.allocateAndRemoveFees(bidId, addedAttoEth, addedAttoRep);
@@ -249,12 +242,8 @@ contract SecurityPoolRepairAuction is ISecurityPoolRepairAuctionCapital {
 }
 
 contract SecurityPoolRepairAuctionDeployer is SecurityPoolCreationCodeDeployer {
-	/// @notice One vault implementation serves every auction this deployer creates.
-	address public immutable vaultImplementation;
-	constructor() SecurityPoolCreationCodeDeployer(type(SecurityPoolRepairAuction).creationCode) {
-		vaultImplementation = address(new SecurityPoolRepairAuctionVault());
-	}
+	constructor() SecurityPoolCreationCodeDeployer(type(SecurityPoolRepairAuction).creationCode) {}
 	function create(address authority, address securityPool, uint248 child, uint256 close, uint256 inventory, uint256 shortfall) external returns (address) {
-		return _deploy(abi.encode(authority, securityPool, child, close, inventory, shortfall, vaultImplementation));
+		return _deploy(abi.encode(authority, securityPool, child, close, inventory, shortfall));
 	}
 }

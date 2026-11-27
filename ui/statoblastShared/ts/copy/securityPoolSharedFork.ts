@@ -40,3 +40,14 @@ export const busy = 'Another security pool action is pending.'
 export const branchStates = { choose: 'Choose an outcome', unprepared: 'Not prepared', chosen: 'Capital prepared', waiting: 'Awaiting activation', active: 'Active' }
 export const readTimeout = 'Fork read timed out. Try again.'
 export const forkReadFailed = 'Couldn’t load this fork.'
+export const claimBidsFirst = 'Claim your repair auction bids before choosing a branch.'
+export const unclaimedBids = (count: bigint) => `${count === 1n ? 'You have 1 unclaimed repair auction bid' : `You have ${count} unclaimed repair auction bids`} in this universe. Claim every bid, including bids that won nothing, before choosing a branch.`
+export const claimBids = 'Claim all bids'
+export const claimingBids = 'Claiming bids…'
+export const noBidsToClaim = 'No repair auction bids to claim.'
+export const claimAfterClose = 'Bids can be claimed after the auction closes.'
+export const claimBidsReview = (batch: number, total: number) => {
+	if (batch < total) return `Claim ${batch} of your ${total} unclaimed repair auction bids in this universe now; claim again for the rest. Winning lots join your position here.`
+	return `Claim ${batch === 1 ? 'your unclaimed repair auction bid' : `all ${batch} of your unclaimed repair auction bids`} in this universe. Winning lots join your position here.`
+}
+export const claimLoadError = 'Unable to load your repair auction bids in this universe.'

@@ -1,7 +1,7 @@
 import { createPublicClient, createWalletClient, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { mainnet, parseAbi } from '@zoltar/core-shared/evm/ethereum'
-import { securityPoolCapitalLedgerAbi as capitalAbi, erc20Abi } from '@zoltar/bot-shared/contracts/abi'
+import { securityPoolCapitalLedgerAbi as capitalAbi, securityPoolCommitmentIndexAbi as indexAbi, erc20Abi } from '@zoltar/bot-shared/contracts/abi'
 import { expect } from 'bun:test'
 import { type useSecurityPoolFixture, unit } from '../../../../solidity/ts/tests/statoblast/securityPoolFixture'
 import { prepareSecurityPoolCollateralRepairAuction } from '../../../../solidity/ts/tests/statoblast/securityPoolCollateralRepairAuctionFixture'
@@ -33,9 +33,14 @@ export function repairAuctionKeeper(fixture: ReturnType<typeof useSecurityPoolFi
 /** Retires the owner's capital down to claim demand, funds the keeper with REP, and returns the distressed second-bid winner the keeper can acquire. */
 export async function distressedSecondWinner(context: RepairAuction, keeperOperator: KeeperOperator, secondBidId: bigint) {
 	const { account, reader, scope, settings } = keeperOperator
-	// Retire chosen capital down to claim demand so cure cannot change K.
+	// Retire chosen capital down to claim demand so cure cannot change K. The owner's own
+	// winning lots join its position on this call, so they stay committed beside the 5 ETH.
 	await context.report(unit)
-	await writeContractAndWait(context.owner, () => context.owner.writeContract({ address: context.capital, abi: capitalAbi, functionName: 'setCommitment', args: [5n * unit] }))
+	const [, ownerCommitment] = await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'ownerCollateral', args: [context.owner.account.address] })
+	const ownerPosition = await reader.readContract({ address: context.capital, abi: capitalAbi, functionName: 'ownerAccount', args: [context.owner.account.address] })
+	const ownerIndexCommitment = await reader.readContract({ address: context.index, abi: indexAbi, functionName: 'accountOf', args: [ownerPosition.positionId] })
+	const ownerWinningCommitment = ownerCommitment - ownerIndexCommitment.commitment
+	await writeContractAndWait(context.owner, () => context.owner.writeContract({ address: context.capital, abi: capitalAbi, functionName: 'setCommitment', args: [5n * unit + ownerWinningCommitment] }))
 	await context.report(4n * unit)
 	const distressed = await loadSecurityPoolObservation(reader, settings, account.address, scope, await reader.getBlockNumber())
 	const initialWinner = distressed.positions.find(position => position.auctionTarget?.bidId === secondBidId)

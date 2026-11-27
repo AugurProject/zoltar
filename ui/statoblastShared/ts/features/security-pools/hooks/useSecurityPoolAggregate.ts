@@ -14,7 +14,6 @@ import {
 	buildSecurityPoolCapitalServeRetirementRequest,
 	buildSecurityPoolCapitalClaimEarningsRequest,
 	loadSecurityPoolCapitalSnapshot,
-	buildSecurityPoolAuctionVaultDepositRequest,
 	minimumSecurityPoolHealthFactorBps,
 	type SecurityPoolCapitalSnapshot,
 } from '@zoltar/statoblast-shared/statoblast/securityPool'
@@ -157,8 +156,8 @@ export function useSecurityPoolAggregate(
 		reportInput.value = ''
 	}, [snapshot?.chainId, snapshot?.securityPool, snapshot?.owner, snapshot?.universeId, snapshot?.ownerAccount.targetHealthFactorBps])
 	const positive = (value: bigint | undefined) => (value === undefined || value === 0n ? transactionCopy.positiveAmountRequired : undefined)
-	const topUpReason = snapshot === undefined ? undefined : capitalDepositReason(snapshot)
-	const fundingReason = ownerReason ?? inactiveReason ?? admissionReason ?? topUpReason ?? positive(depositAttoRep) ?? (snapshot !== undefined && depositAttoRep !== undefined && depositAttoRep > snapshot.walletAttoRep ? transactionCopy.insufficientRep : undefined)
+	const fundingReason =
+		ownerReason ?? inactiveReason ?? admissionReason ?? (snapshot === undefined ? undefined : capitalDepositReason(snapshot, depositAttoRep)) ?? positive(depositAttoRep) ?? (snapshot !== undefined && depositAttoRep !== undefined && depositAttoRep > snapshot.walletAttoRep ? transactionCopy.insufficientRep : undefined)
 	const depositReason = fundingReason ?? (snapshot !== undefined && depositAttoRep !== undefined && depositAttoRep > snapshot.allowanceAttoRep ? transactionCopy.approveBeforeDeposit : undefined)
 	const withdrawReason = ownerReason ?? (snapshot === undefined ? undefined : capitalWithdrawalReason(snapshot, withdrawAttoRep))
 	const healthReason = ownerReason ?? (snapshot === undefined ? undefined : capitalHealthReason(snapshot, healthBps))
@@ -166,7 +165,7 @@ export function useSecurityPoolAggregate(
 		ownerReason ??
 		inactiveReason ??
 		admissionReason ??
-		topUpReason ??
+		(snapshot === undefined ? undefined : capitalDepositReason(snapshot, healthDepositAttoRep)) ??
 		positive(healthDepositAttoRep) ??
 		(snapshot !== undefined && healthDepositAttoRep !== undefined && healthDepositAttoRep > snapshot.walletAttoRep ? transactionCopy.insufficientRep : undefined) ??
 		(snapshot === undefined ? undefined : capitalHealthReason(snapshot, healthBps, healthDepositAttoRep))
@@ -184,7 +183,7 @@ export function useSecurityPoolAggregate(
 	const serveReason = (accountAddress === undefined ? connectWallet : undefined) ?? stateReason ?? inactiveReason ?? retirementReadinessReason()
 	const requireSnapshot = (permissionless = false) => {
 		const current = model.snapshot
-		if (current === undefined || accountAddress === undefined || (!permissionless && accountAddress.toLowerCase() !== (current.auctionVault?.bidder ?? current.owner).toLowerCase())) throw new Error(transactionCopy.connectPositionWallet)
+		if (current === undefined || accountAddress === undefined || (!permissionless && accountAddress.toLowerCase() !== current.owner.toLowerCase())) throw new Error(transactionCopy.connectPositionWallet)
 		return current
 	}
 	const run = (
@@ -224,7 +223,7 @@ export function useSecurityPoolAggregate(
 						const latest = await loadSecurityPoolCapitalSnapshot({ client: securityPoolReadClient(reader), securityPool: selected.securityPool, owner: selected.owner, universeId: selected.universeId })
 						if (latest.chainId !== selected.chainId || latest.capitalLedger !== selected.capitalLedger) throw new Error(poolChanged)
 						if (['depositSecurityPoolRep', 'depositSecurityPoolHealthRep', 'approveSecurityPoolRep', 'approveSecurityPoolHealthRep'].includes(action)) {
-							const reason = capitalDepositReason(latest)
+							const reason = capitalDepositReason(latest, action === 'depositSecurityPoolHealthRep' || action === 'approveSecurityPoolHealthRep' ? healthDepositAttoRep : depositAttoRep)
 							if (reason !== undefined) throw new Error(reason)
 						}
 						await validate?.(latest)
@@ -309,28 +308,24 @@ export function useSecurityPoolAggregate(
 		},
 		approve: (amount: bigint) =>
 			run('approveSecurityPoolRep', transactionCopy.approveDeposit, fundingReason, selected => ({
-				account: selected.auctionVault?.bidder ?? selected.owner,
+				account: selected.owner,
 				to: selected.repToken,
 				value: 0n,
-				data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [selected.auctionVault?.vault ?? selected.capitalLedger, amount] }),
-				reviewDescription: transactionCopy.reviewDepositApproval(selected.auctionVault?.vault ?? selected.capitalLedger, formatCurrencyBalance(amount)),
+				data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [selected.capitalLedger, amount] }),
+				reviewDescription: transactionCopy.reviewDepositApproval(selected.capitalLedger, formatCurrencyBalance(amount)),
 			})),
 		approveHealthDeposit: (amount: bigint) =>
 			run('approveSecurityPoolHealthRep', transactionCopy.approveHealthDeposit, healthFundingReason, selected => ({
-				account: selected.auctionVault?.bidder ?? selected.owner,
+				account: selected.owner,
 				to: selected.repToken,
 				value: 0n,
-				data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [selected.auctionVault?.vault ?? selected.capitalLedger, amount] }),
-				reviewDescription: transactionCopy.reviewDepositApproval(selected.auctionVault?.vault ?? selected.capitalLedger, formatCurrencyBalance(amount)),
+				data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [selected.capitalLedger, amount] }),
+				reviewDescription: transactionCopy.reviewDepositApproval(selected.capitalLedger, formatCurrencyBalance(amount)),
 			})),
 		deposit: () =>
 			run('depositSecurityPoolRep', capitalCopy.deposit, depositReason, selected => {
 				if (depositAttoRep === undefined) throw new Error(transactionCopy.depositRequired)
-				const request =
-					selected.auctionVault === undefined
-						? buildSecurityPoolCapitalDepositRequest({ ...base(selected), amountAttoRep: depositAttoRep })
-						: buildSecurityPoolAuctionVaultDepositRequest({ bidder: selected.auctionVault.bidder, vault: selected.owner, capitalLedger: selected.capitalLedger, amountAttoRep: depositAttoRep, targetHealthFactorBps: selected.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps })
-				return { ...request, reviewDescription: transactionCopy.reviewDeposit(formatCurrencyBalance(depositAttoRep)) }
+				return { ...buildSecurityPoolCapitalDepositRequest({ ...base(selected), amountAttoRep: depositAttoRep }), reviewDescription: transactionCopy.reviewDeposit(formatCurrencyBalance(depositAttoRep)) }
 			}),
 		withdraw: () =>
 			run(
@@ -374,9 +369,7 @@ export function useSecurityPoolAggregate(
 				selected => {
 					if (healthDepositAttoRep === undefined || healthBps === undefined) throw new Error(transactionCopy.depositAndTargetRequired)
 					return {
-						...(selected.auctionVault === undefined
-							? buildSecurityPoolCapitalDepositAndSetHealthRequest({ ...base(selected), amountAttoRep: healthDepositAttoRep, targetHealthFactorBps: healthBps })
-							: buildSecurityPoolAuctionVaultDepositRequest({ bidder: selected.auctionVault.bidder, vault: selected.owner, capitalLedger: selected.capitalLedger, amountAttoRep: healthDepositAttoRep, targetHealthFactorBps: healthBps })),
+						...buildSecurityPoolCapitalDepositAndSetHealthRequest({ ...base(selected), amountAttoRep: healthDepositAttoRep, targetHealthFactorBps: healthBps }),
 						reviewDescription: capitalCopy.healthDepositReview,
 					}
 				},
@@ -386,8 +379,8 @@ export function useSecurityPoolAggregate(
 					if (healthDepositAttoRep === undefined) throw new Error(transactionCopy.repDepositRequired)
 					const client = withStatoblastRequestTimeout(createConnectedReadClient(), currentStateCheckFailed)
 					const [balance, allowance] = await Promise.all([
-						client.readContract({ address: latest.repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [snapshot?.auctionVault?.bidder ?? latest.owner] }),
-						client.readContract({ address: latest.repToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [snapshot?.auctionVault?.bidder ?? latest.owner, snapshot?.auctionVault?.vault ?? latest.capitalLedger] }),
+						client.readContract({ address: latest.repToken, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [latest.owner] }),
+						client.readContract({ address: latest.repToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [latest.owner, latest.capitalLedger] }),
 					])
 					if (balance < healthDepositAttoRep) throw new Error(transactionCopy.insufficientRep)
 					if (allowance < healthDepositAttoRep) throw new Error(transactionCopy.approveBeforeDeposit)
@@ -451,7 +444,7 @@ export function useSecurityPoolAggregate(
 				},
 				(latest, collateral) => {
 					const current = latest.positions.find(position => position.id === pendingRetirement?.id)
-					const label = accountAddress?.toLowerCase() === (snapshot?.auctionVault?.bidder ?? latest.owner).toLowerCase() ? capitalCopy.commitment : capitalCopy.positionCommitment
+					const label = accountAddress?.toLowerCase() === latest.owner.toLowerCase() ? capitalCopy.commitment : capitalCopy.positionCommitment
 					return current === undefined ? [] : [commitmentComparison(collateral, label, current.commitment, current.remainingCommitment)]
 				},
 			),

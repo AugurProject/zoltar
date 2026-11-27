@@ -1,5 +1,6 @@
 import * as abis from '@zoltar/bot-shared/contracts/abi'
 import { getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { securityPoolAuctionClaimBatch } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import type { AuctionSnapshot, PoolSnapshot } from '../operations/types.ts'
 import type { EcosystemDiscoveryContext } from './discovery-context.ts'
 import { requireGraphEdge } from './discovery-graph.ts'
@@ -59,9 +60,8 @@ export async function discoverAuctions(context: EcosystemDiscoveryContext, pools
 		const refundableBidIds: string[] = []
 		for (const bid of bids) {
 			const stored = await client.readContract({ abi: abis.securityPoolUniformPriceRepairAuctionAbi, address: engine, functionName: 'bids', args: [BigInt(bid.bidId)], blockNumber })
-			if (wallet === undefined || stored[0].toLowerCase() !== wallet.toLowerCase() || stored[1].toLowerCase() !== bid.vault.toLowerCase() || stored[2].toString() !== bid.targetHealthBps || stored[3].toString() !== bid.lots || stored[4].toString() !== bid.minimumAttoRepPerLot)
-				throw new Error('Indexed auction bid differs from anchored engine state')
-			bid.settled = stored[5]
+			if (wallet === undefined || stored[0].toLowerCase() !== wallet.toLowerCase() || stored[3].toString() !== bid.lots || stored[4].toString() !== bid.minimumAttoRepPerLot) throw new Error('Indexed auction bid differs from anchored engine state')
+			bid.settled = stored[1]
 			if (bid.settled) continue
 			if (finalized) {
 				const fill = await client.readContract({ abi: abis.securityPoolUniformPriceRepairAuctionAbi, address: engine, functionName: 'previewBid', args: [BigInt(bid.bidId)], blockNumber })
@@ -72,6 +72,22 @@ export async function discoverAuctions(context: EcosystemDiscoveryContext, pools
 				refundableBidIds.push(bid.bidId)
 			} catch (error) {
 				if (!contractSimulationReverted(error)) throw error
+			}
+		}
+		// Every bid must be claimed, winning or not, before its bidder can choose a branch in a later fork. A bid can be
+		// claimed once the auction is finalized, or earlier once it was excluded and refunded.
+		const claimableBidIds: string[] = []
+		for (const bid of bids) {
+			if (!finalized && !bid.settled) continue
+			if (!(await client.readContract({ abi: abis.securityPoolCapitalLedgerAbi, address: capital, functionName: 'repairAuctionBidClaimed', args: [BigInt(bid.bidId)], blockNumber }))) claimableBidIds.push(bid.bidId)
+		}
+		if (claimableBidIds.length > 0) {
+			try {
+				// Simulate the batch the claim operation sends next.
+				await client.simulateContract({ abi: abis.securityPoolCapitalLedgerAbi, address: capital, ...(wallet === undefined ? {} : { account: wallet }), functionName: 'materializeRepairAuctionBids', args: [securityPoolAuctionClaimBatch(claimableBidIds.map(BigInt)).bidIds], blockNumber })
+			} catch (error) {
+				if (!contractSimulationReverted(error)) throw error
+				claimableBidIds.length = 0
 			}
 		}
 		const indexedRefund = context.indexedAuctionRefunds?.[engine.toLowerCase()]
@@ -99,6 +115,8 @@ export async function discoverAuctions(context: EcosystemDiscoveryContext, pools
 			...(generation === undefined ? {} : { pendingEthRefundGeneration: generation }),
 			bids,
 			refundableBidIds,
+			capital,
+			claimableBidIds,
 		})
 	}
 	return auctions

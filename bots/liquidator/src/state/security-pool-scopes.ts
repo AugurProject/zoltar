@@ -1,4 +1,4 @@
-import { getAddress, isHex, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { isHex, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { SecurityPoolScope } from '#monitoring/security-pool-monitor'
 import { parseSecurityPoolSelections } from '#config/security-pool-policy'
 
@@ -8,12 +8,6 @@ export function parseSecurityPoolScopes(value: unknown): SecurityPoolScope[] {
 	return value.map(entry => {
 		const selection = parseSecurityPoolSelections([entry])[0]
 		if (selection === undefined || typeof entry !== 'object' || entry === null) throw new Error('Invalid managed security pool scope')
-		const rawVaults = Reflect.get(entry, 'managedVaults') ?? []
-		if (!Array.isArray(rawVaults)) throw new Error('Invalid managed vault history')
-		const managedVaults: Address[] = rawVaults.map(value => {
-			if (typeof value !== 'string') throw new Error('Invalid managed vault address')
-			return getAddress(value)
-		})
 		const cursor = Reflect.get(entry, 'nextPositionId')
 		const end = Reflect.get(entry, 'sweepEnd')
 		if (typeof cursor !== 'string' || !/^[1-9]\d*$/.test(cursor) || typeof end !== 'string' || !/^(0|[1-9]\d*)$/.test(end) || BigInt(cursor) >= 2n ** 96n || BigInt(end) >= 2n ** 96n) throw new Error('Invalid managed security pool cursor')
@@ -35,7 +29,7 @@ export function parseSecurityPoolScopes(value: unknown): SecurityPoolScope[] {
 			return { id: field('id'), commitment: field('commitment'), batch: field('batch'), since: field('since') }
 		})
 		const sponsoredReports = parseSponsoredReports(Reflect.get(entry, 'sponsoredReports'))
-		return { ...selection, ...(sponsoredReports === undefined ? {} : { sponsoredReports }), ...auctionPage, managedVaults, nextPositionId: BigInt(cursor), sweepEnd: BigInt(end), retirementObservations }
+		return { ...selection, ...(sponsoredReports === undefined ? {} : { sponsoredReports }), ...auctionPage, nextPositionId: BigInt(cursor), sweepEnd: BigInt(end), retirementObservations }
 	})
 }
 

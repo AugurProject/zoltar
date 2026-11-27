@@ -250,7 +250,7 @@ export function buildSecurityPoolPriceOperationsRequest(snapshot: SecurityPoolPr
 			'function claimEarnings(address recipient)',
 			'function takeOver(uint96 id,uint256 commitment,uint256 minimumTakeoverReward,uint256 maximumOwnRep) returns (uint96)',
 			'function takeOverWithBounds(uint96 id,uint256 commitment,uint256 minimumTakeoverReward,uint256 maximumOwnRep,(uint256 maximumOwnerPrincipal,uint256 maximumOwnerCommitment,uint256 expectedTargetHealthFactorBps,uint256 expectedAcceptedPriceEpoch,uint96 expectedSourceBatch) bounds) returns (uint96)',
-			'function materializeRepairAuctionBid(uint256 bidId)',
+			'function materializeRepairAuctionBids(uint256[] bidIds)',
 			'function takeOverRepairAuctionBid(uint256 bidId,uint256 commitment,uint256 minimumTakeoverReward,uint256 maximumOwnRep,(uint256 maximumOwnerPrincipal,uint256 maximumOwnerCommitment,uint256 expectedTargetHealthFactorBps,uint256 expectedAcceptedPriceEpoch,uint96 expectedSourceBatch) bounds)',
 		]).map(item => toFunctionSelector(item)),
 	)

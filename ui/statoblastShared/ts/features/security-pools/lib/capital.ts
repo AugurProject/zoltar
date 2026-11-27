@@ -1,3 +1,4 @@
+import { formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { capital, newPriceRequired } from '../../../copy/securityPoolTransactions.js'
 import * as copy from '../../../copy/securityPoolCapital.js'
 import { minimumSecurityPoolHealthFactorBps, type SecurityPoolCapitalSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
@@ -77,8 +78,31 @@ export function capitalWithdrawalReason(snapshot: SecurityPoolCapitalSnapshot, a
 	return copy.amountAboveWithdrawable
 }
 
-/** Matches the ledger rule even while the accepted price is stale. */
-export function capitalDepositReason(snapshot: Pick<SecurityPoolCapitalSnapshot, 'ownerAccount' | 'positions' | 'liquidationPrice'>) {
+type RescueSnapshot = Pick<SecurityPoolCapitalSnapshot, 'ownerAccount' | 'positions' | 'liquidationPrice' | 'conservativePrice' | 'securityMultiplierBps' | 'priceValid'>
+
+/** The ledger's floor-rounded health price for `rep` backing `commitment`. */
+const maximumHealthyPrice = (rep: bigint, commitment: bigint, securityMultiplierBps: bigint) => (((rep * 10_000n) / securityMultiplierBps) * 10n ** 18n) / commitment
+
+/**
+ * Smallest REP deposit that rescues the owner's liquidating position in place: its backing must
+ * hold at the conservative repair price that a takeover restores. `undefined` when it is not liquidating.
+ */
+function securityPoolRescueDepositAttoRep(snapshot: RescueSnapshot) {
 	const position = snapshot.positions.find(position => position.id === snapshot.ownerAccount.positionId)
-	return position !== undefined && position.commitment > 0n && position.maxHealthyPrice < snapshot.liquidationPrice ? copy.depositLiquidating : undefined
+	if (position === undefined || position.commitment === 0n || position.maxHealthyPrice >= snapshot.liquidationPrice) return undefined
+	const value = ceilDivide(position.commitment * snapshot.conservativePrice, 10n ** 18n)
+	let required = ceilDivide(value * snapshot.securityMultiplierBps, 10_000n)
+	// The upward estimate can trail the ledger's nested floor rounding by a few attoREP.
+	while (maximumHealthyPrice(required, position.commitment, snapshot.securityMultiplierBps) < snapshot.conservativePrice) required += 1n
+	return required > position.rep ? required - position.rep : 1n
+}
+
+/** Matches the ledger rule even while the accepted price is stale. */
+export function capitalDepositReason(snapshot: RescueSnapshot, amount: bigint | undefined) {
+	const rescue = securityPoolRescueDepositAttoRep(snapshot)
+	if (rescue === undefined) return undefined
+	if (!snapshot.priceValid) return copy.rescueNeedsCurrentPrice
+	// Rounding up keeps the shown minimum sufficient when entered as is.
+	if (amount === undefined || amount < rescue) return copy.depositRescueRequired(formatRoundedCurrencyBalance(rescue, 18, 2, 'up'))
+	return undefined
 }

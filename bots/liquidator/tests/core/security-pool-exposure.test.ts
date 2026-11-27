@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { totalManagedPrincipalAttoRep } from '../../src/core/security-pool-exposure.ts'
 import { securityPoolObservation, unit } from '../support/security-pool-observation.ts'
 
-test('managed totals include vault and pending exposure without adding direct principal twice', () => {
+test('managed totals include pending auction exposure without adding direct principal twice', () => {
 	const direct = securityPoolObservation()
 	direct.snapshot.ownerPrincipalAttoRep = 10n * unit
 	const managed = securityPoolObservation()

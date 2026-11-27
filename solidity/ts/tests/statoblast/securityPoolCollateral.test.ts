@@ -131,7 +131,7 @@ describe('ERC20 security pool collateral', () => {
 		await fixture.base.mockWindow.advanceTime(86_400n)
 		await writeContractAndWait(other, () => other.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'depositWalletRepToEscalationGame', args: [2, 10n * unit] }))
 		expect(await owner.readContract({ abi: poolArtifact.abi, address: pool, functionName: 'escalationGame' })).not.toBe('0x0000000000000000000000000000000000000000')
-		if (mode === 'burn-blocked') await expect(fixture.deposit(unit, owner, securityPool)).rejects.toThrow('Position is liquidating')
+		if (mode === 'burn-blocked') await expect(fixture.deposit(unit, owner, securityPool)).rejects.toThrow('Capital price stale')
 		await fixture.deposit(unit, mode === 'burn-blocked' ? other : owner, securityPool)
 		const capital = await owner.readContract({ abi: securityPoolArtifact.abi, address: securityPool, functionName: 'capitalLedger', args: [fixture.base.genesisUniverse] })
 		await fixture.base.mockWindow.advanceTime(5n * 86_400n)

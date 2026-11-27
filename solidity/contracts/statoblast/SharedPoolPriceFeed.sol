@@ -425,7 +425,7 @@ contract SharedPoolPriceFeed {
 			selector == SecurityPoolCapitalLedger.setCommitmentWithReport.selector ||
 			selector == SecurityPoolCapitalLedger.claimEarnings.selector ||
 			selector == SecurityPoolCapitalLedger.serveRetirement.selector ||
-			selector == SecurityPoolCapitalLedger.materializeRepairAuctionBid.selector;
+			selector == SecurityPoolCapitalLedger.materializeRepairAuctionBids.selector;
 	}
 
 	function _executeReportOperations(uint256 reportId, address sponsor) private {

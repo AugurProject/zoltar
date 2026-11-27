@@ -48,5 +48,12 @@ void describe('security pool branch auction simulation scenario', () => {
 		if (excluded === undefined || winning === undefined) throw new Error('Expected one excluded and one still-binding owner bid')
 		expect(quoteSecurityPoolAuctionRefundClaim(snapshot, excluded.id)).toMatchObject({ settles: true, bidRefundAttoEth: excluded.lots * auction.lotAttoEth, creditedAttoEth: 0n })
 		expect(() => quoteSecurityPoolAuctionRefundClaim(snapshot, winning.id)).toThrow('may still win')
+		// Every bid counts as unclaimed in the ledger; none can be claimed while bidding is open and unsettled.
+		expect(auction.unclaimedBidCount).toBe(2n)
+		expect(snapshot.claimableBidIds).toEqual([])
+		expect(auction.bids.map(bid => [bid.claimable, bid.claimed])).toEqual([
+			[false, false],
+			[false, false],
+		])
 	}, 60_000)
 })

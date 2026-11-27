@@ -5,7 +5,6 @@ import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSu
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
@@ -61,7 +60,7 @@ export function SecurityPoolRepairAuction({ onAuctionFinalized, sharedDeadline =
 	const noSale = auction?.finalized === true && auction.shortfallAttoEth > 0n && (!auction.opened || auction.clearing?.filledLots === 0n)
 	const highest = isOpen && auction.maximumAdmissibleBidAttoRepPerLot >= auction.minimumCollateralAttoRepPerLot ? auction.maximumAdmissibleBidAttoRepPerLot : undefined
 	let askHint = copy.priceHint(auction?.repGrid)
-	if (model.minimumAsk !== undefined && highest !== undefined) askHint = model.minimumAsk > highest ? copy.noAskAtTarget : copy.askRange(formatCurrencyBalance(model.minimumAsk), formatCurrencyBalance(highest))
+	if (highest !== undefined && auction !== undefined) askHint = copy.askRange(formatCurrencyBalance(auction.minimumCollateralAttoRepPerLot), formatCurrencyBalance(highest))
 	const collateral = snapshot?.collateral ?? { symbol: collateralCopy.fallback, decimals: 18 }
 	const collateralAmount = (amount: bigint | undefined) => <CurrencyValue value={amount} suffix={collateral.symbol} units={collateral.decimals} />
 	let status = copy.states.unopened
@@ -111,9 +110,8 @@ export function SecurityPoolRepairAuction({ onAuctionFinalized, sharedDeadline =
 					<MetricGrid>
 						<SecurityPoolInput label={copy.lotCount} hint={copy.lotHint} value={model.lotsInput} onChange={model.setLots} disabled={disabled} />
 						<SecurityPoolInput label={copy.minimumRep} hint={askHint} value={model.repInput} onChange={model.setRep} disabled={disabled} numeric />
-						<SecurityPoolInput label={copy.health} hint={model.minimumAsk === undefined ? undefined : copy.lowestAtTarget(formatCurrencyBalanceWithUnit(model.minimumAsk, common.rep))} value={model.healthInput} onChange={model.setHealth} disabled={disabled} numeric />
 					</MetricGrid>
-					{isOpen && <AuctionAskScale floor={auction.minimumCollateralAttoRepPerLot} lowest={model.minimumAsk} ask={model.ask} highest={highest} />}
+					{isOpen && <AuctionAskScale floor={auction.minimumCollateralAttoRepPerLot} ask={model.ask} highest={highest} />}
 					<MetricGrid>
 						<MetricField label={copy.collateralLocked}>{collateralAmount(model.quote?.bidAttoEth)}</MetricField>
 						<MetricField label={copy.repIfFilled}>
@@ -154,12 +152,11 @@ export function SecurityPoolRepairAuction({ onAuctionFinalized, sharedDeadline =
 							<th scope='col'>{copy.lotsWonAndBid}</th>
 							<th scope='col'>{copy.collateralUsed(collateral.symbol)}</th>
 							<th scope='col'>{copy.collateralRefundable(collateral.symbol)}</th>
-							<th scope='col'>{copy.vault}</th>
 							<th scope='col'>{copy.status}</th>
 						</tr>
 					</thead>
 					{auction.bids.map(bid => (
-						<AuctionBid key={bid.id.toString()} auction={auction} bid={bid} model={model} parameters={parameters} collateral={collateral} universeId={snapshot.universeId} isOpen={isOpen} />
+						<AuctionBid key={bid.id.toString()} auction={auction} bid={bid} model={model} parameters={parameters} collateral={collateral} isOpen={isOpen} />
 					))}
 				</table>
 			)}
@@ -171,6 +168,16 @@ export function SecurityPoolRepairAuction({ onAuctionFinalized, sharedDeadline =
 				onNextPage={model.nextPage}
 				summary={auction === undefined ? undefined : copy.pages(auction.bidStart, auction.bids.length, auction.totalBidCount)}
 			/>
+			{auction === undefined || auction.totalBidCount === 0n ? undefined : (
+				<>
+					<MetricGrid>
+						<MetricField label={copy.unclaimedBids}>{auction.unclaimedBidCount.toString()}</MetricField>
+					</MetricGrid>
+					<div className='actions'>
+						<SecurityPoolButton model={parameters.actions} action='claimSecurityPoolAuctionBids' label={copy.claimAllBids} pendingLabel={copy.claimingAllBids} reason={model.claimAllReason} hint={auction.unclaimedBidCount === 0n ? undefined : copy.claimHint} onClick={model.claimAllBids} />
+					</div>
+				</>
+			)}
 			<MetricGrid>
 				<MetricField label={copy.refundEth}>
 					<CurrencyValue value={auction?.refundAttoEth} suffix={snapshot?.collateral.symbol ?? collateralCopy.fallback} units={snapshot?.collateral.decimals ?? 0} />
@@ -207,17 +214,16 @@ function AuctionLots({ auction, lots, collateral }: { auction: Auction; lots: bi
 	)
 }
 
-function AuctionAskScale({ floor, lowest, ask, highest }: { floor: bigint; lowest: bigint | undefined; ask: bigint | undefined; highest: bigint | undefined }) {
+function AuctionAskScale({ floor, ask, highest }: { floor: bigint; ask: bigint | undefined; highest: bigint | undefined }) {
 	const marks = [
 		{ label: copy.baseAsk, value: floor, color: 'base' },
-		{ label: copy.lowestAsk, value: lowest, color: 'min' },
 		{ label: copy.yourAsk, value: ask, color: 'draft' },
 		{ label: copy.highestAsk, value: highest, color: 'max' },
 	].flatMap(mark => (mark.value === undefined ? [] : [{ ...mark, value: mark.value }]))
 	const min = marks.reduce((minimum, mark) => (mark.value < minimum ? mark.value : minimum), floor)
 	const max = marks.reduce((maximum, mark) => (mark.value > maximum ? mark.value : maximum), floor)
 	const position = (value: bigint) => (min === max ? 50 : 4 + Number(((value - min) * 9_200n) / (max - min)) / 100)
-	const range = lowest !== undefined && highest !== undefined && highest >= lowest ? { left: position(lowest), width: position(highest) - position(lowest) } : undefined
+	const range = highest !== undefined && highest >= floor ? { left: position(floor), width: position(highest) - position(floor) } : undefined
 	return (
 		<div className='statoblast-auction-ask-scale'>
 			<strong>{copy.askScale}</strong>
@@ -242,7 +248,7 @@ function AuctionAskScale({ floor, lowest, ask, highest }: { floor: bigint; lowes
 	)
 }
 
-function AuctionBid({ auction, bid, model, parameters, collateral, universeId, isOpen }: { auction: Auction; bid: SecurityPoolAuctionBid; model: AuctionModel; parameters: SecurityPoolAuctionParameters; collateral: Collateral; universeId: bigint; isOpen: boolean }) {
+function AuctionBid({ auction, bid, model, parameters, collateral, isOpen }: { auction: Auction; bid: SecurityPoolAuctionBid; model: AuctionModel; parameters: SecurityPoolAuctionParameters; collateral: Collateral; isOpen: boolean }) {
 	const excluded = bid.earlyRefundAttoEth > 0n || (!auction.finalized && bid.refundSettled)
 	const winning = bid.fill !== undefined && bid.fill.filledLots > 0n
 	const loses = excluded || bid.fill?.filledLots === 0n
@@ -261,7 +267,6 @@ function AuctionBid({ auction, bid, model, parameters, collateral, universeId, i
 	let refund: bigint | undefined
 	if (excluded) refund = escrow
 	if (bid.fill !== undefined) refund = bid.fill.refundAttoEth
-	const manageReason = (parameters.actions.busy !== undefined ? copy.busy : undefined) ?? model.manageReadReason ?? (!winning ? copy.managePending : undefined) ?? (!bid.materialized ? copy.activateFirst : undefined) ?? (parameters.openVault === undefined ? copy.manageUnavailable : undefined)
 	const money = (value: bigint | undefined) => <CurrencyValue value={value} suffix={collateral.symbol} units={collateral.decimals} />
 	return (
 		<tbody>
@@ -275,18 +280,21 @@ function AuctionBid({ auction, bid, model, parameters, collateral, universeId, i
 				</td>
 				<td data-label={copy.collateralUsed(collateral.symbol)}>{money(bid.fill?.usedAttoEth ?? (excluded ? 0n : undefined))}</td>
 				<td data-label={copy.collateralRefundable(collateral.symbol)}>{money(refund)}</td>
-				<td data-label={copy.vault}>
-					<AddressValue longAbbreviation address={bid.vault} />
-				</td>
 				<td data-label={copy.status}>
 					<Badge tone={winning ? 'ok' : 'muted'}>{standing}</Badge>
 					{bidStatus !== undefined && <small>{bidStatus}</small>}
 					{creditStatus !== undefined && <small>{creditStatus}</small>}
+					{bid.claimed && <small>{copy.claimedStatus}</small>}
 				</td>
 			</tr>
 			<tr>
-				<td className='statoblast-auction-bid-actions' colSpan={6}>
+				<td className='statoblast-auction-bid-actions' colSpan={5}>
 					<RefundActions model={model} actions={parameters.actions} bid={bid} />
+					{bid.claimable && (
+						<div className='actions'>
+							<SecurityPoolButton model={parameters.actions} action={`claimSecurityPoolAuctionBid${bid.id}`} label={copy.claimBid} pendingLabel={copy.claimingBid} reason={model.bidClaimReason(bid)} onClick={() => model.claimBid(bid)} />
+						</div>
+					)}
 					<details open={winning || undefined}>
 						<summary>{copy.details}</summary>
 						<MetricGrid>
@@ -302,11 +310,6 @@ function AuctionBid({ auction, bid, model, parameters, collateral, universeId, i
 								<CurrencyValue value={bid.fill?.principalAttoRep} suffix={common.rep} />
 							</MetricField>
 						</MetricGrid>
-						<div className='actions'>
-							<SecurityPoolButton model={parameters.actions} action={`activateSecurityPoolAuction${bid.id}`} label={copy.activate} pendingLabel={copy.activating} reason={model.activateReason(bid)} onClick={() => model.activate(bid)} />
-							<ActionLauncherButton tone='secondary' idleLabel={copy.manage} pendingLabel={copy.loading} availability={{ disabled: manageReason !== undefined, reason: manageReason }} onClick={() => parameters.openVault?.(bid.vault, universeId)} />
-						</div>
-						{winning && !bid.materialized && <UserMessage detail={copy.activateHint} />}
 					</details>
 				</td>
 			</tr>

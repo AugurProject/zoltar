@@ -19,7 +19,6 @@ import {
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger,
 	statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction,
 	statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction,
-	statoblast_SecurityPoolRepairAuctionVault_SecurityPoolRepairAuctionVault,
 	statoblast_tokens_ERC1155_ERC1155,
 	statoblast_tokens_ShareToken_ShareToken,
 	statoblast_WETH9_WETH9,
@@ -51,7 +50,6 @@ describe('generated bot contract ABIs', () => {
 			[abis.securityPoolCapitalLedgerAbi, statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger.abi],
 			[abis.securityPoolRepairAuctionAbi, statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction.abi],
 			[abis.securityPoolUniformPriceRepairAuctionAbi, statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction.abi],
-			[abis.securityPoolRepairAuctionVaultAbi, statoblast_SecurityPoolRepairAuctionVault_SecurityPoolRepairAuctionVault.abi],
 			[abis.openOracleAbi, statoblast_openOracle_OpenOracle_OpenOracle.abi],
 			[abis.weth9Abi, statoblast_WETH9_WETH9.abi],
 			[abis.multicall3Abi, statoblast_Multicall3_Multicall3.abi],
@@ -111,7 +109,6 @@ describe('generated bot contract ABIs', () => {
 			'securityPoolCapitalLedgerAbi',
 			'securityPoolRepairAuctionAbi',
 			'securityPoolUniformPriceRepairAuctionAbi',
-			'securityPoolRepairAuctionVaultAbi',
 		])
 		expect(Object.keys(abis).sort()).toEqual([...asserted].sort())
 	})

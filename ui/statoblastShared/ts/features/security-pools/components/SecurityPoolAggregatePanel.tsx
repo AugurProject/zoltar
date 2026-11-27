@@ -167,7 +167,7 @@ export function SecurityPoolAggregatePanel({ model, actions, priceDeadlineChecki
 				))}
 			</nav>
 			<SectionBlock className='statoblast-capital-position' title={positionTitle}>
-				{snapshot?.auctionVault === undefined ? undefined : <UserMessage detail={copy.auctionVaultOwnership} />}
+				{snapshot !== undefined && snapshot.unclaimedRepairAuctionBids > 0n && <UserMessage tone='warning' detail={copy.unclaimedAuctionBidsDetail(snapshot.unclaimedRepairAuctionBids)} />}
 				<div className='statoblast-health-gauge'>
 					<strong>{health === undefined ? pageCopy.healthUnavailable : pageCopy.formatHealth(health.toLocaleString('en-US', { maximumFractionDigits: 1 }))}</strong>
 					{health !== undefined && (
