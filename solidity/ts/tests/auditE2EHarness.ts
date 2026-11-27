@@ -1,5 +1,5 @@
 import { expect } from 'bun:test'
-import { zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, toEventSelector, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
 	statoblast_SecurityPool_SecurityPool as securityPoolArtifact,
@@ -292,7 +292,22 @@ export function createE2E(fixture: Fixture) {
 			proofs.push(proofFor(leaves, leaf, tree))
 			tree.consume(leaf.leafIndex)
 		}
-		await writeContractAndWait(sender, () => sender.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'withdrawForkedEscalationDeposits', args: [outcome, proofs], gas: BRANCH_GAS }))
+		const supplyBefore = await supply(universe)
+		const hash = await writeContractAndWait(sender, () => sender.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'withdrawForkedEscalationDeposits', args: [outcome, proofs], gas: BRANCH_GAS }))
+		const receipt = await sender.getTransactionReceipt({ hash })
+		const claimEvent = gameArtifact.abi.find(item => item.type === 'event' && item.name === 'ClaimDeposit')
+		if (claimEvent === undefined) throw new Error('ClaimDeposit event missing')
+		let emittedBurn = 0n
+		for (const log of receipt.logs) {
+			if (log.topics[0] !== toEventSelector(claimEvent)) continue
+			const claim = decodeEventLog({ abi: gameArtifact.abi, data: log.data, topics: log.topics })
+			if (claim.eventName === 'ClaimDeposit') emittedBurn += claim.args.burnAmountAttoRep
+		}
+		expect(emittedBurn).toBe(supplyBefore - (await supply(universe)))
+		const prepaidEvent = gameArtifact.abi.find(item => item.type === 'event' && item.name === 'WinningHaircutPrepaid')
+		if (prepaidEvent === undefined) throw new Error('WinningHaircutPrepaid event missing')
+		const paidByFork = await sender.readContract({ ...game(await gameOf(pool)), functionName: 'winnerHaircutPaidByFork' })
+		expect(receipt.logs.some(log => log.topics[0] === toEventSelector(prepaidEvent))).toBe(paidByFork)
 		return (await rep(universe, beneficiary)) - before
 	}
 	/** Every depositor claims all of their carried deposits on the winning outcome, newest first, with exact payouts. */
@@ -327,7 +342,7 @@ export function createE2E(fixture: Fixture) {
 	const redeemShares = async (sender: WriteClient, pool: Address) => {
 		const universe = await owner().readContract({ abi: poolArtifact.abi, address: pool, functionName: 'universeId' })
 		const before = { cash: await cash(sender.account.address), rep: await rep(universe, sender.account.address) }
-		await writeContractAndWait(sender, () => sender.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'redeemShares', gas: BRANCH_GAS }))
+		await writeContractAndWait(sender, () => sender.writeContract({ abi: poolArtifact.abi, address: pool, functionName: 'redeemShares', args: [], gas: BRANCH_GAS }))
 		return { cash: (await cash(sender.account.address)) - before.cash, rep: (await rep(universe, sender.account.address)) - before.rep }
 	}
 

@@ -72,7 +72,7 @@ async function seedForkedCategoricalScenario({ accounts, createReadClient, creat
 	if (rootUniverse === undefined) throw new Error('Expected the seeded genesis universe before forking')
 	await scenarioProtocol.approveErc20(writeClient, rootUniverse.reputationToken, scenarioProtocol.getZoltarAddress(), rootUniverse.forkThresholdAttoRep, 'approveForkRep')
 	await reportBootstrapProgress(onProgress, 'Approving seeded REP for the fork threshold', 0.9)
-	await scenarioProtocol.forkZoltarUniverse(writeClient, universeId, questionId)
+	await scenarioProtocol.forkZoltarUniverse(writeClient, universeId, questionId, rootUniverse.forkThresholdAttoRep)
 	await reportBootstrapProgress(onProgress, 'Forking the seeded genesis universe', 0.92)
 
 	for (const outcomeIndex of [0n, 1n] as const) {

@@ -98,11 +98,6 @@ interface IERC1155 is IERC165 {
 	/// @return        The _owner's balance of the Token type requested
 	function balanceOf(address owner, uint256 id) external view returns (uint256);
 
-	/// @notice Get the total supply of a Token.
-	/// @param id     ID of the Token
-	/// @return        The total supply of the Token type requested
-	function totalSupply(uint256 id) external view returns (uint256);
-
 	/// @notice Get the balance of multiple account/token pairs
 	/// @param owners The addresses of the token holders
 	/// @param ids    ID of the Tokens

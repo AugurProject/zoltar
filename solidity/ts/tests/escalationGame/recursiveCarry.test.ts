@@ -9,7 +9,7 @@ import { readCarryPeaks, readCarryRoot, readCarryLeafCount, readCarryTotal, read
 import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { hashCarryLeaf, hashParent, SparseNullifierTree } from '../carryProofHelpers'
 import { replayZoltarEvents } from '../eventReplay/eventReplayModel'
-import { zeroHash, zeroPeakArray } from './carryHelpers'
+import { FRESH_FORK_RESPONSE_PERIOD, zeroHash, zeroPeakArray } from './carryHelpers'
 import { useEscalationGameFixture } from './fixture'
 
 describe('Escalation Game: recursive and grandchild carry', () => {
@@ -22,6 +22,7 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		startEscalation,
 		startEscalationFromFork,
 		advanceForkContinuationPastStart,
+		resumeEscalationFromFork,
 		depositOnOutcomeViaProofTestQuestionLedger,
 		withdrawDepositViaProofTestQuestionLedger,
 		claimDepositForWinningViaTestQuestionLedger,
@@ -49,8 +50,9 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		const { peaks: parentInvalidPeaks, leafCount: parentInvalidLeafCount, carryTotal: parentInvalidCarryTotal, nullifierRoot: parentInvalidNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Invalid)
 		const { peaks: parentYesPeaks, leafCount: parentLeafCount, carryTotal: parentCarryTotal, nullifierRoot: parentNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Yes)
 
-		const child = await deployForkContinuationEscalationGame()
+		const child = await deployForkContinuationEscalationGame(-FRESH_FORK_RESPONSE_PERIOD)
 		await initializeSnapshotViaTestQuestionLedger(child.testQuestionLedgerAddress, [parentInvalidPeaks, parentYesPeaks, zeroPeakArray()], [parentInvalidLeafCount, parentLeafCount, 0n], [parentInvalidCarryTotal, parentCarryTotal, 0n], [parentInvalidNullifierRoot, parentNullifierRoot, zeroHash()])
+		await resumeEscalationFromFork(child.escalationGameAddress)
 		await depositOnOutcomeViaProofTestQuestionLedger(child.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 
@@ -61,7 +63,7 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		const childLocalParentDepositIndex = computeLocalParentDepositIndex(child.escalationGameAddress, QuestionOutcome.Yes, 0n)
 		const childLocalLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, reportBond, childLocalParentDepositIndex, 4n * reportBond, 1n)
 
-		const grandchild = await deployForkContinuationEscalationGame()
+		const grandchild = await deployForkContinuationEscalationGame(-FRESH_FORK_RESPONSE_PERIOD)
 		await initializeSnapshotViaTestQuestionLedger(grandchild.testQuestionLedgerAddress, [childInvalidPeaks, childYesPeaks, zeroPeakArray()], [childInvalidLeafCount, childLeafCount, 0n], [childInvalidCarryTotal, childCarryTotal, 0n], [childInvalidNullifierRoot, childNullifierRoot, zeroHash()])
 		await advanceForkContinuationPastStart(grandchild.escalationGameAddress, recursiveResolutionTargetCost)
 
@@ -95,7 +97,7 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		const { peaks: parentInvalidPeaks, leafCount: parentInvalidLeafCount, carryTotal: parentInvalidCarryTotal, nullifierRoot: parentInvalidNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Invalid)
 		const { peaks: parentYesPeaks, leafCount: parentYesLeafCount, carryTotal: parentYesCarryTotal, nullifierRoot: parentYesNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Yes)
 
-		const child = await deployForkContinuationEscalationGame()
+		const child = await deployForkContinuationEscalationGame(-FRESH_FORK_RESPONSE_PERIOD)
 		await initializeSnapshotFromSourceViaTestQuestionLedger(
 			child.testQuestionLedgerAddress,
 			parent.escalationGameAddress,
@@ -112,7 +114,7 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		const { peaks: childYesPeaks, leafCount: childYesLeafCount, carryTotal: childYesCarryTotal, nullifierRoot: childYesNullifierRoot } = await readOutcomeCarrySnapshot(child.escalationGameAddress, QuestionOutcome.Yes)
 		assert.strictEqual(childYesCarryTotal, parentYesCarryTotal)
 
-		const grandchild = await deployForkContinuationEscalationGame()
+		const grandchild = await deployForkContinuationEscalationGame(-FRESH_FORK_RESPONSE_PERIOD)
 		await initializeSnapshotFromSourceViaTestQuestionLedger(
 			grandchild.testQuestionLedgerAddress,
 			child.escalationGameAddress,
@@ -147,7 +149,7 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, firstAmount)
 		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, secondAmount)
 
-		const child = await deployForkContinuationEscalationGame()
+		const child = await deployForkContinuationEscalationGame(-FRESH_FORK_RESPONSE_PERIOD)
 		await initializeSnapshotFromSourceViaTestQuestionLedger(
 			child.testQuestionLedgerAddress,
 			parent.escalationGameAddress,
@@ -168,7 +170,7 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		const secondLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, secondAmount, 1n, aggregateAmount, 2n)
 
 		const settleInOrder = async (leafOrder: readonly [0 | 1, 0 | 1]) => {
-			const grandchild = await deployForkContinuationEscalationGame()
+			const grandchild = await deployForkContinuationEscalationGame(-FRESH_FORK_RESPONSE_PERIOD)
 			await initializeSnapshotFromSourceViaTestQuestionLedger(grandchild.testQuestionLedgerAddress, child.escalationGameAddress, zeroHash(), [zeroPeakArray(), childPeaks, zeroPeakArray()], [0n, childLeafCount, 0n], [0n, childCarryTotal, 0n], [zeroHash(), childNullifierRoot, zeroHash()])
 			await advanceForkContinuationPastStart(grandchild.escalationGameAddress, recursiveResolutionTargetCost)
 			const nullifierTree = new SparseNullifierTree()
@@ -202,7 +204,7 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, inheritedPrincipal)
 
 		const { peaks: parentYesPeaks, leafCount: parentYesLeafCount, carryTotal: parentYesCarryTotal, nullifierRoot: parentYesNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Yes)
-		const child = await deployForkContinuationEscalationGame()
+		const child = await deployForkContinuationEscalationGame(-FRESH_FORK_RESPONSE_PERIOD)
 		await initializeSnapshotFromSourceViaTestQuestionLedger(child.testQuestionLedgerAddress, parent.escalationGameAddress, zeroHash(), [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentYesLeafCount, 0n], [0n, parentYesCarryTotal, 0n], [zeroHash(), parentYesNullifierRoot, zeroHash()])
 		await advanceForkContinuationPastStart(child.escalationGameAddress)
 
@@ -225,7 +227,7 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		const { peaks: parentYesPeaks, leafCount: parentYesLeafCount, carryTotal: parentYesCarryTotal, nullifierRoot: parentYesNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Yes)
 
 		const child = await deployEscalationGameWithProofPool()
-		const childStartHash = await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, 0n)
+		const childStartHash = await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThresholdAttoRep, -FRESH_FORK_RESPONSE_PERIOD)
 		const childCheckpointHash = await initializeSnapshotFromSourceViaTestQuestionLedger(
 			child.testQuestionLedgerAddress,
 			parent.escalationGameAddress,
@@ -235,6 +237,7 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 			[parentInvalidCarryTotal, parentYesCarryTotal, 0n],
 			[parentInvalidNullifierRoot, parentYesNullifierRoot, zeroHash()],
 		)
+		await resumeEscalationFromFork(child.escalationGameAddress)
 		const childLocalDepositHash = await depositOnOutcomeViaProofTestQuestionLedger(child.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 		const childClaimHash = await claimDepositForWinningViaTestQuestionLedger(child.testQuestionLedgerAddress, 0n, QuestionOutcome.Yes)
@@ -290,7 +293,7 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		const parent = await deployEscalationGameTestQuestionLedger()
 		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
 
-		const child = await deployForkContinuationEscalationGame()
+		const child = await deployForkContinuationEscalationGame(-FRESH_FORK_RESPONSE_PERIOD)
 		await initializeSnapshotFromSourceViaTestQuestionLedger(
 			child.testQuestionLedgerAddress,
 			parent.escalationGameAddress,
@@ -300,6 +303,7 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 			[0n, await readCarryTotal(client, parent.escalationGameAddress, QuestionOutcome.Yes), 0n],
 			[zeroHash(), await readNullifierRoot(client, parent.escalationGameAddress, QuestionOutcome.Yes), zeroHash()],
 		)
+		await resumeEscalationFromFork(child.escalationGameAddress)
 		await depositOnOutcomeViaProofTestQuestionLedger(child.testQuestionLedgerAddress, childLocalDepositor, QuestionOutcome.Yes, reportBond)
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 		const { peaks: childYesPeaks, leafCount: childYesLeafCount, carryTotal: childYesCarryTotal, nullifierRoot: childYesNullifierRoot } = await readOutcomeCarrySnapshot(child.escalationGameAddress, QuestionOutcome.Yes)
@@ -307,8 +311,9 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		const childLocalParentDepositIndex = computeLocalParentDepositIndex(child.escalationGameAddress, QuestionOutcome.Yes, 0n)
 		const childLocalLeafHash = hashCarryLeaf(childLocalDepositor, QuestionOutcome.Yes, reportBond, childLocalParentDepositIndex, 4n * reportBond, 1n)
 
-		const grandchild = await deployForkContinuationEscalationGame()
+		const grandchild = await deployForkContinuationEscalationGame(-FRESH_FORK_RESPONSE_PERIOD)
 		await initializeSnapshotFromSourceViaTestQuestionLedger(grandchild.testQuestionLedgerAddress, child.escalationGameAddress, zeroHash(), [zeroPeakArray(), childYesPeaks, zeroPeakArray()], [0n, childYesLeafCount, 0n], [0n, childYesCarryTotal, 0n], [zeroHash(), childYesNullifierRoot, zeroHash()])
+		await resumeEscalationFromFork(grandchild.escalationGameAddress)
 		await depositOnOutcomeViaProofTestQuestionLedger(grandchild.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
 		await advanceForkContinuationPastStart(grandchild.escalationGameAddress, recursiveResolutionTargetCost)
 
@@ -333,7 +338,7 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		const parent = await deployEscalationGameTestQuestionLedger()
 		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
 
-		const child = await deployForkContinuationEscalationGame()
+		const child = await deployForkContinuationEscalationGame(-FRESH_FORK_RESPONSE_PERIOD)
 		await initializeSnapshotViaTestQuestionLedger(
 			child.testQuestionLedgerAddress,
 			[zeroPeakArray(), await readCarryPeaks(client, parent.escalationGameAddress, QuestionOutcome.Yes), zeroPeakArray()],
@@ -341,6 +346,7 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 			[0n, await readCarryTotal(client, parent.escalationGameAddress, QuestionOutcome.Yes), 0n],
 			[zeroHash(), await readNullifierRoot(client, parent.escalationGameAddress, QuestionOutcome.Yes), zeroHash()],
 		)
+		await resumeEscalationFromFork(child.escalationGameAddress)
 		await depositOnOutcomeViaProofTestQuestionLedger(child.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 
@@ -348,8 +354,9 @@ describe('Escalation Game: recursive and grandchild carry', () => {
 		const parentLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, 3n * reportBond, 0n, 3n * reportBond, 1n)
 		const childLocalParentDepositIndex = computeLocalParentDepositIndex(child.escalationGameAddress, QuestionOutcome.Yes, 0n)
 
-		const grandchild = await deployForkContinuationEscalationGame()
+		const grandchild = await deployForkContinuationEscalationGame(-FRESH_FORK_RESPONSE_PERIOD)
 		await initializeSnapshotViaTestQuestionLedger(grandchild.testQuestionLedgerAddress, [zeroPeakArray(), childYesPeaks, zeroPeakArray()], [0n, childYesLeafCount, 0n], [0n, childYesCarryTotal, 0n], [zeroHash(), childYesNullifierRoot, zeroHash()])
+		await resumeEscalationFromFork(grandchild.escalationGameAddress)
 		await depositOnOutcomeViaProofTestQuestionLedger(grandchild.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await advanceForkContinuationPastStart(grandchild.escalationGameAddress, recursiveResolutionTargetCost)
 

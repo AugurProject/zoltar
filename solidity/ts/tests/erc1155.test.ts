@@ -87,6 +87,9 @@ describe('ERC1155 Compliance Test Suite', () => {
 
 	test('share token supports ERC165 and ERC1155 interface identifiers', async () => {
 		const shareTokenAddress = await deployShareToken()
+		const receiver = await deployReceiver()
+		const interfaceId = await client.readContract({ abi: test_statoblast_ERC1155ReceiverMock_ERC1155ReceiverMock.abi, address: receiver, functionName: 'standardTokenInterfaceId' })
+		assert.strictEqual(interfaceId, '0xd9b67a26', 'compiler-derived IERC1155 ID must match the standard')
 		assert.strictEqual(
 			await client.readContract({
 				abi: statoblast_tokens_ShareToken_ShareToken.abi,

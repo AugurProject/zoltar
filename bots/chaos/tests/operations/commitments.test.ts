@@ -1,3 +1,4 @@
+import { decodeFunctionData, parseAbi } from '@zoltar/core-shared/evm/ethereum'
 import { describe, expect, test } from 'bun:test'
 import { completeSetDefinition } from '../../src/operations/statoblast/complete-sets.ts'
 import { snapshotFixture } from './fixture.ts'
@@ -16,6 +17,20 @@ function fixture() {
 }
 
 describe('standing commitment keeper planning', () => {
+	for (const kind of ['redeem', 'winning'] as const) {
+		test(`native ${kind} has no payout floor arguments`, () => {
+			const { snapshot, pool } = fixture()
+			pool.projectedSettlementCollateralAttoEth = pool.shareTokenSupplyAttoShares
+			if (kind === 'winning') pool.questionOutcome = 1
+			const plan = completeSetDefinition(kind).buildPlan(snapshot, options)
+			const step = plan?.steps[0]
+			if (step === undefined) throw new Error('Expected native redemption plan')
+			const decoded = decodeFunctionData({ abi: parseAbi(['function redeemCompleteSet(uint256)', 'function redeemShares()']), data: step.data })
+			expect(decoded.functionName).toBe(kind === 'redeem' ? 'redeemCompleteSet' : 'redeemShares')
+			expect(decoded.args?.length ?? 0).toBe(kind === 'redeem' ? 1 : 0)
+		})
+	}
+
 	test('complete-set issuance closes at question maturity while complete-set redemption remains available', () => {
 		const { snapshot, pool } = fixture()
 		const question = snapshot.questions[0]

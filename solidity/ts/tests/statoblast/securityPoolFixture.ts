@@ -31,9 +31,10 @@ export const securityPoolEconomics: SecurityPoolEconomicsConfig = {
 	rewardVestingSeconds: DAY,
 }
 
-export function useSecurityPoolFixture(economicsOverrides: Partial<SecurityPoolEconomicsConfig> = {}) {
+export function useSecurityPoolFixture(economicsOverrides: Partial<SecurityPoolEconomicsConfig> = {}, multiplierOverride?: bigint) {
 	const economics = { ...securityPoolEconomics, ...economicsOverrides }
 	const base = useSecurityPoolProtocolFixture()
+	const securityMultiplierBps = multiplierOverride ?? base.statoblastSecurityMultiplierBps
 	let securityPool: Address
 	let capitalLedger: Address
 	let questionAdmissionPolicy: Address
@@ -41,14 +42,14 @@ export function useSecurityPoolFixture(economicsOverrides: Partial<SecurityPoolE
 	let secondEndTime: bigint
 	const owner = () => base.client
 	const other = () => createWriteClient(base.mockWindow, TEST_ADDRESSES[1])
-	const poolFor = (questionId: bigint, universeId = base.genesisUniverse, parent = zeroAddress, namespace = securityPool) => getQuestionLedgerAddresses(parent, universeId, questionId, base.statoblastSecurityMultiplierBps, base.genesisUniverse, DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, namespace)
+	const poolFor = (questionId: bigint, universeId = base.genesisUniverse, parent = zeroAddress, namespace = securityPool) => getQuestionLedgerAddresses(parent, universeId, questionId, securityMultiplierBps, base.genesisUniverse, DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, namespace)
 	const deploySecurityPool = async (policy = questionAdmissionPolicy, configuration = economics, originOverrides: Partial<{ collateralToken: Address; minimumReportCollateral: bigint; universeId: bigint; securityMultiplierBps: bigint; reportPriorityFeeAttoEthPerGas: bigint }> = {}) => {
 		const infrastructure = getInfraContractAddresses()
 		const origin = {
 			collateralToken: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' as const,
 			minimumReportCollateral: 10n ** 16n,
 			universeId: base.genesisUniverse,
-			securityMultiplierBps: base.statoblastSecurityMultiplierBps,
+			securityMultiplierBps,
 			reportPriorityFeeAttoEthPerGas: DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS,
 			...originOverrides,
 		}

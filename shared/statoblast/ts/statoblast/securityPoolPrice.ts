@@ -179,6 +179,7 @@ export function quoteSecurityPoolPriceFunding(snapshot: SecurityPoolPriceSnapsho
 	if (observation.minimumWethAttoEth === undefined || observation.minimumRepAttoRep === undefined) throw new Error('The branch price reporting window is closed.')
 	const price = decodeUint(proposedRepPerEth, 'REP per ETH price')
 	if (price === 0n) throw new Error('Enter a positive REP per ETH price.')
+	if (price === 1n) throw new Error('Oracle liquidation price would be zero.')
 	decodeUint(requestedWeth, 'WETH for the report', 128)
 	const inventoryWeth = (observation.minimumRepAttoRep * 10n ** 18n + price - 1n) / price
 	const required = inventoryWeth > observation.minimumWethAttoEth ? inventoryWeth : observation.minimumWethAttoEth
@@ -235,6 +236,7 @@ export function buildSecurityPoolPriceOperationsRequest(snapshot: SecurityPoolPr
 	decodeUint(batch.minimumPrice, 'Minimum operation price')
 	decodeUint(batch.maximumPrice, 'Maximum operation price')
 	decodeUint(batch.deadline, 'Operations deadline', 48)
+	if (snapshot.observation !== undefined && batch.deadline < snapshot.timestamp + snapshot.observation.settlementSeconds) throw new Error('Report operations expire before settlement.')
 	if (batch.deadline <= snapshot.timestamp || batch.minimumPrice > batch.maximumPrice || batch.maximumPrice === 0n || batch.operations.length === 0) throw new Error('Invalid report operation batch.')
 	const supportedSelectors = new Set<string>(
 		parseAbi([

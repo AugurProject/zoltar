@@ -45,7 +45,7 @@ contract EscalationGame is EscalationGameSettlement {
 		// Keep one reason for this read-only quote path so the size-constrained game
 		// can retain the state-changing paths' more specific failure reasons.
 		BinaryOutcomes.BinaryOutcome provisional = getQuestionResolution();
-		require(_getUniverseForkTime() == 0 && outcome != BinaryOutcomes.BinaryOutcome.None && nonDecisionState == NonDecisionState.None && _isDepositResolutionOpen(provisional), 'Invalid deposit preview');
+		require((!forkContinuation || (forkResumedAt != 0 && fixedQuestionOutcome == BinaryOutcomes.BinaryOutcome.None)) && _getUniverseForkTime() == 0 && outcome != BinaryOutcomes.BinaryOutcome.None && nonDecisionState == NonDecisionState.None && _isDepositResolutionOpen(provisional), 'Invalid deposit preview');
 		uint256 outcomeIndex = uint256(outcome);
 		uint256 currentBalance = outcomeState[outcomeIndex].balanceAttoRep;
 		require(currentBalance < nonDecisionThresholdAttoRep && amountAttoRep >= startBondAttoRep, 'Invalid deposit preview');

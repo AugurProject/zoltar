@@ -44,6 +44,15 @@ describe('Escalation Game: lifecycle and guards', () => {
 		client = fixture.client
 	})
 
+	test('#1669 both deposit previews reject an unresumed continuation and open after resume', async () => {
+		const child = await deployForkContinuationEscalationGame()
+		const preview = (functionName: 'previewDepositOnOutcome' | 'previewLeadingDepositOnOutcome') => client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: child.escalationGameAddress, functionName, args: [QuestionOutcome.Yes, reportBond] })
+		for (const name of ['previewDepositOnOutcome', 'previewLeadingDepositOnOutcome'] as const) await assert.rejects(preview(name), /Invalid deposit preview/)
+		await initializeSnapshotViaTestQuestionLedger(child.testQuestionLedgerAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+		await resumeEscalationFromFork(child.escalationGameAddress)
+		for (const name of ['previewDepositOnOutcome', 'previewLeadingDepositOnOutcome'] as const) assert.deepStrictEqual(await preview(name), [reportBond, reportBond])
+	})
+
 	test('a start-bond lead flip at activation buys no response period beyond the curve', async () => {
 		const { escalationGameAddress: game, testQuestionLedgerAddress: pool } = await deployEscalationGameTestQuestionLedger()
 		await depositOnOutcomeViaTestQuestionLedger(pool, client.account.address, QuestionOutcome.Yes, reportBond)

@@ -83,6 +83,52 @@ describe('Statoblast: central internal settlement units', () => {
 	const repair = (bookId: bigint, cash: bigint) => writeContractAndWait(client, () => client.writeContract({ ...target(), functionName: 'topUp', args: [bookId, cash] }))
 	const recoveryMintQuote = (bookId: bigint, questionId: bigint, cash: bigint) => client.readContract({ ...target(), functionName: 'quoteMintRecoveryRep', args: [bookId, questionId, cash] })
 
+	test('#1689 executable cash quote includes fees through the redemption checkpoint', async () => {
+		await mint(1n, 1n, 1000n)
+		await mint(1n, 2n, 1000n)
+		await writeContractAndWait(client, () =>
+			client.writeContract({
+				...target(),
+				functionName: 'replaceFeeStream',
+				args: [1n, 1n, 1_000_000_000n, 100, 0],
+			}),
+		)
+		const request = {
+			...target(),
+			functionName: 'redeem' as const,
+			args: [1n, 1n, 1000n, 0n, 50] as const,
+		}
+		const execution = await client.simulateContract(request)
+		const preview = await client.readContract({
+			...target(),
+			functionName: 'quoteRedemptionAt',
+			args: [1n, 1n, 1000n, 50],
+		})
+		expect(preview[0]).toBe(execution.result[0])
+		expect(preview[0]).toBe(950n)
+		const stalePreview = await client.readContract({ ...target(), functionName: 'quoteRedemptionThrough', args: [1n, 1n, 1000n, 50, 25] })
+		expect(stalePreview[0]).toBe(975n)
+		const zeroFeeControl = await client.readContract({ ...target(), functionName: 'quoteRedemptionAt', args: [1n, 2n, 1000n, 50] })
+		expect(zeroFeeControl[0]).toBe(1000n)
+	})
+
+	test('#1739 sealed active quotes distinguish payable proceeds from historical cash', async () => {
+		await mint(1n, 1n, 100n)
+		await seal(1n)
+		expect(await quote(1n, 1n, 100n)).toEqual([100n, 100n])
+		expect(
+			await client.readContract({
+				...target(),
+				functionName: 'quoteRedemptionAt',
+				args: [1n, 1n, 100n, 0],
+			}),
+		).toEqual([0n, 0n])
+		await child(1n, 0n, 100n)
+		await seal(2n)
+		expect(await client.readContract({ ...target(), functionName: 'quoteRecoveryRep', args: [2n, 1n, 100n] })).toBe(0n)
+		expect(await client.readContract({ ...target(), functionName: 'historicalRecoveryRep', args: [2n, 1n, 100n] })).toBe(100n)
+	})
+
 	test('#1257 crafted question IDs cannot inflate settlement read or update gas', async () => {
 		const measure = async (crafted: boolean) => {
 			await deployBook(1n)

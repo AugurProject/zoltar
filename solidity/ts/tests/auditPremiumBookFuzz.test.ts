@@ -61,7 +61,16 @@ type Op =
 const show = (value: unknown) => JSON.stringify(value, (_key, item) => (typeof item === 'bigint' ? `${item}n` : item))
 
 type ModelQuestion = { units: bigint; rate: bigint; end: number; fundedEnd: number }
+type ConversionEpoch = {
+	cash: bigint
+	units: bigint
+	earnedUnits: bigint
+	unusedUnits: bigint
+	earnedCash: bigint
+	unusedCash: bigint
+}
 type ModelBook = {
+	epoch: ConversionEpoch | undefined
 	cash: bigint
 	units: bigint
 	ts: number
@@ -83,9 +92,34 @@ const cloneModel = (model: Model): Model => ({
 	totalCash: model.totalCash,
 	stats: { ...model.stats },
 	branchCash: new Map(model.branchCash),
-	books: new Map([...model.books].map(([id, value]) => [id, { ...value, recoveredShares: new Map(value.recoveredShares), questions: new Map([...value.questions].map(([questionId, state]) => [questionId, { ...state }])) }])),
+	books: new Map(
+		[...model.books].map(([id, value]) => [
+			id,
+			{
+				...value,
+				epoch: value.epoch === undefined ? undefined : { ...value.epoch },
+				recoveredShares: new Map(value.recoveredShares),
+				questions: new Map([...value.questions].map(([questionId, state]) => [questionId, { ...state }])),
+			},
+		]),
+	),
 })
-const newBook = (ts: number, minimumFinalAfter: number, depth: number): ModelBook => ({ cash: 0n, units: 0n, ts, minimumFinalAfter, isSealed: false, assigned: 0n, recoveredUnits: 0n, recoveredCash: 0n, handedToChildren: 0n, neutralAtRecovery: undefined, depth, questions: new Map(), recoveredShares: new Map() })
+const newBook = (ts: number, minimumFinalAfter: number, depth: number): ModelBook => ({
+	epoch: undefined,
+	cash: 0n,
+	units: 0n,
+	ts,
+	minimumFinalAfter,
+	isSealed: false,
+	assigned: 0n,
+	recoveredUnits: 0n,
+	recoveredCash: 0n,
+	handedToChildren: 0n,
+	neutralAtRecovery: undefined,
+	depth,
+	questions: new Map(),
+	recoveredShares: new Map(),
+})
 
 type Outcome = { ok: true; touched: number[]; returns?: bigint[] } | { ok: false; why: string }
 const reject = (why: string): Outcome => ({ ok: false, why })
@@ -110,6 +144,7 @@ const apply = (model: Model, op: Op, blockTime: number): Outcome => {
 			if (book.units + units > MAX_UNITS) return reject('unit domain')
 			state.units += units
 			book.units += units
+			book.epoch = undefined
 			book.cash += op.cash
 			model.totalCash += op.cash
 			model.stats.funded += op.cash
@@ -139,6 +174,7 @@ const apply = (model: Model, op: Op, blockTime: number): Outcome => {
 			const state = book.questions.get(op.q)
 			if (state === undefined || state.units === 0n) return { ok: true, touched: [op.u], returns: [0n] }
 			const cash = takeUnits(model, book, state.units)
+			book.epoch = undefined
 			book.questions.delete(op.q)
 			model.stats.cancelled += cash
 			return { ok: true, touched: [op.u], returns: [cash] }
@@ -157,16 +193,37 @@ const apply = (model: Model, op: Op, blockTime: number): Outcome => {
 				state.units -= amount
 				earned += amount
 			}
-			const earnedCash = earned === 0n ? 0n : takeUnits(model, book, earned)
-			let unusedCash = 0n
+			let unused = 0n
 			if (op.ts > book.minimumFinalAfter) {
-				let unused = 0n
 				for (const [id, state] of [...book.questions]) {
 					if (state.end === 0 || state.end > op.ts - 1) continue
 					unused += state.units
 					book.questions.delete(id)
 				}
-				if (unused !== 0n) unusedCash = takeUnits(model, book, unused)
+			}
+			let earnedCash = 0n
+			let unusedCash = 0n
+			if (earned + unused !== 0n) {
+				book.epoch ??= {
+					cash: book.cash,
+					units: book.units,
+					earnedUnits: 0n,
+					unusedUnits: 0n,
+					earnedCash: 0n,
+					unusedCash: 0n,
+				}
+				const epoch = book.epoch
+				epoch.earnedUnits += earned
+				epoch.unusedUnits += unused
+				const nextEarned = (epoch.cash * epoch.earnedUnits) / epoch.units
+				const nextUnused = epoch.earnedUnits + epoch.unusedUnits === epoch.units ? epoch.cash - nextEarned : (epoch.cash * epoch.unusedUnits) / epoch.units
+				earnedCash = nextEarned - epoch.earnedCash
+				unusedCash = nextUnused - epoch.unusedCash
+				epoch.earnedCash = nextEarned
+				epoch.unusedCash = nextUnused
+				book.units -= earned + unused
+				book.cash -= earnedCash + unusedCash
+				model.totalCash -= earnedCash + unusedCash
 			}
 			book.ts = op.ts
 			model.stats.earned += earnedCash
@@ -485,7 +542,7 @@ describe('audit fuzz: resolution premium book against an eager reference model',
 		}
 
 		const execute = async (op: Op, index: number): Promise<string | undefined> => {
-			history.push(`#${index} ${show(op)}`)
+			history.push(`#${index}${show(op)}`)
 			const context = () => `\n  last operations:\n    ${history.slice(-25).join('\n    ')}`
 			const next = cloneModel(model)
 			let outcome: Outcome

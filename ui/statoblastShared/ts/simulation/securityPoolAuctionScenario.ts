@@ -101,7 +101,7 @@ export async function seedSecurityPoolAuctionScenario(parameters: ScenarioSeedPa
 	await reportStep(auctionSetup.forkFunded)
 	await advanceSimulationTime(memoryClient, 365n * DAY_IN_SECONDS + 60n)
 	await reportStep(auctionSetup.questionEnded)
-	await sendSecurityPoolTransaction(ownerClient, { account: owner, to: zoltar, value: 0n, data: encodeFunctionData({ abi: zoltarArtifact.abi, functionName: 'forkUniverse', args: [0n, questionId] }) }, auctionSetup.forkOrigin)
+	await sendSecurityPoolTransaction(ownerClient, { account: owner, to: zoltar, value: 0n, data: encodeFunctionData({ abi: zoltarArtifact.abi, functionName: 'forkUniverse', args: [0n, questionId, (1n << 256n) - 1n] }) }, auctionSetup.forkOrigin)
 	await reportStep(auctionSetup.originForked)
 	const controller = await readClient.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'forkController' })
 	// Keep both underwriters unchosen so the deficit is the exact claim total.

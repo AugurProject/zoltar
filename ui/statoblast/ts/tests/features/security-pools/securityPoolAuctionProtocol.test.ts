@@ -25,6 +25,7 @@ function fixture() {
 	source.codes.set(vault, auctionVaultRuntimeCode(bindings))
 	const values: Record<string, unknown> = {
 		repairAuctions: auction,
+		branches: [0n, 1n, 0n, 0n, 0n, 0n, true, true, false],
 		engine,
 		vaultImplementation: implementation,
 		capital,

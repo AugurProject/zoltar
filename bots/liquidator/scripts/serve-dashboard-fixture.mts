@@ -82,7 +82,6 @@ function pool(address: string, questionId: string, selected: boolean, isPriceVal
 		lastPrice: '10.284',
 		lastSettlementTimestamp: '1785416250',
 		manager: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-		minLiquidationPriceDistanceBps: '1000',
 		minimumToken1ReportEth: '1',
 		multiplierBps: '20000',
 		parent,

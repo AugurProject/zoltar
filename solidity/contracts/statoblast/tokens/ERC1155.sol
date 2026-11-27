@@ -2,7 +2,7 @@
 pragma solidity 0.8.35;
 
 import { IERC165 } from '../interfaces/IERC165.sol';
-import { IERC1155 } from '../interfaces/IERC1155.sol';
+import { IERC1155Supply } from '../interfaces/IERC1155Supply.sol';
 import { IERC1155Receiver } from '../interfaces/IERC1155Receiver.sol';
 
 /**
@@ -12,7 +12,7 @@ import { IERC1155Receiver } from '../interfaces/IERC1155Receiver.sol';
  * See https://eips.ethereum.org/EIPS/eip-1155
  * Originally based on code by Enjin: https://github.com/enjin/erc-1155
  */
-contract ERC1155 is IERC1155 {
+contract ERC1155 is IERC1155Supply {
 	bytes4 private constant ERC1155_RECEIVED_SELECTOR = IERC1155Receiver.onERC1155Received.selector;
 	bytes4 private constant ERC1155_BATCH_RECEIVED_SELECTOR = IERC1155Receiver.onERC1155BatchReceived.selector;
 	bytes4 private constant ERC1155_INTERFACE_ID = 0xd9b67a26;

@@ -40,6 +40,7 @@ contract ZoltarQuestionData {
 			require(questionData.displayValueMax > questionData.displayValueMin, 'Scalar question display max must be greater than display min');
 			require(questionData.numTicks > 0, 'Scalar question numTicks must be positive');
 		} else {
+			require(questionData.numTicks == 0 && questionData.displayValueMin == 0 && questionData.displayValueMax == 0 && bytes(questionData.answerUnit).length == 0, 'Categorical scalar fields must be zero or empty');
 			uint256 previous = type(uint256).max;
 			bytes32[] memory normalizedHashes = new bytes32[](outcomeOptions.length);
 			for (uint256 index = 0; index < outcomeOptions.length; index++) {

@@ -1,6 +1,6 @@
 import { collateralBalance } from './burnEvidence'
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { encodeDeployData, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, parseAbi, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
 	test_statoblast_SecurityPoolForkHarness_SecurityPoolForkHarness as rootArtifact,
 	test_statoblast_SecurityPoolForkHarness_SecurityPoolForkZoltarMock as zoltarArtifact,
@@ -224,6 +224,23 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		expect(await owner.readContract({ ...zoltarTarget(), functionName: 'getMigrationRepBalanceAttoRep', args: [forks, child] })).toBe(300n * E)
 	})
 
+	test('#1661 source migration preparation is available before fork choices close', async () => {
+		await writeContractAndWait(owner, () =>
+			owner.writeContract({
+				abi: parseAbi(['function prepareSourceMigration(uint248 source)']),
+				address: forks,
+				functionName: 'prepareSourceMigration',
+				args: [0n],
+			}),
+		)
+		expect((await owner.readContract({ ...forkTarget(), functionName: 'forks', args: [0n] })).migrationPrepared).toBe(true)
+		await choose(alice, 1n)
+		await choose(bob, 2n)
+		await moveTo(forkTime + 9n * week)
+		await start(1n)
+		await finalize(await childId(1n))
+	})
+
 	test('floor-backed settlement units preserve neutral premium recovery and consume the right once', async () => {
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'fundRecoveryPremium', args: [1n], value: 20n * E }))
 		await writeContractAndWait(owner, () => owner.writeContract({ ...rootTarget(), functionName: 'setQuestionFee', args: [0n, 1n, ((200n * E - 200n * 10n ** 12n) * 1_000_000_000n) / 10n, Number(forkTime + 10n)] }))
@@ -231,6 +248,8 @@ describe('Statoblast: composed shared fork capital and collateral', () => {
 		const floorForkTime = (await owner.getBlock()).timestamp
 		await writeContractAndWait(owner, () => owner.writeContract({ ...zoltarTarget(), functionName: 'setForkTimestamp', args: [0n, floorForkTime] }))
 		await moveTo(floorForkTime + 8n * week)
+		const recoveryQuote = await buyer.simulateContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, 200n * E] })
+		expect(recoveryQuote.result).toBe(200n * 10n ** 12n + 20n * E)
 		for (const amount of [80n * E, 120n * E]) await writeContractAndWait(buyer, () => buyer.writeContract({ ...forkTarget(), functionName: 'recoverUnchosenCash', args: [0n, 1n, amount] }))
 		expect((await owner.readContract({ ...forkTarget(), functionName: 'forks', args: [0n] })).units).toBe(200n * 10n ** 12n * 1_000_000_000n)
 		expect(await owner.readContract({ ...rootTarget(), functionName: 'recoveredPremiumAttoEth', args: [buyer.account.address] })).toBe(20n * E)

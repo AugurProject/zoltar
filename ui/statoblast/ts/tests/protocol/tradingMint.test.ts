@@ -77,20 +77,28 @@ void describe('complete-set mint submission', () => {
 const securityPool = getAddress('0x00000000000000000000000000000000000000b1')
 const securityPoolMintAbi = parseAbi(['function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintEth,address recipient,uint256 minimumShares,uint256 maximumFee)'])
 
-test('winning-share redemption reviews ETH and REP recovery for the winning balance at one block', async () => {
+test.each(['winning shares', 'complete sets'] as const)('%s redemption allows both payout estimates to fall without payout floor arguments', async operation => {
 	const unit = 10n ** 18n
 	let review: TransactionRequestPreview | undefined
 	let plan: readonly TransactionPlanStep[] = []
 	let balances: [bigint, bigint, bigint] = [unit, 2n * unit, 3n * unit]
+	let quotedCash = unit
+	let quotedRep = 2n * unit
+	let identityReads = 0
+	let blockNumber = 99n
 	const send = mock((request: MockSentTransaction) => {
 		expect(request.to).toBe(pool)
 		if (request.data === undefined) throw new Error('Missing redemption calldata')
-		expect(decodeFunctionData({ abi: parseAbi(['function redeemShares()']), data: request.data }).functionName).toBe('redeemShares')
+		expect(decodeFunctionData({ abi: parseAbi(['function redeemShares()', 'function redeemCompleteSet(uint256)']), data: request.data })).toEqual({
+			functionName: operation === 'winning shares' ? 'redeemShares' : 'redeemCompleteSet',
+			args: operation === 'winning shares' ? [] : [unit],
+		})
 	})
 	const pinned: (bigint | undefined)[] = []
 	const client = {
 		...asWriteClient(
 			createMockWriteClient(send, async request => {
+				if (['collateralToken', 'services', 'securityPoolFactory', 'securityPoolOf', 'isSecurityPool'].includes(request.functionName)) identityReads += 1
 				if (request.functionName === 'collateralToken') return getActiveNetworkProfile().wethAddress
 				if (request.functionName === 'services' || request.functionName === 'settlement') return securityPool
 				if (request.functionName === 'recoveryTokens') return pool
@@ -107,15 +115,15 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 			}),
 		),
 		account: { address: pool, type: 'json-rpc' as const },
-		getBlock: async () => ({ ...createBlockWithTimestamp(100n), number: 99n }),
+		getBlock: async () => ({ ...createBlockWithTimestamp(100n), number: blockNumber }),
 		multicall: createMulticallStub(request => {
 			pinned.push(request.blockNumber)
 			expect(request.contracts.map(contract => ({ address: contract.address, functionName: contract.functionName, args: contract.args }))).toEqual([
 				{ address: pool, functionName: 'refreshSecurityPoolFees', args: [] },
-				{ address: pool, functionName: 'attoSharesToAttoEth', args: [balances[2]] },
-				{ address: pool, functionName: 'attoSharesToAttoRep', args: [balances[2]] },
+				{ address: pool, functionName: 'attoSharesToAttoEth', args: [operation === 'winning shares' ? balances[2] : unit] },
+				{ address: pool, functionName: 'attoSharesToAttoRep', args: [operation === 'winning shares' ? balances[2] : unit] },
 			])
-			return [undefined, unit, 2n * unit]
+			return [undefined, quotedCash, quotedRep]
 		}),
 		onTransactionPrepared: (value: TransactionRequestPreview) => {
 			review = value
@@ -124,22 +132,43 @@ test('winning-share redemption reviews ETH and REP recovery for the winning bala
 			plan = steps
 		},
 	}
-	await redeemSharesInQuestionLedger(client, pool)
-	expect(pinned).toEqual([99n, 99n, 99n])
+	if (operation === 'winning shares') await redeemSharesInQuestionLedger(client, pool)
+	else await redeemCompleteSetInQuestionLedger(client, pool, unit)
+	expect(pinned).toEqual(operation === 'winning shares' ? [99n, 99n, 99n] : [99n])
 	expect(review?.reviewDescription).toMatch(/1\sWETH/)
 	expect(review?.reviewDescription).toMatch(/2\sREP/)
 	expect(send).toHaveBeenCalledTimes(1)
+	expect(identityReads).toBe(5)
+	expect(plan[0]?.requireReview).toBe(true)
 	const step = plan[0]
 	if (step?.validateBeforeSubmit === undefined || step.readReviewRows === undefined) throw new Error('Missing redemption review')
+	blockNumber = 100n
 	await step.validateBeforeSubmit()
-	expect(step.readReviewRows()).toContainEqual({ label: 'No shares', value: '3 → 0' })
-	balances = [unit, 2n * unit, 4n * unit]
-	await expect(step.validateBeforeSubmit()).rejects.toThrow('Changed since you reviewed')
-	if (step.refreshReviewData === undefined) throw new Error('Missing winning-share review refresh')
-	const data = await step.refreshReviewData()
-	expect(decodeFunctionData({ abi: parseAbi(['function redeemShares()']), data }).functionName).toBe('redeemShares')
-	await step.validateBeforeSubmit()
-	expect(step.readReviewRows()).toContainEqual({ label: 'No shares', value: '4 → 0' })
+	expect(identityReads).toBe(5)
+	expect(pinned.slice(operation === 'winning shares' ? -3 : -2)).toEqual(operation === 'winning shares' ? [100n, 100n, 100n] : [100n, 100n])
+	expect(step.readReviewRows()).toContainEqual({ label: 'No shares', value: operation === 'winning shares' ? '3 → 0' : '3 → 2' })
+	expect(step.readReviewRows().some(row => row.label.startsWith('Minimum'))).toBe(false)
+	quotedCash = 0n
+	await expect(step.validateBeforeSubmit()).resolves.toBeUndefined()
+	expect(step.readReviewRows()).toContainEqual({ label: 'Estimated collateral received', value: '0\u00a0WETH', allowValueChange: true })
+	quotedCash = unit
+	quotedRep = 0n
+	await expect(step.validateBeforeSubmit()).resolves.toBeUndefined()
+	expect(step.readReviewRows()).toContainEqual({ label: 'Estimated REP received', value: '0\u00a0REP', allowValueChange: true })
+	quotedRep = 2n * unit
+	if (operation === 'winning shares') {
+		balances = [unit, 2n * unit, 4n * unit]
+		quotedRep = 4n * unit
+		await expect(step.validateBeforeSubmit()).rejects.toThrow('Changed since you reviewed')
+		if (step.refreshReviewData === undefined) throw new Error('Missing winning-share review refresh')
+		const data = await step.refreshReviewData()
+		expect(decodeFunctionData({ abi: parseAbi(['function redeemShares()']), data }).args).toEqual([])
+		if (step.readReviewArgs === undefined) throw new Error('Missing refreshed redemption argument reader')
+		expect(step.readReviewArgs(data)).toEqual([])
+		await step.validateBeforeSubmit()
+		expect(identityReads).toBe(5)
+		expect(step.readReviewRows()).toContainEqual({ label: 'No shares', value: '4 → 0' })
+	}
 })
 
 test('complete-set redemption refreshes all three share balances and its payout estimate', async () => {
@@ -172,6 +201,7 @@ test('complete-set redemption refreshes all three share balances and its payout 
 		['No shares', '3 → 2'],
 		['Invalid shares', '1 → 0'],
 		['Estimated collateral received', '1\u00a0WETH'],
+		['Estimated REP received', '0\u00a0REP'],
 	])
 	holdings = [unit, 0n, 3n * unit]
 	await expect(step.validateBeforeSubmit()).rejects.toThrow('Your balance is too low')

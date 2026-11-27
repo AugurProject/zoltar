@@ -1,9 +1,13 @@
+import { join } from 'node:path'
+import { toHex } from '@zoltar/core-shared/evm/ethereum'
+import { getContractOutput, loadContractsJson, normalizeStorageLayout } from '../contractArtifactHelpers'
 import { describe, expect, test } from 'bun:test'
 import {
 	statoblast_SecurityPoolUniformPriceRepairAuction_SecurityPoolUniformPriceRepairAuction as engineArtifact,
 	statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuction as auctionArtifact,
 	statoblast_SecurityPoolCapitalLedger_SecurityPoolCapitalLedger as capitalArtifact,
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
+	statoblast_SecurityPool_SecurityPool as poolArtifact,
 } from '../../types/contractArtifact'
 import { DAY } from '../../testSupport/simulator/utils/constants'
 import { prepareSecurityPoolCollateralRepairAuction } from './securityPoolCollateralRepairAuctionFixture'
@@ -31,7 +35,20 @@ describe('collateral repair auction safety bounds', () => {
 })
 
 describe('collateral repair auction REP precision', () => {
-	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n, minimumCommitmentAttoEth: 1n })
+	const fixture = useSecurityPoolFixture({ annualFeeBps: 0n, minimumCommitmentAttoEth: 1n }, 10_500n)
+	test('#1634 opening rechecks the observation against final rounded exposure', async () => {
+		const context = await prepareSecurityPoolCollateralRepairAuction(fixture, 10n * 10n ** 18n + 1n)
+		await context.report()
+		const exposure = await context.owner.readContract({ abi: poolArtifact.abi, address: fixture.securityPool, functionName: 'oracleExposure', args: [context.child] })
+		const layout = normalizeStorageLayout(getContractOutput(loadContractsJson(join(import.meta.dir, '..')), 'contracts/statoblast/SharedPoolPriceFeed.sol', 'SharedPoolPriceFeed'))
+		const field = layout.find(entry => entry.label === 'acceptedExposureLimitAttoEth')
+		if (field === undefined || field.offset !== 0) throw new Error('Missing whole-word observation coverage slot')
+		// Isolate the boundary after a normally accepted observation: cover the
+		// original terms exactly, while retaining its real REP budget and clocks.
+		await context.mock.request({ method: 'anvil_setStorageAt', params: [context.feed, toHex(BigInt(field.slot), { size: 32 }), toHex(exposure, { size: 32 })] })
+		await expect(context.open()).rejects.toThrow('Collateral repair auction quote does not cover final lots')
+	})
+
 	test('#1339 permits precise small lots while bounding rounding and covering the deficit', async () => {
 		const context = await prepareSecurityPoolCollateralRepairAuction(fixture)
 		await context.report()

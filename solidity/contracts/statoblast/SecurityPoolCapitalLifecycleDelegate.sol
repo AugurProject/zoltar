@@ -124,7 +124,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 
 	/// @dev These owner operations run after the ledger checkpoints old income.
 	function withdrawPrincipal(uint256 amount, address recipient) external onlyDelegateCall {
-		require(recipient != address(0) && amount > 0, 'Invalid capital withdrawal');
+		require(recipient != address(0) && recipient != address(this) && amount > 0, 'Invalid capital withdrawal');
 		_settleOwner(_capitalOwner());
 		Owner storage owner = owners[_capitalOwner()].account;
 		uint256 free = Math.min(amount, owner.freeAttoRep);
@@ -150,7 +150,7 @@ contract SecurityPoolCapitalLifecycleDelegate is SecurityPoolCapitalState {
 	/// @dev Pays to a recipient the owner chooses, so a token that refuses the owner
 	/// cannot strand either the REP or the collateral earnings.
 	function claimEarnings(address recipient) external onlyDelegateCall {
-		require(recipient != address(0), 'Invalid earnings recipient');
+		require(recipient != address(0) && recipient != address(this), 'Invalid earnings recipient');
 		_settleOwner(_capitalOwner());
 		Owner storage owner = owners[_capitalOwner()].account;
 		uint256 ethAmount = owner.feesAttoEth;

@@ -46,6 +46,18 @@ describe('Statoblast: gas-bounded sponsor operation batches', () => {
 		return { sponsor, feed }
 	}
 	const withdraw = (amount: bigint, recipient: `0x${string}`) => ({ gasLimit: 500_000n, data: encodeFunctionData({ abi: capitalArtifact.abi, functionName: 'withdrawPrincipal', args: [amount, recipient] }) })
+	test('#1682 refuses operations expiring before first settlement without taking funding', async () => {
+		const { sponsor, feed } = await prepare()
+		const snapshot = await loadSecurityPoolPriceSnapshot({ client: sponsor, securityPool: fixture.securityPool, owner: sponsor.account.address, universeId: fixture.base.genesisUniverse })
+		const batch = { gasLimit: 600_000n, minimumPrice: unit, maximumPrice: unit, deadline: snapshot.timestamp + 60n, operations: [withdraw(1n, sponsor.account.address)] }
+		const bounty = 3n * (snapshot.observation?.bounty ?? 0n)
+		await expect(sponsor.writeContract({ abi: batchAbi, address: feed.address, functionName: 'requestSecurityPoolPriceWithOperations', args: [unit, 10n * unit, bounty, batch], value: bounty })).rejects.toThrow('Report operations expire before settlement')
+		expect(() => buildSecurityPoolPriceOperationsRequest(snapshot, unit, 10n * unit, batch)).toThrow('before settlement')
+		const now = (await sponsor.getBlock()).timestamp
+		const challenge = await sponsor.readContract({ ...feed, functionName: 'settlementTime' })
+		await expect(sponsor.simulateContract({ abi: batchAbi, address: feed.address, functionName: 'requestSecurityPoolPriceWithOperations', args: [unit, 10n * unit, bounty, { ...batch, deadline: now + challenge }], value: bounty })).resolves.toBeDefined()
+	})
+
 	test('#1252 the SDK preserves the mined base fee when quoting a settlement bounty', async () => {
 		const { sponsor, feed } = await prepare()
 		const baseFee = 1_000_000_000n

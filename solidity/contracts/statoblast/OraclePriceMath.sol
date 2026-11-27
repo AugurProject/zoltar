@@ -23,7 +23,7 @@ library OraclePriceMath {
 		require(uncertainty < OPEN_ORACLE_PERCENTAGE_PRECISION, 'Invalid oracle uncertainty');
 		return Math.mulDiv(price, OPEN_ORACLE_PERCENTAGE_PRECISION, OPEN_ORACLE_PERCENTAGE_PRECISION + uncertainty);
 	}
-	function maximumPriorityFee(uint256 uncertainty, uint256 protocolFee, uint256 reporterFee, uint256 haltMultiplierBps) internal pure returns (uint256) {
+	function maximumPriorityFee(uint256 uncertainty, uint256 protocolFee, uint256 reporterFee, uint256 haltMultiplierBps, uint256 settlementFeeMultiplierBps) internal pure returns (uint256) {
 		require(uncertainty < OPEN_ORACLE_PERCENTAGE_PRECISION, 'Target price error must be below one hundred percent');
 		require(protocolFee + reporterFee < uncertainty, 'Oracle fees must be below the target price error');
 		require(haltMultiplierBps > 0, 'Escalation multiplier zero');
@@ -31,6 +31,13 @@ library OraclePriceMath {
 		maximumReport = Math.min(maximumReport, type(uint128).max) / 2;
 		uint256 denominator = SecurityPoolUtils.BPS_DENOMINATOR * (uncertainty - protocolFee - reporterFee);
 		uint256 numerator = REPORT_SECURITY_MULTIPLIER_BPS * (OPEN_ORACLE_PERCENTAGE_PRECISION + uncertainty);
-		return Math.mulDiv(maximumReport, denominator, numerator) / DISPUTE_GAS_UNITS;
+		uint256 reportMaximum = Math.mulDiv(maximumReport, denominator, numerator) / DISPUTE_GAS_UNITS;
+		require(settlementFeeMultiplierBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'Max settlement base fee multiplier must be at least one hundred percent');
+		uint256 callbackGas = 4_000_000;
+		uint256 paddedGas = Math.ceilDiv((callbackGas + callbackGas / 63 + 310_000) * 12_000, 10_000) + 20_000;
+		uint256 maximumAllowance = (uint256(type(uint96).max) - 101) / paddedGas;
+		uint256 bountyMaximum =
+			Math.mulDiv(maximumAllowance + 1, 10_000, settlementFeeMultiplierBps, Math.Rounding.Ceil) - 1;
+		return Math.min(reportMaximum, bountyMaximum);
 	}
 }

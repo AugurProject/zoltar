@@ -163,6 +163,18 @@ describe('Statoblast: central security pool and native question integration', ()
 		}
 	})
 
+	test('native redemption pays the current entitlement without a caller minimum', async () => {
+		await fixture.prepare()
+		await fixture.mint()
+		const trader = fixture.other()
+		const pool = fixture.poolFor(fixture.base.questionId)
+		const before = await balanceOfShares(trader, pool.shareToken, fixture.base.genesisUniverse, trader.account.address)
+		const abi = parseAbi(['function redeemCompleteSet(uint256 shares)'])
+		const redeem = () => writeContractAndWait(trader, () => trader.writeContract({ abi, address: pool.questionLedger, functionName: 'redeemCompleteSet', args: [before[0]] }))
+		await redeem()
+		expect(await balanceOfShares(trader, pool.shareToken, fixture.base.genesisUniverse, trader.account.address)).toEqual([0n, 0n, 0n])
+	})
+
 	test('two questions consume one capacity budget while REP remains in one ledger', async () => {
 		await fixture.prepare(1_000n * unit, 100n * unit)
 		await fixture.mint(60n * unit)
