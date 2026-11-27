@@ -181,17 +181,30 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect(await alice.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [ledger] })).toBe(305n * E)
 	})
 
-	test('#1448: an owner cannot cancel triggered liquidation with a REP top-up', async () => {
+	test('an owner rescues its liquidating position in place only with a full rescue at a fresh price', async () => {
 		await deposit(alice, 105n * E)
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
-		await price(2n * E)
+		await price(2n * E, 20)
 		const started = await alice.readContract({ abi: indexArtifact.abi, address: index, functionName: 'liquidationStarted', args: [id] })
 		expect(started).toBeGreaterThan(0n)
-		await expect(deposit(alice, 200n * E)).rejects.toThrow('Position is liquidating')
-		await expect(writeContractAndWait(alice, () => alice.writeContract({ abi: artifact.abi, address: ledger, functionName: 'depositAndSetHealthTarget', args: [200n * E, 12_000n] }))).rejects.toThrow('Position is liquidating')
+		// The rescue must restore backing at the conservative repair price that a takeover restores.
+		const rescue = (await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'requiredRep', args: [100n * E, 10_000n] })) - 105n * E
+		expect(rescue).toBeGreaterThan(0n)
+		await expect(deposit(alice, rescue - 1n)).rejects.toThrow('Deposit must fully rescue the liquidating position')
+		await expect(writeContractAndWait(alice, () => alice.writeContract({ abi: artifact.abi, address: ledger, functionName: 'depositAndSetHealthTarget', args: [rescue - 1n, 12_000n] }))).rejects.toThrow('Deposit must fully rescue the liquidating position')
+		// A stale price cannot prove the rescue, so it cannot clear distress either.
+		await getAnvilWindowEthereum().advanceTime(21n)
+		await expect(deposit(alice, rescue)).rejects.toThrow('Capital price stale')
 		expect(await alice.readContract({ abi: indexArtifact.abi, address: index, functionName: 'liquidationStarted', args: [id] })).toBe(started)
-		expect((await position(id)).rep).toBe(105n * E)
+		await price(2n * E)
+		await deposit(alice, rescue)
+		expect((await position(id)).rep).toBe(105n * E + rescue)
+		expect(await alice.readContract({ abi: indexArtifact.abi, address: index, functionName: 'liquidationStarted', args: [id] })).toBe(0n)
+		// The rescue pays no takeover reward and leaves nothing for a keeper to take over.
+		await getAnvilWindowEthereum().advanceTime(3601n)
+		await expect(writeContractAndWait(keeper, () => keeper.sendTransaction(buildSecurityPoolCapitalTakeOverRequest({ owner: keeper.account.address, capitalLedger: ledger, positionId: id, commitment: 50n * E, minimumTakeoverReward: 0n, maximumOwnRep: 1_000n * E })))).rejects.toThrow('Adverse observation missing')
+		expect((await position(id)).rep).toBe(105n * E + rescue)
 	})
 
 	test('security pool underbacking blocks pledged withdrawals until another healthy owner supplies capacity', async () => {
@@ -400,9 +413,9 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect(previousStart).toBeGreaterThan(0n)
 		await getAnvilWindowEthereum().advanceTime(3601n)
 		await expect(writeContractAndWait(keeper, () => keeper.sendTransaction(buildSecurityPoolCapitalTakeOverRequest({ owner: keeper.account.address, capitalLedger: ledger, positionId: source, commitment: 50n * E, minimumTakeoverReward: 0n, maximumOwnRep: 0n })))).rejects.toThrow('Receiver collateral insufficient')
-		await expect(deposit(keeper, 210n * E)).rejects.toThrow('Position is liquidating')
-		await price(E)
+		// The receiver rescues its own position in place, which ends its older liquidation interval.
 		await deposit(keeper, 210n * E)
+		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [receiver] })).toBe(0n)
 		await price(2n * E)
 		await getAnvilWindowEthereum().advanceTime(3601n)
 		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [receiver] })).toBe(0n)
@@ -418,22 +431,22 @@ describe('Statoblast: individual shared-custody capital', () => {
 		expect(await position(receiver)).toMatchObject({ rep: 245n * E, commitment: 100n * E })
 	})
 
-	test('triggered liquidation rejects fresh and stale top-ups while fresh observations after gaps restart eligibility', async () => {
+	test('triggered liquidation rejects partial and stale top-ups while fresh observations after gaps restart eligibility', async () => {
 		await deposit(alice, 105n * E)
 		const id = await authorize(alice, 100n * E)
 		await demand(100n * E)
 		await price(2n * E, 20)
 		const previousStart = await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })
-		await expect(deposit(alice, E)).rejects.toThrow('Position is liquidating')
+		await expect(deposit(alice, E)).rejects.toThrow('Deposit must fully rescue the liquidating position')
 		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBe(previousStart)
 		await getAnvilWindowEthereum().advanceTime(21n)
-		await expect(deposit(alice, 104n * E)).rejects.toThrow('Position is liquidating')
+		await expect(deposit(alice, 104n * E)).rejects.toThrow('Capital price stale')
 		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'isPriceValid' })).toBe(false)
 		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBe(previousStart)
 		await price(3n * E)
 		// The new adverse observation restarts the takeover reward after a stale gap.
 		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBe((await alice.getBlock()).timestamp)
-		await expect(deposit(alice, 105n * E)).rejects.toThrow('Position is liquidating')
+		await expect(deposit(alice, 105n * E)).rejects.toThrow('Deposit must fully rescue the liquidating position')
 		expect(await alice.readContract({ abi: artifact.abi, address: ledger, functionName: 'liquidationStarted', args: [id] })).toBeGreaterThan(previousStart)
 	})
 

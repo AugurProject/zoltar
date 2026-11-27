@@ -204,8 +204,12 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 			totalFreeAttoRep += amount;
 		} else {
 			SecurityPoolCommitmentIndex.Account memory position = commitmentIndex.accountOf(account.positionId);
-			// Deposits cannot undo the adverse-price condition that permits takeover.
-			require(position.maxHealthyPrice >= liquidationPrice, 'Position is liquidating');
+			// An owner may rescue its liquidating position in place, as a takeover from another of its
+			// addresses could. The rescue must hold at the takeover repair price under a fresh price.
+			if (position.maxHealthyPrice < liquidationPrice) {
+				_requireFresh();
+				require(maximumHealthyPrice(position.rep + amount, position.commitment) >= conservativePrice, 'Deposit must fully rescue the liquidating position');
+			}
 			_replace(account.positionId, position.rep + amount, position.commitment);
 		}
 		repToken().safeTransferFrom(_capitalOwner(), address(this), amount);

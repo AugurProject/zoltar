@@ -105,7 +105,8 @@ export const reportChanged = 'Report terms changed. Review the commitment again.
 
 export { readUnavailable } from './securityPool.js'
 
-export const depositLiquidating = 'This position is liquidating. REP top-ups are unavailable.'
+export const depositRescueRequired = (amount: string) => `This position is liquidating. Deposit at least ${amount} REP to back it at the repair price and end the liquidation.`
+export const rescueNeedsCurrentPrice = 'This position is liquidating. A new accepted REP price is required before a rescue deposit.'
 
 export const resubmitRetirement = 'Retry reduction'
 export const preview = 'Preview'

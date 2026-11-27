@@ -156,8 +156,8 @@ export function useSecurityPoolAggregate(
 		reportInput.value = ''
 	}, [snapshot?.chainId, snapshot?.securityPool, snapshot?.owner, snapshot?.universeId, snapshot?.ownerAccount.targetHealthFactorBps])
 	const positive = (value: bigint | undefined) => (value === undefined || value === 0n ? transactionCopy.positiveAmountRequired : undefined)
-	const topUpReason = snapshot === undefined ? undefined : capitalDepositReason(snapshot)
-	const fundingReason = ownerReason ?? inactiveReason ?? admissionReason ?? topUpReason ?? positive(depositAttoRep) ?? (snapshot !== undefined && depositAttoRep !== undefined && depositAttoRep > snapshot.walletAttoRep ? transactionCopy.insufficientRep : undefined)
+	const fundingReason =
+		ownerReason ?? inactiveReason ?? admissionReason ?? (snapshot === undefined ? undefined : capitalDepositReason(snapshot, depositAttoRep)) ?? positive(depositAttoRep) ?? (snapshot !== undefined && depositAttoRep !== undefined && depositAttoRep > snapshot.walletAttoRep ? transactionCopy.insufficientRep : undefined)
 	const depositReason = fundingReason ?? (snapshot !== undefined && depositAttoRep !== undefined && depositAttoRep > snapshot.allowanceAttoRep ? transactionCopy.approveBeforeDeposit : undefined)
 	const withdrawReason = ownerReason ?? (snapshot === undefined ? undefined : capitalWithdrawalReason(snapshot, withdrawAttoRep))
 	const healthReason = ownerReason ?? (snapshot === undefined ? undefined : capitalHealthReason(snapshot, healthBps))
@@ -165,7 +165,7 @@ export function useSecurityPoolAggregate(
 		ownerReason ??
 		inactiveReason ??
 		admissionReason ??
-		topUpReason ??
+		(snapshot === undefined ? undefined : capitalDepositReason(snapshot, healthDepositAttoRep)) ??
 		positive(healthDepositAttoRep) ??
 		(snapshot !== undefined && healthDepositAttoRep !== undefined && healthDepositAttoRep > snapshot.walletAttoRep ? transactionCopy.insufficientRep : undefined) ??
 		(snapshot === undefined ? undefined : capitalHealthReason(snapshot, healthBps, healthDepositAttoRep))
@@ -223,7 +223,7 @@ export function useSecurityPoolAggregate(
 						const latest = await loadSecurityPoolCapitalSnapshot({ client: securityPoolReadClient(reader), securityPool: selected.securityPool, owner: selected.owner, universeId: selected.universeId })
 						if (latest.chainId !== selected.chainId || latest.capitalLedger !== selected.capitalLedger) throw new Error(poolChanged)
 						if (['depositSecurityPoolRep', 'depositSecurityPoolHealthRep', 'approveSecurityPoolRep', 'approveSecurityPoolHealthRep'].includes(action)) {
-							const reason = capitalDepositReason(latest)
+							const reason = capitalDepositReason(latest, action === 'depositSecurityPoolHealthRep' || action === 'approveSecurityPoolHealthRep' ? healthDepositAttoRep : depositAttoRep)
 							if (reason !== undefined) throw new Error(reason)
 						}
 						await validate?.(latest)

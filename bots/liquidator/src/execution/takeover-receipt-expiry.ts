@@ -38,12 +38,20 @@ export async function explainTakeoverReceiptExpiry(intent: PendingTransactionInt
 			const forkTime = await client.readContract({ address: zoltar, abi: zoltarAbi, functionName: 'getForkTime', args: [universeId], blockNumber })
 			const positionId = call.functionName === 'takeOverWithBounds' ? target : await client.readContract({ ...atReceipt, functionName: 'repairAuctionBidPositionIds', args: [target] })
 			const position = positionId === 0n ? undefined : await client.readContract({ address: index, abi: securityPoolCommitmentIndexAbi, functionName: 'accountOf', args: [positionId], blockNumber })
+			// An owner may rescue its position in place; the rescue ends the liquidation without changing its commitment.
+			const [liquidationStarted, priorLiquidationStarted] =
+				positionId === 0n
+					? [undefined, undefined]
+					: await Promise.all([
+							client.readContract({ address: index, abi: securityPoolCommitmentIndexAbi, functionName: 'liquidationStarted', args: [positionId], blockNumber }),
+							client.readContract({ address: index, abi: securityPoolCommitmentIndexAbi, functionName: 'liquidationStarted', args: [positionId], blockNumber: intent.submissionBlock }),
+						])
 			const priorPosition = call.functionName === 'takeOverWithBounds' ? await client.readContract({ address: index, abi: securityPoolCommitmentIndexAbi, functionName: 'accountOf', args: [target], blockNumber: intent.submissionBlock }) : undefined
 			const [receiptCheck, submissionCheck] = await Promise.all([client.getBlock({ blockNumber }), client.getBlock({ blockNumber: intent.submissionBlock })])
 			if (receiptCheck.hash !== confirmed.hash || submissionCheck.hash !== submission.hash) throw new Error('Takeover evidence changed during reconciliation')
 			// Price expiry cannot invalidate an existing auction. Universe lifecycle guards still apply.
 			const inactive = importing || frozen || forkTime !== 0n
-			return { endpoint, value: { epoch, oldDemand, demand, position, priorPosition, inactive, submissionHash: submission.hash } }
+			return { endpoint, value: { epoch, oldDemand, demand, position, priorPosition, liquidationStarted, priorLiquidationStarted, inactive, submissionHash: submission.hash } }
 		}),
 		quorum,
 	)
@@ -52,6 +60,8 @@ export async function explainTakeoverReceiptExpiry(intent: PendingTransactionInt
 	if (state.oldDemand !== state.demand) return 'Security pool demand changed'
 	if (state.position !== undefined && state.position.commitment === 0n) return 'Target position is no longer live'
 	if (state.position !== undefined && state.position.batch !== bounds.expectedSourceBatch) return 'Target retirement cohort changed'
+	// Only a liquidation that was running when the takeover was signed and ended before it landed is an expiry.
+	if (state.position !== undefined && state.priorLiquidationStarted !== 0n && state.priorLiquidationStarted !== undefined && state.liquidationStarted === 0n) return 'Target position is no longer liquidating'
 	if (state.position !== undefined && state.priorPosition !== undefined && (state.position.owner !== state.priorPosition.owner || state.position.commitment !== state.priorPosition.commitment)) return 'Target position changed'
 	return undefined
 }

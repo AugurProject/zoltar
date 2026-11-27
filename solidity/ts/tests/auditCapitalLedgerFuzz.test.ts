@@ -350,6 +350,13 @@ const generate = (m: Model, random: Random, owners: number, plan: Plan): Operati
 			return { c: 'serve', o, id: random.pick(later.length !== 0 && random.chance(0.6) ? later : queue).id }
 		}
 	}
+	const own = ownerOf(m, o)
+	const distressed = own.positionId === 0n ? undefined : positionOf(m, own.positionId)
+	if (distressed !== undefined && inTree(distressed) && distressed.k !== 0n && distressed.price < m.liq && random.chance(0.3)) {
+		// In-place rescue: exactly enough, one attoREP short, or at a possibly stale price.
+		const rescue = max(1n, requiredRep(distressed.k, m.cons, BPS) - min(distressed.rep, requiredRep(distressed.k, m.cons, BPS)))
+		return { c: 'deposit', o, amount: random.chance(0.25) && rescue > 1n ? rescue - 1n : rescue }
+	}
 	const roll = random.int(1000)
 	if (roll < 70) return { c: 'deposit', o, amount: randomAmount(random, random.chance(0.15) ? 0 : 15, random.chance(0.5) ? 18 : 21) }
 	if (roll < 110) return generateDemand(m, random)
@@ -447,7 +454,7 @@ type Snapshot = Awaited<ReturnType<ReturnType<typeof createDriver>['read']>>
 const stringify = (value: unknown) => JSON.stringify(value, (_key, item: unknown) => (typeof item === 'bigint' ? `${item}n` : item))
 
 const KNOWN_REVERTS = [
-	'Position is liquidating',
+	'Deposit must fully rescue the liquidating position',
 	'Takeover reward below minimum',
 	'Takeover commitment below minimum',
 	'Position requires additional backing',

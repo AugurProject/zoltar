@@ -44,6 +44,20 @@ test('price expiry alone cannot explain a reverted auction fill; an inactive uni
 	expect(await explain({ getForkTime: 1n })).toBe('Capital universe inactive')
 })
 
+test('an owner rescuing its position in place one transaction ahead explains the reverted takeover (#1448)', async () => {
+	const { intent, receipt } = await securityPoolReceiptIntent('takeOverWithBounds')
+	receipt.status = 'reverted'
+	receipt.blockNumber = 123n
+	// Liquidating when the takeover was signed, rescued before it landed.
+	const rescued = securityPoolClient({ acceptedPriceEpoch: 2n, liquidationStarted: (_args: readonly unknown[], blockNumber?: bigint) => (blockNumber === intent.submissionBlock ? 100n : 0n) })
+	receipt.blockHash = rescued.observation.snapshot.blockHash
+	// The rescue only adds REP: owner, commitment, cohort, demand and price epoch are unchanged.
+	expect(await explainTakeoverReceiptExpiry(intent, receipt, [{ client: rescued.client, endpoint: 'https://read.example' }], 1)).toBe('Target position is no longer liquidating')
+	// A takeover signed against a position that was never liquidating is not an expiry: it must still pause.
+	const neverLiquidating = securityPoolClient({ acceptedPriceEpoch: 2n, liquidationStarted: 0n })
+	expect(await explainTakeoverReceiptExpiry(intent, receipt, [{ client: neverLiquidating.client, endpoint: 'https://read.example' }], 1)).toBeUndefined()
+})
+
 test('a finalized takeover whose terms expired is recorded as failed and retires its intent (#1372)', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'expired-takeover-'))
 	try {

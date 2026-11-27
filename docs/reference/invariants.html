@@ -369,6 +369,14 @@
 						</tr>
 						<tr>
 							<td>
+								<a href="#inv-64"><code>INV-64</code></a>
+							</td>
+							<td>In-place liquidation rescue</td>
+							<td>Safety</td>
+							<td>Tested property</td>
+						</tr>
+						<tr>
+							<td>
 								<a href="#inv-03"><code>INV-03</code></a>
 							</td>
 							<td>Maximum removable fee units</td>
@@ -1453,6 +1461,30 @@
 									<dt>Primary evidence</dt>
 									<dd>
 										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCapitalAuction.test.ts"><code>securityPoolCapitalAuction.test.ts</code></a>
+									</dd>
+								</div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="inv-64">
+						<summary><code>INV-64</code><span class="invariant-title">In-place liquidation rescue</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">An owner’s REP deposit into its own position below the liquidation price succeeds only at a fresh price and only when the resulting backing holds at the conservative repair price; a smaller deposit, or any deposit at a stale price, reverts and leaves the liquidation clock unchanged. A successful rescue clears the liquidation clock and moves no REP to any other owner.</div>
+							<dl class="invariant-metadata">
+								<div>
+									<dt>Type</dt>
+									<dd>Safety</dd>
+								</div>
+								<div>
+									<dt>Enforcement status</dt>
+									<dd>Tested property</dd>
+								</div>
+								<div>
+									<dt>Primary evidence</dt>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/securityPoolCapitalLedger.test.ts"><code>securityPoolCapitalLedger.test.ts</code></a
+										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditCapitalLedgerFuzz.test.ts"><code>auditCapitalLedgerFuzz.test.ts</code></a>
 									</dd>
 								</div>
 							</dl>

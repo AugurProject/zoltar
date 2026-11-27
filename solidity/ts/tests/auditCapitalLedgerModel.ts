@@ -680,7 +680,11 @@ export const applyModel = (m: Model, op: Operation): TakeoverResult | undefined 
 				m.totalFree += op.amount
 			} else {
 				const p = positionOf(m, owner.positionId)
-				requireModel(p.price >= m.liq, 'Position is liquidating')
+				// An owner may rescue its liquidating position in place at a fresh price, restoring the repair price.
+				if (p.price < m.liq) {
+					requireFresh(m)
+					requireModel(maxHealthyPrice(p.rep + op.amount, p.k) >= m.cons, 'Deposit must fully rescue the liquidating position')
+				}
 				ledgerReplace(m, p.id, p.rep + op.amount, p.k)
 			}
 			requireModel(owner.walletRep >= op.amount, 'TOKEN')

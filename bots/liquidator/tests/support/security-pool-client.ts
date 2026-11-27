@@ -165,7 +165,7 @@ export function securityPoolClient(overrides: Record<string, unknown> = {}) {
 					if (parameters.functionName === 'implementation') return getAddress(parameters.address)
 					if (!(parameters.functionName in values)) throw new Error(`Unexpected read ${parameters.functionName}`)
 					const value = values[parameters.functionName]
-					return typeof value === 'function' ? value(parameters.args ?? []) : value
+					return typeof value === 'function' ? value(parameters.args ?? [], parameters.blockNumber) : value
 				}
 			return Reflect.get(target, property, target)
 		},
