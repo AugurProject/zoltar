@@ -22,7 +22,9 @@ export function ApplicationBrand({ applicationTitle }: { applicationTitle: strin
 	return (
 		<>
 			<img src='./favicon.svg' alt='' width='28' height='28' />
-			<span className='application-brand-name'>{applicationTitle}</span>
+			<span className='application-brand-name' title={applicationTitle}>
+				{applicationTitle}
+			</span>
 		</>
 	)
 }

@@ -17,15 +17,12 @@ export const cannotReachNetwork = "Can't reach the network"
 export const changeRpcInSettings = 'Change RPC in Settings'
 export const tryAgain = 'Try again'
 export const formatSavedReadFailure = (age: string, reason: string) => `Couldn’t refresh, showing data from ${age} ago. ${reason}`
-export const autoLead = 'Auto '
-export const on = 'on'
-export const off = 'off'
 export const universeForked = 'This universe has forked.'
 export const contractsMissingTitle = 'Statoblast contracts aren’t deployed in this universe'
 export const contractsMissingDetail = 'Deploy the required contracts to open security pools and questions.'
 export const genesisQuestionContext = 'Augur v2 forked over this question. Each answer has its own REP and security pools.'
 export const formatQuestionEnded = (detail: string | number | bigint) => `Question ended ${detail}`
-export const viewQuestionOnEtherscan = 'View question on Etherscan ↗'
+export const viewQuestionOnEtherscan = 'View question on Etherscan'
 export const resolutionRulesAndDetails = 'Resolution rules and details'
 export const designatedReporterLead = 'Designated reporter '
 export const tagsLead = 'Tags '

@@ -22,7 +22,7 @@ import { getActiveNetworkProfile } from '../../lib/activeEnvironment.js'
 import { getNetworkSwitchTarget } from '../../wallet/networkProfile.js'
 import { formatUniverseDisplayLabel, formatUniverseLabel } from '../../lib/universeLabels.js'
 import type { UserMessagePresentation } from '../../lib/userCopy.js'
-import { AccountMenu, AccountMenuNetworkFact } from './AccountMenu.js'
+import { AccountDetails, AccountMenu, AccountMenuNetworkFact } from './AccountMenu.js'
 import { OverviewHeaderPanel } from './OverviewHeaderPanel.js'
 
 /** The REP price group of the account popover; applications without price quotes omit it. */
@@ -42,6 +42,8 @@ export type OverviewRepPricesProps = {
 
 export type OverviewPanelsProps = {
 	settingsMenu?: ComponentChildren
+	/** When supplied, the settings menu also carries the wallet details, so a narrow layout can hide the account control. */
+	renderSettingsMenu?: ((accountContent: ComponentChildren) => ComponentChildren) | undefined
 	/** Primary navigation for the top bar, supplied by `AppHeaderShell`. */
 	navigation?: ComponentChildren
 	applicationTitle: string
@@ -174,6 +176,7 @@ function UniverseForkNotice({ forkTime, hasRepToMigrate, migrateRepHref }: { for
 /** The protocol application top bar: brand, navigation, active universe, the account popover with balances and optional REP prices, and universe state. */
 export function OverviewPanels({
 	settingsMenu,
+	renderSettingsMenu,
 	navigation,
 	applicationTitle,
 	brandHref,
@@ -222,45 +225,42 @@ export function OverviewPanels({
 		...(showWethBalance ? [{ asset: commonCopy.weth, loading: showAccountBalances && isRefreshing && accountState.wethBalanceAttoEth === undefined, value: showAccountBalances ? accountState.wethBalanceAttoEth : undefined }] : []),
 		...(activeUniverseId === undefined ? [] : [{ asset: commonCopy.rep, loading: showAccountBalances && isLoadingUniverseRepBalance, value: showAccountBalances ? universeRepBalanceAttoRep : undefined }]),
 	]
+	// The simulation harness owns the simulated wallet session, so its popover lists balances without wallet actions.
+	const accountActions = isBrowserSimulationReadBackend ? undefined : (
+		<>
+			<WalletConnectionControl className='secondary' onClick={onChangeWallet} disabled={isManagingWallet} label={appCopy.changeWallet} />
+			<WalletConnectionControl className='quiet' onClick={onDisconnectWallet} disabled={isManagingWallet} label={appCopy.disconnectWallet} />
+		</>
+	)
+	const accountNetwork = (
+		<>
+			<AccountMenuNetworkFact label={appCopy.network}>{activeNetworkProfile.displayName}</AccountMenuNetworkFact>
+			{readBackendStatus?.blockNumber === undefined ? undefined : <AccountMenuNetworkFact label={appCopy.latestBlock}>{readBackendStatus.blockNumber.toString()}</AccountMenuNetworkFact>}
+		</>
+	)
+	const accountMetrics = (
+		<>
+			<WalletBalanceGroup balances={balances} />
+			{repPrices === undefined ? undefined : <RepPriceGroup {...repPrices} />}
+		</>
+	)
+	const accountTone = hasWrongWalletNetwork ? 'danger' : 'ok'
 	const accountControl = (() => {
 		if (accountState.address === undefined) return <WalletConnectionControl disabled={!hasInjectedWallet} disabledReasonElementId={noWalletReasonId} onClick={onConnect} pending={isConnectingWallet} pendingLabel={appCopy.connecting} label={commonCopy.connectWallet} />
-		// The simulation harness owns the simulated wallet session, so its popover lists balances without wallet actions.
-		const actions = isBrowserSimulationReadBackend ? undefined : (
-			<>
-				<WalletConnectionControl className='secondary' onClick={onChangeWallet} disabled={isManagingWallet} label={appCopy.changeWallet} />
-				<WalletConnectionControl className='quiet' onClick={onDisconnectWallet} disabled={isManagingWallet} label={appCopy.disconnectWallet} />
-			</>
-		)
 		return (
 			<>
 				{/* Network recovery stays on the bar: a wallet on the wrong network blocks every action until it switches. */}
 				{hasWrongWalletNetwork ? <WalletNetworkControl className='primary wallet-button' onClick={onSwitchNetwork} disabled={isManagingWallet} label={switchNetworkLabel} /> : undefined}
-				<AccountMenu
-					address={accountState.address}
-					longAbbreviation={longWalletAbbreviation}
-					tone={hasWrongWalletNetwork ? 'danger' : 'ok'}
-					network={
-						<>
-							<AccountMenuNetworkFact label={appCopy.network}>{activeNetworkProfile.displayName}</AccountMenuNetworkFact>
-							{readBackendStatus?.blockNumber === undefined ? undefined : <AccountMenuNetworkFact label={appCopy.latestBlock}>{readBackendStatus.blockNumber.toString()}</AccountMenuNetworkFact>}
-						</>
-					}
-					metrics={
-						<>
-							<WalletBalanceGroup balances={balances} />
-							{repPrices === undefined ? undefined : <RepPriceGroup {...repPrices} />}
-						</>
-					}
-					actions={actions}
-				/>
+				<AccountMenu address={accountState.address} longAbbreviation={longWalletAbbreviation} tone={accountTone} network={accountNetwork} metrics={accountMetrics} actions={accountActions} />
 			</>
 		)
 	})()
+	const settings = renderSettingsMenu === undefined || accountState.address === undefined ? settingsMenu : renderSettingsMenu(<AccountDetails address={accountState.address} tone={accountTone} network={accountNetwork} metrics={accountMetrics} actions={accountActions} />)
 	return (
 		<OverviewHeaderPanel
 			applicationTitle={applicationTitle}
 			brandHref={brandHref}
-			settingsMenu={settingsMenu}
+			settingsMenu={settings}
 			navigation={navigation}
 			badges={
 				activeNetworkBadge === undefined && wrongNetworkBadge === undefined ? undefined : (

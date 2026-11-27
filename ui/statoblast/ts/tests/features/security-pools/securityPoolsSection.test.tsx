@@ -186,9 +186,10 @@ test('a hashless deployment offers a way to check the wallet again', async () =>
 	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolsSection deploying parameters={parameters} walletConnected enabled environmentKey={0} activeUniverseId={0n} />))
 	const findCheck = () => [...view.container.querySelectorAll('button')].find(button => button.textContent === 'Check again' && !button.disabled)
 	await waitFor(() => expect(findCheck()).toBeDefined(), { timeout: 1000 })
-	expect([...view.container.querySelectorAll('.statoblast-deploy-layout > section .section-block-title-row')].map(heading => heading.textContent)).toEqual(['4. Deploy and set up', 'Locked fees and limits'])
+	expect([...view.container.querySelectorAll('.statoblast-deploy-layout > section .section-block-title-row')].map(heading => heading.textContent)).toEqual(['4. Deploy and set up', 'Approved settings'])
 	const lockedSummary = view.container.querySelector('.statoblast-deploy-summary')
 	expect(lockedSummary?.textContent).toContain('200%')
+	expect(lockedSummary?.querySelectorAll('dt')).toHaveLength(10)
 	expect(lockedSummary?.querySelector('input')).toBeNull()
 	const checksBeforeClick = nonceChecks
 	await act(() => findCheck()?.click())
