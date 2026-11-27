@@ -2,6 +2,7 @@
 pragma solidity 0.8.35;
 
 import '../../statoblast/interfaces/IERC1155Receiver.sol';
+import { IERC1155 } from '../../statoblast/interfaces/IERC1155.sol';
 import '../../statoblast/interfaces/IQuestionLedger.sol';
 import '../../statoblast/interfaces/IShareToken.sol';
 
@@ -20,6 +21,10 @@ contract ERC1155ReceiverMock is IERC1155Receiver {
 	bytes public lastData;
 	uint256 public singleReceiveCount;
 	uint256 public batchReceiveCount;
+
+	function standardTokenInterfaceId() external pure returns (bytes4) {
+		return type(IERC1155).interfaceId;
+	}
 
 	function setBehavior(bool _acceptSingle, bool _acceptBatch, bool _revertOnReceive) external {
 		acceptSingle = _acceptSingle;

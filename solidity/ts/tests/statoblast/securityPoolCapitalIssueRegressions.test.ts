@@ -4,6 +4,30 @@ import { capitalUnit as E, useCapitalTestFixture } from './securityPoolCapitalTe
 
 describe('capital issue regressions', () => {
 	const f = useCapitalTestFixture()
+	for (const pledged of [false, true]) {
+		test(`#1738 rejects capital self-recipient with pledged=${pledged}`, async () => {
+			await f.fundOwners()
+			await f.deposit(0, 210n * E)
+			if (pledged) await f.authorize(0, 100n * E)
+			const before = await f.owner(0)
+			await expect(writeContractAndWait(f.client(), () => f.client().writeContract({ ...f.capital, functionName: 'withdrawPrincipal', args: [E, f.capital.address] }))).rejects.toThrow('Invalid capital withdrawal')
+			expect(await f.owner(0)).toEqual(before)
+			await writeContractAndWait(f.client(), () => f.client().writeContract({ ...f.capital, functionName: 'withdrawPrincipal', args: [E, f.client().account.address] }))
+		})
+	}
+	test('#1738 rejects earnings self-recipient', async () => {
+		await f.fundOwners()
+		await f.deposit(0, 210n * E)
+		const id = await f.authorize(0, 100n * E)
+		await writeContractAndWait(f.client(), () => f.client().writeContract({ ...f.harness, functionName: 'fundRepFees', args: [86_400n * E] }))
+		await f.getAnvilWindowEthereum().advanceTime(100n)
+		await writeContractAndWait(f.client(), () => f.client().writeContract({ ...f.capital, functionName: 'checkpoint' }))
+		expect((await f.position(id)).repFees).toBeGreaterThan(0n)
+		const before = await f.owner(0)
+		await expect(writeContractAndWait(f.client(), () => f.client().writeContract({ ...f.capital, functionName: 'claimEarnings', args: [f.capital.address] }))).rejects.toThrow('Invalid earnings recipient')
+		expect(await f.owner(0)).toEqual(before)
+		await writeContractAndWait(f.client(), () => f.client().writeContract({ ...f.capital, functionName: 'claimEarnings', args: [f.client().account.address] }))
+	})
 	const setup = async (small = false) => {
 		await f.fundOwners()
 		await f.deposit(0, small ? 105n * 10n ** 13n : 105n * E)

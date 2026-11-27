@@ -41,6 +41,28 @@ test('the auction shows its recapitalization deadline, lot layout, and the curre
 	expect(scale?.textContent).toContain('Highest now')
 })
 
+test('an unaffordable default lot disables opening even when smaller lots would fit the inventory', async () => {
+	const fixture = await auctionFixture()
+	Object.assign(fixture.values, {
+		opened: false,
+		initialized: false,
+		closesAt: 100_000n,
+		shortfallAttoEth: 60n,
+		minimumCommitmentAttoEth: 15n,
+		lotAttoEth: 15n,
+		targetLots: 4n,
+		securityMultiplierBps: 10_500n,
+		repGrid: 21n,
+		conservativePrice: unit,
+		inventoryAttoRep: 21n,
+	})
+	const view = lifecycle.trackRendered(await renderIntoDocument(<SecurityPoolRepairAuction fork={fixture.fork} bidder={owner} actions={actions} />))
+	await waitFor(() => expect(view.container.textContent).toContain('The auction inventory cannot back one collateral lot at the minimum health target.'))
+	const open = button(view.container, 'Open repair auction')
+	expect(open.disabled).toBe(true)
+	expect(open.getAttribute('aria-describedby')).toBeTruthy()
+})
+
 test('an auction deadline stops live bidding and rechecks the last observed block', async () => {
 	const fixture = await auctionFixture()
 	const nearDeadline = capitalSnapshot({ timestamp: 2_999n })

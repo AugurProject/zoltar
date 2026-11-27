@@ -1,6 +1,8 @@
+import { join } from 'node:path'
+import { getContractOutput, loadContractsJson, normalizeStorageLayout } from '../contractArtifactHelpers'
 import { loadSecurityPoolPriceSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { describe, expect, test } from 'bun:test'
-import { decodeEventLog, parseAbiItem, toEventSelector, getAddress, zeroAddress, encodeFunctionData, isHex, createPublicClient, custom, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, parseAbiItem, toEventSelector, getAddress, zeroAddress, encodeFunctionData, isHex, createPublicClient, custom, type Hash, keccak256, encodeAbiParameters, parseAbiParameters, toHex } from '@zoltar/core-shared/evm/ethereum'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import {
 	statoblast_SharedPoolPriceFeed_SharedPoolPriceFeed as feedArtifact,
@@ -27,6 +29,43 @@ const priceCandidateAccepted = parseAbiItem('event PriceCandidateAccepted(uint25
 describe('Statoblast: central capital shared price feed', () => {
 	const fixture = useSecurityPoolFixture()
 	const feed = () => fixture.owner().readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'priceFeed', args: [fixture.base.genesisUniverse] })
+
+	test('#1624 recovery rejects a settled positive price with a zero liquidation bound', async () => {
+		await fixture.prepare()
+		const owner = fixture.owner()
+		const target = { abi: feedArtifact.abi, address: await feed() }
+		const bounty = await owner.readContract({ ...target, functionName: 'getRequestPriceCostAttoEth' })
+		await requestPriceWithValue(owner, target.address, bounty, unit)
+		const id = await owner.readContract({ ...target, functionName: 'pendingReportId' })
+		const [, , ceiling] = await owner.readContract({ ...target, functionName: 'reportCandidates', args: [id] })
+		await fixture.base.mockWindow.advanceTime(481n)
+		await fixture.base.mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [toHex(ceiling + 1n)] })
+		await openOracleSettleWithGasPrice(owner, id, ceiling + 1n)
+		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [id] })).toBe(0n)
+		const oracle = getInfraContractAddresses().openOracle
+		const [, amount2] = await owner.readContract({ abi: oracleArtifact.abi, address: oracle, functionName: 'storedGame', args: [id] })
+		const amount1 = amount2 * unit
+		expect(amount1).toBeLessThan(1n << 128n)
+		const layout = normalizeStorageLayout(getContractOutput(loadContractsJson(join(import.meta.dir, '..')), 'contracts/statoblast/openOracle/OpenOracle.sol', 'OpenOracle'))
+		const field = layout.find(entry => entry.label === 'storedGame')
+		if (field === undefined) throw new Error('Missing oracle game storage')
+		const slot = keccak256(encodeAbiParameters(parseAbiParameters('uint256,uint256'), [id, BigInt(field.slot)]))
+		// Retain the actual settled candidate and clocks while controlling only
+		// its final report ratio, including the independently sufficient REP side.
+		await fixture.base.mockWindow.request({ method: 'anvil_setStorageAt', params: [oracle, slot, toHex(amount1 | (amount2 << 128n), { size: 32 })] })
+		const priceBefore = await owner.readContract({ ...target, functionName: 'lastPrice' })
+		await fixture.base.mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: ['0x0'] })
+		await writeContractAndWait(owner, () => owner.writeContract({ ...target, functionName: 'recoverReport', args: [id], gasPrice: ceiling }))
+		expect(await owner.readContract({ ...target, functionName: 'reportOutcome', args: [id] })).toBe(2n)
+		expect(await owner.readContract({ ...target, functionName: 'lastPrice' })).toBe(priceBefore)
+	})
+
+	test('#1624 positive prices whose liquidation bound is zero cannot be quoted', async () => {
+		await fixture.prepare()
+		const target = { abi: feedArtifact.abi, address: await feed() }
+		await expect(fixture.owner().readContract({ ...target, functionName: 'minimumToken1ReportAttoEthForPrice', args: [1n] })).rejects.toThrow('Oracle liquidation price is zero')
+		expect(await fixture.owner().readContract({ ...target, functionName: 'minimumToken1ReportAttoEthForPrice', args: [2n] })).toBeGreaterThan(0n)
+	})
 
 	test('#1503 questions use the canonical shared feed directly without individual adapters', async () => {
 		await fixture.prepare()

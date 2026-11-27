@@ -231,6 +231,19 @@ export function App() {
 	oracleApp.hash = `#/open-oracle${getTopLevelRouteSearch('watchlist')}`
 	const title = applicationDeploymentMissing && page.kind !== 'choose-universe' ? pageCopy.deployContracts : getAppPageTitle(page)
 
+	const repPriceChip =
+		repPrice === undefined ? undefined : (
+			<span className='statoblast-rep-chip'>
+				{pageCopy.repLead}
+				{Number(repPrice).toLocaleString('en-US', { maximumSignificantDigits: 3 })}
+				{pageCopy.ethTail}
+			</span>
+		)
+	const refreshButton = (
+		<button className='secondary statoblast-refresh' type='button' aria-label={pageCopy.refresh} disabled={!enabled || refreshingPage} onClick={() => void refreshPage()}>
+			↻<span className='statoblast-refresh-status'>{currentReadStatus?.progress ?? (refreshingPage ? pageCopy.refreshing : <UpdatedAgo updatedAt={currentReadStatus?.readAt} />)}</span>
+		</button>
+	)
 	return (
 		<UniverseNamesProvider includeRelatedUniverses={includeRelatedUniverses} universe={zoltarUniverse}>
 			<ProtocolAppFrame
@@ -241,38 +254,23 @@ export function App() {
 				header={
 					<AppHeaderShell
 						showWalletSpeedUp
-						renderOverview={({ settingsMenu }) => (
+						renderOverview={({ renderSettingsMenu, settingsMenu }) => (
 							<OverviewPanels
 								{...overviewWalletProps}
 								applicationTitle={applicationTitle}
 								brandHref={watchlistHref}
 								settingsMenu={settingsMenu}
+								renderSettingsMenu={renderSettingsMenu}
 								activeUniverseId={page.kind === 'choose-universe' ? undefined : activeUniverseId}
 								universePresentation={overview}
 								universeRepBalanceAttoRep={operations.zoltarForkRepBalanceAttoRep}
 								isLoadingUniverseRepBalance={operations.loadingZoltarForkAccess}
 								onGoToGenesisUniverse={() => setUniverse(0n)}
-								longWalletAbbreviation
 								showWethBalance
 								universeControl={
 									<div className='statoblast-header-controls'>
-										{repPrice !== undefined && (
-											<span className='statoblast-rep-chip'>
-												{pageCopy.repLead}
-												{Number(repPrice).toLocaleString('en-US', { maximumSignificantDigits: 3 })}
-												{pageCopy.ethTail}
-											</span>
-										)}
-										<button className='secondary statoblast-refresh' type='button' aria-label={pageCopy.refresh} disabled={!enabled || refreshingPage} onClick={() => void refreshPage()}>
-											↻
-											<span className='statoblast-refresh-status'>
-												{currentReadStatus?.progress ?? (refreshingPage ? pageCopy.refreshing : <UpdatedAgo updatedAt={currentReadStatus?.readAt} />)}
-												<span className='statoblast-auto-state'>
-													{pageCopy.autoLead}
-													{autoRefresh ? pageCopy.on : pageCopy.off}
-												</span>
-											</span>
-										</button>
+										{repPriceChip}
+										{refreshButton}
 										{autoRefreshToggle('statoblast-auto-desktop')}
 										<StatoblastUniverseMenu activeUniverse={activeUniverseId} environmentKey={activeEnvironmentNonce} universe={selectedUniverse} wallet={walletScopedAccountAddress} onSelect={setUniverse} onOpenChange={setUniverseMenuOpen} />
 									</div>
@@ -282,7 +280,13 @@ export function App() {
 						simulationController={simulationController}
 						onEnvironmentChanged={refreshActiveEnvironment}
 						onRefresh={refreshSimulationView}
-						settingsContent={autoRefreshToggle('statoblast-auto-mobile')}
+						settingsContent={
+							<div className='statoblast-menu-status'>
+								{repPriceChip}
+								{refreshButton}
+								{autoRefreshToggle('statoblast-auto-mobile')}
+							</div>
+						}
 						settingsTriggerId={settingsTriggerId}
 					/>
 				}

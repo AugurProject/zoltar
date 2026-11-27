@@ -278,7 +278,7 @@ const forkUniverse: OperationDefinition = {
 		steps.push(
 			encodeStep({
 				abi: zoltarAbi,
-				args: [BigInt(universe.id), BigInt(question.id)],
+				args: [BigInt(universe.id), BigInt(question.id), threshold],
 				evidence: [eventEvidence(snapshot.deployments.zoltar, 'UniverseForked(address,uint248,uint256,uint256,uint256,uint256,uint256)')],
 				functionName: 'forkUniverse',
 				id: 'fork-universe',
@@ -330,7 +330,7 @@ const forkUniverse: OperationDefinition = {
 		steps.push(
 			encodeStep({
 				abi: zoltarAbi,
-				args: [BigInt(universeId), BigInt(questionId)],
+				args: [BigInt(universeId), BigInt(questionId), threshold],
 				evidence: [eventEvidence(zoltar, 'UniverseForked(address,uint248,uint256,uint256,uint256,uint256,uint256)')],
 				functionName: 'forkUniverse',
 				id: 'fork-universe',

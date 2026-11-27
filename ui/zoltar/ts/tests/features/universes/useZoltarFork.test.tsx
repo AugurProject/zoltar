@@ -205,9 +205,9 @@ describe('useZoltarFork', () => {
 	})
 
 	test('forks with the question the caller selected, which the application keeps in the URL', async () => {
-		const forkZoltarUniverse = mock(async (_accountAddress: string, _callbacks: unknown, universeId: bigint, questionId: bigint) => ({ action: 'forkZoltar' as const, hash: `0x${'3'.repeat(64)}` as Hash, questionId: `0x${questionId.toString(16)}`, universeId }))
+		const forkZoltarUniverse = mock(async (_accountAddress: string, _callbacks: unknown, universeId: bigint, questionId: bigint, maximumThresholdAttoRep?: bigint) => ({ maximumThresholdAttoRep, action: 'forkZoltar' as const, hash: `0x${'3'.repeat(64)}` as Hash, questionId: `0x${questionId.toString(16)}`, universeId }))
 		replaceEnvironment(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-		const parameters = createForkParameters({ onTransactionFailed: () => undefined, zoltarForkQuestionId: '0x01' })
+		const parameters = createForkParameters({ onTransactionFailed: () => undefined, zoltarForkQuestionId: '0x01', ensureZoltarUniverse: async () => createUniverse({ forkThresholdAttoRep: 200n }) })
 		const { rerender, state } = await renderForkHook(parameters, createZoltarForkDependencies({ forkZoltarUniverse, loadZoltarForkAccess: async () => createForkAccessResults() }))
 		expect(state().zoltarForkQuestionId).toBe('0x01')
 
@@ -219,6 +219,7 @@ describe('useZoltarFork', () => {
 			await state().forkZoltar()
 		})
 		expect(forkZoltarUniverse.mock.calls[0]?.[3]).toBe(3n)
+		expect(forkZoltarUniverse.mock.calls[0]?.[4]).toBe(100n)
 	})
 
 	test('forkZoltar snapshots the submitted question id before universe preflight resolves', async () => {

@@ -152,6 +152,37 @@ describe('Statoblast: native fork reporter registration', () => {
 		await expect(owner.writeContract({ ...pool, functionName: 'withdrawForkedEscalationDeposits', args: [1, [{ ...proof, nullifierSiblings: [] }]] })).rejects.toThrow()
 	})
 
+	test.each([false, true])('#1689 public share quote matches same-block redemption after fees (stale: %s)', async stale => {
+		await fixture.prepare()
+		await fixture.mint(10n * unit)
+		const owner = fixture.owner()
+		const trader = fixture.other()
+		const pool = { abi: poolArtifact.abi, address: sourcePool() }
+		const validUntil = await owner.readContract({ abi: capitalArtifact.abi, address: fixture.capitalLedger, functionName: 'priceValidUntil' })
+		const now = (await owner.getBlock()).timestamp
+		await fixture.base.mockWindow.setTime(stale ? validUntil + DAY : now + (validUntil - now) / 2n)
+		const saved = await fixture.base.mockWindow.anvilSnapshot()
+		await fixture.base.mockWindow.advanceTime(1n)
+		const quote = await trader.readContract({ ...pool, functionName: 'attoSharesToAttoEth', args: [10n * unit] })
+		expect(quote).toBeLessThan(10n * unit)
+		const collateral = await trader.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'collateralToken' })
+		const balance = await getERC20Balance(trader, collateral, trader.account.address)
+		// Include the redemption at the exact quoted timestamp, preserving the
+		// quote-versus-execution assertion without imposing a collateral floor.
+		await fixture.base.mockWindow.anvilRevert(saved)
+		await writeContractAndWait(trader, () => trader.writeContract({ ...pool, functionName: 'redeemCompleteSet', args: [10n * unit] }))
+		expect((await getERC20Balance(trader, collateral, trader.account.address)) - balance).toBe(quote)
+	})
+
+	test('#1739 sealed active source shares quote no executable proceeds while the child remains funded', async () => {
+		await prepareReport()
+		const { childPool } = await activateUnrelatedFork(true)
+		const owner = fixture.owner()
+		expect(await owner.readContract({ abi: poolArtifact.abi, address: sourcePool(), functionName: 'attoSharesToAttoEth', args: [10n * unit] })).toBe(0n)
+		expect(await owner.readContract({ abi: poolArtifact.abi, address: sourcePool(), functionName: 'attoSharesToAttoRep', args: [10n * unit] })).toBe(0n)
+		expect(await owner.readContract({ abi: poolArtifact.abi, address: childPool, functionName: 'attoSharesToAttoEth', args: [10n * unit] })).toBeGreaterThan(0n)
+	})
+
 	test('security pool reporter history freezes without the removed standalone fork registry', async () => {
 		const game = await prepareReport()
 		await activateUnrelatedFork(true)

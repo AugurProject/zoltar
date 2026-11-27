@@ -37,6 +37,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('escalation', 'escalation', [
 		'CarryDepositConsumed',
 		'ClaimDeposit',
+		'WinningHaircutPrepaid',
 		'DepositOnOutcome',
 		'ForkCarryCheckpoint',
 		'ForkContinuationResumed',

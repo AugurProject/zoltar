@@ -87,8 +87,8 @@ export function useLiquidityWorkflowController({
 	else if (mintAmount !== undefined && mintAmount > market.availableMintingCapacityAttoEth) previewBlocker = liquidityCopy.mintingCapacityExceeded
 	else if (estimate === undefined || bounds === undefined) {
 		if (parsed !== undefined && parsed > 0n) previewBlocker = operation === 'remove' ? liquidityCopy.removalAmountTooSmall : liquidityCopy.initialAmountTooSmall
-	} else if (estimate.operation === 'add')
-		previewBlocker = liquidityHoldingFeeBlocker(market, mintAmount ?? 0n, bounds.maximumYesDeposit, bounds.maximumNoDeposit, capSubmissionDeadline(market, 'add', nowSeconds + settings.validityMinutes * 60n), {
+	} else if (estimate.operation !== 'remove')
+		previewBlocker = liquidityHoldingFeeBlocker(market, mintAmount ?? 0n, bounds.maximumYesDeposit, bounds.maximumNoDeposit, capSubmissionDeadline(market, estimate.operation, nowSeconds + settings.validityMinutes * 60n), {
 			completeSetShares: estimate.completeSets,
 			yesUsed: estimate.yesUsed,
 			noUsed: estimate.noUsed,

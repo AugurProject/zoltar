@@ -48,17 +48,15 @@ contract SharedPoolPriceFeedFactory {
 	address public immutable protocolFeeRecipient;
 	uint256 public immutable escalationHaltMultiplierBps;
 	uint256 public immutable maxSettlementBaseFeeMultiplierBps;
-	uint256 public immutable minLiquidationPriceDistanceBps;
 
-	constructor(IWeth9 _weth, uint256 _targetPriceErrorForDispute, uint48 _settlementTime, uint24 _disputeDelay, uint24 _protocolFee, uint24 _feePercentage, uint16 _multiplier, address _protocolFeeRecipient, uint256 _escalationHaltMultiplierBps, uint256 _maxSettlementBaseFeeMultiplierBps, uint256 _minLiquidationPriceDistanceBps, SharedPoolPriceFeedDeploymentWorker _sharedPoolPriceFeedDeploymentWorker) {
+	constructor(IWeth9 _weth, uint256 _targetPriceErrorForDispute, uint48 _settlementTime, uint24 _disputeDelay, uint24 _protocolFee, uint24 _feePercentage, uint16 _multiplier, address _protocolFeeRecipient, uint256 _escalationHaltMultiplierBps, uint256 _maxSettlementBaseFeeMultiplierBps, SharedPoolPriceFeedDeploymentWorker _sharedPoolPriceFeedDeploymentWorker) {
 		require(address(_sharedPoolPriceFeedDeploymentWorker).code.length != 0, 'Deployment workers missing');
 		sharedPoolPriceFeedDeploymentWorker = _sharedPoolPriceFeedDeploymentWorker;
 		require(_targetPriceErrorForDispute < 10_000_000, 'Target price error must be below one hundred percent');
-		OraclePriceMath.maximumPriorityFee(_targetPriceErrorForDispute, _protocolFee, _feePercentage, _escalationHaltMultiplierBps);
+		OraclePriceMath.maximumPriorityFee(_targetPriceErrorForDispute, _protocolFee, _feePercentage, _escalationHaltMultiplierBps, _maxSettlementBaseFeeMultiplierBps);
 		require(_settlementTime > _disputeDelay, 'Settlement time must exceed dispute delay');
 		require(_multiplier >= 100, 'Oracle dispute multiplier must be at least one hundred percent');
 		require(_maxSettlementBaseFeeMultiplierBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'Max settlement base fee multiplier must be at least one hundred percent');
-		require(_minLiquidationPriceDistanceBps <= SecurityPoolUtils.BPS_DENOMINATOR, 'Minimum liquidation price distance cannot exceed one hundred percent');
 		weth = _weth;
 		targetPriceErrorForDispute = _targetPriceErrorForDispute;
 		settlementTime = _settlementTime;
@@ -69,12 +67,11 @@ contract SharedPoolPriceFeedFactory {
 		protocolFeeRecipient = _protocolFeeRecipient;
 		escalationHaltMultiplierBps = _escalationHaltMultiplierBps;
 		maxSettlementBaseFeeMultiplierBps = _maxSettlementBaseFeeMultiplierBps;
-		minLiquidationPriceDistanceBps = _minLiquidationPriceDistanceBps;
 	}
 
 	function maximumReportPriorityFeeAttoEthPerGas() external view returns (uint256) {
 		return
-			OraclePriceMath.maximumPriorityFee(targetPriceErrorForDispute, protocolFee, feePercentage, escalationHaltMultiplierBps);
+			OraclePriceMath.maximumPriorityFee(targetPriceErrorForDispute, protocolFee, feePercentage, escalationHaltMultiplierBps, maxSettlementBaseFeeMultiplierBps);
 	}
 
 	function deploySharedPoolPriceFeed(OpenOracle oracle, uint256 priorityFee, address securityPool, uint248 universeId, ReputationToken reputationToken, bytes32 salt) external returns (SharedPoolPriceFeed feed) {

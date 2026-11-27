@@ -62,7 +62,7 @@ browserTest('keeps the full wrapped balance on the ranking and labels the capped
 	})
 	const owner = `0x${(2n * 0x123456789abcdefn).toString(16).padStart(40, '0')}`
 	await withBrowserPage(`${origin}/address/${owner}${query}`, desktopViewport, async session => {
-		await session.waitFor("document.body.textContent.includes('Showing the first 100 sampled wrapped native tokens.')")
+		await session.waitFor("document.body?.textContent.includes('Showing the first 100 sampled wrapped native tokens.')")
 		expect(await session.evaluate("Array.from(document.querySelectorAll('.address-balance-grid strong')).filter(node => node.textContent === '1 WETH').length")).toBe(100)
 	})
 })

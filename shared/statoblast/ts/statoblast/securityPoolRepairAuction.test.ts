@@ -54,6 +54,7 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 		oracleExposure: 20n * unit,
 		getRepToken: rep,
 		getForkTime: 0n,
+		branches: [0n, 1n, 0n, 0n, 0n, 0n, true, true, false],
 		forkAuthority: controller,
 		capital,
 		engine,
@@ -65,6 +66,7 @@ function fixture(overrides: Record<string, unknown> = {}, options: { timestamp?:
 		inventoryAttoRep: 18n * unit + 1n,
 		shortfallAttoEth: 10n * unit,
 		lotAttoEth: unit,
+		minimumCommitmentAttoEth: unit,
 		targetLots: 10n,
 		repGrid: 2n,
 		openingConservativePrice: 2n * unit,
@@ -363,4 +365,40 @@ describe('security pool collateral repair auction SDK', () => {
 		const none = await load(fixture({ unclaimedRepairAuctionBids: 0n }, { finalized: true }))
 		expect(await loadSecurityPoolAuctionClaimableBidIds(source.client, none)).toEqual([])
 	})
+})
+
+test('opening rejects an unaffordable default lot even when an intermediate lot count is viable', async () => {
+	// One 20-attoETH lot needs 21 attoREP and would fit; default rounding selects one 60-attoETH lot.
+	const snapshot = await load(fixture({ shortfallAttoEth: 60n, minimumCommitmentAttoEth: 15n, lotAttoEth: 15n, targetLots: 4n, securityMultiplierBps: 10_500n, repGrid: 21n, conservativePrice: unit, inventoryAttoRep: 21n }, { opened: false }))
+	expect(securityPoolAuctionOpeningReason(snapshot)).toContain('cannot back one collateral lot')
+	expect(() => buildSecurityPoolAuctionOpenRequest(snapshot)).toThrow('cannot back one collateral lot')
+})
+
+test('#1634 opening coverage must include the final rounded lot product', async () => {
+	const snapshot = await load(fixture({ shortfallAttoEth: 58n, minimumCommitmentAttoEth: 1n, lotAttoEth: 1n, targetLots: 58n, securityMultiplierBps: 10_500n, repGrid: 21n, conservativePrice: unit, oracleExposure: 58n, acceptedExposureLimitAttoEth: 58n }, { opened: false }))
+	expect(securityPoolAuctionOpeningReason(snapshot)).toContain('final auction collateral exposure')
+})
+
+test('#1652 preflight identifies cumulative escrow exhaustion before bid ranking', async () => {
+	const snapshot = await load(fixture({ depositedAttoEth: (1n << 128n) - 1n, maximumAdmissibleBidAttoRepPerLot: 0n }))
+	expect(() => quoteSecurityPoolAuctionBid(snapshot, bidTerms)).toThrow('Total bid collateral')
+})
+
+test('opening rejects an unaffordable default lot instead of searching lower REP grid bands', async () => {
+	const snapshot = await load(fixture({ shortfallAttoEth: 58n, minimumCommitmentAttoEth: 5n, lotAttoEth: 6n, targetLots: 10n, securityMultiplierBps: 10_500n, repGrid: 21n, conservativePrice: unit, inventoryAttoRep: 42n }, { opened: false }))
+	expect(securityPoolAuctionOpeningReason(snapshot)).toContain('cannot back one collateral lot')
+	expect(() => buildSecurityPoolAuctionOpenRequest(snapshot)).toThrow('cannot back one collateral lot')
+})
+
+test('opening rejects an unaffordable default lot instead of retrying the commitment minimum', async () => {
+	const snapshot = await load(fixture({ shortfallAttoEth: 61n, minimumCommitmentAttoEth: 20n, lotAttoEth: 21n, targetLots: 3n, securityMultiplierBps: 10_500n, repGrid: 21n, conservativePrice: unit, inventoryAttoRep: 21n }, { opened: false }))
+	expect(securityPoolAuctionOpeningReason(snapshot)).toContain('cannot back one collateral lot')
+	expect(() => buildSecurityPoolAuctionOpenRequest(snapshot)).toThrow('cannot back one collateral lot')
+})
+
+test('#1634 final coverage also reserves the branch chosen commitment', async () => {
+	const snapshot = await load(
+		fixture({ shortfallAttoEth: 58n, minimumCommitmentAttoEth: 1n, lotAttoEth: 1n, targetLots: 58n, securityMultiplierBps: 10_500n, repGrid: 21n, conservativePrice: unit, oracleExposure: 258n, acceptedExposureLimitAttoEth: 258n, branches: [0n, 1n, 0n, 200n, 0n, 0n, true, true, false] }, { opened: false }),
+	)
+	expect(securityPoolAuctionOpeningReason(snapshot)).toContain('final auction collateral exposure')
 })

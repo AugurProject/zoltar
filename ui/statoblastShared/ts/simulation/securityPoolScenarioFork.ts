@@ -23,7 +23,7 @@ export async function forkSeededSecurityPool(parameters: BootstrapScenarioApplyP
 	await send(profile.genesisRepTokenAddress, encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [zoltar, balance] }), poolFork.approveRep)
 	await advanceSimulationTime(memoryClient, 365n * 86_400n + 60n)
 	await reportBootstrapProgress(onProgress, poolFork.forking, 0.99)
-	await send(zoltar, encodeFunctionData({ abi: zoltarArtifact.abi, functionName: 'forkUniverse', args: [0n, questionId] }), poolFork.fork)
+	await send(zoltar, encodeFunctionData({ abi: zoltarArtifact.abi, functionName: 'forkUniverse', args: [0n, questionId, (1n << 256n) - 1n] }), poolFork.fork)
 	const controller = await reader.readContract({ abi: securityPoolArtifact.abi, address: securityPool, functionName: 'forkController' })
 	await send(controller, encodeFunctionData({ abi: forkArtifact.abi, functionName: 'choose', args: [0n, 1n] }), poolFork.chooseYes)
 	await advanceSimulationTime(memoryClient, 63n * 86_400n)

@@ -53,7 +53,8 @@ export function securityPoolAuctionOpeningReason(snapshot: SecurityPoolAuctionSn
 		required = requiredForLot()
 	}
 	const requiredCollateral = ceilDiv(required, auction.repGrid) * auction.repGrid
-	if (requiredCollateral > auction.inventoryAttoRep) return 'The auction inventory cannot back one collateral lot at the minimum health target.'
+	if (requiredCollateral === 0n || requiredCollateral > auction.inventoryAttoRep) return 'The auction inventory cannot back one collateral lot at the minimum health target.'
+	if (price.exposureLimitAttoEth < auction.chosenCommitmentAttoEth + targetLots * lot) return 'The price report must cover the final auction collateral exposure.'
 	return undefined
 }
 export function buildSecurityPoolAuctionOpenRequest(snapshot: SecurityPoolAuctionSnapshot) {
@@ -76,11 +77,11 @@ export function quoteSecurityPoolAuctionBid(snapshot: SecurityPoolAuctionSnapsho
 	if (lots === 0n || minimumAttoRepPerLot === 0n || minimumAttoRepPerLot % auction.repGrid !== 0n) throw new Error('Use positive whole lots and an exact REP price-grid multiple.')
 	if (minimumAttoRepPerLot > auction.maximumBidAttoRepPerLot) throw new Error('The minimum REP per lot exceeds the auction inventory.')
 	const requiredPrincipalPerLotAttoRep = auction.minimumCollateralAttoRepPerLot
+	const bidAttoEth = uint(lots * auction.lotAttoEth, 'Bid collateral', 128)
+	uint(auction.depositedAttoEth + bidAttoEth, 'Total bid collateral', 128)
 	if (auction.maximumAdmissibleBidAttoRepPerLot < requiredPrincipalPerLotAttoRep) throw new Error('Better funded bids leave no admissible new limit.')
 	if (minimumAttoRepPerLot < requiredPrincipalPerLotAttoRep) throw new Error(`Increase the minimum REP per lot to at least ${formatEther(requiredPrincipalPerLotAttoRep)} REP to back each lot.`)
 	if (minimumAttoRepPerLot > auction.maximumAdmissibleBidAttoRepPerLot) throw new Error(auction.maximumAdmissibleBidAttoRepPerLot === 0n ? 'Better funded bids leave no admissible new limit.' : `Better funded bids exclude this limit. Use at most ${formatEther(auction.maximumAdmissibleBidAttoRepPerLot)} REP per lot.`)
-	const bidAttoEth = uint(lots * auction.lotAttoEth, 'Bid collateral', 128)
-	uint(auction.depositedAttoEth + bidAttoEth, 'Total bid collateral', 128)
 	return {
 		...terms,
 		bidAttoEth,

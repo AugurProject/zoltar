@@ -8,7 +8,8 @@ import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 /// @notice A branch auction of exact collateral lots. Lower REP-per-lot limits bid a
 /// higher price; every winning lot pledges exactly the same clearing REP.
-/// Only filled lots sell REP; unsold inventory, including grid residue, returns as recovery REP.
+/// Only filled lots sell REP; unsold inventory, including grid residue, returns to the fork
+/// coordinator, which burns it after a full repair and otherwise keeps it as recovery REP.
 /// Its AVL tree freezes at closing and also owns unmaterialized winners' fees.
 /// Bidding, clearing and detaching one winner use logarithmic paths, never scans.
 contract SecurityPoolUniformPriceRepairAuction {
@@ -166,7 +167,13 @@ contract SecurityPoolUniformPriceRepairAuction {
 	/// @notice Highest grid-aligned limit that a new bid can enter at this block.
 	/// Inclusive demand gives every existing equal-price bid its submission priority.
 	function maximumAdmissibleBidAttoRepPerLot() external view returns (uint256) {
-		if (!initialized || finalized || block.timestamp < opensAt || block.timestamp >= closesAt) return 0;
+		if (
+			!initialized ||
+			finalized ||
+			block.timestamp < opensAt ||
+			block.timestamp >= closesAt ||
+			lotAttoEth > type(uint128).max - depositedAttoEth
+		) return 0;
 		uint256 low;
 		uint256 high = maximumBidAttoRepPerLot / repGrid;
 		while (low < high) {

@@ -21,6 +21,9 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 	event GameStarted(uint256 activationTime, uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep);
 	event GameContinuedFromFork(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, int256 elapsedAtFork);
 	event ForkContinuationResumed(uint256 resumedAt);
+	/// @notice An assessed carried haircut already funded by the native fork; no burn occurs on this claim.
+	event WinningHaircutPrepaid(BinaryOutcomes.BinaryOutcome indexed outcome, uint256 indexed parentDepositIndex, uint256 assessedHaircutAttoRep);
+	/// @notice burnAmountAttoRep is the REP actually burned by this claim, excluding prepaid haircuts.
 	event ClaimDeposit(address indexed depositor, BinaryOutcomes.BinaryOutcome indexed outcome, uint256 indexed parentDepositIndex, uint256 originalDepositAmountAttoRep, uint256 amountToWithdrawAttoRep, uint256 burnAmountAttoRep, bool transferredRep);
 	event VaultEscrowUpdated(address indexed vault, uint256 disputeStakedRepByVaultAttoRep, uint256 totalDisputeStakedAttoRep);
 	event OrdinarySettlementInitialized(BinaryOutcomes.BinaryOutcome indexed outcome, uint256 winningPrincipalAttoRep, uint256 reservedAttoRep);

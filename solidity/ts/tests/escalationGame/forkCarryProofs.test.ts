@@ -11,7 +11,7 @@ import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/
 import { statoblast_EscalationGame_EscalationGame } from '../../types/contractArtifact'
 import { isIgnorableLogDecodeError } from '../logDecodeErrors'
 import { hashCarryLeaf, hashParent, SparseNullifierTree } from '../carryProofHelpers'
-import { ESCALATION_TIME_LENGTH, zeroHash, oneHash, zeroPeakArray } from './carryHelpers'
+import { FRESH_FORK_RESPONSE_PERIOD, ESCALATION_TIME_LENGTH, zeroHash, oneHash, zeroPeakArray } from './carryHelpers'
 import { useEscalationGameFixture } from './fixture'
 
 describe('Escalation Game: fork carry and MMR proofs', () => {
@@ -21,6 +21,7 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 		recursiveResolutionTargetCost,
 		fundEscalationGame,
 		advanceForkContinuationPastStart,
+		resumeEscalationFromFork,
 		depositOnOutcomeViaProofTestQuestionLedger,
 		traceCarryLeafPage,
 		traceProofConsumedCarriedDepositIndexes,
@@ -218,10 +219,11 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 		await depositOnOutcomeViaTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		const parentYesPeaks = await readCarryPeaks(client, parent.escalationGameAddress, QuestionOutcome.Yes)
 
-		const child = await deployForkContinuationEscalationGame()
+		const child = await deployForkContinuationEscalationGame(-FRESH_FORK_RESPONSE_PERIOD)
 		await initializeSnapshotWithResolutionBalancesViaTestQuestionLedger(child.testQuestionLedgerAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, 2n, 0n], [0n, 2n * reportBond, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
-		await depositOnOutcomeViaProofTestQuestionLedger(child.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await fundEscalationGame(child.escalationGameAddress, 2n * reportBond)
+		await resumeEscalationFromFork(child.escalationGameAddress)
+		await depositOnOutcomeViaProofTestQuestionLedger(child.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 
 		const shortProof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 1n, [], new SparseNullifierTree().getProof(0n))
@@ -272,8 +274,9 @@ describe('Escalation Game: fork carry and MMR proofs', () => {
 		const parentNullifierRoot = await readNullifierRoot(client, parent.escalationGameAddress, QuestionOutcome.Yes)
 		const parentYesPeaks = await readCarryPeaks(client, parent.escalationGameAddress, QuestionOutcome.Yes)
 
-		const child = await deployForkContinuationEscalationGame()
+		const child = await deployForkContinuationEscalationGame(-FRESH_FORK_RESPONSE_PERIOD)
 		await initializeSnapshotViaTestQuestionLedger(child.testQuestionLedgerAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, reportBond, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
+		await resumeEscalationFromFork(child.escalationGameAddress)
 		await depositOnOutcomeViaProofTestQuestionLedger(child.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond)
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 

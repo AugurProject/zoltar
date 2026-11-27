@@ -47,7 +47,7 @@ export const claimingBids = 'Claiming bids…'
 export const noBidsToClaim = 'No repair auction bids to claim.'
 export const claimAfterClose = 'Bids can be claimed after the auction closes.'
 export const claimBidsReview = (batch: number, total: number) => {
-	if (batch < total) return `Claim ${batch} of your ${total} unclaimed repair auction bids in this universe now; claim again for the rest. Winning lots join your capital account here.`
-	return `Claim ${batch === 1 ? 'your unclaimed repair auction bid' : `all ${batch} of your unclaimed repair auction bids`} in this universe. Winning lots join your capital account here.`
+	if (batch < total) return `Claim ${batch} of your ${total} unclaimed repair auction bids in this universe now; claim again for the rest. Winning lots join your position here.`
+	return `Claim ${batch === 1 ? 'your unclaimed repair auction bid' : `all ${batch} of your unclaimed repair auction bids`} in this universe. Winning lots join your position here.`
 }
 export const claimLoadError = 'Unable to load your repair auction bids in this universe.'

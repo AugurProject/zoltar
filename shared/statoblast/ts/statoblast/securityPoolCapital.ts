@@ -445,7 +445,7 @@ export async function loadSecurityPoolCapitalSnapshot(parameters: { client: Secu
 export async function loadSecurityPoolUnclaimedRepairAuctionBids(parameters: { client: SecurityPoolReadClient; securityPool: Address; owner: Address; universeId: bigint; blockNumber: bigint }) {
 	const { client, blockNumber } = parameters
 	const owner = decodeAddress(parameters.owner, 'Owner')
-	const ledger = decodeAddress(await client.readContract({ address: decodeAddress(parameters.securityPool, 'Security pool'), abi, functionName: 'capitalLedger', args: [decodeUint(parameters.universeId, 'Universe id', 248)], blockNumber }), 'Capital ledger', true)
+	const ledger = decodeAddress(await client.readContract({ address: decodeAddress(parameters.securityPool, 'Security pool'), abi, functionName: 'capitalLedger', args: [decodeUint(parameters.universeId, 'Universe id', 248)], blockNumber }), 'Capital contract', true)
 	if (ledger === zeroAddress) return 0n
 	return decodeUint(await client.readContract({ address: ledger, abi, functionName: 'unclaimedRepairAuctionBids', args: [owner], blockNumber }), 'Unclaimed repair auction bids')
 }

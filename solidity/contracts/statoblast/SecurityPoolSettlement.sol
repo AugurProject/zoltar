@@ -7,12 +7,14 @@ import { Zoltar } from '../Zoltar.sol';
 import { SecurityPoolSettlementBook } from './SecurityPoolSettlementBook.sol';
 import { IERC20 } from '../IERC20.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
+import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 interface ISecurityPoolForkAuthority {
 	function forkController() external view returns (address);
 	function capitalLedger(uint248 universeId) external view returns (SecurityPoolCapitalLedger);
 	function zoltar() external view returns (Zoltar);
 	function securityPoolTime(uint248 universeId) external view returns (uint48);
+	function securityPoolTimeForNative(uint248 universeId, uint48 nativeTimestamp) external view returns (uint48);
 }
 
 /// @notice Actual ERC20 custody for the security pool's virtual question and branch settlement books.
@@ -231,7 +233,8 @@ contract SecurityPoolSettlement {
 
 	/// @notice Fund one child's claim basket with assigned collateral and forfeited child REP.
 	/// @dev Pull repairAuctionCash collateral tokens from the fork authority. Only assigned source
-	/// cash consumes the parent's balance; unsold and old recovery REP stay claims.
+	/// cash consumes the parent's balance; old recovery REP, and unsold auction REP when the
+	/// sale did not raise the whole shortfall, stay claims.
 	function createChildUniverse(uint248 sourceUniverseId, uint248 childUniverseId, uint256 parentContributionAttoEth, IERC20 recoveryToken, uint256 recoveryAttoRep, uint256 repairAuctionCash) external onlyForkAuthority nonReentrant returns (uint64 bookId) {
 		require(universes[childUniverseId].bookId == 0, 'Settlement universe registered');
 		uint256 available = universes[sourceUniverseId].availableForkCashAttoEth;
@@ -249,8 +252,8 @@ contract SecurityPoolSettlement {
 	/// @notice A fork fixes its triggering question even before a native child pool exists.
 	function fixInheritedQuestionFinality(uint248 universeId, uint256 questionId, uint48 finalAfter) external onlyForkAuthority nonReentrant {
 		uint64 bookId = _bookId(universeId);
-		(SecurityPoolSettlementBook.Question memory state, uint64 frozenBookId) = ledger.question(bookId, questionId);
-		if (frozenBookId != 0 || state.outcomeSupplyAttoShares == 0) return;
+		(, uint64 frozenBookId) = ledger.question(bookId, questionId);
+		if (frozenBookId != 0) return;
 		(, , , uint48 timestamp, ) = ledger.totals(bookId);
 		ledger.replaceFeeStream(bookId, questionId, 0, 0, timestamp);
 		ledger.scheduleFinality(bookId, questionId, finalAfter, timestamp);
@@ -288,7 +291,13 @@ contract SecurityPoolSettlement {
 
 	function quoteRedemptionAt(address pool, uint256 shares, uint48 securityPoolTimestamp) external view returns (uint256 cashAttoEth) {
 		QuestionSource memory source = _question(pool);
-		(cashAttoEth, ) = ledger.quoteRedemptionAt(_bookId(source.universeId), source.questionId, shares, securityPoolTimestamp);
+		ISecurityPoolForkAuthority root = ISecurityPoolForkAuthority(securityPool);
+		SecurityPoolCapitalLedger capital = root.capitalLedger(source.universeId);
+		uint48 through =
+			capital.importing()
+				? securityPoolTimestamp
+				: root.securityPoolTimeForNative(source.universeId, uint48(Math.min(capital.effectiveTime(), capital.priceValidUntil())));
+		(cashAttoEth, ) = ledger.quoteRedemptionThrough(_bookId(source.universeId), source.questionId, shares, securityPoolTimestamp, through);
 	}
 
 	function quoteRecoveryRep(address pool, uint256 shares) external view returns (uint256) {
@@ -355,7 +364,7 @@ contract SecurityPoolSettlement {
 		if (state.outcomeSupplyAttoShares != 0)
 			(snapshot.questionCashAttoEth, ) = ledger.quoteRedemption(bookId, source.questionId, state.outcomeSupplyAttoShares);
 		if (state.outcomeSupplyAttoShares != 0)
-			snapshot.questionRecoveryAttoRep = ledger.quoteRecoveryRep(bookId, source.questionId, state.outcomeSupplyAttoShares);
+			snapshot.questionRecoveryAttoRep = ledger.historicalRecoveryRep(bookId, source.questionId, state.outcomeSupplyAttoShares);
 		(snapshot.demandAttoEth, , , snapshot.timestamp, ) = ledger.totals(bookId);
 		snapshot.earnedFeesAttoEth = fees;
 	}

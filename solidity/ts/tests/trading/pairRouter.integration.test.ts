@@ -61,6 +61,23 @@ describe('factory, pair, and router integration', () => {
 		console.log(`gas:${label}=${receipt.gasUsed}`)
 	}
 
+	for (const operation of ['removeLiquidity', 'swapExactInput', 'swapExactOutput'] as const) {
+		for (const yesForNo of [true, false]) {
+			test(`#1714 ${operation} rejects the pair recipient (${yesForNo}) before consuming funds`, async () => {
+				await initialize()
+				await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'mintCompleteSets', args: [universe, account, 100n] }))
+				await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'setApprovalForAll', args: [pair, true] }))
+				const before = await shareBalances(pair)
+				const liquidity = await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })
+				const request = operation === 'removeLiquidity' ? { functionName: operation, args: [liquidity / 2n, 0n, 0n, pair, NO_DEADLINE] as const } : { functionName: operation, args: [yesForNo, operation === 'swapExactInput' ? 50n : 1n, operation === 'swapExactInput' ? 0n : unboundedShares, pair, NO_DEADLINE] as const }
+				await expect(client.simulateContract({ abi: pairArtifact.abi, address: pair, ...request })).rejects.toThrow('Recipient is pair')
+				expect(await shareBalances(pair)).toEqual(before)
+				expect(await tokenBalance(pair, 0n)).toBe(0n)
+				expect(await client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })).toBe(liquidity)
+			})
+		}
+	}
+
 	beforeAll(async () => {
 		const contracts = await compileArtifactsForTests()
 		mocks = contracts['contracts/trading/test/TradingProtocolMocks.sol']
@@ -807,6 +824,7 @@ describe('factory, pair, and router integration', () => {
 
 		const permittedLiquidity = liquidity / 4n
 		const permit = await signPermit({ value: permittedLiquidity })
+		await expect(permitOwnerClient.simulateContract({ abi: routerArtifact.abi, address: currentRouter, functionName: 'removeLiquidityWithPermit', args: [currentPair, permittedLiquidity, 1n, 1n, currentPair, permitDeadline, permit.v, permit.r, permit.s] })).rejects.toThrow('Recipient is pair')
 		await writeContractAndWait(permitOwnerClient, () => permitOwnerClient.writeContract({ abi: routerArtifact.abi, address: currentRouter, functionName: 'removeLiquidityWithPermit', args: [currentPair, permittedLiquidity, 1n, 1n, permitOwner.address, permitDeadline, permit.v, permit.r, permit.s] }))
 		expect(await client.readContract({ abi: pairArtifact.abi, address: currentPair, functionName: 'allowance', args: [permitOwner.address, currentRouter] })).toBe(0n)
 		await expect(permitOwnerClient.writeContract({ abi: routerArtifact.abi, address: currentRouter, functionName: 'removeLiquidityWithPermit', args: [currentPair, permittedLiquidity, 1n, 1n, permitOwner.address, permitDeadline, permit.v, permit.r, permit.s] })).rejects.toThrow('LP permit or allowance')

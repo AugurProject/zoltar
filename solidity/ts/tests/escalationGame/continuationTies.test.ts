@@ -12,7 +12,7 @@ import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/
 import { statoblast_EscalationGame_EscalationGame } from '../../types/contractArtifact'
 import { isIgnorableLogDecodeError } from '../logDecodeErrors'
 import { SparseNullifierTree } from '../carryProofHelpers'
-import { ESCALATION_TIME_LENGTH, NON_DECISION_STATE_NONE, NON_DECISION_STATE_LOCAL, NON_DECISION_STATE_INHERITED_THRESHOLD_TIE, zeroHash, zeroPeakArray } from './carryHelpers'
+import { FRESH_FORK_RESPONSE_PERIOD, ESCALATION_TIME_LENGTH, NON_DECISION_STATE_NONE, NON_DECISION_STATE_LOCAL, NON_DECISION_STATE_INHERITED_THRESHOLD_TIE, zeroHash, zeroPeakArray } from './carryHelpers'
 import { useEscalationGameFixture } from './fixture'
 
 describe('Escalation Game: fork continuation funding and inherited ties', () => {
@@ -58,13 +58,15 @@ describe('Escalation Game: fork continuation funding and inherited ties', () => 
 		await depositOnOutcomeViaProofTestQuestionLedger(parent.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		const { peaks: parentYesPeaks, leafCount: parentLeafCount, carryTotal: parentCarryTotal, nullifierRoot: parentNullifierRoot } = await readOutcomeCarrySnapshot(parent.escalationGameAddress, QuestionOutcome.Yes)
 
-		const child = await deployForkContinuationEscalationGame()
+		const child = await deployForkContinuationEscalationGame(-FRESH_FORK_RESPONSE_PERIOD)
 		await initializeSnapshotWithResolutionBalancesViaTestQuestionLedger(child.testQuestionLedgerAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, parentCarryTotal, 0n], [0n, 0n, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
 		assert.strictEqual(await readIsForkCarryFundingComplete(client, child.escalationGameAddress), false, 'an unfunded inherited carry should be incomplete')
 		await assert.rejects(resumeEscalationFromFork(child.escalationGameAddress), /Fork carry underfunded/)
 
-		await depositOnOutcomeViaProofTestQuestionLedger(child.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await assert.rejects(depositOnOutcomeViaProofTestQuestionLedger(child.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond), /Invalid deposit preview/)
 		await fundEscalationGame(child.escalationGameAddress, parentCarryTotal)
+		await resumeEscalationFromFork(child.escalationGameAddress)
+		await depositOnOutcomeViaProofTestQuestionLedger(child.testQuestionLedgerAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		assert.strictEqual(await readIsForkCarryFundingComplete(client, child.escalationGameAddress), true, 'one-to-one aggregate REP should complete funding without a vault record')
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 	})

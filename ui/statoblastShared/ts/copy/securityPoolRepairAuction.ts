@@ -3,7 +3,7 @@ import { minimumSecurityPoolHealthFactorBps } from '@zoltar/statoblast-shared/st
 import { formatEther, formatUnits } from '@zoltar/core-shared/evm/ethereum'
 export const title = 'Repair auction'
 export const description = 'Lowest REP asks fill first. Every winning lot gets the higher of the highest winning ask and the minimum REP needed to back a lot at closing.'
-export const ownership = 'Claiming a winning bid adds its lots to this wallet’s capital account on this branch at the minimum health. If the wallet already has a position there, the lots merge into it and share its health target, losses and retirement. Bid from a fresh address to keep them separate.'
+export const ownership = 'Claiming a winning bid adds its lots to this wallet’s position on this branch at the minimum health. If the wallet already has a position there, the lots merge into it and share its health target, losses and pending reductions. Bid from a fresh address to keep them separate.'
 export const fairness = 'Equal asks fill in submission order. Unfilled lots are refunded. Bids cannot be cancelled or changed.'
 export const connect = 'Connect a wallet to view and fund your auction bids.'
 export const selectBranch = 'Select a fork branch first.'
@@ -67,18 +67,18 @@ export const claimHint = 'Claim every bid, including bids that won nothing, befo
 export const allBidsClaimed = 'All your bids are claimed.'
 export const claimAfterClose = 'Bids can be claimed after the auction closes.'
 export const claimedStatus = 'Claimed'
-export const claimBidReview = (id: bigint, winning: boolean) => (winning ? `Claim bid ${id}. Its winning lots join this wallet’s capital account on this branch and merge into any position there.` : `Claim bid ${id}. It won nothing, so this only marks it claimed.`)
+export const claimBidReview = (id: bigint, winning: boolean) => (winning ? `Claim bid ${id}. Its winning lots join this wallet’s position on this branch, merging into any existing one.` : `Claim bid ${id}. It won nothing, so this only marks it claimed.`)
 export const claimAllReview = (batch: number, total: number) => {
 	let scope = batch === 1 ? 'your unclaimed bid' : `all ${batch} of your unclaimed bids`
 	if (batch < total) scope = `${batch} of your ${total} unclaimed bids now; claim again for the rest`
-	return `Claim ${scope}. Winning lots join this wallet’s capital account on this branch and merge into any position there.`
+	return `Claim ${scope}. Winning lots join this wallet’s position on this branch, merging into any existing one.`
 }
 export const refresh = 'Refresh auction'
 export const refreshing = 'Refreshing auction…'
 export const busy = 'Wait for the current transaction.'
 export const pages = (start: bigint, count: number, total: bigint) => `${start + (count === 0 ? 0n : 1n)}–${start + BigInt(count)} of ${total} bids`
 export const bidReview = (lots: bigint, bidAttoEth: bigint, minimumAttoRepPerLot: bigint, decimals = 18, symbol = 'collateral') =>
-	`Bid ${formatUnits(bidAttoEth, decimals)} ${symbol} for ${lots} lots with at least ${formatEther(minimumAttoRepPerLot)} REP per winning lot. At closing, that REP backs the commitment of your winning lots; claim the bid to add them to your capital account. If your bid is outbid, you can get your collateral back early. Otherwise, unused collateral is refundable after closing.`
+	`Bid ${formatUnits(bidAttoEth, decimals)} ${symbol} for ${lots} lots with at least ${formatEther(minimumAttoRepPerLot)} REP per winning lot. At closing, that REP backs the commitment of your winning lots; claim the bid to add them to your position. If your bid is outbid, you can get your collateral back early. Otherwise, unused collateral is refundable after closing.`
 
 export const noAdmissibleLimit = 'No admissible new limit'
 

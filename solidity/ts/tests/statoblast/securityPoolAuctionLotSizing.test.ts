@@ -29,10 +29,10 @@ describe('Statoblast: full-deficit auction lot sizing', () => {
 		index = await client.readContract({ abi: capitalArtifact.abi, address: ledger, functionName: 'commitmentIndex' })
 		await node.setBaselineSnapshot()
 	})
-	const open = async (shortfall: bigint, minimum = 1n) => {
+	const open = async (shortfall: bigint, minimum = 1n, inventory = 11_000_000n * 10n ** 18n) => {
 		await writeContractAndWait(client, () => client.writeContract({ abi: harnessArtifact.abi, address: root, functionName: 'setMinimum', args: [minimum] }))
 		const deadline = (await client.getBlock()).timestamp + 3n * 86_400n
-		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: auctionArtifact.abi, bytecode: `0x${auctionArtifact.evm.bytecode.object}`, args: [client.account.address, root, 1n, deadline, 11_000_000n * 10n ** 18n, shortfall] }) }) })
+		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: encodeDeployData({ abi: auctionArtifact.abi, bytecode: `0x${auctionArtifact.evm.bytecode.object}`, args: [client.account.address, root, 1n, deadline, inventory, shortfall] }) }) })
 		if (!receipt.contractAddress) throw new Error('Missing auction')
 		const target = { abi: auctionArtifact.abi, address: receipt.contractAddress }
 		const transaction = await writeContractAndWait(client, () => client.writeContract({ ...target, functionName: 'open' }))
@@ -48,6 +48,26 @@ describe('Statoblast: full-deficit auction lot sizing', () => {
 		expect((result.lots - 1n) * result.lot).toBeLessThan(shortfall)
 		expect(result.lots * result.lot - shortfall).toBeLessThan(result.lots)
 	}
+	test.each([
+		{ shortfall: 60n, minimum: 15n, inventory: 21n },
+		{ shortfall: 58n, minimum: 5n, inventory: 42n },
+		{ shortfall: 61n, minimum: 20n, inventory: 21n },
+	])('rejects unaffordable default lots without searching smaller lots ($shortfall, $minimum, $inventory)', async ({ shortfall, minimum, inventory }) => {
+		// A 20-attoETH lot covers the configured minimum and needs exactly one
+		// REP grid of collateral. Its affordability must not change lot sizing.
+		const smallerRequired = await client.readContract({ abi: indexArtifact.abi, address: index, functionName: 'requiredRep', args: [20n, unit, 10_500n, 10_000n] })
+		expect(20n).toBeGreaterThanOrEqual(minimum)
+		expect(smallerRequired).toBe(21n)
+		expect(smallerRequired).toBeLessThanOrEqual(inventory)
+		await expect(open(shortfall, minimum, inventory)).rejects.toThrow('Collateral repair auction inventory cannot back one lot')
+	})
+	test('opens when inventory exactly backs the default lot after rounding', async () => {
+		const result = await open(60n, 15n, 63n)
+		expect([result.lots, result.lot, result.rounded]).toEqual([1n, 60n, 63n])
+	})
+	test('rejects inventory that cannot fund a lot satisfying the minimum and rounding policy', async () => {
+		await expect(open(61n, 21n, 42n)).rejects.toThrow('Collateral repair auction inventory cannot back one lot')
+	})
 	test('#1339 enlarges tiny lots until grid rounding adds less than one percent', async () => {
 		const result = await open(1_000_000n)
 		expect(result.lots).toBeGreaterThan(1n)

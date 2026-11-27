@@ -87,3 +87,25 @@ test('deployment rejects missing collateral and a zero or oversized report stake
 	expect(() => buildSecurityPoolDeploymentRequest({ ...base, origin: { ...origin, collateralToken: zeroAddress } })).toThrow('Collateral token')
 	for (const minimumReportCollateral of [0n, 1n << 128n]) expect(() => buildSecurityPoolDeploymentRequest({ ...base, origin: { ...origin, minimumReportCollateral } })).toThrow()
 })
+
+test('#1725 minimum purchase fee must fit an empty fee stream', () => {
+	expect(() => validateSecurityPoolEconomics({ ...economics, minimumPurchaseFeeAttoEth: (1n << 128n) - 1n })).not.toThrow()
+	expect(() => validateSecurityPoolEconomics({ ...economics, minimumPurchaseFeeAttoEth: 1n << 128n })).toThrow('fee stream')
+})
+
+test('#1647 deployment rejects underwriting and repair grids beyond the absolute REP supply', () => {
+	const supply = 11_000_000n * 10n ** 18n
+	for (const securityMultiplierBps of [supply * 10_000n + 1n, supply + 1n]) {
+		expect(() => buildSecurityPoolDeploymentRequest({ ...base, origin: { ...origin, securityMultiplierBps } })).toThrow('REP supply')
+	}
+	expect(() => buildSecurityPoolDeploymentRequest({ ...base, origin: { ...origin, securityMultiplierBps: supply * 10_000n } })).not.toThrow()
+	const maximum = 100n * ((1n << 128n) - 1n - origin.minimumReportCollateral)
+	expect(() => buildSecurityPoolDeploymentRequest({ ...base, economics: { ...economics, minimumCommitmentAttoEth: maximum } })).not.toThrow()
+	expect(() => buildSecurityPoolDeploymentRequest({ ...base, economics: { ...economics, minimumCommitmentAttoEth: maximum + 1n } })).toThrow('report exposure')
+})
+
+test('#1625 report floor must fit the halt multiplier at its inclusive endpoint', () => {
+	const maximum = ((1n << 128n) - 1n) / 10n
+	expect(() => buildSecurityPoolDeploymentRequest({ ...base, origin: { ...origin, minimumReportCollateral: maximum } })).not.toThrow()
+	expect(() => buildSecurityPoolDeploymentRequest({ ...base, origin: { ...origin, minimumReportCollateral: maximum + 1n } })).toThrow('halt limit')
+})

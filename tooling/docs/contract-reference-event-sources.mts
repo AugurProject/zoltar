@@ -16,6 +16,7 @@ export const eventSourceByName: Record<string, string> = {
 	CarryDepositConsumed: 'solidity/contracts/statoblast/interfaces/IEscalationGame.sol',
 	ChildReputationTokenInitialized: 'solidity/contracts/Zoltar.sol',
 	ClaimDeposit: 'solidity/contracts/statoblast/EscalationGameState.sol',
+	WinningHaircutPrepaid: 'solidity/contracts/statoblast/EscalationGameState.sol',
 	DeployChild: 'solidity/contracts/Zoltar.sol',
 	DeployQuestionLedger: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
 	DepositOnOutcome: 'solidity/contracts/statoblast/interfaces/IEscalationGame.sol',

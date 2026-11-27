@@ -53,6 +53,7 @@ contract SecurityPoolCapitalLedger is SecurityPoolCapitalState {
 	event UnassignedFeesBurned(uint256 ethAmount, uint256 repAmount);
 
 	constructor(address authority, Zoltar protocol, uint256 multiplier, uint256 minimumCommitment, SecurityPoolCapitalLifecycleDelegate lifecycle, SecurityPoolCapitalRepairAuctionDelegate repairAuction) {
+		require(address(lifecycle).code.length != 0 && address(repairAuction).code.length != 0, 'Capital delegate has no code');
 		require(authority != address(0), 'Capital authority missing');
 		require(minimumCommitment > 0, 'Capital economic minimum missing');
 		securityPool = authority;

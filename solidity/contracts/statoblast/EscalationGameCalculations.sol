@@ -25,7 +25,9 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		return _firstSecondAtCost(attritionCostAttoRep);
 	}
 
+	/// @notice No finite deadline exists before start or while a fork continuation is paused.
 	function getEscalationGameEndDate() public view returns (uint256 endTime) {
+		if (startBondAttoRep == 0) return type(uint256).max;
 		if (nonDecisionState == NonDecisionState.Local) return nonDecisionTimestamp;
 		if (forkContinuation) {
 			if (forkResumedAt == 0) return type(uint256).max;
@@ -132,6 +134,7 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	}
 
 	function hasReachedNonDecision() public view returns (bool) {
+		if (startBondAttoRep == 0) return false;
 		(uint256 invalidBalanceAttoRep, uint256 yesBalanceAttoRep, uint256 noBalanceAttoRep) = _getOutcomeBalances();
 		return
 			proofVerifier.hasReachedNonDecision([invalidBalanceAttoRep, yesBalanceAttoRep, noBalanceAttoRep], nonDecisionThresholdAttoRep);

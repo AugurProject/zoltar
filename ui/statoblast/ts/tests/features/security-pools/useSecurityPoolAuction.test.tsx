@@ -73,7 +73,7 @@ test('auction bidding sends only the reviewed collateral bid without REP approva
 	expect(state.requests).toHaveLength(1)
 	expect(last(state.requests)).toMatchObject({ account: owner, to: auctionAddress, value: 0n })
 	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'submitBid', args: [2n, 5n * unit] })
-	expect(last(state.requests).reviewDescription).toContain('claim the bid to add them to your capital account')
+	expect(last(state.requests).reviewDescription).toContain('claim the bid to add them to your position')
 	await last(state.requests).validateBeforeSubmit?.()
 	expect(last(state.requests).readReviewRows?.()).toContainEqual({ label: 'Number of lots', value: '0 → 2' })
 	state.values['lotAttoEth'] = 2n * unit
@@ -221,7 +221,7 @@ test('winners expose live principal and fees until their bid is claimed', async 
 	expect(last(state.requests)).toMatchObject({ account: owner, to: capital, value: 0n })
 	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'materializeRepairAuctionBids', args: [[1n]] })
 	expect(state.labels.at(-1)).toBe('Claim bid')
-	expect(last(state.requests).reviewDescription).toContain('Its winning lots join this wallet’s capital account')
+	expect(last(state.requests).reviewDescription).toContain('Its winning lots join this wallet’s position')
 	await last(state.requests).validateBeforeSubmit?.()
 	state.values['bids'] = [owner, false, true, 2n, 60n * unit]
 	state.values['repairAuctionPositions'] = [[owner, 8n, 100n * unit, unit, 0n, true, true, 0n, 0n]]

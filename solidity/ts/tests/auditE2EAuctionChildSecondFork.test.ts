@@ -98,15 +98,15 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		await writeContractAndWait(b5, () => b5.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleAndWithdrawRefund', args: [tieB.id, b5.account.address] }))
 		const cashAfterAuction = await cashOf(wallets)
 		expect([cashAfterAuction['loser'], cashAfterAuction['b3'], cashAfterAuction['b4'], cashAfterAuction['b5']]).toEqual([cashBeforeBids['loser'], (cashBeforeBids['b3'] ?? 0n) - 4n * unit, (cashBeforeBids['b4'] ?? 0n) - 3n * unit, (cashBeforeBids['b5'] ?? 0n) - 3n * unit])
-		// Custody after the close: the engine and auction are empty, sold REP is in capital, the rest backs old claims.
+		// Custody after the close: the engine and auction are empty, sold REP is in capital, and the full repair burned the rest.
 		expect(await e2e.cash(context.engine)).toBe(0n)
 		expect(await e2e.cash(context.forks)).toBe(0n)
 		expect(await e2e.rep(C, context.auction)).toBe(0n)
 		expect(await e2e.rep(C, context.engine)).toBe(0n)
 		expect(await e2e.rep(C, context.forks)).toBe(0n)
 		expect(await e2e.rep(C, context.capital)).toBe(2_000n * unit + sold)
-		expect(await e2e.rep(C, settlement)).toBe(inventory - sold)
-		expect(await e2e.supply(C)).toBe(supplyBeforeClose)
+		expect(await e2e.rep(C, settlement)).toBe(0n)
+		expect(await e2e.supply(C)).toBe(supplyBeforeClose - (inventory - sold))
 		// One settlement engine holds every universe: 20 sealed in the origin (10 assigned here, 10 still neutral) plus 10 raised.
 		expect(await e2e.cash(settlement)).toBe(30n * unit)
 		expect((await e2e.bookTotals(C))[0]).toBe(20n * unit)
@@ -137,10 +137,10 @@ describe('auditE2E: an auction-repaired child keeps winner rights and conserves 
 		// The snapshot counts the whole cohort, materialized or not.
 		expect(backing).toBe(2_000n * unit + sold)
 		expect(commitment).toBe(210n * unit)
-		// Half of the unsold recovery REP belongs to the already final fork question and stays here.
+		// A fully repaired child carries no recovery REP into its second fork.
 		const q1RecoveryQuote = await owner.readContract({ ...e2e.securityPool(), functionName: 'quoteQuestionRecoveryRep', args: [pool1C, 10n * unit] })
-		expect(recoveryRep + q1RecoveryQuote).toBeLessThanOrEqual(inventory - sold)
-		expect(inventory - sold - recoveryRep - q1RecoveryQuote).toBeLessThanOrEqual(2n)
+		expect(recoveryRep).toBe(0n)
+		expect(q1RecoveryQuote).toBe(0n)
 
 		// The finalized fork question pays in the forked child, with its share of the recovery REP.
 		const q1Redeemed = await e2e.redeemShares(trader, pool1C)

@@ -499,7 +499,7 @@ test('a liquidating owner can rescue in place only with a full rescue deposit', 
 		hook.state().setDepositAmount('0.5')
 		hook.state().setHealthDepositAmount('0.5')
 	})
-	expect(hook.state().fundingReason).toBe('This position is liquidating. Deposit at least 1.00 REP to back it at the repair price and end the liquidation.')
+	expect(hook.state().fundingReason).toBe('This position is liquidating. Deposit at least 1.00 REP to back it fully and end the liquidation.')
 	expect(hook.state().healthDepositReason).toContain('Deposit at least 1.00 REP')
 	await expect(hook.state().deposit()).rejects.toThrow('liquidating')
 	await expect(hook.state().depositAndSetHealth()).rejects.toThrow('liquidating')

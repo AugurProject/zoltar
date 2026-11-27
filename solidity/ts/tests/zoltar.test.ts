@@ -9,7 +9,7 @@ import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, GENESIS_UNIVERSE, MAX_UINT256
 import { approveToken, setupTestAccounts, overrideGenesisTheoreticalSupply, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testSupport/simulator/utils/utilities'
 import assert from '../testSupport/simulator/utils/assert'
 import { addressString } from '../testSupport/simulator/utils/bigint'
-import { decodeEventLog, encodeDeployData, getAddress, hexToBytes, isHex, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, encodeDeployData, parseAbi, getAddress, hexToBytes, isHex, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
 	addRepToMigrationBalance,
 	deployChild,
@@ -164,6 +164,38 @@ describe('Contract Test Suite', () => {
 		const expectedMaximumSupply = parentSupplyBeforeFork - forkHaircut
 		assert.strictEqual(await getUniverseTheoreticalSupplyAttoRep(client, childUniverseId), expectedMaximumSupply, 'child theoretical maximum should exclude the fork admission haircut')
 		assert.strictEqual(await getTotalTheoreticalSupply(client, getRepTokenAddress(childUniverseId)), expectedMaximumSupply, 'child REP token maximum should match the child universe theoretical supply')
+	})
+
+	test('#1713 a direct fork enforces its reviewed REP ceiling with ample allowance', async () => {
+		const token = addressString(GENESIS_REPUTATION_TOKEN)
+		await overrideGenesisTheoreticalSupply(mockWindow, client, token, 1_000n)
+		const question = makeQuestion('bounded direct fork')
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, question, outcomes)
+		await approveToken(client, token, getZoltarAddress())
+		const ceiling = await getZoltarForkThreshold(client, GENESIS_UNIVERSE)
+		await overrideGenesisTheoreticalSupply(mockWindow, client, token, 2_000n)
+		const abi = parseAbi(['function forkUniverse(uint248 universeId,uint256 questionId,uint256 maximumThresholdAttoRep)'])
+		const submit = (maximum: bigint) => writeContractAndWait(client, () => client.writeContract({ abi, address: getZoltarAddress(), functionName: 'forkUniverse', args: [GENESIS_UNIVERSE, getQuestionId(question, outcomes), maximum] }))
+		const balanceBefore = await getERC20Balance(client, token, client.account.address)
+		await assert.rejects(submit(ceiling), /Fork threshold exceeds maximum/)
+		assert.strictEqual(await getERC20Balance(client, token, client.account.address), balanceBefore)
+		assert.strictEqual((await getUniverseData(client, GENESIS_UNIVERSE)).forkTime, 0n)
+		const liveThreshold = await getZoltarForkThreshold(client, GENESIS_UNIVERSE)
+		await submit(liveThreshold)
+		assert.strictEqual(await getERC20Balance(client, token, client.account.address), balanceBefore - liveThreshold)
+	})
+
+	test('#1629 constructor rejects missing question-data code', async () => {
+		const data = encodeDeployData({
+			abi: Zoltar_Zoltar.abi,
+			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
+			args: [addressString(TEST_ADDRESSES[1]), addressString(GENESIS_REPUTATION_TOKEN), DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
+		})
+		await assert.rejects(
+			writeContractAndWait(client, () => client.sendTransaction({ data })),
+			/Question data address must contain code/,
+		)
 	})
 
 	test('constructor rejects an invalid fork threshold divisor', async () => {

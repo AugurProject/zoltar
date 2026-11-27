@@ -12,6 +12,7 @@ import {
 	statoblast_SecurityPoolCommitmentIndex_SecurityPoolCommitmentIndex as indexArtifact,
 	statoblast_SecurityPoolSettlement_SecurityPoolSettlement as settlementArtifact,
 	statoblast_SecurityPoolSettlementBook_SecurityPoolSettlementBook as bookArtifact,
+	ReputationToken_ReputationToken as tokenArtifact,
 } from '../../types/contractArtifact'
 import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { DAY } from '../../testSupport/simulator/utils/constants'
@@ -102,7 +103,11 @@ describe('Statoblast: collateral repair auction winners own their lots', () => {
 		const accountBefore = await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerAccount', args: [first.bidder] })
 		expect(accountBefore.positionId).not.toBe(0n)
 		await context.closingQuote()
+		const supplyBefore = await context.owner.readContract({ abi: tokenArtifact.abi, address: context.token, functionName: 'totalSupply' })
 		await context.finalize()
+		// A full repair burns the 970 unsold REP instead of attaching it to claims.
+		expect(await context.owner.readContract({ abi: tokenArtifact.abi, address: context.token, functionName: 'totalSupply' })).toBe(supplyBefore - 970n * unit)
+		expect(await context.balance(context.forks)).toBe(0n)
 		const firstFill = await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [first.id] })
 		const secondFill = await context.owner.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [second.id] })
 		expect([firstFill.filledLots, secondFill.filledLots]).toEqual([2n, 3n])
@@ -137,12 +142,12 @@ describe('Statoblast: collateral repair auction winners own their lots', () => {
 		const book = await context.owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'ledger' })
 		const bookId = await context.owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'bookIds', args: [context.child] })
 		expect((await context.owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'totals', args: [bookId] }))[0]).toBe(10n * unit)
-		expect(await context.owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'recoveryRep', args: [bookId] })).toBe(1_000n * unit - 30n * unit)
+		expect(await context.owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'recoveryRep', args: [bookId] })).toBe(0n)
 		expect(await context.owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'isCashFunded', args: [bookId] })).toBe(true)
 		expect(await context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'availableMintCapacity', args: [context.child] })).toBe(195n * unit)
 		await expect(context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'quoteMintRecoveryRep', args: [context.child, fixture.base.questionId, unit] })).rejects.toThrow('Settlement mint closed')
 		expect(await context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'quoteMintRecoveryRep', args: [context.child, fixture.secondQuestionId, unit] })).toBe(0n)
-		expect(await context.owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'quoteRecoveryRep', args: [bookId, fixture.base.questionId, 10n * unit] })).toBe(970n * unit)
+		expect(await context.owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'quoteRecoveryRep', args: [bookId, fixture.base.questionId, 10n * unit] })).toBe(0n)
 		await approveToken(context.owner, context.token, context.capital)
 		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'depositAndSetHealthTarget', args: [unit, 12_000n] }))
 		expect((await context.owner.readContract({ abi: capitalArtifact.abi, address: context.capital, functionName: 'ownerCollateral', args: [first.bidder] }))[0]).toBe((virtual[0] ?? 0n) + unit)
@@ -297,6 +302,11 @@ describe('Statoblast: collateral repair auction winners own their lots', () => {
 		await context.closingQuote(2_000n * unit)
 		await context.finalize()
 		expect((await context.other.readContract({ abi: engineArtifact.abi, address: context.engine, functionName: 'previewBid', args: [bid.id] })).filledLots).toBe(0n)
+		// An unrepaired branch keeps every unsold REP for its inherited claims.
+		const settlement = await context.owner.readContract({ abi: securityPoolArtifact.abi, address: fixture.securityPool, functionName: 'settlement' })
+		const book = await context.owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'ledger' })
+		const bookId = await context.owner.readContract({ abi: settlementArtifact.abi, address: settlement, functionName: 'bookIds', args: [context.child] })
+		expect(await context.owner.readContract({ abi: bookArtifact.abi, address: book, functionName: 'recoveryRep', args: [bookId] })).toBe(1_000n * unit)
 		await writeContractAndWait(context.owner, () => context.owner.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'settleRefund', args: [bid.id] }))
 		await writeContractAndWait(context.other, () => context.other.writeContract({ abi: auctionArtifact.abi, address: context.auction, functionName: 'withdrawRefunds', args: [context.other.account.address] }))
 		expect(await context.balance(context.other.account.address)).toBe(before)
@@ -334,8 +344,9 @@ describe('Statoblast: collateral repair auction winners own their lots', () => {
 			repBound = 0,
 			cashBound = 0,
 			dust = 0
+		await expect(c.owner.readContract({ abi: feedArtifact.abi, address: c.feed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [1n] })).rejects.toThrow('Oracle liquidation price is zero')
 		const switchPrice = (rep * unit + cash - 1n) / cash
-		for (const p of [...new Set([1n, 13n, 997n, unit / 5n, unit - 1n, unit, unit + 1n, switchPrice - 1n, switchPrice, switchPrice + 1n, 10n ** 27n].filter(p => p > 0n))].sort((a, b) => (a < b ? -1 : 1))) {
+		for (const p of [...new Set([2n, 13n, 997n, unit / 5n, unit - 1n, unit, unit + 1n, switchPrice - 1n, switchPrice, switchPrice + 1n, 10n ** 27n].filter(p => p > 0n))].sort((a, b) => (a < b ? -1 : 1))) {
 			const needed = await c.owner.readContract({ abi: feedArtifact.abi, address: c.feed, functionName: 'minimumToken1ReportAttoEthForPrice', args: [p] })
 			expect(needed >= cash && needed * p >= rep * unit).toBe(true)
 			expect(needed - 1n < cash || (needed - 1n) * p < rep * unit).toBe(true)

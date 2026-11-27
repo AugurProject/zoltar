@@ -15,6 +15,7 @@ function fixture() {
 	source.codes.set(engine, `0x${engineArtifact.evm.deployedBytecode.object}`)
 	const values: Record<string, unknown> = {
 		repairAuctions: auction,
+		branches: [0n, 1n, 0n, 0n, 0n, 0n, true, true, false],
 		engine,
 		unclaimedRepairAuctionBids: 1n,
 		capital,

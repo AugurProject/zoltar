@@ -52,6 +52,7 @@ contract Zoltar {
 		require(_forkThresholdDivisor > 1, 'Zoltar fork threshold divisor must be greater than one');
 		require(_forkBurnDivisor >= Constants.MINIMUM_FORK_BURN_DIVISOR, 'Zoltar fork burn divisor must be at least five');
 		require(address(_genesisReputationToken).code.length != 0, 'Genesis REP token address must contain code');
+		require(address(_zoltarQuestionData).code.length != 0, 'Question data address must contain code');
 		zoltarQuestionData = _zoltarQuestionData;
 		genesisReputationToken = _genesisReputationToken;
 		forkThresholdDivisor = _forkThresholdDivisor;
@@ -128,11 +129,11 @@ contract Zoltar {
 	}
 
 	/// @notice Forks an unforked universe on an ended question, burning the fork threshold from the caller and crediting it to migration net of the burn haircut.
-	function forkUniverse(uint248 universeId, uint256 questionId) public {
-		_forkUniverse(msg.sender, universeId, questionId);
+	function forkUniverse(uint248 universeId, uint256 questionId, uint256 maximumThresholdAttoRep) public {
+		_forkUniverse(msg.sender, universeId, questionId, maximumThresholdAttoRep);
 	}
 
-	function _forkUniverse(address owner, uint248 universeId, uint256 questionId) private {
+	function _forkUniverse(address owner, uint248 universeId, uint256 questionId, uint256 maximumThresholdAttoRep) private {
 		Universe storage universe = universes[universeId];
 		if (universeId == 0 && universe.forkTime == 0)
 			frozenGenesisTheoreticalSupply = getUniverseTheoreticalSupplyAttoRep(0);
@@ -152,6 +153,7 @@ contract Zoltar {
 		universes[universeId].forkQuestionId = questionId;
 		uint256 forkThresholdAttoRep = getForkThresholdAttoRep(universeId);
 		require(forkThresholdAttoRep != 0, 'Fork threshold must be non-zero');
+		require(forkThresholdAttoRep <= maximumThresholdAttoRep, 'Fork threshold exceeds maximum');
 		_burnRep(universes[universeId].reputationToken, owner, forkThresholdAttoRep);
 		if (universeId == 0) frozenGenesisTheoreticalSupply -= forkThresholdAttoRep;
 		uint256 migrationRepBalanceAttoRep = forkThresholdAttoRep - forkThresholdAttoRep / forkBurnDivisor;

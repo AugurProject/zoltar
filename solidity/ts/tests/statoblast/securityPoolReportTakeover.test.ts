@@ -92,7 +92,10 @@ describe('Statoblast: report sponsor takeover priority', () => {
 	for (const failure of ['expiry', 'price', 'takeover reward', 'funding', 'cohort', 'health target'] as const) {
 		test(`a failed ${failure} bound preserves accepted price and both owners' funds`, async () => {
 			const { sponsor, feed, intent } = await prepare()
-			if (failure === 'expiry') intent.deadline -= 600n
+			if (failure === 'expiry') {
+				const challenge = await sponsor.readContract({ ...feed, functionName: 'settlementTime' })
+				intent.deadline = (await sponsor.getBlock()).timestamp + challenge + 60n
+			}
 			if (failure === 'price') intent.maximumPrice--
 			if (failure === 'takeover reward') intent.minimumTakeoverReward = 1_000n * unit
 			if (failure === 'funding') intent.maximumOwnRep = 0n
@@ -104,7 +107,11 @@ describe('Statoblast: report sponsor takeover priority', () => {
 			await writeContractAndWait(sponsor, () => sponsor.writeContract({ abi: requestAbi, address: feed.address, functionName: 'requestSecurityPoolPriceWithOperations', args: [4n * unit, 10n * unit, bounty, operationBatch(intent)], value: bounty }))
 			const report = await sponsor.readContract({ ...feed, functionName: 'pendingReportId' })
 			const before = await sponsor.readContract({ ...capital(), functionName: 'ownerAccount', args: [sponsor.account.address] })
-			await fixture.base.mockWindow.advanceTime(481n)
+			if (failure === 'expiry') {
+				const { game } = (await loadOpenOracleEventState(sponsor, report)).latest
+				expect(game.reportTimestamp + game.settlementTime).toBeLessThanOrEqual(intent.deadline)
+				await fixture.base.mockWindow.setTime(intent.deadline + 1n)
+			} else await fixture.base.mockWindow.advanceTime(481n)
 			await openOracleSettle(fixture.owner(), report)
 			expect(await sponsor.readContract({ ...feed, functionName: 'reportOutcome', args: [report] })).toBe(1n)
 			expect(await sponsor.readContract({ ...capital(), functionName: 'isPriceValid' })).toBe(true)

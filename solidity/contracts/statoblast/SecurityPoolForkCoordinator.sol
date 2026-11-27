@@ -308,6 +308,12 @@ contract SecurityPoolForkCoordinator {
 		_freeze(parent);
 		return _prepare(parent, outcome);
 	}
+	/// @notice Reserve frozen source REP admission while owners are still choosing branches.
+	function prepareSourceMigration(uint248 source) external nonReentrant {
+		_freeze(source);
+		Fork storage fork = forks[source];
+		_prepareSourceMigration(source, fork, securityPool.capitalLedger(source), fork.backing + fork.recoveryAttoRep);
+	}
 	function startBranch(uint248 parent, uint256 outcome) external nonReentrant returns (uint248 child) {
 		_freeze(parent);
 		child = _prepare(parent, outcome);
@@ -330,7 +336,8 @@ contract SecurityPoolForkCoordinator {
 		}
 		IERC20 token = IERC20(address(zoltar.getRepToken(child)));
 		if (branch.chosenBacking != 0) token.safeTransfer(address(childCapital), branch.chosenBacking);
-		securityPool.reporters().createChild(branch.parent, branch.outcome);
+		(, uint256 forkQuestionId, , , ) = zoltar.universes(branch.parent);
+		securityPool.reporters().createChild(branch.parent, branch.outcome, fixedTree.get(branchStates[branch.parent].fixedRoot, forkQuestionId) != 0);
 		branch.recoveryAttoRep = migratingPrincipalAttoRep - branch.chosenBacking;
 		if (fork.units == 0 && branch.recoveryAttoRep != 0) {
 			zoltar.burnRep(child, branch.recoveryAttoRep);
@@ -399,6 +406,15 @@ contract SecurityPoolForkCoordinator {
 			SecurityPoolUniformPriceRepairAuction.Clearing memory result = repairAuction.finalize();
 			raisedAttoEth = result.raisedAttoEth;
 			branch.recoveryAttoRep -= result.soldAttoRep;
+			// Unsold REP compensates inherited claims only while the branch stays
+			// short of cash. Raised cash is capped at the shortfall, so equality is a
+			// full repair and the rest is burned. Old recovery REP is never auction
+			// inventory and always stays with the claims that carried it here.
+			uint256 unsoldAttoRep = repairAuction.inventoryAttoRep() - result.soldAttoRep;
+			if (raisedAttoEth == repairAuction.shortfallAttoEth() && unsoldAttoRep != 0) {
+				branch.recoveryAttoRep -= unsoldAttoRep;
+				zoltar.burnRep(child, unsoldAttoRep);
+			}
 			if (result.filledLots != 0)
 				securityPool.capitalLedger(child).installRepairAuctionCohort(address(repairAuction), result.filledLots, result.attoRepPerLot, repairAuction.lotAttoEth());
 		}
@@ -412,7 +428,8 @@ contract SecurityPoolForkCoordinator {
 		uint256 nativeForkTime = zoltar.getForkTime(child);
 		settlement.setFeeClock(child, CheckedCast.toUint48(nativeForkTime == 0 ? block.timestamp : nativeForkTime));
 		(, uint256 forkQuestion, , , ) = zoltar.universes(branch.parent);
-		settlement.fixInheritedQuestionFinality(child, forkQuestion, clocks[child].securityPoolTimeAnchor + Constants.FORK_RESPONSE_DELAY);
+		if (fixedTree.get(branchStates[branch.parent].fixedRoot, forkQuestion) == 0)
+			settlement.fixInheritedQuestionFinality(child, forkQuestion, clocks[child].securityPoolTimeAnchor + Constants.FORK_RESPONSE_DELAY);
 	}
 
 	/// @notice Resolve only this actual fork, never recursively walk ancestors.
@@ -436,11 +453,13 @@ contract SecurityPoolForkCoordinator {
 		IQuestionLedger pool = securityPool.getQuestionLedger(questionId, source);
 		ISecurityPoolRecoveryShares(address(pool.shareToken())).consumeSecurityPoolRecoveryCompleteSets(source, msg.sender, shares);
 		cash = _recordRecovery(source, questionId, question, shares);
-		ISecurityPoolForkServices(securityPool.services()).recoverPremiumCash(source, questionId, shares, msg.sender);
+		uint256 premiumCash = ISecurityPoolForkServices(securityPool.services()).recoverPremiumCash(source, questionId, shares, msg.sender);
 		if (cash != 0) {
 			Collateral.send(ICollateralConfig(address(securityPool)).collateralToken(), msg.sender, cash);
 		}
 		emit NeutralCashRecovered(source, questionId, msg.sender, shares, cash);
+		// Premium cash is transferred by Services; include it only after paying the settlement subtotal.
+		cash += premiumCash;
 	}
 
 	function _recoveryQuestion(uint248 source, uint256 questionId) private returns (SecurityPoolSettlementBook.Question memory question) {

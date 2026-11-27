@@ -6,6 +6,7 @@ import type { InjectedEthereum } from '@zoltar/ui-core-shared/wallet/injectedEth
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { createWalletClient, custom, decodeFunctionData, encodeAbiParameters, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { shareTokenAbi } from '../../protocol/authorization.js'
+import { statoblast_QuestionLedger_QuestionLedger } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { simulateEntry, simulateExit, submitFreshEntry, submitFreshExit, submitFreshLiquidity, submitFreshSettlement } from '../../protocol/live.js'
 import { tradingContracts } from '../../generated/contractArtifact.js'
 import { MINIMUM_SLIPPAGE_BPS } from '../../protocol/tradeQuote.js'
@@ -21,6 +22,7 @@ const shareToken = `0x${'44'.repeat(20)}` as Address
 const transactionHash = `0x${'66'.repeat(32)}` as Hex
 const routerAbi = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter.abi
 const pairAbi = tradingContracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair.abi
+const questionLedgerAbi = statoblast_QuestionLedger_QuestionLedger.abi
 const configuration = deploymentConfigurationFixture({ chainId: 1, chainName: 'Test', rpcUrl: 'http://localhost', factory: `0x${'88'.repeat(20)}`, router: `0x${'99'.repeat(20)}` })
 const market = smallReserveMarketFixture({ pool, pair, shareToken, title: 'Block advance', description: 'Quote block advance fixture' })
 const uint256 = { type: 'uint256' } as const
@@ -248,7 +250,7 @@ describe('submitting a quote after the chain advances', () => {
 		expect(await submitFreshLiquidity(client, configuration, account, quote, write)).toBe(transactionHash)
 		expect(chain.sends).toHaveLength(1)
 	})
-	test('does not offer an add-liquidity quote whose deposit caps cannot cover holding fees', async () => {
+	test.each(['add', 'initialize', 'create'] as const)('#1659 %s quotes cover holding fees through the signed deposit deadline', async operation => {
 		const { chain, client } = createAdvancingChain()
 		const feeMarket = {
 			...market,
@@ -265,8 +267,11 @@ describe('submitting a quote after the chain advances', () => {
 				},
 			},
 		}
-		chain.feeMarket = feeMarket
-		await expect(simulateLiquidity(client, configuration, feeMarket, account, 'add', 10n, 5_000n, { validityMinutes: 7n }, MINIMUM_SLIPPAGE_BPS)).rejects.toThrow('Holding fees')
+		let quoteMarket = feeMarket
+		if (operation === 'create') quoteMarket = { ...feeMarket, pair: undefined, lpTotalSupply: 0n }
+		else if (operation === 'initialize') quoteMarket = { ...feeMarket, lpTotalSupply: 0n }
+		chain.feeMarket = quoteMarket
+		await expect(simulateLiquidity(client, configuration, quoteMarket, account, operation === 'create' ? 'initialize' : operation, 10n, 5_000n, { validityMinutes: 7n }, MINIMUM_SLIPPAGE_BPS)).rejects.toThrow('Holding fees')
 		expect(chain.sends).toHaveLength(0)
 	})
 
@@ -310,6 +315,9 @@ describe('submitting a quote after the chain advances', () => {
 		expect(await submitFreshSettlement(client, configuration, account, settlement, write)).toBe(transactionHash)
 		expect(await submitFreshSettlement(client, configuration, account, winning, write)).toBe(transactionHash)
 		expect(chain.sends).toHaveLength(6)
+		const winningRedemption = chain.sends[5]
+		if (winningRedemption === undefined) throw new Error('Missing winning redemption calldata')
+		expect(decodeFunctionData({ abi: questionLedgerAbi, data: winningRedemption })).toEqual({ functionName: 'redeemShares', args: [] })
 		expect(chain.simulatedBlocks.length).toBeGreaterThan(0)
 		for (const block of chain.simulatedBlocks) expect(block).toBe('0x3')
 	})

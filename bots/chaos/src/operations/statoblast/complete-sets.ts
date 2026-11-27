@@ -80,6 +80,7 @@ export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Op
 			}
 			let args: (bigint | string)[] | undefined
 			if (kind === 'redeem') args = [spend]
+			if (kind === 'winning') args = []
 			if (kind === 'create' && quotedPurchase !== undefined) args = [amount(pool.universeId), amount(pool.questionId), spend, snapshot.wallet.address, amount(quotedPurchase.quote.minimumShares), purchaseFeeBudget(amount(quotedPurchase.quote.feeAttoEth))]
 			const shares = walletShares(snapshot, pool)
 			if (kind !== 'create' && shares === undefined) return undefined

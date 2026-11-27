@@ -4,6 +4,8 @@ import { decodeAddress, decodeBool, decodeFields, decodeUint } from './securityP
 
 const abi = parseAbi([
 	'function collateralToken() view returns (address)',
+	'function minimumCommitmentAttoEth() view returns (uint256)',
+	'function branches(uint248 universeId) view returns (uint248 parent,uint256 outcome,uint256 chosenBacking,uint256 chosenCommitment,uint256 parentCash,uint256 recoveryAttoRep,bool prepared,bool started,bool ready)',
 	'function balanceOf(address owner) view returns (uint256)',
 	'function allowance(address owner,address spender) view returns (uint256)',
 	'function factory() view returns (address)',
@@ -133,7 +135,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 	return { ...base, auction }
 
 	async function readAuction(auctionAddress: Address) {
-		const [fork, root, capital, engineValue, token, child, closes, inventory, shortfall, lot, target, grid, openingPrice, minimumCollateral, openedValue, finalizedValue, multiplier, capitalRoot, capitalProtocol, capitalChild, capitalToken, capitalFork] = await Promise.all([
+		const [fork, root, capital, engineValue, token, child, closes, inventory, shortfall, lot, target, grid, openingPrice, minimumCollateral, openedValue, finalizedValue, multiplier, capitalRoot, capitalProtocol, capitalChild, capitalToken, capitalFork, minimumLot, branchValue] = await Promise.all([
 			read(auctionAddress, 'forkAuthority'),
 			read(auctionAddress, 'securityPool'),
 			read(auctionAddress, 'capital'),
@@ -156,6 +158,8 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			read(capitalLedger, 'universeId'),
 			read(capitalLedger, 'repToken'),
 			read(capitalLedger, 'forkAuthority'),
+			read(securityPool, 'minimumCommitmentAttoEth'),
+			read(controller, 'branches', [universeId]),
 		])
 		if (
 			decodeAddress(fork, 'Auction fork contract') !== controller ||
@@ -186,6 +190,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			read(capitalLedger, 'importing'),
 		])
 		if (decodeAddress(engineController, 'Auction contract address') !== auctionAddress || decodeBool(initialized, 'Invalid auction state.') !== opened || decodeBool(engineFinalized, 'Invalid auction state.') !== finalized) throw new Error('The auction status or contract address does not match this branch.')
+		const [, , , chosenCommitment] = decodeFields(branchValue, ['parent', 'outcome', 'chosenBacking', 'chosenCommitment', 'parentCash', 'recoveryAttoRep', 'prepared', 'started', 'ready'], 'Invalid auction branch state.')
 		const terms = {
 			address: auctionAddress,
 			engine,
@@ -195,6 +200,8 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			inventoryAttoRep: decodeUint(inventory, 'REP inventory'),
 			shortfallAttoEth: decodeUint(shortfall, 'ETH shortfall'),
 			lotAttoEth: decodeUint(lot, 'ETH lot'),
+			minimumCommitmentAttoEth: decodeUint(minimumLot, 'Minimum commitment'),
+			chosenCommitmentAttoEth: decodeUint(chosenCommitment, 'Chosen branch commitment'),
 			targetLots: decodeUint(target, 'Target lots'),
 			repGrid: decodeUint(grid, 'REP grid'),
 			openingConservativePrice: decodeUint(openingPrice, 'Opening price'),
@@ -208,7 +215,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			unclaimedBidCount: decodeUint(unclaimed, 'Unclaimed bids'),
 			capitalImporting: decodeBool(capitalImporting, 'Invalid capital state.'),
 		}
-		if (terms.lotAttoEth === 0n || terms.repGrid === 0n || terms.targetLots !== (terms.shortfallAttoEth + terms.lotAttoEth - 1n) / terms.lotAttoEth) throw new Error('Invalid auction lot configuration.')
+		if (terms.minimumCommitmentAttoEth === 0n || terms.lotAttoEth === 0n || terms.repGrid === 0n || terms.targetLots !== (terms.shortfallAttoEth + terms.lotAttoEth - 1n) / terms.lotAttoEth) throw new Error('Invalid auction lot configuration.')
 		let price: { conservativePrice: bigint; validUntil: bigint; lastSettlementTimestamp: bigint; exposureLimitAttoEth: bigint; exposureLimitAttoRep: bigint; requiredExposureAttoEth: bigint } | undefined
 		if (priceFeed !== zeroAddress) {
 			const [values, exposureValue] = await Promise.all([Promise.all(['conservativePrice', 'priceValidUntil', 'lastSettlementTimestamp', 'acceptedExposureLimitAttoEth', 'acceptedRepExposureLimitAttoRep'].map(name => read(priceFeed, name))), read(securityPool, 'oracleExposure', [universeId])])
@@ -285,8 +292,8 @@ function decodeRepairAuctionPositions(value: unknown, length: number) {
 		const current = decodeFields(item, ['bidder', 'positionId', 'principal', 'commitment', 'liquidationStarted', 'claimed', 'materialized', 'earnedAttoEth', 'earnedAttoRep'], 'Invalid auction response.')
 		return {
 			bidder: decodeAddress(current[0], 'Capital auction bidder'),
-			positionId: decodeUint(current[1], 'Auction position ID', 96),
-			principalAttoRep: decodeUint(current[2], 'Current principal REP'),
+			positionId: decodeUint(current[1], 'Bid position ID', 96),
+			principalAttoRep: decodeUint(current[2], 'Current pledged REP'),
 			commitmentAttoEth: decodeUint(current[3], 'Current commitment ETH'),
 			liquidationStarted: decodeUint(current[4], 'Liquidation start', 48),
 			claimed: decodeBool(current[5], 'Invalid auction state.'),

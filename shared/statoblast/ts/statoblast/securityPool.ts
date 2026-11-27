@@ -1,4 +1,4 @@
-import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '../initialReport/oracleInitialReport.js'
+import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, ORACLE_ESCALATION_HALT_MULTIPLIER_BPS } from '../initialReport/oracleInitialReport.js'
 export { securityPoolTakeoverSource, securityPoolTakeoverFill, securityPoolTakeoverTransfer } from './securityPoolTakeover.js'
 import { type Address, type Hex, encodeAbiParameters, encodeFunctionData, formatUnits, isAddress, isHex, getAddress, parseAbi, parseAbiItem, parseAbiParameters, toEventSelector, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 
@@ -37,6 +37,7 @@ export function validateSecurityPoolEconomics(config: SecurityPoolEconomicsConfi
 	uint(config.minimumCommitmentAttoEth, 256, 'Minimum commitment')
 	uint(config.minimumOutcomeRate, 256, 'Minimum outcome exchange rate')
 	uint(config.rewardVestingSeconds, 48, 'Fee vesting duration')
+	if (config.minimumPurchaseFeeAttoEth >= 1n << 128n) throw new Error('Minimum purchase fee exceeds fee stream capacity.')
 	if (config.purchaseFeeBps > maximumFeeBps) throw new Error(`Purchase fee cannot exceed ${formatUnits(maximumFeeBps, 2)}%.`)
 	if (config.annualFeeBps > maximumFeeBps) throw new Error(`Annual fee cannot exceed ${formatUnits(maximumFeeBps, 2)}%.`)
 	if (config.minimumCommitmentAttoEth === 0n || config.rewardVestingSeconds === 0n) throw new Error('Minimum commitment and fee vesting duration must be positive.')
@@ -57,6 +58,13 @@ const securityPoolConfigurationParameters = parseAbiParameters('address, uint256
 export function buildSecurityPoolDeploymentRequest(parameters: { owner: Address; factory: Address; origin: SecurityPoolOriginConfig; maximumQuestionHorizonSeconds: bigint; questionAdmissionPolicy: Address; economics: SecurityPoolEconomicsConfig; creationCode: Hex }) {
 	address(parameters.origin.collateralToken, 'Collateral token')
 	uint(parameters.origin.minimumReportCollateral, 128, 'Report collateral floor')
+	if ((parameters.origin.minimumReportCollateral * ORACLE_ESCALATION_HALT_MULTIPLIER_BPS) / 10_000n >= 1n << 128n) throw new Error('Report collateral floor exceeds oracle halt limit.')
+	if (parameters.economics.minimumCommitmentAttoEth > 100n * ((1n << 128n) - 1n - parameters.origin.minimumReportCollateral)) throw new Error('Minimum commitment exceeds report exposure capacity.')
+	let divisor = parameters.origin.securityMultiplierBps
+	let remainder = 10_000n
+	while (remainder !== 0n) [divisor, remainder] = [remainder, divisor % remainder]
+	const maximumRep = 11_000_000n * 10n ** 18n
+	if (parameters.origin.securityMultiplierBps > maximumRep * 10_000n || parameters.origin.securityMultiplierBps / divisor > maximumRep) throw new Error('Security multiplier exceeds the supported REP supply limits.')
 	if (parameters.origin.minimumReportCollateral === 0n) throw new Error('Report collateral floor must be positive.')
 	address(parameters.owner, 'Owner')
 	address(parameters.factory, 'Security pool deployment contract')

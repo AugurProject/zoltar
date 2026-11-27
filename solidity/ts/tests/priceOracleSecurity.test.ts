@@ -668,7 +668,7 @@ describe('Shared security pool oracle security regressions', () => {
 			}),
 		)
 		const oraclePricePrecision = 10n ** 18n
-		const proposedRepPerEthPrice = 1n
+		const proposedRepPerEthPrice = 2n
 		const minimumInitialWeth = await client.readContract({
 			abi: coordinatorAbi,
 			address: priceOracle,
@@ -843,13 +843,14 @@ describe('Shared security pool oracle security regressions', () => {
 		const minimum = await client.readContract({ ...direct, functionName: 'minimumToken1ReportAttoEth' })
 		const nextId = () => client.readContract({ abi: statoblast_openOracle_OpenOracle_OpenOracle.abi, address: getInfraContractAddresses().openOracle, functionName: 'nextReportId' })
 		const beforeId = await nextId()
-		await assert.rejects(client.writeContract({ ...target, functionName: 'requestSecurityPoolPrice', args: [1n, 0n, cost - 1n], value: cost - 1n }), /Oracle bounty too small/)
-		await assert.rejects(client.writeContract({ ...target, functionName: 'requestSecurityPoolPrice', args: [1n, 0n, cost], value: cost - 1n }), /Not enough ETH for oracle bounty/)
+		await assert.rejects(client.writeContract({ ...target, functionName: 'requestSecurityPoolPrice', args: [2n, 0n, cost - 1n], value: cost - 1n }), /Oracle bounty too small/)
+		await assert.rejects(client.writeContract({ ...target, functionName: 'requestSecurityPoolPrice', args: [2n, 0n, cost], value: cost - 1n }), /Not enough ETH for oracle bounty/)
 		await assert.rejects(client.writeContract({ ...direct, functionName: 'requestSecurityPoolPrice', args: [0n, 0n, cost], value: cost }), /Initial oracle price zero/)
+		await assert.rejects(client.writeContract({ ...direct, functionName: 'requestSecurityPoolPrice', args: [1n, minimum, cost], value: cost }), /Oracle liquidation price is zero/)
 		await assert.rejects(recoverSettledPendingReport(client, priceOracle), /No report to recover/)
-		await assert.rejects(client.writeContract({ ...direct, functionName: 'requestSecurityPoolPrice', args: [1n, 1n << 128n, cost], value: cost }), /WETH report exceeds uint128/)
+		await assert.rejects(client.writeContract({ ...direct, functionName: 'requestSecurityPoolPrice', args: [2n, 1n << 128n, cost], value: cost }), /WETH report exceeds uint128/)
 		await assert.rejects(client.writeContract({ ...direct, functionName: 'requestSecurityPoolPrice', args: [(1n << 128n) * 10n ** 18n, minimum, cost], value: cost }), /REP report exceeds uint128/)
-		await assert.rejects(client.writeContract({ ...direct, functionName: 'requestSecurityPoolPrice', args: [1n, (1n << 128n) / 10n + 1n, cost], value: cost }), /Oracle escalation halt amount exceeds uint128 maximum/)
+		await assert.rejects(client.writeContract({ ...direct, functionName: 'requestSecurityPoolPrice', args: [2n, (1n << 128n) / 10n + 1n, cost], value: cost }), /Oracle escalation halt amount exceeds uint128 maximum/)
 		assert.strictEqual(await nextId(), beforeId)
 		assert.strictEqual(await getPendingReportId(client, priceOracle), 0n)
 		await requestPrice(client, priceOracle)
