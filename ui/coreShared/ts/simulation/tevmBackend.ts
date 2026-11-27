@@ -1,5 +1,7 @@
 import { withTimeout } from '../lib/promise.js'
-import { clearSessionLocalEntities } from '../lib/localEntityStore.js'
+import { startingSimulation } from '../copy/simulation.js'
+import { clearSessionLocalEntities, localEntityScopeForNetwork, seedEntityFavorite } from '../lib/localEntityStore.js'
+import { formatQuestionIdHex } from '../lib/questionId.js'
 import { createPublicClient, createWalletClient, custom, publicActions, type Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ChainBackend, WriteClient } from '../wallet/chainBackend.js'
 import { normalizeAccount } from '../wallet/chainBackend.js'
@@ -115,7 +117,7 @@ export async function createSimulationBackend(
 	dependencies: CreateSimulationBackendDependencies = {},
 ): Promise<SimulationBackend> {
 	const primaryAccount = QA_ACCOUNTS[0]
-	if (primaryAccount === undefined) throw new Error('No simulation QA accounts configured')
+	if (primaryAccount === undefined) throw new Error('No simulation QA wallets configured')
 	const profile = createSimulationProfile({ ...predictSimulationTokenAddresses(primaryAccount, genesisOutcome), genesisOutcome })
 	const initialization: SimulationInitialization =
 		savedState !== undefined && savedStateId !== undefined
@@ -168,7 +170,7 @@ export async function createSimulationBackend(
 		})
 		const restartTimeout = () => {
 			clearTimeout(timeoutId)
-			timeoutId = setTimeout(() => rejectTimeout(new Error('Simulation request timed out. Reload the page to retry.')), WORKER_REQUEST_TIMEOUT_MILLISECONDS)
+			timeoutId = setTimeout(() => rejectTimeout(new Error('The simulation timed out. Reload the page to retry.')), WORKER_REQUEST_TIMEOUT_MILLISECONDS)
 		}
 		restartTimeout()
 		if (restartsOnProgress) progressListeners.add(restartTimeout)
@@ -207,7 +209,7 @@ export async function createSimulationBackend(
 					} as SimulationWorkerMessage)
 				} catch (error) {
 					pendingRequests.delete(requestId)
-					reject(error instanceof Error ? error : new Error('Simulation worker request failed'))
+					reject(error instanceof Error ? error : new Error('The simulation could not complete this action.'))
 				}
 			}).finally(() => {
 				settled = true
@@ -235,6 +237,14 @@ export async function createSimulationBackend(
 			params: parameters.params,
 			type: 'rpc',
 		})
+
+	const seedWatchlist = () => {
+		const pool = currentState?.seededSecurityPool
+		if (appId !== 'statoblast' || pool === undefined) return
+		seedEntityFavorite(localEntityScopeForNetwork(profile, 'statoblast', 'pool'), pool.address)
+		const questions = localEntityScopeForNetwork(profile, 'statoblast', 'question')
+		for (const id of pool.questionIds) seedEntityFavorite(questions, `${pool.address}:${formatQuestionIdHex(id)}`)
+	}
 
 	const applyState = (nextState: SimulationWorkerState) => {
 		const previousSelectedAccount = currentState?.selectedAccount
@@ -363,11 +373,13 @@ export async function createSimulationBackend(
 			if (bootstrapPromise === undefined) {
 				patchState({
 					bootstrapError: currentState?.bootstrapError,
-					bootstrapLabel: 'Starting simulation bootstrap',
+					bootstrapLabel: startingSimulation,
 					bootstrapProgress: 0,
 					isBootstrapping: true,
 				})
-				bootstrapPromise = resolveScenarioSnapshot().then(parameters => callWorker('bootstrap', parameters))
+				bootstrapPromise = resolveScenarioSnapshot()
+					.then(parameters => callWorker('bootstrap', parameters))
+					.then(seedWatchlist)
 			}
 			return await bootstrapPromise
 		},
@@ -465,9 +477,13 @@ export async function createSimulationBackend(
 			bootstrapWarning = undefined
 			await callWorker('reset', undefined)
 			clearSessionLocalEntities()
+			seedWatchlist()
 		},
 		selectAccount: async address => {
 			await callWorker('selectAccount', { address })
+		},
+		get seededSecurityPool() {
+			return requireState().seededSecurityPool
 		},
 		get selectedAccount() {
 			return requireState().selectedAccount

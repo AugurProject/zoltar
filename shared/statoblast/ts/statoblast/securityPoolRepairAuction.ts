@@ -13,16 +13,18 @@ const abi = parseAbi([
 ])
 const ATTO_UNITS = 10n ** 18n
 const BPS = 10_000n
+const secondsPerDay = 86_400n
+const minimumAuctionOpeningDays = 1n
 function address(value: Address, label: string) {
 	if (!isAddress(value) || getAddress(value) === zeroAddress) throw new Error(`${label} must be a nonzero address.`)
 	return getAddress(value)
 }
 function uint(value: bigint, label: string, bits = 256) {
-	if (typeof value !== 'bigint' || value < 0n || value >= 1n << BigInt(bits)) throw new Error(`${label} must fit uint${bits}.`)
+	if (typeof value !== 'bigint' || value < 0n || value >= 1n << BigInt(bits)) throw new Error(`${label} is out of range.`)
 	return value
 }
 function requireAuction(snapshot: SecurityPoolAuctionSnapshot) {
-	if (snapshot.auction === undefined) throw new Error('This branch has no collateral repair auction.')
+	if (snapshot.auction === undefined) throw new Error('This branch has no repair auction.')
 	return snapshot.auction
 }
 
@@ -33,7 +35,7 @@ export function securityPoolAuctionOpeningReason(snapshot: SecurityPoolAuctionSn
 	if (auction.finalized) return 'This auction is finalized.'
 	if (auction.opened) return 'This auction is already open.'
 	if (snapshot.timestamp >= auction.closesAt) return 'The auction window has closed.'
-	if (auction.closesAt - snapshot.timestamp < 86_400n) return 'Opening requires at least one day for competitive bidding.'
+	if (auction.closesAt - snapshot.timestamp < minimumAuctionOpeningDays * secondsPerDay) return `Opening requires at least ${minimumAuctionOpeningDays} day for competitive bidding.`
 	if (snapshot.forkTime !== 0n) return 'This auction universe has forked.'
 	if (auction.targetLots === 0n || auction.inventoryAttoRep === 0n) return 'This branch has no saleable auction lots.'
 	const price = auction.price
@@ -60,6 +62,7 @@ export function buildSecurityPoolAuctionOpenRequest(snapshot: SecurityPoolAuctio
 	return { account: snapshot.bidder, to: requireAuction(snapshot).address, value: 0n, data: encodeFunctionData({ abi, functionName: 'open' }) }
 }
 type SecurityPoolAuctionBidTerms = { lots: bigint; minimumAttoRepPerLot: bigint }
+
 /**
  * Every bid funds only the exact collateral lots. Winning lots join the bidder's own
  * capital account at the protocol's minimum health; the owner chooses any higher
@@ -77,7 +80,7 @@ export function quoteSecurityPoolAuctionBid(snapshot: SecurityPoolAuctionSnapsho
 	if (minimumAttoRepPerLot < requiredPrincipalPerLotAttoRep) throw new Error(`Increase the minimum REP per lot to at least ${formatEther(requiredPrincipalPerLotAttoRep)} REP to back each lot.`)
 	if (minimumAttoRepPerLot > auction.maximumAdmissibleBidAttoRepPerLot) throw new Error(auction.maximumAdmissibleBidAttoRepPerLot === 0n ? 'Better funded bids leave no admissible new limit.' : `Better funded bids exclude this limit. Use at most ${formatEther(auction.maximumAdmissibleBidAttoRepPerLot)} REP per lot.`)
 	const bidAttoEth = uint(lots * auction.lotAttoEth, 'Bid collateral', 128)
-	uint(auction.depositedAttoEth + bidAttoEth, 'Total auction bid escrow', 128)
+	uint(auction.depositedAttoEth + bidAttoEth, 'Total bid collateral', 128)
 	return {
 		...terms,
 		bidAttoEth,

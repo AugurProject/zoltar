@@ -30,7 +30,7 @@ const ATTO_ETH_PER_ETH = 10n ** 18n
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
 const NEXT_WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a2')
 const QUESTION_LEDGER_ADDRESS = getAddress('0x00000000000000000000000000000000000000b2')
-const WALLET_ACCOUNT_CHANGED = 'Wallet account changed. Review the action with the connected account and try again.'
+const WALLET_ACCOUNT_CHANGED = 'The connected wallet address changed. Review the action and try again.'
 const PROXY_DEPLOYER_STEP: DeploymentStatus = {
 	address: zeroAddress,
 	dependencies: [],
@@ -143,6 +143,10 @@ describe('useTradingOperations', () => {
 			source.setRead('securityPoolOf', securityPool)
 			source.setRead('questionId', zeroHash)
 			source.setRead('purchaseQuote', [0n])
+			source.setRead('refreshSecurityPoolFees', undefined)
+			source.setRead('quoteMintRecoveryRep', 0n)
+			source.setRead('attoEthToAttoShares', 10n ** BigInt(collateralDecimals))
+			source.setRead('availableMintCapacity', 10_000_000n * 10n ** BigInt(collateralDecimals))
 			replaceEnvironment({ ...getActiveBackend(), createReadClient: () => source.client })
 		}
 		const onTransactionFailed = mock((_message: string, _details?: unknown) => undefined)
@@ -227,6 +231,26 @@ describe('useTradingOperations', () => {
 		expect(redeemed).toEqual([5_000_000n])
 	})
 
+	test('mint uses shown defaults or edited limits in collateral decimals and blocks out-of-range edits', async () => {
+		const createMint = mock(async (_account: Address, _callbacks: unknown, questionLedgerAddress: Address, _amount: bigint, _limits?: Parameters<UseTradingOperationsDependencies['createCompleteSetInQuestionLedger']>[4]) => ({
+			action: 'createCompleteSet' as const,
+			hash: zeroHash,
+			questionLedgerAddress,
+			universeId: 1n,
+		}))
+		const hook = await renderTradingHook(createMintDependencies({ createCompleteSetInQuestionLedger: createMint }), {}, {}, true, 6)
+		await hook.setForm({ completeSetAmount: '1', mintMaximumFee: '0.0000001' })
+		await waitFor(() => expect(hook.state().mintLimits.reason).toBe('Enter a valid maximum fee.'))
+		await act(() => hook.state().createCompleteSet())
+		expect(createMint).not.toHaveBeenCalled()
+		await hook.setForm({ mintMaximumFee: '0.042', mintMinimumShares: '1.000001' })
+		await waitFor(() => expect(hook.state().mintLimits.reason).toBe('The quote is below your minimum complete sets.'))
+		await hook.setForm({ mintMinimumShares: '' })
+		expect(hook.state().mintLimits).toEqual({ maximumFee: 42_000n, minimumShares: 990_000n, reason: undefined })
+		await act(() => hook.state().createCompleteSet())
+		expect(createMint.mock.calls[0]?.[4]).toEqual({ maximumFee: 42_000n, minimumShares: 990_000n })
+	})
+
 	test('disabling pool reads clears stale errors and discards an outstanding decode failure', async () => {
 		const pendingDetails = createDeferred<TradingDetails>()
 		const loadTradingDetails = mock(async () => await pendingDetails.promise)
@@ -251,7 +275,7 @@ describe('useTradingOperations', () => {
 		},
 		{
 			capacity: createMintCapacity({ settlementCollateralAttoEth: 0n, feeEligibleUnderwritingLimitAttoEth: 0n, mintingCapacityAttoEth: 0n, shareTokenSupplyAttoShares: 0n }),
-			expectedMessage: 'No mint capacity. No vault has an active commitment.',
+			expectedMessage: 'No mint capacity. No position has an active commitment.',
 			name: 'total underwriting commitments exists but none is fee eligible',
 		},
 		{
@@ -354,12 +378,13 @@ describe('useTradingOperations', () => {
 
 	test('submits the amounts the mint and redeem guards accept, including a leading decimal point and digit grouping spaces', async () => {
 		const halfShare = ATTO_ETH_PER_ETH / 2n
+		const readMintCapacity = mock(async () => createMintCapacity({ shareTokenSupplyAttoShares: ATTO_ETH_PER_ETH }))
 		const createCompleteSetInQuestionLedger = mock(async (_accountAddress: Address, _callbacks: unknown, questionLedgerAddress: Address, _amount: bigint) => ({ action: 'createCompleteSet' as const, hash: zeroHash, questionLedgerAddress, universeId: 1n }))
 		const redeemCompleteSetInQuestionLedger = mock(async (_accountAddress: Address, _callbacks: unknown, questionLedgerAddress: Address, _amount: bigint) => ({ action: 'redeemCompleteSet' as const, hash: zeroHash, questionLedgerAddress, universeId: 1n }))
 		const hook = await renderTradingHook(
 			createMintDependencies({
 				createCompleteSetInQuestionLedger,
-				loadQuestionLedgerMintCapacity: mock(async () => createMintCapacity({ shareTokenSupplyAttoShares: ATTO_ETH_PER_ETH })),
+				loadQuestionLedgerMintCapacity: readMintCapacity,
 				loadTradingDetails: mock(async () => createTradingDetails({ maxRedeemableCompleteSetsAttoShares: ATTO_ETH_PER_ETH, shareBalances: { invalidAttoShares: ATTO_ETH_PER_ETH, noAttoShares: ATTO_ETH_PER_ETH, yesAttoShares: ATTO_ETH_PER_ETH } })),
 				redeemCompleteSetInQuestionLedger,
 			}),
@@ -373,6 +398,7 @@ describe('useTradingOperations', () => {
 			await hook.state().redeemCompleteSet()
 		})
 
+		expect(readMintCapacity).toHaveBeenCalledTimes(1)
 		expect(hook.onTransactionFailed.mock.calls).toEqual([])
 		expect(createCompleteSetInQuestionLedger.mock.calls[0]?.[3]).toBe(halfShare)
 		expect(redeemCompleteSetInQuestionLedger.mock.calls[0]?.[3]).toBe(halfShare)

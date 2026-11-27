@@ -1,4 +1,5 @@
 import { useSignal } from '@preact/signals'
+import { repPriceRefreshTimeout, repQuoteTimeout } from '../../../copy/openOracle.js'
 import { useEffect, useRef } from 'preact/hooks'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
@@ -45,7 +46,7 @@ type RepPrices = {
 	repUsdcSourceUrl: string | undefined
 	isLoadingRepPrices: boolean
 	isRefreshingRepPrices: boolean
-	refreshRepPrices: () => void
+	refreshRepPrices: () => Promise<void>
 }
 
 type CachedRepPrices = {
@@ -67,6 +68,7 @@ type RepPriceLoadResult = {
 
 type UseRepPricesOptions = {
 	enabled?: boolean
+	headerOnly?: boolean
 }
 
 const repPriceCacheByBackend = new Map<ChainBackend, CachedRepPrices>()
@@ -77,20 +79,13 @@ function getCachedRepPrices(backend: ChainBackend) {
 	return repPriceCacheByBackend.get(backend)
 }
 
-function getFreshCachedRepPrices(backend: ChainBackend) {
+function getFreshCachedRepPrices(backend: ChainBackend, headerOnly: boolean) {
 	const cachedRepPrices = getCachedRepPrices(backend)
 	if (cachedRepPrices === undefined) return undefined
 	const now = Date.now()
 	if (cachedRepPrices.repPerEthCachedAtMs === undefined || now - cachedRepPrices.repPerEthCachedAtMs >= REP_PRICE_CACHE_TTL_MILLISECONDS) return undefined
-	if (backend.profile.repPricingMode !== 'unavailable' && (cachedRepPrices.repUsdcCachedAtMs === undefined || now - cachedRepPrices.repUsdcCachedAtMs >= REP_PRICE_CACHE_TTL_MILLISECONDS)) return undefined
+	if (!headerOnly && backend.profile.repPricingMode !== 'unavailable' && (cachedRepPrices.repUsdcCachedAtMs === undefined || now - cachedRepPrices.repUsdcCachedAtMs >= REP_PRICE_CACHE_TTL_MILLISECONDS)) return undefined
 	return cachedRepPrices
-}
-
-function getNextRepPriceExpiry(cachedRepPrices: CachedRepPrices | undefined, backend: ChainBackend) {
-	if (cachedRepPrices === undefined) return undefined
-	const cachedAtValues = [cachedRepPrices.repPerEthCachedAtMs, backend.profile.repPricingMode === 'unavailable' ? undefined : cachedRepPrices.repUsdcCachedAtMs].filter(value => value !== undefined)
-	if (cachedAtValues.length === 0) return undefined
-	return Math.min(...cachedAtValues) + REP_PRICE_CACHE_TTL_MILLISECONDS
 }
 
 /** @internal */
@@ -104,12 +99,12 @@ async function fetchRepPerEthPrice(client: ReturnType<ChainBackend['createReadCl
 	const quoter = getRepPriceQuoter()
 	const repAddress = quoter.getRepAddress()
 	try {
-		const { amountOut, source } = await withTimeout(quoter.quoteBestExactInputWithSource(client, ETH_ADDRESS, repAddress, ATTO_ETH_PER_ETH), 30_000, 'RPC timeout while loading the Uniswap V4 REP price.')
+		const { amountOut, source } = await withTimeout(quoter.quoteBestExactInputWithSource(client, ETH_ADDRESS, repAddress, ATTO_ETH_PER_ETH), 30_000, repQuoteTimeout('V4'))
 		return { price: amountOut, source: source.protocol === 'mock' ? 'mock' : 'v4', sourceUrl: source.poolUrl }
 	} catch (error) {
 		if (!isRecoverableQuoteError(error)) throw error
 		// Missing or stalled V4 quotes must still allow a bounded V3 fallback.
-		const { amountOut, source } = await withTimeout(quoter.quoteBestV3ExactInputWithSource(client, ETH_ADDRESS, repAddress, ATTO_ETH_PER_ETH), 30_000, 'RPC timeout while loading the Uniswap V3 REP price.')
+		const { amountOut, source } = await withTimeout(quoter.quoteBestV3ExactInputWithSource(client, ETH_ADDRESS, repAddress, ATTO_ETH_PER_ETH), 30_000, repQuoteTimeout('V3'))
 		return { price: amountOut, source: source.protocol === 'mock' ? 'mock' : 'v3', sourceUrl: source.poolUrl }
 	}
 }
@@ -122,8 +117,8 @@ function classifyRepPriceFailure(error: unknown): RepPriceFailure {
 	return 'no-liquidity'
 }
 
-async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean) {
-	const cachedRepPrices = forceRefresh ? undefined : getFreshCachedRepPrices(backend)
+async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean, headerOnly: boolean) {
+	const cachedRepPrices = forceRefresh ? undefined : getFreshCachedRepPrices(backend, headerOnly)
 	if (cachedRepPrices !== undefined) {
 		return {
 			prices: cachedRepPrices,
@@ -139,7 +134,7 @@ async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean) {
 	repPriceRefreshGenerationByBackend.set(backend, refreshGeneration)
 	const refreshPromise = (async () => {
 		const client = backend.createReadClient()
-		const [repPerEthResult, repUsdcResult] = await Promise.allSettled([fetchRepPerEthPrice(client), withTimeout(getRepPriceQuoter().quoteRepForUsdcV4WithSource(client, ATTO_REP), 30_000, 'RPC timeout while loading REP price. Refresh prices to retry.')])
+		const [repPerEthResult, repUsdcResult] = await Promise.allSettled([fetchRepPerEthPrice(client), headerOnly ? undefined : withTimeout(getRepPriceQuoter().quoteRepForUsdcV4WithSource(client, ATTO_REP), 30_000, repPriceRefreshTimeout)])
 		if (repPerEthResult.status === 'rejected' && !isRecoverableQuoteError(repPerEthResult.reason)) throw repPerEthResult.reason
 		if (repUsdcResult.status === 'rejected' && !isRecoverableQuoteError(repUsdcResult.reason)) throw repUsdcResult.reason
 		const nextCachedRepPrices: CachedRepPrices = {
@@ -162,7 +157,7 @@ async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean) {
 			hasNextCachedRepPrices = true
 		}
 
-		if (repUsdcResult.status === 'fulfilled') {
+		if (repUsdcResult.status === 'fulfilled' && repUsdcResult.value !== undefined) {
 			nextCachedRepPrices.repUsdcCachedAtMs = Date.now()
 			nextCachedRepPrices.repUsdcPrice = repUsdcResult.value.amountOut
 			nextCachedRepPrices.repUsdcSource = repUsdcResult.value.source.protocol === 'mock' ? 'mock' : 'v4'
@@ -206,7 +201,7 @@ async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean) {
 	}
 }
 
-export function useRepPrices({ enabled = true }: UseRepPricesOptions = {}): RepPrices {
+export function useRepPrices({ enabled = true, headerOnly = false }: UseRepPricesOptions = {}): RepPrices {
 	const backend = getActiveBackend()
 	const cachedRepPrices = getCachedRepPrices(backend)
 	const displayedBackend = useRef(backend)
@@ -220,7 +215,6 @@ export function useRepPrices({ enabled = true }: UseRepPricesOptions = {}): RepP
 	const repUsdcSourceUrl = useSignal<string | undefined>(cachedRepPrices?.repUsdcSourceUrl)
 	const repPricesLoad = useLoadController()
 	const nextRepPricesLoad = useRequestGuard()
-	const cacheExpiry = useSignal<number | undefined>(getNextRepPriceExpiry(cachedRepPrices, backend))
 	const applyRepPriceLoadResult = (result: RepPriceLoadResult) => {
 		displayedBackend.current = backend
 		repPerEthFailure.value = result.repPerEthFailure
@@ -231,12 +225,12 @@ export function useRepPrices({ enabled = true }: UseRepPricesOptions = {}): RepP
 		repUsdcPrice.value = result.prices?.repUsdcPrice
 		repUsdcSource.value = result.prices?.repUsdcSource
 		repUsdcSourceUrl.value = result.prices?.repUsdcSourceUrl
-		cacheExpiry.value = getNextRepPriceExpiry(result.prices, backend)
 	}
 
-	const refreshRepPricesInternal = (forceRefresh: boolean) => {
+	const refreshRepPricesInternal = async (forceRefresh: boolean) => {
+		if (document.hidden) return
 		const isCurrent = nextRepPricesLoad()
-		const nextFreshCachedRepPrices = forceRefresh ? undefined : getFreshCachedRepPrices(backend)
+		const nextFreshCachedRepPrices = forceRefresh ? undefined : getFreshCachedRepPrices(backend, headerOnly)
 		if (nextFreshCachedRepPrices !== undefined) {
 			applyRepPriceLoadResult({
 				prices: nextFreshCachedRepPrices,
@@ -246,9 +240,9 @@ export function useRepPrices({ enabled = true }: UseRepPricesOptions = {}): RepP
 			return
 		}
 
-		void repPricesLoad
+		await repPricesLoad
 			.track(async () => {
-				const result = await loadRepPrices(backend, forceRefresh)
+				const result = await loadRepPrices(backend, forceRefresh, headerOnly)
 				if (!isCurrent()) return
 				applyRepPriceLoadResult(result)
 			})
@@ -260,9 +254,9 @@ export function useRepPrices({ enabled = true }: UseRepPricesOptions = {}): RepP
 			})
 	}
 
-	const refreshRepPrices = () => {
-		if (getActiveBackend() !== backend) return
-		refreshRepPricesInternal(true)
+	const refreshRepPrices = async () => {
+		if (getActiveBackend() !== backend || repPricesLoad.isLoading.value) return
+		await refreshRepPricesInternal(true)
 	}
 
 	useEffect(() => {
@@ -273,19 +267,8 @@ export function useRepPrices({ enabled = true }: UseRepPricesOptions = {}): RepP
 			repPerEthFailure: undefined,
 			repUsdcFailure: undefined,
 		})
-		refreshRepPricesInternal(false)
-	}, [backend, enabled])
-
-	useEffect(() => {
-		if (!enabled || cacheExpiry.value === undefined) return
-		const delay = Math.max(0, cacheExpiry.value - Date.now())
-		const timeout = window.setTimeout(() => {
-			// A load already in flight (for example the mount refresh of an expired cache) re-arms this timer when it resolves.
-			if (repPricesLoad.isLoading.value) return
-			refreshRepPricesInternal(true)
-		}, delay)
-		return () => window.clearTimeout(timeout)
-	}, [backend, cacheExpiry.value, enabled])
+		void refreshRepPricesInternal(false)
+	}, [backend, enabled, headerOnly])
 
 	const pricesMatchBackend = displayedBackend.current === backend
 	const currentRepPerEthPrice = pricesMatchBackend ? repPerEthPrice.value : undefined

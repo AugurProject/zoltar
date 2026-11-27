@@ -2,12 +2,11 @@ import type { AccountState, TradingFormState } from '../types/app.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ListedQuestionLedger, TradingActionResult, TradingDetails } from '../types/contracts.js'
 import type { QuestionLedgerStateModel } from './question-ledgers/lib/questionLedgerState.js'
+import type { ComponentChildren } from 'preact'
 
 export type * from '@zoltar/ui-core-shared/types/components.js'
 
-export type QuestionLedgersView = 'browse' | 'operate' | 'universes' | 'migrate'
-
-type TradingRouteContentProps = {
+export type TradingSectionProps = {
 	accountState: AccountState
 	loadingTradingForkUniverse: boolean
 	loadingTradingDetails: boolean
@@ -23,9 +22,9 @@ type TradingRouteContentProps = {
 	tradingError: string | undefined
 	tradingForkUniverse: ZoltarUniverseSummary | undefined
 	tradingForm: TradingFormState
-	tradingResult: TradingActionResult | undefined
-}
-
-export type TradingSectionProps = TradingRouteContentProps & {
+	mintLimits?: ReturnType<typeof import('./markets/hooks/useTradingOperations.js').useTradingOperations>['mintLimits']
+	actionDataReadAt?: number | undefined
+	savedHoldings?: ComponentChildren
+	requestedSharesAction?: 'mint' | 'redeem' | undefined
 	poolState?: QuestionLedgerStateModel | undefined
 }

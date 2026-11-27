@@ -1,18 +1,19 @@
+import { scenario as scenarioCopy } from '../copy/simulation.js'
 export const STATOBLAST_SCENARIOS = ['portfolio-auction', 'security-pool', 'securitypoolx2'] as const
 export type StatoblastScenario = (typeof STATOBLAST_SCENARIOS)[number]
 
 export function getStatoblastScenarioLabel(scenario: StatoblastScenario) {
 	switch (scenario) {
 		case 'portfolio-auction':
-			return 'Security pool branch auction'
+			return scenarioCopy.branchAuctionTitle
 		case 'security-pool':
-			return 'One-question security pool'
+			return scenarioCopy.oneQuestionTitle
 		default:
-			return 'Two-question security pool'
+			return scenarioCopy.twoQuestionTitle
 	}
 }
 export function getStatoblastScenarioDescription(scenario: StatoblastScenario) {
-	if (scenario === 'portfolio-auction') return 'A shared security pool with an open branch collateral repair auction and binding, excluded, and rival bids. Claim excluded-bid refunds now, then follow the auction through finalization and branch activation.'
-	if (scenario === 'security-pool') return 'A funded shared security pool with one registered question. Test trading, reporting, and owner backing.'
-	return 'A funded shared security pool with two registered questions. Test shared capacity, owner health settings, purchases, retirement, and fees.'
+	if (scenario === 'portfolio-auction') return scenarioCopy.branchAuctionDetail
+	if (scenario === 'security-pool') return scenarioCopy.oneQuestionDetail
+	return scenarioCopy.twoQuestionDetail
 }

@@ -21,7 +21,7 @@ import {
 import { getTransactionLifecycleHash } from '../../transactions/transactionLifecycle.js'
 import { recordTransactionSettled, recordTransactionSubmitted, releaseTransactionActivityWatch } from '../../transactions/transactionActivityStore.js'
 import { subscribeTransactionTrackingStopped } from '../../transactions/transactionTrackingStop.js'
-import { humanizeTransactionAction } from '../../transactions/transactionPresentations.js'
+import { humanizeTransactionAction } from '../../transactions/transactionPreviewRows.js'
 import type { GlobalTransactionPresentation, TransactionIntent } from '../../types/components.js'
 import type { TransactionFailureDetails, TransactionRequestKey } from '../../types/app.js'
 

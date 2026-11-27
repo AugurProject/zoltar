@@ -1,15 +1,16 @@
-/// <reference types="bun-types" />
+import { expect, test } from 'bun:test'
+import { parseStatoblastPage } from '@zoltar/ui-statoblast-shared/lib/routing.js'
+import { formatAppDocumentTitle, getAppPageTitle } from '../../app/lib/appPageTitle.js'
 
-import { describe, expect, test } from 'bun:test'
-import { getAppPageTitle } from '../../app/lib/appPageTitle.js'
-
-describe('statoblast document title', () => {
-	test('titles the route with its visible heading', () => {
-		expect(getAppPageTitle({ activeQuestionLedgersView: 'browse', route: 'pools' })).toBe('Security pool questions')
-		expect(getAppPageTitle({ activeQuestionLedgersView: 'browse', route: 'open-oracle' })).toBe('Price reports')
-	})
-
-	test('names the security pool route', () => {
-		expect(getAppPageTitle({ activeQuestionLedgersView: 'browse', route: 'security-pools' })).toBe('Security pools')
-	})
+test('new Statoblast routes have informative titles, and removed routes use the not-found title', () => {
+	const pool = '0x1111111111111111111111111111111111111111'
+	for (const [hash, title] of [
+		['#/watchlist', 'Watchlist'],
+		['#/migrate-rep', 'Migrate REP'],
+		['#/deploy-pool', 'Deploy a security pool'],
+		[`#/pool/${pool}/price`, 'REP price'],
+		[`#/pool/${pool}/question/10/reporting`, 'Reporting'],
+		['#/security-pools', 'Page not found'],
+	] as const)
+		expect(formatAppDocumentTitle(getAppPageTitle(parseStatoblastPage(hash)))).toBe(`${title} | Augur Statoblast`)
 })

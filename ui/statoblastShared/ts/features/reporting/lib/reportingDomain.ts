@@ -1,3 +1,4 @@
+import { getSecondLargestEscalationBalance, getStrictLeadingEscalationOutcome } from '../../../lib/reportingOutcomeBalances.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 import {
 	getWinningEscalationDepositClaimAmount as computeWinningEscalationDepositClaimAmount,
@@ -10,15 +11,17 @@ import {
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ActiveReportingDetails, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReportingDetails } from '../../../types/contracts.js'
 import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+
+export { getStrictLeadingEscalationOutcome }
+
 type ReportingAmountSuggestion = {
 	amountAttoRep: bigint | undefined
 	reason: string | undefined
 }
-export const ESCALATION_GAME_ACTIVATION_DELAY = ESCALATION_ACTIVATION_DELAY
 const LOAD_REPORTING_PRESETS_REASON = reportingCopy.loadingReportingDetails
 const MAX_PROFIT_NOT_STARTED_REASON = reportingCopy.maxProfitPrestartReason
 const SELECTED_SIDE_ALREADY_LEADS_REASON = reportingCopy.selectedSideLeadsReason
-const ESCALATION_RESOLVED_REASON = 'Escalation is already resolved.'
+const ESCALATION_RESOLVED_REASON = reportingCopy.reportingAlreadyResolved
 type EscalationPhase = 'Resolved' | 'Fork Triggered' | 'Pending Start' | 'Timed Out' | 'Active'
 function getSelectedAndOtherSides(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey) {
 	const selectedSide = details.sides.find(side => side.key === selectedOutcome)
@@ -58,7 +61,7 @@ function getContinuationTiming(details: ActiveReportingDetails) {
 	if (!details.forkContinuation || details.forkResumedAt === undefined || details.forkElapsedAtStart === undefined) return undefined
 	return { forkElapsedAtStart: details.forkElapsedAtStart, forkResumedAt: details.forkResumedAt }
 }
-function getWinningEscalationDepositClaimAmount(details: ActiveReportingDetails, outcome: ReportingOutcomeKey, deposit: EscalationDeposit) {
+function getWinningEscalationDepositClaimAmount(details: ActiveReportingDetails, outcome: ReportingOutcomeKey, deposit: Pick<EscalationDeposit, 'amountAttoRep' | 'cumulativeAmountAttoRep'>) {
 	const winningOutcomeBalance = details.sides.find(side => side.key === outcome)?.balance
 	if (winningOutcomeBalance === undefined) return undefined
 	return computeWinningEscalationDepositClaimAmount({
@@ -97,26 +100,20 @@ export function getImportedEscalationDepositClaimAmount(details: ReportingDetail
 	return getWinningImportedEscalationDepositClaimAmount(details, outcome, deposit)
 }
 
+export function getKnownReportingClaimAmount(details: ReportingDetails | undefined) {
+	if (details?.status !== 'active' || details.settlementState !== 'resolved') return 0n
+	const winner = details.sides.find(side => side.key === details.questionOutcome)
+	if (winner === undefined) return 0n
+	const local = winner.userDeposits.reduce((sum, deposit) => sum + (getEscalationDepositClaimAmount(details, winner.key, deposit) ?? 0n), 0n)
+	const inherited = winner.importedUserDeposits.reduce((sum, deposit) => sum + (deposit.claimIdentity === undefined ? 0n : (getImportedEscalationDepositClaimAmount(details, winner.key, deposit) ?? 0n)), 0n)
+	return local + inherited
+}
+
 export function getRemainingSelectedOutcomeContributionCapacity(details: ReportingDetails, outcome: ReportingOutcomeKey) {
 	if (details.status === 'not-started') return details.nonDecisionThresholdAttoRep
 	const selectedSide = details.sides.find(side => side.key === outcome)
 	if (selectedSide === undefined) return 0n
 	return details.nonDecisionThresholdAttoRep > selectedSide.balance ? details.nonDecisionThresholdAttoRep - selectedSide.balance : 0n
-}
-export function getStrictLeadingEscalationOutcome(sides: EscalationSide[]) {
-	if (sides.length === 0) return undefined
-	const maximum = sides.reduce((largest, side) => (side.balance > largest ? side.balance : largest), 0n)
-	if (maximum === 0n) return 'invalid'
-	const leaders = sides.filter(side => side.balance === maximum)
-	return leaders.length === 1 ? leaders[0]?.key : undefined
-}
-export function getHypotheticalClaimAmount(details: ActiveReportingDetails, outcome: ReportingOutcomeKey, deposit: EscalationDeposit | ImportedEscalationDeposit) {
-	const leader = getStrictLeadingEscalationOutcome(details.sides)
-	if (leader === undefined) return undefined
-	if (outcome !== leader) return 0n
-	const hypotheticalDetails: ActiveReportingDetails = { ...details, questionOutcome: leader, systemState: 'operational', parentWithdrawalEnabled: true }
-	// Imported cumulative amounts use a different allocation convention.
-	return 'parentDepositIndex' in deposit ? getImportedEscalationDepositClaimAmount(hypotheticalDetails, outcome, deposit) : getEscalationDepositClaimAmount(hypotheticalDetails, outcome, deposit)
 }
 function getMinimumOutcomeChangeContribution(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey): ReportingAmountSuggestion {
 	const { largestOtherBalance, selectedSide } = getSelectedAndOtherSides(details, selectedOutcome)
@@ -177,23 +174,13 @@ export function reportingContributionTriggersFork(details: ReportingDetails | un
 	const forkTriggerAmount = getReportingForkTriggerAmount(details, outcome)
 	return forkTriggerAmount !== undefined && amount >= forkTriggerAmount
 }
-/** A fork needs two sides at the non-decision threshold, so the second-largest side measures how close the game is to forking. */
-export function getSecondLargestEscalationBalance(sides: readonly { balance: bigint | undefined }[]) {
-	const [, secondLargest] = sides
-		.map(side => side.balance ?? 0n)
-		.sort((left, right) => {
-			if (left > right) return -1
-			return left < right ? 1 : 0
-		})
-	return secondLargest ?? 0n
-}
 function getMaxProfitContribution(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey): ReportingAmountSuggestion {
 	if (getReportingForkTriggerAmount(details, selectedOutcome) !== undefined) return { amountAttoRep: undefined, reason: reportingCopy.maxProfitForkReason }
 	const minContribution = getMinimumOutcomeChangeContribution(details, selectedOutcome)
 	if (minContribution.amountAttoRep === undefined)
 		return {
 			amountAttoRep: undefined,
-			reason: minContribution.reason ?? 'Max reward is unavailable.',
+			reason: minContribution.reason ?? reportingCopy.maxProfitUnavailable,
 		}
 	const { largestOtherBalance, selectedSide } = getSelectedAndOtherSides(details, selectedOutcome)
 	if (selectedSide === undefined) return { amountAttoRep: undefined, reason: reportingCopy.selectedSideIsUnavailable }
@@ -212,7 +199,7 @@ function getMaxProfitContribution(details: ActiveReportingDetails, selectedOutco
 	if (selectedSide.balance + effectiveAmount < targetFinalBalance)
 		return {
 			amountAttoRep: undefined,
-			reason: 'Max reward is unavailable because the selected side cannot fill the reward window within its remaining capacity.',
+			reason: reportingCopy.maxProfitOutsideCapacity,
 		}
 	return { amountAttoRep, reason: undefined }
 }
@@ -259,17 +246,17 @@ function previewEscalationContribution(details: ActiveReportingDetails, outcome:
 	if (selectedSide === undefined)
 		return {
 			actualDepositAmount: undefined,
-			reason: 'Select a valid reporting outcome.',
+			reason: reportingCopy.validReportingOutcomeRequired,
 		}
 	if (selectedSide.balance >= details.nonDecisionThresholdAttoRep)
 		return {
 			actualDepositAmount: undefined,
-			reason: `Selected side is already full at ${formatCurrencyBalanceWithUnit(details.nonDecisionThresholdAttoRep, 'REP')}.`,
+			reason: reportingCopy.selectedSideAlreadyFull(formatCurrencyBalanceWithUnit(details.nonDecisionThresholdAttoRep, 'REP')),
 		}
 	if (amount < details.startBondAttoRep)
 		return {
 			actualDepositAmount: undefined,
-			reason: `Enter at least ${formatCurrencyBalanceWithUnit(details.startBondAttoRep, 'REP')} to meet the minimum first report.`,
+			reason: reportingCopy.enterMinimumFirstReport(formatCurrencyBalanceWithUnit(details.startBondAttoRep, 'REP')),
 		}
 	const projectedDeposit = projectEscalationDeposit({
 		amountAttoRep: amount,
@@ -281,7 +268,7 @@ function previewEscalationContribution(details: ActiveReportingDetails, outcome:
 	if (projectedDeposit === undefined)
 		return {
 			actualDepositAmount: undefined,
-			reason: 'The escalation game would not accept this report amount.',
+			reason: reportingCopy.invalidReportAmount,
 		}
 	return {
 		actualDepositAmount: projectedDeposit.acceptedAmountAttoRep,
@@ -294,7 +281,7 @@ export function previewReportingContribution(details: ReportingDetails, outcome:
 		if (amount < details.startBondAttoRep)
 			return {
 				actualDepositAmount: undefined,
-				reason: `Enter at least ${formatCurrencyBalanceWithUnit(details.startBondAttoRep, 'REP')} to start the escalation game.`,
+				reason: reportingCopy.minimumReportRequired(formatCurrencyBalanceWithUnit(details.startBondAttoRep, 'REP')),
 			}
 		return {
 			actualDepositAmount: amount,
@@ -307,7 +294,7 @@ export function previewReportingContribution(details: ReportingDetails, outcome:
 
 export function previewReportingDeadline(details: ReportingDetails, outcome: ReportingOutcomeKey, amount: bigint) {
 	if (amount <= 0n || previewReportingContribution(details, outcome, amount).reason !== undefined) return undefined
-	if (details.status === 'not-started') return { deadline: details.currentTime + ESCALATION_GAME_ACTIVATION_DELAY, extension: ESCALATION_GAME_ACTIVATION_DELAY, reachesNonDecision: false }
+	if (details.status === 'not-started') return { deadline: details.currentTime + ESCALATION_ACTIVATION_DELAY, extension: ESCALATION_ACTIVATION_DELAY, reachesNonDecision: false }
 	if (details.systemState !== 'operational' || details.hasReachedNonDecision || isPoolQuestionFinalized(details) || details.currentTime > details.escalationEndTime) return undefined
 	const projected = projectEscalationDeposit({ amountAttoRep: amount, balancesAttoRep: getEscalationBalanceTuple(details.sides), nonDecisionThresholdAttoRep: details.nonDecisionThresholdAttoRep, outcome, startBondAttoRep: details.startBondAttoRep })
 	if (projected === undefined) return undefined
@@ -324,4 +311,56 @@ export function previewReportingDeadline(details: ReportingDetails, outcome: Rep
 	// A report never moves the deadline earlier.
 	const deadline = projectedDeadline > details.escalationEndTime ? projectedDeadline : details.escalationEndTime
 	return { deadline, extension: deadline - details.escalationEndTime, reachesNonDecision: false }
+}
+
+function knownReportingReturn(details: ActiveReportingDetails, leader: ReportingOutcomeKey | undefined) {
+	const winner = details.sides.find(side => side.key === leader)
+	if (winner === undefined) return undefined
+	const local = winner.userDeposits.reduce((sum, deposit) => sum + (getWinningEscalationDepositClaimAmount(details, winner.key, deposit) ?? 0n), 0n)
+	return local + winner.importedUserDeposits.reduce((sum, deposit) => sum + (getWinningImportedEscalationDepositClaimAmount(details, winner.key, deposit) ?? 0n), 0n)
+}
+
+/** Models accepted stake and payouts at the new balances, keeping payout estimates scoped to deposits this device can verify. */
+export function previewReportingComparison(details: ReportingDetails, outcome: ReportingOutcomeKey, amount: bigint) {
+	const acceptedAmount = previewReportingContribution(details, outcome, amount).actualDepositAmount
+	const deadlinePreview = previewReportingDeadline(details, outcome, amount)
+	if (acceptedAmount === undefined || deadlinePreview === undefined) return undefined
+	if (details.status === 'not-started') {
+		if (acceptedAmount > details.nonDecisionThresholdAttoRep) return undefined
+		return {
+			payoutBefore: 0n,
+			payoutAfter: acceptedAmount,
+			stakeBefore: 0n,
+			stakeAfter: acceptedAmount,
+			leaderBefore: undefined,
+			leaderAfter: outcome,
+			endsBefore: undefined,
+			endsAfter: deadlinePreview.deadline,
+			endsUndecided: false,
+			missingDeposits: false,
+		}
+	}
+	const side = details.sides.find(candidate => candidate.key === outcome)
+	if (side === undefined) return undefined
+	const localStake = side.localPrincipalAttoRep ?? side.userDeposits.reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n)
+	const stakeBefore = localStake + side.importedUserDeposits.reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n)
+	const newBalance = side.balance + acceptedAmount
+	const sides = details.sides.map(candidate => (candidate.key === outcome ? { ...candidate, balance: newBalance } : candidate))
+	const projected = { ...details, sides, bindingCapital: getSecondLargestEscalationBalance(sides) }
+	const leaderBefore = details.sides.some(candidate => candidate.balance > 0n) ? getStrictLeadingEscalationOutcome(details.sides) : undefined
+	const leaderAfter = deadlinePreview.reachesNonDecision ? undefined : getStrictLeadingEscalationOutcome(sides)
+	const knownPayoutAfter = knownReportingReturn(projected, leaderAfter)
+	const newDepositPayout = leaderAfter === outcome ? getWinningEscalationDepositClaimAmount(projected, outcome, { amountAttoRep: acceptedAmount, cumulativeAmountAttoRep: newBalance }) : 0n
+	return {
+		payoutBefore: knownReportingReturn(details, leaderBefore) ?? (details.sides.every(candidate => candidate.balance === 0n) ? 0n : undefined),
+		payoutAfter: knownPayoutAfter === undefined || newDepositPayout === undefined ? undefined : knownPayoutAfter + newDepositPayout,
+		stakeBefore,
+		stakeAfter: stakeBefore + acceptedAmount,
+		leaderBefore,
+		leaderAfter,
+		endsBefore: details.escalationEndTime,
+		endsAfter: deadlinePreview.deadline,
+		endsUndecided: deadlinePreview.reachesNonDecision,
+		missingDeposits: details.sides.some(candidate => (candidate.localPrincipalAttoRep ?? 0n) > candidate.userDeposits.reduce((sum, deposit) => sum + deposit.amountAttoRep, 0n)),
+	}
 }

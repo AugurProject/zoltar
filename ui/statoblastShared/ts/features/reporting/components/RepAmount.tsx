@@ -6,8 +6,3 @@ import type { AmountRounding } from '@zoltar/ui-core-shared/lib/formatters.js'
 export function RepAmount({ rounding = 'nearest', value }: { rounding?: AmountRounding | undefined; value: bigint }) {
 	return <CurrencyValue rounding={rounding} value={value} suffix={commonCopy.rep} />
 }
-
-/** `RepAmount` as the amount renderer that `getViewerPositions` takes. */
-export function renderRepAmount(value: bigint, rounding?: AmountRounding) {
-	return <RepAmount value={value} rounding={rounding} />
-}

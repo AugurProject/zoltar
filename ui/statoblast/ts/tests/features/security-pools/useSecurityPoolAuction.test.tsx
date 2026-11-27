@@ -1,10 +1,11 @@
-import { expect, test } from 'bun:test'
+import { expect, spyOn, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { decodeFunctionData, parseAbi, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { currentStateCheckFailed } from '@zoltar/ui-core-shared/copy/transaction.js'
 import { unscopedTransaction } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import { useSecurityPoolAuction, type SecurityPoolAuctionParameters } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolAuction.js'
 import type { SecurityPoolTransaction } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
@@ -72,12 +73,94 @@ test('auction bidding sends only the reviewed collateral bid without REP approva
 	expect(state.requests).toHaveLength(1)
 	expect(last(state.requests)).toMatchObject({ account: owner, to: auctionAddress, value: 0n })
 	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'submitBid', args: [2n, 5n * unit] })
-	expect(last(state.requests).reviewDescription).toContain('Purchased REP backs')
+	expect(last(state.requests).reviewDescription).toContain('claim the bid to add them to your capital account')
 	await last(state.requests).validateBeforeSubmit?.()
+	expect(last(state.requests).readReviewRows?.()).toContainEqual({ label: 'Number of lots', value: '0 → 2' })
 	state.values['lotAttoEth'] = 2n * unit
 	state.values['targetLots'] = 5n
 	await expect(last(state.requests).validateBeforeSubmit?.()).rejects.toThrow()
 	expect(state.requests).toHaveLength(1)
+})
+
+test('a visited bid page stays readable after remount when the auction RPC fails', async () => {
+	const state = await setup()
+	const bid = firstBid(state, 'verified bid')
+	const failed = state.client.extend(() => ({
+		getBlock: async () => {
+			throw new Error('RPC unavailable')
+		},
+	}))
+	installActiveEnvironmentForTesting({ ...state.backend, createReadClient: () => failed })
+	const restored = await renderHookWithProps(useSecurityPoolAuction, { fork: state.fork, bidder: owner, actions: state.actions })
+	lifecycle.trackRendered(restored)
+	await waitFor(() => expect(restored.state().error).toContain('RPC unavailable'))
+	expect(restored.state().snapshot?.auction?.bids[0]).toEqual(bid)
+	expect(restored.state().claimReason(bid)).toContain('RPC unavailable')
+	await expect(restored.state().claim(bid)).rejects.toThrow('RPC unavailable')
+	expect(state.requests).toHaveLength(0)
+	const child = state.fork.branch
+	if (child === undefined) throw new Error('Missing branch')
+	await restored.setProps({ fork: undefined, savedBranch: { securityPool: state.fork.securityPool, universeId: child.universeId } })
+	expect(restored.state().snapshot?.auction?.bids[0]).toEqual(bid)
+	expect(restored.state().claimReason(bid)).toContain('Select a fork branch')
+	await restored.setProps({ savedBranch: { securityPool: state.fork.securityPool, universeId: child.universeId + 1n } })
+	expect(restored.state().snapshot).toBeUndefined()
+})
+
+test('successive auction reads can take longer than one request timeout', async () => {
+	const shortened = new Proxy(globalThis.setTimeout, {
+		apply(schedule, receiver, [handler, delay, ...args]) {
+			return Reflect.apply(schedule, receiver, [handler, delay === 15_000 ? 160 : delay, ...args])
+		},
+	})
+	const timer = spyOn(globalThis, 'setTimeout').mockImplementation(shortened)
+	try {
+		const state = await setup(fixture => {
+			const slow = fixture.client.extend(() => ({
+				getBlock: async (...args: Parameters<typeof fixture.client.getBlock>) => {
+					await Bun.sleep(100)
+					return await fixture.client.getBlock(...args)
+				},
+			}))
+			installActiveEnvironmentForTesting({ ...fixture.backend, createReadClient: () => slow })
+		})
+		expect(firstBid(state, 'bid read through slow RPC').id).toBe(1n)
+	} finally {
+		timer.mockRestore()
+	}
+})
+
+test('a timed-out bid check uses the review retry message and recalculates on retry', async () => {
+	const stalled = createDeferred<void>()
+	let delay = false
+	const state = await setup(fixture => {
+		const client = fixture.client.extend(() => ({
+			getBlock: async (...args: Parameters<typeof fixture.client.getBlock>) => {
+				if (delay) await stalled.promise
+				return await fixture.client.getBlock(...args)
+			},
+		}))
+		installActiveEnvironmentForTesting({ ...fixture.backend, createReadClient: () => client })
+	})
+	await terms(state)
+	await act(() => state.hook.state().bid())
+	const request = last(state.requests)
+	const shortened = new Proxy(globalThis.setTimeout, {
+		apply(schedule, receiver, [handler, timeout, ...args]) {
+			return Reflect.apply(schedule, receiver, [handler, timeout === 15_000 ? 20 : timeout, ...args])
+		},
+	})
+	const timer = spyOn(globalThis, 'setTimeout').mockImplementation(shortened)
+	try {
+		delay = true
+		await expect(request.validateBeforeSubmit?.()).rejects.toThrow(currentStateCheckFailed)
+		delay = false
+		await request.validateBeforeSubmit?.()
+		expect(request.readReviewRows?.()).toContainEqual({ label: 'Number of lots', value: '0 → 2' })
+	} finally {
+		timer.mockRestore()
+		stalled.resolve()
+	}
 })
 
 test('collateral floor, integer lots and price grid are checked before sending, with no bid health target', async () => {
@@ -138,7 +221,7 @@ test('winners expose live principal and fees until their bid is claimed', async 
 	expect(last(state.requests)).toMatchObject({ account: owner, to: capital, value: 0n })
 	expect(decodeFunctionData({ abi, data: last(state.requests).data })).toEqual({ functionName: 'materializeRepairAuctionBids', args: [[1n]] })
 	expect(state.labels.at(-1)).toBe('Claim bid')
-	expect(last(state.requests).reviewDescription).toContain('its winning lots join this wallet’s capital account')
+	expect(last(state.requests).reviewDescription).toContain('Its winning lots join this wallet’s capital account')
 	await last(state.requests).validateBeforeSubmit?.()
 	state.values['bids'] = [owner, false, true, 2n, 60n * unit]
 	state.values['repairAuctionPositions'] = [[owner, 8n, 100n * unit, unit, 0n, true, true, 0n, 0n]]
@@ -183,7 +266,7 @@ test('bids cannot be claimed while they may still win', async () => {
 	const bid = firstBid(state, 'open bid')
 	expect(bid).toMatchObject({ claimable: false, claimed: false })
 	expect(state.hook.state().bidClaimReason(bid)).toBe('This bid can be claimed after the auction closes.')
-	expect(state.hook.state().claimAllReason).toBe('Your bids can be claimed after the auction closes.')
+	expect(state.hook.state().claimAllReason).toBe('Bids can be claimed after the auction closes.')
 	await expect(state.hook.state().claimAllBids()).rejects.toThrow('after the auction closes')
 	expect(state.requests).toHaveLength(0)
 })

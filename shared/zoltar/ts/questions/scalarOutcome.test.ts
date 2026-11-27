@@ -26,8 +26,8 @@ describe('scalar uint120 question boundary', () => {
 	const question = { answerUnit: '', displayValueMin: 0n, displayValueMax: 1n, numTicks: 1n << 120n }
 
 	test('rejects tick counts that would silently truncate both answer parts', () => {
-		expect(() => getScalarOutcomeIndex(question, 0n)).toThrow('uint120')
-		expect(() => getScalarOutcomeIndex(question, question.numTicks)).toThrow('uint120')
+		expect(() => getScalarOutcomeIndex(question, 0n)).toThrow('The number of scalar ticks is out of range.')
+		expect(() => getScalarOutcomeIndex(question, question.numTicks)).toThrow('The number of scalar ticks is out of range.')
 	})
 
 	test('rejects an impossible question even when two encodable parts sum to its tick count', () => {

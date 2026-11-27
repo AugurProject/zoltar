@@ -1,5 +1,6 @@
 import { getBrowserStorage } from './browserStorage.js'
 import { isStoredRecord } from './storedValueReader.js'
+import type { NetworkProfile } from '../wallet/networkProfile.js'
 
 /**
  * Browser-local favorites and a cache of entity summaries the user has already downloaded from chain.
@@ -14,7 +15,12 @@ export type LocalEntityKind = 'pool' | 'question' | 'market' | 'oracleReport'
  * would otherwise name entities that do not exist, or different ones, in the next.
  */
 export type LocalEntityScope = Readonly<{ app: LocalEntityApp; kind: LocalEntityKind; network: string; persistence?: 'browser' | 'session' }>
-export type FavoriteEntry = Readonly<{ id: string; addedAt: number }>
+export function localEntityScopeForNetwork(profile: NetworkProfile, app: LocalEntityApp, kind: LocalEntityKind): LocalEntityScope {
+	const network = `${profile.id}-${profile.chainIdHex.toLowerCase()}-${profile.genesisRepTokenAddress.toLowerCase()}`
+	return profile.id === 'simulation' ? { app, kind, network, persistence: 'session' } : { app, kind, network }
+}
+
+export type FavoriteEntry = Readonly<{ id: string; addedAt: number; label?: string }>
 /** `registryIndex` is the entity's position in an append-only on-chain registry, when it was read from a registry page. */
 export type DownloadedEntry<T> = Readonly<{ id: string; fetchedAt: number; data: T; registryIndex?: number }>
 export type DownloadedItem<T> = Readonly<{ id: string; data: T; registryIndex?: number }>
@@ -70,6 +76,12 @@ function readEnvelopeItems(value: unknown) {
 	return Array.isArray(items) ? items : []
 }
 
+function readFavoriteLabel(value: unknown) {
+	if (typeof value !== 'string') return undefined
+	const label = value.trim().slice(0, 100)
+	return label.length === 0 ? undefined : label
+}
+
 export function parseFavoriteEntries(value: unknown): FavoriteEntry[] {
 	const seen = new Set<string>()
 	return readEnvelopeItems(value).flatMap(item => {
@@ -80,7 +92,8 @@ export function parseFavoriteEntries(value: unknown): FavoriteEntry[] {
 		const normalizedId = normalizeEntityId(id)
 		if (normalizedId === '' || seen.has(normalizedId)) return []
 		seen.add(normalizedId)
-		return [{ id: normalizedId, addedAt }]
+		const label = readFavoriteLabel(item['label'])
+		return [{ id: normalizedId, addedAt, ...(label === undefined ? {} : { label }) }]
 	})
 }
 
@@ -246,14 +259,57 @@ export function readFavoriteEntries(scope: LocalEntityScope): FavoriteEntry[] {
 	return entries
 }
 
+function saveFavoriteEntries(scope: LocalEntityScope, entries: FavoriteEntry[]) {
+	const key = getFavoritesStorageKey(scope)
+	favoritesCache.set(key, entries)
+	writeStorageItem(scope, key, entries)
+	notifyListeners()
+}
+
+function seedPreferenceKey(scope: LocalEntityScope, id: string) {
+	return `${getFavoritesStorageKey(scope)}:seed:${normalizeEntityId(id)}`
+}
+
+/** Defaults seed the scenario once without restoring entries the viewer has dismissed in this browser tab. */
+export function seedEntityFavorite(scope: LocalEntityScope, id: string) {
+	try {
+		const storage = getBrowserStorage('sessionStorage')
+		const key = seedPreferenceKey(scope, id)
+		if (storage?.getItem(key) === 'off') return
+		storage?.setItem(key, 'on')
+	} catch (error) {
+		if (!(error instanceof DOMException)) throw error
+	}
+	setEntityFavorite(scope, id, true)
+}
+
 export function setEntityFavorite(scope: LocalEntityScope, id: string, favorite: boolean, now = Date.now()) {
 	const current = readFavoriteEntries(scope)
 	if (hasFavoriteEntry(current, id) === favorite) return
-	const next = favorite ? addFavoriteEntry(current, id, now) : removeFavoriteEntry(current, id)
-	const key = getFavoritesStorageKey(scope)
-	favoritesCache.set(key, next)
-	writeStorageItem(scope, key, next)
-	notifyListeners()
+	if (scope.persistence === 'session') {
+		try {
+			const storage = getBrowserStorage('sessionStorage')
+			const key = seedPreferenceKey(scope, id)
+			if (storage?.getItem(key) != null) storage.setItem(key, favorite ? 'on' : 'off')
+		} catch (error) {
+			if (!(error instanceof DOMException)) throw error
+		}
+	}
+	saveFavoriteEntries(scope, favorite ? addFavoriteEntry(current, id, now) : removeFavoriteEntry(current, id))
+}
+
+export function setEntityFavoriteLabel(scope: LocalEntityScope, id: string, draft: string, overwrite = true) {
+	const current = readFavoriteEntries(scope)
+	const key = normalizeEntityId(id)
+	const prior = current.find(entry => entry.id === key)
+	if (prior !== undefined && !overwrite) return
+	const label = readFavoriteLabel(draft)
+	if (prior?.label === label && prior !== undefined) return
+	const next = prior === undefined ? addFavoriteEntry(current, key, Date.now()) : current
+	saveFavoriteEntries(
+		scope,
+		next.map(entry => (entry.id !== key ? entry : { id: entry.id, addedAt: entry.addedAt, ...(label === undefined ? {} : { label }) })),
+	)
 }
 
 export type DownloadedEntityStore<T> = Readonly<{

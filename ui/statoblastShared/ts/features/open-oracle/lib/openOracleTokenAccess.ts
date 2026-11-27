@@ -65,7 +65,7 @@ export type RefreshOpenOracleTokenAccessOptions = {
 }
 
 export function getRefreshedOpenOracleApprovalAmount({ approvalError, explicitAmount, requirement, tokenLabel }: { approvalError: string | undefined; explicitAmount: bigint | undefined; requirement: TokenApprovalRequirement; tokenLabel: string }) {
-	if (requirement.requiredAmount === undefined || requirement.requiredAmount <= 0n) throw new Error(`No ${tokenLabel} approval is required for the refreshed report`)
+	if (requirement.requiredAmount === undefined || requirement.requiredAmount <= 0n) throw new Error(openOracleCopy.approvalNoLongerRequired(tokenLabel))
 	if (requirement.approvedAmount === undefined) {
 		throw new Error(
 			formatTokenApprovalUnavailableMessage({
@@ -76,10 +76,10 @@ export function getRefreshedOpenOracleApprovalAmount({ approvalError, explicitAm
 		)
 	}
 	if (explicitAmount === 0n && requirement.approvedAmount > 0n) return 0n
-	if (requirement.hasSufficientApproval && (explicitAmount === undefined || explicitAmount <= requirement.approvedAmount)) throw new Error(`The ${tokenLabel} approval is already sufficient for the refreshed report`)
+	if (requirement.hasSufficientApproval && (explicitAmount === undefined || explicitAmount <= requirement.approvedAmount)) throw new Error(openOracleCopy.approvalAlreadySufficient(tokenLabel))
 	const approvalAmount = explicitAmount ?? requirement.targetAmount
-	if (approvalAmount === undefined) throw new Error(`No ${tokenLabel} approval amount is required for the refreshed report`)
-	if (approvalAmount <= requirement.approvedAmount) throw new Error(`The ${tokenLabel} approval must increase the current allowance`)
+	if (approvalAmount === undefined) throw new Error(openOracleCopy.approvalAmountNoLongerRequired(tokenLabel))
+	if (approvalAmount <= requirement.approvedAmount) throw new Error(openOracleCopy.approvalMustIncrease(tokenLabel))
 	return approvalAmount
 }
 

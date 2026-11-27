@@ -67,7 +67,7 @@ test('branch auction loading authenticates the adapter, engine and custody modul
 	expect(loaded.claimableBidIds).toEqual([3n])
 	expect(new Set(source.reads.map(read => read.blockNumber))).toEqual(new Set([10n]))
 	source.source.codes.set(engine, '0x6000')
-	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('auction engine runtime')
+	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('Could not verify the auction bidding contract code.')
 })
 
 test('branch auction loading rejects bids of another bidder', async () => {
@@ -75,7 +75,7 @@ test('branch auction loading rejects bids of another bidder', async () => {
 	source.values['bidderBidCount'] = 1n
 	source.values['bidderBidId'] = 3n
 	source.values['bids'] = [token, false, false, 1n, 3n * unit]
-	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('another account')
+	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('another wallet')
 	source.values['bids'] = [owner, false, false, 1n, 3n * unit]
 	source.values['repairAuctionPositions'] = [{ bidder: token, positionId: 0n, principal: 10n * unit, commitment: unit, liquidationStarted: 0n, claimed: false, materialized: false, earnedAttoEth: 7n, earnedAttoRep: 9n }]
 	await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('identity')
@@ -99,7 +99,7 @@ test('branch auction loading rejects another fork route, ledger, custody authori
 	for (const address of [auction, engine, capital, modules.capitalImplementation, modules.fork, modules.lifecycle, modules.repairAuctionDelegate, index, modules.indexImplementation, modules.fees, modules.feesImplementation, modules.services]) {
 		const source = fixture()
 		source.source.codes.set(address, '0x6000')
-		await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow('runtime')
+		await expect(loadSecurityPoolBranchAuction(source.client, securityPool, owner, 42n)).rejects.toThrow(/^(?:Could not verify the .* code\.|Could not verify the code or linked addresses for the .*\.)$/)
 	}
 })
 

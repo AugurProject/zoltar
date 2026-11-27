@@ -19,7 +19,7 @@ export function installAppContractLabelResolver(resolver: ContractLabelResolver)
 }
 
 function resolveContractLabel(abi: readonly unknown[], functionName: string) {
-	return getContractLabel(abi, functionName) ?? appContractLabelResolver?.(abi, functionName)
+	return appContractLabelResolver?.(abi, functionName) ?? getContractLabel(abi, functionName)
 }
 
 type ContractRevertReasonParams = {

@@ -1,3 +1,4 @@
+import { auctionSetup } from '../copy/simulation.js'
 import { encodeFunctionData, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
 	buildSecurityPoolAuctionBidRequest,
@@ -51,21 +52,21 @@ export async function seedSecurityPoolAuctionScenario(parameters: ScenarioSeedPa
 	const { accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile } = parameters
 	// Every step reports progress: the browser worker restarts its request timeout on each report.
 	const reportStep = createRangeProgressReporter(onProgress, { start: 0.99, end: 0.999 }, 35)
-	const owner = requireQaAccount(accounts[0], 'Expected security pool auction simulation owner')
-	const rival = requireQaAccount(accounts[1], 'Expected security pool auction simulation rival bidder')
+	const owner = requireQaAccount(accounts[0], auctionSetup.ownerMissing)
+	const rival = requireQaAccount(accounts[1], auctionSetup.bidderMissing)
 	const ownerClient = createWriteClient(owner)
 	const rivalClient = createWriteClient(rival)
 	const readClient = createReadClient()
 	const reader = { ...securityPoolReadClient(readClient), getBalance: (request: { address: Address; blockNumber: bigint }) => readClient.getBalance(request) }
 	const zoltar = getInfraContractAddresses().zoltar
 	const questionId = seeded.questionIds[0]
-	if (questionId === undefined) throw new Error('Expected a registered security pool question')
+	if (questionId === undefined) throw new Error(auctionSetup.questionMissing)
 	const { securityPool, capitalLedger } = seeded
 
 	// More purchased claims, within the seeded healthy commitment, leave the chosen branch an ETH shortfall of several lots.
 	for (let round = 0; round < 6; round++) {
-		await sendSecurityPoolTransaction(ownerClient, await prepareSeededSecurityPoolMint(reader, owner, securityPool, questionId, unit, 1_000n), 'Mint security pool complete sets')
-		await reportStep(`Minted claim ${round + 1} of 6 the branch must repair`)
+		await sendSecurityPoolTransaction(ownerClient, await prepareSeededSecurityPoolMint(reader, owner, securityPool, questionId, unit, 1_000n), auctionSetup.mintSets)
+		await reportStep(auctionSetup.mintedClaim(round + 1))
 	}
 
 	// A larger challenged report budget admits a second underwriter's commitment once the seeded price expires.
@@ -77,87 +78,88 @@ export async function seedSecurityPoolAuctionScenario(parameters: ScenarioSeedPa
 	])
 	const now = await getSimulationChainTimestamp(memoryClient)
 	if (BigInt(validUntil) >= now) await advanceSimulationTime(memoryClient, BigInt(validUntil) - now + 1n)
-	const report = await settleSeededOracleReport({ accountAddress: owner, createWriteClient, securityPool, onProgressStep: reportStep, poolLabel: 'security pool auction', readClient, minimumInitialAttoWeth: minimumReport + ceilDiv(4n * 10n * unit, exposureDivider) })
-	await reportStep('Requested a larger shared price report')
+	const report = await settleSeededOracleReport({ accountAddress: owner, createWriteClient, securityPool, onProgressStep: reportStep, poolLabel: auctionSetup.poolName, readClient, minimumInitialAttoWeth: minimumReport + ceilDiv(4n * 10n * unit, exposureDivider) })
+	await reportStep(auctionSetup.priceOpened)
 	await settleOracleReportIfNeeded({ memoryClient, readClient, writeClient: ownerClient, ...report })
-	await reportStep('Challenged a larger shared price report')
+	await reportStep(auctionSetup.priceChallenged)
 
 	// Unchosen backing becomes the branch auction's REP inventory.
 	const rivalRep = 5_000n * unit
-	await sendSecurityPoolTransaction(rivalClient, { account: rival, to: profile.genesisRepTokenAddress, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [capitalLedger, rivalRep] }), value: 0n }, 'Approve rival REP')
-	await sendSecurityPoolTransaction(rivalClient, buildSecurityPoolCapitalDepositRequest({ owner: rival, capitalLedger, amountAttoRep: rivalRep }), 'Deposit rival REP')
-	await reportStep("Deposited the second underwriter's REP")
-	await sendSecurityPoolTransaction(rivalClient, buildSecurityPoolCapitalSetHealthRequest({ owner: rival, capitalLedger, targetHealthFactorBps: 12_000n }), 'Set rival health target')
-	await sendSecurityPoolTransaction(rivalClient, buildSecurityPoolCapitalSetCommitmentRequest({ owner: rival, capitalLedger, commitment: 10n * unit }), 'Authorize rival commitment')
-	await reportStep('Funded a second underwriter whose backing stays unchosen')
+	await sendSecurityPoolTransaction(rivalClient, { account: rival, to: profile.genesisRepTokenAddress, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [capitalLedger, rivalRep] }), value: 0n }, auctionSetup.approveRivalRep)
+	await sendSecurityPoolTransaction(rivalClient, buildSecurityPoolCapitalDepositRequest({ owner: rival, capitalLedger, amountAttoRep: rivalRep }), auctionSetup.depositRivalRep)
+	await reportStep(auctionSetup.repDeposited)
+	await sendSecurityPoolTransaction(rivalClient, buildSecurityPoolCapitalSetHealthRequest({ owner: rival, capitalLedger, targetHealthFactorBps: 12_000n }), auctionSetup.rivalHealth)
+	await sendSecurityPoolTransaction(rivalClient, buildSecurityPoolCapitalSetCommitmentRequest({ owner: rival, capitalLedger, commitment: 10n * unit }), auctionSetup.rivalCommitment)
+	await reportStep(auctionSetup.rivalFunded)
 
 	// Forcing a fork burns the threshold from the caller; the fixture mints it to the owner first.
 	const threshold = await readClient.readContract({ address: zoltar, abi: zoltarArtifact.abi, functionName: 'getForkThresholdAttoRep', args: [0n] })
 	await mintSimulationGenesisRep({ accountAddress: owner, amount: threshold + 1_000n * unit, createWriteClient, memoryClient, repAddress: profile.genesisRepTokenAddress, zoltarAddress: zoltar })
 	// The fixture mint raises the theoretical supply, and with it the threshold Zoltar pulls at fork time.
 	const forkBalance = await readClient.readContract({ address: profile.genesisRepTokenAddress, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [owner] })
-	await sendSecurityPoolTransaction(ownerClient, { account: owner, to: profile.genesisRepTokenAddress, value: 0n, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [zoltar, forkBalance] }) }, 'Approve fork REP')
-	await reportStep('Funded the fork threshold')
+	await sendSecurityPoolTransaction(ownerClient, { account: owner, to: profile.genesisRepTokenAddress, value: 0n, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [zoltar, forkBalance] }) }, auctionSetup.approveForkRep)
+	await reportStep(auctionSetup.forkFunded)
 	await advanceSimulationTime(memoryClient, 365n * DAY_IN_SECONDS + 60n)
-	await reportStep('Ended the first question')
-	await sendSecurityPoolTransaction(ownerClient, { account: owner, to: zoltar, value: 0n, data: encodeFunctionData({ abi: zoltarArtifact.abi, functionName: 'forkUniverse', args: [0n, questionId] }) }, 'Fork the origin universe')
-	await reportStep('Forked the origin universe on the first question')
+	await reportStep(auctionSetup.questionEnded)
+	await sendSecurityPoolTransaction(ownerClient, { account: owner, to: zoltar, value: 0n, data: encodeFunctionData({ abi: zoltarArtifact.abi, functionName: 'forkUniverse', args: [0n, questionId] }) }, auctionSetup.forkOrigin)
+	await reportStep(auctionSetup.originForked)
 	const controller = await readClient.readContract({ address: securityPool, abi: securityPoolArtifact.abi, functionName: 'forkController' })
 	// Keep both underwriters unchosen so the deficit is the exact claim total.
 	// Fractional inherited cash can otherwise leave a one-lot auction, where
 	// the first winning bid correctly excludes every later bid at its floor.
-	await reportStep('Kept unchosen backing available for a multi-lot branch auction')
+	await reportStep(auctionSetup.backingAvailable)
 	await advanceSimulationTime(memoryClient, FORK_MIGRATION_DURATION_SECONDS + 60n)
-	await reportStep('Closed the branch choice window')
-	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolForkStartRequest({ owner, controller, universeId: 0n, outcomeIndex: FORK_OUTCOME }), 'Start the Yes branch')
+	await reportStep(auctionSetup.branchChoiceClosed)
+	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolForkStartRequest({ owner, controller, universeId: 0n, outcomeIndex: FORK_OUTCOME }), auctionSetup.startYes)
 	const fork = await loadSecurityPoolForkSnapshot({ client: reader, securityPool, owner, universeId: 0n, outcomeIndex: FORK_OUTCOME })
 	const child = fork.branch?.universeId
-	if (child === undefined) throw new Error('Expected the started Yes branch')
-	await reportStep('Started the Yes branch')
+	if (child === undefined) throw new Error(auctionSetup.yesBranchUnavailable)
+	await reportStep(auctionSetup.yesStarted)
 
-	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolPricePreparationRequest(await loadSecurityPoolPriceSnapshot({ client: reader, securityPool, owner, universeId: child })), 'Prepare the branch price feed')
-	await reportStep('Prepared the branch price feed')
+	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolPricePreparationRequest(await loadSecurityPoolPriceSnapshot({ client: reader, securityPool, owner, universeId: child })), auctionSetup.preparePriceFeed)
+	await reportStep(auctionSetup.priceFeedPrepared)
 	let price = await loadSecurityPoolPriceSnapshot({ client: reader, securityPool, owner, universeId: child })
 	const funding = quoteSecurityPoolPriceFunding(price, unit)
 	// The fork credited the owner's migration balance; mint branch REP from it for the report.
-	await sendSecurityPoolTransaction(ownerClient, { account: owner, to: zoltar, value: 0n, data: encodeFunctionData({ abi: zoltarArtifact.abi, functionName: 'prepareAndSplitMigrationRep', args: [0n, 2n * funding.rep, [FORK_OUTCOME], 0n] }) }, 'Mint branch REP')
-	await reportStep('Minted branch REP for the report')
-	if (funding.wrap > 0n) await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolPriceWrapRequest(price, funding.wrap), 'Wrap report ETH')
-	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolPriceApprovalRequest(price, 'weth', funding.weth), 'Approve report WETH')
-	await reportStep('Approved report WETH')
-	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolPriceApprovalRequest(price, 'rep', funding.rep), 'Approve report REP')
-	await reportStep('Approved report REP')
+	await sendSecurityPoolTransaction(ownerClient, { account: owner, to: zoltar, value: 0n, data: encodeFunctionData({ abi: zoltarArtifact.abi, functionName: 'prepareAndSplitMigrationRep', args: [0n, 2n * funding.rep, [FORK_OUTCOME], 0n] }) }, auctionSetup.mintRep)
+	await reportStep(auctionSetup.repMinted)
+	if (funding.wrap > 0n) await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolPriceWrapRequest(price, funding.wrap), auctionSetup.wrapEth)
+	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolPriceApprovalRequest(price, 'weth', funding.weth), auctionSetup.approveWeth)
+	await reportStep(auctionSetup.wethApproved)
+	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolPriceApprovalRequest(price, 'rep', funding.rep), auctionSetup.approveRep)
+	await reportStep(auctionSetup.repApproved)
 	price = await loadSecurityPoolPriceSnapshot({ client: reader, securityPool, owner, universeId: child })
-	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolPriceRequest(price, unit), 'Report the branch price')
-	await reportStep('Reported the branch REP price')
+	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolPriceRequest(price, unit), auctionSetup.reportPrice)
+	await reportStep(auctionSetup.priceReported)
 	price = await loadSecurityPoolPriceSnapshot({ client: reader, securityPool, owner, universeId: child })
-	if (price.observation === undefined || price.observation.pendingReportId === 0n) throw new Error('Expected a pending branch price report')
+	if (price.observation === undefined || price.observation.pendingReportId === 0n) throw new Error(auctionSetup.priceReportMissing)
 	await settleOracleReportIfNeeded({ memoryClient, readClient, writeClient: ownerClient, openOracleAddress: price.observation.openOracle, pendingReportId: price.observation.pendingReportId })
-	await reportStep('Settled the branch REP price')
+	await reportStep(auctionSetup.priceSettled)
 
 	const auctionFor = (bidder: Address) => loadSecurityPoolAuctionSnapshot({ client: reader, securityPool, bidder, universeId: child })
-	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolAuctionOpenRequest(await auctionFor(owner)), 'Open the branch collateral repair auction')
-	await reportStep('Opened the branch collateral repair auction')
+	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolAuctionOpenRequest(await auctionFor(owner)), auctionSetup.openAuction)
+	await reportStep(auctionSetup.auctionOpened)
 	let snapshot = await auctionFor(owner)
 	const auction = snapshot.auction
-	if (auction === undefined) throw new Error('Expected the opened branch collateral repair auction')
-	if (auction.targetLots <= 2n) throw new Error('Expected room for both the owner and rival auction bids')
+	if (auction === undefined) throw new Error(auctionSetup.auctionMissing)
+	if (auction.targetLots <= 2n) throw new Error(auctionSetup.insufficientBidCapacity)
 	const minimum = auction.minimumCollateralAttoRepPerLot
 	for (const [account, client] of [
 		[owner, ownerClient],
 		[rival, rivalClient],
 	] as const)
-		await sendSecurityPoolTransaction(client, { account, to: profile.wethAddress, value: 0n, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [auction.address, (1n << 256n) - 1n] }) }, 'Approve simulated auction collateral')
+		await sendSecurityPoolTransaction(client, { account, to: profile.wethAddress, value: 0n, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: [auction.address, (1n << 256n) - 1n] }) }, auctionSetup.approveCollateral)
 	snapshot = await auctionFor(owner)
 
-	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolAuctionBidRequest(snapshot, { lots: 2n, minimumAttoRepPerLot: minimum }), 'Submit the winning bid')
-	await reportStep('Owner placed the winning bid')
+	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolAuctionBidRequest(snapshot, { lots: 2n, minimumAttoRepPerLot: minimum }), auctionSetup.submitWinningBid)
+	await reportStep(auctionSetup.winningBidPlaced)
 	snapshot = await auctionFor(owner)
-	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolAuctionBidRequest(snapshot, { lots: 1n, minimumAttoRepPerLot: 50n * minimum }), 'Submit the bid that better demand excludes')
-	await reportStep('Owner placed a winning and an expensive bid')
-	await sendSecurityPoolTransaction(rivalClient, buildSecurityPoolAuctionBidRequest(await auctionFor(rival), { lots: auction.targetLots, minimumAttoRepPerLot: minimum }), 'Submit rival tied bids')
+	await sendSecurityPoolTransaction(ownerClient, buildSecurityPoolAuctionBidRequest(snapshot, { lots: 1n, minimumAttoRepPerLot: 50n * minimum }), auctionSetup.submitExpensiveBid)
+	await reportStep(auctionSetup.expensiveBidPlaced)
+	await sendSecurityPoolTransaction(rivalClient, buildSecurityPoolAuctionBidRequest(await auctionFor(rival), { lots: auction.targetLots, minimumAttoRepPerLot: minimum }), auctionSetup.submitRivalBids)
 	const final = await auctionFor(owner)
 	const excluded = final.auction?.bids.find(bid => bid.minimumAttoRepPerLot === 50n * minimum)
-	if (excluded === undefined || excluded.earlyRefundAttoEth === 0n) throw new Error('Expected the expensive owner bid to be refundable before closing')
-	await reportStep('Seeded portfolio-auction scenario is ready')
+	if (excluded === undefined || excluded.earlyRefundAttoEth === 0n) throw new Error(auctionSetup.bidNotRefundable)
+	await reportStep(auctionSetup.ready)
+	return seeded
 }

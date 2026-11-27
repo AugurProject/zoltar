@@ -41,7 +41,7 @@ describe('simulation Uniswap quotes', () => {
 			reads += 1
 			throw new Error('Unsupported pairs need no contract read')
 		}
-		await expect(quoteBestExactInputWithSource(client, ETH_ADDRESS, profile.usdcAddress, 1n)).rejects.toThrow('Simulation mock pricing only supports REP / ETH, REP / WETH, and REP / USDC pairs.')
+		await expect(quoteBestExactInputWithSource(client, ETH_ADDRESS, profile.usdcAddress, 1n)).rejects.toThrow('Simulation pricing supports REP paired with ETH, WETH, or USDC.')
 		expect(reads).toBe(0)
 		resetEnvironment()
 	})

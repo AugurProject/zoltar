@@ -93,13 +93,13 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 		read(securityPool, 'priceFeed', [universeId]),
 		read(securityPool, 'collateralToken'),
 	])
-	const controller = decodeAddress(controllerValue, 'Fork controller')
-	const zoltar = decodeAddress(protocolValue, 'Protocol')
-	const factory = decodeAddress(factoryValue, 'Factory')
-	const capitalLedger = decodeAddress(capitalValue, 'Capital ledger', true)
+	const controller = decodeAddress(controllerValue, 'Fork contract')
+	const zoltar = decodeAddress(protocolValue, 'universe contract for the security pool')
+	const factory = decodeAddress(factoryValue, 'Security pool deployment contract')
+	const capitalLedger = decodeAddress(capitalValue, 'Capital contract', true)
 	const priceFeed = decodeAddress(feedValue, 'Price feed', true)
 	const [authorityValue, controllerProtocol, auctionValue, tokenValue, forkTimeValue] = await Promise.all([read(controller, 'securityPool'), read(controller, 'zoltar'), read(controller, 'repairAuctions', [universeId]), read(zoltar, 'getRepToken', [universeId]), read(zoltar, 'getForkTime', [universeId])])
-	if (decodeAddress(authorityValue, 'Fork authority') !== securityPool || decodeAddress(controllerProtocol, 'Fork protocol') !== zoltar) throw new Error('Auction fork controller belongs to another security pool.')
+	if (decodeAddress(authorityValue, 'Security pool linked to the fork') !== securityPool || decodeAddress(controllerProtocol, 'universe contract for the fork') !== zoltar) throw new Error('The fork contract for this auction belongs to another security pool.')
 	const auctionAddress = decodeAddress(auctionValue, 'Auction', true)
 	const repToken = decodeAddress(tokenValue, 'Branch REP', true)
 	const collateralToken = decodeAddress(collateralValue, 'Collateral token')
@@ -158,19 +158,19 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			read(capitalLedger, 'forkAuthority'),
 		])
 		if (
-			decodeAddress(fork, 'Auction fork authority') !== controller ||
+			decodeAddress(fork, 'Auction fork contract') !== controller ||
 			decodeAddress(root, 'Auction security pool') !== securityPool ||
 			decodeAddress(capital, 'Auction capital') !== capitalLedger ||
 			decodeAddress(token, 'Auction REP') !== repToken ||
 			decodeUint(child, 'Auction universe', 248) !== universeId ||
 			decodeAddress(capitalRoot, 'Capital security pool') !== securityPool ||
-			decodeAddress(capitalProtocol, 'Capital protocol') !== zoltar ||
+			decodeAddress(capitalProtocol, 'universe contract for pool capital') !== zoltar ||
 			decodeUint(capitalChild, 'Capital universe', 248) !== universeId ||
 			decodeAddress(capitalToken, 'Capital REP') !== repToken ||
-			decodeAddress(capitalFork, 'Capital fork authority') !== controller
+			decodeAddress(capitalFork, 'Fork contract for pool capital') !== controller
 		)
 			throw new Error('Auction identities do not match the selected branch.')
-		const engine = decodeAddress(engineValue, 'Auction engine')
+		const engine = decodeAddress(engineValue, 'Auction bidding contract')
 		const opened = decodeBool(openedValue, 'Invalid auction state.')
 		const finalized = decodeBool(finalizedValue, 'Invalid auction state.')
 		const [engineController, initialized, engineFinalized, maximum, admissible, deposited, count, bidCredit, unclaimed, capitalImporting] = await Promise.all([
@@ -185,7 +185,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			read(capitalLedger, 'unclaimedRepairAuctionBids', [bidder]),
 			read(capitalLedger, 'importing'),
 		])
-		if (decodeAddress(engineController, 'Engine controller') !== auctionAddress || decodeBool(initialized, 'Invalid auction state.') !== opened || decodeBool(engineFinalized, 'Invalid auction state.') !== finalized) throw new Error('Auction engine identity or state is inconsistent.')
+		if (decodeAddress(engineController, 'Auction contract address') !== auctionAddress || decodeBool(initialized, 'Invalid auction state.') !== opened || decodeBool(engineFinalized, 'Invalid auction state.') !== finalized) throw new Error('The auction status or contract address does not match this branch.')
 		const terms = {
 			address: auctionAddress,
 			engine,
@@ -202,7 +202,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			securityMultiplierBps: decodeUint(multiplier, 'Security multiplier'),
 			maximumBidAttoRepPerLot: decodeUint(maximum, 'Maximum bid REP per lot'),
 			maximumAdmissibleBidAttoRepPerLot: decodeUint(admissible, 'Highest admissible bid REP per lot'),
-			depositedAttoEth: decodeUint(deposited, 'Bid escrow'),
+			depositedAttoEth: decodeUint(deposited, 'Bid collateral'),
 			refundAttoEth: decodeUint(bidCredit, 'Bid refund'),
 			/** All of the bidder's bids in this universe still to be claimed, on any page. */
 			unclaimedBidCount: decodeUint(unclaimed, 'Unclaimed bids'),
@@ -213,7 +213,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 		if (priceFeed !== zeroAddress) {
 			const [values, exposureValue] = await Promise.all([Promise.all(['conservativePrice', 'priceValidUntil', 'lastSettlementTimestamp', 'acceptedExposureLimitAttoEth', 'acceptedRepExposureLimitAttoRep'].map(name => read(priceFeed, name))), read(securityPool, 'oracleExposure', [universeId])])
 			price = {
-				conservativePrice: decodeUint(values[0], 'Conservative price'),
+				conservativePrice: decodeUint(values[0], 'Health price'),
 				validUntil: decodeUint(values[1], 'Price validity'),
 				lastSettlementTimestamp: decodeUint(values[2], 'Price settlement'),
 				exposureLimitAttoEth: decodeUint(values[3], 'Funded ETH exposure'),
@@ -225,7 +225,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 		const start = bidStart > totalBidCount ? totalBidCount : bidStart
 		const remaining = totalBidCount - start
 		const size = Number(remaining < BigInt(pageSize) ? remaining : BigInt(pageSize))
-		const pageBids = await Promise.all(Array.from({ length: size }, (_, offset) => readBid(decodeUint(start + BigInt(offset), 'Bid index'))))
+		const pageBids = await Promise.all(Array.from({ length: size }, (_, offset) => readBid(decodeUint(start + BigInt(offset), 'Bid ID'))))
 		const claimableIds = pageBids.filter(bid => bid.claimable).map(bid => bid.id)
 		const ledgerPositions = claimableIds.length === 0 ? [] : decodeRepairAuctionPositions(await read(capitalLedger, 'repairAuctionPositions', [claimableIds]), claimableIds.length)
 		const bids = pageBids.map((bid): SecurityPoolAuctionBid => {
@@ -254,7 +254,7 @@ export async function loadSecurityPoolAuctionSnapshot(parameters: { client: Auct
 			const id = decodeUint(await read(engine, 'bidderBidId', [bidder, index]), 'Bid ID')
 			if (id === 0n) throw new Error('Auction bid ID is missing.')
 			const values = decodeFields(await read(engine, 'bids', [id]), ['bidder', 'settled', 'feesRemoved', 'lots', 'minimumAttoRepPerLot'], 'Invalid auction response.')
-			if (decodeAddress(values[0], 'Bid owner') !== bidder) throw new Error('Auction bid belongs to another account.')
+			if (decodeAddress(values[0], 'Bid owner') !== bidder) throw new Error('Auction bid belongs to another wallet.')
 			const bid = {
 				id,
 				bidder,

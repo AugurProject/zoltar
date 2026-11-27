@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { capitalAuthorizationReason, capitalPositionPhase, requiredSecurityPoolCollateral, maximumSecurityPoolCommitment, capitalRetirementReason } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/capital.js'
+import { capitalAuthorizationReason, requiredSecurityPoolCollateral, maximumSecurityPoolCommitment, capitalRetirementReason } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/capital.js'
 import { capitalSnapshot, unit } from './capitalFixture.js'
 test('collateral follows the owner health target and each contract rounding step', () => {
 	const snapshot = capitalSnapshot()
@@ -32,34 +32,28 @@ test('partial retirement keeps a meaningful residual and requires one complete r
 })
 test('authorizations cannot cut obligations, bypass personal collateral or consume unfunded commitments', () => {
 	const snapshot = capitalSnapshot()
-	expect(capitalAuthorizationReason(snapshot, 9n * unit)).toContain('retirement')
+	expect(capitalAuthorizationReason(snapshot, 9n * unit)).toContain('Queue a reduction')
 	expect(capitalAuthorizationReason({ ...snapshot, ownerPrincipalAttoRep: unit }, 10n * unit)).toContain('health')
 	expect(capitalAuthorizationReason({ ...snapshot, priceValid: false }, 10n * unit)).toContain('price')
 	expect(capitalAuthorizationReason({ ...snapshot, forkTime: 1n }, 10n * unit)).toContain('closed')
 	expect(capitalAuthorizationReason({ ...snapshot, positions: [] }, unit - 1n)).toContain('minimum')
 })
-test('current and next retirement cohorts remain distinct without question-history scans', () => {
-	expect(capitalPositionPhase(0n, 3n)).toBe('active')
-	expect(capitalPositionPhase(3n, 3n)).toBe('current')
-	expect(capitalPositionPhase(4n, 3n)).toBe('next')
-})
-
 test('all owner principal backs authorization and a pending retirement locks the commitment', () => {
 	const snapshot = capitalSnapshot({ withdrawableAttoRep: 0n })
 	expect(capitalAuthorizationReason(snapshot, 10n * unit)).toBeUndefined()
-	expect(capitalAuthorizationReason({ ...snapshot, positions: snapshot.positions.map(position => ({ ...position, batch: 2n })) }, 10n * unit)).toContain('locked until its retirement is released')
+	expect(capitalAuthorizationReason({ ...snapshot, positions: snapshot.positions.map(position => ({ ...position, batch: 2n })) }, 10n * unit)).toContain('locked until its reduction clears')
 })
 
 test('a funded report permits growth only with its conservative collateral price', () => {
 	const snapshot = capitalSnapshot({ oracleExposureLimitAttoEth: 1n, ownerPrincipalAttoRep: 40n * unit })
-	expect(capitalAuthorizationReason(snapshot, 10n * unit)).toContain('funded')
+	expect(capitalAuthorizationReason(snapshot, 10n * unit)).toContain('Fund a REP price report')
 	expect(capitalAuthorizationReason(snapshot, 10n * unit, 3n * unit)).toBeUndefined()
 	expect(capitalAuthorizationReason({ ...snapshot, ownerPrincipalAttoRep: 30n * unit }, 10n * unit, 3n * unit)).toContain('Collateral')
 	expect(requiredSecurityPoolCollateral(snapshot, 10n * unit, 3n * unit)).toBe(37_800_000_000_000_000_000n)
 })
 test('unfunded authorization cannot ignore demand above nominal commitment', () => {
 	const snapshot = capitalSnapshot({ demandAttoEth: 101n * unit })
-	expect(capitalAuthorizationReason(snapshot, 10n * unit)).toContain('funded')
+	expect(capitalAuthorizationReason(snapshot, 10n * unit)).toContain('Fund a REP price report')
 })
 
 test('collateral-backed authorization needs no separate ETH execution budget', () => {
@@ -72,5 +66,5 @@ test('a pending retirement can repeat only its saved target for an in-place cure
 	const snapshot = capitalSnapshot()
 	const pending = { ...snapshot, positions: snapshot.positions.map(position => ({ ...position, batch: 1n, remainingCommitment: 5n * unit })) }
 	expect(capitalRetirementReason(pending, 1n, 5n * unit)).toBeUndefined()
-	expect(capitalRetirementReason(pending, 1n, 4n * unit)).toBe('Retirement already requested.')
+	expect(capitalRetirementReason(pending, 1n, 4n * unit)).toBe('A commitment reduction is already in queue.')
 })

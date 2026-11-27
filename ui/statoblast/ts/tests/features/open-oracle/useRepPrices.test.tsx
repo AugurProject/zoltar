@@ -273,48 +273,18 @@ describe('useRepPrices', () => {
 		resetEnvironment()
 	})
 
-	test('automatically expires and refreshes prices in a long-lived view', async () => {
+	test('keeps a long-lived price idle until the viewer refreshes', async () => {
 		const originalSetTimeout = window.setTimeout
-		let expiryCallback: (() => void) | undefined
+		let scheduledExpiry = false
 		window.setTimeout = ((handler: TimerHandler, timeout = 0) => {
-			if (typeof handler === 'function' && timeout >= 29_000) {
-				expiryCallback = handler as () => void
-				return 987_654
-			}
+			if (typeof handler === 'function' && timeout >= 29_000) scheduledExpiry = true
 			return originalSetTimeout(handler, timeout)
 		}) as typeof window.setTimeout
 		try {
-			const simulationController = createSimulationController()
-			let readDelayMilliseconds = 0
-			installSimulationBackend(
-				createReadClient({
-					readContract: async () => {
-						if (readDelayMilliseconds > 0) await delay(readDelayMilliseconds, originalSetTimeout)
-						return 'REP'
-					},
-				}),
-				simulationController,
-			)
-
-			await renderProbe()
-			await waitFor(() => {
-				expect(readRepPriceProbe().repPerEth).toBe(REP_PER_ETH.toString())
-				expect(expiryCallback).toBeDefined()
-			})
-
-			simulationController.repPerEthPrice = 2n * REP_PER_ETH
-			simulationController.repPerUsdcPrice = 2n * REP_PER_USDC
-			readDelayMilliseconds = 50
-			const runExpiry = expiryCallback
-			if (runExpiry === undefined) throw new Error('Expected REP price expiry callback')
-			await act(() => {
-				runExpiry()
-			})
-			expectDisplayedPrices(REP_PER_ETH, REP_PER_USDC)
-
-			await waitFor(() => {
-				expectDisplayedPrices(2n * REP_PER_ETH, 2n * REP_PER_USDC)
-			})
+			const { readContractCount } = installCountingSimulationBackend()
+			await renderLoadedPrices(readContractCount)
+			expect(scheduledExpiry).toBe(false)
+			expect(readContractCount()).toBe(2)
 		} finally {
 			window.setTimeout = originalSetTimeout
 		}

@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { parseAbi, zeroAddress, getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
-import { loadQuestionLedgerListing } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
+import { loadStatoblastQuestion } from '@zoltar/ui-statoblast-shared/protocol/questionLedgers.js'
 
 const abi = parseAbi([
 	'function securityPoolCustody() view returns (address)',
@@ -18,7 +18,9 @@ test(
 		const backend = await createBootstrappedSimulationBackendWithRetry('securitypoolx2', 1, 'statoblast')
 		try {
 			const client = backend.createReadClient()
-			const { pools } = await loadQuestionLedgerListing(client)
+			const seed = backend.seededSecurityPool
+			if (seed === undefined) throw new Error('Missing seeded security pool')
+			const pools = await Promise.all(seed.questionIds.map(async id => (await loadStatoblastQuestion(client, seed.address, id, 0n)).question))
 			let securityPoolQuestions = 0
 			const feeds = new Set<string>()
 			for (const pool of pools) {

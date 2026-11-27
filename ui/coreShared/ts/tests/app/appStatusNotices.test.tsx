@@ -62,7 +62,7 @@ describe('AppStatusNotices', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Simulation bootstrap failed')).not.toBeNull()
+		expect(documentQueries.getByText('Could not start the simulation')).not.toBeNull()
 		expect(documentQueries.getByText('Anvil boot failed')).not.toBeNull()
 	})
 
@@ -201,7 +201,7 @@ describe('AppStatusNotices', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Setup incomplete').closest('.notice')?.getAttribute('data-message-tone')).toBe('error')
-		expect(documentQueries.getByText('Required application contracts are not deployed.')).not.toBeNull()
+		expect(documentQueries.getByText('Required application contracts are missing.')).not.toBeNull()
 		expect(documentQueries.queryByText('Wrong network')).toBeNull()
 		expect(documentQueries.getByText('Error')).not.toBeNull()
 		expect(documentQueries.getByText('Top-level error')).not.toBeNull()

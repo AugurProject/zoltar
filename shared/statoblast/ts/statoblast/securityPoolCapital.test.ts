@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, parseAbi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { decodeFunctionData, parseAbi, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
 	buildSecurityPoolCapitalDepositRequest,
 	buildSecurityPoolCapitalDepositAndSetHealthRequest,
@@ -106,7 +106,7 @@ describe('personal security pool capital SDK', () => {
 		expect(decodeFunctionData({ abi, data: buildSecurityPoolCapitalSetCommitmentRequest({ ...base, commitment: 100n, reportId: 4n }).data })).toEqual({ functionName: 'setCommitmentWithReport', args: [4n, 100n] })
 		expect(decodeFunctionData({ abi, data: buildSecurityPoolCapitalTakeOverRequest({ ...base, positionId: 9n, commitment: 17n, minimumTakeoverReward: 0n, maximumOwnRep: 30n }).data })).toEqual({ functionName: 'takeOver', args: [9n, 17n, 0n, 30n] })
 		expect(() => buildSecurityPoolCapitalSetHealthRequest({ ...base, targetHealthFactorBps: 9_999n })).toThrow('100%')
-		expect(() => buildSecurityPoolCapitalSetCommitmentRequest({ ...base, commitment: -1n })).toThrow('uint256')
+		expect(() => buildSecurityPoolCapitalSetCommitmentRequest({ ...base, commitment: -1n })).toThrow('Commitment is out of range.')
 		expect(() => buildSecurityPoolCapitalSetCommitmentRequest({ ...base, commitment: 0n, reportId: 4n })).toThrow('positive')
 		expect(() => buildSecurityPoolCapitalDepositRequest({ ...base, amountAttoRep: 0n })).toThrow('positive')
 	})
@@ -124,19 +124,19 @@ describe('personal security pool capital SDK', () => {
 		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'takeOverWithBounds', args: [3n, 20n, 0n, 30n, bounds] })
 		expect(request).toMatchObject({ account: owner, to: capitalLedger, value: 0n })
 		expect(() => buildSecurityPoolCapitalTakeOverWithBoundsRequest({ ...parameters, bounds: { ...bounds, expectedTargetHealthFactorBps: 9_999n } })).toThrow('100%')
-		expect(() => buildSecurityPoolCapitalTakeOverWithBoundsRequest({ ...parameters, bounds: { ...bounds, expectedSourceBatch: 1n << 96n } })).toThrow('uint96')
-		expect(() => buildSecurityPoolCapitalTakeOverWithBoundsRequest({ ...parameters, bounds: { ...bounds, maximumOwnerPrincipal: -1n } })).toThrow('uint256')
+		expect(() => buildSecurityPoolCapitalTakeOverWithBoundsRequest({ ...parameters, bounds: { ...bounds, expectedSourceBatch: 1n << 96n } })).toThrow('Expected reduction batch ID is out of range.')
+		expect(() => buildSecurityPoolCapitalTakeOverWithBoundsRequest({ ...parameters, bounds: { ...bounds, maximumOwnerPrincipal: -1n } })).toThrow('Maximum pledged REP is out of range.')
 	})
 	test('an unpaid cure asks for no takeover reward and consents to no exposure', () => {
 		const request = buildSecurityPoolCapitalCureRequest({ ...base, positionId: 3n, commitment: 20n, expectedAcceptedPriceEpoch: 7n, expectedSourceBatch: 9n })
 		expect(request).toMatchObject({ account: owner, to: capitalLedger, value: 0n })
 		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'takeOverWithBounds', args: [3n, 20n, 0n, 0n, { maximumOwnerPrincipal: 0n, maximumOwnerCommitment: 0n, expectedTargetHealthFactorBps: 10_000n, expectedAcceptedPriceEpoch: 7n, expectedSourceBatch: 9n }] })
-		expect(() => buildSecurityPoolCapitalCureRequest({ ...base, positionId: 0n, commitment: 20n, expectedAcceptedPriceEpoch: 7n, expectedSourceBatch: 9n })).toThrow('Position id')
+		expect(() => buildSecurityPoolCapitalCureRequest({ ...base, positionId: 0n, commitment: 20n, expectedAcceptedPriceEpoch: 7n, expectedSourceBatch: 9n })).toThrow('Position ID')
 	})
 	test('retirement service requires the owner position instead of global processing', () => {
-		expect(() => buildSecurityPoolCapitalServeRetirementRequest({ ...base, positionId: 0n })).toThrow('Position id')
+		expect(() => buildSecurityPoolCapitalServeRetirementRequest({ ...base, positionId: 0n })).toThrow('Position ID')
 		expect(decodeFunctionData({ abi, data: buildSecurityPoolCapitalServeRetirementRequest({ ...base, positionId: 9n }).data })).toEqual({ functionName: 'serveRetirement', args: [9n] })
-		expect(() => buildSecurityPoolCapitalServeRetirementRequest({ ...base, positionId: 1n << 96n })).toThrow('uint96')
+		expect(() => buildSecurityPoolCapitalServeRetirementRequest({ ...base, positionId: 1n << 96n })).toThrow('Position ID is out of range.')
 	})
 
 	test('pins one owner position and the canonical collateral allowance to the same block', async () => {
@@ -166,6 +166,22 @@ describe('personal security pool capital SDK', () => {
 		expect(calls.length).toBeLessThan(50)
 	})
 
+	test('public capital reads preserve pool totals without loading a position', async () => {
+		const { client, calls } = fixture()
+		const snapshot = await loadSecurityPoolCapitalSnapshot({
+			client: {
+				...client,
+				getCode: async () => {
+					throw new Error('Public capital reads do not fetch position code.')
+				},
+			},
+			securityPool,
+		})
+		expect(snapshot).toMatchObject({ totalPledgedAttoRep: 600n, healthyCommitmentAttoEth: 50n, ownerPrincipalAttoRep: 0n, positions: [] })
+		expect(calls.some(call => ['exported', 'ownerAccount', 'ownerCollateral', 'ownerConservativePrice', 'accountOf'].includes(call.functionName))).toBe(false)
+		await expect(loadSecurityPoolCapitalSnapshot({ client, securityPool, owner: zeroAddress })).rejects.toThrow('Owner must be a nonzero address.')
+	})
+
 	test('a composing fork reader can select the same confirmed block for every capital read', async () => {
 		const { client, calls } = fixture()
 		const requested: (bigint | undefined)[] = []
@@ -187,7 +203,7 @@ describe('personal security pool capital SDK', () => {
 	})
 	test('retirement preview rejects an unknown status and does not inspect active or lazily closed history', async () => {
 		const retiring = { owner, batch: 9n, rep: 200n, commitment: 20n, maxHealthyPrice: 20n, releasedRep: 0n, ethFees: 0n, repFees: 0n, remainingCommitment: 7n }
-		await expect(loadSecurityPoolCapitalSnapshot({ client: fixture({ accountOf: retiring, previewRetirement: [6n, 9n, 50n, 10n, 0n, 13n, 0n] }).client, securityPool, owner })).rejects.toThrow('Invalid retirement preview status')
+		await expect(loadSecurityPoolCapitalSnapshot({ client: fixture({ accountOf: retiring, previewRetirement: [6n, 9n, 50n, 10n, 0n, 13n, 0n] }).client, securityPool, owner })).rejects.toThrow('Invalid commitment reduction preview status')
 		for (const overrides of [{}, { accountOf: { ...retiring, commitment: 0n, rep: 0n, releasedRep: 200n } }]) {
 			const { client, calls } = fixture(overrides)
 			const snapshot = await loadSecurityPoolCapitalSnapshot({ client, securityPool, owner })
@@ -198,7 +214,7 @@ describe('personal security pool capital SDK', () => {
 
 	test('rejects malformed ownership and reorgs instead of double-counting or mixing snapshots', async () => {
 		const malformed = fixture({ ownerAccount: [10n, 3n, 4n, 12_000n, 1n << 96n] })
-		await expect(loadSecurityPoolCapitalSnapshot({ client: malformed.client, securityPool, owner })).rejects.toThrow('uint96')
+		await expect(loadSecurityPoolCapitalSnapshot({ client: malformed.client, securityPool, owner })).rejects.toThrow('Position ID is out of range.')
 		const reorg = fixture()
 		let reads = 0
 		reorg.client.getBlock = async () => ({ number: 42n, hash: reads++ === 0 ? hash : '0x22', timestamp: 1_000n })
@@ -216,7 +232,7 @@ test('idle owners need no position reads and retain the canonical stale-price wi
 test('live collateral never becomes withdrawable merely because principal exists', async () => {
 	const { client } = fixture({ ownerCollateral: [260n, 20n, 0n], isPriceValid: false })
 	expect((await loadSecurityPoolCapitalSnapshot({ client, securityPool, owner })).withdrawableAttoRep).toBe(0n)
-	await expect(loadSecurityPoolCapitalSnapshot({ client: fixture({ ownerCollateral: [260n, 20n, 261n] }).client, securityPool, owner })).rejects.toThrow('exceeds owner principal')
+	await expect(loadSecurityPoolCapitalSnapshot({ client: fixture({ ownerCollateral: [260n, 20n, 261n] }).client, securityPool, owner })).rejects.toThrow('exceeds pledged REP')
 	await expect(loadSecurityPoolCapitalSnapshot({ client: fixture({ accountOf: { owner: securityPool, batch: 0n, rep: 200n, commitment: 20n, maxHealthyPrice: 20n, releasedRep: 60n, ethFees: 11n, repFees: 13n } }).client, securityPool, owner })).rejects.toThrow('another owner')
 })
 

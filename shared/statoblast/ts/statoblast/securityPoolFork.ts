@@ -55,8 +55,8 @@ export function buildSecurityPoolForkRecoveryRequest(parameters: ForkRequest & {
 export function buildSecurityPoolRecoveryRightsTransferRequest(parameters: { owner: Address; shareToken: Address; universeId: bigint; recipient: Address; amountsAttoShares: readonly [bigint, bigint, bigint] }) {
 	const owner = address(parameters.owner)
 	const recipient = address(parameters.recipient)
-	if (owner === recipient) throw new Error('Recovery recipient must be another account.')
-	const amounts = parameters.amountsAttoShares.map(amount => decodeUint(amount, 'Recovery rights'))
+	if (owner === recipient) throw new Error('Enter a different recipient address.')
+	const amounts = parameters.amountsAttoShares.map(amount => decodeUint(amount, 'Recovery rights amount'))
 	if (amounts.length !== 3 || amounts.every(amount => amount === 0n)) throw new Error('Choose positive recovery rights for at least one of three outcomes.')
 	return { account: owner, to: address(parameters.shareToken), value: 0n, data: encodeFunctionData({ abi, functionName: 'transferSecurityPoolRecoveryRights', args: [decodeUint(parameters.universeId, 'Universe', 248), recipient, amounts] }) }
 }
@@ -84,7 +84,7 @@ export async function loadSecurityPoolForkSnapshot(parameters: { client: Securit
 		read(controller, 'forks', [universeId]),
 		read(controller, 'choices', [universeId, owner]),
 	])
-	if (address(authority) !== securityPool || address(protocol) !== zoltar) throw new Error('Fork controller belongs to a different security pool.')
+	if (address(authority) !== securityPool || address(protocol) !== zoltar) throw new Error('The fork contract belongs to a different security pool.')
 	const f = decodeFields(forkValue, ['backing', 'commitment', 'cash', 'units', 'recoveryAttoRep', 'assignedCash', 'neutralCash', 'recoveredUnits', 'frozen', 'recoveryFunded', 'migrationPrepared'], 'Invalid security pool fork response.')
 	const c = decodeFields(choiceValue, ['outcome', 'recorded'], 'Invalid security pool fork response.')
 	const fork = {

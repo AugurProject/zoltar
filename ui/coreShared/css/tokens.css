@@ -7,6 +7,7 @@
 	color-scheme: light dark;
 	--bg: light-dark(rgba(244, 247, 251, 1), rgba(8, 17, 29, 1));
 	--bg-deep: light-dark(rgba(236, 241, 247, 1), rgba(5, 10, 17, 1));
+	--statoblast-background: light-dark(rgba(242, 245, 249, 1), var(--bg-deep));
 
 	/*
 	 * Text hierarchy.

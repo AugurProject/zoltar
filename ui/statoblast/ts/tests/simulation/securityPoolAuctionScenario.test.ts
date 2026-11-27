@@ -4,7 +4,6 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, simulationSetupTimeoutMs, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { quoteSecurityPoolAuctionRefundClaim } from '@zoltar/statoblast-shared/statoblast/securityPool'
-import { discoverSimulationSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
 import { loadSecurityPoolBranchAuction } from '@zoltar/ui-statoblast-shared/protocol/securityPoolRepairAuction.js'
 import { loadSecurityPoolForkSnapshot } from '@zoltar/statoblast-shared/statoblast/securityPool'
 import { securityPoolReadClient } from '@zoltar/ui-statoblast-shared/protocol/securityPool.js'
@@ -27,7 +26,7 @@ void describe('security pool branch auction simulation scenario', () => {
 		const owner = backend.accounts[0]
 		if (owner === undefined) throw new Error('Expected the simulation owner account')
 		const readClient = backend.createReadClient()
-		const securityPool = await discoverSimulationSecurityPool(readClient, 'simulation', owner)
+		const securityPool = backend.seededSecurityPool?.address
 		if (securityPool === undefined) throw new Error('Expected the seeded security pool')
 		const fork = await loadSecurityPoolForkSnapshot({ client: securityPoolReadClient(readClient), securityPool, owner, universeId: 0n, outcomeIndex: 1n })
 		expect(fork.forkTime).toBeGreaterThan(0n)

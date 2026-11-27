@@ -1,3 +1,4 @@
+import * as deploymentCopy from '../copy/deployment.js'
 import type { Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getCreateAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { constructorArgumentsFromInitCode } from '@zoltar/core-shared/deployment/deploymentAddresses'
@@ -186,13 +187,13 @@ type SecurityPoolModuleId =
 	| 'securityPoolRepairAuctionDeployer'
 type SecurityPoolModuleDeployment = { id: SecurityPoolModuleId; label: string; bytecode: typeof getSecurityPoolCapitalLedgerDeployerByteCode; artifact: { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } } }
 export const securityPoolModuleDeployments: readonly SecurityPoolModuleDeployment[] = [
-	{ id: 'securityPoolCapitalLedgerDeployer', label: 'SecurityPoolCapitalLedgerDeployer', artifact: statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalLedgerDeployer, bytecode: getSecurityPoolCapitalLedgerDeployerByteCode },
-	{ id: 'securityPoolCommitmentIndexDeployer', label: 'SecurityPoolCommitmentIndexDeployer', artifact: statoblast_SecurityPoolModuleDeployers_SecurityPoolCommitmentIndexDeployer, bytecode: getSecurityPoolCommitmentIndexDeployerByteCode },
-	{ id: 'securityPoolCapitalFeeStreamsDeployer', label: 'SecurityPoolCapitalFeeStreamsDeployer', artifact: statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalFeeStreamsDeployer, bytecode: getSecurityPoolCapitalFeeStreamsDeployerByteCode },
-	{ id: 'securityPoolSettlementBookDeployer', label: 'SecurityPoolSettlementBookDeployer', artifact: statoblast_SecurityPoolModuleDeployers_SecurityPoolSettlementBookDeployer, bytecode: getSecurityPoolSettlementBookDeployerByteCode },
-	{ id: 'securityPoolSettlementDeployer', label: 'SecurityPoolSettlementDeployer', artifact: statoblast_SecurityPoolModuleDeployers_SecurityPoolSettlementDeployer, bytecode: getSecurityPoolSettlementDeployerByteCode },
-	{ id: 'securityPoolServicesDeployer', label: 'SecurityPoolServicesDeployer', artifact: statoblast_SecurityPoolModuleDeployers_SecurityPoolServicesDeployer, bytecode: getSecurityPoolServicesDeployerByteCode },
-	{ id: 'securityPoolReporterLedgerDeployer', label: 'SecurityPoolReporterLedgerDeployer', artifact: statoblast_SecurityPoolModuleDeployers_SecurityPoolReporterLedgerDeployer, bytecode: getSecurityPoolReporterLedgerDeployerByteCode },
-	{ id: 'securityPoolForkCoordinatorDeployer', label: 'SecurityPoolForkCoordinatorDeployer', artifact: statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinatorDeployer, bytecode: getSecurityPoolForkCoordinatorDeployerByteCode },
-	{ id: 'securityPoolRepairAuctionDeployer', label: 'SecurityPoolRepairAuctionDeployer', artifact: statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuctionDeployer, bytecode: getSecurityPoolRepairAuctionDeployerByteCode },
+	{ id: 'securityPoolCapitalLedgerDeployer', label: deploymentCopy.poolCapitalDeployment, artifact: statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalLedgerDeployer, bytecode: getSecurityPoolCapitalLedgerDeployerByteCode },
+	{ id: 'securityPoolCommitmentIndexDeployer', label: deploymentCopy.poolCommitmentDeployment, artifact: statoblast_SecurityPoolModuleDeployers_SecurityPoolCommitmentIndexDeployer, bytecode: getSecurityPoolCommitmentIndexDeployerByteCode },
+	{ id: 'securityPoolCapitalFeeStreamsDeployer', label: deploymentCopy.poolFeesDeployment, artifact: statoblast_SecurityPoolModuleDeployers_SecurityPoolCapitalFeeStreamsDeployer, bytecode: getSecurityPoolCapitalFeeStreamsDeployerByteCode },
+	{ id: 'securityPoolSettlementBookDeployer', label: deploymentCopy.poolPayoutDataDeployment, artifact: statoblast_SecurityPoolModuleDeployers_SecurityPoolSettlementBookDeployer, bytecode: getSecurityPoolSettlementBookDeployerByteCode },
+	{ id: 'securityPoolSettlementDeployer', label: deploymentCopy.poolPayoutDeployment, artifact: statoblast_SecurityPoolModuleDeployers_SecurityPoolSettlementDeployer, bytecode: getSecurityPoolSettlementDeployerByteCode },
+	{ id: 'securityPoolServicesDeployer', label: deploymentCopy.poolOperationsDeployment, artifact: statoblast_SecurityPoolModuleDeployers_SecurityPoolServicesDeployer, bytecode: getSecurityPoolServicesDeployerByteCode },
+	{ id: 'securityPoolReporterLedgerDeployer', label: deploymentCopy.poolReportingDeployment, artifact: statoblast_SecurityPoolModuleDeployers_SecurityPoolReporterLedgerDeployer, bytecode: getSecurityPoolReporterLedgerDeployerByteCode },
+	{ id: 'securityPoolForkCoordinatorDeployer', label: deploymentCopy.poolForkDeployment, artifact: statoblast_SecurityPoolForkCoordinator_SecurityPoolForkCoordinatorDeployer, bytecode: getSecurityPoolForkCoordinatorDeployerByteCode },
+	{ id: 'securityPoolRepairAuctionDeployer', label: deploymentCopy.repairAuctionDeployment, artifact: statoblast_SecurityPoolRepairAuction_SecurityPoolRepairAuctionDeployer, bytecode: getSecurityPoolRepairAuctionDeployerByteCode },
 ] as const

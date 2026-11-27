@@ -1,5 +1,8 @@
+import { simulationBootstrapFailed } from '../../ui/coreShared/ts/copy/app.ts'
+
 type ProductionDocument = {
 	readonly body: string
+	readonly simulationStarting: boolean
 	readonly timeOrigin: number
 }
 
@@ -22,10 +25,10 @@ export function createProductionBrowserNavigation({
 		while (now() < deadline) {
 			document = await readDocument()
 			const currentDocument = previousTimeOrigin === undefined || document.timeOrigin !== previousTimeOrigin
-			if (currentDocument && document.body.includes('Simulation bootstrap failed')) throw new Error(`Production simulation failed to bootstrap: ${document.body}`)
+			if (currentDocument && document.body.includes(simulationBootstrapFailed)) throw new Error(`Production simulation failed to bootstrap: ${document.body}`)
 			const remainingMilliseconds = deadline - now()
 			if (remainingMilliseconds <= 0) break
-			if (currentDocument && document.body !== '' && document.body !== 'Loading...' && document.body !== 'Loading…' && !document.body.includes('BOOTSTRAPPING') && !document.body.includes('Starting simulation bootstrap')) return
+			if (currentDocument && document.body !== '' && document.body !== 'Loading...' && document.body !== 'Loading…' && !document.simulationStarting) return
 			await wait(Math.min(50, remainingMilliseconds))
 		}
 		throw new Error(`Production application did not finish loading: ${JSON.stringify(document)}`)

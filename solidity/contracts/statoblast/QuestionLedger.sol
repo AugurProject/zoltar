@@ -6,6 +6,7 @@ import { IERC20 } from '../IERC20.sol';
 import { ReputationToken } from '../ReputationToken.sol';
 import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Zoltar } from '../Zoltar.sol';
+import { Constants } from '../Constants.sol';
 import { IShareToken } from './interfaces/IShareToken.sol';
 import { SharedPoolPriceFeed } from './SharedPoolPriceFeed.sol';
 import {
@@ -41,6 +42,9 @@ interface ICompletePurchaseFunding {
 contract QuestionLedger is QuestionLedgerStorage {
 	using SafeERC20Ops for IERC20;
 	event QuestionAccountingCheckpoint(AccountingReason reason, uint256 settlementCollateralAttoEth, uint256 shareTokenSupplyAttoShares, uint256 lastSettlementSecurityPoolTime);
+
+	/// @notice Seconds between the first report and activation of an ordinary escalation game.
+	uint256 public constant initialReportingResponseWindow = Constants.FORK_RESPONSE_DELAY;
 
 	uint256 public immutable questionId;
 	uint248 public immutable universeId;

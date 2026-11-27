@@ -61,7 +61,7 @@ describe('bounded security pool fork SDK', () => {
 		expect(decodeFunctionData({ abi, data: buildSecurityPoolForkFinalizeRequest({ ...base, universeId: 42n }).data })).toEqual({ functionName: 'finalizeBranch', args: [42n] })
 		expect(decodeFunctionData({ abi, data: buildSecurityPoolForkRecoveryRequest({ ...base, questionId: 123n, shares: 99n }).data })).toEqual({ functionName: 'recoverUnchosenCash', args: [8n, 123n, 99n] })
 		expect(() => buildSecurityPoolForkRecoveryRequest({ ...base, questionId: 123n, shares: 0n })).toThrow('positive')
-		expect(() => buildSecurityPoolForkChoiceRequest({ ...base, universeId: 1n << 248n, outcomeIndex: 7n })).toThrow('uint248')
+		expect(() => buildSecurityPoolForkChoiceRequest({ ...base, universeId: 1n << 248n, outcomeIndex: 7n })).toThrow('Universe is out of range.')
 	})
 	test('independent recovery transfers bind the source, share token, recipient and all three outcome amounts', () => {
 		const parameters = { owner, shareToken: capital, universeId: 8n, recipient: securityPool, amountsAttoShares: [4n, 0n, 7n] satisfies readonly [bigint, bigint, bigint] }
@@ -69,9 +69,9 @@ describe('bounded security pool fork SDK', () => {
 		expect(request).toMatchObject({ account: owner, to: capital, value: 0n })
 		expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'transferSecurityPoolRecoveryRights', args: [8n, securityPool, [4n, 0n, 7n]] })
 		expect(() => buildSecurityPoolRecoveryRightsTransferRequest({ ...parameters, amountsAttoShares: [0n, 0n, 0n] })).toThrow('positive')
-		expect(() => buildSecurityPoolRecoveryRightsTransferRequest({ ...parameters, amountsAttoShares: [-1n, 0n, 1n] })).toThrow('uint256')
+		expect(() => buildSecurityPoolRecoveryRightsTransferRequest({ ...parameters, amountsAttoShares: [-1n, 0n, 1n] })).toThrow('Recovery rights amount is out of range.')
 		expect(() => buildSecurityPoolRecoveryRightsTransferRequest({ ...parameters, recipient: zeroAddress })).toThrow('nonzero')
-		expect(() => buildSecurityPoolRecoveryRightsTransferRequest({ ...parameters, recipient: owner })).toThrow('another account')
+		expect(() => buildSecurityPoolRecoveryRightsTransferRequest({ ...parameters, recipient: owner })).toThrow('different recipient address')
 	})
 
 	test('reads one chosen branch at a pinned block without owner, question or ancestor history', async () => {

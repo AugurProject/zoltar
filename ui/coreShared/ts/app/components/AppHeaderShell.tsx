@@ -33,9 +33,11 @@ type AppHeaderShellProps = {
 	onEnvironmentChanged?: () => Promise<void>
 	onRefresh: () => Promise<void>
 	settingsContent?: ComponentChildren
+	settingsTriggerId?: string
+	showWalletSpeedUp?: boolean
 }
 
-export function AppHeaderShell({ mainElementId = 'app-content', renderOverview, simulationController, secondaryNavigation, tabNavigation, onEnvironmentChanged = async () => undefined, onRefresh, settingsContent }: AppHeaderShellProps) {
+export function AppHeaderShell({ mainElementId = 'app-content', renderOverview, simulationController, secondaryNavigation, tabNavigation, onEnvironmentChanged = async () => undefined, onRefresh, settingsContent, settingsTriggerId, showWalletSpeedUp }: AppHeaderShellProps) {
 	const focusAppContent = () => {
 		const appContent = document.getElementById(mainElementId)
 		if (!(appContent instanceof HTMLElement)) return
@@ -47,9 +49,10 @@ export function AppHeaderShell({ mainElementId = 'app-content', renderOverview, 
 	const showProtocolGuide = tabNavigation !== undefined && tabNavigation.showProtocolGuide !== false
 	const settingsMenu = (
 		<>
-			<TransactionActivityMenu />
+			<TransactionActivityMenu showWalletSpeedUp={showWalletSpeedUp} />
 			<AppSettingsMenu
 				onEnvironmentChanged={onEnvironmentChanged}
+				triggerId={settingsTriggerId}
 				settingsContent={
 					<>
 						{settingsContent}

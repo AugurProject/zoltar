@@ -1,28 +1,26 @@
-import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
-import * as statoblastAppCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
-import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
-import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
-import type { StatoblastRoute } from '@zoltar/ui-statoblast-shared/types/app.js'
-import type { QuestionLedgersView } from '@zoltar/ui-statoblast-shared/features/types.js'
+import * as shellCopy from '@zoltar/ui-statoblast-shared/copy/statoblastShell.js'
+import * as questionCopy from '@zoltar/ui-statoblast-shared/copy/questionPage.js'
+import { poolTabLabels } from '@zoltar/ui-statoblast-shared/copy/securityPoolPage.js'
+import type { StatoblastPage } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { formatAppDocumentTitle as formatDocumentTitle } from '@zoltar/ui-core-shared/app/lib/appTitle.js'
 
-export type AppPageTitleInput = {
-	activeQuestionLedgersView: QuestionLedgersView
-	route: StatoblastRoute
-}
-
-export function getAppPageTitle({ activeQuestionLedgersView, route }: AppPageTitleInput) {
-	if (route === 'security-pools') return statoblastAppCopy.securityPools
-	if (route === 'deploy') return appCopy.deployContracts
-	if (route === 'pools') {
-		if (activeQuestionLedgersView === 'operate') return 'Question'
-		if (activeQuestionLedgersView === 'migrate') return appCopy.migrateRep
-		if (activeQuestionLedgersView === 'universes') return zoltarCopy.universesTitle
-		// Matches the browse view's visible heading, so the tab title and page announcement name what the user sees.
-		return 'Security pool questions'
+export function getAppPageTitle(page: StatoblastPage) {
+	switch (page.kind) {
+		case 'watchlist':
+			return shellCopy.watchlist
+		case 'choose-universe':
+			return shellCopy.genesisTitle
+		case 'migrate-rep':
+			return shellCopy.migrateRep
+		case 'deploy-pool':
+			return shellCopy.deployPool
+		case 'pool':
+			return poolTabLabels[page.tab]
+		case 'question':
+			return { shares: questionCopy.shares, reporting: questionCopy.reporting, claims: questionCopy.inheritedClaims }[page.tab]
+		default:
+			return shellCopy.pageNotFound
 	}
-	if (route === 'open-oracle') return openOracleCopy.priceReports
-	return appCopy.pageNotFoundTitle
 }
 
 export const applicationTitle = 'Augur Statoblast'

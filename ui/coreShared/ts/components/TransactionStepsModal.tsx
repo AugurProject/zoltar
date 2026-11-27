@@ -11,18 +11,18 @@ const embeddedTransactionSteps = signal<AbortSignal | undefined>(undefined)
  * Hosts the review of a transaction started outside any dialog. It is the same `OperationModal` review path a
  * dialog uses for its own transactions, so both surfaces share one review, focus trap, and close behavior.
  */
-export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
+export function TransactionStepsModal({ contextKey, finalActionLabel, keepConfirmed = false }: { contextKey: string; finalActionLabel?: string | undefined; keepConfirmed?: boolean }) {
 	useEffect(() => () => transactionSteps.peek()?.cancel(), [contextKey])
 	const workflow = transactionSteps.value
 	// Standalone approval buttons already specify their spending limit on the page.
-	const directApproval = workflow?.steps.length === 1 && workflow.steps[0]?.spender !== undefined && workflow.steps[0].approval === undefined
+	const directApproval = workflow?.showLifecycle === false && workflow.steps.length === 1 && workflow.steps[0]?.spender !== undefined && workflow.steps[0].approval === undefined
 	const embedded = workflow !== undefined && (isEmbeddedTransactionReview(workflow.reviewSignal) || (embeddedTransactionSteps.value !== undefined && workflow.reviewSignal === embeddedTransactionSteps.value))
 	const completed = workflow?.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped') ?? false
 	useEffect(() => {
 		// Keep failed reviews open so the user can read the error before dismissing them.
 		if (workflow === undefined || embedded) return
-		if (completed || ((directApproval || !workflow.showReviewDialog) && workflow.steps[workflow.activeIndex]?.phase === 'failed')) workflow.cancel()
-	}, [workflow, embedded, completed, directApproval])
+		if ((completed && !(keepConfirmed && workflow.showLifecycle)) || ((directApproval || !workflow.showReviewDialog) && workflow.steps[workflow.activeIndex]?.phase === 'failed')) workflow.cancel()
+	}, [workflow, embedded, completed, directApproval, keepConfirmed])
 	useEffect(() => {
 		if (!embedded && directApproval && workflow?.steps[workflow.activeIndex]?.phase === 'review') workflow.confirm()
 	}, [workflow, embedded, directApproval])
@@ -30,5 +30,5 @@ export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 	if (workflow === undefined || embedded || directApproval || !workflow.showReviewDialog || workflow.reviewSignal?.aborted) return undefined
 	const current = workflow.steps[workflow.activeIndex]
 	if (current === undefined) return undefined
-	return <OperationModal hostsExternalReview isOpen title={workflow.steps.at(-1)?.title ?? current.title} onClose={workflow.cancel} />
+	return <OperationModal hostsExternalReview isOpen title={workflow.steps.at(-1)?.title ?? current.title} finalActionLabel={finalActionLabel} onClose={workflow.cancel} />
 }

@@ -24,6 +24,14 @@ export const permanentRepBurn = 'Permanent REP burn'
 export const forkMigrationCredit = 'Credited to migration balance'
 
 export const migrationIntro = 'Migrating burns REP in this universe and gives you the same amount of REP in each child universe you select. It cannot be undone.'
+export const migrateInto = 'Migrate into'
+export const migrationCreatesUniverse = 'Migration creates this universe and uses more gas.'
+export const migrationReuseHint = 'You can reuse REP burned here to migrate into more child universes later. There is no migration deadline.'
+export const migrationBurnConfirmation = (amount: string) => `Burn ${amount} in this universe. This is irreversible.`
+export const migrationConfirmationRequired = 'Confirm the irreversible burn first.'
+export const migrationSourceBalance = 'REP in this universe'
+export const migratedToUniverse = (universeId: bigint) => `Migrated to universe ${universeId}`
+export const migrationAvailable = 'Available to migrate'
 export const migrationProgress = 'Migration steps'
 export const migrationStepSelectOutcomes = 'Select outcomes'
 export const migrationStepReview = 'Review'
@@ -115,3 +123,5 @@ export const selectedOutcomes = 'Selected outcomes'
 export const formatRemoveOutcome = (outcome: CopyTemplateValue) => `Remove ${outcome}`
 export const formatDeployChildUniverse = (outcome: CopyTemplateValue) => `Deploy ${outcome} universe`
 export const childDeploymentPendingReason = 'Wait for the pending universe deployment.'
+
+export const formatUnknownReportingOutcome = (outcome: string) => `Could not recognize the reporting outcome. Received ${JSON.stringify(outcome)}.`

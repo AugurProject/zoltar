@@ -1,4 +1,4 @@
-import { isHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { isAddress, isHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getErrorMessage } from '../lib/errors.js'
 import { getBrowserStorage } from '../lib/browserStorage.js'
 import type { SimulationScenario } from './scenarios.js'
@@ -44,7 +44,10 @@ export type SerializedSimulationBlock = {
 	senders: Address[]
 }
 
+export type SeededSecurityPool = { address: Address; questionIds: bigint[] }
+
 type SimulationSnapshotV1 = {
+	seededSecurityPool?: SeededSecurityPool | undefined
 	/** Mined blocks with receipts, oldest first. */
 	blocks: SerializedSimulationBlock[]
 	blockCountSinceReset: bigint
@@ -211,6 +214,8 @@ function assertSavedStateEnvelope(value: unknown): asserts value is SavedSimulat
 	if (typeof value['baseScenario'] !== 'string' || value['baseScenario'] === '') throw new SavedSimulationStateError('Saved simulation state is missing a valid baseScenario')
 	if (!isPlainRecord(value['state'])) throw new SavedSimulationStateError('Saved simulation state is missing its state payload')
 	const state = value['state']
+	const pool = state['seededSecurityPool']
+	if (pool !== undefined && (!isPlainRecord(pool) || typeof pool['address'] !== 'string' || !isAddress(pool['address']) || !Array.isArray(pool['questionIds']) || !pool['questionIds'].every(isNonNegativeBigInt))) throw new SavedSimulationStateError('Saved simulation state has an invalid seeded security pool')
 	if (typeof state['selectedAccount'] !== 'string' || state['selectedAccount'].trim() === '') throw new SavedSimulationStateError('Saved simulation state is missing a selectedAccount')
 	if (!isFiniteNonNegativeNumber(state['queryDelayMilliseconds'])) throw new SavedSimulationStateError('Saved simulation state is missing a valid query delay')
 	if (!isFiniteNonNegativeNumber(state['transactionDelayMilliseconds'])) throw new SavedSimulationStateError('Saved simulation state is missing a valid transaction delay')

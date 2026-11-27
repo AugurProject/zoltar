@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { expect, mock, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { zeroHash } from '@zoltar/core-shared/evm/ethereum'
 import { appBlockWatcher, invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
@@ -7,6 +7,7 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { createMulticallStub, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { useTradingCollateral } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useTradingCollateral.js'
 import { renderHookWithProps } from '../../support/renderHook.js'
 import { capitalClient } from '../security-pools/capitalClient.js'
@@ -21,8 +22,26 @@ async function setup(balance = 0n, allowance = 0n, recoveryAttoRep = 0n, recover
 	source.setRead('securityPoolOf', securityPool)
 	source.setRead('questionId', zeroHash)
 	source.setRead('purchaseQuote', [0n])
+	source.setRead('refreshSecurityPoolFees', undefined)
 	source.setRead('quoteMintRecoveryRep', recoveryAttoRep)
+	source.setRead('attoEthToAttoShares', 1_875_101n)
+	source.setRead('availableMintCapacity', 20_000_000n)
 	source.setRead('recoveryTokens', recoveryToken)
+	const quoteBatches = mock((_functionNames: readonly string[]) => undefined)
+	source.client.multicall = createMulticallStub(async request => {
+		quoteBatches(request.contracts.map(contract => contract.functionName))
+		return await Promise.all(
+			request.contracts.map(async contract => {
+				try {
+					const result = await source.client.readContract({ ...contract, blockNumber: request.blockNumber })
+					return request.allowFailure === true ? { status: 'success', result } : result
+				} catch (error) {
+					if (request.allowFailure !== true) throw error
+					return { status: 'failure', error }
+				}
+			}),
+		)
+	})
 	source.install()
 	const transactions: string[] = []
 	const hook = await renderHookWithProps(useTradingCollateral, {
@@ -45,8 +64,113 @@ async function setup(balance = 0n, allowance = 0n, recoveryAttoRep = 0n, recover
 	lifecycle.trackRendered(hook)
 	await waitFor(() => expect(hook.state().loading).toBe(false))
 	const balanceReads = () => source.reads.filter(read => read.name === 'balanceOf').length
-	return { source, hook, transactions, balanceReads }
+	return { source, hook, transactions, balanceReads, quoteBatches }
 }
+
+test('mint preview uses quoted shares, fee and capacity with directional limits in collateral units', async () => {
+	const { source, hook, quoteBatches } = await setup(3_000_000n, 3_000_000n)
+	const before = quoteBatches.mock.calls.length
+	source.setRead('purchaseQuote', [25_001n])
+	await act(() => invalidateAppData())
+	await waitFor(() =>
+		expect(hook.state().mintQuote).toMatchObject({
+			amount: 2_000_000n,
+			fee: 25_001n,
+			shares: 1_875_101n,
+			capacity: 20_000_000n,
+			maximumFee: 27_502n,
+			minimumShares: 1_856_349n,
+		}),
+	)
+	expect(quoteBatches).toHaveBeenCalledTimes(before + 1)
+	expect(quoteBatches.mock.calls.at(-1)?.[0]).toEqual(['refreshSecurityPoolFees', 'purchaseQuote', 'quoteMintRecoveryRep', 'attoEthToAttoShares', 'availableMintCapacity'])
+})
+
+test('the current mint quote blocks an amount above free pool capacity', async () => {
+	const { source, hook } = await setup(3_000_000n, 3_000_000n)
+	source.setRead('availableMintCapacity', 1_999_999n)
+	await act(() => invalidateAppData())
+	await waitFor(() => expect(hook.state().mintQuote?.capacity).toBe(1_999_999n))
+	expect(hook.state().reason).toBe('Insufficient shared REP backing after queued commitment reductions.')
+})
+
+test('Max finds the largest affordable amount with room for the fresh rounded fee cap without refreshing or changing the draft', async () => {
+	const { source, hook, quoteBatches } = await setup(3_000_009n, 0n)
+	const read = source.client.readContract
+	const blockNumbers: (bigint | undefined)[] = []
+	source.client.readContract = createReadContractStub(async request => {
+		blockNumbers.push(request.blockNumber)
+		const amount = request.args?.[2]
+		if (request.functionName === 'purchaseQuote' && typeof amount === 'bigint') return [(amount * 7n + 99n) / 100n + 100n, 0n]
+		return read(request)
+	})
+	const quote = hook.state().mintQuote
+	const before = quoteBatches.mock.calls.length
+	let maximum: bigint | undefined
+	await act(async () => {
+		maximum = await hook.state().findMaximumMintAmount?.()
+	})
+	expect(maximum).toBe(2_785_421n)
+	expect(quoteBatches.mock.calls.length - before).toBeLessThanOrEqual(16)
+	expect(blockNumbers.length).toBeGreaterThan(0)
+	expect(blockNumbers.every(block => block !== undefined && block === blockNumbers[0])).toBe(true)
+	expect(hook.state().mintQuote).toBe(quote)
+})
+
+test('Max uses the recovery REP actually required before approvals', async () => {
+	const { source, hook } = await setup(3_000_000n, 0n)
+	const read = source.client.readContract
+	source.setRead('balanceOf', 102n, token)
+	source.setRead('allowance', 0n, token)
+	source.setRead('availableMintCapacity', 3_000n)
+	source.client.readContract = createReadContractStub(async request => {
+		const amount = request.args?.[2]
+		if (request.functionName === 'quoteMintRecoveryRep' && typeof amount === 'bigint') return (amount + 9n) / 10n
+		return read(request)
+	})
+	let maximum: bigint | undefined
+	await act(async () => {
+		maximum = await hook.state().findMaximumMintAmount?.()
+	})
+	expect(maximum).toBe(1_020n)
+	expect(hook.state().maximumMintAmountError).toBeUndefined()
+})
+
+test('Max does not turn an unresolved quote into a lower verified maximum', async () => {
+	const { source, hook } = await setup(3_000_000n)
+	const read = source.client.readContract
+	source.client.readContract = createReadContractStub(async request => {
+		if (request.functionName === 'purchaseQuote') {
+			if (request.args?.[2] === 2_999_998n) throw new Error('Mint fee precision rate unsupported')
+			return [1n, 0n]
+		}
+		return read(request)
+	})
+	let maximum: bigint | undefined
+	await act(async () => {
+		maximum = await hook.state().findMaximumMintAmount?.()
+	})
+	expect(maximum).toBeUndefined()
+	expect(hook.state().maximumMintAmountError).toBe('Couldn’t check the maximum mint amount. Try again.')
+})
+
+test('leaving the mint page cancels Max before another quote batch starts', async () => {
+	const { source, hook, quoteBatches } = await setup(3_000_000n)
+	const balance = createDeferred<bigint>()
+	source.setRead('balanceOf', balance.promise)
+	const before = quoteBatches.mock.calls.length
+	let pending: Promise<bigint | undefined> | undefined
+	await act(() => {
+		pending = hook.state().findMaximumMintAmount?.()
+	})
+	await waitFor(() => expect(quoteBatches).toHaveBeenCalledTimes(before + 1))
+	expect(hook.state().findingMaximumMintAmount).toBe(true)
+	await hook.setProps({ enabled: false })
+	await act(() => balance.resolve(3_000_000n))
+	expect(await pending).toBeUndefined()
+	expect(quoteBatches).toHaveBeenCalledTimes(before + 1)
+	expect(hook.state().maximumMintAmountError).toBeUndefined()
+})
 
 test('external funding, approval, spending, revocation and fee changes refresh without editing the mint form', async () => {
 	const { source, hook, transactions } = await setup()
