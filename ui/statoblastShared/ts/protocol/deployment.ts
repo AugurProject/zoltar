@@ -38,22 +38,22 @@ import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from './deploymentHelpers.js'
 export { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 
 export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
-	escalationGameDepositDelegate: '0x64c4eaa617bc1ae029805c959024ae025386fdfbcd09dc0d74011990c203f9ec',
-	escalationGameFactory: '0x387f41646d6a424dc8a500b45315ab422969aa19e2a9acf0661906ef21bd8acd',
+	escalationGameDepositDelegate: '0x659497e6d93346c59b4981d0647156cfa916cd5065992b77bc68421198a8875c',
+	escalationGameFactory: '0x456afa4d6332c5576611e29f2afd43707dd13c176fd673ff01991d5ff2177341',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	sharedPoolPriceFeedFactory: '0x2db2d6d0a8e098305b72ddeec390e5f873b92ea46d2715a0a907f4148330eed8',
-	securityPoolFactory: '0x2c2e3c910bc9a7154ecdd2f9e79328acfe6205bf3eb4a2e0cb552f2b7c2a1d71',
-	questionForker: '0xb943c51de2f1dfb06aef9404c0d9966fbb9aa76664f2d82fa63a5e6f4255ec39',
+	sharedPoolPriceFeedFactory: '0x9aea41820fbfdd8ac32607ab2afbc7a1d52acf4dc9dd4b31fe37bde0ae82a614',
+	securityPoolFactory: '0x97fbf9c4d3d6ca29e872371c1ef69e9ca9d70a84a7fdeaac8a230ed24247aaea',
+	questionForker: '0x792a720ce6f619533d91592c1f134bf15d42ae76d799286486b193f6a770fcd2',
 	questionLedgerDelegate: '0xbd4a57b7e3ba1737aee3ec9baf045c78d89e5176a5794946aa7c78b60c51f45a',
-	shareTokenFactory: '0x5d36307371a5737f98c283875104baa32da56c9a035e6d8bea8f90565d345eb0',
-	sharedPoolPriceFeedDeploymentWorker: '0xa93a38db9f18b0dd57ab28265f56bbc48db75a7180e3be5d37d44861293124ca',
+	shareTokenFactory: '0xd44087884c5643571f83cfbabb765c1a3565811503d843814033600de4f3153e',
+	sharedPoolPriceFeedDeploymentWorker: '0xa1c32b988aa9882380f61d64f2f2670ab60a1d24174559e63a060da39cd055f3',
 }
 
 const EXPECTED_NO_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0x18620e809d793d812f3c4bc05e2d5508d6579c17b59462df05451bbdc864507f',
-	questionForker: '0x264856bf82d587a858c772b8b7157495f3115d9e9453a02d19654f6770c4f1a9',
-	shareTokenFactory: '0x455b37ed5b6e81f95dc8f7d0820f7d53d13738634e28fe21cf1d2973d5f7c10f',
+	securityPoolFactory: '0xc488298c39fac13a54586cde7a8efa6de8536ea5046559cc78c0afcdcee47a21',
+	questionForker: '0xf619bf5b092e42d1e9ff4b76f770da642e3be7ebac53ed00552b4d8c8aaaa93d',
+	shareTokenFactory: '0xd416a451237e0c82a4a1c9c3bea86f81a2fe6cd203d37e5434422f09541275de',
 }
 
 function runtimeWithAddresses(artifact: { evm: { deployedBytecode: { object: string; immutableReferences: Readonly<Record<string, readonly { start: number; length: number }[]>> } } }, addresses: readonly Address[]) {
@@ -86,7 +86,7 @@ function moduleRuntimeCode(module: (typeof securityPoolModuleDeployments)[number
 		)
 	}
 	// The auction deployer stores only its two creation-code chunks. Immutable groups follow AST ids, which depend on source
-	// file order, so the chunks are placed by the ids of the shared SecurityPoolCreationCodeDeployer immutables instead of by position.
+	// file order, so the chunks are placed by the ids of the shared CreationCodeDeployer immutables instead of by position.
 	if (module.id === 'securityPoolRepairAuctionDeployer') {
 		const chunkDeployer = securityPoolModuleDeployments.find(candidate => candidate.id === 'securityPoolForkCoordinatorDeployer')
 		if (chunkDeployer === undefined) throw new Error(deploymentErrors.libraryLayoutMissing)
@@ -119,22 +119,22 @@ export function assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes(
 }
 
 const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
-	escalationGameDepositDelegate: '0x64c4eaa617bc1ae029805c959024ae025386fdfbcd09dc0d74011990c203f9ec',
-	escalationGameFactory: '0x387f41646d6a424dc8a500b45315ab422969aa19e2a9acf0661906ef21bd8acd',
+	escalationGameDepositDelegate: '0x659497e6d93346c59b4981d0647156cfa916cd5065992b77bc68421198a8875c',
+	escalationGameFactory: '0x456afa4d6332c5576611e29f2afd43707dd13c176fd673ff01991d5ff2177341',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	sharedPoolPriceFeedFactory: '0xd99dda725e0aa0bc05fe50020e1ad4828615870df4fcdcb81c458cbc1804369a',
-	securityPoolFactory: '0x9d5d271b1c3d3aa44582a6597d74bb159a09e816f5ef4bc0e0f6f6b807ea2edc',
-	questionForker: '0x7efa736bc98b0f7b5d9509444128d978d790c3bd8a956762be8d617803f4b686',
+	sharedPoolPriceFeedFactory: '0x7e71851a9c97cf8765d4571e781a1342b05e2ea6c4f4cfdc137f91745a284c12',
+	securityPoolFactory: '0xf7859b0693a0ca0562ed11beb001aa9107dd4df12b9d70ada8345585258d3058',
+	questionForker: '0x1764159cabc779180ecf716791eae181788aa89059271a9a2ca74ea4f315a0cd',
 	questionLedgerDelegate: '0xbd4a57b7e3ba1737aee3ec9baf045c78d89e5176a5794946aa7c78b60c51f45a',
-	shareTokenFactory: '0x1655d4e1bf272dd2e2bc32d38ba9a8d59a48ad0b59af85903158fda48fbe1532',
-	sharedPoolPriceFeedDeploymentWorker: '0xa93a38db9f18b0dd57ab28265f56bbc48db75a7180e3be5d37d44861293124ca',
+	shareTokenFactory: '0x4ca719641cc8fd77aa0f41adcaa4e03a48561bcef8c76841d02979eb8e86f8c9',
+	sharedPoolPriceFeedDeploymentWorker: '0xa1c32b988aa9882380f61d64f2f2670ab60a1d24174559e63a060da39cd055f3',
 }
 
 const EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	...EXPECTED_MAINNET_RUNTIME_CODE_HASHES,
-	securityPoolFactory: '0x2cf45175ea04eef30c8082b769cfeafa9a43d8e32d01e30c08cb49ad6afb6f9e',
-	questionForker: '0x59d35895876398c2c1a5c365a685119bcdcbfb027d4842d98bdf8054e2a24ce9',
-	shareTokenFactory: '0x1f5876886ea35c0073eca2754f24d6d375c6e73706337a9868c2eebeb67a0e0f',
+	securityPoolFactory: '0x10951e4f97c84f6424a070e97166bed84f101fa95a3b46d601ab5f595eda88e5',
+	questionForker: '0xe280af0716ba5eb9084efbb928c8a7c0af8c0d16c6b4f0c906e915e80fa7a1bd',
+	shareTokenFactory: '0x20a8c7380eacec48e3fad622cc45367b37d50f8336e4177325d1aea92d11b39e',
 }
 const EXPECTED_PUBLIC_RUNTIME_CODE_HASHES = {
 	mainnet: { yes: EXPECTED_MAINNET_RUNTIME_CODE_HASHES, no: EXPECTED_NO_MAINNET_RUNTIME_CODE_HASHES },

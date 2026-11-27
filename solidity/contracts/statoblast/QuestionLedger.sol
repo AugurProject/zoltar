@@ -28,7 +28,7 @@ import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { QuestionLedgerStorage } from './QuestionLedgerStorage.sol';
 import { QuestionLedgerDelegate } from './QuestionLedgerDelegate.sol';
 import { DelegateCall } from './DelegateCall.sol';
-import { IQuestionLedgerDeploymentWorkerConfiguration } from './interfaces/IQuestionLedgerDeploymentWorkerConfiguration.sol';
+import { IQuestionLedgerDeployerConfiguration } from './interfaces/IQuestionLedgerDeployerConfiguration.sol';
 import { ISecurityPoolSettlement } from './interfaces/ISecurityPoolSettlement.sol';
 
 interface IQuestionAdmissionHost {
@@ -90,9 +90,9 @@ contract QuestionLedger is QuestionLedgerStorage {
 
 	constructor(address _questionForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, SharedPoolPriceFeed _priceFeed, IShareToken _shareToken, OpenOracle _openOracle, IQuestionLedger _parent, Zoltar _zoltar, uint248 _universeId, uint256 _questionId, uint256 _statoblastSecurityMultiplierBps) {
 		universeId = _universeId;
-		IQuestionLedgerDeploymentWorkerConfiguration worker = IQuestionLedgerDeploymentWorkerConfiguration(msg.sender);
-		securityPoolFactory = worker.factory();
-		delegate = worker.delegate();
+		IQuestionLedgerDeployerConfiguration deployer = IQuestionLedgerDeployerConfiguration(msg.sender);
+		securityPoolFactory = deployer.factory();
+		delegate = deployer.delegate();
 		questionId = _questionId;
 		statoblastSecurityMultiplierBps = _statoblastSecurityMultiplierBps;
 		repToken = _zoltar.getRepToken(_universeId);

@@ -853,7 +853,6 @@ export const questionLedgerAbi = [
 			{ name: 'leafCount', type: 'uint256', internalType: 'uint256' },
 			{ name: 'carryTotalAttoRep', type: 'uint256', internalType: 'uint256' },
 			{ name: 'resolutionBalanceAttoRep', type: 'uint256', internalType: 'uint256' },
-			{ name: 'nullifierRoot', type: 'bytes32', internalType: 'bytes32' },
 		],
 		outputs: [],
 	},
@@ -914,7 +913,6 @@ export const questionLedgerAbi = [
 					{ name: 'leafIndex', type: 'uint256', internalType: 'uint256' },
 					{ name: 'merkleMountainRangeSiblings', type: 'bytes32[]', internalType: 'bytes32[]' },
 					{ name: 'merkleMountainRangePeakIndex', type: 'uint256', internalType: 'uint256' },
-					{ name: 'nullifierSiblings', type: 'bytes32[]', internalType: 'bytes32[]' },
 				],
 			},
 		],
@@ -1248,7 +1246,6 @@ export const escalationGameAbi = [
 			{ name: 'amountAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'reason', type: 'uint8', internalType: 'enum CarryConsumptionReason', indexed: false },
 			{ name: 'resultingUnresolvedTotalAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
-			{ name: 'resultingNullifierRoot', type: 'bytes32', internalType: 'bytes32', indexed: false },
 			{ name: 'resultingCarryRoot', type: 'bytes32', internalType: 'bytes32', indexed: false },
 		],
 	},
@@ -1297,7 +1294,6 @@ export const escalationGameAbi = [
 			{ name: 'sourceGame', type: 'address', internalType: 'address', indexed: true },
 			{ name: 'snapshotId', type: 'bytes32', internalType: 'bytes32', indexed: true },
 			{ name: 'carryRoots', type: 'bytes32[3]', internalType: 'bytes32[3]', indexed: false },
-			{ name: 'nullifierRoots', type: 'bytes32[3]', internalType: 'bytes32[3]', indexed: false },
 			{ name: 'leafCounts', type: 'uint256[3]', internalType: 'uint256[3]', indexed: false },
 			{ name: 'unresolvedTotalsAttoRep', type: 'uint256[3]', internalType: 'uint256[3]', indexed: false },
 			{ name: 'resolutionBalancesAttoRep', type: 'uint256[3]', internalType: 'uint256[3]', indexed: false },
@@ -1373,22 +1369,7 @@ export const escalationGameAbi = [
 	},
 	{ type: 'fallback', stateMutability: 'nonpayable' },
 	{ type: 'function', name: 'activationTime', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
-	{ type: 'function', name: 'appendOnlyCarry', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
 	{ type: 'function', name: 'canTriggerOwnFork', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
-	{
-		type: 'function',
-		name: 'claimDepositForWinning',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'depositIndex', type: 'uint256', internalType: 'uint256' },
-			{ name: 'outcome', type: 'uint8', internalType: 'enum BinaryOutcomes.BinaryOutcome' },
-		],
-		outputs: [
-			{ name: 'depositor', type: 'address', internalType: 'address' },
-			{ name: 'amountToWithdrawAttoRep', type: 'uint256', internalType: 'uint256' },
-			{ name: 'originalDepositAmountAttoRep', type: 'uint256', internalType: 'uint256' },
-		],
-	},
 	{ type: 'function', name: 'computeCurveFinalityElapsed', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'computeIterativeAttritionCostAttoRep', stateMutability: 'view', inputs: [{ name: 'timeSinceStart', type: 'uint256', internalType: 'uint256' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'computeTimeSinceStartFromAttritionCostAttoRep', stateMutability: 'view', inputs: [{ name: 'attritionCostAttoRep', type: 'uint256', internalType: 'uint256' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
@@ -1499,7 +1480,6 @@ export const escalationGameAbi = [
 			{ name: 'carryPeaks', type: 'bytes32[64][3]', internalType: 'bytes32[64][3]' },
 			{ name: 'carryLeafCounts', type: 'uint256[3]', internalType: 'uint256[3]' },
 			{ name: 'carryTotalsAttoRep', type: 'uint256[3]', internalType: 'uint256[3]' },
-			{ name: 'nullifierRoots', type: 'bytes32[3]', internalType: 'bytes32[3]' },
 		],
 	},
 	{
@@ -1528,7 +1508,6 @@ export const escalationGameAbi = [
 					{ name: 'snapshotLeafCount', type: 'uint256', internalType: 'uint256' },
 					{ name: 'snapshotCarryRoot', type: 'bytes32', internalType: 'bytes32' },
 					{ name: 'inheritedUnresolvedTotalAttoRep', type: 'uint256', internalType: 'uint256' },
-					{ name: 'currentNullifierRoot', type: 'bytes32', internalType: 'bytes32' },
 					{ name: 'localHeadNodeId', type: 'uint256', internalType: 'uint256' },
 					{ name: 'currentLeafCount', type: 'uint256', internalType: 'uint256' },
 					{ name: 'currentPeaks', type: 'bytes32[64]', internalType: 'bytes32[64]' },
@@ -1563,7 +1542,6 @@ export const escalationGameAbi = [
 			{ name: 'leafCount', type: 'uint256', internalType: 'uint256' },
 			{ name: 'carryTotalAttoRep', type: 'uint256', internalType: 'uint256' },
 			{ name: 'resolutionBalanceAttoRep', type: 'uint256', internalType: 'uint256' },
-			{ name: 'nullifierRoot', type: 'bytes32', internalType: 'bytes32' },
 		],
 		outputs: [],
 	},
@@ -1665,20 +1643,6 @@ export const escalationGameAbi = [
 		name: 'withdrawDeposit',
 		stateMutability: 'nonpayable',
 		inputs: [
-			{ name: 'depositIndex', type: 'uint256', internalType: 'uint256' },
-			{ name: 'outcome', type: 'uint8', internalType: 'enum BinaryOutcomes.BinaryOutcome' },
-		],
-		outputs: [
-			{ name: 'depositor', type: 'address', internalType: 'address' },
-			{ name: 'amountToWithdrawAttoRep', type: 'uint256', internalType: 'uint256' },
-			{ name: 'originalDepositAmountAttoRep', type: 'uint256', internalType: 'uint256' },
-		],
-	},
-	{
-		type: 'function',
-		name: 'withdrawDeposit',
-		stateMutability: 'nonpayable',
-		inputs: [
 			{
 				name: 'proof',
 				type: 'tuple',
@@ -1692,9 +1656,22 @@ export const escalationGameAbi = [
 					{ name: 'leafIndex', type: 'uint256', internalType: 'uint256' },
 					{ name: 'merkleMountainRangeSiblings', type: 'bytes32[]', internalType: 'bytes32[]' },
 					{ name: 'merkleMountainRangePeakIndex', type: 'uint256', internalType: 'uint256' },
-					{ name: 'nullifierSiblings', type: 'bytes32[]', internalType: 'bytes32[]' },
 				],
 			},
+			{ name: 'outcome', type: 'uint8', internalType: 'enum BinaryOutcomes.BinaryOutcome' },
+		],
+		outputs: [
+			{ name: 'depositor', type: 'address', internalType: 'address' },
+			{ name: 'amountToWithdrawAttoRep', type: 'uint256', internalType: 'uint256' },
+			{ name: 'originalDepositAmountAttoRep', type: 'uint256', internalType: 'uint256' },
+		],
+	},
+	{
+		type: 'function',
+		name: 'withdrawDeposit',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'depositIndex', type: 'uint256', internalType: 'uint256' },
 			{ name: 'outcome', type: 'uint8', internalType: 'enum BinaryOutcomes.BinaryOutcome' },
 		],
 		outputs: [
@@ -5431,7 +5408,7 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0x43df14a46bec168b4e1ac5657abfbf2954c7ddc807b57efcfa2ff20bf1b8a48f',
 		runtimeCodeLength: 20242,
 		immutableReferences: {
-			'24197': [
+			'22721': [
 				{ length: 32, start: 4018 },
 				{ length: 32, start: 4205 },
 				{ length: 32, start: 7231 },
@@ -5442,14 +5419,14 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 17766 },
 				{ length: 32, start: 19217 },
 			],
-			'24200': [
+			'22724': [
 				{ length: 32, start: 4287 },
 				{ length: 32, start: 8797 },
 				{ length: 32, start: 10284 },
 				{ length: 32, start: 14448 },
 				{ length: 32, start: 16750 },
 			],
-			'24202': [
+			'22726': [
 				{ length: 32, start: 3337 },
 				{ length: 32, start: 8448 },
 				{ length: 32, start: 14394 },
@@ -5457,50 +5434,50 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 17721 },
 				{ length: 32, start: 18831 },
 			],
-			'24205': [
+			'22729': [
 				{ length: 32, start: 11567 },
 				{ length: 32, start: 18876 },
 			],
-			'24207': [
+			'22731': [
 				{ length: 32, start: 11093 },
 				{ length: 32, start: 16032 },
 				{ length: 32, start: 16851 },
 			],
-			'24210': [{ length: 32, start: 5050 }],
-			'24212': [{ length: 32, start: 10414 }],
-			'24214': [
+			'22734': [{ length: 32, start: 5050 }],
+			'22736': [{ length: 32, start: 10414 }],
+			'22738': [
 				{ length: 32, start: 11255 },
 				{ length: 32, start: 16275 },
 				{ length: 32, start: 16891 },
 			],
-			'24216': [
+			'22740': [
 				{ length: 32, start: 10355 },
 				{ length: 32, start: 17398 },
 			],
-			'24218': [{ length: 32, start: 8696 }],
-			'24220': [{ length: 32, start: 6134 }],
-			'24222': [{ length: 32, start: 4819 }],
-			'24224': [
+			'22742': [{ length: 32, start: 8696 }],
+			'22744': [{ length: 32, start: 6134 }],
+			'22746': [{ length: 32, start: 4819 }],
+			'22748': [
 				{ length: 32, start: 12151 },
 				{ length: 32, start: 16070 },
 			],
-			'24226': [
+			'22750': [
 				{ length: 32, start: 4711 },
 				{ length: 32, start: 14653 },
 			],
-			'24231': [
+			'22755': [
 				{ length: 32, start: 5856 },
 				{ length: 32, start: 18322 },
 			],
-			'24234': [{ length: 32, start: 10176 }],
-			'24237': [
+			'22758': [{ length: 32, start: 10176 }],
+			'22761': [
 				{ length: 32, start: 1354 },
 				{ length: 32, start: 3714 },
 				{ length: 32, start: 5228 },
 				{ length: 32, start: 10703 },
 				{ length: 32, start: 10821 },
 			],
-			'24240': [
+			'22764': [
 				{ length: 32, start: 1170 },
 				{ length: 32, start: 1613 },
 				{ length: 32, start: 4360 },
@@ -5520,7 +5497,7 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0x29078e1adcc40bec41c740dafa706a62ac5c95294e34bfa120898a2e73291b1a',
 		runtimeCodeLength: 20095,
 		immutableReferences: {
-			'27356': [
+			'25880': [
 				{ length: 32, start: 1281 },
 				{ length: 32, start: 1924 },
 				{ length: 32, start: 4103 },
@@ -5536,7 +5513,7 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 10058 },
 				{ length: 32, start: 10935 },
 			],
-			'27359': [
+			'25883': [
 				{ length: 32, start: 1503 },
 				{ length: 32, start: 2046 },
 				{ length: 32, start: 8216 },
@@ -5546,35 +5523,35 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 16865 },
 				{ length: 32, start: 19876 },
 			],
-			'27362': [
+			'25886': [
 				{ length: 32, start: 1834 },
 				{ length: 32, start: 2259 },
 			],
-			'27365': [
+			'25889': [
 				{ length: 32, start: 5040 },
 				{ length: 32, start: 8033 },
 				{ length: 32, start: 8529 },
 				{ length: 32, start: 10572 },
 			],
-			'27367': [
+			'25891': [
 				{ length: 32, start: 6578 },
 				{ length: 32, start: 9275 },
 				{ length: 32, start: 12267 },
 			],
-			'27369': [
+			'25893': [
 				{ length: 32, start: 9171 },
 				{ length: 32, start: 14736 },
 				{ length: 32, start: 14995 },
 			],
 		},
 	},
-	SecurityPoolCommitmentIndex: { runtimeCodeHash: '0xbf83d34c6fe7822dbcf5fb292e9d8a9acdaa33786aa91cd5852484f34789b1dd', runtimeCodeLength: 21530, immutableReferences: { '33174': [{ length: 32, start: 3588 }] } },
-	SecurityPoolCapitalFeeStreams: { runtimeCodeHash: '0x782f44c0a13a767c2cfb2bd3d21597c00172ddd4bf16526742faaccafdb08c8b', runtimeCodeLength: 3808, immutableReferences: { '26692': [{ length: 32, start: 1056 }] } },
+	SecurityPoolCommitmentIndex: { runtimeCodeHash: '0xbf83d34c6fe7822dbcf5fb292e9d8a9acdaa33786aa91cd5852484f34789b1dd', runtimeCodeLength: 21530, immutableReferences: { '31698': [{ length: 32, start: 3588 }] } },
+	SecurityPoolCapitalFeeStreams: { runtimeCodeHash: '0x782f44c0a13a767c2cfb2bd3d21597c00172ddd4bf16526742faaccafdb08c8b', runtimeCodeLength: 3808, immutableReferences: { '25216': [{ length: 32, start: 1056 }] } },
 	SecurityPoolSettlement: {
 		runtimeCodeHash: '0xcb0655b543d426567338309639a346d5750c52adffebbcc7631eb392a2684dd1',
 		runtimeCodeLength: 18970,
 		immutableReferences: {
-			'50682': [
+			'49206': [
 				{ length: 32, start: 529 },
 				{ length: 32, start: 1360 },
 				{ length: 32, start: 1661 },
@@ -5597,7 +5574,7 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 10915 },
 				{ length: 32, start: 11712 },
 			],
-			'50685': [
+			'49209': [
 				{ length: 32, start: 5760 },
 				{ length: 32, start: 6100 },
 				{ length: 32, start: 12263 },
@@ -5609,12 +5586,12 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0xbbe2f23f2a88482a960ad36174500bfabac50862214fe22ad6c35a312d47f890',
 		runtimeCodeLength: 23338,
 		immutableReferences: {
-			'52711': [
+			'51235': [
 				{ length: 32, start: 4034 },
 				{ length: 32, start: 13905 },
 			],
-			'52714': [{ length: 32, start: 4967 }],
-			'52717': [
+			'51238': [{ length: 32, start: 4967 }],
+			'51241': [
 				{ length: 32, start: 3922 },
 				{ length: 32, start: 10756 },
 				{ length: 32, start: 19051 },
@@ -5622,7 +5599,7 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 19221 },
 				{ length: 32, start: 20542 },
 			],
-			'56769': [
+			'55293': [
 				{ length: 32, start: 9355 },
 				{ length: 32, start: 11150 },
 				{ length: 32, start: 20656 },
@@ -5633,7 +5610,7 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0xbcd7321002fce97ddccb32d1d882d1b5a527461917c64714ad36b86e34f02c84',
 		runtimeCodeLength: 19430,
 		immutableReferences: {
-			'45098': [
+			'43622': [
 				{ length: 32, start: 272 },
 				{ length: 32, start: 3389 },
 				{ length: 32, start: 4171 },
@@ -5645,7 +5622,7 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 13194 },
 				{ length: 32, start: 15553 },
 			],
-			'45101': [
+			'43625': [
 				{ length: 32, start: 372 },
 				{ length: 32, start: 2230 },
 				{ length: 32, start: 2666 },
@@ -5669,7 +5646,7 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0x91c092607f6b23c5f8c43f452f4bdaad01906ee564bc20634c0aa14d7033b9d3',
 		runtimeCodeLength: 5973,
 		immutableReferences: {
-			'43243': [
+			'41767': [
 				{ length: 32, start: 134 },
 				{ length: 32, start: 212 },
 				{ length: 32, start: 461 },
@@ -5683,7 +5660,7 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0xe34adfa91f96fe045b34802e007165c20398dc3798702d0e066ce49c2ed2d4bb',
 		runtimeCodeLength: 21980,
 		immutableReferences: {
-			'38793': [
+			'37317': [
 				{ length: 32, start: 924 },
 				{ length: 32, start: 1407 },
 				{ length: 32, start: 3904 },
@@ -5699,7 +5676,7 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 15796 },
 				{ length: 32, start: 18508 },
 			],
-			'38796': [
+			'37320': [
 				{ length: 32, start: 1266 },
 				{ length: 32, start: 3701 },
 				{ length: 32, start: 4577 },
@@ -5719,7 +5696,7 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0xa5f57b640e02f090774baefcfd92d0c65324072e572dc7115020b3bff0821dfd',
 		runtimeCodeLength: 18287,
 		immutableReferences: {
-			'49041': [
+			'47565': [
 				{ length: 32, start: 300 },
 				{ length: 32, start: 1513 },
 				{ length: 32, start: 1927 },
@@ -5741,7 +5718,7 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 17064 },
 				{ length: 32, start: 17215 },
 			],
-			'49044': [
+			'47568': [
 				{ length: 32, start: 4024 },
 				{ length: 32, start: 4504 },
 				{ length: 32, start: 5295 },
@@ -5760,7 +5737,7 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0x132f8e867f93e5456de87f296b9bbdcdeeffa075f1a5adff42ec13a821f69fb8',
 		runtimeCodeLength: 19366,
 		immutableReferences: {
-			'29825': [
+			'28349': [
 				{ length: 32, start: 625 },
 				{ length: 32, start: 1539 },
 				{ length: 32, start: 2005 },
@@ -5782,7 +5759,7 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0x364fdabd13f1683d06e9c55b6a8247e6eee1ca888d4447b02c59a1dbecb4afe2',
 		runtimeCodeLength: 9602,
 		immutableReferences: {
-			'31837': [
+			'30361': [
 				{ length: 32, start: 2451 },
 				{ length: 32, start: 2712 },
 				{ length: 32, start: 2860 },
@@ -5793,18 +5770,18 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0x633ee614ebec4cbf2a618481ad1664050cdd426e4702fd4970fd497bf0d4b4ba',
 		runtimeCodeLength: 12483,
 		immutableReferences: {
-			'43958': [
+			'42482': [
 				{ length: 32, start: 4559 },
 				{ length: 32, start: 5157 },
 			],
-			'43961': [
+			'42485': [
 				{ length: 32, start: 425 },
 				{ length: 32, start: 3498 },
 				{ length: 32, start: 4490 },
 				{ length: 32, start: 5323 },
 				{ length: 32, start: 10000 },
 			],
-			'43964': [
+			'42488': [
 				{ length: 32, start: 739 },
 				{ length: 32, start: 3107 },
 				{ length: 32, start: 3850 },
@@ -5812,7 +5789,7 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 5981 },
 				{ length: 32, start: 6259 },
 			],
-			'43967': [
+			'42491': [
 				{ length: 32, start: 1547 },
 				{ length: 32, start: 3176 },
 				{ length: 32, start: 3276 },
@@ -5824,19 +5801,19 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 9076 },
 				{ length: 32, start: 9314 },
 			],
-			'43970': [
+			'42494': [
 				{ length: 32, start: 5926 },
 				{ length: 32, start: 6015 },
 				{ length: 32, start: 8192 },
 			],
-			'43972': [
+			'42496': [
 				{ length: 32, start: 505 },
 				{ length: 32, start: 3585 },
 				{ length: 32, start: 5274 },
 				{ length: 32, start: 8066 },
 				{ length: 32, start: 9946 },
 			],
-			'43974': [
+			'42498': [
 				{ length: 32, start: 360 },
 				{ length: 32, start: 3029 },
 				{ length: 32, start: 6776 },
@@ -5845,7 +5822,7 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 7857 },
 				{ length: 32, start: 8136 },
 			],
-			'43976': [
+			'42500': [
 				{ length: 32, start: 1631 },
 				{ length: 32, start: 2116 },
 				{ length: 32, start: 2715 },
@@ -5854,12 +5831,12 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 8010 },
 				{ length: 32, start: 9805 },
 			],
-			'43978': [
+			'42502': [
 				{ length: 32, start: 922 },
 				{ length: 32, start: 4922 },
 				{ length: 32, start: 5689 },
 			],
-			'43984': [
+			'42508': [
 				{ length: 32, start: 1459 },
 				{ length: 32, start: 2165 },
 				{ length: 32, start: 6487 },
@@ -5871,7 +5848,7 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0x958232b7ea35e74906fa14d9c80006e5b9a6d3178771fbe832419d1b03060ece',
 		runtimeCodeLength: 13153,
 		immutableReferences: {
-			'58245': [
+			'56769': [
 				{ length: 32, start: 364 },
 				{ length: 32, start: 437 },
 				{ length: 32, start: 990 },
@@ -5881,7 +5858,7 @@ export const securityPoolRuntimeIdentities = {
 				{ length: 32, start: 4834 },
 				{ length: 32, start: 7587 },
 			],
-			'58350': [
+			'56874': [
 				{ length: 32, start: 1478 },
 				{ length: 32, start: 2247 },
 				{ length: 32, start: 2639 },
@@ -5894,7 +5871,7 @@ export const securityPoolRuntimeIdentities = {
 		runtimeCodeHash: '0x2f0df2b3821b72c53493710d2abfa67c5e78e2e49463fd3383e173500781fa0a',
 		runtimeCodeLength: 11488,
 		immutableReferences: {
-			'47212': [
+			'45736': [
 				{ length: 32, start: 267 },
 				{ length: 32, start: 514 },
 				{ length: 32, start: 613 },

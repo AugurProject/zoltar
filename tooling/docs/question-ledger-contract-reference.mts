@@ -1,6 +1,6 @@
 import type { ContractReference } from './contract-reference-metadata.mts'
 export const questionLedgerContractReference: ContractReference = {
-	compiledAbiFingerprint: '6c09609d7d696ad0372aa167187b531692db9290b01cabae7b5482e3c0b8b2c6',
+	compiledAbiFingerprint: '4f97bfd0bab8c31d9feb92cd9e7b4a5deb8a0f101af0a5bad29a7010dbb04b96',
 	name: 'QuestionLedger',
 	interactionNotes: 'See the [security pool module boundaries](./contract-inventory.html#security-pool-boundary) for capital, settlement, and reporter custody.',
 	purpose: 'Question ledger for one shared security pool, question and universe. Shares and reporting are question-specific; provider capital, settlement cash and fees are accounted centrally.',
@@ -280,14 +280,14 @@ export const questionLedgerContractReference: ContractReference = {
 			signals: 'Relevant share, reporting or central accounting events; no standalone vault accounting.',
 		},
 		{
-			call: '`initializeForkCarryOutcome(sourceGame, snapshotId, peaks, leafCount, carryTotalAttoRep, resolutionBalanceAttoRep, nullifierRoot)`',
+			call: '`initializeForkCarryOutcome(sourceGame, snapshotId, peaks, leafCount, carryTotalAttoRep, resolutionBalanceAttoRep)`',
 			caller: '`QuestionForker` only',
 			declarations: [
 				{
 					name: 'initializeForkCarryOutcome',
 				},
 			],
-			effect: 'Installs the next outcome of the continuation game’s canonical snapshot. Three calls install immutable inherited roots and leaf counts, plus append-only current peaks, carry totals and resolution balances. Canonical live sources require empty nullifier roots and cannot export finalized claims.',
+			effect: 'Installs the next outcome of the continuation game’s canonical snapshot. Three calls install immutable inherited roots and leaf counts, plus append-only current peaks, carry totals and resolution balances. Sources export only live carry, which never contains spent deposits.',
 			preconditions: 'A game is configured; it is a fork continuation with fewer than three initialized outcomes; leaf counts fit the MMR; every call supplies the same source and nonzero snapshot ID, with the next outcome’s data; the third call verifies the full commitment.',
 			signals: '`ForkCarryCheckpoint` on completion of the third outcome',
 		},
