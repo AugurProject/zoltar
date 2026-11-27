@@ -32,7 +32,7 @@ test('partial retirement keeps a meaningful residual and requires one complete r
 })
 test('authorizations cannot cut obligations, bypass personal collateral or consume unfunded commitments', () => {
 	const snapshot = capitalSnapshot()
-	expect(capitalAuthorizationReason(snapshot, 9n * unit)).toContain('Reduce commitment')
+	expect(capitalAuthorizationReason(snapshot, 9n * unit)).toContain('Queue a reduction')
 	expect(capitalAuthorizationReason({ ...snapshot, ownerPrincipalAttoRep: unit }, 10n * unit)).toContain('health')
 	expect(capitalAuthorizationReason({ ...snapshot, priceValid: false }, 10n * unit)).toContain('price')
 	expect(capitalAuthorizationReason({ ...snapshot, forkTime: 1n }, 10n * unit)).toContain('closed')

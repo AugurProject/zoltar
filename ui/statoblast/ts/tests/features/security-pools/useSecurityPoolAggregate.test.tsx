@@ -180,8 +180,8 @@ test('target-sized retirement sends a fixed residual without silently saving an 
 	const { hook, requests } = await setup()
 	await act(() => hook.state().setHealthPercent('200'))
 	expect(hook.state().healthReason).toContain('REP')
-	await act(() => hook.state().retireToTarget())
-	expect(hook.state().remainingCommitmentAmount).toBe('7.142857142857142857')
+	await act(() => hook.state().useTargetCapacity())
+	expect(hook.state().commitmentAmount).toBe('7.142857142857142857')
 	await act(() => hook.state().retire(1n))
 	expect(requests).toHaveLength(1)
 	const request = requests[0]
@@ -189,6 +189,8 @@ test('target-sized retirement sends a fixed residual without silently saving an 
 	expect(decodeFunctionData({ abi, data: request.data })).toEqual({ functionName: 'setCommitment', args: [7_142_857_142_857_142_857n] })
 	expect(request.reviewDescription).toContain('saved health target stays unchanged')
 	expect(request.reviewDescription).toContain('change or cancel the queued reduction')
+	expect(request.reviewDescription).toContain('Your full current commitment stays active and can be liquidated until the reduction is released.')
+	expect(request.reviewDescription).toContain('Reducing lowers your share of future fees.')
 	await request.validateBeforeSubmit?.()
 	expect(request.readReviewRows?.()).toEqual([{ label: 'Commitment when reduction completes', value: '10 → 7.142857142857142857 WETH' }])
 })
@@ -198,12 +200,14 @@ function underwaterSnapshot() {
 }
 test('the retirement review omits the immediate cure for a covered position', async () => {
 	const { hook, requests } = await setup()
+	await act(() => hook.state().setCommitmentAmount('0'))
 	await act(() => hook.state().retire(1n))
 	expect(requests[0]?.reviewDescription).not.toContain('at once')
 	expect(requests[0]?.reviewDescription).toContain('The reduction waits for free capacity')
 })
 test('the retirement review states the immediate cure for a position underwater at a fresh price', async () => {
 	const { hook, requests } = await setup(underwaterSnapshot())
+	await act(() => hook.state().setCommitmentAmount('0'))
 	await act(() => hook.state().retire(1n))
 	// 30 REP at a 10,500 bps multiplier and a liquidation price of 4 backs 7.142857… WETH, shown rounded down.
 	expect(requests[0]?.reviewDescription).toContain('Your REP covers only 7.1428 WETH at the current price. The uncovered part can be removed at once if there is enough free capacity. The rest waits in queue.')
@@ -212,7 +216,7 @@ test.each(['0', '5'])('the retirement review queues target %s when the uncovered
 	const snapshot = underwaterSnapshot()
 	const { hook, requests } = await setup({ ...snapshot, economics: { ...snapshot.economics, minimumCommitmentAttoEth: 3n * unit } })
 	await act(() => {
-		hook.state().setRemainingCommitmentAmount(remaining)
+		hook.state().setCommitmentAmount(remaining)
 	})
 	await act(() => hook.state().retire(1n))
 	expect(requests[0]?.reviewDescription).not.toContain('at once')
@@ -230,7 +234,7 @@ test('the retirement review states six-decimal collateral amounts in collateral 
 		positions: snapshot.positions.map(position => ({ ...position, commitment: 10n * usdc, maxHealthyPrice: 2n * 10n ** 30n })),
 	}
 	const { hook, requests } = await setup(underwaterUsdc)
-	await act(() => hook.state().setRemainingCommitmentAmount('2.5'))
+	await act(() => hook.state().setCommitmentAmount('2.5'))
 	await act(() => hook.state().retire(1n))
 	const request = requests[0]
 	if (request === undefined) throw new Error('Missing reduction request')
@@ -242,24 +246,25 @@ test('the retirement review claims no queued rest when the kept commitment is at
 	const { hook, requests } = await setup(underwaterSnapshot())
 	const position = underwaterSnapshot().positions[0]
 	if (position === undefined) throw new Error('Missing underwater position')
-	await act(() => hook.state().setRemainingCommitmentAmount(formatEther(position.commitment - unit)))
+	await act(() => hook.state().setCommitmentAmount(formatEther(position.commitment - unit)))
 	await act(() => hook.state().retire(1n))
 	expect(requests[0]?.reviewDescription).toContain('The reduction can happen at once if there is enough free capacity. Any remainder goes in queue.')
 	expect(requests[0]?.reviewDescription).not.toContain('The rest waits in queue.')
 })
 test('the retirement review omits the immediate cure at a stale price', async () => {
 	const { hook, requests } = await setup({ ...underwaterSnapshot(), priceValid: false })
+	await act(() => hook.state().setCommitmentAmount('0'))
 	await act(() => hook.state().retire(1n))
 	expect(requests[0]?.reviewDescription).not.toContain('at once')
 })
 test('target sizing rounds a small reduction up to a meaningful retirement unit', async () => {
 	const { hook } = await setup()
 	await act(() => hook.state().setHealthPercent('150'))
-	await act(() => hook.state().retireToTarget())
-	expect(hook.state().remainingCommitmentAmount).toBe('9')
+	await act(() => hook.state().useTargetCapacity())
+	expect(hook.state().commitmentAmount).toBe('9')
 	expect(hook.state().positionReasons(1n).retire).toBeUndefined()
 })
-test('idle principal sizes new authorization but cannot satisfy a live health raise or reduction', async () => {
+test('idle REP sizes a commitment but cannot satisfy a live health raise', async () => {
 	const base = capitalSnapshot()
 	const snapshot = { ...base, ownerPrincipalAttoRep: 50n * unit, ownerAccount: { ...base.ownerAccount, freeAttoRep: 20n * unit } }
 	const { hook } = await setup(snapshot)
@@ -268,8 +273,8 @@ test('idle principal sizes new authorization but cannot satisfy a live health ra
 	expect(hook.state().healthReason).toContain('REP')
 	expect(hook.state().healthDepositAmount).toBe('')
 	expect(hook.state().targetShortfall).toBe(12n * unit)
-	await act(() => hook.state().retireToTarget())
-	expect(hook.state().remainingCommitmentAmount).toBe('7.142857142857142857')
+	await act(() => hook.state().useTargetCapacity())
+	expect(hook.state().commitmentAmount).toBe('11.904761904761904761')
 })
 test('personal health and exact commitment consent are rechecked after the review opens', async () => {
 	const { hook, requests, transport } = await setup()
@@ -286,6 +291,9 @@ test('personal health and exact commitment consent are rechecked after the revie
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('health target changed')
 	transport.setSnapshot(capitalSnapshot({ ownerPrincipalAttoRep: 31n * unit }))
 	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('pledged REP changed')
+	const largerCommitment = capitalSnapshot({ ownerCommitmentAttoEth: 12n * unit })
+	transport.setSnapshot({ ...largerCommitment, positions: largerCommitment.positions.map(position => ({ ...position, commitment: 12n * unit })) })
+	await expect(request.validateBeforeSubmit?.()).rejects.toThrow('Queue a reduction to lower an existing commitment.')
 })
 test('custom admission blocks new underwriting while keeping existing owners exits available', async () => {
 	const snapshot = capitalSnapshot()
@@ -302,6 +310,7 @@ test('custom admission blocks new underwriting while keeping existing owners exi
 })
 test('single owner position retains its retirement cohort and account changes clear drafts', async () => {
 	const { hook, requests } = await setup()
+	await act(() => hook.state().setCommitmentAmount('0'))
 	expect(hook.state().positionReasons(1n).retire).toBeUndefined()
 	await act(() => hook.state().retire(1n))
 	const request = requests[0]
@@ -317,15 +326,13 @@ test('approval refresh preserves health and commitment drafts until the concrete
 	await act(() => {
 		hook.state().setHealthPercent('150')
 		hook.state().setHealthDepositAmount('7')
-		hook.state().setCommitmentAmount('6')
-		hook.state().setRemainingCommitmentAmount('5')
+		hook.state().setCommitmentAmount('5')
 	})
 	await hook.setProps({ snapshot: undefined })
 	await hook.setProps({ snapshot: capitalSnapshot({ allowanceAttoRep: 7n * unit }) })
 	expect(hook.state().healthPercent).toBe('150')
 	expect(hook.state().healthDepositAmount).toBe('7')
-	expect(hook.state().commitmentAmount).toBe('6')
-	expect(hook.state().remainingCommitmentAmount).toBe('5')
+	expect(hook.state().commitmentAmount).toBe('5')
 	await act(() => hook.state().setHealthPercent('200'))
 	await hook.setProps({ snapshot: capitalSnapshot({ ownerAccount: { ...capitalSnapshot().ownerAccount, targetHealthFactorBps: 15_000n } }) })
 	expect(hook.state().healthPercent).toBe('150')
@@ -333,7 +340,7 @@ test('approval refresh preserves health and commitment drafts until the concrete
 	await hook.setProps({ snapshot: capitalSnapshot({ chainId: 2 }) })
 	expect(hook.state().healthPercent).toBe('120')
 	expect(hook.state().healthDepositAmount).toBe('')
-	expect(hook.state().remainingCommitmentAmount).toBe('0')
+	expect(hook.state().commitmentAmount).toBe('10')
 })
 
 test('retirement service stays disabled while the owner request lacks capacity', async () => {

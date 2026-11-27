@@ -1,7 +1,6 @@
 import { openDeploymentPromptWarning } from './securityPoolTransactions.js'
 
-export const commitmentSection = 'Health target & commitment'
-export const reduceCommitment = 'Reduce commitment'
+export const commitmentSection = 'Change commitment'
 export const capitalSections = 'Capital sections'
 export const yourPosition = 'Your position'
 export const position = 'Position'
