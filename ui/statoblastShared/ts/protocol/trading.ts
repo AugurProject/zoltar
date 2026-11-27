@@ -18,7 +18,7 @@ import type { ShareMigrationTarget, TradingActionResult, TradingDetails, Trading
 import { getMinBigintValue, isBigintTriple } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { type WriteContractClient, readOptionalMulticall, readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { readQuestionLedgerUniverseId } from './questionLedgerActions.js'
-import { formatAmount, formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatAmount, formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatScaledPercentage, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as tradingCopy from '../copy/trading.js'
 import * as collateralCopy from '../copy/collateral.js'
 import { estimatedPurchaseFee, insufficientMintCapacity, invalidMintLimits, maximumMintAmountUnavailable, mintFeeChanged, mintSharesChanged, mintingAfterReportingStarts, mintReview, questionNotLinkedToSecurityPool, questionPoolVerificationFailed } from '../copy/securityPool.js'
@@ -28,6 +28,8 @@ import { ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/co
 import { getReportingOutcomeKey, getReportingOutcomeValue } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import { changedSinceReview } from '../copy/app.js'
 import { checksTransactionReview } from './reviewedClient.js'
+
+const redemptionRepToleranceBps = 50n
 
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
 type QuestionLedgerMintCapacity = {
@@ -549,7 +551,7 @@ async function readRedemptionQuote(client: Pick<ReadClient, 'multicall'>, pool: 
 	const { cash, rep: recovery } = await loadCompleteSetRedemptionQuote(client, pool, shares, blockNumber)
 	const collateralAmount = formatCurrencyBalanceWithUnit(cash, collateral.symbol, collateral.decimals)
 	const repAmount = formatCurrencyBalanceWithUnit(recovery, commonCopy.rep)
-	const minimumRep = (requireBigintValue(recovery, 'recovery REP quote') * 9950n) / 10000n
+	const minimumRep = (requireBigintValue(recovery, 'recovery REP quote') * (10_000n - redemptionRepToleranceBps)) / 10_000n
 	return {
 		collateralAmount,
 		repAmount,
@@ -572,6 +574,6 @@ function redemptionRows(quote: Awaited<ReturnType<typeof readRedemptionQuote>>, 
 		}),
 		{ label: tradingCopy.estimatedRedemptionCollateral, value: quote.collateralAmount, allowValueChange: true },
 		...(quote.recovery === 0n ? [] : [{ label: tradingCopy.estimatedRedemptionRep, value: quote.repAmount }]),
-		{ label: tradingCopy.minimumRecoveryRep, value: formatCurrencyBalanceWithUnit(minimumRep, commonCopy.rep) },
+		{ label: tradingCopy.minimumRecoveryRep(formatScaledPercentage(redemptionRepToleranceBps, 2)), value: formatCurrencyBalanceWithUnit(minimumRep, commonCopy.rep) },
 	]
 }

@@ -64,7 +64,7 @@ export function buildSecurityPoolDeploymentRequest(parameters: { owner: Address;
 	let remainder = 10_000n
 	while (remainder !== 0n) [divisor, remainder] = [remainder, divisor % remainder]
 	const maximumRep = 11_000_000n * 10n ** 18n
-	if (parameters.origin.securityMultiplierBps > maximumRep * 10_000n || parameters.origin.securityMultiplierBps / divisor > maximumRep) throw new Error('Security multiplier exceeds the absolute REP supply underwriting or repair grid.')
+	if (parameters.origin.securityMultiplierBps > maximumRep * 10_000n || parameters.origin.securityMultiplierBps / divisor > maximumRep) throw new Error('Security multiplier exceeds the supported REP supply limits.')
 	if (parameters.origin.minimumReportCollateral === 0n) throw new Error('Report collateral floor must be positive.')
 	address(parameters.owner, 'Owner')
 	address(parameters.factory, 'Security pool deployment contract')
