@@ -452,7 +452,9 @@ contract SecurityPoolCommitmentIndex is SecurityPoolCommitmentTree {
 	/// @notice Returns the maximum backing price, in attoREP per raw collateral token unit scaled by PRICE_SCALE.
 	/// @dev REP uses attoREP and commitment uses raw collateral token units; multiplier
 	/// is in basis points. Both divisions round down. A zero commitment returns
-	/// the uint256 maximum sentinel.
+	/// the uint256 maximum sentinel. For positive commitment and multiplier, both
+	/// rounded intermediate and final results must fit uint256; overflow reverts
+	/// rather than saturating, even when every representable price is healthy.
 	function maximumHealthyPrice(uint256 rep, uint256 commitment, uint256 multiplier) external pure returns (uint256) {
 		if (commitment == 0) return type(uint256).max;
 		return Math.mulDiv(Math.mulDiv(rep, BPS_DENOMINATOR, multiplier), PRICE_SCALE, commitment);

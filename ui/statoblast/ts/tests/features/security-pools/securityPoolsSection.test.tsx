@@ -138,8 +138,8 @@ test('walletless fork page shows public context and keeps personal reads and tra
 	expect(source.reads.some(read => read.args?.includes(zeroAddress) || read.name === 'choices' || read.name === 'balanceOfSecurityPoolRecoveryRights')).toBe(false)
 })
 const reduction = (container: Element) => {
-	const section = container.querySelector('section:has([id$="-reduce"])')
-	if (section === null) throw new Error('Reduce commitment section missing')
+	const section = container.querySelector('section:has([id$="-commitment"])')
+	if (section === null) throw new Error('Change commitment section missing')
 	return section
 }
 
@@ -273,12 +273,12 @@ test('authenticated refresh preserves position controls while disabling transact
 	const source = capitalClient()
 	source.install()
 	const view = await renderSecurityPools()
-	await waitFor(() => expect(view.container.querySelector('section:has([id$="-reduce"]) input')).not.toBeNull())
+	await waitFor(() => expect(view.container.querySelector('section:has([id$="-commitment"]) input')).not.toBeNull())
 	const position = reduction(view.container)
 	const inputs = [...position.querySelectorAll('input')]
 	const buttons = [...position.querySelectorAll('button')]
-	expect(inputs).toHaveLength(1)
-	expect(buttons).toHaveLength(1)
+	expect(inputs.some(input => input.labels?.[0]?.textContent === copy.newCommitment)).toBe(true)
+	expect(buttons.some(button => !button.disabled)).toBe(true)
 	await act(() => render(<SecurityPoolsSection page={poolPage} parameters={parameters} walletConnected enabled={false} environmentKey={0} activeUniverseId={0n} />, view.container))
 	expect(position.isConnected).toBe(true)
 	expect([...position.querySelectorAll('input')]).toEqual(inputs)
@@ -298,9 +298,9 @@ test('a pending retirement shows its locked request without an editable form', a
 	const view = await renderSecurityPools()
 	await waitFor(() => expect(view.container.querySelector('.statoblast-queue-totals')).not.toBeNull())
 	const position = reduction(view.container)
-	expect(position.querySelectorAll('input')).toHaveLength(0)
+	expect([...position.querySelectorAll('input')].some(input => input.labels?.[0]?.textContent === copy.newCommitment)).toBe(false)
 	expect([...position.querySelectorAll('button')].map(button => button.textContent?.trim())).not.toContain(copy.retire)
-	expect(position.textContent).not.toContain(copy.remainingCommitment)
+	expect(position.textContent).toContain(copy.queueCommitment)
 })
 
 test('a forked origin is announced on its field and stated once beside the deploy actions', async () => {

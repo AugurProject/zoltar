@@ -5,6 +5,7 @@ export const withdrawableRep = 'Withdrawable REP'
 export const principalRep = 'Your REP deposited'
 export const commitment = 'Your commitment'
 export const positionCommitment = 'Position commitment'
+export const newCommitment = 'New commitment'
 export const savedHealth = 'Health target'
 export const availableCapacity = 'Free capacity'
 export const priceValid = 'Price current'
@@ -34,6 +35,13 @@ export const depositingHealth = 'Depositing and saving target…'
 export const optionalHealthDeposit = 'Also add REP (optional)'
 export const olderPriceReport = 'Use an older funded price report'
 export const setCommitment = 'Set commitment'
+export const increaseCommitment = 'Increase commitment'
+export const commitmentShortfall = (amount: string) => `Add ${amount} to back this commitment.`
+export const reductionLiquidationRisk = 'Your full current commitment stays active and can be liquidated until the reduction is released.'
+const reductionTradeoff = `${reductionLiquidationRisk} Reducing lowers your share of future fees.`
+export const reductionHint = `A reduction can complete right away if there’s enough free capacity. Queued reductions complete in order and can’t be changed. ${reductionTradeoff}`
+export const newCommitmentHint = (unit: string, suggestReduction: boolean) => (suggestReduction ? `Enter a lower amount in ${unit} to queue a reduction.` : `Enter the total you want to back in ${unit}.`)
+export const afterReduction = 'After reduction'
 export const currentCommitmentPreset = 'Current'
 export const howTargetWorks = 'How the target works'
 export const queuedCommitmentLock = 'This commitment is locked until its reduction clears.'
@@ -45,13 +53,10 @@ export const targetUnavailable = 'A valid target and current REP price are requi
 export const retirementRequested = 'A commitment reduction is already in queue.'
 export const minimumCommitment = 'Minimum commitment (collateral)'
 export const minimumCommitmentHint = 'The minimum collateral commitment; fork auction lots may be larger.'
-export const noPositions = 'No pledged commitments'
-export const noPositionsHint = 'Deposit REP, then authorize your first commitment.'
 export const liquidationHint = (duration?: string) => `The liquidation penalty grows${duration === undefined ? '' : ` for ${duration}`} after liquidation starts. The new backer can receive up to all of your pledged REP. Add REP or reduce commitment to stay above the liquidation threshold.`
 export const formatRewardVesting = (duration: string) => `More earnings vest over ${duration}.`
 export const retire = 'Reduce commitment'
 export const retiring = 'Reducing commitment…'
-export const remainingCommitment = 'Commitment to keep (collateral)'
 export const serving = 'Releasing commitment…'
 export const retirementPreviewUnavailable = 'Preview unavailable'
 export const retirementPreviewStale = 'A new accepted REP price is required to assess readiness'
@@ -72,7 +77,7 @@ export const reductionWithCure = (covered: string, keepsCoveredCommitment: boole
 }
 export const requestReductionReview = (positionId: bigint, releasesPledgedRep: boolean, queue: string) => {
 	const consequence = releasesPledgedRep ? 'Reducing to zero releases its pledged REP.' : 'REP stays pledged to the remaining commitment.'
-	return `Position ${positionId}. ${consequence} ${queue} You can’t change or cancel the queued reduction. Your saved health target stays unchanged.`
+	return `Position ${positionId}. ${consequence} ${queue} You can’t change or cancel the queued reduction. Your saved health target stays unchanged. ${reductionTradeoff}`
 }
 export const releaseReductionReview = (owner: string) => `Release the commitment reduction for ${owner}. Earlier reductions keep their place in queue. Free capacity can change before confirmation. An attempt may spend gas without reducing commitment.`
 export const rewardVesting = 'Reward vesting (hours)'
@@ -107,8 +112,7 @@ export const previewBacking = 'REP needed for target'
 export const previewMaximum = 'Max commitment'
 export const previewBefore = 'Current'
 export const previewAfter = 'After changes'
-export const queueHint = "Reductions release in full, in queue order. A queued reduction can't be changed."
-export const queueCommitment = 'Your commitment'
+export const queueCommitment = 'Current and queued commitment'
 export const queueAhead = 'Ahead of you'
 export const queueYourReduction = 'Your reduction'
 export const requestReduction = 'Queue reduction'
@@ -135,7 +139,7 @@ export const smallerRemainingCommitmentRequired = 'Choose a smaller remaining co
 export const reductionBelowMinimum = 'The remaining commitment and reduction must each meet the security pool minimum.'
 export const positiveCommitmentRequired = 'Enter a positive commitment amount.'
 export const commitmentBelowMinimum = 'Commitment is below this security pool’s minimum.'
-export const useReduceCommitment = 'Use Reduce commitment to lower an existing commitment.'
+export const useReduceCommitment = 'Queue a reduction to lower an existing commitment.'
 export const commitmentBelowHealthTarget = 'Collateral is below your saved health target.'
 export const forkPreventsWithdrawal = 'Pledged REP cannot be withdrawn during fork preparation.'
 export const withdrawalNeedsCurrentPrice = 'A new accepted REP price is required before withdrawing pledged REP.'
