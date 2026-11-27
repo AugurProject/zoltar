@@ -80,9 +80,8 @@ export function useSecurityPoolAggregate(
 	const depositAmount = useSignal('')
 	const withdrawalAmount = useSignal('')
 	const healthPercent = useSignal('100')
-	const commitmentAmount = useSignal('')
+	const commitmentAmount = useSignal<string>()
 	const healthDepositAmount = useSignal('')
-	const remainingCommitmentAmount = useSignal('0')
 	const reportInput = useSignal('')
 	const draftContext = useRef<{ key: string; savedHealth: bigint }>()
 	const proof = useSignal<{ context: string; key: string; price?: bigint | undefined; error?: string; pending?: boolean }>()
@@ -103,21 +102,23 @@ export function useSecurityPoolAggregate(
 	const proofContext = `${snapshot?.chainId}:${snapshot?.securityPool}:${snapshot?.universeId}:${snapshot?.owner}:${snapshot?.blockHash}:${snapshot?.totalCommitmentAttoEth}:${snapshot?.ownerCommitmentAttoEth}:${snapshot?.demandAttoEth}:${reportId}`
 	const sizingProofPrice = proof.value?.context === proofContext ? proof.value.price : undefined
 	const pledgedRep = snapshot?.positions.find(position => position.commitment > 0n)?.rep ?? 0n
-	const retirementTargetCapacity = snapshot === undefined ? undefined : maximumSecurityPoolCommitment({ ...snapshot, ownerPrincipalAttoRep: pledgedRep }, healthBps)
-	const remainingCommitment = securityPoolAmountOrUndefined(remainingCommitmentAmount.value, snapshot?.collateral.decimals ?? 18)
 	const targetRequiredRep = snapshot !== undefined && healthBps !== undefined && healthBps >= minimumSecurityPoolHealthFactorBps && healthBps < 1n << 256n && snapshot.ownerConservativePrice > 0n ? requiredSecurityPoolCollateral(snapshot, snapshot.ownerCommitmentAttoEth, undefined, healthBps) : undefined
 	let targetShortfall: bigint | undefined
 	if (targetRequiredRep !== undefined && snapshot !== undefined) targetShortfall = targetRequiredRep > pledgedRep ? targetRequiredRep - pledgedRep : 0n
 	const healthDepositAttoRep = securityPoolAmountOrUndefined(healthDepositAmount.value)
 	const sizingRep = (snapshot?.ownerPrincipalAttoRep ?? 0n) + (healthDepositAttoRep ?? 0n)
 	const targetCapacity = snapshot === undefined ? undefined : maximumSecurityPoolCommitment({ ...snapshot, ownerPrincipalAttoRep: sizingRep }, healthBps, sizingProofPrice)
-	const commitmentDefault = snapshot?.ownerCommitmentAttoEth
-	const displayedCommitment = commitmentAmount.value.trim() === '' && commitmentDefault !== undefined ? formatUnits(commitmentDefault, snapshot?.collateral.decimals ?? 18) : commitmentAmount.value
+	const displayedCommitment = commitmentAmount.value ?? (snapshot === undefined ? '' : formatUnits(snapshot.ownerCommitmentAttoEth, snapshot.collateral.decimals))
 	const commitmentAttoEth = securityPoolAmountOrUndefined(displayedCommitment, snapshot?.collateral.decimals ?? 18)
+	const livePositions = snapshot?.positions.filter(position => position.commitment > 0n) ?? []
+	const activePosition = livePositions.find(position => position.id === snapshot?.ownerAccount.positionId)
+	const pendingRetirement = livePositions.find(position => position.batch !== 0n)
+	const reducing = pendingRetirement === undefined && activePosition !== undefined && commitmentAttoEth !== undefined && commitmentAttoEth < activePosition.commitment
+	const canReadProof = model.snapshot !== undefined && !reducing && pendingRetirement === undefined
 	const proofKey = `${proofContext}:${commitmentAttoEth}`
 	useEffect(() => {
 		let active = true
-		if (model.snapshot !== undefined && reportId !== undefined && reportId > 0n && commitmentAttoEth !== undefined && commitmentAttoEth > 0n) {
+		if (canReadProof && model.snapshot !== undefined && reportId !== undefined && reportId > 0n && commitmentAttoEth !== undefined && commitmentAttoEth > 0n) {
 			proof.value = { context: proofContext, key: proofKey, price: sizingProofPrice, pending: true }
 			void readAuthorizationProof(model.snapshot, reportId, commitmentAttoEth)
 				.then(price => {
@@ -130,7 +131,7 @@ export function useSecurityPoolAggregate(
 		return () => {
 			active = false
 		}
-	}, [proofKey, model.snapshot !== undefined])
+	}, [proofKey, canReadProof])
 	const proofPrice = proof.value?.key === proofKey && !proof.value.pending && proof.value.error === undefined ? proof.value.price : undefined
 	let proofReason: string | undefined
 	if (reportInput.value.trim() !== '') {
@@ -151,9 +152,8 @@ export function useSecurityPoolAggregate(
 		healthPercent.value = formatUnits(savedHealth, 2)
 		depositAmount.value = ''
 		withdrawalAmount.value = ''
-		commitmentAmount.value = ''
+		commitmentAmount.value = undefined
 		healthDepositAmount.value = ''
-		remainingCommitmentAmount.value = '0'
 		reportInput.value = ''
 	}, [snapshot?.chainId, snapshot?.securityPool, snapshot?.owner, snapshot?.universeId, snapshot?.ownerAccount.targetHealthFactorBps])
 	const positive = (value: bigint | undefined) => (value === undefined || value === 0n ? transactionCopy.positiveAmountRequired : undefined)
@@ -173,8 +173,6 @@ export function useSecurityPoolAggregate(
 	const healthDepositReason = healthFundingReason ?? (snapshot !== undefined && healthDepositAttoRep !== undefined && healthDepositAttoRep > snapshot.allowanceAttoRep ? transactionCopy.approveBeforeDeposit : undefined)
 	const unsavedTargetReason = snapshot !== undefined && healthBps !== (snapshot.ownerAccount.targetHealthFactorBps || minimumSecurityPoolHealthFactorBps) ? transactionCopy.saveTargetBeforeCommitment : undefined
 	const authorizeReason = ownerReason ?? admissionReason ?? unsavedTargetReason ?? proofReason ?? (snapshot === undefined ? undefined : capitalAuthorizationReason(snapshot, commitmentAttoEth, proofPrice))
-	const livePositions = snapshot?.positions.filter(position => position.commitment > 0n) ?? []
-	const pendingRetirement = livePositions.find(position => position.batch !== 0n)
 	const claimReason = ownerReason
 	const retirementReadinessReason = () => {
 		if (pendingRetirement === undefined) return transactionCopy.reductionRequired
@@ -270,10 +268,20 @@ export function useSecurityPoolAggregate(
 			commitmentAmount.value = value
 		},
 		useTargetCapacity: () => {
-			commitmentAmount.value = targetCapacity !== undefined ? formatUnits(targetCapacity, snapshot?.collateral.decimals ?? 18) : ''
+			if (snapshot === undefined || targetCapacity === undefined) return
+			let amount = targetCapacity
+			if (activePosition !== undefined && amount < activePosition.commitment) {
+				const minimum = snapshot.economics.minimumCommitmentAttoEth
+				const maximumResidual = activePosition.commitment - minimum
+				if (amount > maximumResidual) amount = maximumResidual
+				if (amount < minimum) amount = 0n
+			}
+			commitmentAmount.value = formatUnits(amount, snapshot.collateral.decimals)
 		},
 		targetCapacity,
-		retirementTargetCapacity,
+		activePosition,
+		pendingRetirement,
+		reducing,
 		targetShortfall,
 		healthDepositAmount: healthDepositAmount.value,
 		setHealthDepositAmount: (value: string) => {
@@ -282,16 +290,6 @@ export function useSecurityPoolAggregate(
 		healthDepositAttoRep,
 		healthFundingReason,
 		healthDepositReason,
-		remainingCommitmentAmount: remainingCommitmentAmount.value,
-		setRemainingCommitmentAmount: (value: string) => {
-			remainingCommitmentAmount.value = value
-		},
-		retireToTarget: () => {
-			if (retirementTargetCapacity === undefined || snapshot === undefined || retirementTargetCapacity >= snapshot.ownerCommitmentAttoEth) return
-			const maximumResidual = snapshot.ownerCommitmentAttoEth > snapshot.economics.minimumCommitmentAttoEth ? snapshot.ownerCommitmentAttoEth - snapshot.economics.minimumCommitmentAttoEth : 0n
-			const residual = retirementTargetCapacity < maximumResidual ? retirementTargetCapacity : maximumResidual
-			remainingCommitmentAmount.value = formatUnits(residual < snapshot.economics.minimumCommitmentAttoEth ? 0n : residual, snapshot.collateral.decimals)
-		},
 		reportInput: reportInput.value,
 		setReportInput: (value: string) => {
 			reportInput.value = value
@@ -302,7 +300,7 @@ export function useSecurityPoolAggregate(
 		livePositions,
 		claimReason,
 		serveReason,
-		positionReasons: (id: bigint, requestedCommitment = remainingCommitment) => {
+		positionReasons: (id: bigint, requestedCommitment = commitmentAttoEth) => {
 			const position = livePositions.find(item => item.id === id)
 			const common = ownerReason ?? inactiveReason ?? (position === undefined ? transactionCopy.positionInactive : undefined)
 			return {
@@ -457,7 +455,7 @@ export function useSecurityPoolAggregate(
 					return current === undefined ? [] : [commitmentComparison(collateral, label, current.commitment, current.remainingCommitment)]
 				},
 			),
-		retire: (id: bigint, requestedCommitment = remainingCommitment) =>
+		retire: (id: bigint, requestedCommitment = commitmentAttoEth) =>
 			run(
 				`retireSecurityPool-${id}`,
 				livePositions.some(position => position.id === id && position.batch !== 0n) ? capitalCopy.resubmitRetirement : capitalCopy.retire,
