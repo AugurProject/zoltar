@@ -77,7 +77,7 @@ void describe('complete-set mint submission', () => {
 const securityPool = getAddress('0x00000000000000000000000000000000000000b1')
 const securityPoolMintAbi = parseAbi(['function createCompleteSet(uint248 universeId,uint256 questionId,uint256 mintEth,address recipient,uint256 minimumShares,uint256 maximumFee)'])
 
-test.each(['winning shares', 'complete sets'] as const)('%s redemption retains the REP floor while allowing collateral estimates to fall', async operation => {
+test.each(['winning shares', 'complete sets'] as const)('%s redemption allows both payout estimates to fall without payout floor arguments', async operation => {
 	const unit = 10n ** 18n
 	let review: TransactionRequestPreview | undefined
 	let plan: readonly TransactionPlanStep[] = []
@@ -89,9 +89,9 @@ test.each(['winning shares', 'complete sets'] as const)('%s redemption retains t
 	const send = mock((request: MockSentTransaction) => {
 		expect(request.to).toBe(pool)
 		if (request.data === undefined) throw new Error('Missing redemption calldata')
-		expect(decodeFunctionData({ abi: parseAbi(['function redeemShares(uint256)', 'function redeemCompleteSet(uint256,uint256)']), data: request.data })).toEqual({
+		expect(decodeFunctionData({ abi: parseAbi(['function redeemShares()', 'function redeemCompleteSet(uint256)']), data: request.data })).toEqual({
 			functionName: operation === 'winning shares' ? 'redeemShares' : 'redeemCompleteSet',
-			args: operation === 'winning shares' ? [(2n * unit * 9950n) / 10000n] : [unit, (2n * unit * 9950n) / 10000n],
+			args: operation === 'winning shares' ? [] : [unit],
 		})
 	})
 	const pinned: (bigint | undefined)[] = []
@@ -146,14 +146,15 @@ test.each(['winning shares', 'complete sets'] as const)('%s redemption retains t
 	await step.validateBeforeSubmit()
 	expect(identityReads).toBe(5)
 	expect(pinned.slice(operation === 'winning shares' ? -3 : -2)).toEqual(operation === 'winning shares' ? [100n, 100n, 100n] : [100n, 100n])
-	expect(step.readReviewRows()).toContainEqual({ label: 'Minimum recovery REP (0.5% tolerance)', value: '1.99\u00a0REP' })
 	expect(step.readReviewRows()).toContainEqual({ label: 'No shares', value: operation === 'winning shares' ? '3 → 0' : '3 → 2' })
+	expect(step.readReviewRows().some(row => row.label.startsWith('Minimum'))).toBe(false)
 	quotedCash = 0n
 	await expect(step.validateBeforeSubmit()).resolves.toBeUndefined()
 	expect(step.readReviewRows()).toContainEqual({ label: 'Estimated collateral received', value: '0\u00a0WETH', allowValueChange: true })
 	quotedCash = unit
 	quotedRep = 0n
-	await expect(step.validateBeforeSubmit()).rejects.toThrow('Recovery REP payout changed')
+	await expect(step.validateBeforeSubmit()).resolves.toBeUndefined()
+	expect(step.readReviewRows()).toContainEqual({ label: 'Estimated REP received', value: '0\u00a0REP', allowValueChange: true })
 	quotedRep = 2n * unit
 	if (operation === 'winning shares') {
 		balances = [unit, 2n * unit, 4n * unit]
@@ -161,13 +162,12 @@ test.each(['winning shares', 'complete sets'] as const)('%s redemption retains t
 		await expect(step.validateBeforeSubmit()).rejects.toThrow('Changed since you reviewed')
 		if (step.refreshReviewData === undefined) throw new Error('Missing winning-share review refresh')
 		const data = await step.refreshReviewData()
-		expect(decodeFunctionData({ abi: parseAbi(['function redeemShares(uint256 minimumRecoveryRep)']), data }).args).toEqual([(4n * unit * 9950n) / 10000n])
+		expect(decodeFunctionData({ abi: parseAbi(['function redeemShares()']), data }).args).toEqual([])
 		if (step.readReviewArgs === undefined) throw new Error('Missing refreshed redemption argument reader')
-		expect(step.readReviewArgs(data)).toEqual([(4n * unit * 9950n) / 10000n])
+		expect(step.readReviewArgs(data)).toEqual([])
 		await step.validateBeforeSubmit()
 		expect(identityReads).toBe(5)
 		expect(step.readReviewRows()).toContainEqual({ label: 'No shares', value: '4 → 0' })
-		expect(step.readReviewRows()).toContainEqual({ label: 'Minimum recovery REP (0.5% tolerance)', value: '3.98\u00a0REP' })
 	}
 })
 
@@ -201,7 +201,7 @@ test('complete-set redemption refreshes all three share balances and its payout 
 		['No shares', '3 → 2'],
 		['Invalid shares', '1 → 0'],
 		['Estimated collateral received', '1\u00a0WETH'],
-		['Minimum recovery REP (0.5% tolerance)', '0\u00a0REP'],
+		['Estimated REP received', '0\u00a0REP'],
 	])
 	holdings = [unit, 0n, 3n * unit]
 	await expect(step.validateBeforeSubmit()).rejects.toThrow('Your balance is too low')

@@ -2021,8 +2021,7 @@ span.rep-price-status.stale,
 	gap: var(--space-1);
 }
 
-.statoblast-auto-mobile,
-.statoblast-auto-state {
+.statoblast-auto-mobile {
 	display: none;
 }
 
@@ -2129,11 +2128,6 @@ span.rep-price-status.stale,
 
 	.statoblast-auto-mobile {
 		display: inline-flex;
-	}
-
-	.statoblast-auto-state {
-		display: block;
-		font-size: var(--font-caption);
 	}
 
 	.statoblast-refresh-status {
@@ -3231,12 +3225,43 @@ span.rep-price-status.stale,
 	background: var(--surface-section-opaque);
 }
 
-@media (max-width: 40rem) {
-	:root[data-product="statoblast"] .header-toolbar-controls:not(:has(> .wallet-button + .account-menu)) {
+/* Phones and tablets: one bar of logo, universe, activity, and settings. The wallet details, price, freshness, and auto-refresh
+ * move into the settings menu (.app-settings-account and .statoblast-menu-status). */
+.statoblast-menu-status {
+	display: none;
+}
+
+@media (max-width: 64rem) {
+	:root[data-product="statoblast"] .header-toolbar {
 		display: grid;
-		container: statoblast-header-controls / inline-size;
-		grid-template-columns: auto minmax(0, 1fr);
-		gap: var(--space-1);
+		grid-template-columns: auto minmax(0, 1fr) auto;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	:root[data-product="statoblast"] .header-toolbar-brand {
+		grid-area: 1 / 1;
+	}
+
+	:root[data-product="statoblast"] .header-toolbar .application-brand-name {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+	}
+
+	:root[data-product="statoblast"] .header-toolbar-settings {
+		grid-area: 1 / 3;
+	}
+
+	:root[data-product="statoblast"] .header-toolbar-controls:not(:has(> .wallet-button + .account-menu)) {
+		display: flex;
+		grid-area: 1 / 2;
+		flex-wrap: nowrap;
+		gap: var(--space-2);
+		min-width: 0;
 	}
 
 	:root[data-product="statoblast"] .header-toolbar-controls > .toolbar-field.universe,
@@ -3245,34 +3270,82 @@ span.rep-price-status.stale,
 		display: contents;
 	}
 
+	:root[data-product="statoblast"] .header-toolbar-controls :is(.statoblast-rep-chip, .statoblast-refresh, .statoblast-auto-desktop) {
+		display: none;
+	}
+
 	.statoblast-universe-menu {
-		grid-column: 1;
-		grid-row: 2;
+		flex: 1 1 auto;
+		min-inline-size: 0;
 	}
 
-	.statoblast-rep-chip {
-		align-self: stretch;
+	.statoblast-universe-menu > button {
+		box-sizing: border-box;
+		inline-size: 100%;
+		padding-inline: var(--space-2);
 		font-size: var(--font-label);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
-	.statoblast-header-controls > .statoblast-refresh {
-		align-self: stretch;
-		max-inline-size: 100%;
-		padding-block: 0;
-		justify-self: end;
-	}
-
+	/* The wallet lives at the top of the settings menu; connect and switch-network buttons stay on the bar. */
 	:root[data-product="statoblast"] .header-toolbar-controls > .account-menu {
-		grid-column: 2;
-		grid-row: 2;
-		justify-self: end;
+		display: none;
 	}
-}
 
-@container statoblast-header-controls (max-width: 23rem) {
-	:root[data-product="statoblast"] .header-toolbar-controls > .account-menu {
-		grid-column: 1 / -1;
-		grid-row: 3;
+	:root[data-product="statoblast"] .header-toolbar .app-settings-account {
+		display: grid;
+	}
+
+	:root[data-product="statoblast"] .header-toolbar .app-settings-account > .wallet-chip {
+		justify-self: stretch;
+		min-inline-size: 0;
+	}
+
+	/* Wallet first, then price and freshness, then the application settings. */
+	:root[data-product="statoblast"] .header-toolbar .app-settings-menu {
+		display: flex;
+		flex-direction: column;
+	}
+
+	:root[data-product="statoblast"] .header-toolbar .app-settings-account {
+		order: -2;
+	}
+
+	.statoblast-menu-status {
+		order: -1;
+		display: grid;
+		gap: var(--space-2);
+		margin-block-end: 0.75rem;
+		padding-block-end: 0.75rem;
+		border-block-end: 1px solid var(--divider-strong);
+	}
+
+	.statoblast-menu-status > .statoblast-rep-chip {
+		justify-content: center;
+		min-block-size: var(--touch-target-min);
+	}
+
+	.statoblast-menu-status > .statoblast-refresh {
+		justify-content: center;
+		min-block-size: var(--touch-target-min);
+	}
+
+	.app-settings-menu .statoblast-menu-status > label.statoblast-auto-mobile {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.app-settings-menu .statoblast-menu-status > label.statoblast-auto-mobile > input {
+		flex: none;
+		inline-size: 1.25rem;
+		min-block-size: 1.25rem;
+		block-size: 1.25rem;
+		margin: 0;
+		padding: 0;
 	}
 }
 
@@ -4304,11 +4377,14 @@ span.rep-price-status.stale,
 .statoblast-share-mint-glyph {
 	display: flex;
 	flex-wrap: wrap;
-	align-items: baseline;
+	align-items: center;
 	gap: var(--space-2);
 }
 
 .statoblast-share-mint-glyph .currency-value {
+	display: inline-flex;
+	align-items: center;
+	line-height: var(--line-height-tight);
 	padding: var(--space-1) var(--space-2);
 	border: 1px solid var(--border-subtle);
 	border-radius: var(--radius-control);
@@ -4323,7 +4399,7 @@ span.rep-price-status.stale,
 .statoblast-share-mint-details,
 .statoblast-share-mint-limits-fields {
 	display: grid;
-	gap: var(--space-3);
+	gap: var(--space-3) var(--space-5);
 	grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
 }
 
@@ -4359,23 +4435,14 @@ span.rep-price-status.stale,
 	justify-content: end;
 }
 
-:root[data-product="statoblast"] .wallet-chip .address-value-long-abbreviation {
-	inline-size: 42ch;
+/* The bar shows the short address so the whole top bar stays on one row; the copy button and the wallet menu carry the full address. */
+:root[data-product="statoblast"] .header-toolbar-controls .wallet-chip .address-value-fit-content {
+	inline-size: 11ch;
 }
 
-@media (max-width: 40rem) {
-	:root[data-product="statoblast"] .wallet-chip .address-value-long-abbreviation {
-		inline-size: 26ch;
-	}
-}
-
-@container statoblast-header-controls (max-width: 18rem) {
-	:root[data-product="statoblast"] .wallet-chip {
-		gap: 0;
-		padding-inline: 0;
-	}
-
-	:root[data-product="statoblast"] .wallet-chip-dot {
-		display: none;
+@media (width > 64rem) {
+	:root[data-product="statoblast"] .header-toolbar,
+	:root[data-product="statoblast"] .header-toolbar-controls {
+		flex-wrap: nowrap;
 	}
 }

@@ -170,7 +170,7 @@ describe('Statoblast: native fork reporter registration', () => {
 		// Include the redemption at the exact quoted timestamp, preserving the
 		// quote-versus-execution assertion without imposing a collateral floor.
 		await fixture.base.mockWindow.anvilRevert(saved)
-		await writeContractAndWait(trader, () => trader.writeContract({ ...pool, functionName: 'redeemCompleteSet', args: [10n * unit, 0n] }))
+		await writeContractAndWait(trader, () => trader.writeContract({ ...pool, functionName: 'redeemCompleteSet', args: [10n * unit] }))
 		expect((await getERC20Balance(trader, collateral, trader.account.address)) - balance).toBe(quote)
 	})
 

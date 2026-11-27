@@ -1236,7 +1236,7 @@ test.each(['writeContract', 'sendTransaction'] as const)('%s sends the exact ref
 	expect(sendTransaction).toHaveBeenCalledWith(expect.objectContaining({ to: account, data: refreshed, gas: 50_000n }))
 })
 
-test.each(['complete sets', 'winning shares'] as const)('aged %s review accepts falling collateral and still blocks a recovery REP shortfall', async operation => {
+test.each(['complete sets', 'winning shares'] as const)('aged %s review accepts falling collateral and recovery REP estimates', async operation => {
 	const unit = 10n ** 18n
 	const { client, receipt, sendTransaction } = setup()
 	let cash = unit
@@ -1288,18 +1288,18 @@ test.each(['complete sets', 'winning shares'] as const)('aged %s review accepts 
 		expect(sendTransaction).toHaveBeenCalledTimes(1)
 		const data = sendTransaction.mock.calls[0]?.[0].data
 		if (data === undefined) throw new Error('Missing native redemption calldata')
-		expect(decodeFunctionData({ abi: parseAbi(['function redeemShares(uint256)', 'function redeemCompleteSet(uint256,uint256)']), data }).args).toEqual(operation === 'complete sets' ? [unit, (2n * unit * 9950n) / 10000n] : [(2n * unit * 9950n) / 10000n])
+		expect(decodeFunctionData({ abi: parseAbi(['function redeemShares()', 'function redeemCompleteSet(uint256)']), data }).args).toEqual(operation === 'complete sets' ? [unit] : [])
 		transactionSteps.value?.cancel()
 		now.mockReturnValue(0)
-		// A new action uses a fresh controller and retains its reviewed positive REP floor.
-		const blocked = redeem()
-		void blocked.catch(() => undefined)
+		// A new action also permits its recovery REP estimate to decrease.
+		const nextRedemption = redeem()
+		void nextRedemption.catch(() => undefined)
 		await waitForTransactionStep(0)
 		recovery = 0n
 		now.mockReturnValue(31_000)
 		transactionSteps.value?.confirmStep(0)
-		await expect(blocked).rejects.toThrow('Recovery REP payout changed')
-		expect(sendTransaction).toHaveBeenCalledTimes(1)
+		await expect(nextRedemption).resolves.toMatchObject({ hash })
+		expect(sendTransaction).toHaveBeenCalledTimes(2)
 	} finally {
 		now.mockRestore()
 	}
@@ -1317,7 +1317,7 @@ test('an aged review sends when only an explicitly variable estimate changes', a
 				contractAddress: account,
 				readReviewRows: () => [
 					{ label: 'Estimated collateral received', value: collateral, allowValueChange: true },
-					{ label: 'Minimum recovery REP', value: '0 REP' },
+					{ label: 'Estimated REP received', value: '0 REP', allowValueChange: true },
 				],
 			},
 		])

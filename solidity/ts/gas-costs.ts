@@ -91,7 +91,7 @@ try {
 	await approveToken(trader, collateral, services)
 	await measure('2. Shared underwriting and trading', 'Purchase complete sets', trader, () => trader.writeContract({ ...securityPool, functionName: 'createCompleteSet', args: [0n, questionId, 100n * unit, trader.account.address, 0n, 100n * unit + (quote[0] * 10_100n + 9_999n) / 10_000n - 100n * unit], value: 0n }))
 	const shares = await trader.readContract({ ...pool, functionName: 'shareTokenSupplyAttoShares' })
-	await measure('2. Shared underwriting and trading', 'Return half of complete sets', trader, () => trader.writeContract({ ...pool, functionName: 'redeemCompleteSet', args: [shares / 2n, 0n] }))
+	await measure('2. Shared underwriting and trading', 'Return half of complete sets', trader, () => trader.writeContract({ ...pool, functionName: 'redeemCompleteSet', args: [shares / 2n] }))
 	await measure('2. Shared underwriting and trading', 'Checkpoint question accounting', trader, () => trader.writeContract({ ...pool, functionName: 'updateSettlementCollateral' }))
 	// An unrelated native fork leaves this question open. All underwriting moves
 	// once at branch level; lazy question creation does not process owner lists.

@@ -14,6 +14,8 @@ type AppChromeSlots = {
 	/** Primary navigation: top-bar tabs on wide screens, a fixed bottom tab bar on narrow screens. */
 	navigation: ComponentChildren
 	settingsMenu: ComponentChildren
+	/** The settings menu with wallet details at its top, for an application that moves the account control there on phones. */
+	renderSettingsMenu: (accountContent: ComponentChildren) => ComponentChildren
 }
 
 type AppHeaderShellProps = {
@@ -47,10 +49,11 @@ export function AppHeaderShell({ mainElementId = 'app-content', renderOverview, 
 
 	const simulationBanner = simulationController === undefined ? undefined : <SimulationBanner controller={simulationController} onEnvironmentChanged={onEnvironmentChanged} onRefresh={onRefresh} />
 	const showProtocolGuide = tabNavigation !== undefined && tabNavigation.showProtocolGuide !== false
-	const settingsMenu = (
+	const renderSettingsMenu = (accountContent?: ComponentChildren) => (
 		<>
 			<TransactionActivityMenu showWalletSpeedUp={showWalletSpeedUp} />
 			<AppSettingsMenu
+				accountContent={accountContent}
 				onEnvironmentChanged={onEnvironmentChanged}
 				triggerId={settingsTriggerId}
 				settingsContent={
@@ -66,6 +69,8 @@ export function AppHeaderShell({ mainElementId = 'app-content', renderOverview, 
 			/>
 		</>
 	)
+	const settingsMenu = renderSettingsMenu()
+
 	const allTabs = tabNavigation === undefined ? [] : [...tabNavigation.tabs, ...(tabNavigation.moreTabs ?? [])]
 	const currentRouteIsPrimaryTab = tabNavigation !== undefined && allTabs.some(tab => tab.route === tabNavigation.route)
 	const activeSecondaryNavigation = secondaryNavigation !== undefined && currentRouteIsPrimaryTab ? secondaryNavigation : undefined
@@ -86,7 +91,7 @@ export function AppHeaderShell({ mainElementId = 'app-content', renderOverview, 
 			</button>
 			{simulationBanner}
 			<div className='app-chrome'>
-				{renderOverview({ navigation, settingsMenu })}
+				{renderOverview({ navigation, renderSettingsMenu, settingsMenu })}
 				<TabNavigationUnavailableReasons tabs={allTabs} />
 			</div>
 			{routeViews}

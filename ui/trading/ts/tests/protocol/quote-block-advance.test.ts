@@ -317,7 +317,7 @@ describe('submitting a quote after the chain advances', () => {
 		expect(chain.sends).toHaveLength(6)
 		const winningRedemption = chain.sends[5]
 		if (winningRedemption === undefined) throw new Error('Missing winning redemption calldata')
-		expect(decodeFunctionData({ abi: questionLedgerAbi, data: winningRedemption })).toEqual({ functionName: 'redeemShares', args: [0n] })
+		expect(decodeFunctionData({ abi: questionLedgerAbi, data: winningRedemption })).toEqual({ functionName: 'redeemShares', args: [] })
 		expect(chain.simulatedBlocks.length).toBeGreaterThan(0)
 		for (const block of chain.simulatedBlocks) expect(block).toBe('0x3')
 	})

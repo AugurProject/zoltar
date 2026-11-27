@@ -22,7 +22,7 @@
 				<h2 id="interactions">State-changing interactions</h2>
 				<p>The <a href="../contracts.html#table-columns">contract index</a> defines the columns. See the <a href="../contract-inventory.html#security-pool-boundary">security pool module boundaries</a> for capital, settlement, and reporter custody.</p>
 				<!-- Validated read ABI fingerprint: 5fa6edd85169b799786d8411da7312ce2945b82e1984edca945be970ced6e3b7 -->
-				<!-- Validated complete compiled ABI fingerprint: 3456347390b995b05e88bc0518154f2cdd76dc25294113be0e93762af8495d0e -->
+				<!-- Validated complete compiled ABI fingerprint: 8e994bcada473de1176cf54eab6f96fde29e682ca4a96ad057b32ae152ce3a57 -->
 				<table>
 					<thead>
 						<tr>
@@ -70,16 +70,16 @@
 							<td>Relevant share, reporting or central accounting events; no standalone vault accounting.</td>
 						</tr>
 						<tr>
-							<td><code>redeemCompleteSet(amountAttoShares, minimumRecoveryRep)</code><wbr /></td>
+							<td><code>redeemCompleteSet(amountAttoShares)</code></td>
 							<td>A complete-set holder</td>
-							<td>Operational unforked universe; holder has all outcome shares; actual recovery REP meets the caller’s minimum. Collateral is paid at its execution-time value without a caller-supplied floor. A zero REP minimum permits disposal of worthless shares.</td>
+							<td>Operational unforked universe; holder has all outcome shares. Collateral and recovery REP are paid at their execution-time values without caller-supplied floors; worthless shares can be disposed of.</td>
 							<td>Burns complete sets and pays their current collateral and recovery REP entitlement. Released exposure becomes available to the security pool.</td>
 							<td>Relevant share, reporting or central accounting events; no standalone vault accounting.</td>
 						</tr>
 						<tr>
-							<td><code>redeemShares(minimumRecoveryRep)</code></td>
+							<td><code>redeemShares()</code></td>
 							<td>A winning-share holder</td>
-							<td>Operational question with a final outcome; finalized claims retain their protected settlement path; actual recovery REP meets the caller’s minimum. Collateral is paid at its execution-time value without a caller-supplied floor.</td>
+							<td>Operational question with a final outcome; finalized claims retain their protected settlement path. Collateral and recovery REP are paid at their execution-time values without caller-supplied floors.</td>
 							<td>Burns winning shares and pays their central collateral and recovery REP entitlement.</td>
 							<td>Relevant share, reporting or central accounting events; no standalone vault accounting.</td>
 						</tr>
