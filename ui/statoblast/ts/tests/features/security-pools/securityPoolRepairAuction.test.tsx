@@ -258,8 +258,9 @@ test('an early refund becomes available once better bids exclude the bid and clo
 	fixture.values['bids'] = [owner, true, false, 2n, 60n * unit]
 	await act(() => button(view.container, 'Refresh auction').click())
 	await waitFor(() => expect(view.container.textContent).toContain('This bid’s unused collateral was refunded.'))
-	expect(button(view.container, 'Withdraw this bid’s refund')).toBe(refund)
-	expect(refund.disabled).toBe(true)
+	expect(view.container.querySelector('[data-label="WETH refundable"]')?.textContent).toContain('0')
+	expect(view.container.querySelector('[data-label="WETH refundable"]')?.textContent).not.toContain('2.00')
+	expect([...view.container.querySelectorAll('button')].some(candidate => candidate.textContent === 'Withdraw this bid’s refund')).toBe(false)
 	expect(view.container.textContent).not.toContain('Credited collateral refund')
 })
 

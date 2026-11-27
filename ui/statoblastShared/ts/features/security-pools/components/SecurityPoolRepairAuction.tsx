@@ -260,6 +260,8 @@ function AuctionBid({ auction, bid, model, parameters, collateral, isOpen }: { a
 	let refund: bigint | undefined
 	if (excluded) refund = escrow
 	if (bid.fill !== undefined) refund = bid.fill.refundAttoEth
+	// A paid refund leaves nothing owed; the status note records the payment.
+	if (bid.refundSettled) refund = 0n
 	const money = (value: bigint | undefined) => <CurrencyValue value={value} suffix={collateral.symbol} units={collateral.decimals} />
 	return (
 		<tbody>
@@ -282,9 +284,11 @@ function AuctionBid({ auction, bid, model, parameters, collateral, isOpen }: { a
 			</tr>
 			<tr>
 				<td className='statoblast-auction-bid-actions' colSpan={5}>
-					<div className='actions'>
-						<SecurityPoolButton model={parameters.actions} action={`refundSecurityPoolAuction${bid.id}`} label={copy.refund} pendingLabel={copy.refunding} reason={model.refundReason(bid)} onClick={() => model.refund(bid)} />
-					</div>
+					{!bid.refundSettled && (
+						<div className='actions'>
+							<SecurityPoolButton model={parameters.actions} action={`refundSecurityPoolAuction${bid.id}`} label={copy.refund} pendingLabel={copy.refunding} reason={model.refundReason(bid)} onClick={() => model.refund(bid)} />
+						</div>
+					)}
 					{bid.claimable && (
 						<div className='actions'>
 							<SecurityPoolButton model={parameters.actions} action={`claimSecurityPoolAuctionBid${bid.id}`} label={copy.claimBid} pendingLabel={copy.claimingBid} reason={model.bidClaimReason(bid)} onClick={() => model.claimBid(bid)} />
