@@ -249,10 +249,12 @@ contract SecurityPoolResolutionPremiumBook {
 		epoch.earnedUnits += earned;
 		epoch.unusedUnits += unused;
 		uint256 nextEarnedCash = Math.mulDiv(epoch.cash, epoch.earnedUnits, epoch.units);
-		uint256 nextUnusedCash = Math.mulDiv(epoch.cash, epoch.unusedUnits, epoch.units);
 		// Only terminal reconciliation awards raw rounding dust. Paying it early
 		// could exhaust cash while live question units still need funding prices.
-		if (epoch.earnedUnits + epoch.unusedUnits == epoch.units) nextUnusedCash = epoch.cash - nextEarnedCash;
+		uint256 nextUnusedCash =
+			earned + unused == book.units
+				? epoch.cash - nextEarnedCash
+				: Math.mulDiv(epoch.cash, epoch.unusedUnits, epoch.units);
 		earnedCash = nextEarnedCash - epoch.earnedCash;
 		unusedCash = nextUnusedCash - epoch.unusedCash;
 		epoch.earnedCash = nextEarnedCash;
