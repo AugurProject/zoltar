@@ -56,30 +56,9 @@ export function securityPoolAuctionOpeningReason(snapshot: SecurityPoolAuctionSn
 		targetLots = ceilDiv(auction.shortfallAttoEth, lot)
 		required = requiredForLot()
 	}
-	let requiredCollateral = ceilDiv(required, auction.repGrid) * auction.repGrid
-	if (requiredCollateral > auction.inventoryAttoRep) {
-		let gridBudget = (auction.inventoryAttoRep / auction.repGrid) * auction.repGrid
-		requiredCollateral = 0n
-		while (gridBudget !== 0n) {
-			const affordableLot = (((gridBudget * BPS) / auction.securityMultiplierBps) * ATTO_UNITS) / price.conservativePrice
-			if (affordableLot < auction.minimumCommitmentAttoEth) break
-			targetLots = ceilDiv(auction.shortfallAttoEth, affordableLot)
-			const resized = ceilDiv(auction.shortfallAttoEth, targetLots)
-			lot = resized > auction.minimumCommitmentAttoEth ? resized : auction.minimumCommitmentAttoEth
-			targetLots = ceilDiv(auction.shortfallAttoEth, lot)
-			required = requiredForLot()
-			const rounded = ceilDiv(required, auction.repGrid) * auction.repGrid
-			if (targetLots === 1n || (rounded - required) * 100n < required) {
-				requiredCollateral = rounded
-				break
-			}
-			// Same bounded grid-band search as the contract: a failed band
-			// lies below 100 grids and smaller requirements only round worse.
-			gridBudget = (required / auction.repGrid) * auction.repGrid
-		}
-	}
-	if (price.exposureLimitAttoEth < auction.chosenCommitmentAttoEth + targetLots * lot) return 'The price report must cover the final auction collateral exposure.'
+	const requiredCollateral = ceilDiv(required, auction.repGrid) * auction.repGrid
 	if (requiredCollateral === 0n || requiredCollateral > auction.inventoryAttoRep) return 'The auction inventory cannot back one collateral lot at the minimum health target.'
+	if (price.exposureLimitAttoEth < auction.chosenCommitmentAttoEth + targetLots * lot) return 'The price report must cover the final auction collateral exposure.'
 	return undefined
 }
 export function buildSecurityPoolAuctionOpenRequest(snapshot: SecurityPoolAuctionSnapshot) {

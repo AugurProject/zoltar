@@ -52,17 +52,22 @@ describe('Statoblast: full-deficit auction lot sizing', () => {
 		expect((result.lots - 1n) * result.lot).toBeLessThan(shortfall)
 		expect(result.lots * result.lot - shortfall).toBeLessThan(result.lots)
 	}
-	test('#1646 finds an intermediate lot count that the actual inventory can back', async () => {
-		const result = await open(60n, 15n, 21n)
-		expect([result.lots, result.lot, result.rounded]).toEqual([3n, 20n, 21n])
+	test.each([
+		{ shortfall: 60n, minimum: 15n, inventory: 21n },
+		{ shortfall: 58n, minimum: 5n, inventory: 42n },
+		{ shortfall: 61n, minimum: 20n, inventory: 21n },
+	])('rejects unaffordable default lots without searching smaller lots ($shortfall, $minimum, $inventory)', async ({ shortfall, minimum, inventory }) => {
+		// A 20-attoETH lot covers the configured minimum and needs exactly one
+		// REP grid of collateral. Its affordability must not change lot sizing.
+		const smallerRequired = await client.readContract({ abi: indexArtifact.abi, address: index, functionName: 'requiredRep', args: [20n, unit, 10_500n, 10_000n] })
+		expect(20n).toBeGreaterThanOrEqual(minimum)
+		expect(smallerRequired).toBe(21n)
+		expect(smallerRequired).toBeLessThanOrEqual(inventory)
+		await expect(open(shortfall, minimum, inventory)).rejects.toThrow('Collateral repair auction inventory cannot back one lot')
 	})
-	test('#1646 fallback skips an unprofitable REP grid band to find a smaller viable lot', async () => {
-		const result = await open(58n, 5n, 42n)
-		expect([result.lots, result.lot, result.rounded]).toEqual([3n, 20n, 21n])
-	})
-	test('#1646 fallback honors the configured minimum below the initial rounded lot', async () => {
-		const result = await open(61n, 20n, 21n)
-		expect([result.lots, result.lot, result.rounded]).toEqual([4n, 20n, 21n])
+	test('opens when inventory exactly backs the default lot after rounding', async () => {
+		const result = await open(60n, 15n, 63n)
+		expect([result.lots, result.lot, result.rounded]).toEqual([1n, 60n, 63n])
 	})
 	test('rejects inventory that cannot fund a lot satisfying the minimum and rounding policy', async () => {
 		await expect(open(61n, 21n, 42n)).rejects.toThrow('Collateral repair auction inventory cannot back one lot')
